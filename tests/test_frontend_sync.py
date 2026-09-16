@@ -1352,7 +1352,9 @@ def test_frontend_script_has_no_syntax_errors() -> None:
     js_start = html.index("\n", script_start) + 1
     js_content = html[js_start:script_end]
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False) as f:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".js", delete=False, encoding="utf-8"
+    ) as f:
         _ = f.write(js_content)
         _ = f.flush()
         result = subprocess.run(
@@ -7942,7 +7944,7 @@ def test_batch_no_preset_identifiers_remain() -> None:
 
 
 def test_batch_toggle_buttons_present() -> None:
-    """Role toggle buttons with counts and disabled-when-zero logic."""
+    """Role buttons remain editable at zero and counts use selected explicit roles."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "mc-batch-role-bar" in html, "Role toggle bar CSS class missing"
     assert "mc-batch-role-btn" in html, "Role toggle button CSS class missing"
@@ -7951,8 +7953,9 @@ def test_batch_toggle_buttons_present() -> None:
     # Toggle button creation with counts
     assert r"INT \u666e\u901a\u9a7b\u70b9" in html, "INT button label missing"
     assert r"TS \u8fc7\u6e21\u6001" in html, "TS button label missing"
-    # Disabled when count is 0
-    assert "btn.disabled = count === 0" in html, "Disabled-when-zero logic missing"
+    assert "btn.disabled = count === 0" not in html, "Zero-count roles must remain editable"
+    assert "if (item.include === false) return" in html
+    assert 'else if (item.tag === "INT") intCount++' in html
     # Default active logic
     assert 'if (intCount === 0 && tsCount > 0) _batchRoleActive = "ts"' in html
 
@@ -8063,47 +8066,61 @@ def test_batch_server_preview_rendering() -> None:
     assert "_previewGeneration" in html, "Generation token missing"
 
 
-def test_batch_step_bar_present() -> None:
-    """Step bar with zh step names present for batch profile."""
+def test_batch_step_bar_removed_from_batch_modal() -> None:
+    """The flow selector is sufficient; BatchOptimize must not render a duplicate step bar."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-step-bar" in html, "Step bar CSS class missing"
-    assert r"\u4f18\u5316" in html, "Step label '优化' missing"
-    assert r"\u9891\u7387" in html, "Step label '频率' missing"
-    assert r"\u5355\u70b9\u80fd" in html, "Step label '单点能' missing"
-    assert r"\u70ed\u5316\u5b66" in html, "Step label '热化学' missing"
-    assert "mc-step" in html, "Step element class missing"
-    assert "mc-step-arrow" in html, "Step arrow class missing"
+    assert 'stepBar = document.createElement("div")' not in html
+    assert "mc-batch-flat" in html
 
 
-def test_batch_modal_subtitle() -> None:
-    """BatchOptimize modal title = 批量优化设置 with subtitle."""
+def test_batch_modal_has_title_without_explanatory_subtitle() -> None:
+    """BatchOptimize keeps the title and suppresses the redundant subtitle."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert r"\u6279\u91cf\u4f18\u5316\u8bbe\u7f6e" in html, "批量优化设置 title missing"
-    assert "modal-subtitle" in html, "Subtitle element class missing"
-    assert r"\u914d\u7f6e\u65b9\u6cd5\u3001\u6536\u655b\u7b56\u7565\u53ca Hessian" in html, (
-        "Subtitle text missing"
-    )
+    batch_branch = html.split('if (wizardState.workflow.id === "BatchOptimize")', 1)[1]
+    batch_branch = batch_branch.split("} else {", 1)[0]
+    assert 'subtitle.style.display = "none"' in batch_branch
 
 
-def test_batch_more_options_collapsible() -> None:
-    """'更多计算选项' collapsible section present."""
+def test_batch_purpose_specific_disclosures_replace_more_options() -> None:
+    """Advanced controls are grouped by purpose instead of one mixed bucket."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u66f4\u591a\u8ba1\u7b97\u9009\u9879" in html, "'更多计算选项' label missing"
+    assert r"\u66f4\u591a\u8ba1\u7b97\u9009\u9879" not in html
+    for marker in ["SCF 详细设置", "热化学", "失败重试", "参数摘要"]:
+        assert marker in html
 
 
-def test_batch_input_preview_collapsible() -> None:
-    """'输入预览' collapsible section present."""
+def test_batch_single_point_role_fields_are_primary_and_catalog_backed() -> None:
+    """SP profiles expose role-specific method/basis fields outside More Options."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u8f93\u5165\u9884\u89c8" in html, "'输入预览' label missing"
+    assert 'if (batchHasStep("singlepoint"))' in html
+    assert '_buildBatchRoleMethodField(methodFields, "sp_method"' in html
+    assert '_buildBatchRoleMethodField(methodFields, "sp_basis"' in html
+    assert 'label_zh: "单点能"' in html
+
+
+def test_batch_compact_grids_cover_primary_and_more_fields() -> None:
+    """Wide screens use two-column compact fields and narrow screens collapse."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert ".mc-batch-more-fields" in html
+    assert "repeat(2, minmax(0, 1fr))" in html
+    assert "@media (max-width: 680px)" in html
+
+
+def test_batch_parameter_summary_collapsible() -> None:
+    """A normalised parameter summary is not mislabeled as a full input preview."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert '_makeBatchDisclosure("参数摘要", "Parameter Summary"' in html
+    assert '"输入预览" : "Input Preview"' not in html
 
 
 def test_batch_copy_other_role_method() -> None:
-    """Copy button copies only method/basis keys (not optimizer/Hessian/SCF)."""
+    """The role-toolbar copy button copies methods but not optimizer/SCF fields."""
     html = FRONTEND.read_text(encoding="utf-8")
-    # Find the batch copy button (second copyBtn.addEventListener in the file)
-    copy_sections = html.split('copyBtn.addEventListener("click"')
-    assert len(copy_sections) > 2, "Batch copy button handler missing"
-    copy_body = copy_sections[2].split("});", 1)[0]  # third occurrence = batch
+    assert 'roleToolbar.appendChild(copyRoleBtn)' in html
+    assert 'roleToolbar.appendChild(roleBar)' in html
+    copy_body = html.split('copyRoleBtn.addEventListener("click"', 1)[1]
+    copy_body = copy_body.split("});", 1)[0]
     for key in ["method", "basis", "sp_method", "sp_basis"]:
         assert f'"{key}"' in copy_body, f"Copy must include key {key!r}"
     # Must NOT copy optimizer/Hessian/SCF params
@@ -8299,7 +8316,7 @@ def test_batch_temperature_pressure_labels() -> None:
 def test_batch_slowconv_label_zh() -> None:
     """SlowConv zh label (慢收敛) present."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u6162\u6536\u655b" in html, "SlowConv zh label missing"
+    assert 'slowconv: "慢收敛"' in html, "SlowConv zh label missing"
 
 
 def test_batch_hessian_control_writes_canonical_field() -> None:

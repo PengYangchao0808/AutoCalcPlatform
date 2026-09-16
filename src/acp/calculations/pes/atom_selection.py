@@ -2,13 +2,16 @@
 
 The frontend may only provide a sequence of selected atom indices.  This
 module turns that sequence into an explicit scan function and validates it
-against the connectivity perceived from the input geometry.  Keeping this
-logic in the calculation layer makes the GUI, API, CLI, and scheduler share
-the same semantics.
+against the connectivity perceived from the input geometry.  Angle, dihedral,
+and double-bond selections must map onto perceived bonds; a ``bond_stretch``
+pair may be any two distinct atoms so forming/breaking-bond scans are
+expressible.  Keeping this logic in the calculation layer makes the GUI, API,
+CLI, and scheduler share the same semantics.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -17,6 +20,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from acp.calculations.irc.validation import perceive_connectivity
+
+logger = logging.getLogger(__name__)
 
 SelectionKind = Literal["bond_stretch", "angle", "dihedral", "double_bond_scan"]
 
@@ -80,10 +85,15 @@ def parse_functional_atom_selection(
     """Parse and validate one of the four supported atom-selection forms.
 
     Connectivity is inferred from the input geometry, not trusted from the
-    browser payload.  Thus a request cannot silently turn a non-bonded pair
-    into a bond.  The two double-scan groups may be adjacent to each other
-    (e.g. opposite bonds of a four-membered ring for a retro-[2+2], or two
-    bonds flanking a shared bridge) — those are legitimate concerted scans.
+    browser payload.  Angle, dihedral, and double-bond selections must map
+    onto perceived bonds, so a request cannot silently turn a non-bonded
+    pair into one of those coordinates.  A ``bond_stretch`` pair may be any
+    two distinct atoms: forming/breaking-bond scans regularly target pairs
+    outside the perceived bond graph.  Such a pair is logged with its
+    measured distance and its ``adjacency`` metadata is empty.  The two
+    double-scan groups may be adjacent to each other (e.g. opposite bonds
+    of a four-membered ring for a retro-[2+2], or two bonds flanking a
+    shared bridge) — those are legitimate concerted scans.
     """
     if isinstance(atoms, (str, bytes)):
         raise ValueError("selected atoms must be a sequence of integer indices")
@@ -116,8 +126,18 @@ def parse_functional_atom_selection(
     ordered_pairs = tuple(_ordered_pair(selected[i], selected[i + 1]) for i in range(expected - 1))
 
     if selection_kind == "bond_stretch":
-        _require_bond(ordered_pairs[0], edges, "two selected atoms must be adjacent")
-        groups = (ordered_pairs[0],)
+        pair = ordered_pairs[0]
+        if pair not in edges:
+            coords = np.asarray(coordinates, dtype=float)
+            distance = float(np.linalg.norm(coords[pair[0]] - coords[pair[1]]))
+            logger.info(
+                "bond_stretch pair (%d, %d) is not a perceived bond (d=%.3f A); "
+                "allowing forming/breaking-bond distance scan",
+                pair[0],
+                pair[1],
+                distance,
+            )
+        groups = (pair,)
     elif selection_kind == "angle":
         _require_chain(ordered_pairs, edges, "three selected atoms must form A-B-C")
         groups = ()

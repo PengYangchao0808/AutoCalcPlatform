@@ -2632,7 +2632,8 @@ option, optgroup {
   overflow: hidden;
 }
 .modal-dialog-wide { width: min(860px, 96vw); }
-#method-config-modal .modal-dialog { width: min(1000px, calc(100vw - 48px)); max-height: calc(100dvh - 64px); font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+#method-config-modal .modal-dialog { width: min(960px, calc(100vw - 48px)); max-height: calc(100dvh - 64px); font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+#method-config-modal .modal-dialog { background: var(--bg-panel); }
 #method-config-modal .modal-header h2 { font-size: 18px; font-weight: 600; }
 #method-config-modal .modal-subtitle { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; line-height: 1.4; }
 #method-config-modal .mc-profile-label { font-size: 13px; text-transform: none; letter-spacing: normal; color: var(--text-secondary); }
@@ -3142,6 +3143,47 @@ option, optgroup {
   margin-top: 4px;
 }
 .mc-adv-group-fields.collapsed { display: none; }
+/* BatchOptimize keeps both roles in one compact form.  These are fields of
+   the selected role, not a two-column INT/TS comparison. */
+.mc-batch-role-form .mc-adv-group { margin-top: 10px; }
+.mc-batch-role-form .mc-adv-group-header { cursor: default; padding: 2px 0; color: var(--text-primary); }
+.mc-batch-role-form .mc-adv-group-header .mc-adv-group-chevron { display: none; }
+.mc-batch-role-form .mc-adv-group-fields,
+.mc-batch-role-form .mc-role-method-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.mc-batch-role-form .mc-field { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+.mc-batch-role-form .mc-field label { flex: 0 0 88px; font-size: 12px; }
+.mc-batch-role-form .mc-field select,
+.mc-batch-role-form .mc-field input { flex: 1 1 auto; min-width: 0; height: 30px; font-size: 12px; }
+.mc-batch-role-form .mc-method-basis-note { grid-column: 1 / -1; margin: -4px 0 0 96px; color: var(--text-tertiary); font-size: 11px; }
+.mc-batch-role-form .mc-field-hessian { align-items: flex-start; }
+.mc-batch-role-form .mc-field-hessian > label { padding-top: 7px; }
+.mc-batch-role-form .mc-hessian-select-wrap { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mc-batch-role-form .mc-hessian-select-wrap select { width: auto; min-width: 0; }
+.mc-batch-role-form .mc-hessian-custom { margin: 0; }
+.mc-batch-role-form .mc-hessian-custom input { width: 56px; flex: 0 0 auto; }
+.mc-batch-role-form .mc-copy-method { grid-column: 1 / -1; justify-self: start; margin-top: -2px; padding: 4px 8px; font-size: 11px; }
+.mc-batch-more-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.mc-batch-more-fields .mc-field { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+.mc-batch-more-fields .mc-field label { flex: 0 0 112px; font-size: 12px; }
+.mc-batch-more-fields .mc-field select,
+.mc-batch-more-fields .mc-field input { flex: 1 1 auto; min-width: 0; height: 30px; font-size: 12px; }
+#method-config-modal .mc-level-body { gap: 6px; padding-bottom: 8px; }
+#method-config-modal .mc-level-advanced-fields { gap: 6px; margin-top: 0; }
+#method-config-modal .mc-batch-role-bar { margin-bottom: 4px; padding-top: 2px; }
+#method-config-modal .mc-step-bar { margin: 0 0 4px; }
+#method-config-modal .modal-body { padding: 24px; }
+#method-config-modal .modal-footer { min-height: 54px; height: auto; flex-wrap: wrap; }
+@media (max-width: 680px) {
+  .mc-batch-role-form .mc-adv-group-fields,
+  .mc-batch-role-form .mc-role-method-fields,
+  .mc-batch-more-fields { grid-template-columns: 1fr; }
+  .mc-batch-role-form .mc-field { align-items: stretch; flex-direction: column; gap: 3px; }
+  .mc-batch-role-form .mc-field label { flex-basis: auto; }
+  .mc-batch-more-fields .mc-field { align-items: stretch; flex-direction: column; gap: 3px; }
+  .mc-batch-more-fields .mc-field label { flex-basis: auto; }
+  .mc-batch-role-form .mc-method-basis-note { margin-left: 0; }
+  #method-config-modal .modal-body { padding: 12px; }
+}
 /* Batch role toggle bar */
 .mc-batch-role-bar {
   display: flex; gap: 6px; margin-bottom: 10px;
@@ -3164,6 +3206,92 @@ option, optgroup {
 .mc-batch-role-btn.active .mc-batch-role-count { color: var(--accent); opacity: 0.7; }
 /* Batch role form layout */
 .mc-batch-role-form { margin: 8px 0; }
+
+/* BatchOptimize final information hierarchy: modal -> flow/role -> groups. */
+#method-config-modal .mc-level-card.mc-batch-flat { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+#method-config-modal .mc-level-card.mc-batch-flat > .mc-level-header { display: none; }
+#method-config-modal .mc-level-card.mc-batch-flat > .mc-level-body { padding: 0; }
+#method-config-modal .mc-level-card.mc-batch-flat .mc-step-bar { display: none; }
+#method-config-modal .mc-level-card.mc-batch-flat .mc-level-advanced { margin: 0; }
+#method-config-modal .mc-level-card.mc-batch-flat .mc-level-advanced-fields { gap: 0; }
+#method-config-modal .mc-batch-role-bar {
+  display: inline-flex; flex: 1 1 420px; max-width: 520px; gap: 0; padding: 3px; margin: 0;
+  border: 1px solid var(--border-default); border-radius: 9px; background: var(--bg-elevated);
+}
+#method-config-modal .mc-batch-role-toolbar { display: flex; align-items: center; gap: 14px; margin: 2px 0 14px; }
+#method-config-modal .mc-copy-role-method {
+  flex: 0 0 auto; min-height: 34px; padding: 5px 10px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--accent); font-size: 12px; cursor: pointer;
+}
+#method-config-modal .mc-copy-role-method:hover { background: var(--accent-soft); }
+#method-config-modal .mc-batch-role-btn {
+  flex: 1; border: 0; border-radius: 6px; min-height: 32px; padding: 6px 14px;
+  background: transparent; color: var(--text-secondary);
+}
+#method-config-modal .mc-batch-role-btn + .mc-batch-role-btn { border-left: 1px solid var(--border-subtle); }
+#method-config-modal .mc-batch-role-btn.active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(78,161,255,.38); }
+#method-config-modal .mc-batch-role-form { margin: 0; }
+#method-config-modal .mc-batch-role-form .mc-adv-group { margin: 0 0 20px; }
+#method-config-modal .mc-batch-role-form .mc-adv-group-header {
+  min-height: 24px; margin-bottom: 9px; padding: 0; color: var(--text-primary); font-size: 14px;
+}
+#method-config-modal .mc-group-header-action { margin-left: auto; border: 0; padding: 2px 0; background: transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+#method-config-modal .mc-group-header-action:hover { color: var(--accent); }
+#method-config-modal .mc-batch-role-form .mc-adv-group-fields,
+#method-config-modal .mc-batch-role-form .mc-role-method-fields,
+#method-config-modal .mc-batch-detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 28px; }
+#method-config-modal .mc-batch-role-form .mc-field,
+#method-config-modal .mc-batch-detail-fields .mc-field { flex-direction: row; align-items: center; gap: 10px; min-width: 0; }
+#method-config-modal .mc-batch-role-form .mc-field label,
+#method-config-modal .mc-batch-detail-fields .mc-field label { flex: 0 0 112px; color: var(--text-secondary); font-size: 13px; line-height: 1.3; }
+#method-config-modal .mc-batch-role-form .mc-field select,
+#method-config-modal .mc-batch-role-form .mc-field input,
+#method-config-modal .mc-batch-detail-fields .mc-field select,
+#method-config-modal .mc-batch-detail-fields .mc-field input { min-height: 35px; height: 35px; font-size: 13px; }
+#method-config-modal .mc-method-note {
+  grid-column: 1 / -1; margin: -3px 0 2px 122px; color: var(--text-secondary); font-size: 12px; line-height: 1.5;
+}
+#method-config-modal .mc-method-note strong { color: var(--text-primary); font-weight: 500; }
+#method-config-modal .mc-inline-method-detail { margin-top: 8px; }
+#method-config-modal .mc-inline-detail-toggle { border: 0; padding: 3px 0; background: transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+#method-config-modal .mc-inline-detail-toggle:hover { color: var(--text-primary); }
+#method-config-modal .mc-inline-method-detail .mc-batch-detail-fields { margin-top: 8px; }
+#method-config-modal .mc-batch-disclosure { margin: 0; border-top: 1px solid var(--border-subtle); }
+#method-config-modal .mc-batch-disclosure > .mc-adv-group-header { min-height: 42px; padding: 10px 0; color: var(--text-secondary); font-size: 13px; }
+#method-config-modal .mc-batch-disclosure > .mc-adv-group-header:hover { color: var(--text-primary); }
+#method-config-modal .mc-batch-disclosure > .mc-adv-group-fields { margin: 0 0 18px; }
+#method-config-modal .mc-preview-orca-kw { border: 0; background: var(--bg-elevated); }
+#method-config-modal .mc-toggle-wrap { flex: 1; display: flex; align-items: center; }
+#method-config-modal .mc-switch { position: relative; display: inline-flex; width: 36px; height: 20px; cursor: pointer; }
+#method-config-modal .mc-switch input { position: absolute; opacity: 0; pointer-events: none; }
+#method-config-modal .mc-switch-track { width: 36px; height: 20px; border-radius: 999px; background: rgba(255,255,255,.16); transition: .15s ease; }
+#method-config-modal .mc-switch-track::after { content: ""; display: block; width: 16px; height: 16px; margin: 2px; border-radius: 50%; background: var(--text-secondary); transition: transform .15s ease, background .15s ease; }
+#method-config-modal .mc-switch input:checked + .mc-switch-track { background: rgba(78,161,255,.42); }
+#method-config-modal .mc-switch input:checked + .mc-switch-track::after { transform: translateX(16px); background: #fff; }
+#method-config-modal .mc-field-hessian { grid-column: auto; align-items: center; }
+#method-config-modal .mc-field-hessian > label { padding-top: 0; }
+#method-config-modal .mc-hessian-select-wrap { width: 100%; }
+#method-config-modal .mc-hessian-interval { display: flex; }
+#method-config-modal .mc-hessian-interval[hidden] { display: none; }
+#method-config-modal .mc-hessian-interval-control { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+#method-config-modal .mc-hessian-interval-control input { flex: 1; min-width: 0; }
+#method-config-modal .mc-hessian-interval-control .unit { white-space: nowrap; color: var(--text-secondary); font-size: 12px; }
+#method-config-modal .modal-footer #mt-config-restore-default { border: 0; background: transparent; padding-left: 0; color: var(--text-secondary); }
+#method-config-modal .modal-footer #mt-config-restore-default:hover { color: var(--text-primary); }
+@media (max-width: 720px) {
+  #method-config-modal .modal-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
+  #method-config-modal .mc-batch-role-form .mc-adv-group-fields,
+  #method-config-modal .mc-batch-role-form .mc-role-method-fields,
+  #method-config-modal .mc-batch-detail-fields { grid-template-columns: 1fr; gap: 10px; }
+  #method-config-modal .mc-batch-role-form .mc-field,
+  #method-config-modal .mc-batch-detail-fields .mc-field { align-items: stretch; flex-direction: column; gap: 4px; }
+  #method-config-modal .mc-batch-role-form .mc-field label,
+  #method-config-modal .mc-batch-detail-fields .mc-field label { flex-basis: auto; }
+  #method-config-modal .mc-method-note { margin-left: 0; }
+  #method-config-modal .mc-batch-role-toolbar { align-items: stretch; flex-direction: column; gap: 6px; }
+  #method-config-modal .mc-batch-role-bar { width: 100%; max-width: none; }
+  #method-config-modal .mc-copy-role-method { align-self: flex-end; }
+}
 .mc-preview-orca-kw {
   font-size: 12px; font-family: "SFMono-Regular", Consolas, monospace;
   background: var(--bg-elevated); border: 1px solid var(--border-subtle);
@@ -20517,6 +20645,7 @@ function applyBatchOptimizeMethodFields(methodPayload) {
 
   var ROLE_KEYS = [
     "method", "basis", "sp_method", "sp_basis",
+    "dispersion", "aux_j_basis", "aux_c_basis", "ri_approximation",
     "opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess",
     "scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit",
     "scf_damp", "scf_damp_fac", "scf_shift", "scf_shift_fac",
@@ -20784,8 +20913,8 @@ async function openMethodConfig() {
     : "";
   if (wizardState.workflow.id === "BatchOptimize") {
     title.textContent = currentLang === "zh-CN" ? "\u6279\u91cf\u4f18\u5316\u8bbe\u7f6e" : "Batch Optimization Settings";
-    subtitle.textContent = currentLang === "zh-CN" ? "\u914d\u7f6e\u65b9\u6cd5\u3001\u6536\u655b\u7b56\u7565\u53ca Hessian \u8ba1\u7b97" : "Methods, convergence strategy and Hessian";
-    subtitle.style.display = "";
+    subtitle.textContent = "";
+    subtitle.style.display = "none";
   } else {
     title.textContent = (wizardState.workflow.id === "PESsearch"
       ? "配置计算协议"
@@ -20880,6 +21009,7 @@ async function openMethodConfig() {
     if (levelDisabled) expanded = false;
     var card = document.createElement("div");
     card.className = "mc-level-card";
+    if (lvDef.level_id === "batch") card.classList.add("mc-batch-flat");
     card.setAttribute("data-level-id", lvDef.level_id);
 
     var hdr = document.createElement("div");
@@ -20972,17 +21102,31 @@ async function openMethodConfig() {
     var coreFields = [];
     var advancedFields = [];
     var batchSteps = (lvDef.level_id === "batch" && stateData && stateData.steps) || [];
+    function batchHasStep(stepName) {
+      if (batchSteps.indexOf(stepName) >= 0) return true;
+      if (stepName === "singlepoint" && batchSteps.indexOf("single_point") >= 0) return true;
+      var profileSteps = {
+        opt_only: ["optimize"],
+        opt_freq: ["optimize", "frequency"],
+        opt_freq_sp: ["optimize", "frequency", "singlepoint"],
+        opt_freq_sp_thermo: ["optimize", "frequency", "singlepoint", "thermochemistry"],
+      }[wizardState.method.profile_id] || [];
+      return profileSteps.indexOf(stepName) >= 0;
+    }
     var isBatchFieldVisible = function(fieldName) {
       if (lvDef.level_id !== "batch") return true;
       if (["single_point_method", "single_point_basis"].indexOf(fieldName) >= 0) {
-        return batchSteps.indexOf("singlepoint") >= 0;
+        return batchHasStep("singlepoint");
       }
       if (["temperature", "pressure", "scale_factor"].indexOf(fieldName) >= 0) {
-        return batchSteps.indexOf("thermochemistry") >= 0;
+        return batchHasStep("thermochemistry");
       }
       return true;
     };
     (lvDef.fields || []).forEach(function(fn) {
+      // BatchOptimize has no shared method form.  Every editable field is
+      // rendered below against the selected batch_roles.{int,ts} draft.
+      if (lvDef.level_id === "batch") return;
       if (!isBatchFieldVisible(fn)) return;
       if (isFieldAdvanced(fn)) advancedFields.push(fn);
       else coreFields.push(fn);
@@ -21833,37 +21977,12 @@ async function openMethodConfig() {
       getLevelState(lvDef.level_id).engine = lvDef.allowed_engines[0];
     }
 
-    // Step bar for batch profile (shows which steps are active)
-    if (lvDef.level_id === "batch" && batchSteps.length) {
-      var stepBar = document.createElement("div");
-      stepBar.className = "mc-step-bar";
-      var allSteps = [
-        { id: "optimize", label_zh: "\u4f18\u5316", label: "Optimize" },
-        { id: "frequency", label_zh: "\u9891\u7387", label: "Frequency" },
-        { id: "singlepoint", label_zh: "\u5355\u70b9\u80fd", label: "Single-point" },
-        { id: "thermochemistry", label_zh: "\u70ed\u5316\u5b66", label: "Thermochemistry" },
-      ];
-      allSteps.forEach(function(step, si) {
-        if (si > 0) {
-          var arrow = document.createElement("span");
-          arrow.className = "mc-step-arrow";
-          arrow.textContent = "\u2192";
-          stepBar.appendChild(arrow);
-        }
-        var stepEl = document.createElement("span");
-        stepEl.className = "mc-step" + (batchSteps.indexOf(step.id) >= 0 ? "" : " disabled");
-        stepEl.textContent = currentLang === "zh-CN" ? step.label_zh : step.label;
-        stepBar.appendChild(stepEl);
-      });
-      bodyDiv.appendChild(stepBar);
-    }
-
     var coreDiv = document.createElement("div");
     coreDiv.className = "method-fields";
     coreFields.forEach(function(fn) { buildFieldRow(fn, coreDiv); });
     if (coreFields.length) bodyDiv.appendChild(coreDiv);
 
-    if (advancedFields.length) {
+    if (advancedFields.length || lvDef.level_id === "batch") {
       var advWrap = document.createElement("div");
       advWrap.className = "mc-level-advanced";
       advWrap.style.position = "relative";
@@ -21871,9 +21990,11 @@ async function openMethodConfig() {
       advToggle.className = "mc-level-advanced-toggle";
       var pesAdvancedVisible = wizardState.workflow.id === "PESsearch";
       var batchAdvancedVisible = lvDef.level_id === "batch";
-      var advDefaultExpanded = pesAdvancedVisible || batchAdvancedVisible;
-      advToggle.textContent = (advDefaultExpanded ? "- " : "+ ") + (lvDef.level_id === "batch" ? (currentLang === "zh-CN" ? "\u9ad8\u7ea7\u8ba1\u7b97\u63a7\u5236" : "Advanced Calculation Controls") : (t("modal.advanced") || "\u9ad8\u7ea7"));
-      advWrap.appendChild(advToggle);
+        var advDefaultExpanded = pesAdvancedVisible || batchAdvancedVisible;
+        advToggle.textContent = (advDefaultExpanded ? "- " : "+ ") + (t("modal.advanced") || "\u9ad8\u7ea7");
+        // Do not add a second "advanced controls" shell around the batch
+        // role form: role tabs are the top-level navigation for this card.
+        if (lvDef.level_id !== "batch") advWrap.appendChild(advToggle);
 
       var advDiv = document.createElement("div");
       advDiv.className = "mc-level-advanced-fields";
@@ -21885,6 +22006,7 @@ async function openMethodConfig() {
         var _BATCH_ROLE_DEFAULTS = {
           int: {
             method: "", basis: null, sp_method: null, sp_basis: null,
+            dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
             opt_max_iter: null, opt_convergence: "tight",
             opt_trust_radius: null, opt_initial_hessian: "auto", opt_recalc_hess: "auto",
             scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
@@ -21895,6 +22017,7 @@ async function openMethodConfig() {
           },
           ts: {
             method: "", basis: null, sp_method: null, sp_basis: null,
+            dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
             opt_max_iter: null, opt_convergence: "tight",
             opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5,
             scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
@@ -21904,6 +22027,25 @@ async function openMethodConfig() {
             temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
           },
         };
+        var batchMethodDefault = stateData.functional || stateData.method || getFieldDefault("functional", engine) || "r2SCAN-3c";
+        var batchBasisDefault = stateData.basis;
+        if (batchBasisDefault === undefined || batchBasisDefault === null) {
+          batchBasisDefault = getFieldDefault("basis", engine, batchMethodDefault) || "";
+        }
+        var batchSpMethodDefault = stateData.single_point_method || stateData.sp_method || "wB97M-V";
+        var batchSpBasisDefault = stateData.single_point_basis || stateData.sp_basis;
+        if (batchSpBasisDefault === undefined || batchSpBasisDefault === null) {
+          batchSpBasisDefault = getFieldDefault("basis", engine, batchSpMethodDefault) || "def2-TZVPP";
+        }
+        ["int", "ts"].forEach(function(role) {
+          var roleDefaults = _BATCH_ROLE_DEFAULTS[role];
+          roleDefaults.method = batchMethodDefault;
+          roleDefaults.basis = batchBasisDefault;
+          roleDefaults.sp_method = batchSpMethodDefault;
+          roleDefaults.sp_basis = batchSpBasisDefault;
+          roleDefaults.dispersion = getFieldDefault("dispersion", engine, batchMethodDefault, batchBasisDefault) || "none";
+          roleDefaults.aux_j_basis = getFieldDefault("aux_j_basis", engine, batchMethodDefault, batchBasisDefault) || "";
+        });
 
         // Ensure batch_roles draft exists with full defaults
         if (!wizardState.method.stages.batch_roles) {
@@ -21913,6 +22055,14 @@ async function openMethodConfig() {
           };
         }
         var _batchRoles = wizardState.method.stages.batch_roles;
+        // Existing drafts created before role-specific method support may be
+        // sparse.  Fill only missing keys; never overwrite either role.
+        ["int", "ts"].forEach(function(role) {
+          _batchRoles[role] = _batchRoles[role] || {};
+          Object.keys(_BATCH_ROLE_DEFAULTS[role]).forEach(function(key) {
+            if (_batchRoles[role][key] === undefined) _batchRoles[role][key] = _BATCH_ROLE_DEFAULTS[role][key];
+          });
+        });
         window._batchRoles = _batchRoles;
         window._BATCH_ROLE_DEFAULTS = _BATCH_ROLE_DEFAULTS;
 
@@ -21921,16 +22071,49 @@ async function openMethodConfig() {
         var intCount = 0, tsCount = 0;
         if (typeof batchPreviewItems !== "undefined" && batchPreviewItems) {
           batchPreviewItems.forEach(function(item) {
+            if (item.include === false) return;
             if (item.tag === "TS") tsCount++;
-            else intCount++;
+            else if (item.tag === "INT") intCount++;
           });
         }
         if (intCount === 0 && tsCount > 0) _batchRoleActive = "ts";
         window._batchRoleActive_ref = function() { return _batchRoleActive; };
+        function _updateBatchRestoreLabel() {
+          var restore = document.getElementById("mt-config-restore-default");
+          if (!restore) return;
+          restore.textContent = currentLang === "zh-CN"
+            ? "恢复 " + _batchRoleActive.toUpperCase() + " 默认"
+            : "Restore " + _batchRoleActive.toUpperCase() + " defaults";
+        }
+        _updateBatchRestoreLabel();
 
+        var roleToolbar = document.createElement("div");
+        roleToolbar.className = "mc-batch-role-toolbar";
         var roleBar = document.createElement("div");
         roleBar.className = "mc-batch-role-bar";
         var roleButtons = {};
+        var copyRoleBtn = document.createElement("button");
+        copyRoleBtn.type = "button";
+        copyRoleBtn.className = "mc-copy-role-method";
+        function _otherBatchRole() { return _batchRoleActive === "int" ? "ts" : "int"; }
+        function _updateCopyRoleLabel() {
+          var otherRole = _otherBatchRole();
+          copyRoleBtn.textContent = currentLang === "zh-CN"
+            ? "复制" + otherRole.toUpperCase() + "的方法"
+            : "Copy " + otherRole.toUpperCase() + " method";
+        }
+        copyRoleBtn.addEventListener("click", function() {
+          var otherRole = _otherBatchRole();
+          var src = _batchRoles[otherRole] || {};
+          var dst = _batchRoles[_batchRoleActive];
+          if (!dst) return;
+          ["method", "basis", "dispersion", "aux_j_basis", "aux_c_basis", "ri_approximation", "sp_method", "sp_basis"].forEach(function(k) {
+            dst[k] = src[k] !== undefined ? JSON.parse(JSON.stringify(src[k])) : _BATCH_ROLE_DEFAULTS[_batchRoleActive][k];
+          });
+          _renderBatchRoleForm();
+          _fetchBatchConfigPreview();
+        });
+        _updateCopyRoleLabel();
         function _makeRoleBtn(role, label, count) {
           var btn = document.createElement("button");
           btn.type = "button";
@@ -21938,15 +22121,16 @@ async function openMethodConfig() {
           btn.setAttribute("data-role", role);
           var countSpan = document.createElement("span");
           countSpan.className = "mc-batch-role-count";
-          countSpan.textContent = "\u00b7 " + count;
+          countSpan.textContent = batchPreviewItems.length ? "\u00b7 " + count : "";
           btn.appendChild(document.createTextNode(label + " "));
           btn.appendChild(countSpan);
-          btn.disabled = count === 0;
           btn.addEventListener("click", function() {
             if (role === _batchRoleActive) return;
             _batchRoleActive = role;
             roleButtons.int.classList.toggle("active", role === "int");
             roleButtons.ts.classList.toggle("active", role === "ts");
+            _updateBatchRestoreLabel();
+            _updateCopyRoleLabel();
             _renderBatchRoleForm();
           });
           return btn;
@@ -21955,53 +22139,51 @@ async function openMethodConfig() {
         roleButtons.ts = _makeRoleBtn("ts", currentLang === "zh-CN" ? "TS \u8fc7\u6e21\u6001" : "TS Transition State", tsCount);
         roleBar.appendChild(roleButtons.int);
         roleBar.appendChild(roleButtons.ts);
-        advDiv.appendChild(roleBar);
+        roleToolbar.appendChild(roleBar);
+        roleToolbar.appendChild(copyRoleBtn);
+        advDiv.appendChild(roleToolbar);
 
         // ── Role form container ──
         var roleFormDiv = document.createElement("div");
         roleFormDiv.className = "mc-batch-role-form";
         advDiv.appendChild(roleFormDiv);
 
-        // ── Collapsible: \u66f4\u591a\u8ba1\u7b97\u9009\u9879 ──
-        var moreAdvWrap = document.createElement("div");
-        moreAdvWrap.className = "mc-adv-group";
-        var moreHdr = document.createElement("div");
-        moreHdr.className = "mc-adv-group-header";
-        var moreChevron = document.createElement("span");
-        moreChevron.className = "mc-adv-group-chevron";
-        moreChevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
-        moreHdr.appendChild(moreChevron);
-        moreHdr.appendChild(document.createTextNode(currentLang === "zh-CN" ? "\u66f4\u591a\u8ba1\u7b97\u9009\u9879" : "More Calculation Options"));
-        moreAdvWrap.appendChild(moreHdr);
-        var moreFields = document.createElement("div");
-        moreFields.className = "mc-adv-group-fields collapsed";
-        moreAdvWrap.appendChild(moreFields);
-        moreHdr.addEventListener("click", function() {
-          var isCollapsed = moreFields.classList.contains("collapsed");
-          moreFields.classList.toggle("collapsed", !isCollapsed);
-          moreChevron.classList.toggle("open", isCollapsed);
-        });
-        advDiv.appendChild(moreAdvWrap);
+        function _makeBatchDisclosure(labelZh, labelEn, extraClass) {
+          var wrap = document.createElement("div");
+          wrap.className = "mc-adv-group mc-batch-disclosure" + (extraClass ? " " + extraClass : "");
+          var header = document.createElement("div");
+          header.className = "mc-adv-group-header";
+          var chevron = document.createElement("span");
+          chevron.className = "mc-adv-group-chevron";
+          chevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
+          header.appendChild(chevron);
+          header.appendChild(document.createTextNode(currentLang === "zh-CN" ? labelZh : labelEn));
+          var fields = document.createElement("div");
+          fields.className = "mc-adv-group-fields mc-batch-detail-fields collapsed";
+          header.addEventListener("click", function() {
+            var opening = fields.classList.contains("collapsed");
+            fields.classList.toggle("collapsed", !opening);
+            chevron.classList.toggle("open", opening);
+          });
+          wrap.appendChild(header);
+          wrap.appendChild(fields);
+          advDiv.appendChild(wrap);
+          return { wrap: wrap, header: header, fields: fields, chevron: chevron };
+        }
 
-        // ── Collapsible: \u8f93\u5165\u9884\u89c8 ──
-        var previewWrap = document.createElement("div");
-        previewWrap.className = "mc-adv-group";
-        var previewHdr = document.createElement("div");
-        previewHdr.className = "mc-adv-group-header";
-        var previewChevron = document.createElement("span");
-        previewChevron.className = "mc-adv-group-chevron";
-        previewChevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
-        previewHdr.appendChild(previewChevron);
-        previewHdr.appendChild(document.createTextNode(currentLang === "zh-CN" ? "\u8f93\u5165\u9884\u89c8" : "Input Preview"));
-        previewWrap.appendChild(previewHdr);
-        var previewFields = document.createElement("div");
-        previewFields.className = "mc-adv-group-fields collapsed";
-        previewWrap.appendChild(previewFields);
-        previewHdr.addEventListener("click", function() {
-          var isCollapsed = previewFields.classList.contains("collapsed");
-          previewFields.classList.toggle("collapsed", !isCollapsed);
-          previewChevron.classList.toggle("open", isCollapsed);
-        });
+        var scfDetailSection = _makeBatchDisclosure("SCF 详细设置", "SCF Details", "mc-scf-detail-section");
+        var thermoSection = batchHasStep("thermochemistry")
+          ? _makeBatchDisclosure("热化学", "Thermochemistry", "mc-thermo-section") : null;
+        var retrySection = _makeBatchDisclosure("失败重试", "Failure Retry", "mc-retry-section");
+
+        // The endpoint currently exposes the same normalised options consumed
+        // by submission, not a structure-specific ORCA file.  Name it
+        // accurately until a real input-generator endpoint is available.
+        var previewSection = _makeBatchDisclosure("参数摘要", "Parameter Summary", "mc-summary-section");
+        var previewWrap = previewSection.wrap;
+        var previewHdr = previewSection.header;
+        var previewChevron = previewSection.chevron;
+        var previewFields = previewSection.fields;
 
         // Server preview wiring
         var _previewDebounceTimer = null;
@@ -22011,6 +22193,7 @@ async function openMethodConfig() {
 
         function _fetchBatchConfigPreview() {
           if (_previewDebounceTimer) { clearTimeout(_previewDebounceTimer); _previewDebounceTimer = null; }
+          previewFields.setAttribute("data-stale", "true");
           _previewDebounceTimer = setTimeout(function() {
             _previewDebounceTimer = null;
             if (_previewAbortCtrl) { try { _previewAbortCtrl.abort(); } catch(_e) {} }
@@ -22034,7 +22217,8 @@ async function openMethodConfig() {
               .then(function(data) {
                 if (myGen !== _previewGeneration) return;
                 if (data.schema !== "batch_optimize_preview_v1") return;
-                _renderServerPreview(data);
+            previewFields.removeAttribute("data-stale");
+            _renderServerPreview(data);
               })
               .catch(function(err) {
                 if (err && err.name === "AbortError") return;
@@ -22051,7 +22235,6 @@ async function openMethodConfig() {
           var roleData = (data.roles || {})[role];
           if (!roleData) { _renderLocalSummary(); return; }
           var eff = roleData.effective || {};
-          var src = roleData.sources || {};
           var effLabels = {
             max_cycles: zh ? "\u4f18\u5316\u6700\u5927\u5faa\u73af" : "opt max cycles",
             opt_level: zh ? "\u4f18\u5316\u6536\u655b" : "opt level",
@@ -22065,8 +22248,7 @@ async function openMethodConfig() {
           var bits = [];
           Object.keys(effLabels).forEach(function(k) {
             if (eff[k] === undefined || eff[k] === null) return;
-            var badge = src[k] === "user" ? (zh ? "\u5df2\u4fee\u6539" : "modified") : (zh ? "\u9ed8\u8ba4" : "default");
-            bits.push(effLabels[k] + " " + String(eff[k]) + " [" + badge + "]");
+            bits.push(effLabels[k] + " " + String(eff[k]));
           });
           if (bits.length) {
             var line = document.createElement("div");
@@ -22079,12 +22261,6 @@ async function openMethodConfig() {
             pre.className = "mc-preview-orca-kw";
             pre.textContent = role.toUpperCase() + ": ! " + orcaKw.join(" ");
             previewFields.appendChild(pre);
-          }
-          if (data.config_key) {
-            var keyDiv = document.createElement("div");
-            keyDiv.className = "mc-preview-config-key";
-            keyDiv.textContent = (zh ? "\u914d\u7f6e\u7248\u672c\uff1a" : "Config key: ") + String(data.config_key).slice(0, 12) + "\u2026";
-            previewFields.appendChild(keyDiv);
           }
         }
 
@@ -22128,33 +22304,84 @@ async function openMethodConfig() {
         _renderLocalSummary();
         _fetchBatchConfigPreview();
 
+        function _appendMethodNote(dest, meta, basisValue, prefix) {
+          var parts = [];
+          if (basisValue) parts.push((currentLang === "zh-CN" ? "基组 " : "Basis ") + basisValue);
+          if (meta.builtin_dispersion) parts.push((currentLang === "zh-CN" ? "色散 " : "Dispersion ") + meta.builtin_dispersion);
+          if (meta.default_aux_j) parts.push((currentLang === "zh-CN" ? "辅助基组 " : "Aux basis ") + meta.default_aux_j);
+          if (meta.ri_support === "composite" || meta.ri_support === "automatic") {
+            parts.push(currentLang === "zh-CN" ? "方法内置" : "method built-in");
+          }
+          if (!parts.length) return;
+          var note = document.createElement("div");
+          note.className = "mc-method-note";
+          note.textContent = (prefix || "") + parts.join(" · ");
+          dest.appendChild(note);
+        }
+
         // ── _renderBatchRoleForm: renders the form for _batchRoleActive ──
         function _renderBatchRoleForm() {
           roleFormDiv.innerHTML = "";
           var rd = _batchRoles[_batchRoleActive];
           if (!rd) return;
 
-          // Method group
+          // Method group.  It deliberately does not call buildFieldRow():
+          // that renderer is for a shared stage and writes stages.batch.
+          // These controls write the active role draft exclusively.
           var methodGrp = document.createElement("div");
           methodGrp.className = "mc-adv-group";
           var methodHdr = document.createElement("div");
           methodHdr.className = "mc-adv-group-header";
-          var methodChevron = document.createElement("span");
-          methodChevron.className = "mc-adv-group-chevron open";
-          methodChevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
-          methodHdr.appendChild(methodChevron);
-          methodHdr.appendChild(document.createTextNode(currentLang === "zh-CN" ? "\u65b9\u6cd5" : "Method"));
+          methodHdr.appendChild(document.createTextNode(currentLang === "zh-CN" ? "计算方法" : "Methods"));
           methodGrp.appendChild(methodHdr);
           var methodFields = document.createElement("div");
-          methodFields.className = "mc-adv-group-fields";
-          buildFieldRow("functional", methodFields);
-          buildFieldRow("basis", methodFields);
+          methodFields.className = "mc-adv-group-fields mc-role-method-fields";
+          var optMethodMeta = lookupCI(methodCatalogCache.method_meta || {}, rd.method || "") || {};
+          _buildBatchRoleMethodField(methodFields, "method", { label_zh: "优化／频率", label: "Opt / Frequency" });
+          if (optMethodMeta.basis_inline !== false) {
+            _buildBatchRoleMethodField(methodFields, "basis", { label_zh: "基组", label: "Basis" });
+          } else {
+            _appendMethodNote(methodFields, optMethodMeta, rd.basis, "");
+          }
+          if (batchHasStep("singlepoint")) {
+            var spMethodMeta = lookupCI(methodCatalogCache.method_meta || {}, rd.sp_method || "") || {};
+            _buildBatchRoleMethodField(methodFields, "sp_method", { label_zh: "单点能", label: "Single-point", singlePoint: true });
+            if (spMethodMeta.basis_inline !== false) {
+              _buildBatchRoleMethodField(methodFields, "sp_basis", { label_zh: "单点基组", label: "SP Basis", singlePoint: true });
+              if (spMethodMeta.builtin_dispersion || spMethodMeta.ri_support !== "user") {
+                _appendMethodNote(methodFields, spMethodMeta, "", currentLang === "zh-CN" ? "单点能：" : "SP: ");
+              }
+            } else {
+              _appendMethodNote(methodFields, spMethodMeta, rd.sp_basis, currentLang === "zh-CN" ? "单点能：" : "SP: ");
+            }
+          }
           methodGrp.appendChild(methodFields);
-          methodHdr.addEventListener("click", function() {
-            var c = methodFields.classList.contains("collapsed");
-            methodFields.classList.toggle("collapsed", !c);
-            methodChevron.classList.toggle("open", c);
-          });
+          if (optMethodMeta.basis_inline !== false && (optMethodMeta.builtin_dispersion || optMethodMeta.ri_support !== "user")) {
+            _appendMethodNote(methodFields, optMethodMeta, "", "");
+          }
+          if (optMethodMeta.basis_inline !== false && (!optMethodMeta.builtin_dispersion || optMethodMeta.ri_support === "user")) {
+            var methodDetail = document.createElement("div");
+            methodDetail.className = "mc-inline-method-detail";
+            var methodDetailBtn = document.createElement("button");
+            methodDetailBtn.type = "button";
+            methodDetailBtn.className = "mc-inline-detail-toggle";
+            methodDetailBtn.textContent = currentLang === "zh-CN" ? "▸ 方法详细设置" : "▸ Method details";
+            var methodDetailFields = document.createElement("div");
+            methodDetailFields.className = "mc-adv-group-fields mc-batch-detail-fields collapsed";
+            if (!optMethodMeta.builtin_dispersion) _buildBatchRoleMethodField(methodDetailFields, "dispersion", { label_zh: "色散校正", label: "Dispersion" });
+            if (optMethodMeta.ri_support === "user") {
+              _buildBatchRoleMethodField(methodDetailFields, "aux_j_basis", { label_zh: "辅助 /J 基组", label: "Aux /J Basis" });
+              if (optMethodMeta.needs_aux_c) _buildBatchRoleMethodField(methodDetailFields, "aux_c_basis", { label_zh: "辅助 /C 基组", label: "Aux /C Basis" });
+            }
+            methodDetailBtn.addEventListener("click", function() {
+              var opening = methodDetailFields.classList.contains("collapsed");
+              methodDetailFields.classList.toggle("collapsed", !opening);
+              methodDetailBtn.textContent = (opening ? "▾ " : "▸ ") + (currentLang === "zh-CN" ? "方法详细设置" : "Method details");
+            });
+            methodDetail.appendChild(methodDetailBtn);
+            methodDetail.appendChild(methodDetailFields);
+            methodGrp.appendChild(methodDetail);
+          }
           roleFormDiv.appendChild(methodGrp);
 
           // Optimizer group
@@ -22166,24 +22393,19 @@ async function openMethodConfig() {
           optChevron.className = "mc-adv-group-chevron open";
           optChevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
           optHdr.appendChild(optChevron);
-          optHdr.appendChild(document.createTextNode(currentLang === "zh-CN" ? "\u4f18\u5316" : "Optimize"));
+          optHdr.appendChild(document.createTextNode(currentLang === "zh-CN" ? "几何优化" : "Geometry Optimization"));
           optGrp.appendChild(optHdr);
           var optFields = document.createElement("div");
           optFields.className = "mc-adv-group-fields";
 
           _buildBatchRoleField(optFields, "opt_max_iter", { type: "int", min: 1, label_zh: "\u6700\u5927\u5faa\u73af", label: "Max Iterations" });
-          _buildBatchRoleField(optFields, "opt_convergence", { type: "select", options: ["loose", "normal", "tight", "verytight"], label_zh: "\u6536\u655b\u6807\u51c6", label: "Convergence", option_labels_zh: { loose: "LooseOpt", normal: "Opt", tight: "TightOpt", verytight: "VeryTightOpt" } });
+          _buildBatchRoleField(optFields, "opt_convergence", { type: "select", options: ["loose", "normal", "tight", "verytight"], label_zh: "收敛标准", label: "Convergence", option_labels_zh: { loose: "宽松", normal: "标准", tight: "严格", verytight: "非常严格" } });
           _buildBatchRoleField(optFields, "opt_trust_radius", { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "\u4fe1\u8d56\u534a\u5f84", label: "Trust Radius" });
-          _buildBatchRoleField(optFields, "opt_initial_hessian", { type: "select", options: ["auto", "model", "calculate"], label_zh: "\u521d\u59cb Hessian", label: "Initial Hessian", option_labels_zh: { auto: "\u81ea\u52a8", model: "\u6a21\u578b Hessian", calculate: "\u663e\u5f0f\u8ba1\u7b97" } });
+          _buildBatchRoleField(optFields, "opt_initial_hessian", { type: "select", options: ["auto", "model", "calculate"], label_zh: "初始 Hessian", label: "Initial Hessian", option_labels_zh: { auto: "引擎默认", model: "模型 Hessian", calculate: "启动时计算" } });
           // Hessian recalc: custom UI with segmented control
           _buildHessianRecalcField(optFields);
 
           optGrp.appendChild(optFields);
-          optHdr.addEventListener("click", function() {
-            var c = optFields.classList.contains("collapsed");
-            optFields.classList.toggle("collapsed", !c);
-            optChevron.classList.toggle("open", c);
-          });
           roleFormDiv.appendChild(optGrp);
 
           // SCF group
@@ -22200,50 +22422,101 @@ async function openMethodConfig() {
           var scfFields = document.createElement("div");
           scfFields.className = "mc-adv-group-fields";
           _buildBatchRoleField(scfFields, "scf_max_iter", { type: "int", min: 1, label_zh: "\u6700\u5927\u5faa\u73af", label: "Max Iterations" });
-          _buildBatchRoleField(scfFields, "scf_convergence", { type: "select", options: ["loose", "normal", "tight", "verytight"], label_zh: "\u6536\u655b\u6807\u51c6", label: "Convergence", option_labels_zh: { loose: "LooseSCF", normal: "NormalSCF", tight: "TightSCF", verytight: "VeryTightSCF" } });
+          _buildBatchRoleField(scfFields, "scf_convergence", { type: "select", options: ["loose", "normal", "tight", "verytight"], label_zh: "收敛标准", label: "Convergence", option_labels_zh: { loose: "宽松", normal: "标准", tight: "严格", verytight: "非常严格" } });
           scfGrp.appendChild(scfFields);
-          scfHdr.addEventListener("click", function() {
-            var c = scfFields.classList.contains("collapsed");
-            scfFields.classList.toggle("collapsed", !c);
-            scfChevron.classList.toggle("open", c);
-          });
           roleFormDiv.appendChild(scfGrp);
 
-          // More options fields
-          moreFields.innerHTML = "";
-          _buildBatchRoleField(moreFields, "scf_strategy", { type: "select", options: ["normal", "slowconv", "soscf"], label_zh: "SCF \u6536\u655b\u7b97\u6cd5", label: "SCF Strategy", option_labels_zh: { normal: "\u6807\u51c6", slowconv: "\u6162\u6536\u655b", soscf: "SOSCF" } });
-          _buildBatchRoleField(moreFields, "scf_orbital_inherit", { type: "select", options: ["true", "false"], label_zh: "\u8f68\u9053\u521d\u731c\u7ee7\u627f", label: "Orbital Inherit", option_labels_zh: { true: "\u662f", false: "\u5426" } });
-          _buildBatchRoleField(moreFields, "scf_damp", { type: "select", options: ["true", "false"], label_zh: "SCF Damp", label: "SCF Damp", option_labels_zh: { true: "\u542f\u7528", false: "\u5173\u95ed" } });
-          _buildBatchRoleField(moreFields, "scf_shift", { type: "select", options: ["true", "false"], label_zh: "SCF Shift", label: "SCF Shift", option_labels_zh: { true: "\u542f\u7528", false: "\u5173\u95ed" } });
-          _buildBatchRoleField(moreFields, "opt_rescue_policy", { type: "select", options: ["off", "adaptive"], label_zh: "\u5931\u8d25\u540e\u81ea\u52a8\u91cd\u8bd5", label: "Auto-Retry", option_labels_zh: { off: "\u5173\u95ed", adaptive: "\u81ea\u9002\u5e94" } });
-          _buildBatchRoleField(moreFields, "opt_max_rescue", { type: "int", min: 0, max: 10, label_zh: "\u91cd\u8bd5\u6b21\u6570\u4e0a\u9650", label: "Max Retries" });
-          _buildBatchRoleField(moreFields, "sp_method", { type: "text", label_zh: "\u5355\u70b9\u65b9\u6cd5", label: "SP Method" });
-          _buildBatchRoleField(moreFields, "sp_basis", { type: "text", label_zh: "\u5355\u70b9\u57fa\u7ec4", label: "SP Basis" });
-          _buildBatchRoleField(moreFields, "scale_factor", { type: "float", min: 0.9, max: 1.0, step: 0.0001, label_zh: "\u9891\u7387\u7f29\u653e\u56e0\u5b50", label: "Frequency Scale Factor" });
-          _buildBatchRoleField(moreFields, "temperature", { type: "float", min: 0, max: 10000, step: 0.01, label_zh: "\u6e29\u5ea6 (K)", label: "Temperature (K)" });
-          _buildBatchRoleField(moreFields, "pressure", { type: "float", min: 0, max: 1000, step: 0.01, label_zh: "\u538b\u529b (atm)", label: "Pressure (atm)" });
+          // Purpose-specific disclosures replace the former mixed "More options" list.
+          scfDetailSection.fields.innerHTML = "";
+          _buildBatchRoleField(scfDetailSection.fields, "scf_strategy", { type: "select", options: ["normal", "slowconv", "soscf"], label_zh: "收敛算法", label: "SCF Strategy", option_labels_zh: { normal: "标准", slowconv: "慢收敛", soscf: "SOSCF" } });
+          _buildBatchRoleField(scfDetailSection.fields, "scf_orbital_inherit", { type: "toggle", label_zh: "轨道初猜继承", label: "Orbital Inherit" });
+          _buildBatchRoleField(scfDetailSection.fields, "scf_damp", { type: "toggle", label_zh: "阻尼", label: "Damping" });
+          if (rd.scf_damp === true) _buildBatchRoleField(scfDetailSection.fields, "scf_damp_fac", { type: "float", min: 0, max: 1, step: 0.01, label_zh: "阻尼系数", label: "Damping Factor" });
+          _buildBatchRoleField(scfDetailSection.fields, "scf_shift", { type: "toggle", label_zh: "能级移动", label: "Level Shift" });
+          if (rd.scf_shift === true) _buildBatchRoleField(scfDetailSection.fields, "scf_shift_fac", { type: "float", min: 0, max: 10, step: 0.01, label_zh: "移动幅度", label: "Shift Value" });
 
-          // Copy button: \u590d\u5236\u53e6\u4e00\u9875\u7684\u65b9\u6cd5
-          var copyWrap = document.createElement("div");
-          copyWrap.style.marginTop = "8px";
-          var copyBtn = document.createElement("button");
-          copyBtn.type = "button";
-          copyBtn.className = "btn ghost";
-          var otherRole = _batchRoleActive === "int" ? "ts" : "int";
-          copyBtn.textContent = currentLang === "zh-CN"
-            ? "\u590d\u5236" + (otherRole === "ts" ? "TS" : "INT") + "\u7684\u65b9\u6cd5\u5230\u5f53\u524d\u9875"
-            : "Copy " + otherRole.toUpperCase() + " method to current page";
-          copyBtn.addEventListener("click", function() {
-            var src = _batchRoles[otherRole] || {};
-            var dst = _batchRoles[_batchRoleActive];
-            if (!dst) return;
-            ["method", "basis", "sp_method", "sp_basis"].forEach(function(k) {
-              dst[k] = src[k] !== undefined ? JSON.parse(JSON.stringify(src[k])) : _BATCH_ROLE_DEFAULTS[_batchRoleActive][k];
-            });
-            _renderBatchRoleForm();
+          if (thermoSection) {
+            thermoSection.fields.innerHTML = "";
+            _buildBatchRoleField(thermoSection.fields, "temperature", { type: "float", min: 0, max: 10000, step: 0.01, label_zh: "温度 (K)", label: "Temperature (K)" });
+            _buildBatchRoleField(thermoSection.fields, "pressure", { type: "float", min: 0, max: 1000, step: 0.01, label_zh: "压力 (atm)", label: "Pressure (atm)" });
+            _buildBatchRoleField(thermoSection.fields, "scale_factor", { type: "float", min: 0.9, max: 1.0, step: 0.0001, label_zh: "频率缩放因子", label: "Frequency Scale Factor" });
+          }
+
+          retrySection.fields.innerHTML = "";
+          _buildBatchRoleField(retrySection.fields, "opt_rescue_policy", { type: "select", options: ["off", "adaptive"], label_zh: "重试策略", label: "Retry Policy", option_labels_zh: { off: "关闭", adaptive: "自适应" } });
+          if (rd.opt_rescue_policy !== "off") _buildBatchRoleField(retrySection.fields, "opt_max_rescue", { type: "int", min: 0, max: 10, label_zh: "次数上限", label: "Max Retries" });
+        }
+
+        // Role-aware method selector.  Catalog choices are retained instead
+        // of falling back to a free-text field, and dependent basis/RI values
+        // stay in the same role draft as the method itself.
+        function _buildBatchRoleMethodField(dest, key, def) {
+          var rd = _batchRoles[_batchRoleActive];
+          if (!rd) return;
+          var fDiv = document.createElement("div");
+          fDiv.className = "mc-field";
+          var lbl = document.createElement("label");
+          lbl.textContent = currentLang === "zh-CN" ? (def.label_zh || def.label) : def.label;
+          fDiv.appendChild(lbl);
+          var method = def.singlePoint ? (rd.sp_method || rd.method || "") : (rd.method || "");
+          var catalogKey = key === "method" || key === "sp_method" ? "functional" : key;
+          var opts = getFieldOptions(catalogKey, engine, method, rd.basis) || [];
+          var meta = lookupCI(methodCatalogCache.method_meta || {}, method) || {};
+          if (key === "dispersion" && meta.builtin_dispersion) {
+            var badge = document.createElement("span");
+            badge.className = "mc-builtin-badge";
+            badge.textContent = meta.builtin_dispersion + " (" + (currentLang === "zh-CN" ? "内置" : "built in") + ")";
+            rd.dispersion = "none";
+            fDiv.appendChild(badge);
+            dest.appendChild(fDiv);
+            return;
+          }
+          if (key === "aux_j_basis" && meta.ri_support && meta.ri_support !== "user") {
+            var riBadge = document.createElement("span");
+            riBadge.className = "mc-builtin-badge";
+            riBadge.textContent = currentLang === "zh-CN" ? "方法内置" : "Built into method";
+            rd.aux_j_basis = "";
+            fDiv.appendChild(riBadge);
+            dest.appendChild(fDiv);
+            return;
+          }
+          var sel = document.createElement("select");
+          if ((key === "basis" || key === "sp_basis") && !opts.length) opts = [""];
+          opts.forEach(function(optValue) {
+            var option = document.createElement("option");
+            option.value = optValue;
+            option.textContent = optValue || (currentLang === "zh-CN" ? "内置基组" : "Built-in basis");
+            sel.appendChild(option);
           });
-          copyWrap.appendChild(copyBtn);
-          moreFields.appendChild(copyWrap);
+          var value = rd[key];
+          if (value != null && opts.map(String).indexOf(String(value)) < 0 && value !== "") {
+            var legacy = document.createElement("option"); legacy.value = value; legacy.textContent = value; sel.appendChild(legacy);
+          }
+          if (value != null) sel.value = String(value);
+          sel.addEventListener("change", function() {
+            rd[key] = sel.value;
+            if (key === "method" || key === "sp_method") {
+              var nextMethod = sel.value;
+              var nextBasisKey = key === "method" ? "basis" : "sp_basis";
+              var nextBasis = getFieldDefault("basis", engine, nextMethod) || "";
+              rd[nextBasisKey] = nextBasis;
+              if (key === "method") {
+                rd.dispersion = getFieldDefault("dispersion", engine, nextMethod, nextBasis) || "none";
+                rd.aux_j_basis = getFieldDefault("aux_j_basis", engine, nextMethod, nextBasis) || "";
+              }
+              _renderBatchRoleForm();
+            }
+            if (typeof scheduleValidate === "function") scheduleValidate();
+            _fetchBatchConfigPreview();
+          });
+          fDiv.appendChild(sel);
+          dest.appendChild(fDiv);
+          if (key === "method" && meta.builtin_basis) {
+            var note = document.createElement("div");
+            note.className = "mc-method-basis-note";
+            note.textContent = (currentLang === "zh-CN" ? "内置基组：" : "Built-in basis: ") + meta.builtin_basis;
+            dest.appendChild(note);
+          }
         }
 
         // ── _buildBatchRoleField: compact field renderer for role config ──
@@ -22256,7 +22529,28 @@ async function openMethodConfig() {
           lbl.textContent = currentLang === "zh-CN" ? (def.label_zh || def.label) : def.label;
           fDiv.appendChild(lbl);
 
-          if (def.type === "select") {
+          if (def.type === "toggle") {
+            var toggleWrap = document.createElement("div");
+            toggleWrap.className = "mc-toggle-wrap";
+            var switchLabel = document.createElement("label");
+            switchLabel.className = "mc-switch";
+            switchLabel.setAttribute("aria-label", lbl.textContent);
+            var toggle = document.createElement("input");
+            toggle.type = "checkbox";
+            toggle.checked = rd[key] === true;
+            var track = document.createElement("span");
+            track.className = "mc-switch-track";
+            toggle.addEventListener("change", function() {
+              rd[key] = toggle.checked;
+              _renderBatchRoleForm();
+              if (typeof scheduleValidate === "function") scheduleValidate();
+              _fetchBatchConfigPreview();
+            });
+            switchLabel.appendChild(toggle);
+            switchLabel.appendChild(track);
+            toggleWrap.appendChild(switchLabel);
+            fDiv.appendChild(toggleWrap);
+          } else if (def.type === "select") {
             var sel = document.createElement("select");
             (def.options || []).forEach(function(opt) {
               var o = document.createElement("option");
@@ -22277,6 +22571,7 @@ async function openMethodConfig() {
                 if (!isNaN(parsed) && String(parsed) === v) v = parsed;
               }
               rd[key] = v;
+              if (["scf_damp", "scf_shift", "opt_rescue_policy"].indexOf(key) >= 0) _renderBatchRoleForm();
               if (typeof scheduleValidate === "function") scheduleValidate();
               _fetchBatchConfigPreview();
             });
@@ -22287,18 +22582,20 @@ async function openMethodConfig() {
             inp.min = String(def.min);
             if (def.max != null) inp.max = String(def.max);
             inp.step = def.type === "int" ? "1" : String(def.step || 0.01);
-            inp.placeholder = currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto";
+            inp.placeholder = currentLang === "zh-CN" ? "引擎默认" : "Engine default";
             if (rd[key] != null) inp.value = String(rd[key]);
             inp.addEventListener("change", function() {
               if (inp.value === "") {
                 rd[key] = null;
               } else {
                 var v = def.type === "int" ? parseInt(inp.value, 10) : parseFloat(inp.value);
-                if (isNaN(v)) v = def.min;
-                if (def.min != null && v < def.min) v = def.min;
-                if (def.max != null && v > def.max) v = def.max;
+                if (isNaN(v) || (def.min != null && v < def.min) || (def.max != null && v > def.max)) {
+                  inp.setCustomValidity(currentLang === "zh-CN" ? "请输入范围内的有效数值" : "Enter a valid value in the allowed range");
+                  inp.reportValidity();
+                  return;
+                }
+                inp.setCustomValidity("");
                 rd[key] = v;
-                inp.value = String(v);
               }
               if (typeof scheduleValidate === "function") scheduleValidate();
               _fetchBatchConfigPreview();
@@ -22307,7 +22604,7 @@ async function openMethodConfig() {
           } else {
             var textInp = document.createElement("input");
             textInp.type = "text";
-            textInp.placeholder = currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto";
+            textInp.placeholder = currentLang === "zh-CN" ? "引擎默认" : "Engine default";
             if (rd[key] != null) textInp.value = String(rd[key]);
             textInp.addEventListener("change", function() {
               rd[key] = textInp.value || null;
@@ -22319,18 +22616,18 @@ async function openMethodConfig() {
           dest.appendChild(fDiv);
         }
 
-        // ── Hessian recalc field: segmented control (auto / off / every N) ──
+        // ── Hessian recalc field: one explicit selector + optional interval ──
         function _buildHessianRecalcField(dest) {
           var rd = _batchRoles[_batchRoleActive];
           if (!rd) return;
           var fDiv = document.createElement("div");
-          fDiv.className = "mc-field";
+          fDiv.className = "mc-field mc-field-hessian";
           var lbl = document.createElement("label");
           lbl.textContent = currentLang === "zh-CN" ? "Hessian \u91cd\u7b97" : "Hessian Recalc";
           fDiv.appendChild(lbl);
 
           var rawVal = rd.opt_recalc_hess;
-          var mode = "auto";
+          var mode = "engine_default";
           var customVal = 10;
           if (rawVal === 0) { mode = "off"; }
           else if (rawVal !== undefined && rawVal !== "" && rawVal !== null && rawVal !== "auto") {
@@ -22338,35 +22635,25 @@ async function openMethodConfig() {
             if (!isNaN(parsed) && parsed > 0) { mode = "custom"; customVal = parsed; }
           }
 
-          var segWrap = document.createElement("div");
-          segWrap.className = "mc-hessian-seg";
+          var selectWrap = document.createElement("div");
+          selectWrap.className = "mc-hessian-select-wrap";
+          var modeSelect = document.createElement("select");
+          [["engine_default", currentLang === "zh-CN" ? "引擎默认" : "Engine default"], ["off", currentLang === "zh-CN" ? "不重算" : "No recalc"], ["custom", currentLang === "zh-CN" ? "每 N 次循环" : "Every N cycles"]].forEach(function(pair) {
+            var opt = document.createElement("option"); opt.value = pair[0]; opt.textContent = pair[1]; modeSelect.appendChild(opt);
+          });
+          modeSelect.value = mode;
+          selectWrap.appendChild(modeSelect);
+          fDiv.appendChild(selectWrap);
+          dest.appendChild(fDiv);
 
-          function makeSeg(segMode, label) {
-            var btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "mc-hessian-seg-btn" + (mode === segMode ? " active" : "");
-            btn.textContent = label;
-            btn.addEventListener("click", function() {
-              mode = segMode;
-              segWrap.querySelectorAll(".mc-hessian-seg-btn").forEach(function(b) { b.classList.remove("active"); });
-              btn.classList.add("active");
-              if (mode === "auto") { rd.opt_recalc_hess = "auto"; customRow.style.display = "none"; }
-              else if (mode === "off") { rd.opt_recalc_hess = 0; customRow.style.display = "none"; }
-              else { rd.opt_recalc_hess = customVal; customRow.style.display = ""; }
-              if (typeof scheduleValidate === "function") scheduleValidate();
-              _fetchBatchConfigPreview();
-            });
-            return btn;
-          }
-
-          segWrap.appendChild(makeSeg("auto", currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto"));
-          segWrap.appendChild(makeSeg("off", currentLang === "zh-CN" ? "\u4e0d\u91cd\u7b97" : "No recalc"));
-          segWrap.appendChild(makeSeg("custom", currentLang === "zh-CN" ? "\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af" : "Every N cycles"));
-          fDiv.appendChild(segWrap);
-
-          var customRow = document.createElement("div");
-          customRow.className = "mc-hessian-custom";
-          customRow.style.display = (mode === "custom") ? "" : "none";
+          var intervalField = document.createElement("div");
+          intervalField.className = "mc-field mc-hessian-interval";
+          intervalField.hidden = mode !== "custom";
+          var intervalLabel = document.createElement("label");
+          intervalLabel.textContent = currentLang === "zh-CN" ? "间隔" : "Interval";
+          intervalField.appendChild(intervalLabel);
+          var intervalControl = document.createElement("div");
+          intervalControl.className = "mc-hessian-interval-control";
           var numInp = document.createElement("input");
           numInp.type = "number";
           numInp.min = "1";
@@ -22375,19 +22662,31 @@ async function openMethodConfig() {
           numInp.value = String(customVal);
           numInp.addEventListener("change", function() {
             var v = parseInt(numInp.value, 10);
-            if (isNaN(v) || v < 1) v = 1;
-            if (v > 1000) v = 1000;
-            numInp.value = String(v);
+            if (isNaN(v) || v < 1 || v > 1000) {
+              numInp.setCustomValidity(currentLang === "zh-CN" ? "请输入 1 到 1000 的整数" : "Enter an integer from 1 to 1000");
+              numInp.reportValidity();
+              return;
+            }
+            numInp.setCustomValidity("");
             customVal = v;
             if (mode === "custom") { rd.opt_recalc_hess = v; if (typeof scheduleValidate === "function") scheduleValidate(); _fetchBatchConfigPreview(); }
           });
           var unitLbl = document.createElement("span");
           unitLbl.className = "unit";
-          unitLbl.textContent = currentLang === "zh-CN" ? "\u4e2a\u4f18\u5316\u5faa\u73af" : "optimization cycles";
-          customRow.appendChild(numInp);
-          customRow.appendChild(unitLbl);
-          fDiv.appendChild(customRow);
-          dest.appendChild(fDiv);
+          unitLbl.textContent = currentLang === "zh-CN" ? "次循环" : "cycles";
+          intervalControl.appendChild(numInp);
+          intervalControl.appendChild(unitLbl);
+          intervalField.appendChild(intervalControl);
+          dest.appendChild(intervalField);
+          modeSelect.addEventListener("change", function() {
+            mode = modeSelect.value;
+            if (mode === "engine_default") rd.opt_recalc_hess = "auto";
+            else if (mode === "off") rd.opt_recalc_hess = 0;
+            else rd.opt_recalc_hess = customVal;
+            intervalField.hidden = mode !== "custom";
+            if (typeof scheduleValidate === "function") scheduleValidate();
+            _fetchBatchConfigPreview();
+          });
         }
 
         _renderBatchRoleForm();
