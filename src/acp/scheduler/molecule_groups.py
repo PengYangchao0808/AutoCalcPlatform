@@ -60,8 +60,11 @@ def resolve_molecule_key(
 ) -> str:
     """Resolve *raw_name* to the effective ``molecule_key``.
 
-    1. Check ``molecule_aliases`` for an alias hit → return its ``group_key``.
-    2. Otherwise fall back to ``molecule_group_key(raw_name)``.
+    Two-tier alias lookup:
+    1. Exact ``alias_key`` match → return its ``group_key``.
+    2. Case-insensitive fallback (``lower(alias_key) = lower(?)``) →
+       first hit by rowid wins (deterministic).
+    3. Otherwise fall back to ``molecule_group_key(raw_name)``.
     """
     from acp.scheduler.naming import molecule_group_key
 
@@ -69,20 +72,36 @@ def resolve_molecule_key(
     if not alias_key:
         return ""
 
-    # Try alias lookup
     if isinstance(index_or_conn, sqlite3.Connection):
-        row = index_or_conn.execute(
+        conn = index_or_conn
+        row = conn.execute(
             "SELECT group_key FROM molecule_aliases "
             "WHERE project_id=? AND alias_key=?",
             (project_id, alias_key),
         ).fetchone()
+        if row is None:
+            row = conn.execute(
+                "SELECT group_key FROM molecule_aliases "
+                "WHERE project_id=? AND lower(alias_key)=lower(?) "
+                "ORDER BY rowid LIMIT 1",
+                (project_id, alias_key),
+            ).fetchone()
     else:
-        rows = index_or_conn._query(
+        idx = index_or_conn
+        rows = idx._query(
             "SELECT group_key FROM molecule_aliases "
             "WHERE project_id=? AND alias_key=?",
             (project_id, alias_key),
         )
         row = rows[0] if rows else None
+        if row is None:
+            rows = idx._query(
+                "SELECT group_key FROM molecule_aliases "
+                "WHERE project_id=? AND lower(alias_key)=lower(?) "
+                "ORDER BY rowid LIMIT 1",
+                (project_id, alias_key),
+            )
+            row = rows[0] if rows else None
 
     if row is not None:
         return row["group_key"] if isinstance(row, sqlite3.Row) else row[0]

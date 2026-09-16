@@ -463,3 +463,265 @@ def test_merge_raw_sqlite_cross_check(client: TestClient) -> None:
     alias_map = {r[0]: r[1] for r in alias_rows}
     assert alias_map.get("BCB-Allene") == "BCB_ALLENE"
     assert alias_map.get("BCB ALLENE") == "BCB_ALLENE"
+
+
+# ── Re-merge UPSERT: A,B→T then T,C→T2 chains correctly ──────────────
+
+
+def test_re_merge_upsert_chains_aliases(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "A",
+                "task_name": "t1",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+            {
+                "molecule_name": "B",
+                "task_name": "t2",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+            {
+                "molecule_name": "C",
+                "task_name": "t3",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+            {
+                "molecule_name": "T",
+                "task_name": "t4",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+            {
+                "molecule_name": "T2",
+                "task_name": "t5",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+        ],
+        project_id=pid,
+    )
+
+    r = client.post(
+        f"/api/v2/projects/{pid}/molecule-groups/merge",
+        json={"alias_keys": ["A", "B"], "target_key": "T"},
+    )
+    assert r.status_code == 200
+    assert r.json()["updated"] == 2
+
+    r = client.post(
+        f"/api/v2/projects/{pid}/molecule-groups/merge",
+        json={"alias_keys": ["T", "C"], "target_key": "T2"},
+    )
+    assert r.status_code == 200
+    assert r.json()["updated"] == 4
+
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        keys = [r[0] for r in conn.execute(
+            "SELECT molecule_key FROM tasks WHERE project_id=? ORDER BY task_id",
+            (pid,),
+        ).fetchall()]
+    assert keys == ["T2", "T2", "T2", "T2", "T2"]
+
+    with sqlite3.connect(str(db_path)) as conn:
+        alias_rows = conn.execute(
+            "SELECT alias_key, group_key FROM molecule_aliases WHERE project_id=?",
+            (pid,),
+        ).fetchall()
+    alias_map = {r[0]: r[1] for r in alias_rows}
+    assert alias_map["T"] == "T2"
+    assert alias_map["C"] == "T2"
+    assert alias_map["A"] == "T"
+    assert alias_map["B"] == "T"
+
+
+# ── Legacy alias preservation: casefolded alias survives refresh ──────
+
+
+def test_legacy_casefolded_alias_preserved_after_refresh(tmp_path: Path) -> None:
+    from acp.scheduler.migrations import migrate
+
+    db_path = tmp_path / "test.db"
+    migrate(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO tasks "
+            "(task_id, job_id, project_id, molecule_name, task_name, "
+            "remark, display_name, workflow, task_dir_name, status, "
+            "storage_mode, layout_version, created_at, updated_at, "
+            "molecule_key, tags, archived) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
+            (
+                "t1", "t1", "proj1", "BCB-Allene", "opt",
+                "", "dir_t1", "Confsearch", "dir_t1", "completed",
+                "local", "2026-01-01", "2026-01-01", "bcb_allene", "[]",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO molecule_aliases "
+            "(project_id, alias_key, group_key, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            ("proj1", "bcb-allene", "bcb_allene", "2026-01-01"),
+        )
+        conn.execute(
+            "DELETE FROM _schema_migrations WHERE id='016'",
+        )
+        conn.commit()
+
+    migrate(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        row = conn.execute(
+            "SELECT molecule_key FROM tasks WHERE task_id='t1'",
+        ).fetchone()
+    assert row[0] == "bcb_allene", f"Legacy merge key should survive, got {row[0]}"
+
+
+# ── Mixed matrix: alias + case-preserved + no-alias ──────────────────
+
+
+def test_legacy_refresh_mixed_matrix(tmp_path: Path) -> None:
+    from acp.scheduler.migrations import migrate
+
+    db_path = tmp_path / "test.db"
+    migrate(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO tasks "
+            "(task_id, job_id, project_id, molecule_name, task_name, "
+            "remark, display_name, workflow, task_dir_name, status, "
+            "storage_mode, layout_version, created_at, updated_at, "
+            "molecule_key, tags, archived) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
+            (
+                "t_alias", "t_alias", "proj1", "BCB-Allene", "opt",
+                "", "dir", "Confsearch", "dir", "completed",
+                "local", "2026-01-01", "2026-01-01", "bcb_allene", "[]",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO tasks "
+            "(task_id, job_id, project_id, molecule_name, task_name, "
+            "remark, display_name, workflow, task_dir_name, status, "
+            "storage_mode, layout_version, created_at, updated_at, "
+            "molecule_key, tags, archived) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
+            (
+                "t_lower", "t_lower", "proj1", "EtOH", "opt",
+                "", "dir", "Confsearch", "dir", "completed",
+                "local", "2026-01-01", "2026-01-01", "etoh", "[]",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO tasks "
+            "(task_id, job_id, project_id, molecule_name, task_name, "
+            "remark, display_name, workflow, task_dir_name, status, "
+            "storage_mode, layout_version, created_at, updated_at, "
+            "molecule_key, tags, archived) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
+            (
+                "t_plain", "t_plain", "proj1", "MeOH", "opt",
+                "", "dir", "Confsearch", "dir", "completed",
+                "local", "2026-01-01", "2026-01-01", "MeOH", "[]",
+            ),
+        )
+        conn.execute(
+            "INSERT INTO molecule_aliases "
+            "(project_id, alias_key, group_key, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            ("proj1", "bcb-allene", "bcb_allene", "2026-01-01"),
+        )
+        conn.execute(
+            "DELETE FROM _schema_migrations WHERE id='016'",
+        )
+        conn.commit()
+
+    migrate(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        rows = {r[0]: r[1] for r in conn.execute(
+            "SELECT task_id, molecule_key FROM tasks WHERE project_id='proj1' "
+            "ORDER BY task_id",
+        ).fetchall()}
+    assert rows["t_alias"] == "bcb_allene", "alias-covered row keeps merge target"
+    assert rows["t_lower"] == "EtOH", "all-lowercase legacy gets case-preserving key"
+    assert rows["t_plain"] == "MeOH", "plain legacy row gets case-preserving key"
+
+    migrate(db_path)
+
+    with sqlite3.connect(str(db_path)) as conn:
+        rows2 = {r[0]: r[1] for r in conn.execute(
+            "SELECT task_id, molecule_key FROM tasks WHERE project_id='proj1' "
+            "ORDER BY task_id",
+        ).fetchall()}
+    assert rows == rows2, "Idempotent: re-run produces identical results"
+
+
+# ── Sticky aliases: new task gets alias target key ────────────────────
+
+
+def test_sticky_alias_new_task_gets_target_key(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    body = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "BCB-Allene",
+                "task_name": "t1",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+            {
+                "molecule_name": "BCB_ALLENE",
+                "task_name": "t2",
+                "workflow": "fake",
+                "input": {},
+                "method": {},
+            },
+        ],
+        project_id=pid,
+    )
+    assert len(body["created"]) == 2
+
+    r = client.post(
+        f"/api/v2/projects/{pid}/molecule-groups/merge",
+        json={"alias_keys": ["BCB-Allene"], "target_key": "BCB_ALLENE"},
+    )
+    assert r.status_code == 200
+
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        idx_row = conn.execute(
+            "SELECT * FROM tasks WHERE task_id=?",
+            (body["created"][0]["task_id"],),
+        ).fetchone()
+    assert idx_row is not None
+
+    from acp.scheduler.tasks import TaskIndex
+
+    idx = TaskIndex(db_path)
+    key = idx.compute_molecule_key(pid, "BCB-Allene")
+    assert key == "BCB_ALLENE", (
+        f"Alias resolution should return target, got {key}"
+    )
+
+    key_no_alias = idx.compute_molecule_key(pid, "EtOH")
+    assert key_no_alias == "EtOH", "No alias returns case-preserving key"
+
+    key_no_project = idx.compute_molecule_key(None, "BCB-Allene")
+    assert key_no_project == "BCB-Allene", "No project returns bare molecule_group_key"

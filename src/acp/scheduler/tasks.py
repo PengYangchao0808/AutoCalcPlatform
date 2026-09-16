@@ -244,7 +244,6 @@ class TaskIndex:
         node = result.get("node") or result.get("execution_target")
         if not isinstance(node, str) or not node:
             node = "remote" if remote else "local"
-        from acp.scheduler.naming import molecule_group_key
 
         tags_list = record.spec.tags or []
         tags_json = json.dumps(tags_list)
@@ -253,11 +252,12 @@ class TaskIndex:
             if isinstance(record.spec.resources, dict) else None
         )
         last_activity_at = record.completed_at or record.started_at or record.created_at
+        project_id = record.project_id or record.spec.project_id
         self.upsert(
             {
                 "task_id": record.id,
                 "job_id": record.id,
-                "project_id": record.project_id or record.spec.project_id,
+                "project_id": project_id,
                 "molecule_name": record.spec.molecule_name,
                 "task_name": record.spec.task_name,
                 "remark": record.spec.remark,
@@ -274,7 +274,9 @@ class TaskIndex:
                 "layout_version": layout_version,
                 "created_at": record.created_at,
                 "updated_at": record.updated_at,
-                "molecule_key": molecule_group_key(record.spec.molecule_name),
+                "molecule_key": self.compute_molecule_key(
+                    project_id, record.spec.molecule_name,
+                ),
                 "tags": tags_json,
                 "archived": 0,
                 "batch_id": batch_id,
@@ -425,12 +427,12 @@ class TaskIndex:
         params: list[Any] = []
 
         if molecule_name is not None:
-            from acp.scheduler.naming import molecule_group_key
-
             sets.append("molecule_name=?")
             params.append(molecule_name)
             sets.append("molecule_key=?")
-            params.append(molecule_group_key(molecule_name))
+            params.append(self.compute_molecule_key(
+                existing.get("project_id"), molecule_name,
+            ))
 
         if task_name is not None:
             sets.append("task_name=?")
@@ -455,6 +457,22 @@ class TaskIndex:
             tuple(params),
         )
         return True
+
+    # ------------------------------------------------------------------ #
+    # Molecule key resolution (alias-aware)
+    # ------------------------------------------------------------------ #
+
+    def compute_molecule_key(self, project_id: str | None, molecule_name: str) -> str:
+        """Resolve *molecule_name* to the effective ``molecule_key``.
+
+        Uses the two-tier alias lookup when *project_id* is available;
+        falls back to bare ``molecule_group_key`` when project is empty.
+        """
+        if not project_id:
+            from acp.scheduler.naming import molecule_group_key
+            return molecule_group_key(molecule_name)
+        from acp.scheduler.molecule_groups import resolve_molecule_key
+        return resolve_molecule_key(self, project_id, molecule_name)
 
 
 __all__ = ["TaskIndex"]
