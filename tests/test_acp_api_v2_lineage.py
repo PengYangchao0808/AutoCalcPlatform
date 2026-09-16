@@ -180,8 +180,269 @@ def test_self_cycle_terminates(client: TestClient) -> None:
     r = client.get(f"/api/v2/tasks/{task_id}/lineage")
     assert r.status_code == 200
     body = r.json()
+    assert body["upstream"] == []
+
+
+# ── FIX 4a: corrupt row whose spec_json CONTAINS task_id as substring ──
+
+
+def test_corrupt_in_downstream_like_path(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    task_ids = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "confsearch",
+                "workflow": "Confsearch",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "pes",
+                "workflow": "PESsearch",
+                "input": {"source": "CCO"},
+            },
+        ],
+        project_id=pid,
+    )
+    clean_id, corrupt_id = task_ids[0], task_ids[1]
+
+    truncated = (
+        '{"input": {"source": {"source_job_id": "'
+        + clean_id
+        + '"'
+    )
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "UPDATE jobs SET spec_json=? WHERE id=?",
+            (truncated, corrupt_id),
+        )
+        conn.commit()
+
+    r = client.get(f"/api/v2/tasks/{clean_id}/lineage")
+    assert r.status_code == 200
+    body = r.json()
+    downstream_ids = [n["task_id"] for n in body["downstream"]]
+    assert corrupt_id not in downstream_ids
+
+
+# ── FIX 4b: upstream parent corrupt ───────────────────────────────────
+
+
+def test_upstream_parent_corrupt(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    task_ids = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "confsearch",
+                "workflow": "Confsearch",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "pes",
+                "workflow": "PESsearch",
+                "input": {"source": "CCO"},
+            },
+        ],
+        project_id=pid,
+    )
+    parent_id, child_id = task_ids[0], task_ids[1]
+
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "UPDATE jobs SET spec_json=? WHERE id=?",
+            ("NOT_VALID_JSON{", parent_id),
+        )
+        conn.commit()
+
+    _rewrite_spec_json(
+        client,
+        child_id,
+        {"source": {"source_type": "task_artifact", "source_job_id": parent_id}},
+    )
+
+    r = client.get(f"/api/v2/tasks/{child_id}/lineage")
+    assert r.status_code == 200
+    body = r.json()
+    upstream_ids = [n["task_id"] for n in body["upstream"]]
+    assert parent_id not in upstream_ids
+
+
+# ── FIX 4c: queried task itself corrupt → 200 empty ──────────────────
+
+
+def test_self_corrupt_returns_empty(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    task_ids = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "pes",
+                "workflow": "PESsearch",
+                "input": {"source": "CCO"},
+            }
+        ],
+        project_id=pid,
+    )
+    task_id = task_ids[0]
+
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "UPDATE jobs SET spec_json=? WHERE id=?",
+            ("NOT_VALID_JSON{", task_id),
+        )
+        conn.commit()
+
+    r = client.get(f"/api/v2/tasks/{task_id}/lineage")
+    assert r.status_code == 200
+    body = r.json()
     assert body["task_id"] == task_id
     assert body["upstream"] == []
+    assert body["downstream"] == []
+
+
+# ── FIX 5: diamond-duplicate → A appears exactly once ─────────────────
+
+
+def test_diamond_dedup(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    task_ids = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "confsearch",
+                "workflow": "Confsearch",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "pes",
+                "workflow": "PESsearch",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "batch",
+                "workflow": "BatchOptimize",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "irc",
+                "workflow": "irc",
+                "input": {"source": "CCO"},
+            },
+        ],
+        project_id=pid,
+    )
+    x_id, b_id, c_id, a_id = task_ids[0], task_ids[1], task_ids[2], task_ids[3]
+
+    _rewrite_spec_json(
+        client, b_id, {"source": {"source_type": "task_artifact", "source_job_id": a_id}}
+    )
+    _rewrite_spec_json(
+        client, c_id, {"source": {"source_type": "structure_asset", "asset_id": a_id}}
+    )
+    _rewrite_spec_json(
+        client, x_id, {
+            "source": {"source_type": "task_artifact", "source_job_id": b_id},
+            "from": {"source_job_id": c_id},
+        }
+    )
+
+    r = client.get(f"/api/v2/tasks/{x_id}/lineage")
+    assert r.status_code == 200
+    body = r.json()
+    upstream_ids = [n["task_id"] for n in body["upstream"]]
+    assert b_id in upstream_ids
+    assert c_id in upstream_ids
+    assert a_id in upstream_ids
+    assert upstream_ids.count(a_id) == 1
+
+
+# ── FIX 6a: top-level input.source_job_id shape ──────────────────────
+
+
+def test_top_level_source_job_id(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    task_ids = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "confsearch",
+                "workflow": "Confsearch",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "pes",
+                "workflow": "PESsearch",
+                "input": {"source": "CCO"},
+            },
+        ],
+        project_id=pid,
+    )
+    upstream_id, downstream_id = task_ids[0], task_ids[1]
+
+    _rewrite_spec_json(
+        client, downstream_id, {"source_job_id": upstream_id}
+    )
+
+    r = client.get(f"/api/v2/tasks/{downstream_id}/lineage")
+    assert r.status_code == 200
+    body = r.json()
+    upstream_ids = [n["task_id"] for n in body["upstream"]]
+    assert upstream_id in upstream_ids
+    relations = [n["relation"] for n in body["upstream"]]
+    assert any("input.source_job_id" in rel for rel in relations)
+
+
+# ── FIX 6b: input.from.source_job_id shape ───────────────────────────
+
+
+def test_from_dict_source_job_id(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    task_ids = _batch_create(
+        client,
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "confsearch",
+                "workflow": "Confsearch",
+                "input": {"source": "CCO"},
+            },
+            {
+                "molecule_name": "ethanol",
+                "task_name": "pes",
+                "workflow": "PESsearch",
+                "input": {"source": "CCO"},
+            },
+        ],
+        project_id=pid,
+    )
+    upstream_id, downstream_id = task_ids[0], task_ids[1]
+
+    _rewrite_spec_json(
+        client, downstream_id, {"from": {"source_job_id": upstream_id}}
+    )
+
+    r = client.get(f"/api/v2/tasks/{downstream_id}/lineage")
+    assert r.status_code == 200
+    body = r.json()
+    upstream_ids = [n["task_id"] for n in body["upstream"]]
+    assert upstream_id in upstream_ids
+    relations = [n["relation"] for n in body["upstream"]]
+    assert any("input.from.source_job_id" in rel for rel in relations)
 
 
 # ── ④ No-source task → empty lists, 200 ──────────────────────────────

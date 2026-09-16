@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -1042,19 +1043,27 @@ _MAX_LINEAGE_DEPTH = 10
 def _extract_upstream_refs(spec_input: dict[str, Any]) -> list[tuple[str, str]]:
     """Extract (task_id, relation) pairs from spec.input source references.
 
-    Walks the ``source`` sub-dict looking for ``source_job_id`` and ``asset_id``
-    patterns that reference other scheduler tasks.  ``artifact_path`` is a file
-    path, not a task reference, so it is excluded.
+    Covers all shapes recognized by v1_routes._source_job_id_from_input
+    plus asset_id for structure_asset sources.
     """
     refs: list[tuple[str, str]] = []
-    source = spec_input.get("source")
-    if not isinstance(source, dict):
-        return refs
 
-    for key in ("source_job_id", "asset_id"):
-        value = source.get(key)
-        if isinstance(value, str) and value.strip():
-            refs.append((value.strip(), f"input.source.{key}"))
+    source = spec_input.get("source")
+    if isinstance(source, dict):
+        for key in ("source_job_id", "asset_id"):
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                refs.append((value.strip(), f"input.source.{key}"))
+
+    top_sjid = spec_input.get("source_job_id")
+    if isinstance(top_sjid, str) and top_sjid.strip():
+        refs.append((top_sjid.strip(), "input.source_job_id"))
+
+    from_dict = spec_input.get("from")
+    if isinstance(from_dict, dict):
+        from_sjid = from_dict.get("source_job_id")
+        if isinstance(from_sjid, str) and from_sjid.strip():
+            refs.append((from_sjid.strip(), "input.from.source_job_id"))
 
     return refs
 
@@ -1083,16 +1092,17 @@ def _resolve_upstream(
 ) -> list[V2LineageNode]:
     """Recursively resolve upstream lineage via spec.input source references."""
     upstream: list[V2LineageNode] = []
-    visited: set[str] = set()
+    visited: set[str] = {task_id}
     queue: list[tuple[str, int]] = [(task_id, 0)]
 
     while queue:
         current_id, depth = queue.pop(0)
-        if current_id in visited:
-            continue
-        visited.add(current_id)
 
-        record = manager.store.get(current_id)
+        try:
+            record = manager.store.get(current_id)
+        except (json.JSONDecodeError, sqlite3.Error, ValueError, TypeError):
+            logger.warning("lineage: skipping unreadable job %s", current_id)
+            continue
         if record is None:
             logger.warning("lineage: task %s not found, skipping", current_id)
             continue
@@ -1104,7 +1114,12 @@ def _resolve_upstream(
         for ref_id, relation in _extract_upstream_refs(spec_input):
             if ref_id in visited:
                 continue
-            ref_record = manager.store.get(ref_id)
+            visited.add(ref_id)
+            try:
+                ref_record = manager.store.get(ref_id)
+            except (json.JSONDecodeError, sqlite3.Error, ValueError, TypeError):
+                logger.warning("lineage: skipping unreadable upstream job %s", ref_id)
+                continue
             if ref_record is None:
                 logger.warning(
                     "lineage: upstream task %s (from %s) not found, skipping",
@@ -1137,7 +1152,11 @@ def _resolve_downstream(
         candidate_id = row["id"] if hasattr(row, "keys") else row[0]
         if candidate_id == task_id:
             continue
-        record = manager.store.get(candidate_id)
+        try:
+            record = manager.store.get(candidate_id)
+        except (json.JSONDecodeError, sqlite3.Error, ValueError, TypeError):
+            logger.warning("lineage: skipping unreadable downstream job %s", candidate_id)
+            continue
         if record is None:
             continue
         spec_input = record.spec.input
@@ -1162,7 +1181,11 @@ def get_task_lineage(task_id: str, request: Request) -> V2LineageResponse:
     task_id.  All reads only — never writes data.
     """
     manager = _manager(request)
-    record = manager.store.get(task_id)
+    try:
+        record = manager.store.get(task_id)
+    except (json.JSONDecodeError, sqlite3.Error, ValueError, TypeError):
+        logger.warning("lineage: queried task %s has unreadable record, returning empty", task_id)
+        return V2LineageResponse(task_id=task_id, upstream=[], downstream=[])
     if record is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
 
