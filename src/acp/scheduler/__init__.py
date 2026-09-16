@@ -45,7 +45,6 @@ from acp.scheduler.runner import JobRunner
 from acp.scheduler.stage_tasks import StagePlan, StageTask, StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
-from acp.scheduler.tasks import TaskIndex
 from acp.scheduler.task_views import (
     ArchivedFilter,
     GroupBy,
@@ -53,6 +52,7 @@ from acp.scheduler.task_views import (
     TaskViewQuery,
     query_project_tasks,
 )
+from acp.scheduler.tasks import TaskIndex
 
 __all__ = [
     "JobEventLog",

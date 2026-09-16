@@ -378,15 +378,15 @@ class TestTruncation:
         limited = query_project_tasks(
             idx, TaskViewQuery(project_id=proj, group_limit=2)
         )
-        # total unaffected
         assert limited["total"] == full["total"]
-        # counts (per-status dict) unaffected
         assert limited["counts"] == full["counts"]
-        # groups truncated
         assert limited["truncated"] is True
-        # each group's count is whole-scope even if jobs[] capped
         for g in limited["groups"]:
             assert g["count"] <= 2 or g["truncated"] is True
+        # Per-group counts by key must match the untruncated run
+        full_by_key = {g["key"]: g["count"] for g in full["groups"]}
+        limited_by_key = {g["key"]: g["count"] for g in limited["groups"]}
+        assert full_by_key == limited_by_key
 
     def test_max_total_truncation(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
@@ -429,11 +429,56 @@ class TestFacetsExclusion:
         assert "molecules" in facets
         assert "tags" in facets
         assert "batches" in facets
-        # Each molecule facet has key, name, count
         for m in facets["molecules"]:
             assert "key" in m
             assert "name" in m
             assert "count" in m
+
+    def test_cross_project_facet_isolation(self, tmp_path: Path) -> None:
+        from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        result = query_project_tasks(
+            idx, TaskViewQuery(project_id="proj1")
+        )
+        mol_keys = {m["key"] for m in result["facets"]["molecules"]}
+        # proj2 has EtOH → proj1 facets must not list it
+        assert "ethanol" not in mol_keys
+        # proj1 facets only contain proj1 molecule keys
+        for mk in mol_keys:
+            assert mk in {"bcb-allene", "meoh", "__unassigned__"}
+
+    def test_archived_scope_facets(self, tmp_path: Path) -> None:
+        from acp.scheduler.task_views import (
+            ArchivedFilter,
+            TaskViewQuery,
+            query_project_tasks,
+        )
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        excl = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj, archived=ArchivedFilter.exclude,
+            ),
+        )
+        only = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj, archived=ArchivedFilter.only,
+            ),
+        )
+        incl = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj, archived=ArchivedFilter.include,
+            ),
+        )
+        excl_total = sum(excl["facets"]["statuses"].values())
+        only_total = sum(only["facets"]["statuses"].values())
+        incl_total = sum(incl["facets"]["statuses"].values())
+        assert excl_total + only_total == incl_total
+        assert only_total == 1  # t5 archived
 
 
 # ===========================================================================
@@ -450,10 +495,33 @@ class TestSorting:
         result = query_project_tasks(
             idx, TaskViewQuery(project_id=proj, sort=TaskSort.created_asc)
         )
-        # Within each group, rows should be in ascending created_at order
         for g in result["groups"]:
             times = [r["created_at"] for r in g["jobs"]]
-            assert times == sorted(times), f"Group {g['key']} not sorted ascending"
+            assert times == sorted(times), (
+                f"Group {g['key']} not sorted ascending"
+            )
+
+    def test_created_desc_groups_descending(self, tmp_path: Path) -> None:
+        from acp.scheduler.task_views import (
+            GroupBy,
+            TaskSort,
+            TaskViewQuery,
+            query_project_tasks,
+        )
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        result = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj,
+                sort=TaskSort.created_desc,
+                group_by=GroupBy.none,
+            ),
+        )
+        times = [r["created_at"] for r in result["groups"][0]["jobs"]]
+        assert times == sorted(times, reverse=True), (
+            "created_desc should render newest first"
+        )
 
     def test_completed_desc_null_last(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import TaskSort, TaskViewQuery, query_project_tasks
@@ -464,13 +532,38 @@ class TestSorting:
         )
         for g in result["groups"]:
             times = [r["completed_at"] for r in g["jobs"]]
-            coalesced = [t or r["created_at"] for t, r in zip(times, g["jobs"])]
+            coalesced = [
+                t or r["created_at"]
+                for t, r in zip(times, g["jobs"])
+            ]
             assert coalesced == sorted(coalesced, reverse=True), (
-                f"Group {g['key']} not sorted by COALESCE(completed_at, created_at) DESC"
+                f"Group {g['key']} not sorted by "
+                f"COALESCE(completed_at, created_at) DESC"
+            )
+
+    def test_activity_desc_within_group(self, tmp_path: Path) -> None:
+        from acp.scheduler.task_views import TaskSort, TaskViewQuery, query_project_tasks
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        result = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj, sort=TaskSort.activity_desc,
+            ),
+        )
+        for g in result["groups"]:
+            coalesced = [
+                r["last_activity_at"] or r["created_at"]
+                for r in g["jobs"]
+            ]
+            assert coalesced == sorted(coalesced, reverse=True), (
+                f"Group {g['key']} not sorted by "
+                f"COALESCE(last_activity_at, created_at) DESC"
             )
 
     def test_running_first_stable_partition(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import (
+            GroupBy,
             TaskSort,
             TaskViewQuery,
             query_project_tasks,
@@ -483,9 +576,10 @@ class TestSorting:
                 project_id=proj,
                 sort=TaskSort.created_desc,
                 running_first=True,
+                group_by=GroupBy.none,
             ),
         )
-        all_rows = [r for g in result["groups"] for r in g["jobs"]]
+        all_rows = result["groups"][0]["jobs"]
         active_statuses = {
             "queued", "running", "paused", "starting",
             "pending", "cancelling", "waiting_review",
@@ -577,7 +671,38 @@ class TestSearch:
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
 
         idx, proj = _setup_project_and_tasks(tmp_path)
-        # Insert a task with literal % in name
+        # Insert decoy: "100abc" would match unescaped LIKE '100%'
+        idx.upsert({
+            "task_id": "t_pct_decoy",
+            "job_id": "t_pct_decoy",
+            "project_id": proj,
+            "molecule_name": "100abc",
+            "task_name": "test",
+            "remark": "",
+            "display_name": "100abc",
+            "workflow": "Confsearch",
+            "task_dir_name": "dir",
+            "status": "completed",
+            "node_id": "local",
+            "node_path": "/tmp",
+            "input_hash": None,
+            "result_manifest_path": None,
+            "current_stage": None,
+            "storage_mode": "local",
+            "layout_version": 2,
+            "created_at": "2026-01-10T00:00:00",
+            "updated_at": "2026-01-10T00:00:00",
+            "molecule_key": "100abc",
+            "tags": "[]",
+            "archived": 0,
+            "batch_id": None,
+            "last_activity_at": None,
+            "started_at": None,
+            "completed_at": None,
+            "group_id": "t_pct_decoy",
+            "progress": None,
+        })
+        # Insert target: "100%"
         idx.upsert({
             "task_id": "t_pct",
             "job_id": "t_pct",
@@ -596,8 +721,8 @@ class TestSearch:
             "current_stage": None,
             "storage_mode": "local",
             "layout_version": 2,
-            "created_at": "2026-01-10T00:00:00",
-            "updated_at": "2026-01-10T00:00:00",
+            "created_at": "2026-01-10T00:01:00",
+            "updated_at": "2026-01-10T00:01:00",
             "molecule_key": "100%",
             "tags": "[]",
             "archived": 0,
@@ -608,7 +733,6 @@ class TestSearch:
             "group_id": "t_pct",
             "progress": None,
         })
-        # Search for literal "100%" — the % should be escaped, not a wildcard
         result = query_project_tasks(
             idx,
             TaskViewQuery(project_id=proj, search="100%"),
@@ -616,6 +740,82 @@ class TestSearch:
         assert result["total"] == 1
         job_ids = [r["id"] for g in result["groups"] for r in g["jobs"]]
         assert "t_pct" in job_ids
+        assert "t_pct_decoy" not in job_ids
+
+    def test_search_underscore_escaped_with_decoy(self, tmp_path: Path) -> None:
+        from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        # Insert decoy: "axb" matches unescaped LIKE "a_b"
+        idx.upsert({
+            "task_id": "t_ud_decoy",
+            "job_id": "t_ud_decoy",
+            "project_id": proj,
+            "molecule_name": "axb",
+            "task_name": "test",
+            "remark": "",
+            "display_name": "axb",
+            "workflow": "Confsearch",
+            "task_dir_name": "dir",
+            "status": "completed",
+            "node_id": "local",
+            "node_path": "/tmp",
+            "input_hash": None,
+            "result_manifest_path": None,
+            "current_stage": None,
+            "storage_mode": "local",
+            "layout_version": 2,
+            "created_at": "2026-01-11T00:00:00",
+            "updated_at": "2026-01-11T00:00:00",
+            "molecule_key": "axb",
+            "tags": "[]",
+            "archived": 0,
+            "batch_id": None,
+            "last_activity_at": None,
+            "started_at": None,
+            "completed_at": None,
+            "group_id": "t_ud_decoy",
+            "progress": None,
+        })
+        # Insert target: "A_B"
+        idx.upsert({
+            "task_id": "t_underscore",
+            "job_id": "t_underscore",
+            "project_id": proj,
+            "molecule_name": "A_B",
+            "task_name": "test",
+            "remark": "",
+            "display_name": "A_B",
+            "workflow": "Confsearch",
+            "task_dir_name": "dir",
+            "status": "completed",
+            "node_id": "local",
+            "node_path": "/tmp",
+            "input_hash": None,
+            "result_manifest_path": None,
+            "current_stage": None,
+            "storage_mode": "local",
+            "layout_version": 2,
+            "created_at": "2026-01-11T00:01:00",
+            "updated_at": "2026-01-11T00:01:00",
+            "molecule_key": "a_b",
+            "tags": "[]",
+            "archived": 0,
+            "batch_id": None,
+            "last_activity_at": None,
+            "started_at": None,
+            "completed_at": None,
+            "group_id": "t_underscore",
+            "progress": None,
+        })
+        result = query_project_tasks(
+            idx,
+            TaskViewQuery(project_id=proj, search="A_B"),
+        )
+        assert result["total"] == 1
+        job_ids = [r["id"] for g in result["groups"] for r in g["jobs"]]
+        assert "t_underscore" in job_ids
+        assert "t_ud_decoy" not in job_ids
 
     def test_search_mixed_case_molecule_name(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
@@ -959,55 +1159,6 @@ class TestNoneGrouping:
 
 # ===========================================================================
 # Adversarial: weird search strings with % _ \
-# ===========================================================================
-
-
-class TestAdversarialSearch:
-    def test_search_with_underscore_literal(self, tmp_path: Path) -> None:
-        from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
-
-        idx, proj = _setup_project_and_tasks(tmp_path)
-        # _ is a wildcard in LIKE — should be escaped to match literally
-        idx.upsert({
-            "task_id": "t_underscore",
-            "job_id": "t_underscore",
-            "project_id": proj,
-            "molecule_name": "A_B",
-            "task_name": "test",
-            "remark": "",
-            "display_name": "A_B",
-            "workflow": "Confsearch",
-            "task_dir_name": "dir",
-            "status": "completed",
-            "node_id": "local",
-            "node_path": "/tmp",
-            "input_hash": None,
-            "result_manifest_path": None,
-            "current_stage": None,
-            "storage_mode": "local",
-            "layout_version": 2,
-            "created_at": "2026-01-11T00:00:00",
-            "updated_at": "2026-01-11T00:00:00",
-            "molecule_key": "a_b",
-            "tags": "[]",
-            "archived": 0,
-            "batch_id": None,
-            "last_activity_at": None,
-            "started_at": None,
-            "completed_at": None,
-            "group_id": "t_underscore",
-            "progress": None,
-        })
-        # Search for literal "A_B" — should NOT match "AxB" if one existed
-        result = query_project_tasks(
-            idx,
-            TaskViewQuery(project_id=proj, search="A_B"),
-        )
-        assert result["total"] == 1
-
-
-# ===========================================================================
-# Stale state: re-query after upsert
 # ===========================================================================
 
 

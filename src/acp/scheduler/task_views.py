@@ -17,8 +17,13 @@ Counting semantics contract
   ``sum(group.count) >= total``.  The UI uses ``total`` for the
   header; batch-select deduplicates by task_id.
 * ``truncated`` = ``True`` when any group is capped by ``group_limit``
-  or the total row count hits ``max_total``.  Only the ``jobs[]``
-  arrays inside groups are capped; counts remain whole-scope.
+  or the total row count hits ``max_total``.
+* ``group_limit`` keeps per-group ``count`` whole-scope (only
+  ``jobs[]`` is capped).
+* ``max_total`` caps the flat row set before grouping — so per-group
+  ``count`` under ``max_total`` reflects the *returned* (truncated)
+  rows, not the full scope.  Only ``total`` and ``counts`` are
+  guaranteed whole-scope under ``max_total``.
 
 Module-level probe
 ------------------
@@ -365,44 +370,48 @@ def _build_groups(
             key = r["batch_id"] if r["batch_id"] is not None else "__singles__"
             buckets[key].append(r)
 
-    # Sort groups by sort's representative value
-    def _group_sort_key(item: tuple[str, list[dict[str, Any]]]) -> tuple[Any, str]:
+    # Sort groups by sort's representative value.
+    # Rule: desc sorts → groups DESCENDING by rep, key ASC secondary.
+    #        asc sorts → groups ASCENDING by rep, key ASC secondary.
+    # Python's sorted() is stable, so sort key-ASC first then rep-DESC
+    # yields same-rep groups in key-ASC order.
+    def _rep(item: tuple[str, list[dict[str, Any]]]) -> str:
         key, group_rows = item
         if q.sort in (TaskSort.created_desc, TaskSort.created_asc):
-            # Use max/min created_at as representative
             times = [r["created_at"] for r in group_rows if r.get("created_at")]
-            if times and q.sort == TaskSort.created_desc:
-                rep = max(times)
-            elif times:
-                rep = min(times)
-            else:
-                rep = ""
-            return (rep, key)
-        elif q.sort == TaskSort.completed_desc:
+            if q.sort == TaskSort.created_desc:
+                return max(times) if times else ""
+            return min(times) if times else ""
+        if q.sort == TaskSort.completed_desc:
             times = [
                 r["completed_at"] or r["created_at"]
                 for r in group_rows
                 if r.get("completed_at") or r.get("created_at")
             ]
-            rep = max(times) if times else ""
-            return (rep, key)
-        elif q.sort == TaskSort.activity_desc:
+            return max(times) if times else ""
+        if q.sort == TaskSort.activity_desc:
             times = [
                 r["last_activity_at"] or r["created_at"]
                 for r in group_rows
                 if r.get("last_activity_at") or r.get("created_at")
             ]
-            rep = max(times) if times else ""
-            return (rep, key)
-        else:
-            return (key, key)
+            return max(times) if times else ""
+        return key
 
-    sorted_buckets = sorted(buckets.items(), key=_group_sort_key)
-    if q.sort in (TaskSort.created_asc, TaskSort.name_asc):
-        sorted_buckets = list(reversed(sorted_buckets))
+    is_desc = q.sort in (
+        TaskSort.created_desc,
+        TaskSort.completed_desc,
+        TaskSort.activity_desc,
+        TaskSort.name_desc,
+    )
+    items = list(buckets.items())
+    # Step 1: stable sort by key ASC
+    items.sort(key=lambda x: x[0])
+    # Step 2: stable sort by representative (ASC or DESC)
+    items.sort(key=lambda x: _rep(x), reverse=is_desc)
 
     result: list[dict[str, Any]] = []
-    for key, group_rows in sorted_buckets:
+    for key, group_rows in items:
         capped = len(group_rows) > q.group_limit
         group: dict[str, Any] = {
             "key": key,
@@ -479,10 +488,8 @@ def _build_tag_groups(
 
 def _build_where_clauses(
     q: TaskViewQuery,
-    *,
-    exclude_dimensions: frozenset[str] = frozenset(),
 ) -> tuple[list[str], list[Any], bool]:
-    """Build WHERE clauses, optionally excluding specific filter dimensions.
+    """Build WHERE clauses for the given query.
 
     Returns (clauses, params, tag_python_fallback).
     """
@@ -490,47 +497,47 @@ def _build_where_clauses(
     params: list[Any] = []
     tag_python_fallback = False
 
-    if q.project_id is not None and "project" not in exclude_dimensions:
+    if q.project_id is not None:
         clauses.append("t.project_id = ?")
         params.append(q.project_id)
 
-    if "archived" not in exclude_dimensions:
-        if q.archived == ArchivedFilter.exclude:
-            clauses.append("t.archived = 0")
-        elif q.archived == ArchivedFilter.only:
-            clauses.append("t.archived = 1")
+    if q.archived == ArchivedFilter.exclude:
+        clauses.append("t.archived = 0")
+    elif q.archived == ArchivedFilter.only:
+        clauses.append("t.archived = 1")
 
-    if q.statuses and "status" not in exclude_dimensions:
+    if q.statuses:
         placeholders = ", ".join("?" for _ in q.statuses)
         clauses.append(f"t.status IN ({placeholders})")
         params.extend(q.statuses)
 
-    if q.workflows and "workflow" not in exclude_dimensions:
+    if q.workflows:
         placeholders = ", ".join("?" for _ in q.workflows)
         clauses.append(f"t.workflow IN ({placeholders})")
         params.extend(q.workflows)
 
-    if q.molecule_keys and "molecule" not in exclude_dimensions:
+    if q.molecule_keys:
         placeholders = ", ".join("?" for _ in q.molecule_keys)
         clauses.append(f"t.molecule_key IN ({placeholders})")
         params.extend(q.molecule_keys)
 
-    if q.batch_ids and "batch" not in exclude_dimensions:
+    if q.batch_ids:
         placeholders = ", ".join("?" for _ in q.batch_ids)
         clauses.append(f"t.batch_id IN ({placeholders})")
         params.extend(q.batch_ids)
 
-    if q.remarks and "remark" not in exclude_dimensions:
+    if q.remarks:
         placeholders = ", ".join("?" for _ in q.remarks)
         clauses.append(f"t.remark IN ({placeholders})")
         params.extend(q.remarks)
 
-    if q.tags and "tag" not in exclude_dimensions:
+    if q.tags:
         if _JSON1_OK:
             tag_conditions = []
             for tag_val in q.tags:
                 tag_conditions.append(
-                    "EXISTS (SELECT 1 FROM json_each(t.tags) WHERE json_each.value = ?)"
+                    "EXISTS (SELECT 1 FROM json_each(t.tags) "
+                    "WHERE json_each.value = ?)"
                 )
                 params.append(tag_val)
             clauses.append(f"({' OR '.join(tag_conditions)})")
@@ -544,52 +551,70 @@ def _build_facets(
     conn: sqlite3.Connection,
     q: TaskViewQuery,
 ) -> dict[str, Any]:
-    """Build facets — each dimension computed from full dataset (all filters removed).
+    """Build facets scoped to project + archived but without drill-down filters.
 
-    Per the spec: "选中某分子后类型 facet 仍显示全类型计数".  Each facet
-    dimension is computed independently with no filters applied.
+    Project scope and archived filter apply; all drill-down filters
+    (statuses, workflows, molecule_keys, tags, batch_ids, remarks,
+    search) are removed so each facet dimension shows its own full
+    cardinality within the project scope.
     """
+    clauses: list[str] = []
+    params: list[Any] = []
+    if q.project_id is not None:
+        clauses.append("t.project_id = ?")
+        params.append(q.project_id)
+    if q.archived == ArchivedFilter.exclude:
+        clauses.append("t.archived = 0")
+    elif q.archived == ArchivedFilter.only:
+        clauses.append("t.archived = 1")
+    where = " AND ".join(clauses) if clauses else "1=1"
+    base = f"FROM tasks t WHERE {where}"
+
     facets: dict[str, Any] = {}
 
-    sql_status = (
-        "SELECT t.status, COUNT(DISTINCT t.task_id) as cnt "
-        "FROM tasks t WHERE 1=1 GROUP BY t.status"
-    )
-    rows = conn.execute(sql_status).fetchall()
+    rows = conn.execute(
+        f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt "
+        f"{base} GROUP BY t.status",
+        params,
+    ).fetchall()
     facets["statuses"] = {row["status"]: row["cnt"] for row in rows}
 
-    sql_wf = (
-        "SELECT t.workflow, COUNT(DISTINCT t.task_id) as cnt "
-        "FROM tasks t WHERE 1=1 GROUP BY t.workflow"
-    )
-    rows = conn.execute(sql_wf).fetchall()
+    rows = conn.execute(
+        f"SELECT t.workflow, COUNT(DISTINCT t.task_id) as cnt "
+        f"{base} GROUP BY t.workflow",
+        params,
+    ).fetchall()
     facets["workflows"] = [
         {"key": row["workflow"], "count": row["cnt"]}
         for row in sorted(rows, key=lambda r: -r["cnt"])
     ]
 
-    sql_mol = (
-        "SELECT t.molecule_key, t.molecule_name, "
-        "COUNT(DISTINCT t.task_id) as cnt "
-        "FROM tasks t WHERE 1=1 GROUP BY t.molecule_key"
-    )
-    rows = conn.execute(sql_mol).fetchall()
+    rows = conn.execute(
+        f"SELECT t.molecule_key, t.molecule_name, "
+        f"COUNT(DISTINCT t.task_id) as cnt "
+        f"{base} GROUP BY t.molecule_key",
+        params,
+    ).fetchall()
     facets["molecules"] = [
         {
             "key": row["molecule_key"] or "__unassigned__",
-            "name": row["molecule_name"] or (row["molecule_key"] or "__unassigned__"),
+            "name": row["molecule_name"]
+            or (row["molecule_key"] or "__unassigned__"),
             "count": row["cnt"],
         }
         for row in sorted(rows, key=lambda r: -r["cnt"])
     ]
 
     if _JSON1_OK:
-        sql_tag = (
-            "SELECT je.value as tag, COUNT(DISTINCT t.task_id) as cnt "
-            "FROM tasks t, json_each(t.tags) je "
-            "WHERE 1=1 GROUP BY je.value"
+        tag_base = base.replace(
+            "FROM tasks t",
+            "FROM tasks t, json_each(t.tags) je",
         )
-        rows = conn.execute(sql_tag).fetchall()
+        rows = conn.execute(
+            f"SELECT je.value as tag, COUNT(DISTINCT t.task_id) as cnt "
+            f"{tag_base} GROUP BY je.value",
+            params,
+        ).fetchall()
         facets["tags"] = [
             {"tag": row["tag"], "count": row["cnt"]}
             for row in sorted(rows, key=lambda r: -r["cnt"])
@@ -597,12 +622,12 @@ def _build_facets(
     else:
         facets["tags"] = []
 
-    sql_batch = (
-        "SELECT t.batch_id, MIN(t.created_at) as min_ca, "
-        "COUNT(DISTINCT t.task_id) as cnt "
-        "FROM tasks t WHERE 1=1 GROUP BY t.batch_id"
-    )
-    rows = conn.execute(sql_batch).fetchall()
+    rows = conn.execute(
+        f"SELECT t.batch_id, MIN(t.created_at) as min_ca, "
+        f"COUNT(DISTINCT t.task_id) as cnt "
+        f"{base} GROUP BY t.batch_id",
+        params,
+    ).fetchall()
     facets["batches"] = [
         {
             "batch_id": row["batch_id"] or "__singles__",
