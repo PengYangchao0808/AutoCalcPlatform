@@ -1906,6 +1906,16 @@ option, optgroup {
 .task-view-toolbar .export-menu.open { display: block; }
 .task-view-toolbar .export-menu-item { display: block; width: 100%; padding: 6px 12px; font-size: 12px; color: var(--text-secondary); background: none; border: none; text-align: left; cursor: pointer; }
 .task-view-toolbar .export-menu-item:hover { background: rgba(78, 161, 255, 0.12); color: var(--text-primary); }
+.task-view-toolbar .views-menu-wrap { position: relative; }
+.task-view-toolbar .views-menu { display: none; position: absolute; top: 100%; right: 0; z-index: 200; min-width: 180px; max-height: 320px; overflow-y: auto; background: var(--bg-raised, #1e2a36); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); padding: 4px 0; }
+.task-view-toolbar .views-menu.open { display: block; }
+.task-view-toolbar .views-menu-item { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 6px 12px; font-size: 12px; color: var(--text-secondary); background: none; border: none; text-align: left; cursor: pointer; }
+.task-view-toolbar .views-menu-item:hover { background: rgba(78, 161, 255, 0.12); color: var(--text-primary); }
+.task-view-toolbar .views-menu-item .views-delete-btn { color: var(--text-tertiary, #666); font-size: 11px; padding: 2px 4px; border-radius: 4px; }
+.task-view-toolbar .views-menu-item .views-delete-btn:hover { color: #e74c3c; background: rgba(231,76,60,0.15); }
+.task-view-toolbar .views-menu-save { display: block; width: 100%; padding: 6px 12px; font-size: 12px; color: var(--text-primary); background: none; border: none; border-top: 1px solid var(--border-default); text-align: left; cursor: pointer; }
+.task-view-toolbar .views-menu-save:hover { background: rgba(78, 161, 255, 0.12); }
+.task-view-toolbar .views-menu-empty { display: block; padding: 8px 12px; font-size: 11px; color: var(--text-tertiary); text-align: center; }
 .queue-batch-bar { display: flex; align-items: center; gap: 6px; padding: 4px 14px; flex-wrap: wrap; }
 .queue-batch-bar .mini-btn { font-size: 11px; }
 .queue-batch-bar .batch-tag-input { width: 80px; padding: 3px 6px; font-size: 11px; border: 1px solid var(--border-default); border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-primary); }
@@ -4014,6 +4024,13 @@ option, optgroup {
             <div class="export-menu" id="task-view-export-menu">
               <button type="button" class="export-menu-item" id="task-view-export-csv" data-i18n="queue.view.export_csv">CSV</button>
               <button type="button" class="export-menu-item" id="task-view-export-json" data-i18n="queue.view.export_json">JSON</button>
+            </div>
+          </div>
+          <div class="views-menu-wrap">
+            <button type="button" class="mini-btn" id="task-view-views-btn"><span data-i18n="queue.view.views_btn">视图</span> ▾</button>
+            <div class="views-menu" id="task-view-views-menu">
+              <div id="task-view-views-list"></div>
+              <button type="button" class="views-menu-save" id="task-view-views-save" data-i18n="queue.view.views_save">保存当前视图</button>
             </div>
           </div>
         </div>
@@ -6237,6 +6254,14 @@ const I18N = {
     "queue.view.export_btn": "导出",
     "queue.view.export_csv": "CSV",
     "queue.view.export_json": "JSON",
+    "queue.view.views_btn": "视图",
+    "queue.view.views_save": "保存当前视图",
+    "queue.view.views_apply": "套用",
+    "queue.view.views_delete": "删除",
+    "queue.view.views_empty": "暂无保存的视图",
+    "queue.view.views_no_project": "请先选择项目",
+    "queue.view.views_saved_ok": "视图已保存",
+    "queue.view.views_name_label": "视图名称",
     "queue.view.archived_exclude": "排除归档",
     "queue.view.archived_include": "包含归档",
     "queue.view.archived_only": "仅归档",
@@ -7311,6 +7336,14 @@ const I18N = {
     "queue.view.export_btn": "Export",
     "queue.view.export_csv": "CSV",
     "queue.view.export_json": "JSON",
+    "queue.view.views_btn": "Views",
+    "queue.view.views_save": "Save current view",
+    "queue.view.views_apply": "Apply",
+    "queue.view.views_delete": "Delete",
+    "queue.view.views_empty": "No saved views",
+    "queue.view.views_no_project": "Select a project first",
+    "queue.view.views_saved_ok": "View saved",
+    "queue.view.views_name_label": "View name",
     "queue.view.archived_exclude": "Exclude archived",
     "queue.view.archived_include": "Include archived",
     "queue.view.archived_only": "Archived only",
@@ -13826,6 +13859,150 @@ function _exportJSON() {
   URL.revokeObjectURL(url);
   var menu = document.getElementById("task-view-export-menu");
   if (menu) menu.classList.remove("open");
+}
+
+// T10: Saved views menu
+function _toggleViewsMenu() {
+  var menu = document.getElementById("task-view-views-menu");
+  if (!menu) return;
+  _renderSavedViewsList();
+  menu.classList.toggle("open");
+  if (menu.classList.contains("open")) {
+    setTimeout(function() {
+      document.addEventListener("click", _closeViewsMenuOutside, true);
+    }, 0);
+  }
+}
+function _closeViewsMenuOutside(e) {
+  var wrap = document.querySelector(".views-menu-wrap");
+  if (wrap && !wrap.contains(e.target)) {
+    var menu = document.getElementById("task-view-views-menu");
+    if (menu) menu.classList.remove("open");
+    document.removeEventListener("click", _closeViewsMenuOutside, true);
+  }
+}
+function _getSavedViews() {
+  var proj = projectsCache.find(function(p) { return String(p.project_id || "") === String(selectedProjectId || ""); });
+  if (proj && proj.settings && Array.isArray(proj.settings.saved_views)) return proj.settings.saved_views;
+  return [];
+}
+function _renderSavedViewsList() {
+  var list = document.getElementById("task-view-views-list");
+  if (!list) return;
+  var views = _getSavedViews();
+  if (!views.length) {
+    list.innerHTML = '<div class="views-menu-empty" data-i18n="queue.view.views_empty">' + t("queue.view.views_empty") + '</div>';
+    return;
+  }
+  list.innerHTML = "";
+  views.forEach(function(v) {
+    var row = document.createElement("div");
+    row.className = "views-menu-item";
+    var nameSpan = document.createElement("span");
+    nameSpan.textContent = v.name || v.id;
+    row.appendChild(nameSpan);
+    var delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "views-delete-btn";
+    delBtn.textContent = "✕";
+    delBtn.title = t("queue.view.views_delete");
+    delBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      _deleteSavedView(v.id);
+    });
+    row.appendChild(delBtn);
+    row.addEventListener("click", function() { _applySavedView(v); });
+    list.appendChild(row);
+  });
+  var saveBtn = document.getElementById("task-view-views-save");
+  if (saveBtn) {
+    saveBtn.disabled = !selectedProjectId;
+    saveBtn.style.opacity = selectedProjectId ? "1" : "0.4";
+  }
+}
+async function _saveCurrentView() {
+  if (!selectedProjectId) {
+    alert(t("queue.view.views_no_project"));
+    return;
+  }
+  var name = prompt(t("queue.view.views_name_label"));
+  if (!name || !name.trim()) return;
+  var p = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var view = {
+    id: "sv_" + Date.now().toString(36),
+    name: name.trim(),
+    query: {
+      group_by: p.groupBy || "molecule",
+      sort: p.sort || "created_desc",
+      statuses: (p.filters && p.filters.status) || [],
+      workflows: (p.filters && p.filters.workflow) || [],
+      molecule_keys: (p.filters && p.filters.molecule) || [],
+      tags: (p.filters && p.filters.tag) || [],
+      batch_ids: (p.filters && p.filters.batch) || [],
+      remarks: (p.filters && p.filters.remark) || [],
+      search: p.q || "",
+      archived: p.archived || "exclude",
+      running_first: !!p.runningFirst
+    },
+    created_at: new Date().toISOString()
+  };
+  var views = _getSavedViews();
+  views.push(view);
+  try {
+    await api("/projects/" + encodeURIComponent(selectedProjectId), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { saved_views: views } })
+    });
+    _refreshProjectsCache();
+    var menu = document.getElementById("task-view-views-menu");
+    if (menu) menu.classList.remove("open");
+  } catch (e) {
+    console.error("Save view failed:", e);
+  }
+}
+function _applySavedView(view) {
+  if (!view || !view.query) return;
+  var q = view.query;
+  var next = _clonePrefs();
+  next.groupBy = q.group_by || next.groupBy;
+  next.sort = q.sort || next.sort;
+  next.q = q.search || "";
+  next.archived = q.archived || "exclude";
+  next.runningFirst = !!q.running_first;
+  next.filters = next.filters || {};
+  next.filters.status = q.statuses || [];
+  next.filters.workflow = q.workflows || [];
+  next.filters.molecule = q.molecule_keys || [];
+  next.filters.tag = q.tags || [];
+  next.filters.batch = q.batch_ids || [];
+  next.filters.remark = q.remarks || [];
+  taskViewPrefs = next;
+  saveTaskViewPrefs();
+  refreshJobs();
+  var menu = document.getElementById("task-view-views-menu");
+  if (menu) menu.classList.remove("open");
+}
+async function _deleteSavedView(viewId) {
+  if (!selectedProjectId) return;
+  var views = _getSavedViews().filter(function(v) { return v.id !== viewId; });
+  try {
+    await api("/projects/" + encodeURIComponent(selectedProjectId), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { saved_views: views } })
+    });
+    _refreshProjectsCache();
+    _renderSavedViewsList();
+  } catch (e) {
+    console.error("Delete view failed:", e);
+  }
+}
+async function _refreshProjectsCache() {
+  try {
+    var resp = await api("/projects");
+    if (resp && resp.projects) projectsCache = resp.projects;
+  } catch (e) {}
 }
 
 var _mergeSuggestionDismissed = {};
@@ -25476,6 +25653,10 @@ function setupEventListeners() {
   document.getElementById("task-view-export-btn").addEventListener("click", function(e) { e.stopPropagation(); _toggleExportMenu(); });
   document.getElementById("task-view-export-csv").addEventListener("click", _exportCSV);
   document.getElementById("task-view-export-json").addEventListener("click", _exportJSON);
+
+  // T10: saved views menu
+  document.getElementById("task-view-views-btn").addEventListener("click", function(e) { e.stopPropagation(); _toggleViewsMenu(); });
+  document.getElementById("task-view-views-save").addEventListener("click", function(e) { e.stopPropagation(); _saveCurrentView(); });
 
   // T9: tag management modal
   document.getElementById("tag-mgmt-modal-close").addEventListener("click", _closeTagManagement);

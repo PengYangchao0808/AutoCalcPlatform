@@ -9376,3 +9376,84 @@ def test_queue_view_i18n_parity_t9_keys() -> None:
         assert key in en_keys, (
             f"{key} missing from en-US locale block"
         )
+
+
+# ── T10: Saved views contract ───────────────────────────────────────────
+
+
+def test_saved_views_menu_dom_ids() -> None:
+    """T10 contract: saved views menu DOM ids must exist in toolbar."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for elem_id in ("task-view-views-btn", "task-view-views-menu",
+                     "task-view-views-list", "task-view-views-save"):
+        assert f'id="{elem_id}"' in html, (
+            f"Saved views element id=\"{elem_id}\" missing"
+        )
+
+
+def test_saved_views_i18n_parity() -> None:
+    """T10 contract: saved views i18n keys present in both locales."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    view_keys = [
+        "queue.view.views_btn",
+        "queue.view.views_save",
+        "queue.view.views_apply",
+        "queue.view.views_delete",
+        "queue.view.views_empty",
+        "queue.view.views_no_project",
+        "queue.view.views_saved_ok",
+        "queue.view.views_name_label",
+    ]
+    for key in view_keys:
+        assert f'"{key}":' in html, f"i18n key {key} missing from HTML"
+
+    zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
+    for key in view_keys:
+        assert key in zh_keys, f"{key} missing from zh-CN locale"
+        assert key in en_keys, f"{key} missing from en-US locale"
+
+
+def test_saved_views_handler_functions_exist() -> None:
+    """T10 contract: saved views JS handler functions must be defined."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for func_name in ("_toggleViewsMenu", "_saveCurrentView", "_applySavedView",
+                       "_deleteSavedView", "_getSavedViews", "_renderSavedViewsList"):
+        assert f"function {func_name}" in html, (
+            f"JS function {func_name} not defined"
+        )
+
+
+def test_saved_views_query_fields_not_job_ids() -> None:
+    """T10 contract: saved view query uses filter fields, NOT job/task ID lists."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    query_fields = ["group_by", "sort", "statuses", "workflows", "search",
+                    "archived", "running_first"]
+    for field in query_fields:
+        assert f"q.{field}" in html or f'"{field}"' in html, (
+            f"Query field '{field}' not referenced in saved views logic"
+        )
+
+
+def test_saved_views_live_query_assertion() -> None:
+    """T10 contract: saved view stores query filters, not snapshot of task IDs."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert '"statuses"' in html or "'statuses'" in html, "saved view must include statuses"
+    assert '"group_by"' in html or "'group_by'" in html, "saved view must include group_by"
+
+    assert "taskViewPrefs = next" in html or "taskViewPrefs=next" in html, (
+        "apply must assign back to taskViewPrefs"
+    )
+    assert "saveTaskViewPrefs()" in html, "apply must persist to localStorage"
+    assert "refreshJobs()" in html, "apply must refresh the task list"
+
+    save_section = (
+        html.split("_saveCurrentView")[1].split("function")[0]
+        if "_saveCurrentView" in html else ""
+    )
+    assert "query" in save_section, "save function must build a query object"
