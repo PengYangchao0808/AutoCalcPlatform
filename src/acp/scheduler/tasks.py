@@ -12,6 +12,7 @@ compute node.
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import threading
@@ -69,6 +70,16 @@ _TASK_COLUMNS: tuple[str, ...] = (
     "layout_version",
     "created_at",
     "updated_at",
+    # T1 org columns
+    "molecule_key",
+    "tags",
+    "archived",
+    "batch_id",
+    "last_activity_at",
+    "started_at",
+    "completed_at",
+    "group_id",
+    "progress",
 )
 
 #: Mirrors the SQL column defaults for keys absent (or None) in the payload.
@@ -76,7 +87,24 @@ _COLUMN_DEFAULTS: dict[str, Any] = {
     "status": "pending",
     "storage_mode": "local",
     "layout_version": 2,
+    "molecule_key": "",
+    "tags": "[]",
+    "archived": 0,
+    "batch_id": None,
+    "last_activity_at": None,
+    "started_at": None,
+    "completed_at": None,
+    "group_id": None,
+    "progress": None,
 }
+
+
+#: Columns that sync_from_job / sync_job_transition own (updated on conflict).
+_SYNC_COLUMNS: tuple[str, ...] = (
+    "display_name", "task_dir_name", "workflow", "status",
+    "current_stage", "node_id", "node_path", "storage_mode",
+    "layout_version", "input_hash", "result_manifest_path", "updated_at",
+)
 
 
 def _utc_now_iso() -> str:
@@ -140,11 +168,11 @@ class TaskIndex:
     # ------------------------------------------------------------------ #
 
     def upsert(self, record: dict[str, Any]) -> None:
-        """Insert or replace a task row keyed by ``task_id``.
+        """Insert or update a task row keyed by ``task_id``.
 
-        Expects §9.1 field names as dict keys; ``None``/missing values are
-        coerced to ``''`` (or the SQL column default for the defaulted
-        columns ``status``/``storage_mode``/``layout_version``).
+        First-write-wins columns (project_id, molecule_name, task_name,
+        remark, molecule_key, tags, archived, batch_id, created_at) are
+        only set on INSERT.  Sync-owned columns are updated on conflict.
         """
         row: dict[str, Any] = {}
         for col in _TASK_COLUMNS:
@@ -156,8 +184,11 @@ class TaskIndex:
             row["layout_version"] = 2
         columns = ", ".join(_TASK_COLUMNS)
         placeholders = ", ".join("?" for _ in _TASK_COLUMNS)
+
+        update_parts = ", ".join(f"{c}=excluded.{c}" for c in _SYNC_COLUMNS)
         self._run(
-            f"INSERT OR REPLACE INTO tasks ({columns}) VALUES ({placeholders})",
+            f"INSERT INTO tasks ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(task_id) DO UPDATE SET {update_parts}",
             tuple(row[col] for col in _TASK_COLUMNS),
         )
 
@@ -212,6 +243,15 @@ class TaskIndex:
         node = result.get("node") or result.get("execution_target")
         if not isinstance(node, str) or not node:
             node = "remote" if remote else "local"
+        from acp.scheduler.naming import molecule_group_key
+
+        tags_list = record.spec.tags or []
+        tags_json = json.dumps(tags_list)
+        batch_id = (
+            record.spec.resources.get("batch_id")
+            if isinstance(record.spec.resources, dict) else None
+        )
+        last_activity_at = record.completed_at or record.started_at or record.created_at
         self.upsert(
             {
                 "task_id": record.id,
@@ -220,8 +260,6 @@ class TaskIndex:
                 "molecule_name": record.spec.molecule_name,
                 "task_name": record.spec.task_name,
                 "remark": record.spec.remark,
-                # Keep the task index aligned with the physical directory;
-                # historical JobRecords may still carry a legacy spec.name.
                 "display_name": Path(record.work_dir).name if record.work_dir else record.spec.name,
                 "workflow": record.spec.workflow,
                 "task_dir_name": Path(record.work_dir).name if record.work_dir else "",
@@ -235,7 +273,83 @@ class TaskIndex:
                 "layout_version": layout_version,
                 "created_at": record.created_at,
                 "updated_at": record.updated_at,
+                "molecule_key": molecule_group_key(record.spec.molecule_name),
+                "tags": tags_json,
+                "archived": 0,
+                "batch_id": batch_id,
+                "last_activity_at": last_activity_at,
+                "started_at": record.started_at,
+                "completed_at": record.completed_at,
+                "group_id": record.group_id or record.id,
+                "progress": record.progress,
             }
+        )
+
+    def sync_job_transition(self, record: JobRecord) -> None:
+        """Sync status transition with compare-before-write optimization.
+
+        If the task row does not exist, falls back to sync_from_job.
+        Only writes when status/stage/progress actually changed.
+        """
+        rows = self._query(
+            "SELECT status, current_stage, progress FROM tasks WHERE task_id=?",
+            (record.id,),
+        )
+        if not rows:
+            self.sync_from_job(record)
+            return
+
+        stored = rows[0]
+        now = _utc_now_iso()
+
+        status_changed = stored["status"] != record.status.value
+        stage_changed = (stored["current_stage"] or "") != (record.current_stage or "")
+
+        if status_changed or stage_changed:
+            terminal = record.status.is_terminal
+            if terminal and record.completed_at is not None:
+                ca_sql = "completed_at=?"
+                ca_param: tuple[Any, ...] = (record.completed_at,)
+            else:
+                ca_sql = "completed_at=completed_at"
+                ca_param = ()
+            self._run(
+                f"UPDATE tasks SET status=?, current_stage=?, "
+                f"started_at=COALESCE(started_at,?), "
+                f"{ca_sql}, last_activity_at=?, updated_at=? "
+                f"WHERE task_id=?",
+                (
+                    record.status.value,
+                    record.current_stage,
+                    record.started_at,
+                    *ca_param,
+                    now,
+                    now,
+                    record.id,
+                ),
+            )
+            return
+
+        stored_progress = stored["progress"]
+        new_progress = record.progress
+        if (
+            new_progress is not None
+            and stored_progress != new_progress
+        ):
+            self._run(
+                "UPDATE tasks SET progress=?, updated_at=? WHERE task_id=?",
+                (new_progress, now, record.id),
+            )
+
+    def delete(self, task_id: str) -> None:
+        """Remove a task row. No-op if absent."""
+        self._run("DELETE FROM tasks WHERE task_id=?", (task_id,))
+
+    def update_project(self, task_id: str, project_id: str) -> None:
+        """Update project_id for an existing task row. No-op if absent."""
+        self._run(
+            "UPDATE tasks SET project_id=?, updated_at=? WHERE task_id=?",
+            (project_id, _utc_now_iso(), task_id),
         )
 
 

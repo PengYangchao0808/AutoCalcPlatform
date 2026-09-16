@@ -316,14 +316,15 @@ class JobStore:
         """Delete a job row plus every dependent row, in one connection.
 
         No FK cascades exist in the schema, so children are removed
-        explicitly in dependency order: ``stage_tasks`` and ``artifacts``
-        by ``job_id``; ``decision_points`` via ``mechanism_studies``
-        subselect (it has no ``job_id`` column); then ``mechanism_studies``
-        and finally the ``jobs`` row itself.
+        explicitly in dependency order: ``stage_tasks``, ``artifacts``,
+        and ``tasks`` by ``job_id``; ``decision_points`` via
+        ``mechanism_studies`` subselect (it has no ``job_id`` column);
+        then ``mechanism_studies`` and finally the ``jobs`` row itself.
         """
         with self._lock, self._connect() as conn:
             conn.execute("DELETE FROM stage_tasks WHERE job_id=?", (job_id,))
             conn.execute("DELETE FROM artifacts WHERE job_id=?", (job_id,))
+            conn.execute("DELETE FROM tasks WHERE job_id=?", (job_id,))
             conn.execute(
                 "DELETE FROM decision_points WHERE study_id IN "
                 "(SELECT id FROM mechanism_studies WHERE job_id=?)",

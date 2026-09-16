@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
 def _utc_now_iso() -> str:
@@ -189,6 +191,11 @@ CREATE TABLE IF NOT EXISTS mechanism_projects (
         "description": "add node_id and host to jobs (persisted execution target)",
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
     },
+    {
+        "id": "014",
+        "description": "add org columns to tasks (molecule_key, tags, archived, batch_id, etc.)",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility + backfill",
+    },
 ]
 
 
@@ -312,6 +319,149 @@ def _apply_projects_name_unique_index(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_tasks_org_columns(conn: sqlite3.Connection) -> bool:
+    """Add organization columns to tasks + indexes + backfill from jobs."""
+    if not _table_exists(conn, "tasks"):
+        return False
+
+    _org_columns = [
+        ("molecule_key", "TEXT NOT NULL DEFAULT ''"),
+        ("tags", "TEXT NOT NULL DEFAULT '[]'"),
+        ("archived", "INTEGER NOT NULL DEFAULT 0"),
+        ("batch_id", "TEXT"),
+        ("last_activity_at", "TEXT"),
+        ("started_at", "TEXT"),
+        ("completed_at", "TEXT"),
+        ("group_id", "TEXT"),
+        ("progress", "REAL"),
+    ]
+    for col_name, col_def in _org_columns:
+        if not _column_exists(conn, "tasks", col_name):
+            conn.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_def}")
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_project_archived ON tasks(project_id, archived)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_molecule_key ON tasks(molecule_key)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_batch_id ON tasks(batch_id)"
+    )
+
+    _backfill_tasks_from_jobs(conn)
+    return True
+
+
+def _backfill_tasks_from_jobs(conn: sqlite3.Connection) -> None:
+    """Populate task rows from jobs for any jobs not yet indexed.
+
+    Idempotent: only INSERTs missing rows (task_id == jobs.id).
+    """
+    if not _table_exists(conn, "tasks") or not _table_exists(conn, "jobs"):
+        return
+
+    log = logging.getLogger(__name__)
+
+    existing_task_ids = {
+        row[0]
+        for row in conn.execute("SELECT task_id FROM tasks").fetchall()
+    }
+
+    for job_row in conn.execute("SELECT * FROM jobs").fetchall():
+        job_id = job_row["id"]
+        if job_id in existing_task_ids:
+            continue
+
+        spec_raw: dict[str, Any] = {}
+        spec_json_str = job_row["spec_json"]
+        try:
+            spec_raw = json.loads(spec_json_str)
+        except (json.JSONDecodeError, TypeError):
+            log.warning(
+                "Corrupt spec_json for job %s — backfilling with defaults", job_id
+            )
+
+        molecule_name = spec_raw.get("molecule_name", "") if isinstance(spec_raw, dict) else ""
+        task_name = spec_raw.get("task_name", "") if isinstance(spec_raw, dict) else ""
+        remark = spec_raw.get("remark", "") if isinstance(spec_raw, dict) else ""
+        workflow = spec_raw.get("workflow", "") if isinstance(spec_raw, dict) else ""
+        tags_list = spec_raw.get("tags", []) if isinstance(spec_raw, dict) else []
+        if not isinstance(tags_list, list):
+            tags_list = []
+        tags_json = json.dumps(tags_list)
+
+        resources = spec_raw.get("resources", {}) if isinstance(spec_raw, dict) else {}
+        batch_id = resources.get("batch_id") if isinstance(resources, dict) else None
+
+        group_id = job_row["group_id"] if "group_id" in job_row.keys() else job_id
+
+        work_dir = job_row["work_dir"] or ""
+        display_name = Path(work_dir).name if work_dir else ""
+        task_dir_name = Path(work_dir).name if work_dir else ""
+
+        from acp.scheduler.naming import molecule_group_key
+
+        molecule_key = molecule_group_key(molecule_name)
+
+        remote_job_id = job_row["remote_job_id"] if "remote_job_id" in job_row.keys() else None
+        storage_mode = "sftp" if remote_job_id else "local"
+        node_path = work_dir
+        node_id = "remote" if remote_job_id else "local"
+
+        status = job_row["status"] if "status" in job_row.keys() else "pending"
+        started_at = job_row["started_at"] if "started_at" in job_row.keys() else None
+        completed_at = job_row["completed_at"] if "completed_at" in job_row.keys() else None
+        progress = job_row["progress"] if "progress" in job_row.keys() else None
+        created_at = job_row["created_at"] if "created_at" in job_row.keys() else ""
+        updated_at = job_row["updated_at"] if "updated_at" in job_row.keys() else ""
+
+        input_hash = job_row["input_hash"] if "input_hash" in job_row.keys() else None
+
+        last_activity_at = completed_at or started_at or created_at
+
+        conn.execute(
+            """INSERT INTO tasks (
+                task_id, job_id, project_id, molecule_name, task_name, remark,
+                display_name, workflow, task_dir_name, status, node_id, node_path,
+                input_hash, result_manifest_path, current_stage, storage_mode,
+                layout_version, created_at, updated_at,
+                molecule_key, tags, archived, batch_id,
+                last_activity_at, started_at, completed_at, group_id, progress
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                NULL, NULL, ?, 2, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )""",
+            (
+                job_id,
+                job_id,
+                job_row["project_id"] if "project_id" in job_row.keys() else None,
+                molecule_name,
+                task_name,
+                remark,
+                display_name,
+                workflow,
+                task_dir_name,
+                status,
+                node_id,
+                node_path,
+                input_hash,
+                storage_mode,
+                created_at,
+                updated_at,
+                molecule_key,
+                tags_json,
+                0,
+                batch_id,
+                last_activity_at,
+                started_at,
+                completed_at,
+                group_id,
+                progress,
+            ),
+        )
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -328,6 +478,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_projects_name_unique_index(conn)
     if migration_id == "013":
         return _apply_jobs_node_columns(conn)
+    if migration_id == "014":
+        return _apply_tasks_org_columns(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

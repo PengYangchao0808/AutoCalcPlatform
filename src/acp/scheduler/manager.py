@@ -580,6 +580,13 @@ class JobManager:
             shutil.move(str(old_work_dir), str(new_work_dir))
 
         self.store.update_project_id_and_work_dir(job_id, project_id, str(new_work_dir))
+        if self.tasks is not None:
+            try:
+                self.tasks.update_project(job_id, project_id)
+            except Exception:
+                logger.warning(
+                    "Task index project sync failed for job %s", job_id, exc_info=True
+                )
         updated = self.store.get(job_id)
         if updated is not None:
             self._write_job_json(updated)
@@ -1602,7 +1609,7 @@ class JobManager:
         if self.tasks is None:
             return
         try:
-            self.tasks.update_status(record.id, record.status.value, record.current_stage)
+            self.tasks.sync_job_transition(record)
         except Exception:
             logger.warning("Task index status sync failed for job %s", record.id, exc_info=True)
 

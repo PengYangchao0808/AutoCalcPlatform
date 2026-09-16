@@ -61,4 +61,15 @@ def molecule_name_from_input(inp: Mapping[str, Any] | None) -> str:
     return ""
 
 
-__all__ = ["canonical_molecule_name", "molecule_name_from_input"]
+def molecule_group_key(value: str) -> str:
+    """Normalize a molecule name for group-by comparison.
+
+    Strips leading/trailing whitespace, collapses internal whitespace to a
+    single space, and case-folds.  Empty input stays empty.
+    """
+    if not value:
+        return ""
+    return " ".join(value.split()).casefold()
+
+
+__all__ = ["canonical_molecule_name", "molecule_group_key", "molecule_name_from_input"]
