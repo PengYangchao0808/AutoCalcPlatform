@@ -2591,6 +2591,13 @@ option, optgroup {
   border-left: 1px solid var(--border-subtle);
 }
 .queue-group-members.collapsed { display: none; }
+.queue-group-status-line { font-size: 11px; color: var(--text-tertiary); line-height: 1.3; }
+.queue-group-select-all { margin-right: 4px; flex: 0 0 auto; }
+.queue-tag-hint { font-size: 11px; color: var(--amber); padding: 4px 8px; margin-left: 22px; border-left: 1px solid var(--border-subtle); }
+.queue-retired-badge { font-size: 10px; color: var(--amber); border: 1px solid rgba(242, 184, 75, 0.28); border-radius: 999px; padding: 1px 7px; flex: 0 0 auto; }
+.queue-row-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.queue-row-tags .queue-tag-chip { font-size: 10px; color: var(--text-tertiary); background: rgba(255,255,255,0.05); border: 1px solid var(--border-subtle); border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
+.queue-row-tags .queue-tag-overflow { font-size: 10px; color: var(--text-tertiary); }
 
 /* ── Q1: pinned result products block on top of the file tree ── */
 .pinned-block { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border-default); }
@@ -4973,6 +4980,8 @@ function jobRemoteNodeName(job) {
 }
 // Q2: collapsed queue group_ids (persist across poll re-renders).
 let queueCollapsedGroups = {};
+// T6: module-level Intl.Collator for natural + CJK name sorting (TS2 < TS10).
+const _taskCollator = new Intl.Collator("zh", { numeric: true, sensitivity: "variant" });
 
 // Panel layout state (collapse + resize), persisted as one JSON key.
 const LAYOUT_DEFAULTS = {
@@ -6139,6 +6148,14 @@ const I18N = {
     "queue.view.singles": "单独提交",
     "queue.view.untagged": "无标签",
     "queue.view.tag_group_disabled": "标签分组将在标签功能上线后启用",
+    "queue.view.group_tasks_count": "{count} 个任务",
+    "queue.view.status_running": "运行 {count}",
+    "queue.view.status_queued": "排队 {count}",
+    "queue.view.status_completed": "完成 {count}",
+    "queue.view.status_failed": "失败 {count}",
+    "queue.view.tag_group_hint": "同一任务可能在多个标签组出现",
+    "queue.view.retired": "历史",
+    "queue.view.select_all_group": "全选本组",
     "time.just_now": "刚刚",
     "time.seconds_ago": "{n}秒前",
     "time.minutes_ago": "{n}分钟前",
@@ -7173,6 +7190,14 @@ const I18N = {
     "queue.view.singles": "Single submission",
     "queue.view.untagged": "No tags",
     "queue.view.tag_group_disabled": "Tag grouping will be available when tags feature is enabled",
+    "queue.view.group_tasks_count": "{count} tasks",
+    "queue.view.status_running": "Running {count}",
+    "queue.view.status_queued": "Queued {count}",
+    "queue.view.status_completed": "Completed {count}",
+    "queue.view.status_failed": "Failed {count}",
+    "queue.view.tag_group_hint": "A task may appear in multiple tag groups",
+    "queue.view.retired": "Retired",
+    "queue.view.select_all_group": "Select all in group",
     "time.just_now": "just now",
     "time.seconds_ago": "{n}s ago",
     "time.minutes_ago": "{n}m ago",
@@ -13729,6 +13754,23 @@ async function refreshJobs() {
   try {
     var body = await apiV2("/task-view?" + params.toString());
     taskViewCache = body;
+    // T6: sort each group's rows + sort groups for name sorts + runningFirst.
+    if (body && body.groups) {
+      body.groups.forEach(function(g) {
+        if (g.jobs) g.jobs = sortTaskRows(g.jobs);
+      });
+      var sortMode = prefs.sort || "created_desc";
+      if (sortMode === "name_asc" || sortMode === "name_desc") {
+        body.groups.sort(function(a, b) {
+          var na = (a.display_name || a.key || "");
+          var nb = (b.display_name || b.key || "");
+          var c = _taskCollator.compare(na, nb);
+          if (sortMode === "name_desc") c = -c;
+          if (c !== 0) return c;
+          return String(a.key || "").localeCompare(String(b.key || ""));
+        });
+      }
+    }
     // Derive jobsCache: flatten groups in group order so existing consumers
     // (buildQueueRow, canonicalTaskName, pruneQueueSelection, highlightQueueRow)
     // keep working with V1JobRecordModel-compatible rows.
@@ -14130,6 +14172,7 @@ function buildQueueGroup(group) {
 }
 
 function buildQueueRow(job) {
+  var groupBy = job._groupBy || "";
   const row = document.createElement("div");
   row.className = "queue-row" + (String(job.id) === String(selectedJobId) ? " active" : "");
   row.setAttribute("data-job-id", String(job.id));
@@ -14154,15 +14197,24 @@ function buildQueueRow(job) {
   });
   head.appendChild(check);
 
+  // T6 slim card (c): task name — single-line ellipsis + title attribute.
+  // When groupBy=molecule, do NOT repeat molecule name; prefer task_name+remark.
   const name = document.createElement("div");
   name.className = "queue-name";
   const strong = document.createElement("strong");
-  strong.textContent = canonicalTaskName(job) || String(job.id);
+  var primaryLabel;
+  if (groupBy === "molecule") {
+    // Inside molecule group: prefer task_name + remark, fallback to canonicalTaskName
+    var tn = (job.task_name || (job.spec && job.spec.task_name) || "").trim();
+    var rm = (job.remark || (job.spec && job.spec.remark) || "").trim();
+    primaryLabel = tn ? (rm ? tn + " — " + rm : tn) : (canonicalTaskName(job) || String(job.id));
+  } else {
+    primaryLabel = canonicalTaskName(job) || String(job.id);
+  }
+  strong.textContent = primaryLabel;
+  strong.title = primaryLabel;
   const span = document.createElement("span");
-  var queueStageLabel = translateStageName(job.current_stage, job.stage_label);
-  if (!queueStageLabel) queueStageLabel = isProgressIndeterminate(job) ? t("common.computing") : t("common.na");
-  var queueMetaText = (job.spec && job.spec.workflow ? job.spec.workflow : t("common.na")) + " \u00b7 " + translateStatus(job.status);
-  if (queueStageLabel) queueMetaText += " \u00b7 " + queueStageLabel;
+  var queueMetaText = (job.spec && job.spec.workflow ? job.spec.workflow : "") + " \u00b7 " + translateStatus(job.status);
   if (job.stage_detail) queueMetaText += " " + job.stage_detail;
   span.textContent = queueMetaText;
   name.appendChild(strong);
@@ -14170,18 +14222,6 @@ function buildQueueRow(job) {
 
   const actions = document.createElement("div");
   actions.className = "queue-row-actions";
-  // Q2: study chip — prefer the new study_status field on the job item; fall
-  // back to the Phase E cache-only unified-status lookup for mechanism rows.
-  let studyBadge = null;
-  if (job.study_status) {
-    studyBadge = document.createElement("span");
-    studyBadge.className = "badge " + getStudyStatusClass(job.study_status);
-    studyBadge.textContent = translateStudyStatus(job.study_status);
-    studyBadge.title = String(job.study_status);
-  } else if (job.spec && job.spec.workflow === "mechanism") {
-    studyBadge = buildJobListStudyChip(job.id);
-  }
-  if (studyBadge) actions.appendChild(studyBadge);
   actions.appendChild(createStatusBadge(job.status));
   appendQueueInlineActions(actions, job);
   const view = document.createElement("button");
@@ -14196,48 +14236,140 @@ function buildQueueRow(job) {
   head.appendChild(actions);
   row.appendChild(head);
 
-  const progress = document.createElement("div");
-  progress.className = "queue-progress";
-  const track = document.createElement("div");
-  track.className = "progress-track";
-  const fill = document.createElement("div");
-  var progressKnown = isProgressKnown(job);
-  var progressIndeterminate = isProgressIndeterminate(job);
-  if (progressIndeterminate) {
-    fill.className = "progress-fill indeterminate";
-    fill.style.width = "100%";
-  } else {
-    fill.className = "progress-fill";
-    fill.style.width = normalizedProgress(job) + "%";
+  // T6 slim card (c): progress bar ONLY for active statuses.
+  // Terminal + queued rows show status text badge only — no progress bar.
+  if (isActiveJobStatus(job.status)) {
+    var progressIndeterminate = isProgressIndeterminate(job);
+    const progress = document.createElement("div");
+    progress.className = "queue-progress";
+    const track = document.createElement("div");
+    track.className = "progress-track";
+    const fill = document.createElement("div");
+    if (progressIndeterminate) {
+      fill.className = "progress-fill indeterminate";
+      fill.style.width = "100%";
+    } else {
+      fill.className = "progress-fill";
+      fill.style.width = normalizedProgress(job) + "%";
+    }
+    track.appendChild(fill);
+    progress.appendChild(track);
+    const meta = document.createElement("div");
+    meta.className = "progress-meta";
+    const left = document.createElement("span");
+    var stageText = translateStageName(job.current_stage, job.stage_label) || (progressIndeterminate ? t("common.computing") : "");
+    if (job.stage_detail) stageText += " " + job.stage_detail;
+    else if (job.stage_index && job.stage_total) stageText += " " + job.stage_index + "/" + job.stage_total;
+    left.textContent = stageText;
+    const right = document.createElement("span");
+    var rightText = progressIndeterminate ? t("common.computing") : t("common.percent", { value: normalizedProgress(job) });
+    var relTime = formatRelativeTime(job.updated_at);
+    if (relTime) rightText += " \u00b7 " + relTime;
+    right.textContent = rightText;
+    meta.appendChild(left);
+    meta.appendChild(right);
+    progress.appendChild(meta);
+    row.appendChild(progress);
   }
-  track.appendChild(fill);
-  progress.appendChild(track);
 
-  const meta = document.createElement("div");
-  meta.className = "progress-meta";
-  const left = document.createElement("span");
-  var stageText = translateStageName(job.current_stage, job.stage_label) || (progressIndeterminate ? t("common.computing") : t("common.na"));
-  if (job.stage_detail) {
-    stageText += " " + job.stage_detail;
-  } else if (job.stage_index && job.stage_total) {
-    stageText += " " + job.stage_index + "/" + job.stage_total;
+  // T6 slim card (c): tags display (max 2 + +N overflow).
+  var tags = job.tags;
+  if (Array.isArray(tags) && tags.length > 0) {
+    var tagsEl = document.createElement("div");
+    tagsEl.className = "queue-row-tags";
+    var maxShow = 2;
+    var shown = tags.slice(0, maxShow);
+    shown.forEach(function(tag) {
+      var chip = document.createElement("span");
+      chip.className = "queue-tag-chip";
+      chip.textContent = tag;
+      tagsEl.appendChild(chip);
+    });
+    if (tags.length > maxShow) {
+      var overflow = document.createElement("span");
+      overflow.className = "queue-tag-overflow";
+      overflow.textContent = "+" + (tags.length - maxShow);
+      overflow.title = tags.join(", ");
+      tagsEl.appendChild(overflow);
+    }
+    row.appendChild(tagsEl);
   }
-  left.textContent = stageText;
-  const right = document.createElement("span");
-  var rightText = "";
-  if (progressIndeterminate) {
-    rightText = t("common.computing");
-  } else {
-    rightText = t("common.percent", { value: normalizedProgress(job) });
-  }
-  var relTime = formatRelativeTime(job.updated_at);
-  if (relTime) rightText += " \u00b7 " + relTime;
-  right.textContent = rightText;
-  meta.appendChild(left);
-  meta.appendChild(right);
-  progress.appendChild(meta);
-  row.appendChild(progress);
+
   return row;
+}
+
+// T6: client-side sort + running-first partition for task-view rows.
+// Time sorts trust server order; name sorts use _taskCollator.
+// runningFirst: stable partition (active first, preserving relative order).
+function sortTaskRows(rows) {
+  if (!rows || !rows.length) return rows;
+  var prefs = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var sort = prefs.sort || "created_desc";
+  if (sort === "name_asc" || sort === "name_desc") {
+    rows.sort(function(a, b) {
+      var na = canonicalTaskName(a) || "";
+      var nb = canonicalTaskName(b) || "";
+      var c = _taskCollator.compare(na, nb);
+      if (sort === "name_desc") c = -c;
+      if (c !== 0) return c;
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+  }
+  if (prefs.runningFirst) {
+    var active = [];
+    var other = [];
+    for (var i = 0; i < rows.length; i++) {
+      (isActiveJobStatus(rows[i].status) ? active : other).push(rows[i]);
+    }
+    rows = active.concat(other);
+  }
+  return rows;
+}
+
+// T6: sentinel display-name resolution for group headers.
+function _resolveGroupDisplayName(group, groupBy) {
+  var key = group.key || "";
+  var display = group.display_name || "";
+  if (key === "__unassigned__" || display === "" || display === "__unassigned__") {
+    return groupBy === "remark" ? t("queue.view.unassigned_remark") : t("queue.view.unassigned_molecule");
+  }
+  if (key === "__singles__") return t("queue.view.singles");
+  if (key === "__untagged__") return t("queue.view.untagged");
+  return display;
+}
+
+// T6: render a group-level status summary line ("运行 x · 排队 x · 完成 x · 失败 x").
+function _renderGroupStatusLine(group) {
+  var counts = group.counts || {};
+  var r = counts.running || 0;
+  var q = counts.queued || 0;
+  var c = counts.completed || 0;
+  var f = counts.failed || 0;
+  var parts = [];
+  if (r > 0) parts.push(t("queue.view.status_running", { count: r }));
+  if (q > 0) parts.push(t("queue.view.status_queued", { count: q }));
+  if (c > 0) parts.push(t("queue.view.status_completed", { count: c }));
+  if (f > 0) parts.push(t("queue.view.status_failed", { count: f }));
+  var el = document.createElement("span");
+  el.className = "queue-group-status-line";
+  el.textContent = parts.length ? parts.join(" · ") : "";
+  return el;
+}
+
+// T6: one-time hint chip for tag-group views.
+function _renderTagGroupHint() {
+  var el = document.createElement("div");
+  el.className = "queue-tag-hint";
+  el.textContent = t("queue.view.tag_group_hint");
+  return el;
+}
+
+// T6: retired badge for retired workflow groups.
+function _renderRetiredBadge() {
+  var el = document.createElement("span");
+  el.className = "queue-retired-badge";
+  el.textContent = t("queue.view.retired");
+  return el;
 }
 
 function renderQueueList(container) {
@@ -14249,12 +14381,61 @@ function renderQueueList(container) {
     container.appendChild(empty);
     return;
   }
+  var prefs = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var groupBy = prefs.groupBy || "molecule";
+  // T6: use taskViewCache.groups when available (server-grouped mode).
+  var cache = taskViewCache;
+  if (cache && cache.groups) {
+    var groups = cache.groups;
+    // group_by=none → flat list (single __all__ group rendered without header)
+    if (groupBy === "none") {
+      var rows = groups.length ? (groups[0].jobs || []) : [];
+      rows.forEach(function(job) { container.appendChild(buildQueueRow(job)); });
+      return;
+    }
+    // Cross-project scope: wrap groups by project when multiple projects present.
+    var selectedPid = selectedProjectId;
+    var showProjectHeaders = !selectedPid;
+    if (showProjectHeaders) {
+      var byProject = {};
+      var projectOrder = [];
+      groups.forEach(function(g) {
+        (g.jobs || []).forEach(function(row) {
+          var pid = row.project_id ? String(row.project_id) : "";
+          if (!byProject[pid]) {
+            var pname = row.project_name || "";
+            byProject[pid] = { name: pname, jobs: [], groups: [] };
+            projectOrder.push(pid);
+          }
+          byProject[pid].jobs.push(row);
+        });
+      });
+      // Map groups to projects by scanning their first job's project_id
+      groups.forEach(function(g) {
+        var firstJob = (g.jobs && g.jobs.length) ? g.jobs[0] : null;
+        var pid = firstJob && firstJob.project_id ? String(firstJob.project_id) : "";
+        if (byProject[pid]) byProject[pid].groups.push(g);
+        else if (projectOrder.length) byProject[projectOrder[0]].groups.push(g);
+      });
+      projectOrder.forEach(function(pid) {
+        var pg = byProject[pid];
+        if (!pg) return;
+        // Build project header (reuse existing function with synthetic pg shape)
+        var pgObj = { id: pid, name: pg.name, jobs: pg.jobs, groups: [], byGroup: {} };
+        container.appendChild(buildQueueProjectHeader(pgObj));
+        pg.groups.forEach(function(g) { container.appendChild(_buildTaskViewGroup(g, groupBy)); });
+      });
+      return;
+    }
+    // Single project scope: render groups directly.
+    groups.forEach(function(g) { container.appendChild(_buildTaskViewGroup(g, groupBy)); });
+    return;
+  }
+  // Fallback: legacy groupJobsForQueue path (no taskViewCache).
   const projects = groupJobsForQueue(jobsCache);
-  // Skip the project header when everything sits in a single anonymous
-  // project — keeps the flat feel for the common ungrouped case.
-  const showProjectHeaders = projects.length > 1 || !!projects[0].name;
+  const showLegacyHeaders = projects.length > 1 || !!projects[0].name;
   projects.forEach(function(pg) {
-    if (showProjectHeaders) container.appendChild(buildQueueProjectHeader(pg));
+    if (showLegacyHeaders) container.appendChild(buildQueueProjectHeader(pg));
     pg.groups.forEach(function(group) {
       if (group.jobs.length === 1) {
         container.appendChild(buildQueueRow(group.jobs[0]));
@@ -14262,6 +14443,99 @@ function renderQueueList(container) {
         container.appendChild(buildQueueGroup(group));
       }
     });
+  });
+}
+
+// T6: build a collapsible group section from taskViewCache.groups entry.
+function _buildTaskViewGroup(group, groupBy) {
+  var wrap = document.createElement("div");
+  wrap.className = "queue-group";
+  var key = group.key || "__unknown__";
+  var collapseKey = "view:" + groupBy + ":" + key;
+  var isCollapsed = queueCollapsedGroups[collapseKey] === true;
+
+  // Group header
+  var head = document.createElement("div");
+  head.className = "queue-group-head";
+
+  // Per-group select-all checkbox (d)
+  var selectAll = document.createElement("input");
+  selectAll.type = "checkbox";
+  selectAll.className = "queue-group-select-all";
+  selectAll.title = t("queue.view.select_all_group");
+  selectAll.addEventListener("click", function(event) { event.stopPropagation(); });
+  selectAll.addEventListener("change", function() {
+    var ids = (group.jobs || []).map(function(row) { return String(row.id); });
+    ids.forEach(function(id) {
+      if (selectAll.checked) queueSelectedJobs.add(id);
+      else queueSelectedJobs.delete(id);
+    });
+    syncQueueRowCheckboxes_bulk(ids, selectAll.checked);
+    updateQueueBatchBar();
+  });
+  head.appendChild(selectAll);
+
+  // Toggle arrow
+  var toggle = document.createElement("button");
+  toggle.className = "queue-group-toggle" + (isCollapsed ? "" : " open");
+  toggle.innerHTML = folderToggleSvg(!isCollapsed);
+  head.appendChild(toggle);
+
+  // Display name (sentinel resolution)
+  var displayName = _resolveGroupDisplayName(group, groupBy);
+  var name = document.createElement("span");
+  name.className = "queue-group-name";
+  name.textContent = displayName;
+  name.title = displayName;
+  head.appendChild(name);
+
+  // Task count
+  var count = document.createElement("span");
+  count.className = "queue-group-count";
+  count.textContent = t("queue.view.group_tasks_count", { count: group.count || (group.jobs || []).length });
+  head.appendChild(count);
+
+  // Status summary line (hide zero segments, never empty string)
+  head.appendChild(_renderGroupStatusLine(group));
+
+  // Retired badge for workflow groups
+  if (group.retired) head.appendChild(_renderRetiredBadge());
+
+  // Collapse toggle handler
+  head.addEventListener("click", function() {
+    queueCollapsedGroups[collapseKey] = !isCollapsed;
+    renderQueueList(document.getElementById("queue-list"));
+    renderQueueList(document.getElementById("mobile-queue-list"));
+  });
+
+  // Members container
+  var members = document.createElement("div");
+  members.className = "queue-group-members" + (isCollapsed ? " collapsed" : "");
+
+  // Tag-group hint chip (one-time per view, rendered once at top of container)
+  if (groupBy === "tag") {
+    members.appendChild(_renderTagGroupHint());
+  }
+
+  // Render rows with _groupBy annotation for slim-card molecule dedup
+  (group.jobs || []).forEach(function(row) {
+    row._groupBy = groupBy;
+    members.appendChild(buildQueueRow(row));
+  });
+
+  wrap.appendChild(head);
+  wrap.appendChild(members);
+  return wrap;
+}
+
+// T6: bulk checkbox sync helper (set multiple row checkboxes at once).
+function syncQueueRowCheckboxes_bulk(jobIds, checked) {
+  var idSet = new Set(jobIds);
+  document.querySelectorAll(".queue-row").forEach(function(row) {
+    if (idSet.has(row.getAttribute("data-job-id"))) {
+      var cb = row.querySelector(".queue-check");
+      if (cb) cb.checked = checked;
+    }
   });
 }
 

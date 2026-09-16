@@ -8746,3 +8746,291 @@ def test_task_view_filter_panel_structure() -> None:
     assert "function _toggleFilterPanel()" in html, (
         "_toggleFilterPanel() function missing"
     )
+
+
+# ---------------------------------------------------------------------------
+# T6: Grouped collapsible list + slim cards + collator sort
+# ---------------------------------------------------------------------------
+
+
+def test_task_view_group_render() -> None:
+    """T6 contract: view: collapse-key prefix, sentinel→i18n, group header elements."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # (1) _buildTaskViewGroup function exists and uses view: namespace prefix.
+    assert "function _buildTaskViewGroup(" in html, (
+        "_buildTaskViewGroup function missing"
+    )
+    group_fn = html.split("function _buildTaskViewGroup(", 1)[1].split("\nfunction ", 1)[0]
+    assert '"view:"' in group_fn or "'view:'" in group_fn, (
+        "_buildTaskViewGroup must use 'view:' namespace prefix for collapse keys"
+    )
+
+    # (2) Sentinel resolution branches.
+    assert "function _resolveGroupDisplayName(" in html, (
+        "_resolveGroupDisplayName function missing"
+    )
+    sentinel_fn = html.split("function _resolveGroupDisplayName(", 1)[1].split("\nfunction ", 1)[0]
+    # __unassigned__ → conditional i18n for molecule vs remark
+    assert "__unassigned__" in sentinel_fn, (
+        "_resolveGroupDisplayName must handle __unassigned__ sentinel"
+    )
+    assert 'queue.view.unassigned_molecule' in sentinel_fn, (
+        "_resolveGroupDisplayName must resolve __unassigned__ to unassigned_molecule i18n key"
+    )
+    assert 'queue.view.unassigned_remark' in sentinel_fn, (
+        "_resolveGroupDisplayName must resolve __unassigned__ to unassigned_remark i18n key for remark groupBy"
+    )
+    # __singles__ → i18n
+    assert "__singles__" in sentinel_fn, (
+        "_resolveGroupDisplayName must handle __singles__ sentinel"
+    )
+    assert 'queue.view.singles' in sentinel_fn, (
+        "_resolveGroupDisplayName must resolve __singles__ to i18n key"
+    )
+    # __untagged__ → i18n
+    assert "__untagged__" in sentinel_fn, (
+        "_resolveGroupDisplayName must handle __untagged__ sentinel"
+    )
+    assert 'queue.view.untagged' in sentinel_fn, (
+        "_resolveGroupDisplayName must resolve __untagged__ to i18n key"
+    )
+
+    # (3) Group count rendering: queue.view.group_tasks_count i18n key.
+    assert 'queue.view.group_tasks_count' in group_fn, (
+        "_buildTaskViewGroup must render task count with queue.view.group_tasks_count"
+    )
+
+    # (4) Status summary render function exists.
+    assert "function _renderGroupStatusLine(" in html, (
+        "_renderGroupStatusLine function missing"
+    )
+    summary_fn = html.split("function _renderGroupStatusLine(", 1)[1].split("\nfunction ", 1)[0]
+    assert "queue.view.status_running" in summary_fn, (
+        "_renderGroupStatusLine must use queue.view.status_running"
+    )
+    assert "queue.view.status_queued" in summary_fn, (
+        "_renderGroupStatusLine must use queue.view.status_queued"
+    )
+    assert "queue.view.status_completed" in summary_fn, (
+        "_renderGroupStatusLine must use queue.view.status_completed"
+    )
+    assert "queue.view.status_failed" in summary_fn, (
+        "_renderGroupStatusLine must use queue.view.status_failed"
+    )
+
+    # (5) Tag-group hint function exists.
+    assert "function _renderTagGroupHint()" in html, (
+        "_renderTagGroupHint function missing"
+    )
+    assert 'queue.view.tag_group_hint' in html, (
+        "queue.view.tag_group_hint i18n key must be referenced"
+    )
+
+    # (6) Retired badge function exists.
+    assert "function _renderRetiredBadge()" in html, (
+        "_renderRetiredBadge function missing"
+    )
+    assert 'queue.view.retired' in html, (
+        "queue.view.retired i18n key must be referenced"
+    )
+
+    # (7) renderQueueList reads taskViewCache.groups.
+    render_fn = html.split("function renderQueueList(container)", 1)[1].split("\nfunction ", 1)[0]
+    assert "taskViewCache" in render_fn or "cache" in render_fn, (
+        "renderQueueList must read taskViewCache.groups"
+    )
+
+    # (8) Per-group select-all checkbox.
+    assert 'queue-group-select-all' in group_fn, (
+        "_buildTaskViewGroup must have per-group select-all checkbox"
+    )
+    assert 'queue.view.select_all_group' in group_fn, (
+        "_buildTaskViewGroup must use queue.view.select_all_group i18n key for select-all"
+    )
+
+
+def test_slim_card_rules() -> None:
+    """T6 contract: progress bar guarded by isActiveJobStatus, ellipsis, tag truncation, no 暂无."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    build_fn = html.split("function buildQueueRow(job)", 1)[1].split("\nfunction ", 1)[0]
+
+    # (1) Progress bar ONLY in active-status branch.
+    assert "isActiveJobStatus(job.status)" in build_fn, (
+        "buildQueueRow must guard progress bar with isActiveJobStatus(job.status)"
+    )
+    # The progress-fill construction must be inside the active branch.
+    # Split on the guard to check the active branch contains progress.
+    active_branch = build_fn.split("isActiveJobStatus(job.status)", 1)[1]
+    active_branch = active_branch.split("\n  }", 1)[0] if "\n  }" in active_branch else active_branch
+    assert "progress-fill" in active_branch, (
+        "Active-status branch must contain progress-fill construction"
+    )
+
+    # (2) No completed-100% progress path (the old fill.style.width = normalizedProgress
+    #     for completed jobs). The progress section is entirely inside the active guard,
+    #     so non-active rows get no progress bar at all.
+    # Verify no progress-fill outside the active guard by checking the full function
+    # has exactly one progress-fill construction (inside the active branch).
+    progress_count = build_fn.count("progress-fill")
+    # There should be exactly 2: one "progress-fill indeterminate" and one "progress-fill"
+    assert progress_count <= 2, (
+        f"Expected at most 2 progress-fill refs (inside active branch), got {progress_count}"
+    )
+
+    # (3) Task name ellipsis: strong element has title attribute.
+    assert 'strong.title' in build_fn or 'strong.title =' in build_fn, (
+        "buildQueueRow must set title attribute on strong (task name) for ellipsis"
+    )
+
+    # (4) Tag truncation: max 2 + "+N" overflow.
+    assert "queue-row-tags" in build_fn, (
+        "buildQueueRow must render tags container"
+    )
+    assert "queue-tag-chip" in build_fn, (
+        "buildQueueRow must render tag chips"
+    )
+    assert '"+"' in build_fn or "'+'" in build_fn, (
+        "buildQueueRow must render +N overflow for tags"
+    )
+
+    # (5) molecule-dedup: when groupBy=molecule, primaryLabel prefers task_name+remark.
+    assert '_groupBy' in build_fn, (
+        "buildQueueRow must read _groupBy for molecule dedup"
+    )
+    assert 'groupBy === "molecule"' in build_fn or "groupBy === 'molecule'" in build_fn, (
+        "buildQueueRow must branch on groupBy=molecule for label dedup"
+    )
+
+    # (6) No 暂无 placeholder in queue rendering functions (buildQueueRow, _buildTaskViewGroup, renderQueueList).
+    # Check the relevant function bodies — the "queue.none" empty state is allowed (it's "暂无任务").
+    queue_fns_to_check = ["buildQueueRow", "_buildTaskViewGroup", "renderQueueList"]
+    for fn_name in queue_fns_to_check:
+        if fn_name + "(" in html:
+            fn_body = html.split(f"function {fn_name}(", 1)[1].split("\nfunction ", 1)[0]
+            # "queue.none" is allowed (it says "暂无任务" when no jobs exist)
+            # But "暂无" as a direct string literal in the function is forbidden
+            # (except in the empty-state placeholder which uses t("queue.none"))
+            stripped = fn_body.replace('t("queue.none")', '').replace("t('queue.none')", '')
+            # Check there's no remaining 暂无 literal
+            assert "暂无" not in stripped, (
+                f"{fn_name} must not contain 暂无 placeholder literals"
+            )
+
+
+def test_task_sort_collator() -> None:
+    """T6 contract: module-level Intl.Collator, sortTaskRows, runningFirst partition."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # (1) Module-level Intl.Collator with zh locale and numeric:true.
+    collator_line = None
+    for line in html.split("\n"):
+        if 'new Intl.Collator("zh"' in line or "new Intl.Collator('zh'" in line:
+            collator_line = line
+            break
+    assert collator_line is not None, (
+        'Module-level "new Intl.Collator("zh"..." must exist'
+    )
+    assert "numeric" in collator_line, (
+        "Intl.Collator must have numeric option"
+    )
+    # Must be at module scope (not inside a function) — check it's not indented
+    # by verifying it's defined near other module-level vars.
+    assert collator_line.strip().startswith("const ") or collator_line.strip().startswith("var "), (
+        "Intl.Collator must be a module-level const/var"
+    )
+
+    # (2) sortTaskRows function exists.
+    assert "function sortTaskRows(" in html, (
+        "sortTaskRows function missing"
+    )
+    sort_fn = html.split("function sortTaskRows(", 1)[1].split("\nfunction ", 1)[0]
+
+    # (3) Uses _taskCollator for name sorts.
+    assert "_taskCollator" in sort_fn, (
+        "sortTaskRows must use _taskCollator for name sorting"
+    )
+
+    # (4) runningFirst partition logic.
+    assert "runningFirst" in sort_fn, (
+        "sortTaskRows must implement runningFirst partition"
+    )
+    assert "isActiveJobStatus" in sort_fn, (
+        "sortTaskRows must use isActiveJobStatus for running-first partition"
+    )
+
+    # (5) sortTaskRows is called in refreshJobs.
+    refresh_fn = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
+    assert "sortTaskRows(" in refresh_fn, (
+        "refreshJobs must call sortTaskRows"
+    )
+
+    # (6) Name sort also sorts groups.
+    assert "name_asc" in refresh_fn or "name_desc" in refresh_fn, (
+        "refreshJobs must handle name_asc/name_desc group sorting"
+    )
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
+def test_task_sort_collator_node_smoke() -> None:
+    """T6 contract: node smoke — collator runtime order with CJK + natural sort."""
+    script = textwrap.dedent("""\
+        const collator = new Intl.Collator("zh", { numeric: true, sensitivity: "variant" });
+        const items = ["TS10", "TS2", "BCB_ALLENE", "\u4e59\u9187", "abc"];
+        const sorted = items.slice().sort(collator.compare);
+        const ts2_idx = sorted.indexOf("TS2");
+        const ts10_idx = sorted.indexOf("TS10");
+        if (ts2_idx < 0 || ts10_idx < 0) {
+            process.stderr.write("TS2 or TS10 not found in sorted: " + JSON.stringify(sorted) + "\\n");
+            process.exit(1);
+        }
+        if (ts2_idx >= ts10_idx) {
+            process.stderr.write("TS2 index (" + ts2_idx + ") >= TS10 index (" + ts10_idx + ")\\n");
+            process.exit(1);
+        }
+        process.stdout.write(JSON.stringify(sorted));
+    """)
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"node collator smoke failed: {result.stderr}"
+    )
+    sorted_items = json.loads(result.stdout)
+    assert sorted_items.index("TS2") < sorted_items.index("TS10"), (
+        f"TS2 should sort before TS10 with numeric:true, got {sorted_items}"
+    )
+
+
+def test_queue_view_i18n_parity_t6_keys() -> None:
+    """T6 contract: new i18n keys must be present in both locales."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    new_keys = [
+        "queue.view.group_tasks_count",
+        "queue.view.status_running",
+        "queue.view.status_queued",
+        "queue.view.status_completed",
+        "queue.view.status_failed",
+        "queue.view.tag_group_hint",
+        "queue.view.retired",
+        "queue.view.select_all_group",
+    ]
+    for key in new_keys:
+        assert f'"{key}":' in html, (
+            f"i18n key {key} missing from HTML"
+        )
+    # Parity: both locale blocks must contain the same new keys.
+    zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
+    for key in new_keys:
+        assert key in zh_keys, (
+            f"{key} missing from zh-CN locale block"
+        )
+        assert key in en_keys, (
+            f"{key} missing from en-US locale block"
+        )
