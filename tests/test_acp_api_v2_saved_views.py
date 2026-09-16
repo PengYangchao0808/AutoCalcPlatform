@@ -12,9 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-def _make_client(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> TestClient:
+def _make_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from acp.api.server import create_app
 
@@ -189,12 +187,14 @@ class TestSavedViewsRoundtrip:
         pid = project["project_id"]
 
         view1 = {
-            "id": "sv_1", "name": "View 1",
+            "id": "sv_1",
+            "name": "View 1",
             "query": {"group_by": "molecule"},
             "created_at": "2026-09-16T00:00:00Z",
         }
         view2 = {
-            "id": "sv_2", "name": "View 2",
+            "id": "sv_2",
+            "name": "View 2",
             "query": {"group_by": "workflow"},
             "created_at": "2026-09-16T01:00:00Z",
         }

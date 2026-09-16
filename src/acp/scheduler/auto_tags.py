@@ -6,6 +6,7 @@ backfill.  ``apply_auto_tag_rules`` is a pure helper with no DB
 dependency — the caller is responsible for merging returned tags into
 ``TaskIndex.update_display_fields``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -51,9 +52,7 @@ class AutoTagRule:
         return False
 
 
-def apply_auto_tag_rules(
-    rules: list[dict[str, Any]], task_row: dict[str, Any]
-) -> list[str]:
+def apply_auto_tag_rules(rules: list[dict[str, Any]], task_row: dict[str, Any]) -> list[str]:
     """Evaluate enabled rules against *task_row* and return matched tags.
 
     Parameters

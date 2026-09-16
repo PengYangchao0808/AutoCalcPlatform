@@ -8526,7 +8526,7 @@ def test_task_view_prefs_constants_structure() -> None:
     )
 
 
-def test_apiV2_after_api_definition() -> None:
+def test_api_v2_after_api_definition() -> None:
     """T4 contract: apiV2 must be defined AFTER api() (not replacing it)."""
     html = FRONTEND.read_text(encoding="utf-8")
 
@@ -8706,7 +8706,7 @@ def test_task_view_prefs_clone_safety() -> None:
             pass
 
 
-def test_data_i18n_opt_support_in_applyI18n() -> None:
+def test_data_i18n_opt_support_in_apply_i18n() -> None:
     """T5 contract: applyI18n must handle data-i18n-opt for select options."""
     html = FRONTEND.read_text(encoding="utf-8")
 
@@ -8716,7 +8716,7 @@ def test_data_i18n_opt_support_in_applyI18n() -> None:
     )
 
 
-def test_bindTaskViewToolbar_called_at_startup() -> None:
+def test_bind_task_view_toolbar_called_at_startup() -> None:
     """T5 contract: _bindTaskViewToolbar must be called in DOMContentLoaded."""
     html = FRONTEND.read_text(encoding="utf-8")
 
@@ -8782,7 +8782,8 @@ def test_task_view_group_render() -> None:
         "_resolveGroupDisplayName must resolve __unassigned__ to unassigned_molecule i18n key"
     )
     assert 'queue.view.unassigned_remark' in sentinel_fn, (
-        "_resolveGroupDisplayName must resolve __unassigned__ to unassigned_remark i18n key for remark groupBy"
+        "_resolveGroupDisplayName must resolve __unassigned__"
+        " to unassigned_remark i18n key for remark groupBy"
     )
     # __singles__ → i18n
     assert "__singles__" in sentinel_fn, (
@@ -8822,12 +8823,17 @@ def test_task_view_group_render() -> None:
         "_renderGroupStatusLine must use queue.view.status_failed"
     )
     assert "group.jobs" in summary_fn, (
-        "_renderGroupStatusLine must derive counts from group.jobs (backend never emits group.counts)"
+        "_renderGroupStatusLine must derive counts from group.jobs"
+        " (backend never emits group.counts)"
     )
     assert "group.counts" not in summary_fn, (
         "_renderGroupStatusLine must NOT read group.counts (never emitted by backend)"
     )
-    assert "!parts.length" in summary_fn or "parts.length === 0" in summary_fn or "!parts" in summary_fn, (
+    assert (
+        "!parts.length" in summary_fn
+        or "parts.length === 0" in summary_fn
+        or "!parts" in summary_fn
+    ), (
         "_renderGroupStatusLine must guard span creation on non-empty parts"
     )
 
@@ -8875,7 +8881,11 @@ def test_slim_card_rules() -> None:
     # The progress-fill construction must be inside the active branch.
     # Split on the guard to check the active branch contains progress.
     active_branch = build_fn.split("isActiveJobStatus(job.status)", 1)[1]
-    active_branch = active_branch.split("\n  }", 1)[0] if "\n  }" in active_branch else active_branch
+    active_branch = (
+        active_branch.split("\n  }", 1)[0]
+        if "\n  }" in active_branch
+        else active_branch
+    )
     assert "progress-fill" in active_branch, (
         "Active-status branch must contain progress-fill construction"
     )
@@ -8915,8 +8925,10 @@ def test_slim_card_rules() -> None:
         "buildQueueRow must branch on groupBy=molecule for label dedup"
     )
 
-    # (6) No 暂无 placeholder in queue rendering functions (buildQueueRow, _buildTaskViewGroup, renderQueueList).
-    # Check the relevant function bodies — the "queue.none" empty state is allowed (it's "暂无任务").
+    # (6) No 暂无 placeholder in queue rendering functions
+    # (buildQueueRow, _buildTaskViewGroup, renderQueueList).
+    # Check the relevant function bodies — the "queue.none"
+    # empty state is allowed (it's "暂无任务").
     queue_fns_to_check = ["buildQueueRow", "_buildTaskViewGroup", "renderQueueList"]
     for fn_name in queue_fns_to_check:
         if fn_name + "(" in html:
@@ -8994,7 +9006,10 @@ def test_task_sort_collator_node_smoke() -> None:
         const ts2_idx = sorted.indexOf("TS2");
         const ts10_idx = sorted.indexOf("TS10");
         if (ts2_idx < 0 || ts10_idx < 0) {
-            process.stderr.write("TS2 or TS10 not found in sorted: " + JSON.stringify(sorted) + "\\n");
+            process.stderr.write(
+                "TS2 or TS10 not found in sorted: "
+                + JSON.stringify(sorted) + "\\n"
+            );
             process.exit(1);
         }
         if (ts2_idx >= ts10_idx) {
@@ -9077,7 +9092,9 @@ def test_p2_batch_and_archive_ui() -> None:
     assert '"/tags/merge"' in html, "tags/merge endpoint literal missing"
     assert '"/tags/delete"' in html, "tags/delete endpoint literal missing"
     assert '"/molecule-groups/merge"' in html, "molecule-groups/merge endpoint literal missing"
-    assert '"/molecule-groups/suggestions"' in html, "molecule-groups/suggestions endpoint literal missing"
+    assert '"/molecule-groups/suggestions"' in html, (
+        "molecule-groups/suggestions endpoint literal missing"
+    )
     assert '"/tasks/"' in html and '"/lineage"' in html, "lineage endpoint literal missing"
     assert '"add_tags"' in html, "add_tags op literal missing"
     assert '"remove_tags"' in html, "remove_tags op literal missing"
@@ -9095,7 +9112,9 @@ def test_archive_toggle_wiring() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # _applyTaskViewPrefsToControls sets archived select
-    apply_fn = html.split("function _applyTaskViewPrefsToControls(", 1)[1].split("\nfunction ", 1)[0]
+    apply_fn = html.split(
+        "function _applyTaskViewPrefsToControls(", 1
+    )[1].split("\nfunction ", 1)[0]
     assert "task-view-archived" in apply_fn, (
         "_applyTaskViewPrefsToControls must set task-view-archived"
     )
@@ -9285,7 +9304,9 @@ def test_lineage_panel() -> None:
     assert "selectJob" in node_fn, "_buildLineageNode must wire selectJob click"
 
     # Lineage section in detail drawer (openDetailDrawer)
-    drawer_fn = html.split("async function openDetailDrawer(", 1)[1].split("\nasync function ", 1)[0]
+    drawer_fn = html.split(
+        "async function openDetailDrawer(", 1
+    )[1].split("\nasync function ", 1)[0]
     assert "lineage-section" in drawer_fn, (
         "openDetailDrawer must include lineage-section"
     )

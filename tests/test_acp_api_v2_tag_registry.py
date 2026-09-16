@@ -110,9 +110,7 @@ def _db_tags(client: TestClient, task_id: str) -> list[str]:
     """Read raw tags JSON from DB for cross-check."""
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
-        row = conn.execute(
-            "SELECT tags FROM tasks WHERE task_id=?", (task_id,)
-        ).fetchone()
+        row = conn.execute("SELECT tags FROM tasks WHERE task_id=?", (task_id,)).fetchone()
     assert row is not None
     return json.loads(row[0])
 
@@ -122,9 +120,7 @@ def _db_row(client: TestClient, task_id: str) -> dict[str, Any]:
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM tasks WHERE task_id=?", (task_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchone()
     assert row is not None
     return dict(row)
 
@@ -242,9 +238,7 @@ def test_tags_delete_only_unmarks(client: TestClient) -> None:
     # Raw sqlite3: all 4 task rows still exist
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
-        count = conn.execute(
-            "SELECT COUNT(*) FROM tasks WHERE project_id=?", (pid,)
-        ).fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM tasks WHERE project_id=?", (pid,)).fetchone()[0]
     assert count == 4
 
 

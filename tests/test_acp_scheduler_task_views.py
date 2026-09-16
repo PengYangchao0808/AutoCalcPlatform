@@ -107,8 +107,14 @@ def _setup_project_and_tasks(tmp_path: Path) -> tuple[TaskIndex, str]:
         "settings, created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            "proj1", "TestProject", "", "[]", str(tmp_path),
-            "{}", "2026-01-01T00:00:00", "2026-01-01T00:00:00",
+            "proj1",
+            "TestProject",
+            "",
+            "[]",
+            str(tmp_path),
+            "{}",
+            "2026-01-01T00:00:00",
+            "2026-01-01T00:00:00",
         ),
     )
     conn.execute(
@@ -117,8 +123,14 @@ def _setup_project_and_tasks(tmp_path: Path) -> tuple[TaskIndex, str]:
         "settings, created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            "proj2", "OtherProject", "", "[]", str(tmp_path / "p2"),
-            "{}", "2026-01-01T00:00:00", "2026-01-01T00:00:00",
+            "proj2",
+            "OtherProject",
+            "",
+            "[]",
+            str(tmp_path / "p2"),
+            "{}",
+            "2026-01-01T00:00:00",
+            "2026-01-01T00:00:00",
         ),
     )
     conn.commit()
@@ -127,52 +139,87 @@ def _setup_project_and_tasks(tmp_path: Path) -> tuple[TaskIndex, str]:
     tasks = [
         # 1: molecule="BCB-Allene", running, no batch
         dict(
-            job_id="t1", status=JobStatus.RUNNING, project_id="proj1",
-            molecule_name="BCB-Allene", task_name="search", remark="",
-            workflow="Confsearch", tags=["待检查"],
+            job_id="t1",
+            status=JobStatus.RUNNING,
+            project_id="proj1",
+            molecule_name="BCB-Allene",
+            task_name="search",
+            remark="",
+            workflow="Confsearch",
+            tags=["待检查"],
         ),
         # 2: molecule="BCB-Allene" (case-different → same key), completed, batch=bat1
         dict(
-            job_id="t2", status=JobStatus.COMPLETED, project_id="proj1",
-            molecule_name="bcb-allene", task_name="opt", remark="freq",
-            workflow="BatchOptimize", tags=["待检查", "论文使用"],
+            job_id="t2",
+            status=JobStatus.COMPLETED,
+            project_id="proj1",
+            molecule_name="bcb-allene",
+            task_name="opt",
+            remark="freq",
+            workflow="BatchOptimize",
+            tags=["待检查", "论文使用"],
             resources={"batch_id": "bat1"},
         ),
         # 3: molecule="MeOH", failed, batch=bat1
         dict(
-            job_id="t3", status=JobStatus.FAILED, project_id="proj1",
-            molecule_name="MeOH", task_name="scan", remark="scan",
+            job_id="t3",
+            status=JobStatus.FAILED,
+            project_id="proj1",
+            molecule_name="MeOH",
+            task_name="scan",
+            remark="scan",
             workflow="scan",
             resources={"batch_id": "bat1"},
         ),
         # 4: molecule="" (empty → __unassigned__), queued
         dict(
-            job_id="t4", status=JobStatus.QUEUED, project_id="proj1",
-            molecule_name="", task_name="generic", remark="no mol",
+            job_id="t4",
+            status=JobStatus.QUEUED,
+            project_id="proj1",
+            molecule_name="",
+            task_name="generic",
+            remark="no mol",
             workflow="Confsearch",
         ),
         # 5: molecule="EtOH", completed, archived
         dict(
-            job_id="t5", status=JobStatus.COMPLETED, project_id="proj1",
-            molecule_name="EtOH", task_name="optimize", remark="old",
+            job_id="t5",
+            status=JobStatus.COMPLETED,
+            project_id="proj1",
+            molecule_name="EtOH",
+            task_name="optimize",
+            remark="old",
             workflow="optimize",
         ),
         # 6: molecule="BCB-Allene" (third), paused
         dict(
-            job_id="t6", status=JobStatus.PAUSED, project_id="proj1",
-            molecule_name="BCB-Allene", task_name="rerun", remark="retry",
-            workflow="Confsearch", tags=["论文使用"],
+            job_id="t6",
+            status=JobStatus.PAUSED,
+            project_id="proj1",
+            molecule_name="BCB-Allene",
+            task_name="rerun",
+            remark="retry",
+            workflow="Confsearch",
+            tags=["论文使用"],
         ),
         # 7: molecule="MeOH", completed, no batch
         dict(
-            job_id="t7", status=JobStatus.COMPLETED, project_id="proj1",
-            molecule_name="MeOH", task_name="opt2", remark="",
+            job_id="t7",
+            status=JobStatus.COMPLETED,
+            project_id="proj1",
+            molecule_name="MeOH",
+            task_name="opt2",
+            remark="",
             workflow="optimize",
         ),
         # 8: molecule="EtOH", running, on proj2
         dict(
-            job_id="t8", status=JobStatus.RUNNING, project_id="proj2",
-            molecule_name="EtOH", task_name="search2", remark="proj2 task",
+            job_id="t8",
+            status=JobStatus.RUNNING,
+            project_id="proj2",
+            molecule_name="EtOH",
+            task_name="search2",
+            remark="proj2 task",
             workflow="Confsearch",
         ),
     ]
@@ -220,10 +267,7 @@ def _setup_project_and_tasks(tmp_path: Path) -> tuple[TaskIndex, str]:
         "last_activity_at='2026-01-03T07:05:00' "
         "WHERE task_id='t3'"
     )
-    idx._run(
-        "UPDATE tasks SET created_at='2026-01-04T06:00:00' "
-        "WHERE task_id='t4'"
-    )
+    idx._run("UPDATE tasks SET created_at='2026-01-04T06:00:00' WHERE task_id='t4'")
     idx._run(
         "UPDATE tasks SET created_at='2026-01-05T05:00:00', "
         "started_at='2026-01-05T05:05:00', "
@@ -379,9 +423,7 @@ class TestTruncation:
 
         idx, proj = _setup_project_and_tasks(tmp_path)
         full = query_project_tasks(idx, TaskViewQuery(project_id=proj))
-        limited = query_project_tasks(
-            idx, TaskViewQuery(project_id=proj, group_limit=1)
-        )
+        limited = query_project_tasks(idx, TaskViewQuery(project_id=proj, group_limit=1))
         assert limited["total"] == full["total"]
         assert limited["counts"] == full["counts"]
         assert limited["truncated"] is True
@@ -396,9 +438,7 @@ class TestTruncation:
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
 
         idx, proj = _setup_project_and_tasks(tmp_path)
-        limited = query_project_tasks(
-            idx, TaskViewQuery(project_id=proj, max_total=3)
-        )
+        limited = query_project_tasks(idx, TaskViewQuery(project_id=proj, max_total=3))
         assert limited["truncated"] is True
         assert limited["total"] == 6  # total still whole-scope (6 non-archived in proj1)
 
@@ -442,9 +482,7 @@ class TestFacetsExclusion:
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
 
         idx, proj = _setup_project_and_tasks(tmp_path)
-        result = query_project_tasks(
-            idx, TaskViewQuery(project_id="proj1")
-        )
+        result = query_project_tasks(idx, TaskViewQuery(project_id="proj1"))
         mol_keys = {m["key"] for m in result["facets"]["molecules"]}
         # proj2 has EtOH → proj1 facets must not list it
         proj1_keys = {"BCB-Allene", "bcb-allene", "MeOH", "__unassigned__"}
@@ -464,19 +502,22 @@ class TestFacetsExclusion:
         excl = query_project_tasks(
             idx,
             TaskViewQuery(
-                project_id=proj, archived=ArchivedFilter.exclude,
+                project_id=proj,
+                archived=ArchivedFilter.exclude,
             ),
         )
         only = query_project_tasks(
             idx,
             TaskViewQuery(
-                project_id=proj, archived=ArchivedFilter.only,
+                project_id=proj,
+                archived=ArchivedFilter.only,
             ),
         )
         incl = query_project_tasks(
             idx,
             TaskViewQuery(
-                project_id=proj, archived=ArchivedFilter.include,
+                project_id=proj,
+                archived=ArchivedFilter.include,
             ),
         )
         excl_total = sum(excl["facets"]["statuses"].values())
@@ -497,14 +538,10 @@ class TestSorting:
         from acp.scheduler.task_views import TaskSort, TaskViewQuery, query_project_tasks
 
         idx, proj = _setup_project_and_tasks(tmp_path)
-        result = query_project_tasks(
-            idx, TaskViewQuery(project_id=proj, sort=TaskSort.created_asc)
-        )
+        result = query_project_tasks(idx, TaskViewQuery(project_id=proj, sort=TaskSort.created_asc))
         for g in result["groups"]:
             times = [r["created_at"] for r in g["jobs"]]
-            assert times == sorted(times), (
-                f"Group {g['key']} not sorted ascending"
-            )
+            assert times == sorted(times), f"Group {g['key']} not sorted ascending"
 
     def test_created_desc_groups_descending(self, tmp_path: Path) -> None:
         """Group-level ordering: created_desc groups by max(created_at) DESC."""
@@ -573,36 +610,38 @@ class TestSorting:
         # --- Tie-stability: two groups with identical created_at ---
         shared_ts = "2026-02-01T00:00:00"
         for mol, tid in [("AAA", "t_tie_aaa"), ("BBB", "t_tie_bbb")]:
-            idx.upsert({
-                "task_id": tid,
-                "job_id": tid,
-                "project_id": proj,
-                "molecule_name": mol,
-                "task_name": "tie_test",
-                "remark": "",
-                "display_name": mol,
-                "workflow": "Confsearch",
-                "task_dir_name": f"dir_{tid}",
-                "status": "completed",
-                "node_id": "local",
-                "node_path": "/tmp",
-                "input_hash": None,
-                "result_manifest_path": None,
-                "current_stage": None,
-                "storage_mode": "local",
-                "layout_version": 2,
-                "created_at": shared_ts,
-                "updated_at": shared_ts,
-                "molecule_key": mol,
-                "tags": "[]",
-                "archived": 0,
-                "batch_id": None,
-                "last_activity_at": None,
-                "started_at": None,
-                "completed_at": None,
-                "group_id": tid,
-                "progress": None,
-            })
+            idx.upsert(
+                {
+                    "task_id": tid,
+                    "job_id": tid,
+                    "project_id": proj,
+                    "molecule_name": mol,
+                    "task_name": "tie_test",
+                    "remark": "",
+                    "display_name": mol,
+                    "workflow": "Confsearch",
+                    "task_dir_name": f"dir_{tid}",
+                    "status": "completed",
+                    "node_id": "local",
+                    "node_path": "/tmp",
+                    "input_hash": None,
+                    "result_manifest_path": None,
+                    "current_stage": None,
+                    "storage_mode": "local",
+                    "layout_version": 2,
+                    "created_at": shared_ts,
+                    "updated_at": shared_ts,
+                    "molecule_key": mol,
+                    "tags": "[]",
+                    "archived": 0,
+                    "batch_id": None,
+                    "last_activity_at": None,
+                    "started_at": None,
+                    "completed_at": None,
+                    "group_id": tid,
+                    "progress": None,
+                }
+            )
 
         result_desc = query_project_tasks(
             idx,
@@ -639,13 +678,9 @@ class TestSorting:
         )
         for g in result["groups"]:
             times = [r["completed_at"] for r in g["jobs"]]
-            coalesced = [
-                t or r["created_at"]
-                for t, r in zip(times, g["jobs"])
-            ]
+            coalesced = [t or r["created_at"] for t, r in zip(times, g["jobs"])]
             assert coalesced == sorted(coalesced, reverse=True), (
-                f"Group {g['key']} not sorted by "
-                f"COALESCE(completed_at, created_at) DESC"
+                f"Group {g['key']} not sorted by COALESCE(completed_at, created_at) DESC"
             )
 
     def test_activity_desc_within_group(self, tmp_path: Path) -> None:
@@ -655,17 +690,14 @@ class TestSorting:
         result = query_project_tasks(
             idx,
             TaskViewQuery(
-                project_id=proj, sort=TaskSort.activity_desc,
+                project_id=proj,
+                sort=TaskSort.activity_desc,
             ),
         )
         for g in result["groups"]:
-            coalesced = [
-                r["last_activity_at"] or r["created_at"]
-                for r in g["jobs"]
-            ]
+            coalesced = [r["last_activity_at"] or r["created_at"] for r in g["jobs"]]
             assert coalesced == sorted(coalesced, reverse=True), (
-                f"Group {g['key']} not sorted by "
-                f"COALESCE(last_activity_at, created_at) DESC"
+                f"Group {g['key']} not sorted by COALESCE(last_activity_at, created_at) DESC"
             )
 
     def test_running_first_stable_partition(self, tmp_path: Path) -> None:
@@ -688,23 +720,22 @@ class TestSorting:
         )
         all_rows = result["groups"][0]["jobs"]
         active_statuses = {
-            "queued", "running", "paused", "starting",
-            "pending", "cancelling", "waiting_review",
+            "queued",
+            "running",
+            "paused",
+            "starting",
+            "pending",
+            "cancelling",
+            "waiting_review",
         }
-        active_rows = [
-            r for r in all_rows if r["status"] in active_statuses
-        ]
-        inactive_rows = [
-            r for r in all_rows if r["status"] not in active_statuses
-        ]
+        active_rows = [r for r in all_rows if r["status"] in active_statuses]
+        inactive_rows = [r for r in all_rows if r["status"] not in active_statuses]
         if active_rows and inactive_rows:
             last_active_idx = max(
-                i for i, r in enumerate(all_rows)
-                if r["status"] in active_statuses
+                i for i, r in enumerate(all_rows) if r["status"] in active_statuses
             )
             first_inactive_idx = min(
-                i for i, r in enumerate(all_rows)
-                if r["status"] not in active_statuses
+                i for i, r in enumerate(all_rows) if r["status"] not in active_statuses
             )
             assert last_active_idx < first_inactive_idx
 
@@ -779,67 +810,71 @@ class TestSearch:
 
         idx, proj = _setup_project_and_tasks(tmp_path)
         # Insert decoy: "100abc" would match unescaped LIKE '100%'
-        idx.upsert({
-            "task_id": "t_pct_decoy",
-            "job_id": "t_pct_decoy",
-            "project_id": proj,
-            "molecule_name": "100abc",
-            "task_name": "test",
-            "remark": "",
-            "display_name": "100abc",
-            "workflow": "Confsearch",
-            "task_dir_name": "dir",
-            "status": "completed",
-            "node_id": "local",
-            "node_path": "/tmp",
-            "input_hash": None,
-            "result_manifest_path": None,
-            "current_stage": None,
-            "storage_mode": "local",
-            "layout_version": 2,
-            "created_at": "2026-01-10T00:00:00",
-            "updated_at": "2026-01-10T00:00:00",
-            "molecule_key": "100abc",
-            "tags": "[]",
-            "archived": 0,
-            "batch_id": None,
-            "last_activity_at": None,
-            "started_at": None,
-            "completed_at": None,
-            "group_id": "t_pct_decoy",
-            "progress": None,
-        })
+        idx.upsert(
+            {
+                "task_id": "t_pct_decoy",
+                "job_id": "t_pct_decoy",
+                "project_id": proj,
+                "molecule_name": "100abc",
+                "task_name": "test",
+                "remark": "",
+                "display_name": "100abc",
+                "workflow": "Confsearch",
+                "task_dir_name": "dir",
+                "status": "completed",
+                "node_id": "local",
+                "node_path": "/tmp",
+                "input_hash": None,
+                "result_manifest_path": None,
+                "current_stage": None,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": "2026-01-10T00:00:00",
+                "updated_at": "2026-01-10T00:00:00",
+                "molecule_key": "100abc",
+                "tags": "[]",
+                "archived": 0,
+                "batch_id": None,
+                "last_activity_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "group_id": "t_pct_decoy",
+                "progress": None,
+            }
+        )
         # Insert target: "100%"
-        idx.upsert({
-            "task_id": "t_pct",
-            "job_id": "t_pct",
-            "project_id": proj,
-            "molecule_name": "100%",
-            "task_name": "test",
-            "remark": "",
-            "display_name": "100%",
-            "workflow": "Confsearch",
-            "task_dir_name": "dir",
-            "status": "completed",
-            "node_id": "local",
-            "node_path": "/tmp",
-            "input_hash": None,
-            "result_manifest_path": None,
-            "current_stage": None,
-            "storage_mode": "local",
-            "layout_version": 2,
-            "created_at": "2026-01-10T00:01:00",
-            "updated_at": "2026-01-10T00:01:00",
-            "molecule_key": "100%",
-            "tags": "[]",
-            "archived": 0,
-            "batch_id": None,
-            "last_activity_at": None,
-            "started_at": None,
-            "completed_at": None,
-            "group_id": "t_pct",
-            "progress": None,
-        })
+        idx.upsert(
+            {
+                "task_id": "t_pct",
+                "job_id": "t_pct",
+                "project_id": proj,
+                "molecule_name": "100%",
+                "task_name": "test",
+                "remark": "",
+                "display_name": "100%",
+                "workflow": "Confsearch",
+                "task_dir_name": "dir",
+                "status": "completed",
+                "node_id": "local",
+                "node_path": "/tmp",
+                "input_hash": None,
+                "result_manifest_path": None,
+                "current_stage": None,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": "2026-01-10T00:01:00",
+                "updated_at": "2026-01-10T00:01:00",
+                "molecule_key": "100%",
+                "tags": "[]",
+                "archived": 0,
+                "batch_id": None,
+                "last_activity_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "group_id": "t_pct",
+                "progress": None,
+            }
+        )
         result = query_project_tasks(
             idx,
             TaskViewQuery(project_id=proj, search="100%"),
@@ -854,67 +889,71 @@ class TestSearch:
 
         idx, proj = _setup_project_and_tasks(tmp_path)
         # Insert decoy: "axb" matches unescaped LIKE "a_b"
-        idx.upsert({
-            "task_id": "t_ud_decoy",
-            "job_id": "t_ud_decoy",
-            "project_id": proj,
-            "molecule_name": "axb",
-            "task_name": "test",
-            "remark": "",
-            "display_name": "axb",
-            "workflow": "Confsearch",
-            "task_dir_name": "dir",
-            "status": "completed",
-            "node_id": "local",
-            "node_path": "/tmp",
-            "input_hash": None,
-            "result_manifest_path": None,
-            "current_stage": None,
-            "storage_mode": "local",
-            "layout_version": 2,
-            "created_at": "2026-01-11T00:00:00",
-            "updated_at": "2026-01-11T00:00:00",
-            "molecule_key": "axb",
-            "tags": "[]",
-            "archived": 0,
-            "batch_id": None,
-            "last_activity_at": None,
-            "started_at": None,
-            "completed_at": None,
-            "group_id": "t_ud_decoy",
-            "progress": None,
-        })
+        idx.upsert(
+            {
+                "task_id": "t_ud_decoy",
+                "job_id": "t_ud_decoy",
+                "project_id": proj,
+                "molecule_name": "axb",
+                "task_name": "test",
+                "remark": "",
+                "display_name": "axb",
+                "workflow": "Confsearch",
+                "task_dir_name": "dir",
+                "status": "completed",
+                "node_id": "local",
+                "node_path": "/tmp",
+                "input_hash": None,
+                "result_manifest_path": None,
+                "current_stage": None,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": "2026-01-11T00:00:00",
+                "updated_at": "2026-01-11T00:00:00",
+                "molecule_key": "axb",
+                "tags": "[]",
+                "archived": 0,
+                "batch_id": None,
+                "last_activity_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "group_id": "t_ud_decoy",
+                "progress": None,
+            }
+        )
         # Insert target: "A_B"
-        idx.upsert({
-            "task_id": "t_underscore",
-            "job_id": "t_underscore",
-            "project_id": proj,
-            "molecule_name": "A_B",
-            "task_name": "test",
-            "remark": "",
-            "display_name": "A_B",
-            "workflow": "Confsearch",
-            "task_dir_name": "dir",
-            "status": "completed",
-            "node_id": "local",
-            "node_path": "/tmp",
-            "input_hash": None,
-            "result_manifest_path": None,
-            "current_stage": None,
-            "storage_mode": "local",
-            "layout_version": 2,
-            "created_at": "2026-01-11T00:01:00",
-            "updated_at": "2026-01-11T00:01:00",
-            "molecule_key": "a_b",
-            "tags": "[]",
-            "archived": 0,
-            "batch_id": None,
-            "last_activity_at": None,
-            "started_at": None,
-            "completed_at": None,
-            "group_id": "t_underscore",
-            "progress": None,
-        })
+        idx.upsert(
+            {
+                "task_id": "t_underscore",
+                "job_id": "t_underscore",
+                "project_id": proj,
+                "molecule_name": "A_B",
+                "task_name": "test",
+                "remark": "",
+                "display_name": "A_B",
+                "workflow": "Confsearch",
+                "task_dir_name": "dir",
+                "status": "completed",
+                "node_id": "local",
+                "node_path": "/tmp",
+                "input_hash": None,
+                "result_manifest_path": None,
+                "current_stage": None,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": "2026-01-11T00:01:00",
+                "updated_at": "2026-01-11T00:01:00",
+                "molecule_key": "a_b",
+                "tags": "[]",
+                "archived": 0,
+                "batch_id": None,
+                "last_activity_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "group_id": "t_underscore",
+                "progress": None,
+            }
+        )
         result = query_project_tasks(
             idx,
             TaskViewQuery(project_id=proj, search="A_B"),
@@ -1278,9 +1317,7 @@ class TestStaleState:
         assert r1["total"] == 3
 
         # Edit t1's molecule_name
-        idx._run(
-            "UPDATE tasks SET molecule_name='ZZZ', molecule_key='zzz' WHERE task_id='t1'"
-        )
+        idx._run("UPDATE tasks SET molecule_name='ZZZ', molecule_key='zzz' WHERE task_id='t1'")
         r2 = query_project_tasks(idx, TaskViewQuery(project_id=proj, search="BCB"))
         assert r2["total"] == 2  # t1 no longer matches
 

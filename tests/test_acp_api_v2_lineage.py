@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -67,6 +68,32 @@ def _rewrite_spec_json(client: TestClient, task_id: str, new_input: dict[str, An
         spec["input"] = new_input
         conn.execute("UPDATE jobs SET spec_json=? WHERE id=?", (json.dumps(spec), task_id))
         conn.commit()
+
+
+def _wait_for_terminal(client: TestClient, task_ids: list[str], timeout: float = 10.0) -> None:
+    """Poll until all jobs reach a terminal status.
+
+    Race guard: the manager poller does full-row store.update which overwrites
+    spec_json — we must wait for it to finish before raw-sqlite corruption.
+    """
+    deadline = time.monotonic() + timeout
+    db_path = client.app.state.job_manager.store.db_path
+    while time.monotonic() < deadline:
+        with sqlite3.connect(str(db_path)) as conn:
+            statuses = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT status FROM jobs WHERE id IN ({})".format(
+                        ",".join("?" for _ in task_ids)
+                    ),
+                    task_ids,
+                ).fetchall()
+            ]
+        terminal = {"completed", "failed", "cancelled"}
+        if statuses and all(s in terminal for s in statuses):
+            return
+        time.sleep(0.05)
+    # Not all terminal — acceptable for test purposes; proceed anyway
 
 
 def _create_chain(client: TestClient, project_id: str) -> tuple[str, str, str]:
@@ -208,11 +235,7 @@ def test_corrupt_in_downstream_like_path(client: TestClient) -> None:
     )
     clean_id, corrupt_id = task_ids[0], task_ids[1]
 
-    truncated = (
-        '{"input": {"source": {"source_job_id": "'
-        + clean_id
-        + '"'
-    )
+    truncated = '{"input": {"source": {"source_job_id": "' + clean_id + '"'
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(
@@ -252,6 +275,9 @@ def test_upstream_parent_corrupt(client: TestClient) -> None:
         project_id=pid,
     )
     parent_id, child_id = task_ids[0], task_ids[1]
+
+    # Race guard: wait for poller to finish before raw-sqlite corruption
+    _wait_for_terminal(client, task_ids)
 
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
@@ -353,10 +379,12 @@ def test_diamond_dedup(client: TestClient) -> None:
         client, c_id, {"source": {"source_type": "structure_asset", "asset_id": a_id}}
     )
     _rewrite_spec_json(
-        client, x_id, {
+        client,
+        x_id,
+        {
             "source": {"source_type": "task_artifact", "source_job_id": b_id},
             "from": {"source_job_id": c_id},
-        }
+        },
     )
 
     r = client.get(f"/api/v2/tasks/{x_id}/lineage")
@@ -394,9 +422,7 @@ def test_top_level_source_job_id(client: TestClient) -> None:
     )
     upstream_id, downstream_id = task_ids[0], task_ids[1]
 
-    _rewrite_spec_json(
-        client, downstream_id, {"source_job_id": upstream_id}
-    )
+    _rewrite_spec_json(client, downstream_id, {"source_job_id": upstream_id})
 
     r = client.get(f"/api/v2/tasks/{downstream_id}/lineage")
     assert r.status_code == 200
@@ -432,9 +458,7 @@ def test_from_dict_source_job_id(client: TestClient) -> None:
     )
     upstream_id, downstream_id = task_ids[0], task_ids[1]
 
-    _rewrite_spec_json(
-        client, downstream_id, {"from": {"source_job_id": upstream_id}}
-    )
+    _rewrite_spec_json(client, downstream_id, {"from": {"source_job_id": upstream_id}})
 
     r = client.get(f"/api/v2/tasks/{downstream_id}/lineage")
     assert r.status_code == 200

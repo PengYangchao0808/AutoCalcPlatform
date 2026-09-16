@@ -16,7 +16,8 @@ import json
 import logging
 import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -155,6 +156,27 @@ class TaskIndex:
             conn = self._connect()
             try:
                 return conn.execute(sql, params).fetchall()
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    # ------------------------------------------------------------------ #
+    # Public accessors (used by molecule_groups / task_views)
+    # ------------------------------------------------------------------ #
+
+    def query_rows(
+        self, sql: str, params: tuple[Any, ...] = ()
+    ) -> list[sqlite3.Row]:
+        """Execute a read query and return all rows (thread-safe)."""
+        return self._query(sql, params)
+
+    @contextmanager
+    def writer_connection(self) -> Iterator[sqlite3.Connection]:
+        """Yield a connection for batch writes; closes only if not shared."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                yield conn
             finally:
                 if self._shared_conn is None:
                     conn.close()

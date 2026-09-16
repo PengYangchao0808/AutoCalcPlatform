@@ -33,19 +33,9 @@ def _utc_now_iso() -> str:
 
 
 class _Queryable(Protocol):
-    def _query(self, sql: str, params: tuple[Any, ...] = ...) -> list[sqlite3.Row]: ...
+    def query_rows(self, sql: str, params: tuple[Any, ...] = ...) -> list[sqlite3.Row]: ...
 
-    def _run(self, sql: str, params: tuple[Any, ...] = ...) -> None: ...
-
-
-def _get_conn(obj: _Queryable | sqlite3.Connection) -> sqlite3.Connection:
-    """Return a raw connection from a TaskIndex or pass through a Connection."""
-    if isinstance(obj, sqlite3.Connection):
-        return obj
-    # TaskIndex exposes _connect() for write paths and _query for reads.
-    # For alias lookups we need a connection; use _connect under _lock.
-    # We work through the existing _query / _run methods to stay thread-safe.
-    return obj  # type: ignore[return-value]
+    def writer_connection(self) -> Any: ...
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +65,7 @@ def resolve_molecule_key(
     if isinstance(index_or_conn, sqlite3.Connection):
         conn = index_or_conn
         row = conn.execute(
-            "SELECT group_key FROM molecule_aliases "
-            "WHERE project_id=? AND alias_key=?",
+            "SELECT group_key FROM molecule_aliases WHERE project_id=? AND alias_key=?",
             (project_id, alias_key),
         ).fetchone()
         if row is None:
@@ -88,14 +77,13 @@ def resolve_molecule_key(
             ).fetchone()
     else:
         idx = index_or_conn
-        rows = idx._query(
-            "SELECT group_key FROM molecule_aliases "
-            "WHERE project_id=? AND alias_key=?",
+        rows = idx.query_rows(
+            "SELECT group_key FROM molecule_aliases WHERE project_id=? AND alias_key=?",
             (project_id, alias_key),
         )
         row = rows[0] if rows else None
         if row is None:
-            rows = idx._query(
+            rows = idx.query_rows(
                 "SELECT group_key FROM molecule_aliases "
                 "WHERE project_id=? AND lower(alias_key)=lower(?) "
                 "ORDER BY rowid LIMIT 1",
@@ -169,58 +157,44 @@ def apply_group_merge(
         conn.commit()
         return updated
 
-    # TaskIndex path — use _run for writes
+    # TaskIndex path — use writer_connection for batch writes
     idx: _Queryable = index_or_conn
     placeholders = ",".join("?" for _ in alias_keys)
-    # We need the rowcount, but _run doesn't return it.  Use a direct query
-    # through the connection obtained via a write transaction.
-    # TaskIndex._run commits immediately — we must batch the updates.
-    with idx._lock if hasattr(idx, "_lock") else _NoopContext():
-        conn_raw = idx._connect()  # type: ignore[attr-defined]
-        try:
-            cursor = conn_raw.execute(
-                f"UPDATE tasks SET molecule_key=?, updated_at=? "
-                f"WHERE project_id=? AND molecule_key IN ({placeholders})",
-                (target_key, now, project_id, *alias_keys),
-            )
-            updated = cursor.rowcount
+    # We need the rowcount, but query_rows doesn't return it.
+    # Use writer_connection for a batch of writes in one transaction.
+    with idx.writer_connection() as conn_raw:
+        cursor = conn_raw.execute(
+            f"UPDATE tasks SET molecule_key=?, updated_at=? "
+            f"WHERE project_id=? AND molecule_key IN ({placeholders})",
+            (target_key, now, project_id, *alias_keys),
+        )
+        updated = cursor.rowcount
 
-            conn_raw.execute(
-                "INSERT INTO molecule_groups "
-                "(project_id, group_key, display_name, "
-                "created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?) "
-                "ON CONFLICT(project_id, group_key) "
-                "DO UPDATE SET updated_at=excluded.updated_at",
-                (project_id, target_key, target_key, now, now),
-            )
+        conn_raw.execute(
+            "INSERT INTO molecule_groups "
+            "(project_id, group_key, display_name, "
+            "created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(project_id, group_key) "
+            "DO UPDATE SET updated_at=excluded.updated_at",
+            (project_id, target_key, target_key, now, now),
+        )
 
-            for ak in alias_keys:
-                if ak != target_key:
-                    conn_raw.execute(
-                        "INSERT INTO molecule_aliases "
-                        "(project_id, alias_key, group_key, "
-                        "created_at) "
-                        "VALUES (?, ?, ?, ?) "
-                        "ON CONFLICT(project_id, alias_key) "
-                        "DO UPDATE SET "
-                        "group_key=excluded.group_key",
-                        (project_id, ak, target_key, now),
-                    )
+        for ak in alias_keys:
+            if ak != target_key:
+                conn_raw.execute(
+                    "INSERT INTO molecule_aliases "
+                    "(project_id, alias_key, group_key, "
+                    "created_at) "
+                    "VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(project_id, alias_key) "
+                    "DO UPDATE SET "
+                    "group_key=excluded.group_key",
+                    (project_id, ak, target_key, now),
+                )
 
-            conn_raw.commit()
-            return updated
-        finally:
-            if idx._shared_conn is None:  # type: ignore[attr-defined]
-                conn_raw.close()
-
-
-class _NoopContext:
-    def __enter__(self) -> _NoopContext:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        pass
+        conn_raw.commit()
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -284,9 +258,7 @@ def suggest_group_merges(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
 
             # separator-normalized-equal
             if sep_a & sep_b:
-                suggestions.append(
-                    {"a": key_a, "b": key_b, "reason": "separator-normalized-equal"}
-                )
+                suggestions.append({"a": key_a, "b": key_b, "reason": "separator-normalized-equal"})
                 seen.add((key_a, key_b))
 
     return suggestions

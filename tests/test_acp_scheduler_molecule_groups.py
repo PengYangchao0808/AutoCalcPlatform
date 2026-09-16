@@ -51,9 +51,7 @@ def _db_row(client: TestClient, task_id: str) -> dict[str, Any]:
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT * FROM tasks WHERE task_id=?", (task_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchone()
     assert row is not None
     return dict(row)
 
@@ -219,13 +217,9 @@ def test_suggestions_casefold_and_separator(client: TestClient) -> None:
     suggestions = r.json()
 
     has_casefold = any(s["reason"] == "casefold-equal" for s in suggestions)
-    has_separator = any(
-        s["reason"] == "separator-normalized-equal" for s in suggestions
-    )
+    has_separator = any(s["reason"] == "separator-normalized-equal" for s in suggestions)
     assert has_casefold, f"Expected casefold-equal suggestion, got: {suggestions}"
-    assert has_separator, (
-        f"Expected separator-normalized-equal suggestion, got: {suggestions}"
-    )
+    assert has_separator, f"Expected separator-normalized-equal suggestion, got: {suggestions}"
 
     keys = _db_molecule_keys(client, pid)
     assert "BCB_ALLENE" in keys
@@ -276,9 +270,7 @@ def test_migration_015_idempotent(tmp_path: Path) -> None:
     with sqlite3.connect(str(db_path)) as conn:
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
     assert "molecule_groups" in tables
     assert "molecule_aliases" in tables
@@ -528,10 +520,13 @@ def test_re_merge_upsert_chains_aliases(client: TestClient) -> None:
 
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
-        keys = [r[0] for r in conn.execute(
-            "SELECT molecule_key FROM tasks WHERE project_id=? ORDER BY task_id",
-            (pid,),
-        ).fetchall()]
+        keys = [
+            r[0]
+            for r in conn.execute(
+                "SELECT molecule_key FROM tasks WHERE project_id=? ORDER BY task_id",
+                (pid,),
+            ).fetchall()
+        ]
     assert keys == ["T2", "T2", "T2", "T2", "T2"]
 
     with sqlite3.connect(str(db_path)) as conn:
@@ -564,9 +559,21 @@ def test_legacy_casefolded_alias_preserved_after_refresh(tmp_path: Path) -> None
             "molecule_key, tags, archived) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
             (
-                "t1", "t1", "proj1", "BCB-Allene", "opt",
-                "", "dir_t1", "Confsearch", "dir_t1", "completed",
-                "local", "2026-01-01", "2026-01-01", "bcb_allene", "[]",
+                "t1",
+                "t1",
+                "proj1",
+                "BCB-Allene",
+                "opt",
+                "",
+                "dir_t1",
+                "Confsearch",
+                "dir_t1",
+                "completed",
+                "local",
+                "2026-01-01",
+                "2026-01-01",
+                "bcb_allene",
+                "[]",
             ),
         )
         conn.execute(
@@ -607,9 +614,21 @@ def test_legacy_refresh_mixed_matrix(tmp_path: Path) -> None:
             "molecule_key, tags, archived) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
             (
-                "t_alias", "t_alias", "proj1", "BCB-Allene", "opt",
-                "", "dir", "Confsearch", "dir", "completed",
-                "local", "2026-01-01", "2026-01-01", "bcb_allene", "[]",
+                "t_alias",
+                "t_alias",
+                "proj1",
+                "BCB-Allene",
+                "opt",
+                "",
+                "dir",
+                "Confsearch",
+                "dir",
+                "completed",
+                "local",
+                "2026-01-01",
+                "2026-01-01",
+                "bcb_allene",
+                "[]",
             ),
         )
         conn.execute(
@@ -620,9 +639,21 @@ def test_legacy_refresh_mixed_matrix(tmp_path: Path) -> None:
             "molecule_key, tags, archived) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
             (
-                "t_lower", "t_lower", "proj1", "EtOH", "opt",
-                "", "dir", "Confsearch", "dir", "completed",
-                "local", "2026-01-01", "2026-01-01", "etoh", "[]",
+                "t_lower",
+                "t_lower",
+                "proj1",
+                "EtOH",
+                "opt",
+                "",
+                "dir",
+                "Confsearch",
+                "dir",
+                "completed",
+                "local",
+                "2026-01-01",
+                "2026-01-01",
+                "etoh",
+                "[]",
             ),
         )
         conn.execute(
@@ -633,9 +664,21 @@ def test_legacy_refresh_mixed_matrix(tmp_path: Path) -> None:
             "molecule_key, tags, archived) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?, ?, ?, ?, 0)",
             (
-                "t_plain", "t_plain", "proj1", "MeOH", "opt",
-                "", "dir", "Confsearch", "dir", "completed",
-                "local", "2026-01-01", "2026-01-01", "MeOH", "[]",
+                "t_plain",
+                "t_plain",
+                "proj1",
+                "MeOH",
+                "opt",
+                "",
+                "dir",
+                "Confsearch",
+                "dir",
+                "completed",
+                "local",
+                "2026-01-01",
+                "2026-01-01",
+                "MeOH",
+                "[]",
             ),
         )
         conn.execute(
@@ -652,10 +695,12 @@ def test_legacy_refresh_mixed_matrix(tmp_path: Path) -> None:
     migrate(db_path)
 
     with sqlite3.connect(str(db_path)) as conn:
-        rows = {r[0]: r[1] for r in conn.execute(
-            "SELECT task_id, molecule_key FROM tasks WHERE project_id='proj1' "
-            "ORDER BY task_id",
-        ).fetchall()}
+        rows = {
+            r[0]: r[1]
+            for r in conn.execute(
+                "SELECT task_id, molecule_key FROM tasks WHERE project_id='proj1' ORDER BY task_id",
+            ).fetchall()
+        }
     assert rows["t_alias"] == "bcb_allene", "alias-covered row keeps merge target"
     assert rows["t_lower"] == "EtOH", "all-lowercase legacy gets case-preserving key"
     assert rows["t_plain"] == "MeOH", "plain legacy row gets case-preserving key"
@@ -663,10 +708,12 @@ def test_legacy_refresh_mixed_matrix(tmp_path: Path) -> None:
     migrate(db_path)
 
     with sqlite3.connect(str(db_path)) as conn:
-        rows2 = {r[0]: r[1] for r in conn.execute(
-            "SELECT task_id, molecule_key FROM tasks WHERE project_id='proj1' "
-            "ORDER BY task_id",
-        ).fetchall()}
+        rows2 = {
+            r[0]: r[1]
+            for r in conn.execute(
+                "SELECT task_id, molecule_key FROM tasks WHERE project_id='proj1' ORDER BY task_id",
+            ).fetchall()
+        }
     assert rows == rows2, "Idempotent: re-run produces identical results"
 
 
@@ -716,9 +763,7 @@ def test_sticky_alias_new_task_gets_target_key(client: TestClient) -> None:
 
     idx = TaskIndex(db_path)
     key = idx.compute_molecule_key(pid, "BCB-Allene")
-    assert key == "BCB_ALLENE", (
-        f"Alias resolution should return target, got {key}"
-    )
+    assert key == "BCB_ALLENE", f"Alias resolution should return target, got {key}"
 
     key_no_alias = idx.compute_molecule_key(pid, "EtOH")
     assert key_no_alias == "EtOH", "No alias returns case-preserving key"

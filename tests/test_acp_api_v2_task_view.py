@@ -57,14 +57,16 @@ def _create_task(
 ) -> dict[str, Any]:
     body = _batch_create(
         client,
-        [{
-            "molecule_name": molecule_name,
-            "task_name": task_name,
-            "remark": remark,
-            "workflow": workflow,
-            "input": {"source": "CCO"},
-            "method": {"protocol": "ext"},
-        }],
+        [
+            {
+                "molecule_name": molecule_name,
+                "task_name": task_name,
+                "remark": remark,
+                "workflow": workflow,
+                "input": {"source": "CCO"},
+                "method": {"protocol": "ext"},
+            }
+        ],
     )
     created = body["created"]
     assert len(created) == 1
@@ -143,7 +145,7 @@ def test_task_view_default_molecule_grouping(client: TestClient) -> None:
         for i in range(len(jobs) - 1):
             assert jobs[i]["created_at"] >= jobs[i + 1]["created_at"], (
                 f"within-group '{g['key']}' not in created_at descending: "
-                f"{jobs[i]['created_at']} < {jobs[i+1]['created_at']}"
+                f"{jobs[i]['created_at']} < {jobs[i + 1]['created_at']}"
             )
 
     assert "facets" in body
@@ -228,17 +230,13 @@ def test_patch_molecule_name_recomputes_molecule_key(client: TestClient) -> None
 
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
-        before = conn.execute(
-            "SELECT hex(spec_json) FROM jobs WHERE id=?", (task_id,)
-        ).fetchone()
+        before = conn.execute("SELECT hex(spec_json) FROM jobs WHERE id=?", (task_id,)).fetchone()
 
     r = client.patch(f"/api/v2/tasks/{task_id}", json={"molecule_name": "METHANOL"})
     assert r.status_code == 200
 
     with sqlite3.connect(str(db_path)) as conn:
-        after = conn.execute(
-            "SELECT hex(spec_json) FROM jobs WHERE id=?", (task_id,)
-        ).fetchone()
+        after = conn.execute("SELECT hex(spec_json) FROM jobs WHERE id=?", (task_id,)).fetchone()
     assert before == after, "spec_json was mutated by PATCH — must be immutable"
 
     r2 = client.get(f"/api/v2/task-view?project_id={pid}&group_by=molecule")
@@ -375,14 +373,16 @@ def test_batch_with_existing_batch_id_not_overwritten(client: TestClient) -> Non
     pid = _default_project_id(client)
     body = _batch_create(
         client,
-        [{
-            "molecule_name": "ethanol",
-            "task_name": "opt",
-            "workflow": "fake",
-            "input": {"source": "CCO"},
-            "method": {"protocol": "ext"},
-            "resources": {"batch_id": "custom_batch_123"},
-        }],
+        [
+            {
+                "molecule_name": "ethanol",
+                "task_name": "opt",
+                "workflow": "fake",
+                "input": {"source": "CCO"},
+                "method": {"protocol": "ext"},
+                "resources": {"batch_id": "custom_batch_123"},
+            }
+        ],
         project_id=pid,
     )
     created = body["created"]
@@ -448,11 +448,14 @@ def test_active_row_enrichment(client: TestClient) -> None:
     assert r_detail.status_code == 200
     work_dir = Path(r_detail.json()["work_dir"])
 
-    _write_state_json(work_dir, {
-        "stage_index": 2,
-        "stage_total": 5,
-        "stage_detail": "probe",
-    })
+    _write_state_json(
+        work_dir,
+        {
+            "stage_index": 2,
+            "stage_total": 5,
+            "stage_detail": "probe",
+        },
+    )
 
     r = client.get(f"/api/v2/task-view?project_id={pid}")
     assert r.status_code == 200

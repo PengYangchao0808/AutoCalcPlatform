@@ -1,4 +1,3 @@
-# pyright: reportAny=false, reportUnusedCallResult=false
 """
 Task View Engine
 ================
@@ -122,10 +121,17 @@ class TaskViewQuery:
 # Active statuses (for running_first partition)
 # ---------------------------------------------------------------------------
 
-_ACTIVE_STATUSES: frozenset[str] = frozenset({
-    "queued", "starting", "pending", "running", "paused",
-    "cancelling", "waiting_review",
-})
+_ACTIVE_STATUSES: frozenset[str] = frozenset(
+    {
+        "queued",
+        "starting",
+        "pending",
+        "running",
+        "paused",
+        "cancelling",
+        "waiting_review",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -235,13 +241,10 @@ def query_project_tasks(
             total: int = total_row["cnt"] if total_row else 0
 
             counts_sql = (
-                f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt "
-                f"{base_sql} GROUP BY t.status"
+                f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt {base_sql} GROUP BY t.status"
             )
             counts_rows = conn.execute(counts_sql, params).fetchall()
-            counts: dict[str, int] = {
-                s.value: 0 for s in _JobStatus
-            }
+            counts: dict[str, int] = {s.value: 0 for s in _JobStatus}
             for row in counts_rows:
                 counts[row["status"]] = row["cnt"]
 
@@ -459,24 +462,28 @@ def _build_tag_groups(
     for tag_name in sorted(tag_buckets, key=lambda t: (-len(tag_buckets[t]), t)):
         group_rows = tag_buckets[tag_name]
         capped = len(group_rows) > q.group_limit
-        result.append({
-            "key": tag_name,
-            "display_name": tag_name,
-            "count": len(group_rows),
-            "truncated": capped,
-            "jobs": [_row_to_task(r, project_names) for r in group_rows[: q.group_limit]],
-        })
+        result.append(
+            {
+                "key": tag_name,
+                "display_name": tag_name,
+                "count": len(group_rows),
+                "truncated": capped,
+                "jobs": [_row_to_task(r, project_names) for r in group_rows[: q.group_limit]],
+            }
+        )
 
     if untagged:
         capped = len(untagged) > q.group_limit
-        result.append({
-            "key": "__untagged__",
-            "display_name": "__untagged__",
-            "count": len(untagged),
-            "truncated": capped,
-            "jobs": [_row_to_task(r, project_names) for r in untagged[: q.group_limit]],
-            "unassigned": True,
-        })
+        result.append(
+            {
+                "key": "__untagged__",
+                "display_name": "__untagged__",
+                "count": len(untagged),
+                "truncated": capped,
+                "jobs": [_row_to_task(r, project_names) for r in untagged[: q.group_limit]],
+                "unassigned": True,
+            }
+        )
 
     return result
 
@@ -536,8 +543,7 @@ def _build_where_clauses(
             tag_conditions = []
             for tag_val in q.tags:
                 tag_conditions.append(
-                    "EXISTS (SELECT 1 FROM json_each(t.tags) "
-                    "WHERE json_each.value = ?)"
+                    "EXISTS (SELECT 1 FROM json_each(t.tags) WHERE json_each.value = ?)"
                 )
                 params.append(tag_val)
             clauses.append(f"({' OR '.join(tag_conditions)})")
@@ -573,15 +579,13 @@ def _build_facets(
     facets: dict[str, Any] = {}
 
     rows = conn.execute(
-        f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt "
-        f"{base} GROUP BY t.status",
+        f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt {base} GROUP BY t.status",
         params,
     ).fetchall()
     facets["statuses"] = {row["status"]: row["cnt"] for row in rows}
 
     rows = conn.execute(
-        f"SELECT t.workflow, COUNT(DISTINCT t.task_id) as cnt "
-        f"{base} GROUP BY t.workflow",
+        f"SELECT t.workflow, COUNT(DISTINCT t.task_id) as cnt {base} GROUP BY t.workflow",
         params,
     ).fetchall()
     facets["workflows"] = [
@@ -598,8 +602,7 @@ def _build_facets(
     facets["molecules"] = [
         {
             "key": row["molecule_key"] or "__unassigned__",
-            "name": row["molecule_name"]
-            or (row["molecule_key"] or "__unassigned__"),
+            "name": row["molecule_name"] or (row["molecule_key"] or "__unassigned__"),
             "count": row["cnt"],
         }
         for row in sorted(rows, key=lambda r: -r["cnt"])
