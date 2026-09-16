@@ -107,7 +107,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——10+ 任务构造库覆盖上述全部断言；failure——空项目返回空 groups/total=0；未知 group_by 值由 API 层 422（engine 收到即断言错误）。Evidence `.omo/evidence/task-organization/task-2.md`
   Commit: Y | feat(scheduler): whole-project task view engine (group/filter/sort/facets)
 
-- [ ] 3. v2 API：task-view 端点 + PATCH 整理元数据 + batch 共享 batch_id
+- [x] 3. v2 API：task-view 端点 + PATCH 整理元数据 + batch 共享 batch_id
   What to do:
   a) `src/acp/api/v2_schemas.py` 新增：`V2TaskRowModel`（T2g 行形状）、`V2TaskViewGroupModel`（key/display_name/unassigned/retired/count/truncated/min_created_at/jobs）、`V2TaskViewFacetsModel`、`V2TaskViewResponse`（groups/facets/total/truncated/counts/query 回显）、`V2TaskPatchRequest`（molecule_name/task_name/remark/tags 全 Optional）。
   b) `src/acp/api/v2_routes.py` 新增 `GET /projects/{project_id}/task-view`（project_id 路径参数，另支持 `scope=all` 走跨项目？——否：跨项目用独立 `GET /tasks/view?...`？**决策：单一端点 `GET /api/v2/task-view`，project_id 作为可选 query 参数**，None=全部，避免两条路径）：query 参数 `project_id?/group_by(regex ^(molecule|remark|workflow|batch|tag|none)$)/sort(^created_desc|created_asc|completed_desc|activity_desc|name_asc|name_desc$)/status(逗号分隔)/workflow/molecule/tag/batch/remark(逗号分隔)/q/archived(^exclude|include|only$)/running_first(bool)/group_limit(int ge=1 le=1000 默认 200)`；非法枚举→422（FastAPI pattern）。调用 `query_project_tasks`；对 **active 状态行**逐个 `store.get(id)` + 复用 `_enrich_job_snapshot`（从 `v1_routes` import；LRU 上限 256 只服务 active 行，量级≤并发上限，可承受——若 active>200 仅 enrich 前 200 并记 warning）；404：project_id 给定但项目不存在。
@@ -159,7 +159,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——契约全绿 + node 冒烟通过；failure——node 缺失时 skip 而非 fail（断言 skipif 逻辑）。Evidence `.omo/evidence/task-organization/task-6.md`
   Commit: Y | feat(workbench): collapsible grouped task list + slim cards + collator sort
 
-- [x] 7. P2 API：标签清单/重命名/合并/删除 + 批量操作
+- [ ] 7. P2 API：标签清单/重命名/合并/删除 + 批量操作
   What to do:
   a) `src/acp/api/v2_routes.py`：`GET /projects/{project_id}/tags` → 聚合标签清单 `[{tag, count}]`（`SELECT je.value AS tag, COUNT(*) FROM tasks, json_each(tasks.tags) je WHERE project_id=? GROUP BY je.value ORDER BY count DESC`；JSON1 fallback Python 聚合）；`POST /projects/{project_id}/tags/rename` body `{from, to}`（`from`/`to` 为 Python 关键字安全字段名 `source`/`target`）——遍历项目行改写 tasks.tags（去重、保持顺序）；`POST /projects/{project_id}/tags/merge` body `{sources: [str], target: str}`（多并一）；`POST /projects/{project_id}/tags/delete` body `{tag: str}`（仅解除标记，**不删任务**）。三者均返回 `{updated: n}`，逐行事务（TaskIndex 新方法 `rewrite_tags(project_id, transform: Callable[[list[str]], list[str]]) -> int`，持锁单连接遍历）。
   b) `POST /api/v2/tasks/batch-ops` body `{task_ids: [str], op: str, payload: dict}`：op∈`add_tags`(payload.tags 并集去重)/`remove_tags`/`set_molecule_name`(payload.molecule_name → 同时重算 molecule_key)/`archive`/`unarchive`；**archive 校验 tasks.status 属终态**（`JobStatus.is_terminal`；含活动任务则整体 400 并列出不合规 id——不做部分执行）；逐任务执行、返回 `{results: [{task_id, ok, error?}], updated: n}`；task_ids 上限 500。
