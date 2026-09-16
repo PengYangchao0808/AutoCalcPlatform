@@ -22,6 +22,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
+from acp.api.v1_routes import _apply_auto_tag_rules_on_submit
 from acp.api.v2_schemas import (
     V2BatchOpItemResult,
     V2BatchOpsRequest,
@@ -555,6 +556,10 @@ def _submit_batch_item(
     except Exception as exc:  # noqa: BLE001 — one bad item must not abort the batch
         logger.warning("batch item %s/%s failed: %s", item.molecule_name, item.task_name, exc)
         return str(exc)
+    try:
+        _apply_auto_tag_rules_on_submit(manager, record)
+    except Exception:  # noqa: BLE001 — rule errors must never fail submission
+        pass
     return _task_summary(record)
 
 
@@ -875,6 +880,47 @@ def _batch_set_molecule_name(
         return False
     manager.tasks.update_display_fields(task_id, molecule_name=name)
     return True
+
+
+# ── Auto-tag rules backfill endpoint (T11) ────────────────────────────────
+
+
+@router.post("/projects/{project_id}/auto-tag-rules/apply")
+def apply_auto_tag_rules_backfill(project_id: str, request: Request) -> dict[str, int]:
+    """Replay current enabled auto-tag rules over ALL project tasks."""
+    from acp.scheduler.auto_tags import apply_auto_tag_rules
+
+    manager = _manager(request)
+    project = manager.projects.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    settings = project.get("settings", {})
+    rules = settings.get("auto_tag_rules")
+    if not rules or not isinstance(rules, list):
+        return {"updated": 0}
+    tasks_index = manager.tasks
+    rows = tasks_index._query(
+        "SELECT task_id, tags, molecule_name, remark, workflow FROM tasks WHERE project_id=?",
+        (project_id,),
+    )
+    updated = 0
+    for row in rows:
+        task_id = row["task_id"]
+        task_row = dict(row)
+        matched = apply_auto_tag_rules(rules, task_row)
+        if not matched:
+            continue
+        existing_tags: list[str] = []
+        raw_tags = task_row.get("tags", "[]")
+        try:
+            existing_tags = json.loads(raw_tags) if isinstance(raw_tags, str) else list(raw_tags)
+        except (json.JSONDecodeError, TypeError):
+            existing_tags = []
+        merged = list(dict.fromkeys(existing_tags + matched))
+        if merged != existing_tags:
+            tasks_index.update_display_fields(task_id, tags=merged)
+            updated += 1
+    return {"updated": updated}
 
 
 # ── Molecule group / alias endpoints (T8) ────────────────────────────────

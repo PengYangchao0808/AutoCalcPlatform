@@ -255,6 +255,37 @@ def _manager(request: Request) -> JobManager:
     return manager
 
 
+def _apply_auto_tag_rules_on_submit(manager: JobManager, record: Any) -> None:
+    """Apply project auto-tag rules after a task is created."""
+    from acp.scheduler.auto_tags import apply_auto_tag_rules
+
+    project_id = getattr(record, "project_id", None)
+    if not project_id:
+        return
+    project = manager.projects.get_project(project_id)
+    if project is None:
+        return
+    settings = project.get("settings", {})
+    rules = settings.get("auto_tag_rules")
+    if not rules or not isinstance(rules, list):
+        return
+    task_row = manager.tasks.get(record.id)
+    if task_row is None:
+        return
+    matched = apply_auto_tag_rules(rules, task_row)
+    if not matched:
+        return
+    existing_tags: list[str] = []
+    raw_tags = task_row.get("tags", "[]")
+    try:
+        existing_tags = json.loads(raw_tags) if isinstance(raw_tags, str) else list(raw_tags)
+    except (json.JSONDecodeError, TypeError):
+        existing_tags = []
+    merged = list(dict.fromkeys(existing_tags + matched))
+    if merged != existing_tags:
+        manager.tasks.update_display_fields(record.id, tags=merged)
+
+
 def _is_remote_job(record: Any) -> bool:
     """True when *record* carries remote execution metadata."""
     result = record.result or {}
@@ -1392,6 +1423,11 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         record = manager.submit(spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # --- auto-tag rules hook (T11) ---
+    try:
+        _apply_auto_tag_rules_on_submit(manager, record)
+    except Exception:  # noqa: BLE001 — rule errors must never fail submission
+        pass
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,

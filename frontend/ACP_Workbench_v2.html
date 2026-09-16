@@ -1928,6 +1928,20 @@ option, optgroup {
 .tag-mgmt-item .tag-mgmt-count { color: var(--text-tertiary); font-size: 11px; min-width: 30px; text-align: right; }
 .tag-mgmt-item .tag-mgmt-actions { display: flex; gap: 4px; }
 .tag-mgmt-item .tag-mgmt-actions button { font-size: 10px; padding: 2px 6px; }
+.tag-mgmt-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-default); margin-bottom: 10px; }
+.tag-mgmt-tab { padding: 6px 14px; font-size: 12px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-secondary); background: none; border-top: none; border-left: none; border-right: none; }
+.tag-mgmt-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.auto-tag-rule { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+.auto-tag-rule:last-child { border-bottom: none; }
+.auto-tag-rule .rule-desc { flex: 1; color: var(--text-primary); }
+.auto-tag-rule .rule-tag { color: var(--accent); font-weight: 600; margin-left: 4px; }
+.auto-tag-rule .rule-toggle { width: 14px; height: 14px; accent-color: var(--accent); }
+.auto-tag-rule .mini-btn { font-size: 10px; padding: 2px 6px; }
+.auto-tag-form { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 8px; font-size: 12px; }
+.auto-tag-form select, .auto-tag-form input { font-size: 11px; padding: 3px 6px; border: 1px solid var(--border-default); border-radius: 4px; background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.auto-tag-form select { min-width: 70px; }
+.auto-tag-form input.rule-value-input { width: 90px; }
+.auto-tag-form input.rule-tag-input { width: 70px; }
 .lineage-section { margin-top: 10px; padding: 0 14px; }
 .lineage-header { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 8px 0; }
 .lineage-header .lineage-chevron { transition: transform 0.15s; font-size: 10px; }
@@ -4676,14 +4690,42 @@ option, optgroup {
 
 <!-- ── Tag Management Modal ──────────────────────────────────────── -->
 <div class="modal-overlay" id="tag-mgmt-modal" style="display:none;">
-  <div class="modal-dialog" style="max-width:480px;">
+  <div class="modal-dialog" style="max-width:520px;">
     <div class="modal-header">
       <h2 data-i18n="queue.view.manage_tags">管理标签</h2>
       <button class="modal-close" id="tag-mgmt-modal-close">X</button>
     </div>
-    <div class="modal-body" id="tag-mgmt-body" style="max-height:360px;overflow-y:auto;">
-      <div id="tag-mgmt-list"></div>
-      <div id="tag-mgmt-empty" style="display:none;font-size:12px;color:var(--text-tertiary);text-align:center;padding:12px;" data-i18n="queue.view.filter_no_facets">暂无可用筛选条件</div>
+    <div class="modal-body" id="tag-mgmt-body" style="max-height:420px;overflow-y:auto;">
+      <div class="tag-mgmt-tabs">
+        <button class="tag-mgmt-tab active" id="tag-mgmt-tab-tags" data-i18n="queue.view.tab_tags">标签管理</button>
+        <button class="tag-mgmt-tab" id="tag-mgmt-tab-auto" data-i18n="queue.view.tab_auto_tag">自动打标规则</button>
+      </div>
+      <div id="tag-mgmt-panel-tags">
+        <div id="tag-mgmt-list"></div>
+        <div id="tag-mgmt-empty" style="display:none;font-size:12px;color:var(--text-tertiary);text-align:center;padding:12px;" data-i18n="queue.view.filter_no_facets">暂无可用筛选条件</div>
+      </div>
+      <div id="tag-mgmt-panel-auto" style="display:none;">
+        <div id="auto-tag-rules-list"></div>
+        <div id="auto-tag-rules-empty" style="display:none;font-size:12px;color:var(--text-tertiary);text-align:center;padding:12px;" data-i18n="queue.view.auto_tag_empty">暂无自动打标规则</div>
+        <div class="auto-tag-form" id="auto-tag-form">
+          <select id="auto-tag-field">
+            <option value="remark" data-i18n="queue.view.auto_tag_field_remark">备注</option>
+            <option value="molecule_name" data-i18n="queue.view.auto_tag_field_molecule">分子名</option>
+            <option value="workflow" data-i18n="queue.view.auto_tag_field_workflow">任务类型</option>
+          </select>
+          <select id="auto-tag-op">
+            <option value="contains" data-i18n="queue.view.auto_tag_op_contains">包含</option>
+            <option value="equals" data-i18n="queue.view.auto_tag_op_equals">等于</option>
+          </select>
+          <input type="text" id="auto-tag-value" class="rule-value-input" placeholder="value" />
+          <span style="color:var(--text-tertiary);">→</span>
+          <input type="text" id="auto-tag-tag" class="rule-tag-input" placeholder="tag" />
+          <button class="btn primary" id="auto-tag-add-btn" data-i18n="queue.view.auto_tag_add">添加</button>
+        </div>
+        <div style="margin-top:10px;">
+          <button class="btn ghost" id="auto-tag-apply-btn" data-i18n="queue.view.auto_tag_apply">立即应用到历史任务</button>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="tag-mgmt-modal-close-btn" data-i18n="modal.cancel">取消</button>
@@ -6270,6 +6312,18 @@ const I18N = {
     "queue.view.tag_merge": "合并",
     "queue.view.tag_delete": "删除",
     "queue.view.tag_delete_warn": "只解除标记，不删除任务",
+"queue.view.tab_tags": "标签管理",
+"queue.view.tab_auto_tag": "自动打标规则",
+"queue.view.auto_tag_empty": "暂无自动打标规则",
+"queue.view.auto_tag_field_remark": "备注",
+"queue.view.auto_tag_field_molecule": "分子名",
+"queue.view.auto_tag_field_workflow": "任务类型",
+"queue.view.auto_tag_op_contains": "包含",
+"queue.view.auto_tag_op_equals": "等于",
+"queue.view.auto_tag_add": "添加",
+"queue.view.auto_tag_apply": "立即应用到历史任务",
+"queue.view.auto_tag_applied": "已更新 {count} 个任务",
+"queue.view.auto_tag_confirm_apply": "将对项目所有任务重放规则，是否继续？",
     "queue.view.bulk_assign_molecule": "批量补充归属",
     "queue.view.merge_to": "合并到…",
     "queue.view.merge_suggestion": "疑似同分子 → 合并",
@@ -7352,6 +7406,18 @@ const I18N = {
     "queue.view.tag_merge": "Merge",
     "queue.view.tag_delete": "Delete",
     "queue.view.tag_delete_warn": "Only removes the label, does not delete tasks",
+"queue.view.tab_tags": "Tag Management",
+"queue.view.tab_auto_tag": "Auto-Tag Rules",
+"queue.view.auto_tag_empty": "No auto-tag rules yet",
+"queue.view.auto_tag_field_remark": "Remark",
+"queue.view.auto_tag_field_molecule": "Molecule",
+"queue.view.auto_tag_field_workflow": "Workflow",
+"queue.view.auto_tag_op_contains": "contains",
+"queue.view.auto_tag_op_equals": "equals",
+"queue.view.auto_tag_add": "Add",
+"queue.view.auto_tag_apply": "Apply to historical tasks",
+"queue.view.auto_tag_applied": "Updated {count} tasks",
+"queue.view.auto_tag_confirm_apply": "Replay rules over all project tasks. Continue?",
     "queue.view.bulk_assign_molecule": "Bulk assign molecule",
     "queue.view.merge_to": "Merge into…",
     "queue.view.merge_suggestion": "Possible duplicate → Merge",
@@ -14080,6 +14146,7 @@ async function _openTagManagement() {
   var empty = document.getElementById("tag-mgmt-empty");
   if (body) body.innerHTML = "";
   document.getElementById("tag-mgmt-modal").style.display = "flex";
+  _switchMgmtTab("tags");
   try {
     var tags = await apiV2("/projects/" + encodeURIComponent(pid) + "/tags");
     var tagList = Array.isArray(tags) ? tags : (tags && Array.isArray(tags.tags) ? tags.tags : []);
@@ -14176,6 +14243,146 @@ async function _deleteTag(pid, tagName) {
     await refreshJobs();
   } catch (e) {
     appendLogLine("stderr", "delete failed: " + (e.message || e));
+  }
+}
+
+var _autoTagRulesCache = [];
+
+function _switchMgmtTab(tab) {
+  var tagsPanel = document.getElementById("tag-mgmt-panel-tags");
+  var autoPanel = document.getElementById("tag-mgmt-panel-auto");
+  var tagsTab = document.getElementById("tag-mgmt-tab-tags");
+  var autoTab = document.getElementById("tag-mgmt-tab-auto");
+  if (tab === "tags") {
+    if (tagsPanel) tagsPanel.style.display = "";
+    if (autoPanel) autoPanel.style.display = "none";
+    if (tagsTab) tagsTab.classList.add("active");
+    if (autoTab) autoTab.classList.remove("active");
+  } else {
+    if (tagsPanel) tagsPanel.style.display = "none";
+    if (autoPanel) autoPanel.style.display = "";
+    if (tagsTab) tagsTab.classList.remove("active");
+    if (autoTab) autoTab.classList.add("active");
+    _loadAutoTagRules();
+  }
+}
+
+async function _loadAutoTagRules() {
+  var pid = _getSelectedProjectId();
+  if (!pid) return;
+  var listEl = document.getElementById("auto-tag-rules-list");
+  var emptyEl = document.getElementById("auto-tag-rules-empty");
+  if (listEl) listEl.innerHTML = "";
+  try {
+    var project = await api("/projects/" + encodeURIComponent(pid));
+    var settings = project.settings || {};
+    var rules = settings.auto_tag_rules || [];
+    _autoTagRulesCache = rules;
+    if (!rules.length) {
+      if (emptyEl) emptyEl.style.display = "";
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = "none";
+    rules.forEach(function(rule, idx) {
+      var row = document.createElement("div");
+      row.className = "auto-tag-rule";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "rule-toggle";
+      cb.checked = rule.enabled !== false;
+      cb.addEventListener("change", function() { _toggleAutoTagRule(pid, idx, cb.checked); });
+      row.appendChild(cb);
+      var desc = document.createElement("span");
+      desc.className = "rule-desc";
+      var fieldLabel = t("queue.view.auto_tag_field_" + (rule.field === "molecule_name" ? "molecule" : rule.field));
+      var opLabel = t("queue.view.auto_tag_op_" + rule.op);
+      desc.textContent = fieldLabel + " " + opLabel + " \"" + (rule.value || "") + "\"";
+      var tagSpan = document.createElement("span");
+      tagSpan.className = "rule-tag";
+      tagSpan.textContent = " → " + (rule.tag || "");
+      desc.appendChild(tagSpan);
+      row.appendChild(desc);
+      var actions = document.createElement("span");
+      actions.className = "tag-mgmt-actions";
+      var delBtn = document.createElement("button");
+      delBtn.className = "mini-btn";
+      delBtn.style.color = "var(--red)";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", function() { _deleteAutoTagRule(pid, idx); });
+      actions.appendChild(delBtn);
+      row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  } catch (e) {
+    if (emptyEl) { emptyEl.style.display = ""; emptyEl.textContent = "Error: " + (e.message || e); }
+  }
+}
+
+async function _addAutoTagRule(pid) {
+  var field = document.getElementById("auto-tag-field").value;
+  var op = document.getElementById("auto-tag-op").value;
+  var value = document.getElementById("auto-tag-value").value.trim();
+  var tag = document.getElementById("auto-tag-tag").value.trim();
+  if (!value || !tag) { window.alert(t("queue.view.auto_tag_empty")); return; }
+  var rules = (_autoTagRulesCache || []).slice();
+  rules.push({ id: "atr_" + Date.now().toString(36), field: field, op: op, value: value, tag: tag, enabled: true });
+  try {
+    await api("/projects/" + encodeURIComponent(pid), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { auto_tag_rules: rules } })
+    });
+    document.getElementById("auto-tag-value").value = "";
+    document.getElementById("auto-tag-tag").value = "";
+    await _loadAutoTagRules();
+  } catch (e) {
+    appendLogLine("stderr", "add rule failed: " + (e.message || e));
+  }
+}
+
+async function _toggleAutoTagRule(pid, idx, enabled) {
+  var rules = (_autoTagRulesCache || []).slice();
+  if (!rules[idx]) return;
+  rules[idx] = Object.assign({}, rules[idx], { enabled: enabled });
+  try {
+    await api("/projects/" + encodeURIComponent(pid), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { auto_tag_rules: rules } })
+    });
+    await _loadAutoTagRules();
+  } catch (e) {
+    appendLogLine("stderr", "toggle rule failed: " + (e.message || e));
+  }
+}
+
+async function _deleteAutoTagRule(pid, idx) {
+  var rules = (_autoTagRulesCache || []).slice();
+  if (!rules[idx]) return;
+  rules.splice(idx, 1);
+  try {
+    await api("/projects/" + encodeURIComponent(pid), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { auto_tag_rules: rules } })
+    });
+    await _loadAutoTagRules();
+  } catch (e) {
+    appendLogLine("stderr", "delete rule failed: " + (e.message || e));
+  }
+}
+
+async function _applyAutoTagRulesBackfill() {
+  var pid = _getSelectedProjectId();
+  if (!pid) return;
+  if (!window.confirm(t("queue.view.auto_tag_confirm_apply"))) return;
+  try {
+    var result = await apiV2("/projects/" + encodeURIComponent(pid) + "/auto-tag-rules/apply", { method: "POST" });
+    var count = result && result.updated ? result.updated : 0;
+    appendLogLine("done", t("queue.view.auto_tag_applied", { count: count }));
+    await refreshJobs();
+  } catch (e) {
+    appendLogLine("stderr", "backfill failed: " + (e.message || e));
   }
 }
 
@@ -25664,6 +25871,14 @@ function setupEventListeners() {
   document.getElementById("tag-mgmt-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "tag-mgmt-modal") _closeTagManagement();
   });
+  // T11: auto-tag rules tab
+  document.getElementById("tag-mgmt-tab-tags").addEventListener("click", function() { _switchMgmtTab("tags"); });
+  document.getElementById("tag-mgmt-tab-auto").addEventListener("click", function() { _switchMgmtTab("auto"); });
+  document.getElementById("auto-tag-add-btn").addEventListener("click", function() {
+    var pid = _getSelectedProjectId();
+    if (pid) _addAutoTagRule(pid);
+  });
+  document.getElementById("auto-tag-apply-btn").addEventListener("click", _applyAutoTagRulesBackfill);
 
   var dropzone = document.getElementById("upload-dropzone");
   var fileInput = document.getElementById("upload-file-input");

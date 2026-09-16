@@ -8,6 +8,7 @@ from acp.scheduler.artifacts import (
     ParserStatus,
     capture_stage_artifacts,
 )
+from acp.scheduler.auto_tags import AutoTagRule, apply_auto_tag_rules
 from acp.scheduler.capabilities import (
     MatchResult,
     NoCapableNodeError,
@@ -70,6 +71,7 @@ __all__ = [
     "MatchResult",
     "MetricsExtractor",
     "NoCapableNodeError",
+    "AutoTagRule",
     "Artifact",
     "ArtifactRegistry",
     "DEFAULT_MAX_DIRS_PER_SWEEP",
@@ -105,6 +107,7 @@ __all__ = [
     "TaskSort",
     "TaskViewQuery",
     "query_project_tasks",
+    "apply_auto_tag_rules",
     "capture_stage_artifacts",
     "compute_input_hash",
     "derive_required_software",

@@ -8481,10 +8481,11 @@ def test_task_view_data_layer() -> None:
 
     # (9) v1 api("/ call count: refreshJobs switched from api("/jobs") to
     #     apiV2("/task-view") so the count dropped by exactly 1 vs the
-    #     pre-T4 baseline (which was 53).
+    #     pre-T4 baseline (which was 53).  T10 added saved-views PATCH
+    #     calls (+2); T11 added auto-tag rules CRUD (+4).
     api_v1_count = html.count('api("/')
-    assert api_v1_count == 52, (
-        f"v1 api('/ call count expected 52 (53 baseline minus refreshJobs), got {api_v1_count}"
+    assert api_v1_count == 59, (
+        f"v1 api('/ call count expected 59 (53 baseline -1 +2 T10 +4 T11), got {api_v1_count}"
     )
 
 
@@ -9457,3 +9458,75 @@ def test_saved_views_live_query_assertion() -> None:
         if "_saveCurrentView" in html else ""
     )
     assert "query" in save_section, "save function must build a query object"
+
+
+# ── T11: auto-tag rules frontend contracts ──────────────────────────────
+
+
+def test_auto_tag_rules_tab_dom() -> None:
+    """T11: tag-mgmt-modal has auto-tag rules tab with required DOM elements."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "tag-mgmt-tab-tags" in html, "tags tab button missing"
+    assert "tag-mgmt-tab-auto" in html, "auto-tag tab button missing"
+    assert "tag-mgmt-panel-tags" in html, "tags panel missing"
+    assert "tag-mgmt-panel-auto" in html, "auto-tag panel missing"
+    assert "auto-tag-rules-list" in html, "rules list container missing"
+    assert "auto-tag-form" in html, "add-rule form missing"
+    assert "auto-tag-field" in html, "field select missing"
+    assert "auto-tag-op" in html, "op select missing"
+    assert "auto-tag-value" in html, "value input missing"
+    assert "auto-tag-tag" in html, "tag input missing"
+    assert "auto-tag-add-btn" in html, "add button missing"
+    assert "auto-tag-apply-btn" in html, "backfill button missing"
+
+
+def test_auto_tag_rules_handler_functions_exist() -> None:
+    """T11: JS handler functions for auto-tag rules are defined."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    for fn in [
+        "_switchMgmtTab", "_loadAutoTagRules", "_addAutoTagRule",
+        "_toggleAutoTagRule", "_deleteAutoTagRule", "_applyAutoTagRulesBackfill",
+    ]:
+        assert f"function {fn}" in html or f"async function {fn}" in html, (
+            f"Handler function {fn} not found"
+        )
+
+
+def test_auto_tag_rules_backfill_endpoint_literal() -> None:
+    """T11: frontend references the backfill endpoint."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "auto-tag-rules/apply" in html, "backfill endpoint not referenced"
+
+
+def test_auto_tag_rules_settings_storage() -> None:
+    """T11: rules are stored in project settings.auto_tag_rules via PATCH."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "auto_tag_rules" in html, "auto_tag_rules key not in frontend"
+
+
+def test_auto_tag_rules_i18n_parity() -> None:
+    """T11: auto-tag i18n keys exist in both zh-CN and en-US."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
+    expected = {
+        "queue.view.tab_tags", "queue.view.tab_auto_tag",
+        "queue.view.auto_tag_empty", "queue.view.auto_tag_add",
+        "queue.view.auto_tag_apply", "queue.view.auto_tag_applied",
+        "queue.view.auto_tag_confirm_apply",
+        "queue.view.auto_tag_field_remark", "queue.view.auto_tag_field_molecule",
+        "queue.view.auto_tag_field_workflow",
+        "queue.view.auto_tag_op_contains", "queue.view.auto_tag_op_equals",
+    }
+    missing_zh = expected - zh_keys
+    missing_en = expected - en_keys
+    assert not missing_zh, f"zh-CN missing auto-tag keys: {sorted(missing_zh)}"
+    assert not missing_en, f"en-US missing auto-tag keys: {sorted(missing_en)}"
+
+
+def test_auto_tag_rules_event_bindings() -> None:
+    """T11: event listeners bound for tab switch, add, and backfill buttons."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "tag-mgmt-tab-tags" in html and "addEventListener" in html, "tab event binding missing"
+    assert "auto-tag-add-btn" in html, "add button binding missing"
+    assert "auto-tag-apply-btn" in html, "backfill button binding missing"
