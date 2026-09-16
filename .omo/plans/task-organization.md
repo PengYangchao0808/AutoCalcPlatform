@@ -184,7 +184,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——别名/合并/回退全链路；failure——merge 目标键不存在 400；alias 重复创建冲突处理（UPSERT 语义）。Evidence `.omo/evidence/task-organization/task-8.md`
   Commit: Y | feat(scheduler): molecule groups/aliases with merge + suggestions
 
-- [ ] 9. P2 前端：批量工具栏 + 归档开关 + 导出 + 分子管理 + 标签管理
+- [x] 9. P2 前端：批量工具栏 + 归档开关 + 导出 + 分子管理 + 标签管理
   What to do（`frontend/ACP_Workbench_v2.html`）：
   a) 批量工具栏：`updateQueueBatchBar()`（`:13332`）扩展——选中 N>0 时除「批量清除」外加：加标签/移除标签（小输入弹层→batch-ops）、归档/取消归档、设置分子归属（输入名→batch-ops set_molecule_name）；调 T7 端点后 `refreshJobs()`。
   b) 归档开关：工具栏 `#task-view-archived` select（默认排除/包含/仅归档）→ prefs.archived；归档行卡片淡化样式（`.archived` opacity）。
