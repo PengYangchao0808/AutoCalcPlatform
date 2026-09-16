@@ -64,12 +64,14 @@ def molecule_name_from_input(inp: Mapping[str, Any] | None) -> str:
 def molecule_group_key(value: str) -> str:
     """Normalize a molecule name for group-by comparison.
 
-    Strips leading/trailing whitespace, collapses internal whitespace to a
-    single space, and case-folds.  Empty input stays empty.
+    Strips leading/trailing whitespace and collapses internal whitespace to
+    a single space.  Case is preserved so ``ABC`` and ``abc`` remain
+    distinct groups — the suggestion engine surfaces them for user review.
+    Empty input stays empty.
     """
     if not value:
         return ""
-    return " ".join(value.split()).casefold()
+    return " ".join(value.split())
 
 
 __all__ = ["canonical_molecule_name", "molecule_group_key", "molecule_name_from_input"]

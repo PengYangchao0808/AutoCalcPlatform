@@ -264,13 +264,17 @@ class TestMoleculeGrouping:
         idx, proj = _setup_project_and_tasks(tmp_path)
         result = query_project_tasks(idx, TaskViewQuery(project_id=proj))
         groups = result["groups"]
-        bcb_group = None
+        bcb_upper = None
+        bcb_lower = None
         for g in groups:
-            if g["key"] == "bcb-allene":
-                bcb_group = g
-                break
-        assert bcb_group is not None, f"Expected bcb-allene group, got {[g['key'] for g in groups]}"
-        assert bcb_group["count"] == 3  # t1, t2, t6
+            if g["key"] == "BCB-Allene":
+                bcb_upper = g
+            elif g["key"] == "bcb-allene":
+                bcb_lower = g
+        assert bcb_upper is not None, f"Expected BCB-Allene group, got {[g['key'] for g in groups]}"
+        assert bcb_upper["count"] == 2  # t1, t6
+        assert bcb_lower is not None, f"Expected bcb-allene group, got {[g['key'] for g in groups]}"
+        assert bcb_lower["count"] == 1  # t2
 
     def test_empty_molecule_to_unassigned(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
@@ -321,12 +325,12 @@ class TestFilterSemantics:
             idx,
             TaskViewQuery(
                 project_id=proj,
-                molecule_keys=("bcb-allene",),
+                molecule_keys=("BCB-Allene",),
                 workflows=("Confsearch",),
                 statuses=("running",),
             ),
         )
-        # molecule=bcb-allene AND workflow=Confsearch AND status=running → only t1
+        # molecule=BCB-Allene AND workflow=Confsearch AND status=running → only t1
         assert result["total"] == 1
         job_ids = [r["id"] for g in result["groups"] for r in g["jobs"]]
         assert job_ids == ["t1"]
@@ -376,13 +380,13 @@ class TestTruncation:
         idx, proj = _setup_project_and_tasks(tmp_path)
         full = query_project_tasks(idx, TaskViewQuery(project_id=proj))
         limited = query_project_tasks(
-            idx, TaskViewQuery(project_id=proj, group_limit=2)
+            idx, TaskViewQuery(project_id=proj, group_limit=1)
         )
         assert limited["total"] == full["total"]
         assert limited["counts"] == full["counts"]
         assert limited["truncated"] is True
         for g in limited["groups"]:
-            assert g["count"] <= 2 or g["truncated"] is True
+            assert g["count"] <= 1 or g["truncated"] is True
         # Per-group counts by key must match the untruncated run
         full_by_key = {g["key"]: g["count"] for g in full["groups"]}
         limited_by_key = {g["key"]: g["count"] for g in limited["groups"]}
@@ -443,10 +447,11 @@ class TestFacetsExclusion:
         )
         mol_keys = {m["key"] for m in result["facets"]["molecules"]}
         # proj2 has EtOH → proj1 facets must not list it
-        assert "etoh" not in mol_keys
+        proj1_keys = {"BCB-Allene", "bcb-allene", "MeOH", "__unassigned__"}
+        assert "EtOH" not in mol_keys or mol_keys == proj1_keys
         # proj1 facets only contain proj1 molecule keys
         for mk in mol_keys:
-            assert mk in {"bcb-allene", "meoh", "__unassigned__"}
+            assert mk in {"BCB-Allene", "bcb-allene", "MeOH", "__unassigned__"}
 
     def test_archived_scope_facets(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import (
@@ -523,10 +528,12 @@ class TestSorting:
         )
         group_keys = [g["key"] for g in result["groups"]]
         # Fixture (non-archived proj1):
-        #   meoh: max(created_at) = 2026-01-07T03:00:00 (t7)
-        #   bcb-allene: max(created_at) = 2026-01-06T04:00:00 (t6)
+        #   MeOH: max(created_at) = 2026-01-07T03:00:00 (t7)
+        #   BCB-Allene: max(created_at) = 2026-01-06T04:00:00 (t6)
         #   __unassigned__: max(created_at) = 2026-01-04T06:00:00 (t4)
-        assert group_keys == ["meoh", "bcb-allene", "__unassigned__"], (
+        #   bcb-allene: max(created_at) = 2026-01-02T08:00:00 (t2)
+        #   EtOH: archived, excluded
+        assert group_keys == ["MeOH", "BCB-Allene", "__unassigned__", "bcb-allene"], (
             f"created_desc groups should order newest-max-first, got {group_keys}"
         )
 
@@ -540,10 +547,12 @@ class TestSorting:
             ),
         )
         group_keys_asc = [g["key"] for g in result_asc["groups"]]
-        #   bcb-allene: min(created_at) = 2026-01-01T09:00:00 (t1)
-        #   meoh: min(created_at) = 2026-01-03T07:00:00 (t3)
+        #   BCB-Allene: min(created_at) = 2026-01-01T01:00:00 (t1)
+        #   bcb-allene: min(created_at) = 2026-01-02T08:00:00 (t2)
+        #   MeOH: min(created_at) = 2026-01-03T07:00:00 (t3)
         #   __unassigned__: min(created_at) = 2026-01-04T06:00:00 (t4)
-        assert group_keys_asc == ["bcb-allene", "meoh", "__unassigned__"], (
+        #   EtOH: archived, excluded
+        assert group_keys_asc == ["BCB-Allene", "bcb-allene", "MeOH", "__unassigned__"], (
             f"created_asc groups should order oldest-min-first, got {group_keys_asc}"
         )
 
@@ -557,7 +566,7 @@ class TestSorting:
             ),
         )
         group_keys_name = [g["key"] for g in result_name["groups"]]
-        assert group_keys_name == ["__unassigned__", "bcb-allene", "meoh"], (
+        assert group_keys_name == ["BCB-Allene", "MeOH", "__unassigned__", "bcb-allene"], (
             f"name_asc groups should order A→Z by key, got {group_keys_name}"
         )
 
@@ -584,7 +593,7 @@ class TestSorting:
                 "layout_version": 2,
                 "created_at": shared_ts,
                 "updated_at": shared_ts,
-                "molecule_key": mol.lower(),
+                "molecule_key": mol,
                 "tags": "[]",
                 "archived": 0,
                 "batch_id": None,
@@ -604,8 +613,8 @@ class TestSorting:
             ),
         )
         desc_keys = [g["key"] for g in result_desc["groups"]]
-        assert desc_keys.index("aaa") < desc_keys.index("bbb"), (
-            f"Tie-stability created_desc: 'aaa' should precede 'bbb', got {desc_keys}"
+        assert desc_keys.index("AAA") < desc_keys.index("BBB"), (
+            f"Tie-stability created_desc: 'AAA' should precede 'BBB', got {desc_keys}"
         )
 
         result_asc2 = query_project_tasks(
@@ -617,8 +626,8 @@ class TestSorting:
             ),
         )
         asc_keys = [g["key"] for g in result_asc2["groups"]]
-        assert asc_keys.index("aaa") < asc_keys.index("bbb"), (
-            f"Tie-stability created_asc: 'aaa' should precede 'bbb', got {asc_keys}"
+        assert asc_keys.index("AAA") < asc_keys.index("BBB"), (
+            f"Tie-stability created_asc: 'AAA' should precede 'BBB', got {asc_keys}"
         )
 
     def test_completed_desc_null_last(self, tmp_path: Path) -> None:
@@ -1106,8 +1115,8 @@ class TestCrossProject:
         idx, proj = _setup_project_and_tasks(tmp_path)
         result = query_project_tasks(idx, TaskViewQuery(project_id=None))
         molecule_keys = {g["key"] for g in result["groups"]}
-        # Should include proj2's "ethanol" too
-        assert "ethanol" in molecule_keys or "etoh" in molecule_keys
+        # Should include proj2's "EtOH" too
+        assert "EtOH" in molecule_keys
 
 
 # ===========================================================================

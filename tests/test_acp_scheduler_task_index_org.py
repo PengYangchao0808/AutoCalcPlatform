@@ -740,15 +740,15 @@ class TestMoveJobWiring:
 class TestMoleculeGroupKey:
     def test_basic(self) -> None:
         from acp.scheduler.naming import molecule_group_key
-        assert molecule_group_key("CCO") == "cco"
+        assert molecule_group_key("CCO") == "CCO"
 
     def test_strips_whitespace(self) -> None:
         from acp.scheduler.naming import molecule_group_key
-        assert molecule_group_key("  C C O  ") == "c c o"
+        assert molecule_group_key("  C C O  ") == "C C O"
 
     def test_collapses_internal_whitespace(self) -> None:
         from acp.scheduler.naming import molecule_group_key
-        assert molecule_group_key("C   O") == "c o"
+        assert molecule_group_key("C   O") == "C O"
 
     def test_empty_stays_empty(self) -> None:
         from acp.scheduler.naming import molecule_group_key

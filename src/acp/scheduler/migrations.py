@@ -217,6 +217,11 @@ CREATE TABLE IF NOT EXISTS molecule_aliases (
 );
 """,
     },
+    {
+        "id": "016",
+        "description": "refresh molecule_key to case-preserving (alias rows keep target)",
+        "sql": "-- handled in Python: recomputes molecule_key case-preserving",
+    },
 ]
 
 
@@ -483,6 +488,36 @@ def _backfill_tasks_from_jobs(conn: sqlite3.Connection) -> None:
         )
 
 
+def _apply_case_preserving_molecule_key_refresh(conn: sqlite3.Connection) -> bool:
+    """Refresh molecule_key values to case-preserving form.
+
+    Rows whose alias_key maps to a group_key via molecule_aliases keep
+    their merge-target key (alias resolution is consulted first).  All
+    other rows get the new case-preserving molecule_group_key(molecule_name).
+    """
+    if not _table_exists(conn, "tasks"):
+        return False
+
+    from acp.scheduler.molecule_groups import resolve_molecule_key
+
+    rows = conn.execute(
+        "SELECT task_id, project_id, molecule_name, molecule_key FROM tasks"
+    ).fetchall()
+
+    now = _utc_now_iso()
+    for row in rows:
+        project_id = row["project_id"]
+        if not project_id:
+            continue
+        new_key = resolve_molecule_key(conn, project_id, row["molecule_name"])
+        if new_key != row["molecule_key"]:
+            conn.execute(
+                "UPDATE tasks SET molecule_key=?, updated_at=? WHERE task_id=?",
+                (new_key, now, row["task_id"]),
+            )
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -501,6 +536,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_jobs_node_columns(conn)
     if migration_id == "014":
         return _apply_tasks_org_columns(conn)
+    if migration_id == "016":
+        return _apply_case_preserving_molecule_key_refresh(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

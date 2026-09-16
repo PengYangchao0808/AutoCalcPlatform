@@ -244,7 +244,7 @@ def test_patch_molecule_name_recomputes_molecule_key(client: TestClient) -> None
     r2 = client.get(f"/api/v2/task-view?project_id={pid}&group_by=molecule")
     assert r2.status_code == 200
     keys = {g["key"] for g in r2.json()["groups"]}
-    assert "methanol" in keys
+    assert "METHANOL" in keys
 
 
 def test_patch_tags_replaces(client: TestClient) -> None:

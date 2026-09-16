@@ -384,7 +384,7 @@ def test_batch_set_molecule_name_recomputes_key(client: TestClient) -> None:
 
     row = _db_row(client, tid)
     assert row["molecule_name"] == "IsoButanol"
-    assert row["molecule_key"] == "isobutanol"
+    assert row["molecule_key"] == "IsoButanol"
 
 
 # ── ⑧ Unknown task_id → ok:false not 500 ─────────────────────────────

@@ -136,15 +136,15 @@ def test_resolve_molecule_key_alias_hit(client: TestClient) -> None:
         conn.execute(
             "INSERT INTO molecule_aliases (project_id, alias_key, group_key, created_at) "
             "VALUES (?, ?, ?, ?)",
-            (pid, "bcb-allene", "bcb_allene", now),
+            (pid, "BCB-Allene", "BCB_ALLENE", now),
         )
         conn.commit()
 
         result_hit = resolve_molecule_key(conn, pid, "BCB-Allene")
-        assert result_hit == "bcb_allene"
+        assert result_hit == "BCB_ALLENE"
 
         result_miss = resolve_molecule_key(conn, pid, "UnknownMol")
-        assert result_miss == "unknownmol"
+        assert result_miss == "UnknownMol"
 
 
 def test_resolve_molecule_key_no_alias(client: TestClient) -> None:
@@ -154,7 +154,7 @@ def test_resolve_molecule_key_no_alias(client: TestClient) -> None:
         from acp.scheduler.molecule_groups import resolve_molecule_key
 
         result = resolve_molecule_key(conn, pid, "Ethanol")
-        assert result == "ethanol"
+        assert result == "Ethanol"
 
 
 # ── ② Merge rewrites tasks.molecule_key AND task-view grouping merges ──
@@ -165,13 +165,16 @@ def test_merge_rewrites_task_keys_and_groups(client: TestClient) -> None:
     task_ids = _seed_molecules(client, pid)
 
     keys_before = _db_molecule_keys(client, pid)
-    assert "bcb_allene" in keys_before
-    assert "bcb-allene" in keys_before
-    assert "bcb allene" in keys_before
+    assert "BCB_ALLENE" in keys_before
+    assert "BCB-Allene" in keys_before
+    assert "BCB ALLENE" in keys_before
 
     r = client.post(
         f"/api/v2/projects/{pid}/molecule-groups/merge",
-        json={"alias_keys": ["bcb-allene", "bcb allene"], "target_key": "bcb_allene"},
+        json={
+            "alias_keys": ["BCB-Allene", "BCB ALLENE"],
+            "target_key": "BCB_ALLENE",
+        },
     )
     assert r.status_code == 200
     body = r.json()
@@ -179,7 +182,7 @@ def test_merge_rewrites_task_keys_and_groups(client: TestClient) -> None:
 
     for tid in task_ids[:3]:
         row = _db_row(client, tid)
-        assert row["molecule_key"] == "bcb_allene"
+        assert row["molecule_key"] == "BCB_ALLENE"
 
     from acp.scheduler.task_views import (
         ArchivedFilter,
@@ -199,7 +202,7 @@ def test_merge_rewrites_task_keys_and_groups(client: TestClient) -> None:
     )
     result = query_project_tasks(idx, q)
     groups = result["groups"]
-    bcb_group = [g for g in groups if g["key"] == "bcb_allene"]
+    bcb_group = [g for g in groups if g["key"] == "BCB_ALLENE"]
     assert len(bcb_group) == 1
     assert bcb_group[0]["count"] == 3
 
@@ -215,16 +218,22 @@ def test_suggestions_casefold_and_separator(client: TestClient) -> None:
     assert r.status_code == 200
     suggestions = r.json()
 
-    has_separator = any(s["reason"] == "separator-normalized-equal" for s in suggestions)
-    assert has_separator, f"Expected separator-normalized-equal suggestion, got: {suggestions}"
+    has_casefold = any(s["reason"] == "casefold-equal" for s in suggestions)
+    has_separator = any(
+        s["reason"] == "separator-normalized-equal" for s in suggestions
+    )
+    assert has_casefold, f"Expected casefold-equal suggestion, got: {suggestions}"
+    assert has_separator, (
+        f"Expected separator-normalized-equal suggestion, got: {suggestions}"
+    )
 
     keys = _db_molecule_keys(client, pid)
-    assert "bcb_allene" in keys
-    assert "bcb-allene" in keys
-    assert "bcb allene" in keys
-
-    assert "etoh" in keys
+    assert "BCB_ALLENE" in keys
+    assert "BCB-Allene" in keys
+    assert "BCB ALLENE" in keys
+    assert "EtOH" in keys
     assert "abc" in keys
+    assert "ABC" in keys
 
 
 # ── ④ Alias removal falls back to original key ─────────────────────────
@@ -238,17 +247,20 @@ def test_alias_removal_fallback(client: TestClient) -> None:
 
     r = client.post(
         f"/api/v2/projects/{pid}/molecule-groups/merge",
-        json={"alias_keys": ["bcb-allene", "bcb allene"], "target_key": "bcb_allene"},
+        json={
+            "alias_keys": ["BCB-Allene", "BCB ALLENE"],
+            "target_key": "BCB_ALLENE",
+        },
     )
     assert r.status_code == 200
 
-    r = client.delete(f"/api/v2/projects/{pid}/molecule-groups/alias/bcb-allene")
+    r = client.delete(f"/api/v2/projects/{pid}/molecule-groups/alias/BCB-Allene")
     assert r.status_code == 200
     assert r.json()["updated"] == 1
 
     row = _db_row(client, task_ids[1])
     assert row["molecule_key"] == molecule_group_key("BCB-Allene")
-    assert row["molecule_key"] == "bcb-allene"
+    assert row["molecule_key"] == "BCB-Allene"
 
 
 # ── ⑤ Migration 015 idempotent ────────────────────────────────────────
@@ -285,11 +297,12 @@ def test_list_molecule_groups(client: TestClient) -> None:
     assert isinstance(groups, list)
 
     keys = [g["group_key"] for g in groups]
-    assert "bcb_allene" in keys
-    assert "bcb-allene" in keys
-    assert "bcb allene" in keys
-    assert "etoh" in keys
+    assert "BCB_ALLENE" in keys
+    assert "BCB-Allene" in keys
+    assert "BCB ALLENE" in keys
+    assert "EtOH" in keys
     assert "abc" in keys
+    assert "ABC" in keys
 
 
 def test_list_molecule_groups_404(client: TestClient) -> None:
@@ -306,7 +319,10 @@ def test_merge_endpoint(client: TestClient) -> None:
 
     r = client.post(
         f"/api/v2/projects/{pid}/molecule-groups/merge",
-        json={"alias_keys": ["bcb-allene", "bcb allene"], "target_key": "bcb_allene"},
+        json={
+            "alias_keys": ["BCB-Allene", "BCB ALLENE"],
+            "target_key": "BCB_ALLENE",
+        },
     )
     assert r.status_code == 200
     assert r.json()["updated"] == 2
@@ -318,9 +334,9 @@ def test_merge_endpoint(client: TestClient) -> None:
             (pid,),
         ).fetchall()
     keys = {r[0] for r in rows}
-    assert "bcb-allene" not in keys
-    assert "bcb allene" not in keys
-    assert "bcb_allene" in keys
+    assert "BCB-Allene" not in keys
+    assert "BCB ALLENE" not in keys
+    assert "BCB_ALLENE" in keys
 
 
 def test_merge_400_unknown_target(client: TestClient) -> None:
@@ -329,7 +345,10 @@ def test_merge_400_unknown_target(client: TestClient) -> None:
 
     r = client.post(
         f"/api/v2/projects/{pid}/molecule-groups/merge",
-        json={"alias_keys": ["bcb-allene"], "target_key": "totally_unknown_key"},
+        json={
+            "alias_keys": ["BCB-Allene"],
+            "target_key": "totally_unknown_key",
+        },
     )
     assert r.status_code == 400
 
@@ -365,6 +384,7 @@ def test_suggestions_endpoint(client: TestClient) -> None:
     assert len(data) >= 2
 
     reasons = [s["reason"] for s in data]
+    assert "casefold-equal" in reasons
     assert "separator-normalized-equal" in reasons
 
 
@@ -384,11 +404,14 @@ def test_delete_alias(client: TestClient) -> None:
 
     r = client.post(
         f"/api/v2/projects/{pid}/molecule-groups/merge",
-        json={"alias_keys": ["bcb-allene", "bcb allene"], "target_key": "bcb_allene"},
+        json={
+            "alias_keys": ["BCB-Allene", "BCB ALLENE"],
+            "target_key": "BCB_ALLENE",
+        },
     )
     assert r.status_code == 200
 
-    r = client.delete(f"/api/v2/projects/{pid}/molecule-groups/alias/bcb-allene")
+    r = client.delete(f"/api/v2/projects/{pid}/molecule-groups/alias/BCB-Allene")
     assert r.status_code == 200
     assert r.json()["updated"] == 1
 
@@ -418,14 +441,17 @@ def test_merge_raw_sqlite_cross_check(client: TestClient) -> None:
 
     client.post(
         f"/api/v2/projects/{pid}/molecule-groups/merge",
-        json={"alias_keys": ["bcb-allene", "bcb allene"], "target_key": "bcb_allene"},
+        json={
+            "alias_keys": ["BCB-Allene", "BCB ALLENE"],
+            "target_key": "BCB_ALLENE",
+        },
     )
 
     db_path = client.app.state.job_manager.store.db_path
     with sqlite3.connect(str(db_path)) as conn:
         cnt = conn.execute(
             "SELECT COUNT(*) FROM tasks WHERE project_id=? AND molecule_key=?",
-            (pid, "bcb_allene"),
+            (pid, "BCB_ALLENE"),
         ).fetchone()[0]
     assert cnt == 3
 
@@ -435,5 +461,5 @@ def test_merge_raw_sqlite_cross_check(client: TestClient) -> None:
             (pid,),
         ).fetchall()
     alias_map = {r[0]: r[1] for r in alias_rows}
-    assert alias_map.get("bcb-allene") == "bcb_allene"
-    assert alias_map.get("bcb allene") == "bcb_allene"
+    assert alias_map.get("BCB-Allene") == "BCB_ALLENE"
+    assert alias_map.get("BCB ALLENE") == "BCB_ALLENE"
