@@ -29,6 +29,11 @@ from acp.scheduler.local_cleanup import (
 )
 from acp.scheduler.manager import JobManager
 from acp.scheduler.metrics import MetricsExtractor
+from acp.scheduler.molecule_groups import (
+    apply_group_merge,
+    resolve_molecule_key,
+    suggest_group_merges,
+)
 from acp.scheduler.nodes import (
     ExecutionCapacityUnavailable,
     ExecutionMode,
@@ -92,6 +97,9 @@ __all__ = [
     "StageTaskStore",
     "StructureSourceService",
     "TaskIndex",
+    "apply_group_merge",
+    "resolve_molecule_key",
+    "suggest_group_merges",
     "ArchivedFilter",
     "GroupBy",
     "TaskSort",

@@ -25,6 +25,9 @@ from acp.api.v2_schemas import (
     V2BatchOpsRequest,
     V2BatchOpsResult,
     V2FileEntry,
+    V2MoleculeGroupInfo,
+    V2MoleculeGroupSuggestion,
+    V2MoleculeMergeRequest,
     V2ProjectSummary,
     V2TagDeleteRequest,
     V2TagInfo,
@@ -868,3 +871,162 @@ def _batch_set_molecule_name(
         return False
     manager.tasks.update_display_fields(task_id, molecule_name=name)
     return True
+
+
+# ── Molecule group / alias endpoints (T8) ────────────────────────────────
+
+
+@router.get("/projects/{project_id}/molecule-groups", response_model=list[V2MoleculeGroupInfo])
+def list_molecule_groups(project_id: str, request: Request) -> list[V2MoleculeGroupInfo]:
+    """List molecule groups with alias lists and task counts for a project."""
+    _project_or_404(request, project_id)
+    manager = _manager(request)
+
+    alias_rows = manager.tasks._query(
+        "SELECT alias_key, group_key FROM molecule_aliases WHERE project_id=?",
+        (project_id,),
+    )
+    alias_map: dict[str, str] = {r["alias_key"]: r["group_key"] for r in alias_rows}
+
+    group_rows = manager.tasks._query(
+        "SELECT group_key, display_name FROM molecule_groups WHERE project_id=?",
+        (project_id,),
+    )
+    group_display: dict[str, str] = {r["group_key"]: r["display_name"] for r in group_rows}
+
+    count_rows = manager.tasks._query(
+        "SELECT molecule_key, COUNT(*) AS cnt FROM tasks "
+        "WHERE project_id=? GROUP BY molecule_key",
+        (project_id,),
+    )
+    key_counts: dict[str, int] = {r["molecule_key"]: r["cnt"] for r in count_rows}
+
+    all_keys = set(key_counts) | set(group_display)
+    result: list[V2MoleculeGroupInfo] = []
+    for gk in sorted(all_keys):
+        aliases = sorted(ak for ak, g in alias_map.items() if g == gk)
+        result.append(
+            V2MoleculeGroupInfo(
+                group_key=gk,
+                display_name=group_display.get(gk, gk),
+                aliases=aliases,
+                task_count=key_counts.get(gk, 0),
+            )
+        )
+    return result
+
+
+@router.post("/projects/{project_id}/molecule-groups/merge", response_model=V2TagOpResult)
+def merge_molecule_groups(
+    project_id: str, body: V2MoleculeMergeRequest, request: Request
+) -> V2TagOpResult:
+    """Merge alias keys into target_key, rewriting tasks.molecule_key.
+
+    The target_key must be among existing molecule_key values in the project
+    OR equal to one of the alias_keys (which becomes the canonical key).
+    """
+    _project_or_404(request, project_id)
+    manager = _manager(request)
+
+    target_key = body.target_key.strip()
+    alias_keys = [k.strip() for k in body.alias_keys if k.strip()]
+    if not alias_keys:
+        raise HTTPException(
+            status_code=422,
+            detail="alias_keys must contain at least one non-empty key",
+        )
+    if not target_key:
+        raise HTTPException(status_code=422, detail="target_key must be non-empty")
+
+    existing_keys = {
+        r["molecule_key"]
+        for r in manager.tasks._query(
+            "SELECT DISTINCT molecule_key FROM tasks WHERE project_id=?",
+            (project_id,),
+        )
+    }
+    if target_key not in existing_keys and target_key not in alias_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"target_key '{target_key}' does not match any existing molecule key or alias",
+        )
+
+    from acp.scheduler.molecule_groups import apply_group_merge
+
+    updated = apply_group_merge(manager.tasks, project_id, alias_keys, target_key)
+    return V2TagOpResult(updated=updated)
+
+
+@router.get(
+    "/projects/{project_id}/molecule-groups/suggestions",
+    response_model=list[V2MoleculeGroupSuggestion],
+)
+def get_molecule_group_suggestions(
+    project_id: str, request: Request
+) -> list[V2MoleculeGroupSuggestion]:
+    """Return merge suggestions based on casefold / separator-normalized similarity.
+
+    Read-only — never modifies data.
+    """
+    _project_or_404(request, project_id)
+    manager = _manager(request)
+
+    rows = [
+        dict(r)
+        for r in manager.tasks._query(
+            "SELECT molecule_key, molecule_name FROM tasks WHERE project_id=?",
+            (project_id,),
+        )
+    ]
+
+    from acp.scheduler.molecule_groups import suggest_group_merges
+
+    raw = suggest_group_merges(rows)
+    return [V2MoleculeGroupSuggestion(**s) for s in raw]
+
+
+@router.delete(
+    "/projects/{project_id}/molecule-groups/alias/{alias_key}",
+    response_model=V2TagOpResult,
+)
+def delete_molecule_alias(
+    project_id: str, alias_key: str, request: Request
+) -> V2TagOpResult:
+    """Remove an alias mapping.  Affected tasks' molecule_key falls back
+    to their own molecule_group_key(molecule_name).
+    """
+    _project_or_404(request, project_id)
+    manager = _manager(request)
+
+    rows = manager.tasks._query(
+        "SELECT group_key FROM molecule_aliases WHERE project_id=? AND alias_key=?",
+        (project_id, alias_key),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"Alias not found: {alias_key}")
+
+    manager.tasks._run(
+        "DELETE FROM molecule_aliases WHERE project_id=? AND alias_key=?",
+        (project_id, alias_key),
+    )
+
+    from acp.scheduler.naming import molecule_group_key
+    from acp.scheduler.tasks import _utc_now_iso
+
+    affected_rows = manager.tasks._query(
+        "SELECT task_id, molecule_name FROM tasks WHERE project_id=?",
+        (project_id,),
+    )
+    updated = 0
+    for row in affected_rows:
+        computed_key = molecule_group_key(row["molecule_name"])
+        if computed_key == alias_key:
+            current = manager.tasks.get(row["task_id"])
+            if current and current.get("molecule_key") != computed_key:
+                manager.tasks._run(
+                    "UPDATE tasks SET molecule_key=?, updated_at=? WHERE task_id=?",
+                    (computed_key, _utc_now_iso(), row["task_id"]),
+                )
+                updated += 1
+
+    return V2TagOpResult(updated=updated)

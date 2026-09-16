@@ -20,6 +20,11 @@ __all__ = [
     "V2BatchOpsRequest",
     "V2BatchOpsResult",
     "V2FileEntry",
+    "V2MoleculeAliasUpsert",
+    "V2MoleculeGroupInfo",
+    "V2MoleculeGroupSuggestion",
+    "V2MoleculeGroupUpsert",
+    "V2MoleculeMergeRequest",
     "V2ProjectSummary",
     "V2TaskBatchItem",
     "V2TaskBatchRequest",
@@ -298,3 +303,48 @@ class V2BatchOpsResult(BaseModel):
 
     results: list[V2BatchOpItemResult] = Field(default_factory=list)
     updated: int = 0
+
+
+# ── Molecule group / alias models (T8) ──────────────────────────────────
+
+
+class V2MoleculeGroupInfo(BaseModel):
+    """One molecule group with its alias list and task count."""
+
+    group_key: str
+    display_name: str
+    aliases: list[str] = Field(default_factory=list)
+    task_count: int = 0
+
+
+class V2MoleculeMergeRequest(BaseModel):
+    """Merge one or more alias keys into a target key.
+
+    All tasks whose ``molecule_key`` matches any ``alias_key`` will be
+    rewritten to ``target_key``.
+    """
+
+    alias_keys: list[str] = Field(min_length=1)
+    target_key: str
+
+
+class V2MoleculeGroupSuggestion(BaseModel):
+    """A read-only merge hint — never auto-applied."""
+
+    a: str
+    b: str
+    reason: str
+
+
+class V2MoleculeGroupUpsert(BaseModel):
+    """Create or update a molecule group's display name."""
+
+    group_key: str
+    display_name: str
+
+
+class V2MoleculeAliasUpsert(BaseModel):
+    """Register an alias mapping to a group."""
+
+    alias_key: str
+    group_key: str

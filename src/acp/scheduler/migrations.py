@@ -196,6 +196,27 @@ CREATE TABLE IF NOT EXISTS mechanism_projects (
         "description": "add org columns to tasks (molecule_key, tags, archived, batch_id, etc.)",
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility + backfill",
     },
+    {
+        "id": "015",
+        "description": "create molecule_groups and molecule_aliases tables (P2 aliases/merge)",
+        "sql": """
+CREATE TABLE IF NOT EXISTS molecule_groups (
+    project_id TEXT NOT NULL,
+    group_key TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, group_key)
+);
+CREATE TABLE IF NOT EXISTS molecule_aliases (
+    project_id TEXT NOT NULL,
+    alias_key TEXT NOT NULL,
+    group_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, alias_key)
+);
+""",
+    },
 ]
 
 
