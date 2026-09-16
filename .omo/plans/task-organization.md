@@ -245,13 +245,13 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
 
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
-- [ ] F1. Plan compliance audit
+- [x] F1. Plan compliance audit
   对照本计划逐 todo 核验：每个验收命令真实执行且通过、Evidence 文件存在且含输出摘要；数据层四个关键回归（迁移幂等/同步防覆盖/purge 幻影/整项目计数）有专项测试证据。
-- [ ] F2. Code quality review
+- [x] F2. Code quality review
   `ruff check src tests` 与 `ruff format --check src tests` 对新增/改动文件零新违规；`pytest -m "not slow" -q` 全绿（CI 同款，`pip install -e '.[dev,api,remote]'` 环境）；无 `as any` 式类型抑制新增。
-- [ ] F3. Real manual QA
+- [x] F3. Real manual QA
   启动 `acp run serve`（或 TestClient 脚本）+ 打开 `frontend/ACP_Workbench_v2.html`：进入项目→默认按分子折叠分组/组内时间倒序；切分组/排序/筛选/搜索/chips；编辑备注后触发状态迁移不回滚（防覆盖实证）；批量打标签/归档/导出；「全部」范围跨项目分节。证据：截图或 DOM 断言脚本输出入 Evidence。
-- [ ] F4. Scope fidelity
+- [x] F4. Scope fidelity
   Must-NOT 清单逐条审计：jobs.batch_id 列不存在（`PRAGMA table_info(jobs)`）；spec_json 无回写路径（PATCH 测试证据）；v1 /jobs 参数行为不变（既有测试）；无自动合并/自动归档/多标签交叉分组代码路径；无新 Python/JS 依赖（pyproject/frontend 无新增）。
 
 ## Commit strategy
