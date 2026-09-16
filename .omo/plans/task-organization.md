@@ -223,7 +223,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——规则建立→新提交自动带标→回填历史；failure——value 为空 422；规则 tag 与手动标签冲突去重。Evidence `.omo/evidence/task-organization/task-11.md`
   Commit: Y | feat(api,workbench): user-defined auto-tag rules with backfill
 
-- [ ] 12. P3：来源链路只读浏览
+- [x] 12. P3：来源链路只读浏览
   What to do:
   a) `GET /api/v2/tasks/{task_id}/lineage` → `{upstream: [V2TaskSummary...], downstream: [...]}`：上游＝递归解析 `spec.input` 的来源引用（`input.source` 的 from-job / artifact_path 指向的任务 id；复用 `src/acp/scheduler/structure_sources.py` 的发现逻辑思路但按 job 查询），深度 ≤10 + 环检测（visited set）；下游＝反向扫描（jobs 中 spec_json LIKE 预筛 + Python 精确判定引用本 id）。全部只读。
   b) 前端：任务详情面板新增「来源链路」折叠区——上游链（可点击跳转选中任务）+ 下游列表；无链路显示空区（不报错）。
