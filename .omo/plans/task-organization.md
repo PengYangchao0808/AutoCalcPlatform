@@ -134,7 +134,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——契约断言通过；failure——`loadTaskViewPrefs` 输入损坏 JSON 回默认（契约断言 try/catch 分支存在）。Evidence `.omo/evidence/task-organization/task-4.md`
   Commit: Y | feat(workbench): v2 task-view data layer + per-project view prefs
 
-- [ ] 5. 前端工具栏：搜索/分组/排序/筛选面板/筛选 chips
+- [x] 5. 前端工具栏：搜索/分组/排序/筛选面板/筛选 chips
   What to do:
   a) DOM：在 `#queue-summary` 与 `.queue-expanded` 之间（~`:3914`）插入工具栏：搜索框 `#task-view-search`（占位符 i18n「搜索任务、分子、备注…」，300ms debounce）、分组 select `#task-view-group`（分子/备注/任务类型/提交批次/自定义标签/不分组——标签选项 P2 前禁用置灰）、排序 select `#task-view-sort`（创建 新→旧/旧→新、完成 新→旧、名称 A→Z/Z→A、最近活动）、「筛选」按钮 `#task-view-filter-btn`（弹层含 状态/类型/分子/标签/批次 分组 checkbox，由 `taskViewCache.facets` 渲染，多选）、「筛选 N」角标、`#task-view-chips` 行（每个生效条件一个 chip：`label ×` 移除单个 + 「清除」全部）。
   b) 交互：任何变更 → `saveTaskViewPrefs()` + `refreshJobs()`；chips 从当前 prefs 渲染（状态/类型/标签用 i18n 显示名，分子/批次用原始名）。
