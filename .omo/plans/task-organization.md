@@ -146,7 +146,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——契约+parity 全绿；failure——缺失任一 locale 键 → parity 测试红（构造性验证：临时删键跑测试见红后恢复）。Evidence `.omo/evidence/task-organization/task-5.md`
   Commit: Y | feat(workbench): task view toolbar, filter panel and chips
 
-- [ ] 6. 前端分组列表与卡片精简
+- [x] 6. 前端分组列表与卡片精简
   What to do:
   a) 渲染重构：`renderQueueList(container)` 改基于 `taskViewCache.groups`——`group_by=none` 时平铺；否则每组折叠节（复用 `queueCollapsedGroups` 模式 `:4905` + `folderToggleSvg()`，**键命名空间化** `view:<groupBy>:<groupKey>` 防跨维度串折）；组头＝显示名 + `N 个任务` + 状态摘要行（`运行 x · 排队 x · 完成 x · 失败 x`，由 group.counts 渲染；`__unassigned__`→「未标注分子/未填写备注」i18n、`__singles__`→「单独提交」、`__untagged__`→「无标签」）；跨项目范围时最外层保留 `buildQueueProjectHeader` 分节（`:13609`）。tag 分组视图组头加提示「同一任务可能在多个标签组出现」。
   b) 排序：`taskViewCache` 行在前端重排函数 `sortTaskRows(rows)`——`name_asc/name_desc` 用 `new Intl.Collator("zh", { numeric: true, sensitivity: "variant" })`（自然排序 TS2<TS10 + 中文拼音）；时间排序信任服务端序；`runningFirst` 开关（工具栏 checkbox，默认关）做稳定分区；组排序同 T2f 契约；次级稳定键 group.key。
