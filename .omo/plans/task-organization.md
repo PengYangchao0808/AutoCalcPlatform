@@ -121,7 +121,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——完整 fixture 项目（多分子/多状态/带标签/含归档）全参数组合；failure——引擎抛 ValueError（tag 分组无 JSON1 模拟）→ 500 带清晰 detail；PATCH 并发（两次连续 PATCH 不同字段）最终态一致。Evidence `.omo/evidence/task-organization/task-3.md`
   Commit: Y | feat(api): v2 task-view + task metadata PATCH + batch batch_id
 
-- [ ] 4. 前端数据层：apiV2 客户端 + task-view 拉取 + 视图偏好持久化
+- [x] 4. 前端数据层：apiV2 客户端 + task-view 拉取 + 视图偏好持久化
   What to do（`frontend/ACP_Workbench_v2.html` 单文件）：
   a) 新增 `apiV2(path, opts)` helper（`fetch("/api/v2" + path, ...)`，错误处理/JSON 解析复刻 `api()`（定义于 `:7606` 附近），**不改 `API_BASE`**——它被 ~40 个 v1 调用点依赖）。
   b) 视图状态常量与持久化：`const DEFAULT_TASK_VIEW = { groupBy: "molecule", sort: "created_desc", filters: { status: [], workflow: [], molecule: [], tag: [], batch: [], remark: [] }, q: "", archived: "exclude", runningFirst: false }`；`taskViewPrefs` 变量；`loadTaskViewPrefs(projectId)`/`saveTaskViewPrefs()`——localStorage key `acp.taskview.<project_id>`（"全部"范围用 `acp.taskview.__all__`），JSON 容错（损坏即回默认）；项目切换时加载。
@@ -159,7 +159,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——契约全绿 + node 冒烟通过；failure——node 缺失时 skip 而非 fail（断言 skipif 逻辑）。Evidence `.omo/evidence/task-organization/task-6.md`
   Commit: Y | feat(workbench): collapsible grouped task list + slim cards + collator sort
 
-- [ ] 7. P2 API：标签清单/重命名/合并/删除 + 批量操作
+- [x] 7. P2 API：标签清单/重命名/合并/删除 + 批量操作
   What to do:
   a) `src/acp/api/v2_routes.py`：`GET /projects/{project_id}/tags` → 聚合标签清单 `[{tag, count}]`（`SELECT je.value AS tag, COUNT(*) FROM tasks, json_each(tasks.tags) je WHERE project_id=? GROUP BY je.value ORDER BY count DESC`；JSON1 fallback Python 聚合）；`POST /projects/{project_id}/tags/rename` body `{from, to}`（`from`/`to` 为 Python 关键字安全字段名 `source`/`target`）——遍历项目行改写 tasks.tags（去重、保持顺序）；`POST /projects/{project_id}/tags/merge` body `{sources: [str], target: str}`（多并一）；`POST /projects/{project_id}/tags/delete` body `{tag: str}`（仅解除标记，**不删任务**）。三者均返回 `{updated: n}`，逐行事务（TaskIndex 新方法 `rewrite_tags(project_id, transform: Callable[[list[str]], list[str]]) -> int`，持锁单连接遍历）。
   b) `POST /api/v2/tasks/batch-ops` body `{task_ids: [str], op: str, payload: dict}`：op∈`add_tags`(payload.tags 并集去重)/`remove_tags`/`set_molecule_name`(payload.molecule_name → 同时重算 molecule_key)/`archive`/`unarchive`；**archive 校验 tasks.status 属终态**（`JobStatus.is_terminal`；含活动任务则整体 400 并列出不合规 id——不做部分执行）；逐任务执行、返回 `{results: [{task_id, ok, error?}], updated: n}`；task_ids 上限 500。
