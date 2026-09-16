@@ -199,7 +199,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——契约全绿；failure——无选中时批量按钮隐藏逻辑存在（断言 size>0 守卫）。Evidence `.omo/evidence/task-organization/task-9.md`
   Commit: Y | feat(workbench): P2 batch ops, archive toggle, export, molecule/tag management
 
-- [ ] 10. P3：保存视图（服务端 projects.settings + 前端菜单）
+- [x] 10. P3：保存视图（服务端 projects.settings + 前端菜单）
   What to do:
   a) 存储：`projects.settings` JSON 增键 `saved_views: [{id, name, query: {group_by, sort, statuses, workflows, molecule_keys, tags, batch_ids, search, archived, running_first}, created_at}]`——**复用现有** `PATCH /api/v1/projects/{project_id}`（`v1_schemas.ProjectUpdateRequest.settings`）读-合并-写回（PATCH 处理器中 settings 深合并而非整替换——检查现行为，若整替换则改为深合并仅对 settings 键）；`GET /api/v1/projects/{id}` 自然带出。前端亦可只读消费。无新表新端点。
   b) 前端：工具栏「视图 ▾」菜单——保存当前（命名对话框→PATCH）、列出已存视图（点击=套用 query 到 prefs+refreshJobs，**活查询非快照**）、删除；入口区支持「待检查结果/失败任务」类用户自建视图。
