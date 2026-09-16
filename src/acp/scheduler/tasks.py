@@ -16,6 +16,7 @@ import json
 import logging
 import sqlite3
 import threading
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -351,6 +352,53 @@ class TaskIndex:
             "UPDATE tasks SET project_id=?, updated_at=? WHERE task_id=?",
             (project_id, _utc_now_iso(), task_id),
         )
+
+    def rewrite_tags(
+        self,
+        project_id: str,
+        transform: Callable[[list[str]], list[str]],
+    ) -> int:
+        """Apply *transform* to the tags list of every task in *project_id*.
+
+        Runs under a single lock + connection: SELECT all rows, apply
+        *transform*, write back changed rows, commit once.  Returns the
+        number of rows whose tags were actually modified.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT task_id, tags FROM tasks WHERE project_id=?",
+                    (project_id,),
+                ).fetchall()
+                updated = 0
+                for row in rows:
+                    raw = row["tags"]
+                    try:
+                        current: list[str] = json.loads(raw) if raw else []
+                    except (json.JSONDecodeError, TypeError):
+                        current = []
+                    if not isinstance(current, list):
+                        current = []
+                    new_tags = transform(current)
+                    # Dedupe preserving order
+                    seen: set[str] = set()
+                    deduped: list[str] = []
+                    for t in new_tags:
+                        if t not in seen:
+                            seen.add(t)
+                            deduped.append(t)
+                    if deduped != current:
+                        conn.execute(
+                            "UPDATE tasks SET tags=?, updated_at=? WHERE task_id=?",
+                            (json.dumps(deduped), _utc_now_iso(), row["task_id"]),
+                        )
+                        updated += 1
+                conn.commit()
+                return updated
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
 
     def update_display_fields(
         self,

@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field, field_validator
 from acp.api.v1_schemas import normalize_node_tags
 
 __all__ = [
+    "V2BatchOpItemResult",
+    "V2BatchOpsRequest",
+    "V2BatchOpsResult",
     "V2FileEntry",
     "V2ProjectSummary",
     "V2TaskBatchItem",
@@ -28,6 +31,11 @@ __all__ = [
     "V2TaskViewFacetsModel",
     "V2TaskViewGroupModel",
     "V2TaskViewResponse",
+    "V2TagDeleteRequest",
+    "V2TagInfo",
+    "V2TagMergeRequest",
+    "V2TagOpResult",
+    "V2TagRenameRequest",
     "V2TreeResponse",
 ]
 
@@ -208,3 +216,85 @@ class V2TaskPatchRequest(BaseModel):
     task_name: str | None = None
     remark: str | None = None
     tags: list[str] | None = None
+
+
+# ── Tag registry models (T7) ──────────────────────────────────────────
+
+
+class V2TagInfo(BaseModel):
+    """One tag entry with its usage count across the project."""
+
+    tag: str
+    count: int
+
+
+class V2TagRenameRequest(BaseModel):
+    """Rename a tag across all tasks in a project."""
+
+    source: str
+    target: str
+
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("target must be non-empty")
+        if len(v) > 32:
+            raise ValueError("target must be ≤ 32 characters")
+        return v
+
+
+class V2TagMergeRequest(BaseModel):
+    """Merge multiple source tags into a single target tag."""
+
+    sources: list[str] = Field(min_length=1)
+    target: str
+
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("target must be non-empty")
+        if len(v) > 32:
+            raise ValueError("target must be ≤ 32 characters")
+        return v
+
+
+class V2TagDeleteRequest(BaseModel):
+    """Remove a tag from all tasks (never deletes tasks themselves)."""
+
+    tag: str
+
+
+class V2TagOpResult(BaseModel):
+    """Result of a tag registry mutation (rename/merge/delete)."""
+
+    updated: int
+
+
+class V2BatchOpsRequest(BaseModel):
+    """Batch operation on multiple tasks.
+
+    Supported ops: add_tags, remove_tags, archive, unarchive, set_molecule_name.
+    """
+
+    task_ids: list[str] = Field(min_length=1, max_length=500)
+    op: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class V2BatchOpItemResult(BaseModel):
+    """Per-task outcome of a batch operation."""
+
+    task_id: str
+    ok: bool
+    error: str | None = None
+
+
+class V2BatchOpsResult(BaseModel):
+    """Aggregate result of a batch-ops request."""
+
+    results: list[V2BatchOpItemResult] = Field(default_factory=list)
+    updated: int = 0

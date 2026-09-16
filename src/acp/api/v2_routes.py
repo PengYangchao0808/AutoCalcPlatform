@@ -10,7 +10,9 @@ existing scheduler jobs — the jobs table is the task index.  Mounted under
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -19,8 +21,16 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from acp.api.v2_schemas import (
+    V2BatchOpItemResult,
+    V2BatchOpsRequest,
+    V2BatchOpsResult,
     V2FileEntry,
     V2ProjectSummary,
+    V2TagDeleteRequest,
+    V2TagInfo,
+    V2TagMergeRequest,
+    V2TagOpResult,
+    V2TagRenameRequest,
     V2TaskBatchItem,
     V2TaskBatchRequest,
     V2TaskBatchResponse,
@@ -539,3 +549,322 @@ def _submit_batch_item(
         logger.warning("batch item %s/%s failed: %s", item.molecule_name, item.task_name, exc)
         return str(exc)
     return _task_summary(record)
+
+
+# ── Tag registry endpoints (T7) ───────────────────────────────────────
+
+
+def _project_or_404(request: Request, project_id: str) -> None:
+    manager = _manager(request)
+    if manager.projects.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+
+def _aggregate_tags_python(tasks_index, project_id: str) -> list[V2TagInfo]:
+    """Python-side tag aggregation fallback when JSON1 is unavailable."""
+    from collections import Counter
+
+    rows = tasks_index._query(
+        "SELECT tags FROM tasks WHERE project_id=?",
+        (project_id,),
+    )
+    counter: Counter[str] = Counter()
+    for row in rows:
+        raw = row["tags"]
+        try:
+            tags = json.loads(raw) if raw else []
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(tags, list):
+            for t in tags:
+                if isinstance(t, str):
+                    counter[t] += 1
+    return [V2TagInfo(tag=t, count=c) for t, c in counter.most_common()]
+
+
+def _aggregate_tags_sql(tasks_index, project_id: str) -> list[V2TagInfo] | None:
+    """SQL-side tag aggregation using JSON1 ``json_each``. Returns None if JSON1 unavailable."""
+    from acp.scheduler.task_views import _JSON1_OK
+
+    if not _JSON1_OK:
+        return None
+    try:
+        rows = tasks_index._query(
+            "SELECT je.value AS tag, COUNT(*) AS cnt "
+            "FROM tasks, json_each(tasks.tags) je "
+            "WHERE project_id=? "
+            "GROUP BY je.value "
+            "ORDER BY cnt DESC",
+            (project_id,),
+        )
+        return [V2TagInfo(tag=r["tag"], count=r["cnt"]) for r in rows]
+    except Exception:
+        return None
+
+
+@router.get("/projects/{project_id}/tags", response_model=list[V2TagInfo])
+def list_project_tags(project_id: str, request: Request) -> list[V2TagInfo]:
+    """Aggregate tag counts for all tasks in a project."""
+    _project_or_404(request, project_id)
+    manager = _manager(request)
+    result = _aggregate_tags_sql(manager.tasks, project_id)
+    if result is None:
+        result = _aggregate_tags_python(manager.tasks, project_id)
+    return result
+
+
+@router.post("/projects/{project_id}/tags/rename", response_model=V2TagOpResult)
+def rename_tag(project_id: str, body: V2TagRenameRequest, request: Request) -> V2TagOpResult:
+    """Rename a tag across all tasks in a project (exact-match replacement)."""
+    _project_or_404(request, project_id)
+    source = body.source.strip()
+    target = body.target.strip()
+    if not source:
+        raise HTTPException(status_code=422, detail="source must be non-empty")
+    if source == target:
+        return V2TagOpResult(updated=0)
+
+    def _rename_transform(tags: list[str]) -> list[str]:
+        return [target if t == source else t for t in tags]
+
+    manager = _manager(request)
+    count = manager.tasks.rewrite_tags(project_id, _rename_transform)
+    return V2TagOpResult(updated=count)
+
+
+@router.post("/projects/{project_id}/tags/merge", response_model=V2TagOpResult)
+def merge_tags(project_id: str, body: V2TagMergeRequest, request: Request) -> V2TagOpResult:
+    """Merge multiple source tags into a single target tag."""
+    _project_or_404(request, project_id)
+    target = body.target.strip()
+    sources = [s.strip() for s in body.sources if s.strip()]
+    if not sources:
+        raise HTTPException(
+            status_code=422,
+            detail="sources must contain at least one non-empty tag",
+        )
+    if target in sources:
+        raise HTTPException(status_code=422, detail="sources must not contain the target tag")
+
+    source_set = set(sources)
+
+    def _merge_transform(tags: list[str]) -> list[str]:
+        result: list[str] = []
+        merged = False
+        for t in tags:
+            if t in source_set:
+                if not merged:
+                    result.append(target)
+                    merged = True
+            else:
+                result.append(t)
+        return result
+
+    manager = _manager(request)
+    count = manager.tasks.rewrite_tags(project_id, _merge_transform)
+    return V2TagOpResult(updated=count)
+
+
+@router.post("/projects/{project_id}/tags/delete", response_model=V2TagOpResult)
+def delete_tag(project_id: str, body: V2TagDeleteRequest, request: Request) -> V2TagOpResult:
+    """Remove a tag from all tasks in a project (never deletes tasks)."""
+    _project_or_404(request, project_id)
+    tag = body.tag.strip()
+    if not tag:
+        raise HTTPException(status_code=422, detail="tag must be non-empty")
+
+    def _delete_transform(tags: list[str]) -> list[str]:
+        return [t for t in tags if t != tag]
+
+    manager = _manager(request)
+    count = manager.tasks.rewrite_tags(project_id, _delete_transform)
+    return V2TagOpResult(updated=count)
+
+
+# ── Batch operations endpoint (T7) ───────────────────────────────────
+
+
+_BATCH_OP_RE = re.compile(r"^(add_tags|remove_tags|archive|unarchive|set_molecule_name)$")
+
+
+@router.post("/tasks/batch-ops", response_model=V2BatchOpsResult)
+def batch_ops(body: V2BatchOpsRequest, request: Request) -> V2BatchOpsResult:
+    """Execute a batch operation across multiple tasks.
+
+    Per-task errors are captured in results (never 500 on one bad id).
+    Archive rejects active tasks — the whole request returns 400 with
+    offending ids listed.  No partial execution on archive validation failure.
+    """
+    if not _BATCH_OP_RE.match(body.op):
+        raise HTTPException(status_code=422, detail=f"Unsupported op: {body.op}")
+
+    manager = _manager(request)
+
+    if body.op == "archive":
+        _validate_archive_targets(manager, body.task_ids)
+
+    results: list[V2BatchOpItemResult] = []
+    updated_count = 0
+    for task_id in body.task_ids:
+        try:
+            changed = _execute_batch_op(manager, task_id, body.op, body.payload)
+            results.append(V2BatchOpItemResult(task_id=task_id, ok=True))
+            if changed:
+                updated_count += 1
+        except Exception as exc:  # noqa: BLE001 — per-task isolation
+            results.append(V2BatchOpItemResult(task_id=task_id, ok=False, error=str(exc)))
+
+    return V2BatchOpsResult(results=results, updated=updated_count)
+
+
+def _validate_archive_targets(manager: JobManager, task_ids: list[str]) -> None:
+    """Reject if any task_id refers to a non-terminal (active) task.
+
+    Raises 400 with offending ids listed.  NO partial execution.
+    """
+    terminal_statuses = {s.value for s in JobStatus if s.is_terminal}
+    offending: list[str] = []
+    for tid in task_ids:
+        row = manager.tasks.get(tid)
+        if row is not None and row.get("status") not in terminal_statuses:
+            offending.append(tid)
+    if offending:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot archive active tasks: {offending}",
+        )
+
+
+def _execute_batch_op(
+    manager: JobManager,
+    task_id: str,
+    op: str,
+    payload: dict[str, Any],
+) -> bool:
+    """Execute one batch op on a single task. Returns True when state changed.
+
+    Raises for unknown task_id so caller captures it as ok=False.
+    """
+    existing = manager.tasks.get(task_id)
+    if existing is None:
+        raise ValueError(f"Task not found: {task_id}")
+
+    if op == "add_tags":
+        return _batch_add_tags(manager, task_id, existing, payload)
+    if op == "remove_tags":
+        return _batch_remove_tags(manager, task_id, existing, payload)
+    if op == "archive":
+        return _batch_set_archived(manager, task_id, True)
+    if op == "unarchive":
+        return _batch_set_archived(manager, task_id, False)
+    if op == "set_molecule_name":
+        return _batch_set_molecule_name(manager, task_id, payload)
+    raise ValueError(f"Unsupported op: {op}")
+
+
+def _validate_batch_tags(payload: dict[str, Any]) -> list[str]:
+    """Validate and clean tags from payload. Raises ValueError on invalid input."""
+    raw_tags = payload.get("tags", [])
+    if not isinstance(raw_tags, list):
+        raise ValueError("payload.tags must be a list")
+    cleaned: list[str] = []
+    for raw in raw_tags:
+        tag = str(raw).strip()
+        if not tag:
+            raise ValueError("tags must not contain empty strings")
+        if len(tag) > 32:
+            raise ValueError("each tag must be ≤ 32 characters")
+        cleaned.append(tag)
+    if len(cleaned) > 20:
+        raise ValueError("tags must contain at most 20 items")
+    return cleaned
+
+
+def _batch_add_tags(
+    manager: JobManager,
+    task_id: str,
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+) -> bool:
+    new_tags = _validate_batch_tags(payload)
+    try:
+        current = json.loads(existing.get("tags", "[]"))
+    except (json.JSONDecodeError, TypeError):
+        current = []
+    if not isinstance(current, list):
+        current = []
+    merged = list(current)
+    changed = False
+    for t in new_tags:
+        if t not in merged:
+            merged.append(t)
+            changed = True
+    if changed:
+        manager.tasks.update_display_fields(task_id, tags=merged)
+    return changed
+
+
+def _batch_remove_tags(
+    manager: JobManager,
+    task_id: str,
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+) -> bool:
+    remove_set = set(_validate_batch_tags(payload))
+    try:
+        current = json.loads(existing.get("tags", "[]"))
+    except (json.JSONDecodeError, TypeError):
+        current = []
+    if not isinstance(current, list):
+        current = []
+    new_tags = [t for t in current if t not in remove_set]
+    if new_tags != current:
+        manager.tasks.update_display_fields(task_id, tags=new_tags)
+        return True
+    return False
+
+
+def _batch_set_archived(
+    manager: JobManager,
+    task_id: str,
+    archived: bool,
+) -> bool:
+    existing = manager.tasks.get(task_id)
+    if existing is None:
+        return False
+    current_archived = bool(existing.get("archived", 0))
+    if current_archived == archived:
+        return False
+    with manager.tasks._lock:
+        conn = manager.tasks._connect()
+        try:
+            from acp.scheduler.tasks import _utc_now_iso
+
+            conn.execute(
+                "UPDATE tasks SET archived=?, updated_at=? WHERE task_id=?",
+                (1 if archived else 0, _utc_now_iso(), task_id),
+            )
+            conn.commit()
+        finally:
+            if manager.tasks._shared_conn is None:
+                conn.close()
+    return True
+
+
+def _batch_set_molecule_name(
+    manager: JobManager,
+    task_id: str,
+    payload: dict[str, Any],
+) -> bool:
+    name = str(payload.get("molecule_name", "")).strip()
+    if not name:
+        raise ValueError("molecule_name must be non-empty")
+    if len(name) > 200:
+        raise ValueError("molecule_name must be ≤ 200 characters")
+    existing = manager.tasks.get(task_id)
+    if existing is None:
+        return False
+    if existing.get("molecule_name") == name:
+        return False
+    manager.tasks.update_display_fields(task_id, molecule_name=name)
+    return True
