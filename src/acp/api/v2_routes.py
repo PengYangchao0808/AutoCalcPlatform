@@ -4,7 +4,8 @@ API v2 Routes
 
 Project-task surface for the v2 storage design
 (docs/ACP_Project_Task_Storage_Design_v2.md §12).  v2 "tasks" are the
-existing scheduler jobs — the jobs table is the task index.  Mounted under
+existing scheduler jobs — the tasks table (TaskIndex) is the server-side
+task index while jobs remains the execution record.  Mounted under
 ``/api/v2`` by :func:`acp.api.server.create_app`.
 """
 

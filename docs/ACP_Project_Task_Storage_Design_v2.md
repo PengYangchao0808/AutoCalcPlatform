@@ -502,8 +502,35 @@ tasks
 ├── result_manifest_path
 ├── current_stage
 ├── created_at
-└── updated_at
-```
+├── updated_at
+│   ── T1 task-organization 扩展列（迁移 014）──
+├── molecule_key TEXT NOT NULL DEFAULT ''     -- 分子分组键（molecule_group_key: strip+collapse+casefold）
+├── tags TEXT NOT NULL DEFAULT '[]'           -- 手动标签 JSON 数组（与结构 TAG/node_tags 完全隔离）
+├── archived INTEGER NOT NULL DEFAULT 0      -- 归档标志（仅终态任务可设，只影响默认可见性）
+├── batch_id TEXT                            -- 提交批次（从 spec.resources["batch_id"] 派生；NULL=单独提交）
+├── last_activity_at TEXT                    -- 最近活动时间（仅实质状态/阶段变化更新，非轮询时间）
+├── started_at TEXT                          -- 首次进入活跃状态的时间
+├── completed_at TEXT                        -- 进入终态的时间
+├── group_id TEXT                            -- 项目分组 id（从 jobs.group_id 同步）
+└── progress REAL                            -- 进度比例（0.0–1.0）
+
+索引（迁移 014）：
+- `idx_tasks_project_archived(project_id, archived)`
+- `idx_tasks_molecule_key(molecule_key)`
+- `idx_tasks_batch_id(batch_id)`
+
+同步规则：
+- **ON CONFLICT 白名单**（迁移 014 将 `INSERT OR REPLACE` 改为 `INSERT ... ON CONFLICT DO UPDATE SET`）：
+  sync 拥有的列（DO UPDATE 集）= display_name, task_dir_name, workflow, status, current_stage, node_id, node_path, storage_mode, layout_version, input_hash, result_manifest_path, updated_at；
+  首写胜出列（不进 DO UPDATE）= project_id, molecule_name, task_name, remark, molecule_key, tags, archived, batch_id, created_at。
+- **sync_job_transition**：compare-before-write — status/current_stage 变化 → 更新 status, current_stage, started_at (COALESCE), completed_at, last_activity_at；仅 progress 变化 → 只更新 progress；均无变化 → 不写（消除轮询写放大）。
+- **purge_cascade**：`DELETE FROM tasks WHERE job_id=?` 先于 jobs 删除（修复幻影行）。
+- **move_job**：`UPDATE tasks SET project_id=? WHERE task_id=?` 保持与 jobs.project_id 一致。
+
+迁移摘要：
+- **014**：tasks 表扩 9 列 + 3 索引 + Python 历史回填 + upsert ON CONFLICT 白名单改造
+- **015**：molecule_groups 表（别名/合并建议）+ 两层别名解析（exact → case-insensitive）
+- **016**：case-preserving key 刷新 — 两层别名解析 exact→case-insensitive，现有 molecule_key 按新规则重新计算
 
 服务端不保存以下完整文件：
 
