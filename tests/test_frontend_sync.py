@@ -8581,13 +8581,15 @@ def test_queue_view_toolbar_present() -> None:
         "Filter button must have data-i18n=queue.view.filter_btn"
     )
 
-    # data-i18n-opt on group select options (tag option disabled)
+    # data-i18n-opt on group select options (tag option enabled in T9)
     group_select = html.split('id="task-view-group"', 1)[1].split("</select>", 1)[0]
     assert "data-i18n-opt=" in group_select, (
         "Group select options must use data-i18n-opt"
     )
-    assert "disabled" in group_select, (
-        "Tag option in group select must be disabled (P2 placeholder)"
+    tag_option_match = re.search(r'<option\s+value="tag"[^>]*>', group_select)
+    assert tag_option_match, "tag option must exist in group select"
+    assert "disabled" not in tag_option_match.group(0), (
+        "Tag option must NOT be disabled (T9 enabled tag grouping)"
     )
 
     # data-i18n-opt on sort select options
@@ -9034,6 +9036,337 @@ def test_queue_view_i18n_parity_t6_keys() -> None:
             f"i18n key {key} missing from HTML"
         )
     # Parity: both locale blocks must contain the same new keys.
+    zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
+    for key in new_keys:
+        assert key in zh_keys, (
+            f"{key} missing from zh-CN locale block"
+        )
+        assert key in en_keys, (
+            f"{key} missing from en-US locale block"
+        )
+
+
+def test_p2_batch_and_archive_ui() -> None:
+    """T9 contract: batch toolbar + archive + export + endpoint literals."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Batch bar control ids
+    for ctrl_id in ("queue-batch-bar", "batch-tag-input", "batch-add-tags",
+                     "batch-remove-tags", "batch-archive", "batch-unarchive",
+                     "batch-molecule-input", "batch-set-molecule"):
+        assert f'id="{ctrl_id}"' in html, (
+            f"Batch control id=\"{ctrl_id}\" missing"
+        )
+
+    # Archive select
+    assert 'id="task-view-archived"' in html, "Archive select missing"
+    assert '"exclude"' in html, "Archive exclude value missing"
+    assert '"include"' in html, "Archive include value missing"
+    assert '"only"' in html, "Archive only value missing"
+
+    # Export controls
+    assert 'id="task-view-export-btn"' in html, "Export button missing"
+    assert 'id="task-view-export-csv"' in html, "Export CSV button missing"
+    assert 'id="task-view-export-json"' in html, "Export JSON button missing"
+
+    # Endpoint literals referenced
+    assert '"/tasks/batch-ops"' in html, "batch-ops endpoint literal missing"
+    assert '"/tags/rename"' in html, "tags/rename endpoint literal missing"
+    assert '"/tags/merge"' in html, "tags/merge endpoint literal missing"
+    assert '"/tags/delete"' in html, "tags/delete endpoint literal missing"
+    assert '"/molecule-groups/merge"' in html, "molecule-groups/merge endpoint literal missing"
+    assert '"/molecule-groups/suggestions"' in html, "molecule-groups/suggestions endpoint literal missing"
+    assert '"/tasks/"' in html and '"/lineage"' in html, "lineage endpoint literal missing"
+    assert '"add_tags"' in html, "add_tags op literal missing"
+    assert '"remove_tags"' in html, "remove_tags op literal missing"
+    assert '"archive"' in html, "archive op literal missing"
+    assert '"unarchive"' in html, "unarchive op literal missing"
+    assert '"set_molecule_name"' in html, "set_molecule_name op literal missing"
+
+    # updateQueueBatchBar extended
+    batch_fn = html.split("function updateQueueBatchBar(", 1)[1].split("\nfunction ", 1)[0]
+    assert "queue-batch-bar" in batch_fn, "updateQueueBatchBar must control queue-batch-bar"
+
+
+def test_archive_toggle_wiring() -> None:
+    """T9 contract: prefs.archived wired to #task-view-archived."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # _applyTaskViewPrefsToControls sets archived select
+    apply_fn = html.split("function _applyTaskViewPrefsToControls(", 1)[1].split("\nfunction ", 1)[0]
+    assert "task-view-archived" in apply_fn, (
+        "_applyTaskViewPrefsToControls must set task-view-archived"
+    )
+    assert "p.archived" in apply_fn or 'prefs.archived' in apply_fn, (
+        "_applyTaskViewPrefsToControls must read prefs.archived"
+    )
+
+    # archived change handler saves prefs and refreshes
+    assert "archivedEl.value" in html, "archived change handler must read value"
+
+    # refreshJobs passes archived param
+    refresh_fn = html.split("async function refreshJobs(", 1)[1].split("\nfunction ", 1)[0]
+    assert "prefs.archived" in refresh_fn or "p.archived" in refresh_fn, (
+        "refreshJobs must pass archived param"
+    )
+
+    # archived-row CSS class
+    assert ".archived-row" in html, "archived-row CSS class missing"
+    assert "archived-row" in html and "job.archived" in html, (
+        "buildQueueRow must apply archived-row class"
+    )
+
+
+def test_export_logic() -> None:
+    """T9 contract: CSV builder + JSON export + Blob/download."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # _exportCSV function
+    assert "function _exportCSV(" in html, "_exportCSV function missing"
+    csv_fn = html.split("function _exportCSV(", 1)[1].split("\nfunction ", 1)[0]
+    assert "Blob" in csv_fn, "_exportCSV must use Blob"
+    assert "text/csv" in csv_fn, "_exportCSV must set text/csv MIME"
+    assert "a.download" in csv_fn or "a.click" in csv_fn, "_exportCSV must trigger download"
+    assert "FEFF" in csv_fn, "_exportCSV must include BOM for Excel"
+
+    # _exportJSON function
+    assert "function _exportJSON(" in html, "_exportJSON function missing"
+    json_fn = html.split("function _exportJSON(", 1)[1].split("\nfunction ", 1)[0]
+    assert "application/json" in json_fn, "_exportJSON must set application/json MIME"
+
+    # _flattenTaskViewRows helper
+    assert "function _flattenTaskViewRows(" in html, "_flattenTaskViewRows missing"
+
+    # Column header i18n key
+    assert '"queue.view.export_columns"' in html, "export_columns i18n key missing"
+
+
+def test_molecule_management_ui() -> None:
+    """T9 contract: merge suggestions + bulk assign molecule."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Merge suggestions banner rendering
+    assert "function _renderMergeSuggestions(" in html, (
+        "_renderMergeSuggestions function missing"
+    )
+    suggest_fn = html.split("function _renderMergeSuggestions(", 1)[1].split("\nfunction ", 1)[0]
+    assert "merge-suggestion-banner" in suggest_fn, (
+        "_renderMergeSuggestions must render merge-suggestion-banner"
+    )
+    assert "merge_suggestion" in suggest_fn, (
+        "_renderMergeSuggestions must use merge_suggestion i18n key"
+    )
+    assert "_executeMergeSuggestion" in suggest_fn, (
+        "_renderMergeSuggestions must wire _executeMergeSuggestion"
+    )
+
+    # Merge suggestion loading
+    assert "function _loadMergeSuggestions(" in html, (
+        "_loadMergeSuggestions function missing"
+    )
+    assert "/molecule-groups/suggestions" in html, (
+        "suggestions endpoint literal missing"
+    )
+
+    # Execute merge
+    assert "function _executeMergeSuggestion(" in html, (
+        "_executeMergeSuggestion function missing"
+    )
+    exec_fn = html.split("function _executeMergeSuggestion(", 1)[1].split("\nfunction ", 1)[0]
+    assert "/molecule-groups/merge" in exec_fn, (
+        "_executeMergeSuggestion must call molecule-groups/merge"
+    )
+
+    # refreshJobs triggers suggestions for molecule grouping
+    refresh_fn = html.split("async function refreshJobs(", 1)[1].split("\nfunction ", 1)[0]
+    assert "_loadMergeSuggestions" in refresh_fn, (
+        "refreshJobs must call _loadMergeSuggestions"
+    )
+    assert "_renderMergeSuggestions" in refresh_fn, (
+        "refreshJobs must call _renderMergeSuggestions"
+    )
+
+    # Bulk molecule assignment via batch-ops
+    assert "function _batchSetMolecule(" in html, (
+        "_batchSetMolecule function missing"
+    )
+    mol_fn = html.split("function _batchSetMolecule(", 1)[1].split("\nfunction ", 1)[0]
+    assert "set_molecule_name" in mol_fn, (
+        "_batchSetMolecule must use set_molecule_name op"
+    )
+
+
+def test_tag_management_dialog() -> None:
+    """T9 contract: tag management modal with rename/merge/delete."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Modal DOM
+    assert 'id="tag-mgmt-modal"' in html, "tag-mgmt-modal missing"
+    assert 'id="tag-mgmt-list"' in html, "tag-mgmt-list missing"
+    assert 'id="tag-mgmt-modal-close"' in html, "tag-mgmt-modal-close missing"
+
+    # Functions
+    assert "function _openTagManagement(" in html, (
+        "_openTagManagement function missing"
+    )
+    open_fn = html.split("function _openTagManagement(", 1)[1].split("\nfunction ", 1)[0]
+    assert "/projects/" in open_fn and "/tags" in open_fn, (
+        "_openTagManagement must call /projects/{id}/tags"
+    )
+    assert "tag-mgmt-item" in open_fn, (
+        "_openTagManagement must render tag-mgmt-item rows"
+    )
+
+    # Rename/merge/delete functions
+    assert "function _renameTag(" in html, "_renameTag missing"
+    assert "function _mergeTag(" in html, "_mergeTag missing"
+    assert "function _deleteTag(" in html, "_deleteTag missing"
+
+    rename_fn = html.split("function _renameTag(", 1)[1].split("\nfunction ", 1)[0]
+    assert "/tags/rename" in rename_fn, "_renameTag must call /tags/rename"
+    assert "source" in rename_fn and "target" in rename_fn, (
+        "_renameTag must send source/target"
+    )
+
+    merge_fn = html.split("function _mergeTag(", 1)[1].split("\nfunction ", 1)[0]
+    assert "/tags/merge" in merge_fn, "_mergeTag must call /tags/merge"
+
+    delete_fn = html.split("function _deleteTag(", 1)[1].split("\nfunction ", 1)[0]
+    assert "/tags/delete" in delete_fn, "_deleteTag must call /tags/delete"
+    assert "tag_delete_warn" in delete_fn, "_deleteTag must show warning"
+
+    # Filter panel links to tag management
+    render_fn = html.split("function renderFilterPanel(", 1)[1].split("\nfunction ", 1)[0]
+    assert "_openTagManagement" in render_fn, (
+        "renderFilterPanel must link to _openTagManagement"
+    )
+    assert "manage_tags" in render_fn, (
+        "renderFilterPanel must use manage_tags i18n key"
+    )
+
+    # Event listener wired
+    assert 'id="tag-mgmt-modal-close"' in html
+
+
+def test_lineage_panel() -> None:
+    """T9 contract: lineage panel lazy-loads /api/v2/tasks/{id}/lineage."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # _loadAndRenderLineage function
+    assert "function _loadAndRenderLineage(" in html, (
+        "_loadAndRenderLineage function missing"
+    )
+    load_fn = html.split("function _loadAndRenderLineage(", 1)[1].split("\nfunction ", 1)[0]
+    assert '"/tasks/"' in load_fn and '"/lineage"' in load_fn, (
+        "_loadAndRenderLineage must call /tasks/{id}/lineage"
+    )
+    assert "apiV2" in load_fn, "_loadAndRenderLineage must use apiV2"
+
+    # Render function
+    assert "function _renderLineageData(" in html, (
+        "_renderLineageData function missing"
+    )
+    render_fn = html.split("function _renderLineageData(", 1)[1].split("\nfunction ", 1)[0]
+    assert "upstream" in render_fn, "_renderLineageData must handle upstream"
+    assert "downstream" in render_fn, "_renderLineageData must handle downstream"
+    assert "lineage_subtitle" in render_fn or "lineage-subtitle" in render_fn, (
+        "_renderLineageData must render subtitles"
+    )
+
+    # Node builder with depth rendering
+    assert "function _buildLineageNode(" in html, (
+        "_buildLineageNode function missing"
+    )
+    node_fn = html.split("function _buildLineageNode(", 1)[1].split("\nfunction ", 1)[0]
+    assert "depth" in node_fn, "_buildLineageNode must render depth"
+    assert "lineage-name" in node_fn, "_buildLineageNode must have lineage-name"
+    assert "selectJob" in node_fn, "_buildLineageNode must wire selectJob click"
+
+    # Lineage section in detail drawer (openDetailDrawer)
+    drawer_fn = html.split("async function openDetailDrawer(", 1)[1].split("\nasync function ", 1)[0]
+    assert "lineage-section" in drawer_fn, (
+        "openDetailDrawer must include lineage-section"
+    )
+    assert "lineage-header" in drawer_fn, (
+        "openDetailDrawer must include lineage-header"
+    )
+    assert "_loadAndRenderLineage" in drawer_fn, (
+        "openDetailDrawer must call _loadAndRenderLineage"
+    )
+    assert "lineageLoaded" in drawer_fn, (
+        "openDetailDrawer must implement lazy-load flag"
+    )
+
+    # i18n keys
+    for key in ("queue.view.lineage_section", "queue.view.lineage_upstream",
+                "queue.view.lineage_downstream"):
+        assert f'"{key}":' in html, f"i18n key {key} missing"
+
+
+def test_tag_group_option_enabled() -> None:
+    """T9 contract: tag option in #task-view-group must NOT be disabled."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Find the tag option line
+    tag_opt_match = re.search(
+        r'<option\s+value="tag"[^>]*>.*?</option>', html
+    )
+    assert tag_opt_match, "tag option not found in #task-view-group"
+    tag_opt = tag_opt_match.group(0)
+    assert "disabled" not in tag_opt, (
+        f"tag option must NOT be disabled, got: {tag_opt}"
+    )
+    assert "data-i18n-opt=\"queue.view.group_tag\"" in tag_opt, (
+        "tag option must have data-i18n-opt"
+    )
+
+    # tag_group_disabled hint key should still exist in i18n (for backward compat)
+    # but no data-i18n-title referencing it on the option
+    assert "data-i18n-title" not in tag_opt or "tag_group_disabled" not in tag_opt, (
+        "tag option must not have tag_group_disabled title"
+    )
+
+
+def test_queue_view_i18n_parity_t9_keys() -> None:
+    """T9 contract: new i18n keys must be present in both locales."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    new_keys = [
+        "queue.view.batch_add_tags",
+        "queue.view.batch_remove_tags",
+        "queue.view.batch_archive",
+        "queue.view.batch_unarchive",
+        "queue.view.batch_set_molecule",
+        "queue.view.export_btn",
+        "queue.view.export_csv",
+        "queue.view.export_json",
+        "queue.view.archived_exclude",
+        "queue.view.archived_include",
+        "queue.view.archived_only",
+        "queue.view.manage_tags",
+        "queue.view.tag_rename",
+        "queue.view.tag_merge",
+        "queue.view.tag_delete",
+        "queue.view.tag_delete_warn",
+        "queue.view.bulk_assign_molecule",
+        "queue.view.merge_to",
+        "queue.view.merge_suggestion",
+        "queue.view.lineage_section",
+        "queue.view.lineage_upstream",
+        "queue.view.lineage_downstream",
+        "queue.view.lineage_depth",
+        "queue.view.lineage_parent",
+        "queue.view.lineage_node",
+        "queue.view.lineage_relation",
+        "queue.view.batch_op_success",
+        "queue.view.batch_op_partial",
+        "queue.view.export_columns",
+    ]
+    for key in new_keys:
+        assert f'"{key}":' in html, (
+            f"i18n key {key} missing from HTML"
+        )
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
     for key in new_keys:

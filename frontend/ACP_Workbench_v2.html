@@ -1899,6 +1899,41 @@ option, optgroup {
 .task-view-chip .chip-remove:hover { opacity: 1; }
 .task-view-chips .chip-clear { font-size: 11px; color: var(--text-tertiary); cursor: pointer; margin-left: 4px; }
 .task-view-chips .chip-clear:hover { color: var(--text-primary); }
+/* T9: batch ops toolbar, archive toggle, export, tag management, lineage */
+.task-view-toolbar .toolbar-archived-select { width: auto; padding: 4px 24px 4px 8px; font-size: 12px; }
+.task-view-toolbar .export-menu-wrap { position: relative; }
+.task-view-toolbar .export-menu { display: none; position: absolute; top: 100%; right: 0; z-index: 200; min-width: 100px; background: var(--bg-raised, #1e2a36); border: 1px solid var(--border-default); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); padding: 4px 0; }
+.task-view-toolbar .export-menu.open { display: block; }
+.task-view-toolbar .export-menu-item { display: block; width: 100%; padding: 6px 12px; font-size: 12px; color: var(--text-secondary); background: none; border: none; text-align: left; cursor: pointer; }
+.task-view-toolbar .export-menu-item:hover { background: rgba(78, 161, 255, 0.12); color: var(--text-primary); }
+.queue-batch-bar { display: flex; align-items: center; gap: 6px; padding: 4px 14px; flex-wrap: wrap; }
+.queue-batch-bar .mini-btn { font-size: 11px; }
+.queue-batch-bar .batch-tag-input { width: 80px; padding: 3px 6px; font-size: 11px; border: 1px solid var(--border-default); border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.queue-batch-bar .batch-molecule-input { width: 100px; padding: 3px 6px; font-size: 11px; border: 1px solid var(--border-default); border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.queue-row.archived-row { opacity: 0.55; }
+.tag-mgmt-link { font-size: 11px; color: var(--accent); cursor: pointer; margin-left: auto; text-decoration: underline; }
+.tag-mgmt-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+.tag-mgmt-item:last-child { border-bottom: none; }
+.tag-mgmt-item .tag-mgmt-name { flex: 1; color: var(--text-primary); }
+.tag-mgmt-item .tag-mgmt-count { color: var(--text-tertiary); font-size: 11px; min-width: 30px; text-align: right; }
+.tag-mgmt-item .tag-mgmt-actions { display: flex; gap: 4px; }
+.tag-mgmt-item .tag-mgmt-actions button { font-size: 10px; padding: 2px 6px; }
+.lineage-section { margin-top: 10px; padding: 0 14px; }
+.lineage-header { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 8px 0; }
+.lineage-header .lineage-chevron { transition: transform 0.15s; font-size: 10px; }
+.lineage-header .lineage-chevron.open { transform: rotate(90deg); }
+.lineage-body { padding-left: 8px; }
+.lineage-node { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; cursor: pointer; border-radius: 6px; }
+.lineage-node:hover { background: rgba(78, 161, 255, 0.08); }
+.lineage-node .lineage-depth { color: var(--text-tertiary); font-size: 10px; min-width: 20px; }
+.lineage-node .lineage-name { color: var(--accent); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lineage-node .lineage-status { font-size: 10px; }
+.lineage-node .lineage-relation { font-size: 10px; color: var(--text-tertiary); }
+.lineage-subtitle { font-size: 11px; color: var(--text-tertiary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.merge-suggestion-banner { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 4px 14px; background: rgba(242, 184, 75, 0.08); border: 1px solid rgba(242, 184, 75, 0.25); border-radius: 8px; font-size: 11px; color: var(--amber); }
+.merge-suggestion-banner .merge-suggestion-dismiss { cursor: pointer; margin-left: auto; opacity: 0.7; }
+.merge-suggestion-banner .merge-suggestion-dismiss:hover { opacity: 1; }
+.merge-suggestion-banner .merge-suggestion-action { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .queue-summary { padding: 14px 14px 10px; flex: 0 0 auto; }
 .queue-summary-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .queue-toggle { border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); padding: 6px 10px; font-size: 12px; }
@@ -3941,6 +3976,15 @@ option, optgroup {
           </div>
           <div class="queue-counts" id="queue-counts">加载中…</div>
         </div>
+        <div class="queue-batch-bar" id="queue-batch-bar" style="display:none;">
+          <input type="text" class="batch-tag-input" id="batch-tag-input" placeholder="标签">
+          <button type="button" class="mini-btn" id="batch-add-tags" data-i18n="queue.view.batch_add_tags" style="display:none;">添加标签</button>
+          <button type="button" class="mini-btn" id="batch-remove-tags" data-i18n="queue.view.batch_remove_tags" style="display:none;">移除标签</button>
+          <button type="button" class="mini-btn" id="batch-archive" data-i18n="queue.view.batch_archive" style="display:none;">归档</button>
+          <button type="button" class="mini-btn" id="batch-unarchive" data-i18n="queue.view.batch_unarchive" style="display:none;">取消归档</button>
+          <input type="text" class="batch-molecule-input" id="batch-molecule-input" placeholder="分子名">
+          <button type="button" class="mini-btn" id="batch-set-molecule" data-i18n="queue.view.batch_set_molecule" style="display:none;">设置分子归属</button>
+        </div>
         <div class="task-view-toolbar" id="task-view-toolbar">
           <input type="text" id="task-view-search" class="modal-input" data-i18n-ph="queue.view.search_placeholder" placeholder="搜索任务、分子、备注…">
           <select id="task-view-group" class="modal-select">
@@ -3948,7 +3992,7 @@ option, optgroup {
             <option value="remark" data-i18n-opt="queue.view.group_remark">备注</option>
             <option value="workflow" data-i18n-opt="queue.view.group_workflow">任务类型</option>
             <option value="batch" data-i18n-opt="queue.view.group_batch">提交批次</option>
-            <option value="tag" data-i18n-opt="queue.view.group_tag" disabled data-i18n-title="queue.view.tag_group_disabled">自定义标签</option>
+            <option value="tag" data-i18n-opt="queue.view.group_tag">自定义标签</option>
             <option value="none" data-i18n-opt="queue.view.group_none">不分组</option>
           </select>
           <select id="task-view-sort" class="modal-select">
@@ -3960,6 +4004,18 @@ option, optgroup {
             <option value="activity_desc" data-i18n-opt="queue.view.sort_activity_desc">最近活动</option>
           </select>
           <button type="button" class="mini-btn" id="task-view-filter-btn"><span data-i18n="queue.view.filter_btn">筛选</span> <span class="filter-badge" id="task-view-filter-badge" style="display:none;"></span></button>
+          <select id="task-view-archived" class="modal-select toolbar-archived-select">
+            <option value="exclude" data-i18n-opt="queue.view.archived_exclude">排除归档</option>
+            <option value="include" data-i18n-opt="queue.view.archived_include">包含归档</option>
+            <option value="only" data-i18n-opt="queue.view.archived_only">仅归档</option>
+          </select>
+          <div class="export-menu-wrap">
+            <button type="button" class="mini-btn" id="task-view-export-btn"><span data-i18n="queue.view.export_btn">导出</span> ▾</button>
+            <div class="export-menu" id="task-view-export-menu">
+              <button type="button" class="export-menu-item" id="task-view-export-csv" data-i18n="queue.view.export_csv">CSV</button>
+              <button type="button" class="export-menu-item" id="task-view-export-json" data-i18n="queue.view.export_json">JSON</button>
+            </div>
+          </div>
         </div>
         <div class="task-view-filter-panel" id="task-view-filter-panel" style="display:none;">
           <div class="filter-panel-header">
@@ -4597,6 +4653,23 @@ option, optgroup {
     <div class="modal-footer">
       <button class="btn ghost" id="purge-modal-cancel" data-i18n="modal.cancel">取消</button>
       <button class="btn danger" id="purge-modal-submit" data-i18n="purge.confirm">清除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tag Management Modal ──────────────────────────────────────── -->
+<div class="modal-overlay" id="tag-mgmt-modal" style="display:none;">
+  <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-header">
+      <h2 data-i18n="queue.view.manage_tags">管理标签</h2>
+      <button class="modal-close" id="tag-mgmt-modal-close">X</button>
+    </div>
+    <div class="modal-body" id="tag-mgmt-body" style="max-height:360px;overflow-y:auto;">
+      <div id="tag-mgmt-list"></div>
+      <div id="tag-mgmt-empty" style="display:none;font-size:12px;color:var(--text-tertiary);text-align:center;padding:12px;" data-i18n="queue.view.filter_no_facets">暂无可用筛选条件</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="tag-mgmt-modal-close-btn" data-i18n="modal.cancel">取消</button>
     </div>
   </div>
 </div>
@@ -6156,6 +6229,38 @@ const I18N = {
     "queue.view.tag_group_hint": "同一任务可能在多个标签组出现",
     "queue.view.retired": "历史",
     "queue.view.select_all_group": "全选本组",
+    "queue.view.batch_add_tags": "添加标签",
+    "queue.view.batch_remove_tags": "移除标签",
+    "queue.view.batch_archive": "归档",
+    "queue.view.batch_unarchive": "取消归档",
+    "queue.view.batch_set_molecule": "设置分子归属",
+    "queue.view.export_btn": "导出",
+    "queue.view.export_csv": "CSV",
+    "queue.view.export_json": "JSON",
+    "queue.view.archived_exclude": "排除归档",
+    "queue.view.archived_include": "包含归档",
+    "queue.view.archived_only": "仅归档",
+    "queue.view.manage_tags": "管理标签",
+    "queue.view.tag_rename": "重命名",
+    "queue.view.tag_merge": "合并",
+    "queue.view.tag_delete": "删除",
+    "queue.view.tag_delete_warn": "只解除标记，不删除任务",
+    "queue.view.bulk_assign_molecule": "批量补充归属",
+    "queue.view.merge_to": "合并到…",
+    "queue.view.merge_suggestion": "疑似同分子 → 合并",
+    "queue.view.lineage_section": "来源链路",
+    "queue.view.lineage_upstream": "上游",
+    "queue.view.lineage_downstream": "下游",
+    "queue.view.lineage_depth": "深度 {depth}",
+    "queue.view.lineage_parent": "来源",
+    "queue.view.lineage_node": "节点",
+    "queue.view.lineage_relation": "关系",
+    "queue.view.batch_op_success": "操作成功：{count} 个任务已更新",
+    "queue.view.batch_op_partial": "部分失败：{ok}/{total} 成功",
+    "queue.view.export_columns": "id,分子,任务名,备注,类型,状态,标签,创建时间,完成时间",
+    "queue.view.lineage_relation_input": "输入来源",
+    "queue.view.lineage_relation_output": "输出产物",
+    "queue.view.lineage_relation_same_molecule": "同分子",
     "time.just_now": "刚刚",
     "time.seconds_ago": "{n}秒前",
     "time.minutes_ago": "{n}分钟前",
@@ -7198,6 +7303,38 @@ const I18N = {
     "queue.view.tag_group_hint": "A task may appear in multiple tag groups",
     "queue.view.retired": "Retired",
     "queue.view.select_all_group": "Select all in group",
+    "queue.view.batch_add_tags": "Add tags",
+    "queue.view.batch_remove_tags": "Remove tags",
+    "queue.view.batch_archive": "Archive",
+    "queue.view.batch_unarchive": "Unarchive",
+    "queue.view.batch_set_molecule": "Set molecule",
+    "queue.view.export_btn": "Export",
+    "queue.view.export_csv": "CSV",
+    "queue.view.export_json": "JSON",
+    "queue.view.archived_exclude": "Exclude archived",
+    "queue.view.archived_include": "Include archived",
+    "queue.view.archived_only": "Archived only",
+    "queue.view.manage_tags": "Manage tags",
+    "queue.view.tag_rename": "Rename",
+    "queue.view.tag_merge": "Merge",
+    "queue.view.tag_delete": "Delete",
+    "queue.view.tag_delete_warn": "Only removes the label, does not delete tasks",
+    "queue.view.bulk_assign_molecule": "Bulk assign molecule",
+    "queue.view.merge_to": "Merge into…",
+    "queue.view.merge_suggestion": "Possible duplicate → Merge",
+    "queue.view.lineage_section": "Lineage",
+    "queue.view.lineage_upstream": "Upstream",
+    "queue.view.lineage_downstream": "Downstream",
+    "queue.view.lineage_depth": "Depth {depth}",
+    "queue.view.lineage_parent": "Source",
+    "queue.view.lineage_node": "Node",
+    "queue.view.lineage_relation": "Relation",
+    "queue.view.batch_op_success": "Success: {count} tasks updated",
+    "queue.view.batch_op_partial": "Partial: {ok}/{total} succeeded",
+    "queue.view.export_columns": "id,molecule,task_name,remark,workflow,status,tags,created_at,completed_at",
+    "queue.view.lineage_relation_input": "Input source",
+    "queue.view.lineage_relation_output": "Output artifact",
+    "queue.view.lineage_relation_same_molecule": "Same molecule",
     "time.just_now": "just now",
     "time.seconds_ago": "{n}s ago",
     "time.minutes_ago": "{n}m ago",
@@ -13530,6 +13667,423 @@ function updateQueueBatchBar() {
     btn.style.display = count ? "" : "none";
     if (count) btn.textContent = t("purge.selected", { count: count });
   });
+  var batchBar = document.getElementById("queue-batch-bar");
+  if (batchBar) {
+    batchBar.style.display = count > 0 ? "" : "none";
+    ["batch-add-tags", "batch-remove-tags", "batch-archive", "batch-unarchive", "batch-set-molecule"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = count > 0 ? "" : "none";
+    });
+    var tagInput = document.getElementById("batch-tag-input");
+    var molInput = document.getElementById("batch-molecule-input");
+    if (tagInput) tagInput.style.display = count > 0 ? "" : "none";
+    if (molInput) molInput.style.display = count > 0 ? "" : "none";
+  }
+}
+
+function _getSelectedProjectId() {
+  return selectedProjectId || null;
+}
+
+async function _batchOp(op, payload) {
+  var ids = Array.from(queueSelectedJobs);
+  if (!ids.length) return;
+  try {
+    var resp = await apiV2("/tasks/batch-ops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task_ids: ids, op: op, payload: payload || {} })
+    });
+    var ok = 0, fail = 0, errors = [];
+    if (resp && Array.isArray(resp.results)) {
+      resp.results.forEach(function(r) {
+        if (r && r.ok !== false && !r.error) ok++;
+        else { fail++; if (r && r.error) errors.push(r.task_id + ": " + r.error); }
+      });
+    } else if (resp && typeof resp.updated === "number") {
+      ok = resp.updated;
+    }
+    if (fail) {
+      appendLogLine("warn", t("queue.view.batch_op_partial", { ok: ok, total: ids.length }));
+      if (errors.length) appendLogLine("stderr", errors.slice(0, 5).join("\n"));
+    } else {
+      appendLogLine("done", t("queue.view.batch_op_success", { count: ok }));
+    }
+    await refreshJobs();
+  } catch (e) {
+    appendLogLine("stderr", "batch-ops " + op + " failed: " + (e.message || e));
+  }
+}
+
+async function _batchAddTags() {
+  var input = document.getElementById("batch-tag-input");
+  if (!input) return;
+  var raw = input.value.trim();
+  if (!raw) return;
+  var tags = raw.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+  if (!tags.length) return;
+  await _batchOp("add_tags", { tags: tags });
+  input.value = "";
+}
+
+async function _batchRemoveTags() {
+  var input = document.getElementById("batch-tag-input");
+  if (!input) return;
+  var raw = input.value.trim();
+  if (!raw) return;
+  var tags = raw.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+  if (!tags.length) return;
+  await _batchOp("remove_tags", { tags: tags });
+  input.value = "";
+}
+
+async function _batchArchive() {
+  await _batchOp("archive", {});
+}
+
+async function _batchUnarchive() {
+  await _batchOp("unarchive", {});
+}
+
+async function _batchSetMolecule() {
+  var input = document.getElementById("batch-molecule-input");
+  if (!input) return;
+  var name = input.value.trim();
+  if (!name) return;
+  await _batchOp("set_molecule_name", { molecule_name: name });
+  input.value = "";
+}
+
+function _toggleExportMenu() {
+  var menu = document.getElementById("task-view-export-menu");
+  if (!menu) return;
+  menu.classList.toggle("open");
+  if (menu.classList.contains("open")) {
+    setTimeout(function() {
+      document.addEventListener("click", _closeExportMenuOutside, true);
+    }, 0);
+  }
+}
+
+function _closeExportMenuOutside(e) {
+  var wrap = document.querySelector(".export-menu-wrap");
+  if (wrap && !wrap.contains(e.target)) {
+    var menu = document.getElementById("task-view-export-menu");
+    if (menu) menu.classList.remove("open");
+    document.removeEventListener("click", _closeExportMenuOutside, true);
+  }
+}
+
+function _flattenTaskViewRows() {
+  var rows = [];
+  if (!taskViewCache || !Array.isArray(taskViewCache.groups)) return rows;
+  taskViewCache.groups.forEach(function(g) {
+    (g.jobs || []).forEach(function(r) { rows.push(r); });
+  });
+  return rows;
+}
+
+function _exportCSV() {
+  var rows = _flattenTaskViewRows();
+  var header = t("queue.view.export_columns");
+  var headerKeys = ["id", "molecule_name", "task_name", "remark", "workflow", "status", "tags", "created_at", "completed_at"];
+  var headerLabels = header.split(",");
+  var lines = [headerLabels.map(function(h) { return '"' + h.replace(/"/g, '""') + '"'; }).join(",")];
+  rows.forEach(function(r) {
+    var vals = headerKeys.map(function(k) {
+      var v = r[k];
+      if (k === "tags" && Array.isArray(v)) v = v.join(";");
+      if (v == null) v = "";
+      return '"' + String(v).replace(/"/g, '""') + '"';
+    });
+    lines.push(vals.join(","));
+  });
+  var csv = "\uFEFF" + lines.join("\n");
+  var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "task_export_" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  var menu = document.getElementById("task-view-export-menu");
+  if (menu) menu.classList.remove("open");
+}
+
+function _exportJSON() {
+  var rows = _flattenTaskViewRows();
+  var json = JSON.stringify(rows, null, 2);
+  var blob = new Blob([json], { type: "application/json" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "task_export_" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  var menu = document.getElementById("task-view-export-menu");
+  if (menu) menu.classList.remove("open");
+}
+
+var _mergeSuggestionDismissed = {};
+
+function _renderMergeSuggestions(groups) {
+  if (!Array.isArray(groups) || groups.length < 2) return;
+  var container = document.getElementById("queue-list");
+  if (!container) return;
+  var projectTags = _mergeSuggestionCache;
+  if (!Array.isArray(projectTags) || !projectTags.length) return;
+  var visibleKeys = {};
+  groups.forEach(function(g) { if (g && g.key) visibleKeys[g.key] = true; });
+  projectTags.forEach(function(pair) {
+    if (!pair || !pair.a || !pair.b) return;
+    var dismissKey = pair.a + "::" + pair.b;
+    if (_mergeSuggestionDismissed[dismissKey]) return;
+    if (!visibleKeys[pair.a] && !visibleKeys[pair.b]) return;
+    var banner = document.createElement("div");
+    banner.className = "merge-suggestion-banner";
+    banner.innerHTML = "<span>" + _escHtml(pair.a) + " / " + _escHtml(pair.b) + " " + t("queue.view.merge_suggestion") + "</span>";
+    var action = document.createElement("span");
+    action.className = "merge-suggestion-action";
+    action.textContent = t("queue.view.merge_to");
+    action.addEventListener("click", function() { _executeMergeSuggestion(pair); });
+    banner.appendChild(action);
+    var dismiss = document.createElement("span");
+    dismiss.className = "merge-suggestion-dismiss";
+    dismiss.textContent = "✕";
+    dismiss.addEventListener("click", function() {
+      _mergeSuggestionDismissed[dismissKey] = true;
+      banner.remove();
+    });
+    banner.appendChild(dismiss);
+    container.insertBefore(banner, container.firstChild);
+  });
+}
+
+var _mergeSuggestionCache = [];
+
+async function _loadMergeSuggestions() {
+  var pid = _getSelectedProjectId();
+  if (!pid) return;
+  try {
+    var resp = await apiV2("/projects/" + encodeURIComponent(pid) + "/molecule-groups/suggestions");
+    _mergeSuggestionCache = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.suggestions) ? resp.suggestions : []);
+  } catch (e) {
+    _mergeSuggestionCache = [];
+  }
+}
+
+async function _executeMergeSuggestion(pair) {
+  if (!pair || !pair.a || !pair.b) return;
+  var target = pair.a;
+  var aliasKeys = [pair.b];
+  var pid = _getSelectedProjectId();
+  if (!pid) return;
+  try {
+    await apiV2("/projects/" + encodeURIComponent(pid) + "/molecule-groups/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ alias_keys: aliasKeys, target_key: target })
+    });
+    _mergeSuggestionDismissed[pair.a + "::" + pair.b] = true;
+    appendLogLine("done", pair.a + " ← " + pair.b + " merged");
+    await refreshJobs();
+  } catch (e) {
+    appendLogLine("stderr", "merge failed: " + (e.message || e));
+  }
+}
+
+async function _openTagManagement() {
+  var pid = _getSelectedProjectId();
+  if (!pid) { window.alert("No project selected"); return; }
+  var body = document.getElementById("tag-mgmt-list");
+  var empty = document.getElementById("tag-mgmt-empty");
+  if (body) body.innerHTML = "";
+  document.getElementById("tag-mgmt-modal").style.display = "flex";
+  try {
+    var tags = await apiV2("/projects/" + encodeURIComponent(pid) + "/tags");
+    var tagList = Array.isArray(tags) ? tags : (tags && Array.isArray(tags.tags) ? tags.tags : []);
+    if (!tagList.length) {
+      if (empty) empty.style.display = "";
+      return;
+    }
+    if (empty) empty.style.display = "none";
+    tagList.forEach(function(item) {
+      var row = document.createElement("div");
+      row.className = "tag-mgmt-item";
+      var nameEl = document.createElement("span");
+      nameEl.className = "tag-mgmt-name";
+      nameEl.textContent = item.tag || item.name || "";
+      row.appendChild(nameEl);
+      var countEl = document.createElement("span");
+      countEl.className = "tag-mgmt-count";
+      countEl.textContent = item.count || 0;
+      row.appendChild(countEl);
+      var actions = document.createElement("span");
+      actions.className = "tag-mgmt-actions";
+      var renameBtn = document.createElement("button");
+      renameBtn.className = "mini-btn";
+      renameBtn.textContent = t("queue.view.tag_rename");
+      renameBtn.addEventListener("click", function() { _renameTag(pid, item.tag || item.name); });
+      actions.appendChild(renameBtn);
+      var mergeBtn = document.createElement("button");
+      mergeBtn.className = "mini-btn";
+      mergeBtn.textContent = t("queue.view.tag_merge");
+      mergeBtn.addEventListener("click", function() { _mergeTag(pid, item.tag || item.name); });
+      actions.appendChild(mergeBtn);
+      var deleteBtn = document.createElement("button");
+      deleteBtn.className = "mini-btn";
+      deleteBtn.style.color = "var(--red)";
+      deleteBtn.textContent = t("queue.view.tag_delete");
+      deleteBtn.addEventListener("click", function() { _deleteTag(pid, item.tag || item.name); });
+      actions.appendChild(deleteBtn);
+      row.appendChild(actions);
+      body.appendChild(row);
+    });
+  } catch (e) {
+    if (empty) { empty.style.display = ""; empty.textContent = "Error: " + (e.message || e); }
+  }
+}
+
+function _closeTagManagement() {
+  document.getElementById("tag-mgmt-modal").style.display = "none";
+}
+
+async function _renameTag(pid, tagName) {
+  var newName = window.prompt("Rename '" + tagName + "' to:", tagName);
+  if (!newName || newName === tagName) return;
+  try {
+    await apiV2("/projects/" + encodeURIComponent(pid) + "/tags/rename", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: tagName, target: newName })
+    });
+    appendLogLine("done", tagName + " → " + newName);
+    await _openTagManagement();
+    await refreshJobs();
+  } catch (e) {
+    appendLogLine("stderr", "rename failed: " + (e.message || e));
+  }
+}
+
+async function _mergeTag(pid, tagName) {
+  var target = window.prompt("Merge '" + tagName + "' into (target tag name):");
+  if (!target || target === tagName) return;
+  try {
+    await apiV2("/projects/" + encodeURIComponent(pid) + "/tags/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sources: [tagName], target: target })
+    });
+    appendLogLine("done", tagName + " → " + target + " merged");
+    await _openTagManagement();
+    await refreshJobs();
+  } catch (e) {
+    appendLogLine("stderr", "merge failed: " + (e.message || e));
+  }
+}
+
+async function _deleteTag(pid, tagName) {
+  if (!window.confirm(t("queue.view.tag_delete_warn") + "\n\n'" + tagName + "'")) return;
+  try {
+    await apiV2("/projects/" + encodeURIComponent(pid) + "/tags/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag: tagName })
+    });
+    appendLogLine("done", tagName + " deleted");
+    await _openTagManagement();
+    await refreshJobs();
+  } catch (e) {
+    appendLogLine("stderr", "delete failed: " + (e.message || e));
+  }
+}
+
+var _lineageCache = {};
+
+async function _loadAndRenderLineage(jobId) {
+  var body = document.getElementById("lineage-body");
+  if (!body) return;
+  body.innerHTML = "";
+  if (_lineageCache[jobId]) {
+    _renderLineageData(body, _lineageCache[jobId]);
+    return;
+  }
+  try {
+    var data = await apiV2("/tasks/" + encodeURIComponent(jobId) + "/lineage");
+    _lineageCache[jobId] = data;
+    _renderLineageData(body, data);
+  } catch (e) {
+    body.innerHTML = '<div style="font-size:11px;color:var(--text-tertiary);padding:4px 0;">Error loading lineage</div>';
+  }
+}
+
+function _renderLineageData(container, data) {
+  var upstream = (data && Array.isArray(data.upstream)) ? data.upstream : [];
+  var downstream = (data && Array.isArray(data.downstream)) ? data.downstream : [];
+  if (!upstream.length && !downstream.length) {
+    container.innerHTML = "";
+    return;
+  }
+  if (upstream.length) {
+    var subTitle = document.createElement("div");
+    subTitle.className = "lineage-subtitle";
+    subTitle.textContent = t("queue.view.lineage_upstream");
+    container.appendChild(subTitle);
+    upstream.forEach(function(node) {
+      container.appendChild(_buildLineageNode(node));
+    });
+  }
+  if (downstream.length) {
+    var subTitle2 = document.createElement("div");
+    subTitle2.className = "lineage-subtitle";
+    subTitle2.style.marginTop = "8px";
+    subTitle2.textContent = t("queue.view.lineage_downstream");
+    container.appendChild(subTitle2);
+    downstream.forEach(function(node) {
+      container.appendChild(_buildLineageNode(node));
+    });
+  }
+}
+
+function _buildLineageNode(node) {
+  var el = document.createElement("div");
+  el.className = "lineage-node";
+  el.style.paddingLeft = ((node.depth || 0) * 16 + 4) + "px";
+  var depthSpan = document.createElement("span");
+  depthSpan.className = "lineage-depth";
+  depthSpan.textContent = node.depth != null ? "D" + node.depth : "";
+  el.appendChild(depthSpan);
+  var nameSpan = document.createElement("span");
+  nameSpan.className = "lineage-name";
+  nameSpan.textContent = node.molecule_name || node.task_name || node.task_id || "";
+  nameSpan.title = node.task_id || "";
+  el.appendChild(nameSpan);
+  if (node.relation) {
+    var relSpan = document.createElement("span");
+    relSpan.className = "lineage-relation";
+    relSpan.textContent = node.relation;
+    el.appendChild(relSpan);
+  }
+  if (node.status) {
+    var statusSpan = document.createElement("span");
+    statusSpan.className = "lineage-status";
+    statusSpan.textContent = node.status;
+    el.appendChild(statusSpan);
+  }
+  el.addEventListener("click", function() {
+    if (node.task_id) selectJob(node.task_id);
+  });
+  return el;
+}
+
+function _escHtml(s) {
+  var d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 // Keep the desktop and mobile twin checkboxes of one job in sync.
@@ -13788,6 +14342,11 @@ async function refreshJobs() {
     updateMobileStatusBar();
     _applyTaskViewPrefsToControls();
     renderChips();
+    if (prefs.groupBy === "molecule" && body && body.groups) {
+      _loadMergeSuggestions().then(function() {
+        _renderMergeSuggestions(body.groups);
+      });
+    }
   } catch (e) {
     console.error("refreshJobs failed:", e);
   }
@@ -13822,6 +14381,8 @@ function _applyTaskViewPrefsToControls() {
   if (groupEl) groupEl.value = p.groupBy || "molecule";
   var sortEl = document.getElementById("task-view-sort");
   if (sortEl) sortEl.value = p.sort || "created_desc";
+  var archivedEl = document.getElementById("task-view-archived");
+  if (archivedEl) archivedEl.value = p.archived || "exclude";
   _updateFilterBadge();
 }
 
@@ -13920,6 +14481,16 @@ function renderFilterPanel() {
     empty.textContent = t("queue.view.filter_no_facets");
     body.appendChild(empty);
   }
+
+  var mgmtLink = document.createElement("div");
+  mgmtLink.className = "tag-mgmt-link";
+  mgmtLink.textContent = t("queue.view.manage_tags");
+  mgmtLink.addEventListener("click", function(e) {
+    e.stopPropagation();
+    _closeFilterPanel();
+    _openTagManagement();
+  });
+  body.appendChild(mgmtLink);
 }
 
 function _toggleFilterPanel() {
@@ -14174,7 +14745,7 @@ function buildQueueGroup(group) {
 function buildQueueRow(job) {
   var groupBy = job._groupBy || "";
   const row = document.createElement("div");
-  row.className = "queue-row" + (String(job.id) === String(selectedJobId) ? " active" : "");
+  row.className = "queue-row" + (String(job.id) === String(selectedJobId) ? " active" : "") + (job.archived ? " archived-row" : "");
   row.setAttribute("data-job-id", String(job.id));
   row.addEventListener("click", function() { selectJob(job.id); });
 
@@ -15821,6 +16392,41 @@ async function openDetailDrawer(job) {
     evRow.textContent = t("overview.latest_event") + ": " + latestEvent;
     body.appendChild(evRow);
   }
+
+  // ── Lineage panel (T12) ──
+  var lineageSection = document.createElement("div");
+  lineageSection.className = "lineage-section";
+  var lineageHeader = document.createElement("div");
+  lineageHeader.className = "lineage-header";
+  var lineageChevron = document.createElement("span");
+  lineageChevron.className = "lineage-chevron";
+  lineageChevron.textContent = "▸";
+  lineageHeader.appendChild(lineageChevron);
+  var lineageLabel = document.createElement("span");
+  lineageLabel.textContent = t("queue.view.lineage_section");
+  lineageHeader.appendChild(lineageLabel);
+  lineageSection.appendChild(lineageHeader);
+  var lineageBody = document.createElement("div");
+  lineageBody.className = "lineage-body";
+  lineageBody.id = "lineage-body";
+  lineageBody.style.display = "none";
+  lineageSection.appendChild(lineageBody);
+  var lineageLoaded = false;
+  lineageHeader.addEventListener("click", function() {
+    var isOpen = lineageBody.style.display !== "none";
+    if (isOpen) {
+      lineageBody.style.display = "none";
+      lineageChevron.classList.remove("open");
+    } else {
+      lineageBody.style.display = "";
+      lineageChevron.classList.add("open");
+      if (!lineageLoaded) {
+        lineageLoaded = true;
+        _loadAndRenderLineage(jobId);
+      }
+    }
+  });
+  body.appendChild(lineageSection);
 
   // ── Work dir + size + disk state ──
   var drawerAdvItems = [];
@@ -24846,6 +25452,37 @@ function setupEventListeners() {
 
   // T5: bind task-view toolbar controls (search, group, sort, filter)
   _bindTaskViewToolbar();
+
+  // T9: batch ops toolbar
+  document.getElementById("batch-add-tags").addEventListener("click", _batchAddTags);
+  document.getElementById("batch-remove-tags").addEventListener("click", _batchRemoveTags);
+  document.getElementById("batch-archive").addEventListener("click", _batchArchive);
+  document.getElementById("batch-unarchive").addEventListener("click", _batchUnarchive);
+  document.getElementById("batch-set-molecule").addEventListener("click", _batchSetMolecule);
+  document.getElementById("batch-tag-input").addEventListener("keydown", function(e) { if (e.key === "Enter") _batchAddTags(); });
+  document.getElementById("batch-molecule-input").addEventListener("keydown", function(e) { if (e.key === "Enter") _batchSetMolecule(); });
+
+  // T9: archive toggle
+  var archivedEl = document.getElementById("task-view-archived");
+  if (archivedEl) archivedEl.addEventListener("change", function() {
+    var next = _clonePrefs();
+    next.archived = archivedEl.value;
+    taskViewPrefs = next;
+    saveTaskViewPrefs();
+    refreshJobs();
+  });
+
+  // T9: export menu
+  document.getElementById("task-view-export-btn").addEventListener("click", function(e) { e.stopPropagation(); _toggleExportMenu(); });
+  document.getElementById("task-view-export-csv").addEventListener("click", _exportCSV);
+  document.getElementById("task-view-export-json").addEventListener("click", _exportJSON);
+
+  // T9: tag management modal
+  document.getElementById("tag-mgmt-modal-close").addEventListener("click", _closeTagManagement);
+  document.getElementById("tag-mgmt-modal-close-btn").addEventListener("click", _closeTagManagement);
+  document.getElementById("tag-mgmt-modal").addEventListener("mousedown", function(event) {
+    if (event.target.id === "tag-mgmt-modal") _closeTagManagement();
+  });
 
   var dropzone = document.getElementById("upload-dropzone");
   var fileInput = document.getElementById("upload-file-input");
