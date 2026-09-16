@@ -46,6 +46,13 @@ from acp.scheduler.stage_tasks import StagePlan, StageTask, StageTaskObserver, S
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
 from acp.scheduler.tasks import TaskIndex
+from acp.scheduler.task_views import (
+    ArchivedFilter,
+    GroupBy,
+    TaskSort,
+    TaskViewQuery,
+    query_project_tasks,
+)
 
 __all__ = [
     "JobEventLog",
@@ -85,6 +92,11 @@ __all__ = [
     "StageTaskStore",
     "StructureSourceService",
     "TaskIndex",
+    "ArchivedFilter",
+    "GroupBy",
+    "TaskSort",
+    "TaskViewQuery",
+    "query_project_tasks",
     "capture_stage_artifacts",
     "compute_input_hash",
     "derive_required_software",
