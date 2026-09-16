@@ -171,7 +171,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——含标签/归档/分子混合 fixture 全链路；failure——500 task_ids 超限 422；并发 rename+add（同锁串行不丢更新）。Evidence `.omo/evidence/task-organization/task-7.md`
   Commit: Y | feat(api): project tag registry + task batch operations
 
-- [ ] 8. P2：分子别名与合并（迁移 015）+ suggestions
+- [x] 8. P2：分子别名与合并（迁移 015）+ suggestions
   What to do:
   a) `migrations.py` 追加 `015`：`CREATE TABLE IF NOT EXISTS molecule_groups (project_id TEXT NOT NULL, group_key TEXT NOT NULL, display_name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (project_id, group_key))`；`CREATE TABLE IF NOT EXISTS molecule_aliases (project_id TEXT NOT NULL, alias_key TEXT NOT NULL, group_key TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (project_id, alias_key))`（别名**项目级**）。
   b) `src/acp/scheduler/tasks.py` 或新 `src/acp/scheduler/molecule_groups.py`：`resolve_molecule_key(conn_or_index, project_id, raw_name) -> str`——alias 命中→group_key，否则 `molecule_group_key(raw_name)`；`apply_group_merge(project_id, alias_keys, target_key)`——`UPDATE tasks SET molecule_key=? WHERE project_id=? AND molecule_key IN (...)`。
