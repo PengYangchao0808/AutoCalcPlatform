@@ -125,9 +125,9 @@ def _task_or_404(request: Request, task_id: str) -> JobRecord:
     return record
 
 
-_ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset({
-    s.value for s in JobStatus if s.is_active
-})
+_ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset(
+    {s.value for s in JobStatus if s.is_active}
+)
 _ENRICHMENT_CAP = 200
 
 
@@ -155,8 +155,11 @@ def _enrich_active_rows(
         job_model = _record_to_v1_model(record)
         enriched = _enrich_job_snapshot(record, job_model, include_event=False)
         for field in (
-            "stage_index", "stage_total", "stage_detail",
-            "progress_state", "display_method",
+            "stage_index",
+            "stage_total",
+            "stage_detail",
+            "progress_state",
+            "display_method",
         ):
             val = getattr(enriched, field, None)
             if val is not None:
@@ -945,8 +948,7 @@ def list_molecule_groups(project_id: str, request: Request) -> list[V2MoleculeGr
     group_display: dict[str, str] = {r["group_key"]: r["display_name"] for r in group_rows}
 
     count_rows = manager.tasks._query(
-        "SELECT molecule_key, COUNT(*) AS cnt FROM tasks "
-        "WHERE project_id=? GROUP BY molecule_key",
+        "SELECT molecule_key, COUNT(*) AS cnt FROM tasks WHERE project_id=? GROUP BY molecule_key",
         (project_id,),
     )
     key_counts: dict[str, int] = {r["molecule_key"]: r["cnt"] for r in count_rows}
@@ -1039,9 +1041,7 @@ def get_molecule_group_suggestions(
     "/projects/{project_id}/molecule-groups/alias/{alias_key}",
     response_model=V2TagOpResult,
 )
-def delete_molecule_alias(
-    project_id: str, alias_key: str, request: Request
-) -> V2TagOpResult:
+def delete_molecule_alias(project_id: str, alias_key: str, request: Request) -> V2TagOpResult:
     """Remove an alias mapping.  Affected tasks' molecule_key falls back
     to their own molecule_group_key(molecule_name).
     """
@@ -1170,7 +1170,8 @@ def _resolve_upstream(
             if ref_record is None:
                 logger.warning(
                     "lineage: upstream task %s (from %s) not found, skipping",
-                    ref_id, current_id,
+                    ref_id,
+                    current_id,
                 )
                 continue
             next_depth = depth + 1
@@ -1211,9 +1212,7 @@ def _resolve_downstream(
             continue
         for ref_id, relation in _extract_upstream_refs(spec_input):
             if ref_id == task_id:
-                downstream.append(
-                    _build_lineage_node(record, relation, 0)
-                )
+                downstream.append(_build_lineage_node(record, relation, 0))
                 break
 
     return downstream

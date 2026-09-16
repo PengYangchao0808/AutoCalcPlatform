@@ -103,9 +103,18 @@ _COLUMN_DEFAULTS: dict[str, Any] = {
 
 #: Columns that sync_from_job / sync_job_transition own (updated on conflict).
 _SYNC_COLUMNS: tuple[str, ...] = (
-    "display_name", "task_dir_name", "workflow", "status",
-    "current_stage", "node_id", "node_path", "storage_mode",
-    "layout_version", "input_hash", "result_manifest_path", "updated_at",
+    "display_name",
+    "task_dir_name",
+    "workflow",
+    "status",
+    "current_stage",
+    "node_id",
+    "node_path",
+    "storage_mode",
+    "layout_version",
+    "input_hash",
+    "result_manifest_path",
+    "updated_at",
 )
 
 
@@ -164,9 +173,7 @@ class TaskIndex:
     # Public accessors (used by molecule_groups / task_views)
     # ------------------------------------------------------------------ #
 
-    def query_rows(
-        self, sql: str, params: tuple[Any, ...] = ()
-    ) -> list[sqlite3.Row]:
+    def query_rows(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         """Execute a read query and return all rows (thread-safe)."""
         return self._query(sql, params)
 
@@ -271,7 +278,8 @@ class TaskIndex:
         tags_json = json.dumps(tags_list)
         batch_id = (
             record.spec.resources.get("batch_id")
-            if isinstance(record.spec.resources, dict) else None
+            if isinstance(record.spec.resources, dict)
+            else None
         )
         last_activity_at = record.completed_at or record.started_at or record.created_at
         project_id = record.project_id or record.spec.project_id
@@ -297,7 +305,8 @@ class TaskIndex:
                 "created_at": record.created_at,
                 "updated_at": record.updated_at,
                 "molecule_key": self.compute_molecule_key(
-                    project_id, record.spec.molecule_name,
+                    project_id,
+                    record.spec.molecule_name,
                 ),
                 "tags": tags_json,
                 "archived": 0,
@@ -357,10 +366,7 @@ class TaskIndex:
 
         stored_progress = stored["progress"]
         new_progress = record.progress
-        if (
-            new_progress is not None
-            and stored_progress != new_progress
-        ):
+        if new_progress is not None and stored_progress != new_progress:
             self._run(
                 "UPDATE tasks SET progress=?, updated_at=? WHERE task_id=?",
                 (new_progress, now, record.id),
@@ -452,9 +458,12 @@ class TaskIndex:
             sets.append("molecule_name=?")
             params.append(molecule_name)
             sets.append("molecule_key=?")
-            params.append(self.compute_molecule_key(
-                existing.get("project_id"), molecule_name,
-            ))
+            params.append(
+                self.compute_molecule_key(
+                    existing.get("project_id"),
+                    molecule_name,
+                )
+            )
 
         if task_name is not None:
             sets.append("task_name=?")
@@ -492,8 +501,10 @@ class TaskIndex:
         """
         if not project_id:
             from acp.scheduler.naming import molecule_group_key
+
             return molecule_group_key(molecule_name)
         from acp.scheduler.molecule_groups import resolve_molecule_key
+
         return resolve_molecule_key(self, project_id, molecule_name)
 
 
