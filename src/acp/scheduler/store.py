@@ -312,6 +312,24 @@ class JobStore:
             conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
             conn.commit()
 
+    def has_job_dependents(self, job_id: str) -> bool:
+        """Return True when any child table still holds rows for *job_id*.
+
+        Covers exactly the tables :meth:`purge_cascade` cleans
+        (``tasks`` / ``stage_tasks`` / ``artifacts`` /
+        ``mechanism_studies``).  Used to distinguish "job never existed"
+        from ghost index entries left behind by a non-cascading delete of
+        the ``jobs`` row.
+        """
+        with self._lock, self._connect() as conn:
+            for table in ("tasks", "stage_tasks", "artifacts", "mechanism_studies"):
+                row = conn.execute(
+                    f"SELECT 1 FROM {table} WHERE job_id=? LIMIT 1", (job_id,)
+                ).fetchone()
+                if row is not None:
+                    return True
+        return False
+
     def purge_cascade(self, job_id: str) -> None:
         """Delete a job row plus every dependent row, in one connection.
 

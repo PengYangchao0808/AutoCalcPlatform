@@ -1575,6 +1575,127 @@ def test_purge_jobs_filter_by_status(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
+def test_purge_jobs_cleans_ghost_entries(tmp_path: Path) -> None:
+    """Regression (2026-09-18): jobs row deleted but tasks index survives.
+
+    ``purge_jobs`` must cascade-clean the residual rows instead of
+    erroring with ``job not found`` and leaving the queue polluted.
+    """
+    mgr = _make_manager(tmp_path)
+    try:
+        db = mgr.store.db_path
+        record = _seed_job(
+            mgr.store, tmp_path / "runs/ghost", "ghost-1", status=JobStatus.COMPLETED
+        )
+        mgr.tasks.sync_from_job(record)
+        StageTaskStore(db).create(
+            StageTask(task_id="st-ghost", job_id="ghost-1", stage_name="opt", state="completed")
+        )
+
+        # Reproduce the historical bug: bare single-table delete.
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute("DELETE FROM jobs WHERE id='ghost-1'")
+            conn.commit()
+
+        assert mgr.store.get("ghost-1") is None
+        assert mgr.store.has_job_dependents("ghost-1") is True
+
+        report = mgr.purge_jobs(["ghost-1", "never-existed"])
+        by_id = {entry["job_id"]: entry for entry in report}
+        assert by_id["ghost-1"] == {
+            "job_id": "ghost-1",
+            "ok": True,
+            "action": "purged_orphan",
+            "error": None,
+        }
+        # An id with neither jobs nor child rows is still a plain error.
+        assert by_id["never-existed"]["ok"] is False
+        assert by_id["never-existed"]["error"] == "job not found"
+
+        assert _table_count(db, "tasks", "task_id=?", ("ghost-1",)) == 0
+        assert _table_count(db, "stage_tasks", "job_id=?", ("ghost-1",)) == 0
+        assert mgr.store.has_job_dependents("ghost-1") is False
+    finally:
+        mgr.shutdown()
+
+
+def test_delete_project_leaves_no_ghost_rows(tmp_path: Path) -> None:
+    """Regression (2026-09-18): project deletion must cascade, not bare-delete."""
+    mgr = _make_manager(tmp_path)
+    try:
+        project = mgr.projects.create_project("GhostPrj")
+        pid = project["project_id"]
+        for i in (1, 2):
+            record = _seed_job(
+                mgr.store,
+                tmp_path / f"runs/prj{i}",
+                f"prj-job-{i}",
+                status=JobStatus.COMPLETED,
+                project_id=pid,
+            )
+            mgr.tasks.sync_from_job(record)
+            StageTaskStore(mgr.store.db_path).create(
+                StageTask(
+                    task_id=f"st-prj-{i}",
+                    job_id=f"prj-job-{i}",
+                    stage_name="opt",
+                    state="completed",
+                )
+            )
+
+        assert mgr.delete_project(pid, delete_data=True) is True
+
+        db = mgr.store.db_path
+        assert _table_count(db, "jobs", "project_id=?", (pid,)) == 0
+        assert _table_count(db, "tasks", "project_id=?", (pid,)) == 0
+        assert _table_count(db, "tasks", "task_id=?", ("prj-job-1",)) == 0
+        assert _table_count(db, "tasks", "task_id=?", ("prj-job-2",)) == 0
+        assert _table_count(db, "stage_tasks", "job_id=?", ("prj-job-1",)) == 0
+        assert mgr.find_orphan_tasks() == []
+    finally:
+        mgr.shutdown()
+
+
+def test_find_and_purge_orphan_tasks(tmp_path: Path) -> None:
+    """Orphan check & repair: discovery + DB-only cascade purge."""
+    mgr = _make_manager(tmp_path)
+    try:
+        db = mgr.store.db_path
+        survivor = None
+        for i in (1, 2, 3):
+            record = _seed_job(
+                mgr.store,
+                tmp_path / f"runs/orph{i}",
+                f"orph-{i}",
+                status=JobStatus.COMPLETED,
+            )
+            mgr.tasks.sync_from_job(record)
+            if i == 2:
+                survivor = record
+
+        # Two jobs fall to the historical bare-delete; one stays intact.
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute("DELETE FROM jobs WHERE id IN ('orph-1', 'orph-3')")
+            conn.commit()
+
+        assert mgr.find_orphan_tasks() == ["orph-1", "orph-3"]
+
+        report = mgr.purge_orphan_tasks()
+        by_id = {entry["job_id"]: entry for entry in report}
+        assert set(by_id) == {"orph-1", "orph-3"}
+        assert all(entry["ok"] and entry["action"] == "purged_orphan" for entry in report)
+
+        assert mgr.find_orphan_tasks() == []
+        assert _table_count(db, "tasks", "task_id=?", ("orph-1",)) == 0
+        assert _table_count(db, "tasks", "task_id=?", ("orph-3",)) == 0
+        # Intact job untouched.
+        assert mgr.get("orph-2") is not None
+        assert _table_count(db, "tasks", "task_id=?", ("orph-2",)) == 1
+        assert survivor is not None
+    finally:
+        mgr.shutdown()
+
+
 def test_delete_job_cascades_to_stage_tasks(tmp_path: Path) -> None:
     mgr = _make_manager(tmp_path)
     try:

@@ -798,8 +798,11 @@ class JobManager:
 
         Returns:
             One dict per job: ``{job_id, ok, action, error}`` where
-            *action* is ``"purged"`` | ``"skipped_active"`` |
-            ``"cancel_failed"`` | ``"error"``.
+            *action* is ``"purged"`` | ``"purged_orphan"`` |
+            ``"skipped_active"`` | ``"cancel_failed"`` | ``"error"``.
+            ``"purged_orphan"`` means the ``jobs`` row was already gone
+            but ghost child/index rows survived and were cascade-cleaned
+            (DB rows only — no disk paths are guessed).
         """
         if job_ids:
             targets = list(dict.fromkeys(job_ids))
@@ -821,9 +824,26 @@ class JobManager:
         for job_id in targets:
             record = self.store.get(job_id)
             if record is None:
-                report.append(
-                    {"job_id": job_id, "ok": False, "action": "error", "error": "job not found"}
-                )
+                if self.store.has_job_dependents(job_id):
+                    # Ghost entries: the jobs row was deleted by a
+                    # historical non-cascading path but child rows (tasks
+                    # index, stage_tasks, artifacts, mechanism_studies)
+                    # survived. Clean the DB rows only — the work_dir is
+                    # unknown, so no local/remote paths are guessed or
+                    # deleted.
+                    self._purge_job_records(job_id)
+                    report.append(
+                        {
+                            "job_id": job_id,
+                            "ok": True,
+                            "action": "purged_orphan",
+                            "error": None,
+                        }
+                    )
+                else:
+                    report.append(
+                        {"job_id": job_id, "ok": False, "action": "error", "error": "job not found"}
+                    )
                 continue
             if record.status.is_active:
                 if not force_cancel:
@@ -895,6 +915,41 @@ class JobManager:
                 cache.purge_job(job_id)
             except Exception:
                 logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
+
+    def find_orphan_tasks(self) -> list[str]:
+        """List ghost task-index entries whose ``jobs`` row no longer exists.
+
+        These are produced by historical non-cascading deletes: the queue
+        keeps showing (and counting) the task while every lookup by
+        ``job_id`` fails.  Returns ``[]`` when the index cannot be
+        validated (no ``jobs`` table in the index DB).
+        """
+        return self.tasks.find_orphan_task_ids()
+
+    def purge_orphan_tasks(self) -> list[dict[str, Any]]:
+        """Cascade-purge DB rows for ghost task entries; per-job report.
+
+        For every orphan from :meth:`find_orphan_tasks` the full child-row
+        set (``tasks`` / ``stage_tasks`` / ``artifacts`` /
+        ``mechanism_studies``) is removed via :meth:`JobStore.purge_cascade`
+        plus remote structure-cache eviction.  Disk directories are never
+        touched: the ``jobs`` row — and with it ``work_dir`` — is gone, so
+        no local or remote path can be resolved safely from the incomplete
+        index rows.
+        """
+        report: list[dict[str, Any]] = []
+        for task_id in self.tasks.find_orphan_task_ids():
+            try:
+                self._purge_job_records(task_id)
+                report.append(
+                    {"job_id": task_id, "ok": True, "action": "purged_orphan", "error": None}
+                )
+            except Exception as exc:
+                logger.warning("Orphan purge failed for %s", task_id, exc_info=True)
+                report.append(
+                    {"job_id": task_id, "ok": False, "action": "error", "error": str(exc)}
+                )
+        return report
 
     def _delete_job_disk(self, record: JobRecord) -> None:
         """Remove a job's remote directories and local work directory."""
@@ -994,7 +1049,9 @@ class JobManager:
         all jobs in the project are removed from the database, their local
         work directories are deleted, and remote directories are cleaned on
         every configured node.  Active jobs block deletion until they are
-        cancelled or finish.
+        cancelled or finish.  The DB delete cascades to ``tasks`` /
+        ``stage_tasks`` / ``artifacts`` / ``mechanism_studies`` via
+        :meth:`JobStore.purge_cascade` so no ghost index rows survive.
         """
         if project_id == self.default_project_id:
             raise ValueError("Default project cannot be deleted")
@@ -1023,7 +1080,7 @@ class JobManager:
                         shutil.rmtree(work_dir)
                 except Exception:
                     logger.warning("Failed to remove work_dir for job %s", record.id, exc_info=True)
-                self.store.delete(record.id)
+                self._purge_job_records(record.id)
 
         if delete_data:
             # ProjectManager.delete_project will also rmtree the project dir.
