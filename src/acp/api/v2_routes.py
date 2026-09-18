@@ -318,6 +318,19 @@ def get_task_view(
     )
 
 
+@router.get("/tasks/orphans")
+def list_orphan_tasks(request: Request) -> dict[str, Any]:
+    """Ghost task-index entries whose ``jobs`` row no longer exists.
+
+    Produced by historical non-cascading deletes: the queue kept showing
+    (and counting) these tasks while every job lookup failed with
+    ``job not found``.  Read-only — pair with
+    ``POST /api/v2/tasks/orphans/purge`` to repair.
+    """
+    manager = _manager(request)
+    return {"orphans": manager.find_orphan_tasks()}
+
+
 @router.get("/tasks/{task_id}", response_model=V2TaskDetail)
 def get_task(task_id: str, request: Request) -> V2TaskDetail:
     """Fetch one task's detail projection (§12)."""
@@ -1243,3 +1256,21 @@ def get_task_lineage(task_id: str, request: Request) -> V2LineageResponse:
         upstream=upstream,
         downstream=downstream,
     )
+
+
+@router.post("/tasks/orphans/purge")
+def purge_orphan_tasks(request: Request) -> dict[str, Any]:
+    """Cascade-purge DB rows for ghost task entries (per-job report).
+
+    Deletes only database rows (``tasks`` / ``stage_tasks`` / ``artifacts``
+    / ``mechanism_studies``) plus the remote structure-cache eviction.
+    Disk directories are never touched — the ``jobs`` row (and with it
+    ``work_dir``) is gone, so no path can be resolved safely.
+    """
+    manager = _manager(request)
+    results = manager.purge_orphan_tasks()
+    return {
+        "results": results,
+        "purged": sum(1 for r in results if r.get("ok")),
+        "failed": sum(1 for r in results if not r.get("ok")),
+    }

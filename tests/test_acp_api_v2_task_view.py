@@ -529,3 +529,45 @@ def test_patch_reflected_in_task_view(client: TestClient) -> None:
     remark_keys = {g["key"] for g in r.json()["groups"]}
     assert "after" in remark_keys
     assert "before" not in remark_keys
+
+
+# ── Ghost task entries: orphan check & repair endpoints (2026-09-18) ─────
+
+
+def test_orphan_task_check_and_purge_endpoints(client: TestClient) -> None:
+    """Regression: ghost entries are detectable, hidden from views, repairable."""
+    import sqlite3
+
+    pid = _default_project_id(client)
+    created = _create_multi_tasks(client, pid)
+    tid = created[0]["task_id"]
+
+    r = client.get("/api/v2/tasks/orphans")
+    assert r.status_code == 200
+    assert r.json() == {"orphans": []}
+
+    view = client.get(f"/api/v2/task-view?project_id={pid}").json()
+    assert view["total"] == 3
+
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute("DELETE FROM jobs WHERE id=?", (tid,))
+        conn.commit()
+
+    # Hidden from the queue view + counts, but discoverable as an orphan.
+    view = client.get(f"/api/v2/task-view?project_id={pid}").json()
+    assert view["total"] == 2
+    r = client.get("/api/v2/tasks/orphans")
+    assert r.status_code == 200
+    assert r.json() == {"orphans": [tid]}
+
+    r = client.post("/api/v2/tasks/orphans/purge")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["purged"] == 1
+    assert body["failed"] == 0
+    assert body["results"] == [
+        {"job_id": tid, "ok": True, "action": "purged_orphan", "error": None}
+    ]
+
+    assert client.get("/api/v2/tasks/orphans").json() == {"orphans": []}
