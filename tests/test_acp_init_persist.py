@@ -21,6 +21,7 @@ from acp.init_wizard.persist import (
     set_cluster_type,
     set_executable_path,
     set_execution_mode_remote,
+    set_software_path,
     upsert_node,
 )
 
@@ -167,6 +168,26 @@ def test_set_executable_path_creates_missing_sections() -> None:
     data: dict[str, Any] = {}
     set_executable_path(data, "xtb", Path("/x"))
     assert data == {"executables": {"xtb": {"path": "/x"}}}
+
+
+def test_set_software_path_stores_mpi_under_orca_runtime_config() -> None:
+    data: dict[str, Any] = {"executables": {"orca": {"path": "/opt/orca/orca"}}}
+
+    set_software_path(data, "mpi", "/opt/openmpi/bin/mpirun")
+
+    assert data["executables"]["orca"] == {
+        "path": "/opt/orca/orca",
+        "mpi_path": "/opt/openmpi/bin/mpirun",
+    }
+    assert "mpi" not in data["executables"]
+
+
+def test_set_software_path_repairs_malformed_executables_block() -> None:
+    data: dict[str, Any] = {"executables": "invalid"}
+
+    set_software_path(data, "mpi", "/opt/openmpi/bin/mpirun")
+
+    assert data == {"executables": {"orca": {"mpi_path": "/opt/openmpi/bin/mpirun"}}}
 
 
 def test_set_cluster_type_only_when_absent_or_local() -> None:

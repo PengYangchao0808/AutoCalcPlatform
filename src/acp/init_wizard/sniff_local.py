@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from acp.init_wizard.persist import save_target, set_executable_path
+from acp.init_wizard.persist import save_target, set_software_path
 from acp.init_wizard.prompts import (
     ask,
     ask_local_path,
@@ -73,11 +73,24 @@ def sniff_local(target: Path) -> dict[str, SoftwareDiscovery]:
         target: Wizard target YAML file path.
 
     Returns:
-        Per-software discovery picture keyed by software name
+        Per-software discovery picture keyed by software name, including
+        the ``mpi`` runtime entry used by ORCA
         (:class:`cccp.software.SoftwareDiscovery`).
     """
     config = load_config(config_path=target)
-    return cccp_software.discover_all_detailed(config=config)
+    entries = cccp_software.discover_all_detailed(config=config)
+
+    executables = config.get("executables")
+    orca_config = executables.get("orca") if isinstance(executables, dict) else None
+    mpi_path = orca_config.get("mpi_path") if isinstance(orca_config, dict) else None
+    orca = entries.get("orca")
+    orca_dir = orca.resolved.parent if orca is not None and orca.resolved else None
+    resolved, source = cccp_software.resolve_mpirun_with_source(
+        mpi_path,
+        orca_dir=orca_dir,
+    )
+    entries["mpi"] = SoftwareDiscovery(name="mpi", resolved=resolved, source=source)
+    return entries
 
 
 def versions_via(entries: dict[str, SoftwareDiscovery]) -> dict[str, str]:
@@ -188,7 +201,7 @@ def apply_local_spec(
 ) -> dict[str, SoftwareDiscovery]:
     """Persist manual specs into the raw target file, then re-sniff (D10).
 
-    Calls :func:`acp.init_wizard.persist.set_executable_path` per spec and
+    Calls :func:`acp.init_wizard.persist.set_software_path` per spec and
     :func:`acp.init_wizard.persist.save_target` (never
     ``cccp.config.save_config``), then re-sniffs via :func:`sniff_local` —
     the explicit target merge makes the fresh picture reflect the just
@@ -203,6 +216,6 @@ def apply_local_spec(
         The fresh discovery picture after the write.
     """
     for name, raw_path in specs.items():
-        set_executable_path(data, name, Path(raw_path))
+        set_software_path(data, name, raw_path)
     save_target(target_path, data)
     return sniff_local(target_path)
