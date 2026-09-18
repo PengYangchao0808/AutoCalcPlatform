@@ -122,6 +122,18 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def jobs_table_exists(conn: sqlite3.Connection) -> bool:
+    """Return True when the scheduler ``jobs`` table exists in *conn*.
+
+    Shared probe for ghost-entry guards: the task index normally lives in
+    the scheduler DB next to ``jobs`` (so task rows can be validated
+    against it), but a standalone index DB has no ``jobs`` table and
+    cannot be validated.
+    """
+    row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
+    return row is not None
+
+
 class TaskIndex:
     """Thread-safe SQLite index of task rows over the scheduler DB file.
 
@@ -376,6 +388,29 @@ class TaskIndex:
         """Remove a task row. No-op if absent."""
         self._run("DELETE FROM tasks WHERE task_id=?", (task_id,))
 
+    def find_orphan_task_ids(self) -> list[str]:
+        """Ghost index entries: task rows whose ``jobs`` row is gone.
+
+        Produced by historical non-cascading deletes of the ``jobs`` row.
+        Returns ``[]`` when the ``jobs`` table is absent from the index DB
+        (standalone index) — orphans are only definable against the
+        scheduler schema.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                if not jobs_table_exists(conn):
+                    return []
+                rows = conn.execute(
+                    "SELECT t.task_id FROM tasks t "
+                    "WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.id = t.job_id) "
+                    "ORDER BY t.created_at"
+                ).fetchall()
+                return [row["task_id"] for row in rows]
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
     def update_project(self, task_id: str, project_id: str) -> None:
         """Update project_id for an existing task row. No-op if absent."""
         self._run(
@@ -508,4 +543,4 @@ class TaskIndex:
         return resolve_molecule_key(self, project_id, molecule_name)
 
 
-__all__ = ["TaskIndex"]
+__all__ = ["TaskIndex", "jobs_table_exists"]

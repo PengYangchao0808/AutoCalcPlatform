@@ -27,6 +27,7 @@ import pytest
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
+from acp.scheduler.store import JobStore
 from acp.scheduler.tasks import TaskIndex
 
 # ---------------------------------------------------------------------------
@@ -93,10 +94,36 @@ def _make_record(
     )
 
 
+def _seed_job_row(idx: TaskIndex, job_id: str, *, project_id: str = "proj1") -> None:
+    """Insert a minimal jobs row so a raw-upserted task is not a ghost."""
+    assert idx.db_path is not None
+    with sqlite3.connect(str(idx.db_path)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO jobs (id, workflow, name, status, work_dir, "
+            "spec_json, created_at, updated_at, project_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                job_id,
+                "Confsearch",
+                job_id,
+                "completed",
+                f"/tmp/{project_id}/{job_id}",
+                "{}",
+                "2026-01-01T00:00:00",
+                "2026-01-01T00:00:00",
+                project_id,
+            ),
+        )
+        conn.commit()
+
+
 def _setup_project_and_tasks(tmp_path: Path) -> tuple[TaskIndex, str]:
     """Create a TaskIndex with project + 8 tasks covering diverse scenarios."""
     db = tmp_path / "test.db"
     migrate(db)
+    # jobs table (JobStore schema) so the ghost-entry guard is active,
+    # mirroring production where the index lives in the scheduler DB.
+    store = JobStore(db)
     idx = TaskIndex(db)
 
     # We need projects table for project_name lookup
@@ -241,6 +268,7 @@ def _setup_project_and_tasks(tmp_path: Path) -> tuple[TaskIndex, str]:
             spec=spec,
             work_dir=f"/tmp/{t.get('project_id', 'proj1')}/{t['job_id']}",
         )
+        store.create(record)
         idx.sync_from_job(record)
 
     # Archive t5
@@ -610,6 +638,7 @@ class TestSorting:
         # --- Tie-stability: two groups with identical created_at ---
         shared_ts = "2026-02-01T00:00:00"
         for mol, tid in [("AAA", "t_tie_aaa"), ("BBB", "t_tie_bbb")]:
+            _seed_job_row(idx, tid, project_id=proj)
             idx.upsert(
                 {
                     "task_id": tid,
@@ -810,6 +839,7 @@ class TestSearch:
 
         idx, proj = _setup_project_and_tasks(tmp_path)
         # Insert decoy: "100abc" would match unescaped LIKE '100%'
+        _seed_job_row(idx, "t_pct_decoy", project_id=proj)
         idx.upsert(
             {
                 "task_id": "t_pct_decoy",
@@ -843,6 +873,7 @@ class TestSearch:
             }
         )
         # Insert target: "100%"
+        _seed_job_row(idx, "t_pct", project_id=proj)
         idx.upsert(
             {
                 "task_id": "t_pct",
@@ -889,6 +920,7 @@ class TestSearch:
 
         idx, proj = _setup_project_and_tasks(tmp_path)
         # Insert decoy: "axb" matches unescaped LIKE "a_b"
+        _seed_job_row(idx, "t_ud_decoy", project_id=proj)
         idx.upsert(
             {
                 "task_id": "t_ud_decoy",
@@ -922,6 +954,7 @@ class TestSearch:
             }
         )
         # Insert target: "A_B"
+        _seed_job_row(idx, "t_underscore", project_id=proj)
         idx.upsert(
             {
                 "task_id": "t_underscore",
@@ -1337,3 +1370,96 @@ class TestExports:
         assert "GroupBy" in mod.__all__
         assert "TaskSort" in mod.__all__
         assert "ArchivedFilter" in mod.__all__
+
+
+# ===========================================================================
+# Ghost entries: task rows whose jobs record was deleted (orphan guard)
+# ===========================================================================
+
+
+class TestGhostEntryGuard:
+    def test_orphan_task_row_hidden_from_view_counts_and_facets(
+        self, tmp_path: Path
+    ) -> None:
+        """Regression: bare jobs-row delete must not keep rendering/counting."""
+        from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        before = query_project_tasks(idx, TaskViewQuery(project_id=proj))
+        # proj1 visible (archived excluded): t1 t2 t3 t4 t6 t7
+        assert before["total"] == 6
+        assert before["counts"]["running"] == 1  # t1
+
+        # Simulate the historical bug: delete the jobs row only.
+        assert idx.db_path is not None
+        with sqlite3.connect(str(idx.db_path)) as conn:
+            conn.execute("DELETE FROM jobs WHERE id='t1'")
+            conn.commit()
+
+        after = query_project_tasks(idx, TaskViewQuery(project_id=proj))
+        assert after["total"] == 5
+        assert after["counts"]["running"] == 0
+        ids = [j["id"] for g in after["groups"] for j in g["jobs"]]
+        assert "t1" not in ids
+        # Facets are guarded too.
+        assert after["facets"]["statuses"].get("running", 0) == 0
+        mol_facet = {m["key"]: m["count"] for m in after["facets"]["molecules"]}
+        assert mol_facet.get("BCB-Allene") == 1  # t6 kept, orphaned t1 no longer counted
+        assert mol_facet.get("bcb-allene") == 1  # t2
+        assert sum(mol_facet.values()) == 5
+
+    def test_orphan_visible_without_jobs_table(self, tmp_path: Path) -> None:
+        """Guard is disabled on standalone index DBs (no jobs table)."""
+        from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
+
+        # migrate() creates the tasks schema but NOT the jobs table
+        # (only JobStore._init_schema does) — a standalone index DB.
+        db = tmp_path / "standalone.db"
+        migrate(db)
+        idx = TaskIndex(db)
+        idx.upsert(
+            {
+                "task_id": "solo",
+                "job_id": "solo",
+                "project_id": "p1",
+                "molecule_name": "X",
+                "task_name": "t",
+                "remark": "",
+                "display_name": "X",
+                "workflow": "Confsearch",
+                "task_dir_name": "d",
+                "status": "completed",
+                "node_id": "local",
+                "node_path": "/tmp",
+                "input_hash": None,
+                "result_manifest_path": None,
+                "current_stage": None,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": "2026-01-01T00:00:00",
+                "updated_at": "2026-01-01T00:00:00",
+                "molecule_key": "X",
+                "tags": "[]",
+                "archived": 0,
+                "batch_id": None,
+                "last_activity_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "group_id": "solo",
+                "progress": None,
+            }
+        )
+        result = query_project_tasks(idx, TaskViewQuery(project_id="p1"))
+        assert result["total"] == 1
+
+    def test_find_orphan_task_ids(self, tmp_path: Path) -> None:
+        idx, _ = _setup_project_and_tasks(tmp_path)
+        assert idx.find_orphan_task_ids() == []
+
+        assert idx.db_path is not None
+        with sqlite3.connect(str(idx.db_path)) as conn:
+            conn.execute("DELETE FROM jobs WHERE id='t1'")
+            conn.execute("DELETE FROM jobs WHERE id='t8'")
+            conn.commit()
+
+        assert idx.find_orphan_task_ids() == ["t1", "t8"]

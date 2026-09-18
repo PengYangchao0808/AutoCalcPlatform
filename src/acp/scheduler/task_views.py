@@ -42,7 +42,14 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from acp.scheduler.tasks import jobs_table_exists
+
 logger = logging.getLogger(__name__)
+
+#: Ghost-entry guard: a task row is only valid when its ``jobs`` record
+#: still exists (``task_id == job_id``, one index row per scheduler job).
+#: Appended to the WHERE clause whenever the ``jobs`` table is present.
+_ORPHAN_GUARD_SQL = "EXISTS (SELECT 1 FROM jobs j WHERE j.id = t.job_id)"
 
 # ---------------------------------------------------------------------------
 # JSON1 probe (one-time at import)
@@ -235,6 +242,13 @@ def query_project_tasks(
             project_names = _resolve_project_names(conn)
             from acp.scheduler.jobs import JobStatus as _JobStatus
 
+            # Ghost guard (active only when the jobs table exists): residual
+            # task rows whose jobs record was deleted must not render or
+            # count anywhere in the view.
+            require_job_row = jobs_table_exists(conn)
+            if require_job_row:
+                base_sql += f" AND {_ORPHAN_GUARD_SQL}"
+
             total_row = conn.execute(
                 f"SELECT COUNT(DISTINCT t.task_id) as cnt {base_sql}", params
             ).fetchone()
@@ -260,7 +274,7 @@ def query_project_tasks(
             )
             all_rows = conn.execute(fetch_sql, params).fetchall()
 
-            facets = _build_facets(conn, q)
+            facets = _build_facets(conn, q, require_job_row=require_job_row)
         finally:
             if index._shared_conn is None:
                 conn.close()
@@ -556,13 +570,17 @@ def _build_where_clauses(
 def _build_facets(
     conn: sqlite3.Connection,
     q: TaskViewQuery,
+    *,
+    require_job_row: bool = False,
 ) -> dict[str, Any]:
     """Build facets scoped to project + archived but without drill-down filters.
 
     Project scope and archived filter apply; all drill-down filters
     (statuses, workflows, molecule_keys, tags, batch_ids, remarks,
     search) are removed so each facet dimension shows its own full
-    cardinality within the project scope.
+    cardinality within the project scope.  When *require_job_row* is
+    set, ghost task rows (jobs record deleted) are excluded from every
+    facet, mirroring the main query.
     """
     clauses: list[str] = []
     params: list[Any] = []
@@ -575,6 +593,8 @@ def _build_facets(
         clauses.append("t.archived = 1")
     where = " AND ".join(clauses) if clauses else "1=1"
     base = f"FROM tasks t WHERE {where}"
+    if require_job_row:
+        base += f" AND {_ORPHAN_GUARD_SQL}"
 
     facets: dict[str, Any] = {}
 
