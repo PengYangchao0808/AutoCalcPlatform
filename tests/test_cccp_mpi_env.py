@@ -14,7 +14,9 @@ import pytest
 
 import cccp.software as software
 from cccp.software import (
+    MPICompatibilityError,
     ShellEnvironment,
+    detect_mpi_family,
     orca_runtime_env,
     resolve_mpirun,
     resolve_mpirun_with_source,
@@ -113,6 +115,7 @@ def test_resolve_mpirun_uses_login_shell_sniff(tmp_path: Path) -> None:
     sniff_result = ShellEnvironment(mpirun=sniffed, source="login-shell")
 
     with (
+        patch.dict(os.environ, {"PATH": ""}),
         patch.object(software.shutil, "which", return_value=None),
         patch.object(software, "sniff_login_shell_env", return_value=sniff_result),
     ):
@@ -126,6 +129,7 @@ def test_resolve_mpirun_falls_back_to_rc_parse(tmp_path: Path) -> None:
     )
 
     with (
+        patch.dict(os.environ, {"PATH": ""}),
         patch.object(software.shutil, "which", return_value=None),
         patch("pathlib.Path.home", return_value=tmp_path),
     ):
@@ -143,6 +147,75 @@ def test_resolve_mpirun_glob_includes_orca_dir(tmp_path: Path) -> None:
         patch.object(software.Path, "home", return_value=tmp_path / "nohome"),
     ):
         assert resolve_mpirun(orca_dir=orca_dir) == bundled
+
+
+def test_orca_bundled_openmpi_beats_conda_hydra(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    orca_dir = tmp_path / "orca611"
+    bundled = _make_executable(orca_dir / "openmpi418" / "bin")
+    conda_bin = tmp_path / "anaconda3" / "bin"
+    hydra = _make_executable(conda_bin, "mpiexec.hydra")
+    (conda_bin / "mpirun").symlink_to(hydra)
+    monkeypatch.setenv("PATH", str(conda_bin))
+
+    resolved, source = resolve_mpirun_with_source(orca_dir=orca_dir)
+
+    assert resolved == bundled
+    assert source == "orca-bundled"
+
+
+def test_incompatible_explicit_hydra_falls_back_to_orca_bundled_openmpi(
+    tmp_path: Path,
+) -> None:
+    orca_dir = tmp_path / "orca611"
+    bundled = _make_executable(orca_dir / "openmpi418" / "bin")
+    hydra = _make_executable(tmp_path / "anaconda3" / "bin", "mpiexec.hydra")
+
+    resolved, source = resolve_mpirun_with_source(hydra, orca_dir=orca_dir)
+
+    assert resolved == bundled
+    assert source == "orca-bundled"
+
+
+def test_openmpi_later_on_path_beats_first_conda_hydra(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conda_bin = tmp_path / "anaconda3" / "bin"
+    hydra = _make_executable(conda_bin, "mpiexec.hydra")
+    (conda_bin / "mpirun").symlink_to(hydra)
+    openmpi_bin = tmp_path / "openmpi418" / "bin"
+    openmpi = _make_executable(openmpi_bin)
+    monkeypatch.setenv("PATH", f"{conda_bin}{os.pathsep}{openmpi_bin}")
+    monkeypatch.setattr(software, "detect_orca_mpi_family", lambda orca_dir: "openmpi")
+
+    resolved, source = resolve_mpirun_with_source(orca_dir=tmp_path / "orca611")
+
+    assert resolved == openmpi
+    assert source == "path"
+
+
+def test_detect_mpi_family_recognizes_hydra_realpath(tmp_path: Path) -> None:
+    hydra = _make_executable(tmp_path / "anaconda3" / "bin", "mpiexec.hydra")
+    launcher = hydra.parent / "mpirun"
+    launcher.symlink_to(hydra)
+
+    assert detect_mpi_family(launcher) == "hydra"
+
+
+def test_orca_runtime_env_fails_fast_on_only_incompatible_hydra(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conda_bin = tmp_path / "anaconda3" / "bin"
+    hydra = _make_executable(conda_bin, "mpiexec.hydra")
+    (conda_bin / "mpirun").symlink_to(hydra)
+    monkeypatch.setenv("PATH", str(conda_bin))
+    monkeypatch.setattr(software, "detect_orca_mpi_family", lambda orca_dir: "openmpi")
+    monkeypatch.setattr(software, "sniff_rc_files", lambda: ShellEnvironment())
+    monkeypatch.setattr(software, "_SYSTEM_MPI_GLOB_PATTERNS", ())
+
+    with pytest.raises(MPICompatibilityError, match="Hydra|OpenMPI"):
+        orca_runtime_env(None, orca_dir=tmp_path / "orca611")
 
 
 def test_orca_runtime_env_noop_when_mpi_already_on_path(tmp_path: Path) -> None:
@@ -196,6 +269,7 @@ def test_orca_runtime_env_uses_sniffed_mpi(tmp_path: Path) -> None:
     sniff_result = ShellEnvironment(mpirun=sniffed, source="login-shell")
 
     with (
+        patch.dict(os.environ, {"PATH": ""}),
         patch.object(software.shutil, "which", return_value=None),
         patch.object(software, "sniff_login_shell_env", return_value=sniff_result),
     ):

@@ -199,6 +199,9 @@ class CensoInterface:
             "censo", configured_path=self._censo_path
         )
         self._orca_path = config.get("executables", {}).get("orca", {}).get("path", "orca")
+        self._orca_executable = resolve_executable(
+            "orca", configured_path=self._orca_path
+        )
         self._xtb_path = config.get("executables", {}).get("xtb", {}).get("path", "xtb")
         self._default_preset = config.get("censo", {}).get("preset", "censo-light")
         self._default_solvent = config.get("censo", {}).get("solvent")
@@ -713,6 +716,7 @@ class CensoInterface:
         env = orca_runtime_env(
             orca_cfg.get("ld_library_path"),
             mpi_path=orca_cfg.get("mpi_path"),
+            orca_dir=self._orca_executable.parent if self._orca_executable else None,
         )
 
         if effective_templates:
