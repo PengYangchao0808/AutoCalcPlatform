@@ -46,6 +46,7 @@ def _isolate_config_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
 
 
 def _make_executable(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     path.chmod(0o755)
     return path
@@ -158,6 +159,36 @@ def test_sniff_local_passes_target_as_explicit_config_source(
     assert config_arg["executables"]["xtb"]["path"] == str(fake_bins["xtb"])
     assert entries["xtb"].source == "config"
     assert entries["xtb"].resolved == fake_bins["xtb"]
+
+
+def test_sniff_local_includes_mpi_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_bins: dict[str, Path]
+) -> None:
+    captured: list[dict[str, Any] | None] = []
+    _install_fake_discover(monkeypatch, fake_bins, captured)
+    mpirun = _make_executable(tmp_path / "openmpi" / "bin" / "mpirun")
+    target = tmp_path / "cccp.yaml"
+    target.write_text(
+        yaml.dump({"executables": {"orca": {"mpi_path": str(mpirun)}}}),
+        encoding="utf-8",
+    )
+    seen: list[tuple[str | Path | None, str | Path | None]] = []
+
+    def fake_resolve(
+        configured_path: str | Path | None = None,
+        orca_dir: str | Path | None = None,
+    ) -> tuple[Path, str]:
+        seen.append((configured_path, orca_dir))
+        return mpirun, "config"
+
+    from cccp import software as cccp_software
+
+    monkeypatch.setattr(cccp_software, "resolve_mpirun_with_source", fake_resolve)
+
+    entries = sniff_local(target)
+
+    assert entries["mpi"] == SoftwareDiscovery(name="mpi", resolved=mpirun, source="config")
+    assert seen == [(str(mpirun), fake_bins["orca"].parent)]
 
 
 # ---------------------------------------------------------------------------
@@ -348,3 +379,29 @@ def test_apply_local_spec_empty_specs_leaves_no_executables_key(
     # re-sniff still shows xtb missing
     assert entries["xtb"].resolved is None
     assert entries["xtb"].source is None
+
+
+def test_apply_local_mpi_spec_writes_orca_mpi_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_bins: dict[str, Path]
+) -> None:
+    captured: list[dict[str, Any] | None] = []
+    _install_fake_discover(monkeypatch, fake_bins, captured)
+    mpirun = _make_executable(tmp_path / "mpi" / "bin" / "mpirun")
+    from cccp import software as cccp_software
+
+    monkeypatch.setattr(
+        cccp_software,
+        "resolve_mpirun_with_source",
+        lambda configured_path=None, orca_dir=None: (
+            (Path(configured_path), "config") if configured_path else (None, None)
+        ),
+    )
+    target = tmp_path / "cccp.yaml"
+
+    entries = apply_local_spec(target, {}, {"mpi": str(mpirun)})
+
+    saved = yaml.safe_load(target.read_text(encoding="utf-8"))
+    assert saved["executables"]["orca"]["mpi_path"] == str(mpirun)
+    assert "mpi" not in saved["executables"]
+    assert entries["mpi"].resolved == mpirun
+    assert entries["mpi"].source == "config"

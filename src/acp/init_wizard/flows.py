@@ -27,7 +27,7 @@ from acp.init_wizard.newnode import (
     _validate_remote_path,
     run_new_node,
 )
-from acp.init_wizard.persist import InitAbort, load_target, save_target
+from acp.init_wizard.persist import InitAbort, load_target, save_target, set_software_path
 from acp.init_wizard.prompts import WizardAborted
 from acp.init_wizard.sniff_local import (
     apply_local_spec,
@@ -203,8 +203,9 @@ def _existing_node_session(
     Manual paths follow D9/D12: the ACP-side node entry gains
     ``executables``/``bin_symlinks``/``capabilities.software`` (in-memory,
     caller persists), the remote ``~/.cccp.yaml`` gains the executables
-    paths, and immediate ``~/bin`` symlinks are optional.  A re-sniff (D10)
-    confirms every specified path resolves.
+    paths, and immediate ``~/bin`` symlinks are optional. MPI is stored as
+    the ORCA runtime path plus an ``mpirun`` symlink, not as a backend
+    capability. A re-sniff (D10) confirms every specified path resolves.
 
     Returns:
         ``True`` when any spec was applied (caller then persists the target).
@@ -229,16 +230,8 @@ def _existing_node_session(
     apply_remote_manual_spec(target_data, node.name, specs)
     home = remote_home(pool, node)
     remote_data, remote_mode = read_remote_config(pool, node, home)
-    executables = remote_data.get("executables")
-    if not isinstance(executables, dict):
-        executables = {}
-        remote_data["executables"] = executables
     for sw_name, sw_path in specs.items():
-        entry = executables.get(sw_name)
-        if not isinstance(entry, dict):
-            entry = {}
-            executables[sw_name] = entry
-        entry["path"] = sw_path
+        set_software_path(remote_data, sw_name, sw_path)
     write_remote_config(pool, node, home, remote_data, remote_mode)
     if prompts.menu("是否立即在节点上创建 ~/bin 符号链接？", ["创建", "跳过"]) == 1:
         make_remote_symlinks(pool, node, specs)

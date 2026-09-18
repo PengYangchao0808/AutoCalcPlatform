@@ -27,6 +27,7 @@ from acp.init_wizard.persist import (
     save_target,
     set_cluster_type,
     set_execution_mode_remote,
+    set_software_path,
     upsert_node,
 )
 from acp.init_wizard.prompts import (
@@ -42,6 +43,7 @@ from acp.init_wizard.sniff_remote import (
     make_remote_symlinks,
     read_remote_config,
     remote_home,
+    remote_symlink_specs,
     sniff_remote,
     write_remote_config,
 )
@@ -638,16 +640,8 @@ def _sniff_and_specify(
         return
 
     remote_data, remote_mode = read_remote_config(pool, node, home)
-    executables = remote_data.get("executables")
-    if not isinstance(executables, dict):
-        executables = {}
-        remote_data["executables"] = executables
     for sw_name, sw_path in specs.items():
-        entry = executables.get(sw_name)
-        if not isinstance(entry, dict):
-            entry = {}
-            executables[sw_name] = entry
-        entry["path"] = sw_path
+        set_software_path(remote_data, sw_name, sw_path)
     write_remote_config(pool, node, home, remote_data, remote_mode)
 
     if prompts.menu("是否立即在节点上创建 ~/bin 符号链接？", ["创建", "跳过"]) == 1:
@@ -656,16 +650,19 @@ def _sniff_and_specify(
     apply_remote_manual_spec(target_data, node.name, specs)
     # Mirror the spec onto the in-memory node so the authoritative
     # to_config_dict serialization (upsert replaces the placeholder entry)
-    # still carries bin_symlinks + capabilities.software (D9b).
+    # still carries bin_symlinks + capabilities.software (D9b). MPI is a
+    # runtime dependency, so it contributes mpirun only, not a capability.
     from acp.scheduler.remote.config import NodeCapabilities
 
-    node.bin_symlinks.update(specs)
+    node.bin_symlinks.update(remote_symlink_specs(specs))
     existing = node.capabilities.software if node.capabilities is not None else ()
     tags = node.capabilities.tags if node.capabilities is not None else ()
-    node.capabilities = NodeCapabilities(
-        software=(*existing, *(sw for sw in specs if sw not in existing)),
-        tags=tags,
-    )
+    specified_software = tuple(sw for sw in specs if sw != "mpi" and sw not in existing)
+    if specified_software:
+        node.capabilities = NodeCapabilities(
+            software=(*existing, *specified_software),
+            tags=tags,
+        )
 
 
 def run_new_node(

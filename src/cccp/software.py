@@ -82,6 +82,7 @@ FALLBACKS: dict[str, list[str]] = {
 #: (modern C++ builds) then ``-version`` (CENSO-QM 1.x Python wrapper).
 _VERSION_FLAGS: dict[str, tuple[str, ...]] = {
     "orca": ("--version",),
+    "mpi": ("--version",),
     "xtb": ("--version",),
     "crest": ("--version",),
     "censo": ("-v", "-version"),
@@ -664,25 +665,48 @@ def resolve_mpirun(
     6. Conventional install globs (:data:`_MPI_GLOB_PATTERNS`), including
        bundled MPI inside *orca_dir*.
     """
+    return resolve_mpirun_with_source(configured_path, orca_dir=orca_dir)[0]
+
+
+def resolve_mpirun_with_source(
+    configured_path: str | Path | None = None,
+    orca_dir: str | Path | None = None,
+) -> tuple[Path | None, str | None]:
+    """Resolve the MPI launcher and report which discovery source won.
+
+    Uses the same first-hit order as :func:`resolve_mpirun`.  The source is
+    one of ``"config"``, ``"env"``, ``"path"``, ``"login-shell"``,
+    ``"rc-files"`` or ``"scan"``; both values are ``None`` when no usable
+    launcher is found.  This detailed form is used by interactive resource
+    discovery so MPI can be displayed alongside the QC executables.
+
+    Args:
+        configured_path: Explicit ``executables.orca.mpi_path`` value.
+        orca_dir: Resolved ORCA installation directory, used for bundled-MPI
+            fallback patterns.
+
+    Returns:
+        ``(resolved_path, source)``.
+    """
     path = _valid_executable(configured_path)
     if path:
-        return path
+        return path, "config"
 
     path = _valid_executable(os.environ.get(MPI_ENV_VAR))
     if path:
-        return path
+        return path, "env"
 
     found = shutil.which(MPI_BINARY, path=_search_path())
     if found:
-        return Path(found).resolve()
+        return Path(found).resolve(), "path"
 
     sniffed = sniff_login_shell_env()
     if sniffed is not None and sniffed.mpirun is not None:
-        return sniffed.mpirun
+        return sniffed.mpirun, sniffed.source
 
     rc_env = sniff_rc_files()
     if rc_env.mpirun is not None:
-        return rc_env.mpirun
+        return rc_env.mpirun, rc_env.source
 
     for pattern in _MPI_GLOB_PATTERNS:
         if "{orca_dir}" in pattern:
@@ -692,8 +716,8 @@ def resolve_mpirun(
         for match in sorted(glob.glob(os.path.expanduser(pattern))):
             path = _valid_executable(match)
             if path:
-                return path
-    return None
+                return path, "scan"
+    return None, None
 
 
 def orca_runtime_env(
@@ -780,6 +804,7 @@ __all__ = [
     "resolve_executable",
     "resolve_executable_with_source",
     "resolve_mpirun",
+    "resolve_mpirun_with_source",
     "sniff_login_shell_env",
     "sniff_rc_files",
     "version_cached",

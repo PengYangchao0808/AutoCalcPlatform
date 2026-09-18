@@ -17,6 +17,7 @@ from cccp.software import (
     ShellEnvironment,
     orca_runtime_env,
     resolve_mpirun,
+    resolve_mpirun_with_source,
     sniff_login_shell_env,
     sniff_rc_files,
 )
@@ -92,6 +93,12 @@ def test_resolve_mpirun_prefers_explicit_config(tmp_path: Path) -> None:
         patch.object(software, "sniff_login_shell_env", return_value=monkey_sniff),
     ):
         assert resolve_mpirun(pinned) == pinned
+
+
+def test_resolve_mpirun_with_source_reports_config(tmp_path: Path) -> None:
+    pinned = _make_executable(tmp_path / "configured")
+
+    assert resolve_mpirun_with_source(pinned) == (pinned.resolve(), "config")
 
 
 def test_resolve_mpirun_env_var_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

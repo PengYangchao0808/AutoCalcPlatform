@@ -14,10 +14,14 @@ semantics are genuinely exercised.
 from __future__ import annotations
 
 import io
+import json
 import os
 import stat
+import sys
+import types
 from contextlib import contextmanager
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -27,6 +31,7 @@ import yaml
 from acp.init_wizard import sniff_remote
 from acp.init_wizard.persist import InitAbort
 from acp.scheduler.remote.config import RemoteNode
+from acp.scheduler.remote.node_manager import _DOCTOR_SOFTWARE_SCRIPT
 
 HOME = "/home/tester"
 CFG_PATH = f"{HOME}/.cccp.yaml"
@@ -156,17 +161,29 @@ def test_shell_path_probe_single_command_parses_all_names():
         "shermo=\n"
         "isostat=\n"
         "molclus=\n"
+        "mpirun=/opt/openmpi/bin/mpirun\n"
     )
     pool = FakePool(results=[("command -v", (0, sweep_out, ""))])
     found = sniff_remote.shell_path_probe(pool, node)
     # ONE SSH command for the whole sweep (D8).
     assert len(pool.commands) == 1
     assert "command -v" in pool.commands[0]
-    for name in ("orca", "xtb", "crest", "censo", "Shermo", "shermo", "isostat", "molclus"):
+    for name in (
+        "orca",
+        "xtb",
+        "crest",
+        "censo",
+        "Shermo",
+        "shermo",
+        "isostat",
+        "molclus",
+        "mpirun",
+    ):
         assert name in found
     assert found["orca"] == "/opt/orca/orca"
     assert found["xtb"] is None
     assert found["Shermo"] == "/opt/shermo/Shermo"
+    assert found["mpirun"] == "/opt/openmpi/bin/mpirun"
 
 
 # ====================================================================== #
@@ -204,8 +221,8 @@ def test_sniff_remote_falls_back_when_software_probe_fails():
         "version": None,
         "source": "shell",
     }
-    # All seven doctor names present.
-    for name in ("orca", "xtb", "crest", "censo", "shermo", "isostat", "molclus"):
+    # All QC programs plus the MPI runtime are present.
+    for name in ("orca", "xtb", "crest", "censo", "shermo", "isostat", "molclus", "mpi"):
         assert name in report["software"]
 
 
@@ -241,6 +258,57 @@ def test_sniff_remote_keeps_doctor_report_when_probe_succeeds():
     assert "source" not in report["software"]["xtb"]
     for key in ("node", "host", "reachable", "python", "software", "symlinks", "error"):
         assert key in report
+
+
+def test_sniff_remote_supplements_mpi_for_older_doctor_report():
+    node = make_node()
+    doctor_json = (
+        '{"orca": {"configured": "orca", "resolved": "/opt/orca/orca", "version": "6.1.0"}}'
+    )
+    sweep_out = "mpirun=/opt/openmpi/bin/mpirun\n"
+    pool = FakePool(
+        results=[
+            ("cccp.software", (0, doctor_json + "\n", "")),
+            ("command -v", (0, sweep_out, "")),
+        ]
+    )
+
+    report = sniff_remote.sniff_remote(pool, node)
+
+    assert report["software_fallback"] is False
+    assert report["software"]["mpi"] == {
+        "configured": "/opt/openmpi/bin/mpirun",
+        "resolved": "/opt/openmpi/bin/mpirun",
+        "version": None,
+        "source": "shell",
+    }
+
+
+def test_doctor_script_falls_back_when_remote_cccp_lacks_mpi_resolver(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    mpirun = bin_dir / "mpirun"
+    mpirun.write_text("#!/bin/sh\n", encoding="utf-8")
+    mpirun.chmod(0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", str(bin_dir))
+
+    old_software = types.ModuleType("cccp.software")
+    old_software.detect_version = lambda name, resolved: None  # type: ignore[attr-defined]
+    old_software.resolve_executable = (  # type: ignore[attr-defined]
+        lambda name, configured_path=None: None
+    )
+    monkeypatch.setitem(sys.modules, "cccp.software", old_software)
+
+    exec(compile(_DOCTOR_SOFTWARE_SCRIPT, "<doctor>", "exec"), {})
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["mpi"]["configured"] == "mpirun"
+    assert report["mpi"]["resolved"] == str(mpirun)
 
 
 # ====================================================================== #
@@ -295,6 +363,30 @@ def test_apply_remote_manual_spec_rejects_space_before_mutating():
     with pytest.raises(ValueError):
         sniff_remote.apply_remote_manual_spec(data, "node-a", {"xtb": ""})
     assert data == snapshot
+
+
+def test_apply_remote_manual_spec_maps_mpi_to_orca_runtime_and_mpirun_symlink():
+    data: dict[str, Any] = {
+        "cluster": {
+            "nodes": [
+                {
+                    "name": "node-a",
+                    "capabilities": {"software": ["orca"], "tags": ["cpu"]},
+                }
+            ]
+        }
+    }
+
+    sniff_remote.apply_remote_manual_spec(
+        data,
+        "node-a",
+        {"mpi": "/opt/openmpi/bin/mpirun"},
+    )
+
+    node_entry = data["cluster"]["nodes"][0]
+    assert node_entry["executables"]["orca"]["mpi_path"] == "/opt/openmpi/bin/mpirun"
+    assert node_entry["bin_symlinks"] == {"mpirun": "/opt/openmpi/bin/mpirun"}
+    assert node_entry["capabilities"] == {"software": ["orca"], "tags": ["cpu"]}
 
 
 # ====================================================================== #
@@ -448,3 +540,10 @@ def test_make_remote_symlinks_issues_bootstrap_command():
     pool = FakePool()
     sniff_remote.make_remote_symlinks(pool, node, {"xtb": "/opt/xtb/bin/xtb"})
     assert pool.commands == ["mkdir -p ~/bin && ln -sf /opt/xtb/bin/xtb ~/bin/xtb"]
+
+
+def test_make_remote_symlinks_uses_mpirun_command_name_for_mpi():
+    node = make_node()
+    pool = FakePool()
+    sniff_remote.make_remote_symlinks(pool, node, {"mpi": "/opt/openmpi/bin/mpirun"})
+    assert pool.commands == ["mkdir -p ~/bin && ln -sf /opt/openmpi/bin/mpirun ~/bin/mpirun"]
