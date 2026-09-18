@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from acp.init_wizard.persist import InitAbort
+from acp.init_wizard.persist import InitAbort, set_software_path
 
 if TYPE_CHECKING:  # never imported at runtime (D7 — no paramiko here)
     from acp.scheduler.remote.config import RemoteNode
@@ -36,6 +36,7 @@ __all__ = [
     "apply_remote_manual_spec",
     "make_remote_symlinks",
     "read_remote_config",
+    "remote_symlink_specs",
     "remote_home",
     "shell_path_probe",
     "sniff_remote",
@@ -54,6 +55,7 @@ _DOCTOR_SOFTWARE_NAMES: tuple[str, ...] = (
     "shermo",
     "isostat",
     "molclus",
+    "mpi",
 )
 
 #: Binary names swept by the D8 shell fallback — includes both Shermo
@@ -67,7 +69,17 @@ _SHELL_PROBE_NAMES: tuple[str, ...] = (
     "shermo",
     "isostat",
     "molclus",
+    "mpirun",
 )
+
+
+def remote_symlink_specs(specs: dict[str, str]) -> dict[str, str]:
+    """Translate discovery keys to executable names created in ``~/bin``.
+
+    MPI is shown as ``mpi`` in resource reports, while ORCA invokes the
+    launcher by its real command name, ``mpirun``.
+    """
+    return {"mpirun" if name == "mpi" else name: path for name, path in specs.items()}
 
 
 def remote_home(pool: SSHConnectionPool, node: RemoteNode) -> str:
@@ -132,7 +144,9 @@ def sniff_remote(pool: SSHConnectionPool, node: RemoteNode) -> dict[str, Any]:
     Falls back to :func:`shell_path_probe` when the doctor's software probe
     failed — i.e. the report carries an ``error`` OR ``software`` is empty
     (covers both the no-synced-code case and the no-Python-3.10+ early
-    return, which leaves ``error=None`` / ``software={}``).
+    return, which leaves ``error=None`` / ``software={}``).  A report from
+    an older synced doctor that lacks ``mpi`` is supplemented with a direct
+    ``mpirun`` shell probe without marking the whole report as fallback.
 
     Returns:
         Plain dict mirroring the :class:`NodeDoctorReport` fields
@@ -155,13 +169,20 @@ def sniff_remote(pool: SSHConnectionPool, node: RemoteNode) -> dict[str, Any]:
     result = asdict(report)
     software: dict[str, Any] = dict(result.get("software") or {})
     needs_fallback = report.error is not None or not software
+    needs_mpi_supplement = "mpi" not in software
     result["software_fallback"] = needs_fallback
-    if needs_fallback:
+    if needs_fallback or needs_mpi_supplement:
         shell = shell_path_probe(pool, node)
-        for name in _DOCTOR_SOFTWARE_NAMES:
-            path = shell.get(name) or shell.get(name.capitalize())
+        names = _DOCTOR_SOFTWARE_NAMES if needs_fallback else ("mpi",)
+        for name in names:
+            if name == "mpi":
+                path = shell.get("mpirun")
+                configured = path or "mpirun"
+            else:
+                path = shell.get(name) or shell.get(name.capitalize())
+                configured = path or name
             software[name] = {
-                "configured": path or name,
+                "configured": configured,
                 "resolved": path,
                 "version": None,
                 "source": "shell",
@@ -309,6 +330,10 @@ def apply_remote_manual_spec(
       preserving existing order, appending new names, deduplicated
       (``_parse_declared_software`` semantics).
 
+    MPI is the intentional exception: discovery key ``mpi`` is stored as
+    ``executables.orca.mpi_path`` and ``bin_symlinks.mpirun`` and is not
+    added to backend capabilities.
+
     All validation happens BEFORE any mutation (D12): a spec path that is
     empty or contains a space raises ValueError — bootstrap's symlink
     command leaves the target unquoted, so spaces would break it.
@@ -333,15 +358,13 @@ def apply_remote_manual_spec(
         nodes.append(node_entry)
 
     for name, path in specs.items():
-        executables = node_entry.setdefault("executables", {})
-        entry = executables.get(name)
-        if not isinstance(entry, dict):
-            entry = {}
-            executables[name] = entry
-        entry["path"] = path
+        set_software_path(node_entry, name, path)
 
         bin_symlinks = node_entry.setdefault("bin_symlinks", {})
-        bin_symlinks[name] = path
+        bin_symlinks["mpirun" if name == "mpi" else name] = path
+
+        if name == "mpi":
+            continue
 
         capabilities = node_entry.get("capabilities")
         if not isinstance(capabilities, dict):
@@ -362,10 +385,11 @@ def make_remote_symlinks(
 
     Per entry one combined ``mkdir -p ~/bin && ln -sf <path> ~/bin/<name>``
     execute (mirrors ``NodeManager.bootstrap_node`` node_manager.py:550).
+    The discovery key ``mpi`` is translated to command name ``mpirun``.
     Individual failures are logged and skipped, matching the bootstrap
     precedent; whether to call this at all is the flow's decision (T7/T8).
     """
-    for name, target in symlinks.items():
+    for name, target in remote_symlink_specs(symlinks).items():
         command = f"mkdir -p ~/bin && ln -sf {target} ~/bin/{shlex.quote(name)}"
         try:
             code, _out, err = pool.execute(node, command, timeout=30)

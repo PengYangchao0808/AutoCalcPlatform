@@ -27,6 +27,7 @@ __all__ = [
     "set_cluster_type",
     "set_execution_mode_remote",
     "set_executable_path",
+    "set_software_path",
     "upsert_node",
 ]
 
@@ -154,13 +155,49 @@ def set_executable_path(data: dict[str, Any], name: str, path: Path) -> None:
         name: Executable name (e.g. ``xtb``).
         path: Executable path to persist.
     """
-    executables = data.setdefault("executables", {})
+    executables = data.get("executables")
+    if not isinstance(executables, dict):
+        if executables is not None:
+            logger.warning("executables 不是映射，已替换（原值 %r）", executables)
+        executables = {}
+        data["executables"] = executables
     entry = executables.setdefault(name, {})
     if not isinstance(entry, dict):
         logger.warning("executables.%s 不是映射，已替换（原值 %r）", name, entry)
         entry = {}
         executables[name] = entry
     entry["path"] = str(path)
+
+
+def set_software_path(data: dict[str, Any], name: str, path: str | Path) -> None:
+    """Persist a path emitted by the init wizard's resource discovery.
+
+    Ordinary QC programs use ``executables.<name>.path``.  MPI is an ORCA
+    runtime dependency rather than a standalone backend, so its launcher is
+    stored at the path consumed by ORCA execution:
+    ``executables.orca.mpi_path``.
+
+    Args:
+        data: Configuration mapping to mutate.
+        name: Discovery key (``"mpi"`` or a QC software name).
+        path: Executable path to persist.
+    """
+    if name != "mpi":
+        set_executable_path(data, name, Path(path))
+        return
+
+    executables = data.get("executables")
+    if not isinstance(executables, dict):
+        if executables is not None:
+            logger.warning("executables 不是映射，已替换（原值 %r）", executables)
+        executables = {}
+        data["executables"] = executables
+    entry = executables.setdefault("orca", {})
+    if not isinstance(entry, dict):
+        logger.warning("executables.orca 不是映射，已替换（原值 %r）", entry)
+        entry = {}
+        executables["orca"] = entry
+    entry["mpi_path"] = str(path)
 
 
 def set_cluster_type(data: dict[str, Any], node_type: str) -> None:
