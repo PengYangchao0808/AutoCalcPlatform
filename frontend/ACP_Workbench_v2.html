@@ -1355,8 +1355,8 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-legend-swatch.int { background: var(--amber); }
 .energy-legend-swatch.min { background: var(--green); }
 .energy-legend-swatch.failed { background: var(--red); }
-.energy-inspector-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
-.energy-structure-viewer { position: relative; overflow: hidden; aspect-ratio: 16/10; min-height: 240px; max-height: 320px; background: radial-gradient(circle at 50% 40%, rgba(78, 161, 255, 0.12), transparent 58%), #0b1118; }
+.energy-inspector-panel { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+.energy-structure-viewer { position: relative; overflow: hidden; width: 100%; min-width: 0; aspect-ratio: 16/10; min-height: 240px; max-height: 320px; background: radial-gradient(circle at 50% 40%, rgba(78, 161, 255, 0.12), transparent 58%), #0b1118; }
 .energy-structure-viewer.empty { display: grid; place-items: center; padding: 20px; color: var(--text-tertiary); font-size: 11px; text-align: center; }
 .energy-inspector-body { min-height: 0; overflow: auto; padding: 10px; }
 .energy-selected-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }

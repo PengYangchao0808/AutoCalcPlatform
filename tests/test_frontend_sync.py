@@ -1338,6 +1338,42 @@ def test_viewer_framing_disposed_in_cleanup_paths() -> None:
         assert "disposeViewerFraming(" in body, f"{name} omits framing cleanup"
 
 
+def test_energy_structure_viewer_stays_within_visible_panel() -> None:
+    """Layout regression: the energy viewer canvas must never exceed its panel.
+
+    aspect-ratio: 16/10 + min-height: 240px used to transfer a 384px
+    (240 * 1.6) minimum inline size through the grid item automatic minimum
+    into the inspector panel's implicit auto column, overflowing the narrower
+    right column; the panel's overflow: hidden then clipped the canvas on the
+    right (measured 384px canvas in a 348px panel, +18px apparent center
+    shift). Checking only "canvas equals its own container" is insufficient —
+    the container itself must be bounded by the visible panel.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    viewer_marker = ".energy-structure-viewer {"
+    assert html.count(viewer_marker) == 1, "Viewer base rule must be defined once"
+    viewer_rule = html.split(viewer_marker, 1)[1].split("}", 1)[0]
+    assert "width: 100%" in viewer_rule, "Viewer must fill its column, not self-size"
+    assert "min-width: 0" in viewer_rule, (
+        "Viewer must defeat the aspect-ratio-transferred minimum width"
+    )
+    assert "aspect-ratio" in viewer_rule and "min-height" in viewer_rule, (
+        "Viewer ratio and height clamps must remain"
+    )
+
+    panel_marker = "\n.energy-inspector-panel {"
+    panel_rule_bodies = [
+        segment.split("}", 1)[0]
+        for segment in html.split(panel_marker)[1:]
+    ]
+    rows_rules = [r for r in panel_rule_bodies if "grid-template-rows" in r]
+    assert rows_rules, "Inspector panel rows-grid definition missing"
+    assert any("grid-template-columns: minmax(0, 1fr)" in r for r in rows_rules), (
+        "Inspector rows-grid must bound its implicit column to the panel width"
+    )
+
+
 def test_frontend_script_has_no_syntax_errors() -> None:
     """Regression guard: the main <script> block must pass node --check."""
     if not shutil.which("node"):
