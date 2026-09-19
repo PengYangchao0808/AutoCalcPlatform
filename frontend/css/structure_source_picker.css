@@ -321,6 +321,39 @@
   border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
   font-size: 12px;
 }
+
+/* Compact, single-scroll layout used inside the edit/recalculate workspace. */
+.sp-root.sp-density-editor {
+  height: 100%;
+  padding: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+.sp-density-editor .sp-search-input { min-height: 40px; }
+.sp-density-editor .sp-filter-row,
+.sp-density-editor .sp-opt-row { flex: 0 0 auto; }
+.sp-density-editor .sp-filter-row { flex-wrap: nowrap; }
+.sp-density-editor .sp-filter-select { min-width: 0; flex: 1 1 0; min-height: 36px; }
+.sp-density-editor .sp-opt-row { justify-content: flex-start; }
+.sp-density-editor .sp-opt-label { width: 100%; }
+.sp-density-editor .sp-sort-select { flex: 1 1 auto; }
+.sp-density-editor .sp-list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: none;
+  overflow-y: auto;
+}
+.sp-density-editor .sp-row { min-height: 64px; }
+.sp-density-editor .sp-row-name {
+  flex: 1 1 180px;
+  max-width: none;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.sp-density-editor .sp-row-secondary { white-space: normal; }
+.sp-density-editor .sp-pagination { flex: 0 0 auto; margin: 0; }
 .sp-sel-count {
   font-weight: 500;
   color: var(--sv-text-primary, var(--text-primary, #e5edf5));

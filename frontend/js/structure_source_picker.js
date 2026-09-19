@@ -7,7 +7,8 @@
  * Exposes:
  *   - mount(container, options)  → picker instance
  *     options: { mode, projectId, onChanged, onLoadItem, onLoadSelection,
- *                loadLabel, allowBatchTags, initialFilters, virtualItems }
+ *                loadLabel, allowBatchTags, initialFilters, virtualItems,
+ *                density }
  *   Instance methods:
  *     refresh()
  *     setProject(projectId|null)
@@ -238,6 +239,7 @@
     var loadLabel = opts.loadLabel || _t("picker.load");
     var allowBatchTags = opts.allowBatchTags != null ? !!opts.allowBatchTags : mode === "multi";
     var virtualItems = Array.isArray(opts.virtualItems) ? opts.virtualItems.slice() : [];
+    var density = opts.density === "editor" ? "editor" : "default";
 
     // State
     var legacyMode = false;
@@ -261,7 +263,9 @@
     var filterTags = [];
     var filterTagMatch = prefs.tag_match || "any";
     var filterSort = prefs.sort || "produced_desc";
-    var filterGroupBy = mode === "multi" ? prefs.group_by || "job" : prefs.group_by || "none";
+    var filterGroupBy = density === "editor"
+      ? "none"
+      : (mode === "multi" ? prefs.group_by || "job" : prefs.group_by || "none");
     var filterLimit = prefs.limit || PAGE_LIMIT;
 
     // Selection (multi mode)
@@ -297,7 +301,7 @@
 
     function _buildUI() {
       rootEl = document.createElement("div");
-      rootEl.className = "sp-root";
+      rootEl.className = "sp-root" + (density === "editor" ? " sp-density-editor" : "");
 
       // Search row
       var searchRow = _el("div", "sp-search-row");
@@ -369,7 +373,7 @@
       });
       groupSelect.value = filterGroupBy;
       groupWrap.appendChild(groupSelect);
-      optRow.appendChild(groupWrap);
+      if (density !== "editor") optRow.appendChild(groupWrap);
 
       rootEl.appendChild(optRow);
 
