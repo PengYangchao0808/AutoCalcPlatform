@@ -61,7 +61,7 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     server = SERVER.read_text(encoding="utf-8")
 
     assert 'html_path = _FRONTEND_DIR / "ACP_Workbench_v2.html"' in server
-    assert 'ACP_Workbench_minimal.html' not in server
+    assert "ACP_Workbench_minimal.html" not in server
     assert 'const API_BASE = "/api/v1"' in html
     for feature in ("workflow-catalog", "method-catalog", "/uploads", "/structures/parse"):
         assert feature in html
@@ -103,7 +103,7 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     # Structure viewer tab: conformers removed, 3d renamed to structure
     assert 'data-tab="conformers"' not in html, "conformers tab must be removed"
     assert 'data-tab="structure"' in html, "structure tab must exist"
-    assert '>结构查看器</button>' in html
+    assert ">结构查看器</button>" in html
     assert '"tab.structure": "结构查看器"' in html
     assert '"tab.structure": "Structure Viewer"' in html
     assert '"tab.conformers"' not in html, "tab.conformers i18n key must be removed"
@@ -113,10 +113,13 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert 'data-tab="energy"' in html
     assert 'data-tab="wavefunction"' in html
     # Compat mapping: stale "3d"/"conformers" -> "structure"
-    assert 'tab === "3d" || tab === "conformers"' in html or 'tab === "conformers" || tab === "3d"' in html
+    assert (
+        'tab === "3d" || tab === "conformers"' in html
+        or 'tab === "conformers" || tab === "3d"' in html
+    )
 
     # Renamed tab: HTML button + i18n zh-CN + i18n en-US
-    assert '>能量与轨迹</button>' in html
+    assert ">能量与轨迹</button>" in html
     assert '"tab.energy": "能量与轨迹"' in html
     assert '"tab.energy": "Energy & Trajectory"' in html
     assert "能量图" not in html
@@ -144,14 +147,16 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     # Running jobs disable the save action with an explicit reason instead of
     # offering a button the backend will reject with 409.
     assert "energy.inspector.save_after_complete" in html
-    assert "save-candidate\" data-energy-frame-id=\"' + escapeHtml(frameIdStr) + '\" disabled" in html
+    assert (
+        'save-candidate" data-energy-frame-id="\' + escapeHtml(frameIdStr) + \'" disabled' in html
+    )
 
     # Sampling hooks
     assert 'data-sampling-view="' in html
     assert "samplingState" in html
 
     # Convergence panel hooks
-    assert 'data-optimization-convergence' in html
+    assert "data-optimization-convergence" in html
     assert "function energyOptCriteriaRows(data, cycleMetadata)" in html
 
     # Unified geometry loader
@@ -279,11 +284,17 @@ def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
         "  min-width: 0;\n  min-height: 0;\n  height: 100%;\n}"
     )
     assert svg_rule in html
-    assert ".energy-chart-svg { display: block; width: 100%; min-width: 640px; min-height: 360px; height: 100%; }" not in html
+    assert (
+        ".energy-chart-svg { display: block; width: 100%; min-width: 640px; min-height: 360px; height: 100%; }"
+        not in html
+    )
 
     # Optimization chart: same contract — the SVG is measured from the live
     # container (ResizeObserver), so no fixed pixel width can force clipping.
-    assert ".optimization-chart-svg { display: block; width: 100%; min-width: 0; min-height: 0; height: 100%; cursor: grab; }" in html
+    assert (
+        ".optimization-chart-svg { display: block; width: 100%; min-width: 0; min-height: 0; height: 100%; cursor: grab; }"
+        in html
+    )
     assert "min-width: 620px" not in html
     assert "min-width: 620px; height: 238px;" not in html
     assert ".optimization-chart-scroll { flex: 1 1 0; min-height: 0; overflow: hidden;" in html
@@ -304,8 +315,7 @@ def test_optimization_chart_single_view_switching_contract() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     view_ids = (
-        'OPTIMIZATION_VIEW_IDS = ["energy", "force", '
-        '"energy_derivative", "force_derivative"]'
+        'OPTIMIZATION_VIEW_IDS = ["energy", "force", "energy_derivative", "force_derivative"]'
     )
     assert view_ids in html
     assert 'data-optimization-view="' in html
@@ -346,7 +356,9 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
 
     # 1. State machine: selectionOrigin field + selectJob reset.
     assert 'selectionOrigin: "none",' in html
-    select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[0]
+    select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[
+        0
+    ]
     assert 'energyGraphState.selectionOrigin = "none";' in select_job
 
     # 2. Panel entry: one pure model decides the mode; the old last_cycle
@@ -354,24 +366,34 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     assert "function optimizationStatusPanelModel(data, job)" in html
     assert "function optimizationStatusPanelMarkup(data)" in html
     assert "optimizationConvergencePanelMarkup" not in html
-    model = html.split("function optimizationStatusPanelModel(data, job)", 1)[1].split("\nfunction ", 1)[0]
+    model = html.split("function optimizationStatusPanelModel(data, job)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
     assert "optimizationExplicitSelectedNode(data)" in model
     assert "buildSelectedCycleConvergenceModel(data, selected)" in model
     assert "buildTaskStatusModel(data, job)" in model
-    criteria = html.split("function energyOptCriteriaRows(data, cycleMetadata)", 1)[1].split("\n}\n", 1)[0]
+    criteria = html.split("function energyOptCriteriaRows(data, cycleMetadata)", 1)[1].split(
+        "\n}\n", 1
+    )[0]
     assert "last_cycle" not in criteria
-    assert "metadata.last_cycle" not in html.split("function optimizationWorkspaceMarkup(data)", 1)[1]
+    assert (
+        "metadata.last_cycle" not in html.split("function optimizationWorkspaceMarkup(data)", 1)[1]
+    )
 
     # 3. Explicit-pick detection requires selectionOrigin === "user" and must
     #    not fall back to another node (inspector/panel node consistency).
-    explicit = html.split("function optimizationExplicitSelectedNode(data)", 1)[1].split("\nfunction ", 1)[0]
+    explicit = html.split("function optimizationExplicitSelectedNode(data)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
     assert 'energyGraphState.selectionOrigin !== "user"' in explicit
     assert "nodes[0]" not in explicit
 
     # 4. Selected-cycle mode reads the picked node's own metadata, so a
     #    historical complete cycle shows its numbers even when the last cycle
     #    is incomplete.
-    selected_model = html.split("function buildSelectedCycleConvergenceModel(data, node)", 1)[1].split("\nfunction ", 1)[0]
+    selected_model = html.split("function buildSelectedCycleConvergenceModel(data, node)", 1)[
+        1
+    ].split("\nfunction ", 1)[0]
     assert "energyOptCriteriaRows(data, nodeMeta)" in selected_model
     assert 't("energy.conv.cycle_title"' in html
 
@@ -387,9 +409,14 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     #    add the converged note, failed/cancelled keep the last trajectory
     #    cycle, and a failed job with an incomplete last cycle adds the
     #    incomplete-cycle note.
-    task_model = html.split("function buildTaskStatusModel(data, job)", 1)[1].split("\nfunction ", 1)[0]
+    task_model = html.split("function buildTaskStatusModel(data, job)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
     assert "(job && job.status) || (data && data.status)" in task_model
-    assert 'rawStatus === "queued" || rawStatus === "starting" || rawStatus === "pending"' in task_model
+    assert (
+        'rawStatus === "queued" || rawStatus === "starting" || rawStatus === "pending"'
+        in task_model
+    )
     assert 'rawStatus === "running" || rawStatus === "partial"' in task_model
     assert 'rawStatus === "paused"' in task_model
     assert 'rawStatus === "cancelling"' in task_model
@@ -406,16 +433,28 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     # 7. Transitions: chart click / prev-next / keyboard → user (+follow off);
     #    "back to latest" → follow; refresh keeps a surviving user pick and
     #    falls back to follow when the picked node disappears.
-    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[1].split("\nfunction ", 1)[0]
-    assert 'energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";' in select_frame
-    assert 'energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow", nodes[nodes.length - 1].id)' in html
+    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[
+        1
+    ].split("\nfunction ", 1)[0]
+    assert (
+        'energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";'
+        in select_frame
+    )
+    assert (
+        'energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow", nodes[nodes.length - 1].id)'
+        in html
+    )
     opt_bind = html.split("function optimizationGraphBind(root)", 1)[1].split("\nfunction ", 1)[0]
     assert "energyGraphState.liveFollow = false;" in opt_bind
-    nav = html.split("function energyGraphBindInspectorButtons(root)", 1)[1].split("\nfunction ", 1)[0]
+    nav = html.split("function energyGraphBindInspectorButtons(root)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
     assert nav.count("energyGraphState.liveFollow = false;") >= 2
     keydown = html.split('if (e.key === "ArrowLeft")', 1)[1].split("switch (e.key)", 1)[0]
     assert keydown.count("energyGraphState.liveFollow = false;") >= 2
-    refresh = html.split('if (String(data.view_type || "") === "optimization")', 1)[1].split("\n    }", 1)[0]
+    refresh = html.split('if (String(data.view_type || "") === "optimization")', 1)[1].split(
+        "\n    }", 1
+    )[0]
     assert 'energyGraphState.selectionOrigin = "follow";' in refresh
     assert "energyGraphState.liveFollow = true;" in refresh
 
@@ -531,7 +570,10 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
     # tag selection and schedules a refresh after becoming visible.
     cards_body = html.split("function updateConfigCards()", 1)[1].split("\nfunction ", 1)[0]
     assert "scheduleNodeMatchingRefresh();" in cards_body
-    assert 'document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);' in html
+    assert (
+        'document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);'
+        in html
+    )
     open_body = html.split("function openModal()", 1)[1].split("\nfunction ", 1)[0]
     assert "resetNodeSelector();" in open_body
     assert "scheduleNodeMatchingRefresh();" in open_body
@@ -731,9 +773,7 @@ def test_frame_candidate_save_uses_terminal_status_predicate() -> None:
     assert "const jobTerminal = jobStatus ===" in html, (
         "jobTerminal must be defined checking all three terminal statuses"
     )
-    assert "&& jobTerminal" in html, (
-        "canEditRole must include jobTerminal gate"
-    )
+    assert "&& jobTerminal" in html, "canEditRole must include jobTerminal gate"
 
 
 def test_frame_candidate_role_picker_gate_uses_terminal_predicate() -> None:
@@ -749,8 +789,7 @@ def test_frame_candidate_role_picker_gate_uses_terminal_predicate() -> None:
     # The role-picker gate must use a terminal predicate, not the
     # completed-only variable.
     assert "(!isPES && jobCompleted)" not in html, (
-        "Role-picker gate must use terminal-status predicate, "
-        "not completed-only jobCompleted"
+        "Role-picker gate must use terminal-status predicate, not completed-only jobCompleted"
     )
 
 
@@ -764,7 +803,9 @@ def test_frame_candidate_disabled_active_job_branch_retained() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     assert "energy.inspector.save_after_complete" in html
-    assert 'save-candidate" data-energy-frame-id="\' + escapeHtml(frameIdStr) + \'" disabled' in html
+    assert (
+        'save-candidate" data-energy-frame-id="\' + escapeHtml(frameIdStr) + \'" disabled' in html
+    )
 
 
 def test_frame_candidate_post_body_includes_item_id() -> None:
@@ -778,9 +819,7 @@ def test_frame_candidate_post_body_includes_item_id() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # Extract the role-picker click handler that builds the POST body.
-    assert "[data-energy-candidate-role]" in html, (
-        "sanity: role-picker button selector exists"
-    )
+    assert "[data-energy-candidate-role]" in html, "sanity: role-picker button selector exists"
     handler = html.split("[data-energy-candidate-role]", 1)[1]
     handler = handler.split("\nfunction ", 1)[0]
 
@@ -793,6 +832,7 @@ def test_frame_candidate_post_body_includes_item_id() -> None:
 # ---------------------------------------------------------------------------
 # PES manual review — candidate card mode vs editability (2026-09 regression)
 # ---------------------------------------------------------------------------
+
 
 def _candidate_card_source(html: str) -> str:
     """Source of energyCandidateCardMarkup() up to the next top-level function."""
@@ -872,8 +912,7 @@ def test_pes_review_confirm_accepts_single_candidate() -> None:
         "the review payload must carry the whole working candidate set"
     )
     assert re.search(r"candidates\.length\s*[<>]=?\s*2", payload) is None, (
-        "the frontend must not impose a >=2 candidate gate — a single TS "
-        "frame is a valid selection"
+        "the frontend must not impose a >=2 candidate gate — a single TS frame is a valid selection"
     )
 
     dialog = html.split("function energyGraphOpenSaveDialog()", 1)[1]
@@ -898,9 +937,7 @@ def test_pes_none_role_labeled_cancel_candidate_with_effect_hint() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # Labels in both locales.
-    assert '"energy.card.type_none": "取消候选"' in html, (
-        "zh label must read 取消候选, not 无标记"
-    )
+    assert '"energy.card.type_none": "取消候选"' in html, "zh label must read 取消候选, not 无标记"
     assert '"energy.card.type_none": "Remove Candidate"' in html
     # Effect hint shipped in both locales (2 i18n definitions + 1 t() call site).
     assert html.count('"energy.card.type_none_hint":') == 2
@@ -910,9 +947,7 @@ def test_pes_none_role_labeled_cancel_candidate_with_effect_hint() -> None:
     card = _candidate_card_source(html)
     # The none button exposes the hint as a tooltip.
     none_btn = card.split('data-energy-role="none"', 1)[1].split("</button>", 1)[0]
-    assert "noneHint" in none_btn, (
-        "取消候选 button must carry the effect hint as its title"
-    )
+    assert "noneHint" in none_btn, "取消候选 button must carry the effect hint as its title"
     # The hint note renders only while the role buttons are editable.
     assert (
         "(canEditRole ? '<div class=\"energy-card-disabled-note\">' + noneHint + '</div>' : '')"
@@ -925,7 +960,15 @@ def test_pes_none_role_labeled_cancel_candidate_with_effect_hint() -> None:
 # ---------------------------------------------------------------------------
 
 _EXPECTED_STRUCTURE_EXTS = [
-    ".xyz", ".sdf", ".sd", ".mol", ".gjf", ".com", ".inp", ".log", ".out",
+    ".xyz",
+    ".sdf",
+    ".sd",
+    ".mol",
+    ".gjf",
+    ".com",
+    ".inp",
+    ".log",
+    ".out",
 ]
 
 
@@ -934,10 +977,10 @@ def test_structure_upload_exts_constant_defined() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     assert "STRUCTURE_UPLOAD_EXTS" in html, "STRUCTURE_UPLOAD_EXTS constant missing"
     for ext in _EXPECTED_STRUCTURE_EXTS:
-        assert f'"{ext}"' in html.split("STRUCTURE_UPLOAD_EXTS")[1].split("\n")[0] or \
-               f"'{ext}'" in html.split("STRUCTURE_UPLOAD_EXTS")[1].split("\n")[0], (
-            f"{ext} missing from STRUCTURE_UPLOAD_EXTS definition"
-        )
+        assert (
+            f'"{ext}"' in html.split("STRUCTURE_UPLOAD_EXTS")[1].split("\n")[0]
+            or f"'{ext}'" in html.split("STRUCTURE_UPLOAD_EXTS")[1].split("\n")[0]
+        ), f"{ext} missing from STRUCTURE_UPLOAD_EXTS definition"
 
 
 def test_structure_upload_exts_include_sd_log_out() -> None:
@@ -945,9 +988,7 @@ def test_structure_upload_exts_include_sd_log_out() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     accept_line = html.split('id="upload-file-input"')[1].split(">")[0]
     for ext in (".sd", ".log", ".out"):
-        assert ext in accept_line, (
-            f"{ext} missing from file picker accept attribute"
-        )
+        assert ext in accept_line, f"{ext} missing from file picker accept attribute"
 
 
 def test_file_picker_accept_matches_constant() -> None:
@@ -966,9 +1007,7 @@ def test_file_picker_accept_matches_constant() -> None:
 def test_is_accepted_structure_file_function_exists() -> None:
     """isAcceptedStructureFile(file) must exist and use STRUCTURE_UPLOAD_EXTS."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "function isAcceptedStructureFile(" in html, (
-        "isAcceptedStructureFile function missing"
-    )
+    assert "function isAcceptedStructureFile(" in html, "isAcceptedStructureFile function missing"
     # The function body must reference STRUCTURE_UPLOAD_EXTS
     fn_body = html.split("function isAcceptedStructureFile(")[1].split("\nfunction ")[0]
     assert "STRUCTURE_UPLOAD_EXTS" in fn_body, (
@@ -979,9 +1018,7 @@ def test_is_accepted_structure_file_function_exists() -> None:
 def test_reject_unsupported_file_function_exists() -> None:
     """rejectUnsupportedFile(file) must exist and use modal.unsupported_ext."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "function rejectUnsupportedFile(" in html, (
-        "rejectUnsupportedFile function missing"
-    )
+    assert "function rejectUnsupportedFile(" in html, "rejectUnsupportedFile function missing"
     fn_body = html.split("function rejectUnsupportedFile(")[1].split("\nfunction ")[0]
     assert "modal.unsupported_ext" in fn_body, (
         "rejectUnsupportedFile must use modal.unsupported_ext i18n key"
@@ -1006,9 +1043,7 @@ def test_drop_handler_calls_reject_unsupported() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     # Find the drop handler block
     drop_block = html.split('dropzone.addEventListener("drop"')[1].split("});")[0]
-    assert "rejectUnsupportedFile(" in drop_block, (
-        "drop handler must call rejectUnsupportedFile"
-    )
+    assert "rejectUnsupportedFile(" in drop_block, "drop handler must call rejectUnsupportedFile"
     assert "isAcceptedStructureFile(" in drop_block, (
         "drop handler must call isAcceptedStructureFile"
     )
@@ -1031,12 +1066,8 @@ def test_unsupported_ext_locale_key_in_both_locales() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     zh_keys = _extract_all_modal_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_all_modal_keys(html, _EN_BLOCK_RE)
-    assert "modal.unsupported_ext" in zh_keys, (
-        "modal.unsupported_ext missing from zh-CN locale"
-    )
-    assert "modal.unsupported_ext" in en_keys, (
-        "modal.unsupported_ext missing from en-US locale"
-    )
+    assert "modal.unsupported_ext" in zh_keys, "modal.unsupported_ext missing from zh-CN locale"
+    assert "modal.unsupported_ext" in en_keys, "modal.unsupported_ext missing from en-US locale"
 
 
 def test_nmr_bruker_zip_upload_unchanged() -> None:
@@ -1161,8 +1192,8 @@ def test_results_rows_status_badges_project_labels_and_search_scope() -> None:
     render_body = html.split("function renderResultsList()", 1)[1].split("\nfunction ", 1)[0]
     assert 'mode === "all"' in render_body
     assert "projectNameOf(src.project_id)" in render_body
-    assert "(src.candidate_id || \"\")" in render_body
-    assert "(src.job_status || \"\")" in render_body
+    assert '(src.candidate_id || "")' in render_body
+    assert '(src.job_status || "")' in render_body
 
     assert "function updateResultsCrossHint(" in html
     assert 'id="results-cross-hint"' in html
@@ -1245,8 +1276,11 @@ def test_viewer_framing_shared_helper_call_order() -> None:
     body = html.split(marker, 1)[1].split("\nfunction ", 1)[0]
     for token in (".resize()", ".center(", ".zoomTo(", ".render()"):
         assert token in body, f"Shared framing helper missing {token}"
-    assert body.find(".resize()") < body.find(".center(") < body.find(".zoomTo(") < body.find(
-        ".render()"
+    assert (
+        body.find(".resize()")
+        < body.find(".center(")
+        < body.find(".zoomTo(")
+        < body.find(".render()")
     ), "Shared framing helper call order changed"
     assert "preserveView" in body, "Shared framing helper must preserve user view"
 
@@ -1363,10 +1397,7 @@ def test_energy_structure_viewer_stays_within_visible_panel() -> None:
     )
 
     panel_marker = "\n.energy-inspector-panel {"
-    panel_rule_bodies = [
-        segment.split("}", 1)[0]
-        for segment in html.split(panel_marker)[1:]
-    ]
+    panel_rule_bodies = [segment.split("}", 1)[0] for segment in html.split(panel_marker)[1:]]
     rows_rules = [r for r in panel_rule_bodies if "grid-template-rows" in r]
     assert rows_rules, "Inspector panel rows-grid definition missing"
     assert any("grid-template-columns: minmax(0, 1fr)" in r for r in rows_rules), (
@@ -1378,6 +1409,7 @@ def test_frontend_script_has_no_syntax_errors() -> None:
     """Regression guard: the main <script> block must pass node --check."""
     if not shutil.which("node"):
         import pytest
+
         pytest.skip("node not available")
 
     html = FRONTEND.read_text(encoding="utf-8")
@@ -1388,18 +1420,15 @@ def test_frontend_script_has_no_syntax_errors() -> None:
     js_start = html.index("\n", script_start) + 1
     js_content = html[js_start:script_end]
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".js", delete=False, encoding="utf-8"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False, encoding="utf-8") as f:
         _ = f.write(js_content)
         _ = f.flush()
         result = subprocess.run(
             ["node", "--check", f.name],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
-        assert result.returncode == 0, (
-            f"node --check failed:\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"node --check failed:\n{result.stderr}"
 
 
 def test_frontend_files_exist_and_readable() -> None:
@@ -1467,6 +1496,7 @@ def test_v2_html_dropped_legacy_pick_and_measure_state() -> None:
 def test_extracted_js_passes_node_check(js_file: str) -> None:
     if not shutil.which("node"):
         import pytest as _pytest
+
         _pytest.skip("node not available")
 
     path = FRONTEND_JS_DIR / js_file
@@ -1475,23 +1505,30 @@ def test_extracted_js_passes_node_check(js_file: str) -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, (
-        f"node --check {js_file} failed:\n{result.stderr}"
-    )
+    assert result.returncode == 0, f"node --check {js_file} failed:\n{result.stderr}"
 
 
 # ---------------------------------------------------------------------------
 # Todo 15: structureViewerState store + payload fetch + revision/token
 # ---------------------------------------------------------------------------
 
+
 def test_structure_viewer_state_store_contract() -> None:
     """Contract: state fields, AbortController, requestToken, _fetchImpl exist."""
     js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
 
     for field in (
-        "jobId", "payload", "revision", "selectedEntryId",
-        "selectionOrigin", "selectionToken", "dirty", "editState",
-        "requestToken", "availability", "newerAvailable",
+        "jobId",
+        "payload",
+        "revision",
+        "selectedEntryId",
+        "selectionOrigin",
+        "selectionToken",
+        "dirty",
+        "editState",
+        "requestToken",
+        "availability",
+        "newerAvailable",
     ):
         assert field in js, f"state field {field!r} missing from structure_viewer.js"
 
@@ -1578,7 +1615,9 @@ def test_structure_viewer_node_logic_stale_response_discarded() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node logic test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -1653,7 +1692,9 @@ def test_structure_viewer_node_logic_dirty_guard() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node dirty-guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -1700,7 +1741,9 @@ def test_structure_viewer_node_logic_select_entry_token() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node selectEntry token test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -1711,6 +1754,7 @@ def test_structure_viewer_node_logic_select_entry_token() -> None:
 # ---------------------------------------------------------------------------
 # Todo 16: structure list + inspector + narrow-screen drawers
 # ---------------------------------------------------------------------------
+
 
 def test_structure_workspace_html_contract() -> None:
     """HTML contract: single-column workspace (summary bar + strip + drawers).
@@ -1796,12 +1840,12 @@ def test_structure_viewer_source_kind_labels() -> None:
     js = FRONTEND_JS_DIR / "structure_viewer.js"
     content = js.read_text(encoding="utf-8")
 
-    assert "\u6b63\u5f0f\u7ed3\u679c" in content      # 正式结果
-    assert "\u81ea\u52a8\u63a8\u8350" in content        # 自动推荐
-    assert "\u4eba\u5de5\u786e\u8ba4" in content        # 人工确认
+    assert "\u6b63\u5f0f\u7ed3\u679c" in content  # 正式结果
+    assert "\u81ea\u52a8\u63a8\u8350" in content  # 自动推荐
+    assert "\u4eba\u5de5\u786e\u8ba4" in content  # 人工确认
     assert "\u6700\u540e\u6709\u6548\u5468\u671f" in content  # 最后有效周期
-    assert "\u8ba1\u7b97\u8f93\u5165" in content        # 计算输入
-    assert "\u624b\u52a8\u6587\u4ef6" in content        # 手动文件
+    assert "\u8ba1\u7b97\u8f93\u5165" in content  # 计算输入
+    assert "\u624b\u52a8\u6587\u4ef6" in content  # 手动文件
 
 
 def test_structure_viewer_css_drawer_responsive() -> None:
@@ -1836,9 +1880,9 @@ def test_structure_viewer_css_single_column_layout() -> None:
         ".sv-canvas-col must declare flex: 1 to fill the workspace height"
     )
 
-    viewer_container_block = (
-        content.split(".sv-canvas-col .viewer-container {", 1)[1].split("}", 1)[0]
-    )
+    viewer_container_block = content.split(".sv-canvas-col .viewer-container {", 1)[1].split(
+        "}", 1
+    )[0]
     assert "flex: 1" in viewer_container_block
     assert "min-height: 0" in viewer_container_block
 
@@ -1873,6 +1917,7 @@ def test_structure_viewer_css_ultrawide_canvas_col_width() -> None:
 # ---------------------------------------------------------------------------
 # UX spec v2.0 P0: single-column workspace + summary bar + strip + drawers
 # ---------------------------------------------------------------------------
+
 
 def _div_span(html: str, id_token: str) -> tuple[int, int]:
     """Return the (start, end) character span of the <div> carrying id_token."""
@@ -1972,6 +2017,7 @@ def test_no_empty_inspector_sections() -> None:
 # Todo 17: auto-load on job select + manual_file injection + dirty guard
 # ---------------------------------------------------------------------------
 
+
 def test_selectjob_calls_onjobselected() -> None:
     """Contract: selectJob must call ACPStructureViewer.onJobSelected."""
     html = FRONTEND.read_text(encoding="utf-8")
@@ -1982,7 +2028,7 @@ def test_selectjob_calls_onjobselected() -> None:
     assert "ACPStructureViewer.onJobSelected" in select_job, (
         "selectJob must call ACPStructureViewer.onJobSelected"
     )
-    assert 'window.ACPStructureViewer && window.ACPStructureViewer.onJobSelected' in select_job, (
+    assert "window.ACPStructureViewer && window.ACPStructureViewer.onJobSelected" in select_job, (
         "onJobSelected call must be guarded by existence check"
     )
 
@@ -2054,7 +2100,9 @@ def test_structure_viewer_node_manual_entry_id_matches_python() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node manual_entry_id test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2071,6 +2119,7 @@ def test_structure_viewer_node_sha256_vectors() -> None:
 
     # Pre-computed expected digests
     import hashlib
+
     test_vectors = [
         ("", hashlib.sha256(b"").hexdigest()),
         ("abc", hashlib.sha256(b"abc").hexdigest()),
@@ -2078,7 +2127,8 @@ def test_structure_viewer_node_sha256_vectors() -> None:
     ]
 
     vectors_js = json.dumps(test_vectors)
-    script = textwrap.dedent("""\
+    script = (
+        textwrap.dedent("""\
         var window = { fetch: null };
         require(JS_PATH);
         var ns = window.ACPStructureViewer;
@@ -2093,11 +2143,16 @@ def test_structure_viewer_node_sha256_vectors() -> None:
           }
         }
         console.log("PASS");
-    """).replace("JS_PATH", json.dumps(str(js_path))).replace("VECTORS", vectors_js)
+    """)
+        .replace("JS_PATH", json.dumps(str(js_path)))
+        .replace("VECTORS", vectors_js)
+    )
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node sha256 test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2161,7 +2216,9 @@ def test_structure_viewer_node_dirty_guard_no_replace() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node dirty-guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2221,7 +2278,9 @@ def test_structure_viewer_node_geometry_409_retry() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Node geometry 409 test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2236,14 +2295,13 @@ def test_structure_viewer_svload_xyz_bridge_exists() -> None:
     assert "window._svLoadXyzToViewer" in html, (
         "Bridge function _svLoadXyzToViewer must exist in HTML"
     )
-    assert "parseMultiFrameXYZ" in html, (
-        "_svLoadXyzToViewer must use parseMultiFrameXYZ"
-    )
+    assert "parseMultiFrameXYZ" in html, "_svLoadXyzToViewer must use parseMultiFrameXYZ"
 
 
 # ---------------------------------------------------------------------------
 # Todo 18: energy graph -> structure viewer one-way push
 # ---------------------------------------------------------------------------
+
 
 def test_energy_selectframe_pushes_to_structure_viewer() -> None:
     """Contract: energyGraphSelectFrame calls onEnergyNodeSelected."""
@@ -2255,9 +2313,7 @@ def test_energy_selectframe_pushes_to_structure_viewer() -> None:
     assert "onEnergyNodeSelected" in select_frame, (
         "energyGraphSelectFrame must push selection to structure viewer"
     )
-    assert 'energyGraphState.jobId' in select_frame, (
-        "Push must pass jobId from energyGraphState"
-    )
+    assert "energyGraphState.jobId" in select_frame, "Push must pass jobId from energyGraphState"
 
 
 def test_structure_viewer_js_has_energy_push_api() -> None:
@@ -2267,9 +2323,7 @@ def test_structure_viewer_js_has_energy_push_api() -> None:
 
     assert "onEnergyNodeSelected" in content
     assert "_entryIdFromEnergyNode" in content
-    assert '"energy_graph"' in content, (
-        'Must use "energy_graph" origin for energy-graph push'
-    )
+    assert '"energy_graph"' in content, 'Must use "energy_graph" origin for energy-graph push'
 
 
 def test_structure_viewer_energy_push_forbidden_ids_still_absent() -> None:
@@ -2314,7 +2368,9 @@ def test_structure_viewer_node_energy_stale_job_guard() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Stale-job guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2358,7 +2414,9 @@ def test_structure_viewer_node_energy_entry_id_mapping() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Entry-id mapping test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2413,7 +2471,9 @@ def test_structure_viewer_node_energy_token_guard() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Token guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2469,7 +2529,9 @@ def test_structure_viewer_node_energy_transient_entry() -> None:
 
     result = subprocess.run(
         ["node", "-e", script],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert result.returncode == 0, (
         f"Transient entry test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
@@ -2502,7 +2564,7 @@ def test_phase_a_structure_tab_contract() -> None:
     assert 'data-tab="conformers"' not in html, "conformers tab must be removed"
     assert 'data-tab="3d"' not in html, "3d tab must be renamed to structure"
     assert 'data-tab="structure"' in html, "structure tab must exist"
-    assert '>结构查看器</button>' in html
+    assert ">结构查看器</button>" in html
     assert '"tab.structure": "结构查看器"' in html
     assert '"tab.structure": "Structure Viewer"' in html
     assert '"tab.conformers"' not in html
@@ -2512,7 +2574,10 @@ def test_phase_a_structure_tab_contract() -> None:
     assert 'data-tab="energy"' in html
     assert 'data-tab="wavefunction"' in html
     # Compat mapping
-    assert 'tab === "3d" || tab === "conformers"' in html or 'tab === "conformers" || tab === "3d"' in html
+    assert (
+        'tab === "3d" || tab === "conformers"' in html
+        or 'tab === "conformers" || tab === "3d"' in html
+    )
 
 
 def test_phase_a_store_api_names() -> None:
@@ -2538,10 +2603,10 @@ def test_phase_a_selectjob_autoload_call() -> None:
     """Phase-A lock: selectJob calls onJobSelected which triggers loadStructureViewer (todo 17)."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[0]
-    assert "onJobSelected" in select_job, (
-        "selectJob must call ACPStructureViewer.onJobSelected"
-    )
+    select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[
+        0
+    ]
+    assert "onJobSelected" in select_job, "selectJob must call ACPStructureViewer.onJobSelected"
 
 
 def test_phase_a_manual_file_injection_and_sha256_parity() -> None:
@@ -2551,7 +2616,7 @@ def test_phase_a_manual_file_injection_and_sha256_parity() -> None:
 
     assert "injectManualEntry" in content
     assert "_manualEntryId" in content
-    assert '_sha256hex(relpath).slice(0, 12)' in content, (
+    assert "_sha256hex(relpath).slice(0, 12)" in content, (
         "manual entry id must use sha256(relpath)[:12]"
     )
 
@@ -2562,9 +2627,7 @@ def test_phase_a_energy_push_token_guard() -> None:
     content = js.read_text(encoding="utf-8")
 
     assert "onEnergyNodeSelected" in content
-    assert '"energy_graph"' in content, (
-        'Must use "energy_graph" origin for energy-graph push'
-    )
+    assert '"energy_graph"' in content, 'Must use "energy_graph" origin for energy-graph push'
 
 
 def test_phase_a_dirty_guard_branch() -> None:
@@ -2640,9 +2703,7 @@ def test_phase_a_i18n_structure_keys_in_js_have_str_fallback() -> None:
 
     # Match _t("structure.xxx", STR.YYY) — must have two arguments
     t_calls = re.findall(r'_t\("structure\.[^"]+",\s*STR\.\w+\)', content)
-    assert len(t_calls) >= 20, (
-        f"Expected >=20 _t() calls with STR fallback, found {len(t_calls)}"
-    )
+    assert len(t_calls) >= 20, f"Expected >=20 _t() calls with STR fallback, found {len(t_calls)}"
 
 
 # ---------------------------------------------------------------------------
@@ -2947,11 +3008,14 @@ def test_vibration_viewer_node_render_unavailable_reason_only() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = textwrap.dedent("""\
+    script = textwrap.dedent(
+        """\
         var window = { fetch: null };
         require(JS_PATH);
         var ns = window.ACPVibrationViewer;
-""" + _VIB_DOM_STUB + """
+"""
+        + _VIB_DOM_STUB
+        + """
         ns.state.loading = false;
         ns.state.error = null;
         ns.state.data = { available: false, reason: "geometry_mismatch", modes: [] };
@@ -2973,7 +3037,8 @@ def test_vibration_viewer_node_render_unavailable_reason_only() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+    """
+    ).replace("JS_PATH", json.dumps(str(_VIB_JS)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -2988,11 +3053,14 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = textwrap.dedent("""\
+    script = textwrap.dedent(
+        """\
         var window = { fetch: null };
         require(JS_PATH);
         var ns = window.ACPVibrationViewer;
-""" + _VIB_DOM_STUB + """
+"""
+        + _VIB_DOM_STUB
+        + """
         var modes = [
             { mode_index: 5, frequency_cm1: 0.0, imaginary: false, ir_intensity: null },
             { mode_index: 6, frequency_cm1: -797.72, imaginary: true, ir_intensity: 24.8 },
@@ -3068,7 +3136,8 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+    """
+    ).replace("JS_PATH", json.dumps(str(_VIB_JS)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -3080,6 +3149,7 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
 # ---------------------------------------------------------------------------
 # Vibration dock regression tests (UX optimization plan)
 # ---------------------------------------------------------------------------
+
 
 def test_vibration_dock_host_element_exists() -> None:
     """Dock host element exists in HTML with display:none default."""
@@ -3374,7 +3444,7 @@ def test_vibration_summary_loading_class_used() -> None:
     sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
     assert "sv-vib-summary-loading" in sv, "loading spinner class missing"
     render_fn = sv.split("function renderStructureViewer()", 1)[1]
-    render_fn = render_fn[:render_fn.index("function _renderStripItem(")]
+    render_fn = render_fn[: render_fn.index("function _renderStripItem(")]
     assert "sv-vib-summary-loading" in render_fn, (
         "loading class must be used in renderStructureViewer"
     )
@@ -3385,9 +3455,10 @@ def test_vibration_summary_loading_no_height_change() -> None:
     """Loading indicator is inline (no block-level height change)."""
     css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
     loading_block = css.split(".sv-vib-summary-loading {", 1)[1].split("}", 1)[0]
-    assert "display: inline-block" in loading_block or "display:inline-block" in loading_block.replace(" ", ""), (
-        "loading indicator must be inline-block to avoid height change"
-    )
+    assert (
+        "display: inline-block" in loading_block
+        or "display:inline-block" in loading_block.replace(" ", "")
+    ), "loading indicator must be inline-block to avoid height change"
     assert "12px" in loading_block or "10px" in loading_block, (
         "loading indicator must be small (10-12px)"
     )
@@ -3400,9 +3471,9 @@ def test_vibration_grip_css_cursor_and_position() -> None:
     assert "cursor: ns-resize" in grip_block or "cursor:ns-resize" in grip_block.replace(" ", ""), (
         "grip must have ns-resize cursor"
     )
-    assert "position: absolute" in grip_block or "position:absolute" in grip_block.replace(" ", ""), (
-        "grip must be absolutely positioned"
-    )
+    assert "position: absolute" in grip_block or "position:absolute" in grip_block.replace(
+        " ", ""
+    ), "grip must be absolutely positioned"
 
 
 _SV_JS_PATH = FRONTEND_JS_DIR / "structure_viewer.js"
@@ -3452,19 +3523,24 @@ def test_vibration_viewer_arrow_contract() -> None:
     assert '"arrows"' in vib and '"animation"' in vib and '"combo"' in vib
 
     # Displayed-coordinates source + geometry-load arrow refresh hook
-    for name in ("displayedCoords", "displayedSymbols", "displayedEntryId",
-                 "_parseXyzFirstFrame"):
+    for name in ("displayedCoords", "displayedSymbols", "displayedEntryId", "_parseXyzFirstFrame"):
         assert name in sv, f"{name} missing from structure_viewer.js"
     assert "ACPVibrationViewer.refreshArrows" in sv
 
     # Toggle labels in BOTH locales (animation_soon stub key removed in todo 29)
     for zh, en in (
-        ('"structure.vib.arrow.display_arrows": "箭头"',
-         '"structure.vib.arrow.display_arrows": "Arrows"'),
-        ('"structure.vib.arrow.display_animation": "动画"',
-         '"structure.vib.arrow.display_animation": "Animation"'),
-        ('"structure.vib.arrow.display_combo": "箭头+动画"',
-         '"structure.vib.arrow.display_combo": "Arrows+Animation"'),
+        (
+            '"structure.vib.arrow.display_arrows": "箭头"',
+            '"structure.vib.arrow.display_arrows": "Arrows"',
+        ),
+        (
+            '"structure.vib.arrow.display_animation": "动画"',
+            '"structure.vib.arrow.display_animation": "Animation"',
+        ),
+        (
+            '"structure.vib.arrow.display_combo": "箭头+动画"',
+            '"structure.vib.arrow.display_combo": "Arrows+Animation"',
+        ),
     ):
         assert zh in html, f"zh toggle label missing: {zh}"
         assert en in html, f"en toggle label missing: {en}"
@@ -3701,7 +3777,7 @@ def test_vibration_viewer_animation_contract() -> None:
     assert "getView" in vib
     assert "setView" in vib
     assert "removeAllModels" in vib
-    assert 'addModel(' in vib
+    assert "addModel(" in vib
 
     # Built-in viewer.animate() is FORBIDDEN (no variable speed/phase)
     assert ".animate(" not in vib, "viewer.animate() must not be used"
@@ -3741,8 +3817,7 @@ def test_vibration_viewer_animation_contract() -> None:
         ('"structure.vib.anim.play": "播放"', '"structure.vib.anim.play": "Play"'),
         ('"structure.vib.anim.pause": "暂停"', '"structure.vib.anim.pause": "Pause"'),
         ('"structure.vib.anim.speed": "速度"', '"structure.vib.anim.speed": "Speed"'),
-        ('"structure.vib.anim.invert": "相位反转"',
-         '"structure.vib.anim.invert": "Invert Phase"'),
+        ('"structure.vib.anim.invert": "相位反转"', '"structure.vib.anim.invert": "Invert Phase"'),
     ):
         assert zh in html, f"zh label missing: {zh}"
         assert en in html, f"en label missing: {en}"
@@ -4088,7 +4163,8 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = (
+        textwrap.dedent("""\
         var window = { fetch: null };
         var AbortController = class { constructor() { this.signal = null; } abort() {} };
         require(EDITOR_PATH);
@@ -4294,8 +4370,14 @@ def test_vibration_viewer_ts_evidence_contract() -> None:
     vib = _VIB_JS.read_text(encoding="utf-8")
     html = FRONTEND.read_text(encoding="utf-8")
 
-    for name in ("tsJudgment", "tsHintText", "tsSuffixText", "thresholdText",
-                 "geometryMismatch", "_catalogEntry"):
+    for name in (
+        "tsJudgment",
+        "tsHintText",
+        "tsSuffixText",
+        "thresholdText",
+        "geometryMismatch",
+        "_catalogEntry",
+    ):
         assert name in vib, f"{name} missing from vibration_viewer.js"
 
     # At-or-below threshold rule (matches backend _count_significant_imaginary)
@@ -4310,29 +4392,44 @@ def test_vibration_viewer_ts_evidence_contract() -> None:
     assert "structure.vib.ts.mismatch_reason" in vib
 
     # Selector contract hooks
-    for cls in ("sv-vib-ts-hint", "sv-vib-ts-line", "sv-vib-ts-suffix",
-                "sv-vib-ts-threshold"):
+    for cls in ("sv-vib-ts-hint", "sv-vib-ts-line", "sv-vib-ts-suffix", "sv-vib-ts-threshold"):
         assert cls in vib, f"{cls} class missing"
 
     # All phase-B labels in BOTH locales
     for zh, en in (
-        ('"structure.vib.ts.first_order": "频率数量符合一阶鞍点"',
-         '"structure.vib.ts.first_order": "Frequency count is consistent '
-         'with a first-order saddle point"'),
-        ('"structure.vib.ts.no_evidence": "不是一阶鞍点证据"',
-         '"structure.vib.ts.no_evidence": "Not evidence of a first-order saddle point"'),
-        ('"structure.vib.ts.higher_order": "高阶鞍点或未充分优化"',
-         '"structure.vib.ts.higher_order": "Higher-order saddle or insufficiently optimized"'),
-        ('"structure.vib.ts.suffix": "仍需检查振动方向及 IRC"',
-         '"structure.vib.ts.suffix": "Still verify the vibration direction and IRC"'),
-        ('"structure.vib.ts.threshold_label": "显著虚频阈值"',
-         '"structure.vib.ts.threshold_label": "Significant imaginary threshold"'),
-        ('"structure.vib.ts.source_default": "默认"',
-         '"structure.vib.ts.source_default": "default"'),
-        ('"structure.vib.ts.source_job_config": "任务配置"',
-         '"structure.vib.ts.source_job_config": "job config"'),
-        ('"structure.vib.ts.mismatch_reason": "模式与当前几何不匹配"',
-         '"structure.vib.ts.mismatch_reason": "The modes do not match the displayed geometry"'),
+        (
+            '"structure.vib.ts.first_order": "频率数量符合一阶鞍点"',
+            '"structure.vib.ts.first_order": "Frequency count is consistent '
+            'with a first-order saddle point"',
+        ),
+        (
+            '"structure.vib.ts.no_evidence": "不是一阶鞍点证据"',
+            '"structure.vib.ts.no_evidence": "Not evidence of a first-order saddle point"',
+        ),
+        (
+            '"structure.vib.ts.higher_order": "高阶鞍点或未充分优化"',
+            '"structure.vib.ts.higher_order": "Higher-order saddle or insufficiently optimized"',
+        ),
+        (
+            '"structure.vib.ts.suffix": "仍需检查振动方向及 IRC"',
+            '"structure.vib.ts.suffix": "Still verify the vibration direction and IRC"',
+        ),
+        (
+            '"structure.vib.ts.threshold_label": "显著虚频阈值"',
+            '"structure.vib.ts.threshold_label": "Significant imaginary threshold"',
+        ),
+        (
+            '"structure.vib.ts.source_default": "默认"',
+            '"structure.vib.ts.source_default": "default"',
+        ),
+        (
+            '"structure.vib.ts.source_job_config": "任务配置"',
+            '"structure.vib.ts.source_job_config": "job config"',
+        ),
+        (
+            '"structure.vib.ts.mismatch_reason": "模式与当前几何不匹配"',
+            '"structure.vib.ts.mismatch_reason": "The modes do not match the displayed geometry"',
+        ),
     ):
         assert zh in html, f"zh TS label missing: {zh}"
         assert en in html, f"en TS label missing: {en}"
@@ -4350,7 +4447,7 @@ def test_vibration_viewer_node_ts_judgment_logic() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(VIB_PATH);
         var ns = window.ACPVibrationViewer;
@@ -4436,8 +4533,7 @@ def test_vibration_viewer_node_ts_judgment_logic() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("VIB_PATH", json.dumps(str(_VIB_JS))))
+    """).replace("VIB_PATH", json.dumps(str(_VIB_JS)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -4452,7 +4548,7 @@ def test_vibration_viewer_node_mismatch_disables_controls() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(VIB_PATH);
         var ns = window.ACPVibrationViewer;
@@ -4514,8 +4610,7 @@ def test_vibration_viewer_node_mismatch_disables_controls() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("VIB_PATH", json.dumps(str(_VIB_JS))))
+    """).replace("VIB_PATH", json.dumps(str(_VIB_JS)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -4567,7 +4662,7 @@ def test_structure_editor_node_adjacency_logic() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -4723,8 +4818,7 @@ def test_structure_editor_node_adjacency_logic() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -4778,7 +4872,7 @@ def test_structure_editor_node_bond_length_edit() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -4954,8 +5048,7 @@ def test_structure_editor_node_bond_length_edit() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -5008,7 +5101,7 @@ def test_structure_editor_node_bond_angle_edit() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -5190,8 +5283,7 @@ def test_structure_editor_node_bond_angle_edit() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -5231,7 +5323,7 @@ def test_structure_editor_node_dihedral_edit() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -5388,8 +5480,7 @@ def test_structure_editor_node_dihedral_edit() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -5447,8 +5538,13 @@ def test_structure_editor_transaction_contract() -> None:
     assert "sv-edit-panel" in sv_js and "sv-badge-dirty" in sv_js
 
     # CSS: edit panel + dirty badge (amber) + collision (red) + prompt
-    for cls in (".sv-edit-panel", ".sv-badge-dirty", ".sv-edit-collision",
-                ".sv-edit-prompt", ".sv-edit-btn"):
+    for cls in (
+        ".sv-edit-panel",
+        ".sv-badge-dirty",
+        ".sv-edit-collision",
+        ".sv-edit-prompt",
+        ".sv-edit-btn",
+    ):
         assert cls in css, f"{cls} missing from structure_viewer.css"
 
     # i18n keys in BOTH locales
@@ -5462,8 +5558,10 @@ def test_structure_editor_transaction_contract() -> None:
         ('"structure.edit.discard": "放弃"', '"structure.edit.discard": "Discard"'),
         ('"structure.edit.save_as": "另存为"', '"structure.edit.save_as": "Save As"'),
         ('"structure.edit.cancel": "取消"', '"structure.edit.cancel": "Cancel"'),
-        ('"structure.edit.collision": "严重碰撞"',
-         '"structure.edit.collision": "Severe collision"'),
+        (
+            '"structure.edit.collision": "严重碰撞"',
+            '"structure.edit.collision": "Severe collision"',
+        ),
     ):
         assert zh in html, f"zh edit key missing: {zh}"
         assert en in html, f"en edit key missing: {en}"
@@ -5476,7 +5574,7 @@ def test_structure_editor_node_transactions() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -5656,8 +5754,7 @@ def test_structure_editor_node_transactions() -> None:
             process.exit(1);
         }
         console.log("PASS");
-    """)
-        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -5705,22 +5802,29 @@ def test_structure_editor_asset_contract() -> None:
     assert "RESULT/" not in ed_js and "WORK/" not in ed_js
 
     # structure_viewer panel wiring
-    for name in ("exportEditedXyz", "saveEditedAsset", "prefillNewCalculation",
-                 "structure.edit.export_xyz", "structure.edit.save_asset",
-                 "structure.edit.new_calc"):
+    for name in (
+        "exportEditedXyz",
+        "saveEditedAsset",
+        "prefillNewCalculation",
+        "structure.edit.export_xyz",
+        "structure.edit.save_asset",
+        "structure.edit.new_calc",
+    ):
         assert name in sv_js, f"{name} missing from structure_viewer.js"
 
     # i18n keys in BOTH locales
     for zh, en in (
-        ('"structure.edit.export_xyz": "导出 XYZ"',
-         '"structure.edit.export_xyz": "Export XYZ"'),
-        ('"structure.edit.save_asset": "另存为结构资产"',
-         '"structure.edit.save_asset": "Save As Structure Asset"'),
-        ('"structure.edit.new_calc": "以此结构新建计算"',
-         '"structure.edit.new_calc": "New Calculation From This Structure"'),
+        ('"structure.edit.export_xyz": "导出 XYZ"', '"structure.edit.export_xyz": "Export XYZ"'),
+        (
+            '"structure.edit.save_asset": "另存为结构资产"',
+            '"structure.edit.save_asset": "Save As Structure Asset"',
+        ),
+        (
+            '"structure.edit.new_calc": "以此结构新建计算"',
+            '"structure.edit.new_calc": "New Calculation From This Structure"',
+        ),
         ('"structure.edit.saved": "已保存"', '"structure.edit.saved": "Saved"'),
-        ('"structure.edit.save_error": "保存失败"',
-         '"structure.edit.save_error": "Save failed"'),
+        ('"structure.edit.save_error": "保存失败"', '"structure.edit.save_error": "Save failed"'),
     ):
         assert zh in html, f"zh key missing: {zh}"
         assert en in html, f"en key missing: {en}"
@@ -5734,7 +5838,7 @@ def test_structure_editor_node_asset_save() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -5894,8 +5998,7 @@ def test_structure_editor_node_asset_save() -> None:
             console.error("FAIL: unexpected", e);
             process.exit(1);
         });
-    """)
-        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -6853,13 +6956,10 @@ def test_i18n_str_fallback_sweep() -> None:
         assert str_names, f"{module_name}: STR table not parsed"
 
         linked = {
-            name: key
-            for key, name in re.findall(r'_t\("([^"]+)",\s*STR\.([A-Z][A-Z0-9_]+)\)', src)
+            name: key for key, name in re.findall(r'_t\("([^"]+)",\s*STR\.([A-Z][A-Z0-9_]+)\)', src)
         }
         for helper in ("_editBtn", "_playbackBtn"):
-            for key, name in re.findall(
-                rf'{helper}\("([^"]+)",\s*STR\.([A-Z][A-Z0-9_]+)\)', src
-            ):
+            for key, name in re.findall(rf'{helper}\("([^"]+)",\s*STR\.([A-Z][A-Z0-9_]+)\)', src):
                 linked[name] = key
 
         orphans = str_names - set(linked) - set(declared)
@@ -7044,7 +7144,7 @@ def test_chemistry_editor_reference_scenario() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -7122,7 +7222,7 @@ def test_chemistry_editor_reference_scenario() -> None:
           console.error("FAIL: symbol order"); process.exit(1);
         }
         console.log("PASS");
-    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -7139,7 +7239,7 @@ def test_chemistry_dihedral_shortest_path_rerun() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -7197,7 +7297,7 @@ def test_chemistry_dihedral_shortest_path_rerun() -> None:
           process.exit(1);
         }
         console.log("PASS");
-    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -7213,7 +7313,7 @@ def test_chemistry_disconnected_sequence_rejection() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(EDITOR_PATH);
         var ed = window.ACPStructureEditor;
@@ -7247,7 +7347,7 @@ def test_chemistry_disconnected_sequence_rejection() -> None:
           process.exit(1);
         }
         console.log("PASS");
-    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -7264,7 +7364,7 @@ def test_chemistry_mode_vectors_never_mixed_node() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         require(VIB_PATH);
         var vib = window.ACPVibrationViewer;
@@ -7302,7 +7402,7 @@ def test_chemistry_mode_vectors_never_mixed_node() -> None:
           console.error("FAIL: null data pid must stay allowed"); process.exit(1);
         }
         console.log("PASS");
-    """).replace("VIB_PATH", json.dumps(str(_VIB_JS))))
+    """).replace("VIB_PATH", json.dumps(str(_VIB_JS)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -7327,7 +7427,7 @@ def test_f2_vibrations_fetch_gate_contract() -> None:
     sv_js = _SV_JS_PATH.read_text(encoding="utf-8")
     assert "entry.vibrations && entry.vibrations.available !== false" in sv_js
 
-    script = (textwrap.dedent("""\
+    script = textwrap.dedent("""\
         var window = { fetch: null };
         var AbortController = class { constructor() { this.signal = null; } abort() {} };
 
@@ -7393,7 +7493,7 @@ def test_f2_vibrations_fetch_gate_contract() -> None:
           process.exit(1);
         }
         console.log("PASS");
-    """).replace("SV_PATH", json.dumps(str(_SV_JS_PATH))))
+    """).replace("SV_PATH", json.dumps(str(_SV_JS_PATH)))
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
@@ -7419,7 +7519,7 @@ def test_summary_bar_vibration_and_measure_buttons() -> None:
     assert "toggleVibrationDock" in sv, "dock toggle missing"
 
     summary_fn = sv.split("function renderStructureViewer()", 1)[1]
-    summary_fn = summary_fn[:summary_fn.index("function _renderStripItem(")]
+    summary_fn = summary_fn[: summary_fn.index("function _renderStripItem(")]
     assert "toggleVibrationDock" in summary_fn, "vibration dock toggle not in summary bar"
     assert 'openDrawer("measure"' in summary_fn, "measure button not in summary bar"
     assert "imaginary_count" in summary_fn, "imaginary_count not in summary bar"
@@ -7436,7 +7536,7 @@ def test_render_measure_drawer_reads_store_measurements() -> None:
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
 
     measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
-    measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
+    measure_fn = measure_fn[: measure_fn.index("function _renderMoreDrawer(")]
     assert "_storeSnapshot()" in measure_fn, (
         "_renderMeasureDrawer must read the store via _storeSnapshot()"
     )
@@ -7455,9 +7555,7 @@ def test_render_measure_drawer_reads_store_measurements() -> None:
         "Chinese fallback message for non-editable measurements missing"
     )
     assert "applyMeasuredEdit" in measure_fn, "_renderMeasureDrawer must call applyMeasuredEdit"
-    assert "m.id" in measure_fn, (
-        "applyMeasuredEdit must receive the store measurement id"
-    )
+    assert "m.id" in measure_fn, "applyMeasuredEdit must receive the store measurement id"
     assert "markApplied" in measure_fn, (
         "successful apply must be written back to the store (markApplied)"
     )
@@ -7481,11 +7579,9 @@ def test_apply_measured_edit_call_site_in_viewer() -> None:
     assert "ACPStructureEditor.applyMeasuredEdit" in sv, (
         "viewer must call ACPStructureEditor.applyMeasuredEdit"
     )
-    assert "bond_length" in sv and "bond_angle" in sv, (
-        "type mapping tokens must appear in viewer"
-    )
+    assert "bond_length" in sv and "bond_angle" in sv, "type mapping tokens must appear in viewer"
     measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
-    measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
+    measure_fn = measure_fn[: measure_fn.index("function _renderMoreDrawer(")]
     assert "_appliedSet" not in measure_fn, (
         "index-based _appliedSet must be removed; use _applied flag on object"
     )
@@ -7496,22 +7592,18 @@ def test_edit_panel_in_measure_drawer_only() -> None:
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
 
     source_fn = sv.split("function _renderSourceDrawer(body)", 1)[1]
-    source_fn = source_fn[:source_fn.index("function _renderVibrationDrawer(")]
+    source_fn = source_fn[: source_fn.index("function _renderVibrationDrawer(")]
     assert "_renderEditPanel" not in source_fn, (
         "_renderEditPanel must NOT be in _renderSourceDrawer"
     )
 
     more_fn = sv.split("function _renderMoreDrawer(body)", 1)[1]
-    more_fn = more_fn[:more_fn.index("function toggleListDrawer(")]
-    assert "_renderEditPanel" not in more_fn, (
-        "_renderEditPanel must NOT be in _renderMoreDrawer"
-    )
+    more_fn = more_fn[: more_fn.index("function toggleListDrawer(")]
+    assert "_renderEditPanel" not in more_fn, "_renderEditPanel must NOT be in _renderMoreDrawer"
 
     measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
-    measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
-    assert "_renderEditPanel" in measure_fn, (
-        "_renderEditPanel MUST be in _renderMeasureDrawer"
-    )
+    measure_fn = measure_fn[: measure_fn.index("function _renderMoreDrawer(")]
+    assert "_renderEditPanel" in measure_fn, "_renderEditPanel MUST be in _renderMeasureDrawer"
 
 
 def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
@@ -7522,7 +7614,7 @@ def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     handler = html.split("function handleMeasureClick(atom)", 1)[1]
-    handler = handler[:handler.index("// ── Mechanism Builder")]
+    handler = handler[: handler.index("// ── Mechanism Builder")]
     assert "_svResolveAtomId" in handler, (
         "handleMeasureClick must resolve the native 3Dmol atom index"
     )
@@ -7541,12 +7633,8 @@ def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
     assert "renderMolDoc(" not in handler, (
         "pick callback must not synchronously rebuild the model (renderMolDoc)"
     )
-    assert 'openDrawer("measure"' in handler, (
-        "handleMeasureClick must auto-open measure drawer"
-    )
-    assert "_updateMeasureStatus" in handler, (
-        "handleMeasureClick must call _updateMeasureStatus"
-    )
+    assert 'openDrawer("measure"' in handler, "handleMeasureClick must auto-open measure drawer"
+    assert "_updateMeasureStatus" in handler, "handleMeasureClick must call _updateMeasureStatus"
     assert "renderMeasurementList" in handler, (
         "handleMeasureClick must call renderMeasurementList after measurement"
     )
@@ -7567,16 +7655,14 @@ def test_measure_status_element_and_update_function() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     assert 'id="measure-mode-status"' in html, "measure-mode-status span missing"
-    assert "function _updateMeasureStatus()" in html, (
-        "_updateMeasureStatus function missing"
-    )
+    assert "function _updateMeasureStatus()" in html, "_updateMeasureStatus function missing"
 
     update_fn = html.split("function _updateMeasureStatus()", 1)[1]
-    update_fn = update_fn[:update_fn.index("function setMode(")]
-    assert "measure-mode-status" in update_fn, "_updateMeasureStatus must reference the status element"
-    assert "ACPGeometryStore" in update_fn, (
-        "_updateMeasureStatus must read the geometry store"
+    update_fn = update_fn[: update_fn.index("function setMode(")]
+    assert "measure-mode-status" in update_fn, (
+        "_updateMeasureStatus must reference the status element"
     )
+    assert "ACPGeometryStore" in update_fn, "_updateMeasureStatus must read the geometry store"
     assert "store.state.selection.length" in update_fn, (
         "_updateMeasureStatus must read the store selection length"
     )
@@ -7591,10 +7677,8 @@ def test_set_mode_calls_update_measure_status() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     setmode_fn = html.split("function setMode(mode)", 1)[1]
-    setmode_fn = setmode_fn[:setmode_fn.index("function updateFrameController")]
-    assert "_updateMeasureStatus" in setmode_fn, (
-        "setMode must call _updateMeasureStatus"
-    )
+    setmode_fn = setmode_fn[: setmode_fn.index("function updateFrameController")]
+    assert "_updateMeasureStatus" in setmode_fn, "setMode must call _updateMeasureStatus"
 
 
 # ---------------------------------------------------------------------------
@@ -7796,16 +7880,34 @@ def test_measure_i18n_keys_in_both_locales() -> None:
 
     for zh, en in (
         ('"structure.vib.btn": "振动模式"', '"structure.vib.btn": "Vibrations"'),
-        ('"structure.vib.imaginary_btn": "虚频 {count}"', '"structure.vib.imaginary_btn": "Imaginary {count}"'),
+        (
+            '"structure.vib.imaginary_btn": "虚频 {count}"',
+            '"structure.vib.imaginary_btn": "Imaginary {count}"',
+        ),
         ('"structure.measure.btn": "测量"', '"structure.measure.btn": "Measure"'),
-        ('"structure.measure.type_distance": "距离"', '"structure.measure.type_distance": "Distance"'),
+        (
+            '"structure.measure.type_distance": "距离"',
+            '"structure.measure.type_distance": "Distance"',
+        ),
         ('"structure.measure.type_angle": "角度"', '"structure.measure.type_angle": "Angle"'),
-        ('"structure.measure.type_dihedral": "二面角"', '"structure.measure.type_dihedral": "Dihedral"'),
+        (
+            '"structure.measure.type_dihedral": "二面角"',
+            '"structure.measure.type_dihedral": "Dihedral"',
+        ),
         ('"structure.measure.apply": "应用修改"', '"structure.measure.apply": "Apply Edit"'),
         ('"structure.measure.applied": "已应用"', '"structure.measure.applied": "Applied"'),
-        ('"structure.measure.range_warn": "值超出范围"', '"structure.measure.range_warn": "Value out of range"'),
-        ('"structure.measure.status_label": "测量："', '"structure.measure.status_label": "Measure: "'),
-        ('"structure.measure.status_selected": "已选"', '"structure.measure.status_selected": "selected"'),
+        (
+            '"structure.measure.range_warn": "值超出范围"',
+            '"structure.measure.range_warn": "Value out of range"',
+        ),
+        (
+            '"structure.measure.status_label": "测量："',
+            '"structure.measure.status_label": "Measure: "',
+        ),
+        (
+            '"structure.measure.status_selected": "已选"',
+            '"structure.measure.status_selected": "selected"',
+        ),
     ):
         assert zh in html, f"zh-CN key missing: {zh}"
         assert en in html, f"en-US key missing: {en}"
@@ -7815,9 +7917,17 @@ def test_str_keys_linked_via_t_calls() -> None:
     """All new STR keys are linked via _t() calls in structure_viewer.js."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
 
-    for key in ("VIB_BTN", "VIB_IMAG_BTN", "MEASURE_BTN",
-                "MEASURE_TYPE_DISTANCE", "MEASURE_TYPE_ANGLE", "MEASURE_TYPE_DIHEDRAL",
-                "MEASURE_APPLY", "MEASURE_APPLIED", "MEASURE_RANGE_WARN"):
+    for key in (
+        "VIB_BTN",
+        "VIB_IMAG_BTN",
+        "MEASURE_BTN",
+        "MEASURE_TYPE_DISTANCE",
+        "MEASURE_TYPE_ANGLE",
+        "MEASURE_TYPE_DIHEDRAL",
+        "MEASURE_APPLY",
+        "MEASURE_APPLIED",
+        "MEASURE_RANGE_WARN",
+    ):
         assert f"STR.{key}" in sv, f"STR.{key} not referenced via _t() in structure_viewer.js"
 
 
@@ -7930,9 +8040,7 @@ def test_electronic_state_module_renderer_dispatch() -> None:
     # 3. The module dispatch sits before the generic text-input fallback.
     module_pos = html.find('fieldName].renderer === "electronic_state"')
     fallback_marker = (
-        "} else {\n"
-        '        var inp = document.createElement("input");\n'
-        '        inp.type = "text";'
+        '} else {\n        var inp = document.createElement("input");\n        inp.type = "text";'
     )
     fallback_pos = html.find(fallback_marker)
     assert module_pos != -1 and fallback_pos != -1
@@ -7963,18 +8071,37 @@ def test_batch_no_preset_identifiers_remain() -> None:
     """All preset/inheritance identifiers must be completely removed."""
     html = FRONTEND.read_text(encoding="utf-8")
     for marker in [
-        "BATCH_PRESETS", "_batchPresetMatch", "_presetSummaryText",
-        "_batchCustomCount", "mc-adv-header-bar", "mc-adv-custom-count",
-        "mc-adv-reset-btn", "mc-preset-bar", "mc-preset-btn",
-        "mc-preset-summary", "mc-preset-toast",
-        "_buildRoleOverrideField", "_resolveRoleValue",
-        "_linkEnabled", "_linkTsMethods", "_copyIntToTs",
-        "mc-role-columns", "mc-role-col", "mc-role-section",
-        "mc-role-link-row", "mc-role-link", "mc-role-inherit-switch",
-        "mc-role-override-row", "mc-role-inherit-value",
-        "mc-role-inherit-badge", "mc-role-linked-note",
-        "_ROLE_COLUMN_FIELDS", "_ROLE_FIELD_DEFS", "_ROLE_COLUMN_BASE_FIELDS",
-        "_buildRoleColumn", "_buildRoleGroupCol",
+        "BATCH_PRESETS",
+        "_batchPresetMatch",
+        "_presetSummaryText",
+        "_batchCustomCount",
+        "mc-adv-header-bar",
+        "mc-adv-custom-count",
+        "mc-adv-reset-btn",
+        "mc-preset-bar",
+        "mc-preset-btn",
+        "mc-preset-summary",
+        "mc-preset-toast",
+        "_buildRoleOverrideField",
+        "_resolveRoleValue",
+        "_linkEnabled",
+        "_linkTsMethods",
+        "_copyIntToTs",
+        "mc-role-columns",
+        "mc-role-col",
+        "mc-role-section",
+        "mc-role-link-row",
+        "mc-role-link",
+        "mc-role-inherit-switch",
+        "mc-role-override-row",
+        "mc-role-inherit-value",
+        "mc-role-inherit-badge",
+        "mc-role-linked-note",
+        "_ROLE_COLUMN_FIELDS",
+        "_ROLE_FIELD_DEFS",
+        "_ROLE_COLUMN_BASE_FIELDS",
+        "_buildRoleColumn",
+        "_buildRoleGroupCol",
     ]:
         assert marker not in html, f"Preset/inheritance marker {marker!r} must be removed"
 
@@ -8001,27 +8128,43 @@ def test_batch_serializer_emits_batch_roles() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
-    assert 'methodPayload.batch_roles = {}' in fn_body, "batch_roles initialization missing"
+    assert "methodPayload.batch_roles = {}" in fn_body, "batch_roles initialization missing"
     assert '"int", "ts"].forEach' in fn_body, "Role iteration missing"
     # Key contract
     for key in [
-        "method", "basis", "sp_method", "sp_basis",
-        "opt_max_iter", "opt_convergence", "opt_trust_radius",
-        "opt_initial_hessian", "opt_recalc_hess",
-        "scf_max_iter", "scf_convergence", "scf_strategy",
-        "scf_orbital_inherit", "scf_damp", "scf_damp_fac",
-        "scf_shift", "scf_shift_fac",
-        "opt_rescue_policy", "opt_max_rescue",
-        "temperature", "pressure", "scale_factor",
+        "method",
+        "basis",
+        "sp_method",
+        "sp_basis",
+        "opt_max_iter",
+        "opt_convergence",
+        "opt_trust_radius",
+        "opt_initial_hessian",
+        "opt_recalc_hess",
+        "scf_max_iter",
+        "scf_convergence",
+        "scf_strategy",
+        "scf_orbital_inherit",
+        "scf_damp",
+        "scf_damp_fac",
+        "scf_shift",
+        "scf_shift_fac",
+        "opt_rescue_policy",
+        "opt_max_rescue",
+        "temperature",
+        "pressure",
+        "scale_factor",
     ]:
         assert f'"{key}"' in fn_body, f"ROLE_CONFIG key {key!r} missing from serializer"
     # Null preservation
-    assert 'dest[k] = (src[k] !== undefined) ? src[k] : null' in fn_body, (
+    assert "dest[k] = (src[k] !== undefined) ? src[k] : null" in fn_body, (
         "Null preservation logic missing"
     )
     # No minimum_/transition_state_ prefixed keys in the serializer
     assert "minimum_opt_" not in fn_body, "Old minimum_ prefixed keys must be gone from serializer"
-    assert "transition_state_opt_" not in fn_body, "Old transition_state_ prefixed keys must be gone from serializer"
+    assert "transition_state_opt_" not in fn_body, (
+        "Old transition_state_ prefixed keys must be gone from serializer"
+    )
 
 
 def test_batch_role_defaults_defined() -> None:
@@ -8043,18 +8186,14 @@ def test_batch_role_defaults_defined() -> None:
 def test_batch_hessian_label_not_computation_count() -> None:
     """Plan section: 'Hessian 计算次数' is forbidden; '每 N 个优化循环重算' is correct."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert r"Hessian \u8ba1\u7b97\u6b21\u6570" not in html, (
-        "'Hessian 计算次数' is forbidden"
-    )
+    assert r"Hessian \u8ba1\u7b97\u6b21\u6570" not in html, "'Hessian 计算次数' is forbidden"
     assert r"\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af\u91cd\u7b97" in html
 
 
 def test_batch_trust_radius_label() -> None:
     """opt_trust_radius label must be '信赖半径' (NOT '步长')."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u4fe1\u8d56\u534a\u5f84" in html, (
-        "'信赖半径' label missing for opt_trust_radius"
-    )
+    assert r"\u4fe1\u8d56\u534a\u5f84" in html, "'信赖半径' label missing for opt_trust_radius"
     # Must NOT be renamed to 步长
     assert r"\u6b65\u957f" not in html, "'步长' must not replace '信赖半径'"
 
@@ -8062,9 +8201,7 @@ def test_batch_trust_radius_label() -> None:
 def test_batch_preview_endpoint_url_present() -> None:
     """config-preview endpoint URL string present."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "/api/v1/batch-optimize/config-preview" in html, (
-        "Preview endpoint URL missing"
-    )
+    assert "/api/v1/batch-optimize/config-preview" in html, "Preview endpoint URL missing"
 
 
 def test_batch_preview_debounce_and_abort() -> None:
@@ -8153,8 +8290,8 @@ def test_batch_parameter_summary_collapsible() -> None:
 def test_batch_copy_other_role_method() -> None:
     """The role-toolbar copy button copies methods but not optimizer/SCF fields."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert 'roleToolbar.appendChild(copyRoleBtn)' in html
-    assert 'roleToolbar.appendChild(roleBar)' in html
+    assert "roleToolbar.appendChild(copyRoleBtn)" in html
+    assert "roleToolbar.appendChild(roleBar)" in html
     copy_body = html.split('copyRoleBtn.addEventListener("click"', 1)[1]
     copy_body = copy_body.split("});", 1)[0]
     for key in ["method", "basis", "sp_method", "sp_basis"]:
@@ -8200,7 +8337,7 @@ def test_batch_cancel_reverts_whole_draft() -> None:
     open_body = open_body.split("\nasync function ", 1)[0]
     assert "var _methodDraft = JSON.parse(JSON.stringify(wizardState.method));" in open_body
     assert "function revertMethodDraft()" in open_body
-    assert 'window._revertMethodDraft = revertMethodDraft;' in open_body
+    assert "window._revertMethodDraft = revertMethodDraft;" in open_body
     for btn_id in ("mt-config-cancel", "mt-config-close"):
         marker = (
             f'document.getElementById("{btn_id}").addEventListener("click", function() {{\n'
@@ -8214,8 +8351,7 @@ def test_batch_cancel_blocks_late_validation_writeback() -> None:
     """doValidate must not write normalized values after cancel closed the modal."""
     html = FRONTEND.read_text(encoding="utf-8")
     modal_guard = (
-        'var modalHidden = document.getElementById("method-config-modal")'
-        '.style.display === "none";'
+        'var modalHidden = document.getElementById("method-config-modal").style.display === "none";'
     )
     assert modal_guard in html
     assert "if (body.normalized_levels && !modalHidden)" in html
@@ -8365,7 +8501,6 @@ def test_batch_hessian_control_writes_canonical_field() -> None:
     assert "st.recalc_hess !== undefined" in body, "legacy one-time migration read must remain"
 
 
-
 # ── P2c: job detail effective config for BatchOptimize ────────────────
 
 
@@ -8380,10 +8515,10 @@ def test_p2c_job_detail_effective_config_function_exists() -> None:
 def test_p2c_effective_config_schema_guard() -> None:
     """P2c contract: render only when schema === batch_optimize_effective_v1."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert 'effectiveConfig.schema !== "batch_optimize_effective_v1"' in html or \
-           "effectiveConfig.schema !== 'batch_optimize_effective_v1'" in html, (
-        "Schema guard string 'batch_optimize_effective_v1' missing"
-    )
+    assert (
+        'effectiveConfig.schema !== "batch_optimize_effective_v1"' in html
+        or "effectiveConfig.schema !== 'batch_optimize_effective_v1'" in html
+    ), "Schema guard string 'batch_optimize_effective_v1' missing"
 
 
 def test_p2c_effective_config_orca_summary_chips() -> None:
@@ -8448,25 +8583,18 @@ def test_electronic_state_summary_expands_preset() -> None:
 # T4 — Task-view data layer (apiV2 + prefs + refreshJobs rewrite)
 # ---------------------------------------------------------------------------
 
+
 def test_task_view_data_layer() -> None:
     """T4 data-layer contract: apiV2, DEFAULT_TASK_VIEW, prefs, refreshJobs rewrite."""
     html = FRONTEND.read_text(encoding="utf-8")
 
     # (1) apiV2 function definition and "/api/v2" literal present.
-    assert "async function apiV2(path, opts)" in html, (
-        "apiV2 function definition missing"
-    )
-    assert '"/api/v2"' in html or "fetch(\"/api/v2\"" in html, (
-        '"/api/v2" literal missing from apiV2'
-    )
+    assert "async function apiV2(path, opts)" in html, "apiV2 function definition missing"
+    assert '"/api/v2"' in html or 'fetch("/api/v2"' in html, '"/api/v2" literal missing from apiV2'
 
     # (2) DEFAULT_TASK_VIEW with correct shape.
-    assert 'groupBy: "molecule"' in html, (
-        'DEFAULT_TASK_VIEW.groupBy must be "molecule"'
-    )
-    assert 'sort: "created_desc"' in html, (
-        'DEFAULT_TASK_VIEW.sort must be "created_desc"'
-    )
+    assert 'groupBy: "molecule"' in html, 'DEFAULT_TASK_VIEW.groupBy must be "molecule"'
+    assert 'sort: "created_desc"' in html, 'DEFAULT_TASK_VIEW.sort must be "created_desc"'
 
     # (3) localStorage prefix and __all__ fallback.
     assert '"acp.taskview."' in html or "acp.taskview." in html, (
@@ -8476,17 +8604,11 @@ def test_task_view_data_layer() -> None:
 
     # (4) refreshJobs uses apiV2("/task-view...) and no longer sets limit=50.
     refresh_body = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
-    assert 'apiV2("/task-view' in refresh_body, (
-        'refreshJobs must call apiV2("/task-view...)'
-    )
-    assert 'query.set("limit", "50")' not in refresh_body, (
-        "refreshJobs must no longer set limit=50"
-    )
+    assert 'apiV2("/task-view' in refresh_body, 'refreshJobs must call apiV2("/task-view...)'
+    assert 'query.set("limit", "50")' not in refresh_body, "refreshJobs must no longer set limit=50"
 
     # (5) API_BASE unchanged.
-    assert 'const API_BASE = "/api/v1"' in html, (
-        'API_BASE must remain "/api/v1"'
-    )
+    assert 'const API_BASE = "/api/v1"' in html, 'API_BASE must remain "/api/v1"'
 
     # (6) taskViewCache defined and jobsCache derived from groups.
     assert "let taskViewCache" in html or "var taskViewCache" in html, (
@@ -8495,18 +8617,14 @@ def test_task_view_data_layer() -> None:
     assert "taskViewCache = body" in refresh_body, (
         "refreshJobs must store full body in taskViewCache"
     )
-    assert "body.groups" in refresh_body, (
-        "refreshJobs must derive jobsCache from body.groups"
-    )
+    assert "body.groups" in refresh_body, "refreshJobs must derive jobsCache from body.groups"
 
     # (7) try/catch around JSON.parse in loadTaskViewPrefs.
     prefs_fn = html.split("function loadTaskViewPrefs(", 1)[1].split("\nfunction ", 1)[0]
     assert "try" in prefs_fn and "catch" in prefs_fn, (
         "loadTaskViewPrefs must have try/catch for corrupt JSON fallback"
     )
-    assert "JSON.parse" in prefs_fn, (
-        "loadTaskViewPrefs must use JSON.parse"
-    )
+    assert "JSON.parse" in prefs_fn, "loadTaskViewPrefs must use JSON.parse"
 
     # (8) loadTaskViewPrefs hook at selectedProjectId change site.
     change_handler = html.split('getElementById("project-select").addEventListener("change"', 1)[1]
@@ -8518,10 +8636,11 @@ def test_task_view_data_layer() -> None:
     # (9) v1 api("/ call count: refreshJobs switched from api("/jobs") to
     #     apiV2("/task-view") so the count dropped by exactly 1 vs the
     #     pre-T4 baseline (which was 53).  T10 added saved-views PATCH
-    #     calls (+2); T11 added auto-tag rules CRUD (+4).
+    #     calls (+2); T11 added auto-tag rules CRUD (+4); P4 structure
+    #     picker added s2scan picker branch detail+asset calls (+2).
     api_v1_count = html.count('api("/')
-    assert api_v1_count == 59, (
-        f"v1 api('/ call count expected 59 (53 baseline -1 +2 T10 +4 T11), got {api_v1_count}"
+    assert api_v1_count == 61, (
+        f"v1 api('/ call count expected 61 (53 baseline -1 +2 T10 +4 T11 +2 P4 picker), got {api_v1_count}"
     )
 
 
@@ -8532,9 +8651,7 @@ def test_task_view_prefs_corrupt_fallback() -> None:
     # The loadTaskViewPrefs function must have a catch branch that assigns
     # a JSON.parse(JSON.stringify(DEFAULT_TASK_VIEW)) deep clone as fallback.
     prefs_fn = html.split("function loadTaskViewPrefs(", 1)[1].split("\nfunction ", 1)[0]
-    assert "catch" in prefs_fn, (
-        "loadTaskViewPrefs must have a catch branch for corrupt JSON"
-    )
+    assert "catch" in prefs_fn, "loadTaskViewPrefs must have a catch branch for corrupt JSON"
     # The fallback must produce a fresh DEFAULT_TASK_VIEW clone.
     assert "DEFAULT_TASK_VIEW" in prefs_fn, (
         "loadTaskViewPrefs must reference DEFAULT_TASK_VIEW in fallback"
@@ -8551,15 +8668,9 @@ def test_task_view_prefs_constants_structure() -> None:
     definition = html[start:end]
 
     for dim in ("status", "workflow", "molecule", "tag", "batch", "remark"):
-        assert f"{dim}: []" in definition, (
-            f"DEFAULT_TASK_VIEW.filters must include {dim}: []"
-        )
-    assert 'archived: "exclude"' in definition, (
-        'DEFAULT_TASK_VIEW.archived must be "exclude"'
-    )
-    assert "runningFirst: false" in definition, (
-        "DEFAULT_TASK_VIEW.runningFirst must be false"
-    )
+        assert f"{dim}: []" in definition, f"DEFAULT_TASK_VIEW.filters must include {dim}: []"
+    assert 'archived: "exclude"' in definition, 'DEFAULT_TASK_VIEW.archived must be "exclude"'
+    assert "runningFirst: false" in definition, "DEFAULT_TASK_VIEW.runningFirst must be false"
 
 
 def test_api_v2_after_api_definition() -> None:
@@ -8568,9 +8679,7 @@ def test_api_v2_after_api_definition() -> None:
 
     api_pos = html.index("async function api(path, opts)")
     api_v2_pos = html.index("async function apiV2(path, opts)")
-    assert api_v2_pos > api_pos, (
-        "apiV2 must be defined after api() — it is a separate helper"
-    )
+    assert api_v2_pos > api_pos, "apiV2 must be defined after api() — it is a separate helper"
 
 
 # ---------------------------------------------------------------------------
@@ -8593,16 +8702,17 @@ def test_queue_view_toolbar_present() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # Five control ids
-    for ctrl_id in ("task-view-search", "task-view-group", "task-view-sort",
-                     "task-view-filter-btn", "task-view-chips"):
-        assert f'id="{ctrl_id}"' in html, (
-            f"Toolbar control id=\"{ctrl_id}\" missing"
-        )
+    for ctrl_id in (
+        "task-view-search",
+        "task-view-group",
+        "task-view-sort",
+        "task-view-filter-btn",
+        "task-view-chips",
+    ):
+        assert f'id="{ctrl_id}"' in html, f'Toolbar control id="{ctrl_id}" missing'
 
     # Filter panel id
-    assert 'id="task-view-filter-panel"' in html, (
-        "Filter panel id missing"
-    )
+    assert 'id="task-view-filter-panel"' in html, "Filter panel id missing"
 
     # data-i18n-ph on search input
     assert 'id="task-view-search"' in html
@@ -8620,9 +8730,7 @@ def test_queue_view_toolbar_present() -> None:
 
     # data-i18n-opt on group select options (tag option enabled in T9)
     group_select = html.split('id="task-view-group"', 1)[1].split("</select>", 1)[0]
-    assert "data-i18n-opt=" in group_select, (
-        "Group select options must use data-i18n-opt"
-    )
+    assert "data-i18n-opt=" in group_select, "Group select options must use data-i18n-opt"
     tag_option_match = re.search(r'<option\s+value="tag"[^>]*>', group_select)
     assert tag_option_match, "tag option must exist in group select"
     assert "disabled" not in tag_option_match.group(0), (
@@ -8631,9 +8739,7 @@ def test_queue_view_toolbar_present() -> None:
 
     # data-i18n-opt on sort select options
     sort_select = html.split('id="task-view-sort"', 1)[1].split("</select>", 1)[0]
-    assert "data-i18n-opt=" in sort_select, (
-        "Sort select options must use data-i18n-opt"
-    )
+    assert "data-i18n-opt=" in sort_select, "Sort select options must use data-i18n-opt"
 
     # toolbar sits between queue-summary and queue-expanded
     summary_pos = html.index('class="queue-summary"')
@@ -8651,21 +8757,13 @@ def test_queue_view_i18n_parity() -> None:
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
 
-    assert len(zh_keys) >= 25, (
-        f"Expected >= 25 queue.view.* keys in zh-CN, got {len(zh_keys)}"
-    )
-    assert len(en_keys) >= 25, (
-        f"Expected >= 25 queue.view.* keys in en-US, got {len(en_keys)}"
-    )
+    assert len(zh_keys) >= 25, f"Expected >= 25 queue.view.* keys in zh-CN, got {len(zh_keys)}"
+    assert len(en_keys) >= 25, f"Expected >= 25 queue.view.* keys in en-US, got {len(en_keys)}"
 
     only_zh = zh_keys - en_keys
     only_en = en_keys - zh_keys
-    assert not only_zh, (
-        f"queue.view.* keys in zh-CN but missing from en-US: {sorted(only_zh)}"
-    )
-    assert not only_en, (
-        f"queue.view.* keys in en-US but missing from zh-CN: {sorted(only_en)}"
-    )
+    assert not only_zh, f"queue.view.* keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"queue.view.* keys in en-US but missing from zh-CN: {sorted(only_en)}"
 
 
 def test_task_view_chips_logic() -> None:
@@ -8673,33 +8771,21 @@ def test_task_view_chips_logic() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # renderChips function exists
-    assert "function renderChips()" in html, (
-        "renderChips() function missing"
-    )
+    assert "function renderChips()" in html, "renderChips() function missing"
 
     # Chip remove handler references _clonePrefs + filters
     chips_fn = html.split("function renderChips()", 1)[1].split("\nfunction ", 1)[0]
-    assert "_clonePrefs()" in chips_fn, (
-        "renderChips must use _clonePrefs() for safe mutation"
-    )
-    assert "next.filters" in chips_fn, (
-        "renderChips remove handler must reference next.filters"
-    )
+    assert "_clonePrefs()" in chips_fn, "renderChips must use _clonePrefs() for safe mutation"
+    assert "next.filters" in chips_fn, "renderChips remove handler must reference next.filters"
 
     # Clear-all handler exists (inside renderChips)
-    assert "queue.view.chip_clear" in chips_fn, (
-        "renderChips must render chip-clear with i18n key"
-    )
+    assert "queue.view.chip_clear" in chips_fn, "renderChips must render chip-clear with i18n key"
 
     # _activeFilterCount helper exists
-    assert "function _activeFilterCount()" in html, (
-        "_activeFilterCount() function missing"
-    )
+    assert "function _activeFilterCount()" in html, "_activeFilterCount() function missing"
 
     # _updateFilterBadge helper exists
-    assert "function _updateFilterBadge()" in html, (
-        "_updateFilterBadge() function missing"
-    )
+    assert "function _updateFilterBadge()" in html, "_updateFilterBadge() function missing"
 
 
 def test_task_view_prefs_clone_safety() -> None:
@@ -8733,8 +8819,12 @@ def test_task_view_prefs_clone_safety() -> None:
     all_fn_bodies = html.split("function ")
     for body in all_fn_bodies:
         fn_header = body.split("(", 1)[0].strip() if "(" in body else ""
-        if fn_header in ("_clonePrefs", "loadTaskViewPrefs", "_applyTaskViewPrefsToControls",
-                          "_activeFilterCount"):
+        if fn_header in (
+            "_clonePrefs",
+            "loadTaskViewPrefs",
+            "_applyTaskViewPrefsToControls",
+            "_activeFilterCount",
+        ):
             continue
         # No function should directly mutate taskViewPrefs.filters
         if "taskViewPrefs.filters[" in body and "=" in body.split("taskViewPrefs.filters[")[1][:20]:
@@ -8747,18 +8837,14 @@ def test_data_i18n_opt_support_in_apply_i18n() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     apply_fn = html.split("function applyI18n()", 1)[1].split("\nfunction ", 1)[0]
-    assert "data-i18n-opt" in apply_fn, (
-        "applyI18n must handle data-i18n-opt attribute"
-    )
+    assert "data-i18n-opt" in apply_fn, "applyI18n must handle data-i18n-opt attribute"
 
 
 def test_bind_task_view_toolbar_called_at_startup() -> None:
     """T5 contract: _bindTaskViewToolbar must be called in DOMContentLoaded."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    assert "function _bindTaskViewToolbar()" in html, (
-        "_bindTaskViewToolbar() function missing"
-    )
+    assert "function _bindTaskViewToolbar()" in html, "_bindTaskViewToolbar() function missing"
     # Must be called in DOMContentLoaded handler
     dom_ready = html.split("DOMContentLoaded", 1)[1]
     assert "_bindTaskViewToolbar()" in dom_ready, (
@@ -8770,21 +8856,11 @@ def test_task_view_filter_panel_structure() -> None:
     """T5 contract: filter panel has header, body, close button."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    assert 'id="task-view-filter-panel"' in html, (
-        "Filter panel id missing"
-    )
-    assert 'id="task-view-filter-body"' in html, (
-        "Filter panel body id missing"
-    )
-    assert 'id="task-view-filter-close"' in html, (
-        "Filter panel close button id missing"
-    )
-    assert "function renderFilterPanel()" in html, (
-        "renderFilterPanel() function missing"
-    )
-    assert "function _toggleFilterPanel()" in html, (
-        "_toggleFilterPanel() function missing"
-    )
+    assert 'id="task-view-filter-panel"' in html, "Filter panel id missing"
+    assert 'id="task-view-filter-body"' in html, "Filter panel body id missing"
+    assert 'id="task-view-filter-close"' in html, "Filter panel close button id missing"
+    assert "function renderFilterPanel()" in html, "renderFilterPanel() function missing"
+    assert "function _toggleFilterPanel()" in html, "_toggleFilterPanel() function missing"
 
 
 # ---------------------------------------------------------------------------
@@ -8797,54 +8873,46 @@ def test_task_view_group_render() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # (1) _buildTaskViewGroup function exists and uses view: namespace prefix.
-    assert "function _buildTaskViewGroup(" in html, (
-        "_buildTaskViewGroup function missing"
-    )
+    assert "function _buildTaskViewGroup(" in html, "_buildTaskViewGroup function missing"
     group_fn = html.split("function _buildTaskViewGroup(", 1)[1].split("\nfunction ", 1)[0]
     assert '"view:"' in group_fn or "'view:'" in group_fn, (
         "_buildTaskViewGroup must use 'view:' namespace prefix for collapse keys"
     )
 
     # (2) Sentinel resolution branches.
-    assert "function _resolveGroupDisplayName(" in html, (
-        "_resolveGroupDisplayName function missing"
-    )
+    assert "function _resolveGroupDisplayName(" in html, "_resolveGroupDisplayName function missing"
     sentinel_fn = html.split("function _resolveGroupDisplayName(", 1)[1].split("\nfunction ", 1)[0]
     # __unassigned__ → conditional i18n for molecule vs remark
     assert "__unassigned__" in sentinel_fn, (
         "_resolveGroupDisplayName must handle __unassigned__ sentinel"
     )
-    assert 'queue.view.unassigned_molecule' in sentinel_fn, (
+    assert "queue.view.unassigned_molecule" in sentinel_fn, (
         "_resolveGroupDisplayName must resolve __unassigned__ to unassigned_molecule i18n key"
     )
-    assert 'queue.view.unassigned_remark' in sentinel_fn, (
+    assert "queue.view.unassigned_remark" in sentinel_fn, (
         "_resolveGroupDisplayName must resolve __unassigned__"
         " to unassigned_remark i18n key for remark groupBy"
     )
     # __singles__ → i18n
-    assert "__singles__" in sentinel_fn, (
-        "_resolveGroupDisplayName must handle __singles__ sentinel"
-    )
-    assert 'queue.view.singles' in sentinel_fn, (
+    assert "__singles__" in sentinel_fn, "_resolveGroupDisplayName must handle __singles__ sentinel"
+    assert "queue.view.singles" in sentinel_fn, (
         "_resolveGroupDisplayName must resolve __singles__ to i18n key"
     )
     # __untagged__ → i18n
     assert "__untagged__" in sentinel_fn, (
         "_resolveGroupDisplayName must handle __untagged__ sentinel"
     )
-    assert 'queue.view.untagged' in sentinel_fn, (
+    assert "queue.view.untagged" in sentinel_fn, (
         "_resolveGroupDisplayName must resolve __untagged__ to i18n key"
     )
 
     # (3) Group count rendering: queue.view.group_tasks_count i18n key.
-    assert 'queue.view.group_tasks_count' in group_fn, (
+    assert "queue.view.group_tasks_count" in group_fn, (
         "_buildTaskViewGroup must render task count with queue.view.group_tasks_count"
     )
 
     # (4) Status summary render function exists.
-    assert "function _renderGroupStatusLine(" in html, (
-        "_renderGroupStatusLine function missing"
-    )
+    assert "function _renderGroupStatusLine(" in html, "_renderGroupStatusLine function missing"
     summary_fn = html.split("function _renderGroupStatusLine(", 1)[1].split("\nfunction ", 1)[0]
     assert "queue.view.status_running" in summary_fn, (
         "_renderGroupStatusLine must use queue.view.status_running"
@@ -8869,25 +8937,17 @@ def test_task_view_group_render() -> None:
         "!parts.length" in summary_fn
         or "parts.length === 0" in summary_fn
         or "!parts" in summary_fn
-    ), (
-        "_renderGroupStatusLine must guard span creation on non-empty parts"
-    )
+    ), "_renderGroupStatusLine must guard span creation on non-empty parts"
 
     # (5) Tag-group hint function exists.
-    assert "function _renderTagGroupHint()" in html, (
-        "_renderTagGroupHint function missing"
-    )
-    assert 'queue.view.tag_group_hint' in html, (
+    assert "function _renderTagGroupHint()" in html, "_renderTagGroupHint function missing"
+    assert "queue.view.tag_group_hint" in html, (
         "queue.view.tag_group_hint i18n key must be referenced"
     )
 
     # (6) Retired badge function exists.
-    assert "function _renderRetiredBadge()" in html, (
-        "_renderRetiredBadge function missing"
-    )
-    assert 'queue.view.retired' in html, (
-        "queue.view.retired i18n key must be referenced"
-    )
+    assert "function _renderRetiredBadge()" in html, "_renderRetiredBadge function missing"
+    assert "queue.view.retired" in html, "queue.view.retired i18n key must be referenced"
 
     # (7) renderQueueList reads taskViewCache.groups.
     render_fn = html.split("function renderQueueList(container)", 1)[1].split("\nfunction ", 1)[0]
@@ -8896,10 +8956,10 @@ def test_task_view_group_render() -> None:
     )
 
     # (8) Per-group select-all checkbox.
-    assert 'queue-group-select-all' in group_fn, (
+    assert "queue-group-select-all" in group_fn, (
         "_buildTaskViewGroup must have per-group select-all checkbox"
     )
-    assert 'queue.view.select_all_group' in group_fn, (
+    assert "queue.view.select_all_group" in group_fn, (
         "_buildTaskViewGroup must use queue.view.select_all_group i18n key for select-all"
     )
 
@@ -8918,9 +8978,7 @@ def test_slim_card_rules() -> None:
     # Split on the guard to check the active branch contains progress.
     active_branch = build_fn.split("isActiveJobStatus(job.status)", 1)[1]
     active_branch = (
-        active_branch.split("\n  }", 1)[0]
-        if "\n  }" in active_branch
-        else active_branch
+        active_branch.split("\n  }", 1)[0] if "\n  }" in active_branch else active_branch
     )
     assert "progress-fill" in active_branch, (
         "Active-status branch must contain progress-fill construction"
@@ -8938,25 +8996,17 @@ def test_slim_card_rules() -> None:
     )
 
     # (3) Task name ellipsis: strong element has title attribute.
-    assert 'strong.title' in build_fn or 'strong.title =' in build_fn, (
+    assert "strong.title" in build_fn or "strong.title =" in build_fn, (
         "buildQueueRow must set title attribute on strong (task name) for ellipsis"
     )
 
     # (4) Tag truncation: max 2 + "+N" overflow.
-    assert "queue-row-tags" in build_fn, (
-        "buildQueueRow must render tags container"
-    )
-    assert "queue-tag-chip" in build_fn, (
-        "buildQueueRow must render tag chips"
-    )
-    assert '"+"' in build_fn or "'+'" in build_fn, (
-        "buildQueueRow must render +N overflow for tags"
-    )
+    assert "queue-row-tags" in build_fn, "buildQueueRow must render tags container"
+    assert "queue-tag-chip" in build_fn, "buildQueueRow must render tag chips"
+    assert '"+"' in build_fn or "'+'" in build_fn, "buildQueueRow must render +N overflow for tags"
 
     # (5) molecule-dedup: when groupBy=molecule, primaryLabel prefers task_name+remark.
-    assert '_groupBy' in build_fn, (
-        "buildQueueRow must read _groupBy for molecule dedup"
-    )
+    assert "_groupBy" in build_fn, "buildQueueRow must read _groupBy for molecule dedup"
     assert 'groupBy === "molecule"' in build_fn or "groupBy === 'molecule'" in build_fn, (
         "buildQueueRow must branch on groupBy=molecule for label dedup"
     )
@@ -8972,11 +9022,9 @@ def test_slim_card_rules() -> None:
             # "queue.none" is allowed (it says "暂无任务" when no jobs exist)
             # But "暂无" as a direct string literal in the function is forbidden
             # (except in the empty-state placeholder which uses t("queue.none"))
-            stripped = fn_body.replace('t("queue.none")', '').replace("t('queue.none')", '')
+            stripped = fn_body.replace('t("queue.none")', "").replace("t('queue.none')", "")
             # Check there's no remaining 暂无 literal
-            assert "暂无" not in stripped, (
-                f"{fn_name} must not contain 暂无 placeholder literals"
-            )
+            assert "暂无" not in stripped, f"{fn_name} must not contain 暂无 placeholder literals"
 
 
 def test_task_sort_collator() -> None:
@@ -8989,12 +9037,8 @@ def test_task_sort_collator() -> None:
         if 'new Intl.Collator("zh"' in line or "new Intl.Collator('zh'" in line:
             collator_line = line
             break
-    assert collator_line is not None, (
-        'Module-level "new Intl.Collator("zh"..." must exist'
-    )
-    assert "numeric" in collator_line, (
-        "Intl.Collator must have numeric option"
-    )
+    assert collator_line is not None, 'Module-level "new Intl.Collator("zh"..." must exist'
+    assert "numeric" in collator_line, "Intl.Collator must have numeric option"
     # Must be at module scope (not inside a function) — check it's not indented
     # by verifying it's defined near other module-level vars.
     assert collator_line.strip().startswith("const ") or collator_line.strip().startswith("var "), (
@@ -9002,29 +9046,21 @@ def test_task_sort_collator() -> None:
     )
 
     # (2) sortTaskRows function exists.
-    assert "function sortTaskRows(" in html, (
-        "sortTaskRows function missing"
-    )
+    assert "function sortTaskRows(" in html, "sortTaskRows function missing"
     sort_fn = html.split("function sortTaskRows(", 1)[1].split("\nfunction ", 1)[0]
 
     # (3) Uses _taskCollator for name sorts.
-    assert "_taskCollator" in sort_fn, (
-        "sortTaskRows must use _taskCollator for name sorting"
-    )
+    assert "_taskCollator" in sort_fn, "sortTaskRows must use _taskCollator for name sorting"
 
     # (4) runningFirst partition logic.
-    assert "runningFirst" in sort_fn, (
-        "sortTaskRows must implement runningFirst partition"
-    )
+    assert "runningFirst" in sort_fn, "sortTaskRows must implement runningFirst partition"
     assert "isActiveJobStatus" in sort_fn, (
         "sortTaskRows must use isActiveJobStatus for running-first partition"
     )
 
     # (5) sortTaskRows is called in refreshJobs.
     refresh_fn = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
-    assert "sortTaskRows(" in refresh_fn, (
-        "refreshJobs must call sortTaskRows"
-    )
+    assert "sortTaskRows(" in refresh_fn, "refreshJobs must call sortTaskRows"
 
     # (6) Name sort also sorts groups.
     assert "name_asc" in refresh_fn or "name_desc" in refresh_fn, (
@@ -9060,9 +9096,7 @@ def test_task_sort_collator_node_smoke() -> None:
         text=True,
         timeout=10,
     )
-    assert result.returncode == 0, (
-        f"node collator smoke failed: {result.stderr}"
-    )
+    assert result.returncode == 0, f"node collator smoke failed: {result.stderr}"
     sorted_items = json.loads(result.stdout)
     assert sorted_items.index("TS2") < sorted_items.index("TS10"), (
         f"TS2 should sort before TS10 with numeric:true, got {sorted_items}"
@@ -9084,19 +9118,13 @@ def test_queue_view_i18n_parity_t6_keys() -> None:
         "queue.view.select_all_group",
     ]
     for key in new_keys:
-        assert f'"{key}":' in html, (
-            f"i18n key {key} missing from HTML"
-        )
+        assert f'"{key}":' in html, f"i18n key {key} missing from HTML"
     # Parity: both locale blocks must contain the same new keys.
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
     for key in new_keys:
-        assert key in zh_keys, (
-            f"{key} missing from zh-CN locale block"
-        )
-        assert key in en_keys, (
-            f"{key} missing from en-US locale block"
-        )
+        assert key in zh_keys, f"{key} missing from zh-CN locale block"
+        assert key in en_keys, f"{key} missing from en-US locale block"
 
 
 def test_p2_batch_and_archive_ui() -> None:
@@ -9104,12 +9132,17 @@ def test_p2_batch_and_archive_ui() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # Batch bar control ids
-    for ctrl_id in ("queue-batch-bar", "batch-tag-input", "batch-add-tags",
-                     "batch-remove-tags", "batch-archive", "batch-unarchive",
-                     "batch-molecule-input", "batch-set-molecule"):
-        assert f'id="{ctrl_id}"' in html, (
-            f"Batch control id=\"{ctrl_id}\" missing"
-        )
+    for ctrl_id in (
+        "queue-batch-bar",
+        "batch-tag-input",
+        "batch-add-tags",
+        "batch-remove-tags",
+        "batch-archive",
+        "batch-unarchive",
+        "batch-molecule-input",
+        "batch-set-molecule",
+    ):
+        assert f'id="{ctrl_id}"' in html, f'Batch control id="{ctrl_id}" missing'
 
     # Archive select
     assert 'id="task-view-archived"' in html, "Archive select missing"
@@ -9148,13 +9181,13 @@ def test_archive_toggle_wiring() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # _applyTaskViewPrefsToControls sets archived select
-    apply_fn = html.split(
-        "function _applyTaskViewPrefsToControls(", 1
-    )[1].split("\nfunction ", 1)[0]
+    apply_fn = html.split("function _applyTaskViewPrefsToControls(", 1)[1].split("\nfunction ", 1)[
+        0
+    ]
     assert "task-view-archived" in apply_fn, (
         "_applyTaskViewPrefsToControls must set task-view-archived"
     )
-    assert "p.archived" in apply_fn or 'prefs.archived' in apply_fn, (
+    assert "p.archived" in apply_fn or "prefs.archived" in apply_fn, (
         "_applyTaskViewPrefsToControls must read prefs.archived"
     )
 
@@ -9203,9 +9236,7 @@ def test_molecule_management_ui() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # Merge suggestions banner rendering
-    assert "function _renderMergeSuggestions(" in html, (
-        "_renderMergeSuggestions function missing"
-    )
+    assert "function _renderMergeSuggestions(" in html, "_renderMergeSuggestions function missing"
     suggest_fn = html.split("function _renderMergeSuggestions(", 1)[1].split("\nfunction ", 1)[0]
     assert "merge-suggestion-banner" in suggest_fn, (
         "_renderMergeSuggestions must render merge-suggestion-banner"
@@ -9218,17 +9249,11 @@ def test_molecule_management_ui() -> None:
     )
 
     # Merge suggestion loading
-    assert "function _loadMergeSuggestions(" in html, (
-        "_loadMergeSuggestions function missing"
-    )
-    assert "/molecule-groups/suggestions" in html, (
-        "suggestions endpoint literal missing"
-    )
+    assert "function _loadMergeSuggestions(" in html, "_loadMergeSuggestions function missing"
+    assert "/molecule-groups/suggestions" in html, "suggestions endpoint literal missing"
 
     # Execute merge
-    assert "function _executeMergeSuggestion(" in html, (
-        "_executeMergeSuggestion function missing"
-    )
+    assert "function _executeMergeSuggestion(" in html, "_executeMergeSuggestion function missing"
     exec_fn = html.split("function _executeMergeSuggestion(", 1)[1].split("\nfunction ", 1)[0]
     assert "/molecule-groups/merge" in exec_fn, (
         "_executeMergeSuggestion must call molecule-groups/merge"
@@ -9236,21 +9261,13 @@ def test_molecule_management_ui() -> None:
 
     # refreshJobs triggers suggestions for molecule grouping
     refresh_fn = html.split("async function refreshJobs(", 1)[1].split("\nfunction ", 1)[0]
-    assert "_loadMergeSuggestions" in refresh_fn, (
-        "refreshJobs must call _loadMergeSuggestions"
-    )
-    assert "_renderMergeSuggestions" in refresh_fn, (
-        "refreshJobs must call _renderMergeSuggestions"
-    )
+    assert "_loadMergeSuggestions" in refresh_fn, "refreshJobs must call _loadMergeSuggestions"
+    assert "_renderMergeSuggestions" in refresh_fn, "refreshJobs must call _renderMergeSuggestions"
 
     # Bulk molecule assignment via batch-ops
-    assert "function _batchSetMolecule(" in html, (
-        "_batchSetMolecule function missing"
-    )
+    assert "function _batchSetMolecule(" in html, "_batchSetMolecule function missing"
     mol_fn = html.split("function _batchSetMolecule(", 1)[1].split("\nfunction ", 1)[0]
-    assert "set_molecule_name" in mol_fn, (
-        "_batchSetMolecule must use set_molecule_name op"
-    )
+    assert "set_molecule_name" in mol_fn, "_batchSetMolecule must use set_molecule_name op"
 
 
 def test_tag_management_dialog() -> None:
@@ -9263,16 +9280,12 @@ def test_tag_management_dialog() -> None:
     assert 'id="tag-mgmt-modal-close"' in html, "tag-mgmt-modal-close missing"
 
     # Functions
-    assert "function _openTagManagement(" in html, (
-        "_openTagManagement function missing"
-    )
+    assert "function _openTagManagement(" in html, "_openTagManagement function missing"
     open_fn = html.split("function _openTagManagement(", 1)[1].split("\nfunction ", 1)[0]
     assert "/projects/" in open_fn and "/tags" in open_fn, (
         "_openTagManagement must call /projects/{id}/tags"
     )
-    assert "tag-mgmt-item" in open_fn, (
-        "_openTagManagement must render tag-mgmt-item rows"
-    )
+    assert "tag-mgmt-item" in open_fn, "_openTagManagement must render tag-mgmt-item rows"
 
     # Rename/merge/delete functions
     assert "function _renameTag(" in html, "_renameTag missing"
@@ -9281,9 +9294,7 @@ def test_tag_management_dialog() -> None:
 
     rename_fn = html.split("function _renameTag(", 1)[1].split("\nfunction ", 1)[0]
     assert "/tags/rename" in rename_fn, "_renameTag must call /tags/rename"
-    assert "source" in rename_fn and "target" in rename_fn, (
-        "_renameTag must send source/target"
-    )
+    assert "source" in rename_fn and "target" in rename_fn, "_renameTag must send source/target"
 
     merge_fn = html.split("function _mergeTag(", 1)[1].split("\nfunction ", 1)[0]
     assert "/tags/merge" in merge_fn, "_mergeTag must call /tags/merge"
@@ -9294,12 +9305,8 @@ def test_tag_management_dialog() -> None:
 
     # Filter panel links to tag management
     render_fn = html.split("function renderFilterPanel(", 1)[1].split("\nfunction ", 1)[0]
-    assert "_openTagManagement" in render_fn, (
-        "renderFilterPanel must link to _openTagManagement"
-    )
-    assert "manage_tags" in render_fn, (
-        "renderFilterPanel must use manage_tags i18n key"
-    )
+    assert "_openTagManagement" in render_fn, "renderFilterPanel must link to _openTagManagement"
+    assert "manage_tags" in render_fn, "renderFilterPanel must use manage_tags i18n key"
 
     # Event listener wired
     assert 'id="tag-mgmt-modal-close"' in html
@@ -9310,9 +9317,7 @@ def test_lineage_panel() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # _loadAndRenderLineage function
-    assert "function _loadAndRenderLineage(" in html, (
-        "_loadAndRenderLineage function missing"
-    )
+    assert "function _loadAndRenderLineage(" in html, "_loadAndRenderLineage function missing"
     load_fn = html.split("function _loadAndRenderLineage(", 1)[1].split("\nfunction ", 1)[0]
     assert '"/tasks/"' in load_fn and '"/lineage"' in load_fn, (
         "_loadAndRenderLineage must call /tasks/{id}/lineage"
@@ -9320,9 +9325,7 @@ def test_lineage_panel() -> None:
     assert "apiV2" in load_fn, "_loadAndRenderLineage must use apiV2"
 
     # Render function
-    assert "function _renderLineageData(" in html, (
-        "_renderLineageData function missing"
-    )
+    assert "function _renderLineageData(" in html, "_renderLineageData function missing"
     render_fn = html.split("function _renderLineageData(", 1)[1].split("\nfunction ", 1)[0]
     assert "upstream" in render_fn, "_renderLineageData must handle upstream"
     assert "downstream" in render_fn, "_renderLineageData must handle downstream"
@@ -9331,34 +9334,27 @@ def test_lineage_panel() -> None:
     )
 
     # Node builder with depth rendering
-    assert "function _buildLineageNode(" in html, (
-        "_buildLineageNode function missing"
-    )
+    assert "function _buildLineageNode(" in html, "_buildLineageNode function missing"
     node_fn = html.split("function _buildLineageNode(", 1)[1].split("\nfunction ", 1)[0]
     assert "depth" in node_fn, "_buildLineageNode must render depth"
     assert "lineage-name" in node_fn, "_buildLineageNode must have lineage-name"
     assert "selectJob" in node_fn, "_buildLineageNode must wire selectJob click"
 
     # Lineage section in detail drawer (openDetailDrawer)
-    drawer_fn = html.split(
-        "async function openDetailDrawer(", 1
-    )[1].split("\nasync function ", 1)[0]
-    assert "lineage-section" in drawer_fn, (
-        "openDetailDrawer must include lineage-section"
-    )
-    assert "lineage-header" in drawer_fn, (
-        "openDetailDrawer must include lineage-header"
-    )
-    assert "_loadAndRenderLineage" in drawer_fn, (
-        "openDetailDrawer must call _loadAndRenderLineage"
-    )
-    assert "lineageLoaded" in drawer_fn, (
-        "openDetailDrawer must implement lazy-load flag"
-    )
+    drawer_fn = html.split("async function openDetailDrawer(", 1)[1].split("\nasync function ", 1)[
+        0
+    ]
+    assert "lineage-section" in drawer_fn, "openDetailDrawer must include lineage-section"
+    assert "lineage-header" in drawer_fn, "openDetailDrawer must include lineage-header"
+    assert "_loadAndRenderLineage" in drawer_fn, "openDetailDrawer must call _loadAndRenderLineage"
+    assert "lineageLoaded" in drawer_fn, "openDetailDrawer must implement lazy-load flag"
 
     # i18n keys
-    for key in ("queue.view.lineage_section", "queue.view.lineage_upstream",
-                "queue.view.lineage_downstream"):
+    for key in (
+        "queue.view.lineage_section",
+        "queue.view.lineage_upstream",
+        "queue.view.lineage_downstream",
+    ):
         assert f'"{key}":' in html, f"i18n key {key} missing"
 
 
@@ -9367,17 +9363,11 @@ def test_tag_group_option_enabled() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
 
     # Find the tag option line
-    tag_opt_match = re.search(
-        r'<option\s+value="tag"[^>]*>.*?</option>', html
-    )
+    tag_opt_match = re.search(r'<option\s+value="tag"[^>]*>.*?</option>', html)
     assert tag_opt_match, "tag option not found in #task-view-group"
     tag_opt = tag_opt_match.group(0)
-    assert "disabled" not in tag_opt, (
-        f"tag option must NOT be disabled, got: {tag_opt}"
-    )
-    assert "data-i18n-opt=\"queue.view.group_tag\"" in tag_opt, (
-        "tag option must have data-i18n-opt"
-    )
+    assert "disabled" not in tag_opt, f"tag option must NOT be disabled, got: {tag_opt}"
+    assert 'data-i18n-opt="queue.view.group_tag"' in tag_opt, "tag option must have data-i18n-opt"
 
     # tag_group_disabled hint key should still exist in i18n (for backward compat)
     # but no data-i18n-title referencing it on the option
@@ -9422,18 +9412,12 @@ def test_queue_view_i18n_parity_t9_keys() -> None:
         "queue.view.export_columns",
     ]
     for key in new_keys:
-        assert f'"{key}":' in html, (
-            f"i18n key {key} missing from HTML"
-        )
+        assert f'"{key}":' in html, f"i18n key {key} missing from HTML"
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
     for key in new_keys:
-        assert key in zh_keys, (
-            f"{key} missing from zh-CN locale block"
-        )
-        assert key in en_keys, (
-            f"{key} missing from en-US locale block"
-        )
+        assert key in zh_keys, f"{key} missing from zh-CN locale block"
+        assert key in en_keys, f"{key} missing from en-US locale block"
 
 
 # ── T10: Saved views contract ───────────────────────────────────────────
@@ -9443,11 +9427,13 @@ def test_saved_views_menu_dom_ids() -> None:
     """T10 contract: saved views menu DOM ids must exist in toolbar."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    for elem_id in ("task-view-views-btn", "task-view-views-menu",
-                     "task-view-views-list", "task-view-views-save"):
-        assert f'id="{elem_id}"' in html, (
-            f"Saved views element id=\"{elem_id}\" missing"
-        )
+    for elem_id in (
+        "task-view-views-btn",
+        "task-view-views-menu",
+        "task-view-views-list",
+        "task-view-views-save",
+    ):
+        assert f'id="{elem_id}"' in html, f'Saved views element id="{elem_id}" missing'
 
 
 def test_saved_views_i18n_parity() -> None:
@@ -9478,19 +9464,30 @@ def test_saved_views_handler_functions_exist() -> None:
     """T10 contract: saved views JS handler functions must be defined."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    for func_name in ("_toggleViewsMenu", "_saveCurrentView", "_applySavedView",
-                       "_deleteSavedView", "_getSavedViews", "_renderSavedViewsList"):
-        assert f"function {func_name}" in html, (
-            f"JS function {func_name} not defined"
-        )
+    for func_name in (
+        "_toggleViewsMenu",
+        "_saveCurrentView",
+        "_applySavedView",
+        "_deleteSavedView",
+        "_getSavedViews",
+        "_renderSavedViewsList",
+    ):
+        assert f"function {func_name}" in html, f"JS function {func_name} not defined"
 
 
 def test_saved_views_query_fields_not_job_ids() -> None:
     """T10 contract: saved view query uses filter fields, NOT job/task ID lists."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    query_fields = ["group_by", "sort", "statuses", "workflows", "search",
-                    "archived", "running_first"]
+    query_fields = [
+        "group_by",
+        "sort",
+        "statuses",
+        "workflows",
+        "search",
+        "archived",
+        "running_first",
+    ]
     for field in query_fields:
         assert f"q.{field}" in html or f'"{field}"' in html, (
             f"Query field '{field}' not referenced in saved views logic"
@@ -9511,8 +9508,7 @@ def test_saved_views_live_query_assertion() -> None:
     assert "refreshJobs()" in html, "apply must refresh the task list"
 
     save_section = (
-        html.split("_saveCurrentView")[1].split("function")[0]
-        if "_saveCurrentView" in html else ""
+        html.split("_saveCurrentView")[1].split("function")[0] if "_saveCurrentView" in html else ""
     )
     assert "query" in save_section, "save function must build a query object"
 
@@ -9541,8 +9537,12 @@ def test_auto_tag_rules_handler_functions_exist() -> None:
     """T11: JS handler functions for auto-tag rules are defined."""
     html = FRONTEND.read_text(encoding="utf-8")
     for fn in [
-        "_switchMgmtTab", "_loadAutoTagRules", "_addAutoTagRule",
-        "_toggleAutoTagRule", "_deleteAutoTagRule", "_applyAutoTagRulesBackfill",
+        "_switchMgmtTab",
+        "_loadAutoTagRules",
+        "_addAutoTagRule",
+        "_toggleAutoTagRule",
+        "_deleteAutoTagRule",
+        "_applyAutoTagRulesBackfill",
     ]:
         assert f"function {fn}" in html or f"async function {fn}" in html, (
             f"Handler function {fn} not found"
@@ -9567,13 +9567,18 @@ def test_auto_tag_rules_i18n_parity() -> None:
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
     expected = {
-        "queue.view.tab_tags", "queue.view.tab_auto_tag",
-        "queue.view.auto_tag_empty", "queue.view.auto_tag_add",
-        "queue.view.auto_tag_apply", "queue.view.auto_tag_applied",
+        "queue.view.tab_tags",
+        "queue.view.tab_auto_tag",
+        "queue.view.auto_tag_empty",
+        "queue.view.auto_tag_add",
+        "queue.view.auto_tag_apply",
+        "queue.view.auto_tag_applied",
         "queue.view.auto_tag_confirm_apply",
-        "queue.view.auto_tag_field_remark", "queue.view.auto_tag_field_molecule",
+        "queue.view.auto_tag_field_remark",
+        "queue.view.auto_tag_field_molecule",
         "queue.view.auto_tag_field_workflow",
-        "queue.view.auto_tag_op_contains", "queue.view.auto_tag_op_equals",
+        "queue.view.auto_tag_op_contains",
+        "queue.view.auto_tag_op_equals",
     }
     missing_zh = expected - zh_keys
     missing_en = expected - en_keys
@@ -9587,3 +9592,173 @@ def test_auto_tag_rules_event_bindings() -> None:
     assert "tag-mgmt-tab-tags" in html and "addEventListener" in html, "tab event binding missing"
     assert "auto-tag-add-btn" in html, "add button binding missing"
     assert "auto-tag-apply-btn" in html, "backfill button binding missing"
+
+
+# ── T12: Task rename feature contracts ──────────────────────────────────
+
+_RENAME_I18N_KEY_RE = re.compile(r'"(task\.rename\.[^"]+)":')
+_RENAME_QUEUE_I18N_KEY_RE = re.compile(r'"(queue\.rename)"')
+
+
+def _extract_rename_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract task.rename.* + queue.rename i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_RENAME_I18N_KEY_RE.findall(m.group(1))) | set(
+        _RENAME_QUEUE_I18N_KEY_RE.findall(m.group(1))
+    )
+
+
+def test_task_rename_modal_dom() -> None:
+    """T12: #task-rename-modal exists with input + three buttons + data-i18n."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="task-rename-modal"' in html, "task-rename-modal missing"
+    assert 'id="task-rename-input"' in html, "task-rename-input missing"
+    assert 'id="task-rename-restore"' in html, "restore button missing"
+    assert 'id="task-rename-cancel"' in html, "cancel button missing"
+    assert 'id="task-rename-save"' in html, "save button missing"
+    assert 'id="task-rename-default"' in html, "default name display missing"
+    assert 'id="task-rename-err"' in html, "error text missing"
+    # data-i18n on key elements
+    assert 'data-i18n="task.rename.title"' in html, "title data-i18n missing"
+    assert 'data-i18n="task.rename.hint"' in html, "hint data-i18n missing"
+    assert 'data-i18n="task.rename.restore"' in html, "restore data-i18n missing"
+    assert 'data-i18n="task.rename.save"' in html, "save data-i18n missing"
+
+
+def test_task_rename_modal_input_attributes() -> None:
+    """T12: input has maxlength and correct type."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="task-rename-input" class="modal-input" type="text" maxlength="200"' in html, (
+        "input missing required attributes"
+    )
+
+
+def test_displayTaskName_defined_and_used() -> None:
+    """T12: displayTaskName function defined and used at display sites."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function displayTaskName(job)" in html, "displayTaskName not defined"
+    assert "displayTaskName(job) || deleteJobId" in html, (
+        "openDeleteJobModal not using displayTaskName"
+    )
+    assert "const name = displayTaskName(job)" in html, (
+        "updateFileTreeTaskName not using displayTaskName"
+    )
+    build_row_section = html.split("function buildQueueRow")[1].split("function sortTaskRows")[0]
+    assert "displayTaskName(job)" in build_row_section, "buildQueueRow not using displayTaskName"
+    render_section = html.split("function renderInfoInto")[1].split("function ")[0]
+    assert "displayTaskName(job)" in render_section, "renderInfoInto not using displayTaskName"
+
+
+def test_canonicalTaskName_still_exists() -> None:
+    """T12: canonicalTaskName function preserved for pure-path uses."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function canonicalTaskName(job)" in html, "canonicalTaskName removed"
+
+
+def test_displayTaskName_not_used_for_file_tree_nodes() -> None:
+    """T12: file-tree node labels still use disk names (canonicalTaskName)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    # displayTaskName should NOT appear in file-tree node rendering contexts.
+    # The updateFileTreeTaskName PANEL TITLE uses displayTaskName (correct),
+    # but actual node labels (file names) should not.
+    # Verify canonicalTaskName is still used in the codebase (not replaced everywhere)
+    assert html.count("canonicalTaskName(") > 1, "canonicalTaskName should still be used"
+
+
+def test_pencil_button_in_queue_inline_actions() -> None:
+    """T12: pencil (✎) button wired in appendQueueInlineActions."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    actions_section = html.split("function appendQueueInlineActions")[1].split("}")[0]
+    assert "btn-rename-task" in actions_section, (
+        "pencil button class missing in appendQueueInlineActions"
+    )
+    assert "openTaskRenameModal" in actions_section, (
+        "openTaskRenameModal not called in appendQueueInlineActions"
+    )
+
+
+def test_pencil_button_in_detail_panel() -> None:
+    """T12: pencil button next to #v-task-name in detail panel."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    render_section = html.split("function renderInfoInto")[1].split("function ")[0]
+    assert 'taskName.id = "v-task-name"' in render_section, (
+        "v-task-name id assignment missing in renderInfoInto"
+    )
+    assert "btn-rename-task" in render_section, "pencil button class missing in renderInfoInto"
+    assert "openTaskRenameModal(job)" in render_section, (
+        "openTaskRenameModal not called in renderInfoInto"
+    )
+
+
+def test_pencil_css_reveal_rules() -> None:
+    """T12: CSS hover/focus-within reveal + @media(hover:none) always-show."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert ".btn-rename-task { display: none" in html, "pencil default hidden rule missing"
+    assert ".queue-row:hover .btn-rename-task" in html, "hover reveal rule missing"
+    assert ".queue-row:focus-within .btn-rename-task" in html, "focus-within reveal rule missing"
+    assert "@media (hover: none)" in html, "@media(hover:none) rule missing"
+    assert (
+        ".btn-rename-task { display: inline-flex"
+        in html.split("@media (hover: none)")[1].split("}")[0]
+    ), "always-show rule in @media(hover:none) missing"
+
+
+def test_task_rename_i18n_parity() -> None:
+    """T12: all task rename i18n keys present in both zh-CN and en-US."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    expected = {
+        "queue.rename",
+        "task.rename.title",
+        "task.rename.default_label",
+        "task.rename.hint",
+        "task.rename.restore",
+        "task.rename.save",
+        "task.rename.conflict",
+        "task.rename.invalid",
+        "task.rename.failed",
+    }
+    for key in expected:
+        assert f'"{key}":' in html, f"i18n key {key} missing from HTML"
+    zh_keys = _extract_rename_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_rename_keys(html, _EN_BLOCK_RE)
+    missing_zh = expected - zh_keys
+    missing_en = expected - en_keys
+    assert not missing_zh, f"zh-CN missing rename keys: {sorted(missing_zh)}"
+    assert not missing_en, f"en-US missing rename keys: {sorted(missing_en)}"
+
+
+def test_task_rename_patch_call_shape() -> None:
+    """T12: PATCH call includes custom_name and expected_name_revision."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'apiV2("/tasks/" + encodeURIComponent' in html, "apiV2 PATCH call not found"
+    assert "expected_name_revision" in html, "expected_name_revision not in PATCH payload"
+    assert "custom_name" in html, "custom_name not in PATCH payload"
+    assert '"PATCH"' in html, "PATCH method not specified"
+
+
+def test_task_rename_409_handling() -> None:
+    """T12: 409 conflict handling with name_revision_conflict marker."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "name_revision_conflict" in html, "name_revision_conflict marker missing"
+    # The 409 handler should refresh revision from response
+    rename_section = html.split("submitTaskRenameNow")[1].split("function _applyRenameResult")[0]
+    assert "name_revision" in rename_section, "revision refresh missing in 409 handler"
+
+
+def test_task_rename_handler_functions_exist() -> None:
+    """T12: rename handler functions defined."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    for fn in (
+        "openTaskRenameModal",
+        "closeTaskRenameModal",
+        "submitTaskRenameNow",
+        "_applyRenameResult",
+        "_refreshAfterRename",
+        "_validateRenameInput",
+        "_updateRenameSaveState",
+    ):
+        assert f"function {fn}" in html or f"async function {fn}" in html, (
+            f"Handler function {fn} not found"
+        )

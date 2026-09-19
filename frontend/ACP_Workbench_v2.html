@@ -1976,6 +1976,14 @@ option, optgroup {
 .queue-name strong { font-size: 13px; }
 .queue-name span { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
 .queue-row-actions { display: flex; gap: 6px; align-items: center; }
+.btn-rename-task { display: none; }
+.queue-row:hover .btn-rename-task,
+.queue-row:focus-within .btn-rename-task,
+.v-task-name-wrap:hover .btn-rename-task,
+.v-task-name-wrap:focus-within .btn-rename-task { display: inline-flex; }
+@media (hover: none) { .btn-rename-task { display: inline-flex; } }
+.task-rename-default { color: var(--text-tertiary); font-size: 11px; margin-top: 6px; }
+.task-rename-err { color: var(--red); font-size: 11px; margin-top: 4px; display: none; }
 .mini-btn { border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.04); color: var(--text-secondary); font-size: 11px; padding: 4px 9px; }
 .queue-progress { margin-top: 10px; }
 .progress-track { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
@@ -3760,6 +3768,7 @@ option, optgroup {
 }
 </style>
 <link rel="stylesheet" href="css/structure_viewer.css">
+<link rel="stylesheet" href="css/structure_source_picker.css">
 </head>
 <body>
 <div class="app-shell">
@@ -4610,6 +4619,29 @@ option, optgroup {
   </div>
 </div>
 
+<div class="modal-overlay" id="task-rename-modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 data-i18n="task.rename.title">重命名任务</h2>
+      <button class="modal-close" id="task-rename-modal-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <label for="task-rename-input" data-i18n="task.rename.title">重命名任务</label>
+        <input id="task-rename-input" class="modal-input" type="text" maxlength="200" placeholder="">
+        <div class="task-rename-default" id="task-rename-default"></div>
+        <div class="dim" style="font-size:11px;margin-top:4px;" data-i18n="task.rename.hint">1–200 个字符，支持中文</div>
+        <div class="task-rename-err" id="task-rename-err"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="task-rename-restore" data-i18n="task.rename.restore" disabled>恢复默认</button>
+      <button class="btn ghost" id="task-rename-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn primary" id="task-rename-save" data-i18n="task.rename.save" disabled>保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="delete-project-modal" style="display:none;">
   <div class="modal-dialog">
     <div class="modal-header">
@@ -5060,6 +5092,7 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
 <script src="js/structure_viewer.js"></script>
 <script src="js/structure_editor.js"></script>
 <script src="js/vibration_viewer.js"></script>
+<script src="js/structure_source_picker.js"></script>
 <script>
 const API_BASE = "/api/v1";
 const STRUCTURE_UPLOAD_EXTS = [".xyz", ".sdf", ".sd", ".mol", ".gjf", ".com", ".inp", ".log", ".out"];
@@ -6546,7 +6579,91 @@ const I18N = {
     "structure.measure.applied": "已应用",
     "structure.measure.range_warn": "值超出范围",
     "structure.measure.status_label": "测量：",
-    "structure.measure.status_selected": "已选"
+    "structure.measure.status_selected": "已选",
+    "queue.rename": "重命名",
+    "task.rename.title": "重命名任务",
+    "task.rename.default_label": "默认名称：{name}",
+    "task.rename.hint": "1–200 个字符，支持中文",
+    "task.rename.restore": "恢复默认",
+    "task.rename.save": "保存",
+    "task.rename.conflict": "名称已被其他会话修改，请重试",
+    "task.rename.invalid": "名称不能为空、不能包含换行或控制字符",
+    "task.rename.failed": "重命名失败: {message}",
+    "picker.search_ph": "搜索结构名称、来源任务、候选编号、标签……",
+    "picker.filter.project": "项目",
+    "picker.filter.all_projects": "全部项目",
+    "picker.filter.target_project": "目标项目",
+    "picker.filter.role": "结构角色",
+    "picker.filter.tags": "分类标签",
+    "picker.filter.sort": "排序",
+    "picker.filter.group": "分组",
+    "picker.filter.tag_match_any": "任一标签",
+    "picker.filter.tag_match_all": "全部标签",
+    "picker.filter.tag_match_toggle": "切换标签匹配模式",
+    "picker.role.all": "全部",
+    "picker.role.ts": "TS",
+    "picker.role.int": "INT",
+    "picker.role.unlabeled": "未标注",
+    "picker.sort.produced_desc": "最新产出",
+    "picker.sort.produced_asc": "最早产出",
+    "picker.sort.name_asc": "名称↑",
+    "picker.sort.name_desc": "名称↓",
+    "picker.sort.organized_desc": "最近整理",
+    "picker.group.none": "无",
+    "picker.group.job": "来源任务",
+    "picker.group.tag": "分类标签",
+    "picker.group.role": "结构角色",
+    "picker.empty": "暂无结构来源",
+    "picker.loading": "加载中…",
+    "picker.error": "加载失败",
+    "picker.load": "载入",
+    "picker.load_disabled_reason": "该结构暂不可用，无法载入",
+    "picker.source_label": "来源",
+    "picker.remote": "远程",
+    "picker.retry": "重试",
+    "picker.indexing": "来源索引中，仍有 {count} 个任务待索引",
+    "picker.total_count": "共 {total} 项",
+    "picker.prev_page": "上一页",
+    "picker.next_page": "下一页",
+    "picker.select_page": "全选本页",
+    "picker.select_item": "选择 {name}",
+    "picker.selected_count": "已选 {count} 项",
+    "picker.hidden_selected": "其中 {count} 项不在当前筛选结果",
+    "picker.selection_max": "最多选择 {max} 项",
+    "picker.availability.pending_sync": "待同步",
+    "picker.availability.pending_fetch": "待取回",
+    "picker.availability.unavailable": "不可用",
+    "picker.rename.title": "重命名结构",
+    "picker.rename.short": "重命名",
+    "picker.rename.default_label": "默认名称：{name}",
+    "picker.rename.hint": "1–200 个字符，支持中文",
+    "picker.rename.restore": "恢复默认",
+    "picker.rename.cancel": "取消",
+    "picker.rename.save": "保存",
+    "picker.rename.conflict": "名称已被其他会话修改，请重试",
+    "picker.rename.invalid": "名称不能为空、不能超过200字符",
+    "picker.rename.failed": "重命名失败: {message}",
+    "picker.tags.title": "编辑标签",
+    "picker.tags.short": "标签",
+    "picker.tags.input_ph": "输入标签",
+    "picker.tags.add": "添加",
+    "picker.tags.remove": "移除标签",
+    "picker.tags.close": "关闭",
+    "picker.tags.hint": "每结构最多20个标签，每标签最多32字符",
+    "picker.tags.none": "暂无标签",
+    "picker.tags.too_long": "标签最多32个字符",
+    "picker.tags.max_count": "每结构最多20个标签",
+    "picker.tags.failed": "标签更新失败: {message}",
+    "picker.batch.add_tags": "添加标签",
+    "picker.batch.remove_tags": "移除标签",
+    "picker.batch.clear": "清空选择",
+    "picker.batch.load": "载入所选",
+    "picker.batch.apply": "应用",
+    "picker.batch.tag_hint": "将对 {count} 个选中结构执行操作",
+    "picker.batch.max_notice": "最多载入 {max} 项",
+    "picker.batch.partial_fail": "批量操作部分成功：成功 {succeeded} 项，失败 {failed} 项",
+    "picker.batch.all_failed": "所有选中项均无法操作",
+    "picker.legacy_mode": "当前服务版本较旧，仅显示最近来源"
   },
   "en-US": {
     "app.title": "ACP Molecular Workbench",
@@ -7640,7 +7757,91 @@ const I18N = {
     "structure.measure.applied": "Applied",
     "structure.measure.range_warn": "Value out of range",
     "structure.measure.status_label": "Measure: ",
-    "structure.measure.status_selected": "selected"
+    "structure.measure.status_selected": "selected",
+    "queue.rename": "Rename",
+    "task.rename.title": "Rename task",
+    "task.rename.default_label": "Default name: {name}",
+    "task.rename.hint": "1–200 characters, Unicode supported",
+    "task.rename.restore": "Restore default",
+    "task.rename.save": "Save",
+    "task.rename.conflict": "Name modified by another session, please retry",
+    "task.rename.invalid": "Name cannot be empty or contain newlines/control characters",
+    "task.rename.failed": "Rename failed: {message}",
+    "picker.search_ph": "Search structure name, source job, candidate ID, tags…",
+    "picker.filter.project": "Project",
+    "picker.filter.all_projects": "All projects",
+    "picker.filter.target_project": "Target project",
+    "picker.filter.role": "Structure role",
+    "picker.filter.tags": "Tags",
+    "picker.filter.sort": "Sort",
+    "picker.filter.group": "Group",
+    "picker.filter.tag_match_any": "Any tag",
+    "picker.filter.tag_match_all": "All tags",
+    "picker.filter.tag_match_toggle": "Toggle tag match mode",
+    "picker.role.all": "All",
+    "picker.role.ts": "TS",
+    "picker.role.int": "INT",
+    "picker.role.unlabeled": "Unlabeled",
+    "picker.sort.produced_desc": "Newest first",
+    "picker.sort.produced_asc": "Oldest first",
+    "picker.sort.name_asc": "Name ↑",
+    "picker.sort.name_desc": "Name ↓",
+    "picker.sort.organized_desc": "Recently organized",
+    "picker.group.none": "None",
+    "picker.group.job": "Source job",
+    "picker.group.tag": "Tags",
+    "picker.group.role": "Structure role",
+    "picker.empty": "No structure sources available",
+    "picker.loading": "Loading…",
+    "picker.error": "Load failed",
+    "picker.load": "Load",
+    "picker.load_disabled_reason": "This structure is not available for loading",
+    "picker.source_label": "Source",
+    "picker.remote": "Remote",
+    "picker.retry": "Retry",
+    "picker.indexing": "Indexing in progress, {count} jobs pending",
+    "picker.total_count": "{total} items total",
+    "picker.prev_page": "Previous",
+    "picker.next_page": "Next",
+    "picker.select_page": "Select all on this page",
+    "picker.select_item": "Select {name}",
+    "picker.selected_count": "{count} selected",
+    "picker.hidden_selected": "{count} not in current filter",
+    "picker.selection_max": "Maximum {max} items",
+    "picker.availability.pending_sync": "Pending sync",
+    "picker.availability.pending_fetch": "Pending fetch",
+    "picker.availability.unavailable": "Unavailable",
+    "picker.rename.title": "Rename structure",
+    "picker.rename.short": "Rename",
+    "picker.rename.default_label": "Default name: {name}",
+    "picker.rename.hint": "1–200 characters, Unicode supported",
+    "picker.rename.restore": "Restore default",
+    "picker.rename.cancel": "Cancel",
+    "picker.rename.save": "Save",
+    "picker.rename.conflict": "Name modified by another session, please retry",
+    "picker.rename.invalid": "Name cannot be empty or exceed 200 characters",
+    "picker.rename.failed": "Rename failed: {message}",
+    "picker.tags.title": "Edit tags",
+    "picker.tags.short": "Tags",
+    "picker.tags.input_ph": "Enter tag",
+    "picker.tags.add": "Add",
+    "picker.tags.remove": "Remove tag",
+    "picker.tags.close": "Close",
+    "picker.tags.hint": "Max 20 tags per structure, 32 characters per tag",
+    "picker.tags.none": "No tags",
+    "picker.tags.too_long": "Tag cannot exceed 32 characters",
+    "picker.tags.max_count": "Maximum 20 tags per structure",
+    "picker.tags.failed": "Tag update failed: {message}",
+    "picker.batch.add_tags": "Add tags",
+    "picker.batch.remove_tags": "Remove tags",
+    "picker.batch.clear": "Clear selection",
+    "picker.batch.load": "Load selected",
+    "picker.batch.apply": "Apply",
+    "picker.batch.tag_hint": "This will apply to {count} selected structures",
+    "picker.batch.max_notice": "Maximum {max} items can be loaded",
+    "picker.batch.partial_fail": "Batch partially succeeded: {succeeded} OK, {failed} failed",
+    "picker.batch.all_failed": "All selected items failed",
+    "picker.legacy_mode": "Server version is older, showing recent sources only"
   }
 };
 
@@ -13566,7 +13767,7 @@ async function submitDeleteProjectModal() {
 function openDeleteJobModal(job) {
   deleteJobId = job ? (job.id || job.job_id || "") : "";
   if (!deleteJobId) return;
-  const jobName = canonicalTaskName(job) || deleteJobId;
+  const jobName = displayTaskName(job) || deleteJobId;
   const promptEl = document.getElementById("delete-job-prompt");
   if (promptEl) {
     promptEl.textContent = (t("job.delete_prompt") || "确定要删除任务") + " \"" + jobName + "\" 吗？";
@@ -13592,6 +13793,18 @@ function canonicalTaskName(job) {
   return job.id || job.job_id || "";
 }
 
+// Display name: prefer resolved_name (server-authoritative), then
+// custom_name, then fall back to canonicalTaskName (disk/path-based).
+// Used for user-facing labels; keep canonicalTaskName for pure-path uses.
+function displayTaskName(job) {
+  if (!job) return "";
+  var rn = job.resolved_name || "";
+  if (rn) return String(rn);
+  var cn = job.custom_name || "";
+  if (cn) return String(cn);
+  return canonicalTaskName(job) || "";
+}
+
 function updateFileTreeTaskName(jobId) {
   const key = String(jobId || "");
   let job = key ? lastSelectedJob : null;
@@ -13600,7 +13813,7 @@ function updateFileTreeTaskName(jobId) {
       return String(entry.id || entry.job_id || "") === key;
     }) || null;
   }
-  const name = canonicalTaskName(job);
+  const name = displayTaskName(job);
   document.querySelectorAll(".file-tree-task-name").forEach(function(el) {
     el.textContent = name || t("files.no_task");
     el.title = name || "";
@@ -14577,9 +14790,12 @@ function makeQueueIconButton(glyph, titleText, extraClass, onClick) {
 // Inline row buttons: at most 1–2 high-frequency actions per status
 // (running: pause + cancel; paused: resume; terminal: rerun). The cached
 // recovery matrix wins when present; status-based defaults otherwise.
+// Rename pencil: visible on hover/focus-within (CSS), all statuses.
 function appendQueueInlineActions(actions, job) {
   const status = String(job.status || "").toLowerCase();
   const jobId = String(job.id || job.job_id || "");
+  // Rename button — always available, shown on hover/focus-within via CSS
+  actions.appendChild(makeQueueIconButton("\u270e", t("queue.rename"), "btn-rename-task", function() { openTaskRenameModal(job); }));
   const recovery = resolveJobRecovery(job);
   if (recovery.can_pause) {
     actions.appendChild(makeQueueIconButton("‖", t("job.pause"), "warn", function() { pauseJob(jobId); }));
@@ -14597,6 +14813,203 @@ function appendQueueInlineActions(actions, job) {
     actions.appendChild(makeQueueIconButton("↻", t("job.rerun"), "", function(btn) { rerunJob(jobId, btn); }));
   }
 }
+
+// ── Task rename modal ─────────────────────────────────────────────────
+var _renameState = { job: null, triggerEl: null, revision: 0 };
+
+function openTaskRenameModal(job) {
+  if (!job) return;
+  var jobId = String(job.id || job.job_id || "");
+  if (!jobId) return;
+  _renameState.job = job;
+  _renameState.triggerEl = document.activeElement;
+  _renameState.revision = job.name_revision || 0;
+  var input = document.getElementById("task-rename-input");
+  var current = job.custom_name || "";
+  input.value = current;
+  var defName = job.default_name || canonicalTaskName(job) || "";
+  var defEl = document.getElementById("task-rename-default");
+  defEl.textContent = t("task.rename.default_label", { name: defName });
+  defEl.style.display = defName ? "" : "none";
+  var restoreBtn = document.getElementById("task-rename-restore");
+  restoreBtn.disabled = !current;
+  var saveBtn = document.getElementById("task-rename-save");
+  saveBtn.disabled = true;
+  var errEl = document.getElementById("task-rename-err");
+  errEl.style.display = "none";
+  errEl.textContent = "";
+  document.getElementById("task-rename-modal").style.display = "flex";
+  setTimeout(function() { input.focus(); input.select(); }, 50);
+}
+
+function closeTaskRenameModal() {
+  document.getElementById("task-rename-modal").style.display = "none";
+  if (_renameState.triggerEl && _renameState.triggerEl.isConnected) {
+    try { _renameState.triggerEl.focus(); } catch (e) { /* ignore */ }
+  }
+  _renameState.job = null;
+}
+
+function _validateRenameInput(raw) {
+  var v = String(raw || "").trim();
+  if (!v || v.length > 200) return null;
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\n\r]/.test(v)) return null;
+  return v;
+}
+
+function _updateRenameSaveState() {
+  var input = document.getElementById("task-rename-input");
+  var saveBtn = document.getElementById("task-rename-save");
+  var job = _renameState.job;
+  if (!job) { saveBtn.disabled = true; return; }
+  var trimmed = String(input.value || "").trim();
+  var current = job.custom_name || "";
+  var valid = _validateRenameInput(input.value) !== null || trimmed === "";
+  // Enable save when: valid text differs from current, OR "restore default" (empty when current is set)
+  saveBtn.disabled = !valid || (trimmed === current);
+}
+
+async function submitTaskRenameNow(customName) {
+  var job = _renameState.job;
+  if (!job) return;
+  var jobId = String(job.id || job.job_id || "");
+  var errEl = document.getElementById("task-rename-err");
+  var saveBtn = document.getElementById("task-rename-save");
+  var restoreBtn = document.getElementById("task-rename-restore");
+  saveBtn.disabled = true;
+  restoreBtn.disabled = true;
+  errEl.style.display = "none";
+  errEl.textContent = "";
+  try {
+    var payload = { expected_name_revision: _renameState.revision };
+    if (customName === null) {
+      payload.custom_name = null;
+    } else {
+      payload.custom_name = customName;
+    }
+    var result = await apiV2("/tasks/" + encodeURIComponent(jobId), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    // Update in-memory job object so re-render shows new name without reload
+    _applyRenameResult(job, result);
+    closeTaskRenameModal();
+    // Re-render affected UI in place
+    _refreshAfterRename(job);
+  } catch (e) {
+    var msg = String(e.message || "");
+    // 409 conflict: refresh revision from error detail
+    if (msg.indexOf("name_revision_conflict") !== -1 || msg.indexOf("409") !== -1) {
+      try {
+        var parsed = JSON.parse(msg.substring(msg.indexOf("{")));
+        if (parsed && parsed.current) {
+          _renameState.revision = parsed.current.name_revision || 0;
+          _renameState.job.name_revision = parsed.current.name_revision;
+          _renameState.job.custom_name = parsed.current.custom_name || "";
+          _renameState.job.resolved_name = parsed.current.resolved_name || "";
+          _renameState.job.default_name = parsed.current.default_name || "";
+        }
+      } catch (e2) { /* ignore parse failure */ }
+      errEl.textContent = t("task.rename.conflict");
+    } else {
+      errEl.textContent = t("task.rename.failed", { message: msg });
+    }
+    errEl.style.display = "block";
+    saveBtn.disabled = false;
+    restoreBtn.disabled = !(_renameState.job && _renameState.job.custom_name);
+  }
+}
+
+function _applyRenameResult(job, result) {
+  if (!result || typeof result !== "object") return;
+  if ("custom_name" in result) job.custom_name = result.custom_name;
+  if ("resolved_name" in result) job.resolved_name = result.resolved_name;
+  if ("default_name" in result) job.default_name = result.default_name;
+  if ("name_revision" in result) job.name_revision = result.name_revision;
+  if ("name_updated_at" in result) job.name_updated_at = result.name_updated_at;
+  // Also update in jobsCache
+  var jobId = String(job.id || job.job_id || "");
+  for (var i = 0; i < jobsCache.length; i++) {
+    if (String(jobsCache[i].id || jobsCache[i].job_id || "") === jobId) {
+      _applyRenameResult(jobsCache[i], result);
+      break;
+    }
+  }
+  // Update lastSelectedJob if same
+  if (lastSelectedJob && String(lastSelectedJob.id || lastSelectedJob.job_id || "") === jobId) {
+    _applyRenameResult(lastSelectedJob, result);
+  }
+}
+
+function _refreshAfterRename(job) {
+  var jobId = String(job.id || job.job_id || "");
+  // Update detail panel title if this job is selected
+  var vTaskName = document.getElementById("v-task-name");
+  if (vTaskName && String(selectedJobId) === jobId) {
+    vTaskName.textContent = displayTaskName(job) || String(job.id || "");
+    vTaskName.title = vTaskName.textContent;
+  }
+  // Update file tree panel title
+  updateFileTreeTaskName(jobId);
+  // Re-render queue without full reload (preserves scroll/selection)
+  var queueList = document.getElementById("queue-list");
+  if (queueList) renderQueueList(queueList);
+  var mobileList = document.getElementById("mobile-queue-list");
+  if (mobileList) renderQueueList(mobileList);
+}
+
+// Wire up modal events
+(function() {
+  var modal = document.getElementById("task-rename-modal");
+  if (!modal) return;
+  var input = document.getElementById("task-rename-input");
+  var saveBtn = document.getElementById("task-rename-save");
+  var cancelBtn = document.getElementById("task-rename-cancel");
+  var closeBtn = document.getElementById("task-rename-modal-close");
+  var _renameRestoreBtn = document.getElementById("task-rename-restore");
+
+  input.addEventListener("input", _updateRenameSaveState);
+  input.addEventListener("keydown", function(event) {
+    if (event.key === "Enter" && !saveBtn.disabled) {
+      event.preventDefault();
+      var trimmed = String(input.value || "").trim();
+      if (trimmed === "" && _renameState.job && _renameState.job.custom_name) {
+        submitTaskRenameNow(null);
+      } else if (trimmed !== "") {
+        submitTaskRenameNow(trimmed);
+      }
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeTaskRenameModal();
+    }
+  });
+  saveBtn.addEventListener("click", function() {
+    var trimmed = String(input.value || "").trim();
+    if (trimmed === "" && _renameState.job && _renameState.job.custom_name) {
+      submitTaskRenameNow(null);
+    } else if (trimmed !== "") {
+      submitTaskRenameNow(trimmed);
+    }
+  });
+  cancelBtn.addEventListener("click", closeTaskRenameModal);
+  closeBtn.addEventListener("click", closeTaskRenameModal);
+  _renameRestoreBtn.addEventListener("click", function() {
+    submitTaskRenameNow(null);
+  });
+  // Close on overlay click
+  modal.addEventListener("click", function(event) {
+    if (event.target === modal) closeTaskRenameModal();
+  });
+  // Esc on modal itself
+  modal.addEventListener("keydown", function(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeTaskRenameModal();
+    }
+  });
+})();
 
 async function submitTargetProjectModal() {
   if (!targetProjectJobId) return;
@@ -15092,7 +15505,7 @@ function buildQueueGroup(group) {
   const wrap = document.createElement("div");
   wrap.className = "queue-group";
   const root = group.jobs[0];
-  const rootName = canonicalTaskName(root) || String(group.id);
+  const rootName = displayTaskName(root) || String(group.id);
 
   const head = document.createElement("div");
   head.className = "queue-group-head";
@@ -15154,17 +15567,23 @@ function buildQueueRow(job) {
 
   // T6 slim card (c): task name — single-line ellipsis + title attribute.
   // When groupBy=molecule, do NOT repeat molecule name; prefer task_name+remark.
+  // Custom name (resolved_name/custom_name) always takes precedence per plan §2.
   const name = document.createElement("div");
   name.className = "queue-name";
   const strong = document.createElement("strong");
   var primaryLabel;
   if (groupBy === "molecule") {
-    // Inside molecule group: prefer task_name + remark, fallback to canonicalTaskName
-    var tn = (job.task_name || (job.spec && job.spec.task_name) || "").trim();
-    var rm = (job.remark || (job.spec && job.spec.remark) || "").trim();
-    primaryLabel = tn ? (rm ? tn + " — " + rm : tn) : (canonicalTaskName(job) || String(job.id));
+    // Inside molecule group: prefer resolved/custom name, then task_name+remark, fallback
+    var dn = (job.resolved_name || job.custom_name || "").trim();
+    if (dn) {
+      primaryLabel = dn;
+    } else {
+      var tn = (job.task_name || (job.spec && job.spec.task_name) || "").trim();
+      var rm = (job.remark || (job.spec && job.spec.remark) || "").trim();
+      primaryLabel = tn ? (rm ? tn + " — " + rm : tn) : (canonicalTaskName(job) || String(job.id));
+    }
   } else {
-    primaryLabel = canonicalTaskName(job) || String(job.id);
+    primaryLabel = displayTaskName(job) || String(job.id);
   }
   strong.textContent = primaryLabel;
   strong.title = primaryLabel;
@@ -15262,8 +15681,8 @@ function sortTaskRows(rows) {
   var sort = prefs.sort || "created_desc";
   if (sort === "name_asc" || sort === "name_desc") {
     rows.sort(function(a, b) {
-      var na = canonicalTaskName(a) || "";
-      var nb = canonicalTaskName(b) || "";
+      var na = displayTaskName(a) || "";
+      var nb = displayTaskName(b) || "";
       var c = _taskCollator.compare(na, nb);
       if (sort === "name_desc") c = -c;
       if (c !== 0) return c;
@@ -16308,12 +16727,27 @@ function renderInfoInto(container, job) {
   sec1.className = "v-panel-section v-summary-section";
   sec1.setAttribute("data-testid", "summary-section");
 
-  // Task name
+  // Task name with rename button
+  var taskNameWrap = document.createElement("div");
+  taskNameWrap.className = "v-task-name-wrap";
+  taskNameWrap.style.cssText = "display:flex;align-items:center;gap:6px;";
   var taskName = document.createElement("div");
   taskName.className = "v-task-name";
-  taskName.textContent = canonicalTaskName(job) || String(job.id || "");
+  taskName.id = "v-task-name";
+  taskName.textContent = displayTaskName(job) || String(job.id || "");
   taskName.title = taskName.textContent;
-  sec1.appendChild(taskName);
+  taskNameWrap.appendChild(taskName);
+  var renameBtn = document.createElement("button");
+  renameBtn.className = "mini-btn icon-btn btn-rename-task";
+  renameBtn.textContent = "\u270e";
+  renameBtn.title = t("queue.rename");
+  renameBtn.setAttribute("aria-label", t("queue.rename"));
+  renameBtn.addEventListener("click", function(event) {
+    event.stopPropagation();
+    openTaskRenameModal(job);
+  });
+  taskNameWrap.appendChild(renameBtn);
+  sec1.appendChild(taskNameWrap);
 
   // Summary grid: status / method / command / remark
   var grid = document.createElement("div");
@@ -21396,9 +21830,11 @@ function setPESCoordinateKind(kind) {
 var resultsSources = [];        // cached list for the current modal open
 var resultsLoaded = false;      // per-modal-open fetch guard
 var resultsSearchTimer = null;
+var resultsPicker = null;       // ACPSourcePicker instance for results tab
 var batchPreviewItems = [];     // batch structure-source panel items
 
 function resetResultsPanel() {
+  if (resultsPicker) { resultsPicker.destroy(); resultsPicker = null; }
   resultsSources = [];
   resultsLoaded = false;
   var searchEl = document.getElementById("results-search");
@@ -21412,33 +21848,72 @@ function resetResultsPanel() {
 }
 
 async function loadStructureSources(force) {
-  if (resultsLoaded && !force) return;
+  if (resultsLoaded && !force && resultsPicker) return;
   var list = document.getElementById("results-list");
   if (!list) return;
-  list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.loading")) + "</div>";
-  // Result-source policy can change after a server restart; never reuse a
-  // browser/proxy response from the previous parser implementation.
-  var url = "/structure-sources/recent?limit=50&_t=" + Date.now();
-  var projEl = document.getElementById("results-project");
-  var mode = projEl && projEl.value ? projEl.value : "target";
-  if (mode === "all") {
-    url += "&all_projects=true";
-  } else if (mode === "target") {
-    // "目标项目" follows the modal submission target — NOT the top project
-    // filter (P1 regression guard: loading from project B while submitting
-    // to project A must stay an explicit choice).
-    url += "&project_id=" + encodeURIComponent(resultsProjectTargetId());
-  } else {
-    url += "&project_id=" + encodeURIComponent(mode);
-  }
-  try {
-    var body = await api(url);
-    resultsSources = (body && body.sources) || [];
+
+  // Mount picker if not already mounted
+  if (!resultsPicker && typeof ACPSourcePicker !== "undefined") {
+    resultsPicker = ACPSourcePicker.mount(list, {
+      mode: "single",
+      projectId: resultsProjectTargetId(),
+      onLoadItem: function(item) {
+        loadStructureSource(item.source_id || item.source_uid, null);
+      },
+      loadLabel: t("results.load") || "载入",
+    });
+    // Wire existing search input into picker
+    var searchEl = document.getElementById("results-search");
+    if (searchEl) {
+      searchEl.addEventListener("input", function() {
+        if (resultsPicker) resultsPicker.refresh();
+      });
+    }
+    // Wire existing project select into picker
+    var projEl = document.getElementById("results-project");
+    if (projEl) {
+      projEl.addEventListener("change", function() {
+        var mode = projEl.value;
+        if (mode === "all") {
+          if (resultsPicker) resultsPicker.setProject(null);
+        } else if (mode === "target") {
+          if (resultsPicker) resultsPicker.setProject(resultsProjectTargetId());
+        } else {
+          if (resultsPicker) resultsPicker.setProject(mode);
+        }
+      });
+    }
     resultsLoaded = true;
-    renderResultsList();
-  } catch (e) {
-    list.innerHTML = '<div class="results-list-note err">' + escapeHtml(t("results.error")) + ": " + escapeHtml(e.message || String(e)) + "</div>";
+    return;
   }
+
+  // Fallback: if picker not available, use legacy behavior
+  if (!resultsPicker) {
+    list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.loading")) + "</div>";
+    var url = "/structure-sources/recent?limit=50&_t=" + Date.now();
+    var projEl = document.getElementById("results-project");
+    var mode = projEl && projEl.value ? projEl.value : "target";
+    if (mode === "all") {
+      url += "&all_projects=true";
+    } else if (mode === "target") {
+      url += "&project_id=" + encodeURIComponent(resultsProjectTargetId());
+    } else {
+      url += "&project_id=" + encodeURIComponent(mode);
+    }
+    try {
+      var body = await api(url);
+      resultsSources = (body && body.sources) || [];
+      resultsLoaded = true;
+      renderResultsList();
+    } catch (e) {
+      list.innerHTML = '<div class="results-list-note err">' + escapeHtml(t("results.error")) + ": " + escapeHtml(e.message || String(e)) + "</div>";
+    }
+    return;
+  }
+
+  // Picker already mounted, just refresh
+  resultsPicker.refresh();
+  resultsLoaded = true;
 }
 
 function scheduleResultsSearch() {
@@ -22214,13 +22689,42 @@ async function stageBatchFromResults() {
   if (!picker) return;
   if (picker.style.display !== "none") {
     picker.style.display = "none";
+    // Destroy any existing picker instance
+    if (picker._acpPicker) { picker._acpPicker.destroy(); picker._acpPicker = null; }
     return;
   }
   picker.style.display = "block";
+
+  // Mount multi picker if ACPSourcePicker available
+  if (typeof ACPSourcePicker !== "undefined") {
+    picker.innerHTML = "";
+    picker._acpPicker = ACPSourcePicker.mount(picker, {
+      mode: "multi",
+      projectId: selectedProjectId || null,
+      allowBatchTags: false,
+      onLoadSelection: function(items) {
+        items.forEach(function(item) {
+          stageBatchAddItem(
+            item.resolved_name || item.default_name || "mol",
+            item.role === "TS" ? "TS" : "",
+            null,
+            item.charge !== undefined ? item.charge : 0,
+            item.multiplicity || 1,
+            item.atom_count || 0,
+            item.formula || "",
+            "job_artifact",
+            item.source_id || ""
+          );
+        });
+      },
+      loadLabel: t("picker.batch.load") || "载入所选",
+    });
+    return;
+  }
+
+  // Legacy fallback
   picker.innerHTML = '<div class="muted" style="font-size:11px;">' + escapeHtml(t("results.loading")) + '</div>';
   try {
-    // Follow the top project filter (P1): 全部 → all projects, never the
-    // silent uncategorized default.
     var pickerUrl = "/structure-sources/recent?limit=50&_t=" + Date.now();
     if (selectedProjectId) pickerUrl += "&project_id=" + encodeURIComponent(selectedProjectId);
     else pickerUrl += "&all_projects=true";
@@ -26385,6 +26889,9 @@ function s2scanOpen() {
 }
 
 function s2scanClose() {
+  // Destroy picker instance if present
+  var assetList = s2scanEl("s2scan-asset-list");
+  if (assetList && assetList._acpPicker) { assetList._acpPicker.destroy(); assetList._acpPicker = null; }
   disposeViewerFraming(s2scanState.previewFraming);
   disposeViewerFraming(s2scanState.bondFraming);
   disposeViewerFraming(s2scanState.resultFraming);
@@ -27375,9 +27882,48 @@ async function s2scanLoadAssets() {
   var listEl = s2scanEl("s2scan-asset-list");
   if (!listEl) return;
   listEl.style.display = "";
+
+  // Mount picker if ACPSourcePicker available
+  if (typeof ACPSourcePicker !== "undefined") {
+    listEl.innerHTML = "";
+    if (listEl._acpPicker) { listEl._acpPicker.destroy(); listEl._acpPicker = null; }
+    listEl._acpPicker = ACPSourcePicker.mount(listEl, {
+      mode: "single",
+      projectId: s2scanState.projectId || selectedProjectId || null,
+      onLoadItem: async function(item) {
+        try {
+          var sourceId = item.source_id || item.source_uid;
+          var detail = await api("/structure-sources/" + encodeURIComponent(sourceId));
+          var structure = detail.structure || {};
+          var created = await api("/structure-assets", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: structure.molecule_name || structure.name || "s2_source",
+              xyz_text: structure.xyz || "",
+              project_id: s2scanState.projectId || null,
+            }),
+          });
+          s2scanEl("s2scan-asset-path").value = created.asset_path || "";
+          await s2scanPreviewSource({
+            source_type: "structure_asset",
+            asset_path: created.asset_path,
+            asset_id: created.asset_id,
+            charge: s2scanState.charge,
+            multiplicity: s2scanState.mult,
+          });
+        } catch (e) {
+          window.alert(e.message || String(e));
+        }
+      },
+      loadLabel: t("picker.load") || "载入",
+    });
+    return;
+  }
+
+  // Legacy fallback
   listEl.innerHTML = '<div style="padding:8px;font-size:12px;color:var(--text-tertiary);">加载中…</div>';
   try {
-    // Follow the top project filter (P1): 全部 → all projects.
     var s2scanUrl = "/structure-sources/recent?limit=50&_t=" + Date.now();
     if (selectedProjectId) s2scanUrl += "&project_id=" + encodeURIComponent(selectedProjectId);
     else s2scanUrl += "&all_projects=true";
