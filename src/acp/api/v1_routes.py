@@ -220,6 +220,7 @@ from acp.scheduler.runner import find_workflow_state
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
+from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
 
 UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
@@ -523,6 +524,24 @@ def _record_to_v1_model(
         study_status=study_status,
         result=record.result,
         progress_state=_compute_progress_state(record),
+    )
+
+
+def _enrich_v1_with_names(
+    model: V1JobRecordModel,
+    name_projection: dict[str, Any] | None,
+) -> V1JobRecordModel:
+    """Merge task name projection fields onto a V1 job model."""
+    if not name_projection:
+        return model
+    return model.model_copy(
+        update={
+            "custom_name": name_projection.get("custom_name"),
+            "resolved_name": name_projection.get("resolved_name", ""),
+            "default_name": name_projection.get("default_name", ""),
+            "name_revision": name_projection.get("name_revision", 0),
+            "name_updated_at": name_projection.get("name_updated_at"),
+        }
     )
 
 
@@ -1223,21 +1242,24 @@ def _prepare_bond_scan_input(
     return prepared
 
 
-def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> dict[str, Any]:
-    """Inline ``source_id`` references in a Workbench ``batch_structures`` payload.
+def _resolve_batch_structures_input(
+    inp: dict[str, Any], request: Request
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Inline ``source_id`` references and capture metadata snapshots.
 
-    Items may reference reusable structures via ``source_id``
-    (``job_<id>:<rel_path>``).  The runner materializer only understands
-    inline XYZ, so references are expanded here while the API still has
-    store + remote-fetcher access (works for local and remote source jobs).
+    Returns ``(resolved_input, snapshots)`` where *snapshots* is a list of
+    per-item metadata dicts captured at materialisation time.  Snapshots are
+    written to ``events.jsonl`` after job submission — they never feed into
+    the ``JobSpec`` or ``input_hash`` computation.
     """
     items = inp.get("items")
     if not isinstance(items, list) or not items:
-        return inp
+        return inp, []
     if not any(isinstance(item, dict) and item.get("source_id") for item in items):
-        return inp
+        return inp, []
     service = _structure_source_service(request)
     resolved_items: list[Any] = []
+    snapshots: list[dict[str, Any]] = []
     for item in items:
         if not isinstance(item, dict):
             resolved_items.append(item)
@@ -1253,9 +1275,54 @@ def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> di
         resolved = {key: value for key, value in item.items() if key != "source_id"}
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
+        # Capture metadata snapshot (plan §7).
+        snapshot: dict[str, Any] = {
+            "source_id": source_id,
+            "source_uid": "",
+            "job_id": "",
+            "relative_path": "",
+            "custom_name": None,
+            "default_name": asset.get("name", ""),
+            "resolved_name": asset.get("name", ""),
+            "tags": [],
+            "role": asset.get("tag", ""),
+            "role_evidence": "",
+            "candidate_id": asset.get("candidate_id", ""),
+            "metadata_revision": 0,
+        }
+        try:
+            from acp.scheduler.structure_sources import StructureSourceService
+
+            parsed_id, parsed_path = StructureSourceService.parse_source_id(source_id)
+            snapshot["job_id"] = parsed_id
+            snapshot["relative_path"] = parsed_path
+        except (ValueError, ImportError):
+            pass
+        # Enrich from org store when available.
+        try:
+            from acp.scheduler.structure_source_store import StructureSourceStore
+
+            manager = _manager(request)
+            org_store = StructureSourceStore(manager.store.db_path)
+            org_entry = org_store.get_by_legacy_source_id(source_id)
+            if org_entry is not None:
+                snapshot["source_uid"] = org_entry.get("source_uid", "")
+                snapshot["custom_name"] = org_entry.get("custom_name")
+                snapshot["default_name"] = org_entry.get("default_name", "")
+                snapshot["resolved_name"] = org_entry.get("resolved_name", "")
+                snapshot["tags"] = org_entry.get("tags", [])
+                org_role = org_entry.get("role", "")
+                if org_role:
+                    snapshot["role"] = org_role
+                snapshot["role_evidence"] = org_entry.get("role_evidence", "")
+                snapshot["metadata_revision"] = org_entry.get("metadata_revision", 0)
+        except Exception:
+            logger.debug("Org-store snapshot enrichment skipped", exc_info=True)
+        snapshot["captured_at"] = _utc_now_iso()
+        snapshots.append(snapshot)
     resolved_inp = dict(inp)
     resolved_inp["items"] = resolved_items
-    return resolved_inp
+    return resolved_inp, snapshots
 
 
 def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
@@ -1379,12 +1446,13 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    batch_snapshots: list[dict[str, Any]] = []
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
     elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
-        req.input = _resolve_batch_structures_input(req.input, request)
+        req.input, batch_snapshots = _resolve_batch_structures_input(req.input, request)
     req.execution_mode, req.target_node = _inherit_stage_execution_fields(
         req.workflow, req.input, req.execution_mode, req.target_node, manager
     )
@@ -1423,6 +1491,16 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         record = manager.submit(spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if batch_snapshots:
+        try:
+            events_path = runtime_file(record.work_dir, "events.jsonl")
+            JobEventLog(events_path).append(
+                "structure_source_snapshot",
+                job_id=record.id,
+                snapshots=batch_snapshots,
+            )
+        except Exception:
+            logger.debug("Snapshot event log failed for job %s", record.id, exc_info=True)
     # --- auto-tag rules hook (T11) ---
     try:
         _apply_auto_tag_rules_on_submit(manager, record)
@@ -1445,6 +1523,7 @@ def list_jobs(
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
     store = _job_store(request)
+    manager = _manager(request)
     if project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
         if status is not None:
@@ -1454,6 +1533,8 @@ def list_jobs(
     if workflow:
         enriched = [item for item in enriched if item["record"].spec.workflow == workflow]
     jobs = []
+    job_ids = [item["record"].id for item in enriched]
+    name_map = manager.tasks.get_name_projections_by_job_ids(job_ids)
     for item in enriched:
         model = _record_to_v1_model(
             item["record"],
@@ -1462,6 +1543,7 @@ def list_jobs(
             study_status=item["study_status"],
         )
         model = _enrich_job_snapshot(item["record"], model, include_event=False)
+        model = _enrich_v1_with_names(model, name_map.get(item["record"].id))
         jobs.append(model)
     return V1JobListResponse(
         jobs=jobs,
@@ -2410,9 +2492,7 @@ def get_structure_viewer_geometry(
     try:
         xyz_text = resolved.read_text(encoding="utf-8")
     except OSError as exc:
-        raise HTTPException(
-            status_code=404, detail=f"Cannot read geometry file: {exc}"
-        ) from exc
+        raise HTTPException(status_code=404, detail=f"Cannot read geometry file: {exc}") from exc
 
     if entry.source.frame_index is not None:
         frame = read_traj_frame_xyz(resolved, entry.source.frame_index)
@@ -2477,11 +2557,7 @@ def _try_historical_mode_projection(
             vectors_tuple = calc.mode_vectors.get(mode_idx, ())
             if not atom_count and vectors_tuple:
                 atom_count = len(vectors_tuple)
-            ir = (
-                calc.mode_ir_intensities.get(mode_idx)
-                if calc.mode_ir_intensities
-                else None
-            )
+            ir = calc.mode_ir_intensities.get(mode_idx) if calc.mode_ir_intensities else None
             try:
                 mode = StructureViewerModeModel(
                     mode_index=mode_idx,
@@ -3057,7 +3133,11 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return _record_to_v1_model(record)
+    model = _record_to_v1_model(record)
+    task_row = manager.tasks.get(job_id)
+    if task_row is not None:
+        model = _enrich_v1_with_names(model, resolve_task_names(task_row))
+    return model
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -3067,7 +3147,11 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     model = _record_to_v1_model(record)
-    return _enrich_job_snapshot(record, model, include_event=True)
+    model = _enrich_job_snapshot(record, model, include_event=True)
+    task_row = manager.tasks.get(job_id)
+    if task_row is not None:
+        model = _enrich_v1_with_names(model, resolve_task_names(task_row))
+    return model
 
 
 # ---------------------------------------------------------------------- #
@@ -3414,6 +3498,9 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     job_model = _record_to_v1_model(record)
     job_model = _enrich_job_snapshot(record, job_model, include_event=True)
+    task_row = manager.tasks.get(job_id)
+    if task_row is not None:
+        job_model = _enrich_v1_with_names(job_model, resolve_task_names(task_row))
     if record.result is None:
         backfilled = _backfill_result_from_disk(record)
         if backfilled is not None:
@@ -4472,9 +4559,32 @@ def list_structure_sources(
         workflow=workflow,
         include_remote=include_remote,
     )
-    return StructureSourceListResponse(
-        sources=[StructureSourceSummary(**entry) for entry in entries]
-    )
+    sources = [StructureSourceSummary(**entry) for entry in entries]
+    # Enrich with org-store fields (custom_name, tags, role, etc.)
+    # when the org store is available.  Old DBs without org tables
+    # silently skip enrichment — the optional fields stay at defaults.
+    try:
+        manager = _manager(request)
+        from acp.scheduler.structure_source_store import StructureSourceStore
+
+        org_store = StructureSourceStore(manager.store.db_path)
+        for s in sources:
+            org_entry = org_store.get_by_legacy_source_id(s.source_id)
+            if org_entry is None:
+                continue
+            s.custom_name = org_entry.get("custom_name")
+            s.resolved_name = org_entry.get("resolved_name")
+            s.default_name = org_entry.get("default_name")
+            s.tags = org_entry.get("tags", [])
+            org_role = org_entry.get("role", "")
+            if org_role:
+                s.role = org_role
+            s.role_evidence = org_entry.get("role_evidence", "")
+            s.source_uid = org_entry.get("source_uid", "")
+            s.job_resolved_name = org_entry.get("job_resolved_name")
+    except Exception:
+        logger.debug("Org-store enrichment skipped (store unavailable)", exc_info=True)
+    return StructureSourceListResponse(sources=sources)
 
 
 @router.get("/structure-sources/{source_id:path}", response_model=StructureSourceDetailResponse)

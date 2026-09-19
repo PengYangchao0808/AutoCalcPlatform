@@ -584,9 +584,7 @@ class JobManager:
             try:
                 self.tasks.update_project(job_id, project_id)
             except Exception:
-                logger.warning(
-                    "Task index project sync failed for job %s", job_id, exc_info=True
-                )
+                logger.warning("Task index project sync failed for job %s", job_id, exc_info=True)
         updated = self.store.get(job_id)
         if updated is not None:
             self._write_job_json(updated)
@@ -915,6 +913,17 @@ class JobManager:
                 cache.purge_job(job_id)
             except Exception:
                 logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
+        # Cascade-delete structure-source org rows (index + metadata +
+        # tags + index_state) — design plan §5.3 last paragraph.
+        try:
+            from acp.scheduler.structure_source_store import StructureSourceStore
+
+            org_store = StructureSourceStore(self.store.db_path)
+            org_store.delete_by_job(job_id)
+        except Exception:
+            # Org tables must never block a purge.  Log with details so
+            # orphan rows can be cleaned manually if needed.
+            logger.warning("Org-table purge failed for job %s (non-fatal)", job_id, exc_info=True)
 
     def find_orphan_tasks(self) -> list[str]:
         """List ghost task-index entries whose ``jobs`` row no longer exists.

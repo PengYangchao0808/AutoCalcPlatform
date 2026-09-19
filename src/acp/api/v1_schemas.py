@@ -318,6 +318,11 @@ class V1JobRecordModel(BaseModel):
     snapshot_version: int | None = None  # epoch seconds of state.json mtime
     live_status: JobLiveStatus | None = None
     display_method: str | None = None
+    custom_name: str | None = None
+    resolved_name: str = ""
+    default_name: str = ""
+    name_revision: int = 0
+    name_updated_at: str | None = None
 
 
 class V1JobCreateRequest(BaseModel):
@@ -874,6 +879,15 @@ class StructureSourceSummary(BaseModel):
     job_status: str = ""
     source_kind: str = ""  # final | saved_candidate | partial_result
     available_at: str = ""
+    # Org-store enrichment fields (optional — absent on old DBs).
+    custom_name: str | None = None
+    resolved_name: str | None = None
+    default_name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    role: str = ""
+    role_evidence: str = ""
+    source_uid: str = ""
+    job_resolved_name: str | None = None
 
 
 class StructureSourceListResponse(BaseModel):
