@@ -8413,20 +8413,23 @@ def test_batch_preview_local_summary_for_active_role() -> None:
 
 
 def test_batch_engine_defaults_match_backend() -> None:
-    """_BATCH_ROLE_DEFAULTS must mirror backend ROLE_PRODUCT_DEFAULTS exactly.
+    """batchRoleStaticDefaults() must mirror backend ROLE_PRODUCT_DEFAULTS exactly.
 
     Imports ROLE_PRODUCT_DEFAULTS at runtime, extracts the JS object literal
-    from the HTML, and asserts every key/value pair matches for both roles.
-    Static assertions are kept for semantic documentation.
+    from the HTML (now the shared ``batchRoleStaticDefaults`` factory used by
+    both openMethodConfig and ACPJobEditor), and asserts every key/value pair
+    matches for both roles. Static assertions are kept for semantic
+    documentation.
     """
     from acp.calculations.batch.options import ROLE_PRODUCT_DEFAULTS
 
     html = FRONTEND.read_text(encoding="utf-8")
 
-    # Extract the JS literal: "var _BATCH_ROLE_DEFAULTS = { ... };"
-    block = html.split("var _BATCH_ROLE_DEFAULTS = {", 1)[1]
-    block = block.split("};", 1)[0]
-    block += "}"  # re-add closing brace for the outer object
+    # Extract the JS literal from the shared defaults factory.
+    block = html.split("function batchRoleStaticDefaults()", 1)[1]
+    block = block.split("return {", 1)[1]
+    block = block.split("\n  };", 1)[0]
+    block += "\n}"  # re-add closing brace for the outer object
 
     def _py_to_js(val: object) -> str:
         if val is None:
@@ -9987,5 +9990,242 @@ def test_edit_i18n_keys_complete_across_locales() -> None:
         "edit.confirm_in_place",
         "edit.confirm_new_job",
         "edit.discard_confirm",
+        "edit.copy_to_structure",
+        "edit.original_items_summary",
+        "edit.batch_panel_hint",
+        "edit.method_backfilled",
+        "edit.effective_snapshot",
+        "edit.effective_recomputed",
     ):
         assert required in zh, f"required edit key missing: {required}"
+
+
+# ---------------------------------------------------------------------------
+# Edit-and-recalculate unified-state fixes (single draft / single source
+# state / single submit entry; BatchOptimize full hydrate + patch serialize).
+# ---------------------------------------------------------------------------
+
+
+def test_single_submit_entry_dispatches_to_editor() -> None:
+    """The footer #modal-submit is the ONLY submit button: it dispatches to
+    ACPJobEditor.checkAndSubmit while a draft is open, otherwise the normal
+    create flow. The banner submit button is gone."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    assert "function handleModalSubmit()" in html
+    assert "ACPJobEditor.checkAndSubmit()" in html
+    assert "return submitJobModal();" in html
+    assert (
+        'document.getElementById("modal-submit").addEventListener("click", handleModalSubmit)'
+        in html
+    )
+    # The duplicate banner submit entry must not exist anywhere.
+    assert 'id="edit-recalc-submit"' not in html
+    assert "edit-recalc-submit" not in js
+    # The editor owns the footer button label/disabled state in edit mode and
+    # restores the standard 提交 label on close.
+    assert "checkAndSubmit: checkAndSubmit" in js
+    assert 'btn.setAttribute("data-i18n", "modal.submit")' in js
+
+
+def test_profile_summary_resolved_from_catalog() -> None:
+    """Profile titles resolve from profile_id against the catalog on every
+    render — never from the mutable wizardState.method.profile_label (the
+    stale "仅优化" bug); language switches re-resolve via applyI18n."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function resolveCurrentProfile()" in html
+    assert "function resolveCurrentProfileLabel()" in html
+    cards = html.split("function updateConfigCards()", 1)[1].split("\nfunction ", 1)[0]
+    assert "resolveCurrentProfileLabel()" in cards
+    assert "profile_label" not in cards, "config card must not read stale profile_label"
+    summary = html.split("function syncBatchOptimizeProfileSummary()", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert "resolveCurrentProfileLabel()" in summary
+    # batch_roles INT/TS line must win over the engine-less "(default)" line.
+    batch_pos = cards.find('lv.level_id === "batch" && stages.batch_roles')
+    engine_pos = cards.find("st._disabled === true")
+    assert batch_pos != -1 and engine_pos != -1 and batch_pos < engine_pos
+    # applyI18n refreshes open-modal summaries so titles follow the language.
+    i18n_body = html.split("function applyI18n()", 1)[1].split("\nfunction ", 1)[0]
+    assert "updateConfigCards()" in i18n_body
+    assert "ACPJobEditor.refreshUi()" in i18n_body
+
+
+def test_editor_single_source_area() -> None:
+    """The modal has one three-entry source browser and one preview state."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    tabs = html.split('class="input-mode-tabs"', 1)[1].split("</div>", 1)[0]
+    assert 'data-input-mode="task"' in tabs
+    assert 'data-input-mode="structure"' in tabs
+    assert 'data-input-mode="upload"' in tabs
+    assert 'data-input-mode="original"' not in tabs
+    assert 'data-input-mode="last_structure"' not in tabs
+    assert 'id="input-panel-original"' not in html
+    assert 'id="edit-recalc-footer"' in html
+    # Single source-state authority in the editor.
+    assert "sourceSelection" in js
+    assert 'name="edit-input-mode"' not in js, "banner input radios must be gone"
+    mode_fn = html.split("function setWizardInputMode(mode)", 1)[1].split("\nfunction ", 1)[0]
+    assert "ACPJobEditor.onSourceTabChange(mode)" in mode_fn
+    assert 'input-panel-task' in mode_fn
+    assert 'task-results-browser' in mode_fn
+    assert "hydrateTaskStructures(ctx, draft)" in js
+    assert 'kind: "original_input"' in js
+
+
+def test_job_modal_structure_browser_visual_contract() -> None:
+    """Edit modal follows the compact three-source, 35/65 preview contract."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
+    assert 'id="preview-structure-title"' in modal
+    assert 'id="source-coordinate-disclosure"' in modal
+    assert 'id="preview-reset-view"' in modal
+    assert 'id="task-results-browser"' in modal
+    assert 'class="task-info-details"' in modal
+    assert modal.count('id="structure-preview-3d"') == 1
+    assert 'grid-template-columns: minmax(230px, 35fr) minmax(0, 65fr)' in html
+    assert '@media (max-width: 760px)' in html
+
+
+def test_job_modal_typography_is_scoped_to_three_tokens() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "--editor-font-small: 12px" in html
+    assert "--editor-font-base: 14px" in html
+    assert "--editor-font-title: 16px" in html
+    assert 'font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif !important' in html
+    assert "--editor-weight-normal: 400" in html
+    assert "--editor-weight-medium: 500" in html
+
+
+def test_job_editor_workflow_adapters_registered() -> None:
+    """Every active edit workflow has an adapter with the full hydrate/
+    serialize surface; the patch contract is presence-based (no ||)."""
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    adapters_block = js.split("var workflowAdapters = {", 1)[1].split("};", 1)[0]
+    for key in ("BatchOptimize", "Confsearch", "PESsearch", "nmr", "scan", "default"):
+        assert key + ":" in adapters_block, f"workflow adapter missing: {key}"
+    assert "function has(obj, key)" in js, "presence check helper required"
+    assert "hasOwnProperty.call" in js
+    # BatchOptimize hydrate must restore batch_roles + profile, serialize must
+    # patch (never rebuild) — serialize(hydrate(original)) ≡ original.
+    assert "mergeBatchRoles" in js
+    assert "buildBatchMethodFromPatch" in js
+    assert "methodBaseline" in js
+    assert "baselineFormState" in js
+    # Baseline dirty state: compare current form vs post-hydrate baseline,
+    # not current-default form vs original JSON.
+    count_fn = js.split("function countLocalChanges()", 1)[1].split("\nfunction ", 1)[0]
+    assert "baselineFormState" in count_fn
+
+
+def test_job_editor_batch_roundtrip_semantics() -> None:
+    """Node runtime harness over the editor's pure internals: BatchOptimize
+    hydrate/serialize round-trips, single-field patches, presence semantics
+    for null/false/0/"", and legacy flat-field reconstruction."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    harness = (
+        '"use strict";\n'
+        "global.window = {};\n"
+        "global.document = { removeEventListener: function() {}, "
+        "getElementById: function() { return null; } };\n"
+        + js
+        + textwrap.dedent(
+            """
+            var I = window.ACPJobEditorInternals;
+            function expect(cond, msg) {
+              if (!cond) { console.error("FAIL: " + msg); process.exit(1); }
+            }
+            var original = {
+              schema_id: "batch_optimize",
+              profile: "opt_freq_sp_thermo",
+              profile_id: "opt_freq_sp_thermo",
+              optimization_method: "wB97X-D4",
+              optimization_basis: "def2-TZVP",
+              single_point_method: "DLPNO-CCSD(T)",
+              single_point_basis: "def2-TZVP",
+              temperature: 298.15,
+              batch_roles: {
+                int: { method: "wB97X-D4", basis: "def2-TZVP",
+                       opt_convergence: "tight", opt_max_iter: null,
+                       scf_orbital_inherit: true, scf_damp: false,
+                       opt_max_rescue: 2, sp_method: null, aux_j_basis: "",
+                       temperature: 298.15 },
+                ts: { method: "wB97X-D4", opt_trust_radius: 0.1,
+                      opt_initial_hessian: "calculate", opt_recalc_hess: 5,
+                      opt_max_iter: 0, basis: "", scf_shift: false }
+              }
+            };
+            var defaults = I.batchRoleStaticDefaults();
+            // hydrate: static defaults <- legacy flat <- original batch_roles
+            var hydrated = I.mergeBatchRoles(original, defaults);
+            // presence semantics survive the merge
+            expect(hydrated.int.opt_max_iter === null, "null preserved");
+            expect(hydrated.int.scf_damp === false, "false preserved");
+            expect(hydrated.ts.opt_max_iter === 0, "zero preserved");
+            expect(hydrated.ts.basis === "", "empty string preserved");
+            // serialize(hydrate(original)) with no user edits === original
+            var out = I.buildBatchMethodFromPatch(
+              original, hydrated, I.deepCopy(hydrated),
+              "opt_freq_sp_thermo", "opt_freq_sp_thermo", defaults);
+            expect(I.deepEqual(out, original), "unmodified roundtrip equals original");
+            // single TS trust-radius edit: patch touches only that field
+            var cur = I.deepCopy(hydrated);
+            cur.ts.opt_trust_radius = 0.15;
+            out = I.buildBatchMethodFromPatch(
+              original, hydrated, cur, "opt_freq_sp_thermo", "opt_freq_sp_thermo", defaults);
+            var expected = I.deepCopy(original);
+            expected.batch_roles.ts.opt_trust_radius = 0.15;
+            expect(I.deepEqual(out, expected), "single-field patch touches only that field");
+            // profile switch patches profile_id/profile only
+            out = I.buildBatchMethodFromPatch(
+              original, hydrated, I.deepCopy(hydrated),
+              "opt_freq_sp_thermo", "opt_freq", defaults);
+            expect(out.profile_id === "opt_freq" && out.profile === "opt_freq",
+                   "profile patch applied");
+            expect(out.batch_roles.ts.opt_trust_radius === 0.1,
+                   "profile patch leaves roles untouched");
+            // INT method edit syncs the legacy flat mirror for consumers
+            cur = I.deepCopy(hydrated);
+            cur.int.method = "wB97M-V";
+            out = I.buildBatchMethodFromPatch(
+              original, hydrated, cur, "opt_freq_sp_thermo", "opt_freq_sp_thermo", defaults);
+            expect(out.batch_roles.int.method === "wB97M-V", "int method patched");
+            expect(out.optimization_method === "wB97M-V", "flat mirror synced");
+            // legacy flat reconstruction (no batch_roles at all)
+            var legacy = { optimization_method: "r2SCAN-3c", optimization_basis: "def2-SVP",
+                           transition_state_opt_trust_radius: 0.3, temperature: 310.0 };
+            var roles = I.mergeBatchRoles(legacy, defaults);
+            expect(roles.int.method === "r2SCAN-3c" && roles.ts.method === "r2SCAN-3c",
+                   "flat common method lands on both roles");
+            expect(roles.ts.opt_trust_radius === 0.3 && roles.int.opt_trust_radius === null,
+                   "role-prefixed flat honored on its role only");
+            expect(roles.int.temperature === 310.0 && roles.ts.temperature === 310.0,
+                   "flat temperature lands on both roles");
+            // batch_roles keys override flat only where present
+            var mixed = I.deepCopy(legacy);
+            mixed.batch_roles = { ts: { method: "wB97M-V" } };
+            roles = I.mergeBatchRoles(mixed, defaults);
+            expect(roles.ts.method === "wB97M-V" && roles.int.method === "r2SCAN-3c",
+                   "batch_roles override flat only for present keys");
+            console.log("OK");
+            """
+        )
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        script = Path(tmp) / "editor_roundtrip.js"
+        script.write_text(harness, encoding="utf-8")
+        proc = subprocess.run(
+            ["node", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    assert proc.returncode == 0, (
+        f"node harness failed (exit {proc.returncode}):\n"
+        f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "OK" in proc.stdout, f"unexpected harness output: {proc.stdout!r}"

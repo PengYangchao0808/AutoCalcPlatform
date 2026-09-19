@@ -789,8 +789,146 @@ body.resizing-v canvas {
 .edit-radio.disabled { opacity: 0.45; }
 .edit-banner-footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .edit-banner-footer .flex-spacer { flex: 1; }
+#job-modal {
+  --editor-font-small: 12px;
+  --editor-font-base: 14px;
+  --editor-font-title: 16px;
+  --editor-weight-normal: 400;
+  --editor-weight-medium: 500;
+  font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif;
+}
+#job-modal, #job-modal * {
+  font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif !important;
+  font-size: var(--editor-font-base) !important;
+  font-weight: var(--editor-weight-normal) !important;
+}
+#job-modal .modal-header h2,
+#job-modal .modal-section-title,
+#job-modal .config-card-body strong,
+#job-modal .task-info-summary {
+  font-size: var(--editor-font-title) !important;
+  font-weight: var(--editor-weight-medium) !important;
+}
+#job-modal .muted,
+#job-modal .dim,
+#job-modal .parse-status,
+#job-modal .preview-source-meta,
+#job-modal .preview-source-group,
+#job-modal .preview-right-title,
+#job-modal .config-card-label,
+#job-modal .config-card-desc,
+#job-modal .edit-banner-hint,
+#job-modal .edit-context-meta,
+#job-modal .project-hint,
+#job-modal .node-select-hint,
+#job-modal .node-select-detail,
+#job-modal .node-tag-chips,
+#job-modal .preview-3d-empty,
+#job-modal .source-coordinate-note {
+  font-size: var(--editor-font-small) !important;
+}
+#job-modal strong,
+#job-modal .active,
+#job-modal .selected,
+#job-modal .edit-banner-source,
+#job-modal .edit-changed-badge.has-changes {
+  font-weight: var(--editor-weight-medium) !important;
+}
+#job-modal .modal-dialog {
+  width: min(960px, calc(100vw - 48px));
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-radius: 16px;
+}
+#job-modal .modal-header { padding: 16px 20px; }
+#job-modal .modal-body { padding: 16px 20px 24px; gap: 24px; }
+#job-modal .modal-footer {
+  padding: 12px 20px;
+  min-height: 64px;
+  flex-wrap: wrap;
+  background: var(--bg-panel);
+}
+#edit-recalc-footer { display: flex; flex: 1 1 420px; min-width: 0; }
+#edit-recalc-footer .edit-banner-row { width: 100%; margin: 0; }
+#job-modal .edit-banner {
+  margin: 0;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(78, 161, 255, 0.10);
+}
+#job-modal .edit-banner-source { margin: 0; }
+#job-modal .edit-context-meta { margin-left: 12px; color: var(--text-secondary); }
+#job-modal .wizard-input-section { padding: 0; border: 0; background: transparent; }
+#job-modal .input-mode-tabs { gap: 8px; margin: 8px 0 12px; }
+#job-modal .input-mode-tab { flex: 0 0 auto; min-height: 40px; padding: 0 16px; border-radius: 8px; }
+#job-modal .source-browser-shell {
+  display: grid;
+  grid-template-columns: minmax(230px, 35fr) minmax(0, 65fr);
+  min-height: 334px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  overflow: hidden;
+}
+#job-modal .preview-left {
+  max-height: none;
+  border: 0;
+  border-right: 1px solid var(--border-default);
+  border-radius: 0;
+  padding: 12px;
+}
+#job-modal .preview-right { min-height: 332px; border: 0; border-radius: 0; }
+#job-modal .preview-3d-stage { min-height: 220px; }
+#job-modal .preview-right-toolbar { min-height: 42px; padding: 0 14px; }
+#job-modal .preview-right-actions .btn { min-height: 40px; padding: 0 12px; }
+#job-modal .preview-source-group { margin-bottom: 8px; color: var(--accent); }
+#job-modal .preview-table { display: block; }
+#job-modal .preview-table thead { display: none; }
+#job-modal .preview-table tbody { display: grid; gap: 8px; }
+#job-modal .preview-table tr {
+  display: block;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.025);
+}
+#job-modal .preview-table tr.selected { border-color: var(--accent); background: rgba(78,161,255,0.12); }
+#job-modal .preview-table td { display: inline; padding: 0; border: 0; white-space: normal; }
+#job-modal .preview-table td:first-child { display: none; }
+#job-modal .preview-table td:nth-child(2) { display: block; margin-bottom: 6px; color: var(--text-primary); }
+#job-modal .preview-table td:nth-child(3)::after { content: " · "; }
+#job-modal .preview-table td:nth-child(4)::after { content: " 原子 · "; }
+#job-modal .preview-table td:nth-child(5) { color: var(--text-secondary); }
+#job-modal .preview-name-input { padding: 0; border: 0; font-weight: var(--editor-weight-medium) !important; }
+#job-modal .preview-source-name { font-weight: var(--editor-weight-medium) !important; }
+#job-modal .task-results-browser { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+#job-modal .results-toolbar { display: grid; grid-template-columns: 1fr auto; }
+#job-modal .results-toolbar #results-search { grid-column: 1 / -1; }
+#job-modal .results-list { max-height: 260px; }
+#job-modal .source-coordinate-disclosure { border-top: 1px solid var(--border-subtle); }
+#job-modal .source-coordinate-disclosure summary { cursor: pointer; list-style: none; padding: 12px 14px; color: var(--text-secondary); }
+#job-modal .source-coordinate-disclosure summary::-webkit-details-marker { display: none; }
+#job-modal:not(.edit-mode) #edit-original-copy { display: none !important; }
+#job-modal .source-coordinate-text {
+  max-height: 180px; margin: 0; padding: 0 14px 14px; overflow: auto;
+  font-variant-numeric: tabular-nums; white-space: pre; color: var(--text-secondary);
+}
+#job-modal .structure-preview-wrap { margin-top: 0; }
+#job-modal .input-panel:not(#input-panel-task) { margin-bottom: 12px; }
+#job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { border-radius: 8px; }
+#job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { min-height: 40px; }
+#job-modal .config-cards-row { gap: 12px; }
+#job-modal .config-card { border-radius: 12px; }
+#job-modal .task-info-details { border-top: 1px solid var(--border-subtle); padding-top: 16px; }
+#job-modal .task-info-details > summary { cursor: pointer; list-style: none; }
+#job-modal .task-info-details > summary::-webkit-details-marker { display: none; }
+#job-modal .task-info-grid { display: grid; gap: 12px; margin-top: 16px; }
+#job-modal .edit-original-preview {
+  margin: 0; max-height: 180px; overflow: auto;
+  font-variant-numeric: tabular-nums; white-space: pre;
+}
 .edit-changed-badge { opacity: 0.8; }
-.edit-changed-badge.has-changes { color: var(--amber, #f2b84b); opacity: 1; font-weight: 600; }
+.edit-changed-badge.has-changes { color: var(--amber, #f2b84b); opacity: 1; font-weight: 500; }
 .edit-items { margin: 6px 0; }
 .edit-items summary { cursor: pointer; opacity: 0.85; }
 .edit-items-list {
@@ -3847,6 +3985,18 @@ option, optgroup {
   .structure-preview-wrap { grid-template-columns: 1fr; }
   .config-cards-row { grid-template-columns: 1fr; }
   .modal-row { grid-template-columns: 1fr; }
+  #job-modal { padding: 8px; }
+  #job-modal .modal-dialog { width: 100%; max-height: calc(100dvh - 16px); }
+  #job-modal .modal-header, #job-modal .modal-body, #job-modal .modal-footer { padding-left: 12px; padding-right: 12px; }
+  #job-modal .edit-banner { margin: 0; }
+  #job-modal .source-browser-shell { grid-template-columns: 1fr; }
+  #job-modal .preview-left { border-right: 0; border-bottom: 1px solid var(--border-default); max-height: 300px; }
+  #job-modal .preview-right { min-height: 300px; }
+  #job-modal .input-mode-tabs { overflow-x: auto; }
+  #job-modal .input-mode-tab { min-width: max-content; min-height: 44px; }
+  #job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { min-height: 44px; }
+  #job-modal .modal-footer { align-items: stretch; }
+  #edit-recalc-footer { flex-basis: 100%; }
 }
 </style>
 <link rel="stylesheet" href="css/structure_viewer.css">
@@ -4230,15 +4380,13 @@ option, optgroup {
 <div class="modal-overlay" id="job-modal" style="display:none;">
   <div class="modal-dialog modal-dialog-wide">
     <div class="modal-header">
-      <h2 data-i18n="modal.title">新建计算任务</h2>
+      <h2 id="job-modal-title" data-i18n="modal.title">新建计算任务</h2>
       <button class="modal-close" id="modal-close">X</button>
     </div>
-    <!-- Edit-and-recalculate banner (docs/ACP_Edit_And_Recalculate_Plan.md §4.2):
-         source identity, input/execution mode radios, changed-count badge,
-         per-item batch include list, and the check-and-submit entry. Filled
-         dynamically by ACPJobEditor; hidden in normal create mode. -->
-    <div id="edit-recalc-banner" style="display:none;"></div>
     <div class="modal-body">
+      <!-- Normal-flow context row: it scrolls with the body and never overlays
+           workflow/protocol content. Only the submit footer stays fixed. -->
+      <div id="edit-recalc-banner" style="display:none;"></div>
       <!-- Step 1: project target — deciding WHERE the job belongs comes
            before configuring WHAT to run (structure/workflow/protocol). -->
       <div class="modal-section" id="modal-project-section">
@@ -4249,26 +4397,17 @@ option, optgroup {
 
       <div class="wizard-input-section">
         <div class="modal-section-title" data-i18n="modal.step2">2. 选择结构来源</div>
-        <div class="input-mode-tabs">
-          <button class="input-mode-tab active" data-input-mode="structure" data-i18n="modal.mode_structure">结构输入（自动识别）</button>
-          <button class="input-mode-tab" data-input-mode="results" data-i18n="modal.mode_results">任务结果</button>
+        <div class="input-mode-tabs" role="tablist" aria-label="结构来源">
+          <button class="input-mode-tab active" data-input-mode="task" role="tab" aria-selected="true" data-i18n="modal.mode_task">任务结构</button>
+          <button class="input-mode-tab" data-input-mode="structure" role="tab" aria-selected="false" data-i18n="modal.mode_structure_short">结构输入</button>
           <button class="input-mode-tab" data-input-mode="upload" data-i18n="modal.mode_upload">上传</button>
         </div>
+
+        <div class="input-panel" id="input-panel-task"></div>
 
         <div class="input-panel" id="input-panel-structure">
           <label data-i18n="modal.structure_label">SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP（自动识别）</label>
           <textarea id="modal-structure-input" class="modal-input" rows="6" placeholder="CCO" data-i18n-ph="modal.structure_placeholder"></textarea>
-        </div>
-
-        <div class="input-panel" id="input-panel-results" style="display:none;">
-          <div class="muted" style="margin-bottom:6px;" data-i18n="results.title">任务结果</div>
-          <div class="results-toolbar">
-            <select id="results-project" class="modal-select"></select>
-            <input type="text" id="results-search" class="modal-input" placeholder="搜索名称/项目/状态/候选编号…" data-i18n-ph="results.search_placeholder">
-            <button type="button" class="btn ghost" id="results-reload" data-i18n="results.reload">刷新</button>
-          </div>
-          <div id="results-cross-hint" style="display:none;margin:4px 0 6px;font-size:11px;color:#ffb454;"></div>
-          <div class="results-list" id="results-list"></div>
         </div>
 
         <div class="input-panel" id="input-panel-upload" style="display:none;">
@@ -4433,8 +4572,9 @@ option, optgroup {
           </div>
         </div>
 
-        <div class="structure-preview-wrap" id="structure-preview">
+        <div class="structure-preview-wrap source-browser-shell" id="structure-preview">
           <div class="preview-left">
+            <div class="preview-source-group" id="preview-source-group">当前任务 · 默认沿用</div>
             <table class="preview-table">
               <thead>
                 <tr>
@@ -4447,11 +4587,22 @@ option, optgroup {
               </thead>
               <tbody id="preview-tbody"></tbody>
             </table>
+            <div class="task-results-browser" id="task-results-browser">
+              <div class="preview-source-group" data-i18n="edit.other_task_results">本项目的其他任务结果</div>
+              <div class="results-toolbar">
+                <select id="results-project" class="modal-select" aria-label="项目"></select>
+                <button type="button" class="btn ghost" id="results-reload" data-i18n="results.reload">刷新</button>
+                <input type="text" id="results-search" class="modal-input" placeholder="搜索名称/项目/状态/候选编号…" data-i18n-ph="results.search_placeholder">
+              </div>
+              <div id="results-cross-hint" style="display:none;color:#ffb454;"></div>
+              <div class="results-list" id="results-list"></div>
+            </div>
           </div>
           <div class="preview-right">
             <div class="preview-right-toolbar">
-              <span class="preview-right-title" data-i18n="modal.preview_title">结构预览</span>
+              <span class="preview-right-title" id="preview-structure-title" data-i18n="modal.preview_title">结构预览</span>
               <div class="preview-right-actions">
+                <button type="button" class="btn ghost" id="preview-reset-view" data-i18n="edit.reset_view">重置视角</button>
                 <button type="button" class="btn ghost" id="preview-remove-selected" data-i18n="modal.remove_selected">删除选中</button>
                 <button type="button" class="btn ghost" id="preview-clear-all" data-i18n="modal.clear_structures">清空全部</button>
               </div>
@@ -4460,6 +4611,13 @@ option, optgroup {
               <div id="structure-preview-3d" class="preview-3d-container"></div>
               <div class="preview-3d-empty" id="preview-3d-empty">无 3D 坐标</div>
             </div>
+            <details class="source-coordinate-disclosure" id="source-coordinate-disclosure">
+              <summary data-i18n="edit.view_coordinates">查看坐标</summary>
+              <pre class="source-coordinate-text" id="source-coordinate-text"></pre>
+              <div class="source-coordinate-note">
+                <button type="button" class="btn ghost" id="edit-original-copy" data-i18n="edit.copy_to_structure">复制到结构输入并修改</button>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -4569,21 +4727,19 @@ option, optgroup {
         </div>
       </div>
 
-      <div class="modal-section">
-        <label for="modal-remark" data-i18n="modal.remark">备注（可选）</label>
-        <textarea id="modal-remark" class="modal-input batch-remark" rows="3" data-i18n-ph="modal.remark_ph"></textarea>
-      </div>
-
-      <!-- Task name (v2 dir layout): scheduler task dirs are named
-           <molecule>_<task_name>_<remark>; when omitted the backend
-           defaults task_name := workflow id (e.g. energy). -->
-      <div class="modal-section">
-        <label for="modal-task-name" data-i18n="modal.task_name">任务名（可选）</label>
-        <input type="text" id="modal-task-name" class="modal-input" autocomplete="off" data-i18n-ph="modal.task_name_ph">
-      </div>
-
-      <div class="modal-section">
-        <label data-i18n="modal.step5">5. 资源设置并提交</label>
+      <details class="task-info-details">
+        <summary class="task-info-summary" data-i18n="edit.task_info_resources">5. 任务信息与资源</summary>
+        <span hidden data-i18n="modal.step5"></span>
+        <div class="task-info-grid">
+          <div class="modal-section">
+            <label for="modal-remark" data-i18n="modal.remark">备注（可选）</label>
+            <textarea id="modal-remark" class="modal-input batch-remark" rows="3" data-i18n-ph="modal.remark_ph"></textarea>
+          </div>
+          <div class="modal-section">
+            <label for="modal-task-name" data-i18n="modal.task_name">任务名（可选）</label>
+            <input type="text" id="modal-task-name" class="modal-input" autocomplete="off" data-i18n-ph="modal.task_name_ph">
+          </div>
+          <div class="modal-section">
         <div class="resource-grid">
           <div class="resource-field">
             <label for="modal-nproc" data-i18n="modal.nproc">核数</label>
@@ -4611,9 +4767,12 @@ option, optgroup {
           <div class="node-tag-chips" id="modal-node-tags" style="display:none;"></div>
           <div class="node-select-hint" id="modal-node-note" style="display:none;"></div>
         </div>
-      </div>
+          </div>
+        </div>
+      </details>
     </div>
     <div class="modal-footer">
+      <div id="edit-recalc-footer" style="display:none;"></div>
       <button class="btn ghost" id="modal-cancel" data-i18n="modal.cancel">取消</button>
       <button class="btn primary" id="modal-submit" data-i18n="modal.submit">提交</button>
     </div>
@@ -5659,6 +5818,17 @@ const I18N = {
     "edit.changed_n": "已修改 {n} 项",
     "edit.batch_items_summary": "批量输入清单（共 {total} 项，可勾选参与重算的部分）",
     "edit.batch_items_empty": "至少需要勾选一个批量输入条目",
+    "edit.original_items_summary": "共 {total} 个结构 · INT {int} / TS {ts}",
+    "edit.batch_panel_hint": "条目的勾选、名称、标签与电子态在下方批量清单中调整",
+    "edit.copy_to_structure": "复制到结构输入并修改",
+    "edit.title": "修改参数后重算",
+    "edit.other_task_results": "本项目的其他任务结果",
+    "edit.reset_view": "重置视角",
+    "edit.view_coordinates": "查看坐标",
+    "edit.task_info_resources": "5. 任务信息与资源",
+    "edit.method_backfilled": "原任务缺少部分方法参数，已按当前目录默认重建（以预览差异为准）",
+    "edit.effective_snapshot": "参数快照：上次实际生效配置（effective_config.json）",
+    "edit.effective_recomputed": "参数按上次提交配置重建（无生效快照）",
     "edit.check_and_submit": "检查并提交",
     "edit.discard_confirm": "当前编辑有未提交的修改。确定放弃草稿并关闭？",
     "edit.create_blocked_in_editor": "编辑模式下不可直接创建任务；请先完成或取消编辑",
@@ -5926,6 +6096,8 @@ const I18N = {
     "modal.mode_smiles": "SMILES",
     "modal.mode_paste": "粘贴",
     "modal.mode_structure": "结构输入（自动识别）",
+    "modal.mode_task": "任务结构",
+    "modal.mode_structure_short": "结构输入",
     "modal.mode_results": "任务结果",
     "modal.mode_upload": "上传",
     "modal.smiles": "SMILES（每行一个分子）",
@@ -6748,6 +6920,8 @@ const I18N = {
     "picker.group.tag": "分类标签",
     "picker.group.role": "结构角色",
     "picker.empty": "暂无结构来源",
+    "picker.current_task": "当前任务",
+    "picker.other_tasks": "其他任务",
     "picker.loading": "加载中…",
     "picker.error": "加载失败",
     "picker.load": "载入",
@@ -6883,6 +7057,17 @@ const I18N = {
     "edit.changed_n": "{n} field(s) modified",
     "edit.batch_items_summary": "Batch items ({total} total — untick to exclude)",
     "edit.batch_items_empty": "At least one batch item must stay selected",
+    "edit.original_items_summary": "{total} structures · INT {int} / TS {ts}",
+    "edit.batch_panel_hint": "Toggle, rename, tag, and set electronic states per item in the batch list below",
+    "edit.copy_to_structure": "Copy to structure input & edit",
+    "edit.title": "Edit parameters & recalculate",
+    "edit.other_task_results": "Other task results in this project",
+    "edit.reset_view": "Reset view",
+    "edit.view_coordinates": "View coordinates",
+    "edit.task_info_resources": "5. Task info & resources",
+    "edit.method_backfilled": "Some method parameters were missing from the original task and were rebuilt from current catalog defaults (the preview diff is authoritative)",
+    "edit.effective_snapshot": "Parameter snapshot: last effective configuration (effective_config.json)",
+    "edit.effective_recomputed": "Parameters rebuilt from the last submitted config (no effective snapshot)",
     "edit.check_and_submit": "Check & submit",
     "edit.discard_confirm": "The draft has unsubmitted changes. Discard and close?",
     "edit.create_blocked_in_editor": "Direct creation is disabled while the editor is open; finish or cancel the edit first",
@@ -7150,6 +7335,8 @@ const I18N = {
     "modal.mode_smiles": "SMILES",
     "modal.mode_paste": "Paste",
     "modal.mode_structure": "Structure Input (auto-detect)",
+    "modal.mode_task": "Task structures",
+    "modal.mode_structure_short": "Structure input",
     "modal.mode_results": "Job Results",
     "modal.mode_upload": "Upload",
     "modal.smiles": "SMILES (one per line)",
@@ -7972,6 +8159,8 @@ const I18N = {
     "picker.group.tag": "Tags",
     "picker.group.role": "Structure role",
     "picker.empty": "No structure sources available",
+    "picker.current_task": "Current task",
+    "picker.other_tasks": "Other tasks",
     "picker.loading": "Loading…",
     "picker.error": "Load failed",
     "picker.load": "Load",
@@ -8574,6 +8763,10 @@ function applyI18n() {
   if (activeViewerTab === "path") renderMechanismTabFromCache(activeViewerTab);
   if (activeViewerTab === "energy" && lastSelectedJob) renderEnergyGraphWorkspace(lastSelectedJob, { silent: true });
   if (!selectedJobId) renderLogPlaceholder();
+  // Open job modal: profile summaries resolve labels per current language.
+  var _jobModalEl = document.getElementById("job-modal");
+  if (_jobModalEl && _jobModalEl.style.display !== "none") updateConfigCards();
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) ACPJobEditor.refreshUi();
 }
 
 function formatDateTime(value) {
@@ -19510,6 +19703,25 @@ function getMethodProfileById(profileId) {
   return null;
 }
 
+// Profile titles are ALWAYS resolved from profile_id against the current
+// catalog — never from the mutable wizardState.method.profile_label, which
+// goes stale after edit-draft hydration restores a non-default profile
+// (the "仅优化" bug). Language switches re-resolve via updateConfigCards.
+function resolveCurrentProfile() {
+  return getMethodProfileById(wizardState.method.profile_id);
+}
+
+function resolveCurrentProfileLabel() {
+  if (wizardState.method.profile_id === "__custom__") {
+    return t("modal.custom") || "Custom";
+  }
+  var profile = resolveCurrentProfile();
+  if (!profile) return wizardState.method.profile_id || (t("modal.custom") || "Custom");
+  return currentLang === "zh-CN"
+    ? (profile.label_zh || profile.label)
+    : profile.label;
+}
+
 function extractMechanismSettingsFromProfile(profile) {
   if (!profile || !profile.levels) return null;
   var scanLevel = profile.levels.scan || {};
@@ -21371,15 +21583,29 @@ function closeJobModalGuarded() {
 function setWizardInputMode(mode) {
   wizardInputMode = mode;
   document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
-    tab.classList.toggle("active", tab.getAttribute("data-input-mode") === mode);
+    var active = tab.getAttribute("data-input-mode") === mode;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
   });
+  var taskPanel = document.getElementById("input-panel-task");
+  if (taskPanel) taskPanel.style.display = mode === "task" ? "block" : "none";
   document.getElementById("input-panel-structure").style.display = mode === "structure" ? "block" : "none";
-  document.getElementById("input-panel-results").style.display = mode === "results" ? "block" : "none";
   document.getElementById("input-panel-upload").style.display = mode === "upload" ? "block" : "none";
+  var browser = document.getElementById("task-results-browser");
+  if (browser) browser.style.display = mode === "task" ? "block" : "none";
+  var sourceGroup = document.getElementById("preview-source-group");
+  if (sourceGroup) {
+    var editing = window.ACPJobEditor && ACPJobEditor.isActive();
+    sourceGroup.style.display = mode === "task" && editing ? "block" : "none";
+  }
   // Invalidate any in-flight parse from the previous tab (slow-response race).
   parseSeqToken++;
   if (parseDebounceTimer) { clearTimeout(parseDebounceTimer); parseDebounceTimer = null; }
-  if (mode === "results") loadStructureSources(false);
+  if (mode === "task") loadStructureSources(false);
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+    ACPJobEditor.onSourceTabChange(mode);
+  }
+  if (mode === "task") return;
   // Parse-race fix: the token bump above cancels any parse still in flight,
   // so returning to a tab whose input was never applied must re-parse or
   // the preview stays stuck on "等待输入" forever.
@@ -21430,6 +21656,10 @@ function renderPreviewWaiting() {
     emptyEl.style.display = "grid";
   }
   if (container) container.style.display = "grid";
+  var title = document.getElementById("preview-structure-title");
+  if (title) title.textContent = t("modal.preview_title");
+  var coords = document.getElementById("source-coordinate-text");
+  if (coords) coords.textContent = "";
   updatePreviewActionState();
   if (previewViewer) {
     try {
@@ -21569,28 +21799,51 @@ function renderStructurePreview(structures, warnings) {
 
   structures.forEach(function(s, i) {
     var tr = document.createElement("tr");
+    tr.tabIndex = 0;
+    tr.setAttribute("role", "option");
+    tr.setAttribute("aria-selected", i === wizardSelectedStructureIndex ? "true" : "false");
     if (i === wizardSelectedStructureIndex) tr.className = "selected";
     var moleculeName = String(s.name || ("mol_" + (i + 1))).trim();
     if (!moleculeName) moleculeName = "mol_" + (i + 1);
     s.name = moleculeName;
+    var taskReadOnly = window.ACPJobEditor && ACPJobEditor.isActive() && wizardInputMode === "task";
+    var nameCell = taskReadOnly
+      ? '<span class="preview-source-name">' + escapeHtml(moleculeName) + "</span>"
+      : '<input class="preview-name-input" type="text" value="' + escapeHtml(moleculeName) + '" data-structure-index="' + i + '" aria-label="' + escapeHtml(t("modal.molecule_name")) + '">';
     tr.innerHTML =
       "<td>" + (i + 1) + "</td>" +
-      '<td><input class="preview-name-input" type="text" value="' + escapeHtml(moleculeName) + '" data-structure-index="' + i + '" aria-label="' + escapeHtml(t("modal.molecule_name")) + '"></td>' +
-      "<td>" + escapeHtml(s.formula || "--") + "</td>" +
+      "<td>" + nameCell + "</td>" +
+      "<td>" + escapeHtml(s.tag || s.formula || "Structure") + "</td>" +
       "<td>" + s.atom_count + "</td>" +
-      "<td class='" + (s.errors.length ? "preview-warn" : "preview-ok") + "'>" +
-        (s.errors.length ? "\u2717" : (s.warnings.length ? "\u26a0" : "OK")) +
+      "<td class='" + ((s.errors || []).length ? "preview-warn" : "preview-ok") + "'>" +
+        "charge " + (s.charge !== undefined ? s.charge : 0) + " · multiplicity " + (s.multiplicity || 1) +
+        ((s.errors || []).length ? " · \u2717" : ((s.warnings || []).length ? " · \u26a0" : "")) +
       "</td>";
-    tr.addEventListener("click", function() {
+    function selectRow() {
       wizardSelectedStructureIndex = i;
       document.querySelectorAll("#preview-tbody tr").forEach(function(r, idx) {
         r.classList.toggle("selected", idx === i);
+        r.setAttribute("aria-selected", idx === i ? "true" : "false");
       });
       renderPreviewStructure3D(structures[i]);
+      if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+        ACPJobEditor.onPreviewStructureSelected(structures[i]);
+      }
        if (isPESsearchTask()) {
          syncPESSelectionFromWizard(true);
          attachPESPreviewSelection();
        }
+    }
+    tr.addEventListener("click", selectRow);
+    tr.addEventListener("keydown", function(event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault(); selectRow();
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        var next = event.key === "ArrowDown" ? Math.min(i + 1, structures.length - 1) : Math.max(i - 1, 0);
+        var rows = document.querySelectorAll("#preview-tbody tr");
+        if (rows[next]) { rows[next].focus(); rows[next].click(); }
+      }
     });
     tbody.appendChild(tr);
   });
@@ -21624,6 +21877,9 @@ function updatePreviewActionState() {
   var clearBtn = document.getElementById("preview-clear-all");
   if (removeBtn) removeBtn.disabled = !hasStructures;
   if (clearBtn) clearBtn.disabled = !hasStructures;
+  var passiveTaskSource = window.ACPJobEditor && ACPJobEditor.isActive() && wizardInputMode === "task";
+  if (removeBtn) removeBtn.style.display = passiveTaskSource ? "none" : "";
+  if (clearBtn) clearBtn.style.display = passiveTaskSource ? "none" : "";
 }
 
 function removeSelectedStructure() {
@@ -21679,15 +21935,25 @@ function renderPreviewStructure3D(structure) {
   clearPESPreviewSelectionShapes();
   previewModel = null;
   var emptyEl = document.getElementById("preview-3d-empty");
+  var titleEl = document.getElementById("preview-structure-title");
+  var coordinateEl = document.getElementById("source-coordinate-text");
+  var titleParts = [];
+  if (structure) {
+    titleParts.push(structure.name || structure.molecule_name || "结构预览");
+    if (structure.tag) titleParts.push(structure.tag);
+    if (wizardStructures.length > 1) titleParts.push((wizardSelectedStructureIndex + 1) + "/" + wizardStructures.length);
+  }
+  if (titleEl) titleEl.textContent = titleParts.join(" · ") || t("modal.preview_title");
+  if (coordinateEl) coordinateEl.textContent = structure ? (structure.xyz || "") : "";
   if (!structure || !structure.has_3d) {
     if (emptyEl) {
       // Parsed OK but no 3D coordinates is a different situation from
       // "nothing parsed" — say so explicitly (P2) instead of a bare
       // "无 3D 坐标" that reads like a parse failure.
       if (structure) {
-        emptyEl.textContent = t("parse.no_3d_embedded");
-        var firstWarn = (structure.warnings || [])[0];
-        if (firstWarn) emptyEl.title = firstWarn;
+        var geometryReason = (structure.errors || [])[0] || (structure.warnings || [])[0];
+        emptyEl.textContent = geometryReason || t("parse.no_3d_embedded");
+        emptyEl.title = geometryReason || "";
       } else {
         emptyEl.textContent = t("parse.no_3d_waiting");
         emptyEl.title = "";
@@ -22053,6 +22319,8 @@ var resultsLoaded = false;      // per-modal-open fetch guard
 var resultsSearchTimer = null;
 var resultsPicker = null;       // ACPSourcePicker instance for results tab
 var batchPreviewItems = [];     // batch structure-source panel items
+var structureSourceLoadController = null;
+var structureSourceLoadToken = 0;
 
 function resetResultsPanel() {
   if (resultsPicker) { resultsPicker.destroy(); resultsPicker = null; }
@@ -22317,28 +22585,39 @@ function structureFromSourceDetail(a, sourceId) {
 }
 
 async function loadStructureSource(sourceId, rowEl) {
+  if (structureSourceLoadController) structureSourceLoadController.abort();
+  structureSourceLoadController = typeof AbortController !== "undefined" ? new AbortController() : null;
+  var loadToken = ++structureSourceLoadToken;
   var errEl = rowEl ? rowEl.querySelector(".result-row-error") : null;
   var btn = rowEl ? rowEl.querySelector(".result-load-btn") : null;
   if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
   if (btn) { btn.disabled = true; btn.textContent = t("results.loading_structure"); }
   showParseStatus(t("results.loading_structure"), false);
   try {
-    var body = await api("/structure-sources/" + encodeURIComponent(sourceId));
+    var body = await api("/structure-sources/" + encodeURIComponent(sourceId),
+      structureSourceLoadController ? { signal: structureSourceLoadController.signal } : undefined);
+    if (loadToken !== structureSourceLoadToken) return;
     var a = body.structure || {};
     var struct = structureFromSourceDetail(a, sourceId);
     struct.source_ref.checksum = body.checksum || "";
     struct.source_ref.project_id = struct.source_ref.project_id || body.project_id || "";
     struct.source_ref.job_status = struct.source_ref.job_status || body.job_status || "";
-    var existingIndex = wizardStructures.findIndex(function(existing) {
-      var left = existing && existing.source_ref;
-      var right = struct.source_ref;
-      return !!(left && right && left.job_id === right.job_id && left.path === right.path);
-    });
-    if (existingIndex >= 0) {
-      wizardSelectedStructureIndex = existingIndex;
+    if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+      // Edit mode is a source replacement, not an additive import.
+      wizardStructures = [struct];
+      wizardSelectedStructureIndex = 0;
     } else {
-      wizardStructures.push(struct);
-      wizardSelectedStructureIndex = wizardStructures.length - 1;
+      var existingIndex = wizardStructures.findIndex(function(existing) {
+        var left = existing && existing.source_ref;
+        var right = struct.source_ref;
+        return !!(left && right && left.job_id === right.job_id && left.path === right.path);
+      });
+      if (existingIndex >= 0) {
+        wizardSelectedStructureIndex = existingIndex;
+      } else {
+        wizardStructures.push(struct);
+        wizardSelectedStructureIndex = wizardStructures.length - 1;
+      }
     }
     wizardParseWarnings = wizardStructures.reduce(function(warnings, item) {
       return warnings.concat(item.warnings || []);
@@ -22351,6 +22630,9 @@ async function loadStructureSource(sourceId, rowEl) {
     var errBox = document.getElementById("parse-errors");
     if (errBox) errBox.style.display = "none";
     renderStructurePreview(wizardStructures, wizardParseWarnings);
+    if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+      ACPJobEditor.onJobResultLoaded(struct);
+    }
     showParseStatus(t("parse.success", { count: wizardStructures.length }), false);
     var loadedMeta = resultsSources.find(function(s) { return s.source_id === sourceId; });
     var loadedProject = (loadedMeta && loadedMeta.project_id) || body.project_id || "";
@@ -22370,6 +22652,7 @@ async function loadStructureSource(sourceId, rowEl) {
     }
     updateInputModeVisibility();
   } catch (e) {
+    if (loadToken !== structureSourceLoadToken || (e && e.name === "AbortError")) return;
     if (errEl) {
       errEl.textContent = t("results.error") + ": " + (e.message || String(e));
       errEl.style.display = "inline";
@@ -22470,6 +22753,39 @@ async function uploadNmrBruker(input) {
   }
 }
 
+// Per-stage summary line for the method card (extracted from
+// updateConfigCards; behavior unchanged).
+function stageSummaryPart(lv, st) {
+  if (st.functional) {
+    var s = lv.label + ": " + st.functional;
+    var basisStr = st.basis;
+    if (!basisStr) {
+      var fMeta = (methodCatalogCache.method_meta || {})[st.functional];
+      if (!fMeta) fMeta = lookupCI(methodCatalogCache.method_meta || {}, st.functional);
+      if (fMeta && fMeta.default_basis) basisStr = fMeta.default_basis;
+    }
+    if (basisStr) s += "/" + basisStr;
+    return s;
+  }
+  if (st.gfn) return lv.label + ": " + st.gfn;
+  if (st.scan_coordinate_kind) {
+    var kindLabels = { distance: "键长扫描", angle: "键角扫描", dihedral: "二面角扫描" };
+    var bondLabels = { auto: "自动键型", single: "单键", double: "双键", multiple: "多键", aromatic: "芳香键" };
+    var coordText = kindLabels[st.scan_coordinate_kind] || st.scan_coordinate_kind;
+    if (st.scan_coordinate_kind === "distance") {
+      coordText += " · " + (bondLabels[st.scan_bond_type] || "自动键型");
+    }
+    var startText = st.scan_coordinate_start !== undefined ? st.scan_coordinate_start : "?";
+    var endText = st.scan_coordinate_end !== undefined ? st.scan_coordinate_end : "?";
+    var pointText = st.scan_coordinate_points !== undefined ? st.scan_coordinate_points : "?";
+    return (lv.label_zh || lv.label) + ": " + coordText + " · " + startText + " → " + endText + " · " + pointText + "点";
+  }
+  if (st.scan_optimizer_method) return (lv.label_zh || lv.label) + ": " + st.scan_optimizer_method;
+  if (st.scan_mode) return (lv.label_zh || lv.label) + ": " + st.scan_mode;
+  if (st.temperature !== undefined && st.temperature !== "") return lv.label + ": " + st.temperature + "K";
+  return lv.label + ": " + st.engine;
+}
+
 function updateConfigCards() {
   ensureWizardWorkflowValid();
   syncBatchOptimizeProfileSummary();
@@ -22487,7 +22803,7 @@ function updateConfigCards() {
 
   var mtTitle = document.getElementById("method-card-title");
   var mtDesc = document.getElementById("method-card-desc");
-  mtTitle.textContent = wizardState.method.profile_label || (t("modal.custom") || "Custom");
+  mtTitle.textContent = resolveCurrentProfileLabel();
 
   var stages = wizardState.method.stages || {};
   var schemaId = canonicalMethodSchemaId(wizardState.workflow.id, wizardState.workflow.schema_id);
@@ -22516,12 +22832,8 @@ function updateConfigCards() {
   if (schema && schema.method_levels) {
     schema.method_levels.forEach(function(lv) {
       var st = stages[lv.level_id];
-      if (!st || !st.engine || st._disabled === true) {
-        var label = lv.label_zh || lv.label || lv.level_id;
-        parts.push('<span style="color:var(--text-tertiary)">' + label + " (default)</span>");
-        return;
-      }
-      // Batch level: show INT/TS methods from batch_roles
+      // Batch level first: INT/TS methods from batch_roles must win over the
+      // engine-less "(default)" placeholder (profile levels carry steps only).
       if (lv.level_id === "batch" && stages.batch_roles) {
         var br = stages.batch_roles;
         var intM = (br.int || {}).method || "r2SCAN-3c";
@@ -22529,38 +22841,12 @@ function updateConfigCards() {
         parts.push("INT: " + intM + " | TS: " + tsM);
         return;
       }
-      if (st.functional) {
-        var s = lv.label + ": " + st.functional;
-        var basisStr = st.basis;
-        if (!basisStr) {
-          var fMeta = (methodCatalogCache.method_meta || {})[st.functional];
-          if (!fMeta) fMeta = lookupCI(methodCatalogCache.method_meta || {}, st.functional);
-          if (fMeta && fMeta.default_basis) basisStr = fMeta.default_basis;
-        }
-        if (basisStr) s += "/" + basisStr;
-        parts.push(s);
-      } else if (st.gfn) {
-        parts.push(lv.label + ": " + st.gfn);
-      } else if (st.scan_coordinate_kind) {
-        var kindLabels = { distance: "键长扫描", angle: "键角扫描", dihedral: "二面角扫描" };
-        var bondLabels = { auto: "自动键型", single: "单键", double: "双键", multiple: "多键", aromatic: "芳香键" };
-        var coordText = kindLabels[st.scan_coordinate_kind] || st.scan_coordinate_kind;
-        if (st.scan_coordinate_kind === "distance") {
-          coordText += " · " + (bondLabels[st.scan_bond_type] || "自动键型");
-        }
-        var startText = st.scan_coordinate_start !== undefined ? st.scan_coordinate_start : "?";
-        var endText = st.scan_coordinate_end !== undefined ? st.scan_coordinate_end : "?";
-        var pointText = st.scan_coordinate_points !== undefined ? st.scan_coordinate_points : "?";
-        parts.push((lv.label_zh || lv.label) + ": " + coordText + " · " + startText + " → " + endText + " · " + pointText + "点");
-      } else if (st.scan_optimizer_method) {
-        parts.push((lv.label_zh || lv.label) + ": " + st.scan_optimizer_method);
-      } else if (st.scan_mode) {
-        parts.push((lv.label_zh || lv.label) + ": " + st.scan_mode);
-      } else if (st.temperature !== undefined && st.temperature !== "") {
-        parts.push(lv.label + ": " + st.temperature + "K");
-      } else {
-        parts.push(lv.label + ": " + st.engine);
+      if (!st || !st.engine || st._disabled === true) {
+        var label = lv.label_zh || lv.label || lv.level_id;
+        parts.push('<span style="color:var(--text-tertiary)">' + label + " (default)</span>");
+        return;
       }
+      parts.push(stageSummaryPart(lv, st));
     });
   } else {
     Object.keys(stages).forEach(function(lid) {
@@ -22589,7 +22875,7 @@ function updateConfigCards() {
 function syncBatchOptimizeProfileSummary() {
   var summary = document.getElementById("batch-optimize-profile-summary");
   if (!summary) return;
-  var label = wizardState.method.profile_label || t("modal.custom") || "Custom";
+  var label = resolveCurrentProfileLabel();
   summary.textContent = (t("modal.batch_profile") || "计算档案") + "：" + label + "（由计算协议统一控制）";
 }
 
@@ -23079,6 +23365,38 @@ function openPESsearchWizard(projectId) {
   };
   openModal();
 }
+
+// Static INT/TS role defaults, mirroring backend ROLE_DEFAULTS +
+// BatchMethodOptions. Method-dependent keys (method/basis/sp_*/dispersion/
+// aux_j_basis) are patched per-context by callers. Shared by openMethodConfig
+// and ACPJobEditor (edit-draft batch_roles hydration).
+function batchRoleStaticDefaults() {
+  return {
+    int: {
+      method: "", basis: null, sp_method: null, sp_basis: null,
+      dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
+      opt_max_iter: null, opt_convergence: "tight",
+      opt_trust_radius: null, opt_initial_hessian: "auto", opt_recalc_hess: "auto",
+      scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
+      scf_orbital_inherit: true, scf_damp: false, scf_damp_fac: 0.50,
+      scf_shift: false, scf_shift_fac: 0.30,
+      opt_rescue_policy: "adaptive", opt_max_rescue: 2,
+      temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
+    },
+    ts: {
+      method: "", basis: null, sp_method: null, sp_basis: null,
+      dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
+      opt_max_iter: null, opt_convergence: "tight",
+      opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5,
+      scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
+      scf_orbital_inherit: true, scf_damp: false, scf_damp_fac: 0.50,
+      scf_shift: false, scf_shift_fac: 0.30,
+      opt_rescue_policy: "adaptive", opt_max_rescue: 2,
+      temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
+    },
+  };
+}
+window.batchRoleStaticDefaults = batchRoleStaticDefaults;
 
 function applyBatchOptimizeMethodFields(methodPayload) {
   var batchRoles = (wizardState.method.stages || {}).batch_roles || {};
@@ -24449,31 +24767,9 @@ async function openMethodConfig() {
 
       // ── BatchOptimize: INT/TS role toggle + per-role config form ──
       if (lvDef.level_id === "batch") {
-        // ── _BATCH_ROLE_DEFAULTS: mirrors backend ROLE_DEFAULTS + BatchMethodOptions ──
-        var _BATCH_ROLE_DEFAULTS = {
-          int: {
-            method: "", basis: null, sp_method: null, sp_basis: null,
-            dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
-            opt_max_iter: null, opt_convergence: "tight",
-            opt_trust_radius: null, opt_initial_hessian: "auto", opt_recalc_hess: "auto",
-            scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
-            scf_orbital_inherit: true, scf_damp: false, scf_damp_fac: 0.50,
-            scf_shift: false, scf_shift_fac: 0.30,
-            opt_rescue_policy: "adaptive", opt_max_rescue: 2,
-            temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
-          },
-          ts: {
-            method: "", basis: null, sp_method: null, sp_basis: null,
-            dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
-            opt_max_iter: null, opt_convergence: "tight",
-            opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5,
-            scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
-            scf_orbital_inherit: true, scf_damp: false, scf_damp_fac: 0.50,
-            scf_shift: false, scf_shift_fac: 0.30,
-            opt_rescue_policy: "adaptive", opt_max_rescue: 2,
-            temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
-          },
-        };
+        // Static base shared with ACPJobEditor; method-dependent keys are
+        // patched just below from the current level state.
+        var _BATCH_ROLE_DEFAULTS = batchRoleStaticDefaults();
         var batchMethodDefault = stateData.functional || stateData.method || getFieldDefault("functional", engine) || "r2SCAN-3c";
         var batchBasisDefault = stateData.basis;
         if (batchBasisDefault === undefined || batchBasisDefault === null) {
@@ -25612,6 +25908,16 @@ async function submitPESsearchTask() {
   }
 }
 
+// Single submit entry: the footer #modal-submit dispatches to the editor's
+// check-and-submit chain while a draft is open, otherwise the normal create
+// flow. The editor never adds a second submit button.
+function handleModalSubmit() {
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+    return ACPJobEditor.checkAndSubmit();
+  }
+  return submitJobModal();
+}
+
 async function submitJobModal() {
   ensureWizardWorkflowValid();
   var stageWf = wizardState.workflow && wizardState.workflow.id;
@@ -26432,7 +26738,21 @@ function setupEventListeners() {
   document.getElementById("btn-new-calc").addEventListener("click", openModal);
   document.getElementById("modal-close").addEventListener("click", closeJobModalGuarded);
   document.getElementById("modal-cancel").addEventListener("click", closeJobModalGuarded);
-  document.getElementById("modal-submit").addEventListener("click", submitJobModal);
+  document.getElementById("modal-submit").addEventListener("click", handleModalSubmit);
+  var editCopyBtn = document.getElementById("edit-original-copy");
+  if (editCopyBtn) {
+    editCopyBtn.addEventListener("click", function() {
+      if (window.ACPJobEditor) ACPJobEditor.copyOriginalToStructureInput();
+    });
+  }
+  var previewResetBtn = document.getElementById("preview-reset-view");
+  if (previewResetBtn) {
+    previewResetBtn.addEventListener("click", function() {
+      if (!previewViewer) return;
+      previewViewer.zoomTo();
+      previewViewer.render();
+    });
+  }
   document.querySelectorAll(".pes-function-btn").forEach(function(button) {
     button.addEventListener("click", function() {
       setPESSelectionKind(button.getAttribute("data-selection-kind"));
