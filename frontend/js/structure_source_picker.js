@@ -7,7 +7,7 @@
  * Exposes:
  *   - mount(container, options)  → picker instance
  *     options: { mode, projectId, onChanged, onLoadItem, onLoadSelection,
- *                loadLabel, allowBatchTags, initialFilters }
+ *                loadLabel, allowBatchTags, initialFilters, virtualItems }
  *   Instance methods:
  *     refresh()
  *     setProject(projectId|null)
@@ -237,6 +237,7 @@
     var onLoadSelection = typeof opts.onLoadSelection === "function" ? opts.onLoadSelection : null;
     var loadLabel = opts.loadLabel || _t("picker.load");
     var allowBatchTags = opts.allowBatchTags != null ? !!opts.allowBatchTags : mode === "multi";
+    var virtualItems = Array.isArray(opts.virtualItems) ? opts.virtualItems.slice() : [];
 
     // State
     var legacyMode = false;
@@ -722,7 +723,7 @@
     /* ---- Render list ---- */
 
     function _renderList() {
-      if (!items.length) {
+      if (!items.length && !virtualItems.length) {
         listEl.innerHTML =
           '<div class="sp-list-note">' + _esc(_t("picker.empty")) + "</div>";
         if (mode === "multi" && selectAllCheckbox) {
@@ -733,6 +734,14 @@
       }
 
       var html = "";
+
+      if (virtualItems.length) {
+        html += '<div class="sp-group-label">' + _esc(_t("picker.current_task")) + "</div>";
+        virtualItems.forEach(function (item) { html += _renderRow(item); });
+        if (items.length) {
+          html += '<div class="sp-group-label">' + _esc(_t("picker.other_tasks")) + "</div>";
+        }
+      }
 
       if (filterGroupBy !== "none" && groups.length > 0) {
         // Grouped rendering
@@ -1005,6 +1014,9 @@
     }
 
     function _findItem(uid) {
+      for (var v = 0; v < virtualItems.length; v++) {
+        if (virtualItems[v].source_uid === uid) return virtualItems[v];
+      }
       for (var i = 0; i < items.length; i++) {
         if (items[i].source_uid === uid) return items[i];
       }
@@ -1989,6 +2001,11 @@
       _notifyChanged();
     }
 
+    function setVirtualItems(nextItems) {
+      virtualItems = Array.isArray(nextItems) ? nextItems.slice() : [];
+      _renderList();
+    }
+
     function destroy() {
       destroyed = true;
       _closeActiveDialog();
@@ -2020,6 +2037,7 @@
       setProject: setProject,
       getSelection: getSelection,
       clearSelection: clearSelection,
+      setVirtualItems: setVirtualItems,
       destroy: destroy,
     };
   }
