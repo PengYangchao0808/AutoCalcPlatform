@@ -789,6 +789,11 @@
       baselineBatchItems: [],
       methodBackfilled: false,
       sourceSelection: { kind: "original_input", payload: null },
+      activeSourceTab: "task",
+      sourceDrafts: {
+        structure: { applied: false, structures: [], selectedIndex: 0 },
+        upload: { applied: false, structures: [], selectedIndex: 0 },
+      },
       executionMode: mode === "new_from_job" ? "new_job" : "in_place",
       fingerprint: null,
       submitting: false,
@@ -887,6 +892,7 @@
     // 6) 所有原输入结构进入共享 wizardStructures/previewViewer；默认选中
     //    第一项（BatchOptimize 保留完整输入顺序），界面只显示「任务结构」。
     hydrateTaskStructures(ctx, draft);
+    ctx.activeSourceTab = "task";
     setWizardInputMode("task");
     updateEditModeTabs();
     updateConfigCards();
@@ -1232,28 +1238,72 @@
 
   var SOURCE_TAB_KINDS = { task: 1, structure: 1, upload: 1 };
 
+  function saveActiveSourceDraft(ctx) {
+    var tab = ctx.activeSourceTab;
+    if (tab !== "structure" && tab !== "upload") return;
+    var draft = ctx.sourceDrafts[tab] || {};
+    draft.text = tab === "structure" ? fieldVal("modal-structure-input") : "";
+    draft.structures = typeof wizardStructures !== "undefined" ? deepCopy(wizardStructures) : [];
+    draft.selectedIndex = typeof wizardSelectedStructureIndex !== "undefined"
+      ? wizardSelectedStructureIndex : 0;
+    draft.applied = ctx.sourceSelection.kind === (tab === "structure" ? "manual_input" : "upload");
+    ctx.sourceDrafts[tab] = draft;
+  }
+
+  function restoreSourceDraft(ctx, tab) {
+    var draft = ctx.sourceDrafts[tab];
+    if (!draft || !draft.applied || !draft.structures.length) return;
+    wizardStructures = deepCopy(draft.structures);
+    wizardSelectedStructureIndex = Math.min(
+      draft.selectedIndex || 0, Math.max(wizardStructures.length - 1, 0)
+    );
+    wizardParseWarnings = [];
+    renderStructurePreview(wizardStructures, wizardParseWarnings);
+    ctx.sourceSelection = {
+      kind: tab === "structure" ? "manual_input" : "upload",
+      payload: wizardStructures[wizardSelectedStructureIndex] || wizardStructures[0] || null,
+    };
+  }
+
   function onSourceTabChange(kind) {
     var ctx = editorContext;
     if (!ctx || !SOURCE_TAB_KINDS[kind]) return;
+    if (ctx.activeSourceTab === kind) return;
     var prev = ctx.sourceSelection.kind;
+    saveActiveSourceDraft(ctx);
+    ctx.activeSourceTab = kind;
     if (kind === "task") {
       hydrateTaskStructures(ctx, ctx.draft);
     } else {
-      ctx.sourceSelection.kind = kind === "structure" ? "manual_input" : "upload";
-      ctx.sourceSelection.payload = null;
+      restoreSourceDraft(ctx, kind);
     }
-    // BatchOptimize：在原任务结构与替换来源之间保存/恢复批量清单镜像。
+    // BatchOptimize：仅在返回任务结构时恢复基线。单纯查看“结构输入/上传”
+    // 不改变批量清单，避免页签切换被误判为一次结构修改。
     if (ctx.originalSpec.workflow === "BatchOptimize" &&
       typeof batchPreviewItems !== "undefined") {
       if (kind === "task" && prev !== "original_input" && prev !== "last_structure") {
         restoreBatchItems(ctx.baselineBatchItems);
-      } else if (kind !== "task" && (prev === "original_input" || prev === "last_structure")) {
-        if (typeof wizardStructures !== "undefined" && wizardStructures.length) {
-          batchPreviewItems = [];  // 收集器将用新解析结构重建
-          if (typeof renderStageBatchPreview === "function") renderStageBatchPreview();
-        }
       }
     }
+    updateEditorUiState();
+  }
+
+  function onParsedSourceApplied(kind, structures) {
+    var ctx = editorContext;
+    if (!ctx || (kind !== "structure" && kind !== "upload") || !structures || !structures.length) return;
+    var semanticKind = kind === "structure" ? "manual_input" : "upload";
+    structures.forEach(function (structure) { structure.source_kind = semanticKind; });
+    ctx.activeSourceTab = kind;
+    ctx.sourceSelection = {
+      kind: semanticKind,
+      payload: structures[wizardSelectedStructureIndex] || structures[0] || null,
+    };
+    ctx.sourceDrafts[kind] = {
+      applied: true,
+      text: kind === "structure" ? fieldVal("modal-structure-input") : "",
+      structures: deepCopy(structures),
+      selectedIndex: wizardSelectedStructureIndex || 0,
+    };
     updateEditorUiState();
   }
 
@@ -1275,6 +1325,7 @@
     var ctx = editorContext;
     if (!ctx) return;
     if (structure) structure.source_kind = "job_result";
+    ctx.activeSourceTab = "task";
     ctx.sourceSelection = { kind: "job_result", payload: structure || null };
     updateEditorUiState();
   }
@@ -1646,6 +1697,7 @@
     onSourceTabChange: onSourceTabChange,
     onPreviewStructureSelected: onPreviewStructureSelected,
     onJobResultLoaded: onJobResultLoaded,
+    onParsedSourceApplied: onParsedSourceApplied,
     copyOriginalToStructureInput: copyOriginalToStructureInput,
     updateEditModeTabs: updateEditModeTabs,
     refreshUi: refreshUi,

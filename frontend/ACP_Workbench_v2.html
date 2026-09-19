@@ -835,8 +835,8 @@ body.resizing-v canvas {
   font-weight: var(--editor-weight-medium) !important;
 }
 #job-modal .modal-dialog {
-  width: min(960px, calc(100vw - 48px));
-  max-height: calc(100dvh - 32px);
+  width: min(1120px, calc(100vw - 32px));
+  max-height: calc(100dvh - 24px);
   grid-template-rows: auto minmax(0, 1fr) auto;
   border-radius: 16px;
 }
@@ -864,24 +864,57 @@ body.resizing-v canvas {
 #job-modal .input-mode-tab { flex: 0 0 auto; min-height: 40px; padding: 0 16px; border-radius: 8px; }
 #job-modal .source-browser-shell {
   display: grid;
-  grid-template-columns: minmax(230px, 35fr) minmax(0, 65fr);
-  min-height: 334px;
+  grid-template-columns: minmax(360px, 42fr) minmax(480px, 58fr);
+  height: clamp(440px, 56dvh, 560px);
+  min-height: 440px;
   border: 1px solid var(--border-default);
   border-radius: 12px;
   overflow: hidden;
 }
 #job-modal .preview-left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   max-height: none;
   border: 0;
   border-right: 1px solid var(--border-default);
   border-radius: 0;
-  padding: 12px;
+  padding: 16px;
+  overflow: hidden;
 }
-#job-modal .preview-right { min-height: 332px; border: 0; border-radius: 0; }
-#job-modal .preview-3d-stage { min-height: 220px; }
-#job-modal .preview-right-toolbar { min-height: 42px; padding: 0 14px; }
+#job-modal .preview-right { min-height: 0; border: 0; border-radius: 0; }
+#job-modal .preview-3d-stage { min-height: 0; }
+#job-modal .preview-right-toolbar { min-height: 48px; padding: 0 16px; }
 #job-modal .preview-right-actions .btn { min-height: 40px; padding: 0 12px; }
 #job-modal .preview-source-group { margin-bottom: 8px; color: var(--accent); }
+#job-modal .source-editor-pane,
+#job-modal .source-upload-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+#job-modal .source-editor-pane label { flex: 0 0 auto; }
+#job-modal .source-editor-pane textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 240px;
+  resize: none;
+}
+#job-modal .source-upload-pane .upload-dropzone {
+  flex: 1 1 auto;
+  min-height: 280px;
+  padding: 24px 16px;
+}
+#job-modal .source-parse-meta {
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+#job-modal .source-parse-meta .parse-actions,
+#job-modal .source-parse-meta .charge-spin-row { margin-top: 0; }
 #job-modal .preview-table { display: block; }
 #job-modal .preview-table thead { display: none; }
 #job-modal .preview-table tbody { display: grid; gap: 8px; }
@@ -901,10 +934,32 @@ body.resizing-v canvas {
 #job-modal .preview-table td:nth-child(5) { color: var(--text-secondary); }
 #job-modal .preview-name-input { padding: 0; border: 0; font-weight: var(--editor-weight-medium) !important; }
 #job-modal .preview-source-name { font-weight: var(--editor-weight-medium) !important; }
-#job-modal .task-results-browser { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
-#job-modal .results-toolbar { display: grid; grid-template-columns: 1fr auto; }
-#job-modal .results-toolbar #results-search { grid-column: 1 / -1; }
-#job-modal .results-list { max-height: 260px; }
+#job-modal #preview-structure-list { flex: 0 1 auto; max-height: 180px; overflow-y: auto; }
+#job-modal .task-results-browser {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+#job-modal .task-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#job-modal .task-results-heading .preview-source-group { margin: 0; }
+#job-modal .task-results-heading .btn { min-height: 32px; padding: 0 10px; }
+#job-modal .results-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden; }
+#job-modal .results-list > .sp-root { height: 100%; padding: 8px 0 0; }
+#job-modal .results-list .sp-list { min-height: 120px; max-height: none; }
+#job-modal .results-list .sp-row { min-height: 64px; padding: 8px 10px; }
+#job-modal .results-list .sp-row-name {
+  flex: 1 1 180px;
+  max-width: none;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+#job-modal .results-list .sp-row-secondary { white-space: normal; }
 #job-modal .source-coordinate-disclosure { border-top: 1px solid var(--border-subtle); }
 #job-modal .source-coordinate-disclosure summary { cursor: pointer; list-style: none; padding: 12px 14px; color: var(--text-secondary); }
 #job-modal .source-coordinate-disclosure summary::-webkit-details-marker { display: none; }
@@ -3979,9 +4034,14 @@ option, optgroup {
   .energy-workspace-grid { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) auto; }
 }
 
-/* Narrow dialogs: collapse the two-column method-config layout to one
-   column so nothing ever forces horizontal scrolling. */
-@media (max-width: 760px) {
+@media (max-width: 1100px) and (min-width: 681px) {
+  #job-modal .source-browser-shell {
+    grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+  }
+}
+
+/* Narrow dialogs: collapse the two-column source workspace to one column. */
+@media (max-width: 680px) {
   .structure-preview-wrap { grid-template-columns: 1fr; }
   .config-cards-row { grid-template-columns: 1fr; }
   .modal-row { grid-template-columns: 1fr; }
@@ -3989,9 +4049,9 @@ option, optgroup {
   #job-modal .modal-dialog { width: 100%; max-height: calc(100dvh - 16px); }
   #job-modal .modal-header, #job-modal .modal-body, #job-modal .modal-footer { padding-left: 12px; padding-right: 12px; }
   #job-modal .edit-banner { margin: 0; }
-  #job-modal .source-browser-shell { grid-template-columns: 1fr; }
-  #job-modal .preview-left { border-right: 0; border-bottom: 1px solid var(--border-default); max-height: 300px; }
-  #job-modal .preview-right { min-height: 300px; }
+  #job-modal .source-browser-shell { grid-template-columns: 1fr; height: auto; min-height: 0; }
+  #job-modal .preview-left { border-right: 0; border-bottom: 1px solid var(--border-default); min-height: 300px; max-height: 380px; }
+  #job-modal .preview-right { min-height: 360px; }
   #job-modal .input-mode-tabs { overflow-x: auto; }
   #job-modal .input-mode-tab { min-width: max-content; min-height: 44px; }
   #job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { min-height: 44px; }
@@ -4400,34 +4460,7 @@ option, optgroup {
         <div class="input-mode-tabs" role="tablist" aria-label="结构来源">
           <button class="input-mode-tab active" data-input-mode="task" role="tab" aria-selected="true" data-i18n="modal.mode_task">任务结构</button>
           <button class="input-mode-tab" data-input-mode="structure" role="tab" aria-selected="false" data-i18n="modal.mode_structure_short">结构输入</button>
-          <button class="input-mode-tab" data-input-mode="upload" data-i18n="modal.mode_upload">上传</button>
-        </div>
-
-        <div class="input-panel" id="input-panel-task"></div>
-
-        <div class="input-panel" id="input-panel-structure">
-          <label data-i18n="modal.structure_label">SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP（自动识别）</label>
-          <textarea id="modal-structure-input" class="modal-input" rows="6" placeholder="CCO" data-i18n-ph="modal.structure_placeholder"></textarea>
-        </div>
-
-        <div class="input-panel" id="input-panel-upload" style="display:none;">
-          <div class="upload-dropzone" id="upload-dropzone">
-            <svg viewBox="0 0 20 20" width="32" height="32" stroke="currentColor" fill="none" stroke-width="1.5">
-              <path d="M10 14V4M6 8l4-4 4 4M3 16v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/>
-            </svg>
-            <span data-i18n="modal.upload_hint">拖拽文件到此处，或点击选择</span>
-            <input type="file" id="upload-file-input" style="display:none;" accept=".xyz,.sdf,.sd,.mol,.gjf,.com,.inp,.log,.out">
-          </div>
-        </div>
-
-        <div class="parse-actions">
-          <span class="chip-format" id="detected-format-chip" style="display:none;"></span>
-          <span class="parse-status" id="parse-status"></span>
-        </div>
-
-        <div class="charge-spin-row" id="charge-spin-row" style="display:none;">
-          <label><span data-i18n="modal.col_charge">电荷</span> <input type="number" id="modal-charge" value="0" step="1"></label>
-          <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
+          <button class="input-mode-tab" data-input-mode="upload" role="tab" aria-selected="false" data-i18n="modal.mode_upload">上传</button>
         </div>
 
         <div class="modal-section" id="mech-builder-panel" style="display:none;">
@@ -4574,8 +4607,32 @@ option, optgroup {
 
         <div class="structure-preview-wrap source-browser-shell" id="structure-preview">
           <div class="preview-left">
+            <div class="input-panel" id="input-panel-task"></div>
+            <div class="input-panel source-editor-pane" id="input-panel-structure" style="display:none;">
+              <label data-i18n="modal.structure_label">SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP（自动识别）</label>
+              <textarea id="modal-structure-input" class="modal-input" rows="12" placeholder="CCO" data-i18n-ph="modal.structure_placeholder"></textarea>
+            </div>
+            <div class="input-panel source-upload-pane" id="input-panel-upload" style="display:none;">
+              <div class="upload-dropzone" id="upload-dropzone">
+                <svg viewBox="0 0 20 20" width="32" height="32" stroke="currentColor" fill="none" stroke-width="1.5">
+                  <path d="M10 14V4M6 8l4-4 4 4M3 16v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/>
+                </svg>
+                <span data-i18n="modal.upload_hint">拖拽文件到此处，或点击选择</span>
+                <input type="file" id="upload-file-input" style="display:none;" accept=".xyz,.sdf,.sd,.mol,.gjf,.com,.inp,.log,.out">
+              </div>
+            </div>
+            <div class="source-parse-meta" id="source-parse-meta" style="display:none;">
+              <div class="parse-actions">
+                <span class="chip-format" id="detected-format-chip" style="display:none;"></span>
+                <span class="parse-status" id="parse-status"></span>
+              </div>
+              <div class="charge-spin-row" id="charge-spin-row" style="display:none;">
+                <label><span data-i18n="modal.col_charge">电荷</span> <input type="number" id="modal-charge" value="0" step="1"></label>
+                <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
+              </div>
+            </div>
             <div class="preview-source-group" id="preview-source-group">当前任务 · 默认沿用</div>
-            <table class="preview-table">
+            <table class="preview-table" id="preview-structure-list">
               <thead>
                 <tr>
                   <th>#</th>
@@ -4588,11 +4645,9 @@ option, optgroup {
               <tbody id="preview-tbody"></tbody>
             </table>
             <div class="task-results-browser" id="task-results-browser">
-              <div class="preview-source-group" data-i18n="edit.other_task_results">本项目的其他任务结果</div>
-              <div class="results-toolbar">
-                <select id="results-project" class="modal-select" aria-label="项目"></select>
+              <div class="task-results-heading">
+                <div class="preview-source-group" data-i18n="edit.other_task_results">本项目的其他任务结果</div>
                 <button type="button" class="btn ghost" id="results-reload" data-i18n="results.reload">刷新</button>
-                <input type="text" id="results-search" class="modal-input" placeholder="搜索名称/项目/状态/候选编号…" data-i18n-ph="results.search_placeholder">
               </div>
               <div id="results-cross-hint" style="display:none;color:#ffb454;"></div>
               <div class="results-list" id="results-list"></div>
@@ -21589,10 +21644,12 @@ function setWizardInputMode(mode) {
   });
   var taskPanel = document.getElementById("input-panel-task");
   if (taskPanel) taskPanel.style.display = mode === "task" ? "block" : "none";
-  document.getElementById("input-panel-structure").style.display = mode === "structure" ? "block" : "none";
-  document.getElementById("input-panel-upload").style.display = mode === "upload" ? "block" : "none";
+  document.getElementById("input-panel-structure").style.display = mode === "structure" ? "flex" : "none";
+  document.getElementById("input-panel-upload").style.display = mode === "upload" ? "flex" : "none";
+  var parseMeta = document.getElementById("source-parse-meta");
+  if (parseMeta) parseMeta.style.display = mode === "task" ? "none" : "flex";
   var browser = document.getElementById("task-results-browser");
-  if (browser) browser.style.display = mode === "task" ? "block" : "none";
+  if (browser) browser.style.display = mode === "task" ? "flex" : "none";
   var sourceGroup = document.getElementById("preview-source-group");
   if (sourceGroup) {
     var editing = window.ACPJobEditor && ACPJobEditor.isActive();
@@ -21765,6 +21822,9 @@ function handleParseResult(body) {
   }
 
   renderStructurePreview(wizardStructures, wizardParseWarnings);
+  if (body.ok && wizardStructures.length && window.ACPJobEditor && ACPJobEditor.isActive()) {
+    ACPJobEditor.onParsedSourceApplied(wizardInputMode, wizardStructures);
+  }
   showParseStatus(
     body.ok ? t("parse.success", { count: wizardStructures.length }) : t("parse.failed"),
     !body.ok
@@ -22345,6 +22405,7 @@ async function loadStructureSources(force) {
   if (!resultsPicker && typeof ACPSourcePicker !== "undefined") {
     resultsPicker = ACPSourcePicker.mount(list, {
       mode: "single",
+      density: "editor",
       projectId: resultsProjectTargetId(),
       onLoadItem: function(item) {
         loadStructureSource(item.source_id || item.source_uid, null);
@@ -26732,6 +26793,8 @@ function setupEventListeners() {
     var projEl = document.getElementById("results-project");
     if (projEl && projEl.value === "target" && resultsLoaded) {
       loadStructureSources(true);
+    } else if (!projEl && resultsPicker) {
+      resultsPicker.setProject(resultsProjectTargetId());
     }
   });
 
@@ -26862,22 +26925,37 @@ function setupEventListeners() {
   document.getElementById("sysres-refresh-nodes").addEventListener("click", loadNodes);
   document.getElementById("sysres-refresh-backends").addEventListener("click", loadBackends);
 
-  document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
+  var sourceTabs = Array.from(document.querySelectorAll(".input-mode-tab"));
+  sourceTabs.forEach(function(tab, tabIndex) {
     tab.addEventListener("click", function() {
       setWizardInputMode(tab.getAttribute("data-input-mode"));
+    });
+    tab.addEventListener("keydown", function(event) {
+      var nextIndex = null;
+      if (event.key === "ArrowRight") nextIndex = (tabIndex + 1) % sourceTabs.length;
+      if (event.key === "ArrowLeft") nextIndex = (tabIndex - 1 + sourceTabs.length) % sourceTabs.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = sourceTabs.length - 1;
+      if (nextIndex === null) return;
+      event.preventDefault();
+      sourceTabs[nextIndex].focus();
+      setWizardInputMode(sourceTabs[nextIndex].getAttribute("data-input-mode"));
     });
   });
 
   document.getElementById("modal-structure-input").addEventListener("input", scheduleParseStructures);
   document.getElementById("preview-remove-selected").addEventListener("click", removeSelectedStructure);
   document.getElementById("preview-clear-all").addEventListener("click", clearParsedStructures);
-  document.getElementById("results-reload").addEventListener("click", function() {
+  var resultsReload = document.getElementById("results-reload");
+  if (resultsReload) resultsReload.addEventListener("click", function() {
     loadStructureSources(true);
   });
-  document.getElementById("results-project").addEventListener("change", function() {
+  var resultsProject = document.getElementById("results-project");
+  if (resultsProject) resultsProject.addEventListener("change", function() {
     loadStructureSources(true);
   });
-  document.getElementById("results-search").addEventListener("input", scheduleResultsSearch);
+  var resultsSearch = document.getElementById("results-search");
+  if (resultsSearch) resultsSearch.addEventListener("input", scheduleResultsSearch);
 
   // T5: bind task-view toolbar controls (search, group, sort, filter)
   _bindTaskViewToolbar();

@@ -1137,32 +1137,25 @@ def test_wizard_project_section_is_first_step() -> None:
 
 
 def test_results_filter_targets_modal_project_not_top_filter() -> None:
-    """任务结果 filter must follow the modal target project (plan §2).
-
-    The old static "当前项目" option bound to the top selectedProjectId,
-    so a user preparing submission to project A queried results of the
-    top-filtered project B.
-    """
+    """The embedded picker follows the modal target project directly."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    toolbar = html.split('id="results-project"', 1)[1].split("</select>", 1)[0]
-    assert 'value="current"' not in toolbar
-    assert "<option" not in toolbar
-
     assert "function resultsProjectTargetId()" in html
-    assert "function renderResultsProjectOptions()" in html
+    modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
+    assert 'id="results-project"' not in modal
+    assert 'id="results-search"' not in modal
 
     loader = html.split("async function loadStructureSources(", 1)[1].split("\nfunction ", 1)[0]
     assert "selectedProjectId" not in loader
+    assert 'density: "editor"' in loader
+    assert "projectId: resultsProjectTargetId()" in loader
     assert 'mode === "target"' in loader
     assert "resultsProjectTargetId()" in loader
     assert "all_projects=true" in loader
 
     change_block = html.split('modal-project-select").addEventListener("change"', 1)[1]
     change_block = change_block.split("});", 1)[0]
-    assert "renderResultsProjectOptions()" in change_block
-    assert 'projEl.value === "target"' in change_block
-    assert "loadStructureSources(true)" in change_block
+    assert "resultsPicker.setProject(resultsProjectTargetId())" in change_block
 
 
 def test_results_rows_status_badges_project_labels_and_search_scope() -> None:
@@ -10076,7 +10069,7 @@ def test_editor_single_source_area() -> None:
 
 
 def test_job_modal_structure_browser_visual_contract() -> None:
-    """Edit modal follows the compact three-source, 35/65 preview contract."""
+    """All source tabs share one stable 42/58 editor workspace."""
     html = FRONTEND.read_text(encoding="utf-8")
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
     assert 'id="preview-structure-title"' in modal
@@ -10085,8 +10078,35 @@ def test_job_modal_structure_browser_visual_contract() -> None:
     assert 'id="task-results-browser"' in modal
     assert 'class="task-info-details"' in modal
     assert modal.count('id="structure-preview-3d"') == 1
-    assert 'grid-template-columns: minmax(230px, 35fr) minmax(0, 65fr)' in html
-    assert '@media (max-width: 760px)' in html
+    assert 'grid-template-columns: minmax(360px, 42fr) minmax(480px, 58fr)' in html
+    assert 'height: clamp(440px, 56dvh, 560px)' in html
+    assert '@media (max-width: 680px)' in html
+    left_pane = modal.split('class="preview-left"', 1)[1].split(
+        'class="preview-right"', 1
+    )[0]
+    assert 'id="input-panel-task"' in left_pane
+    assert 'id="input-panel-structure"' in left_pane
+    assert 'id="input-panel-upload"' in left_pane
+    assert 'id="task-results-browser"' in left_pane
+    assert 'id="structure-preview-3d"' not in left_pane
+    assert len(re.findall(r'class="input-mode-tab(?: active)?"', modal)) == 3
+    assert 'event.key === "ArrowRight"' in html
+    assert 'event.key === "ArrowLeft"' in html
+
+
+def test_job_editor_source_tabs_do_not_apply_unparsed_sources() -> None:
+    """Changing tabs is navigation; only a successful parse changes the source."""
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    tab_fn = js.split("function onSourceTabChange(kind)", 1)[1].split(
+        "function onParsedSourceApplied", 1
+    )[0]
+    parsed_fn = js.split("function onParsedSourceApplied", 1)[1].split(
+        "function ", 1
+    )[0]
+    assert 'kind: "manual_input"' not in tab_fn
+    assert 'kind: "upload"' not in tab_fn
+    assert "batchPreviewItems = []" not in tab_fn
+    assert 'kind === "structure" ? "manual_input" : "upload"' in parsed_fn
 
 
 def test_job_modal_typography_is_scoped_to_three_tokens() -> None:
