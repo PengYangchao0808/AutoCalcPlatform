@@ -959,6 +959,32 @@ def test_api_edit_draft_carries_effective_config(client: TestClient) -> None:
     assert draft["effective_config"]["config"] == snapshot
 
 
+def test_api_preview_batch_no_modification_diff_empty(client: TestClient) -> None:
+    """Frontend patch-serialize contract, server side: resubmitting the draft
+    verbatim (unmodified BatchOptimize batch_roles + items) must produce a
+    zero computational diff — the acceptance matrix case for opening the
+    editor and previewing without changes."""
+    _seed_api_job(client, "prevbatch", workflow="BatchOptimize")
+    draft = client.get("/api/v1/jobs/prevbatch/edit-draft").json()
+    spec = draft["editable_spec"]
+    response = client.post(
+        "/api/v1/jobs/prevbatch/edit-recalculate/preview",
+        json={
+            "mode": "in_place",
+            "input": spec["input"],
+            "method": spec["method"],
+            "resources": spec["resources"],
+            "remark": spec["remark"],
+            "tags": spec["tags"],
+            "expected_source_revision": draft["source_revision"],
+        },
+    )
+    assert response.status_code == 200
+    preview = response.json()
+    assert preview["ok"] is True
+    assert preview["diff"] == [], f"unmodified roundtrip must diff empty: {preview['diff']}"
+    assert preview["preview_fingerprint"].startswith("pf_")
+
 
 def test_api_submit_in_place(client: TestClient) -> None:
     record = _seed_api_job(client, "sub1")

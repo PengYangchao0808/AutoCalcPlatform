@@ -3739,7 +3739,11 @@ def _build_edited_spec(
         workflow, inp, execution_mode, target_node, manager
     )
     molecule_name = req.molecule_name or record.spec.molecule_name
-    task_name = req.task_name or workflow
+    # Edit parity: an omitted/empty task_name keeps the ORIGINAL value (even
+    # empty — scheduler/legacy records may carry '') instead of re-defaulting
+    # to the workflow id, so an unmodified resubmission diffs empty. Downstream
+    # task-dir naming already applies ``task_name or workflow``.
+    task_name = str(req.task_name or "").strip() or record.spec.task_name
     is_submit = isinstance(req, V1EditRecalculateRequest)
     spec = JobSpec(
         workflow=workflow,
