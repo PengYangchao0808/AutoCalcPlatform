@@ -122,6 +122,42 @@ class JobStore:
             row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return _row_to_record(row) if row else None
 
+    def list_terminal_jobs_paged(
+        self,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> list[JobRecord]:
+        """Page through all terminal jobs, ordered by terminal timestamp desc."""
+        query = (
+            "SELECT * FROM jobs "
+            "WHERE status IN (?, ?, ?) "
+            "ORDER BY COALESCE(completed_at, updated_at, created_at) DESC "
+            "LIMIT ? OFFSET ?"
+        )
+        params: tuple[Any, ...] = (
+            JobStatus.COMPLETED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+            limit,
+            offset,
+        )
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_record(r) for r in rows]
+
+    def count_terminal_jobs(self) -> int:
+        """Count all terminal (COMPLETED/FAILED/CANCELLED) jobs."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as n FROM jobs WHERE status IN (?, ?, ?)",
+                (
+                    JobStatus.COMPLETED.value,
+                    JobStatus.FAILED.value,
+                    JobStatus.CANCELLED.value,
+                ),
+            ).fetchone()
+        return row["n"] if row else 0
+
     def list(
         self,
         status: str | None = None,

@@ -471,12 +471,13 @@ class StructureSourceService:
         """Return only formally registered products from a non-completed terminal job."""
         selectors = ((_RESULT_MANIFEST_FILENAME, _select_terminal_registered_products),)
         if self._is_remote(record):
-            return self._probe_remote_product_listings(
-                record, selectors=selectors, candidate_hints=True
-            ) or []
-        return self._discover_product_listings(
-            record, selectors=selectors, candidate_hints=True
-        )
+            return (
+                self._probe_remote_product_listings(
+                    record, selectors=selectors, candidate_hints=True
+                )
+                or []
+            )
+        return self._discover_product_listings(record, selectors=selectors, candidate_hints=True)
 
     @staticmethod
     def _deduplicate_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -525,17 +526,12 @@ class StructureSourceService:
             raise ValueError(f"Job not found: {job_id}")
         if record.status != JobStatus.COMPLETED:
             if not record.status.is_terminal:
-                raise ValueError(
-                    f"Job {job_id} is not completed (status={record.status.value})"
-                )
+                raise ValueError(f"Job {job_id} is not completed (status={record.status.value})")
             allowed_paths = {
-                str(entry.get("path") or "")
-                for entry in self._discover_terminal_sources(record)
+                str(entry.get("path") or "") for entry in self._discover_terminal_sources(record)
             }
             if rel_path not in allowed_paths:
-                raise ValueError(
-                    f"Job {job_id} is not completed (status={record.status.value})"
-                )
+                raise ValueError(f"Job {job_id} is not completed (status={record.status.value})")
         if record.spec.workflow in _EXCLUDED_WORKFLOWS:
             raise ValueError(
                 f"Workflow {record.spec.workflow!r} does not provide reusable structures"
@@ -849,6 +845,8 @@ class StructureSourceService:
             "multiplicity": 1,
             "has_3d": True,
             "tag": "",
+            "role": "",
+            "role_evidence": "",
             "candidate_id": "",
             "remote": True,
             "needs_fetch": True,
@@ -1164,22 +1162,37 @@ class StructureSourceService:
         )
         lowered = candidate_id.lower()
         if lowered.startswith(("ts_", "pes_ts_")):
-            inferred_tag = "TS"
+            inferred_role = "TS"
         elif lowered.startswith(("int_", "pes_int_")):
-            inferred_tag = "INT"
+            inferred_role = "INT"
         else:
-            inferred_tag = ""
-        # INT is the default stationary-point interpretation.  Persist only
-        # the exceptional TS marker so callers cannot accidentally render or
-        # re-apply a redundant INT annotation.
-        tag = tag_match.group(1).upper() if tag_match else (tag_hint or inferred_tag)
+            inferred_role = ""
+        # Resolve the full role (TS / INT / '') with evidence tracking.
+        raw_tag = tag_match.group(1).upper() if tag_match else ""
+        role = raw_tag or (tag_hint or inferred_role)
+        if role not in ("TS", "INT"):
+            role = ""
+        # Determine evidence source for role assignment.
+        if raw_tag:
+            role_evidence = "xyz_tag"
+        elif tag_hint:
+            role_evidence = "manifest"
+        elif inferred_role:
+            role_evidence = "inferred:path"
+        else:
+            role_evidence = ""
+        # Legacy tag field: keep only the TS marker for v1 wire compatibility.
+        # INT is intentionally excluded from the legacy tag to avoid confusion
+        # with the old single-badge UI.
         return {
             "formula": first.formula,
             "atom_count": first.atom_count,
             "charge": charge,
             "multiplicity": mult,
             "has_3d": first.has_3d,
-            "tag": "TS" if tag == "TS" else "",
+            "tag": "TS" if role == "TS" else "",
+            "role": role,
+            "role_evidence": role_evidence,
             "candidate_id": candidate_id,
         }
 
@@ -1318,6 +1331,8 @@ class StructureSourceService:
             "multiplicity": meta["multiplicity"],
             "has_3d": meta["has_3d"],
             "tag": meta.get("tag") or "",
+            "role": meta.get("role") or "",
+            "role_evidence": meta.get("role_evidence") or "",
             "candidate_id": meta.get("candidate_id") or "",
             "remote": remote,
             "needs_fetch": needs_fetch,
@@ -1336,9 +1351,7 @@ class StructureSourceService:
                 self._project_names = {}
             else:
                 try:
-                    self._project_names = {
-                        str(k): str(v) for k, v in dict(lookup()).items()
-                    }
+                    self._project_names = {str(k): str(v) for k, v in dict(lookup()).items()}
                 except (OSError, TypeError, ValueError, sqlite3.Error) as exc:
                     logger.debug("Project-name lookup failed: %s", exc)
                     self._project_names = {}
