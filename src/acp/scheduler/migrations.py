@@ -227,6 +227,29 @@ CREATE TABLE IF NOT EXISTS molecule_aliases (
         "description": "add custom_name columns to tasks + create organization_events table",
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
     },
+    {
+        "id": "018",
+        "description": (
+            "create job_edit_operations table (edit-and-recalculate idempotency, "
+            "docs/ACP_Edit_And_Recalculate_Plan.md §9/§10)"
+        ),
+        "sql": """
+CREATE TABLE IF NOT EXISTS job_edit_operations (
+    request_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    result_json TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_job_edit_ops_job ON job_edit_operations(job_id, created_at);
+""",
+    },
 ]
 
 

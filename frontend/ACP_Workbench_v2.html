@@ -736,6 +736,88 @@ body.resizing-v canvas {
 .mini-btn.icon-btn { padding: 4px 7px; font-size: 12px; line-height: 1; }
 .mini-btn.icon-btn.warn { color: var(--amber); border-color: rgba(242, 184, 75, 0.35); }
 .mini-btn.icon-btn.danger { color: var(--red); border-color: rgba(229, 83, 83, 0.35); }
+
+/* ── Edit-and-recalculate (docs/ACP_Edit_And_Recalculate_Plan.md §4) ── */
+.rerun-action-menu {
+  z-index: 1200;
+  min-width: 210px;
+  background: var(--bg-raised, #1d222b);
+  border: 1px solid var(--border, #333a47);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.rerun-action-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.rerun-action-menu button:hover:not([disabled]),
+.rerun-action-menu button:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+.rerun-action-menu button[disabled] { opacity: 0.45; cursor: not-allowed; }
+.rerun-menu-icon { width: 18px; text-align: center; opacity: 0.85; }
+
+.edit-banner {
+  margin: 10px 16px 0;
+  border: 1px solid var(--border, #333a47);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(96, 125, 168, 0.10);
+  font-size: 12.5px;
+}
+.edit-banner-error { border-color: rgba(229, 83, 83, 0.5); background: rgba(229, 83, 83, 0.08); }
+.edit-banner-source { font-weight: 600; margin-bottom: 6px; }
+.edit-banner-hint { opacity: 0.85; margin: 4px 0; }
+.edit-banner-hint.edit-warn { color: var(--amber, #f2b84b); }
+.edit-banner-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 6px 0; }
+.edit-row-label { opacity: 0.75; min-width: 64px; }
+.edit-radio { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.edit-radio.disabled { opacity: 0.45; }
+.edit-banner-footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.edit-banner-footer .flex-spacer { flex: 1; }
+.edit-changed-badge { opacity: 0.8; }
+.edit-changed-badge.has-changes { color: var(--amber, #f2b84b); opacity: 1; font-weight: 600; }
+.edit-items { margin: 6px 0; }
+.edit-items summary { cursor: pointer; opacity: 0.85; }
+.edit-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px dashed var(--border, #333a47);
+  border-radius: 6px;
+}
+.edit-summary-meta { margin-bottom: 10px; line-height: 1.7; }
+.edit-diff-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.edit-diff-table th, .edit-diff-table td {
+  border: 1px solid var(--border, #333a47);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+.edit-diff-table th { opacity: 0.8; }
+.edit-diff-path { font-family: var(--mono, monospace); }
+.edit-summary-error { color: var(--red, #e55353); margin-top: 8px; white-space: pre-wrap; }
+#edit-summary-overlay { z-index: 1300; }
 .queue-purge-btn { color: var(--red); border-color: rgba(229, 83, 83, 0.35); }
 .queue-purge-btn:hover { background: rgba(229, 83, 83, 0.10); }
 
@@ -4151,6 +4233,11 @@ option, optgroup {
       <h2 data-i18n="modal.title">新建计算任务</h2>
       <button class="modal-close" id="modal-close">X</button>
     </div>
+    <!-- Edit-and-recalculate banner (docs/ACP_Edit_And_Recalculate_Plan.md §4.2):
+         source identity, input/execution mode radios, changed-count badge,
+         per-item batch include list, and the check-and-submit entry. Filled
+         dynamically by ACPJobEditor; hidden in normal create mode. -->
+    <div id="edit-recalc-banner" style="display:none;"></div>
     <div class="modal-body">
       <!-- Step 1: project target — deciding WHERE the job belongs comes
            before configuring WHAT to run (structure/workflow/protocol). -->
@@ -5093,6 +5180,7 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
 <script src="js/structure_editor.js"></script>
 <script src="js/vibration_viewer.js"></script>
 <script src="js/structure_source_picker.js"></script>
+<script src="js/job_editor.js"></script>
 <script>
 const API_BASE = "/api/v1";
 const STRUCTURE_UPLOAD_EXTS = [".xyz", ".sdf", ".sd", ".mol", ".gjf", ".com", ".inp", ".log", ".out"];
@@ -5550,6 +5638,52 @@ const I18N = {
     "job.rerun_hint": "在原任务中重新执行，不创建新任务",
     "job.rerun_ok": "已在原任务中重新排队",
     "job.rerun_failed": "重算失败: {message}",
+    "edit.menu.rerun_direct": "直接重跑",
+    "edit.menu.rerun_direct_disabled": "当前状态不可直接重跑（需终态）",
+    "edit.menu.edit_recalculate": "修改参数后重算",
+    "edit.menu.new_from_job": "复制为新任务",
+    "edit.loading_draft": "正在恢复原任务配置…",
+    "edit.load_failed": "配置恢复失败：{message}",
+    "edit.banner_source": "来源：{name} · {status} · 第 {attempt} 次尝试",
+    "edit.migration_hint": "迁移建议：{hint}",
+    "edit.missing_fields": "缺失依赖（需补齐后提交）：{fields}",
+    "edit.input_mode": "输入：",
+    "edit.input_original": "原始输入",
+    "edit.input_last_structure": "最后有效结构",
+    "edit.input_replace": "替换输入",
+    "edit.last_structure_missing": "该任务没有可用的最后有效结构",
+    "edit.execution_mode": "执行：",
+    "edit.exec_in_place": "原地重算",
+    "edit.exec_new_job": "创建新任务",
+    "edit.in_place_blocked": "当前状态不可原地重算：请先取消并等待终态，或切换为创建新任务",
+    "edit.changed_n": "已修改 {n} 项",
+    "edit.batch_items_summary": "批量输入清单（共 {total} 项，可勾选参与重算的部分）",
+    "edit.batch_items_empty": "至少需要勾选一个批量输入条目",
+    "edit.check_and_submit": "检查并提交",
+    "edit.discard_confirm": "当前编辑有未提交的修改。确定放弃草稿并关闭？",
+    "edit.create_blocked_in_editor": "编辑模式下不可直接创建任务；请先完成或取消编辑",
+    "edit.no_payload_collected": "未能收集到可提交的参数（表单校验未通过）",
+    "edit.multi_structure_not_supported": "编辑重算一次只提交一个任务；多结构批量请使用普通新建",
+    "edit.preview_failed": "预检失败",
+    "edit.summary_title": "提交摘要",
+    "edit.summary_workflow": "工作流",
+    "edit.summary_mode": "执行方式",
+    "edit.summary_cleanup_warning": "将清理旧 WORK/RESULT 和日志；保存参数与输入的尝试摘要，不保存完整旧结果",
+    "edit.diff_field": "字段",
+    "edit.diff_old": "原值",
+    "edit.diff_new": "新值",
+    "edit.diff_kind": "类别",
+    "edit.no_changes": "未修改任何计算参数（语义等价重算）",
+    "edit.summary_back": "返回编辑",
+    "edit.confirm_in_place": "应用修改并原地重算",
+    "edit.confirm_new_job": "创建新任务并计算",
+    "edit.submit_inplace_ok": "已应用修改并原地重算（第 {attempt} 次尝试）",
+    "edit.submit_new_ok": "已创建新任务并开始计算",
+    "edit.submit_failed": "提交失败",
+    "edit.view_only_title": "历史任务（{workflow}）— 仅查看",
+    "edit.view_only_params": "原参数",
+    "edit.view_only_input": "原输入",
+    "edit.view_only_input_kind": "{kind}",
     "job.op_unavailable": "服务端暂不支持此操作（需要升级后端）",
     "info.created_at": "创建时间",
     "info.duration": "耗时",
@@ -6728,6 +6862,52 @@ const I18N = {
     "job.rerun_hint": "Run again in the original task without creating a new task",
     "job.rerun_ok": "The original task was queued for rerun",
     "job.rerun_failed": "Rerun failed: {message}",
+    "edit.menu.rerun_direct": "Rerun directly",
+    "edit.menu.rerun_direct_disabled": "Direct rerun needs a terminal status",
+    "edit.menu.edit_recalculate": "Edit parameters & recalculate",
+    "edit.menu.new_from_job": "Duplicate as new task",
+    "edit.loading_draft": "Restoring the original configuration…",
+    "edit.load_failed": "Failed to restore configuration: {message}",
+    "edit.banner_source": "Source: {name} · {status} · attempt {attempt}",
+    "edit.migration_hint": "Migration hint: {hint}",
+    "edit.missing_fields": "Missing dependencies (fill them before submitting): {fields}",
+    "edit.input_mode": "Input:",
+    "edit.input_original": "Original input",
+    "edit.input_last_structure": "Last valid structure",
+    "edit.input_replace": "Replace input",
+    "edit.last_structure_missing": "No verifiable last structure for this task",
+    "edit.execution_mode": "Execution:",
+    "edit.exec_in_place": "Recalculate in place",
+    "edit.exec_new_job": "Create a new task",
+    "edit.in_place_blocked": "In-place recalculation unavailable: cancel and wait for a terminal status, or switch to new-task mode",
+    "edit.changed_n": "{n} field(s) modified",
+    "edit.batch_items_summary": "Batch items ({total} total — untick to exclude)",
+    "edit.batch_items_empty": "At least one batch item must stay selected",
+    "edit.check_and_submit": "Check & submit",
+    "edit.discard_confirm": "The draft has unsubmitted changes. Discard and close?",
+    "edit.create_blocked_in_editor": "Direct creation is disabled while the editor is open; finish or cancel the edit first",
+    "edit.no_payload_collected": "No submittable payload collected (form validation failed)",
+    "edit.multi_structure_not_supported": "Edit-recalculate submits exactly one task; use normal creation for multi-structure batches",
+    "edit.preview_failed": "Preview failed",
+    "edit.summary_title": "Submit summary",
+    "edit.summary_workflow": "Workflow",
+    "edit.summary_mode": "Execution",
+    "edit.summary_cleanup_warning": "Old WORK/RESULT and logs will be cleared; only attempt summaries of parameters and inputs are kept — full old results are NOT preserved",
+    "edit.diff_field": "Field",
+    "edit.diff_old": "Old",
+    "edit.diff_new": "New",
+    "edit.diff_kind": "Kind",
+    "edit.no_changes": "No computational parameters changed (semantically equivalent rerun)",
+    "edit.summary_back": "Back to editing",
+    "edit.confirm_in_place": "Apply changes & recalculate in place",
+    "edit.confirm_new_job": "Create new task & calculate",
+    "edit.submit_inplace_ok": "Changes applied; recalculation queued (attempt {attempt})",
+    "edit.submit_new_ok": "New task created and queued",
+    "edit.submit_failed": "Submit failed",
+    "edit.view_only_title": "Historical task ({workflow}) — view only",
+    "edit.view_only_params": "Original parameters",
+    "edit.view_only_input": "Original input",
+    "edit.view_only_input_kind": "{kind}",
     "job.op_unavailable": "This operation is not supported by the server (backend upgrade required)",
     "info.created_at": "Created",
     "info.duration": "Duration",
@@ -8193,6 +8373,16 @@ function energyInspectorMetadataRows(data, node, metadata) {
 
 async function api(path, opts) {
   opts = opts || {};
+  // Edit mode intercepts job creation at this single chokepoint: every
+  // submit branch (simple/batch/stage/PES/NMR) funnels POST /jobs through
+  // here, so ACPJobEditor can collect the built payload and run the
+  // preview/summary flow instead of creating a duplicate task.
+  if (path === "/jobs" && opts && opts.method === "POST" &&
+      window.ACPJobEditor && ACPJobEditor.isActive()) {
+    var _intercepted = {};
+    try { _intercepted = JSON.parse(opts.body || "{}"); } catch (e) {}
+    return ACPJobEditor.interceptJobCreate(_intercepted);
+  }
   // 8s timeout via AbortController unless caller already provides a signal
   if (!opts.signal && typeof AbortController !== "undefined") {
     var _ac = new AbortController();
@@ -14810,7 +15000,21 @@ function appendQueueInlineActions(actions, job) {
     actions.appendChild(makeQueueIconButton("\u23f5", t("job.continue"), "", function() { continueJob(jobId); }));
   }
   if (recovery.can_rerun) {
-    actions.appendChild(makeQueueIconButton("↻", t("job.rerun"), "", function(btn) { rerunJob(jobId, btn); }));
+    actions.appendChild(makeQueueIconButton("↻", t("job.rerun"), "", function(btn) {
+      openRerunActionMenu(job, btn);
+    }));
+  }
+}
+
+// ↻ opens the lightweight rerun action menu (直接重跑 / 修改参数后重算 /
+// 复制为新任务) — server capability projection decides availability inside
+// ACPJobEditor.openRerunMenu; keyboard and touch both reach it via the
+// button's click path, and menu clicks never select/expand the card.
+function openRerunActionMenu(job, btn) {
+  if (window.ACPJobEditor && ACPJobEditor.openRerunMenu) {
+    ACPJobEditor.openRerunMenu(job, btn);
+  } else {
+    rerunJob(String(job.id || job.job_id || ""), btn);
   }
 }
 
@@ -17133,7 +17337,7 @@ async function openDetailDrawer(job) {
     dRerunBtn.className = "btn";
     dRerunBtn.textContent = t("job.rerun");
     dRerunBtn.title = t("job.rerun_hint");
-    dRerunBtn.addEventListener("click", function() { rerunJob(jobId, dRerunBtn); });
+    dRerunBtn.addEventListener("click", function() { openRerunActionMenu(job, dRerunBtn); });
     drawerRunGroup.appendChild(dRerunBtn);
   }
   if (drawerRunGroup.childNodes.length) drawerActions.appendChild(drawerRunGroup);
@@ -21153,6 +21357,16 @@ function openModal() {
 }
 
 function closeModal() { document.getElementById("job-modal").style.display = "none"; }
+
+// Closing with an edit draft in flight routes through ACPJobEditor so a
+// dirty draft asks 留在页面/放弃草稿 instead of silently vanishing (plan §4.2).
+function closeJobModalGuarded() {
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+    ACPJobEditor.cancelEditor(false);
+    return;
+  }
+  closeModal();
+}
 
 function setWizardInputMode(mode) {
   wizardInputMode = mode;
@@ -26216,8 +26430,8 @@ function setupEventListeners() {
   });
 
   document.getElementById("btn-new-calc").addEventListener("click", openModal);
-  document.getElementById("modal-close").addEventListener("click", closeModal);
-  document.getElementById("modal-cancel").addEventListener("click", closeModal);
+  document.getElementById("modal-close").addEventListener("click", closeJobModalGuarded);
+  document.getElementById("modal-cancel").addEventListener("click", closeJobModalGuarded);
   document.getElementById("modal-submit").addEventListener("click", submitJobModal);
   document.querySelectorAll(".pes-function-btn").forEach(function(button) {
     button.addEventListener("click", function() {

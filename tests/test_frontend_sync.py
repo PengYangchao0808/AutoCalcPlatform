@@ -9877,3 +9877,115 @@ def test_task_rename_apply_result_runtime_no_recursion() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Edit-and-recalculate chain (docs/ACP_Edit_And_Recalculate_Plan.md §8/§14)
+# ---------------------------------------------------------------------------
+
+JOB_EDITOR_JS = FRONTEND_JS_DIR / "job_editor.js"
+
+_EDIT_I18N_KEY_RE = re.compile(r'"(edit\.[^"]+)":')
+
+
+def _i18n_block_keys(block_re: re.Pattern[str], key_re: re.Pattern[str]) -> set[str]:
+    html = FRONTEND.read_text(encoding="utf-8")
+    block = block_re.search(html)
+    assert block is not None
+    return set(key_re.findall(block.group(1)))
+
+
+def test_job_editor_module_loaded_before_inline_script() -> None:
+    """job_editor.js ships, loads in v2, and exports the editor surface."""
+    assert JOB_EDITOR_JS.is_file(), "frontend/js/job_editor.js missing"
+    html = FRONTEND.read_text(encoding="utf-8")
+    tag = '<script src="js/job_editor.js"></script>'
+    assert tag in html, "v2 HTML must load job_editor.js"
+    assert html.index(tag) < html.find("<script>\n"), "job_editor.js loads before inline script"
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    for export in (
+        "openJobEditor",
+        "openRerunMenu",
+        "interceptJobCreate",
+        "cancelEditor",
+        "isActive",
+    ):
+        assert export + ":" in js, f"ACPJobEditor export missing: {export}"
+
+
+def test_job_editor_js_has_no_syntax_errors() -> None:
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".js", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(JOB_EDITOR_JS.read_text(encoding="utf-8"))
+        path = f.name
+    proc = subprocess.run(["node", "--check", path], capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, f"node --check failed: {proc.stderr}"
+
+
+def test_rerun_button_routes_through_action_menu() -> None:
+    """↻ opens the 3-action menu (直接重跑/修改参数后重算/复制为新任务),
+    both in queue rows and the detail drawer (plan §4.1)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function openRerunActionMenu(" in html
+    assert "ACPJobEditor.openRerunMenu(job, btn)" in html
+    # Detail drawer routes through the same wrapper (queue + drawer parity).
+    assert "openRerunActionMenu(job, dRerunBtn)" in html
+    # Queue inline rerun no longer calls rerunJob directly.
+    queue_section = html.split("function appendQueueInlineActions(")[1].split("\n}") [0]
+    assert "rerunJob(jobId, btn)" not in queue_section, (
+        "queue ↻ must open the action menu, not fire a direct rerun"
+    )
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    for key in ("edit.menu.rerun_direct", "edit.menu.edit_recalculate", "edit.menu.new_from_job"):
+        assert key in js, f"menu item key missing: {key}"
+    # Menu must not trigger card selection (plan §4.1).
+    assert "stopPropagation" in js
+
+
+def test_edit_banner_container_and_close_guard() -> None:
+    """Edit banner container exists; modal close routes through the editor
+    guard so a dirty draft asks before vanishing (plan §4.2)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="edit-recalc-banner"' in html
+    assert "function closeJobModalGuarded(" in html
+    assert 'getElementById("modal-cancel").addEventListener("click", closeJobModalGuarded)' in html
+    assert 'getElementById("modal-close").addEventListener("click", closeJobModalGuarded)' in html
+    assert "ACPJobEditor.cancelEditor(false)" in html
+
+
+def test_api_create_intercepted_in_edit_mode() -> None:
+    """All POST /jobs submits funnel through ACPJobEditor while editing —
+    the single chokepoint reuses every existing payload builder (plan §8)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    api_body = html.split("async function api(path, opts) {", 1)[1].split(
+        "async function apiV2(", 1
+    )[0]
+    assert 'path === "/jobs"' in api_body
+    assert "ACPJobEditor.interceptJobCreate" in api_body
+
+
+def test_edit_flow_uses_draft_preview_submit_endpoints() -> None:
+    js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    assert "/edit-draft" in js
+    assert "/edit-recalculate/preview" in js
+    assert '"/jobs/" + encodeURIComponent(ctx.sourceJobId) + "/edit-recalculate"' in js
+    # Draft hydration reuses the existing pending-new-task channel and the
+    # shared config cards instead of a second defaults system.
+    assert "applyPendingNewTask" in js
+    assert "updateConfigCards" in js
+
+
+def test_edit_i18n_keys_complete_across_locales() -> None:
+    zh = _i18n_block_keys(_ZH_BLOCK_RE, _EDIT_I18N_KEY_RE)
+    en = _i18n_block_keys(_EN_BLOCK_RE, _EDIT_I18N_KEY_RE)
+    assert zh, "no edit.* keys found in zh-CN"
+    assert zh == en, f"edit.* i18n mismatch: zh-only={sorted(zh - en)} en-only={sorted(en - zh)}"
+    for required in (
+        "edit.menu.edit_recalculate",
+        "edit.check_and_submit",
+        "edit.summary_cleanup_warning",
+        "edit.confirm_in_place",
+        "edit.confirm_new_job",
+        "edit.discard_confirm",
+    ):
+        assert required in zh, f"required edit key missing: {required}"

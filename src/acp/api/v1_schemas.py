@@ -576,6 +576,120 @@ class V1JobPurgeResponse(BaseModel):
     results: list[V1JobPurgeResult] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# Edit & recalculate (docs/ACP_Edit_And_Recalculate_Plan.md §9) —
+# GET /jobs/{id}/edit-draft · POST /jobs/{id}/edit-recalculate/preview ·
+# POST /jobs/{id}/edit-recalculate.
+# ---------------------------------------------------------------------------
+
+
+class V1EditCapabilities(BaseModel):
+    """Server-computed action availability plus human-readable block reasons."""
+
+    can_edit: bool
+    can_in_place: bool
+    can_new_job: bool
+    disabled_reasons: list[str] = Field(default_factory=list)
+
+
+class V1EditDraftResponse(BaseModel):
+    job_id: str
+    workflow: str
+    workflow_status: str
+    job_status: str
+    attempt: int
+    source_revision: str
+    editable_spec: dict[str, Any]
+    input_refs: dict[str, Any]
+    capabilities: V1EditCapabilities
+    preserved_fields: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    migration_hint: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class V1EditPreviewRequest(BaseModel):
+    """Body for the edit-recalculate preview (validation + diff, no writes)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    mode: str
+    workflow: str | None = None
+    input: dict[str, Any] = Field(default_factory=dict)
+    method: dict[str, Any] = Field(default_factory=dict)
+    resources: dict[str, Any] = Field(default_factory=dict)
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
+    project_id: str | None = None
+    execution_mode: str | None = None
+    target_node: str | None = None
+    expected_source_revision: str | None = None
+
+
+class V1EditDiffEntry(BaseModel):
+    path: str
+    kind: str
+    old: Any = None
+    new: Any = None
+
+
+class V1EditPreviewResponse(BaseModel):
+    ok: bool
+    mode: str
+    workflow: str
+    job_id: str
+    diff: list[V1EditDiffEntry] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    blocking_reasons: list[str] = Field(default_factory=list)
+    preview_fingerprint: str
+    source_revision: str
+
+
+class V1EditRecalculateRequest(BaseModel):
+    """Body for the edit-recalculate submission (plan §9).
+
+    ``mode``: ``in_place`` reuses the task identity; ``new_job`` performs one
+    regular submit with lineage.  ``request_id`` drives exactly-once
+    semantics; ``expected_source_revision`` guards against stale drafts;
+    ``preview_fingerprint`` (when provided) must match the server-side
+    canonical fingerprint of the submitted configuration.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    mode: str
+    workflow: str | None = None
+    name: str = ""
+    input: dict[str, Any] = Field(default_factory=dict)
+    method: dict[str, Any] = Field(default_factory=dict)
+    resources: dict[str, Any] = Field(default_factory=dict)
+    output_dir: str | None = None
+    config_path: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
+    project_id: str | None = None
+    execution_mode: str | None = None
+    target_node: str | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    expected_source_revision: str | None = None
+    preview_fingerprint: str | None = None
+    request_id: str
+
+
+class V1EditRecalculateResponse(BaseModel):
+    job_id: str
+    attempt: int
+    operation: str
+    status: str
+    replayed: bool = False
+    diff_summary: list[V1EditDiffEntry] = Field(default_factory=list)
+
+
 class V1JobListResponse(BaseModel):
     jobs: list[V1JobRecordModel] = Field(default_factory=list)
     counts: dict[str, int] = Field(default_factory=dict)

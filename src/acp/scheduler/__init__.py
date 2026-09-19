@@ -18,6 +18,18 @@ from acp.scheduler.capabilities import (
     matches_capabilities,
 )
 from acp.scheduler.events import JobEventLog
+from acp.scheduler.job_edit import (
+    EDIT_ACTIVE_WORKFLOWS,
+    EditConflictError,
+    EditValidationError,
+    JobEditOperationStore,
+    audit_workflow_edit_coverage,
+    build_edit_draft,
+    compute_source_revision,
+    diff_editable_specs,
+    editable_spec_from_record,
+    resolve_last_structure,
+)
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.local_cleanup import (
     DEFAULT_MAX_DIRS_PER_SWEEP,
@@ -68,6 +80,10 @@ __all__ = [
     "JobSpec",
     "JobStatus",
     "JobStore",
+    "EDIT_ACTIVE_WORKFLOWS",
+    "EditConflictError",
+    "EditValidationError",
+    "JobEditOperationStore",
     "MatchResult",
     "MetricsExtractor",
     "NoCapableNodeError",
@@ -99,6 +115,12 @@ __all__ = [
     "StageTaskStore",
     "StructureSourceService",
     "TaskIndex",
+    "audit_workflow_edit_coverage",
+    "build_edit_draft",
+    "compute_source_revision",
+    "diff_editable_specs",
+    "editable_spec_from_record",
+    "resolve_last_structure",
     "apply_group_merge",
     "resolve_molecule_key",
     "suggest_group_merges",

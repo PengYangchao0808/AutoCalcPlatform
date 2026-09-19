@@ -33,6 +33,13 @@ from acp.scheduler.capabilities import (
     local_satisfies,
 )
 from acp.scheduler.events import JobEventLog
+from acp.scheduler.job_edit import (
+    EditConflictError,
+    JobEditOperationStore,
+    attempt_number,
+    compute_source_revision,
+    normalize_for_compare,
+)
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
     SUPPORTED_WORKFLOWS,
@@ -635,81 +642,18 @@ class JobManager:
         with self._lock:
             # Re-read under the manager lock so two rapid clicks cannot both
             # act on the same stale terminal snapshot.
-            record = self.store.get(job_id)
-            if record is None:
-                return None
-            current_project = record.project_id or record.spec.project_id
-            if project_id is not None and project_id != current_project:
-                raise ValueError("原地重跑不能切换项目，请使用复制到项目")
-            if not record.status.is_terminal:
-                raise ValueError(f"rerun requires a terminal status; got {record.status.value}")
-            if job_id in self._submission_jobs:
-                raise ValueError(f"job {job_id} is already being submitted")
-
-            killed = self._terminate_stale_task_processes(record)
-            if self._has_live_task_process(record):
-                raise ValueError(
-                    f"job {job_id} still has live process(es) in its task directory; "
-                    "refusing to rerun — terminate them first"
-                )
-
-            attempts = int((record.result or {}).get("attempts") or 1) + 1
-            old_status = record.status.value
-            result = dict(record.result or {})
-            # Affinity capture (design §3.4): remember where this job ran so
-            # the rerun's auto dispatch prefers the same node.
-            source_target = result.get("execution_target")
-            history = result.get("attempt_history")
-            if not isinstance(history, list):
-                history = []
-            history.append(
-                {
-                    "attempt": attempts - 1,
-                    "mode": "rerun",
-                    "status": old_status,
-                    "completed_at": record.completed_at,
-                    "exit_code": record.exit_code,
-                    "error": record.error,
-                }
+            outcome = self._inplace_requeue_locked(
+                job_id,
+                mode="rerun",
+                new_spec=None,
+                expected_source_revision=None,
+                project_id=project_id,
             )
-            # Clear the task directory while the job is still terminal —
-            # flipping to QUEUED lets the poller dispatch a submission at
-            # any moment, and that submission must find a clean task root.
-            self._reset_work_dir_in_place(record)
-            # Do not carry a previous workflow state, remote submission, or
-            # result payload into a full rerun.  Keep only scheduler history.
-            record.result = {
-                "attempts": attempts,
-                "attempt_history": history,
-            }
-            if (
-                isinstance(source_target, str)
-                and source_target != LOCAL_NODE_NAME
-                and record.spec.target_node is None
-                and record.spec.execution_mode is None
-            ):
-                # Transient affinity hint for the auto branch; consumed when
-                # the next execution target is recorded.
-                record.result["affinity_node"] = source_target
-            record.status = JobStatus.QUEUED
-            record.started_at = None
-            record.completed_at = None
-            record.current_stage = None
-            record.progress = None
-            record.error = None
-            record.pid = None
-            record.exit_code = None
-            record.remote_job_id = None
-            record.touch()
-            self._cancel_events[job_id] = threading.Event()
-            self.store.update(record)
+            if outcome is None:
+                return None
+            record, attempts, old_status, killed = outcome
 
-        self._stage_task_observer.reset_job(job_id)
-        self._reset_job_artifacts(job_id)
-        TaskStorage(Path(record.work_dir)).ensure_layout()
-        self._sync_task_status(record)
-        self._update_task_json_status(Path(record.work_dir), record.status.value)
-        self._write_job_json(record)
+        self._finish_inplace_requeue(record)
         self._event_log(record).append(
             "job.rerun",
             job_id=job_id,
@@ -721,17 +665,302 @@ class JobManager:
         self._start_submission_thread(job_id, f"acp-rerun-{job_id}")
         return record
 
-    def _reset_work_dir_in_place(self, record: JobRecord) -> None:
+    def _inplace_requeue_locked(
+        self,
+        job_id: str,
+        *,
+        mode: str,
+        new_spec: JobSpec | None,
+        expected_source_revision: str | None,
+        project_id: str | None = None,
+    ) -> tuple[JobRecord, int, str, list[int]] | None:
+        """Shared in-place requeue core (rerun + edit-recalculate, plan §10).
+
+        Must be called while holding ``self._lock``; re-reads the record,
+        validates the state machine, clears the task directory, optionally
+        installs an edited spec, and flips the record to QUEUED.  Returns
+        ``(record, new_attempts, old_status, killed_pids)`` or ``None`` when
+        the job vanished between reads.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            return None
+        current_project = record.project_id or record.spec.project_id
+        if project_id is not None and project_id != current_project:
+            raise ValueError("原地重跑不能切换项目，请使用复制到项目")
+        if not record.status.is_terminal:
+            raise ValueError(f"rerun requires a terminal status; got {record.status.value}")
+        if job_id in self._submission_jobs:
+            raise ValueError(f"job {job_id} is already being submitted")
+        if expected_source_revision is not None:
+            current_revision = compute_source_revision(record)
+            if current_revision != expected_source_revision:
+                raise EditConflictError(
+                    "源任务配置已变化（source_revision 不匹配）；请刷新编辑草稿后重试"
+                )
+        if new_spec is not None:
+            if new_spec.workflow != record.spec.workflow:
+                raise ValueError(
+                    "原地重算锁定工作流；如需更换工作流请使用「创建新任务」"
+                )
+            # Lock physical identity: the directory allocator is the single
+            # source of truth for the task label; project moves go through
+            # move_job.
+            new_spec = replace(
+                new_spec,
+                name=record.spec.name,
+                output_dir=record.spec.output_dir,
+                project_id=current_project,
+            )
+
+        killed = self._terminate_stale_task_processes(record)
+        if self._has_live_task_process(record):
+            raise ValueError(
+                f"job {job_id} still has live process(es) in its task directory; "
+                "refusing to rerun — terminate them first"
+            )
+
+        attempts = attempt_number(record) + 1
+        old_status = record.status.value
+        result = dict(record.result or {})
+        # Affinity capture (design §3.4): remember where this job ran so
+        # the rerun's auto dispatch prefers the same node.
+        source_target = result.get("execution_target")
+        history = result.get("attempt_history")
+        if not isinstance(history, list):
+            history = []
+        history.append(
+            {
+                "attempt": attempts - 1,
+                "mode": mode,
+                "status": old_status,
+                "completed_at": record.completed_at,
+                "exit_code": record.exit_code,
+                "error": record.error,
+            }
+        )
+        # Clear the task directory while the job is still terminal —
+        # flipping to QUEUED lets the poller dispatch a submission at
+        # any moment, and that submission must find a clean task root.
+        self._reset_work_dir_in_place(record, strict=True)
+        if new_spec is not None and normalize_for_compare(new_spec.input) != normalize_for_compare(
+            record.spec.input
+        ):
+            # The runner re-materialises input.xyz from spec.input on the
+            # next launch, but the preserved stale snapshot must never
+            # shadow the new selection if materialisation fails (plan §6.2).
+            for stale in ("input.xyz", "input_source.json"):
+                try:
+                    (Path(record.work_dir) / stale).unlink(missing_ok=True)
+                except OSError:
+                    logger.warning(
+                        "Could not remove stale %s before edit-recalculate of %s",
+                        stale,
+                        record.id,
+                        exc_info=True,
+                    )
+        if new_spec is not None:
+            record.spec = new_spec
+            record.input_hash = compute_input_hash(new_spec)
+        # Do not carry a previous workflow state, remote submission, or
+        # result payload into a full rerun.  Keep only scheduler history.
+        record.result = {
+            "attempts": attempts,
+            "attempt_history": history,
+        }
+        if (
+            isinstance(source_target, str)
+            and source_target != LOCAL_NODE_NAME
+            and record.spec.target_node is None
+            and record.spec.execution_mode is None
+        ):
+            # Transient affinity hint for the auto branch; consumed when
+            # the next execution target is recorded.
+            record.result["affinity_node"] = source_target
+        record.status = JobStatus.QUEUED
+        record.started_at = None
+        record.completed_at = None
+        record.current_stage = None
+        record.progress = None
+        record.error = None
+        record.pid = None
+        record.exit_code = None
+        record.remote_job_id = None
+        record.touch()
+        self._cancel_events[job_id] = threading.Event()
+        self.store.update(record)
+        return record, attempts, old_status, killed
+
+    def _finish_inplace_requeue(self, record: JobRecord) -> None:
+        """Post-lock side effects shared by rerun and in-place edit-recalculate."""
+        self._stage_task_observer.reset_job(record.id)
+        self._reset_job_artifacts(record.id)
+        TaskStorage(Path(record.work_dir)).ensure_layout()
+        self._sync_task_status(record)
+        self._update_task_json_status(Path(record.work_dir), record.status.value)
+        self._write_job_json(record)
+
+    def edit_recalculate(
+        self,
+        job_id: str,
+        *,
+        mode: str,
+        new_spec: JobSpec,
+        expected_source_revision: str | None,
+        request_id: str,
+        payload_hash: str,
+        payload_json: str,
+        diff_summary: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Apply an edited spec as a new attempt (docs/ACP_Edit_And_Recalculate_Plan.md).
+
+        ``mode="in_place"`` reuses the shared in-place requeue core with a
+        validated spec; ``mode="new_job"`` performs exactly one regular
+        :meth:`submit` with lineage recorded on the source task.  The
+        ``request_id`` operation record makes retries idempotent across
+        network replays and service restarts.
+        """
+        if mode not in ("in_place", "new_job"):
+            raise ValueError(f"invalid edit mode: {mode!r}")
+        op_store = JobEditOperationStore(self.store.db_path)
+        existing = op_store.get(request_id)
+        if existing is not None:
+            if existing["job_id"] != job_id:
+                raise EditConflictError(
+                    f"request_id {request_id} 已用于其他任务；请使用新的 request_id"
+                )
+            if existing["payload_hash"] != payload_hash:
+                raise EditConflictError(
+                    f"request_id {request_id} 已用于不同的提交负载；请使用新的 request_id"
+                )
+            if existing["status"] == "completed":
+                result = json.loads(existing["result_json"] or "{}")
+                result["replayed"] = True
+                return result
+            # "prepared"/"failed" rows are re-driven below (crash recovery,
+            # plan §10): the in-place operation itself is convergent.
+        else:
+            op_store.insert_prepared(
+                request_id=request_id,
+                job_id=job_id,
+                mode=mode,
+                payload_hash=payload_hash,
+                payload_json=payload_json,
+            )
+
+        record = self.store.get(job_id)
+        if record is None:
+            op_store.fail(request_id, f"job not found: {job_id}")
+            raise KeyError(job_id)
+        try:
+            if mode == "in_place":
+                result = self._edit_in_place(
+                    record,
+                    job_id,
+                    new_spec=new_spec,
+                    expected_source_revision=expected_source_revision,
+                    diff_summary=diff_summary or [],
+                )
+            else:
+                result = self._edit_new_job(record, new_spec, diff_summary or [])
+        except BaseException as exc:
+            op_store.fail(request_id, f"{type(exc).__name__}: {exc}")
+            raise
+        op_store.complete(request_id, json.dumps(result, default=str))
+        return result
+
+    def _edit_in_place(
+        self,
+        record: JobRecord,
+        job_id: str,
+        *,
+        new_spec: JobSpec,
+        expected_source_revision: str | None,
+        diff_summary: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        with self._lock:
+            outcome = self._inplace_requeue_locked(
+                job_id,
+                mode="edit_recalculate",
+                new_spec=new_spec,
+                expected_source_revision=expected_source_revision,
+            )
+            if outcome is None:
+                raise KeyError(job_id)
+            record, attempts, old_status, killed = outcome
+
+        self._finish_inplace_requeue(record)
+        if self.tasks is not None:
+            try:
+                # Identity columns (molecule/task/remark) may have changed.
+                self.tasks.sync_from_job(record)
+            except Exception:
+                logger.warning(
+                    "Task index identity sync failed for job %s", record.id, exc_info=True
+                )
+        self._event_log(record).append(
+            "job.edit_recalculate",
+            job_id=job_id,
+            mode="in_place",
+            rerun_from=old_status,
+            attempts=attempts,
+            request_id=record.id,
+            changed_fields=[entry.get("path") for entry in diff_summary],
+            killed_pids=killed,
+            work_dir=record.work_dir,
+        )
+        self._start_submission_thread(job_id, f"acp-edit-{job_id}")
+        return {
+            "job_id": job_id,
+            "attempt": attempts,
+            "operation": "in_place",
+            "status": record.status.value,
+            "replayed": False,
+        }
+
+    def _edit_new_job(
+        self,
+        record: JobRecord,
+        new_spec: JobSpec,
+        diff_summary: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if new_spec.workflow not in SUPPORTED_WORKFLOWS:
+            raise ValueError(
+                f"Unsupported workflow: {new_spec.workflow}. Supported: {SUPPORTED_WORKFLOWS}"
+            )
+        new_spec = replace(new_spec, output_dir=None)
+        created = self.submit(new_spec, group_id=record.group_id)
+        self._event_log(record).append(
+            "job.edit_recalculate",
+            job_id=record.id,
+            mode="new_job",
+            new_job_id=created.id,
+            changed_fields=[entry.get("path") for entry in diff_summary],
+        )
+        return {
+            "job_id": created.id,
+            "attempt": 1,
+            "operation": "new_job",
+            "status": created.status.value,
+            "replayed": False,
+        }
+
+    def _reset_work_dir_in_place(self, record: JobRecord, *, strict: bool = True) -> None:
         """Clear attempt-scoped content, keeping the task identity files.
 
         Deletes ``WORK``/``RESULT``, any legacy ``_attempts/`` archives, and
         all run markers/logs in place so the rerun starts from a clean task
         root without creating a duplicate directory.  The v2 scaffold is
         recreated by the caller afterwards.
+
+        ``strict=True`` (edit-and-recalculate plan §10.5): individual delete
+        failures are collected and abort the requeue instead of being
+        logged-and-ignored — a half-cleaned task root must never be queued.
         """
         work_dir = Path(record.work_dir)
         if not work_dir.is_dir():
             return
+        failures: list[str] = []
         for child in list(work_dir.iterdir()):
             if child.name in _RERUN_STABLE_FILES:
                 continue
@@ -747,6 +976,12 @@ class JobManager:
                     record.id,
                     exc_info=True,
                 )
+                failures.append(str(child))
+        if failures and strict:
+            raise RuntimeError(
+                f"清理旧尝试产物失败（{len(failures)} 项），已阻断排队: "
+                + "; ".join(failures[:5])
+            )
 
     def _reset_job_artifacts(self, job_id: str) -> None:
         """Drop artifact rows captured by the previous attempt."""

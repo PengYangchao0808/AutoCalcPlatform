@@ -151,6 +151,12 @@ from acp.api.v1_schemas import (
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
+    V1EditDiffEntry,
+    V1EditDraftResponse,
+    V1EditPreviewRequest,
+    V1EditPreviewResponse,
+    V1EditRecalculateRequest,
+    V1EditRecalculateResponse,
     V1FrameCandidateInfo,
     V1FrameCandidateListResponse,
     V1FrameCandidateRequest,
@@ -197,6 +203,18 @@ from acp.scheduler.capabilities import (
 )
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import build_manifest, resolve_safe
+from acp.scheduler.job_edit import (
+    EditConflictError,
+    EditValidationError,
+    build_edit_draft,
+    compute_payload_hash,
+    compute_preview_fingerprint,
+    compute_source_revision,
+    diff_editable_specs,
+    editable_spec_from_parts,
+    editable_spec_from_record,
+    workflow_edit_status,
+)
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
@@ -3678,6 +3696,298 @@ def rerun_job(
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return _record_to_v1_model(record)
+
+
+def _build_edited_spec(
+    record: JobRecord,
+    req: V1EditPreviewRequest | V1EditRecalculateRequest,
+    request: Request,
+    manager: JobManager,
+) -> tuple[JobSpec, list[dict[str, Any]]]:
+    """Rebuild a validated JobSpec from an edit request.
+
+    Shares the exact parameter resolvers of POST ``/jobs`` (electronic-state
+    expansion, bond-scan preparation, stage-artifact resolution, batch
+    structure inlining, stage execution inheritance) so a configuration that
+    is legal at creation is legal for recalculation and vice versa (plan §9).
+    """
+    workflow = req.workflow or record.spec.workflow
+    edit_status = workflow_edit_status(workflow)
+    if not edit_status["editable"]:
+        raise EditValidationError(
+            f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算；"
+            f"迁移建议：{edit_status.get('migration_hint') or '—'}"
+        )
+    method = _expand_method_electronic_state(dict(req.method))
+    inp = dict(req.input)
+    batch_snapshots: list[dict[str, Any]] = []
+    if workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
+        inp = _prepare_bond_scan_input(inp, manager)
+    elif workflow == "PESsearch":
+        inp = _resolve_stage_artifact_ref(workflow, inp, manager)
+    elif workflow == "BatchOptimize":
+        inp, batch_snapshots = _resolve_batch_structures_input(inp, request)
+
+    original_execution_mode = (
+        getattr(record.spec.execution_mode, "value", None) or record.spec.execution_mode
+    )
+    execution_mode = (
+        req.execution_mode if req.execution_mode is not None else original_execution_mode
+    )
+    target_node = req.target_node if req.target_node is not None else record.spec.target_node
+    execution_mode, target_node = _inherit_stage_execution_fields(
+        workflow, inp, execution_mode, target_node, manager
+    )
+    molecule_name = req.molecule_name or record.spec.molecule_name
+    task_name = req.task_name or workflow
+    is_submit = isinstance(req, V1EditRecalculateRequest)
+    spec = JobSpec(
+        workflow=workflow,
+        name=req.name if is_submit else record.spec.name,
+        input=inp,
+        method=method,
+        resources=dict(req.resources),
+        output_dir=req.output_dir if is_submit else None,
+        config_path=(
+            req.config_path if is_submit and req.config_path else record.spec.config_path
+        ),
+        tags=list(req.tags),
+        node_tags=list(req.node_tags),
+        project_id=req.project_id or (record.project_id or record.spec.project_id),
+        execution_mode=execution_mode,
+        target_node=target_node,
+        molecule_name=molecule_name,
+        task_name=task_name,
+        remark=req.remark,
+    )
+    return spec, batch_snapshots
+
+
+def _edited_spec_diff(record: JobRecord, spec: JobSpec) -> list[dict[str, Any]]:
+    return diff_editable_specs(
+        editable_spec_from_record(record),
+        editable_spec_from_parts(
+            workflow=spec.workflow,
+            input_spec=spec.input,
+            method=spec.method,
+            resources=spec.resources,
+            molecule_name=spec.molecule_name,
+            task_name=spec.task_name,
+            remark=spec.remark,
+            tags=spec.tags,
+            node_tags=spec.node_tags,
+            project_id=spec.project_id,
+            execution_mode=getattr(spec.execution_mode, "value", None) or spec.execution_mode,
+            target_node=spec.target_node,
+            config_path=spec.config_path,
+        ),
+    )
+
+
+def _validate_edited_execution(spec: JobSpec, manager: JobManager) -> None:
+    try:
+        validate_execution_request(spec)
+    except ExecutionTargetError as exc:
+        detail = _target_validation_detail(exc)
+        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
+        raise HTTPException(status_code=400, detail=detail) from exc
+    try:
+        validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+
+
+def _edit_payload_dict(
+    job_id: str, body: V1EditPreviewRequest | V1EditRecalculateRequest, spec: JobSpec
+) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "mode": body.mode,
+        "workflow": spec.workflow,
+        "input": spec.input,
+        "method": spec.method,
+        "resources": spec.resources,
+        "molecule_name": spec.molecule_name,
+        "task_name": spec.task_name,
+        "remark": spec.remark,
+        "tags": spec.tags,
+        "node_tags": spec.node_tags,
+        "project_id": spec.project_id,
+        "execution_mode": getattr(spec.execution_mode, "value", None) or spec.execution_mode,
+        "target_node": spec.target_node,
+    }
+
+
+@router.get("/jobs/{job_id}/edit-draft", response_model=V1EditDraftResponse)
+def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
+    """Restore the original submission configuration as an editable draft."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    draft = build_edit_draft(record, run_root=manager.run_root)
+    return V1EditDraftResponse(**draft)
+
+
+@router.post("/jobs/{job_id}/edit-recalculate/preview", response_model=V1EditPreviewResponse)
+def preview_job_edit_recalculate(
+    job_id: str,
+    body: V1EditPreviewRequest,
+    request: Request,
+) -> V1EditPreviewResponse:
+    """Validate an edited spec and return the normalised diff (no writes)."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if body.mode not in ("in_place", "new_job"):
+        raise HTTPException(status_code=422, detail=f"invalid mode: {body.mode!r}")
+    source_revision = compute_source_revision(record)
+    if body.expected_source_revision and body.expected_source_revision != source_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "source_revision_conflict",
+                "message": "源任务配置已变化，请刷新编辑草稿后重试",
+                "current": source_revision,
+            },
+        )
+    try:
+        spec, _ = _build_edited_spec(record, body, request, manager)
+    except EditValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _validate_edited_execution(spec, manager)
+
+    blocking: list[str] = []
+    if body.mode == "in_place":
+        if spec.workflow != record.spec.workflow:
+            blocking.append("原地重算锁定工作流；请切换为「创建新任务」以更换工作流")
+        if not record.status.is_terminal:
+            blocking.append(
+                f"任务状态 {record.status.value} 非终态；请先取消并等待终态后再原地重算"
+            )
+    diff = _edited_spec_diff(record, spec)
+    warnings: list[str] = []
+    for entry in diff:
+        if entry.get("kind") == "input":
+            warnings.append(f"输入已修改（{entry['path']}）；提交后将重新物化输入")
+        if entry.get("kind") == "resource":
+            warnings.append(f"资源已修改（{entry['path']}）")
+    fingerprint = compute_preview_fingerprint(
+        job_id, source_revision, spec.workflow, spec.input, spec.method, spec.resources
+    )
+    return V1EditPreviewResponse(
+        ok=not blocking,
+        mode=body.mode,
+        workflow=spec.workflow,
+        job_id=job_id,
+        diff=[V1EditDiffEntry(**entry) for entry in diff],
+        warnings=warnings,
+        blocking_reasons=blocking,
+        preview_fingerprint=fingerprint,
+        source_revision=source_revision,
+    )
+
+
+@router.post("/jobs/{job_id}/edit-recalculate", response_model=V1EditRecalculateResponse)
+def submit_job_edit_recalculate(
+    job_id: str,
+    body: V1EditRecalculateRequest,
+    request: Request,
+) -> V1EditRecalculateResponse:
+    """Apply an edited configuration as an in-place attempt or a new task."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if body.mode not in ("in_place", "new_job"):
+        raise HTTPException(status_code=422, detail=f"invalid mode: {body.mode!r}")
+    if not str(body.request_id or "").strip():
+        raise HTTPException(status_code=422, detail="request_id is required")
+    from acp.scheduler.job_edit import JobEditOperationStore
+
+    known_request = False
+    existing_op = JobEditOperationStore(manager.store.db_path).get(body.request_id)
+    if existing_op is not None:
+        if existing_op["job_id"] != job_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"request_id {body.request_id} 已用于其他任务；请使用新的 request_id",
+            )
+        # A replayed request may legitimately carry a stale revision and
+        # fingerprint — the manager's payload-hash check arbitrates it.
+        known_request = True
+    source_status = workflow_edit_status(record.spec.workflow)
+    if body.mode == "in_place":
+        if not source_status["editable"]:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
+                    "历史任务仅支持查看与迁移，原地编辑重算已禁用"
+                ),
+            )
+        if body.workflow and body.workflow != record.spec.workflow:
+            raise HTTPException(
+                status_code=422,
+                detail="原地重算锁定工作流；如需更换工作流请使用「创建新任务」模式",
+            )
+    source_revision = compute_source_revision(record)
+    if (
+        not known_request
+        and body.expected_source_revision
+        and body.expected_source_revision != source_revision
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "source_revision_conflict",
+                "message": "源任务配置已变化，请刷新编辑草稿后重试",
+                "current": source_revision,
+            },
+        )
+    try:
+        spec, _batch_snapshots = _build_edited_spec(record, body, request, manager)
+    except EditValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _validate_edited_execution(spec, manager)
+    if body.preview_fingerprint and not known_request:
+        expected = compute_preview_fingerprint(
+            job_id, source_revision, spec.workflow, spec.input, spec.method, spec.resources
+        )
+        if body.preview_fingerprint != expected:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "preview_fingerprint_conflict",
+                    "message": "提交的配置与预览时不一致，请重新预览后提交",
+                },
+            )
+    diff = _edited_spec_diff(record, spec)
+    payload = _edit_payload_dict(job_id, body, spec)
+    try:
+        result = manager.edit_recalculate(
+            job_id,
+            mode=body.mode,
+            new_spec=spec,
+            expected_source_revision=body.expected_source_revision,
+            request_id=body.request_id,
+            payload_hash=compute_payload_hash(payload),
+            payload_json=json.dumps(payload, default=str, sort_keys=True),
+            diff_summary=diff,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
+    except EditConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return V1EditRecalculateResponse(
+        **{key: value for key, value in result.items() if key != "diff"},
+        diff_summary=[V1EditDiffEntry(**entry) for entry in diff],
+    )
 
 
 @router.post("/jobs/purge", response_model=V1JobPurgeResponse)
