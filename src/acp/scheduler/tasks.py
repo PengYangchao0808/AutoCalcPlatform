@@ -16,6 +16,7 @@ import json
 import logging
 import sqlite3
 import threading
+import unicodedata
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -47,7 +48,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     storage_mode TEXT NOT NULL DEFAULT 'local',
     layout_version INTEGER NOT NULL DEFAULT 2,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    custom_name TEXT,
+    name_revision INTEGER NOT NULL DEFAULT 0,
+    name_updated_at TEXT
 )
 """
 
@@ -82,6 +86,10 @@ _TASK_COLUMNS: tuple[str, ...] = (
     "completed_at",
     "group_id",
     "progress",
+    # custom-name columns (Wave 1)
+    "custom_name",
+    "name_revision",
+    "name_updated_at",
 )
 
 #: Mirrors the SQL column defaults for keys absent (or None) in the payload.
@@ -98,6 +106,9 @@ _COLUMN_DEFAULTS: dict[str, Any] = {
     "completed_at": None,
     "group_id": None,
     "progress": None,
+    "custom_name": None,
+    "name_revision": 0,
+    "name_updated_at": None,
 }
 
 
@@ -120,6 +131,53 @@ _SYNC_COLUMNS: tuple[str, ...] = (
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class NameRevisionConflictError(Exception):
+    """Raised when an update_custom_name call has a stale expected_name_revision."""
+
+    def __init__(self, current_projection: dict[str, Any]) -> None:
+        self.current_projection = current_projection
+        rev = current_projection.get("name_revision")
+        super().__init__(f"name_revision conflict — current is {rev}")
+
+
+def validate_custom_name(value: str | None) -> str | None:
+    """Validate and normalise a custom task name.
+
+    ``None`` passes through (restore default).  Otherwise: strip, reject
+    empty, reject length > 200, reject control characters (Unicode Cc).
+    Returns the stripped value or raises ``ValueError``.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("custom_name must not be empty after trimming")
+    if len(stripped) > 200:
+        raise ValueError(f"custom_name exceeds 200 characters (got {len(stripped)})")
+    for ch in stripped:
+        if unicodedata.category(ch) == "Cc":
+            raise ValueError(f"custom_name contains control character: {ch!r}")
+    return stripped
+
+
+def resolve_task_names(row_or_dict: dict[str, Any]) -> dict[str, Any]:
+    """Produce a name projection from a task row.
+
+    Returns ``default_name`` (display_name), ``resolved_name``
+    (custom_name or display_name), ``custom_name``, ``name_revision``,
+    and ``name_updated_at``.
+    """
+    display_name = row_or_dict.get("display_name") or ""
+    custom_name = row_or_dict.get("custom_name")
+    return {
+        "default_name": display_name,
+        "resolved_name": custom_name if custom_name else display_name,
+        "custom_name": custom_name,
+        "name_revision": row_or_dict.get("name_revision") or 0,
+        "name_updated_at": row_or_dict.get("name_updated_at"),
+    }
 
 
 def jobs_table_exists(conn: sqlite3.Connection) -> bool:
@@ -524,6 +582,97 @@ class TaskIndex:
         )
         return True
 
+    def update_custom_name(
+        self,
+        task_id: str,
+        custom_name: str | None,
+        expected_name_revision: int,
+    ) -> dict[str, Any]:
+        """Set or clear a task's custom name within one transaction.
+
+        *custom_name* ``None`` restores the default.  Validates the name,
+        checks the revision for optimistic concurrency, bumps the revision,
+        and writes an audit row to ``organization_events`` — all atomically.
+
+        Returns a name projection dict.  Raises ``LookupError`` if the task
+        does not exist, ``NameRevisionConflictError`` on stale revision, or
+        ``ValueError`` on validation failure.
+        """
+        validated = validate_custom_name(custom_name)
+        now = _utc_now_iso()
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute("SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchall()
+                if not rows:
+                    raise LookupError(f"task {task_id!r} not found")
+
+                current = dict(rows[0])
+                current_rev = current["name_revision"]
+                if expected_name_revision != current_rev:
+                    raise NameRevisionConflictError(resolve_task_names(current))
+
+                if validated == current["custom_name"]:
+                    return resolve_task_names(current)
+
+                new_rev = current_rev + 1
+                action = "restore_default_name" if validated is None else "rename"
+                old_value = current["custom_name"]
+                new_value = validated
+
+                conn.execute(
+                    "UPDATE tasks SET custom_name=?, name_revision=?, "
+                    "name_updated_at=?, updated_at=? WHERE task_id=?",
+                    (validated, new_rev, now, now, task_id),
+                )
+                conn.execute(
+                    "INSERT INTO organization_events "
+                    "(object_type, object_id, action, old_value, new_value, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        "task",
+                        task_id,
+                        action,
+                        json.dumps(old_value),
+                        json.dumps(new_value),
+                        now,
+                    ),
+                )
+                conn.commit()
+
+                return {
+                    "default_name": current["display_name"] or "",
+                    "resolved_name": validated if validated else current["display_name"] or "",
+                    "custom_name": validated,
+                    "name_revision": new_rev,
+                    "name_updated_at": now,
+                }
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    # ------------------------------------------------------------------ #
+    # Name projections (batch, for v1 enrichment)
+    # ------------------------------------------------------------------ #
+
+    def get_name_projections_by_job_ids(self, job_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Return ``{job_id: name_projection}`` for the given job IDs.
+
+        Each projection contains ``custom_name``, ``resolved_name``,
+        ``default_name``, ``name_revision``, and ``name_updated_at``.
+        Missing task rows are silently omitted.
+        """
+        if not job_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in job_ids)
+        rows = self._query(
+            f"SELECT task_id, display_name, custom_name, name_revision, name_updated_at "
+            f"FROM tasks WHERE task_id IN ({placeholders})",
+            tuple(job_ids),
+        )
+        return {row["task_id"]: resolve_task_names(dict(row)) for row in rows}
+
     # ------------------------------------------------------------------ #
     # Molecule key resolution (alias-aware)
     # ------------------------------------------------------------------ #
@@ -543,4 +692,10 @@ class TaskIndex:
         return resolve_molecule_key(self, project_id, molecule_name)
 
 
-__all__ = ["TaskIndex", "jobs_table_exists"]
+__all__ = [
+    "NameRevisionConflictError",
+    "TaskIndex",
+    "jobs_table_exists",
+    "resolve_task_names",
+    "validate_custom_name",
+]

@@ -222,6 +222,11 @@ CREATE TABLE IF NOT EXISTS molecule_aliases (
         "description": "refresh molecule_key to case-preserving (alias rows keep target)",
         "sql": "-- handled in Python: recomputes molecule_key case-preserving",
     },
+    {
+        "id": "017",
+        "description": "add custom_name columns to tasks + create organization_events table",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
 ]
 
 
@@ -368,12 +373,8 @@ def _apply_tasks_org_columns(conn: sqlite3.Connection) -> bool:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_tasks_project_archived ON tasks(project_id, archived)"
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_tasks_molecule_key ON tasks(molecule_key)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_tasks_batch_id ON tasks(batch_id)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_molecule_key ON tasks(molecule_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_batch_id ON tasks(batch_id)")
 
     _backfill_tasks_from_jobs(conn)
     return True
@@ -389,10 +390,7 @@ def _backfill_tasks_from_jobs(conn: sqlite3.Connection) -> None:
 
     log = logging.getLogger(__name__)
 
-    existing_task_ids = {
-        row[0]
-        for row in conn.execute("SELECT task_id FROM tasks").fetchall()
-    }
+    existing_task_ids = {row[0] for row in conn.execute("SELECT task_id FROM tasks").fetchall()}
 
     for job_row in conn.execute("SELECT * FROM jobs").fetchall():
         job_id = job_row["id"]
@@ -404,9 +402,7 @@ def _backfill_tasks_from_jobs(conn: sqlite3.Connection) -> None:
         try:
             spec_raw = json.loads(spec_json_str)
         except (json.JSONDecodeError, TypeError):
-            log.warning(
-                "Corrupt spec_json for job %s — backfilling with defaults", job_id
-            )
+            log.warning("Corrupt spec_json for job %s — backfilling with defaults", job_id)
 
         molecule_name = spec_raw.get("molecule_name", "") if isinstance(spec_raw, dict) else ""
         task_name = spec_raw.get("task_name", "") if isinstance(spec_raw, dict) else ""
@@ -518,6 +514,42 @@ def _apply_case_preserving_molecule_key_refresh(conn: sqlite3.Connection) -> boo
     return True
 
 
+def _apply_tasks_custom_name_columns(conn: sqlite3.Connection) -> bool:
+    """Add custom_name, name_revision, name_updated_at to tasks + create organization_events."""
+    if not _table_exists(conn, "tasks"):
+        return False
+
+    _name_columns = [
+        ("custom_name", "TEXT"),
+        ("name_revision", "INTEGER NOT NULL DEFAULT 0"),
+        ("name_updated_at", "TEXT"),
+    ]
+    for col_name, col_def in _name_columns:
+        if not _column_exists(conn, "tasks", col_name):
+            conn.execute(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_def}")
+
+    if not _table_exists(conn, "organization_events"):
+        conn.executescript("""
+CREATE TABLE IF NOT EXISTS organization_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    object_type TEXT NOT NULL,
+    object_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_org_events_object ON organization_events(object_type, object_id);
+""")
+    else:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_org_events_object "
+            "ON organization_events(object_type, object_id)"
+        )
+
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -538,6 +570,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_tasks_org_columns(conn)
     if migration_id == "016":
         return _apply_case_preserving_molecule_key_refresh(conn)
+    if migration_id == "017":
+        return _apply_tasks_custom_name_columns(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)
