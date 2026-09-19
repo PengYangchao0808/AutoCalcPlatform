@@ -10069,7 +10069,7 @@ def test_editor_single_source_area() -> None:
 
 
 def test_job_modal_structure_browser_visual_contract() -> None:
-    """All source tabs share one stable 42/58 editor workspace."""
+    """The source browser dominates a compact, expandable preview column."""
     html = FRONTEND.read_text(encoding="utf-8")
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
     assert 'id="preview-structure-title"' in modal
@@ -10078,9 +10078,16 @@ def test_job_modal_structure_browser_visual_contract() -> None:
     assert 'id="task-results-browser"' in modal
     assert 'class="task-info-details"' in modal
     assert modal.count('id="structure-preview-3d"') == 1
-    assert 'grid-template-columns: minmax(360px, 42fr) minmax(480px, 58fr)' in html
-    assert 'height: clamp(440px, 56dvh, 560px)' in html
-    assert '@media (max-width: 680px)' in html
+    assert 'grid-template-columns: minmax(0, 1fr) clamp(340px, 36%, 400px)' in html
+    assert 'height: clamp(440px, 54dvh, 520px)' in html
+    assert '@media (max-width: 900px)' in html
+    assert 'height: clamp(560px, 75dvh, 680px)' in html
+    assert 'class="current-structure-summary"' in html
+    assert 'id="preview-structure-prev"' in html
+    assert 'id="preview-structure-next"' in html
+    assert "#job-modal .source-section-nav {" in html
+    assert "display: flex;" in html
+    assert "#job-modal .input-mode-tabs { gap: 8px; margin: 0; }" in html
     left_pane = modal.split('class="preview-left"', 1)[1].split(
         'class="preview-right"', 1
     )[0]
@@ -10088,7 +10095,28 @@ def test_job_modal_structure_browser_visual_contract() -> None:
     assert 'id="input-panel-structure"' in left_pane
     assert 'id="input-panel-upload"' in left_pane
     assert 'id="task-results-browser"' in left_pane
+    assert 'id="preview-remove-selected"' in left_pane
+    assert 'id="preview-clear-all"' in left_pane
     assert 'id="structure-preview-3d"' not in left_pane
+    header = modal.split('class="source-section-header"', 1)[1].split(
+        'id="mech-builder-panel"', 1
+    )[0]
+    assert 'id="task-source-inline"' in header
+    assert 'id="current-structure-summary"' in header
+    assert 'id="current-structure-name"' in header
+    assert 'id="current-structure-meta"' in header
+    right_pane = modal.split('class="preview-right"', 1)[1]
+    assert 'id="preview-expand-view"' in right_pane
+    assert 'id="preview-remove-selected"' not in right_pane
+    assert "var PREVIEW_ZOOM_FACTOR = 0.82" in html
+    assert '{ zoomFactor: PREVIEW_ZOOM_FACTOR }' in html
+    assert 'var editableSource = wizardInputMode !== "task"' in html
+    assert 'updatePreviewActionState();' in html
+    assert 'sourceShell.setAttribute("data-source-mode", mode)' in html
+    assert '[data-source-mode="task"] .preview-left-actions' in html
+    assert 'browser.style.display = mode === "task" ? "flex" : "none"' in html
+    assert 'sourceInline.style.display = wizardStructures.length ? "flex" : "none"' in html
+    assert "display: contents" not in html
     assert len(re.findall(r'class="input-mode-tab(?: active)?"', modal)) == 3
     assert 'event.key === "ArrowRight"' in html
     assert 'event.key === "ArrowLeft"' in html
@@ -10109,14 +10137,45 @@ def test_job_editor_source_tabs_do_not_apply_unparsed_sources() -> None:
     assert 'kind === "structure" ? "manual_input" : "upload"' in parsed_fn
 
 
-def test_job_modal_typography_is_scoped_to_three_tokens() -> None:
+def test_job_modal_typography_has_a_clear_four_level_hierarchy() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "--editor-font-small: 12px" in html
+    assert "--editor-font-detail: 12px" in html
     assert "--editor-font-base: 14px" in html
-    assert "--editor-font-title: 16px" in html
+    assert "--editor-font-feature: 16px" in html
+    assert "--editor-font-title: 18px" in html
     assert 'font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif !important' in html
     assert "--editor-weight-normal: 400" in html
-    assert "--editor-weight-medium: 500" in html
+    assert "--editor-weight-medium: 600" in html
+    assert "--editor-weight-strong: 700" in html
+    assert "#job-modal .modal-header h2 {" in html
+    feature_heading_rule = html.split("#job-modal .modal-section-title,", 1)[1].split("}", 1)[0]
+    assert "#job-modal #modal-project-section > label" in feature_heading_rule
+    assert "#job-modal .config-card-label" in feature_heading_rule
+    assert "#job-modal .config-card-body strong" not in feature_heading_rule
+    content_title_rule = html.rsplit("#job-modal .edit-banner-source,", 1)[1].split("}", 1)[0]
+    assert "#job-modal .config-card-body strong" in content_title_rule
+    assert "#job-modal .sp-row-name" in content_title_rule
+    assert "#job-modal .sp-row-meta {" in html
+    assert "font-size: var(--editor-font-base) !important" not in html
+
+
+def test_job_modal_numbered_headings_use_aligned_step_layout() -> None:
+    """Steps 1/2/3/5 share the left edge; protocol remains the right column."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
+
+    assert 'class="project-step" id="modal-project-section"' in modal
+    assert 'class="project-step-panel"' in modal
+    assert 'class="config-step" id="workflow-card"' in modal
+    assert 'class="config-step" id="method-card"' in modal
+    assert '<div class="config-card">' in modal
+
+    # The numbered config headings must keep feature-heading typography and
+    # must not be pulled back into the tertiary/detail text rule.
+    tertiary_rule = html.split("#job-modal .muted,", 1)[1].split("{", 1)[0]
+    assert "#job-modal .config-card-label" not in tertiary_rule
+    assert "#job-modal .config-step {" in html
+    assert "#job-modal .project-step { display: grid; gap: 8px; }" in html
 
 
 def test_job_editor_workflow_adapters_registered() -> None:

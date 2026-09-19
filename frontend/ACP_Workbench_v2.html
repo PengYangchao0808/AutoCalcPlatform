@@ -790,24 +790,63 @@ body.resizing-v canvas {
 .edit-banner-footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .edit-banner-footer .flex-spacer { flex: 1; }
 #job-modal {
-  --editor-font-small: 12px;
+  --editor-font-detail: 12px;
   --editor-font-base: 14px;
-  --editor-font-title: 16px;
+  --editor-font-feature: 16px;
+  --editor-font-title: 18px;
   --editor-weight-normal: 400;
-  --editor-weight-medium: 500;
+  --editor-weight-medium: 600;
+  --editor-weight-strong: 700;
   font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif;
 }
 #job-modal, #job-modal * {
   font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif !important;
-  font-size: var(--editor-font-base) !important;
-  font-weight: var(--editor-weight-normal) !important;
 }
-#job-modal .modal-header h2,
+#job-modal .modal-dialog {
+  color: var(--text-primary);
+  font-size: var(--editor-font-base);
+  font-weight: var(--editor-weight-normal);
+  line-height: 1.5;
+}
+#job-modal button,
+#job-modal input,
+#job-modal select,
+#job-modal textarea {
+  font-size: var(--editor-font-base);
+  font-weight: var(--editor-weight-normal);
+}
+#job-modal .modal-header h2 {
+  color: var(--text-primary);
+  font-size: var(--editor-font-title);
+  font-weight: var(--editor-weight-strong);
+  line-height: 1.35;
+}
 #job-modal .modal-section-title,
-#job-modal .config-card-body strong,
-#job-modal .task-info-summary {
-  font-size: var(--editor-font-title) !important;
-  font-weight: var(--editor-weight-medium) !important;
+#job-modal .task-info-summary,
+#job-modal #modal-project-section > label,
+#job-modal .config-card-label {
+  color: var(--text-primary);
+  font-size: var(--editor-font-feature);
+  font-weight: var(--editor-weight-medium);
+  line-height: 1.4;
+}
+#job-modal .input-mode-tab,
+#job-modal .config-card-btn,
+#job-modal .preview-right-actions .btn,
+#job-modal .modal-footer .btn {
+  font-size: var(--editor-font-base);
+  font-weight: var(--editor-weight-medium);
+}
+#job-modal .input-mode-tab.active,
+#job-modal .btn.primary {
+  color: var(--accent);
+  font-weight: var(--editor-weight-strong);
+}
+#job-modal .modal-section > label,
+#job-modal .resource-field > label {
+  color: var(--text-secondary);
+  font-size: var(--editor-font-base);
+  font-weight: var(--editor-weight-medium);
 }
 #job-modal .muted,
 #job-modal .dim,
@@ -815,7 +854,6 @@ body.resizing-v canvas {
 #job-modal .preview-source-meta,
 #job-modal .preview-source-group,
 #job-modal .preview-right-title,
-#job-modal .config-card-label,
 #job-modal .config-card-desc,
 #job-modal .edit-banner-hint,
 #job-modal .edit-context-meta,
@@ -824,8 +862,15 @@ body.resizing-v canvas {
 #job-modal .node-select-detail,
 #job-modal .node-tag-chips,
 #job-modal .preview-3d-empty,
-#job-modal .source-coordinate-note {
-  font-size: var(--editor-font-small) !important;
+#job-modal .source-coordinate-note,
+#job-modal .current-structure-meta,
+#job-modal .sp-row-secondary,
+#job-modal .sp-row-source,
+#job-modal .sp-row-meta {
+  color: var(--text-tertiary);
+  font-size: var(--editor-font-detail) !important;
+  font-weight: var(--editor-weight-normal);
+  line-height: 1.5;
 }
 #job-modal strong,
 #job-modal .active,
@@ -833,6 +878,43 @@ body.resizing-v canvas {
 #job-modal .edit-banner-source,
 #job-modal .edit-changed-badge.has-changes {
   font-weight: var(--editor-weight-medium) !important;
+}
+#job-modal .edit-banner-source,
+#job-modal .current-structure-name,
+#job-modal .preview-source-name,
+#job-modal .sp-toolbar-title,
+#job-modal .sp-row-name,
+#job-modal .config-card-body strong {
+  color: var(--text-primary);
+  font-size: var(--editor-font-base);
+  font-weight: var(--editor-weight-medium) !important;
+}
+#job-modal .config-card-label {
+  flex: 0 0 auto;
+  min-width: 0;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+}
+#job-modal .config-card-desc {
+  color: var(--text-secondary);
+  font-size: var(--editor-font-detail) !important;
+  font-weight: var(--editor-weight-normal);
+}
+#job-modal .sp-search-input,
+#job-modal .sp-filter-select,
+#job-modal .sp-opt-row,
+#job-modal .sp-pagination {
+  font-size: var(--editor-font-detail);
+}
+#job-modal .sp-load-btn {
+  font-size: var(--editor-font-base);
+  font-weight: var(--editor-weight-medium);
+}
+#job-modal .sp-badge,
+#job-modal .sp-tag-chip {
+  font-size: 11px;
+  font-weight: var(--editor-weight-medium);
 }
 #job-modal .modal-dialog {
   width: min(1120px, calc(100vw - 32px));
@@ -860,13 +942,85 @@ body.resizing-v canvas {
 #job-modal .edit-banner-source { margin: 0; }
 #job-modal .edit-context-meta { margin-left: 12px; color: var(--text-secondary); }
 #job-modal .wizard-input-section { padding: 0; border: 0; background: transparent; }
-#job-modal .input-mode-tabs { gap: 8px; margin: 8px 0 12px; }
+#job-modal .source-section-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+#job-modal .source-section-nav {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 12px;
+}
+#job-modal .source-section-nav .modal-section-title {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
+#job-modal .task-source-inline {
+  display: flex;
+  min-width: 0;
+  min-height: 36px;
+  max-height: 36px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  overflow: hidden;
+}
+#job-modal .current-structure-summary {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.025);
+  color: var(--text-secondary);
+}
+#job-modal .current-structure-label { flex: 0 0 auto; color: var(--accent); }
+#job-modal .current-structure-name {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: var(--editor-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#job-modal .current-structure-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#job-modal .current-structure-nav {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+#job-modal .current-structure-nav .btn {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+}
+#job-modal .input-mode-tabs { gap: 8px; margin: 0; }
 #job-modal .input-mode-tab { flex: 0 0 auto; min-height: 40px; padding: 0 16px; border-radius: 8px; }
 #job-modal .source-browser-shell {
   display: grid;
-  grid-template-columns: minmax(360px, 42fr) minmax(480px, 58fr);
-  height: clamp(440px, 56dvh, 560px);
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 36%, 400px);
+  height: clamp(440px, 54dvh, 520px);
   min-height: 440px;
+  position: relative;
   border: 1px solid var(--border-default);
   border-radius: 12px;
   overflow: hidden;
@@ -879,13 +1033,28 @@ body.resizing-v canvas {
   border: 0;
   border-right: 1px solid var(--border-default);
   border-radius: 0;
-  padding: 16px;
+  padding: 4px 16px 12px;
   overflow: hidden;
 }
 #job-modal .preview-right { min-height: 0; border: 0; border-radius: 0; }
 #job-modal .preview-3d-stage { min-height: 0; }
 #job-modal .preview-right-toolbar { min-height: 48px; padding: 0 16px; }
 #job-modal .preview-right-actions .btn { min-height: 40px; padding: 0 12px; }
+#job-modal .preview-left-actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+#job-modal .preview-left-actions .btn { min-height: 36px; padding: 0 10px; }
+#job-modal .source-browser-shell[data-source-mode="task"] .preview-left-actions { display: none !important; }
+#job-modal .source-browser-shell.preview-expanded .preview-right {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--bg-panel);
+}
 #job-modal .preview-source-group { margin-bottom: 8px; color: var(--accent); }
 #job-modal .source-editor-pane,
 #job-modal .source-upload-pane {
@@ -917,10 +1086,12 @@ body.resizing-v canvas {
 #job-modal .source-parse-meta .charge-spin-row { margin-top: 0; }
 #job-modal .preview-table { display: block; }
 #job-modal .preview-table thead { display: none; }
-#job-modal .preview-table tbody { display: grid; gap: 8px; }
+#job-modal .preview-table tbody { display: grid; gap: 8px; justify-items: start; }
 #job-modal .preview-table tr {
   display: block;
-  padding: 12px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: rgba(255,255,255,0.025);
@@ -928,38 +1099,21 @@ body.resizing-v canvas {
 #job-modal .preview-table tr.selected { border-color: var(--accent); background: rgba(78,161,255,0.12); }
 #job-modal .preview-table td { display: inline; padding: 0; border: 0; white-space: normal; }
 #job-modal .preview-table td:first-child { display: none; }
-#job-modal .preview-table td:nth-child(2) { display: block; margin-bottom: 6px; color: var(--text-primary); }
+#job-modal .preview-table td:nth-child(2) { display: inline; margin-right: 6px; color: var(--text-primary); }
+#job-modal .preview-table td:nth-child(2)::after { content: " · "; color: var(--text-secondary); }
 #job-modal .preview-table td:nth-child(3)::after { content: " · "; }
 #job-modal .preview-table td:nth-child(4)::after { content: " 原子 · "; }
 #job-modal .preview-table td:nth-child(5) { color: var(--text-secondary); }
-#job-modal .preview-name-input { padding: 0; border: 0; font-weight: var(--editor-weight-medium) !important; }
+#job-modal .preview-name-input { width: auto; max-width: 280px; padding: 0; border: 0; font-weight: var(--editor-weight-medium) !important; }
 #job-modal .preview-source-name { font-weight: var(--editor-weight-medium) !important; }
-#job-modal #preview-structure-list { flex: 0 1 auto; max-height: 180px; overflow-y: auto; }
 #job-modal .task-results-browser {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
 }
-#job-modal .task-results-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-#job-modal .task-results-heading .preview-source-group { margin: 0; }
-#job-modal .task-results-heading .btn { min-height: 32px; padding: 0 10px; }
 #job-modal .results-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden; }
-#job-modal .results-list > .sp-root { height: 100%; padding: 8px 0 0; }
-#job-modal .results-list .sp-list { min-height: 120px; max-height: none; }
-#job-modal .results-list .sp-row { min-height: 64px; padding: 8px 10px; }
-#job-modal .results-list .sp-row-name {
-  flex: 1 1 180px;
-  max-width: none;
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-#job-modal .results-list .sp-row-secondary { white-space: normal; }
+#job-modal .results-list > .sp-root { width: 100%; height: 100%; }
 #job-modal .source-coordinate-disclosure { border-top: 1px solid var(--border-subtle); }
 #job-modal .source-coordinate-disclosure summary { cursor: pointer; list-style: none; padding: 12px 14px; color: var(--text-secondary); }
 #job-modal .source-coordinate-disclosure summary::-webkit-details-marker { display: none; }
@@ -973,7 +1127,21 @@ body.resizing-v canvas {
 #job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { border-radius: 8px; }
 #job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { min-height: 40px; }
 #job-modal .config-cards-row { gap: 12px; }
-#job-modal .config-card { border-radius: 12px; }
+#job-modal .config-step {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 8px;
+}
+#job-modal .config-card { min-height: 72px; border-radius: 12px; }
+#job-modal .project-step { display: grid; gap: 8px; }
+#job-modal .project-step > label { margin: 0; }
+#job-modal .project-step-panel {
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
 #job-modal .task-info-details { border-top: 1px solid var(--border-subtle); padding-top: 16px; }
 #job-modal .task-info-details > summary { cursor: pointer; list-style: none; }
 #job-modal .task-info-details > summary::-webkit-details-marker { display: none; }
@@ -4034,14 +4202,14 @@ option, optgroup {
   .energy-workspace-grid { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) auto; }
 }
 
-@media (max-width: 1100px) and (min-width: 681px) {
+@media (max-width: 1100px) and (min-width: 901px) {
   #job-modal .source-browser-shell {
-    grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 40%, 360px);
   }
 }
 
 /* Narrow dialogs: collapse the two-column source workspace to one column. */
-@media (max-width: 680px) {
+@media (max-width: 900px) {
   .structure-preview-wrap { grid-template-columns: 1fr; }
   .config-cards-row { grid-template-columns: 1fr; }
   .modal-row { grid-template-columns: 1fr; }
@@ -4049,14 +4217,33 @@ option, optgroup {
   #job-modal .modal-dialog { width: 100%; max-height: calc(100dvh - 16px); }
   #job-modal .modal-header, #job-modal .modal-body, #job-modal .modal-footer { padding-left: 12px; padding-right: 12px; }
   #job-modal .edit-banner { margin: 0; }
+  #job-modal .source-section-header { grid-template-columns: 1fr; align-items: start; }
+  #job-modal .task-source-inline { justify-content: flex-start; }
   #job-modal .source-browser-shell { grid-template-columns: 1fr; height: auto; min-height: 0; }
-  #job-modal .preview-left { border-right: 0; border-bottom: 1px solid var(--border-default); min-height: 300px; max-height: 380px; }
-  #job-modal .preview-right { min-height: 360px; }
+  #job-modal .preview-left {
+    height: clamp(560px, 75dvh, 680px);
+    min-height: 560px;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  #job-modal .preview-right { min-height: 300px; height: 340px; }
+  #job-modal .source-browser-shell.preview-expanded .preview-right { height: 100%; }
   #job-modal .input-mode-tabs { overflow-x: auto; }
   #job-modal .input-mode-tab { min-width: max-content; min-height: 44px; }
   #job-modal .modal-input, #job-modal .modal-select, #job-modal .btn { min-height: 44px; }
   #job-modal .modal-footer { align-items: stretch; }
   #edit-recalc-footer { flex-basis: 100%; }
+}
+@media (max-width: 680px) {
+  #job-modal .source-section-nav {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  #job-modal .source-section-nav .input-mode-tabs { width: 100%; }
+  #job-modal .current-structure-summary { max-width: 100%; }
+  #job-modal .current-structure-name { max-width: 180px; }
 }
 </style>
 <link rel="stylesheet" href="css/structure_viewer.css">
@@ -4449,18 +4636,35 @@ option, optgroup {
       <div id="edit-recalc-banner" style="display:none;"></div>
       <!-- Step 1: project target — deciding WHERE the job belongs comes
            before configuring WHAT to run (structure/workflow/protocol). -->
-      <div class="modal-section" id="modal-project-section">
+      <div class="project-step" id="modal-project-section">
         <label for="modal-project-select" data-i18n="modal.step1">1. 选择项目</label>
-        <select id="modal-project-select" class="modal-select"></select>
-        <div class="project-hint dim" id="modal-project-hint" style="font-size:11px;margin-top:6px;display:none;"></div>
+        <div class="project-step-panel">
+          <select id="modal-project-select" class="modal-select"></select>
+          <div class="project-hint dim" id="modal-project-hint" style="font-size:11px;margin-top:6px;display:none;"></div>
+        </div>
       </div>
 
       <div class="wizard-input-section">
-        <div class="modal-section-title" data-i18n="modal.step2">2. 选择结构来源</div>
-        <div class="input-mode-tabs" role="tablist" aria-label="结构来源">
-          <button class="input-mode-tab active" data-input-mode="task" role="tab" aria-selected="true" data-i18n="modal.mode_task">任务结构</button>
-          <button class="input-mode-tab" data-input-mode="structure" role="tab" aria-selected="false" data-i18n="modal.mode_structure_short">结构输入</button>
-          <button class="input-mode-tab" data-input-mode="upload" role="tab" aria-selected="false" data-i18n="modal.mode_upload">上传</button>
+        <div class="source-section-header">
+          <div class="source-section-nav">
+            <div class="modal-section-title" data-i18n="modal.step2">2. 选择结构来源</div>
+            <div class="input-mode-tabs" role="tablist" aria-label="结构来源">
+              <button class="input-mode-tab active" data-input-mode="task" role="tab" aria-selected="true" data-i18n="modal.mode_task">任务结构</button>
+              <button class="input-mode-tab" data-input-mode="structure" role="tab" aria-selected="false" data-i18n="modal.mode_structure_short">结构输入</button>
+              <button class="input-mode-tab" data-input-mode="upload" role="tab" aria-selected="false" data-i18n="modal.mode_upload">上传</button>
+            </div>
+          </div>
+          <div class="task-source-inline" id="task-source-inline" style="display:none;">
+            <div class="current-structure-summary" id="current-structure-summary" tabindex="0">
+              <span class="current-structure-label">当前：</span>
+              <span class="current-structure-name" id="current-structure-name" title="">--</span>
+              <span class="current-structure-meta" id="current-structure-meta"></span>
+              <span class="current-structure-nav" id="current-structure-nav" style="display:none;">
+                <button type="button" class="btn ghost" id="preview-structure-prev" aria-label="上一结构" title="上一结构">‹</button>
+                <button type="button" class="btn ghost" id="preview-structure-next" aria-label="下一结构" title="下一结构">›</button>
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="modal-section" id="mech-builder-panel" style="display:none;">
@@ -4631,24 +4835,11 @@ option, optgroup {
                 <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
               </div>
             </div>
-            <div class="preview-source-group" id="preview-source-group">当前任务 · 默认沿用</div>
-            <table class="preview-table" id="preview-structure-list">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th data-i18n="modal.col_name">名称</th>
-                  <th data-i18n="modal.col_formula">分子式</th>
-                  <th data-i18n="modal.col_atoms">原子</th>
-                  <th data-i18n="modal.col_ok">状态</th>
-                </tr>
-              </thead>
-              <tbody id="preview-tbody"></tbody>
-            </table>
+            <div class="preview-left-actions">
+              <button type="button" class="btn ghost" id="preview-remove-selected" data-i18n="modal.remove_selected">删除选中</button>
+              <button type="button" class="btn ghost" id="preview-clear-all" data-i18n="modal.clear_structures">清空全部</button>
+            </div>
             <div class="task-results-browser" id="task-results-browser">
-              <div class="task-results-heading">
-                <div class="preview-source-group" data-i18n="edit.other_task_results">本项目的其他任务结果</div>
-                <button type="button" class="btn ghost" id="results-reload" data-i18n="results.reload">刷新</button>
-              </div>
               <div id="results-cross-hint" style="display:none;color:#ffb454;"></div>
               <div class="results-list" id="results-list"></div>
             </div>
@@ -4658,8 +4849,7 @@ option, optgroup {
               <span class="preview-right-title" id="preview-structure-title" data-i18n="modal.preview_title">结构预览</span>
               <div class="preview-right-actions">
                 <button type="button" class="btn ghost" id="preview-reset-view" data-i18n="edit.reset_view">重置视角</button>
-                <button type="button" class="btn ghost" id="preview-remove-selected" data-i18n="modal.remove_selected">删除选中</button>
-                <button type="button" class="btn ghost" id="preview-clear-all" data-i18n="modal.clear_structures">清空全部</button>
+                <button type="button" class="btn ghost" id="preview-expand-view" data-i18n="edit.expand_preview">放大查看</button>
               </div>
             </div>
             <div class="preview-3d-stage">
@@ -4764,21 +4954,25 @@ option, optgroup {
       </div>
 
       <div class="config-cards-row">
-        <div class="config-card" id="workflow-card">
+        <div class="config-step" id="workflow-card">
           <div class="config-card-label" data-i18n="modal.step3">工作流</div>
-          <div class="config-card-body">
-            <strong id="workflow-card-title">Conformer Search</strong>
-            <span id="workflow-card-desc" class="config-card-desc">CREST → DFT → SP → Thermo</span>
+          <div class="config-card">
+            <div class="config-card-body">
+              <strong id="workflow-card-title">Conformer Search</strong>
+              <span id="workflow-card-desc" class="config-card-desc">CREST → DFT → SP → Thermo</span>
+            </div>
+            <button class="btn ghost config-card-btn" id="btn-config-workflow" data-i18n="modal.configure">配置</button>
           </div>
-          <button class="btn ghost config-card-btn" id="btn-config-workflow" data-i18n="modal.configure">配置</button>
         </div>
-        <div class="config-card" id="method-card">
+        <div class="config-step" id="method-card">
           <div class="config-card-label" data-i18n="modal.step4">计算协议</div>
-          <div class="config-card-body">
-            <strong id="method-card-title">Lite Protocol</strong>
-            <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT: r2SCAN-3c | SP: wB97M-V/def2-TZVPP</span>
+          <div class="config-card">
+            <div class="config-card-body">
+              <strong id="method-card-title">Lite Protocol</strong>
+              <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT: r2SCAN-3c | SP: wB97M-V/def2-TZVPP</span>
+            </div>
+            <button class="btn ghost config-card-btn" id="btn-config-method" data-i18n="modal.configure">配置</button>
           </div>
-          <button class="btn ghost config-card-btn" id="btn-config-method" data-i18n="modal.configure">配置</button>
         </div>
       </div>
 
@@ -5877,8 +6071,10 @@ const I18N = {
     "edit.batch_panel_hint": "条目的勾选、名称、标签与电子态在下方批量清单中调整",
     "edit.copy_to_structure": "复制到结构输入并修改",
     "edit.title": "修改参数后重算",
-    "edit.other_task_results": "本项目的其他任务结果",
+    "edit.other_task_results": "其他结果",
     "edit.reset_view": "重置视角",
+    "edit.expand_preview": "放大查看",
+    "edit.collapse_preview": "返回预览",
     "edit.view_coordinates": "查看坐标",
     "edit.task_info_resources": "5. 任务信息与资源",
     "edit.method_backfilled": "原任务缺少部分方法参数，已按当前目录默认重建（以预览差异为准）",
@@ -6951,6 +7147,7 @@ const I18N = {
     "task.rename.invalid": "名称不能为空、不能包含换行或控制字符",
     "task.rename.failed": "重命名失败: {message}",
     "picker.search_ph": "搜索结构名称、来源任务、候选编号、标签……",
+    "picker.refresh": "刷新候选结构",
     "picker.filter.project": "项目",
     "picker.filter.all_projects": "全部项目",
     "picker.filter.target_project": "目标项目",
@@ -7116,8 +7313,10 @@ const I18N = {
     "edit.batch_panel_hint": "Toggle, rename, tag, and set electronic states per item in the batch list below",
     "edit.copy_to_structure": "Copy to structure input & edit",
     "edit.title": "Edit parameters & recalculate",
-    "edit.other_task_results": "Other task results in this project",
+    "edit.other_task_results": "Other results",
     "edit.reset_view": "Reset view",
+    "edit.expand_preview": "Expand",
+    "edit.collapse_preview": "Back to preview",
     "edit.view_coordinates": "View coordinates",
     "edit.task_info_resources": "5. Task info & resources",
     "edit.method_backfilled": "Some method parameters were missing from the original task and were rebuilt from current catalog defaults (the preview diff is authoritative)",
@@ -8190,6 +8389,7 @@ const I18N = {
     "task.rename.invalid": "Name cannot be empty or contain newlines/control characters",
     "task.rename.failed": "Rename failed: {message}",
     "picker.search_ph": "Search structure name, source job, candidate ID, tags…",
+    "picker.refresh": "Refresh candidate structures",
     "picker.filter.project": "Project",
     "picker.filter.all_projects": "All projects",
     "picker.filter.target_project": "Target project",
@@ -13658,6 +13858,9 @@ function frame3DViewer(viewer3dmol, options) {
     if (!options.preserveView) {
       viewer3dmol.center({}, 0);
       viewer3dmol.zoomTo({}, 0);
+      if (typeof options.zoomFactor === "number" && options.zoomFactor > 0) {
+        viewer3dmol.zoom(options.zoomFactor, 0);
+      }
     }
     viewer3dmol.render();
   } catch (e) {}
@@ -21103,6 +21306,7 @@ function rejectUnsupportedFile(file) {
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
 let previewViewer = null;
+var PREVIEW_ZOOM_FACTOR = 0.82;
 var previewViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let previewModel = null;
 let pesSelectionState = {
@@ -21526,6 +21730,14 @@ function openModal() {
   wizardStructures = [];
   wizardParseWarnings = [];
   wizardSelectedStructureIndex = 0;
+  var previewShell = document.getElementById("structure-preview");
+  if (previewShell) previewShell.classList.remove("preview-expanded");
+  var previewExpandBtn = document.getElementById("preview-expand-view");
+  if (previewExpandBtn) {
+    previewExpandBtn.setAttribute("data-i18n", "edit.expand_preview");
+    previewExpandBtn.textContent = t("edit.expand_preview");
+    previewExpandBtn.setAttribute("aria-pressed", "false");
+  }
   wizardState.s2_mode = "path_search";
   s2scanResetState();
   resetPESSelection();
@@ -21650,11 +21862,10 @@ function setWizardInputMode(mode) {
   if (parseMeta) parseMeta.style.display = mode === "task" ? "none" : "flex";
   var browser = document.getElementById("task-results-browser");
   if (browser) browser.style.display = mode === "task" ? "flex" : "none";
-  var sourceGroup = document.getElementById("preview-source-group");
-  if (sourceGroup) {
-    var editing = window.ACPJobEditor && ACPJobEditor.isActive();
-    sourceGroup.style.display = mode === "task" && editing ? "block" : "none";
-  }
+  var sourceShell = document.getElementById("structure-preview");
+  if (sourceShell) sourceShell.setAttribute("data-source-mode", mode);
+  var sourceInline = document.getElementById("task-source-inline");
+  if (sourceInline) sourceInline.style.display = wizardStructures.length ? "flex" : "none";
   // Invalidate any in-flight parse from the previous tab (slow-response race).
   parseSeqToken++;
   if (parseDebounceTimer) { clearTimeout(parseDebounceTimer); parseDebounceTimer = null; }
@@ -21662,6 +21873,7 @@ function setWizardInputMode(mode) {
   if (window.ACPJobEditor && ACPJobEditor.isActive()) {
     ACPJobEditor.onSourceTabChange(mode);
   }
+  updatePreviewActionState();
   if (mode === "task") return;
   // Parse-race fix: the token bump above cancels any parse still in flight,
   // so returning to a tab whose input was never applied must re-parse or
@@ -21702,10 +21914,8 @@ function setDetectedFormatChip(fmt) {
 
 function renderPreviewWaiting() {
   var container = document.getElementById("structure-preview");
-  var tbody = document.getElementById("preview-tbody");
-  if (tbody) {
-    tbody.innerHTML = '<tr><td colspan="5" class="preview-waiting-cell">' + escapeHtml(t("parse.waiting")) + "</td></tr>";
-  }
+  var sourceInline = document.getElementById("task-source-inline");
+  if (sourceInline) sourceInline.style.display = "none";
   var emptyEl = document.getElementById("preview-3d-empty");
   if (emptyEl) {
     emptyEl.textContent = t("parse.no_3d_waiting");
@@ -21849,8 +22059,6 @@ function showParseStatus(msg, isError) {
 
 function renderStructurePreview(structures, warnings) {
   var container = document.getElementById("structure-preview");
-  var tbody = document.getElementById("preview-tbody");
-  tbody.innerHTML = "";
 
   if (!structures.length) {
     renderPreviewWaiting();
@@ -21858,88 +22066,90 @@ function renderStructurePreview(structures, warnings) {
   }
 
   structures.forEach(function(s, i) {
-    var tr = document.createElement("tr");
-    tr.tabIndex = 0;
-    tr.setAttribute("role", "option");
-    tr.setAttribute("aria-selected", i === wizardSelectedStructureIndex ? "true" : "false");
-    if (i === wizardSelectedStructureIndex) tr.className = "selected";
     var moleculeName = String(s.name || ("mol_" + (i + 1))).trim();
     if (!moleculeName) moleculeName = "mol_" + (i + 1);
     s.name = moleculeName;
-    var taskReadOnly = window.ACPJobEditor && ACPJobEditor.isActive() && wizardInputMode === "task";
-    var nameCell = taskReadOnly
-      ? '<span class="preview-source-name">' + escapeHtml(moleculeName) + "</span>"
-      : '<input class="preview-name-input" type="text" value="' + escapeHtml(moleculeName) + '" data-structure-index="' + i + '" aria-label="' + escapeHtml(t("modal.molecule_name")) + '">';
-    tr.innerHTML =
-      "<td>" + (i + 1) + "</td>" +
-      "<td>" + nameCell + "</td>" +
-      "<td>" + escapeHtml(s.tag || s.formula || "Structure") + "</td>" +
-      "<td>" + s.atom_count + "</td>" +
-      "<td class='" + ((s.errors || []).length ? "preview-warn" : "preview-ok") + "'>" +
-        "charge " + (s.charge !== undefined ? s.charge : 0) + " · multiplicity " + (s.multiplicity || 1) +
-        ((s.errors || []).length ? " · \u2717" : ((s.warnings || []).length ? " · \u26a0" : "")) +
-      "</td>";
-    function selectRow() {
-      wizardSelectedStructureIndex = i;
-      document.querySelectorAll("#preview-tbody tr").forEach(function(r, idx) {
-        r.classList.toggle("selected", idx === i);
-        r.setAttribute("aria-selected", idx === i ? "true" : "false");
-      });
-      renderPreviewStructure3D(structures[i]);
-      if (window.ACPJobEditor && ACPJobEditor.isActive()) {
-        ACPJobEditor.onPreviewStructureSelected(structures[i]);
-      }
-       if (isPESsearchTask()) {
-         syncPESSelectionFromWizard(true);
-         attachPESPreviewSelection();
-       }
-    }
-    tr.addEventListener("click", selectRow);
-    tr.addEventListener("keydown", function(event) {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault(); selectRow();
-      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault();
-        var next = event.key === "ArrowDown" ? Math.min(i + 1, structures.length - 1) : Math.max(i - 1, 0);
-        var rows = document.querySelectorAll("#preview-tbody tr");
-        if (rows[next]) { rows[next].focus(); rows[next].click(); }
-      }
-    });
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll(".preview-name-input").forEach(function(input) {
-    input.addEventListener("click", function(event) { event.stopPropagation(); });
-    input.addEventListener("input", function() {
-      var idx = parseInt(this.getAttribute("data-structure-index"), 10);
-      if (structures[idx]) structures[idx].name = this.value;
-    });
-    input.addEventListener("blur", function() {
-      var idx = parseInt(this.getAttribute("data-structure-index"), 10);
-      var value = String(this.value || "").trim();
-      if (!value) value = "mol_" + (idx + 1);
-      this.value = value;
-      if (structures[idx]) structures[idx].name = value;
-    });
   });
 
   container.style.display = "grid";
   initPreviewViewer();
-  renderPreviewStructure3D(structures[wizardSelectedStructureIndex] || structures[0]);
+  selectPreviewStructure(wizardSelectedStructureIndex, false);
   if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
     renderReactionDefinitionPanel();
   }
   updatePreviewActionState();
 }
 
+function selectPreviewStructure(index, notifyEditor) {
+  if (!Array.isArray(wizardStructures) || !wizardStructures.length) return;
+  wizardSelectedStructureIndex = Math.max(0, Math.min(Number(index) || 0, wizardStructures.length - 1));
+  var structure = wizardStructures[wizardSelectedStructureIndex];
+  updateCurrentStructureSummary(structure);
+  renderPreviewStructure3D(structure);
+  if (notifyEditor !== false && window.ACPJobEditor && ACPJobEditor.isActive()) {
+    ACPJobEditor.onPreviewStructureSelected(structure);
+  }
+  if (isPESsearchTask()) {
+    syncPESSelectionFromWizard(true);
+    attachPESPreviewSelection();
+  }
+}
+
+function updateCurrentStructureSummary(structure) {
+  var inline = document.getElementById("task-source-inline");
+  var nameEl = document.getElementById("current-structure-name");
+  var metaEl = document.getElementById("current-structure-meta");
+  var nav = document.getElementById("current-structure-nav");
+  var prev = document.getElementById("preview-structure-prev");
+  var next = document.getElementById("preview-structure-next");
+  if (!inline || !nameEl || !metaEl || !structure) {
+    if (inline) inline.style.display = "none";
+    return;
+  }
+  var fullName = String(structure.name || structure.molecule_name || "Structure");
+  nameEl.textContent = fullName;
+  nameEl.title = fullName;
+  var editableName = wizardInputMode !== "task";
+  nameEl.contentEditable = editableName ? "true" : "false";
+  nameEl.setAttribute("role", editableName ? "textbox" : "text");
+  nameEl.oninput = editableName ? function() {
+    structure.name = String(nameEl.textContent || "");
+    nameEl.title = structure.name;
+  } : null;
+  nameEl.onblur = editableName ? function() {
+    var value = String(nameEl.textContent || "").trim() || "mol_" + (wizardSelectedStructureIndex + 1);
+    structure.name = value;
+    nameEl.textContent = value;
+    nameEl.title = value;
+  } : null;
+  var role = String(structure.tag || structure.role || "Structure");
+  var parts = [role];
+  if (wizardStructures.length > 1) {
+    parts.push((wizardSelectedStructureIndex + 1) + "/" + wizardStructures.length);
+  } else {
+    parts.push(String(structure.atom_count || 0) + "原子");
+    parts.push("q" + (structure.charge !== undefined ? structure.charge : 0));
+    parts.push("m" + (structure.multiplicity || 1));
+  }
+  metaEl.textContent = "· " + parts.join(" · ");
+  inline.style.display = "flex";
+  var hasMany = wizardStructures.length > 1;
+  if (nav) nav.style.display = hasMany ? "flex" : "none";
+  if (prev) prev.disabled = wizardSelectedStructureIndex === 0;
+  if (next) next.disabled = wizardSelectedStructureIndex >= wizardStructures.length - 1;
+}
+
 function updatePreviewActionState() {
   var hasStructures = Array.isArray(wizardStructures) && wizardStructures.length > 0;
   var removeBtn = document.getElementById("preview-remove-selected");
   var clearBtn = document.getElementById("preview-clear-all");
+  var actionBar = document.querySelector("#job-modal .preview-left-actions");
   if (removeBtn) removeBtn.disabled = !hasStructures;
   if (clearBtn) clearBtn.disabled = !hasStructures;
-  var passiveTaskSource = window.ACPJobEditor && ACPJobEditor.isActive() && wizardInputMode === "task";
-  if (removeBtn) removeBtn.style.display = passiveTaskSource ? "none" : "";
-  if (clearBtn) clearBtn.style.display = passiveTaskSource ? "none" : "";
+  var editableSource = wizardInputMode !== "task";
+  if (actionBar) actionBar.style.display = editableSource ? "flex" : "none";
+  if (removeBtn) removeBtn.style.display = editableSource ? "" : "none";
+  if (clearBtn) clearBtn.style.display = editableSource ? "" : "none";
 }
 
 function removeSelectedStructure() {
@@ -22031,7 +22241,12 @@ function renderPreviewStructure3D(structure) {
     previewViewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
     attachPESPreviewSelection();
     previewViewer.render();
-    scheduleViewerFraming(document.getElementById("structure-preview-3d"), previewViewerFraming, function() { return previewViewer; });
+    scheduleViewerFraming(
+      document.getElementById("structure-preview-3d"),
+      previewViewerFraming,
+      function() { return previewViewer; },
+      { zoomFactor: PREVIEW_ZOOM_FACTOR }
+    );
   }
 }
 
@@ -22406,6 +22621,7 @@ async function loadStructureSources(force) {
     resultsPicker = ACPSourcePicker.mount(list, {
       mode: "single",
       density: "editor",
+      toolbarLabel: t("edit.other_task_results") || "其他结果",
       projectId: resultsProjectTargetId(),
       onLoadItem: function(item) {
         loadStructureSource(item.source_id || item.source_uid, null);
@@ -26812,8 +27028,21 @@ function setupEventListeners() {
   if (previewResetBtn) {
     previewResetBtn.addEventListener("click", function() {
       if (!previewViewer) return;
-      previewViewer.zoomTo();
-      previewViewer.render();
+      frame3DViewer(previewViewer, { zoomFactor: PREVIEW_ZOOM_FACTOR });
+    });
+  }
+  var previewExpandBtn = document.getElementById("preview-expand-view");
+  if (previewExpandBtn) {
+    previewExpandBtn.addEventListener("click", function() {
+      var shell = document.getElementById("structure-preview");
+      if (!shell) return;
+      var expanded = shell.classList.toggle("preview-expanded");
+      previewExpandBtn.setAttribute("aria-pressed", expanded ? "true" : "false");
+      previewExpandBtn.setAttribute("data-i18n", expanded ? "edit.collapse_preview" : "edit.expand_preview");
+      previewExpandBtn.textContent = t(expanded ? "edit.collapse_preview" : "edit.expand_preview");
+      requestAnimationFrame(function() {
+        if (previewViewer) frame3DViewer(previewViewer, { zoomFactor: PREVIEW_ZOOM_FACTOR });
+      });
     });
   }
   document.querySelectorAll(".pes-function-btn").forEach(function(button) {
@@ -26946,9 +27175,23 @@ function setupEventListeners() {
   document.getElementById("modal-structure-input").addEventListener("input", scheduleParseStructures);
   document.getElementById("preview-remove-selected").addEventListener("click", removeSelectedStructure);
   document.getElementById("preview-clear-all").addEventListener("click", clearParsedStructures);
-  var resultsReload = document.getElementById("results-reload");
-  if (resultsReload) resultsReload.addEventListener("click", function() {
-    loadStructureSources(true);
+  var previewPrev = document.getElementById("preview-structure-prev");
+  var previewNext = document.getElementById("preview-structure-next");
+  if (previewPrev) previewPrev.addEventListener("click", function() {
+    selectPreviewStructure(wizardSelectedStructureIndex - 1, true);
+  });
+  if (previewNext) previewNext.addEventListener("click", function() {
+    selectPreviewStructure(wizardSelectedStructureIndex + 1, true);
+  });
+  var currentSummary = document.getElementById("current-structure-summary");
+  if (currentSummary) currentSummary.addEventListener("keydown", function(event) {
+    if (event.target && event.target.isContentEditable) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    selectPreviewStructure(
+      wizardSelectedStructureIndex + (event.key === "ArrowRight" ? 1 : -1),
+      true
+    );
   });
   var resultsProject = document.getElementById("results-project");
   if (resultsProject) resultsProject.addEventListener("change", function() {
