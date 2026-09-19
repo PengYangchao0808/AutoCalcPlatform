@@ -601,6 +601,7 @@ class V1EditDraftResponse(BaseModel):
     source_revision: str
     editable_spec: dict[str, Any]
     input_refs: dict[str, Any]
+    effective_config: dict[str, Any] = Field(default_factory=dict)
     capabilities: V1EditCapabilities
     preserved_fields: list[str] = Field(default_factory=list)
     missing_fields: list[str] = Field(default_factory=list)

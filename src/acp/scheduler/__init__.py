@@ -28,6 +28,7 @@ from acp.scheduler.job_edit import (
     compute_source_revision,
     diff_editable_specs,
     editable_spec_from_record,
+    effective_config_info,
     resolve_last_structure,
 )
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -120,6 +121,7 @@ __all__ = [
     "compute_source_revision",
     "diff_editable_specs",
     "editable_spec_from_record",
+    "effective_config_info",
     "resolve_last_structure",
     "apply_group_merge",
     "resolve_molecule_key",

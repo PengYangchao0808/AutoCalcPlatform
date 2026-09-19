@@ -43,6 +43,7 @@ __all__ = [
     "diff_editable_specs",
     "editable_spec_from_parts",
     "editable_spec_from_record",
+    "effective_config_info",
     "normalize_for_compare",
     "resolve_last_structure",
     "workflow_edit_status",
@@ -320,6 +321,126 @@ def _describe_original_input(record: JobRecord, run_root: Path | None = None) ->
     return desc
 
 
+def _xyz_atom_count(xyz_text: str) -> int | None:
+    """Return the declared XYZ atom count when the payload is usable."""
+    lines = xyz_text.lstrip("\ufeff \t\r\n").splitlines()
+    if not lines:
+        return None
+    try:
+        count = int(lines[0].strip())
+    except (TypeError, ValueError):
+        return None
+    return count if count > 0 and len(lines) >= count + 2 else None
+
+
+def _structure_source_item(
+    record: JobRecord,
+    *,
+    item_id: str,
+    name: str,
+    xyz_text: str,
+    tag: str = "",
+    charge: Any = 0,
+    multiplicity: Any = 1,
+    source_kind: str = "original_input",
+) -> dict[str, Any]:
+    """Project inline task geometry to the shared frontend source contract."""
+    atom_count = _xyz_atom_count(xyz_text)
+    available = atom_count is not None
+    return {
+        "source_id": f"edit-{source_kind}:{record.id}:{item_id}",
+        "source_kind": source_kind,
+        "job_id": record.id,
+        "item_id": item_id,
+        "name": name or item_id,
+        "tag": tag if tag in {"INT", "TS"} else "",
+        "atom_count": atom_count or 0,
+        "charge": charge if charge is not None else 0,
+        "multiplicity": multiplicity if multiplicity is not None else 1,
+        "geometry_ref": {"kind": "inline_xyz", "item_id": item_id},
+        "geometry_status": "available" if available else "missing",
+        "geometry_error": None if available else "该来源没有可用几何",
+        "xyz_text": xyz_text if available else "",
+    }
+
+
+def project_original_structure_items(record: JobRecord) -> list[dict[str, Any]]:
+    """Return every reusable geometry from the submitted task input.
+
+    Stable identifiers prefer persisted ``item_id``/``candidate_id`` values
+    and otherwise use the input-order index. Geometry is inline-only here, so
+    the draft never exposes an arbitrary filesystem path.
+    """
+    inp = record.spec.input if isinstance(record.spec.input, dict) else {}
+    default_charge = inp.get("charge", 0)
+    default_mult = inp.get("multiplicity", 1)
+    projected: list[dict[str, Any]] = []
+
+    items = inp.get("items")
+    if isinstance(items, list):
+        for index, raw in enumerate(items, start=1):
+            if not isinstance(raw, dict):
+                continue
+            item_id = str(raw.get("item_id") or raw.get("candidate_id") or f"item_{index:03d}")
+            projected.append(
+                _structure_source_item(
+                    record,
+                    item_id=item_id,
+                    name=str(raw.get("name") or raw.get("candidate_id") or item_id),
+                    xyz_text=str(raw.get("xyz") or raw.get("xyz_text") or raw.get("source") or ""),
+                    tag=str(raw.get("tag") or ""),
+                    charge=raw.get("charge", default_charge),
+                    multiplicity=raw.get("multiplicity", default_mult),
+                )
+            )
+        return projected
+
+    candidates = inp.get("candidates")
+    if isinstance(candidates, list):
+        for index, raw in enumerate(candidates, start=1):
+            if not isinstance(raw, dict):
+                continue
+            item_id = str(raw.get("item_id") or raw.get("candidate_id") or f"candidate_{index:03d}")
+            projected.append(
+                _structure_source_item(
+                    record,
+                    item_id=item_id,
+                    name=str(raw.get("name") or raw.get("candidate_id") or item_id),
+                    xyz_text=str(raw.get("xyz") or raw.get("xyz_text") or raw.get("source") or ""),
+                    tag=str(raw.get("tag") or ""),
+                    charge=raw.get("charge", default_charge),
+                    multiplicity=raw.get("multiplicity", default_mult),
+                )
+            )
+        return projected
+
+    source = inp
+    scan_request = inp.get("scan_request")
+    if isinstance(scan_request, dict) and isinstance(scan_request.get("source"), dict):
+        source = scan_request["source"]
+    xyz_text = str(source.get("xyz_text") or source.get("xyz") or source.get("source") or "")
+    if _xyz_atom_count(xyz_text) is None and record.work_dir:
+        materialized = Path(record.work_dir) / "input.xyz"
+        try:
+            xyz_text = materialized.read_text(encoding="utf-8")
+        except OSError:
+            pass
+    projected.append(
+        _structure_source_item(
+            record,
+            item_id="input_001",
+            name=str(inp.get("name") or record.spec.molecule_name or "上次运行输入"),
+            xyz_text=xyz_text,
+            tag=str(inp.get("tag") or inp.get("input_role") or "")
+            .upper()
+            .replace("TRANSITION_STATE", "TS"),
+            charge=source.get("charge", default_charge),
+            multiplicity=source.get("multiplicity", default_mult),
+        )
+    )
+    return projected
+
+
 def resolve_last_structure(work_dir: Path | str) -> dict[str, Any] | None:
     """Resolve the task's best ``kind=structure`` product for re-use as input.
 
@@ -349,6 +470,49 @@ def resolve_last_structure(work_dir: Path | str) -> dict[str, Any] | None:
             "xyz_text": xyz_text,
         }
     return None
+
+
+def effective_config_info(record: JobRecord) -> dict[str, Any]:
+    """Last-effective-config availability for the edit draft.
+
+    Authority order for edit hydration (plan §6.3): ``JobRecord.spec`` is the
+    authoritative *submission*; ``effective_config.json`` captures what the
+    engine actually resolved last run (inherited defaults included) and is
+    display/reference only.  ``status`` tells the frontend which case holds:
+
+    * ``snapshot``   — effective_config.json exists in the work dir.
+    * ``recomputed`` — no snapshot; the effective config was recomputed from
+      the submitted method dict (BatchOptimize only).
+    * ``unavailable``— neither is available (non-batch workflows without a
+      snapshot; the draft hydrates from the spec alone).
+    """
+    work_dir = Path(record.work_dir) if record.work_dir else None
+    if work_dir is not None:
+        try:
+            from acp.calculations.batch.effective_config import (
+                read_effective_config,
+            )
+
+            snapshot = read_effective_config(work_dir)
+        except ImportError:  # pragma: no cover - module is always importable
+            snapshot = None
+        if snapshot is not None:
+            return {
+                "status": "snapshot",
+                "source": "effective_config.json",
+                "config": snapshot,
+            }
+    if record.spec.workflow == "BatchOptimize":
+        try:
+            from acp.calculations.batch.effective_config import (
+                compute_effective_from_method,
+            )
+
+            recomputed = compute_effective_from_method(dict(record.spec.method))
+            return {"status": "recomputed", "source": "spec.method", "config": recomputed}
+        except Exception:  # noqa: BLE001 - degrade to unavailable, never block the draft
+            logger.debug("effective-config recompute failed", exc_info=True)
+    return {"status": "unavailable", "source": None, "config": None}
 
 
 def _missing_fields(record: JobRecord) -> list[str]:
@@ -419,6 +583,7 @@ def build_edit_draft(
     input_refs: dict[str, Any] = {
         "mode": "original",
         "original": _describe_original_input(record, run_root=run_root),
+        "structure_items": project_original_structure_items(record),
         "last_structure": resolve_last_structure(record.work_dir) if editable else None,
     }
     method = spec.method if isinstance(spec.method, dict) else {}
@@ -434,6 +599,7 @@ def build_edit_draft(
         "source_revision": compute_source_revision(record),
         "editable_spec": editable_spec_from_record(record),
         "input_refs": input_refs,
+        "effective_config": effective_config_info(record),
         "capabilities": {
             "can_edit": editable,
             "can_in_place": can_in_place,

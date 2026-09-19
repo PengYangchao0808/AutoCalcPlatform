@@ -30,6 +30,7 @@ from acp.scheduler.job_edit import (
     diff_editable_specs,
     editable_spec_from_record,
     normalize_for_compare,
+    project_original_structure_items,
     resolve_last_structure,
     spec_semantics_hash,
 )
@@ -283,11 +284,27 @@ def test_draft_capabilities_and_input_refs(workflow: str) -> None:
     assert draft["editable_spec"]["method"], "method payload must survive the projection"
     if workflow == "BatchOptimize":
         assert draft["input_refs"]["original"]["items_count"] == 2
+        structures = draft["input_refs"]["structure_items"]
+        assert [item["item_id"] for item in structures] == ["pes_ts_001", "item_002"]
+        assert [item["tag"] for item in structures] == ["TS", "INT"]
+        assert all(item["geometry_status"] == "available" for item in structures)
         assert draft["preserved_fields"], "batch profile/roles must be preserved"
     if workflow == "scan":
         assert "scan_coordinates" in draft["preserved_fields"]
     if workflow == "casscf":
         assert "casscf" in draft["preserved_fields"]
+
+
+def test_original_structure_projection_is_stable_and_path_safe() -> None:
+    record = _record("BatchOptimize")
+    first = project_original_structure_items(record)
+    second = project_original_structure_items(record)
+    assert first == second
+    assert first[0]["source_id"].endswith(":pes_ts_001")
+    assert first[1]["source_id"].endswith(":item_002")
+    assert first[0]["atom_count"] == 3
+    assert first[0]["geometry_ref"] == {"kind": "inline_xyz", "item_id": "pes_ts_001"}
+    assert "path" not in first[0]["geometry_ref"]
 
 
 def test_draft_missing_fields_detected() -> None:
@@ -735,6 +752,66 @@ def test_operation_store_lifecycle(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Draft effective-config source info (snapshot / recomputed / unavailable)
+# ---------------------------------------------------------------------------
+
+
+def test_draft_effective_config_snapshot(tmp_path: Path) -> None:
+    work_dir = tmp_path / "batch_snapshot"
+    work_dir.mkdir()
+    snapshot = {
+        "schema": "batch_optimize_effective_v1",
+        "common": {"optimization_method": "wB97X-D4"},
+        "roles": {"int": {"max_cycles": 200}, "ts": {"opt_trust_radius": 0.1}},
+        "orca_summary": {"int": [], "ts": []},
+    }
+    (work_dir / "effective_config.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    record = JobRecord(
+        id="eff1",
+        spec=_spec("BatchOptimize"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+    )
+    draft = build_edit_draft(record)
+    assert draft["effective_config"]["status"] == "snapshot"
+    assert draft["effective_config"]["source"] == "effective_config.json"
+    assert draft["effective_config"]["config"] == snapshot
+
+
+def test_draft_effective_config_recomputed(tmp_path: Path) -> None:
+    work_dir = tmp_path / "batch_recompute"
+    work_dir.mkdir()  # exists but carries no effective_config.json
+    record = JobRecord(
+        id="eff2",
+        spec=_spec("BatchOptimize"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+    )
+    draft = build_edit_draft(record)
+    assert draft["effective_config"]["status"] == "recomputed"
+    assert draft["effective_config"]["source"] == "spec.method"
+    config = draft["effective_config"]["config"]
+    assert config["schema"] == "batch_optimize_effective_v1"
+    assert config["common"]["optimization_method"] == "wB97X-D4"
+    assert config["roles"]["ts"]["opt_trust_radius"] == 0.1
+
+
+def test_draft_effective_config_unavailable(tmp_path: Path) -> None:
+    work_dir = tmp_path / "single_no_snapshot"
+    work_dir.mkdir()
+    record = JobRecord(
+        id="eff3",
+        spec=_spec("singlepoint"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+    )
+    draft = build_edit_draft(record)
+    assert draft["effective_config"]["status"] == "unavailable"
+    assert draft["effective_config"]["source"] is None
+    assert draft["effective_config"]["config"] is None
+
+
+# ---------------------------------------------------------------------------
 # API-level behaviour
 # ---------------------------------------------------------------------------
 
@@ -863,6 +940,24 @@ def test_api_preview_revision_conflict_409(client: TestClient) -> None:
     )
     assert response.status_code == 409
     assert response.json()["detail"]["error"] == "source_revision_conflict"
+
+
+def test_api_edit_draft_carries_effective_config(client: TestClient) -> None:
+    record = _seed_api_job(client, "effapi", workflow="BatchOptimize")
+    work_dir = Path(record.work_dir)
+    snapshot = {
+        "schema": "batch_optimize_effective_v1",
+        "common": {"optimization_method": "wB97X-D4"},
+        "roles": {"int": {}, "ts": {}},
+        "orca_summary": {"int": [], "ts": []},
+    }
+    (work_dir / "effective_config.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    response = client.get("/api/v1/jobs/effapi/edit-draft")
+    assert response.status_code == 200
+    draft = response.json()
+    assert draft["effective_config"]["status"] == "snapshot"
+    assert draft["effective_config"]["config"] == snapshot
+
 
 
 def test_api_submit_in_place(client: TestClient) -> None:
