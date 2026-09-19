@@ -240,6 +240,7 @@
     var allowBatchTags = opts.allowBatchTags != null ? !!opts.allowBatchTags : mode === "multi";
     var virtualItems = Array.isArray(opts.virtualItems) ? opts.virtualItems.slice() : [];
     var density = opts.density === "editor" ? "editor" : "default";
+    var toolbarLabel = opts.toolbarLabel || "";
 
     // State
     var legacyMode = false;
@@ -266,7 +267,7 @@
     var filterGroupBy = density === "editor"
       ? "none"
       : (mode === "multi" ? prefs.group_by || "job" : prefs.group_by || "none");
-    var filterLimit = prefs.limit || PAGE_LIMIT;
+    var filterLimit = density === "editor" ? 8 : prefs.limit || PAGE_LIMIT;
 
     // Selection (multi mode)
     var selectedUids = new Set();
@@ -303,6 +304,13 @@
       rootEl = document.createElement("div");
       rootEl.className = "sp-root" + (density === "editor" ? " sp-density-editor" : "");
 
+      var toolbarRow = density === "editor" ? _el("div", "sp-toolbar") : null;
+      if (toolbarRow && toolbarLabel) {
+        var toolbarTitle = _el("span", "sp-toolbar-title");
+        toolbarTitle.textContent = toolbarLabel;
+        toolbarRow.appendChild(toolbarTitle);
+      }
+
       // Search row
       var searchRow = _el("div", "sp-search-row");
       searchInput = _el("input", "sp-search-input");
@@ -310,7 +318,7 @@
       searchInput.placeholder = _t("picker.search_ph");
       searchInput.setAttribute("aria-label", _t("picker.search_ph"));
       searchRow.appendChild(searchInput);
-      rootEl.appendChild(searchRow);
+      (toolbarRow || rootEl).appendChild(searchRow);
 
       // Filter row
       var filterRow = _el("div", "sp-filter-row");
@@ -344,14 +352,13 @@
       tagMatchToggle.style.display = "none";
       filterRow.appendChild(tagMatchToggle);
 
-      rootEl.appendChild(filterRow);
-
       // Options row (sort + group)
       var optRow = _el("div", "sp-opt-row");
 
       var sortWrap = _el("label", "sp-opt-label");
-      sortWrap.textContent = _t("picker.filter.sort") + " ";
+      sortWrap.textContent = density === "editor" ? "" : _t("picker.filter.sort") + " ";
       sortSelect = _el("select", "sp-filter-select sp-sort-select");
+      sortSelect.setAttribute("aria-label", _t("picker.filter.sort"));
       SORT_OPTIONS.forEach(function (opt) {
         var o = document.createElement("option");
         o.value = opt.value;
@@ -359,8 +366,12 @@
         sortSelect.appendChild(o);
       });
       sortSelect.value = filterSort;
-      sortWrap.appendChild(sortSelect);
-      optRow.appendChild(sortWrap);
+      if (density === "editor") {
+        filterRow.appendChild(sortSelect);
+      } else {
+        sortWrap.appendChild(sortSelect);
+        optRow.appendChild(sortWrap);
+      }
 
       var groupWrap = _el("label", "sp-opt-label");
       groupWrap.textContent = _t("picker.filter.group") + " ";
@@ -375,22 +386,39 @@
       groupWrap.appendChild(groupSelect);
       if (density !== "editor") optRow.appendChild(groupWrap);
 
-      rootEl.appendChild(optRow);
+      if (density !== "editor") rootEl.appendChild(optRow);
+
+      if (toolbarRow) {
+        toolbarRow.appendChild(filterRow);
+        var refreshButton = _el("button", "sp-btn-sm sp-refresh-btn");
+        refreshButton.type = "button";
+        refreshButton.textContent = "↻";
+        refreshButton.setAttribute("aria-label", _t("picker.refresh"));
+        refreshButton.title = _t("picker.refresh");
+        refreshButton.addEventListener("click", refresh);
+        toolbarRow.appendChild(refreshButton);
+        rootEl.appendChild(toolbarRow);
+      } else {
+        rootEl.insertBefore(filterRow, optRow);
+      }
+
+      var listShell = _el("div", "sp-list-shell");
 
       // Legacy mode hint
       var legacyHint = _el("div", "sp-legacy-hint");
       legacyHint.style.display = "none";
       legacyHint.textContent = _t("picker.legacy_mode");
-      rootEl.appendChild(legacyHint);
+      listShell.appendChild(legacyHint);
 
       // Indexing status
       indexingEl = _el("div", "sp-indexing");
       indexingEl.style.display = "none";
-      rootEl.appendChild(indexingEl);
+      listShell.appendChild(indexingEl);
 
       // List
       listEl = _el("div", "sp-list");
-      rootEl.appendChild(listEl);
+      listShell.appendChild(listEl);
+      rootEl.appendChild(listShell);
 
       // Pagination
       paginationEl = _el("div", "sp-pagination");
@@ -801,12 +829,20 @@
     }
 
     function _renderRow(item) {
+      if (density === "editor") return _renderEditorRow(item);
+
       var uid = item.source_uid;
       var name = item.resolved_name || item.default_name || "--";
       var isAvailable = item.availability === "available";
       var isPendingSync = item.availability === "pending_sync";
       var isPendingFetch = item.availability === "pending_fetch";
       var isUnavailable = item.availability === "unavailable";
+      var secondaryParts = [];
+      if (item.candidate_id) secondaryParts.push(_esc(item.candidate_id));
+      var jobName = item.job_resolved_name || item.job_name || "";
+      if (jobName) secondaryParts.push(_esc(_t("picker.source_label")) + " " + _esc(jobName));
+      if (item.produced_at) secondaryParts.push(_esc(_shortDateBrief(item.produced_at)));
+      if (item.formula) secondaryParts.push(_esc(item.formula));
 
       var html = '<div class="sp-row" data-uid="' + _esc(uid) + '">';
 
@@ -829,6 +865,9 @@
       // Name
       html +=
         '<span class="sp-row-name" title="' + _esc(name) + '">' + _esc(name) + "</span>";
+      if (density === "editor") {
+        html += '<span class="sp-row-secondary">' + secondaryParts.join(" · ") + "</span>";
+      }
 
       // Role badge
       if (item.role === "TS") {
@@ -907,18 +946,12 @@
       html += "</div>"; // .sp-row-main
 
       // Secondary line
-      html += '<div class="sp-row-secondary">';
-      var parts = [];
-      if (item.candidate_id) parts.push(_esc(item.candidate_id));
-      var jobName = item.job_resolved_name || item.job_name || "";
-      if (jobName) parts.push(_esc(_t("picker.source_label")) + " " + _esc(jobName));
-      if (item.produced_at) parts.push(_esc(_shortDateBrief(item.produced_at)));
-      if (item.formula) parts.push(_esc(item.formula));
-      html += parts.join(" · ");
-      html += "</div>";
+      if (density !== "editor") {
+        html += '<div class="sp-row-secondary">' + secondaryParts.join(" · ") + "</div>";
+      }
 
       // Tags line
-      if (item.tags && item.tags.length) {
+      if (density !== "editor" && item.tags && item.tags.length) {
         html += '<div class="sp-row-tags">';
         item.tags.forEach(function (tag) {
           html += '<span class="sp-tag-chip">' + _esc(tag) + "</span>";
@@ -927,6 +960,37 @@
       }
 
       html += "</div>"; // .sp-row
+      return html;
+    }
+
+    function _renderEditorRow(item) {
+      var uid = item.source_uid;
+      var name = item.resolved_name || item.default_name || "--";
+      var jobName = item.job_resolved_name || item.job_name || "";
+      var sourceParts = [];
+      if (item.candidate_id) sourceParts.push(item.candidate_id);
+      if (jobName) sourceParts.push(jobName);
+      var sourceText = sourceParts.join(" · ") || "--";
+      var metaText = _shortDateBrief(item.produced_at) || item.formula || "--";
+      var isAvailable = item.availability === "available";
+      var role = item.role === "TS" || item.role === "INT" ? item.role : "--";
+      var roleClass = item.role === "TS" ? " sp-badge-ts" : item.role === "INT" ? " sp-badge-int" : "";
+      var html = '<div class="sp-row" data-uid="' + _esc(uid) + '"><div class="sp-row-main">';
+      html += '<span class="sp-row-name" title="' + _esc(name) + '">' + _esc(name) + "</span>";
+      html += '<span class="sp-row-source" title="' + _esc(sourceText) + '">' + _esc(sourceText) + "</span>";
+      html += '<span class="sp-row-meta" title="' + _esc(metaText) + '">' + _esc(metaText) + "</span>";
+      html += '<span class="sp-row-role"><span class="sp-badge' + roleClass + '">' + _esc(role) + "</span></span>";
+      html += '<span class="sp-row-action">';
+      if (item.availability === "pending_sync") {
+        html += '<button type="button" class="sp-btn-sm sp-retry-btn" data-action="retry" aria-label="' +
+          _esc(_t("picker.retry")) + '">' + _esc(_t("picker.retry")) + "</button>";
+      } else {
+        var disabled = !isAvailable ? " disabled" : "";
+        var title = !isAvailable ? ' title="' + _esc(_t("picker.load_disabled_reason")) + '"' : "";
+        html += '<button type="button" class="sp-btn-sm sp-load-btn" data-action="load" data-uid="' +
+          _esc(uid) + '"' + disabled + title + ">" + _esc(loadLabel) + "</button>";
+      }
+      html += "</span></div></div>";
       return html;
     }
 
@@ -1079,6 +1143,10 @@
         ">" +
         _esc(_t("picker.prev_page")) +
         "</button>";
+
+      var currentPage = prevCursors.length + 1;
+      var pageCount = Math.max(1, Math.ceil(total / filterLimit));
+      html += '<span class="sp-page-current" aria-live="polite">' + currentPage + "/" + pageCount + "</span>";
 
       // Next button
       html +=

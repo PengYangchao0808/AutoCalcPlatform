@@ -113,6 +113,27 @@ def test_picker_css_linked_in_html() -> None:
     )
 
 
+def test_editor_density_uses_compact_inline_controls() -> None:
+    """The editor picker keeps toolbar, list, and pagination in stable rows."""
+    js = PICKER_JS.read_text(encoding="utf-8")
+    css = PICKER_CSS.read_text(encoding="utf-8")
+    assert 'if (density === "editor") {' in js
+    assert "filterRow.appendChild(sortSelect)" in js
+    assert 'sortSelect.setAttribute("aria-label", _t("picker.filter.sort"))' in js
+    assert ".sp-density-editor .sp-search-row" in css
+    assert "grid-template-rows: 40px minmax(288px, 1fr) 36px" in css
+    assert ".sp-density-editor .sp-toolbar" in css
+    assert ".sp-density-editor .sp-project-select { width: 100px; }" in css
+    assert ".sp-density-editor .sp-role-select { width: 76px; }" in css
+    assert ".sp-density-editor .sp-sort-select { width: 104px; }" in css
+    assert "height: 48px;" in css
+    assert "minmax(150px, 1.2fr) minmax(170px, 1.5fr) 72px 36px 52px" in css
+    assert 'refreshButton.setAttribute("aria-label", _t("picker.refresh"))' in js
+    assert '<span class="sp-page-current"' in js
+    assert 'if (density !== "editor") {' in js
+    assert "_renderEditorRow" in js
+
+
 def test_picker_js_loaded_in_html() -> None:
     """JS file is loaded via script tag in ACP_Workbench_v2.html."""
     html = FRONTEND.read_text(encoding="utf-8")
@@ -199,6 +220,7 @@ def test_localstorage_pref_key() -> None:
 # All picker.* keys that must exist in BOTH zh-CN and en-US dicts
 EXPECTED_PICKER_KEYS = {
     "picker.search_ph",
+    "picker.refresh",
     "picker.filter.project",
     "picker.filter.all_projects",
     "picker.filter.target_project",
