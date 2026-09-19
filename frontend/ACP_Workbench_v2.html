@@ -14921,24 +14921,31 @@ async function submitTaskRenameNow(customName) {
   }
 }
 
+// Shallow-copy rename fields onto one target. MUST stay non-recursive:
+// _applyRenameResult fans out to job / jobsCache / lastSelectedJob itself —
+// self-recursion there was the bb3cdb7 RangeError regression (fixed 2026-09-19).
+function _applyRenameFields(target, result) {
+  if ("custom_name" in result) target.custom_name = result.custom_name;
+  if ("resolved_name" in result) target.resolved_name = result.resolved_name;
+  if ("default_name" in result) target.default_name = result.default_name;
+  if ("name_revision" in result) target.name_revision = result.name_revision;
+  if ("name_updated_at" in result) target.name_updated_at = result.name_updated_at;
+}
+
 function _applyRenameResult(job, result) {
   if (!result || typeof result !== "object") return;
-  if ("custom_name" in result) job.custom_name = result.custom_name;
-  if ("resolved_name" in result) job.resolved_name = result.resolved_name;
-  if ("default_name" in result) job.default_name = result.default_name;
-  if ("name_revision" in result) job.name_revision = result.name_revision;
-  if ("name_updated_at" in result) job.name_updated_at = result.name_updated_at;
+  _applyRenameFields(job, result);
   // Also update in jobsCache
   var jobId = String(job.id || job.job_id || "");
   for (var i = 0; i < jobsCache.length; i++) {
     if (String(jobsCache[i].id || jobsCache[i].job_id || "") === jobId) {
-      _applyRenameResult(jobsCache[i], result);
+      _applyRenameFields(jobsCache[i], result);
       break;
     }
   }
   // Update lastSelectedJob if same
   if (lastSelectedJob && String(lastSelectedJob.id || lastSelectedJob.job_id || "") === jobId) {
-    _applyRenameResult(lastSelectedJob, result);
+    _applyRenameFields(lastSelectedJob, result);
   }
 }
 

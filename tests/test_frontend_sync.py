@@ -9762,3 +9762,118 @@ def test_task_rename_handler_functions_exist() -> None:
         assert f"function {fn}" in html or f"async function {fn}" in html, (
             f"Handler function {fn} not found"
         )
+
+
+def test_task_rename_apply_result_static_no_self_call() -> None:
+    """T12 regression (bb3cdb7): _applyRenameResult must not call itself.
+
+    Pre-fix code synced jobsCache / lastSelectedJob via self-recursion; the
+    job id always matched, so the PATCH-200 handler died with
+    ``RangeError: Maximum call stack size exceeded`` (shown to the user as a
+    bogus 重命名失败). Fan-out now lives in non-recursive _applyRenameFields.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function _applyRenameFields(" in html, "_applyRenameFields helper missing"
+    result_body = html.split("function _applyRenameResult(", 1)[1].split(
+        "function _refreshAfterRename(", 1
+    )[0]
+    assert "_applyRenameResult(" not in result_body, (
+        "_applyRenameResult calls itself — reintroduces infinite recursion"
+    )
+    fields_body = html.split("function _applyRenameFields(", 1)[1].split(
+        "function _applyRenameResult(", 1
+    )[0]
+    assert "_applyRenameResult" not in fields_body, (
+        "_applyRenameFields must not call back into _applyRenameResult (cycle)"
+    )
+
+
+def test_task_rename_apply_result_runtime_no_recursion() -> None:
+    """T12 regression (bb3cdb7): run _applyRenameResult under node.
+
+    Extracts ``_applyRenameFields`` + ``_applyRenameResult`` verbatim and
+    executes them against the reported repro shape (PATCH 200, job present in
+    jobsCache and selected). Text-only contract tests cannot see the stack
+    overflow; the pre-fix code exits non-zero here with ``RangeError``.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+    html = FRONTEND.read_text(encoding="utf-8")
+    extracted = "function _applyRenameFields(" + html.split(
+        "function _applyRenameFields(", 1
+    )[1].split("function _refreshAfterRename(", 1)[0]
+    harness = (
+        '"use strict";\n'
+        + extracted
+        + textwrap.dedent(
+            """
+            function expect(cond, msg) {
+              if (!cond) { console.error("FAIL: " + msg); process.exit(1); }
+            }
+            var result = {
+              custom_name: "TS1_Strength_Fail",
+              resolved_name: "TS1_Strength_Fail",
+              default_name: "20260919_001_Confsearch",
+              name_revision: 4,
+              name_updated_at: "2026-09-19T01:33:00Z"
+            };
+            var jobsCache = [
+              { id: "job-other", name: "other" },
+              { id: "job-a", name: "original" }
+            ];
+            var lastSelectedJob = { id: "job-a", name: "original" };
+            var job = { id: "job-a", name: "original" };
+            _applyRenameResult(job, result);
+            expect(job.custom_name === "TS1_Strength_Fail", "job.custom_name updated");
+            expect(job.name_revision === 4, "job.name_revision updated");
+            expect(jobsCache[1].custom_name === "TS1_Strength_Fail",
+                   "matching jobsCache entry updated");
+            expect(jobsCache[1].name_updated_at === "2026-09-19T01:33:00Z",
+                   "jobsCache name_updated_at updated");
+            expect(!("custom_name" in jobsCache[0]),
+                   "non-matching jobsCache entry untouched");
+            expect(lastSelectedJob.custom_name === "TS1_Strength_Fail",
+                   "lastSelectedJob updated");
+            expect(lastSelectedJob.resolved_name === "TS1_Strength_Fail",
+                   "lastSelectedJob resolved_name updated");
+            // Guards: null / non-object result must be no-ops
+            _applyRenameResult(job, null);
+            _applyRenameResult(job, "not-an-object");
+            expect(job.custom_name === "TS1_Strength_Fail", "no-op guards keep fields");
+            // job-only path: empty cache, mismatched lastSelectedJob
+            jobsCache = [];
+            lastSelectedJob = { id: "job-z" };
+            var solo = { id: "job-solo" };
+            _applyRenameResult(solo, { custom_name: "solo-rename", name_revision: 9 });
+            expect(solo.custom_name === "solo-rename" && solo.name_revision === 9,
+                   "job-only path works");
+            expect(lastSelectedJob.custom_name === undefined,
+                   "mismatched lastSelectedJob untouched");
+            // job_id-keyed entries (v1 projection shape)
+            jobsCache = [{ job_id: "job-b" }];
+            lastSelectedJob = null;
+            var keyed = { job_id: "job-b" };
+            _applyRenameResult(keyed, { custom_name: "keyed-rename" });
+            expect(jobsCache[0].custom_name === "keyed-rename",
+                   "job_id-keyed cache entry updated");
+            console.log("OK");
+            """
+        )
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        script = Path(tmp) / "rename_regression.js"
+        script.write_text(harness, encoding="utf-8")
+        proc = subprocess.run(
+            ["node", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    assert proc.returncode == 0, (
+        f"node harness failed (exit {proc.returncode}):\n"
+        f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "OK" in proc.stdout, f"unexpected harness output: {proc.stdout!r}"
+
+
+# ---------------------------------------------------------------------------
