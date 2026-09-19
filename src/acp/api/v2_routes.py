@@ -60,6 +60,7 @@ from acp.scheduler.nodes import (
     validate_execution_request,
     validate_submission_target,
 )
+from acp.scheduler.tasks import NameRevisionConflictError, resolve_task_names
 from acp.storage.backend import (
     LocalStorageBackend,
     StorageError,
@@ -334,7 +335,14 @@ def list_orphan_tasks(request: Request) -> dict[str, Any]:
 @router.get("/tasks/{task_id}", response_model=V2TaskDetail)
 def get_task(task_id: str, request: Request) -> V2TaskDetail:
     """Fetch one task's detail projection (§12)."""
-    return _task_detail(_task_or_404(request, task_id))
+    manager = _manager(request)
+    record = _task_or_404(request, task_id)
+    detail = _task_detail(record)
+    task_row = manager.tasks.get(task_id)
+    if task_row is not None:
+        names = resolve_task_names(task_row)
+        detail = detail.model_copy(update=names)
+    return detail
 
 
 @router.patch("/tasks/{task_id}")
@@ -342,11 +350,44 @@ def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict
     """Update user-editable display fields on a task row (T3).
 
     Only touches the tasks index — never modifies jobs/spec_json/work_dir.
+
+    When ``custom_name`` is explicitly present in the request body (even as
+    ``null``), ``expected_name_revision`` is required for optimistic-concurrency
+    control.  ``null`` restores the default name; omitting ``custom_name``
+    entirely leaves it unchanged.  Custom-name mutation is applied before
+    legacy field updates so both can coexist in one request.
     """
     manager = _manager(request)
     existing = manager.tasks.get(task_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+    name_projection: dict[str, Any] | None = None
+
+    if "custom_name" in body.model_fields_set:
+        if body.expected_name_revision is None:
+            raise HTTPException(
+                status_code=422,
+                detail="expected_name_revision required when modifying custom_name",
+            )
+        try:
+            name_projection = manager.tasks.update_custom_name(
+                task_id,
+                body.custom_name,
+                body.expected_name_revision,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except NameRevisionConflictError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "name_revision_conflict",
+                    "current": exc.current_projection,
+                },
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     if body.molecule_name is not None and len(body.molecule_name) > 200:
         raise HTTPException(status_code=422, detail="molecule_name must be ≤ 200 characters")
@@ -380,7 +421,12 @@ def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict
 
     updated = manager.tasks.get(task_id)
     assert updated is not None
-    return updated
+    result = dict(updated)
+    if name_projection is not None:
+        result.update(name_projection)
+    else:
+        result.update(resolve_task_names(result))
+    return result
 
 
 @router.get("/tasks/{task_id}/tree", response_model=V2TreeResponse)

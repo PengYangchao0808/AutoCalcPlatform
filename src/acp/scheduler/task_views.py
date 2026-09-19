@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from acp.scheduler.tasks import jobs_table_exists
+from acp.scheduler.tasks import jobs_table_exists, resolve_task_names
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +227,13 @@ def query_project_tasks(
     if q.search.strip():
         escaped = _escape_like(q.search.strip())
         pattern = f"%{escaped}%"
-        for col in ("t.molecule_name", "t.task_name", "t.remark", "t.display_name"):
+        for col in (
+            "t.molecule_name",
+            "t.task_name",
+            "t.remark",
+            "t.display_name",
+            "t.custom_name",
+        ):
             search_clauses.append(f"LOWER({col}) LIKE ? ESCAPE '\\'")
             params.append(pattern.lower())
 
@@ -269,7 +275,8 @@ def query_project_tasks(
                 f"t.node_id, t.node_path, t.input_hash, t.result_manifest_path, "
                 f"t.current_stage, t.storage_mode, t.layout_version, t.created_at, "
                 f"t.updated_at, t.molecule_key, t.tags, t.archived, t.batch_id, "
-                f"t.last_activity_at, t.started_at, t.completed_at, t.group_id, t.progress "
+                f"t.last_activity_at, t.started_at, t.completed_at, t.group_id, t.progress, "
+                f"t.custom_name, t.name_revision, t.name_updated_at "
                 f"{base_sql} ORDER BY {sort_sql}"
             )
             all_rows = conn.execute(fetch_sql, params).fetchall()
@@ -675,6 +682,7 @@ def _row_to_task(
     """Convert a DB row dict to a TaskRow dict aligned with V1JobRecordModel."""
     tags = json.loads(row["tags"]) if row.get("tags") else []
     project_id = row.get("project_id") or ""
+    names = resolve_task_names(row)
     return {
         "id": row["task_id"],
         "status": row["status"],
@@ -704,6 +712,7 @@ def _row_to_task(
             "remark": row["remark"],
             "tags": tags,
         },
+        **names,
     }
 
 

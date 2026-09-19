@@ -73,6 +73,11 @@ class V2TaskSummary(BaseModel):
     project_id: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    custom_name: str | None = None
+    resolved_name: str = ""
+    default_name: str = ""
+    name_revision: int = 0
+    name_updated_at: str | None = None
 
 
 class V2TaskDetail(V2TaskSummary):
@@ -173,6 +178,11 @@ class V2TaskRowModel(BaseModel):
     archived: bool = False
     batch_id: str | None = None
     spec: dict[str, Any] = Field(default_factory=dict)
+    custom_name: str | None = None
+    resolved_name: str = ""
+    default_name: str = ""
+    name_revision: int = 0
+    name_updated_at: str | None = None
     # Active-row enrichment fields (populated only for active-status rows)
     stage_index: int | None = None
     stage_total: int | None = None
@@ -217,12 +227,19 @@ class V2TaskViewResponse(BaseModel):
 
 
 class V2TaskPatchRequest(BaseModel):
-    """Request body for PATCH /tasks/{task_id} — user-editable display fields only."""
+    """Request body for PATCH /tasks/{task_id} — user-editable display fields only.
+
+    ``custom_name``: explicit ``null`` restores the default name; omitted
+    leaves it unchanged.  ``expected_name_revision`` is required when
+    ``custom_name`` is present (optimistic-concurrency guard).
+    """
 
     molecule_name: str | None = None
     task_name: str | None = None
     remark: str | None = None
     tags: list[str] | None = None
+    custom_name: str | None = None
+    expected_name_revision: int | None = None
 
 
 # ── Tag registry models (T7) ──────────────────────────────────────────
