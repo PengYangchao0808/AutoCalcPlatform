@@ -1447,6 +1447,226 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "help": "Advanced electronic-state module: restricted/unrestricted, broken-symmetry singlets (GuessMix/FlipSpin), and multi-spin state sweeps. Complex configurations travel via --spin-config YAML/JSON.",
         "help_zh": "高级电子态模块：restricted/unrestricted、自旋极化单重态（GuessMix/FlipSpin）与多自旋状态集合。复杂配置经 --spin-config YAML/JSON 传入。",
     },
+    # ── BatchOptimize optimization controls ─────────────────────────────
+    "opt_max_iter": {
+        "type": "int",
+        "advanced": True,
+        "label": "Opt Max Iterations",
+        "label_zh": "优化最大迭代",
+        "min": 1,
+        "max": 10000,
+        "nullable": True,
+        "default": {"*": None},
+        "help": "Maximum geometry-optimization iterations (None = ORCA default)",
+        "help_zh": "几何优化最大迭代次数（None = ORCA 默认值）",
+    },
+    "opt_trust_radius": {
+        "type": "float",
+        "advanced": True,
+        "label": "Trust Radius",
+        "label_zh": "信任半径",
+        "min": 0.01,
+        "max": 1.0,
+        "nullable": True,
+        "default": {"*": None},
+        "help": "Geometry-optimization trust radius in Bohr",
+        "help_zh": "几何优化信任半径（Bohr）",
+    },
+    "opt_initial_hessian": {
+        "type": "select",
+        "advanced": True,
+        "label": "Initial Hessian",
+        "label_zh": "初始 Hessian",
+        "options": ["auto", "model", "calculate"],
+        "option_labels_zh": {
+            "auto": "自动",
+            "model": "模型 Hessian",
+            "calculate": "显式计算",
+        },
+        "default": {"*": "auto"},
+        "help": "Initial Hessian construction strategy",
+        "help_zh": "初始 Hessian 构建策略",
+    },
+    "opt_recalc_hess": {
+        "type": "hessian_interval",
+        "advanced": True,
+        "label": "Hessian Recalculation (Opt)",
+        "label_zh": "Hessian 重算（优化）",
+        "default": {"*": "auto"},
+        "min_interval": 1,
+        "max_interval": 1000,
+        "nullable": True,
+        "widget": "hessian_toggle",
+        "help": (
+            "auto = infer from elements (light=off; others=10); "
+            "0 = never compute exact Hessian (approximate + BFGS); "
+            "1-1000 = recalculation interval"
+        ),
+    },
+    # ── per-role optimization overrides ──────────────────────────────────
+    **{
+        k: v
+        for k, v in {
+            "minimum_opt_trust_radius": {
+                "type": "float",
+                "advanced": True,
+                "label": "INT Trust Radius",
+                "label_zh": "INT 信赖半径（步长控制）",
+                "min": 0.01,
+                "max": 1.0,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "INT role trust radius override in Bohr",
+                "help_zh": "INT 角色信赖半径覆盖（Bohr）",
+                "role_override": "minimum",
+                "inherits": "opt_trust_radius",
+            },
+            "minimum_opt_initial_hessian": {
+                "type": "select",
+                "advanced": True,
+                "label": "INT Initial Hessian",
+                "label_zh": "INT 初始 Hessian",
+                "options": ["auto", "model", "calculate"],
+                "option_labels_zh": {
+                    "auto": "自动",
+                    "model": "模型 Hessian",
+                    "calculate": "显式计算",
+                },
+                "default": {"*": "auto"},
+                "help": "INT role initial Hessian override",
+                "help_zh": "INT 角色初始 Hessian 覆盖",
+                "role_override": "minimum",
+                "inherits": "opt_initial_hessian",
+            },
+            "minimum_opt_recalc_hess": {
+                "type": "hessian_interval",
+                "advanced": True,
+                "label": "INT Hessian Recalculation",
+                "label_zh": "INT Hessian 重算",
+                "default": {"*": "auto"},
+                "min_interval": 1,
+                "max_interval": 1000,
+                "nullable": True,
+                "widget": "hessian_toggle",
+                "help": (
+                    "auto = infer from elements (light=off; others=10); "
+                    "0 = never compute exact Hessian; "
+                    "1-1000 = recalculation interval"
+                ),
+                "role_override": "minimum",
+                "inherits": "opt_recalc_hess",
+            },
+            "transition_state_opt_trust_radius": {
+                "type": "float",
+                "advanced": True,
+                "label": "TS Trust Radius",
+                "label_zh": "TS 初始信赖半径（步长控制）",
+                "min": 0.01,
+                "max": 1.0,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "TS role trust radius override in Bohr (default 0.3)",
+                "help_zh": "TS 角色信赖半径覆盖（Bohr，默认 0.3）",
+                "role_override": "transition_state",
+                "inherits": "opt_trust_radius",
+            },
+            "transition_state_opt_initial_hessian": {
+                "type": "select",
+                "advanced": True,
+                "label": "TS Initial Hessian",
+                "label_zh": "TS 初始 Hessian",
+                "options": ["auto", "model", "calculate"],
+                "option_labels_zh": {
+                    "auto": "自动",
+                    "model": "模型 Hessian",
+                    "calculate": "显式计算",
+                },
+                "default": {"*": "auto"},
+                "help": "TS role initial Hessian override (default calculate)",
+                "help_zh": "TS 角色初始 Hessian 覆盖（默认 calculate）",
+                "role_override": "transition_state",
+                "inherits": "opt_initial_hessian",
+            },
+            "transition_state_opt_recalc_hess": {
+                "type": "hessian_interval",
+                "advanced": True,
+                "label": "TS Hessian Recalculation",
+                "label_zh": "TS Hessian 重算",
+                "default": {"*": "auto"},
+                "min_interval": 1,
+                "max_interval": 1000,
+                "nullable": True,
+                "widget": "hessian_toggle",
+                "help": (
+                    "auto = infer from elements (light=off; others=10); "
+                    "0 = never compute exact Hessian; "
+                    "1-1000 = recalculation interval (default 5 for TS)"
+                ),
+                "role_override": "transition_state",
+                "inherits": "opt_recalc_hess",
+            },
+        }.items()
+    },
+    "opt_rescue_policy": {
+        "type": "select",
+        "advanced": True,
+        "label": "Rescue Policy",
+        "label_zh": "救援策略",
+        "options": ["off", "adaptive"],
+        "option_labels_zh": {
+            "off": "关闭",
+            "adaptive": "自适应",
+        },
+        "default": {"*": "adaptive"},
+        "help": "Optimization rescue strategy for failed steps",
+        "help_zh": "优化失败步骤的救援策略",
+    },
+    "opt_max_rescue": {
+        "type": "int",
+        "advanced": True,
+        "label": "Max Rescue Attempts",
+        "label_zh": "最大救援次数",
+        "min": 0,
+        "max": 10,
+        "default": {"*": 2},
+        "help": "Maximum number of rescue attempts per optimization",
+        "help_zh": "每次优化的最大救援次数",
+    },
+    # ── BatchOptimize SCF controls ──────────────────────────────────────
+    "scf_max_iter": {
+        "type": "int",
+        "advanced": True,
+        "label": "SCF Max Iterations",
+        "label_zh": "SCF 最大迭代",
+        "min": 1,
+        "default": {"*": 300},
+        "help": "Maximum SCF iterations",
+        "help_zh": "SCF 最大迭代次数",
+    },
+    "scf_strategy": {
+        "type": "select",
+        "advanced": True,
+        "label": "SCF Strategy",
+        "label_zh": "SCF 策略",
+        "options": ["normal", "slowconv", "soscf"],
+        "option_labels_zh": {
+            "normal": "标准",
+            "slowconv": "慢收敛",
+            "soscf": "SOSCF",
+        },
+        "default": {"*": "normal"},
+        "help": "SCF convergence accelerator strategy",
+        "help_zh": "SCF 收敛加速策略",
+    },
+    "scf_orbital_inherit": {
+        "type": "bool",
+        "advanced": True,
+        "label": "Orbital Inheritance",
+        "label_zh": "轨道继承",
+        "default": {"*": True},
+        "help": "Inherit orbitals from previous calculation",
+        "help_zh": "继承前一计算的轨道",
+    },
     "cas_active_electrons": {
         "type": "int",
         "min": 1,
@@ -2648,6 +2868,23 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                     "transition_state_method",
                     "transition_state_basis",
                     "electronic_state",
+                    "opt_max_iter",
+                    "opt_convergence",
+                    "opt_trust_radius",
+                    "opt_initial_hessian",
+                    "opt_recalc_hess",
+                    "minimum_opt_trust_radius",
+                    "minimum_opt_initial_hessian",
+                    "minimum_opt_recalc_hess",
+                    "transition_state_opt_trust_radius",
+                    "transition_state_opt_initial_hessian",
+                    "transition_state_opt_recalc_hess",
+                    "opt_rescue_policy",
+                    "opt_max_rescue",
+                    "scf_max_iter",
+                    "scf_convergence",
+                    "scf_strategy",
+                    "scf_orbital_inherit",
                 ],
             },
         ],
@@ -3958,7 +4195,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
             fd = FIELD_DEFINITIONS.get(field_name)
             # hessian_interval is a self-validating scalar: route through the
             # shared normaliser so CLI/API/catalog/scheduler all agree.
-            if fd and fd.get("type") == "hessian_interval":
+            if fd and fd.get("type") == "hessian_interval" and field_name in ("recalc_hess", "opt_recalc_hess"):
                 if user_val is None or user_val == "":
                     default_val = _resolve_field_default(
                         field_name, engine, normalized.get("functional")
@@ -4198,9 +4435,22 @@ _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     "scale_factor": "scale-factor",
     "max_steps": "geom-maxiter",
     "opt_convergence": "opt-convergence",
-    # NOTE: recalc_hess is handled inline in method_levels_to_cli_flags()
-    # because the new CLI surface is --calc-hess / --no-calc-hess (mutually
-    # exclusive) rather than a single --recalc-hess flag.
+    "opt_max_iter": "opt-max-iter",
+    "opt_trust_radius": "opt-trust-radius",
+    "opt_initial_hessian": "opt-initial-hessian",
+    "minimum_opt_trust_radius": "minimum-opt-trust-radius",
+    "minimum_opt_initial_hessian": "minimum-opt-initial-hessian",
+    "transition_state_opt_trust_radius": "transition-state-opt-trust-radius",
+    "transition_state_opt_initial_hessian": "transition-state-opt-initial-hessian",
+    "opt_rescue_policy": "opt-rescue-policy",
+    "opt_max_rescue": "opt-max-rescue",
+    "scf_max_iter": "scf-max-iter",
+    "scf_convergence": "scf-convergence",
+    "scf_strategy": "scf-strategy",
+    "scf_orbital_inherit": "scf-orbital-inherit",
+    # NOTE: recalc_hess and opt_recalc_hess are handled inline in
+    # method_levels_to_cli_flags() because the new CLI surface is
+    # --calc-hess / --no-calc-hess rather than a single --recalc-hess flag.
 }
 
 

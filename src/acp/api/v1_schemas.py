@@ -655,6 +655,7 @@ class V1JobDetailResponse(BaseModel):
     disk_state: JobDiskState = Field(default_factory=JobDiskState)
     recovery: JobRecovery = Field(default_factory=JobRecovery)
     metrics: JobMetrics | None = None
+    effective_config: dict[str, Any] | None = None
 
 
 class DecisionPointModel(BaseModel):

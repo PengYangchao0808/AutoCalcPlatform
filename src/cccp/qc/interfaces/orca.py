@@ -429,6 +429,7 @@ _OPT_LEVEL_MAP: dict[str, str] = {
     "tight": "TightOpt",
     "verytight": "VeryTightOpt",
     "loose": "LooseOpt",
+    "normal": "Opt",
 }
 
 _SCF_CONVERGENCE_MAP: dict[str, str] = {
@@ -2310,6 +2311,9 @@ class ORCAInterface(QCInterfaceBase):
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
             scf_options=kwargs.get("scf_options"),
+            scf_maxiter=kwargs.get("scf_maxiter"),
+            scf_convergence=kwargs.get("scf_convergence"),
+            scf_strategy=kwargs.get("scf_strategy"),
         )
 
         success = self._run_orca(input_file, output_file)
