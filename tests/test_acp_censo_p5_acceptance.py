@@ -387,10 +387,20 @@ def test_refine_ensemble_pins_per_child_threads_not_total(tmp_path: Path, monkey
     (4 x 16 = 64 -> oversubscription).  Regression guard for the
     compute-01 SmI2 incident (40-core node, 100% CPU on a 16-core job)."""
     interface = CensoInterface(_make_config(resources={"nproc": 16}))
+    interface._orca_executable = tmp_path / "orca611" / "orca"
     input_xyz = tmp_path / "crest_conformers.xyz"
     input_xyz.write_text("1\n-1.0\nH  0 0 0\n")
 
     captured: dict[str, Any] = {}
+    runtime: dict[str, Any] = {}
+
+    def fake_orca_runtime_env(
+        ld_library_path: str | None,
+        mpi_path: str | Path | None = None,
+        orca_dir: str | Path | None = None,
+    ) -> dict[str, str]:
+        runtime["orca_dir"] = orca_dir
+        return {}
 
     def fake_run(cmd, **kwargs):
         captured["env"] = kwargs.get("env")
@@ -415,6 +425,7 @@ def test_refine_ensemble_pins_per_child_threads_not_total(tmp_path: Path, monkey
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("cccp.qc.interfaces.censo.subprocess.run", fake_run)
+    monkeypatch.setattr("cccp.qc.interfaces.censo.orca_runtime_env", fake_orca_runtime_env)
     monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
     interface.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
@@ -430,6 +441,7 @@ def test_refine_ensemble_pins_per_child_threads_not_total(tmp_path: Path, monkey
     assert env["OMP_NUM_THREADS"] == "4"
     assert env["MKL_NUM_THREADS"] == "4"
     assert env["OPENBLAS_NUM_THREADS"] == "4"
+    assert runtime["orca_dir"] == interface._orca_executable.parent
     assert env["OMP_NUM_THREADS"] != "16"
 
 

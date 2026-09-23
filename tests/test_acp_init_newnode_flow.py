@@ -31,6 +31,7 @@ from acp.init_wizard.newnode import (  # noqa: E402
     ConnectedAuth,
     FlowResult,
     PromptBundle,
+    _sniff_and_specify,
     run_new_node,
 )
 from acp.init_wizard.persist import InitAbort, load_target  # noqa: E402
@@ -282,6 +283,43 @@ def _write_target(tmp_path: Path, data: dict[str, Any]) -> tuple[Path, dict[str,
     target = tmp_path / "cccp.yaml"
     target.write_text(yaml.dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return target, load_target(target)
+
+
+def test_sniff_and_specify_persists_mpi_without_declaring_backend_capability() -> None:
+    prompts = FakePrompts(
+        menu_choices=[2],
+        ask_answers=["/opt/openmpi/bin/mpirun"],
+    )
+    node = RemoteNode(
+        name="node-a",
+        host="10.0.0.8",
+        username="ops",
+        remote_work_dir="/scratch/acp",
+        remote_code_dir="/home/ops/acp",
+    )
+    target_data: dict[str, Any] = {
+        "cluster": {"nodes": [node.to_config_dict()]},
+    }
+    with StageMocks(
+        software={
+            "orca": _sw("/opt/orca/orca"),
+            "mpi": _sw(None),
+        },
+        remote_data={"executables": {"orca": {"path": "/opt/orca/orca"}}},
+    ) as mocks:
+        _sniff_and_specify(prompts.bundle(), object(), node, target_data)
+
+    written = mocks.write_cfg.call_args.args[3]
+    assert written["executables"]["orca"] == {
+        "path": "/opt/orca/orca",
+        "mpi_path": "/opt/openmpi/bin/mpirun",
+    }
+    target_node = target_data["cluster"]["nodes"][0]
+    assert target_node["executables"]["orca"]["mpi_path"] == "/opt/openmpi/bin/mpirun"
+    assert target_node["bin_symlinks"] == {"mpirun": "/opt/openmpi/bin/mpirun"}
+    assert "capabilities" not in target_node
+    assert node.bin_symlinks == {"mpirun": "/opt/openmpi/bin/mpirun"}
+    assert node.capabilities is None
 
 
 _KEY_AUTH = ConnectedAuth(

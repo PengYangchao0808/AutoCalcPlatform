@@ -82,6 +82,7 @@ FALLBACKS: dict[str, list[str]] = {
 #: (modern C++ builds) then ``-version`` (CENSO-QM 1.x Python wrapper).
 _VERSION_FLAGS: dict[str, tuple[str, ...]] = {
     "orca": ("--version",),
+    "mpi": ("--version",),
     "xtb": ("--version",),
     "crest": ("--version",),
     "censo": ("-v", "-version"),
@@ -453,10 +454,12 @@ def version_cached(name: str, executable: Path | None) -> str:
 # every parallel run aborts with
 # ``ORCA finished by error termination in Startup``.
 #
-# This section discovers a usable MPI launcher and builds the subprocess
-# environment for ORCA-family runs:  explicit pin -> env var -> PATH ->
-# login-shell sniff (``bash -lc`` — sees ``module load``, conda init and
-# rc-file exports) -> static rc-file parse -> conventional install globs.
+# This section discovers an ORCA-compatible MPI launcher and builds the
+# subprocess environment for ORCA-family runs.  A launcher being executable
+# is not sufficient: OpenMPI-linked ORCA binaries cannot be started through
+# MPICH/Intel Hydra.  Explicit pins still lead, but known-incompatible pins
+# are rejected; ORCA-bundled MPI is preferred over ambient PATH (especially
+# conda) before login-shell/rc-file/system fallbacks are considered.
 
 
 #: Binary ORCA's driver spawns for parallel runs (looked up via PATH).
@@ -471,17 +474,27 @@ MPI_ENV_VAR = "CONFSEARCH_ORCA_MPI_PATH"
 #: stub ``subprocess.run`` from seeing the sniff's probe call).
 SNIFF_DISABLE_ENV_VAR = "ACP_DISABLE_MPI_SNIFF"
 
-#: Glob patterns for last-resort MPI discovery.  ``{orca_dir}`` is replaced
-#: with the resolved ORCA install directory when available.
-_MPI_GLOB_PATTERNS: tuple[str, ...] = (
+#: MPI launchers bundled in an ORCA installation.  These must be considered
+#: before ambient PATH because conda commonly exposes MPICH/Intel Hydra as
+#: ``mpirun``, which is ABI-incompatible with OpenMPI-linked ORCA builds.
+_ORCA_MPI_GLOB_PATTERNS: tuple[str, ...] = (
     "{orca_dir}/mpirun",
     "{orca_dir}/*/mpirun",
     "{orca_dir}/*/bin/mpirun",
+)
+
+#: Conventional non-ORCA OpenMPI locations used after PATH/login-shell/rc
+#: candidates have been compatibility-checked.
+_SYSTEM_MPI_GLOB_PATTERNS: tuple[str, ...] = (
     "~/openmpi*/bin/mpirun",
     "/opt/openmpi*/bin/mpirun",
     "/usr/lib64/openmpi/bin/mpirun",
     "/usr/lib/openmpi/bin/mpirun",
 )
+
+#: Launcher/ORCA family probe caches, keyed by resolved path/directory.
+_MPI_FAMILY_CACHE: dict[str, str] = {}
+_ORCA_MPI_FAMILY_CACHE: dict[str, str] = {}
 
 #: Shell init files parsed by :func:`sniff_rc_files` (in lookup order).
 _RC_FILES: tuple[str, ...] = (".bashrc", ".bash_profile", ".profile")
@@ -522,6 +535,10 @@ class ShellEnvironment:
 
 _SHELL_ENV_CACHE: ShellEnvironment | None = None
 _SHELL_ENV_SNIFFED = False
+
+
+class MPICompatibilityError(SoftwareNotFoundError):
+    """Raised when ORCA and the only visible MPI launcher use different ABIs."""
 
 
 def _reset_shell_env_cache() -> None:
@@ -649,6 +666,138 @@ def sniff_rc_files(home: Path | None = None) -> ShellEnvironment:
     )
 
 
+def _mpi_family_from_text(text: str, path: Path | None = None) -> str:
+    """Classify an MPI implementation from version/ldd text and path hints."""
+    haystack = text.lower()
+    if path is not None:
+        resolved = path.resolve()
+        # Restrict path hints to the launcher and its two closest parent
+        # directories.  Higher ancestors may contain unrelated words (for
+        # example a job/test directory named ``openmpi-repro``) and must not
+        # override an unambiguous ``mpiexec.hydra`` basename.
+        path_hint = "/".join(
+            (resolved.parent.parent.name, resolved.parent.name, resolved.name)
+        )
+        haystack = f"{haystack}\n{path_hint}".lower()
+    if any(token in haystack for token in ("open mpi", "openmpi", "open-rte", "openrte")):
+        return "openmpi"
+    if any(token in haystack for token in ("intel(r) mpi", "intel mpi", "/oneapi/mpi", "/impi/")):
+        return "intel-mpi"
+    if "hydra" in haystack:
+        return "hydra"
+    if "mpich" in haystack:
+        return "mpich"
+    return "unknown"
+
+
+def detect_mpi_family(executable: str | Path | None) -> str:
+    """Return the MPI implementation family for a launcher.
+
+    Path/realpath hints are checked first (important for conda's
+    ``mpirun -> mpiexec.hydra`` wrapper), then ``--version`` is probed.
+    Unknown implementations remain usable unless ORCA provides enough
+    evidence to prove an ABI mismatch.
+    """
+    path = _valid_executable(executable)
+    if path is None:
+        return "unknown"
+    key = str(path)
+    cached = _MPI_FAMILY_CACHE.get(key)
+    if cached is not None:
+        return cached
+    family = _mpi_family_from_text("", path)
+    if family == "unknown":
+        try:
+            result = subprocess.run(
+                [str(path), "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env={**os.environ, "OMP_NUM_THREADS": "1"},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            output = ""
+        else:
+            output = f"{result.stdout}\n{result.stderr}"
+        family = _mpi_family_from_text(output, path)
+    _MPI_FAMILY_CACHE[key] = family
+    return family
+
+
+def _glob_mpirun(
+    patterns: tuple[str, ...],
+    orca_dir: str | Path | None = None,
+) -> Path | None:
+    """Return the first executable launcher matched by *patterns*."""
+    for raw_pattern in patterns:
+        pattern = raw_pattern
+        if "{orca_dir}" in pattern:
+            if not orca_dir:
+                continue
+            pattern = pattern.replace("{orca_dir}", str(orca_dir))
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            path = _valid_executable(match)
+            if path is not None:
+                return path
+    return None
+
+
+def _orca_bundled_mpirun(orca_dir: str | Path | None) -> Path | None:
+    """Find the launcher shipped below an ORCA installation directory."""
+    return _glob_mpirun(_ORCA_MPI_GLOB_PATTERNS, orca_dir=orca_dir)
+
+
+def detect_orca_mpi_family(orca_dir: str | Path | None) -> str:
+    """Infer the MPI ABI used by an ORCA installation.
+
+    A bundled launcher is authoritative.  Otherwise, inspect dynamic links
+    of a few ``*_mpi`` ORCA executables with ``ldd``.  Failure is conservative
+    and returns ``"unknown"`` rather than rejecting a launcher.
+    """
+    if not orca_dir:
+        return "unknown"
+    directory = Path(orca_dir).expanduser().resolve()
+    key = str(directory)
+    cached = _ORCA_MPI_FAMILY_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    bundled = _orca_bundled_mpirun(directory)
+    family = detect_mpi_family(bundled)
+    if family != "unknown":
+        _ORCA_MPI_FAMILY_CACHE[key] = family
+        return family
+
+    for candidate in sorted(directory.glob("*_mpi"))[:3]:
+        if not candidate.is_file():
+            continue
+        try:
+            result = subprocess.run(
+                ["ldd", str(candidate)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        family = _mpi_family_from_text(f"{result.stdout}\n{result.stderr}")
+        if family != "unknown":
+            break
+    _ORCA_MPI_FAMILY_CACHE[key] = family
+    return family
+
+
+def _mpi_families_compatible(expected: str, actual: str) -> bool:
+    """Return whether two known launcher families share the MPI ABI line."""
+    if "unknown" in (expected, actual):
+        return True
+    # OpenMPI and MPICH-derived launchers (Hydra/Intel MPI/MPICH) are not
+    # interchangeable.  Variants within the MPICH-derived group are treated
+    # as potentially compatible because launcher branding alone is not
+    # enough to distinguish their ABI.
+    return (expected == "openmpi") == (actual == "openmpi")
+
+
 def resolve_mpirun(
     configured_path: str | Path | None = None,
     orca_dir: str | Path | None = None,
@@ -657,43 +806,106 @@ def resolve_mpirun(
 
     1. Explicit *configured_path* (``executables.orca.mpi_path``).
     2. :data:`MPI_ENV_VAR` environment override.
-    3. Current PATH (+ current Python env directory).
-    4. Login-shell sniff (:func:`sniff_login_shell_env` — sees ``module
+    3. ORCA-bundled MPI below *orca_dir*.
+    4. Current PATH (+ current Python env directory).
+    5. Login-shell sniff (:func:`sniff_login_shell_env` — sees ``module
        load``, conda init and rc-file exports a service env lacks).
-    5. Static rc-file parse (:func:`sniff_rc_files`).
-    6. Conventional install globs (:data:`_MPI_GLOB_PATTERNS`), including
-       bundled MPI inside *orca_dir*.
+    6. Static rc-file parse (:func:`sniff_rc_files`).
+    7. Conventional OpenMPI install globs.
+
+    Every candidate is checked against the MPI family inferred from ORCA;
+    a known OpenMPI-vs-Hydra/MPICH mismatch is skipped.
     """
-    path = _valid_executable(configured_path)
-    if path:
-        return path
+    return resolve_mpirun_with_source(configured_path, orca_dir=orca_dir)[0]
 
-    path = _valid_executable(os.environ.get(MPI_ENV_VAR))
-    if path:
-        return path
 
-    found = shutil.which(MPI_BINARY, path=_search_path())
-    if found:
-        return Path(found).resolve()
+def resolve_mpirun_with_source(
+    configured_path: str | Path | None = None,
+    orca_dir: str | Path | None = None,
+) -> tuple[Path | None, str | None]:
+    """Resolve the MPI launcher and report which discovery source won.
+
+    Uses the same compatibility-aware first-hit order as
+    :func:`resolve_mpirun`.  The source is one of ``"config"``, ``"env"``,
+    ``"orca-bundled"``, ``"path"``, ``"login-shell"``, ``"rc-files"`` or
+    ``"scan"``.  If launchers were found but all had a known ABI mismatch,
+    the path is ``None`` and source begins with ``"incompatible:"`` so the
+    init wizard reports a missing runtime instead of a false positive.
+
+    Args:
+        configured_path: Explicit ``executables.orca.mpi_path`` value.
+        orca_dir: Resolved ORCA installation directory, used for bundled-MPI
+            fallback patterns.
+
+    Returns:
+        ``(resolved_path, source)``.
+    """
+    expected_family = detect_orca_mpi_family(orca_dir)
+    rejected: list[tuple[Path, str]] = []
+
+    def _accept(candidate: str | Path | None, source: str) -> tuple[Path, str] | None:
+        path = _valid_executable(candidate)
+        if path is None:
+            return None
+        family = detect_mpi_family(path)
+        if not _mpi_families_compatible(expected_family, family):
+            rejected.append((path, family))
+            logger.warning(
+                "Rejected MPI launcher %s (%s): ORCA expects %s",
+                path,
+                family,
+                expected_family,
+            )
+            return None
+        return path, source
+
+    accepted = _accept(configured_path, "config")
+    if accepted is not None:
+        return accepted
+
+    accepted = _accept(os.environ.get(MPI_ENV_VAR), "env")
+    if accepted is not None:
+        return accepted
+
+    bundled = _orca_bundled_mpirun(orca_dir)
+    accepted = _accept(bundled, "orca-bundled")
+    if accepted is not None:
+        return accepted
+
+    for found in _which_all(MPI_BINARY, _search_path()):
+        accepted = _accept(found, "path")
+        if accepted is not None:
+            return accepted
 
     sniffed = sniff_login_shell_env()
-    if sniffed is not None and sniffed.mpirun is not None:
-        return sniffed.mpirun
+    if sniffed is not None:
+        shell_path = os.pathsep.join(str(path) for path in sniffed.path_dirs)
+        shell_candidates = _which_all(MPI_BINARY, shell_path)
+        if sniffed.mpirun is not None:
+            shell_candidates.insert(0, sniffed.mpirun)
+        for candidate in shell_candidates:
+            accepted = _accept(candidate, sniffed.source)
+            if accepted is not None:
+                return accepted
 
     rc_env = sniff_rc_files()
+    rc_path = os.pathsep.join(str(path) for path in rc_env.path_dirs)
+    rc_candidates = _which_all(MPI_BINARY, rc_path)
     if rc_env.mpirun is not None:
-        return rc_env.mpirun
+        rc_candidates.insert(0, rc_env.mpirun)
+    for candidate in rc_candidates:
+        accepted = _accept(candidate, rc_env.source)
+        if accepted is not None:
+            return accepted
 
-    for pattern in _MPI_GLOB_PATTERNS:
-        if "{orca_dir}" in pattern:
-            if not orca_dir:
-                continue
-            pattern = pattern.replace("{orca_dir}", str(orca_dir))
-        for match in sorted(glob.glob(os.path.expanduser(pattern))):
-            path = _valid_executable(match)
-            if path:
-                return path
-    return None
+    scanned = _glob_mpirun(_SYSTEM_MPI_GLOB_PATTERNS)
+    accepted = _accept(scanned, "scan")
+    if accepted is not None:
+        return accepted
+    if rejected:
+        families = ",".join(sorted({family for _path, family in rejected}))
+        return None, f"incompatible:{families}!={expected_family}"
+    return None, None
 
 
 def orca_runtime_env(
@@ -728,7 +940,15 @@ def orca_runtime_env(
         when nothing would change (callers pass ``env=None`` through to
         :mod:`subprocess`, preserving the inherit-everything behaviour).
     """
-    mpirun = resolve_mpirun(mpi_path, orca_dir=orca_dir)
+    mpirun, mpi_source = resolve_mpirun_with_source(mpi_path, orca_dir=orca_dir)
+    if mpirun is None and mpi_source and mpi_source.startswith("incompatible:"):
+        raise MPICompatibilityError(
+            "No ORCA-compatible MPI launcher was found "
+            f"({mpi_source.removeprefix('incompatible:')}). "
+            "Conda/Intel/MPICH Hydra cannot launch an OpenMPI-linked ORCA build. "
+            "Configure executables.orca.mpi_path or CONFSEARCH_ORCA_MPI_PATH "
+            "to the matching OpenMPI mpirun."
+        )
     if mpirun is None and not ld_library_path:
         return None
 
@@ -762,6 +982,7 @@ __all__ = [
     "EXECUTABLES",
     "FALLBACKS",
     "MPI_BINARY",
+    "MPICompatibilityError",
     "MPI_ENV_VAR",
     "SCAN_PATTERNS",
     "SNIFF_DISABLE_ENV_VAR",
@@ -771,6 +992,8 @@ __all__ = [
     "SoftwareDiscovery",
     "SoftwareNotFoundError",
     "detect_version",
+    "detect_mpi_family",
+    "detect_orca_mpi_family",
     "discover_all",
     "discover_all_detailed",
     "discover_candidates",
@@ -780,6 +1003,7 @@ __all__ = [
     "resolve_executable",
     "resolve_executable_with_source",
     "resolve_mpirun",
+    "resolve_mpirun_with_source",
     "sniff_login_shell_env",
     "sniff_rc_files",
     "version_cached",
