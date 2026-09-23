@@ -449,6 +449,19 @@ _BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
     "temperature": "--temperature",
     "pressure": "--pressure",
     "scale_factor": "--scale-factor",
+    "opt_max_iter": "--opt-max-iter",
+    "opt_convergence": "--opt-convergence",
+    "opt_trust_radius": "--opt-trust-radius",
+    "opt_initial_hessian": "--opt-initial-hessian",
+    "opt_rescue_policy": "--opt-rescue-policy",
+    "opt_max_rescue": "--opt-max-rescue",
+    "scf_max_iter": "--scf-max-iter",
+    "scf_convergence": "--scf-convergence",
+    "scf_strategy": "--scf-strategy",
+    "minimum_opt_trust_radius": "--minimum-opt-trust-radius",
+    "minimum_opt_initial_hessian": "--minimum-opt-initial-hessian",
+    "transition_state_opt_trust_radius": "--transition-state-opt-trust-radius",
+    "transition_state_opt_initial_hessian": "--transition-state-opt-initial-hessian",
 }
 _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
     {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
@@ -477,6 +490,23 @@ def batchoptimize_method_flags(
         value = method.get(key)
         if value is not None and value != "":
             flags += [flag, str(value)]
+
+    opt_recalc = method.get("opt_recalc_hess")
+    if opt_recalc is not None and opt_recalc != "":
+        flags += ["--opt-recalc-hess", str(opt_recalc)]
+
+    min_opt_recalc = method.get("minimum_opt_recalc_hess")
+    if min_opt_recalc is not None and min_opt_recalc != "":
+        flags += ["--minimum-opt-recalc-hess", str(min_opt_recalc)]
+
+    ts_opt_recalc = method.get("transition_state_opt_recalc_hess")
+    if ts_opt_recalc is not None and ts_opt_recalc != "":
+        flags += ["--transition-state-opt-recalc-hess", str(ts_opt_recalc)]
+
+    orbital_inherit = method.get("scf_orbital_inherit")
+    if orbital_inherit is False:
+        flags += ["--no-scf-orbital-inherit"]
+
     return flags
 
 

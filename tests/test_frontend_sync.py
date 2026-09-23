@@ -23,6 +23,7 @@ FRONTEND_JS_DIR = REPO_ROOT / "frontend" / "js"
 FRONTEND_CSS_DIR = REPO_ROOT / "frontend" / "css"
 FRONTEND_FILES: list[Path] = [
     FRONTEND,
+    FRONTEND_JS_DIR / "geometry_store.js",
     FRONTEND_JS_DIR / "structure_viewer.js",
     FRONTEND_JS_DIR / "structure_editor.js",
     FRONTEND_JS_DIR / "vibration_viewer.js",
@@ -1393,14 +1394,33 @@ def test_vibration_viewer_js_has_namespace() -> None:
 def test_v2_html_loads_structure_viewer_modules() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     assert '<link rel="stylesheet" href="css/structure_viewer.css">' in html
+    assert '<script src="js/geometry_store.js"></script>' in html
     assert '<script src="js/structure_viewer.js"></script>' in html
     assert '<script src="js/structure_editor.js"></script>' in html
     assert '<script src="js/vibration_viewer.js"></script>' in html
+    # The store defines window.ACPGeometryStore before any consumer module
+    # evaluates (structure_viewer.js reads it at call time, but the contract
+    # is a strict load order: store first).
+    assert html.index('<script src="js/geometry_store.js"></script>') < html.index(
+        '<script src="js/structure_viewer.js"></script>'
+    ), "geometry_store.js must load BEFORE structure_viewer.js"
+
+
+def test_v2_html_dropped_legacy_pick_and_measure_state() -> None:
+    """The HTML uses native 3Dmol atom.index + ACPGeometryStore; the removed
+    legacy ways of tracking picks/measurements must not come back."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "atom.acpId" not in html, "legacy acpId atom property must not return"
+    assert "measureBuffer" not in html, "legacy measureBuffer must not return"
+    assert "molDoc.selection" not in html, "legacy molDoc.selection must not return"
+    assert "molDoc.measures" not in html, "legacy molDoc.measures must not return"
 
 
 @pytest.mark.parametrize(
     "js_file",
     [
+        "geometry_store.js",
         "structure_viewer.js",
         "structure_editor.js",
         "vibration_viewer.js",
@@ -3348,6 +3368,7 @@ def test_vibration_grip_css_cursor_and_position() -> None:
 
 
 _SV_JS_PATH = FRONTEND_JS_DIR / "structure_viewer.js"
+_GEOMETRY_STORE_JS_PATH = FRONTEND_JS_DIR / "geometry_store.js"
 
 
 def test_vibration_viewer_arrow_contract() -> None:
@@ -7369,22 +7390,43 @@ def test_summary_bar_vibration_and_measure_buttons() -> None:
     )
 
 
-def test_render_measure_drawer_reads_moldoc_measures() -> None:
-    """_renderMeasureDrawer reads molDoc.measures (live render) and re-seeds
-    applied measurements after geometry reload."""
+def test_render_measure_drawer_reads_store_measurements() -> None:
+    """_renderMeasureDrawer is store-first: it reads ACPGeometryStore
+    measurements via _storeSnapshot(), shows `editable === false` measurements
+    with the store's Chinese verdict message, and applies edits through
+    applyMeasuredEdit with the store measurement id (markApplied on success)."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
 
     measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
     measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
-    assert "molDoc.measures" in measure_fn, "_renderMeasureDrawer must read molDoc.measures"
-    assert "molDoc.measures.length" in measure_fn, "_renderMeasureDrawer must check measures length"
+    assert "_storeSnapshot()" in measure_fn, (
+        "_renderMeasureDrawer must read the store via _storeSnapshot()"
+    )
+    assert "snap.measurements" in measure_fn, (
+        "_renderMeasureDrawer must read the ACPGeometryStore measurements"
+    )
+    assert "m.editable === false" in measure_fn, (
+        "non-editable measurements must render without an edit control"
+    )
+    assert "m.message" in measure_fn, (
+        "non-editable measurements must show the store verdict message"
+    )
+    # The store verdict carries a Chinese message; the drawer keeps a Chinese
+    # fallback ("当前测量不可编辑") for verdicts without one.
+    assert "\\u5f53\\u524d\\u6d4b\\u91cf\\u4e0d\\u53ef\\u7f16\\u8f91" in measure_fn, (
+        "Chinese fallback message for non-editable measurements missing"
+    )
     assert "applyMeasuredEdit" in measure_fn, "_renderMeasureDrawer must call applyMeasuredEdit"
+    assert "m.id" in measure_fn, (
+        "applyMeasuredEdit must receive the store measurement id"
+    )
+    assert "markApplied" in measure_fn, (
+        "successful apply must be written back to the store (markApplied)"
+    )
     assert "bond_length" in measure_fn, "type mapping bond_length missing"
     assert "bond_angle" in measure_fn, "type mapping bond_angle missing"
     assert "dihedral" in measure_fn, "type mapping dihedral missing"
-    assert "_applied" in measure_fn, "_applied flag detection missing for re-seeded measurements"
-    assert "measurementValue" in measure_fn, "measurementValue recompute missing for post-apply re-seed"
-    assert "molDoc.measures.push" in measure_fn, "post-apply re-seed push missing"
+    assert "_applied" in measure_fn, "_applied flag detection missing for applied measurements"
     assert "_svMeasureAppliedIds = {}" in sv, (
         "applied map must be reset on successful apply to prevent index reuse"
     )
@@ -7435,12 +7477,32 @@ def test_edit_panel_in_measure_drawer_only() -> None:
 
 
 def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
-    """handleMeasureClick calls openDrawer("measure"), updates measure-status,
-    and resets status after measurement completes (post-completion _updateMeasureStatus)."""
+    """handleMeasureClick resolves the atom via _svResolveAtomId, routes the
+    pick through ACPGeometryStore (addToSelection / addMeasurement /
+    clearSelection), updates measure-status, and opens the drawer — WITHOUT a
+    synchronous renderMolDoc() model rebuild in the pick callback."""
     html = FRONTEND.read_text(encoding="utf-8")
 
     handler = html.split("function handleMeasureClick(atom)", 1)[1]
     handler = handler[:handler.index("// ── Mechanism Builder")]
+    assert "_svResolveAtomId" in handler, (
+        "handleMeasureClick must resolve the native 3Dmol atom index"
+    )
+    assert "ACPGeometryStore" in handler and "window.ACPGeometryStore" in handler, (
+        "handleMeasureClick must read the geometry store"
+    )
+    assert "store.addToSelection" in handler, (
+        "handleMeasureClick must append the pick to the store selection"
+    )
+    assert "store.addMeasurement" in handler, (
+        "handleMeasureClick must create the measurement on the store"
+    )
+    assert "store.clearSelection" in handler, (
+        "handleMeasureClick must reset the store selection after a completed measurement"
+    )
+    assert "renderMolDoc(" not in handler, (
+        "pick callback must not synchronously rebuild the model (renderMolDoc)"
+    )
     assert 'openDrawer("measure"' in handler, (
         "handleMeasureClick must auto-open measure drawer"
     )
@@ -7454,14 +7516,16 @@ def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
     assert update_calls >= 2, (
         f"_updateMeasureStatus must be called at least twice (before+after completion), got {update_calls}"
     )
-    after_reset = handler.split("measureBuffer = []", 1)[1]
+    after_reset = handler.split("store.clearSelection()", 1)[1]
     assert "_updateMeasureStatus" in after_reset, (
-        "_updateMeasureStatus must be called after measureBuffer reset"
+        "_updateMeasureStatus must be called after the selection reset"
     )
 
 
 def test_measure_status_element_and_update_function() -> None:
-    """measure-mode-status span exists and _updateMeasureStatus function is defined."""
+    """measure-mode-status span exists and _updateMeasureStatus is store-based:
+    it reads the ACPGeometryStore selection length (not the removed
+    measureBuffer) and the active measureType."""
     html = FRONTEND.read_text(encoding="utf-8")
 
     assert 'id="measure-mode-status"' in html, "measure-mode-status span missing"
@@ -7472,7 +7536,15 @@ def test_measure_status_element_and_update_function() -> None:
     update_fn = html.split("function _updateMeasureStatus()", 1)[1]
     update_fn = update_fn[:update_fn.index("function setMode(")]
     assert "measure-mode-status" in update_fn, "_updateMeasureStatus must reference the status element"
-    assert "measureBuffer" in update_fn, "_updateMeasureStatus must read measureBuffer"
+    assert "ACPGeometryStore" in update_fn, (
+        "_updateMeasureStatus must read the geometry store"
+    )
+    assert "store.state.selection.length" in update_fn, (
+        "_updateMeasureStatus must read the store selection length"
+    )
+    assert "measureBuffer" not in update_fn, (
+        "_updateMeasureStatus must not read the removed measureBuffer"
+    )
     assert "measureType" in update_fn, "_updateMeasureStatus must read measureType"
 
 
@@ -7485,6 +7557,199 @@ def test_set_mode_calls_update_measure_status() -> None:
     assert "_updateMeasureStatus" in setmode_fn, (
         "setMode must call _updateMeasureStatus"
     )
+
+
+# ---------------------------------------------------------------------------
+# ACPGeometryStore (frontend/js/geometry_store.js) node unit contracts
+# ---------------------------------------------------------------------------
+
+
+def test_geometry_store_node_load_and_selection_order() -> None:
+    """load() resets the store (revision 1, fresh geometry, empty
+    selection/measurements); addToSelection preserves pick order and dedupes;
+    setSelection dedupes while keeping first-occurrence order."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = {};
+        require(GEOMETRY_PATH);
+
+        var store = window.ACPGeometryStore;
+        if (!store) { console.error("FAIL: window.ACPGeometryStore missing"); process.exit(1); }
+
+        var snap = store.load({ entryId: "e1", symbols: ["C", "C", "C"], coordinates: [[0,0,0],[1.5,0,0],[3,0,0]] });
+        if (snap.revision !== 1 || store.state.revision !== 1) { console.error("FAIL: revision must be 1 after load"); process.exit(1); }
+        if (store.state.entryId !== "e1") { console.error("FAIL: entryId not stored"); process.exit(1); }
+        if (JSON.stringify(store.state.symbols) !== JSON.stringify(["C", "C", "C"])) { console.error("FAIL: symbols"); process.exit(1); }
+        if (JSON.stringify(store.state.coordinates) !== JSON.stringify([[0,0,0],[1.5,0,0],[3,0,0]])) { console.error("FAIL: coordinates"); process.exit(1); }
+        if (store.state.selection.length !== 0 || store.state.measurements.length !== 0) { console.error("FAIL: load must clear selection+measurements"); process.exit(1); }
+
+        store.addToSelection(2);
+        store.addToSelection(0);
+        store.addToSelection(1);
+        store.addToSelection(2);
+        if (JSON.stringify(store.state.selection) !== JSON.stringify([2, 0, 1])) { console.error("FAIL: pick order/dedupe, got " + JSON.stringify(store.state.selection)); process.exit(1); }
+
+        store.setSelection([5, 3, 5, 1]);
+        if (JSON.stringify(store.state.selection) !== JSON.stringify([5, 3, 1])) { console.error("FAIL: setSelection dedupe, got " + JSON.stringify(store.state.selection)); process.exit(1); }
+
+        console.log("PASS");
+    """).replace("GEOMETRY_PATH", json.dumps(str(_GEOMETRY_STORE_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node geometry-store load/selection test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_geometry_store_node_update_coordinates_preserves_state() -> None:
+    """updateCoordinates() bumps the revision, KEEPS selection + measurements,
+    and recomputes every measurement value from the new coordinates."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = {};
+        require(GEOMETRY_PATH);
+
+        var store = window.ACPGeometryStore;
+        store.load({ entryId: "e1", symbols: ["C", "C"], coordinates: [[0,0,0],[1.5,0,0]] });
+        store.addToSelection(0);
+        var m = store.addMeasurement("distance", [0, 1]);
+        if (!m || Math.abs(m.value - 1.5) > 1e-9) { console.error("FAIL: initial measurement value"); process.exit(1); }
+
+        var snap = store.updateCoordinates([[0,0,0],[1.6,0,0]]);
+        if (snap.revision !== 2 || store.state.revision !== 2) { console.error("FAIL: revision must bump to 2"); process.exit(1); }
+        if (JSON.stringify(store.state.selection) !== JSON.stringify([0])) { console.error("FAIL: selection lost on updateCoordinates"); process.exit(1); }
+        if (store.state.measurements.length !== 1) { console.error("FAIL: measurements lost on updateCoordinates"); process.exit(1); }
+        if (Math.abs(store.state.measurements[0].value - 1.6) > 1e-9) { console.error("FAIL: measurement value not recomputed, got " + store.state.measurements[0].value); process.exit(1); }
+
+        console.log("PASS");
+    """).replace("GEOMETRY_PATH", json.dumps(str(_GEOMETRY_STORE_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node geometry-store updateCoordinates test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_geometry_store_node_add_measurement_validation() -> None:
+    """addMeasurement() returns a measurement for valid arity/ids, null for
+    wrong arity / unknown type / duplicate / malformed ids, and copies the
+    ACPStructureEditor.validateEditableCoordinate verdict (editable/reason/message)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = {};
+        require(GEOMETRY_PATH);
+
+        var store = window.ACPGeometryStore;
+        store.load({ entryId: "e1", symbols: ["C", "C", "C"], coordinates: [[0,0,0],[1.5,0,0],[3,1,0]] });
+
+        var m = store.addMeasurement("distance", [0, 1]);
+        if (!m || m.type !== "distance" || JSON.stringify(m.atoms) !== JSON.stringify([0, 1])) { console.error("FAIL: valid measurement not created"); process.exit(1); }
+        if (Math.abs(m.value - 1.5) > 1e-9) { console.error("FAIL: measurement value"); process.exit(1); }
+
+        if (store.addMeasurement("distance", [0]) !== null) { console.error("FAIL: wrong arity must return null"); process.exit(1); }
+        if (store.addMeasurement("bogus", [0, 1]) !== null) { console.error("FAIL: unknown type must return null"); process.exit(1); }
+        if (store.addMeasurement("distance", [0, 0]) !== null) { console.error("FAIL: duplicate ids must return null"); process.exit(1); }
+        if (store.addMeasurement("distance", [0, -1]) !== null) { console.error("FAIL: malformed id must return null"); process.exit(1); }
+
+        window.ACPStructureEditor = {
+            validateEditableCoordinate: function () {
+                return { editable: false, reason: "ring_bond", message: "X" };
+            }
+        };
+        var blocked = store.addMeasurement("distance", [1, 2]);
+        if (!blocked) { console.error("FAIL: blocked measurement must still be created"); process.exit(1); }
+        if (blocked.editable !== false || blocked.reason !== "ring_bond" || blocked.message !== "X") {
+            console.error("FAIL: verdict not copied, got " + JSON.stringify(blocked));
+            process.exit(1);
+        }
+        if (store.state.measurements.length !== 2) { console.error("FAIL: blocked measurement must be stored"); process.exit(1); }
+
+        console.log("PASS");
+    """).replace("GEOMETRY_PATH", json.dumps(str(_GEOMETRY_STORE_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node geometry-store addMeasurement test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_geometry_store_node_compute_measurement_values() -> None:
+    """computeMeasurementValue: distance 3.0 A, right angle 90 deg, anti
+    dihedral 180 deg (all within 1e-6)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = {};
+        require(GEOMETRY_PATH);
+
+        var store = window.ACPGeometryStore;
+        var dist = store.computeMeasurementValue("distance", [[0,0,0],[3,0,0]], [0, 1]);
+        if (Math.abs(dist - 3) > 1e-6) { console.error("FAIL: distance " + dist); process.exit(1); }
+
+        var angle = store.computeMeasurementValue("angle", [[1,0,0],[0,0,0],[0,1,0]], [0, 1, 2]);
+        if (Math.abs(angle - 90) > 1e-6) { console.error("FAIL: angle " + angle); process.exit(1); }
+
+        var dihedral = store.computeMeasurementValue("dihedral", [[1,0,0],[0,0,0],[0,1,0],[-1,1,0]], [0, 1, 2, 3]);
+        if (Math.abs(dihedral - 180) > 1e-6) { console.error("FAIL: dihedral " + dihedral); process.exit(1); }
+
+        console.log("PASS");
+    """).replace("GEOMETRY_PATH", json.dumps(str(_GEOMETRY_STORE_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node geometry-store computeMeasurementValue test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_geometry_store_node_subscribe_change_tokens() -> None:
+    """subscribe(fn) receives the change tokens in mutation order
+    ("load", "selection", "measurement", "coordinates", "preview") and the
+    returned unsubscriber stops delivery."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = {};
+        require(GEOMETRY_PATH);
+
+        var store = window.ACPGeometryStore;
+        var seen = [];
+        var unsubscribe = store.subscribe(function (_snap, change) { seen.push(change); });
+
+        store.load({ entryId: "e1", symbols: ["C", "C"], coordinates: [[0,0,0],[1.5,0,0]] });
+        store.addToSelection(1);
+        store.addMeasurement("distance", [0, 1]);
+        store.updateCoordinates([[0,0,0],[1.6,0,0]]);
+        store.setEditPreview({ coordinates: [[0,0,0],[1.7,0,0]] });
+
+        var expected = ["load", "selection", "measurement", "coordinates", "preview"];
+        if (JSON.stringify(seen) !== JSON.stringify(expected)) { console.error("FAIL: tokens " + JSON.stringify(seen)); process.exit(1); }
+
+        unsubscribe();
+        var countBefore = seen.length;
+        store.clearSelection();
+        store.updateCoordinates([[0,0,0],[1.8,0,0]]);
+        if (seen.length !== countBefore) { console.error("FAIL: unsubscriber did not stop delivery"); process.exit(1); }
+
+        console.log("PASS");
+    """).replace("GEOMETRY_PATH", json.dumps(str(_GEOMETRY_STORE_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node geometry-store subscribe test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
 
 
 def test_measure_i18n_keys_in_both_locales() -> None:
@@ -7606,3 +7871,389 @@ def test_vibration_summary_bar_node_logic() -> None:
         f"Vibration summary bar test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+def test_electronic_state_module_renderer_dispatch() -> None:
+    """Contract: electronic_state type:'module' gets a dedicated renderer.
+
+    The generic buildFieldRow must dispatch to buildElectronicStateFieldRow
+    for fields with type 'module' and renderer 'electronic_state' BEFORE the
+    text-input fallback, so the structured value never renders as
+    '[object Object]'.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # 1. The dedicated dispatch string exists in buildFieldRow.
+    assert 'fieldName].renderer === "electronic_state"' in html
+
+    # 2. buildElectronicStateFieldRow is defined exactly once.
+    assert html.count("function buildElectronicStateFieldRow(") == 1
+
+    # 3. The module dispatch sits before the generic text-input fallback.
+    module_pos = html.find('fieldName].renderer === "electronic_state"')
+    fallback_marker = (
+        "} else {\n"
+        '        var inp = document.createElement("input");\n'
+        '        inp.type = "text";'
+    )
+    fallback_pos = html.find(fallback_marker)
+    assert module_pos != -1 and fallback_pos != -1
+    assert module_pos < fallback_pos, (
+        "module/electronic_state dispatch must precede the text-input fallback"
+    )
+
+    # 4. Preset labels cover all catalog presets.
+    from acp.catalog import FIELD_DEFINITIONS
+
+    es_fd = FIELD_DEFINITIONS.get("electronic_state", {})
+    for preset_id in es_fd.get("presets", []):
+        assert preset_id in html, (
+            f"electronic_state preset {preset_id!r} missing from _ES_PRESET_LABELS"
+        )
+
+    # 5. The fallback guard handles object values (no raw [object Object]).
+    assert 'typeof curVal === "object"' in html
+    assert "JSON.stringify(curVal)" in html
+
+
+# ---------------------------------------------------------------------------
+# P1: BatchOptimize advanced section rework (2026-09-12)
+# ---------------------------------------------------------------------------
+
+def test_batch_preset_chip_labels() -> None:
+    """P1a contract: preset chips use renamed labels (标准/困难几何/困难 SCF/严格收敛/自定义)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # All five preset labels (zh, stored as \uXXXX escapes in JS) must appear
+    for label in (
+        r"\u6807\u51c6",
+        r"\u56f0\u96be\u51e0\u4f55",
+        r"\u56f0\u96be SCF",
+        r"\u4e25\u683c\u6536\u655b",
+        r"\u81ea\u5b9a\u4e49",
+):
+        assert label in html, f"Preset label {label!r} missing from frontend"
+
+    # Old labels that should be gone
+    assert r"\u6807\u51c6\u4f18\u5316" not in html, "Old label '标准优化' must be renamed to '标准'"
+    assert r"\u9ad8\u7cbe\u5ea6\u786e\u8ba4" not in html, (
+        "Old label '高精度确认' must be renamed to '严格收敛'"
+    )
+    # "困难SCF" (no space) must be replaced by "困难 SCF" (with space)
+    assert r"\u56f0\u96beSCF" not in html, "'困难SCF' must have a space: '困难 SCF'"
+
+
+def test_batch_effective_summary_function_exists() -> None:
+    """P1c contract: buildBatchEffectiveSummary is defined exactly once."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert html.count("function buildBatchEffectiveSummary(") == 1, (
+        "buildBatchEffectiveSummary must be defined exactly once"
+    )
+
+
+def test_batch_reset_defaults_control_present() -> None:
+    """P1d contract: '恢复默认' reset button exists in the advanced section."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "\u6062\u590d\u9ed8\u8ba4" in html, "恢复默认 reset button label missing"
+    assert "mc-adv-reset-btn" in html, "Reset button CSS class missing"
+    assert "mc-adv-header-bar" in html, "Header bar CSS class missing"
+    assert "mc-adv-custom-count" in html, "Custom count CSS class missing"
+
+
+def test_batch_payload_includes_rescue_and_orbital_fields() -> None:
+    """P1e contract: applyBatchOptimizeMethodFields carries opt_rescue_policy,
+    opt_max_rescue, and scf_orbital_inherit."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+
+    assert 'methodPayload.opt_rescue_policy = value("opt_rescue_policy"' in fn_body
+    assert 'methodPayload.opt_max_rescue = value("opt_max_rescue"' in fn_body
+    assert 'methodPayload.scf_orbital_inherit = value("scf_orbital_inherit"' in fn_body
+
+
+def test_batch_four_group_ids_present() -> None:
+    """P1b contract: FIELD_GROUPS contains the four required group ids."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for gid in ("opt_control", "scf_control", "hessian_control", "freq_thermo"):
+        assert f'id: "{gid}"' in html, f"Group id {gid!r} missing from FIELD_GROUPS"
+    # expert_overrides must also still exist
+    assert 'id: "expert_overrides"' in html
+
+
+def test_batch_hessian_label_not_computation_count() -> None:
+    """Plan §3.4: 'Hessian 计算次数' is forbidden; '每 N 个优化循环重算' is the correct label."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"Hessian \u8ba1\u7b97\u6b21\u6570" not in html, (
+        "'Hessian 计算次数' is forbidden by plan §3.4"
+    )
+    assert r"\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af\u91cd\u7b97" in html
+
+
+def test_batch_trust_radius_label() -> None:
+    """Plan §3.2: opt_trust_radius label must be '初始信赖半径（步长控制）'."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u521d\u59cb\u4fe1\u8d56\u534a\u5f84" in html, (
+        "'初始信赖半径' label missing for opt_trust_radius"
+    )
+
+
+def test_batch_effective_summary_source_badges() -> None:
+    """P1c contract: effective summary uses source badges (默认/预设/自定义)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-effective-summary" in html, "Effective summary CSS class missing"
+    assert "mc-eff-chip" in html, "Effective chip CSS class missing"
+    assert "mc-eff-src" in html, "Source badge CSS class missing"
+    assert "src-default" in html, "Default source badge class missing"
+    assert "src-preset" in html, "Preset source badge class missing"
+    assert "src-custom" in html, "Custom source badge class missing"
+
+
+def test_batch_groups_grid_css() -> None:
+    """P1b contract: 2×2 grid layout for groups on wide screens."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-adv-groups-grid" in html, "Groups grid CSS class missing"
+    assert "grid-template-columns: 1fr 1fr" in html, "2-column grid template missing"
+
+
+def test_batch_expert_sub_row() -> None:
+    """P1b contract: expert sub-row classes for rescue/orbital_inherit."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-expert-sub" in html, "Expert sub-row CSS class missing"
+    assert "mc-expert-sub-toggle" in html, "Expert sub-toggle CSS class missing"
+    assert "mc-expert-sub-fields" in html, "Expert sub-fields CSS class missing"
+
+
+# ---------------------------------------------------------------------------
+# P2a: BatchOptimize role-override tabs + server preview (2026-09-12)
+# ---------------------------------------------------------------------------
+
+def test_batch_role_tab_strip_present() -> None:
+    """P2a: tab strip with Common/INT/TS buttons and pane classes."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-role-tabs" in html, "Role tabs container class missing"
+    assert "mc-role-tab-strip" in html, "Tab strip class missing"
+    assert "mc-role-tab-btn" in html, "Tab button class missing"
+    assert "mc-role-tab-pane" in html, "Tab pane class missing"
+    assert r"\u901a\u7528" in html, "Common tab label (\u901a\u7528) missing"
+    assert 'label: "INT"' in html or "label: 'INT'" in html
+
+
+def test_batch_role_tab_labels_zh_en() -> None:
+    """P2a: tab labels have both zh and en variants."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "label_zh:" in html, "label_zh key missing in tab definitions"
+    assert r"\u901a\u7528" in html, "Chinese Common tab label (\u901a\u7528) missing"
+
+
+def test_batch_role_override_payload_keys() -> None:
+    """P2a: applyBatchOptimizeMethodFields carries 6 role-override keys."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    role_keys = [
+        "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
+        "transition_state_opt_trust_radius",
+        "transition_state_opt_initial_hessian",
+        "transition_state_opt_recalc_hess",
+    ]
+    for rk in role_keys:
+        assert f'methodPayload.{rk} = value("{rk}"' in fn_body, (
+            f"Role key {rk!r} missing from applyBatchOptimizeMethodFields"
+        )
+
+
+def test_batch_role_fields_excluded_from_common_groups() -> None:
+    """P2a: role-override fields are excluded from FIELD_GROUPS partitioning."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "_ROLE_OVERRIDE_FIELDS" in html, "_ROLE_OVERRIDE_FIELDS array missing"
+    assert "_ROLE_OVERRIDE_FIELDS.indexOf(fn) >= 0" in html, (
+        "Role-field exclusion check missing from group partitioning"
+    )
+
+
+def test_batch_role_inherit_badge_class() -> None:
+    """P2a: inherit/override badge classes present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-role-inherit-badge" in html, "Inherit badge class missing"
+    assert "badge-inherit" in html, "badge-inherit subclass missing"
+    assert "badge-override" in html, "badge-override subclass missing"
+
+
+def test_batch_role_override_field_defs_present() -> None:
+    """P2a: _ROLE_FIELD_DEFS defines all 6 role fields with types."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "_ROLE_FIELD_DEFS" in html, "_ROLE_FIELD_DEFS object missing"
+    role_keys = [
+        "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
+        "transition_state_opt_trust_radius",
+        "transition_state_opt_initial_hessian",
+        "transition_state_opt_recalc_hess",
+    ]
+    for rk in role_keys:
+        assert f'{rk}:' in html or f'"{rk}":' in html, (
+            f"Role field {rk!r} missing from _ROLE_FIELD_DEFS"
+        )
+
+
+def test_batch_role_hint_text_zh_en() -> None:
+    """P2a: INT/TS panes show inherit hints with role defaults."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u7ee7\u627f\uff1a\u901a\u7528\u8bbe\u7f6e" in html, "INT inherit hint missing"
+    assert "Trust 0.3" in html, "TS hint Trust 0.3 missing"
+    assert r"\u6bcf 5 \u6b65\u91cd\u7b97" in html, "TS hint recalc every 5 missing"
+
+
+def test_batch_preview_endpoint_url_present() -> None:
+    """P2a: config-preview endpoint URL string present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "/api/v1/batch-optimize/config-preview" in html, (
+        "Preview endpoint URL missing"
+    )
+
+
+def test_batch_preview_debounce_and_abort() -> None:
+    """P2a: debounce timer and AbortController markers present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "_previewDebounceTimer" in html, "Debounce timer variable missing"
+    assert "_previewAbortCtrl" in html, "Abort controller variable missing"
+    assert "_PREVIEW_DEBOUNCE_MS" in html, "Debounce constant missing"
+    assert "AbortController" in html, "AbortController reference missing"
+
+
+def test_batch_preview_fallback_path() -> None:
+    """P2a: local summary function still exists as fallback."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function buildBatchEffectiveSummary(" in html, (
+        "Local buildBatchEffectiveSummary must exist for fallback"
+    )
+    assert "_renderLocalSummary" in html, "_renderLocalSummary fallback function missing"
+    assert 'console.warn("[batch-config-preview]' in html, (
+        "Console.warn fallback path missing"
+    )
+
+
+def test_batch_preview_schema_validation() -> None:
+    """P2a: preview response validates schema string."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "batch_optimize_preview_v1" in html, "Preview schema version string missing"
+
+
+def test_batch_reset_clears_role_keys() -> None:
+    """P2a: reset handler clears all 6 role-override keys."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    role_keys = [
+        "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
+        "transition_state_opt_trust_radius",
+        "transition_state_opt_initial_hessian",
+        "transition_state_opt_recalc_hess",
+    ]
+    for rk in role_keys:
+        assert f'"{rk}"' in html, f"Role key {rk!r} missing from reset handler delete list"
+
+
+def test_batch_custom_count_includes_role_keys() -> None:
+    """P2a: _batchCustomCount counts role-override keys."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function _batchCustomCount(stageVals)", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0] if "\nfunction " in fn_body else fn_body[:800]
+    assert "roleKeys" in fn_body, "_batchCustomCount missing roleKeys array"
+    assert "minimum_opt_trust_radius" in fn_body, "Role key missing from _batchCustomCount"
+
+
+def test_batch_role_preset_match_skips_role_keys() -> None:
+    """P2a: _batchPresetMatch skips role-override keys during matching."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function _batchPresetMatch(stageVals)", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0] if "\nfunction " in fn_body else fn_body[:2000]
+    assert "minimum_opt_" in fn_body, "Role key prefix check missing from _batchPresetMatch"
+    assert "transition_state_opt_" in fn_body, (
+        "TS role key prefix check missing from _batchPresetMatch"
+    )
+
+
+def test_batch_server_preview_role_chips_rendering() -> None:
+    """P2a: _renderServerPreview renders role-separated chips."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function _renderServerPreview(data)" in html, "_renderServerPreview function missing"
+    assert "mc-eff-role-label" in html, "Role label CSS class missing in preview renderer"
+    assert "orca_summary" in html, "orca_summary key reference missing"
+
+
+def test_batch_role_tab_default_active_is_common() -> None:
+    """P2a: default active tab is Common (\u901a\u7528)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert '(idx === 0 ? " active" : "")' in html, "Default active tab logic missing"
+    assert 'mc-role-tab-pane" + (idx === 0 ? " active" : "")' in html or \
+           "mc-role-tab-pane\" + (idx === 0 ? \" active\" : \"\")" in html, (
+        "Default active pane logic missing"
+    )
+
+
+# ── P2c: job detail effective config for BatchOptimize ────────────────
+
+
+def test_p2c_job_detail_effective_config_function_exists() -> None:
+    """P2c contract: buildJobDetailEffectiveConfig is defined exactly once."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert html.count("function buildJobDetailEffectiveConfig(") == 1, (
+        "buildJobDetailEffectiveConfig must be defined exactly once"
+    )
+
+
+def test_p2c_effective_config_schema_guard() -> None:
+    """P2c contract: render only when schema === batch_optimize_effective_v1."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'effectiveConfig.schema !== "batch_optimize_effective_v1"' in html or \
+           "effectiveConfig.schema !== 'batch_optimize_effective_v1'" in html, (
+        "Schema guard string 'batch_optimize_effective_v1' missing"
+    )
+
+
+def test_p2c_effective_config_orca_summary_chips() -> None:
+    """P2c contract: orca_summary arrays drive chip rendering per role."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function buildJobDetailEffectiveConfig(", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    assert "orca_summary" in fn_body, "orca_summary key reference missing in detail renderer"
+    assert "mc-eff-chip" in fn_body, "mc-eff-chip class missing in detail renderer"
+    assert "mc-eff-role-label" in fn_body, "mc-eff-role-label class missing in detail renderer"
+
+
+def test_p2c_effective_config_null_safety() -> None:
+    """P2c contract: non-batch or absent effective_config renders nothing."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function buildJobDetailEffectiveConfig(", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    assert "!effectiveConfig" in fn_body, "Null guard for effectiveConfig missing"
+    assert "!isPlainObject(effectiveConfig)" in fn_body, "Type guard for effectiveConfig missing"
+    call_marker = "buildJobDetailEffectiveConfig(body, detail.effective_config)"
+    call_site = html.split(call_marker, 1)[0].rsplit("\n", 1)[-1]
+    assert "if (detail)" in call_site, "Call site must guard against null detail"
+
+
+def test_p2c_effective_config_zh_labels() -> None:
+    """P2c contract: Chinese label '\u751f\u6548\u914d\u7f6e' (生效配置) via \\uXXXX."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u751f\u6548\u914d\u7f6e" in html, (
+        "Chinese label '生效配置' (\\u751f\\u6548\\u914d\\u7f6e) missing"
+    )
+
+
+def test_p2c_effective_config_rescue_not_in_api() -> None:
+    """P2c contract: rescue/provenance data is NOT exposed in V1JobDetailResponse.
+
+    _read_effective_config reads effective_config.json only (not batch_provenance.json).
+    The V1JobDetailResponse has no provenance/rescue field.
+    If the backend later adds rescue data to the detail payload, the frontend
+    renderer should be updated to display it (TODO: batch_provenance surfacing).
+    """
+    from acp.api.v1_schemas import V1JobDetailResponse
+
+    fields = V1JobDetailResponse.model_fields
+    assert "effective_config" in fields, "effective_config field missing from V1JobDetailResponse"
+    assert "provenance" not in fields, (
+        "provenance unexpectedly added — update frontend renderer to display rescue history"
+    )

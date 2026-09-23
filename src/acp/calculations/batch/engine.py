@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -506,6 +507,7 @@ class BatchOptimizeEngine:
         records: list[BatchCalculationItem] = []
         carried: list[BatchCalculationItem] = []
         executed_count = 0
+        self._provenance_records: list[dict[str, object]] = []
 
         for index, item in enumerate(expanded_items):
             record = BatchCalculationItem.from_item(item, charge, multiplicity)
@@ -599,6 +601,8 @@ class BatchOptimizeEngine:
             updated_at=_utc_now_iso(),
         )
         self._materialize_result_products(manifest)
+        if self._provenance_records:
+            self._write_batch_provenance(self._provenance_records, manifest)
         self._write_state_comparison(records)
 
         logger.info(
@@ -826,6 +830,33 @@ class BatchOptimizeEngine:
         except OSError:
             logger.warning("failed to write state_comparison.json", exc_info=True)
 
+    def _write_batch_provenance(
+        self,
+        provenance_records: list[dict[str, object]],
+        manifest: BatchCalculationManifest,
+    ) -> None:
+        """Write per-item effective config + rescue events to RESULT/."""
+        provenance_payload: dict[str, object] = {
+            "schema": "batch_provenance_v1",
+            "profile": manifest.profile,
+            "workflow": manifest.workflow,
+            "created_at": manifest.created_at,
+            "items": provenance_records,
+        }
+        provenance_path = self._result_root / "batch_provenance.json"
+        tmp = provenance_path.with_suffix(".json.tmp")
+        # Deliberately NOT registered as a result-manifest product: the batch
+        # manifest invariant requires structure-only products (opt_only profile);
+        # the file is discoverable by name convention under RESULT/.
+        try:
+            tmp.write_text(
+                json.dumps(provenance_payload, indent=2, sort_keys=True, default=str),
+                encoding="utf-8",
+            )
+            os.replace(tmp, provenance_path)
+        except OSError:
+            logger.warning("failed to write batch_provenance.json", exc_info=True)
+
     # ── per-item processing ──────────────────────────────────────────────
 
     def _process_item(
@@ -919,6 +950,52 @@ class BatchOptimizeEngine:
                     optimized_coords = [[float(v) for v in row] for row in current_result.coords]
                 gbw_name = "ts_opt.gbw" if is_ts else "optimize.gbw"
                 last_optimize_gbw = (step_dir / gbw_name).as_posix()
+
+                if hasattr(self, "_provenance_records"):
+                    role_opts = resolved_methods.resolve_role_options(is_ts)
+                    prov: dict[str, object] = {
+                        "item_id": item.item_id,
+                        "role": "ts" if is_ts else "int",
+                        "effective_config": {
+                            "max_cycles": opt_kwargs.get("max_cycles"),
+                            "opt_level": opt_kwargs.get("opt_level"),
+                            "trust_radius": opt_kwargs.get("trust_radius"),
+                            "initial_hessian": opt_kwargs.get("initial_hessian"),
+                            "recalc_hess": opt_kwargs.get("recalc_hess"),
+                            "scf_maxiter": opt_kwargs.get("scf_maxiter"),
+                            "scf_convergence": opt_kwargs.get("scf_convergence"),
+                            "scf_strategy": opt_kwargs.get("scf_strategy"),
+                            "method": resolved_methods.for_step(
+                                StepKind.OPTIMIZE, is_ts
+                            )[0],
+                            "basis": resolved_methods.for_step(
+                                StepKind.OPTIMIZE, is_ts
+                            )[1],
+                        },
+                        "role_resolution": {
+                            "opt_trust_radius": role_opts.get("opt_trust_radius"),
+                            "opt_initial_hessian": role_opts.get("opt_initial_hessian"),
+                            "opt_recalc_hess": role_opts.get("opt_recalc_hess"),
+                        },
+                    }
+                    rescue_meta = current_result.metadata.get("rescue_attempts")
+                    if rescue_meta is not None:
+                        prov["rescue"] = {
+                            "attempts": rescue_meta,
+                            "failure_type": current_result.metadata.get(
+                                "rescue_failure_type"
+                            ),
+                            "structure_kind": current_result.metadata.get(
+                                "rescue_structure_kind"
+                            ),
+                            "actions": current_result.metadata.get(
+                                "rescue_actions"
+                            ),
+                            "terminal": current_result.metadata.get(
+                                "rescue_terminal"
+                            ),
+                        }
+                    self._provenance_records.append(prov)
 
             elif step_kind is StepKind.FREQUENCY:
                 if current_result is None or current_result.coords is None:
@@ -1020,31 +1097,40 @@ class BatchOptimizeEngine:
     def _optimization_kwargs(self, is_ts: bool) -> dict[str, JsonValue]:
         """Build optimization keyword arguments for a request.
 
-        TS items use ``OptimizationMode.TRANSITION_STATE`` semantics:
-        trust_radius, recalc_hess, initial_hessian.  INT items use plain
-        optimization defaults.
+        Delegates trust_radius / initial_hessian / recalc_hess resolution
+        to :meth:`BatchMethodOptions.resolve_role_options` — the single
+        source of per-role defaults (plan §5.4).
         """
-        if is_ts:
-            kwargs: dict[str, JsonValue] = {
-                "initial_hessian": "calculate",
-                "recalc_hess": 5,
-                "trust_radius": 0.3,
-                "max_cycles": 200,
-                "structure_kind": "ts",
-            }
-        else:
-            kwargs = {
-                "max_cycles": 200,
-                "structure_kind": "minimum",
-            }
-        kwargs["opt_rescue_policy"] = self._active_methods.opt_rescue_policy
-        kwargs["opt_max_rescue"] = self._active_methods.opt_max_rescue
-        if self._active_methods.scf_damp:
+        m = self._active_methods
+        kwargs: dict[str, JsonValue] = {
+            "max_cycles": m.opt_max_iter if m.opt_max_iter is not None else 200,
+            "opt_level": m.opt_convergence,
+            "structure_kind": "ts" if is_ts else "minimum",
+        }
+
+        role_opts = m.resolve_role_options(is_ts)
+        if "opt_trust_radius" in role_opts:
+            kwargs["trust_radius"] = role_opts["opt_trust_radius"]
+        if "opt_initial_hessian" in role_opts:
+            kwargs["initial_hessian"] = role_opts["opt_initial_hessian"]
+        if "opt_recalc_hess" in role_opts:
+            kwargs["recalc_hess"] = role_opts["opt_recalc_hess"]
+
+        # rescue + scf damping/shifting (unchanged)
+        kwargs["opt_rescue_policy"] = m.opt_rescue_policy
+        kwargs["opt_max_rescue"] = m.opt_max_rescue
+        if m.scf_damp:
             kwargs["scf_damp"] = True
-            kwargs["scf_damp_fac"] = self._active_methods.scf_damp_fac
-        if self._active_methods.scf_shift:
+            kwargs["scf_damp_fac"] = m.scf_damp_fac
+        if m.scf_shift:
             kwargs["scf_shift"] = True
-            kwargs["scf_shift_fac"] = self._active_methods.scf_shift_fac
+            kwargs["scf_shift_fac"] = m.scf_shift_fac
+
+        # SCF trio forwarded to ORCA optimize
+        kwargs["scf_maxiter"] = m.scf_max_iter
+        kwargs["scf_convergence"] = m.scf_convergence
+        kwargs["scf_strategy"] = m.scf_strategy
+
         return kwargs
 
     def _step_state_payload(
@@ -1058,11 +1144,16 @@ class BatchOptimizeEngine:
 
         Downstream FREQ/SP steps read the optimized wavefunction via
         ``wavefunction_bootstrap`` unless the state opts out of inheritance.
+        When ``scf_orbital_inherit`` is False, inheritance is forced off
+        regardless of the electronic-state configuration.
         """
         base = item.electronic_state
         if base is None:
             return None
         if step_kind is StepKind.OPTIMIZE or not inherit_gbw:
+            return base
+        active_methods = getattr(self, "_active_methods", None)
+        if active_methods is not None and not active_methods.scf_orbital_inherit:
             return base
         if base.get("wavefunction_bootstrap"):
             return base
@@ -1129,6 +1220,9 @@ class BatchOptimizeEngine:
             "multiplicity": multiplicity,
             "coordinates": coordinates,
             "symbols": symbols_json,
+            "scf_maxiter": methods.scf_max_iter,
+            "scf_convergence": methods.scf_convergence,
+            "scf_strategy": methods.scf_strategy,
         }
         if basis:
             resources["basis"] = basis
@@ -1165,6 +1259,9 @@ class BatchOptimizeEngine:
             "multiplicity": multiplicity,
             "coordinates": coordinates,
             "symbols": symbols_json,
+            "scf_maxiter": methods.scf_max_iter,
+            "scf_convergence": methods.scf_convergence,
+            "scf_strategy": methods.scf_strategy,
         }
         if basis:
             resources["basis"] = basis
