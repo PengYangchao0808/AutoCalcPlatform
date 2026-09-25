@@ -135,6 +135,7 @@ _ALLOWED_REMOTE_WORKFLOWS: frozenset[str] = frozenset(
         "frequency",
         "scan",
         "irc",
+        "tsmode",
         "xtb_optimize",
     }
 )
@@ -275,6 +276,8 @@ def build_remote_cli_command(
             cmd += scan_method_flags(method, inp)
     elif wf == "irc":
         cmd += build_remote_irc_tail(spec, source)
+    elif wf == "tsmode":
+        cmd += build_remote_tsmode_tail(spec, source)
     elif wf == "xtb_optimize":
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
@@ -391,6 +394,25 @@ def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
 
 
 # ── Stage tail (PESsearch bond-scan only) ───────────────────────────────
+
+
+def build_remote_tsmode_tail(spec: JobSpec, source: str) -> list[str]:
+    """Generate argv tail for TS Mode remote execution.
+
+    The scheduler materializes ``INPUT/tsmode/bundle.json`` (with relative
+    file references) into the synced work dir, so the remote command
+    consumes the same staged snapshot as the local runner (plan §11).
+    """
+    inp = spec.input
+    bundle_reference = str(inp.get("bundle_path") or "INPUT/tsmode/bundle.json")
+    cmd: list[str] = ["--source-bundle", bundle_reference, "--output", "."]
+    mode_index = inp.get("source_mode_index")
+    if not isinstance(mode_index, int) or isinstance(mode_index, bool):
+        raise ValueError("tsmode remote job requires an integer source_mode_index")
+    cmd += ["--source-mode-index", str(mode_index)]
+    if spec.name:
+        cmd += ["--name", spec.name]
+    return cmd
 
 
 def build_remote_scan_config_payload(spec: JobSpec) -> dict[str, Any] | None:

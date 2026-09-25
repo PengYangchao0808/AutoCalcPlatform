@@ -35,6 +35,7 @@ __all__ = [
     "simple_entry_id",
     "scan_entry_id",
     "irc_entry_id",
+    "tsmode_entry_id",
     "manual_entry_id",
     "legacy_entry_id",
     "resolve_collision",
@@ -445,6 +446,18 @@ def irc_entry_id(endpoint: str, frame_index: int) -> str:
         Deterministic entry id string.
     """
     return f"irc_{endpoint}_{frame_index}"
+
+
+def tsmode_entry_id(step: str) -> str:
+    """Build a tsmode entry id from a step label.
+
+    Args:
+        step: Step label (e.g. ``"optimized"``, ``"source"``).
+
+    Returns:
+        Deterministic entry id string.
+    """
+    return f"tsmode_{step}"
 
 
 def manual_entry_id(relpath: str) -> str:
@@ -1406,6 +1419,95 @@ def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str
     return groups, entries, default_id
 
 
+def _resolve_tsmode(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+    """Resolve TS Mode results → structure viewer entries.
+
+    Reads ``RESULT/tsmode/optimized.xyz`` for the optimised transition state
+    and ``RESULT/tsmode/normal_modes.json`` for vibration data.  Also registers
+    the source snapshot ``INPUT/tsmode/source.xyz`` as a read-only entry when
+    present (discovered via ``RESULT/result_manifest.json``).
+    """
+    from acp.results.manifest import find_products, load_result_manifest
+
+    groups: list[StructureViewerGroup] = []
+    entries: list[StructureViewerEntry] = []
+    default_id: str | None = None
+
+    tsmode_dir = task_root / "RESULT" / "tsmode"
+
+    # ── 1. Optimised structure ──────────────────────────────────────────────
+    optimized_xyz = tsmode_dir / "optimized.xyz"
+    if optimized_xyz.is_file():
+        entry_id = tsmode_entry_id("optimized")
+        geometry_ref = "RESULT/tsmode/optimized.xyz"
+
+        # Read label from XYZ comment line (line 2)
+        label = "TS Mode 优化结果"
+        try:
+            lines = optimized_xyz.read_text(encoding="utf-8").splitlines()
+            if len(lines) >= 2:
+                comment = lines[1].strip()
+                if comment:
+                    label = comment
+        except OSError:
+            pass
+
+        # Probe vibrations — normal_modes.json in the tsmode dir
+        vibrations = StructureViewerVibrations(available=False)
+        normal_modes_path = tsmode_dir / "normal_modes.json"
+        if normal_modes_path.is_file():
+            vibrations = StructureViewerVibrations(
+                available=True,
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+                imaginary_count=None,
+                source="product",
+            )
+
+        entries.append(StructureViewerEntry(
+            id=entry_id,
+            group_id="",
+            label=label,
+            role="transition_state",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(),
+            source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
+            badges=(),
+            vibrations=vibrations,
+        ))
+        default_id = entry_id
+
+    # ── 2. Source snapshot from manifest ────────────────────────────────────
+    source_xyz = task_root / "INPUT" / "tsmode" / "source.xyz"
+    if source_xyz.is_file():
+        source_id = tsmode_entry_id("source")
+        entries.append(StructureViewerEntry(
+            id=source_id,
+            group_id="",
+            label="Source structure",
+            role="minimum",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{source_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(),
+            source=StructureViewerSource(kind="calculation_input", geometry_ref="INPUT/tsmode/source.xyz"),
+            badges=(),
+            vibrations=StructureViewerVibrations(available=False),
+        ))
+        if default_id is None:
+            default_id = source_id
+
+    if not entries:
+        warnings.append("tsmode results not found")
+
+    return groups, entries, default_id
+
+
 def _resolve_legacy(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Legacy fallback for workflows without a dedicated resolver.
 
@@ -1522,6 +1624,7 @@ _DISPATCH_TABLE: dict[str, _Resolver] = {
     "xtb-optimize": _resolve_simple,
     "scan": _resolve_scan,
     "irc": _resolve_irc,
+    "tsmode": _resolve_tsmode,
 }
 
 

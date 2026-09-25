@@ -345,6 +345,10 @@ def materialize_job_input(
         if materialized is not None:
             return materialized
 
+    tsmode_bundle = _materialize_tsmode_bundle(inp, inputs_dir)
+    if tsmode_bundle is not None:
+        return tsmode_bundle
+
     return _materialize_single_input(inp, inputs_dir, run_root)
 
 
@@ -456,7 +460,13 @@ class JobRunner:
         )
         if materialized is not None and materialized != work_dir / "input.xyz":
             try:
-                storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
+                if record.spec.workflow != "tsmode":
+                    if record.spec.input.get("source_type") == "batch_structures":
+                        xyz_snapshot = _batch_structures_xyz_snapshot(record.spec.input)
+                        if xyz_snapshot is not None:
+                            storage.write_input_xyz(xyz_snapshot)
+                    else:
+                        storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
             except OSError:
                 logger.warning("Could not copy primary input.xyz for job %s", record.id)
         storage.write_task_json(
@@ -1121,6 +1131,7 @@ class JobRunner:
             "frequency",
             "scan",
             "irc",
+            "tsmode",
             "casscf",
             "xtb_optimize",
         ):
@@ -1137,6 +1148,34 @@ class JobRunner:
             return self._build_pessearch_cmd(spec, work_dir, source)
         if wf == "nmr":
             return self._build_nmr_cmd(spec, work_dir)
+
+        if wf == "tsmode":
+            bundle_path = Path(input_path) if input_path else None
+            if bundle_path is None or not bundle_path.is_file() or not str(
+                bundle_path
+            ).endswith("bundle.json"):
+                raise ValueError(
+                    "tsmode job requires a materialized INPUT/tsmode/bundle.json"
+                )
+            cmd += [
+                "--source-bundle",
+                bundle_path.as_posix(),
+                "--output",
+                cli_work_dir,
+            ]
+            mode_index = inp.get("source_mode_index")
+            if not isinstance(mode_index, int) or isinstance(mode_index, bool):
+                raise ValueError("tsmode job requires an integer source_mode_index")
+            cmd += ["--source-mode-index", str(mode_index)]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            if res.get("nproc") is not None:
+                cmd += ["--nproc", str(res["nproc"])]
+            if res.get("mem"):
+                cmd += ["--mem", str(res["mem"])]
+            if spec.config_path:
+                cmd += ["--config", str(spec.config_path)]
+            return cmd
 
         if wf == "BatchOptimize":
             artifact = inp.get("from_artifact")
