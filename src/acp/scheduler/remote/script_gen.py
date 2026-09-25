@@ -185,6 +185,11 @@ def build_remote_cli_command(
         elif items_file:
             source = str(items_file)
             cmd += ["--items-file", str(items_file), "--output", "."]
+        elif inp.get("source_type") == "batch_structures" and input_path:
+            # Batch structures are staged as a JSON request file. Preserve
+            # its suffix so the CLI dispatches to the JSON request loader.
+            source = str(input_path)
+            cmd += ["--items-file", str(input_path), "--output", "."]
         elif input_path:
             # RemoteJobRunner stages one structure as input.xyz for each
             # independent scheduler job.  Treat that file as a one-item

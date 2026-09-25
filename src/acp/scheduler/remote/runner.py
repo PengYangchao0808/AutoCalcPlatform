@@ -778,7 +778,8 @@ class RemoteJobRunner:
         bond_scan_mode = spec.workflow == "PESsearch" and (
             str(spec.method.get("mode") or "") == "bond_length_scan"
         )
-        _remote_input_name = materialized.name if materialized else "input.xyz"
+        is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
+        remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
         if bond_scan_mode:
             scan_payload = build_remote_scan_config_payload(spec) or {}
             scan_config_local = work_dir / SCAN_CONFIG_FILENAME
@@ -798,7 +799,7 @@ class RemoteJobRunner:
                 role="scan_config",
             )
         elif materialized and materialized.is_file():
-            remote_path = posixpath.join(remote_job_dir, "input.xyz")
+            remote_path = posixpath.join(remote_job_dir, remote_input_name)
             self._stager.upload_file(node, materialized, remote_path)
             event_log.append(
                 "remote.input_uploaded",
@@ -819,7 +820,7 @@ class RemoteJobRunner:
             queue=node.queue or self._config.queue,
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
-            input_path="input.xyz",
+            input_path=remote_input_name,
             remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
             python_executable=py,
             pre_cmds=self._config.pre_cmds,
