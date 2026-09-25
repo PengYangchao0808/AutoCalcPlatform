@@ -88,6 +88,9 @@ class RelaxedScanPoint:
     energy_hartree: float | None
     success: bool
     coordinate_values: dict[str, float] = field(default_factory=dict)
+    # Free-form provenance: retry history / SCF state for the frame
+    # (populated by the pointwise ORCA scan driver; empty on native scans).
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

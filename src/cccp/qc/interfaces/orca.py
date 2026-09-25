@@ -429,8 +429,13 @@ def _is_orca_gfn_xtb_method(method: str | None) -> bool:
 _OPT_LEVEL_MAP: dict[str, str] = {
     "tight": "TightOpt",
     "verytight": "VeryTightOpt",
+    # PES contracts spell the level "very_tight"; accept the alias here so
+    # the convergence setting actually reaches the route line (G3 fix).
+    "very_tight": "VeryTightOpt",
     "loose": "LooseOpt",
-    "normal": "Opt",
+    # ``normal`` is ORCA's default for an optimization route.  The base
+    # ``calc_type="opt"`` already emits ``Opt``; adding it here duplicates
+    # the keyword (notably for ScanTS relaxed scans).
 }
 
 _SCF_CONVERGENCE_MAP: dict[str, str] = {
@@ -443,6 +448,33 @@ _SCF_STRATEGY_MAP: dict[str, str] = {
     "slowconv": "SlowConv",
     "soscf": "SOSCF",
 }
+
+# ORCA-native integration-grid keywords (route line).  The PES scan
+# optimizer exposes the ORCA-native names (DefGrid1/2/3) rather than the
+# legacy SG1/Fine aliases to avoid a second mapping layer.
+_GRID_KEYWORD_MAP: dict[str, str] = {
+    "defgrid1": "DefGrid1",
+    "defgrid2": "DefGrid2",
+    "defgrid3": "DefGrid3",
+}
+
+_DISPERSION_KEYWORD_MAP: dict[str, str] = {
+    "d3": "D3",
+    "d3bj": "D3BJ",
+    "d4": "D4",
+    "vv10": "VV10",
+}
+
+
+def _looser_opt_level(opt_level: str | None) -> str | None:
+    """Relax a geometry-convergence keyword by one notch (tight→normal)."""
+    if opt_level is None:
+        return "normal"
+    return {
+        "verytight": "tight",
+        "very_tight": "tight",
+        "tight": "normal",
+    }.get(str(opt_level).strip().lower(), opt_level)
 
 
 # ── Electronic-state SCF block renderer (design doc §9) ─────────────────
@@ -1222,6 +1254,8 @@ class ORCAInterface(QCInterfaceBase):
         scf_maxiter: int | None = None,
         scf_convergence: str | None = None,
         scf_strategy: str | None = None,
+        grid: str | None = None,
+        dispersion: str | None = None,
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
@@ -1302,6 +1336,31 @@ class ORCAInterface(QCInterfaceBase):
             if scf_options is None:
                 scf_options = {}
             scf_options.setdefault("maxiter", scf_maxiter)
+
+        # Named grid / dispersion parameters (PES DFT-scan extension): these
+        # used to be reachable only through raw route_extras.  Composite 3c
+        # and GFN methods are immune — the former strip the token via the
+        # builtin-dispersion filter below, the latter have no basis/dispersion
+        # layer at all.
+        _gfn_method = _is_orca_gfn_xtb_method(_method)
+        if not _gfn_method:
+            if grid:
+                _grid_kw = _GRID_KEYWORD_MAP.get(str(grid).strip().lower(), str(grid).strip())
+                if _grid_kw and _grid_kw.upper() not in _extras_upper:
+                    _route_extras.append(_grid_kw)
+                    _extras_upper.add(_grid_kw.upper())
+            _meta_ri = (meta or {}).get("ri_support", "user")
+            if (
+                dispersion
+                and str(dispersion).strip().lower() != "none"
+                and _meta_ri == "user"
+            ):
+                _disp_kw = _DISPERSION_KEYWORD_MAP.get(
+                    str(dispersion).strip().lower(), str(dispersion).strip()
+                )
+                if _disp_kw and _disp_kw.upper() not in _extras_upper:
+                    _route_extras.append(_disp_kw)
+                    _extras_upper.add(_disp_kw.upper())
 
         calc_type_map = {
             "opt": "Opt",
@@ -1508,6 +1567,8 @@ class ORCAInterface(QCInterfaceBase):
         scf_maxiter: int | None = None,
         scf_convergence: str | None = None,
         scf_strategy: str | None = None,
+        grid: str | None = None,
+        dispersion: str | None = None,
     ):
         """Write ORCA input file."""
         charge = charge if charge is not None else self.charge
@@ -1535,6 +1596,8 @@ class ORCAInterface(QCInterfaceBase):
             scf_maxiter=scf_maxiter,
             scf_convergence=scf_convergence,
             scf_strategy=scf_strategy,
+            grid=grid,
+            dispersion=dispersion,
         )
 
         ensure_dir(input_file.parent)
@@ -1846,6 +1909,11 @@ class ORCAInterface(QCInterfaceBase):
             aux_c_basis=kwargs.get("aux_c_basis"),
             geom_extra_lines=geom_extra_lines,
             scf_options=kwargs.get("scf_options"),
+            opt_level=kwargs.get("opt_level"),
+            scf_maxiter=kwargs.get("scf_maxiter"),
+            scf_convergence=kwargs.get("scf_convergence"),
+            grid=kwargs.get("grid"),
+            dispersion=kwargs.get("dispersion"),
         )
 
         try:
@@ -1859,9 +1927,12 @@ class ORCAInterface(QCInterfaceBase):
             )
 
         if not success:
+            failure_class = classify_orca_failure(output_file)
             return QCResult(
                 success=False,
-                error_message="ORCA constrained optimization failed",
+                error_message=(
+                    f"ORCA constrained optimization failed [{failure_class}]"
+                ),
                 output_file=input_file,
                 log_file=output_file,
             )
@@ -1870,9 +1941,10 @@ class ORCAInterface(QCInterfaceBase):
         energy = LogParser.extract_energy(output_file, "orca")
 
         if coords is None:
+            failure_class = classify_orca_failure(output_file)
             return QCResult(
                 success=False,
-                error_message=error or "Could not extract coordinates",
+                error_message=f"{error or 'Could not extract coordinates'} [{failure_class}]",
                 output_file=input_file,
                 log_file=output_file,
             )
@@ -1931,6 +2003,17 @@ class ORCAInterface(QCInterfaceBase):
                 recalc_hess=kwargs.pop("recalc_hess", 0),
                 route_extras=kwargs.pop("route_extras", None),
                 point_callback=kwargs.pop("point_callback", None),
+                opt_level=kwargs.pop("opt_level", None),
+                scf_convergence=kwargs.pop("scf_convergence", None),
+                scf_maxiter=kwargs.pop("scf_maxiter", None),
+                grid=kwargs.pop("grid", None),
+                dispersion=kwargs.pop("dispersion", None),
+                aux_j_basis=kwargs.pop("aux_j_basis", None),
+                aux_c_basis=kwargs.pop("aux_c_basis", None),
+                retry_count=kwargs.pop("retry_count", 0),
+                retry_strategy=kwargs.pop("retry_strategy", "previous_geometry"),
+                failure_policy=kwargs.pop("failure_policy", "abort"),
+                reuse_previous_geometry=kwargs.pop("reuse_previous_geometry", True),
             )
         if scan_coordinate is None or points is None:
             raise ValueError("ORCA relaxed_scan requires one scan coordinate and points")
@@ -1971,6 +2054,21 @@ class ORCAInterface(QCInterfaceBase):
                 "point_callback ignored for native ORCA relaxed scan; "
                 "live data comes from the incremental scan-artifact reader"
             )
+        opt_level = kwargs.pop("opt_level", None)
+        scf_convergence = kwargs.pop("scf_convergence", None)
+        scf_maxiter = kwargs.pop("scf_maxiter", None)
+        grid = kwargs.pop("grid", None)
+        dispersion = kwargs.pop("dispersion", None)
+        aux_j_basis = kwargs.pop("aux_j_basis", None)
+        aux_c_basis = kwargs.pop("aux_c_basis", None)
+        _retry_keys = ("retry_count", "retry_strategy", "failure_policy", "reuse_previous_geometry")
+        _retry_kwargs = {key: kwargs.pop(key) for key in _retry_keys if key in kwargs}
+        if _retry_kwargs:
+            logger.warning(
+                "Native ORCA relaxed scan is a single subprocess: per-point retry "
+                "kwargs %s are accepted but ignored (execution_mode=native_scan)",
+                sorted(_retry_kwargs),
+            )
         route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
             eff_method,
             eff_solvent,
@@ -2004,6 +2102,13 @@ class ORCAInterface(QCInterfaceBase):
             solvent=input_solvent,
             solvent_model=input_solvent_model,
             geom_extra_lines=geom_extra_lines,
+            opt_level=opt_level,
+            scf_convergence=scf_convergence,
+            scf_maxiter=scf_maxiter,
+            grid=grid,
+            dispersion=dispersion,
+            aux_j_basis=aux_j_basis,
+            aux_c_basis=aux_c_basis,
         )
 
         try:
@@ -2062,6 +2167,17 @@ class ORCAInterface(QCInterfaceBase):
         recalc_hess: object,
         route_extras: list[str] | None,
         point_callback: Callable[[object], None] | None = None,
+        opt_level: str | None = None,
+        scf_convergence: str | None = None,
+        scf_maxiter: int | None = None,
+        grid: str | None = None,
+        dispersion: str | None = None,
+        aux_j_basis: str | None = None,
+        aux_c_basis: str | None = None,
+        retry_count: int = 0,
+        retry_strategy: str = "previous_geometry",
+        failure_policy: str = "abort",
+        reuse_previous_geometry: bool = True,
     ) -> RelaxedScanResult:
         """Run multiple driven coordinates at one shared progress value.
 
@@ -2074,6 +2190,17 @@ class ORCAInterface(QCInterfaceBase):
         :class:`~cccp.qc.interfaces.xtb_scan.RelaxedScanPoint` (success or
         failure) so callers can publish live scan snapshots; callback
         errors are logged and never abort the scan.
+
+        Retry semantics (per point, at most ``retry_count`` retries):
+        ``previous_geometry`` reseeds from the last converged frame,
+        ``original_geometry`` reseeds from the scan-start geometry, and
+        ``looser_convergence`` retries with the geometry convergence
+        keyword relaxed one notch (tight→normal).  Retries never change the
+        method/basis/solvent — the calculation level is fixed outside the
+        loop.  The legacy driver policies ``retry_previous`` /
+        ``retry_original`` act as strategy overrides and abort the scan once
+        retries are exhausted; ``mark_failed_continue`` records the frame as
+        failed and proceeds to the next point; ``abort`` stops the scan.
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         ensure_dir(output_dir)
@@ -2108,29 +2235,81 @@ class ORCAInterface(QCInterfaceBase):
             route_extras,
         )
 
-        current_coordinates = np.asarray(coordinates, dtype=float)
+        effective_strategy = retry_strategy
+        continue_on_failure = failure_policy == "mark_failed_continue"
+        if failure_policy == "retry_original":
+            effective_strategy = "original_geometry"
+        elif failure_policy == "retry_previous":
+            effective_strategy = "previous_geometry"
+
+        start_coordinates = np.asarray(coordinates, dtype=float)
+        current_coordinates = start_coordinates
         result_points: list[RelaxedScanPoint] = []
         for index in range(plan.points):
             frame_dir = output_dir / f"frame_{index:03d}"
-            result = self.constrained_optimize(
-                current_coordinates,
-                symbols,
-                plan.frame_constraints(index),
-                charge=charge,
-                multiplicity=multiplicity,
-                output_dir=frame_dir,
-                output_name=output_name,
-                method=eff_method,
-                basis=eff_basis,
-                solvent=input_solvent,
-                solvent_model=input_solvent_model,
-                geom_maxiter=geom_maxiter,
-                recalc_hess=recalc_hess,
-                route_extras=resolved_route_extras,
-            )
             targets = plan.coordinate_targets(index)
             progress = index / max(plan.points - 1, 1)
-            if not result.success or result.coordinates is None:
+            retry_history: list[dict[str, Any]] = []
+            active_opt_level = opt_level
+            result = None
+            for attempt in range(1 + max(0, int(retry_count))):
+                if attempt > 0 and effective_strategy == "original_geometry":
+                    seed = start_coordinates
+                elif reuse_previous_geometry:
+                    seed = current_coordinates
+                else:
+                    seed = start_coordinates
+                result = self.constrained_optimize(
+                    seed,
+                    symbols,
+                    plan.frame_constraints(index),
+                    charge=charge,
+                    multiplicity=multiplicity,
+                    output_dir=frame_dir,
+                    output_name=f"{output_name}_try{attempt + 1}",
+                    method=eff_method,
+                    basis=eff_basis,
+                    solvent=input_solvent,
+                    solvent_model=input_solvent_model,
+                    geom_maxiter=geom_maxiter,
+                    recalc_hess=recalc_hess,
+                    route_extras=resolved_route_extras,
+                    opt_level=active_opt_level,
+                    scf_convergence=scf_convergence,
+                    scf_maxiter=scf_maxiter,
+                    grid=grid,
+                    dispersion=dispersion,
+                    aux_j_basis=aux_j_basis,
+                    aux_c_basis=aux_c_basis,
+                )
+                if result.success and result.coordinates is not None:
+                    retry_history.append(
+                        {
+                            "attempt": attempt + 1,
+                            "strategy": "initial" if attempt == 0 else effective_strategy,
+                            "opt_level": active_opt_level,
+                            "failure_class": None,
+                        }
+                    )
+                    break
+                failure_class = (
+                    classify_orca_failure(result.log_file)
+                    if result is not None and result.log_file
+                    else "unknown"
+                )
+                retry_history.append(
+                    {
+                        "attempt": attempt + 1,
+                        "strategy": "initial" if attempt == 0 else effective_strategy,
+                        "opt_level": active_opt_level,
+                        "failure_class": failure_class,
+                    }
+                )
+                if effective_strategy == "looser_convergence":
+                    active_opt_level = _looser_opt_level(active_opt_level)
+
+            if result is None or not result.success or result.coordinates is None:
+                retry_history_dicts = [dict(entry) for entry in retry_history]
                 result_points.append(
                     RelaxedScanPoint(
                         frame_index=index,
@@ -2140,9 +2319,26 @@ class ORCAInterface(QCInterfaceBase):
                         energy_hartree=None,
                         success=False,
                         coordinate_values=targets,
+                        metadata={
+                            "retry_history": retry_history_dicts,
+                            "scf_converged": (
+                                False
+                                if retry_history
+                                and retry_history[-1].get("failure_class") == "scf_failure"
+                                else None
+                            ),
+                        },
                     )
                 )
                 _notify_scan_point(point_callback, result_points[-1])
+                if continue_on_failure:
+                    logger.warning(
+                        "Synchronous ORCA scan frame %d failed after %d attempt(s) "
+                        "(failure_policy=mark_failed_continue)",
+                        index,
+                        len(retry_history),
+                    )
+                    continue
                 return RelaxedScanResult(
                     points=result_points,
                     input_xyz=input_xyz,
@@ -2150,7 +2346,7 @@ class ORCAInterface(QCInterfaceBase):
                     success=False,
                     message=(
                         f"Synchronous ORCA scan failed at frame {index}: "
-                        f"{result.error_message or 'constrained optimization failed'}"
+                        f"{(result.error_message if result else None) or 'constrained opt failed'}"
                     ),
                 )
 
@@ -2164,6 +2360,10 @@ class ORCAInterface(QCInterfaceBase):
                     energy_hartree=result.energy,
                     success=True,
                     coordinate_values=targets,
+                    metadata={
+                        "retry_history": [dict(entry) for entry in retry_history],
+                        "scf_converged": True,
+                    },
                 )
             )
             _notify_scan_point(point_callback, result_points[-1])
@@ -2344,6 +2544,8 @@ class ORCAInterface(QCInterfaceBase):
             scf_maxiter=kwargs.get("scf_maxiter"),
             scf_convergence=kwargs.get("scf_convergence"),
             scf_strategy=kwargs.get("scf_strategy"),
+            grid=kwargs.get("grid"),
+            dispersion=kwargs.get("dispersion"),
         )
 
         success = self._run_orca(input_file, output_file)
