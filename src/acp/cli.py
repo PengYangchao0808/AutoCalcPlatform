@@ -193,6 +193,68 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         help="Logging level (default: INFO)",
     )
 
+    # TS Mode directed optimization (source-bundle driven, plan §8)
+    p = run_sub.add_parser(
+        "tsmode",
+        help="Directed TS optimization along a chosen imaginary mode",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  acp run tsmode --source-bundle bundle.json --source-mode-index 7 --output ./out\n"
+            "\n"
+            "bundle.json references validated frequency-source files:\n"
+            '  {"files": {"output": "freq.out", "hessian": "freq.hess"},\n'
+            '   "charge": 0, "multiplicity": 1,\n'
+            '   "level": {"method": "r2SCAN-3c", "basis": ""},\n'
+            '   "origin": {"kind": "files"}}'
+        ),
+    )
+    p.set_defaults(workflow="tsmode")
+    p.add_argument(
+        "--source-bundle",
+        required=True,
+        help="Frequency-source bundle description (bundle.json)",
+    )
+    p.add_argument(
+        "--source-mode-index",
+        type=int,
+        required=True,
+        help="Native printed mode index of the target imaginary frequency",
+    )
+    p.add_argument("--output", "-o", default="./tsmode_output", help="Output directory")
+    p.add_argument("--name", type=str, help="Task name")
+    p.add_argument("--max-steps", type=int, help="Geometry optimization MaxIter")
+    p.add_argument("--recalc-hess", type=int, help="Recalc Hessian every N steps (0=off)")
+    p.add_argument("--trust-radius", type=float, help="Initial trust radius")
+    p.add_argument(
+        "--retry-limit",
+        type=int,
+        default=2,
+        help="SCF rescue attempts that preserve the target (default: 2)",
+    )
+    p.add_argument(
+        "--no-final-frequency",
+        action="store_true",
+        help="Skip the fixed final frequency verification stage",
+    )
+    p.add_argument(
+        "--allow-unverified-mapping",
+        action="store_true",
+        help=(
+            "Proceed although the TS_Mode eigenvalue-rank mapping is not yet "
+            "verified against real ORCA samples (plan §6, milestone P0)"
+        ),
+    )
+    p.add_argument("--nproc", type=int, help="Number of CPU cores")
+    p.add_argument("--mem", type=str, help="Memory limit")
+    p.add_argument("--config", type=str, help="Configuration YAML file")
+    p.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
     # xTB optimization (separate parser — different solvent models & params)
     p = run_sub.add_parser(
         "xtb_optimize",
@@ -2760,6 +2822,69 @@ def _handle_irc(args: argparse.Namespace) -> int:
     return 1
 
 
+def _handle_tsmode(args: argparse.Namespace) -> int:
+    """Run the TS Mode directed optimization workflow from a bundle file."""
+    from acp.calculations.progress import ProgressReporter
+    from acp.calculations.tsmode import TsmodeError
+    from acp.workflows.tsmode import run_tsmode
+
+    setup_logging(args.log_level)
+    reporter = ProgressReporter(
+        Path(args.output),
+        job_name="tsmode",
+        stages=[
+            "prepare_source",
+            "resolve_target",
+            "optimize_ts",
+            "frequency_final",
+            "validate_ts",
+            "publish_results",
+        ],
+    )
+    try:
+        result = run_tsmode(
+            args.source_bundle,
+            args.source_mode_index,
+            output_dir=args.output,
+            config=_build_config(args),
+            name=args.name,
+            optimization_overrides={
+                "max_iterations": args.max_steps,
+                "recalc_hess": args.recalc_hess,
+                "trust_radius": args.trust_radius,
+                "retry_limit": args.retry_limit,
+                "final_frequency": (not args.no_final_frequency) or None,
+                "allow_unverified_mapping": args.allow_unverified_mapping or None,
+            },
+            resources={"nproc": args.nproc, "mem": args.mem},
+            progress_reporter=reporter,
+        )
+    except TsmodeError as exc:
+        logger.error("TS Mode %s: %s", exc.error_code, exc.detail)
+        reporter.fail(f"{exc.error_code}: {exc.detail}")
+        return 2
+    except (ValueError, FileNotFoundError) as exc:
+        logger.error("TS Mode input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except KeyboardInterrupt:
+        logger.warning("TS Mode interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+    except (OSError, RuntimeError, TypeError) as exc:
+        logger.exception("TS Mode failed: %s", exc)
+        reporter.fail(str(exc))
+        return 1
+
+    if result.status == "completed":
+        logger.info("TS Mode completed")
+        reporter.complete()
+        return 0
+    logger.error("TS Mode failed: %s", result.error)
+    reporter.fail(result.error or "tsmode failed")
+    return 1
+
+
 def _build_xtb_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in ("gfn", "opt_level", "solvent_model", "solvent", "max_steps"):
@@ -3234,6 +3359,7 @@ def main(argv: list[str] | None = None) -> int:
             "frequency": _handle_frequency,
             "scan": _handle_scan,
             "irc": _handle_irc,
+            "tsmode": _handle_tsmode,
             "casscf": _handle_casscf,
             "xtb_optimize": _handle_xtb_optimize,
         }

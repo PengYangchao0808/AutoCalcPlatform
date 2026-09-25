@@ -69,6 +69,23 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "tsmode",
+        "label": "TS Mode Optimization",
+        "label_zh": "TS 模式定向优化",
+        "category": "simple",
+        "description": (
+            "Directed OptTS along a chosen imaginary mode of an existing "
+            "frequency result (reads its Hessian), with final frequency "
+            "verification"
+        ),
+        "method_schema_id": "tsmode",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "requires_source": True,
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "casscf",
         "label": "CASSCF / NEVPT2",
         "label_zh": "CASSCF / NEVPT2",
@@ -2538,7 +2555,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
             {
                 "level_id": "irc",
                 "label": "Intrinsic Reaction Coordinate",
-                "label_zh": "\u5185\u7968\u53cd\u5e94\u5750\u6807",
+                "label_zh": "内禀反应坐标",
                 "required": True,
                 "allowed_engines": ["orca"],
                 "fields": ["method", "basis", "maxpoints", "step", "electronic_state"],
@@ -2558,6 +2575,50 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "basis": "",
                         "maxpoints": 100,
                         "step": 0.1,
+                    }
+                },
+            }
+        ],
+    },
+    "tsmode": {
+        "method_levels": [
+            {
+                "level_id": "tsmode",
+                "label": "TS Mode Directed Optimization",
+                "label_zh": "TS 模式定向优化",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["method", "basis", "max_steps", "recalc_hess"],
+            }
+        ],
+        "stages": {
+            "mode": "static",
+            "static": [
+                "prepare_source",
+                "resolve_target",
+                "optimize_ts",
+                "frequency_final",
+                "validate_ts",
+                "publish_results",
+            ],
+        },
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default TS Mode",
+                "label_zh": "标准 TS 模式优化",
+                "summary": (
+                    "Directed OptTS reading the source Hessian; level of "
+                    "theory, charge and multiplicity are inherited from the "
+                    "frequency source"
+                ),
+                "levels": {
+                    "tsmode": {
+                        "engine": "orca",
+                        "method": "",
+                        "basis": "",
+                        "max_steps": 250,
+                        "recalc_hess": 0,
                     }
                 },
             }
