@@ -69,6 +69,7 @@ EDIT_ACTIVE_WORKFLOWS: frozenset[str] = frozenset(
         "frequency",
         "scan",
         "irc",
+        "tsmode",
         "casscf",
         "xtb_optimize",
         "nmr",

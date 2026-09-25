@@ -101,6 +101,16 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Run an independent IRC from a transition-state structure.",
         requires_binaries=["orca"],
     ),
+    "tsmode": WorkflowRegistryEntry(
+        name="tsmode",
+        label="TS Mode Optimization",
+        description=(
+            "Directed OptTS along a chosen imaginary mode of an existing "
+            "frequency result (reads its Hessian) plus final frequency "
+            "verification."
+        ),
+        requires_binaries=["orca"],
+    ),
     "casscf": WorkflowRegistryEntry(
         name="casscf",
         label="CASSCF / NEVPT2",
