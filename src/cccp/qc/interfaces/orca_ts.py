@@ -92,6 +92,16 @@ class TsOptResult:
             return None
         return min(self.all_frequencies)
 
+    @property
+    def energy(self) -> float | None:
+        """Alias so ``to_qc_result`` normalization can lift the energy."""
+        return self.energy_hartree
+
+    @property
+    def frequencies(self) -> list[float]:
+        """Alias so ``to_qc_result`` normalization can lift frequencies."""
+        return list(self.all_frequencies)
+
 
 @dataclass(frozen=True)
 class IrcResult:
@@ -365,6 +375,7 @@ def ts_geom_block(
     *,
     ts_mode: bool | int = False,
     max_iter: int | None = None,
+    hess_file_name: str | None = None,
 ) -> str:
     """Render the ``%geom`` block for a TS optimization.
 
@@ -372,10 +383,27 @@ def ts_geom_block(
     ``"calculate"`` (model/read Hessians omit it). ``trust_radius`` maps to the
     ORCA ``Trust`` keyword (positive value = initial trust radius with
     trust-radius update; negative = fixed). ``max_iter`` emits ORCA's ``MaxIter``
-    keyword; ``None`` leaves it out so ORCA's default applies. ``ts_mode`` emits
-    ORCA's ``TS_Mode {M n} end`` selector, where *n* is the 0-based normal-mode
-    index from the frequency run. ``True`` maps to mode ``0``.
+    keyword; ``None`` leaves it out so ORCA's default applies.
+
+    ``ts_mode`` emits ORCA's ``TS_Mode {M n} end`` selector.  **The index *n*
+    is the optimizer-side mode number defined by ORCA's eigenvalue ordering
+    of the Hessian it reads (``M 0`` = lowest eigenvalue), NOT the printed
+    vibrational-frequency index of a frequency output.**  Callers that only
+    have a frequency-output mode number must first resolve it through an
+    explicit mapping (see ``acp.calculations.tsmode.mode_mapping``);
+    ``True`` maps to mode ``0`` (legacy lowest-mode rescue behaviour).
+
+    *hess_file_name* emits ``InHess Read`` + ``InHessName "<name>"`` so the
+    optimization starts from a staged ``.hess`` file; it requires
+    *initial_hessian* to be ``"read"`` and suppresses ``Calc_Hess true`` so a
+    read source is never silently combined with Hessian recomputation.
     """
+    if hess_file_name is not None and initial_hessian not in ("read", "model"):
+        raise ValueError(
+            "hess_file_name requires initial_hessian='read' (got "
+            f"{initial_hessian!r}); refusing to mix a read Hessian with "
+            "'calculate'"
+        )
     lines = ["%geom"]
     if initial_hessian == "calculate":
         lines.append("  Calc_Hess true")
@@ -385,6 +413,9 @@ def ts_geom_block(
         lines.append(f"  Trust {float(trust_radius):g}")
     if max_iter is not None:
         lines.append(f"  MaxIter {int(max_iter)}")
+    if hess_file_name:
+        lines.append("  InHess Read")
+        lines.append(f'  InHessName "{hess_file_name}"')
     emit_ts_mode = False
     mode_index = 0
     if isinstance(ts_mode, bool):
@@ -393,6 +424,11 @@ def ts_geom_block(
         emit_ts_mode = True
         mode_index = int(ts_mode)
     if emit_ts_mode:
+        if not isinstance(ts_mode, (bool, int, np.integer)):
+            raise TypeError(
+                f"TS_Mode index must be an int, got {type(ts_mode).__name__}; "
+                "resolve frequency-output indices through the tsmode mapping first"
+            )
         if mode_index < 0:
             raise ValueError(f"ORCA TS_Mode index must be >= 0, got {mode_index}")
         lines.append(f"  TS_Mode {{M {mode_index}}} end")

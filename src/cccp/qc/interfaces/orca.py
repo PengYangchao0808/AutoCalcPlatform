@@ -2997,13 +2997,22 @@ class ORCAInterface(QCInterfaceBase):
             method: Override method (uses ``self.method`` if None).
             basis: Override basis (uses ``self.basis`` if None).
             initial_hessian: ``"calculate"`` (default) / ``"model"`` / ``"read"``.
+                ``"read"`` stages *hess_file* (when supplied) as the ORCA
+                ``InHess Read`` source.
             recalc_hess: Recalculate Hessian every N steps (0 disables).
             trust_radius: Initial Trust (trust radius) for the TS optimizer.
             **kwargs: ``solvent`` / ``solvent_model`` / ``grid`` / ``scf`` /
                 ``nproc`` / ``ts_mode`` / ``opt_level`` /
                 ``geom_maxiter`` / ``max_cycles`` /
                 ``mode_displacement`` / ``mode_vector`` /
-                ``mode_displacement_sign`` overrides.
+                ``mode_displacement_sign`` overrides, plus ``hess_file``
+                (``Path`` to an ORCA ``.hess`` staged as
+                ``<output_name>.hess`` and referenced by ``InHessName``).
+                ``ts_mode`` accepts ``True`` (legacy mode-0 rescue) or an
+                **optimizer-side mode index** resolved from the staged
+                Hessian (``M 0`` = lowest eigenvalue) — a raw
+                frequency-output index must go through the tsmode mapping
+                first.
 
         Returns:
             :class:`TsOptResult` with the converged TS geometry, energies and
@@ -3026,12 +3035,28 @@ class ORCAInterface(QCInterfaceBase):
         _mode_vector = kwargs.pop("mode_vector", None)
         _mode_displacement_sign = kwargs.pop("mode_displacement_sign", "plus")
         _output_callback = kwargs.pop("output_callback", None)
+        _hess_file = kwargs.pop("hess_file", None)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
         if kwargs:
             logger.warning(
                 "Unused ORCA transition_state_opt kwargs for %s: %s",
                 output_name,
                 sorted(kwargs),
+            )
+
+        staged_hessian: Path | None = None
+        if _hess_file is not None:
+            if initial_hessian == "calculate":
+                raise ValueError(
+                    "hess_file cannot be combined with initial_hessian='calculate'; "
+                    "a read Hessian source must not silently request recomputation"
+                )
+            staged_hessian = _copy_irc_hessian(Path(_hess_file), output_dir, output_name)
+        elif initial_hessian == "read":
+            logger.warning(
+                "transition_state_opt %s requested initial_hessian='read' without a "
+                "hess_file; ORCA will fall back to its default model Hessian",
+                output_name,
             )
 
         eff_method = method or self.method
@@ -3071,6 +3096,7 @@ class ORCAInterface(QCInterfaceBase):
                     trust_radius,
                     ts_mode=_ts_mode,
                     max_iter=geom_maxiter,
+                    hess_file_name=staged_hessian.name if staged_hessian else None,
                 ),
                 freq_block_for_ts(),
             )
