@@ -19,6 +19,7 @@ CURRENT_ACTIVE_IDS = (
     "frequency",
     "scan",
     "irc",
+    "tsmode",
     "casscf",
     "xtb_optimize",
     "nmr",
@@ -32,6 +33,7 @@ TARGET_ACTIVE_IDS = (
     "frequency",
     "scan",
     "irc",
+    "tsmode",
     "casscf",
     "xtb_optimize",
     "Confsearch",
@@ -83,13 +85,14 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
     assert active_ids == CURRENT_ACTIVE_IDS
-    assert len(active_ids) == 11
+    assert len(active_ids) == 12
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
         "frequency",
         "scan",
         "irc",
+        "tsmode",
         "casscf",
         "xtb_optimize",
         "nmr",
@@ -184,13 +187,14 @@ def test_batch_engine_no_stage_symbols() -> None:
 def test_target_active_workflow_ids_are_exact() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
-    assert len(active_ids) == 11
+    assert len(active_ids) == 12
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
         "frequency",
         "scan",
         "irc",
+        "tsmode",
         "casscf",
         "xtb_optimize",
         "Confsearch",

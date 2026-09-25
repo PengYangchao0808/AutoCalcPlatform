@@ -110,6 +110,31 @@ def _spec(workflow: str) -> JobSpec:
                 "step": 0.1,
             },
         )
+    elif workflow == "tsmode":
+        base.update(
+            input={
+                "source_type": "tsmode_bundle",
+                "source_job_id": "20260920_001_frequency",
+                "entry_id": "simple_frequency",
+                "source_mode_index": 7,
+                "frequency_out": "/runs/20260920_001_frequency/WORK/freq/frequency.out",
+                "hess": "/runs/20260920_001_frequency/WORK/freq/frequency.hess",
+                "charge": 0,
+                "multiplicity": 1,
+                "level": {"method": "r2SCAN-3c", "basis": ""},
+                "origin": {
+                    "kind": "job",
+                    "job_id": "20260920_001_frequency",
+                    "entry_id": "simple_frequency",
+                    "source_mode_index": 7,
+                    "target_mode_id": "tm_example0123456789",
+                },
+            },
+            method={
+                "schema_id": "tsmode",
+                "levels": {"tsmode": {"method": "r2SCAN-3c", "max_steps": 250}},
+            },
+        )
     elif workflow == "casscf":
         base.update(
             input={"source_type": "xyz_text", "source": XYZ_COOH, "charge": 0, "multiplicity": 1},

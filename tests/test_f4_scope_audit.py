@@ -49,10 +49,19 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        ``parse_irc_trajectory_xyz`` / ``parse_irc_iteration_energies`` module
        block, the ``IrcResult.trajectory_files`` field, and the
        ``ORCAInterface.irc`` ``output_callback`` + ``discover_irc_trajectory_files``
-       plumbing.  Sanctioned scopes are the named module block and the
+       plumbing.  Sanctioned scopes: the named module block and the
        ``ORCAInterface.irc`` method only.  Teeth: the parsers and
        ``IrcPathPoint`` must exist, ``parse_irc_endpoints`` must survive, and
        ``ORCAInterface.irc`` must accept ``output_callback``.
+    G. ``orca_ts.py`` + ``orca.py`` + ``hess_file.py``(NEW): TS Mode wave
+       (2026-09-22, ``docs/ACP_TSMode_Optimization_Implementation_Plan.md``) —
+       ``ts_geom_block`` read-Hessian input generation (``InHess Read`` /
+       ``InHessName`` / read+calculate guard / TS_Mode int type check),
+       ``TsOptResult`` ``energy``/``frequencies`` aliases,
+       ``ORCAInterface.transition_state_opt`` ``hess_file`` staging, and the
+       pure ``.hess`` parser module.  Teeth: ``InHess Read`` + guard must
+       render, ``transition_state_opt`` must stage ``hess_file``,
+       ``parse_ts_mode_vectors`` must survive.
 """
 
 from __future__ import annotations
@@ -74,6 +83,7 @@ ALLOWED_PY = frozenset(
         "src/cccp/qc/interfaces/orca.py",
         "src/cccp/qc/interfaces/orca_ts.py",
         "src/cccp/qc/interfaces/constraints.py",
+        "src/cccp/qc/interfaces/hess_file.py",
         "src/acp/backends/orca.py",
     }
 )
@@ -504,6 +514,84 @@ def _target_orca(src: str) -> set[int]:
     return tgt
 
 
+# ── Amendment G: TS Mode wave (2026-09-22) ───────────────────────────────────
+#
+# ``docs/ACP_TSMode_Optimization_Implementation_Plan.md`` §9/§13: the TS Mode
+# directed-OptTS wave adds read-Hessian input generation and .hess parsing:
+#
+# * ``orca_ts.py``: ``ts_geom_block`` gains ``hess_file_name`` (``InHess Read``
+#   + ``InHessName``), the read/calculate guard, and an int type check on the
+#   TS_Mode selector; ``TsOptResult`` gains read-only ``energy`` /
+#   ``frequencies`` aliases for ``to_qc_result`` normalization; the M-index
+#   docstring semantics are corrected (M 0 = lowest eigenvalue).
+# * ``orca.py``: ``ORCAInterface.transition_state_opt`` stages ``hess_file``
+#   as ``<name>.hess`` and refuses to combine it with ``'calculate'``.
+# * ``hess_file.py``: NEW pure parser for ORCA ``.hess`` files (no subprocess).
+
+_G_ORCA_TS_SYMBOLS = (
+    "InHess",
+    "hess_file_name",
+    "np.integer",
+    "def energy",
+    "def frequencies",
+    "Alias so",
+    "resolve frequency-output indices",
+)
+
+
+def _is_amendment_g_orca_ts_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca_ts.py`` additions for the TS Mode wave."""
+    geom_range = _func_ranges(worktree_src).get("ts_geom_block")
+    if geom_range is not None and geom_range[0] <= ln <= geom_range[1]:
+        return True
+    stripped = txt.strip()
+    return any(symbol in stripped for symbol in _G_ORCA_TS_SYMBOLS)
+
+
+def _amendment_g_orca_ts_teeth(worktree: str) -> list[str]:
+    """Teeth: the read-Hessian input generation actually landed."""
+    issues: list[str] = []
+    geom_range = _func_ranges(worktree).get("ts_geom_block")
+    if geom_range is None:
+        issues.append("  Amendment G scope ts_geom_block missing")
+    else:
+        body = "\n".join(worktree.splitlines()[geom_range[0] - 1 : geom_range[1]])
+        if "InHess Read" not in body:
+            issues.append("  Amendment G: ts_geom_block lacks InHess Read")
+        if "requires initial_hessian='read'" not in body:
+            issues.append("  Amendment G: ts_geom_block lacks read/calculate guard")
+    if "parse_ts_mode_vectors" not in _func_ranges(worktree):
+        issues.append("  Amendment G must preserve parse_ts_mode_vectors")
+    return issues
+
+
+def _is_amendment_g_orca_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the TS Mode wave."""
+    ts_range = _func_range(worktree_src, "transition_state_opt", "ORCAInterface")
+    return ts_range is not None and ts_range[0] <= ln <= ts_range[1]
+
+
+def _is_amendment_g_orca_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions live inside ``transition_state_opt``."""
+    ts_range = _func_range(baseline_src, "transition_state_opt", "ORCAInterface")
+    return ts_range is not None and ts_range[0] <= ln <= ts_range[1]
+
+
+def _amendment_g_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: ``transition_state_opt`` gained Hessian staging."""
+    issues: list[str] = []
+    ts_range = _func_range(worktree, "transition_state_opt", "ORCAInterface")
+    if ts_range is None:
+        issues.append("  Amendment G scope ORCAInterface.transition_state_opt missing")
+        return issues
+    body = "\n".join(worktree.splitlines()[ts_range[0] - 1 : ts_range[1]])
+    if '"hess_file"' not in body:
+        issues.append("  Amendment G: transition_state_opt lacks hess_file staging")
+    if "cannot be combined with initial_hessian='calculate'" not in body:
+        issues.append("  Amendment G: transition_state_opt lacks calculate guard")
+    return issues
+
+
 def _target_backend(src: str) -> set[int]:
     """Target-region line numbers for baseline ``backends/orca.py``."""
     lines = src.splitlines()
@@ -546,7 +634,7 @@ def test_algorithm_body_untouched() -> None:
     for fp in ALLOWED_PY:
         added, deleted = _diff_hunks(fp)
 
-        # ── orca_ts.py: Amendment F only ──────────────────────────────────
+        # ── orca_ts.py: Amendment F + G ───────────────────────────────────
         if fp == "src/cccp/qc/interfaces/orca_ts.py":
             worktree = _worktree_content(fp)
             for ln, txt in added:
@@ -555,8 +643,11 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_f_orca_ts_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_g_orca_ts_addition(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
             violations.extend(_amendment_f_orca_ts_teeth(worktree))
+            violations.extend(_amendment_g_orca_ts_teeth(worktree))
             continue
 
         # ── backends/orca.py: Amendment A + E ─────────────────────────────
@@ -629,6 +720,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_f_orca_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_g_orca_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -667,13 +760,23 @@ def test_algorithm_body_untouched() -> None:
             if _func_range(worktree, "casscf", "ORCAInterface") is None:
                 violations.append(f"  {fp}: Amendment E scope ORCAInterface.casscf missing")
             violations.extend(_amendment_f_orca_teeth(worktree))
+            violations.extend(_amendment_g_orca_teeth(worktree))
+            continue
+
+        # ── hess_file.py: Amendment G (new pure-parser module) ───────────
+        if fp == "src/cccp/qc/interfaces/hess_file.py":
+            worktree = _worktree_content(fp)
+            if "def parse_orca_hess_file" not in worktree:
+                violations.append("  Amendment G scope parse_orca_hess_file missing")
+            if "import subprocess" in worktree:
+                violations.append("  Amendment G: hess_file.py must not use subprocess")
             continue
 
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
 
 
 def test_orca_ts_no_changes() -> None:
-    """① ``orca_ts.py`` additions are confined to Amendment F (IRC path)."""
+    """① ``orca_ts.py`` additions are confined to Amendments F (IRC path) + G (TS Mode)."""
     fp = "src/cccp/qc/interfaces/orca_ts.py"
     if fp not in _changed_files():
         return
@@ -685,9 +788,11 @@ def test_orca_ts_no_changes() -> None:
         if txt.strip()
         and not txt.strip().startswith("#")
         and not _is_amendment_f_orca_ts_addition(ln, txt, worktree)
+        and not _is_amendment_g_orca_ts_addition(ln, txt, worktree)
     ]
     violations.extend(_amendment_f_orca_ts_teeth(worktree))
-    assert not violations, "orca_ts.py additions outside Amendment F:\n" + "\n".join(violations)
+    violations.extend(_amendment_g_orca_ts_teeth(worktree))
+    assert not violations, "orca_ts.py additions outside Amendments F/G:\n" + "\n".join(violations)
 
 
 def test_deleted_lines_in_target_regions() -> None:
@@ -716,6 +821,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_e_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_g_orca_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             # Amendment C: relaxed_scan multi-coordinate rewrite lives in the
