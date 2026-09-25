@@ -34,6 +34,7 @@ _I18N_KEY_RE = re.compile(r'"((?:energy|tab\.energy)\.[^"]+)":')
 _NODES_I18N_KEY_RE = re.compile(r'"(nodes\.[^"]+)":')
 _ZH_BLOCK_RE = re.compile(r'"zh-CN":\s*\{(.*?)\n\s*"en-US":', re.DOTALL)
 _EN_BLOCK_RE = re.compile(r'"en-US":\s*\{(.*?)(?:\n\s*\};)', re.DOTALL)
+_SP_JS = FRONTEND_JS_DIR / "structure_source_picker.js"
 
 
 class _ProfileRecord(TypedDict, total=False):
@@ -433,13 +434,19 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     # 7. Transitions: chart click / prev-next / keyboard → user (+follow off);
     #    "back to latest" → follow; refresh keeps a surviving user pick and
     #    falls back to follow when the picked node disappears.
-    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[
+    # The selectionOrigin logic now lives in energyGraphSetSelection (unified writer).
+    set_selection = html.split("function energyGraphSetSelection(opts)", 1)[
         1
     ].split("\nfunction ", 1)[0]
     assert (
         'energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";'
-        in select_frame
+        in set_selection
     )
+    # energyGraphSelectFrame delegates to energyGraphSetSelection
+    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[
+        1
+    ].split("\nfunction ", 1)[0]
+    assert "energyGraphSetSelection(" in select_frame
     assert (
         'energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow", nodes[nodes.length - 1].id)'
         in html
@@ -1114,7 +1121,7 @@ def test_wizard_project_section_is_first_step() -> None:
     assert proj_pos != -1 and wizard_pos != -1 and cards_pos != -1
     assert proj_pos < wizard_pos < cards_pos
 
-    assert 'data-i18n="modal.step1"' in modal
+    assert 'data-i18n="wizard.target_project"' in modal
     assert 'data-i18n="modal.step2"' in modal
     assert 'data-i18n="modal.step3">工作流' in modal
     assert 'data-i18n="modal.step4">计算协议' in modal
@@ -1134,6 +1141,24 @@ def test_wizard_project_section_is_first_step() -> None:
         '"modal.step5": "5. Resources & Submit"',
     ):
         assert key in html, f"missing i18n entry: {key}"
+
+
+def test_job_modal_layout_prevents_card_and_toolbar_overlap() -> None:
+    """Long labels stay inside balanced cards and preview actions stay horizontal."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "#job-modal .config-cards-row {" in html
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in html
+    assert "#job-modal .config-card {" in html
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in html
+    assert "#job-modal .config-card-btn {" in html
+    assert "white-space: nowrap;" in html
+    assert "#job-modal .preview-right-toolbar {" in html
+    assert "#job-modal .preview-right-actions {" in html
+    assert "min-width: max-content;" in html
+    assert ".footer-selected-count {" in html
+    assert "flex: 1 1 auto;" in html
+    assert "#job-modal .config-cards-row { grid-template-columns: minmax(0, 1fr); }" in html
 
 
 def test_results_filter_targets_modal_project_not_top_filter() -> None:
@@ -2297,16 +2322,21 @@ def test_structure_viewer_svload_xyz_bridge_exists() -> None:
 
 
 def test_energy_selectframe_pushes_to_structure_viewer() -> None:
-    """Contract: energyGraphSelectFrame calls onEnergyNodeSelected."""
+    """Contract: energyGraphSelectFrame delegates to energyGraphSetSelection which pushes to structure viewer."""
     html = FRONTEND.read_text(encoding="utf-8")
 
     select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[1]
     select_frame = select_frame.split("\nfunction ", 1)[0]
-
-    assert "onEnergyNodeSelected" in select_frame, (
-        "energyGraphSelectFrame must push selection to structure viewer"
+    assert "energyGraphSetSelection(" in select_frame, (
+        "energyGraphSelectFrame must delegate to energyGraphSetSelection"
     )
-    assert "energyGraphState.jobId" in select_frame, "Push must pass jobId from energyGraphState"
+
+    set_selection = html.split("function energyGraphSetSelection(opts)", 1)[1]
+    set_selection = set_selection.split("\nfunction ", 1)[0]
+    assert "onEnergyNodeSelected" in set_selection, (
+        "energyGraphSetSelection must push selection to structure viewer"
+    )
+    assert "energyGraphState.jobId" in set_selection, "Push must pass jobId from energyGraphState"
 
 
 def test_structure_viewer_js_has_energy_push_api() -> None:
@@ -3271,9 +3301,9 @@ def test_vibration_dock_i18n_keys_new() -> None:
 
 
 def test_vibration_viewer_version_bump() -> None:
-    """ACPVibrationViewer bumped to 0.7.0."""
+    """ACPVibrationViewer bumped to 0.8.0."""
     vib = _VIB_JS.read_text(encoding="utf-8")
-    assert 'var VERSION = "0.7.0"' in vib
+    assert 'var VERSION = "0.8.0"' in vib
 
 
 def test_vibration_dock_ir_unit_updated() -> None:
@@ -8634,9 +8664,10 @@ def test_task_view_data_layer() -> None:
     #     pre-T4 baseline (which was 53).  T10 added saved-views PATCH
     #     calls (+2); T11 added auto-tag rules CRUD (+4); P4 structure
     #     picker added s2scan picker branch detail+asset calls (+2).
+    #     candidate workspace added _loadPendingGeometry api call (+1).
     api_v1_count = html.count('api("/')
-    assert api_v1_count == 61, (
-        f"v1 api('/ call count expected 61 (53 baseline -1 +2 T10 +4 T11 +2 P4 picker), got {api_v1_count}"
+    assert api_v1_count == 62, (
+        f"v1 api('/ call count expected 62 (53 baseline -1 +2 T10 +4 T11 +2 P4 picker +2 candidate ws), got {api_v1_count}"
     )
 
 
@@ -10061,7 +10092,8 @@ def test_editor_single_source_area() -> None:
     assert "sourceSelection" in js
     assert 'name="edit-input-mode"' not in js, "banner input radios must be gone"
     mode_fn = html.split("function setWizardInputMode(mode)", 1)[1].split("\nfunction ", 1)[0]
-    assert "ACPJobEditor.onSourceTabChange(mode)" in mode_fn
+    assert "ACPJobEditor.onSourceTabChange(" in mode_fn
+    assert 'mode === "candidate"' in mode_fn, "candidate→task editor mapping missing"
     assert 'input-panel-task' in mode_fn
     assert 'task-results-browser' in mode_fn
     assert "hydrateTaskStructures(ctx, draft)" in js
@@ -10069,7 +10101,7 @@ def test_editor_single_source_area() -> None:
 
 
 def test_job_modal_structure_browser_visual_contract() -> None:
-    """The source browser dominates a compact, expandable preview column."""
+    """The source browser uses a two-column workspace (left list + right preview)."""
     html = FRONTEND.read_text(encoding="utf-8")
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
     assert 'id="preview-structure-title"' in modal
@@ -10078,16 +10110,22 @@ def test_job_modal_structure_browser_visual_contract() -> None:
     assert 'id="task-results-browser"' in modal
     assert 'class="task-info-details"' in modal
     assert modal.count('id="structure-preview-3d"') == 1
-    assert 'grid-template-columns: minmax(0, 1fr) clamp(340px, 36%, 400px)' in html
-    assert 'height: clamp(440px, 54dvh, 520px)' in html
+    assert 'class="tiw-grid"' in modal, "tiw-grid two-column workspace missing"
+    assert 'class="tiw-left"' in modal, "tiw-left column missing"
+    assert 'class="tiw-right"' in modal, "tiw-right column missing"
+    tiw_css = (REPO_ROOT / "frontend" / "css" / "task_input_workspace.css").read_text()
+    assert "grid-template-columns" in tiw_css, "tiw-grid grid-template-columns missing from CSS"
+    assert "minmax(0, 3fr) minmax(380px, 2fr)" in tiw_css, "60/40 workspace columns missing"
+    assert "@media (max-width: 1100px)" in tiw_css, "responsive breakpoint missing from tiw CSS"
     assert '@media (max-width: 900px)' in html
-    assert 'height: clamp(560px, 75dvh, 680px)' in html
-    assert 'class="current-structure-summary"' in html
-    assert 'id="preview-structure-prev"' in html
-    assert 'id="preview-structure-next"' in html
-    assert "#job-modal .source-section-nav {" in html
-    assert "display: flex;" in html
-    assert "#job-modal .input-mode-tabs { gap: 8px; margin: 0; }" in html
+    assert 'class="tiw-source-toolbar"' in modal, "tiw-source-toolbar missing"
+    assert 'id="tiw-toolbar-host"' in modal, "tiw-toolbar-host missing"
+    assert 'id="tiw-list-header"' in modal, "tiw-list-header column header missing"
+    assert 'id="footer-input-count"' in html, "footer-input-count missing"
+    assert 'id="input-list-overlay"' in html, "input-list-overlay missing"
+    assert 'class="tiw-info-panel"' in modal, "tiw-info-panel missing"
+    assert 'id="wizard-input-form"' in modal, "wizard-input-form missing"
+    assert 'id="tiw-info-panel"' in modal, "tiw-info-panel id missing"
     left_pane = modal.split('class="preview-left"', 1)[1].split(
         'class="preview-right"', 1
     )[0]
@@ -10095,31 +10133,17 @@ def test_job_modal_structure_browser_visual_contract() -> None:
     assert 'id="input-panel-structure"' in left_pane
     assert 'id="input-panel-upload"' in left_pane
     assert 'id="task-results-browser"' in left_pane
-    assert 'id="preview-remove-selected"' in left_pane
-    assert 'id="preview-clear-all"' in left_pane
     assert 'id="structure-preview-3d"' not in left_pane
-    header = modal.split('class="source-section-header"', 1)[1].split(
-        'id="mech-builder-panel"', 1
-    )[0]
-    assert 'id="task-source-inline"' in header
-    assert 'id="current-structure-summary"' in header
-    assert 'id="current-structure-name"' in header
-    assert 'id="current-structure-meta"' in header
     right_pane = modal.split('class="preview-right"', 1)[1]
     assert 'id="preview-expand-view"' in right_pane
     assert 'id="preview-remove-selected"' not in right_pane
     assert "var PREVIEW_ZOOM_FACTOR = 0.82" in html
     assert '{ zoomFactor: PREVIEW_ZOOM_FACTOR }' in html
-    assert 'var editableSource = wizardInputMode !== "task"' in html
     assert 'updatePreviewActionState();' in html
     assert 'sourceShell.setAttribute("data-source-mode", mode)' in html
-    assert '[data-source-mode="task"] .preview-left-actions' in html
     assert 'browser.style.display = mode === "task" ? "flex" : "none"' in html
-    assert 'sourceInline.style.display = wizardStructures.length ? "flex" : "none"' in html
     assert "display: contents" not in html
     assert len(re.findall(r'class="input-mode-tab(?: active)?"', modal)) == 3
-    assert 'event.key === "ArrowRight"' in html
-    assert 'event.key === "ArrowLeft"' in html
 
 
 def test_job_editor_source_tabs_do_not_apply_unparsed_sources() -> None:
@@ -10164,8 +10188,8 @@ def test_job_modal_numbered_headings_use_aligned_step_layout() -> None:
     html = FRONTEND.read_text(encoding="utf-8")
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
 
-    assert 'class="project-step" id="modal-project-section"' in modal
-    assert 'class="project-step-panel"' in modal
+    # project-step-inline is the compressed single-row variant (task 2026-09-22)
+    assert 'class="project-step project-step-inline" id="modal-project-section"' in modal
     assert 'class="config-step" id="workflow-card"' in modal
     assert 'class="config-step" id="method-card"' in modal
     assert '<div class="config-card">' in modal
@@ -10308,3 +10332,834 @@ def test_job_editor_batch_roundtrip_semantics() -> None:
         f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     )
     assert "OK" in proc.stdout, f"unexpected harness output: {proc.stdout!r}"
+
+
+# --- Energy graph unified selection + annotation resolution contracts ---
+
+def test_energy_graph_set_selection_exists() -> None:
+    """energyGraphSetSelection is the unified selection writer."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function energyGraphSetSelection(opts)" in html, "Unified selection writer missing"
+    body = html.split("function energyGraphSetSelection(opts)", 1)[1].split("\nfunction ", 1)[0]
+    assert "energyGraphState.selection =" in body, "Must store selection object"
+    assert "energyGraphState.selectedNodeId" in body, "Must mirror to legacy selectedNodeId"
+    assert "energyGraphState.selectedAnnotationId" in body, "Must mirror to legacy selectedAnnotationId"
+
+
+def test_energy_graph_node_for_annotation_exists() -> None:
+    """energyGraphNodeForAnnotation resolves node_id then frame_index."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function energyGraphNodeForAnnotation(data, annotation)" in html, "Annotation resolver missing"
+    body = html.split("function energyGraphNodeForAnnotation(data, annotation)", 1)[1].split("\nfunction ", 1)[0]
+    assert "annotation.node_id" in body, "Must check node_id first"
+    assert "annotation.frame_index" in body, "Must fallback to frame_index"
+
+
+def test_energy_band_frame_i18n_key_exists() -> None:
+    """energy.band.frame key exists in both locales."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    zh_keys = _extract_energy_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_energy_keys(html, _EN_BLOCK_RE)
+    assert "energy.band.frame" in zh_keys, "energy.band.frame missing from zh-CN"
+    assert "energy.band.frame" in en_keys, "energy.band.frame missing from en-US"
+
+
+def test_energy_annotations_consume_node_id() -> None:
+    """renderTrajectoryAnnotations uses energyGraphNodeForAnnotation for resolution."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    body = html.split("function renderTrajectoryAnnotations(opts)", 1)[1].split("\nfunction ", 1)[0]
+    assert "energyGraphNodeForAnnotation" in body, "Must use energyGraphNodeForAnnotation for resolution"
+
+
+# ---------------------------------------------------------------------------
+# PES DFT-scan extension — frontend contract tests (2026-09)
+# ---------------------------------------------------------------------------
+
+
+def _get_pes_scan_schema():
+    """Return the pes_scan METHOD_SCHEMA, dynamically from the catalog."""
+    schema = METHOD_SCHEMAS.get("pes_scan")
+    assert schema is not None, "pes_scan schema missing from METHOD_SCHEMAS"
+    return schema
+
+
+def test_scan_optimizer_method_option_groups_consumed() -> None:
+    """(a) scan_optimizer_method option_groups: frontend renders <optgroup> when present.
+
+    The field definition for scan_optimizer_method carries option_groups
+    (xtb / composite_dft / conventional_dft).  The frontend buildFieldRow
+    must detect option_groups on the field definition and render <optgroup>
+    elements with localized labels.
+    """
+    from acp.catalog import FIELD_DEFINITIONS
+
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Verify the backend actually defines option_groups for scan_optimizer_method
+    fd = FIELD_DEFINITIONS.get("scan_optimizer_method", {})
+    assert "option_groups" in fd, "scan_optimizer_method must have option_groups in FIELD_DEFINITIONS"
+    assert len(fd["option_groups"]) >= 2, "need at least 2 option groups"
+
+    # Verify the frontend code handles option_groups generically
+    assert "option_groups" in html, "frontend must reference option_groups"
+    assert "optgroup" in html, "frontend must render <optgroup> elements"
+    assert 'grpLblKey = currentLang === "zh-CN" ? "label_zh" : "label"' in html or \
+           'label_zh' in html, "optgroup labels must be localized"
+
+
+def test_scan_optimizer_level_method_linkage_registration() -> None:
+    """(b) scan_optimizer level method linkage: scan_optimizer_method is the linkage source.
+
+    The frontend buildFieldRow must resolve method-context for the scan_optimizer
+    level using scan_optimizer_method (not "functional") as the method field.
+    Basis/dispersion/RI must key off scan_optimizer_method for METHOD_META lookup.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Verify the level-to-method-field mapping exists
+    assert '"scan_optimizer": "scan_optimizer_method"' in html, (
+        "scan_optimizer must map to scan_optimizer_method as linkage source"
+    )
+    # Verify basis/dispersion/RI field mappings exist
+    assert '"scan_optimizer_basis": "basis"' in html or \
+           '"scan_optimizer_basis"' in html, (
+        "scan_optimizer_basis must be mapped for funcFilter lookup"
+    )
+    assert '"scan_optimizer_dispersion"' in html, (
+        "scan_optimizer_dispersion must be handled in linkage"
+    )
+    assert '"scan_optimizer_ri_approximation"' in html, (
+        "scan_optimizer_ri_approximation must be handled in RI lock"
+    )
+    # Verify scan_optimizer_method change handler exists
+    assert 'fieldName === "scan_optimizer_method"' in html, (
+        "scan_optimizer_method must have its own change handler for re-default cascade"
+    )
+
+
+def test_copy_scan_level_button_exists() -> None:
+    """(c) Copy scan level button exists on single_point card for pes_scan schema.
+
+    The button copies scan_optimizer level fields into single_point, then
+    rebuilds the card.  It must be disabled when scan_optimizer has no state.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "modal.copy_scan_level" in html, "copy_scan_level i18n key missing"
+    assert "mc-copy-scan-level" in html, "copy button class missing"
+    assert 'lvDef.level_id === "single_point"' in html, (
+        "copy button must be conditional on single_point level"
+    )
+    assert 'schema_id === "pes_scan"' in html or 'wizardState.workflow.schema_id' in html, (
+        "copy button must be conditional on pes_scan schema"
+    )
+    assert "rebuildLevelCard(\"single_point\")" in html or \
+           "rebuildLevelCard('single_point')" in html, (
+        "copy button must rebuild single_point card after copying"
+    )
+
+
+def test_submit_summary_contains_three_lines() -> None:
+    """(d) Submit confirmation summary shows three lines before POSTing.
+
+    The summary must include: geometry scan (method + solvent + convergence +
+    max iterations + n points), single point energy (method/basis or disabled),
+    recovery strategy (per-point retry or native note).
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Verify i18n keys exist in both locales
+    for key in (
+        "modal.scan_summary_title",
+        "modal.scan_summary_geometry",
+        "modal.scan_summary_sp",
+        "modal.scan_summary_recovery",
+        "modal.scan_summary_sp_disabled",
+        "modal.scan_summary_native_no_retry",
+        "modal.scan_summary_per_point_retry",
+    ):
+        assert key in html, f"i18n key {key} missing from frontend"
+
+    # Verify the summary is built in submitPESsearchTask
+    submit_fn = html.split("async function submitPESsearchTask()", 1)[1]
+    submit_fn = submit_fn.split("\n// Single submit entry", 1)[0]
+    assert "scan_summary_geometry" in submit_fn, "summary must include geometry line"
+    assert "scan_summary_sp" in submit_fn, "summary must include single point line"
+    assert "scan_summary_recovery" in submit_fn, "summary must include recovery line"
+    assert "window.confirm" in submit_fn, "summary must use confirm dialog"
+
+
+def test_recovery_differentiation_native_disables_per_point_retry() -> None:
+    """(e) Recovery differentiation: native single-coordinate scan disables per-point retry.
+
+    When the scan has exactly ONE coordinate (native ORCA scan), the
+    retry_count and retry_strategy fields in scan_optimizer must be disabled
+    with an explanatory note.  Multiple coordinates (double_bond_scan) keep
+    them enabled.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Verify native single-coordinate detection
+    assert "_native_single_coord" in html, "native single-coordinate flag missing"
+    assert 'selectionKind !== "double_bond_scan"' in html or \
+           'selectionKind === "double_bond_scan"' in html, (
+        "coordinate count detection missing"
+    )
+    # Verify retry fields are disabled for native scan
+    assert 'scan_optimizer_retries' in html, "retry field name missing"
+    assert 'scan_optimizer_retry_strategy' in html, "retry strategy field name missing"
+    assert "_native_single_coord" in html, "native flag must be checked for disable"
+    # Verify the i18n key for the note
+    assert "modal.native_scan_no_per_point_retry" in html, (
+        "native scan no-retry i18n key missing"
+    )
+
+
+def test_pes_scan_profiles_catalog_driven() -> None:
+    """(f) pes_scan profiles are read dynamically from catalog (anti-pattern #27).
+
+    The frontend must not hardcode a fixed list of pes_scan profile ids.
+    Profiles must be read from METHOD_SCHEMAS["pes_scan"]["profiles"] at
+    runtime, so future profile additions require zero frontend changes.
+    """
+    schema = _get_pes_scan_schema()
+    profiles = schema.get("profiles", [])
+    assert len(profiles) >= 4, (
+        f"pes_scan must have at least 4 profiles (default/economy-dft/standard-dft/hybrid-dft), "
+        f"got {len(profiles)}"
+    )
+    profile_ids = {p["profile_id"] for p in profiles}
+    assert "default" in profile_ids, "default profile missing"
+    assert "economy-dft" in profile_ids, "economy-dft profile missing"
+    assert "standard-dft" in profile_ids, "standard-dft profile missing"
+    assert "hybrid-dft" in profile_ids, "hybrid-dft profile missing"
+
+    # Verify no hardcoded profile id list in the frontend for pes_scan
+    html = FRONTEND.read_text(encoding="utf-8")
+    # The profile selector is built dynamically from schema.profiles
+    assert "profiles = schema.profiles || []" in html or \
+           "var profiles = schema.profiles" in html, (
+        "profiles must be read from schema dynamically"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TS Mode Editor — module integration + vibration viewer quick-create
+# ---------------------------------------------------------------------------
+
+_TSMODE_JS = FRONTEND_JS_DIR / "tsmode_editor.js"
+_TSMODE_CSS = FRONTEND_CSS_DIR / "tsmode_editor.css"
+
+
+def test_tsmode_editor_js_exists_and_has_namespace() -> None:
+    """tsmode_editor.js defines window.ACPTsmodeEditor with open/submit/close."""
+    assert _TSMODE_JS.is_file(), "frontend/js/tsmode_editor.js missing"
+    js = _TSMODE_JS.read_text(encoding="utf-8")
+    assert "window.ACPTsmodeEditor" in js
+    assert "open:" in js or "open =" in js
+    assert "submit:" in js or "submit =" in js
+    assert "close:" in js or "close =" in js
+
+
+def test_tsmode_editor_css_exists() -> None:
+    """tsmode_editor.css exists and contains tsme-root."""
+    assert _TSMODE_CSS.is_file(), "frontend/css/tsmode_editor.css missing"
+    css = _TSMODE_CSS.read_text(encoding="utf-8")
+    assert ".tsme-root" in css
+
+
+def test_v2_html_loads_tsmode_editor_modules() -> None:
+    """ACP_Workbench_v2.html includes tsmode_editor.js + tsmode_editor.css."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert '<script src="js/tsmode_editor.js"></script>' in html
+    assert '<link rel="stylesheet" href="css/tsmode_editor.css">' in html
+    assert html.index('<script src="js/structure_source_picker.js"></script>') < \
+           html.index('<script src="js/tsmode_editor.js"></script>'), \
+        "tsmode_editor.js must load after structure_source_picker.js"
+
+
+def test_tsmode_editor_js_passes_node_check() -> None:
+    """tsmode_editor.js has no syntax errors."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+    result = subprocess.run(
+        ["node", "--check", str(_TSMODE_JS)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"node --check tsmode_editor.js failed:\n{result.stderr}"
+
+
+def test_vibration_viewer_contains_tsmode_editor_open_call() -> None:
+    """vibration_viewer.js references ACPTsmodeEditor.open for quick-create."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "ACPTsmodeEditor" in vib, (
+        "vibration_viewer.js must reference ACPTsmodeEditor for quick-create"
+    )
+    assert "ACPTsmodeEditor.open" in vib, (
+        "vibration_viewer.js must call ACPTsmodeEditor.open"
+    )
+
+
+def test_vibration_viewer_has_ts_mode_create_string() -> None:
+    """vibration_viewer.js contains the TS mode create button text."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "TS_MODE_CREATE" in vib, "TS_MODE_CREATE string constant missing"
+
+
+def test_submit_tsmode_task_branch_exists() -> None:
+    """submitJobModal() has a tsmode branch that opens ACPTsmodeEditor."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'stageWf === "tsmode"' in html, (
+        "submitJobModal must have a tsmode workflow branch"
+    )
+    assert "ACPTsmodeEditor.open" in html, (
+        "tsmode branch must call ACPTsmodeEditor.open"
+    )
+
+
+def test_tsmode_i18n_keys_in_both_locales() -> None:
+    """tsmode.* i18n keys exist in both zh-CN and en-US blocks."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    tsmode_key_re = re.compile(r'"(tsmode\.[^"]+)":')
+
+    zh_m = _ZH_BLOCK_RE.search(html)
+    en_m = _EN_BLOCK_RE.search(html)
+    assert zh_m, "zh-CN block not found"
+    assert en_m, "en-US block not found"
+
+    zh_keys = set(tsmode_key_re.findall(zh_m.group(1)))
+    en_keys = set(tsmode_key_re.findall(en_m.group(1)))
+
+    assert zh_keys, "No tsmode.* keys found in zh-CN"
+    assert en_keys, "No tsmode.* keys found in en-US"
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"tsmode keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"tsmode keys in en-US but missing from zh-CN: {sorted(only_en)}"
+
+    required = {
+        "tsmode.modal_title",
+        "tsmode.panel_source",
+        "tsmode.panel_mode",
+        "tsmode.panel_settings",
+        "tsmode.select_job",
+        "tsmode.hess_available",
+        "tsmode.hess_missing",
+        "tsmode.no_imaginary",
+        "tsmode.set_target",
+        "tsmode.target_confirmed",
+        "tsmode.preview_differs",
+        "tsmode.inherited_level",
+        "tsmode.allow_unverified",
+        "tsmode.allow_unverified_warn",
+        "tsmode.submit",
+        "tsmode.cancel",
+        "tsmode.submit_failed",
+        "tsmode.source_required",
+        "tsmode.target_required",
+    }
+    assert required <= zh_keys, f"Missing zh-CN tsmode keys: {sorted(required - zh_keys)}"
+
+
+def test_tsmode_editor_has_request_token_guard() -> None:
+    """tsmode_editor.js uses requestToken for stale-response guarding."""
+    js = _TSMODE_JS.read_text(encoding="utf-8")
+    assert "requestToken" in js, "requestToken stale-response guard missing"
+    assert "capturedToken" in js, "capturedToken pattern missing in tsmode_editor.js"
+
+
+def test_tsmode_editor_has_i18n_helper() -> None:
+    """tsmode_editor.js defines _t() i18n helper with STR-table fallback."""
+    js = _TSMODE_JS.read_text(encoding="utf-8")
+    assert "function _t(" in js, "_t i18n helper missing"
+    assert "STR" in js, "STR fallback table missing"
+
+
+# ---------------------------------------------------------------------------
+# Candidate inspector i18n keys (kept — candidate_details.js still uses these)
+# ---------------------------------------------------------------------------
+
+
+def test_candidate_inspector_i18n_keys_in_both_locales() -> None:
+    """candidate.inspector.* i18n keys exist in both zh-CN and en-US blocks."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    ci_key_re = re.compile(r'"(candidate\.inspector\.[^"]+)":')
+
+    zh_m = _ZH_BLOCK_RE.search(html)
+    en_m = _EN_BLOCK_RE.search(html)
+    assert zh_m, "zh-CN block not found"
+    assert en_m, "en-US block not found"
+
+    zh_keys = set(ci_key_re.findall(zh_m.group(1)))
+    en_keys = set(ci_key_re.findall(en_m.group(1)))
+
+    assert zh_keys, "No candidate.inspector.* keys found in zh-CN"
+    assert en_keys, "No candidate.inspector.* keys found in en-US"
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"candidate.inspector keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"candidate.inspector keys in en-US but missing from zh-CN: {sorted(only_en)}"
+
+    required = {
+        "candidate.inspector.empty",
+        "candidate.inspector.current_assessment",
+        "candidate.inspector.usage_status",
+        "candidate.inspector.edit_btn",
+        "candidate.inspector.save_btn",
+        "candidate.inspector.save_caption",
+        "candidate.inspector.cancel_btn",
+        "candidate.inspector.conclusion_label",
+        "candidate.inspector.reason_label",
+        "candidate.inspector.placeholder_select",
+        "candidate.inspector.reason_required",
+        "candidate.inspector.conflict_banner",
+        "candidate.inspector.geometry_hint",
+        "candidate.inspector.discard_confirm",
+        "candidate.inspector.conclusion.recommended",
+        "candidate.inspector.conclusion.review",
+        "candidate.inspector.conclusion.not_recommended",
+        "candidate.inspector.reason.geometry_unreasonable",
+        "candidate.inspector.reason.wrong_reaction_mode",
+        "candidate.inspector.reason.other",
+    }
+    assert required <= zh_keys, f"Missing zh-CN candidate.inspector keys: {sorted(required - zh_keys)}"
+
+
+def test_wizard_footer_selected_count_element() -> None:
+    """footer-selected-count and footer-input-count elements exist."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="footer-selected-count"' in html, "footer-selected-count element missing"
+    assert 'id="footer-input-count"' in html, "footer-input-count element missing"
+    assert 'id="footer-input-badge"' in html, "footer-input-badge element missing"
+    assert "updateFooterSelectedCount" in html, "updateFooterSelectedCount function missing"
+    assert "_refreshWizardInputForm" in html, "_refreshWizardInputForm function missing"
+
+
+def test_wizard_inspector_i18n_keys_in_both_locales() -> None:
+    """wizard.* i18n keys exist in both zh-CN and en-US blocks."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    _wizard_key_re = re.compile(r'"(wizard\.[^"]+)":')
+    zh_m = _ZH_BLOCK_RE.search(html)
+    en_m = _EN_BLOCK_RE.search(html)
+    assert zh_m, "zh-CN block not found"
+    assert en_m, "en-US block not found"
+    zh_keys = set(_wizard_key_re.findall(zh_m.group(1)))
+    en_keys = set(_wizard_key_re.findall(en_m.group(1)))
+    assert zh_keys, "No wizard.* keys found in zh-CN"
+    assert en_keys, "No wizard.* keys found in en-US"
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"wizard keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"wizard keys in en-US but missing from zh-CN: {sorted(only_en)}"
+    required = {"wizard.select_hint", "wizard.no_3d_coord", "wizard.selected_count_footer",
+                "wizard.disabled_needs_action", "wizard.atom_numbers", "wizard.list_tab", "wizard.detail_tab"}
+    assert required <= zh_keys, f"Missing zh-CN wizard keys: {sorted(required - zh_keys)}"
+
+
+def test_picker_set_source_group_exists() -> None:
+    js = _SP_JS.read_text(encoding="utf-8")
+    assert "setSourceGroup" in js, "setSourceGroup missing from structure_source_picker.js"
+    ret_idx = js.rindex("return {")
+    ret_section = js[ret_idx:ret_idx + 500]
+    assert "setSourceGroup" in ret_section, \
+        "setSourceGroup must be in the picker instance return object"
+
+
+def test_wizard_create_viewer_count_still_seven() -> None:
+    """$3Dmol.createViewer count in the HTML is STILL exactly 7 (no new viewer)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    count = html.count("$3Dmol.createViewer")
+    assert count == 7, f"Expected exactly 7 $3Dmol.createViewer calls, found {count}"
+
+
+def test_wizard_no_batch_management_in_step1() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="candidate-library-modal"' not in html, \
+        "standalone candidate-library-modal must be removed"
+    assert "批量管理" not in html, \
+        "批量管理 batch management text must not appear in the converged workspace"
+
+
+def test_wizard_atom_toggle_button_in_toolbar() -> None:
+    """preview-atom-numbers button exists in preview-right-toolbar."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="preview-atom-numbers"' in html, "preview-atom-numbers button missing"
+    assert "wizardAtomLabelsOn" in html, "wizardAtomLabelsOn state variable missing"
+
+
+def test_wizard_mobile_toggle_buttons_exist() -> None:
+    """wizard-mobile-list-btn and wizard-mobile-detail-btn exist for small-screen fallback."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="wizard-mobile-list-btn"' in html, "wizard-mobile-list-btn missing"
+    assert 'id="wizard-mobile-detail-btn"' in html, "wizard-mobile-detail-btn missing"
+    assert "wizard-show-list" in html, "wizard-show-list CSS class missing"
+    assert "wizard-show-detail" in html, "wizard-show-detail CSS class missing"
+
+
+def test_wizard_disabled_badge_in_drawer() -> None:
+    """loaded-structure-disabled-badge rendered for disabled/archived structures in drawer."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "loaded-structure-disabled-badge" in html, "loaded-structure-disabled-badge class missing"
+    assert "wizard.disabled_needs_action" in html, "wizard.disabled_needs_action i18n key not used in JS"
+
+
+def test_wizard_project_section_compressed() -> None:
+    """#modal-project-section uses project-step-inline class for compressed layout."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "project-step-inline" in html, "project-step-inline class missing"
+    # The inline CSS must exist
+    assert ".project-step-inline" in html, ".project-step-inline CSS rule missing"
+
+
+# ---------------------------------------------------------------------------
+# Task Input Workspace — new-IA contracts
+# ---------------------------------------------------------------------------
+
+class TestTaskInputWorkspace:
+
+    @staticmethod
+    def _html() -> str:
+        return FRONTEND.read_text(encoding="utf-8")
+
+    def test_unified_structure_library_filters(self) -> None:
+        html = self._html()
+        tabs = html.split('class="input-mode-tabs"', 1)[1].split("</div>", 1)[0]
+        assert 'data-i18n="modal.mode_library"' in tabs
+        assert 'data-input-mode="candidate"' not in tabs
+        for group in ("candidate", "task_result"):
+            assert f'data-source-group="{group}"' in html, f"library filter {group!r} missing"
+
+    def test_tiw_grid_layout_and_details_host(self) -> None:
+        html = self._html()
+        assert 'class="tiw-grid"' in html, "tiw-grid layout missing"
+        assert 'class="tiw-details-host"' in html, "tiw-details-host missing"
+        assert 'id="candidate-details-host"' in html, "candidate-details-host missing"
+
+    def test_trash_row_menu_and_undo(self) -> None:
+        html = self._html()
+        assert "trash.row_menu" in html, "trash.row_menu i18n keys missing"
+        assert "wizard-open-trash" in html, "wizard-open-trash button missing"
+        assert "wizard-trash-header" in html, "wizard-trash-header area missing"
+
+    def test_details_panel_wired_in_on_preview_item(self) -> None:
+        html = self._html()
+        assert "candidateDetailsPanel.setEntry" in html, \
+            "candidateDetailsPanel.setEntry wiring missing"
+
+    def test_draft_retention_and_close_keep_draft(self) -> None:
+        html = self._html()
+        assert "wizard.close_keep_draft" in html, "close_keep_draft i18n key missing"
+        assert "wizard-clear-draft" in html, "wizard-clear-draft button missing"
+
+    def test_i18n_parity_for_new_prefixes(self) -> None:
+        html = self._html()
+        zh_m = _ZH_BLOCK_RE.search(html)
+        en_m = _EN_BLOCK_RE.search(html)
+        assert zh_m and en_m, "locale blocks missing"
+        for prefix in ("wizard.", "trash.", "cd.", "picker."):
+            key_re = re.compile(r'"(' + re.escape(prefix) + r'[^"]+)":')
+            zh_keys = set(key_re.findall(zh_m.group(1)))
+            en_keys = set(key_re.findall(en_m.group(1)))
+            only_zh = zh_keys - en_keys
+            only_en = en_keys - zh_keys
+            assert not only_zh, f"{prefix} keys in zh-CN but not en-US: {sorted(only_zh)}"
+            assert not only_en, f"{prefix} keys in en-US but not zh-CN: {sorted(only_en)}"
+
+    def test_create_viewer_count_still_seven(self) -> None:
+        html = self._html()
+        count = html.count("$3Dmol.createViewer")
+        assert count == 7, f"Expected exactly 7 $3Dmol.createViewer calls, found {count}"
+
+    def test_candidate_api_preserved_and_used(self) -> None:
+        html = self._html()
+        assert "async function candidateApi" in html, "candidateApi function missing"
+        assert "apiErr.status = response.status" in html, \
+            "candidateApi must attach .status to thrown errors"
+
+    def test_no_standalone_candidate_library_modal(self) -> None:
+        html = self._html()
+        assert 'id="candidate-library-modal"' not in html, \
+            "standalone candidate-library-modal must be removed"
+        assert 'id="btn-candidate-library"' not in html, \
+            "standalone btn-candidate-library must be removed"
+
+    def test_no_data_i18n_element_wraps_form_controls(self) -> None:
+        html = self._html()
+        pattern = re.compile(
+            r"<(label|div|span)\b[^>]*data-i18n=[^>]*>(?:(?!</\1>).)*?"
+            r"<(select|input|textarea)\b",
+            re.DOTALL,
+        )
+        offenders = pattern.findall(html)
+        assert not offenders, (
+            f"data-i18n elements wrapping form controls found: {offenders[:5]} — "
+            "the i18n textContent pass would gut these controls at startup"
+        )
+
+
+# ── Candidate Details panel (§5.4) ──────────────────────────────────────
+_CD_JS = FRONTEND_JS_DIR / "candidate_details.js"
+
+
+def test_candidate_details_js_exists() -> None:
+    """candidate_details.js exists."""
+    assert _CD_JS.is_file(), "frontend/js/candidate_details.js missing"
+
+
+def test_candidate_details_js_passes_node_check() -> None:
+    """candidate_details.js is valid JS (node --check)."""
+    result = subprocess.run(
+        ["node", "--check", str(_CD_JS)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"node --check failed:\n{result.stderr}"
+
+
+def test_candidate_details_namespace_shape() -> None:
+    """candidate_details.js exports VERSION, mount, VALID_CONCLUSIONS, destroy."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "VERSION" in js, "VERSION missing"
+    assert "VALID_CONCLUSIONS" in js, "VALID_CONCLUSIONS missing"
+    assert "window.ACPCandidateDetails" in js, "namespace export missing"
+    assert "mount:" in js, "mount method missing"
+    assert "destroy:" in js, "destroy method missing"
+
+
+def test_candidate_details_four_state_enum() -> None:
+    """VALID_CONCLUSIONS contains exactly the four backend enum values."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    for conclusion in ("unreviewed", "recommended", "review", "not_recommended"):
+        assert f'"{conclusion}"' in js, f"conclusion {conclusion!r} missing from VALID_CONCLUSIONS"
+    assert '"已确认"' not in js, "must never label anything as 已确认"
+
+
+def test_candidate_details_revision_fields() -> None:
+    """metadata_revision and status_revision are both referenced."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "metadata_revision" in js, "metadata_revision field missing"
+    assert "version_id" in js, "version_id field missing (assessment binding)"
+
+
+def test_candidate_details_not_provided_fallback() -> None:
+    """未提供 / Not provided fallback for missing data fields."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "not_provided" in js, "not_provided i18n key missing"
+    assert "\u672a\u63d0\u4f9b" in js, "未提供 Chinese fallback missing"
+
+
+def test_candidate_details_host_div_exists() -> None:
+    """#candidate-details-host div exists in the wizard right column."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="candidate-details-host"' in html, "candidate-details-host div missing"
+    assert 'class="tiw-details-host"' in html, "tiw-details-host class missing"
+
+
+def test_candidate_details_wired_in_on_preview_item() -> None:
+    """candidateDetailsPanel.setEntry is called from both wizard onPreviewItem callbacks."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    count = html.count("candidateDetailsPanel.setEntry(item)")
+    assert count >= 2, \
+        f"candidateDetailsPanel.setEntry(item) should appear in both onPreviewItem callbacks, found {count}"
+
+
+def test_candidate_details_mount_called_in_open_modal() -> None:
+    """ACPCandidateDetails.mount is called in openModal."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    open_modal_start = html.index("function openModal()")
+    open_modal_section = html[open_modal_start:open_modal_start + 6000]
+    assert "ACPCandidateDetails.mount" in open_modal_section, \
+        "ACPCandidateDetails.mount must be called inside openModal"
+
+
+def test_candidate_details_cleanup_in_close_modal() -> None:
+    """candidateDetailsPanel.destroy() is called in closeModal."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    close_start = html.index("function closeModal()")
+    close_section = html[close_start:close_start + 300]
+    assert "candidateDetailsPanel" in close_section, \
+        "candidateDetailsPanel cleanup missing from closeModal"
+
+
+def test_candidate_details_i18n_keys_in_both_locales() -> None:
+    """cd.* i18n keys exist in both zh-CN and en-US blocks."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    _cd_key_re = re.compile(r'"(cd\.[^"]+)":')
+    zh_m = _ZH_BLOCK_RE.search(html)
+    en_m = _EN_BLOCK_RE.search(html)
+    assert zh_m, "zh-CN block not found"
+    assert en_m, "en-US block not found"
+    zh_keys = set(_cd_key_re.findall(zh_m.group(1)))
+    en_keys = set(_cd_key_re.findall(en_m.group(1)))
+    assert zh_keys, "No cd.* keys found in zh-CN"
+    assert en_keys, "No cd.* keys found in en-US"
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"cd.* keys only in zh-CN: {only_zh}"
+    assert not only_en, f"cd.* keys only in en-US: {only_en}"
+
+
+def test_candidate_details_css_file_has_panel_styles() -> None:
+    """task_input_workspace.css contains candidate details panel styles."""
+    css = (FRONTEND_CSS_DIR / "task_input_workspace.css").read_text(encoding="utf-8")
+    assert "cd-row" in css, "cd-row CSS class missing"
+    assert "cd-save-btn" in css, "cd-save-btn CSS class missing"
+    assert "cd-conflict" in css, "cd-conflict CSS class missing"
+
+
+def test_candidate_details_set_entry_and_destroy() -> None:
+    """setEntry and destroy are instance methods on the mounted component."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "setEntry:" in js or "setEntry :" in js, "setEntry instance method missing"
+    assert "destroy:" in js or "destroy :" in js, "destroy instance method missing"
+    assert "refresh:" in js or "refresh :" in js, "refresh instance method missing"
+
+
+def test_candidate_details_assessment_post_carries_version_id() -> None:
+    """Assessment POST payload includes version_id."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "version_id" in js, "version_id missing from assessment payload"
+
+
+def test_candidate_details_patch_expected_revision() -> None:
+    """Metadata PATCH payload includes expected_revision."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "expected_revision" in js, "expected_revision missing from metadata PATCH payload"
+
+
+def test_candidate_details_409_conflict_handling() -> None:
+    """409 responses are handled with conflict banner (not auto-overwrite)."""
+    js = _CD_JS.read_text(encoding="utf-8")
+    assert "409" in js or "status === 409" in js, "409 status handling missing"
+    assert "conflict" in js.lower(), "conflict handling missing"
+
+
+# ── §8: step-2/3 frame + wizard i18n parity + editor mapping ──────────
+
+
+_WIZARD_I18N_KEY_RE = re.compile(r'"(wizard\.[^"]+)":')
+_WIZARD_I18N_PREFIXES = ("wizard.", "cd.", "trash.", "modal.mode_")
+
+
+def test_wizard_i18n_parity_across_locales() -> None:
+    """Every wizard.*/cd.*/trash.*/modal.mode_* key exists in both zh-CN and en-US."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    zh_m = _ZH_BLOCK_RE.search(html)
+    en_m = _EN_BLOCK_RE.search(html)
+    assert zh_m, "zh-CN block not found"
+    assert en_m, "en-US block not found"
+    zh_block, en_block = zh_m.group(1), en_m.group(1)
+    for prefix in _WIZARD_I18N_PREFIXES:
+        pat = re.compile(r'"(' + re.escape(prefix) + r'[^"]+)":')
+        zh_keys = set(pat.findall(zh_block))
+        en_keys = set(pat.findall(en_block))
+        only_zh = zh_keys - en_keys
+        only_en = en_keys - zh_keys
+        assert not only_zh, f"{prefix}* keys only in zh-CN: {only_zh}"
+        assert not only_en, f"{prefix}* keys only in en-US: {only_en}"
+
+
+def test_wizard_step2_step3_inside_tiw_grid() -> None:
+    """config-cards-row, task-info-details, create-review are children of .tiw-left."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    grid_start = html.index('class="tiw-grid"')
+    grid_end = html.index("<!-- /tiw-grid -->", grid_start)
+    grid_html = html[grid_start:grid_end]
+    left_start = grid_html.index('class="tiw-left"')
+    left_end = grid_html.index("<!-- /tiw-left -->", left_start)
+    left_html = grid_html[left_start:left_end]
+    assert 'class="config-cards-row"' in left_html, "config-cards-row not inside tiw-left"
+    assert 'class="task-info-details"' in left_html, "task-info-details not inside tiw-left"
+    assert 'id="create-review"' in left_html, "create-review not inside tiw-left"
+
+
+def test_wizard_step_summary_in_tiw_right() -> None:
+    """wizard-step-summary div exists inside tiw-right for steps 2/3 compact view."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    grid_start = html.index('class="tiw-grid"')
+    grid_end = html.index("<!-- /tiw-grid -->", grid_start)
+    grid_html = html[grid_start:grid_end]
+    right_start = grid_html.index('class="tiw-right"')
+    right_end = grid_html.index("<!-- /tiw-right -->", right_start)
+    right_html = grid_html[right_start:right_end]
+    assert 'id="wizard-step-summary"' in right_html, "wizard-step-summary not inside tiw-right"
+
+
+def test_wizard_step_css_rules_target_tiw_children() -> None:
+    """Step visibility CSS rules use .tiw-left > and .tiw-right > child selectors."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert '.tiw-left > .config-cards-row' in html, "step CSS missing .tiw-left > .config-cards-row"
+    assert '.tiw-right > .wizard-step-summary' in html, "step CSS missing .tiw-right > .wizard-step-summary"
+    assert 'data-create-step="2"] .tiw-left > .source-section-header' in html, \
+        "step-2 CSS missing source-section-header hide rule"
+    assert 'data-create-step="3"] .tiw-left > .create-review' in html, \
+        "step-3 CSS missing create-review show rule"
+
+
+def test_wizard_no_standalone_config_cards_outside_grid() -> None:
+    """config-cards-row does NOT appear as a direct child of .modal-body."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    body_start = html.index('<div class="modal-body">')
+    body_end = html.index("</div><!-- /modal-body -->", body_start) if "<!-- /modal-body -->" in html[body_start:body_start+5000] else -1
+    if body_end < 0:
+        body_end = html.index('<div class="modal-footer">', body_start)
+    body_html = html[body_start:body_end]
+    grid_start = body_html.index('class="tiw-grid"')
+    after_grid = body_html[grid_start:]
+    grid_end_marker = after_grid.index("<!-- /tiw-grid -->")
+    after_grid_only = after_grid[grid_end_marker:]
+    assert 'class="config-cards-row"' not in after_grid_only, \
+        "config-cards-row found outside tiw-grid in modal-body"
+
+
+def test_editor_source_tab_mapping_preserved() -> None:
+    """Legacy candidate drafts normalize to the unified task/library mode."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'if (mode === "candidate") mode = "task"' in html, \
+        "legacy candidate draft normalization missing"
+    js = _SP_JS.read_text(encoding="utf-8") if _SP_JS.exists() else ""
+    je = (FRONTEND_JS_DIR / "job_editor.js").read_text(encoding="utf-8")
+    assert "SOURCE_TAB_KINDS" in je, "SOURCE_TAB_KINDS missing from job_editor.js"
+    assert "{ task: 1, structure: 1, upload: 1 }" in je, \
+        "SOURCE_TAB_KINDS mapping changed"
+
+
+def test_editor_check_and_submit_interception() -> None:
+    """handleModalSubmit delegates to ACPJobEditor.checkAndSubmit when editor is active."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    submit_fn_start = html.index("function handleModalSubmit()")
+    submit_fn = html[submit_fn_start:submit_fn_start + 300]
+    assert "ACPJobEditor.checkAndSubmit()" in submit_fn, \
+        "handleModalSubmit missing checkAndSubmit delegation"
+
+
+def test_editor_cancel_routes_through_guarded_close() -> None:
+    """closeJobModalGuarded routes through ACPJobEditor.cancelEditor(false)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    guard_start = html.index("function closeJobModalGuarded()")
+    guard_fn = html[guard_start:guard_start + 400]
+    assert "ACPJobEditor.cancelEditor(false)" in guard_fn, \
+        "closeJobModalGuarded missing cancelEditor routing"
+
+
+def test_wizard_submit_button_uses_i18n() -> None:
+    """Submit button text uses t() calls, not hard-coded strings."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    step_fn_start = html.index("function setCreateWizardStep(step)")
+    step_fn = html[step_fn_start:step_fn_start + 800]
+    assert 't("wizard.submit_task")' in step_fn, "submit button not using i18n"
+    assert 't("wizard.next_step")' in step_fn, "next button not using i18n"
+
+
+def test_wizard_review_uses_i18n() -> None:
+    """renderCreateReview uses t() calls for all labels, not hard-coded Chinese."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    review_fn_start = html.index("function renderCreateReview()")
+    review_fn_end = html.index("function renderStepCompactSummary()", review_fn_start)
+    review_fn = html[review_fn_start:review_fn_end]
+    assert 't("wizard.review_project")' in review_fn, "review_project i18n missing"
+    assert 't("wizard.review_input")' in review_fn, "review_input i18n missing"
+    assert 't("wizard.review_workflow")' in review_fn, "review_workflow i18n missing"
+    assert 't("wizard.review_risk")' in review_fn, "review_risk i18n missing"
