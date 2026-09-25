@@ -48,6 +48,11 @@ import numpy as np
 import acp.backends
 from acp.backends.base import RelaxedScanCalculator
 from acp.calculations.batch.singlepoint import BatchSinglePointExecutor
+from acp.calculations.levels import (
+    CalculationLevel,
+    canonical_level,
+    level_fingerprint,
+)
 from acp.calculations.pes.atom_selection import (
     FunctionalAtomSelection,
     normalize_selection_kind,
@@ -59,6 +64,7 @@ from acp.calculations.pes.contracts import (
     PesScanRequest,
     ScanCoordinate,
     ScanFrame,
+    ScanOptimizer,
     ScanProtocol,
     ScanQuality,
     SinglePointSpec,
@@ -205,6 +211,16 @@ def run_pes_scan(
         validate_scan_protocol(coordinate, req.protocol)
         validate_scan_coordinates(scan_coordinates)
         protocol = req.protocol
+        # Canonical per-point optimization level (shared model).  Computed
+        # once here so the backend call, the frame records, and the
+        # pes_profile payload all describe the same level.
+        optimizer_level = scan_optimizer_level(protocol.scan_optimizer)
+        optimizer_level_fingerprint = level_fingerprint(optimizer_level)
+        # Single drive coordinate → ORCA native relaxed scan (single
+        # subprocess, no per-point retry); multiple coordinates → per-point
+        # constrained optimizations with retry semantics.
+        execution_mode = "pointwise" if len(scan_coordinates) > 1 else "native_scan"
+        protocol = replace(protocol, execution_mode=execution_mode)
         if progress_reporter is not None:
             progress_reporter.complete_stage("validate_coordinate")
 
@@ -251,6 +267,7 @@ def run_pes_scan(
             scan_dir=scan_dir,
             cfg=cfg,
             point_callback=snapshot_writer.publish_point,
+            optimizer_level=optimizer_level,
         )
         if not scan_result.success:
             # Fail fast: partial scan geometries must never reach frame
@@ -273,6 +290,8 @@ def run_pes_scan(
             reporter=progress_reporter,
             coordinates=scan_coordinates,
             tolerances=tolerances,
+            optimizer_level=optimizer_level.to_dict(),
+            optimizer_engine=protocol.scan_driver.software,
         )
         if progress_reporter is not None:
             progress_reporter.complete_stage("extract_frames")
@@ -283,6 +302,17 @@ def run_pes_scan(
         if progress_reporter is not None:
             progress_reporter.start_stage("run_single_points")
         sp_spec = protocol.single_point
+        if sp_spec.enabled and (
+            sp_spec.charge != charge or sp_spec.multiplicity != multiplicity
+        ):
+            logger.warning(
+                "single_point charge/multiplicity (%s/%s) differ from the task-level "
+                "values (%s/%s); the task structure remains the single source",
+                sp_spec.charge,
+                sp_spec.multiplicity,
+                charge,
+                multiplicity,
+            )
         _run_single_points(
             frames,
             charge,
@@ -294,6 +324,7 @@ def run_pes_scan(
             on_frame_done=(
                 _snapshot_sp_publisher(snapshot_writer) if snapshot_writer is not None else None
             ),
+            cache_scope=optimizer_level_fingerprint,
         )
         if snapshot_writer is not None:
             for frame in frames:
@@ -322,10 +353,30 @@ def run_pes_scan(
             if frame.max_constraint_residual is not None:
                 if max_residual is None or frame.max_constraint_residual > max_residual:
                     max_residual = frame.max_constraint_residual
+        # Candidate gating: only converged, on-constraint frames enter the
+        # candidate screen (previously only a global constraints_satisfied
+        # flag suppressed everything).  The candidate-scoped profile keeps
+        # the recommendation path internally aligned after filtering.
+        candidate_frames = [
+            f
+            for f in frames
+            if f.optimization_converged and f.constraint_residual_ok is not False
+        ]
+        dropped = len(frames) - len(candidate_frames)
+        if dropped:
+            logger.warning(
+                "PES scan candidate gate: %d/%d frames excluded (not converged or "
+                "off-constraint)",
+                dropped,
+                len(frames),
+            )
+        candidate_profile = (
+            _build_energy_profile(candidate_frames, sp_spec) if candidate_frames else profile
+        )
         ts_recs, int_recs, quality = _recommend_candidates(
-            frames,
+            candidate_frames,
             coordinate,
-            profile,
+            candidate_profile,
             cfg,
             scan_dir,
             coordinates=scan_coordinates,
@@ -365,6 +416,9 @@ def run_pes_scan(
         "coordinates": [item.to_dict() for item in scan_coordinates],
         "selection": selection,
         "protocol": protocol.to_dict(),
+        "optimization_level": optimizer_level.to_dict(),
+        "optimization_level_fingerprint": optimizer_level_fingerprint,
+        "execution_mode": execution_mode,
         "scan_dir": str(scan_dir),
         "scan_dir_rel": PES_SCAN_RELATIVE_PATH,
     }
@@ -432,6 +486,25 @@ def _materialize_xyz_text(source: StructureSource, work_root: Path) -> Path:
 # ── relaxed scan via backend ───────────────────────────────────────────
 
 
+def scan_optimizer_level(optimizer: ScanOptimizer) -> CalculationLevel:
+    """Build the canonical per-point optimization level from the protocol."""
+    return canonical_level(
+        CalculationLevel(
+            method=optimizer.method,
+            basis=optimizer.basis,
+            dispersion=optimizer.dispersion,
+            solvent_model=optimizer.solvent_model,
+            solvent=optimizer.solvent,
+            grid=optimizer.grid,
+            scf_convergence=optimizer.scf_convergence,
+            scf_max_iterations=optimizer.scf_max_iterations,
+            ri_approximation=optimizer.ri_approximation,
+            aux_j_basis=optimizer.aux_j_basis,
+            aux_c_basis=optimizer.aux_c_basis,
+        )
+    )
+
+
 def _snapshot_sp_publisher(
     writer: PesScanSnapshotWriter,
 ) -> Callable[[str, float | None, str], None]:
@@ -462,11 +535,18 @@ def _run_relaxed_scan_backend(
     scan_dir: Path,
     cfg: dict[str, Any],
     point_callback: Callable[[Any], None] | None = None,
+    optimizer_level: CalculationLevel | None = None,
 ) -> RelaxedScanResult:
     """Execute the relaxed scan via ``get_backend("orca").relaxed_scan``.
 
     This is the fixed path — bond_scan.py:724 called ORCAInterface directly;
     this module resolves and validates the backend capability first.
+
+    The per-point optimization level is canonicalised once (shared model,
+    ``acp.calculations.levels``) and every layer of the level — method,
+    basis, dispersion, solvent, grid, SCF, geometry convergence, retry
+    policy — is forwarded to the backend as named kwargs (G3/G4/G6 fixes:
+    previously only ``method`` reached the interface).
     """
     backend_ref = acp.backends.get_backend(protocol.scan_driver.software)
     backend = backend_ref(cfg) if isinstance(backend_ref, type) else backend_ref
@@ -484,6 +564,10 @@ def _run_relaxed_scan_backend(
     )
     plan = ReactionCoordinatePlan(coordinates=specs, points=scan_coordinates[0].n_points)
     nproc = int((cfg.get("resources") or {}).get("nproc") or 1)
+    level = optimizer_level or scan_optimizer_level(protocol.scan_optimizer)
+    route_extras: list[str] = []
+    if level.ri_approximation and level.ri_approximation.lower() != "none":
+        route_extras.append(level.ri_approximation)
     result = backend.relaxed_scan(
         coords,
         symbols,
@@ -491,13 +575,28 @@ def _run_relaxed_scan_backend(
         plan=plan,
         charge=charge,
         multiplicity=multiplicity,
-        method=protocol.scan_optimizer.method,
+        method=level.method,
+        basis=level.basis,
+        solvent=level.solvent,
+        solvent_model=level.solvent_model,
+        route_extras=route_extras or None,
         nprocs=nproc,
         use_scants=bool(protocol.scan_driver.use_scants),
         full_scan=bool(protocol.scan_driver.full_scan),
         geom_maxiter=int(
             protocol.scan_optimizer.max_iterations or protocol.scan_driver.max_iterations
         ),
+        opt_level=protocol.scan_optimizer.convergence,
+        grid=level.grid,
+        scf_convergence=level.scf_convergence,
+        scf_maxiter=level.scf_max_iterations,
+        aux_j_basis=level.aux_j_basis,
+        aux_c_basis=level.aux_c_basis,
+        dispersion=level.dispersion,
+        retry_count=int(protocol.scan_optimizer.retry_count),
+        retry_strategy=protocol.scan_optimizer.retry_strategy,
+        failure_policy=protocol.scan_driver.failure_policy,
+        reuse_previous_geometry=bool(protocol.scan_driver.reuse_previous_geometry),
         point_callback=point_callback,
     )
     if not isinstance(result, RelaxedScanResult):
@@ -516,6 +615,8 @@ def _extract_frames(
     *,
     coordinates: tuple[ScanCoordinate, ...] | None = None,
     tolerances: dict[str, float] | None = None,
+    optimizer_level: dict[str, Any] | None = None,
+    optimizer_engine: str = "",
 ) -> list[ScanFrame]:
     """Build per-frame records from the scan result.
 
@@ -523,6 +624,10 @@ def _extract_frames(
     (``actual - target``) plus an acceptance flag against *tolerances*;
     optimizer convergence alone does not imply the frame sits on the
     prescribed reaction-coordinate slice.
+
+    Frames also carry the traceability triple (canonical optimizer level,
+    engine, SCF state) and the per-attempt retry history reported by the
+    backend (pointwise path only; native scans leave the history empty).
     """
     frames: list[ScanFrame] = []
     frames_dir = scan_dir / "scan_frames"
@@ -586,6 +691,8 @@ def _extract_frames(
             if abs(residual) > tolerance:
                 invalid_reasons.append(f"{coordinate_id}:residual_{residual:+.4f}")
         finite_residuals = [abs(r) for r in residuals.values() if np.isfinite(r)]
+        point_metadata = getattr(point, "metadata", None) or {}
+        retry_history = point_metadata.get("retry_history") or ()
         frames.append(
             ScanFrame(
                 index=index,
@@ -604,6 +711,10 @@ def _extract_frames(
                 constraint_residual_ok=not invalid_reasons,
                 max_constraint_residual=max(finite_residuals) if finite_residuals else None,
                 invalid_reasons=tuple(invalid_reasons),
+                optimizer_level=dict(optimizer_level or {}),
+                optimizer_engine=optimizer_engine,
+                scf_converged=point_metadata.get("scf_converged"),
+                retry_history=tuple(dict(entry) for entry in retry_history),
             )
         )
         if reporter is not None:
@@ -737,11 +848,16 @@ def _run_single_points(
     cfg: dict[str, Any],
     reporter: ProgressReporter | None = None,
     on_frame_done: Callable[[str, float | None, str], None] | None = None,
+    cache_scope: str | None = None,
 ) -> None:
     """Run one cached, isolated single point per extracted scan frame.
 
     ``on_frame_done(frame_id, energy_hartree, status)`` fires as each frame
     resolves (including cache hits and failures) for live snapshot updates.
+
+    ``cache_scope`` mixes the scan-optimization level fingerprint into the
+    SP cache profile so energies computed under a different scan level are
+    never reused even when frame geometries coincide.
     """
     if not sp_spec.enabled:
         for i, frame in enumerate(frames):
@@ -843,8 +959,11 @@ def _run_single_points(
         config=sp_cfg,
         max_workers=sp_workers,
         cache=sp_spec.resume,
-        cache_profile="pes_scan",
+        cache_profile=(
+            f"pes_scan:{cache_scope}" if cache_scope else "pes_scan"
+        ),
         solvent_model=sp_spec.solvent_model,
+        solvent=sp_spec.solvent,
         dispersion=sp_spec.dispersion,
         ri_approximation=sp_spec.ri_approximation,
         aux_j_basis=sp_spec.aux_j_basis,

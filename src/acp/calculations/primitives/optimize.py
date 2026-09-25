@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import logging
 import shutil
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
+import numpy as np
 from typing_extensions import assert_never
 
 from acp.backends.base import QCResult
@@ -91,7 +92,10 @@ _RESCUE_MATRIX: Final[dict[tuple[str, str], tuple[str, ...]]] = {
     ("minimum_with_imaginary", "minimum"): (MODE_DISPLACEMENT,),
     ("collapsed_to_product", "intermediate"): (IRC_MIDPOINT_RECOVERY,),
     ("scf_failure", "ts"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
-    ("scf_failure", "intermediate"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
+    (
+        "scf_failure",
+        "intermediate",
+    ): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
     ("scf_failure", "minimum"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
     ("scf_failure", "precursor"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
     ("scf_failure", "product"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
@@ -158,9 +162,48 @@ class RescuePlan:
     terminal: bool
 
 
-def build_rescue_plan(failure_type: str, structure_kind: str) -> RescuePlan:
-    """Build the migrated eight-strategy rescue plan for one failure cell."""
+_TARGET_PRESERVING_STRATEGIES: Final[frozenset[str]] = frozenset(
+    {
+        SCF_INCREASE_MAXITER,
+        SCF_SLOWCONV,
+        SCF_SOSCF,
+        SCF_DAMP_SHIFT,
+    }
+)
+
+
+def _explicit_ts_target(kwargs: Mapping[str, Any]) -> int | None:
+    """Return an explicitly requested TS mode index, if any.
+
+    ``ts_mode`` as ``bool`` is the legacy "follow the lowest mode" rescue;
+    a non-bool ``int >= 0`` is an explicit, mapped target (tsmode flow)
+    that rescues must never silently override (plan §10.1).
+    """
+    value = kwargs.get("ts_mode")
+    if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+        return None
+    return int(value)
+
+
+def build_rescue_plan(
+    failure_type: str,
+    structure_kind: str,
+    *,
+    explicit_ts_target: int | None = None,
+) -> RescuePlan:
+    """Build the migrated eight-strategy rescue plan for one failure cell.
+
+    When *explicit_ts_target* is set (a mapped TS Mode target), every
+    strategy that would restart from a different geometry/Hessian or
+    override ``TS_Mode`` is dropped: only SCF-recovery actions keep the
+    target binding intact, and the plan is terminal otherwise (plan §10.1
+    — "不能确定目标时停止并报告，不自动回到最低模式").
+    """
     strategies = _RESCUE_MATRIX.get((failure_type, structure_kind), ())
+    if explicit_ts_target is not None:
+        strategies = tuple(
+            strategy for strategy in strategies if strategy in _TARGET_PRESERVING_STRATEGIES
+        )
     terminal = failure_type in FAILURE_EXIT or not strategies
     actions = tuple(
         RescueAction(
@@ -268,8 +311,14 @@ def run_optimize(
     first_failure = failure or _qc_failure_message(qc_result, capability)
     errors.append(f"{capability}: {first_failure}")
     failure_type = _failure_type(req, first_failure)
-    plan = build_rescue_plan(failure_type, structure_kind)
+    explicit_target = _explicit_ts_target(base_kwargs)
+    plan = build_rescue_plan(
+        failure_type, structure_kind, explicit_ts_target=explicit_target
+    )
     rescue_metadata = _plan_metadata(plan)
+    if explicit_target is not None:
+        rescue_metadata["tsmode_explicit_target"] = explicit_target
+        rescue_metadata["tsmode_target_preserved"] = True
 
     rescue_enabled = req.resources.get("opt_rescue_policy", "adaptive") != "off"
     max_rescue = int(req.resources.get("opt_max_rescue", 2))

@@ -228,9 +228,26 @@ class ScanDriver:
 
 @dataclass(frozen=True)
 class ScanOptimizer:
-    """Per-point optimisation level used inside the scan driver."""
+    """Per-point optimisation level used inside the scan driver.
+
+    The DFT extension (2026-09) adds the full calculation-level surface
+    (basis / dispersion / solvent / grid / SCF / RI).  All new fields
+    default so that legacy payloads parse unchanged; normalization and
+    composite-method locking happen in
+    :mod:`acp.calculations.levels` (``canonical_level``).
+    """
 
     method: str = "GFN2-xTB"
+    basis: str | None = None
+    dispersion: str | None = None
+    solvent_model: str = "none"
+    solvent: str | None = None
+    grid: str | None = None
+    scf_convergence: str | None = None
+    scf_max_iterations: int | None = None
+    ri_approximation: str = "none"
+    aux_j_basis: str | None = None
+    aux_c_basis: str | None = None
     max_iterations: int = 250
     convergence: str = "normal"
     retry_count: int = 2
@@ -241,6 +258,32 @@ class ScanOptimizer:
         payload = dict(payload or {})
         return cls(
             method=str(payload.get("method") or "GFN2-xTB"),
+            basis=None if payload.get("basis") in (None, "") else str(payload["basis"]),
+            dispersion=(
+                None
+                if payload.get("dispersion") in (None, "")
+                else str(payload["dispersion"])
+            ),
+            solvent_model=str(payload.get("solvent_model") or "none"),
+            solvent=None if payload.get("solvent") in (None, "") else str(payload["solvent"]),
+            grid=None if payload.get("grid") in (None, "") else str(payload["grid"]),
+            scf_convergence=(
+                None
+                if payload.get("scf_convergence") in (None, "")
+                else str(payload["scf_convergence"])
+            ),
+            scf_max_iterations=(
+                None
+                if payload.get("scf_max_iterations") in (None, "")
+                else _coerce_int(payload.get("scf_max_iterations"), 200)
+            ),
+            ri_approximation=str(payload.get("ri_approximation") or "none"),
+            aux_j_basis=(
+                None if payload.get("aux_j_basis") in (None, "") else str(payload["aux_j_basis"])
+            ),
+            aux_c_basis=(
+                None if payload.get("aux_c_basis") in (None, "") else str(payload["aux_c_basis"])
+            ),
             max_iterations=_coerce_int(payload.get("max_iterations"), 250),
             convergence=str(payload.get("convergence") or "normal"),
             retry_count=_coerce_int(payload.get("retry_count"), 2),
@@ -250,6 +293,16 @@ class ScanOptimizer:
     def to_dict(self) -> dict[str, Any]:
         return {
             "method": self.method,
+            "basis": self.basis,
+            "dispersion": self.dispersion,
+            "solvent_model": self.solvent_model,
+            "solvent": self.solvent,
+            "grid": self.grid,
+            "scf_convergence": self.scf_convergence,
+            "scf_max_iterations": self.scf_max_iterations,
+            "ri_approximation": self.ri_approximation,
+            "aux_j_basis": self.aux_j_basis,
+            "aux_c_basis": self.aux_c_basis,
             "max_iterations": self.max_iterations,
             "convergence": self.convergence,
             "retry_count": self.retry_count,
@@ -337,6 +390,9 @@ class ScanProtocol:
     scan_optimizer: ScanOptimizer = field(default_factory=ScanOptimizer)
     single_point: SinglePointSpec = field(default_factory=SinglePointSpec)
     name: str = DEFAULT_SCAN_PROTOCOL_NAME
+    # Executor-backfilled ("native_scan" | "pointwise"); persisted into
+    # pes_profile.json so the UI can show the actual recovery capability.
+    execution_mode: str | None = None
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> ScanProtocol:
@@ -370,10 +426,13 @@ class ScanProtocol:
             scan_optimizer=optimizer,
             single_point=single_point,
             name=str(payload.get("name") or DEFAULT_SCAN_PROTOCOL_NAME),
+            execution_mode=(
+                None if payload.get("execution_mode") is None else str(payload["execution_mode"])
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "scan_type": self.scan_type,
             "coordinate": self.coordinate.to_dict(),
             "scan_driver": self.scan_driver.to_dict(),
@@ -381,6 +440,9 @@ class ScanProtocol:
             "single_point": self.single_point.to_dict(),
             "name": self.name,
         }
+        if self.execution_mode is not None:
+            payload["execution_mode"] = self.execution_mode
+        return payload
 
 
 # ── top-level request ──────────────────────────────────────────────────
@@ -474,6 +536,13 @@ class ScanFrame:
     constraint_residual_ok: bool | None = None
     max_constraint_residual: float | None = None
     invalid_reasons: tuple[str, ...] = ()
+    # Traceability (PES DFT-scan extension): the canonical calculation level
+    # actually used for this frame's optimization, its engine, the SCF
+    # convergence state, and the per-attempt retry history.
+    optimizer_level: dict[str, Any] = field(default_factory=dict)
+    optimizer_engine: str = ""
+    scf_converged: bool | None = None
+    retry_history: tuple[dict[str, Any], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -493,6 +562,10 @@ class ScanFrame:
             "constraint_residual_ok": self.constraint_residual_ok,
             "max_constraint_residual": self.max_constraint_residual,
             "invalid_reasons": list(self.invalid_reasons),
+            "optimizer_level": dict(self.optimizer_level),
+            "optimizer_engine": self.optimizer_engine,
+            "scf_converged": self.scf_converged,
+            "retry_history": [dict(entry) for entry in self.retry_history],
         }
 
 
@@ -705,6 +778,34 @@ def validate_scan_protocol(
             "looser_convergence",
         }:
             raise ValueError(f"unknown scan optimizer retry strategy: {optimizer.retry_strategy!r}")
+        # Calculation-level validation (DFT scan extension): capability
+        # filtering, composite-method locking, and solvent consistency are
+        # centralised in acp.calculations.levels.
+        from acp.calculations.levels import (
+            CalculationLevel,
+            validate_level_for_purpose,
+        )
+
+        level_errors = validate_level_for_purpose(
+            CalculationLevel(
+                method=optimizer.method,
+                basis=optimizer.basis,
+                dispersion=optimizer.dispersion,
+                solvent_model=optimizer.solvent_model,
+                solvent=optimizer.solvent,
+                grid=optimizer.grid,
+                scf_convergence=optimizer.scf_convergence,
+                scf_max_iterations=optimizer.scf_max_iterations,
+                ri_approximation=optimizer.ri_approximation,
+                aux_j_basis=optimizer.aux_j_basis,
+                aux_c_basis=optimizer.aux_c_basis,
+            ),
+            purpose="scan_optimization",
+        )
+        if level_errors:
+            raise ValueError(
+                "invalid scan optimizer level: " + "; ".join(level_errors)
+            )
         if protocol.single_point.enabled:
             sp = protocol.single_point
             if sp.charge is None or sp.multiplicity is None:
