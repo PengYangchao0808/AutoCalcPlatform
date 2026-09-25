@@ -260,6 +260,47 @@ def test_pessearch_local_remote_parity() -> None:
     assert "bond_length_scan" in argv_scan
     assert "--scan-config" in argv_scan  # remote ships scan_config.json
 
+    # Guards the plan §5 invariant: scheduler passes protocol fields through verbatim.
+    dft_scan_request = {
+        "mode": "bond_length_scan",
+        "source": {"source_type": "xyz_text", "xyz_text": "2\n\nH 0 0 0\nH 0 0 0.74\n"},
+        "coordinate": {
+            "kind": "distance",
+            "atoms": [0, 1],
+            "start": 0.6,
+            "end": 2.0,
+            "n_points": 15,
+        },
+        "protocol": {
+            "scan_optimizer": {
+                "method": "r2SCAN-3c",
+                "grid": "DefGrid2",
+                "scf_convergence": "tight",
+                "scf_max_iterations": 300,
+                "solvent_model": "smd",
+                "solvent": "water",
+                "convergence": "tight",
+                "retry_count": 3,
+            },
+            "single_point": {"enabled": False},
+        },
+    }
+    spec_dft = _spec(
+        "PESsearch",
+        {"scan_request": dft_scan_request},
+        {"mode": "bond_length_scan"},
+    )
+    assert "--scan-config" in _remote_argv(spec_dft)
+    from acp.scheduler.remote.script_gen import build_remote_scan_config_payload
+
+    remote_payload = build_remote_scan_config_payload(spec_dft)
+    assert remote_payload is not None
+    expected_optimizer = dft_scan_request["protocol"]["scan_optimizer"]
+    assert remote_payload["protocol"]["scan_optimizer"] == expected_optimizer
+    import json as _json
+
+    assert _json.loads(_json.dumps(remote_payload)) == remote_payload
+
 
 # ── IRC parity ────────────────────────────────────────────────────────
 

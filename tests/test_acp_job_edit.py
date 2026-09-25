@@ -200,7 +200,25 @@ def _spec(workflow: str) -> JobSpec:
                     },
                 },
             },
-            method={"schema_id": "pes_scan", "mode": "bond_length_scan", "profile_id": "default"},
+            method={
+                "schema_id": "pes_scan",
+                "mode": "bond_length_scan",
+                "profile_id": "default",
+                "levels": {
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "r2SCAN-3c",
+                        "scan_optimizer_grid": "DefGrid2",
+                        "scan_optimizer_scf_convergence": "tight",
+                        "scan_optimizer_scf_max_iterations": 300,
+                        "scan_optimizer_solvent_model": "smd",
+                        "scan_optimizer_solvent": "water",
+                        "scan_optimizer_convergence": "tight",
+                        "scan_optimizer_retry_count": 3,
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
+                },
+            },
         )
     elif workflow == "BatchOptimize":
         base.update(

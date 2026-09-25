@@ -318,13 +318,13 @@ def test_simple_workflow_rows(workflow: str, expected: frozenset[str]) -> None:
 
 
 def test_pessearch_row() -> None:
-    """PESsearch → {orca, xtb} via the pes_scan default profile.
+    """PESsearch → {orca} via the pes_scan default profile.
 
-    Evidence: catalog.py:2378-2523 — the single "default" profile carries
-    scan_coordinate/scan_driver/single_point engines "orca" (:2468/2476/
-    2493) and scan_optimizer engine "xtb" (:2485).
+    The scan_optimizer engine migrated xtb→orca in the DFT-scan extension
+    (plan ACP_PES_DFT_Scan_Extension_Plan): ORCA executes GFN2-xTB natively,
+    so xtb is no longer a required executable for the default profile.
     """
-    assert derive_required_software(_spec("PESsearch")) == frozenset({"orca", "xtb"})
+    assert derive_required_software(_spec("PESsearch")) == frozenset({"orca"})
 
 
 def test_explicit_levels_engines_win() -> None:
