@@ -35,10 +35,76 @@ from acp.scheduler.migrations import migrate
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "CandidateUseConflictError",
     "RevisionConflictError",
     "StructureSourceStore",
     "source_uid_for",
 ]
+
+_SCHEMA_CANDIDATES = """
+CREATE TABLE IF NOT EXISTS structure_candidates (
+    candidate_record_id TEXT PRIMARY KEY,
+    source_uid TEXT NOT NULL UNIQUE,
+    usage_status TEXT NOT NULL DEFAULT 'active',
+    status_reason TEXT,
+    status_scope TEXT,
+    status_revision INTEGER NOT NULL DEFAULT 0,
+    status_updated_at TEXT
+);
+"""
+
+_SCHEMA_VERSIONS = """
+CREATE TABLE IF NOT EXISTS structure_candidate_versions (
+    version_id TEXT PRIMARY KEY,
+    candidate_record_id TEXT NOT NULL,
+    geometry_hash TEXT NOT NULL,
+    source_revision TEXT NOT NULL DEFAULT '',
+    relative_path TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(candidate_record_id, geometry_hash, source_revision)
+);
+"""
+
+_SCHEMA_ASSESSMENTS = """
+CREATE TABLE IF NOT EXISTS structure_candidate_assessments (
+    assessment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_record_id TEXT NOT NULL,
+    version_id TEXT NOT NULL,
+    conclusion TEXT NOT NULL,
+    reason_code TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    note TEXT,
+    evidence_json TEXT NOT NULL DEFAULT '[]',
+    attachment_refs_json TEXT NOT NULL DEFAULT '[]',
+    actor TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL
+);
+"""
+
+_SCHEMA_USAGE = """
+CREATE TABLE IF NOT EXISTS structure_candidate_usage (
+    usage_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_record_id TEXT NOT NULL,
+    version_id TEXT NOT NULL,
+    consumer_job_id TEXT NOT NULL,
+    input_snapshot_json TEXT NOT NULL,
+    disabled_exception INTEGER NOT NULL DEFAULT 0,
+    exception_reason TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(candidate_record_id, version_id, consumer_job_id)
+);
+"""
+
+_SCHEMA_TOMBSTONES = """
+CREATE TABLE IF NOT EXISTS structure_candidate_tombstones (
+    candidate_record_id TEXT NOT NULL,
+    geometry_hash TEXT NOT NULL,
+    source_revision TEXT NOT NULL DEFAULT '',
+    removed_at TEXT NOT NULL,
+    actor TEXT NOT NULL DEFAULT 'user',
+    PRIMARY KEY (candidate_record_id, geometry_hash, source_revision)
+);
+"""
 
 # ---------------------------------------------------------------------------
 # Schema
@@ -132,6 +198,11 @@ _ALL_SCHEMA = "\n".join(
         _SCHEMA_TAGS,
         _SCHEMA_EVENTS,
         _SCHEMA_INDEX_STATE,
+        _SCHEMA_CANDIDATES,
+        _SCHEMA_VERSIONS,
+        _SCHEMA_ASSESSMENTS,
+        _SCHEMA_USAGE,
+        _SCHEMA_TOMBSTONES,
     ]
 )
 
@@ -168,6 +239,9 @@ _DISCOVERY_COLUMNS: tuple[str, ...] = (
 
 _VALID_AVAILABILITY = frozenset({"available", "pending_fetch", "unavailable", "pending_sync"})
 _VALID_ROLES = frozenset({"TS", "INT", ""})
+_VALID_USAGE_STATUSES = frozenset({"active", "trash"})
+_VALID_CONCLUSIONS = frozenset({"unreviewed", "recommended", "review", "not_recommended"})
+_VALID_SOURCE_GROUPS = frozenset({"candidate", "task_result"})
 _MAX_NAME_LEN = 200
 _MAX_TAG_LEN = 32
 _MAX_TAGS_PER_SOURCE = 20
@@ -270,6 +344,14 @@ class RevisionConflictError(Exception):
         self.projection = projection
 
 
+class CandidateUseConflictError(Exception):
+    """A selected candidate is no longer eligible for normal submission."""
+
+    def __init__(self, projection: dict[str, Any]):
+        super().__init__(f"candidate is {projection.get('usage_status', 'unavailable')}")
+        self.projection = projection
+
+
 # ---------------------------------------------------------------------------
 # Store
 # ---------------------------------------------------------------------------
@@ -298,6 +380,13 @@ class StructureSourceStore:
             conn.executescript(_ALL_SCHEMA)
             for idx_sql in _INDEXES:
                 conn.execute(idx_sql)
+            # The old UI exposed disabled and archived as separate states.  They
+            # are intentionally folded into the single recoverable trash state.
+            conn.execute(
+                "UPDATE structure_candidates SET usage_status='trash', "
+                "status_reason=NULL, status_scope='project' "
+                "WHERE usage_status IN ('disabled', 'archived')"
+            )
             conn.commit()
         # Run project-level migrations for any other tables
         migrate(Path(self._db_path))
@@ -357,6 +446,21 @@ class StructureSourceStore:
                         "discovered_at": now,
                         "discovery_version": discovery_version,
                     }
+                    candidate_record_id = self._candidate_record_id(uid)
+                    geometry_hash, source_revision = self._version_identity(params)
+                    removed = conn.execute(
+                        "SELECT 1 FROM structure_candidate_tombstones "
+                        "WHERE candidate_record_id=? AND geometry_hash=? AND source_revision=?",
+                        (candidate_record_id, geometry_hash, source_revision),
+                    ).fetchone()
+                    if removed is not None:
+                        # Full rebuilds may have recreated the discovery row before
+                        # this exact version was checked.  Keep the tombstone
+                        # authoritative without touching source calculation files.
+                        conn.execute(
+                            "DELETE FROM structure_source_index WHERE source_uid=?", (uid,)
+                        )
+                        continue
                     cols = ", ".join(params.keys())
                     placeholders = ", ".join("?" for _ in params)
                     update_parts = ", ".join(f"{c}=excluded.{c}" for c in _DISCOVERY_COLUMNS)
@@ -366,6 +470,7 @@ class StructureSourceStore:
                         f"ON CONFLICT(source_uid) DO UPDATE SET {update_parts}",
                         tuple(params.values()),
                     )
+                    self._ensure_candidate_version_tx(conn, uid, params)
                     count += 1
                 conn.commit()
             except Exception:
@@ -386,10 +491,30 @@ class StructureSourceStore:
                 m.metadata_revision,
                 m.metadata_updated_at,
                 t.custom_name AS task_custom_name,
-                t.display_name AS task_display_name
+                t.display_name AS task_display_name,
+                c.candidate_record_id,
+                c.usage_status,
+                c.status_reason,
+                c.status_scope,
+                c.status_revision,
+                c.status_updated_at,
+                v.version_id,
+                v.geometry_hash,
+                v.source_revision,
+                (SELECT a.conclusion FROM structure_candidate_assessments a
+                 WHERE a.candidate_record_id = c.candidate_record_id
+                   AND a.version_id = v.version_id
+                 ORDER BY a.assessment_id DESC LIMIT 1) AS assessment,
+                (SELECT COUNT(*) FROM structure_candidate_usage u
+                 WHERE u.candidate_record_id = c.candidate_record_id) AS usage_count
             FROM structure_source_index i
             LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid
             LEFT JOIN tasks t ON t.task_id = i.job_id
+            LEFT JOIN structure_candidates c ON c.source_uid = i.source_uid
+            LEFT JOIN structure_candidate_versions v ON v.version_id = (
+                SELECT v2.version_id FROM structure_candidate_versions v2
+                WHERE v2.candidate_record_id = c.candidate_record_id
+                ORDER BY v2.created_at DESC, v2.rowid DESC LIMIT 1)
             {where}
         """
         with self._lock, self._connect() as conn:
@@ -401,9 +526,29 @@ class StructureSourceStore:
                         i.*,
                         m.custom_name,
                         m.metadata_revision,
-                        m.metadata_updated_at
+                        m.metadata_updated_at,
+                        c.candidate_record_id,
+                        c.usage_status,
+                        c.status_reason,
+                        c.status_scope,
+                        c.status_revision,
+                        c.status_updated_at,
+                        v.version_id,
+                        v.geometry_hash,
+                        v.source_revision,
+                        (SELECT a.conclusion FROM structure_candidate_assessments a
+                         WHERE a.candidate_record_id = c.candidate_record_id
+                           AND a.version_id = v.version_id
+                         ORDER BY a.assessment_id DESC LIMIT 1) AS assessment,
+                        (SELECT COUNT(*) FROM structure_candidate_usage u
+                         WHERE u.candidate_record_id = c.candidate_record_id) AS usage_count
                     FROM structure_source_index i
                     LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid
+                    LEFT JOIN structure_candidates c ON c.source_uid = i.source_uid
+                    LEFT JOIN structure_candidate_versions v ON v.version_id = (
+                        SELECT v2.version_id FROM structure_candidate_versions v2
+                        WHERE v2.candidate_record_id = c.candidate_record_id
+                        ORDER BY v2.created_at DESC, v2.rowid DESC LIMIT 1)
                     {where}
                 """
                 rows = conn.execute(sql_fallback, params).fetchall()
@@ -429,8 +574,64 @@ class StructureSourceStore:
             task_custom = d.pop("task_custom_name", None)
             task_display = d.pop("task_display_name", None)
             d["job_resolved_name"] = task_custom or task_display or d.get("job_name", "")
+            d["usage_status"] = d.get("usage_status") or "active"
+            d["assessment"] = d.get("assessment") or "unreviewed"
+            d["usage_count"] = int(d.get("usage_count") or 0)
             results.append(d)
         return results
+
+    @staticmethod
+    def _candidate_record_id(source_uid: str) -> str:
+        return "cand_" + hashlib.sha256(source_uid.encode("utf-8")).hexdigest()[:24]
+
+    def _ensure_candidate_version_tx(
+        self, conn: sqlite3.Connection, source_uid: str, entry: dict[str, Any]
+    ) -> None:
+        """Create the stable candidate and exact geometry version without touching reviews."""
+        now = _utc_now_iso()
+        candidate_id = self._candidate_record_id(source_uid)
+        conn.execute(
+            "INSERT OR IGNORE INTO structure_candidates "
+            "(candidate_record_id, source_uid) VALUES (?, ?)",
+            (candidate_id, source_uid),
+        )
+        geometry_hash, source_revision = self._version_identity(entry)
+        raw = f"{candidate_id}\n{geometry_hash}\n{source_revision}"
+        version_id = "cv_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+        conn.execute(
+            "INSERT OR IGNORE INTO structure_candidate_versions "
+            "(version_id, candidate_record_id, geometry_hash, source_revision, "
+            "relative_path, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                version_id,
+                candidate_id,
+                geometry_hash,
+                source_revision,
+                str(entry.get("relative_path") or ""),
+                now,
+            ),
+        )
+        if conn.execute(
+            "SELECT 1 FROM structure_candidate_tombstones WHERE candidate_record_id=? LIMIT 1",
+            (candidate_id,),
+        ).fetchone():
+            conn.execute(
+                "UPDATE structure_candidates SET usage_status='active', status_reason=NULL, "
+                "status_scope='project', status_revision=status_revision+1, status_updated_at=? "
+                "WHERE candidate_record_id=?",
+                (now, candidate_id),
+            )
+
+    @staticmethod
+    def _version_identity(entry: dict[str, Any]) -> tuple[str, str]:
+        """Return the stable identity used by versions and purge tombstones."""
+        geometry_hash = str(entry.get("content_checksum") or "")
+        if not geometry_hash:
+            geometry_hash = "unknown:" + hashlib.sha256(
+                f"{entry.get('job_id', '')}\n{entry.get('relative_path', '')}".encode()
+            ).hexdigest()
+        return geometry_hash, str(entry.get("discovery_version") or "")
 
     def get(self, source_uid: str) -> dict[str, Any] | None:
         """Get a single source by source_uid."""
@@ -445,6 +646,323 @@ class StructureSourceStore:
     def list_by_job(self, job_id: str) -> list[dict[str, Any]]:
         """List all sources for a given job."""
         return self._join_projection("WHERE i.job_id = ?", (job_id,))
+
+    # ------------------------------------------------------------------ #
+    # Candidate lifecycle, version-bound reviews, and usage provenance
+    # ------------------------------------------------------------------ #
+
+    def set_candidate_status(
+        self,
+        source_uid: str,
+        status: str,
+        *,
+        reason: str = "",
+        scope: str = "project",
+        expected_revision: int,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        """Move a candidate between the normal list and the recoverable trash."""
+        if status not in _VALID_USAGE_STATUSES:
+            raise ValueError(f"invalid usage status: {status}")
+        reason = reason.strip()
+        scope = scope.strip() or "project"
+        now = _utc_now_iso()
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM structure_candidates WHERE source_uid = ?", (source_uid,)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"source not found: {source_uid}")
+            current_revision = int(row["status_revision"] or 0)
+            if current_revision != expected_revision:
+                raise RevisionConflictError("status revision mismatch", projection=dict(row))
+            if (
+                row["usage_status"] == status
+                and (row["status_reason"] or "") == reason
+                and (row["status_scope"] or "project") == scope
+            ):
+                unchanged = True
+            else:
+                unchanged = False
+            if unchanged:
+                conn.commit()
+            else:
+                new_revision = current_revision + 1
+                conn.execute(
+                    "UPDATE structure_candidates SET usage_status=?, status_reason=?, "
+                    "status_scope=?, "
+                    "status_revision=?, status_updated_at=? WHERE source_uid=?",
+                    (status, reason or None, scope, new_revision, now, source_uid),
+                )
+                conn.execute(
+                    "INSERT INTO organization_events "
+                    "(object_type, object_id, action, old_value, new_value, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        "structure_candidate",
+                        row["candidate_record_id"],
+                        "set_usage_status",
+                        json.dumps({"status": row["usage_status"], "reason": row["status_reason"]}),
+                        json.dumps(
+                            {"status": status, "reason": reason, "scope": scope, "actor": actor},
+                            ensure_ascii=False,
+                        ),
+                        now,
+                    ),
+                )
+                conn.commit()
+        return self.get(source_uid) or {}
+
+    def purge_candidates(
+        self,
+        source_uids: list[str],
+        *,
+        project_id: str | None = None,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        """Permanently remove trashed library entries, preserving source jobs/files.
+
+        A version-bound tombstone prevents discovery from recreating the same
+        candidate.  A later geometry/source revision remains eligible to appear.
+        """
+        unique_uids = list(dict.fromkeys(source_uids))
+        removed: list[str] = []
+        now = _utc_now_iso()
+        with self._lock, self._connect() as conn:
+            for uid in unique_uids:
+                row = conn.execute(
+                    "SELECT c.candidate_record_id, c.usage_status, i.project_id, "
+                    "v.geometry_hash, v.source_revision FROM structure_candidates c "
+                    "JOIN structure_source_index i ON i.source_uid=c.source_uid "
+                    "JOIN structure_candidate_versions v ON v.version_id=("
+                    "SELECT v2.version_id FROM structure_candidate_versions v2 "
+                    "WHERE v2.candidate_record_id=c.candidate_record_id "
+                    "ORDER BY v2.created_at DESC, v2.rowid DESC LIMIT 1) "
+                    "WHERE c.source_uid=?",
+                    (uid,),
+                ).fetchone()
+                if row is None:
+                    continue
+                if row["usage_status"] != "trash":
+                    raise ValueError(f"candidate is not in trash: {uid}")
+                if project_id is not None and row["project_id"] != project_id:
+                    raise ValueError(f"candidate is outside current project: {uid}")
+                conn.execute(
+                    "INSERT OR IGNORE INTO structure_candidate_tombstones "
+                    "(candidate_record_id, geometry_hash, source_revision, removed_at, actor) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        row["candidate_record_id"],
+                        row["geometry_hash"],
+                        row["source_revision"],
+                        now,
+                        actor,
+                    ),
+                )
+                conn.execute("DELETE FROM structure_source_tags WHERE source_uid=?", (uid,))
+                conn.execute("DELETE FROM structure_source_metadata WHERE source_uid=?", (uid,))
+                conn.execute("DELETE FROM structure_source_index WHERE source_uid=?", (uid,))
+                conn.execute(
+                    "INSERT INTO organization_events "
+                    "(object_type, object_id, action, old_value, new_value, created_at) "
+                    "VALUES (?, ?, 'purge_candidate', 'trash', ?, ?)",
+                    ("structure_candidate", row["candidate_record_id"], actor, now),
+                )
+                removed.append(uid)
+            conn.commit()
+        return {"removed": removed, "count": len(removed)}
+
+    def add_assessment(
+        self,
+        source_uid: str,
+        *,
+        conclusion: str,
+        reason_code: str,
+        scope: str,
+        note: str = "",
+        evidence: list[dict[str, Any]] | None = None,
+        attachment_refs: list[str] | None = None,
+        actor: str = "user",
+        version_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Append an immutable assessment bound to one exact geometry version."""
+        if conclusion not in _VALID_CONCLUSIONS:
+            raise ValueError(f"invalid conclusion: {conclusion}")
+        if not reason_code.strip():
+            raise ValueError("reason_code is required")
+        if not scope.strip():
+            raise ValueError("scope is required")
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT c.candidate_record_id, v.version_id FROM structure_candidates c "
+                "JOIN structure_candidate_versions v "
+                "ON v.candidate_record_id=c.candidate_record_id "
+                "WHERE c.source_uid=? "
+                + ("AND v.version_id=? " if version_id else "")
+                + "ORDER BY v.created_at DESC, v.rowid DESC LIMIT 1",
+                (source_uid, version_id) if version_id else (source_uid,),
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"candidate version not found: {source_uid}")
+            now = _utc_now_iso()
+            conn.execute(
+                "INSERT INTO structure_candidate_assessments "
+                "(candidate_record_id, version_id, conclusion, reason_code, scope, note, "
+                "evidence_json, attachment_refs_json, actor, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    row["candidate_record_id"],
+                    row["version_id"],
+                    conclusion,
+                    reason_code.strip(),
+                    scope.strip(),
+                    note.strip() or None,
+                    json.dumps(evidence or [], ensure_ascii=False),
+                    json.dumps(attachment_refs or [], ensure_ascii=False),
+                    actor,
+                    now,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO organization_events "
+                "(object_type, object_id, action, old_value, new_value, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "structure_candidate_version",
+                    row["version_id"],
+                    "add_assessment",
+                    None,
+                    json.dumps(
+                        {
+                            "conclusion": conclusion,
+                            "reason_code": reason_code,
+                            "scope": scope,
+                            "actor": actor,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    now,
+                ),
+            )
+            conn.commit()
+        return self.get_candidate_detail(source_uid)
+
+    def get_candidate_detail(self, source_uid: str) -> dict[str, Any]:
+        projection = self.get(source_uid)
+        if projection is None:
+            raise ValueError(f"source not found: {source_uid}")
+        candidate_id = projection.get("candidate_record_id")
+        with self._lock, self._connect() as conn:
+            versions = [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM structure_candidate_versions WHERE candidate_record_id=? "
+                    "ORDER BY created_at DESC, rowid DESC",
+                    (candidate_id,),
+                ).fetchall()
+            ]
+            assessments = []
+            for row in conn.execute(
+                "SELECT * FROM structure_candidate_assessments WHERE candidate_record_id=? "
+                "ORDER BY assessment_id DESC",
+                (candidate_id,),
+            ).fetchall():
+                item = dict(row)
+                item["evidence"] = json.loads(item.pop("evidence_json") or "[]")
+                item["attachment_refs"] = json.loads(item.pop("attachment_refs_json") or "[]")
+                assessments.append(item)
+            usage = []
+            for row in conn.execute(
+                "SELECT * FROM structure_candidate_usage WHERE candidate_record_id=? "
+                "ORDER BY usage_id DESC",
+                (candidate_id,),
+            ).fetchall():
+                item = dict(row)
+                item["input_snapshot"] = json.loads(item.pop("input_snapshot_json") or "{}")
+                usage.append(item)
+            events = [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM organization_events WHERE "
+                    "(object_type='structure_candidate' AND object_id=?) OR "
+                    "(object_type='structure_candidate_version' AND object_id IN "
+                    "(SELECT version_id FROM structure_candidate_versions "
+                    "WHERE candidate_record_id=?)) "
+                    "ORDER BY id DESC",
+                    (candidate_id, candidate_id),
+                ).fetchall()
+            ]
+        return {
+            **projection,
+            "versions": versions,
+            "assessments": assessments,
+            "usage": usage,
+            "history": events,
+        }
+
+    def validate_candidate_use(
+        self,
+        source_uid: str,
+        *,
+        allow_disabled: bool = False,
+        justification: str = "",
+    ) -> dict[str, Any]:
+        """Re-read status at submit time; disabled use requires an explicit exception."""
+        projection = self.get(source_uid)
+        if projection is None:
+            raise ValueError(f"source not found: {source_uid}")
+        status = projection.get("usage_status", "active")
+        if status != "active":
+            raise CandidateUseConflictError(projection)
+        return projection
+
+    def trash_uids(self, project_id: str | None) -> list[str]:
+        """Return every trashed candidate in a project, independent of UI filters."""
+        with self._lock, self._connect() as conn:
+            if project_id is None:
+                rows = conn.execute(
+                    "SELECT c.source_uid FROM structure_candidates c "
+                    "JOIN structure_source_index i ON i.source_uid=c.source_uid "
+                    "WHERE c.usage_status='trash' ORDER BY c.source_uid"
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT c.source_uid FROM structure_candidates c "
+                    "JOIN structure_source_index i ON i.source_uid=c.source_uid "
+                    "WHERE c.usage_status='trash' AND i.project_id=? ORDER BY c.source_uid",
+                    (project_id,),
+                ).fetchall()
+        return [str(row["source_uid"]) for row in rows]
+
+    def record_usage(
+        self,
+        source_uid: str,
+        consumer_job_id: str,
+        snapshot: dict[str, Any],
+        *,
+        disabled_exception: bool = False,
+        exception_reason: str = "",
+    ) -> None:
+        """Persist an exact candidate/version/input snapshot link after submission."""
+        projection = self.get(source_uid)
+        if projection is None:
+            raise ValueError(f"source not found: {source_uid}")
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO structure_candidate_usage "
+                "(candidate_record_id, version_id, consumer_job_id, input_snapshot_json, "
+                "disabled_exception, exception_reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    projection["candidate_record_id"],
+                    projection["version_id"],
+                    consumer_job_id,
+                    json.dumps(snapshot, ensure_ascii=False),
+                    int(disabled_exception),
+                    exception_reason.strip() or None,
+                    _utc_now_iso(),
+                ),
+            )
+            conn.commit()
 
     # ------------------------------------------------------------------ #
     # Metadata mutations
@@ -1170,8 +1688,12 @@ class StructureSourceStore:
         tag_match: str = "any",
         workflow: str | None = None,
         source_kind: str | None = None,
+        source_group: str | None = None,
         remote: bool | None = None,
         availability: str | None = None,
+        assessment: str | None = None,
+        usage_status: str | None = None,
+        include_inactive: bool = False,
         sort: str = "produced_desc",
         group_by: str = "none",
         limit: int = 50,
@@ -1184,6 +1706,9 @@ class StructureSourceStore:
         """
         if limit > 100:
             limit = 100
+
+        if source_group is not None and source_group not in _VALID_SOURCE_GROUPS:
+            raise ValueError(f"invalid source group: {source_group}")
 
         # Parse cursor
         offset = 0
@@ -1249,6 +1774,13 @@ class StructureSourceStore:
             clauses.append("i.source_kind = ?")
             params.append(source_kind)
 
+        if source_group == "candidate":
+            clauses.append("i.source_kind = ?")
+            params.append("saved_candidate")
+        elif source_group == "task_result":
+            clauses.append("i.source_kind != ?")
+            params.append("saved_candidate")
+
         if remote is not None:
             clauses.append("i.remote = ?")
             params.append(int(remote))
@@ -1256,6 +1788,37 @@ class StructureSourceStore:
         if availability:
             clauses.append("i.availability = ?")
             params.append(availability)
+
+        if usage_status:
+            if usage_status not in _VALID_USAGE_STATUSES:
+                raise ValueError(f"invalid usage status: {usage_status}")
+            clauses.append(
+                "EXISTS (SELECT 1 FROM structure_candidates c "
+                "WHERE c.source_uid=i.source_uid AND c.usage_status=?)"
+            )
+            params.append(usage_status)
+        elif not include_inactive:
+            clauses.append(
+                "NOT EXISTS (SELECT 1 FROM structure_candidates c "
+                "WHERE c.source_uid=i.source_uid AND c.usage_status!='active')"
+            )
+
+        if assessment:
+            if assessment not in _VALID_CONCLUSIONS:
+                raise ValueError(f"invalid assessment: {assessment}")
+            if assessment == "unreviewed":
+                clauses.append(
+                    "NOT EXISTS (SELECT 1 FROM structure_candidate_assessments a "
+                    "JOIN structure_candidates c ON c.candidate_record_id=a.candidate_record_id "
+                    "WHERE c.source_uid=i.source_uid)"
+                )
+            else:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM structure_candidate_assessments a "
+                    "JOIN structure_candidates c ON c.candidate_record_id=a.candidate_record_id "
+                    "WHERE c.source_uid=i.source_uid AND a.conclusion=?)"
+                )
+                params.append(assessment)
 
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
@@ -1270,8 +1833,12 @@ class StructureSourceStore:
                 "tag_match": tag_match,
                 "workflow": workflow,
                 "source_kind": source_kind,
+                "source_group": source_group,
                 "remote": remote,
                 "availability": availability,
+                "assessment": assessment,
+                "usage_status": usage_status,
+                "include_inactive": include_inactive,
                 "sort": sort,
                 "group_by": group_by,
             },
@@ -1487,10 +2054,17 @@ class StructureSourceStore:
         tag_match: str = "any",
         workflow: str | None = None,
         source_kind: str | None = None,
+        source_group: str | None = None,
         remote: bool | None = None,
         availability: str | None = None,
+        assessment: str | None = None,
+        usage_status: str | None = None,
+        include_inactive: bool = False,
     ) -> dict[str, Any]:
         """Compute facet counts under the given filter set (excluding the facet's own dimension)."""
+
+        if source_group is not None and source_group not in _VALID_SOURCE_GROUPS:
+            raise ValueError(f"invalid source group: {source_group}")
 
         # Build base WHERE clauses (excluding the specific facet we're counting)
         def build_clauses(exclude: str = "") -> tuple[list[str], list[Any]]:
@@ -1537,12 +2111,45 @@ class StructureSourceStore:
             if source_kind and exclude != "source_kind":
                 clauses.append("i.source_kind = ?")
                 params.append(source_kind)
+            if source_group == "candidate":
+                clauses.append("i.source_kind = ?")
+                params.append("saved_candidate")
+            elif source_group == "task_result":
+                clauses.append("i.source_kind != ?")
+                params.append("saved_candidate")
             if remote is not None and exclude != "remote":
                 clauses.append("i.remote = ?")
                 params.append(int(remote))
             if availability and exclude != "availability":
                 clauses.append("i.availability = ?")
                 params.append(availability)
+            if usage_status and exclude != "usage_status":
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM structure_candidates c "
+                    "WHERE c.source_uid=i.source_uid AND c.usage_status=?)"
+                )
+                params.append(usage_status)
+            elif not include_inactive and exclude != "usage_status":
+                clauses.append(
+                    "NOT EXISTS (SELECT 1 FROM structure_candidates c "
+                    "WHERE c.source_uid=i.source_uid AND c.usage_status!='active')"
+                )
+            if assessment and exclude != "assessment":
+                if assessment == "unreviewed":
+                    clauses.append(
+                        "NOT EXISTS (SELECT 1 FROM structure_candidate_assessments a "
+                        "JOIN structure_candidates c "
+                        "ON c.candidate_record_id=a.candidate_record_id "
+                        "WHERE c.source_uid=i.source_uid)"
+                    )
+                else:
+                    clauses.append(
+                        "EXISTS (SELECT 1 FROM structure_candidate_assessments a "
+                        "JOIN structure_candidates c "
+                        "ON c.candidate_record_id=a.candidate_record_id "
+                        "WHERE c.source_uid=i.source_uid AND a.conclusion=?)"
+                    )
+                    params.append(assessment)
             return clauses, params
 
         result: dict[str, Any] = {}
