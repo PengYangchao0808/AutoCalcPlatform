@@ -51,6 +51,10 @@ ANNOTATION_CANDIDATE_KEYS = ANNOTATION_WIRE_KEYS | {
     "selection_source",
     "confidence",
     "reason",
+    "node_id",
+    "frame_number",
+    "scan_step",
+    "display_label",
 }
 
 
@@ -120,6 +124,138 @@ def test_s2_projection_contains_series_nodes_and_annotations() -> None:
     assert any(item["type"] == "ts" and item["selected"] for item in graph["annotations"])
     assert any(item["type"] == "failed" for item in graph["annotations"])
     assert any(item["type"] == "minimum" for item in graph["annotations"])
+
+
+def _s2_identity_payload() -> dict:
+    indices = [12, 30, 45]
+    return {
+        "status": "ready_for_review",
+        "protocol": {"coordinate": {"kind": "distance", "unit": "angstrom"}},
+        "scan": {
+            "quality": {"scan_complete": True},
+            "frames": [
+                {
+                    "index": index,
+                    "target_coordinate": 1.0 + position * 0.1,
+                    "actual_coordinate": 1.0 + position * 0.1,
+                    "geometry_path": f"frame_{index:03d}.xyz",
+                    "scan_energy_hartree": -100.0 + position * 0.1,
+                    "single_point_energy_hartree": -100.1 + position * 0.1,
+                    "optimization_converged": True,
+                    "single_point_status": "completed",
+                }
+                for position, index in enumerate(indices)
+            ],
+        },
+        "energy_profile": {
+            "energy_source": "single_point",
+            "relative_energies_kcal_mol": [0.0, 10.0, 20.0],
+            "raw_hartree": [-100.1, -100.0, -99.9],
+            "sp_incomplete": False,
+        },
+        "recommendations": {
+            "ts": [
+                {
+                    "candidate_id": "ts_guess_045",
+                    "kind": "ts",
+                    "frame_index": 45,
+                    "confidence": "high",
+                },
+                {
+                    "candidate_id": "ts_guess_030",
+                    "kind": "ts",
+                    "frame_index": 30,
+                    "confidence": "medium",
+                },
+            ],
+            "intermediates": [
+                {
+                    "candidate_id": "int_guess_012",
+                    "kind": "int",
+                    "frame_index": 12,
+                    "confidence": "high",
+                }
+            ],
+        },
+        "review": {"selected_ts": [], "selected_intermediates": []},
+    }
+
+
+def test_s2_candidate_display_labels_are_sequenced_per_role_by_frame_index() -> None:
+    graph = build_s2_energy_graph("job-identity", _s2_identity_payload())
+
+    candidates = {
+        item["candidate_id"]: item
+        for item in graph["annotations"]
+        if item["type"] in {"ts", "intermediate"}
+    }
+    assert candidates["ts_guess_030"]["label"] == "TS-01"
+    assert candidates["ts_guess_045"]["label"] == "TS-02"
+    assert candidates["int_guess_012"]["label"] == "INT-01"
+    for item in candidates.values():
+        frame_index = item["frame_index"]
+        assert item["display_label"] == item["label"]
+        assert item["node_id"] == f"frame_{frame_index}"
+        assert item["frame_number"] == frame_index + 1
+        assert item["scan_step"] == frame_index
+        node = next(node for node in graph["nodes"] if node["id"] == item["node_id"])
+        assert node["metadata"]["frame_number"] == frame_index + 1
+        assert node["metadata"]["scan_step"] == frame_index
+    assert graph["metadata"]["consistency_warnings"] == []
+
+
+def test_s2_candidate_with_missing_node_is_skipped_with_consistency_warning() -> None:
+    payload = _s2_payload()
+    payload["recommendations"]["ts"][0]["frame_index"] = 7
+
+    graph = build_s2_energy_graph("job-missing", payload)
+
+    assert not any(item["type"] == "ts" for item in graph["annotations"])
+    missing = [
+        warning
+        for warning in graph["metadata"]["consistency_warnings"]
+        if warning["code"] == "candidate_node_missing"
+    ]
+    assert len(missing) == 1
+    assert missing[0]["candidate_id"] == "ts_guess_001"
+    assert missing[0]["frame_index"] == 7
+
+
+def test_s2_duplicate_candidate_frames_emit_annotations_and_warning() -> None:
+    payload = _s2_payload()
+    payload["recommendations"]["ts"] = [
+        {
+            "candidate_id": "ts_guess_001",
+            "kind": "ts",
+            "frame_index": 1,
+            "confidence": "high",
+            "reason": "local maximum",
+        },
+        {
+            "candidate_id": "ts_guess_002",
+            "kind": "ts",
+            "frame_index": 1,
+            "confidence": "medium",
+            "reason": "nearby guess",
+        },
+    ]
+
+    graph = build_s2_energy_graph("job-duplicate", payload)
+
+    ts_annotations = [item for item in graph["annotations"] if item["type"] == "ts"]
+    assert {item["candidate_id"] for item in ts_annotations} == {
+        "ts_guess_001",
+        "ts_guess_002",
+    }
+    assert {item["display_label"] for item in ts_annotations} == {"TS-01", "TS-02"}
+    duplicates = [
+        warning
+        for warning in graph["metadata"]["consistency_warnings"]
+        if warning["code"] == "duplicate_candidate_frame"
+    ]
+    assert len(duplicates) == 1
+    assert duplicates[0]["candidate_id"] == "ts_guess_002"
+    assert duplicates[0]["frame_index"] == 1
 
 
 def _scan_trajectory_payload() -> dict[str, Any]:

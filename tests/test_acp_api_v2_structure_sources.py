@@ -52,6 +52,7 @@ def _seed_index_entry(
     role: str = "",
     role_evidence: str = "",
     label: str = "Rank-1 conformer",
+    source_kind: str = "final",
 ) -> str:
     uid = source_uid_for(job_id, rel_path)
     source_store.upsert_index_entries(
@@ -65,7 +66,7 @@ def _seed_index_entry(
                 "molecule_name": "ethanol",
                 "workflow": workflow,
                 "job_status": "completed",
-                "source_kind": "final",
+                "source_kind": source_kind,
                 "label": label,
                 "candidate_id": "",
                 "role": role,
@@ -222,6 +223,110 @@ class TestFacets:
 
 
 # ------------------------------------------------------------------ #
+# source_group filter
+# ------------------------------------------------------------------ #
+
+
+class TestSourceGroupFilter:
+    def _seed_groups(self, client: TestClient) -> None:
+        ss = _get_source_store(client)
+        _seed_index_entry(
+            ss,
+            "job_cand",
+            rel_path="RESULT/cand.xyz",
+            label="Saved candidate",
+            source_kind="saved_candidate",
+        )
+        _seed_index_entry(ss, "job_final", rel_path="RESULT/final.xyz", source_kind="final")
+        _seed_index_entry(
+            ss,
+            "job_partial",
+            rel_path="RESULT/partial.xyz",
+            source_kind="partial_result",
+        )
+
+    def test_candidate_group(self, client: TestClient) -> None:
+        self._seed_groups(client)
+        resp = client.get(
+            "/api/v2/structure-sources",
+            params={"all_projects": "true", "source_group": "candidate"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert [item["source_kind"] for item in data["items"]] == ["saved_candidate"]
+
+    def test_task_result_group(self, client: TestClient) -> None:
+        self._seed_groups(client)
+        resp = client.get(
+            "/api/v2/structure-sources",
+            params={"all_projects": "true", "source_group": "task_result"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+        assert {item["source_kind"] for item in data["items"]} == {"final", "partial_result"}
+
+    def test_total_consistent_with_pagination(self, client: TestClient) -> None:
+        ss = _get_source_store(client)
+        for i in range(3):
+            _seed_index_entry(
+                ss,
+                f"job_cand_{i}",
+                rel_path=f"RESULT/cand_{i}.xyz",
+                source_kind="saved_candidate",
+            )
+        _seed_index_entry(ss, "job_final", rel_path="RESULT/final.xyz", source_kind="final")
+        resp = client.get(
+            "/api/v2/structure-sources",
+            params={"all_projects": "true", "source_group": "candidate", "limit": 1},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 3
+        assert len(data["items"]) == 1
+
+    def test_group_by_consistent(self, client: TestClient) -> None:
+        self._seed_groups(client)
+        resp = client.get(
+            "/api/v2/structure-sources",
+            params={"all_projects": "true", "source_group": "candidate", "group_by": "job"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert sum(group["count"] for group in data["groups"]) == 1
+
+    def test_facets_respect_group(self, client: TestClient) -> None:
+        self._seed_groups(client)
+        resp = client.get(
+            "/api/v2/structure-sources/facets",
+            params={"all_projects": "true", "source_group": "candidate"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_structures"] == 1
+        assert data["source_kinds"] == {"saved_candidate": 1}
+
+        resp_all = client.get(
+            "/api/v2/structure-sources/facets",
+            params={"all_projects": "true"},
+        )
+        assert resp_all.status_code == 200
+        assert resp_all.json()["total_structures"] == 3
+
+    def test_422_when_both_filters(self, client: TestClient) -> None:
+        both = {"all_projects": "true", "source_kind": "final", "source_group": "candidate"}
+        assert client.get("/api/v2/structure-sources", params=both).status_code == 422
+        assert client.get("/api/v2/structure-sources/facets", params=both).status_code == 422
+
+    def test_422_invalid_group(self, client: TestClient) -> None:
+        invalid = {"all_projects": "true", "source_group": "bogus"}
+        assert client.get("/api/v2/structure-sources", params=invalid).status_code == 422
+        assert client.get("/api/v2/structure-sources/facets", params=invalid).status_code == 422
+
+
+# ------------------------------------------------------------------ #
 # GET /structure-sources/{source_uid}
 # ------------------------------------------------------------------ #
 
@@ -239,6 +344,53 @@ class TestGetSource:
         data = resp.json()
         assert data["source_uid"] == uid
         assert "source_id" in data
+
+
+class TestCandidateApi:
+    def test_assess_trash_restore_and_history(self, client: TestClient) -> None:
+        ss = _get_source_store(client)
+        uid = _seed_index_entry(ss, "job_candidate", role="TS")
+        assessment = client.post(
+            f"/api/v2/structure-sources/{uid}/candidate/assessments",
+            json={
+                "conclusion": "not_recommended",
+                "reason_code": "wrong_reaction_mode",
+                "scope": "reaction:A",
+                "note": "converged to another channel",
+                "evidence": [{"job_id": "job_127", "kind": "irc_mismatch"}],
+            },
+        )
+        assert assessment.status_code == 200
+        assert assessment.json()["assessments"][0]["conclusion"] == "not_recommended"
+
+        trashed = client.patch(
+            f"/api/v2/structure-sources/{uid}/candidate/status",
+            json={
+                "status": "trash",
+                "expected_revision": 0,
+            },
+        )
+        assert trashed.status_code == 200
+        assert trashed.json()["usage_status"] == "trash"
+        hidden = client.get("/api/v2/structure-sources", params={"all_projects": "true"})
+        assert uid not in {item["source_uid"] for item in hidden.json()["items"]}
+        visible = client.get(
+            "/api/v2/structure-sources",
+            params={"all_projects": "true", "usage_status": "trash"},
+        )
+        assert uid in {item["source_uid"] for item in visible.json()["items"]}
+
+        detail = client.get(f"/api/v2/structure-sources/{uid}/candidate")
+        assert detail.status_code == 200
+        assert detail.json()["history"]
+
+        purged = client.post(
+            "/api/v2/structure-sources/trash/purge",
+            json={"source_uids": [uid]},
+        )
+        assert purged.status_code == 200
+        assert purged.json() == {"removed": [uid], "count": 1}
+        assert client.get(f"/api/v2/structure-sources/{uid}").status_code == 404
 
 
 # ------------------------------------------------------------------ #

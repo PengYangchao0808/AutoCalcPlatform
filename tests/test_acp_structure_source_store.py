@@ -320,6 +320,68 @@ class TestGet:
         assert "ts-candidate" in result["tags"]
 
 
+class TestCandidateLifecycle:
+    def test_new_geometry_creates_unreviewed_version(self, store: StructureSourceStore) -> None:
+        entry = _make_entry(content_checksum="sha256:a")
+        store.upsert_index_entries([entry])
+        uid = source_uid_for("job_001", "RESULT/structures/conformer_001.xyz")
+        first = store.get(uid)
+        assert first is not None
+        store.add_assessment(
+            uid,
+            conclusion="recommended",
+            reason_code="optimization_converged",
+            scope="project",
+        )
+        reviewed = store.get(uid)
+        assert reviewed is not None and reviewed["assessment"] == "recommended"
+
+        store.upsert_index_entries([_make_entry(content_checksum="sha256:b")])
+        changed = store.get(uid)
+        assert changed is not None
+        assert changed["version_id"] != first["version_id"]
+        assert changed["assessment"] == "unreviewed"
+        assert len(store.get_candidate_detail(uid)["assessments"]) == 1
+
+    def test_trash_restore_and_default_filter(self, store: StructureSourceStore) -> None:
+        store.upsert_index_entries([_make_entry()])
+        uid = source_uid_for("job_001", "RESULT/structures/conformer_001.xyz")
+        trashed = store.set_candidate_status(uid, "trash", expected_revision=0)
+        assert trashed["usage_status"] == "trash"
+        assert store.query_sources(all_projects=True)["total"] == 0
+        assert store.query_sources(all_projects=True, usage_status="trash")["total"] == 1
+        restored = store.set_candidate_status(uid, "active", expected_revision=1)
+        assert restored["usage_status"] == "active"
+
+    def test_purge_tombstone_blocks_same_version_but_allows_new_version(
+        self, store: StructureSourceStore
+    ) -> None:
+        original = _make_entry(content_checksum="sha256:a")
+        store.upsert_index_entries([original])
+        uid = source_uid_for("job_001", "RESULT/structures/conformer_001.xyz")
+        store.set_candidate_status(uid, "trash", expected_revision=0)
+        assert store.purge_candidates([uid])["count"] == 1
+        assert store.get(uid) is None
+
+        store.upsert_index_entries([original])
+        assert store.get(uid) is None
+
+        store.upsert_index_entries([_make_entry(content_checksum="sha256:b")])
+        recreated = store.get(uid)
+        assert recreated is not None
+        assert recreated["usage_status"] == "active"
+
+    def test_usage_snapshot_is_version_bound(self, store: StructureSourceStore) -> None:
+        store.upsert_index_entries([_make_entry(content_checksum="sha256:a")])
+        uid = source_uid_for("job_001", "RESULT/structures/conformer_001.xyz")
+        current = store.get(uid)
+        assert current is not None
+        store.record_usage(uid, "job_downstream", {"xyz": "snapshot"})
+        detail = store.get_candidate_detail(uid)
+        assert detail["usage"][0]["version_id"] == current["version_id"]
+        assert detail["usage"][0]["input_snapshot"]["xyz"] == "snapshot"
+
+
 # ---------------------------------------------------------------------------
 # set_custom_name
 # ---------------------------------------------------------------------------
@@ -877,6 +939,80 @@ class TestQuerySources:
         # Natural sort would be different, but our SQL uses LOWER() which is string sort
         assert labels == sorted(labels, key=str.lower)
 
+    def test_source_group_candidate(self, store: StructureSourceStore) -> None:
+        entries = [
+            _make_entry(job_id="j1", path="a.xyz", source_kind="saved_candidate"),
+            _make_entry(job_id="j2", path="b.xyz", source_kind="final"),
+            _make_entry(job_id="j3", path="c.xyz", source_kind="partial_result"),
+        ]
+        store.upsert_index_entries(entries)
+        result = store.query_sources(all_projects=True, source_group="candidate")
+        assert result["total"] == 1
+        assert [i["source_kind"] for i in result["items"]] == ["saved_candidate"]
+
+    def test_source_group_task_result(self, store: StructureSourceStore) -> None:
+        entries = [
+            _make_entry(job_id="j1", path="a.xyz", source_kind="saved_candidate"),
+            _make_entry(job_id="j2", path="b.xyz", source_kind="final"),
+            _make_entry(job_id="j3", path="c.xyz", source_kind="partial_result"),
+        ]
+        store.upsert_index_entries(entries)
+        result = store.query_sources(all_projects=True, source_group="task_result")
+        assert result["total"] == 2
+        assert {i["source_kind"] for i in result["items"]} == {"final", "partial_result"}
+
+    def test_source_group_invalid(self, store: StructureSourceStore) -> None:
+        with pytest.raises(ValueError, match="invalid source group"):
+            store.query_sources(all_projects=True, source_group="bogus")
+
+    def test_source_group_cursor_fingerprint(self, store: StructureSourceStore) -> None:
+        entries = [
+            _make_entry(
+                job_id="jc",
+                path=f"cand{i}.xyz",
+                project_id="p1",
+                source_kind="saved_candidate",
+            )
+            for i in range(3)
+        ] + [
+            _make_entry(
+                job_id="jf",
+                path=f"final{i}.xyz",
+                project_id="p1",
+                source_kind="final",
+            )
+            for i in range(3)
+        ]
+        store.upsert_index_entries(entries)
+
+        page1 = store.query_sources(project_id="p1", limit=2, source_group="candidate")
+        assert page1["next_cursor"] is not None
+        page2 = store.query_sources(
+            project_id="p1",
+            limit=2,
+            source_group="candidate",
+            cursor=page1["next_cursor"],
+        )
+        assert len(page2["items"]) == 1
+        with pytest.raises(ValueError, match="fingerprint mismatch"):
+            store.query_sources(
+                project_id="p1",
+                limit=2,
+                source_group="task_result",
+                cursor=page1["next_cursor"],
+            )
+
+    def test_source_group_group_by_inherits_filter(self, store: StructureSourceStore) -> None:
+        entries = [
+            _make_entry(job_id="j1", path="a.xyz", source_kind="saved_candidate"),
+            _make_entry(job_id="j1", path="b.xyz", source_kind="final"),
+            _make_entry(job_id="j2", path="c.xyz", source_kind="final"),
+        ]
+        store.upsert_index_entries(entries)
+        result = store.query_sources(all_projects=True, source_group="candidate", group_by="job")
+        assert result["total"] == 1
+        assert {g["key"]: g["count"] for g in result["groups"]} == {"j1": 1}
+
 
 # ---------------------------------------------------------------------------
 # Facets
@@ -934,6 +1070,46 @@ class TestFacetCounts:
         # Even though we filter by TS, facets should show all roles
         assert facets["roles"]["TS"] == 1
         assert facets["roles"]["INT"] == 1
+
+    def test_source_group_filter(self, store: StructureSourceStore) -> None:
+        entries = [
+            _make_entry(
+                job_id="j1",
+                path="a.xyz",
+                project_id="p1",
+                workflow="PESsearch",
+                source_kind="saved_candidate",
+            ),
+            _make_entry(
+                job_id="j2",
+                path="b.xyz",
+                project_id="p1",
+                workflow="Confsearch",
+                source_kind="final",
+            ),
+            _make_entry(
+                job_id="j3",
+                path="c.xyz",
+                project_id="p1",
+                workflow="Confsearch",
+                source_kind="partial_result",
+            ),
+        ]
+        store.upsert_index_entries(entries)
+
+        candidate_facets = store.facet_counts(project_id="p1", source_group="candidate")
+        assert candidate_facets["total_structures"] == 1
+        assert candidate_facets["source_kinds"] == {"saved_candidate": 1}
+        assert candidate_facets["workflows"] == {"PESsearch": 1}
+
+        task_facets = store.facet_counts(project_id="p1", source_group="task_result")
+        assert task_facets["total_structures"] == 2
+        assert task_facets["source_kinds"] == {"final": 1, "partial_result": 1}
+        assert task_facets["workflows"] == {"Confsearch": 2}
+
+    def test_source_group_invalid(self, store: StructureSourceStore) -> None:
+        with pytest.raises(ValueError, match="invalid source group"):
+            store.facet_counts(project_id="p1", source_group="bogus")
 
 
 # ---------------------------------------------------------------------------
