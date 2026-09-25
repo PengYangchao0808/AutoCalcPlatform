@@ -1,6 +1,6 @@
 /**
  * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-31)
- * @version 0.7.0
+ * @version 0.8.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -71,7 +71,7 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.7.0";
+  var VERSION = "0.8.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -110,6 +110,7 @@
     SOURCE_DEFAULT: "\u9ed8\u8ba4",
     SOURCE_JOB_CONFIG: "\u4efb\u52a1\u914d\u7f6e",
     MISMATCH_REASON: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",
+    TS_MODE_CREATE: "\u4ee5\u6b64\u865a\u9891\u521b\u5efa TS Mode \u4efb\u52a1",
     REASONS: {
       no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",
       geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",
@@ -1723,6 +1724,35 @@
     grid.appendChild(speedField);
 
     col.appendChild(grid);
+
+    /* TS Mode quick-create button (visible only for imaginary modes) */
+    var selMode = _selectedMode();
+    if (selMode && _isImaginary(selMode)) {
+      var tsModeRow = document.createElement("div");
+      tsModeRow.className = "sv-vib-dock-section-label";
+      tsModeRow.style.marginTop = "8px";
+      tsModeRow.textContent = "TS \u4f18\u5316";
+      col.appendChild(tsModeRow);
+
+      var tsModeBtn = document.createElement("button");
+      tsModeBtn.type = "button";
+      tsModeBtn.className = "sv-vib-toggle";
+      tsModeBtn.setAttribute("aria-label", _t("structure.vib.ts_mode_create", STR.TS_MODE_CREATE));
+      tsModeBtn.textContent = _t("structure.vib.ts_mode_create", STR.TS_MODE_CREATE);
+      tsModeBtn.style.width = "100%";
+      tsModeBtn.style.marginTop = "4px";
+      tsModeBtn.addEventListener("click", function () {
+        if (typeof window !== "undefined" && window.ACPTsmodeEditor &&
+            typeof window.ACPTsmodeEditor.open === "function") {
+          window.ACPTsmodeEditor.open({
+            sourceJobId: vibrationState.jobId,
+            entryId: vibrationState.entryId,
+            modeIndex: selMode.mode_index,
+          });
+        }
+      });
+      col.appendChild(tsModeBtn);
+    }
 
     if (arrowState._hint) {
       var hintBox = document.createElement("div");
