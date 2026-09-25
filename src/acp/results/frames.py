@@ -96,6 +96,13 @@ _ANNOTATION_METADATA_KEYS = frozenset(
         "selection_source",
         "confidence",
         "reason",
+        # Point-identity contract: candidates carry the owning node id plus the
+        # 0-based scan step and its 1-based human frame number, and the per-role
+        # display label (TS-01 / INT-01) assigned by frame order.
+        "node_id",
+        "frame_number",
+        "scan_step",
+        "display_label",
     }
 )
 

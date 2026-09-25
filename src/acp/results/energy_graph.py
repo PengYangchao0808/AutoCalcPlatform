@@ -108,22 +108,18 @@ def _coordinate_axis(payload: dict[str, Any]) -> dict[str, str]:
     return {"label": labels.get(kind, "扫描坐标"), "unit": display_unit}
 
 
-def _candidate_label(candidate: dict[str, Any], index: int) -> str:
-    kind = str(candidate.get("kind") or "candidate").lower()
-    prefix = (
-        "TS"
-        if kind in {"ts", "transition_state"}
-        else "INT"
-        if kind in {"intermediate", "int"}
-        else "候选"
-    )
-    candidate_id = str(candidate.get("candidate_id") or "")
-    suffix = candidate_id.rsplit("_", 1)[-1] if candidate_id else str(index + 1).zfill(2)
-    try:
-        suffix = str(int(suffix)).zfill(2)
-    except ValueError:
-        suffix = suffix[-8:] or str(index + 1).zfill(2)
-    return f"{prefix}-{suffix}"
+def _candidate_role_prefix(role: str) -> str:
+    kind = str(role or "").lower()
+    if kind in {"ts", "transition_state"}:
+        return "TS"
+    if kind in {"intermediate", "int"}:
+        return "INT"
+    return "候选"
+
+
+def _candidate_display_label(role: str, seq: int) -> str:
+    """Return the 1-based per-role display label (``TS-01``/``INT-01``)."""
+    return f"{_candidate_role_prefix(role)}-{seq:02d}"
 
 
 def _s2_series(frames: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
@@ -224,6 +220,8 @@ def build_s2_energy_graph(
                 status=status,
                 geometry_ref=str(frame.get("geometry_path") or ""),
                 metadata={
+                    "frame_number": frame_index + 1,
+                    "scan_step": frame_index,
                     "target_coordinate": _number(frame.get("target_coordinate")),
                     "actual_coordinate": _number(frame.get("actual_coordinate")),
                     "target_coordinates": _sanitize_json(frame.get("target_coordinates") or {}),
@@ -254,11 +252,13 @@ def build_s2_energy_graph(
     review_state = s2_review_state or {}
     saved_any = bool(saved_rows) or str(review_state.get("status") or "") == "confirmed"
 
+    consistency_warnings: list[dict[str, Any]] = []
     annotations: list[dict[str, Any]] = []
     merged_ids = list(recommendation_by_id) + [
         cid for cid in saved_rows if cid not in recommendation_by_id
     ]
-    for position, candidate_id in enumerate(merged_ids):
+    resolved: list[dict[str, Any]] = []
+    for candidate_id in merged_ids:
         recommendation = recommendation_by_id.get(candidate_id)
         saved = saved_rows.get(candidate_id)
         if saved is not None:
@@ -276,29 +276,74 @@ def build_s2_energy_graph(
             if recommendation is not None
             else (saved or {}).get("recommended_role")
         )
+        resolved.append(
+            {
+                "candidate_id": candidate_id,
+                "recommendation": recommendation,
+                "saved": saved,
+                "frame_index": frame_index,
+                "active": active,
+                "marker_type": marker_type,
+                "selection_source": selection_source,
+                "recommended_type": recommended_type,
+            }
+        )
+    resolved.sort(key=lambda item: item["frame_index"])
+    role_sequences: dict[str, int] = {}
+    frame_active_counts: dict[int, int] = {}
+    for item in resolved:
+        candidate_id = str(item["candidate_id"])
+        frame_index = int(item["frame_index"])
+        marker_type = str(item["marker_type"])
+        role_prefix = _candidate_role_prefix(marker_type)
+        role_sequences[role_prefix] = role_sequences.get(role_prefix, 0) + 1
+        display_label = _candidate_display_label(marker_type, role_sequences[role_prefix])
+        if item["active"] and role_prefix in {"TS", "INT"}:
+            frame_active_counts[frame_index] = frame_active_counts.get(frame_index, 0) + 1
+            if frame_active_counts[frame_index] > 1:
+                consistency_warnings.append(
+                    {
+                        "code": "duplicate_candidate_frame",
+                        "candidate_id": candidate_id,
+                        "frame_index": frame_index,
+                    }
+                )
         node = node_by_frame.get(frame_index)
         if node is None:
+            consistency_warnings.append(
+                {
+                    "code": "candidate_node_missing",
+                    "candidate_id": candidate_id,
+                    "frame_index": frame_index,
+                    "message": f"候选 {candidate_id} 指向不存在的帧 {frame_index}，已跳过标注",
+                }
+            )
             continue
-        label_source = recommendation or saved or {}
+        recommendation = item["recommendation"]
+        saved = item["saved"]
         annotations.append(
             TrajectoryAnnotation(
                 id=candidate_id,
                 type=marker_type,
-                label=_candidate_label(label_source, position),
+                label=display_label,
                 frame_index=frame_index,
                 x=node["x"],
                 y=node["energy"],
                 status=node["status"],
                 geometry_ref=node["geometry_ref"],
-                selected=active,
+                selected=item["active"],
                 metadata={
                     "candidate_id": candidate_id,
-                    "active": active,
+                    "active": item["active"],
                     "saved": saved_any and saved is not None,
-                    "recommended_type": recommended_type,
-                    "selection_source": selection_source,
+                    "recommended_type": item["recommended_type"],
+                    "selection_source": item["selection_source"],
                     "confidence": (recommendation or saved or {}).get("confidence"),
                     "reason": (recommendation or saved or {}).get("reason"),
+                    "node_id": node["id"],
+                    "frame_number": frame_index + 1,
+                    "scan_step": frame_index,
+                    "display_label": display_label,
                 },
             ).to_annotation()
         )
@@ -367,6 +412,7 @@ def build_s2_energy_graph(
                 "energy_source": profile.get("energy_source"),
                 "sp_incomplete": bool(profile.get("sp_incomplete")),
                 "frame_count": len(frames),
+                "consistency_warnings": consistency_warnings,
                 "constraints_satisfied": bool(quality.get("constraints_satisfied", True)),
                 "max_constraint_residual": _number(quality.get("max_constraint_residual")),
                 "constraint_tolerance": _number(quality.get("constraint_tolerance")),
@@ -642,7 +688,11 @@ def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str,
                 energy=relative[position],
                 status="failed" if energies[position] is None else "completed",
                 geometry_ref=geometry_ref,
-                metadata={"coordinate_values": coordinate_values},
+                metadata={
+                    "frame_number": frame_index + 1,
+                    "scan_step": frame_index,
+                    "coordinate_values": coordinate_values,
+                },
             ).to_node(VIEW_REGISTRY["scan_trajectory"].node_type)
         )
     coordinate_key = str(next(iter(nodes[0]["metadata"]["coordinate_values"]), "")).lower()
