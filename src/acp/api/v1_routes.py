@@ -72,6 +72,9 @@ from acp.api.v1_schemas import (
     DecisionResolveResponse,
     DiskUsageResponse,
     EnergyGraphResponse,
+    FrequencySourceEntryModel,
+    FrequencySourceOriginModel,
+    FrequencySourcesResponse,
     HessianPreviewRequest,
     HessianPreviewResponse,
     HessianPreviewResult,
@@ -1290,7 +1293,11 @@ def _resolve_batch_structures_input(
             asset, _ = service.get(source_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        resolved = {key: value for key, value in item.items() if key != "source_id"}
+        resolved = {
+            key: value
+            for key, value in item.items()
+            if key not in {"source_id", "allow_disabled_use", "disabled_use_reason"}
+        }
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
         # Capture metadata snapshot (plan §7).
@@ -1324,7 +1331,31 @@ def _resolve_batch_structures_input(
             org_store = StructureSourceStore(manager.store.db_path)
             org_entry = org_store.get_by_legacy_source_id(source_id)
             if org_entry is not None:
+                from acp.scheduler.structure_source_store import CandidateUseConflictError
+
+                allow_disabled = bool(item.get("allow_disabled_use"))
+                exception_reason = str(item.get("disabled_use_reason") or "")
+                try:
+                    org_entry = org_store.validate_candidate_use(
+                        org_entry["source_uid"],
+                        allow_disabled=allow_disabled,
+                        justification=exception_reason,
+                    )
+                except CandidateUseConflictError as exc:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "error": "candidate_not_active",
+                            "source_uid": org_entry["source_uid"],
+                            "current": exc.projection,
+                        },
+                    ) from exc
                 snapshot["source_uid"] = org_entry.get("source_uid", "")
+                snapshot["candidate_record_id"] = org_entry.get("candidate_record_id", "")
+                snapshot["version_id"] = org_entry.get("version_id", "")
+                snapshot["geometry_hash"] = org_entry.get("geometry_hash", "")
+                snapshot["source_revision"] = org_entry.get("source_revision", "")
+                snapshot["usage_status"] = org_entry.get("usage_status", "active")
                 snapshot["custom_name"] = org_entry.get("custom_name")
                 snapshot["default_name"] = org_entry.get("default_name", "")
                 snapshot["resolved_name"] = org_entry.get("resolved_name", "")
@@ -1334,6 +1365,12 @@ def _resolve_batch_structures_input(
                     snapshot["role"] = org_role
                 snapshot["role_evidence"] = org_entry.get("role_evidence", "")
                 snapshot["metadata_revision"] = org_entry.get("metadata_revision", 0)
+                snapshot["disabled_exception"] = bool(
+                    org_entry.get("usage_status") == "disabled" and allow_disabled
+                )
+                snapshot["exception_reason"] = exception_reason
+        except HTTPException:
+            raise
         except Exception:
             logger.debug("Org-store snapshot enrichment skipped", exc_info=True)
         snapshot["captured_at"] = _utc_now_iso()
@@ -1341,6 +1378,234 @@ def _resolve_batch_structures_input(
     resolved_inp = dict(inp)
     resolved_inp["items"] = resolved_items
     return resolved_inp, snapshots
+
+
+def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list[dict[str, Any]]:
+    """Validate and snapshot a directly reused candidate without guessing legacy links."""
+    ref = inp.get("source_ref")
+    if not isinstance(ref, dict):
+        return []
+    job_id = str(ref.get("job_id") or "").strip()
+    rel_path = str(ref.get("path") or "").strip()
+    if not job_id or not rel_path:
+        return []
+    source_id = f"job_{job_id}:{rel_path}"
+    from acp.scheduler.structure_source_store import (
+        CandidateUseConflictError,
+        StructureSourceStore,
+    )
+
+    manager = _manager(request)
+    store = StructureSourceStore(manager.store.db_path)
+    projection = store.get_by_legacy_source_id(source_id)
+    if projection is None:
+        return []
+    allow_disabled = bool(ref.get("allow_disabled_use"))
+    exception_reason = str(ref.get("disabled_use_reason") or "")
+    try:
+        projection = store.validate_candidate_use(
+            projection["source_uid"],
+            allow_disabled=allow_disabled,
+            justification=exception_reason,
+        )
+    except CandidateUseConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "candidate_not_active",
+                "source_uid": projection["source_uid"],
+                "current": exc.projection,
+            },
+        ) from exc
+    return [
+        {
+            "source_id": source_id,
+            "source_uid": projection["source_uid"],
+            "candidate_record_id": projection["candidate_record_id"],
+            "version_id": projection["version_id"],
+            "geometry_hash": projection["geometry_hash"],
+            "source_revision": projection["source_revision"],
+            "usage_status": projection["usage_status"],
+            "metadata_revision": projection.get("metadata_revision", 0),
+            "disabled_exception": bool(
+                projection.get("usage_status") == "disabled" and allow_disabled
+            ),
+            "exception_reason": exception_reason,
+            "input_snapshot": {
+                "source_type": inp.get("source_type"),
+                "source": inp.get("source"),
+                "charge": inp.get("charge"),
+                "multiplicity": inp.get("multiplicity"),
+                "source_ref": ref,
+            },
+            "captured_at": _utc_now_iso(),
+        }
+    ]
+
+
+def _tsmode_error_to_http(exc: Any) -> HTTPException:
+    """Map a TsmodeError to an HTTPException with the correct status code."""
+    return HTTPException(
+        status_code=getattr(exc, "http_status", 422),
+        detail={"error": exc.error_code, "detail": exc.detail},
+    )
+
+
+def _prepare_tsmode_input(inp: dict[str, Any], manager: JobManager) -> dict[str, Any]:
+    """Validate and rewrite tsmode submission input for scheduler materialization.
+
+    Loads the frequency source bundle, resolves the target mode, and rewrites
+    ``inp`` to the ``source_type: tsmode_bundle`` form consumed by
+    ``runner._materialize_tsmode_bundle``.
+    """
+    from acp.calculations.tsmode.contracts import TsmodeError, sha256_file
+    from acp.calculations.tsmode.mode_mapping import (
+        enforce_launch_gate,
+        resolve_target_mode,
+    )
+    from acp.calculations.tsmode.source import load_bundle_from_files
+
+    source_job_id = inp.get("source_job_id")
+    if not isinstance(source_job_id, str) or not source_job_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "frequency_source_incomplete",
+                "detail": "source_job_id is required",
+            },
+        )
+
+    source_record = manager.get(source_job_id)
+    if source_record is None:
+        raise HTTPException(status_code=404, detail=f"Source job not found: {source_job_id}")
+    if not source_record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Source job has no work dir: {source_job_id}")
+
+    source_work_dir = Path(source_record.work_dir)
+    entry_id = inp.get("entry_id")
+    sources = _discover_frequency_sources(source_work_dir, source_job_id)
+
+    if not sources:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "frequency_source_incomplete",
+                "detail": f"No frequency sources found in job {source_job_id}",
+            },
+        )
+
+    matched_source = None
+    if isinstance(entry_id, str) and entry_id:
+        for src in sources:
+            if src.entry_id == entry_id:
+                matched_source = src
+                break
+    elif len(sources) == 1:
+        matched_source = sources[0]
+
+    if matched_source is None:
+        available = [s.entry_id for s in sources]
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "frequency_source_incomplete",
+                "detail": (
+                    f"Cannot resolve frequency source (entry_id={entry_id!r}); "
+                    f"available: {available}"
+                ),
+            },
+        )
+
+    if not matched_source.hessian_available:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "hessian_missing",
+                "detail": f"No Hessian file found for source {matched_source.entry_id}",
+            },
+        )
+
+    out_abs = source_work_dir / matched_source.output_path
+    hess_abs = source_work_dir / matched_source.hess_path  # type: ignore[arg-type]
+
+    source_mode_index = inp.get("source_mode_index")
+    if isinstance(source_mode_index, bool) or not isinstance(source_mode_index, int):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "target_mode_invalid",
+                "detail": (
+                    f"source_mode_index must be an int, got {type(source_mode_index).__name__}"
+                ),
+            },
+        )
+
+    try:
+        bundle = load_bundle_from_files(
+            str(out_abs),
+            str(hess_abs),
+            charge=None,
+            multiplicity=None,
+            level=None,
+            origin={"kind": "job", "job_id": source_job_id, "entry_id": matched_source.entry_id},
+        )
+    except TsmodeError as exc:
+        raise _tsmode_error_to_http(exc) from exc
+
+    try:
+        resolution = resolve_target_mode(bundle, source_mode_index)
+    except TsmodeError as exc:
+        raise _tsmode_error_to_http(exc) from exc
+
+    try:
+        enforce_launch_gate(
+            resolution,
+            require_verified=not bool(inp.get("allow_unverified_mapping")),
+            orca_version=bundle.level.orca_version,
+        )
+    except TsmodeError as exc:
+        raise _tsmode_error_to_http(exc) from exc
+
+    hess_sha = sha256_file(hess_abs)
+    out_sha = sha256_file(out_abs)
+
+    resolved: dict[str, Any] = {
+        "source_type": "tsmode_bundle",
+        "frequency_out": str(out_abs),
+        "hess": str(hess_abs),
+        "hess_sha256": hess_sha,
+        "frequency_out_sha256": out_sha,
+        "geometry": None,
+        "source_mode_index": source_mode_index,
+        "charge": bundle.charge,
+        "multiplicity": bundle.multiplicity,
+        "level": bundle.level.to_dict(),
+        "origin": {
+            "kind": "job",
+            "job_id": source_job_id,
+            "entry_id": matched_source.entry_id,
+            "source_mode_index": source_mode_index,
+            "target_mode_id": resolution.target_mode_id,
+        },
+    }
+
+    for key in ("max_iterations", "recalc_hess", "trust_radius", "retry_limit", "final_frequency"):
+        if inp.get(key) is not None:
+            resolved[key] = inp[key]
+    if inp.get("allow_unverified_mapping") is not None:
+        resolved["allow_unverified_mapping"] = inp["allow_unverified_mapping"]
+
+    level_overrides = inp.get("level_overrides")
+    if isinstance(level_overrides, dict):
+        allowed_keys = {"solvent", "solvent_model", "scf"}
+        filtered = {k: v for k, v in level_overrides.items() if k in allowed_keys}
+        if filtered:
+            resolved_level = dict(resolved.get("level") or {})
+            resolved_level.update(filtered)
+            resolved["level"] = resolved_level
+
+    resolved["_bundle_level"] = bundle.level.to_dict()
+    return resolved
 
 
 def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
@@ -1464,13 +1729,25 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
-    batch_snapshots: list[dict[str, Any]] = []
+    batch_snapshots: list[dict[str, Any]] = _snapshot_direct_source_input(req.input, request)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
     elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
-        req.input, batch_snapshots = _resolve_batch_structures_input(req.input, request)
+        req.input, resolved_batch_snapshots = _resolve_batch_structures_input(req.input, request)
+        batch_snapshots.extend(resolved_batch_snapshots)
+    elif req.workflow == "tsmode":
+        req.input = _prepare_tsmode_input(req.input, manager)
+        bundle_level = req.input.pop("_bundle_level", None)
+        if bundle_level and not req.method.get("levels"):
+            req.method["levels"] = {
+                "tsmode": {
+                    "engine": "orca",
+                    "method": bundle_level.get("method", ""),
+                    "basis": bundle_level.get("basis", ""),
+                }
+            }
     req.execution_mode, req.target_node = _inherit_stage_execution_fields(
         req.workflow, req.input, req.execution_mode, req.target_node, manager
     )
@@ -1517,6 +1794,19 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
                 job_id=record.id,
                 snapshots=batch_snapshots,
             )
+            from acp.scheduler.structure_source_store import StructureSourceStore
+
+            usage_store = StructureSourceStore(manager.store.db_path)
+            for snapshot in batch_snapshots:
+                source_uid = str(snapshot.get("source_uid") or "")
+                if source_uid:
+                    usage_store.record_usage(
+                        source_uid,
+                        record.id,
+                        snapshot,
+                        disabled_exception=bool(snapshot.get("disabled_exception")),
+                        exception_reason=str(snapshot.get("exception_reason") or ""),
+                    )
         except Exception:
             logger.debug("Snapshot event log failed for job %s", record.id, exc_info=True)
     # --- auto-tag rules hook (T11) ---
@@ -2312,6 +2602,180 @@ def save_pes_review_endpoint(
             for row in payload.get("selected") or []
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# TS Mode frequency sources
+# ---------------------------------------------------------------------------
+
+
+def _discover_frequency_sources(work_dir: Path, job_id: str) -> list[FrequencySourceEntryModel]:
+    """Walk *work_dir* for ORCA frequency outputs and matching Hessians.
+
+    Probes ``WORK/`` for ``.out`` files containing ``VIBRATIONAL FREQUENCIES``
+    and ``RESULT/result_manifest.json`` for ``kind: frequency_modes`` products.
+    For each ``.out``, a matching ``.hess`` is located via sibling-stem or
+    single-glob fallback (reimplements ``_discover_sibling_hessian`` semantics
+    from ``cccp.qc.interfaces.orca``).
+    """
+    from cccp.qc.interfaces.orca_ts import parse_ts_frequency_map
+
+    entries: list[FrequencySourceEntryModel] = []
+    seen: set[str] = set()
+
+    def _add_source(
+        out_path: Path,
+        *,
+        label: str = "",
+        item_id: str | None = None,
+        entry_id: str = "",
+    ) -> None:
+        if str(out_path) in seen:
+            return
+        seen.add(str(out_path))
+        out_rel = str(out_path.relative_to(work_dir))
+        hess_path = _discover_sibling_hess(out_path)
+        hess_rel = str(hess_path.relative_to(work_dir)) if hess_path else None
+        imaginary_count = 0
+        mode_count = 0
+        atom_count = 0
+        try:
+            text = out_path.read_text(encoding="utf-8", errors="replace")
+            freq_map = parse_ts_frequency_map(text)
+            mode_count = len(freq_map)
+            imaginary_count = sum(1 for f in freq_map.values() if f < 0.0)
+            atom_count = _count_atoms_from_output(text)
+        except Exception:  # noqa: BLE001
+            pass
+        eid = entry_id or out_path.stem
+        entries.append(
+            FrequencySourceEntryModel(
+                entry_id=eid,
+                item_id=item_id,
+                label=label or out_path.stem,
+                output_path=out_rel,
+                hess_path=hess_rel,
+                complete=True,
+                hessian_available=hess_path is not None and hess_path.is_file(),
+                imaginary_count=imaginary_count,
+                atom_count=atom_count,
+                mode_count=mode_count,
+                origin=FrequencySourceOriginModel(job_id=job_id, item_id=item_id, entry_id=eid),
+            )
+        )
+
+    # 1) Walk WORK/ for .out files with vibrational frequencies
+    work = work_dir / "WORK"
+    if work.is_dir():
+        for out_file in sorted(work.rglob("*.out")):
+            try:
+                head = out_file.read_text(encoding="utf-8", errors="replace")[:8192]
+            except OSError:
+                continue
+            if "VIBRATIONAL FREQUENCIES" in head:
+                _add_source(out_file)
+
+    # 2) Walk RESULT/result_manifest.json for frequency_modes products
+    manifest_path = work_dir / "RESULT" / "result_manifest.json"
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            manifest = {}
+        for product in manifest.get("products", []):
+            if product.get("kind") != "frequency_modes":
+                continue
+            prod_path = work_dir / product.get("path", "")
+            if not prod_path.is_file():
+                continue
+            sibling_out = prod_path.with_suffix(".out")
+            if not sibling_out.is_file():
+                continue
+            item_id = product.get("item_id")
+            entry_id = product.get("entry_id", sibling_out.stem)
+            _add_source(
+                sibling_out,
+                label=str(product.get("label") or sibling_out.stem),
+                item_id=str(item_id) if item_id else None,
+                entry_id=str(entry_id),
+            )
+
+    return entries
+
+
+def _discover_sibling_hess(out_path: Path) -> Path | None:
+    """Find a ``.hess`` sibling for an ORCA ``.out`` file.
+
+    Same semantics as ``cccp.qc.interfaces.orca._discover_sibling_hessian``:
+    exact stem match first, then single-glob fallback.
+    """
+    parent = out_path.parent
+    exact = parent / f"{out_path.stem}.hess"
+    if exact.exists():
+        return exact
+    matches = sorted(parent.glob("*.hess"))
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _count_atoms_from_output(text: str) -> int:
+    """Best-effort atom count from ORCA ``CARTESIAN COORDINATES`` section."""
+    lines = text.splitlines()
+    for idx in range(len(lines) - 1, -1, -1):
+        if "CARTESIAN COORDINATES" in lines[idx]:
+            count = 0
+            cursor = idx + 2
+            while cursor < len(lines):
+                stripped = lines[cursor].strip()
+                cursor += 1
+                if not stripped:
+                    continue
+                parts = stripped.split()
+                if len(parts) >= 4:
+                    try:
+                        int(parts[0])
+                        float(parts[2])
+                        count += 1
+                        continue
+                    except (IndexError, ValueError):
+                        pass
+                break
+            if count > 0:
+                return count
+    return 0
+
+
+@router.get(
+    "/jobs/{job_id}/frequency-sources",
+    response_model=FrequencySourcesResponse,
+)
+def get_frequency_sources(
+    job_id: str,
+    request: Request,
+) -> FrequencySourcesResponse:
+    """Return available frequency sources for a job.
+
+    404 when the job is unknown.  Remote jobs with absent local files return
+    200 with ``sources: []`` and a ``pending_fetch`` warning.
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    work_dir = Path(record.work_dir)
+    warnings: list[str] = []
+
+    is_remote = _is_remote_job(record)
+    if is_remote and not work_dir.is_dir():
+        warnings.append("pending_fetch")
+        return FrequencySourcesResponse(job_id=job_id, sources=[], warnings=warnings)
+
+    sources = _discover_frequency_sources(work_dir, job_id)
+    return FrequencySourcesResponse(job_id=job_id, sources=sources, warnings=warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -3752,9 +4216,7 @@ def _build_edited_spec(
         method=method,
         resources=dict(req.resources),
         output_dir=req.output_dir if is_submit else None,
-        config_path=(
-            req.config_path if is_submit and req.config_path else record.spec.config_path
-        ),
+        config_path=(req.config_path if is_submit and req.config_path else record.spec.config_path),
         tags=list(req.tags),
         node_tags=list(req.node_tags),
         project_id=req.project_id or (record.project_id or record.spec.project_id),
@@ -4896,6 +5358,7 @@ def list_structure_sources(
             s.role_evidence = org_entry.get("role_evidence", "")
             s.source_uid = org_entry.get("source_uid", "")
             s.job_resolved_name = org_entry.get("job_resolved_name")
+            s.usage_status = org_entry.get("usage_status", "active")
     except Exception:
         logger.debug("Org-store enrichment skipped (store unavailable)", exc_info=True)
     return StructureSourceListResponse(sources=sources)

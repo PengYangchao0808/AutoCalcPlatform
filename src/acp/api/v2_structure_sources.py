@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from acp.scheduler.structure_source_indexer import StructureSourceIndexer
 from acp.scheduler.structure_source_store import (
@@ -61,6 +61,29 @@ class _TagRenameBody(BaseModel):
 
 class _TagRemoveBody(BaseModel):
     tag: str
+
+
+class _CandidateStatusBody(BaseModel):
+    status: str
+    expected_revision: int
+    actor: str = "user"
+
+
+class _TrashPurgeBody(BaseModel):
+    project_id: str | None = None
+    source_uids: list[str] | None = None
+    actor: str = "user"
+
+
+class _AssessmentBody(BaseModel):
+    conclusion: str
+    reason_code: str
+    scope: str = "project"
+    note: str = ""
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    attachment_refs: list[str] = Field(default_factory=list)
+    actor: str = "user"
+    version_id: str | None = None
 
 
 def _manager(request: Request) -> Any:
@@ -111,11 +134,20 @@ def get_facets(
     tag_match: str = "any",
     workflow: str | None = None,
     source_kind: str | None = None,
+    source_group: str | None = None,
     remote: bool | None = None,
     availability: str | None = None,
+    assessment: str | None = None,
+    usage_status: str | None = None,
+    include_inactive: bool = False,
 ) -> dict[str, Any]:
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
+    if source_kind and source_group:
+        raise HTTPException(
+            status_code=422,
+            detail="source_kind and source_group are mutually exclusive",
+        )
     try:
         counts = source_store.facet_counts(
             project_id=project_id if not all_projects else None,
@@ -126,8 +158,12 @@ def get_facets(
             tag_match=tag_match,
             workflow=workflow,
             source_kind=source_kind,
+            source_group=source_group,
             remote=remote,
             availability=availability,
+            assessment=assessment,
+            usage_status=usage_status,
+            include_inactive=include_inactive,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -162,6 +198,25 @@ def batch_metadata(request: Request, body: _BatchBody) -> dict[str, Any]:
     return {"succeeded": succeeded, "failed": failed, "conflicts": conflicts}
 
 
+@router.post("/structure-sources/trash/purge")
+def purge_structure_source_trash(request: Request, body: _TrashPurgeBody) -> dict[str, Any]:
+    """Purge selected or all project trash entries without deleting source jobs."""
+    source_store, _ = _get_stores(request)
+    source_uids = (
+        source_store.trash_uids(body.project_id)
+        if body.source_uids is None
+        else body.source_uids
+    )
+    try:
+        return source_store.purge_candidates(
+            source_uids,
+            project_id=body.project_id,
+            actor=body.actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 # ------------------------------------------------------------------ #
 # Dynamic routes
 # ------------------------------------------------------------------ #
@@ -178,8 +233,12 @@ def list_structure_sources(
     tag_match: str = "any",
     workflow: str | None = None,
     source_kind: str | None = None,
+    source_group: str | None = None,
     remote: bool | None = None,
     availability: str | None = None,
+    assessment: str | None = None,
+    usage_status: str | None = None,
+    include_inactive: bool = False,
     sort: str = "produced_desc",
     group_by: str = "none",
     limit: int = Query(default=50, le=100),
@@ -187,6 +246,11 @@ def list_structure_sources(
 ) -> dict[str, Any]:
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
+    if source_kind and source_group:
+        raise HTTPException(
+            status_code=422,
+            detail="source_kind and source_group are mutually exclusive",
+        )
     try:
         result = source_store.query_sources(
             project_id=project_id if not all_projects else None,
@@ -197,8 +261,12 @@ def list_structure_sources(
             tag_match=tag_match,
             workflow=workflow,
             source_kind=source_kind,
+            source_group=source_group,
             remote=remote,
             availability=availability,
+            assessment=assessment,
+            usage_status=usage_status,
+            include_inactive=include_inactive,
             sort=sort,
             group_by=group_by,
             limit=limit,
@@ -217,6 +285,59 @@ def get_structure_source(request: Request, source_uid: str) -> dict[str, Any]:
     if projection is None:
         raise HTTPException(status_code=404, detail=f"Source not found: {source_uid}")
     return projection
+
+
+@router.get("/structure-sources/{source_uid}/candidate")
+def get_candidate(request: Request, source_uid: str) -> dict[str, Any]:
+    source_store, _ = _get_stores(request)
+    try:
+        return source_store.get_candidate_detail(source_uid)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/structure-sources/{source_uid}/candidate/status")
+def patch_candidate_status(
+    request: Request, source_uid: str, body: _CandidateStatusBody
+) -> dict[str, Any]:
+    source_store, _ = _get_stores(request)
+    try:
+        return source_store.set_candidate_status(
+            source_uid,
+            body.status,
+            expected_revision=body.expected_revision,
+            actor=body.actor,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "revision_conflict", "current": exc.projection},
+        ) from exc
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc) else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+
+@router.post("/structure-sources/{source_uid}/candidate/assessments")
+def add_candidate_assessment(
+    request: Request, source_uid: str, body: _AssessmentBody
+) -> dict[str, Any]:
+    source_store, _ = _get_stores(request)
+    try:
+        return source_store.add_assessment(
+            source_uid,
+            conclusion=body.conclusion,
+            reason_code=body.reason_code,
+            scope=body.scope,
+            note=body.note,
+            evidence=body.evidence,
+            attachment_refs=body.attachment_refs,
+            actor=body.actor,
+            version_id=body.version_id,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc) else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
 @router.patch("/structure-sources/{source_uid}/metadata")

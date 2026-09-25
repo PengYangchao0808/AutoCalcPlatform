@@ -1003,6 +1003,7 @@ class StructureSourceSummary(BaseModel):
     role_evidence: str = ""
     source_uid: str = ""
     job_resolved_name: str | None = None
+    usage_status: str = "active"
 
 
 class StructureSourceListResponse(BaseModel):
@@ -1756,6 +1757,43 @@ class V1SamplingFrameResponse(BaseModel):
     xyz: str = ""
 
 
+# ---------------------------------------------------------------------------
+# TS Mode frequency sources (docs/ACP_TSMode_Optimization_Implementation_Plan.md §8).
+# ---------------------------------------------------------------------------
+
+
+class FrequencySourceOriginModel(BaseModel):
+    """Provenance of a frequency source."""
+
+    job_id: str = ""
+    item_id: str | None = None
+    entry_id: str = ""
+
+
+class FrequencySourceEntryModel(BaseModel):
+    """One discovered frequency source for a job."""
+
+    entry_id: str
+    item_id: str | None = None
+    label: str = ""
+    output_path: str = ""
+    hess_path: str | None = None
+    complete: bool = True
+    hessian_available: bool = False
+    imaginary_count: int = 0
+    atom_count: int = 0
+    mode_count: int = 0
+    origin: FrequencySourceOriginModel = Field(default_factory=FrequencySourceOriginModel)
+
+
+class FrequencySourcesResponse(BaseModel):
+    """Response for ``GET /jobs/{job_id}/frequency-sources``."""
+
+    job_id: str
+    sources: list[FrequencySourceEntryModel] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class EnergyGraphSeriesModel(BaseModel):
     id: str
     label: str
@@ -1883,6 +1921,9 @@ __all__ = [
     "EnergyGraphNodeModel",
     "EnergyGraphResponse",
     "EnergyGraphSeriesModel",
+    "FrequencySourceEntryModel",
+    "FrequencySourceOriginModel",
+    "FrequencySourcesResponse",
     "V1FrameCandidateInfo",
     "V1FrameCandidateListResponse",
     "V1FrameCandidateRequest",
