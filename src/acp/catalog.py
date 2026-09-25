@@ -452,6 +452,7 @@ _BASIS_CATALOG_REF = "<basis-catalog>"
 METHOD_META: dict[str, dict[str, Any]] = {
     # ── 3c composite methods (built-in basis set, RI fully fixed) ──
     "r2SCAN-3c": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": False,
         "ri_support": "composite",
         "basis": ("def2-mTZVPP",),
@@ -461,6 +462,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
     "PBEh-3c": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": False,
         "ri_support": "composite",
         "basis": ("def2-mSVP",),
@@ -470,6 +472,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
     "B97-3c": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": False,
         "ri_support": "composite",
         "basis": ("mTZVP",),
@@ -480,6 +483,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Ordinary hybrid functionals (user-selectable RI, no /C needed) ──
     "B3LYP": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -490,6 +494,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D4",
     },
     "PBE0": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -500,6 +505,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D4",
     },
     "M062X": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -512,6 +518,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     # Goodman GIAO NMR level (DP4/DP5 error model) — Pople-style basis,
     # no dispersion correction in the original parametrisation.
     "mPW1PW91": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -523,6 +530,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Range-separated single-hybrid functionals ──
     "wB97X-D4": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -533,6 +541,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
     "wB97M-V": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -544,6 +553,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Double-hybrid functionals (need /J + /C) ──
     "PWPB95": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": True,
@@ -554,6 +564,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D3BJ",
     },
     "revDSD-PBEP86": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": True,
@@ -565,6 +576,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Post-HF wavefunction methods ──
     "DLPNO-CCSD(T)": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": False,
         "ri_support": "automatic",
         "needs_aux_c": True,
@@ -1201,11 +1213,109 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "scan_optimizer_method": {
         "type": "select",
-        "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF"],
+        "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF", "B97-3c", "r2SCAN-3c", "B3LYP", "PBE0"],
+        "option_groups": [
+            {"group_id": "xtb", "label": "xTB", "label_zh": "xTB 半经验",
+             "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF"]},
+            {"group_id": "composite_dft", "label": "Composite DFT (3c)", "label_zh": "复合 DFT（3c）",
+             "options": ["B97-3c", "r2SCAN-3c"]},
+            {"group_id": "conventional_dft", "label": "Conventional DFT", "label_zh": "常规 DFT",
+             "options": ["B3LYP", "PBE0"]},
+        ],
         "default": {"*": "GFN2-xTB"},
+        "normalize_method_alias": True,
         "label": "Scan Optimization Method",
         "label_zh": "扫描点优化方法",
-        "help": "Low-cost method used to relax each point on the PES scan.",
+        "help": "Level of theory used to relax each point on the PES scan.",
+        "help_zh": "逐点约束优化所用的计算级别；DFT 方法下每个扫描点都在对应 DFT 势能面上优化。",
+    },
+    "scan_optimizer_basis": {
+        "type": "select",
+        "label": "Scan Optimization Basis",
+        "label_zh": "扫描点优化基组",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": ""},
+        "supports_custom": True,
+        "help": "Basis set for the per-point optimizer; 3c composite methods carry a built-in basis (locked).",
+        "help_zh": "逐点优化基组；3c 复合方法使用内置基组（锁定）。",
+    },
+    "scan_optimizer_dispersion": {
+        "type": "select",
+        "label": "Scan Optimization Dispersion",
+        "label_zh": "扫描点优化色散校正",
+        "options": ["none", "D3", "D3BJ", "D4"],
+        "option_labels_zh": {"none": "无", "D3": "D3", "D3BJ": "D3BJ", "D4": "D4"},
+        "default": {"*": "none"},
+        "help": "Dispersion correction for the per-point optimizer; 3c methods carry a built-in correction (locked).",
+        "help_zh": "逐点优化色散校正；3c 复合方法内置色散（锁定）。",
+    },
+    "scan_optimizer_solvent_model": {
+        "type": "select",
+        "label": "Scan Optimization Solvation Model",
+        "label_zh": "扫描点优化溶剂模型",
+        "options": ["none", "CPCM", "SMD"],
+        "option_labels_zh": {"none": "不使用溶剂", "CPCM": "CPCM（连续介质）", "SMD": "SMD（溶剂化）"},
+        "default": {"*": "none"},
+        "help": "Implicit solvation model for the per-point optimizer; 'none' explicitly disables solvation.",
+        "help_zh": "逐点优化的隐式溶剂模型；'none' 显式表示不使用溶剂。",
+    },
+    "scan_optimizer_solvent": {
+        "type": "select",
+        "label": "Scan Optimization Solvent",
+        "label_zh": "扫描点优化溶剂",
+        "options": ["water", "methanol", "ethanol", "acetone", "dichloromethane", "toluene", "THF", "DMSO", "acetonitrile", "chloroform", "hexane", "benzene"],
+        "default": {"*": ""},
+        "depends_on": {"field": "scan_optimizer_solvent_model", "not_values": ["none"]},
+        "help": "Solvent for the per-point optimizer (required when a solvent model is active).",
+        "help_zh": "逐点优化溶剂（启用溶剂模型时必选）。",
+    },
+    "scan_optimizer_grid": {
+        "type": "select",
+        "advanced": True,
+        "label": "Scan Optimization Integration Grid",
+        "label_zh": "扫描点优化积分网格",
+        "options": ["DefGrid1", "DefGrid2", "DefGrid3"],
+        "option_labels_zh": {
+            "DefGrid1": "DefGrid1（粗）",
+            "DefGrid2": "DefGrid2（默认精度档）",
+            "DefGrid3": "DefGrid3（细）",
+        },
+        "default": {"*": ""},
+        "help": "ORCA integration grid for the per-point optimizer; empty keeps the ORCA default.",
+        "help_zh": "逐点优化的 ORCA 积分网格；留空使用 ORCA 缺省网格。",
+    },
+    "scan_optimizer_scf_convergence": {
+        "type": "select",
+        "advanced": True,
+        "label": "Scan Optimization SCF Convergence",
+        "label_zh": "扫描点优化 SCF 收敛标准",
+        "options": ["normal", "tight", "verytight"],
+        "option_labels_zh": {"normal": "标准", "tight": "严格", "verytight": "非常严格"},
+        "default": {"*": ""},
+        "help": "SCF convergence for the per-point optimizer; empty keeps the ORCA default.",
+        "help_zh": "逐点优化的 SCF 收敛标准；留空使用 ORCA 缺省。",
+    },
+    "scan_optimizer_scf_max_iterations": {
+        "type": "int",
+        "advanced": True,
+        "min": 1,
+        "max": 5000,
+        "default": {"*": 200},
+        "label": "Scan Optimization SCF Max Iterations",
+        "label_zh": "扫描点优化 SCF 最大迭代",
+        "help": "Maximum SCF cycles per scan point.",
+        "help_zh": "每个扫描点允许的最大 SCF 迭代数。",
+    },
+    "scan_optimizer_ri_approximation": {
+        "type": "select",
+        "advanced": True,
+        "label": "Scan Optimization RI Approximation",
+        "label_zh": "扫描点优化 RI 近似",
+        "options": ["none", "RI", "RIJCOSX", "RIJK"],
+        "option_labels_zh": {"none": "不使用", "RI": "RI", "RIJCOSX": "RIJCOSX", "RIJK": "RIJK"},
+        "default": {"*": "none"},
+        "help": "RI approximation for the per-point optimizer; 3c composite methods fix their RI chain (locked).",
+        "help_zh": "逐点优化的 RI 近似；3c 复合方法 RI 链固定（锁定）。",
     },
     "scan_optimizer_max_iterations": {
         "type": "int",
@@ -2856,11 +2966,19 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "label": "Per-Point Optimization",
                 "label_zh": "扫描点优化",
                 "required": True,
-                "allowed_engines": ["xtb"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "scan_optimizer_method",
+                    "scan_optimizer_basis",
+                    "scan_optimizer_dispersion",
+                    "scan_optimizer_solvent_model",
+                    "scan_optimizer_solvent",
                     "scan_optimizer_max_iterations",
                     "scan_optimizer_convergence",
+                    "scan_optimizer_grid",
+                    "scan_optimizer_scf_convergence",
+                    "scan_optimizer_scf_max_iterations",
+                    "scan_optimizer_ri_approximation",
                     "scan_optimizer_retries",
                     "scan_optimizer_retry_strategy",
                 ],
@@ -2926,10 +3044,18 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "scan_use_scants": False,
                     },
                     "scan_optimizer": {
-                        "engine": "xtb",
+                        "engine": "orca",
                         "scan_optimizer_method": "GFN2-xTB",
+                        "scan_optimizer_basis": "",
+                        "scan_optimizer_dispersion": "none",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
                         "scan_optimizer_max_iterations": 250,
                         "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
                         "scan_optimizer_retries": 2,
                         "scan_optimizer_retry_strategy": "previous_geometry",
                     },
@@ -2961,6 +3087,135 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "select_candidates",
                         "finalize",
                     ],
+                },
+            },
+            {
+                "profile_id": "economy-dft",
+                "label": "Economy DFT Scan (B97-3c)",
+                "label_zh": "经济型 DFT 扫描（B97-3c）",
+                "summary": "ORCA relaxed scan | B97-3c point optimization (built-in basis/dispersion) | single points off",
+                "summary_zh": "ORCA 松弛扫描｜B97-3c 扫描点优化（内置基组/色散）｜单点能关闭",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "B97-3c",
+                        "scan_optimizer_basis": "",
+                        "scan_optimizer_dispersion": "none",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
+                },
+            },
+            {
+                "profile_id": "standard-dft",
+                "label": "Standard DFT Scan (r2SCAN-3c)",
+                "label_zh": "标准 DFT 扫描（r2SCAN-3c）",
+                "summary": "ORCA relaxed scan | r2SCAN-3c point optimization (built-in basis/dispersion) | single points off",
+                "summary_zh": "ORCA 松弛扫描｜r2SCAN-3c 扫描点优化（内置基组/色散）｜单点能关闭",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "r2SCAN-3c",
+                        "scan_optimizer_basis": "",
+                        "scan_optimizer_dispersion": "none",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
+                },
+            },
+            {
+                "profile_id": "hybrid-dft",
+                "label": "Hybrid DFT Scan (B3LYP-D3BJ/def2-SVP)",
+                "label_zh": "杂化 DFT 扫描（B3LYP-D3BJ/def2-SVP）",
+                "summary": "ORCA relaxed scan | B3LYP-D3BJ/def2-SVP point optimization | single points off",
+                "summary_zh": "ORCA 松弛扫描｜B3LYP-D3BJ/def2-SVP 扫描点优化｜单点能关闭",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "B3LYP",
+                        "scan_optimizer_basis": "def2-SVP",
+                        "scan_optimizer_dispersion": "D3BJ",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
                 },
             },
         ],
@@ -4091,6 +4346,21 @@ def _case_insensitive_get(mapping: dict[str, Any], key: str) -> Any | None:
     return None
 
 
+# Level → field name carrying that level's electronic-structure method.
+# Levels without a ``functional`` field (currently ``scan_optimizer``) use
+# this mapping so basis/dispersion/RI options resolve against the level's
+# own method with the same METHOD_META linkage as functional levels.
+_LEVEL_METHOD_FIELD: dict[str, str] = {"scan_optimizer": "scan_optimizer_method"}
+
+# Level-scoped field → shared base field name used for METHOD_META /
+# FUNCTIONAL_OPTIONS_MAP lookups (PES DFT-scan extension, 2026-09).
+_LEVEL_SCOPED_FIELD_BASE: dict[str, str] = {
+    "scan_optimizer_basis": "basis",
+    "scan_optimizer_dispersion": "dispersion",
+    "scan_optimizer_ri_approximation": "ri_approximation",
+}
+
+
 def _resolve_field_options(
     field_name: str,
     engine: str,
@@ -4105,11 +4375,15 @@ def _resolve_field_options(
 
     For ``aux_j_basis`` / ``aux_c_basis``, dynamic options are generated
     from ``BASIS_CATALOG`` based on the current *basis*.
+
+    Level-scoped fields (e.g. ``scan_optimizer_basis``) reuse the shared
+    base-field (``basis``) functional linkage via ``_LEVEL_SCOPED_FIELD_BASE``.
     """
-    if functional and field_name in ("basis", "dispersion"):
+    base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+    if functional and base_name in ("basis", "dispersion"):
         mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
-        if mapping and field_name in mapping:
-            return mapping[field_name]
+        if mapping and base_name in mapping:
+            return mapping[base_name]
     fd = FIELD_DEFINITIONS.get(field_name)
     if not fd:
         return None
@@ -4173,17 +4447,18 @@ def _resolve_field_default(
         else:
             global_default = dflt
 
+    base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
     if functional:
         meta = _case_insensitive_get(METHOD_META, functional)
         if meta:
-            if field_name == "basis" and meta.get("default_basis") is not None:
+            if base_name == "basis" and meta.get("default_basis") is not None:
                 return meta["default_basis"]
-            if field_name == "dispersion" and meta.get("default_dispersion") is not None:
+            if base_name == "dispersion" and meta.get("default_dispersion") is not None:
                 return meta["default_dispersion"]
 
             ri_support = meta.get("ri_support", "user")
             if ri_support in ("composite", "automatic"):
-                if field_name == "ri_approximation":
+                if base_name == "ri_approximation":
                     return "none"
                 if field_name in ("aux_j_basis", "aux_c_basis"):
                     return ""
@@ -4202,10 +4477,10 @@ def _resolve_field_default(
                         return basis_meta["aux_c"]
                     return global_default
 
-        if field_name in ("basis", "dispersion"):
+        if base_name in ("basis", "dispersion"):
             mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, functional)
-            if mapping and field_name in mapping:
-                opts = mapping[field_name]
+            if mapping and base_name in mapping:
+                opts = mapping[base_name]
                 if opts:
                     if global_default and global_default in opts:
                         return global_default
@@ -4310,6 +4585,13 @@ def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
     for level_id, level in levels.items():
         if not isinstance(level, dict):
             continue
+        if level_id == "scan_optimizer" and str(level.get("engine") or "").lower() == "xtb":
+            # PES DFT-scan extension (2026-09): scan_optimizer now executes
+            # exclusively through ORCA (allowed_engines ["orca"]); migrate the
+            # legacy "xtb" marker at read time so edit-recalculate passes
+            # normalize_and_validate. New level fields are NOT injected —
+            # missing keys fall back to schema defaults downstream.
+            level["engine"] = "orca"
         if "aux_basis" in level and "aux_j_basis" not in level and "aux_c_basis" not in level:
             func = level.get("functional")
             meta = _case_insensitive_get(METHOD_META, func) if func else None
@@ -4333,6 +4615,8 @@ _CASE_INSENSITIVE_FIELDS = frozenset(
         "opt_convergence",
         "scf_convergence",
         "scf_strategy",
+        "scan_optimizer_solvent_model",
+        "scan_optimizer_dispersion",
     }
 )
 
@@ -4510,15 +4794,17 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
             continue
 
         normalized: dict[str, Any] = {"engine": engine}
+        method_field = _LEVEL_METHOD_FIELD.get(lid, "functional")
         for field_name in lv_def.get("fields", []):
             user_val = user_lv.get(field_name)
+            level_method = normalized.get(method_field)
             fd = FIELD_DEFINITIONS.get(field_name)
             # hessian_interval is a self-validating scalar: route through the
             # shared normaliser so CLI/API/catalog/scheduler all agree.
             if fd and fd.get("type") == "hessian_interval" and field_name in ("recalc_hess", "opt_recalc_hess"):
                 if user_val is None or user_val == "":
                     default_val = _resolve_field_default(
-                        field_name, engine, normalized.get("functional")
+                        field_name, engine, level_method
                     )
                     normalized[field_name] = default_val
                     continue
@@ -4551,6 +4837,12 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     normalized[field_name] = expanded_module
                 continue
             if user_val is not None and user_val != "":
+                if fd and fd.get("normalize_method_alias") and isinstance(user_val, str):
+                    # Lazy import: levels.py depends on this module (one-way);
+                    # resolving at call time keeps the dependency acyclic.
+                    from acp.calculations.levels import normalize_method_alias
+
+                    user_val = normalize_method_alias(user_val)
                 # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
                 # or a list, validate every item against the allowed options,
                 # and normalise to a list so downstream CLI-flag emission
@@ -4560,7 +4852,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     multi_options = _resolve_field_options(
                         field_name,
                         engine,
-                        normalized.get("functional"),
+                        level_method,
                         basis=normalized.get("basis") or user_lv.get("basis"),
                     )
                     if multi_options is not None:
@@ -4576,7 +4868,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 options = _resolve_field_options(
                     field_name,
                     engine,
-                    normalized.get("functional"),
+                    level_method,
                     basis=normalized.get("basis") or user_lv.get("basis"),
                 )
                 if options is not None:
@@ -4622,7 +4914,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 default_val = _resolve_field_default(
                     field_name,
                     engine,
-                    normalized.get("functional"),
+                    level_method,
                     basis=normalized.get("basis"),
                 )
                 normalized[field_name] = default_val

@@ -563,6 +563,37 @@ Examples:
     pes.add_argument("--scan-end", type=float, help="Scan end distance (Angstrom)")
     pes.add_argument("--scan-points", type=int, help="Scan point count (3–101)")
     pes.add_argument("--scan-method", help="Scan optimisation method (default: GFN2-xTB)")
+    pes.add_argument("--scan-basis", help="Scan optimisation basis (3c methods: built-in)")
+    pes.add_argument(
+        "--scan-dispersion",
+        help="Scan optimisation dispersion correction (none/D3/D3BJ/D4; 3c methods: built-in)",
+    )
+    pes.add_argument(
+        "--scan-solvent-model",
+        choices=["none", "CPCM", "SMD"],
+        help="Scan optimisation solvation model (default: none)",
+    )
+    pes.add_argument("--scan-solvent", help="Scan optimisation solvent (e.g. water)")
+    pes.add_argument(
+        "--scan-grid",
+        choices=["DefGrid1", "DefGrid2", "DefGrid3"],
+        help="Scan optimisation ORCA integration grid (default: ORCA default)",
+    )
+    pes.add_argument(
+        "--scan-scf-convergence",
+        choices=["normal", "tight", "verytight"],
+        help="Scan optimisation SCF convergence (default: ORCA default)",
+    )
+    pes.add_argument(
+        "--scan-scf-max-iter",
+        type=int,
+        help="Scan optimisation SCF max iterations (default: 200)",
+    )
+    pes.add_argument(
+        "--scan-ri-approximation",
+        choices=["none", "RI", "RIJCOSX", "RIJK"],
+        help="Scan optimisation RI approximation (3c methods: locked)",
+    )
     pes.add_argument("--sp-method", help="Single-point method (default: B97-3c)")
     pes.add_argument("--sp-basis", help="Single-point basis (composite methods: none)")
     pes.add_argument("--no-sp", action="store_true", help="Disable the single-point refinement")
@@ -1347,6 +1378,22 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
         coordinate["n_points"] = args.scan_points
     if getattr(args, "scan_method", None):
         protocol.setdefault("scan_optimizer", {})["method"] = args.scan_method
+    # DFT scan-level flags (2026-09): setdefault semantics — a scheduler
+    # --scan-config payload always wins over CLI flags.
+    _scan_level_flags = {
+        "scan_basis": "basis",
+        "scan_dispersion": "dispersion",
+        "scan_solvent_model": "solvent_model",
+        "scan_solvent": "solvent",
+        "scan_grid": "grid",
+        "scan_scf_convergence": "scf_convergence",
+        "scan_scf_max_iter": "scf_max_iterations",
+        "scan_ri_approximation": "ri_approximation",
+    }
+    for arg_name, protocol_key in _scan_level_flags.items():
+        value = getattr(args, arg_name, None)
+        if value is not None:
+            protocol.setdefault("scan_optimizer", {}).setdefault(protocol_key, value)
     if getattr(args, "sp_method", None):
         protocol.setdefault("single_point", {})["method"] = args.sp_method
     if getattr(args, "sp_basis", None):
