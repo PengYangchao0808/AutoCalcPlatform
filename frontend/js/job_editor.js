@@ -105,7 +105,12 @@
     var refs = draft.input_refs || {};
     var items = Array.isArray(refs.structure_items) ? refs.structure_items.slice() : [];
     var last = refs.last_structure;
-    if (last && last.available && last.xyz_text) {
+    var isBatchWorkflow = ctx.originalSpec.workflow === "BatchOptimize";
+    // BatchOptimize inputs can be stored either as an item array or as a
+    // single source XYZ (legacy/single-structure submission). In both cases,
+    // the last optimized product is not another submitted input; users can
+    // explicitly select it from the structure library if they want it.
+    if (!isBatchWorkflow && last && last.available && last.xyz_text) {
       items.push({
         source_id: "edit-last:" + ctx.sourceJobId + ":" + (last.entry_id || "last"),
         source_kind: "last_structure",
@@ -424,6 +429,8 @@
         batchPreviewItems = items.map(function (item, i) {
           return {
             key: "edit_" + i + "_" + Math.random().toString(36).slice(2, 8),
+            itemId: String(item.item_id || item.candidate_id ||
+              ("item_" + String(i + 1).padStart(3, "0"))),
             include: item.include !== false,
             name: item.name || item.candidate_id || "structure",
             tag: item.tag || "",
@@ -467,7 +474,11 @@
       if (Array.isArray(overlay.items)) {
         var kept = [];
         overlay.items.forEach(function (item, i) {
-          var curItem = cur[i];
+          var itemId = String(item.item_id || item.candidate_id ||
+            ("item_" + String(i + 1).padStart(3, "0")));
+          var curItem = cur.find(function (candidate) {
+            return candidate && candidate.itemId === itemId;
+          }) || cur[i];
           if (curItem && curItem.include === false) return;
           if (!curItem && i >= base.length) return; // 新增行未提供 → 丢弃
           var copy = deepCopy(item);
@@ -485,6 +496,34 @@
         });
         if (!kept.length) throw new Error(t("edit.batch_items_empty"));
         overlay.items = kept;
+      } else {
+        // Older one-structure BatchOptimize jobs store a flat xyz_text input.
+        // If its structure metadata/geometry was edited in the shared input
+        // form, convert that one row to the current batch_structures contract
+        // so TAG, charge, multiplicity, name, and edited coordinates reach the
+        // BatchOptimize loader instead of silently keeping the old XYZ only.
+        var currentStructure = selectedOriginalTaskStructure(ctx);
+        var currentProjection = originalTaskStructureProjection(ctx);
+        var baseStructure = (ctx.baselineFormState || {}).original_task_structure;
+        if (currentStructure && currentProjection && baseStructure &&
+          !deepEqual(currentProjection, baseStructure)) {
+          overlay = {
+            source_type: "batch_structures",
+            charge: has(currentStructure, "charge") ? currentStructure.charge : 0,
+            multiplicity: currentStructure.multiplicity || 1,
+            items: [{
+              item_id: currentStructure.item_id || currentStructure.candidate_id || "item_001",
+              candidate_id: currentStructure.candidate_id || currentStructure.item_id || "item_001",
+              name: currentStructure.name || currentStructure.molecule_name || "structure",
+              tag: currentStructure.tag || currentStructure.role || "",
+              xyz: currentStructure.xyz || currentStructure.xyz_text || "",
+              charge: has(currentStructure, "charge") ? currentStructure.charge : 0,
+              multiplicity: currentStructure.multiplicity || 1,
+              include: true,
+            }],
+          };
+          if (currentStructure.source_ref) overlay.items[0].source_ref = deepCopy(currentStructure.source_ref);
+        }
       }
       return patchOriginalChargeMult(ctx, overlay, body);
     },
@@ -559,7 +598,39 @@
   };
 
   var pesSearchAdapter = {
-    hydrateMethod: function (ctx, draft) { hydrateMethodBase(ctx, draft); },
+    hydrateMethod: function (ctx, draft) {
+      hydrateMethodBase(ctx, draft);
+      // ── Legacy hydration (Item 6): fill missing scan_optimizer fields ──
+      // Old PESsearch tasks may lack the new DFT-scan fields in their
+      // scan_optimizer level.  Fill wizardState display values from schema
+      // defaults so the method-config modal renders correctly.  Submission
+      // must reflect only actual user changes — these are display-layer only.
+      var so = (wizardState.method.stages || {}).scan_optimizer || {};
+      var _newFields = [
+        "scan_optimizer_basis", "scan_optimizer_dispersion",
+        "scan_optimizer_solvent_model", "scan_optimizer_solvent",
+        "scan_optimizer_grid", "scan_optimizer_scf_convergence",
+        "scan_optimizer_scf_max_iterations", "scan_optimizer_ri_approximation",
+      ];
+      var _schemaDefaults = {
+        scan_optimizer_basis: "",
+        scan_optimizer_dispersion: "none",
+        scan_optimizer_solvent_model: "none",
+        scan_optimizer_solvent: "",
+        scan_optimizer_grid: "",
+        scan_optimizer_scf_convergence: "",
+        scan_optimizer_scf_max_iterations: 200,
+        scan_optimizer_ri_approximation: "none",
+      };
+      for (var _fi = 0; _fi < _newFields.length; _fi++) {
+        var _fk = _newFields[_fi];
+        if (so[_fk] === undefined || so[_fk] === null) {
+          so[_fk] = _schemaDefaults[_fk];
+        }
+      }
+      // Also ensure scan_optimizer_method exists (default to GFN2-xTB)
+      if (!so.scan_optimizer_method) so.scan_optimizer_method = "GFN2-xTB";
+    },
     hydrateInput: function (ctx, draft) {
       var spec = draft.editable_spec || {};
       var inp = spec.input || {};
@@ -655,6 +726,7 @@
   function batchItemProjection(item) {
     if (!item) return null;
     return {
+      item_id: item.itemId || "",
       name: item.name || "",
       tag: item.tag || "",
       charge: item.charge,
@@ -667,6 +739,101 @@
   function batchItemsProjection() {
     if (typeof batchPreviewItems === "undefined") return [];
     return batchPreviewItems.map(batchItemProjection);
+  }
+
+  function selectedOriginalTaskStructure(ctx) {
+    if (!ctx || ctx.activeSourceTab !== "task" || ctx.sourceSelection.kind !== "original_input") return null;
+    var structures = typeof wizardStructures !== "undefined" ? wizardStructures : [];
+    var selected = structures[wizardSelectedStructureIndex] || ctx.sourceSelection.payload;
+    if (!selected || (selected.source_kind && selected.source_kind !== "original_input")) return null;
+    return selected;
+  }
+
+  function originalTaskStructureProjection(ctx) {
+    var input = (ctx && ctx.originalSpec && ctx.originalSpec.input) || {};
+    if (!ctx || ctx.originalSpec.workflow !== "BatchOptimize" || Array.isArray(input.items)) return null;
+    var structure = selectedOriginalTaskStructure(ctx);
+    if (!structure) return null;
+    return {
+      item_id: structure.item_id || structure.candidate_id || "",
+      name: structure.name || structure.molecule_name || "",
+      tag: structure.tag || structure.role || "",
+      charge: has(structure, "charge") ? structure.charge : 0,
+      multiplicity: structure.multiplicity || 1,
+      xyz: structure.xyz || structure.xyz_text || "",
+    };
+  }
+
+  function findOriginalBatchRow(structure, index) {
+    var ctx = editorContext;
+    if (!ctx || !structure || ctx.originalSpec.workflow !== "BatchOptimize" ||
+      ctx.activeSourceTab !== "task" || structure.source_kind !== "original_input") return null;
+    var itemId = String(structure.item_id || structure.candidate_id || "");
+    var source = (ctx.taskStructureItems || []).find(function (candidate) {
+      return candidate && candidate.source_kind === "original_input" &&
+        String(candidate.item_id || candidate.candidate_id || "") === itemId;
+    });
+    if (!source) return null;
+    var row = batchPreviewItems.find(function (candidate) {
+      return candidate && candidate.itemId === String(source.item_id || source.candidate_id || "");
+    });
+    // Compatibility fallback for an older draft without stable item ids.
+    if (!row && batchPreviewItems[index] && source === ctx.taskStructureItems[index]) {
+      row = batchPreviewItems[index];
+    }
+    return row || null;
+  }
+
+  function onTaskStructureChanged(index, structure) {
+    var ctx = editorContext;
+    if (!ctx || !structure) return;
+    if (ctx.activeSourceTab === "task" && structure.source_kind === "original_input" &&
+      Number(index) === Number(wizardSelectedStructureIndex)) {
+      ctx.sourceSelection = { kind: "original_input", payload: structure };
+    }
+    var row = findOriginalBatchRow(structure, index);
+    if (row) {
+      if (structure.name !== undefined) row.name = structure.name;
+      row.tag = structure.tag || "";
+      row.tagAuto = false;
+      if (structure.charge !== undefined) row.charge = structure.charge;
+      if (structure.multiplicity !== undefined) row.multiplicity = structure.multiplicity;
+      if (typeof renderStageBatchPreview === "function") renderStageBatchPreview();
+    }
+    updateEditorUiState();
+  }
+
+  function onTaskStructureRemoved(index, structure) {
+    var row = findOriginalBatchRow(structure, index);
+    if (!row) return;
+    row.include = false;
+    if (typeof renderStageBatchPreview === "function") renderStageBatchPreview();
+    updateEditorUiState();
+  }
+
+  function onBatchItemChanged(row) {
+    var ctx = editorContext;
+    if (!ctx || !row || ctx.originalSpec.workflow !== "BatchOptimize" ||
+      ctx.activeSourceTab !== "task") return;
+    var itemId = String(row.itemId || "");
+    if (!itemId) return;
+    var source = (ctx.taskStructureItems || []).find(function (candidate) {
+      return candidate && candidate.source_kind === "original_input" &&
+        String(candidate.item_id || candidate.candidate_id || "") === itemId;
+    });
+    if (!source) return;
+    var structure = (typeof wizardStructures !== "undefined" ? wizardStructures : []).find(function (candidate) {
+      return candidate && candidate.source_kind === "original_input" &&
+        String(candidate.item_id || candidate.candidate_id || "") === itemId;
+    });
+    if (!structure) return;
+    structure.name = row.name || structure.name;
+    structure.tag = row.tag || "";
+    structure.charge = row.charge;
+    structure.multiplicity = row.multiplicity;
+    structure.input_modified = true;
+    if (typeof renderLoadedStructuresList === "function") renderLoadedStructuresList();
+    updateEditorUiState();
   }
 
   // ---------------------------------------------------------------------------
@@ -782,6 +949,7 @@
       requestToken: token,
       draft: null,
       originalSpec: {},
+      editStep: 1,
       effectiveConfig: null,
       adapter: null,
       methodBaseline: null,
@@ -801,6 +969,9 @@
       collectedBodies: null,
       pendingPreviewBody: null,
     };
+    // Apply edit-mode styling before openModal restores any saved create-wizard
+    // state; the edit form must not inherit the last create step's visibility.
+    updateEditModeTabs();
     openModal();
     renderBanner("loading");
     hideFooter();
@@ -898,6 +1069,8 @@
     updateConfigCards();
     ctx.methodBaseline = ctx.adapter.methodProjection();
     ctx.baselineFormState = formProjection();
+    renderOriginalInputPanel();
+    setEditStep(1);
   }
 
   // ---------------------------------------------------------------------------
@@ -1029,6 +1202,138 @@
 
   function modalSubmitBtn() { return document.getElementById("modal-submit"); }
 
+  function currentStep() {
+    return editorContext ? (Number(editorContext.editStep) || 1) : 1;
+  }
+
+  function setEditStep(step) {
+    var ctx = editorContext;
+    var modal = document.getElementById("job-modal");
+    if (!ctx || !modal) return false;
+    var requested = Math.max(1, Math.min(3, Number(step) || 1));
+    var current = currentStep();
+    // Keep forward navigation sequential; the stepper remains a shortcut back
+    // to sections the user has already reached.
+    if (requested > current + 1) return false;
+    ctx.editStep = requested;
+    modal.setAttribute("data-create-step", String(requested));
+    modal.querySelectorAll(".create-step").forEach(function (button) {
+      var buttonStep = Number(button.getAttribute("data-create-step"));
+      button.classList.toggle("active", buttonStep === requested);
+      button.classList.toggle("completed", buttonStep < requested);
+      if (buttonStep === requested) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
+    });
+    var back = document.getElementById("modal-back");
+    if (back) back.style.display = requested > 1 ? "inline-flex" : "none";
+    var taskInfo = modal.querySelector(".task-info-details");
+    if (taskInfo) taskInfo.open = requested === 2;
+    if (typeof _closeInputListOverlay === "function") _closeInputListOverlay();
+    if (typeof updatePESSelectionVisibility === "function") updatePESSelectionVisibility();
+    renderEditStepCompactSummary(ctx);
+    if (requested === 3) renderEditStepReview(ctx);
+    updateModalSubmitButton();
+    updateEditorUiState();
+    var body = modal.querySelector(".modal-body");
+    if (body) body.scrollTop = 0;
+    if (previewViewer && requested < 3) {
+      requestAnimationFrame(function () {
+        try { previewViewer.resize(); previewViewer.render(); } catch (e) {}
+      });
+    }
+    return true;
+  }
+
+  function renderEditStepCompactSummary(ctx) {
+    var summary = document.getElementById("wizard-step-summary");
+    var inner = document.getElementById("wizard-step-summary-inner");
+    if (!summary || !inner || !ctx) return;
+    if (ctx.editStep < 2) {
+      summary.style.display = "none";
+      return;
+    }
+    var isBatch = ctx.originalSpec.workflow === "BatchOptimize";
+    var rows = isBatch && typeof batchPreviewItems !== "undefined"
+      ? batchPreviewItems.filter(function (item) { return item && item.include !== false; })
+      : [];
+    var names = rows.length
+      ? rows.map(function (item) {
+        var role = item.tag === "TS" ? "TS" : (item.tag === "INT" ? "INT" : "—");
+        return (item.name || "structure") + " · " + role;
+      })
+      : (typeof wizardStructures !== "undefined" ? wizardStructures : []).map(function (item) {
+        return (item.name || item.molecule_name || "structure") +
+          (item.tag ? " · " + item.tag : "");
+      });
+    var zh = typeof currentLang !== "undefined" && currentLang === "zh-CN";
+    var listHtml = names.slice(0, 20).map(function (name) {
+      return '<div class="wizard-step-summary-item">' + escapeHtml(name) + "</div>";
+    }).join("");
+    inner.innerHTML = '<div class="wizard-step-summary-label">' +
+      (zh ? "本次重算输入" : "Inputs for recalculation") +
+      '</div><div class="wizard-step-summary-count">' + names.length +
+      '</div><div class="wizard-step-summary-label">' +
+      (names.length === 1 ? (zh ? "个结构" : "structure") : (zh ? "个结构" : "structures")) +
+      '</div>' + (listHtml ? '<div class="wizard-step-summary-list">' + listHtml + "</div>" : "");
+    summary.style.display = "flex";
+  }
+
+  function renderEditStepReview(ctx) {
+    var target = document.getElementById("create-review-summary");
+    if (!target || !ctx) return;
+    var zh = typeof currentLang !== "undefined" && currentLang === "zh-CN";
+    var workflow = (wizardState.workflow && wizardState.workflow.label) || ctx.originalSpec.workflow || "—";
+    var methodTitle = (document.getElementById("method-card-title") || {}).textContent || "—";
+    var methodDesc = (document.getElementById("method-card-desc") || {}).textContent || "";
+    var projectSelect = document.getElementById("modal-project-select");
+    var projectName = projectSelect && projectSelect.selectedOptions.length
+      ? projectSelect.selectedOptions[0].textContent : "—";
+    var isBatch = ctx.originalSpec.workflow === "BatchOptimize";
+    var batchRows = isBatch && typeof batchPreviewItems !== "undefined"
+      ? batchPreviewItems.filter(function (item) { return item && item.include !== false; })
+      : [];
+    var inputRows = batchRows.length
+      ? batchRows.map(function (item, index) {
+        var name = item.name || item.itemId || ("#" + (index + 1));
+        var role = item.tag === "TS" ? "TS" : (item.tag === "INT" ? "INT" : "—");
+        var charge = has(item, "charge") ? item.charge : 0;
+        var mult = has(item, "multiplicity") ? item.multiplicity : 1;
+        return name + " [" + role + "] q" + charge + "/m" + mult;
+      })
+      : (typeof wizardStructures !== "undefined" ? wizardStructures : []).map(function (item, index) {
+        var role = item.tag === "TS" ? "TS" : (item.tag === "INT" ? "INT" : (zh ? "普通" : "Normal"));
+        return (item.name || item.molecule_name || ("#" + (index + 1))) +
+          " [" + role + "] q" + (item.charge === undefined ? 0 : item.charge) +
+          "/m" + (item.multiplicity || 1);
+      });
+    var inputSummary = inputRows.length ? inputRows.join("；") : (zh ? "沿用原任务输入" : "Original task input");
+    var resources = fieldVal("modal-nproc") + " " + (zh ? "核" : "cores") +
+      " · " + fieldVal("modal-mem") + " · " + (zh ? "并行" : "parallel") + " " +
+      (fieldVal("modal-parallelism") || "1");
+    var changedCount = countLocalChanges();
+    var taskName = fieldVal("modal-task-name").trim() || ctx.originalSpec.task_name || "—";
+    var remark = fieldVal("modal-remark").trim() || "—";
+    var checkHint = zh
+      ? "点击“检查并提交”后会生成服务端参数差异与风险检查；确认后才会开始重算。"
+      : "Check and submit generates the server-side parameter diff and risk review; recalculation starts only after confirmation.";
+    var changedLabel = zh ? "已修改项目" : "Changed items";
+    var modeLabel = ctx.executionMode === "new_job"
+      ? (zh ? "创建新任务" : "Create a new task")
+      : (zh ? "原地重算" : "Recalculate in place");
+    target.innerHTML = '<div class="create-review-grid">' +
+      '<span class="muted">' + (zh ? "目标项目" : "Target project") + '</span><strong>' + escapeHtml(projectName) + '</strong>' +
+      '<span class="muted">' + (zh ? "输入结构" : "Input structures") + '</span><div>' + escapeHtml(inputSummary) + '</div>' +
+      '<span class="muted">' + (zh ? "工作流" : "Workflow") + '</span><strong>' + escapeHtml(workflow) + '</strong>' +
+      '<span class="muted">' + (zh ? "计算方案" : "Calculation method") + '</span><div><strong>' + escapeHtml(methodTitle) + '</strong>' +
+      (methodDesc ? '<div class="muted">' + escapeHtml(methodDesc) + '</div>' : "") + '</div>' +
+      '<span class="muted">' + (zh ? "资源" : "Resources") + '</span><div>' + escapeHtml(resources) + '</div>' +
+      '<span class="muted">' + (zh ? "任务名" : "Task name") + '</span><div>' + escapeHtml(taskName) + '</div>' +
+      '<span class="muted">' + (zh ? "备注" : "Remark") + '</span><div>' + escapeHtml(remark) + '</div>' +
+      '<span class="muted">' + (zh ? "执行方式" : "Execution mode") + '</span><div>' + escapeHtml(modeLabel) + '</div>' +
+      '<span class="muted">' + changedLabel + '</span><strong>' + changedCount + '</strong>' +
+      '</div><div class="edit-banner-hint">' + escapeHtml(checkHint) + '</div>';
+  }
+
   function setFooterBusy(busy) {
     var btn = modalSubmitBtn();
     if (btn) btn.disabled = !!busy;
@@ -1084,6 +1389,10 @@
     var ctx = editorContext;
     if (!ctx || ctx.submitting || ctx.collecting) return;
     if (!ctx.draft) return;
+    if (ctx.editStep < 3) {
+      setEditStep(ctx.editStep + 1);
+      return;
+    }
     var passiveKind = ctx.sourceSelection.kind === "original_input" ||
       ctx.sourceSelection.kind === "last_structure";
     var collecting = passiveKind ? Promise.resolve(collectFormOnlyBody()) : null;
@@ -1207,6 +1516,7 @@
       project_id: fieldVal("modal-project-select"),
       method: ctx && ctx.adapter ? ctx.adapter.methodProjection() : null,
       source_kind: ctx ? ctx.sourceSelection.kind : null,
+      original_task_structure: originalTaskStructureProjection(ctx),
       batch_items: ctx ? batchItemsProjection() : null,
       nmr_experiment_text: nmrText,
     };
@@ -1335,6 +1645,7 @@
     batchPreviewItems = (projection || []).map(function (p) {
       return {
         key: "edit_" + Math.random().toString(36).slice(2, 10),
+        itemId: p.item_id || "",
         include: p.include !== false,
         name: p.name,
         tag: p.tag,
@@ -1355,6 +1666,8 @@
     var ctx = editorContext;
     var modal = document.getElementById("job-modal");
     if (modal) modal.classList.toggle("edit-mode", !!ctx);
+    var stepper = document.getElementById("create-stepper");
+    if (stepper) stepper.setAttribute("aria-label", ctx ? "修改参数后重算步骤" : "新建任务步骤");
     var copyButton = document.getElementById("edit-original-copy");
     if (copyButton) copyButton.style.display = ctx ? "" : "none";
     var title = document.getElementById("job-modal-title");
@@ -1384,7 +1697,7 @@
     var html = [];
     html.push('<div class="edit-banner-hint"><b>' + escapeHtml(t("edit.input_original")) +
       "</b> · " + escapeHtml(kind) + "</div>");
-    if (kind === "batch_structures" && Array.isArray(inp.items)) {
+    if (ctx.originalSpec.workflow === "BatchOptimize" && Array.isArray(inp.items)) {
       var int = 0, ts = 0;
       inp.items.forEach(function (item) {
         if (item.tag === "TS") ts++;
@@ -1409,6 +1722,8 @@
       html.push("</div></details></div>");
       html.push('<div class="edit-banner-hint">' +
         escapeHtml(t("edit.batch_panel_hint")) + "</div>");
+      html.push('<div class="edit-banner-hint edit-warn">' +
+        escapeHtml(t("edit.batch_reaction_scope")) + "</div>");
     } else if (kind === "stage_artifact") {
       html.push('<div class="edit-banner-hint edit-banner-source">source_job_id: ' +
         escapeHtml(String(inp.source_job_id || "—")) + "</div>");
@@ -1595,7 +1910,7 @@
     if (!btn) return;
     if (editorContext) {
       btn.removeAttribute("data-i18n");
-      btn.textContent = t("edit.check_and_submit");
+      btn.textContent = currentStep() === 3 ? t("edit.check_and_submit") : t("wizard.next_step");
     } else {
       btn.setAttribute("data-i18n", "modal.submit");
       btn.textContent = t("modal.submit");
@@ -1638,8 +1953,8 @@
     overlay.className = "modal-overlay";
     overlay.id = "edit-summary-overlay";
     var diffRows = (preview.diff || []).map(function (entry) {
-      var oldV = typeof entry.old === "object" ? JSON.stringify(entry.old) : String(entry.old);
-      var newV = typeof entry.new === "object" ? JSON.stringify(entry.new) : String(entry.new);
+      var oldV = formatDiffValue(entry, entry.old);
+      var newV = formatDiffValue(entry, entry.new);
       return '<tr><td class="edit-diff-path">' + escapeHtml(entry.path) + "</td><td>" +
         escapeHtml(oldV) + "</td><td>" + escapeHtml(newV) + "</td><td>" + escapeHtml(entry.kind) + "</td></tr>";
     }).join("");
@@ -1647,6 +1962,7 @@
       return '<div class="edit-banner-hint edit-warn">' + escapeHtml(w) + "</div>";
     }).join("");
     var isRemote = editorContext && editorContext.executionMode === "new_job";
+    var batchRoleSummary = renderBatchRoleSummary(editorContext);
     overlay.innerHTML =
       '<div class="modal-dialog"><div class="modal-header"><h2>' + t("edit.summary_title") +
       '</h2><button class="modal-close" id="edit-summary-x">X</button></div><div class="modal-body">' +
@@ -1655,7 +1971,7 @@
       "<div><b>" + t("edit.summary_mode") + ":</b> " +
       t(isRemote ? "edit.exec_new_job" : "edit.exec_in_place") + "</div>" +
       (isRemote ? "" : '<div class="edit-warn">' + t("edit.summary_cleanup_warning") + "</div>") +
-      "</div>" + warns +
+      "</div>" + warns + batchRoleSummary +
       (diffRows ? '<table class="edit-diff-table"><thead><tr><th>' + t("edit.diff_field") +
         "</th><th>" + t("edit.diff_old") + "</th><th>" + t("edit.diff_new") + "</th><th>" +
         t("edit.diff_kind") + "</th></tr></thead><tbody>" + diffRows + "</tbody></table>"
@@ -1672,6 +1988,42 @@
     overlay.querySelector("#edit-summary-confirm").addEventListener("click", finalSubmit);
   }
 
+  function formatDiffValue(entry, value) {
+    if (entry && entry.path === "input.items" && Array.isArray(value)) {
+      return value.map(function (item, index) {
+        item = item || {};
+        var name = item.name || item.candidate_id || item.item_id || ("#" + (index + 1));
+        var role = item.tag === "TS" ? "TS" : "INT";
+        var charge = has(item, "charge") ? item.charge : 0;
+        var multiplicity = has(item, "multiplicity") ? item.multiplicity : 1;
+        return name + " [" + role + "] q" + charge + "/m" + multiplicity;
+      }).join("\n");
+    }
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
+  function renderBatchRoleSummary(ctx) {
+    if (!ctx || !ctx.originalSpec || ctx.originalSpec.workflow !== "BatchOptimize") return "";
+    var input = (ctx.pendingPreviewBody || {}).input || {};
+    var items = Array.isArray(input.items) ? input.items : [];
+    if (!items.length) return "";
+    var zh = typeof currentLang !== "undefined" && currentLang === "zh-CN";
+    var rows = items.map(function (item, index) {
+      item = item || {};
+      var name = item.name || item.candidate_id || item.item_id || ("#" + (index + 1));
+      var role = item.tag === "TS" ? "TS" : "INT";
+      var charge = has(item, "charge") ? item.charge : 0;
+      var multiplicity = has(item, "multiplicity") ? item.multiplicity : 1;
+      return '<div class="edit-banner-hint"><b>' + escapeHtml(name) +
+        '</b> · ' + escapeHtml(role) + ' · q' + escapeHtml(charge) +
+        '/m' + escapeHtml(multiplicity) + '</div>';
+    }).join("");
+    return '<section class="edit-batch-role-summary"><b>' +
+      (zh ? "本次提交的结构角色" : "Structure roles in this submission") +
+      '</b>' + rows + '</section>';
+  }
+
   function hideSummary() {
     var el = document.getElementById("edit-summary-overlay");
     if (el && el.parentNode) el.parentNode.removeChild(el);
@@ -1686,6 +2038,8 @@
   // 导出：Workbench 只保留入口绑定（计划 §8）。
   window.ACPJobEditor = {
     isActive: isActive,
+    currentStep: currentStep,
+    setStep: setEditStep,
     currentMode: currentMode,
     sourceJobId: sourceJobId,
     openJobEditor: openJobEditor,
@@ -1698,6 +2052,9 @@
     onPreviewStructureSelected: onPreviewStructureSelected,
     onJobResultLoaded: onJobResultLoaded,
     onParsedSourceApplied: onParsedSourceApplied,
+    onTaskStructureChanged: onTaskStructureChanged,
+    onTaskStructureRemoved: onTaskStructureRemoved,
+    onBatchItemChanged: onBatchItemChanged,
     copyOriginalToStructureInput: copyOriginalToStructureInput,
     updateEditModeTabs: updateEditModeTabs,
     refreshUi: refreshUi,

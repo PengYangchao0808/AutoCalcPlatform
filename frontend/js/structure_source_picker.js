@@ -1,6 +1,6 @@
 /**
  * ACP Structure Source Picker — reusable structure-source selection widget
- * @version 0.1.0
+ * @version 0.2.0
  *
  * Namespace: window.ACPSourcePicker
  *
@@ -27,7 +27,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.1.0";
+  var VERSION = "0.2.0";
   var PAGE_LIMIT = 50;
   var MAX_SELECTION = 200;
   var SEARCH_DEBOUNCE_MS = 300;
@@ -235,17 +235,36 @@
     var projectId = opts.projectId || null;
     var onChanged = typeof opts.onChanged === "function" ? opts.onChanged : null;
     var onLoadItem = typeof opts.onLoadItem === "function" ? opts.onLoadItem : null;
+    var onPreviewItem = typeof opts.onPreviewItem === "function" ? opts.onPreviewItem : null;
+    var onTrashItem = typeof opts.onTrashItem === "function" ? opts.onTrashItem : null;
+    var onRowMenu = typeof opts.onRowMenu === "function" ? opts.onRowMenu : null;
+    var onBatchTrash = typeof opts.onBatchTrash === "function" ? opts.onBatchTrash : null;
+    var onDataChanged = typeof opts.onDataChanged === "function" ? opts.onDataChanged : null;
+    // Optional submission-local state.  This is deliberately read-only: a
+    // picker can show an item as staged without changing source metadata.
+    var isItemLoaded = typeof opts.isItemLoaded === "function" ? opts.isItemLoaded : null;
     var onLoadSelection = typeof opts.onLoadSelection === "function" ? opts.onLoadSelection : null;
     var loadLabel = opts.loadLabel || _t("picker.load");
+    var hideLoadButton = !!opts.hideLoadButton;
+    var allowInlineManagement = !!opts.allowInlineManagement;
     var allowBatchTags = opts.allowBatchTags != null ? !!opts.allowBatchTags : mode === "multi";
     var virtualItems = Array.isArray(opts.virtualItems) ? opts.virtualItems.slice() : [];
     var density = opts.density === "editor" ? "editor" : "default";
     var toolbarLabel = opts.toolbarLabel || "";
+    var usageStatus = opts.usageStatus || "active";
+    // sourceGroup: "candidate" | "task_result" | null — optional server-side
+    // filter that maps to source_group= query param on /structure-sources and
+    // /structure-sources/facets.  When null, the param is omitted and the
+    // server returns all source kinds (backward-compatible with existing mounts).
+    var sourceGroup = (opts.sourceGroup === "candidate" || opts.sourceGroup === "task_result")
+      ? opts.sourceGroup : null;
 
     // State
     var legacyMode = false;
     var destroyed = false;
     var loading = false;
+    var fetchPending = false;
+    var fetchRevision = 0;
     var items = [];
     var total = 0;
     var nextCursor = null;
@@ -272,6 +291,9 @@
     // Selection (multi mode)
     var selectedUids = new Set();
     var selectedSnapshots = {};
+    // Preview focus is intentionally separate from multi-selection.  Clicking a
+    // row changes the inspector only; checking it changes the task/batch set.
+    var previewUid = "";
 
     // Search timer
     var searchTimer = null;
@@ -293,6 +315,7 @@
     var indexingEl = null;
     var selectionBarEl = null;
     var selectAllCheckbox = null;
+    var toolbarEl = null;
 
     // Dialog state
     var activeDialog = null;
@@ -305,6 +328,7 @@
       rootEl.className = "sp-root" + (density === "editor" ? " sp-density-editor" : "");
 
       var toolbarRow = density === "editor" ? _el("div", "sp-toolbar") : null;
+      toolbarEl = toolbarRow;
       if (toolbarRow && toolbarLabel) {
         var toolbarTitle = _el("span", "sp-toolbar-title");
         toolbarTitle.textContent = toolbarLabel;
@@ -318,10 +342,22 @@
       searchInput.placeholder = _t("picker.search_ph");
       searchInput.setAttribute("aria-label", _t("picker.search_ph"));
       searchRow.appendChild(searchInput);
+      var filterButton = _el("button", "sp-btn-sm sp-filter-button");
+      filterButton.type = "button";
+      filterButton.textContent = _t("picker.filter.button") || "筛选";
+      filterButton.setAttribute("aria-expanded", "false");
+      searchRow.appendChild(filterButton);
       (toolbarRow || rootEl).appendChild(searchRow);
 
       // Filter row
       var filterRow = _el("div", "sp-filter-row");
+      filterRow.classList.add("sp-filter-popover");
+      filterRow.style.display = "none";
+      filterButton.addEventListener("click", function () {
+        var open = filterRow.style.display !== "none";
+        filterRow.style.display = open ? "none" : "flex";
+        filterButton.setAttribute("aria-expanded", open ? "false" : "true");
+      });
 
       // Project select
       projectSelect = _el("select", "sp-filter-select sp-project-select");
@@ -397,7 +433,14 @@
         refreshButton.title = _t("picker.refresh");
         refreshButton.addEventListener("click", refresh);
         toolbarRow.appendChild(refreshButton);
-        rootEl.appendChild(toolbarRow);
+        if (opts.toolbarHost && density === "editor") {
+          rootEl.classList.add("sp-toolbar-detached");
+          toolbarRow.dataset.sourceGroup = sourceGroup || "";
+          opts.toolbarHost.classList.add("sp-density-editor");
+          opts.toolbarHost.appendChild(toolbarRow);
+        } else {
+          rootEl.appendChild(toolbarRow);
+        }
       } else {
         rootEl.insertBefore(filterRow, optRow);
       }
@@ -550,14 +593,23 @@
     /* ---- Fetch & render ---- */
 
     function _resetAndFetch() {
+      fetchRevision++;
       prevCursors = [];
       currentCursor = null;
       nextCursor = null;
-      _fetchPage();
+      _fetchPage(fetchRevision);
     }
 
-    async function _fetchPage() {
-      if (destroyed || loading) return;
+    async function _fetchPage(revision) {
+      if (destroyed) return;
+      if (revision == null) revision = fetchRevision;
+      if (loading) {
+        fetchPending = true;
+        if (currentAbort) {
+          try { currentAbort.abort(); } catch (e) {}
+        }
+        return;
+      }
       loading = true;
       _showLoading();
 
@@ -571,30 +623,35 @@
 
       try {
         if (legacyMode) {
-          await _fetchLegacy();
+          await _fetchLegacy(revision);
         } else {
-          await _fetchV2(currentAbort.signal);
+          await _fetchV2(currentAbort.signal, revision);
         }
       } catch (e) {
         if (destroyed) return;
+        if (revision !== fetchRevision) return;
         // Detect legacy fallback
         if (e && (e.status === 404 || e.status === 405) && !legacyMode) {
           legacyMode = true;
           _updateLegacyHint();
           try {
-            await _fetchLegacy();
+            await _fetchLegacy(revision);
           } catch (e2) {
-            _showError(e2);
+            if (revision === fetchRevision) _showError(e2);
           }
         } else {
           _showError(e);
         }
       } finally {
         loading = false;
+        if (fetchPending && !destroyed) {
+          fetchPending = false;
+          _fetchPage(fetchRevision);
+        }
       }
     }
 
-    async function _fetchV2(signal) {
+    async function _fetchV2(signal, revision) {
       var params = new URLSearchParams();
       if (filterQ) params.set("q", filterQ);
 
@@ -625,6 +682,9 @@
       params.set("sort", filterSort);
       params.set("group_by", filterGroupBy);
       params.set("limit", String(filterLimit));
+      params.set("usage_status", usageStatus);
+
+      if (sourceGroup) params.set("source_group", sourceGroup);
 
       // Cursor
       if (currentCursor) params.set("cursor", currentCursor);
@@ -633,7 +693,7 @@
       var path = "/structure-sources" + (qs ? "?" + qs : "");
 
       var body = await _apiV2(path, { signal: signal });
-      if (destroyed) return;
+      if (destroyed || revision !== fetchRevision) return;
 
       items = body.items || [];
       total = body.total || 0;
@@ -645,9 +705,10 @@
       _renderPagination();
       _renderIndexing();
       _renderSelectionBar();
+      if (onDataChanged) onDataChanged({ total: total, items: items.slice() });
     }
 
-    async function _fetchLegacy() {
+    async function _fetchLegacy(revision) {
       var params = new URLSearchParams();
       params.set("limit", "50");
       params.set("_t", String(Date.now()));
@@ -662,7 +723,7 @@
       }
 
       var body = await _apiV1("/structure-sources/recent?" + params.toString());
-      if (destroyed) return;
+      if (destroyed || revision !== fetchRevision) return;
 
       var sources = (body && body.sources) || [];
 
@@ -684,6 +745,16 @@
         });
       }
 
+      // The v1 compatibility endpoint cannot filter usage state server-side.
+      // It now includes the org-store status, so apply the same view filters
+      // here instead of showing active rows in the trash view (and vice versa).
+      sources = sources.filter(function (s) {
+        var status = s.usage_status || "active";
+        if (status !== usageStatus) return false;
+        if (sourceGroup === "candidate" && s.source_kind !== "saved_candidate") return false;
+        return !(sourceGroup === "task_result" && s.source_kind === "saved_candidate");
+      });
+
       // Map to v2-like shape
       items = sources.map(function (s) {
         return {
@@ -703,7 +774,7 @@
           workflow: s.workflow || "",
           project_id: s.project_id || "",
           project_name: "",
-          source_kind: "",
+          source_kind: s.source_kind || "",
           formula: s.formula || "",
           atom_count: s.atom_count || 0,
           charge: s.charge,
@@ -711,6 +782,7 @@
           has_3d: true,
           remote: !!s.remote,
           availability: "available",
+          usage_status: s.usage_status || "active",
           candidate_id: s.candidate_id || "",
           produced_at: s.available_at || s.completed_at || "",
           job_status: s.job_status || "",
@@ -725,6 +797,7 @@
       _renderList();
       _renderPagination();
       _renderIndexing();
+      if (onDataChanged) onDataChanged({ total: total, items: items.slice() });
       _renderSelectionBar();
     }
 
@@ -833,10 +906,11 @@
 
       var uid = item.source_uid;
       var name = item.resolved_name || item.default_name || "--";
-      var isAvailable = item.availability === "available";
+      var isAvailable = item.availability === "available" && item.usage_status === "active";
       var isPendingSync = item.availability === "pending_sync";
       var isPendingFetch = item.availability === "pending_fetch";
       var isUnavailable = item.availability === "unavailable";
+      var isCollection = item.input_kind === "collection" || /(?:trajectory|path_collection)/i.test(item.source_kind || "");
       var secondaryParts = [];
       if (item.candidate_id) secondaryParts.push(_esc(item.candidate_id));
       var jobName = item.job_resolved_name || item.job_name || "";
@@ -844,7 +918,7 @@
       if (item.produced_at) secondaryParts.push(_esc(_shortDateBrief(item.produced_at)));
       if (item.formula) secondaryParts.push(_esc(item.formula));
 
-      var html = '<div class="sp-row" data-uid="' + _esc(uid) + '">';
+      var html = '<div class="sp-row' + (uid === previewUid ? ' sp-row-previewing' : '') + '" data-uid="' + _esc(uid) + '">';
 
       // Main line
       html += '<div class="sp-row-main">';
@@ -864,7 +938,7 @@
 
       // Name
       html +=
-        '<span class="sp-row-name" title="' + _esc(name) + '">' + _esc(name) + "</span>";
+        '<span class="sp-row-name" tabindex="0" title="' + _esc(name) + '">' + _esc(name) + "</span>";
       if (density === "editor") {
         html += '<span class="sp-row-secondary">' + secondaryParts.join(" · ") + "</span>";
       }
@@ -875,6 +949,8 @@
       } else if (item.role === "INT") {
         html += '<span class="sp-badge sp-badge-int">INT</span>';
       }
+      if (isCollection) html += '<span class="sp-badge sp-badge-muted">' +
+        _esc(_t("picker.input.collection") || "轨迹集合") + "</span>";
 
       // Availability badge
       if (isPendingSync) {
@@ -910,7 +986,7 @@
 
       // Actions (single mode)
       if (mode === "single") {
-        var disabled = !isAvailable ? " disabled" : "";
+        var disabled = !isAvailable || isCollection ? " disabled" : "";
         var title = !isAvailable ? ' title="' + _esc(_t("picker.load_disabled_reason")) + '"' : "";
         html +=
           '<button type="button" class="sp-btn-sm sp-load-btn" data-action="load" data-uid="' +
@@ -924,7 +1000,7 @@
       }
 
       // Per-item actions (multi mode)
-      if (mode === "multi") {
+      if (mode === "multi" && allowInlineManagement) {
         html +=
           '<button type="button" class="sp-btn-sm sp-rename-btn" data-action="rename" data-uid="' +
           _esc(uid) +
@@ -967,28 +1043,47 @@
       var uid = item.source_uid;
       var name = item.resolved_name || item.default_name || "--";
       var jobName = item.job_resolved_name || item.job_name || "";
-      var sourceParts = [];
-      if (item.candidate_id) sourceParts.push(item.candidate_id);
-      if (jobName) sourceParts.push(jobName);
-      var sourceText = sourceParts.join(" · ") || "--";
-      var metaText = _shortDateBrief(item.produced_at) || item.formula || "--";
-      var isAvailable = item.availability === "available";
+      var candidateId = item.candidate_id || "--";
+      var isAvailable = item.availability === "available" && item.usage_status === "active";
       var role = item.role === "TS" || item.role === "INT" ? item.role : "--";
+      var isCollection = item.input_kind === "collection" || /(?:trajectory|path_collection)/i.test(item.source_kind || "");
+      var isSelectable = usageStatus === "trash" || (item.availability === "available" && !isCollection);
       var roleClass = item.role === "TS" ? " sp-badge-ts" : item.role === "INT" ? " sp-badge-int" : "";
-      var html = '<div class="sp-row" data-uid="' + _esc(uid) + '"><div class="sp-row-main">';
-      html += '<span class="sp-row-name" title="' + _esc(name) + '">' + _esc(name) + "</span>";
-      html += '<span class="sp-row-source" title="' + _esc(sourceText) + '">' + _esc(sourceText) + "</span>";
-      html += '<span class="sp-row-meta" title="' + _esc(metaText) + '">' + _esc(metaText) + "</span>";
+      var html = '<div class="sp-row' + (uid === previewUid ? ' sp-row-previewing' : '') + '" data-uid="' + _esc(uid) + '"><div class="sp-row-main">';
+      if (mode === "multi") {
+        html += '<input type="checkbox" class="sp-row-cb" data-uid="' + _esc(uid) + '"' +
+          (selectedUids.has(uid) ? " checked" : "") + (isSelectable ? "" : " disabled") +
+          ' aria-label="' + _esc(_t("picker.select_item", { name: name })) + '">';
+      }
+      html += '<span class="sp-row-copy"><span class="sp-row-name" tabindex="0" title="' + _esc(name) + '">' + _esc(name) + "</span>";
+      html += '<span class="sp-row-source" title="' + _esc(item.formula || "") + '">' + _esc(item.formula || "") + "</span></span>";
       html += '<span class="sp-row-role"><span class="sp-badge' + roleClass + '">' + _esc(role) + "</span></span>";
+      html += '<span class="sp-row-job" tabindex="0" title="' + _esc(jobName || "--") + '">' + _esc(jobName || "--") + "</span>";
+      html += '<span class="sp-row-candidate" tabindex="0" title="' + _esc(candidateId) + '">' + _esc(candidateId) + "</span>";
       html += '<span class="sp-row-action">';
+      if ((onRowMenu || onTrashItem) && item.usage_status === "active") {
+        html += '<button type="button" class="sp-btn-sm sp-trash-btn" data-action="trash" data-uid="' +
+          _esc(uid) + '" title="移入垃圾箱">⋯</button>';
+      }
+      if (onRowMenu && item.usage_status === "trash") {
+        html += '<button type="button" class="sp-btn-sm sp-trash-btn" data-action="trash" data-uid="' +
+          _esc(uid) + '" title="操作">⋯</button>';
+      }
       if (item.availability === "pending_sync") {
         html += '<button type="button" class="sp-btn-sm sp-retry-btn" data-action="retry" aria-label="' +
           _esc(_t("picker.retry")) + '">' + _esc(_t("picker.retry")) + "</button>";
+      } else if (mode === "multi" || hideLoadButton) {
+        // Hosts that route adding through a single external CTA (e.g. the wizard's
+        // 加入本次任务) suppress the row button; the loaded state stays visible.
+        if (isItemLoaded && isItemLoaded(item) && !(density === "editor" && opts.toolbarHost)) {
+          html += '<span class="sp-loaded-mark">' + _esc(_t("picker.loaded")) + "</span>";
+        }
       } else {
         var disabled = !isAvailable ? " disabled" : "";
         var title = !isAvailable ? ' title="' + _esc(_t("picker.load_disabled_reason")) + '"' : "";
+        var alreadyLoaded = !!(isItemLoaded && isItemLoaded(item));
         html += '<button type="button" class="sp-btn-sm sp-load-btn" data-action="load" data-uid="' +
-          _esc(uid) + '"' + disabled + title + ">" + _esc(loadLabel) + "</button>";
+          _esc(uid) + '"' + disabled + title + ">" + _esc(alreadyLoaded ? _t("picker.loaded") : loadLabel) + "</button>";
       }
       html += "</span></div></div>";
       return html;
@@ -1044,6 +1139,43 @@
           refresh();
         });
       });
+
+      listEl.querySelectorAll(".sp-trash-btn").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var item = _findItem(btn.getAttribute("data-uid"));
+          if (!item) return;
+          if (onRowMenu) {
+            onRowMenu(_snapshotItem(item), btn);
+          } else if (onTrashItem) {
+            onTrashItem(_snapshotItem(item));
+          }
+        });
+      });
+
+      if (onPreviewItem) {
+        listEl.querySelectorAll(".sp-row").forEach(function (row) {
+          row.addEventListener("keydown", function(e) {
+            if (e.key === "Enter" && !e.target.closest("button,input,select,a")) {
+              e.preventDefault();
+              e.target.click();
+            }
+          });
+          row.addEventListener("click", function (e) {
+            if (e.target.closest("button,input,select,a")) return;
+            var uid = row.getAttribute("data-uid");
+            var item = _findItem(uid);
+            if (item) {
+              var accepted = onPreviewItem(_snapshotItem(item));
+              if (accepted === false) return;
+              previewUid = uid;
+              listEl.querySelectorAll(".sp-row").forEach(function (candidateRow) {
+                candidateRow.classList.toggle("sp-row-previewing", candidateRow.getAttribute("data-uid") === previewUid);
+              });
+            }
+          });
+        });
+      }
     }
 
     /* ---- Selection model ---- */
@@ -1067,7 +1199,8 @@
     function _selectAllOnPage(checked) {
       items.forEach(function (item) {
         if (checked) {
-          _selectUid(item.source_uid);
+          var collection = item.input_kind === "collection" || /(?:trajectory|path_collection)/i.test(item.source_kind || "");
+          if (usageStatus === "trash" || (item.availability === "available" && !collection)) _selectUid(item.source_uid);
         } else {
           _deselectUid(item.source_uid);
         }
@@ -1112,9 +1245,20 @@
         charge: item.charge,
         multiplicity: item.multiplicity || 1,
         availability: item.availability || "",
+        availability_reason: item.availability_reason || item.error || "",
+        has_3d: item.has_3d !== false,
         candidate_id: item.candidate_id || "",
+        candidate_record_id: item.candidate_record_id || "",
+        version_id: item.version_id || "",
+        geometry_hash: item.geometry_hash || "",
+        usage_status: item.usage_status || "active",
+        status_reason: item.status_reason || "",
+        status_scope: item.status_scope || "",
+        status_revision: item.status_revision || 0,
+        usage_count: item.usage_count || 0,
         produced_at: item.produced_at || "",
         source_kind: item.source_kind || "",
+        input_kind: item.input_kind || "structure",
         remote: !!item.remote,
       };
     }
@@ -1215,6 +1359,12 @@
     function _renderSelectionBar() {
       if (!selectionBarEl || mode !== "multi") return;
 
+      if (usageStatus === "trash") {
+        selectionBarEl.style.display = "none";
+        selectionBarEl.innerHTML = "";
+        return;
+      }
+
       var count = selectedUids.size;
       if (count === 0) {
         selectionBarEl.style.display = "none";
@@ -1248,6 +1398,11 @@
           "</button>";
       }
 
+      if (onBatchTrash && usageStatus === "active") {
+        html += '<button type="button" class="sp-btn-sm sp-batch-btn sp-batch-trash" data-action="batch-trash">' +
+          _esc(_t("trash.row_menu.move_to_trash") || "移入垃圾箱") + "</button>";
+      }
+
       html +=
         '<button type="button" class="sp-btn-sm sp-batch-btn" data-action="batch-clear">' +
         _esc(_t("picker.batch.clear")) +
@@ -1278,6 +1433,8 @@
             _openBatchTagDialog("remove");
           } else if (action === "batch-load") {
             _handleBatchLoad();
+          } else if (action === "batch-trash") {
+            onBatchTrash(getSelection());
           }
         });
       });
@@ -1289,8 +1446,9 @@
       var item = _findItem(uid);
       if (!item) return;
       if (item.availability !== "available") return;
+      var snapshot = _snapshotItem(item);
       if (onLoadItem) {
-        onLoadItem(_snapshotItem(item));
+        onLoadItem(snapshot);
       }
     }
 
@@ -1941,6 +2099,8 @@
         }
         if (filterRole) params.set("role", filterRole);
 
+        if (sourceGroup) params.set("source_group", sourceGroup);
+
         var qs = params.toString();
         var body = await _apiV2(
           "/structure-sources/facets" + (qs ? "?" + qs : "")
@@ -2039,7 +2199,8 @@
     /* ---- Public API ---- */
 
     function refresh() {
-      _fetchPage();
+      fetchRevision++;
+      _fetchPage(fetchRevision);
       _loadFacets();
     }
 
@@ -2073,6 +2234,39 @@
       _notifyChanged();
     }
 
+    function setSelection(items, opts) {
+      if (!Array.isArray(items)) return;
+      var silent = !opts || opts.silent !== false;
+      selectedUids.clear();
+      selectedSnapshots = {};
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i];
+        var uid = typeof entry === "string" ? entry : (entry && entry.source_uid) || "";
+        if (!uid) continue;
+        if (selectedUids.size >= MAX_SELECTION) break;
+        selectedUids.add(uid);
+        // If the entry is already a snapshot object, store it directly.
+        if (entry && typeof entry === "object" && entry.source_uid) {
+          selectedSnapshots[uid] = entry;
+        } else {
+          // Attempt to resolve from current items / virtual items.
+          var resolved = _findItem(uid);
+          if (resolved) selectedSnapshots[uid] = _snapshotItem(resolved);
+        }
+      }
+      _renderList();
+      _renderSelectionBar();
+      if (!silent) _notifyChanged();
+    }
+
+    function getSelectedUids() {
+      return Array.from(selectedUids);
+    }
+
+    function getTotal() {
+      return total;
+    }
+
     function setVirtualItems(nextItems) {
       virtualItems = Array.isArray(nextItems) ? nextItems.slice() : [];
       _renderList();
@@ -2090,6 +2284,9 @@
       if (rootEl && rootEl.parentNode) {
         rootEl.parentNode.removeChild(rootEl);
       }
+      if (toolbarEl && toolbarEl.parentNode) {
+        toolbarEl.parentNode.removeChild(toolbarEl);
+      }
     }
 
     /* ---- Init ---- */
@@ -2102,6 +2299,42 @@
       _loadFacets();
     }
 
+    function setUsageStatus(value) {
+      usageStatus = value === "trash" ? "trash" : "active";
+      clearSelection();
+      _resetAndFetch();
+    }
+
+    function setFilters(filters) {
+      filters = filters || {};
+      var changed = false;
+      if (Object.prototype.hasOwnProperty.call(filters, "usageStatus")) {
+        var nextUsageStatus = filters.usageStatus === "trash" ? "trash" : "active";
+        if (usageStatus !== nextUsageStatus) {
+          usageStatus = nextUsageStatus;
+          clearSelection();
+          changed = true;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(filters, "sourceGroup")) {
+        var nextSourceGroup = (filters.sourceGroup === "candidate" || filters.sourceGroup === "task_result") ? filters.sourceGroup : null;
+        if (sourceGroup !== nextSourceGroup) {
+          sourceGroup = nextSourceGroup;
+          changed = true;
+        }
+      }
+      if (changed) {
+        _resetAndFetch();
+        _loadFacets();
+      }
+    }
+
+    function setSourceGroup(value) {
+      sourceGroup = (value === "candidate" || value === "task_result") ? value : null;
+      _resetAndFetch();
+      _loadFacets();
+    }
+
     _init();
 
     return {
@@ -2109,7 +2342,14 @@
       setProject: setProject,
       getSelection: getSelection,
       clearSelection: clearSelection,
+      setSelection: setSelection,
+      getSelectedUids: getSelectedUids,
+      getTotal: getTotal,
       setVirtualItems: setVirtualItems,
+      setUsageStatus: setUsageStatus,
+      setSourceGroup: setSourceGroup,
+      setFilters: setFilters,
+      render: _renderList,
       destroy: destroy,
     };
   }
