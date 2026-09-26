@@ -66,6 +66,8 @@ def _fake_irc_with_endpoints(
     backend: Any,
     directions: tuple[str, ...] = ("forward", "reverse"),
     output_dir: Path | None = None,
+    forward_points: int | None = None,
+    reverse_points: int | None = None,
 ) -> None:
     """Configure the fake backend to create IRC endpoint files and return them."""
     output_dir = output_dir or tmp_path / "irc_work"
@@ -100,22 +102,24 @@ def _fake_irc_with_endpoints(
     endpoints_dict = {d: info["path"] for d, info in endpoint_data.items()}
     final_geometries = {d: info["coordinates"] for d, info in endpoint_data.items()}
 
-    backend.set_result(
-        "irc",
-        QCResult(
-            success=True,
-            energy=-77.0,
-            coordinates=np.zeros((6, 3)),
-            symbols=symbols,
-            converged=True,
-            output_file=output_dir / "irc.out",
-            log_file=output_dir / "irc.log",
-            metadata={
-                "endpoints": {d: str(p) for d, p in endpoints_dict.items()},
-                "final_geometries": {d: coords.tolist() for d, coords in final_geometries.items()},
-            },
-        ),
+    response = QCResult(
+        success=True,
+        energy=-77.0,
+        coordinates=np.zeros((6, 3)),
+        symbols=symbols,
+        converged=True,
+        output_file=output_dir / "irc.out",
+        log_file=output_dir / "irc.log",
+        metadata={
+            "endpoints": {d: str(p) for d, p in endpoints_dict.items()},
+            "final_geometries": {d: coords.tolist() for d, coords in final_geometries.items()},
+        },
     )
+    if forward_points is not None:
+        setattr(response, "forward_points", forward_points)
+    if reverse_points is not None:
+        setattr(response, "reverse_points", reverse_points)
+    backend.set_result("irc", response)
 
 
 # ---------------------------------------------------------------------------
@@ -288,10 +292,13 @@ def test_irc_progress_does_not_expose_legacy_header_counts(
 ) -> None:
     """Legacy forward_points fields are not reliable path-point evidence."""
     ts = _ts_artifact(tmp_path)
-    response = QCResult(success=True, coordinates=np.zeros((6, 3)), symbols=ts.elements)
-    setattr(response, "forward_points", 12)
-    setattr(response, "reverse_points", 18)
-    fake_backend.set_result("irc", response)
+    _fake_irc_with_endpoints(
+        tmp_path,
+        fake_backend,
+        output_dir=tmp_path / "irc_work",
+        forward_points=12,
+        reverse_points=18,
+    )
     progress_dir = tmp_path / "progress"
     reporter = ProgressReporter(
         progress_dir,
@@ -311,6 +318,39 @@ def test_irc_progress_does_not_expose_legacy_header_counts(
     assert result.status == "completed"
     state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
     assert "live_metrics" not in state
+
+
+def test_irc_without_endpoints_is_reported_as_failure(
+    tmp_path: Path,
+    fake_backend: Any,
+) -> None:
+    """Backend success with zero endpoint products must not publish completed."""
+    ts = _ts_artifact(tmp_path)
+    fake_backend.set_result(
+        "irc",
+        QCResult(success=True, coordinates=np.zeros((6, 3)), symbols=ts.elements),
+    )
+    progress_dir = tmp_path / "progress"
+    reporter = ProgressReporter(
+        progress_dir,
+        stages=["preparing", "irc_forward", "irc_backward", "validating"],
+        min_interval=0.0,
+    )
+
+    result = primitive_run_irc(
+        ts,
+        resources={
+            "output_dir": str(tmp_path / "irc_work"),
+            "result_dir": str(tmp_path / "RESULT"),
+        },
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "failed"
+    assert any("no endpoint" in error for error in result.errors)
+    state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert state["stages"]["validating"]["status"] == "failed"
 
 
 def test_irc_progress_marks_backend_failure(

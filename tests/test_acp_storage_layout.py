@@ -36,6 +36,12 @@ class TestSanitizeTaskDirName:
             assert ch not in sanitize_task_dir_name(f"mol{ch}x", f"ta{ch}sk")
         assert sanitize_task_dir_name("a/b", "c:d") == "a_b_c_d"
 
+    def test_shell_metacharacters_and_parentheses_replaced(self) -> None:
+        name = sanitize_task_dir_name("frame_1 (TS, opt_freq_sp_thermo)", "irc")
+        assert name == "frame_1_TS_opt_freq_sp_thermo_irc"
+        for ch in "()[]{};&$`'!#~,":
+            assert ch not in sanitize_task_dir_name(f"mol{ch}x", f"ta{ch}sk")
+
     def test_empty_remark_omitted(self) -> None:
         assert sanitize_task_dir_name("ethanol", "opt") == "ethanol_opt"
         assert sanitize_task_dir_name("ethanol", "opt", "   ") == "ethanol_opt"

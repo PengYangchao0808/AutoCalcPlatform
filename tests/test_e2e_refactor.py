@@ -158,6 +158,10 @@ def test_e2e_full_chain(
         elements=["H", "H"],
         role=StructureRole.TRANSITION_STATE,
     )
+    irc_orca_dir = irc_output / "WORK" / "07_PATH" / "ORCA"
+    irc_orca_dir.mkdir(parents=True, exist_ok=True)
+    (irc_orca_dir / "irc_f.xyz").write_text(_TS_XYZ, encoding="utf-8")
+    (irc_orca_dir / "irc_r.xyz").write_text(_TS_XYZ, encoding="utf-8")
     irc_result = run_irc_workflow(artifact, output_dir=irc_output)
 
     assert irc_result.status == "completed"

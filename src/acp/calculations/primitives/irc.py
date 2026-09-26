@@ -195,6 +195,13 @@ def run_irc(
 
         # --- Parse endpoint geometries ---
         endpoints = _discover_endpoints(raw_result, target_dir, inputs)
+        if success and not endpoints:
+            success = False
+            message = "IRC produced no endpoint geometries"
+            errors.append(message)
+            if progress_reporter is not None and active_stage is not None:
+                progress_reporter.fail_stage(active_stage, message)
+                active_stage = None
 
         # ORCAInterface.forward_points/reverse_points currently count direction
         # header occurrences, not validated IRC iterations. Until a parser is

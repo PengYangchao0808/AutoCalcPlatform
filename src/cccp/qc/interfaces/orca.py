@@ -1649,6 +1649,11 @@ class ORCAInterface(QCInterfaceBase):
         timeout = to_val.get("default_seconds", 864000) if isinstance(to_val, dict) else 864000
         executable = self._require_executable()
 
+        def _orca_fatal_marker(text: str) -> bool:
+            """Detect fatal ORCA termination that still returned exit code 0."""
+            lowered = text.lower()
+            return "error termination" in lowered or "aborting the run" in lowered
+
         try:
             env = orca_runtime_env(
                 self._orca_ld_library_path,
@@ -1674,7 +1679,9 @@ class ORCAInterface(QCInterfaceBase):
                     if result.stderr:
                         handle.write("\nSTDERR:\n")
                         handle.write(result.stderr)
-                return result.returncode == 0
+                if result.returncode != 0:
+                    return False
+                return not _orca_fatal_marker(f"{result.stdout or ''}\n{result.stderr or ''}")
 
             process = subprocess.Popen(
                 [executable, str(input_file)],
@@ -1737,7 +1744,16 @@ class ORCAInterface(QCInterfaceBase):
                 stdout_thread.join(timeout=2)
                 stderr_thread.join(timeout=2)
 
-            return return_code == 0
+            if return_code != 0:
+                return False
+            try:
+                captured_text = output_file.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                captured_text = ""
+            if _orca_fatal_marker(captured_text):
+                logger.error("ORCA reported a fatal error despite exit code 0: %s", input_file)
+                return False
+            return True
 
         except subprocess.TimeoutExpired:
             logger.error(f"ORCA calculation timed out: {input_file}")
@@ -3269,6 +3285,19 @@ class ORCAInterface(QCInterfaceBase):
             endpoint_coords = _read_endpoint_geometry(endpoint_file, symbols)
             if endpoint_coords is not None:
                 final_geometries[endpoint_direction] = endpoint_coords
+
+        if not endpoints and forward_points == 0 and reverse_points == 0:
+            return IrcResult(
+                success=False,
+                error_message=(
+                    "ORCA IRC produced no endpoints or path points "
+                    "(the run likely aborted before the IRC stage)"
+                ),
+                output_file=input_file,
+                log_file=output_file,
+                trajectory_files=discover_irc_trajectory_files(output_dir, stem=output_name)
+                or None,
+            )
 
         return IrcResult(
             success=True,

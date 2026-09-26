@@ -26,7 +26,11 @@ __all__ = [
 
 TASK_DIR_NAME_MAX_LEN = 100
 
-_FORBIDDEN_CHARS = re.compile(r'[/\\:*?"<>|]')
+# Path separators + Windows-illegal chars + shell metacharacters.  ORCA's
+# startup helper interpolates the input path into an unquoted shell command,
+# so a directory like ``frame_1_(TS,_opt_freq_sp_thermo)_irc`` aborts with
+# ``sh: Syntax error: "(" unexpected`` (incident 2026-09-26).
+_FORBIDDEN_CHARS = re.compile(r"""[/\\:*?"<>|()\[\]{};&$`'!#~,]""")
 _WHITESPACE = re.compile(r"\s+")
 _REPEAT_UNDERSCORE = re.compile(r"_+")
 
