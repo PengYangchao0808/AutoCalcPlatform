@@ -535,6 +535,12 @@ def batchoptimize_method_flags(
 
     if "batch_roles" in method:
         flags += ["--batch-roles-json", _json.dumps(method["batch_roles"], separators=(",", ":"))]
+        batch_level = (method.get("levels") or {}).get("batch", {})
+        if isinstance(batch_level, Mapping) and batch_level.get("electronic_state"):
+            flags += [
+                "--electronic-state-json",
+                _json.dumps(batch_level["electronic_state"], separators=(",", ":")),
+            ]
         return flags
 
     for key, flag in _BATCHOPTIMIZE_SCALAR_FLAGS.items():
@@ -560,6 +566,13 @@ def batchoptimize_method_flags(
     orbital_inherit = method.get("scf_orbital_inherit")
     if orbital_inherit is False:
         flags += ["--no-scf-orbital-inherit"]
+
+    batch_level = (method.get("levels") or {}).get("batch", {})
+    if isinstance(batch_level, Mapping) and batch_level.get("electronic_state"):
+        flags += [
+            "--electronic-state-json",
+            _json.dumps(batch_level["electronic_state"], separators=(",", ":")),
+        ]
 
     return flags
 

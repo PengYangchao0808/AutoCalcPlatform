@@ -1436,6 +1436,10 @@ class JobRunner:
                 cmd += _electronic_state_cli_flags(casscf_level["electronic_state"], work_dir)
         elif wf == "irc":
             cmd += ["--input", str(source), "--output", cli_work_dir]
+            provenance = inp.get("ts_source")
+            if not isinstance(provenance, dict) or provenance.get("schema") != "irc_ts_source_v1":
+                raise ValueError("IRC requires verified TS source provenance")
+            cmd += ["--ts-provenance-json", json.dumps(provenance, sort_keys=True)]
             if spec.name:
                 cmd += ["--name", spec.name]
             input_role = inp.get("input_role")
@@ -1462,6 +1466,7 @@ class JobRunner:
             irc_basis = method.get("basis") or irc_level.get("basis")
             if irc_basis:
                 cmd += ["--basis", str(irc_basis)]
+            cmd += ["--charge", str(inp["charge"]), "--multiplicity", str(inp["multiplicity"])]
             maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
             if maxpoints is not None:
                 cmd += ["--maxpoints", str(maxpoints)]

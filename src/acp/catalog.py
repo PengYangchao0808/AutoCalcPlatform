@@ -2558,7 +2558,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "label_zh": "内禀反应坐标",
                 "required": True,
                 "allowed_engines": ["orca"],
-                "fields": ["method", "basis", "maxpoints", "step", "electronic_state"],
+                "fields": ["maxpoints", "step"],
             }
         ],
         "stages": {"mode": "static", "static": ["irc"]},
@@ -2567,12 +2567,10 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "profile_id": "default",
                 "label": "Default IRC",
                 "label_zh": "标准 IRC",
-                "summary": "r2SCAN-3c IRC in both directions",
+                "summary": "IRC at the verified source TS calculation level",
                 "levels": {
                     "irc": {
                         "engine": "orca",
-                        "method": "r2SCAN-3c",
-                        "basis": "",
                         "maxpoints": 100,
                         "step": 0.1,
                     }

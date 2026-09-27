@@ -167,7 +167,10 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         ),
     )
     p.set_defaults(workflow="irc")
-    p.add_argument("--input", "-i", required=True, help="Transition-state XYZ input")
+    p.add_argument("--input", "-i", required=True, help="Verified transition-state XYZ snapshot")
+    proof = p.add_mutually_exclusive_group(required=True)
+    proof.add_argument("--ts-provenance", help="Verified upstream TS result provenance file")
+    proof.add_argument("--ts-provenance-json", help="Scheduler supplied TS provenance JSON")
     p.add_argument("--input-role", choices=["transition_state"], help="Explicit input role")
     p.add_argument(
         "--direction",
@@ -176,12 +179,12 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         help="IRC direction (default: both)",
     )
     p.add_argument("--output", "-o", default="./irc_output", help="Output directory")
-    p.add_argument("--method", default="r2SCAN-3c", help="IRC method (default: r2SCAN-3c)")
+    p.add_argument("--method", default="", help="Inherited TS method (scheduler supplied)")
     p.add_argument("--basis", default="", help="Basis set (default: empty)")
     p.add_argument("--maxpoints", "--max-points", dest="maxpoints", type=int, default=100)
     p.add_argument("--step", type=float, default=0.1, help="IRC step size (default: 0.1)")
-    p.add_argument("--charge", type=int, default=0)
-    p.add_argument("--multiplicity", type=int, default=1)
+    p.add_argument("--charge", type=int, default=None)
+    p.add_argument("--multiplicity", type=int, default=None)
     p.add_argument("--name", type=str, help="Task name")
     p.add_argument("--nproc", type=int, help="Number of CPU cores")
     p.add_argument("--mem", type=str, help="Memory limit")
@@ -734,6 +737,12 @@ Examples:
         ),
     )
     batch.add_argument("--select", help="Comma-separated item or candidate ids")
+    batch.add_argument(
+        "--electronic-state-json",
+        help="Job-level electronic-state module as JSON (used by the scheduler)",
+    )
+    batch.add_argument("--spin-preset", help="Built-in electronic-state preset id")
+    batch.add_argument("--spin-config", help="Electronic-state module YAML/JSON file")
     batch.add_argument(
         "--method",
         "--optimization-method",
@@ -1499,6 +1508,19 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     else:
         source = args.items_file or args.from_artifact
 
+    electronic_state = None
+    if args.electronic_state_json:
+        try:
+            electronic_state = json.loads(args.electronic_state_json)
+        except json.JSONDecodeError as exc:
+            logger.error("Invalid --electronic-state-json: %s", exc)
+            return 2
+        if not isinstance(electronic_state, dict):
+            logger.error("--electronic-state-json must be a JSON object")
+            return 2
+    else:
+        electronic_state = _resolve_spin_flags(args.spin_preset, args.spin_config)
+
     batch_roles_json = getattr(args, "batch_roles_json", None)
     if batch_roles_json is not None:
         try:
@@ -1587,6 +1609,7 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             select=_parse_select(args.select),
             methods=BatchMethodOptions.from_method_dict(method_kwargs),
+            electronic_state=electronic_state,
             layout_mode=args.layout_mode,
             progress_reporter=reporter,
         )
@@ -2771,6 +2794,8 @@ def _handle_scan(args: argparse.Namespace) -> int:
 
 def _handle_irc(args: argparse.Namespace) -> int:
     """Execute an independent IRC request from one transition-state artifact."""
+    import hashlib
+
     from acp.calculations.contracts import StructureArtifact
     from acp.calculations.progress import ProgressReporter
     from acp.workflows.irc import run_irc_workflow
@@ -2785,19 +2810,37 @@ def _handle_irc(args: argparse.Namespace) -> int:
     stages.append("validating")
     reporter = ProgressReporter(Path(args.output), job_name="irc", stages=stages)
     try:
+        proof_text = args.ts_provenance_json or Path(args.ts_provenance).read_text(encoding="utf-8")
+        proof = json.loads(proof_text)
+        if not isinstance(proof, dict) or proof.get("schema") != "irc_ts_source_v1":
+            raise ValueError("IRC requires verified TS source provenance")
+        xyz_hash = hashlib.sha256(Path(args.input).read_bytes()).hexdigest()
+        if xyz_hash != proof.get("geometry_sha256"):
+            raise ValueError("IRC TS geometry differs from its verified source")
+        method = str(proof.get("method") or "")
+        basis = str(proof.get("basis") or "")
+        charge = int(proof["charge"])
+        multiplicity = int(proof["multiplicity"])
+        if not method or (args.method and args.method != method) or (args.basis and args.basis != basis):
+            raise ValueError("IRC method and basis must match the verified TS source")
+        if args.charge is not None and args.charge != charge:
+            raise ValueError("IRC charge must match the verified TS source")
+        if args.multiplicity is not None and args.multiplicity != multiplicity:
+            raise ValueError("IRC multiplicity must match the verified TS source")
         result = run_irc_workflow(
             input_artifact=StructureArtifact(path=Path(args.input), source="cli"),
             directions=directions,
             output_dir=Path(args.output),
             config=_build_config(args),
-            method=args.method,
-            basis=args.basis,
+            method=method,
+            basis=basis,
             maxpoints=args.maxpoints,
             step=args.step,
             input_role=args.input_role,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
+            charge=charge,
+            multiplicity=multiplicity,
             progress_reporter=reporter,
+            source_provenance=proof,
         )
     except ValueError as exc:
         logger.error("IRC input error: %s", exc)
