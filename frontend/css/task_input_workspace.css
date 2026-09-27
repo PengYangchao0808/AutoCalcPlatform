@@ -161,6 +161,184 @@
   min-height: 0;
 }
 
+/* The final wizard step is a full-width review page, not a structure inspector. */
+#job-modal[data-create-step="3"] .tiw-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+#job-modal[data-create-step="3"] .tiw-left {
+  border-right: 0;
+}
+#job-modal[data-create-step="3"] .tiw-right {
+  display: none;
+}
+#job-modal[data-create-step="3"] .tiw-left > .create-review {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: clamp(16px, 2.2vw, 28px);
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+#job-modal .create-review h3 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  letter-spacing: .01em;
+}
+#job-modal .create-review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+#job-modal .create-review-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+#job-modal .create-review-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid rgba(62, 194, 123, .28);
+  border-radius: 999px;
+  background: rgba(62, 194, 123, .09);
+  color: #75d5a1;
+  font-size: 12px;
+  font-weight: 600;
+}
+#job-modal .create-review-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(62, 194, 123, .12);
+}
+#job-modal .create-review-status.warn {
+  border-color: rgba(246, 177, 74, .3);
+  background: rgba(246, 177, 74, .09);
+  color: #f2bd69;
+}
+#job-modal .create-review-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+#job-modal .create-review-stat {
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+}
+#job-modal .create-review-stat-label {
+  margin-bottom: 5px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+#job-modal .create-review-stat-value {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#job-modal .create-review-stat-meta {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+#job-modal .create-review-section {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: rgba(8, 14, 22, .34);
+}
+#job-modal .create-review-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+#job-modal .create-review-section-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+#job-modal .create-review-section-note {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+#job-modal .create-review-table-wrap {
+  max-height: min(38vh, 330px);
+  overflow: auto;
+}
+#job-modal .create-review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+#job-modal .create-review-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 9px 13px;
+  background: var(--bg-panel);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+#job-modal .create-review-table td {
+  padding: 9px 13px;
+  border-top: 1px solid rgba(255,255,255,.055);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+#job-modal .create-review-table tbody tr:hover { background: rgba(255,255,255,.025); }
+#job-modal .create-review-index { width: 44px; color: var(--text-tertiary) !important; font-variant-numeric: tabular-nums; }
+#job-modal .create-review-structure { min-width: 160px; color: var(--text-primary) !important; font-weight: 600; }
+#job-modal .create-review-source { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#job-modal .create-review-role,
+#job-modal .create-review-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+#job-modal .create-review-role.ts { border-color: rgba(183, 143, 255, .28); background: rgba(183,143,255,.09); color: #c6a8ff; }
+#job-modal .create-review-role.int { border-color: rgba(246, 177, 74, .28); background: rgba(246,177,74,.08); color: #f2bd69; }
+#job-modal .create-review-state.ready { border-color: rgba(62,194,123,.22); background: rgba(62,194,123,.07); color: #75d5a1; }
+#job-modal .create-review-state.warn { border-color: rgba(246,177,74,.25); background: rgba(246,177,74,.07); color: #f2bd69; }
+#job-modal .create-review-state.failed { border-color: rgba(239,91,91,.28); background: rgba(239,91,91,.08); color: #ff9292; }
+#job-modal .create-review-empty { padding: 22px; color: var(--text-tertiary); text-align: center; }
+@media (max-width: 900px) {
+  #job-modal .create-review-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #job-modal .create-review-table-wrap { max-height: 42vh; }
+}
+@media (max-width: 600px) {
+  #job-modal[data-create-step="3"] .tiw-grid { height: min(720px, calc(90dvh - 190px)); }
+  #job-modal[data-create-step="3"] .tiw-left > .create-review { padding: 14px 12px; }
+  #job-modal .create-review-heading { flex-direction: column; align-items: flex-start; }
+  #job-modal .create-review-stats { gap: 8px; }
+  #job-modal .create-review-stat { padding: 10px 11px; }
+  #job-modal .create-review-table { min-width: 600px; }
+}
+
 /* Info panel: replaces bare candidate-details-host, fills remaining right column */
 .tiw-right > .tiw-info-panel {
   flex: 0 1 auto;
@@ -406,7 +584,20 @@
   display: flex;
   align-items: center;
   gap: var(--tiw-spacing-xs);
-  min-width: max-content;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+#job-modal .tiw-source-toolbar #input-panel-task {
+  flex:1 1 auto;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  border:0;
+  background:transparent;
+}
+#job-modal .tiw-source-toolbar #input-panel-task .library-filter-tabs {
+  min-width:0;
+  overflow-x:auto;
 }
 #job-modal .tiw-source-toolbar .input-mode-tabs {
   gap: var(--tiw-spacing-xs);
@@ -988,6 +1179,27 @@
 #job-modal .library-filter-tabs { padding:2px; border:1px solid var(--tiw-border); border-radius:8px; }
 #job-modal .library-filter { border-radius:6px; }
 #job-modal .structure-library-filters { padding:8px 16px; }
+#job-modal .library-draft-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  min-width:0;
+  margin-left:auto;
+}
+#job-modal .library-draft-actions #wizard-draft-status {
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#job-modal .structure-library-filters #wizard-drafts-open {
+  flex:0 0 auto;
+  height:28px;
+  min-height:28px;
+  padding:0 10px;
+  border-radius:8px;
+  font-size:12px;
+  line-height:1;
+}
 #job-modal .tiw-left .sp-root { padding:0; gap:0; }
 #job-modal .sp-row { margin:0; padding:0; }
 #job-modal .sp-pagination { padding:8px 16px; gap:8px; flex-wrap:wrap; }

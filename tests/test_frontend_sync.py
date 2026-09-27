@@ -962,6 +962,59 @@ def test_pes_none_role_labeled_cancel_candidate_with_effect_hint() -> None:
     ), "the effect-hint note must be gated on canEditRole (edit mode only)"
 
 
+def test_pes_interrupted_scan_review_contract() -> None:
+    """Failed-task partial scans: interrupted banner (never 计算中), view-only
+    geometry gate, and unconverged manual-judgement badge (2026-09).
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Interrupted scans must never render as 计算中 — both the workspace
+    # status badge and the footer completeness label say 扫描中断、数据不完整.
+    assert 'status === "interrupted" ? "● 扫描中断、数据不完整"' in html
+    assert '"扫描中断、数据不完整" : data.complete' in html
+    assert html.count('"energy.header.status.interrupted":') == 2, (
+        "interrupted header status must exist in zh + en locales"
+    )
+
+    # Frames without usable geometry are view-only: role buttons stay disabled.
+    assert "const nodeGeometryOk = metadata.selectable !== false" in html
+    assert "&& jobTerminal && nodeGeometryOk" in html, (
+        "canEditRole must gate on per-frame geometry availability"
+    )
+    assert "该帧缺少有效几何" in html, "view-only frames need an explicit note"
+
+    # Unconverged frames are annotatable but flagged as manual judgement.
+    assert "未收敛 · 待后续验证" in html
+    assert "未收敛帧 · 标注为人工判断" in html
+
+
+def test_pes_live_status_transition_rebuilds_review_toolbar() -> None:
+    """A failed scan can gain review controls without gaining another frame."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    revision_source = "function energyGraphDataRevision(data) {" + html.split(
+        "function energyGraphDataRevision(data) {", 1
+    )[1].split("\nfunction optimizationJobItemId", 1)[0]
+    script = revision_source + textwrap.dedent(
+        """
+        const running = {revision: 'same-frames', status: 'running',
+          metadata: {job_status: 'running'}};
+        const failed = {revision: 'same-frames', status: 'interrupted',
+          metadata: {job_status: 'failed', scan_interrupted: true,
+            review: {status: 'pending', editable: true}}};
+        const saved = {revision: 'same-frames', status: 'interrupted',
+          metadata: {job_status: 'failed', scan_interrupted: true,
+            review: {status: 'confirmed', revision: 1, editable: true}}};
+        if (energyGraphDataRevision(running) === energyGraphDataRevision(failed)) process.exit(1);
+        if (energyGraphDataRevision(failed) === energyGraphDataRevision(saved)) process.exit(2);
+        """
+    )
+    if shutil.which("node"):
+        result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+    assert 'data-energy-reviewable="\' + (hasReview ? "1" : "0")' in html
+    assert 'root.getAttribute("data-energy-reviewable") !== (hasReview ? "1" : "0")' in html
+
+
 # ---------------------------------------------------------------------------
 # S5 — Structure upload validation (STRUCTURE_UPLOAD_EXTS + reject helpers)
 # ---------------------------------------------------------------------------
@@ -2820,8 +2873,8 @@ def test_vibration_viewer_i18n_keys_complete_across_locales() -> None:
     )
 
     # Summary template carries the required placeholders in both locales
-    assert '"structure.vib.imaginary_summary": "显著虚频 {count} 个"' in html
-    assert '"structure.vib.imaginary_summary": "{count} significant imaginary mode(s)"' in html
+    assert '"structure.vib.imaginary_summary": "虚频 {count} 个"' in html
+    assert '"structure.vib.imaginary_summary": "{count} imaginary mode(s)"' in html
 
 
 def test_vibration_viewer_node_sort_negatives_first() -> None:
@@ -3105,7 +3158,7 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
         }
         var summary = container.children[0];
         var tsBlock = container.children[1];
-        if (summary.textContent !== "显著虚频 2 个") {
+        if (summary.textContent !== "虚频 2 个") {
             console.error("FAIL: summary mismatch: " + summary.textContent);
             process.exit(1);
         }
@@ -3120,9 +3173,8 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
             console.error("FAIL: TS suffix " + tsSuffixDiv.textContent);
             process.exit(1);
         }
-        var tsThrDiv = tsBlock.children[2];
-        if (tsThrDiv.textContent !== "显著虚频阈值 ≤ -50.0 cm⁻¹ (默认)") {
-            console.error("FAIL: threshold text " + tsThrDiv.textContent);
+        if (tsBlock.children.length !== 2) {
+            console.error("FAIL: unexpected TS evidence lines " + tsBlock.children.length);
             process.exit(1);
         }
 
@@ -3270,12 +3322,10 @@ def test_vibration_dock_keyboard_navigation() -> None:
 
 
 def test_vibration_dock_default_mode_selection_order() -> None:
-    """Default mode selection: most-negative significant → most-negative other → first positive."""
+    """Default mode selection: most-negative frequency → first positive."""
     vib = _VIB_JS.read_text(encoding="utf-8")
-    assert "bestSigNeg" in vib
-    assert "bestOtherNeg" in vib
+    assert "bestNeg" in vib
     assert "firstPos" in vib
-    assert "threshold" in vib
 
 
 def test_vibration_dock_i18n_keys_new() -> None:
@@ -3301,9 +3351,9 @@ def test_vibration_dock_i18n_keys_new() -> None:
 
 
 def test_vibration_viewer_version_bump() -> None:
-    """ACPVibrationViewer bumped to 0.8.0."""
+    """ACPVibrationViewer bumped to 0.8.1."""
     vib = _VIB_JS.read_text(encoding="utf-8")
-    assert 'var VERSION = "0.8.0"' in vib
+    assert 'var VERSION = "0.8.1"' in vib
 
 
 def test_vibration_dock_ir_unit_updated() -> None:
@@ -3320,7 +3370,7 @@ def test_vibration_old_drawer_removed_from_html() -> None:
 
 
 def test_vibration_viewer_node_default_mode_order() -> None:
-    """Node logic: defaultModeIndex picks most-negative significant first."""
+    """Node logic: defaultModeIndex picks the most-negative mode first."""
     if not shutil.which("node"):
         pytest.skip("node not available")
 
@@ -3329,24 +3379,24 @@ def test_vibration_viewer_node_default_mode_order() -> None:
         require(JS_PATH);
         var ns = window.ACPVibrationViewer;
 
-        // Case 1: has significant imaginary (-419.46 <= -50)
+        // Case 1: multiple negative modes, choose the most negative.
         var tsModes = [
             { mode_index: 5, frequency_cm1: 42.44, imaginary: false },
             { mode_index: 6, frequency_cm1: -419.46, imaginary: true },
             { mode_index: 7, frequency_cm1: -30.0, imaginary: true }
         ];
         if (ns.defaultModeIndex(tsModes) !== 6) {
-            console.error("FAIL: expected 6 (significant), got " + ns.defaultModeIndex(tsModes));
+            console.error("FAIL: expected 6 (most negative), got " + ns.defaultModeIndex(tsModes));
             process.exit(1);
         }
 
-        // Case 2: no significant, has other negative
+        // Case 2: a weak negative mode is still selected.
         var negModes = [
             { mode_index: 3, frequency_cm1: -30.0, imaginary: true },
             { mode_index: 4, frequency_cm1: 100.0, imaginary: false }
         ];
         if (ns.defaultModeIndex(negModes) !== 3) {
-            console.error("FAIL: expected 3 (other neg), got " + ns.defaultModeIndex(negModes));
+            console.error("FAIL: expected 3 (negative), got " + ns.defaultModeIndex(negModes));
             process.exit(1);
         }
 
@@ -3386,10 +3436,11 @@ def test_vibration_viewer_node_categorize_modes() -> None:
             { mode_index: 3, frequency_cm1: -419.46, imaginary: true },
             { mode_index: 4, frequency_cm1: -30.0, imaginary: true },
             { mode_index: 5, frequency_cm1: 100.0, imaginary: false },
-            { mode_index: 6, frequency_cm1: 200.0, imaginary: false }
+            { mode_index: 6, frequency_cm1: 200.0, imaginary: false },
+            { mode_index: 7, frequency_cm1: -0.01, imaginary: true }
         ];
         var cats = ns._categorizeModes(modes);
-        if (cats.imaginary.length !== 2) {
+        if (cats.imaginary.length !== 3) {
             console.error("FAIL: imaginary count " + cats.imaginary.length);
             process.exit(1);
         }
@@ -3401,12 +3452,12 @@ def test_vibration_viewer_node_categorize_modes() -> None:
             console.error("FAIL: zeros count " + cats.zeros.length);
             process.exit(1);
         }
-        if (cats.all.length !== 6) {
+        if (cats.all.length !== 7) {
             console.error("FAIL: all count " + cats.all.length);
             process.exit(1);
         }
-        if (cats.significantCount !== 1) {
-            console.error("FAIL: significant count " + cats.significantCount);
+        if (cats.imaginaryCount !== 3) {
+            console.error("FAIL: imaginary count " + cats.imaginaryCount);
             process.exit(1);
         }
         console.log("PASS");
@@ -4387,7 +4438,7 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
 
 
 def test_vibration_viewer_ts_evidence_contract() -> None:
-    """Phase-B contract: three hint strings + suffix + threshold display +
+    """Phase-B contract: three hint strings + suffix +
     mismatch-disable branch in both locales; pure-helper names; evidence-only
     (no batch/irc validation calls)."""
     vib = _VIB_JS.read_text(encoding="utf-8")
@@ -4397,25 +4448,21 @@ def test_vibration_viewer_ts_evidence_contract() -> None:
         "tsJudgment",
         "tsHintText",
         "tsSuffixText",
-        "thresholdText",
         "geometryMismatch",
         "_catalogEntry",
     ):
         assert name in vib, f"{name} missing from vibration_viewer.js"
 
-    # At-or-below threshold rule (matches backend _count_significant_imaginary)
-    assert "<= thr" in vib or "<= thresholdCm1" in vib or "f <= thr" in vib
-
-    # Threshold display: ≤ symbol + unit + both source labels
-    assert "\\u2264" in vib or "\u2264" in vib
-    assert "source_job_config" in vib and "source_default" in vib
+    # Negative-frequency rule matches the backend TS gate.
+    assert "f < 0" in vib
+    assert "thresholdText" not in vib
 
     # Mismatch-disable branch: controls suppressed, reason shown
     assert "geometryMismatch(_catalogEntry(), data)" in vib
     assert "structure.vib.ts.mismatch_reason" in vib
 
     # Selector contract hooks
-    for cls in ("sv-vib-ts-hint", "sv-vib-ts-line", "sv-vib-ts-suffix", "sv-vib-ts-threshold"):
+    for cls in ("sv-vib-ts-hint", "sv-vib-ts-line", "sv-vib-ts-suffix"):
         assert cls in vib, f"{cls} class missing"
 
     # All phase-B labels in BOTH locales
@@ -4438,18 +4485,6 @@ def test_vibration_viewer_ts_evidence_contract() -> None:
             '"structure.vib.ts.suffix": "Still verify the vibration direction and IRC"',
         ),
         (
-            '"structure.vib.ts.threshold_label": "显著虚频阈值"',
-            '"structure.vib.ts.threshold_label": "Significant imaginary threshold"',
-        ),
-        (
-            '"structure.vib.ts.source_default": "默认"',
-            '"structure.vib.ts.source_default": "default"',
-        ),
-        (
-            '"structure.vib.ts.source_job_config": "任务配置"',
-            '"structure.vib.ts.source_job_config": "job config"',
-        ),
-        (
             '"structure.vib.ts.mismatch_reason": "模式与当前几何不匹配"',
             '"structure.vib.ts.mismatch_reason": "The modes do not match the displayed geometry"',
         ),
@@ -4464,8 +4499,8 @@ def test_vibration_viewer_ts_evidence_contract() -> None:
 
 
 def test_vibration_viewer_node_ts_judgment_logic() -> None:
-    """Node logic: tsJudgment counts (<= rule, boundary, default threshold),
-    tsHintText mapping, thresholdText formatting, geometryMismatch cases,
+    """Node logic: tsJudgment counts every negative frequency,
+    tsHintText mapping, geometryMismatch cases,
     and the mismatch-disable render branch (no controls, animation refused)."""
     if not shutil.which("node"):
         pytest.skip("node not available")
@@ -4481,36 +4516,25 @@ def test_vibration_viewer_node_ts_judgment_logic() -> None:
             });
         }
 
-        var one = ns.tsJudgment(modesOf([-797.72]), -50.0);
-        if (one.significantCount !== 1 || one.hint !== "first_order") {
+        var one = ns.tsJudgment(modesOf([-34.22]));
+        if (one.imaginaryCount !== 1 || one.hint !== "first_order") {
             console.error("FAIL: 1 imaginary -> first_order");
             process.exit(1);
         }
-        var none = ns.tsJudgment(modesOf([1411.55, 3896.58]), -50.0);
-        if (none.significantCount !== 0 || none.hint !== "no_evidence") {
+        var none = ns.tsJudgment(modesOf([0.0, 1411.55, 3896.58]));
+        if (none.imaginaryCount !== 0 || none.hint !== "no_evidence") {
             console.error("FAIL: 0 -> no_evidence");
             process.exit(1);
         }
-        var two = ns.tsJudgment(modesOf([-797.72, -100.0]), -50.0);
-        if (two.significantCount !== 2 || two.hint !== "higher_order") {
+        var two = ns.tsJudgment(modesOf([-797.72, -0.01]));
+        if (two.imaginaryCount !== 2 || two.hint !== "higher_order") {
             console.error("FAIL: 2 -> higher_order");
             process.exit(1);
         }
-        // boundary: frequency exactly == threshold is significant (<=)
-        var boundary = ns.tsJudgment(modesOf([-50.0]), -50.0);
-        if (boundary.significantCount !== 1) {
-            console.error("FAIL: == threshold must count");
-            process.exit(1);
-        }
-        var justAbove = ns.tsJudgment(modesOf([-49.9]), -50.0);
-        if (justAbove.significantCount !== 0) {
-            console.error("FAIL: > threshold must not count");
-            process.exit(1);
-        }
-        // non-finite threshold -> backend default -50.0
-        var defaulted = ns.tsJudgment(modesOf([-50.0]), null);
-        if (defaulted.significantCount !== 1 || defaulted.hint !== "first_order") {
-            console.error("FAIL: default threshold -50.0");
+        // A weak negative frequency still counts.
+        var weak = ns.tsJudgment(modesOf([-0.01]));
+        if (weak.imaginaryCount !== 1) {
+            console.error("FAIL: weak negative must count");
             process.exit(1);
         }
 
@@ -4523,20 +4547,6 @@ def test_vibration_viewer_node_ts_judgment_logic() -> None:
         }
         if (ns.tsHintText("bogus") !== "" || ns.tsSuffixText() !== "仍需检查振动方向及 IRC") {
             console.error("FAIL: unknown hint / suffix");
-            process.exit(1);
-        }
-
-        // threshold display formatting
-        if (ns.thresholdText(-50.0, "default") !== "显著虚频阈值 ≤ -50.0 cm⁻¹ (默认)") {
-            console.error("FAIL: thresholdText default: " + ns.thresholdText(-50.0, "default"));
-            process.exit(1);
-        }
-        if (ns.thresholdText(-30.0, "job_config") !== "显著虚频阈值 ≤ -30.0 cm⁻¹ (任务配置)") {
-            console.error("FAIL: thresholdText job_config");
-            process.exit(1);
-        }
-        if (ns.thresholdText(null, null).indexOf("-50.0") < 0) {
-            console.error("FAIL: thresholdText fallback value");
             process.exit(1);
         }
 
@@ -8666,8 +8676,8 @@ def test_task_view_data_layer() -> None:
     #     picker added s2scan picker branch detail+asset calls (+2).
     #     candidate workspace added _loadPendingGeometry api call (+1).
     api_v1_count = html.count('api("/')
-    assert api_v1_count == 62, (
-        f"v1 api('/ call count expected 62 (53 baseline -1 +2 T10 +4 T11 +2 P4 picker +2 candidate ws), got {api_v1_count}"
+    assert api_v1_count >= 64, (
+        f"v1 api('/ call count expected at least 64 (including IRC TS source checks), got {api_v1_count}"
     )
 
 

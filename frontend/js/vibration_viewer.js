@@ -1,6 +1,6 @@
 /**
  * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-31)
- * @version 0.8.0
+ * @version 0.8.1
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -20,9 +20,8 @@
  *   - isAnimationActive()            (mutual-exclusion probe)
  *   - handleTeardown()               (tab/job switch + viewer destroy hook)
  *   - setSpeed(v) / toggleInvertPhase()
- *   - tsJudgment(modes, thresholdCm1)  (PURE: significant-imaginary evidence)
+ *   - tsJudgment(modes)                (PURE: negative-frequency evidence)
  *   - tsHintText(hint) / tsSuffixText() (TS evidence i18n)
- *   - thresholdText(cm1, source)       (PURE: threshold display line)
  *   - geometryMismatch(entry, vibData) (PURE: product-id mismatch guard)
  *   - animationState                   (the live animation state)
  *
@@ -47,7 +46,7 @@
  *   - _esc                             (XSS-safe text conversion)
  *
  * Contract (backend, ready): GET /api/v1/jobs/{id}/structure-viewer/entries/{entryId}/vibrations
- *   -> {available, reason|null, threshold_cm1, threshold_source,
+ *   -> {available, reason|null, threshold_cm1, threshold_source (legacy, ignored),
  *       modes:[{mode_index, frequency_cm1, imaginary, ir_intensity|null, vectors}],
  *       atom_count, geometry_product_id|null, source|null}
  *   reasons: no_normal_modes / geometry_mismatch / pending_fetch / historical_unavailable
@@ -71,14 +70,14 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.8.0";
+  var VERSION = "0.8.1";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
     LOADING: "\u52a0\u8f7d\u4e2d\u2026",
     NONE: "\u65e0\u632f\u52a8\u6570\u636e",
     IMAGINARY: "\u865a\u9891",
-    IMAGINARY_SUMMARY: "\u663e\u8457\u865a\u9891 {count} \u4e2a",
+    IMAGINARY_SUMMARY: "\u865a\u9891 {count} \u4e2a",
     FREQ_UNIT: "cm\u207b\u00b9",
     IR_UNIT: "km\u00b7mol\u207b\u00b9",
     MODE: "\u6a21\u5f0f",
@@ -106,9 +105,6 @@
       higher_order: "\u9ad8\u9636\u978d\u70b9\u6216\u672a\u5145\u5206\u4f18\u5316",
     },
     TS_SUFFIX: "\u4ecd\u9700\u68c0\u67e5\u632f\u52a8\u65b9\u5411\u53ca IRC",
-    THRESHOLD_LABEL: "\u663e\u8457\u865a\u9891\u9608\u503c",
-    SOURCE_DEFAULT: "\u9ed8\u8ba4",
-    SOURCE_JOB_CONFIG: "\u4efb\u52a1\u914d\u7f6e",
     MISMATCH_REASON: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",
     TS_MODE_CREATE: "\u4ee5\u6b64\u865a\u9891\u521b\u5efa TS Mode \u4efb\u52a1",
     REASONS: {
@@ -298,26 +294,19 @@
    */
   function defaultModeIndex(modes) {
     if (!modes || !modes.length) return null;
-    var bestSigNeg = null;
-    var bestOtherNeg = null;
+    var bestNeg = null;
     var firstPos = null;
-    var threshold = -50.0;
     for (var i = 0; i < modes.length; i++) {
       var m = modes[i];
       var f = m.frequency_cm1;
       if (typeof f !== "number" || !isFinite(f)) continue;
       if (f < 0) {
-        if (f <= threshold) {
-          if (bestSigNeg === null || f < bestSigNeg.frequency_cm1) bestSigNeg = m;
-        } else {
-          if (bestOtherNeg === null || f < bestOtherNeg.frequency_cm1) bestOtherNeg = m;
-        }
+        if (bestNeg === null || f < bestNeg.frequency_cm1) bestNeg = m;
       } else if (f > 0 && firstPos === null) {
         firstPos = m;
       }
     }
-    if (bestSigNeg !== null) return bestSigNeg.mode_index;
-    if (bestOtherNeg !== null) return bestOtherNeg.mode_index;
+    if (bestNeg !== null) return bestNeg.mode_index;
     if (firstPos !== null) return firstPos.mode_index;
     return modes[0].mode_index;
   }
@@ -684,8 +673,8 @@
   /* ---- TS judgment evidence (todo 31 — display only) ---- */
 
   /**
-   * Count significant imaginary frequencies (frequency_cm1 <= threshold,
-   * matching the backend _count_significant_imaginary at-or-below rule)
+   * Count negative frequencies (frequency_cm1 < 0), matching the backend
+   * TS frequency gate,
    * and classify the evidence hint:
    *   1  -> "first_order"   (频率数量符合一阶鞍点)
    *   0  -> "no_evidence"   (不是一阶鞍点证据)
@@ -693,24 +682,20 @@
    * Evidence only — never replaces BatchOptimize/IRC validation status.
    *
    * @param {Array<Object>|null} modes
-   * @param {number} [thresholdCm1] - defaults to -50.0 when non-finite
-   * @returns {{significantCount: number, hint: string}}
+   * @returns {{imaginaryCount: number, hint: string}}
    */
-  function tsJudgment(modes, thresholdCm1) {
-    var thr = (typeof thresholdCm1 === "number" && isFinite(thresholdCm1))
-      ? thresholdCm1
-      : -50.0;
+  function tsJudgment(modes) {
     var count = 0;
     if (modes && modes.length) {
       for (var i = 0; i < modes.length; i++) {
         var f = modes[i] ? modes[i].frequency_cm1 : null;
-        if (typeof f === "number" && isFinite(f) && f <= thr) {
+        if (typeof f === "number" && isFinite(f) && f < 0) {
           count += 1;
         }
       }
     }
     var hint = count === 1 ? "first_order" : (count > 1 ? "higher_order" : "no_evidence");
-    return { significantCount: count, hint: hint };
+    return { imaginaryCount: count, hint: hint };
   }
 
   /**
@@ -731,24 +716,6 @@
    */
   function tsSuffixText() {
     return _t("structure.vib.ts.suffix", STR.TS_SUFFIX);
-  }
-
-  /**
-   * Threshold display line, e.g. "显著虚频阈值 ≤ -50.0 cm⁻¹ (默认)".
-   *
-   * @param {number} thresholdCm1
-   * @param {string} [thresholdSource] - "default" | "job_config"
-   * @returns {string}
-   */
-  function thresholdText(thresholdCm1, thresholdSource) {
-    var val = (typeof thresholdCm1 === "number" && isFinite(thresholdCm1))
-      ? thresholdCm1
-      : -50.0;
-    var srcLabel = thresholdSource === "job_config"
-      ? _t("structure.vib.ts.source_job_config", STR.SOURCE_JOB_CONFIG)
-      : _t("structure.vib.ts.source_default", STR.SOURCE_DEFAULT);
-    return _t("structure.vib.ts.threshold_label", STR.THRESHOLD_LABEL) +
-      " \u2264 " + val.toFixed(1) + " " + STR.FREQ_UNIT + " (" + srcLabel + ")";
   }
 
   /**
@@ -1301,7 +1268,7 @@
       );
       container.appendChild(summary);
     }
-    var judgment = tsJudgment(modes, data.threshold_cm1);
+    var judgment = tsJudgment(modes);
     var tsBlock = document.createElement("div");
     tsBlock.className = "sv-vib-ts-hint";
     var hintLine = document.createElement("div");
@@ -1313,10 +1280,6 @@
     suffixLine.className = "sv-vib-ts-suffix";
     suffixLine.textContent = tsSuffixText();
     tsBlock.appendChild(suffixLine);
-    var thrLine = document.createElement("div");
-    thrLine.className = "sv-vib-ts-threshold";
-    thrLine.textContent = thresholdText(data.threshold_cm1, data.threshold_source);
-    tsBlock.appendChild(thrLine);
     container.appendChild(tsBlock);
     var list = document.createElement("div");
     list.className = "sv-vib-list";
@@ -1335,32 +1298,29 @@
   }
 
   function _categorizeModes(modes) {
-    var significant = [];
-    var otherNeg = [];
+    var imaginary = [];
     var positives = [];
     var zeros = [];
-    var threshold = -50.0;
     for (var i = 0; i < modes.length; i++) {
       var m = modes[i];
       var f = m.frequency_cm1;
       if (typeof f !== "number" || !isFinite(f)) { zeros.push(m); continue; }
-      if (Math.abs(f) < 0.5) { zeros.push(m); continue; }
       if (f < 0) {
-        if (f <= threshold) { significant.push(m); }
-        else { otherNeg.push(m); }
+        imaginary.push(m);
+      } else if (f < 0.5) {
+        zeros.push(m);
       } else {
         positives.push(m);
       }
     }
-    significant.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
-    otherNeg.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
+    imaginary.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
     positives.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
     return {
-      imaginary: significant.concat(otherNeg),
+      imaginary: imaginary,
       valid: positives,
       all: modes,
       zeros: zeros,
-      significantCount: significant.length,
+      imaginaryCount: imaginary.length,
       validCount: positives.length,
       totalCount: modes.length,
     };
@@ -1452,7 +1412,7 @@
     }
     var verdict = document.createElement("div");
     verdict.className = "sv-vib-dock-ts-verdict";
-    var judgment = tsJudgment(modes, data.threshold_cm1);
+    var judgment = tsJudgment(modes);
     verdict.className += judgment.hint === "first_order" ? " sv-vib-ts-ok" : " sv-vib-ts-warn";
     verdict.textContent = _format(
       _t("structure.vib.imaginary_summary", STR.IMAGINARY_SUMMARY),
@@ -1465,10 +1425,6 @@
     hintLine.textContent = tsHintText(judgment.hint);
     col.appendChild(hintLine);
 
-    var thrLine = document.createElement("div");
-    thrLine.className = "sv-vib-dock-ts-threshold";
-    thrLine.textContent = thresholdText(data.threshold_cm1, data.threshold_source);
-    col.appendChild(thrLine);
 
     var suffixLine = document.createElement("div");
     suffixLine.className = "sv-vib-dock-ts-suffix";
@@ -1479,7 +1435,7 @@
   function _renderModesColumn(col, modes, cats) {
     if (!vibrationState._filterTab) {
       vibrationState._filterTab = "imaginary";
-      if (cats.significantCount === 0) {
+      if (cats.imaginaryCount === 0) {
         vibrationState._filterTab = cats.validCount > 0 ? "valid" : "all";
       }
     }
@@ -1524,7 +1480,7 @@
     var zeroShown = false;
     for (var ri = 0; ri < filtered.length; ri++) {
       var m = filtered[ri];
-      if (Math.abs(m.frequency_cm1) < 0.5) {
+      if (m.frequency_cm1 >= 0 && m.frequency_cm1 < 0.5) {
         if (!zeroShown && vibrationState._filterTab !== "all") {
           zeroShown = true;
           var collapseBtn = document.createElement("button");
@@ -2022,7 +1978,6 @@
     tsJudgment: tsJudgment,
     tsHintText: tsHintText,
     tsSuffixText: tsSuffixText,
-    thresholdText: thresholdText,
     geometryMismatch: geometryMismatch,
     _categorizeModes: _categorizeModes,
     _catalogEntry: _catalogEntry,

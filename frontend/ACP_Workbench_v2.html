@@ -4362,7 +4362,7 @@ option, optgroup {
 </style>
 <link rel="stylesheet" href="css/structure_viewer.css">
 <link rel="stylesheet" href="css/structure_source_picker.css">
-<link rel="stylesheet" href="css/task_input_workspace.css?v=20260924-task-info-polish">
+<link rel="stylesheet" href="css/task_input_workspace.css?v=20260927-submit-review">
 <link rel="stylesheet" href="css/tsmode_editor.css">
 </head>
 <body>
@@ -4781,6 +4781,18 @@ option, optgroup {
               <button class="input-mode-tab" data-input-mode="structure" role="tab" aria-selected="false" data-i18n="modal.mode_structure_short">结构输入</button>
               <button class="input-mode-tab" data-input-mode="upload" role="tab" aria-selected="false" data-i18n="modal.mode_upload">上传</button>
             </div>
+            <div class="input-panel structure-library-filters" id="input-panel-task">
+              <span class="library-filter-label" data-i18n="wizard.library_filter">快速筛选</span>
+              <div class="library-filter-tabs" role="group" aria-label="结构库筛选">
+                <button type="button" class="library-filter active" data-source-group="" aria-pressed="true" data-i18n="wizard.library_all">全部</button>
+                <button type="button" class="library-filter" data-source-group="candidate" aria-pressed="false" data-i18n="wizard.library_candidates">已保存候选</button>
+                <button type="button" class="library-filter" data-source-group="task_result" aria-pressed="false" data-i18n="wizard.library_results">任务产物</button>
+              </div>
+              <div class="library-draft-actions">
+                <span id="wizard-draft-status" class="muted" style="font-size:11px;white-space:nowrap;"></span>
+                <button type="button" class="btn ghost" id="wizard-drafts-open">草稿箱</button>
+              </div>
+            </div>
           </div>
           <div class="tiw-toolbar-host" id="tiw-toolbar-host"></div>
           <div class="source-management-toolbar">
@@ -4933,14 +4945,6 @@ option, optgroup {
 
         <!-- LEFT column content: source input panels + browsers -->
         <div class="preview-left" id="preview-left">
-          <div class="input-panel structure-library-filters" id="input-panel-task">
-            <span class="library-filter-label" data-i18n="wizard.library_filter">快速筛选</span>
-            <div class="library-filter-tabs" role="group" aria-label="结构库筛选">
-              <button type="button" class="library-filter active" data-source-group="" aria-pressed="true" data-i18n="wizard.library_all">全部</button>
-              <button type="button" class="library-filter" data-source-group="candidate" aria-pressed="false" data-i18n="wizard.library_candidates">已保存候选</button>
-              <button type="button" class="library-filter" data-source-group="task_result" aria-pressed="false" data-i18n="wizard.library_results">任务产物</button>
-            </div>
-          </div>
           <div class="input-panel source-editor-pane" id="input-panel-structure" style="display:none;">
             <label data-i18n="modal.structure_label">SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP（自动识别）</label>
             <textarea id="modal-structure-input" class="modal-input" rows="12" placeholder="CCO" data-i18n-ph="modal.structure_placeholder"></textarea>
@@ -5213,6 +5217,13 @@ option, optgroup {
         <button class="btn primary" id="modal-submit" data-i18n="wizard.next_step">下一步</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="wizard-drafts-modal" style="display:none;z-index:2100;">
+  <div class="modal-dialog" style="max-width:640px;">
+    <div class="modal-header"><h2 id="wizard-drafts-title">草稿箱</h2><button type="button" class="btn ghost" id="wizard-drafts-new">新建空白</button><button type="button" class="modal-close" id="wizard-drafts-close" aria-label="关闭">×</button></div>
+    <div class="modal-body"><div id="wizard-drafts-list"></div></div>
   </div>
 </div>
 
@@ -6065,7 +6076,7 @@ let treeRefreshCounter = 0;
 // only the latest /logs fetch render; logCursor tracks per-stream offsets for
 // incremental cursor-based fetching (replaces lastLogTailText diff key).
 let logPollToken = 0;
-var logCursor = { stdout: 0, stderr: 0, jobId: "" };
+var logCursor = { stdout: 0, stderr: 0, irc: 0, jobId: "" };
 // Log store: single source of truth for log rendering. Capped at MAX_LOG_LINES;
 // oldest entries dropped in chunks when exceeded. Flushed to DOM via
 // requestAnimationFrame so multiple appends in the same frame produce one
@@ -6117,6 +6128,8 @@ let energyGraphState = {
   status: "idle",
   layout: null,
   loadedFrameIndex: null,
+  loadedFrameId: "",
+  lastFetchedJobStatus: "",
   abortController: null,
   structureAbort: null,
   structureFraming: { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 },
@@ -6942,7 +6955,9 @@ const I18N = {
     "energy.error": "能量与轨迹数据加载失败",
     "energy.idle_prompt": "请选择任务后查看能量与轨迹。",
     "energy.unsupported": "该任务没有可绘制的能量曲线，但结果文件仍然可用。",
-    "energy.irc_pending": "IRC 正在计算，尚无可用路径点。计算完成后曲线会自动刷新。",
+    "energy.irc_pending": "IRC 正在计算，等待第一个完整路径点；路径点生成后曲线会自动刷新。",
+    "energy.irc_missing": "IRC 已结束，但没有可用路径点。请检查 ORCA 输出和任务错误信息。",
+    "energy.irc_remote_error": "暂时无法读取远程 IRC 轨迹，请检查远程连接或稍后重试。",
   "energy.pes_pending": "PES 扫描正在计算，尚无已完成的扫描点。曲线会随扫描点收敛自动出现。",
     "energy.header.frames": "帧",
     "energy.header.status.running": "运行中",
@@ -6950,6 +6965,7 @@ const I18N = {
     "energy.header.status.completed": "已完成",
     "energy.header.status.converged": "已收敛",
     "energy.header.status.failed": "失败",
+    "energy.header.status.interrupted": "扫描中断、数据不完整",
     "energy.header.status.unknown": "未知",
     "energy.header.status.unavailable": "不可用",
     "energy.inspector.export": "导出结构",
@@ -7248,7 +7264,7 @@ const I18N = {
     "structure.vib.loading": "加载中…",
     "structure.vib.none": "无振动数据",
     "structure.vib.imaginary_chip": "虚频",
-    "structure.vib.imaginary_summary": "显著虚频 {count} 个",
+    "structure.vib.imaginary_summary": "虚频 {count} 个",
     "structure.vib.current_positive": "#{index}  {freq} cm⁻¹ · 正频",
     "structure.vib.current_imaginary": "#{index}  {freq} cm⁻¹ · 虚频",
     "structure.vib.reason.no_normal_modes": "无振动模式数据",
@@ -7271,9 +7287,6 @@ const I18N = {
     "structure.vib.ts.higher_order": "高阶鞍点或未充分优化",
     "structure.vib.ts.suffix": "仍需检查振动方向及 IRC",
     "structure.vib.ts_mode_create": "以此虚频创建 TS Mode 任务",
-    "structure.vib.ts.threshold_label": "显著虚频阈值",
-    "structure.vib.ts.source_default": "默认",
-    "structure.vib.ts.source_job_config": "任务配置",
     "structure.vib.ts.mismatch_reason": "模式与当前几何不匹配",
     "structure.edit.title": "几何编辑",
     "structure.edit.bond_source": "成键来源",
@@ -7535,6 +7548,7 @@ const I18N = {
     "wizard.remove_from_input": "移出本次输入",
     "wizard.source_candidate": "候选",
     "wizard.source_task_result": "任务结果",
+    "wizard.source_last_structure": "上次计算结果",
     "wizard.source_manual": "手动输入",
     "wizard.source_upload": "上传",
     "wizard.target_project": "目标项目",
@@ -7579,6 +7593,23 @@ const I18N = {
   "wizard.review_custom": "自定义",
   "wizard.review_inactive": "{count} 个候选已移入垃圾箱，必须先移除或恢复",
   "wizard.review_all_ok": "所选候选均可用",
+  "wizard.review_intro": "提交前核对任务配置与输入结构。",
+  "wizard.review_inputs_ready": "输入状态正常",
+  "wizard.review_attention_count": "{count} 项输入需留意",
+  "wizard.review_inactive_short": "已移入垃圾箱",
+  "wizard.review_version_changed": "来源已变化",
+  "wizard.review_geometry_failed": "坐标加载失败",
+  "wizard.review_geometry_pending": "坐标待加载",
+  "wizard.review_ready": "可用",
+  "wizard.review_role_normal": "普通",
+  "wizard.review_parallelism": "并行数量：{count}",
+  "wizard.review_input_count": "共 {count} 个结构",
+  "wizard.review_index": "序号",
+  "wizard.review_structure": "结构名称",
+  "wizard.review_source": "来源",
+  "wizard.review_role": "角色",
+  "wizard.review_charge_spin": "电荷 / 多重度",
+  "wizard.review_state": "状态",
     "modal.close": "关闭",
     "tsmode.modal_title": "TS 模式优化",
     "tsmode.panel_source": "来源",
@@ -8427,7 +8458,9 @@ const I18N = {
     "energy.error": "Failed to load energy & trajectory data",
     "energy.idle_prompt": "Select a job to view Energy & Trajectory.",
     "energy.unsupported": "This job has no plottable energy curve, but its result files remain available.",
-    "energy.irc_pending": "IRC is still running; no path points are available yet. The curve refreshes automatically once points are published.",
+    "energy.irc_pending": "IRC is running and waiting for the first complete path point. The curve updates as points are published.",
+    "energy.irc_missing": "IRC has ended without usable path points. Check the ORCA output and task error.",
+    "energy.irc_remote_error": "The remote IRC trajectory is temporarily unavailable. Check the connection or retry.",
   "energy.pes_pending": "PES scan is running; no scan point has converged yet. The curve appears automatically as points converge.",
     "energy.header.frames": "frames",
     "energy.header.status.running": "Running",
@@ -8435,6 +8468,7 @@ const I18N = {
     "energy.header.status.completed": "Completed",
     "energy.header.status.converged": "Converged",
     "energy.header.status.failed": "Failed",
+    "energy.header.status.interrupted": "Interrupted — incomplete data",
     "energy.header.status.unknown": "Unknown",
     "energy.header.status.unavailable": "Unavailable",
     "energy.inspector.export": "Export Structure",
@@ -8733,7 +8767,7 @@ const I18N = {
     "structure.vib.loading": "Loading…",
     "structure.vib.none": "No vibration data",
     "structure.vib.imaginary_chip": "Imaginary",
-    "structure.vib.imaginary_summary": "{count} significant imaginary mode(s)",
+    "structure.vib.imaginary_summary": "{count} imaginary mode(s)",
     "structure.vib.current_positive": "#{index}  {freq} cm⁻¹ · positive",
     "structure.vib.current_imaginary": "#{index}  {freq} cm⁻¹ · imaginary",
     "structure.vib.reason.no_normal_modes": "No vibrational mode data",
@@ -8756,9 +8790,6 @@ const I18N = {
     "structure.vib.ts.higher_order": "Higher-order saddle or insufficiently optimized",
     "structure.vib.ts.suffix": "Still verify the vibration direction and IRC",
     "structure.vib.ts_mode_create": "Create TS Mode task from this imaginary frequency",
-    "structure.vib.ts.threshold_label": "Significant imaginary threshold",
-    "structure.vib.ts.source_default": "default",
-    "structure.vib.ts.source_job_config": "job config",
     "structure.vib.ts.mismatch_reason": "The modes do not match the displayed geometry",
     "structure.edit.title": "Geometry Editing",
     "structure.edit.bond_source": "Bond Source",
@@ -9020,6 +9051,7 @@ const I18N = {
     "wizard.remove_from_input": "Remove from input",
     "wizard.source_candidate": "Candidate",
     "wizard.source_task_result": "Task result",
+    "wizard.source_last_structure": "Last calculation result",
     "wizard.source_manual": "Manual input",
     "wizard.source_upload": "Upload",
     "wizard.target_project": "Target project",
@@ -9064,6 +9096,23 @@ const I18N = {
   "wizard.review_custom": "Custom",
   "wizard.review_inactive": "{count} candidate(s) moved to trash — restore or remove first",
   "wizard.review_all_ok": "All selected candidates available",
+  "wizard.review_intro": "Review the task configuration and input structures before submission.",
+  "wizard.review_inputs_ready": "Inputs look ready",
+  "wizard.review_attention_count": "{count} input(s) need attention",
+  "wizard.review_inactive_short": "In trash",
+  "wizard.review_version_changed": "Source changed",
+  "wizard.review_geometry_failed": "Geometry load failed",
+  "wizard.review_geometry_pending": "Geometry pending",
+  "wizard.review_ready": "Ready",
+  "wizard.review_role_normal": "Default",
+  "wizard.review_parallelism": "Parallel jobs: {count}",
+  "wizard.review_input_count": "{count} structure(s)",
+  "wizard.review_index": "#",
+  "wizard.review_structure": "Structure",
+  "wizard.review_source": "Source",
+  "wizard.review_role": "Role",
+  "wizard.review_charge_spin": "Charge / multiplicity",
+  "wizard.review_state": "Status",
     "modal.close": "Close",
     "tsmode.modal_title": "TS Mode Optimization",
     "tsmode.panel_source": "Source",
@@ -9327,7 +9376,7 @@ async function energyGraphLoadFrameGeometry(node) {
   if (!data || !container || !node) return;
   var frameIndex = node.frame_index;
   if (frameIndex == null) return;
-  if (Number(frameIndex) === energyGraphState.loadedFrameIndex && energyGraphState.viewer && container.isConnected && container.querySelector("canvas")) {
+  if (Number(frameIndex) === energyGraphState.loadedFrameIndex && String(node.id || "") === energyGraphState.loadedFrameId && energyGraphState.viewer && container.isConnected && container.querySelector("canvas")) {
     var _fs = energyGraphState.structureFraming;
     if (_fs.settled && (container.clientWidth !== _fs.lastW || container.clientHeight !== _fs.lastH)) {
       var _tk = energyGraphState.requestToken;
@@ -9344,6 +9393,17 @@ async function energyGraphLoadFrameGeometry(node) {
   try {
     var xyz = "";
     var geoRef = node.geometry_ref || "";
+    if (view === "irc") {
+      try {
+        var ircDirection = String((node.metadata && node.metadata.direction) || "");
+        var ircUrl = "/jobs/" + encodeURIComponent(jobId) + "/irc/frames/" + encodeURIComponent(ircDirection) + "/" + encodeURIComponent(frameIndex) + "/geometry";
+        var ircResp = await api(ircUrl, ac ? { signal: ac.signal } : {});
+        if (tk !== energyGraphState.requestToken) return;
+        if (ircResp && ircResp.xyz) xyz = ircResp.xyz;
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
+      }
+    }
     /* Each source runs in its own try/catch so one failure (e.g. a 404 from
        the files endpoint) never blocks the remaining fallbacks; AbortError
        is rethrown so cancellation still short-circuits the whole load. */
@@ -9362,7 +9422,7 @@ async function energyGraphLoadFrameGeometry(node) {
       }
     }
     /* (2) geometry_ref → files endpoint */
-    if (!xyz && geoRef) {
+    if (!xyz && geoRef && view !== "irc") {
       try {
         var fileResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(geoRef), ac ? { signal: ac.signal } : {});
         if (tk !== energyGraphState.requestToken) return;
@@ -9422,6 +9482,7 @@ async function energyGraphLoadFrameGeometry(node) {
        Token+isConnected guards keep a stale load from clobbering a newer one. */
     scheduleViewerFraming(container, energyGraphState.structureFraming, function() { return energyGraphState.viewer; }, { isValid: function() { return tk === energyGraphState.requestToken; } });
     energyGraphState.loadedFrameIndex = Number(frameIndex);
+    energyGraphState.loadedFrameId = String(node.id || "");
   } catch (e) {
     if (e && e.name === "AbortError") return;
     if (tk !== energyGraphState.requestToken) return;
@@ -9440,6 +9501,15 @@ async function energyGraphFetchFrameXyz(node) {
   var jobId = energyGraphState.jobId;
   var view = String(data.view_type || "");
   var geoRef = node.geometry_ref || "";
+  if (view === "irc") {
+    try {
+      var ircDirection = String((node.metadata && node.metadata.direction) || "");
+      var ircUrl = "/jobs/" + encodeURIComponent(jobId) + "/irc/frames/" + encodeURIComponent(ircDirection) + "/" + encodeURIComponent(frameIndex) + "/geometry";
+      var ircResp = await api(ircUrl);
+      if (ircResp && ircResp.xyz) return ircResp.xyz;
+    } catch (e) {}
+    return null;
+  }
   if (geoRef) {
     try {
       var fileResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(geoRef));
@@ -9818,7 +9888,7 @@ function energyHeaderStatusInfo(data) {
   var s = String((data && data.status) || "unknown").toLowerCase();
   var color = (s === "running" || s === "partial") ? "var(--accent)"
     : (s === "completed" || s === "converged" || s === "ready_for_review") ? "var(--green)"
-    : (s === "failed") ? "var(--red)"
+    : (s === "failed" || s === "interrupted") ? "var(--red)"
     : "var(--text-tertiary)";
   var key = "energy.header.status." + s;
   var text = t(key);
@@ -11971,6 +12041,8 @@ function energyCandidateCardMarkup(data, node, opts) {
   var candEntry = opts.candEntry;
   var currentRole = opts.currentRole;
   var recommendedRole = opts.recommendedRole;
+  var nodeGeometryOk = opts.nodeGeometryOk !== false;
+  var frameUnconverged = !!opts.frameUnconverged;
 
   /* Dual mode: scan/PES uses s2scanState; non-PES uses POST /frame-candidate.
      The card flavour is decided by workflow + view_type — NEVER by
@@ -12044,6 +12116,8 @@ function energyCandidateCardMarkup(data, node, opts) {
         '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none" title="' + noneHint + '"' + (canEditRole ? "" : " disabled") + '>' + escapeHtml(t("energy.card.type_none")) + '</button>' +
       '</div>' +
       (canEditRole ? '<div class="energy-card-disabled-note">' + noneHint + '</div>' : '') +
+      (!nodeGeometryOk ? '<div class="energy-card-disabled-note">该帧缺少有效几何 · 仅可查看，不能确认为候选</div>' : '') +
+      (frameUnconverged && workingEntry ? '<div class="energy-card-disabled-note">未收敛帧 · 标注为人工判断，待后续验证</div>' : '') +
       (recommendedRole ? '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.algo_rec", { role: recommendedRole === "ts" ? "TS" : "INT" })) + '</div>' : '') +
       '<div class="energy-card-disabled-note">' + escapeHtml(roleStateText) + escapeHtml(roleStateNote) + '</div>' +
       '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
@@ -12095,7 +12169,12 @@ function energyGraphInspectorMarkup(data) {
   const hasReview = !!(data.metadata && data.metadata.review);
   const jobStatus = String(energyGraphState.jobStatus || "");
   const jobTerminal = jobStatus === "completed" || jobStatus === "failed" || jobStatus === "cancelled";
-  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked && hasReview && jobTerminal;
+  /* Energy-without-geometry frames (interrupted scans) are view-only: the
+     backend refuses to confirm them, so the role buttons stay disabled. */
+  const nodeGeometryOk = metadata.selectable !== false && !!String(node.geometry_ref || "");
+  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked && hasReview && jobTerminal && nodeGeometryOk;
+  const scanFrameUnconverged = data.view_type === "scan" && String(node.status || "") === "failed";
+  const nodeStatusText = scanFrameUnconverged ? "未收敛 · 待后续验证" : translateStatus(node.status || "unknown");
   const isScanFrame = data.view_type === "scan" && frameIndexNum != null;
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const nodeIndex = nodes.findIndex(function(item) { return String(item.id) === String(node.id); });
@@ -12141,7 +12220,7 @@ function energyGraphInspectorMarkup(data) {
   if (frameIndexNum != null) tertiaryParts.push('frame_index ' + frameIndexNum);
   var tertiaryLine = tertiaryParts.length ? '<div style="color:var(--text-tertiary);font-size:10px;margin-bottom:8px;">' + escapeHtml(tertiaryParts.join(' \u00b7 ')) + '</div>' : '';
   return '<div class="energy-inspector-body">' +
-    '<div class="energy-selected-title"><strong>' + escapeHtml(displayLabel) + '</strong><span class="energy-badge ' + badgeClass + '">' + escapeHtml(annotation ? String(annotation.type).toUpperCase() : translateStatus(node.status || "unknown")) + '</span></div>' +
+    '<div class="energy-selected-title"><strong>' + escapeHtml(displayLabel) + '</strong><span class="energy-badge ' + badgeClass + '">' + escapeHtml(annotation ? String(annotation.type).toUpperCase() : nodeStatusText) + '</span></div>' +
     '<div class="frame-nav-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
       '<button class="frame-nav-btn" data-energy-action="prev" type="button" title="\u4e0a\u4e00\u5e27" aria-label="\u4e0a\u4e00\u5e27" data-tip="\u4e0a\u4e00\u5e27" data-tip-keys="←"><svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-6 6 6 6"/></svg></button>' +
       '<span class="frame-nav-label">' + escapeHtml(frameNavText) + '</span>' +
@@ -12149,7 +12228,7 @@ function energyGraphInspectorMarkup(data) {
     '</div>' +
     tertiaryLine +
     '<dl class="energy-data-list">' +
-      '<dt>\u72b6\u6001</dt><dd>' + escapeHtml(translateStatus(node.status || "unknown")) + '</dd>' +
+      '<dt>\u72b6\u6001</dt><dd>' + escapeHtml(nodeStatusText) + '</dd>' +
       (isScanFrame ? '<dt>' + escapeHtml(xAxisLabel) + '</dt><dd>' + escapeHtml(energyGraphFormatNumber(node.x, 3)) + ' ' + escapeHtml(String((data.x_axis || {}).unit || "")) + '</dd>' : '') +
       '<dt>\u76f8\u5bf9\u80fd\u91cf</dt><dd>' + escapeHtml(energyGraphFormatNumber(node.energy, 4)) + ' kcal/mol</dd>' +
       (metadata.single_point_energy_hartree != null || metadata.scan_energy_hartree != null
@@ -12177,6 +12256,8 @@ function energyGraphInspectorMarkup(data) {
       candEntry: candEntry,
       currentRole: currentRole,
       recommendedRole: recommendedRole,
+      nodeGeometryOk: nodeGeometryOk,
+      frameUnconverged: scanFrameUnconverged,
     }) +
     candidateAttrHtml +
     energyCandidateListMarkup(data) +
@@ -13011,17 +13092,20 @@ function energyGraphWorkspaceMarkup(data) {
     return '<option value="' + escapeHtml(String(item.id)) + '"' + (String(item.id) === String(energyGraphState.seriesId) ? " selected" : "") + '>' + escapeHtml(String(item.label || item.id)) + ' · ' + escapeHtml(String(item.unit || "")) + '</option>';
   }).join("");
   const status = String(data.status || "unknown").toLowerCase();
-  const statusText = status === "running" || status === "partial" ? "● 计算中" : status === "completed" || status === "ready_for_review" ? "● 已完成" : translateStatus(status);
+  const statusText = status === "running" || status === "partial" ? "● 计算中" : status === "interrupted" ? "● 扫描中断、数据不完整" : status === "completed" || status === "ready_for_review" ? "● 已完成" : translateStatus(status);
   const dirtyBadge = '<span class="energy-dirty-badge" data-energy-dirty-badge' + (s2scanState.dirty ? "" : ' style="display:none;"') + '>未保存修改</span>';
   const savedText = s2scanState.savedAt ? "已保存 " + String(s2scanState.savedAt).replace("T", " ").slice(0, 19) : (reviewMeta.saved || s2scanState.reviewStatus === "confirmed" ? "已保存" : "尚未保存");
   const selectionButtonClass = s2scanState.selectionLocked ? "locked" : "editable";
   const vm = energyGraphState.viewMode || "fit";
   const labelsActive = energyGraphState.annotationMode !== "hide";
   const standaloneBadge = hasReview && !projectId ? '<span class="energy-standalone-badge">独立 PESsearch 任务</span>' : "";
-  return '<div class="energy-workspace" data-energy-workspace>' +
+  const ircCounts = data.view_type === "irc" ? ((data.metadata || {}).directions || {}) : null;
+  const ircProgressText = ircCounts ? '正向 ' + Number(ircCounts.forward || 0) + ' 点 · 反向 ' + Number(ircCounts.reverse || 0) + ' 点' : '';
+  const ircUpdatedAt = data.view_type === "irc" ? String((data.metadata || {}).updated_at || "") : "";
+  return '<div class="energy-workspace" data-energy-workspace data-energy-reviewable="' + (hasReview ? "1" : "0") + '">' +
     '<div class="energy-workspace-head">' +
       '<div style="min-width:0"><div class="energy-workspace-kicker">\u4efb\u52a1\u89c2\u5bdf \u00b7 Calculation Viewer</div><div class="energy-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "\u5f53\u524d\u4efb\u52a1")) + '</div></div>' +
-      '<div class="energy-workspace-meta"><span>' + escapeHtml(String(data.title || "能量与轨迹")) + '</span><span>' + escapeHtml(String((data.metadata || {}).frame_count || (data.nodes || []).length)) + ' frames</span><span class="energy-live">' + escapeHtml(statusText) + '</span>' + standaloneBadge + '</div>' +
+      '<div class="energy-workspace-meta"><span>' + escapeHtml(String(data.title || "能量与轨迹")) + '</span><span>' + escapeHtml(ircProgressText || String((data.metadata || {}).frame_count || (data.nodes || []).length) + ' frames') + '</span><span class="energy-live">' + escapeHtml(statusText) + '</span>' + standaloneBadge + '</div>' +
     '</div>' +
     '<div class="energy-workspace-toolbar">' +
       '<span class="energy-tool-label">\u5f53\u524d\u66f2\u7ebf</span>' +
@@ -13069,7 +13153,7 @@ function energyGraphWorkspaceMarkup(data) {
         energyGraphInspectorMarkup(data) +
       '</aside>' +
     '</div>' +
-    '<div class="energy-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || "--")) + '</strong></span><span>revision <strong>' + escapeHtml(String(data.revision || "--")) + '</strong> · ' + (data.complete ? "数据完整" : "数据部分完成") + '</span></div>' +
+    '<div class="energy-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || "--")) + '</strong>' + (ircUpdatedAt ? ' · 更新 ' + escapeHtml(ircUpdatedAt.replace('T', ' ').slice(0, 19)) : '') + '</span><span>revision <strong>' + escapeHtml(String(data.revision || "--")) + '</strong> · ' + ((data.metadata || {}).scan_interrupted ? "扫描中断、数据不完整" : data.complete ? "数据完整" : "数据部分完成") + '</span></div>' +
     '<div class="energy-context-menu" data-energy-menu>' +
       '<div class="energy-context-title">曲线类型</div>' +
       series.map(function(item) { return '<button class="energy-menu-item' + (item.id === energyGraphState.seriesId ? " active" : "") + '" data-energy-menu-series="' + escapeHtml(String(item.id)) + '"><span>' + escapeHtml(String(item.label || item.id)) + '</span>' + (item.id === energyGraphState.seriesId ? '<span class="energy-check">✓</span>' : '<span></span>') + '</button>'; }).join("") +
@@ -13094,6 +13178,7 @@ function energyGraphDestroyViewer() {
     energyGraphState.viewer = null;
   }
   energyGraphState.loadedFrameIndex = null;
+  energyGraphState.loadedFrameId = "";
 }
 
 function energyGraphCurrentNode(data) {
@@ -13885,6 +13970,7 @@ function energyGraphSetSelection(opts) {
   /* Mirror into legacy fields for backward compat */
   energyGraphState.selectedNodeId = String(node.id);
   energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";
+  if (data.view_type === "irc" && origin !== "follow") energyGraphState.liveFollow = false;
   /* Resolve annotation if not explicitly provided */
   if (!annotationId) {
     var ann = (data.annotations || []).find(function(a) {
@@ -14166,6 +14252,8 @@ function energyGraphUpdateSelectionToolbar() {
   }
   var dirtyBadge = screen.querySelector("[data-energy-dirty-badge]");
   if (dirtyBadge) dirtyBadge.style.display = s2scanState.dirty ? "inline-flex" : "none";
+  var unconfirmedHint = screen.querySelector("[data-energy-unconfirmed-hint]");
+  if (unconfirmedHint) unconfirmedHint.style.display = s2scanState.reviewStatus === "confirmed" ? "none" : "";
   var savedState = screen.querySelector("[data-energy-saved-state]");
   if (savedState) {
     var reviewMeta = (energyGraphState.data && energyGraphState.data.metadata || {}).review || {};
@@ -14356,6 +14444,10 @@ function energyGraphRenderCurrent() {
   var root = screen.querySelector("[data-energy-workspace]");
   if (root && root.getAttribute("data-energy-view") === "optimization") root = null;
   if (root && root.getAttribute("data-energy-view") === "sampling") root = null;
+  // A live PES scan gains the review toolbar when the job becomes terminal.
+  // The usual in-place update patches only the chart and inspector.
+  var hasReview = !!(energyGraphState.data.metadata && energyGraphState.data.metadata.review);
+  if (root && root.getAttribute("data-energy-reviewable") !== (hasReview ? "1" : "0")) root = null;
   if (!root) {
     // Mount once.  Replacing the complete workspace would also detach the
     // 3Dmol container and reset the user's chart view on every data update.
@@ -14501,8 +14593,17 @@ function energyGraphSetReloadDisabled(disabled) {
 // metadata cannot make the chart redraw on every poll.
 function energyGraphDataRevision(data) {
   if (!data) return "";
-  if (data.revision != null) return String(data.revision);
-  if (data.data_revision != null) return String(data.data_revision);
+  // Terminal status and manual review change editability without changing
+  // scan frames. Keep them in the revision even when the server supplies one.
+  var metadata = data.metadata || {};
+  var stateRevision = JSON.stringify({
+    status: data.status || "",
+    job_status: metadata.job_status || "",
+    review: metadata.review || {},
+    scan_interrupted: !!metadata.scan_interrupted,
+  });
+  if (data.revision) return String(data.revision) + "|" + stateRevision;
+  if (data.data_revision) return String(data.data_revision) + "|" + stateRevision;
   try {
     return JSON.stringify({
       view_type: data.view_type || "",
@@ -14524,6 +14625,16 @@ function optimizationJobItemId(job) {
   if (!job) return "";
   var resources = job.resources || (job.spec && job.spec.resources) || {};
   return String(job.item_id || resources.item_id || "");
+}
+
+function energyIrcLatestNode(data) {
+  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
+  var reverse = nodes.filter(function(node) { return node.metadata && node.metadata.direction === "reverse"; });
+  var forward = nodes.filter(function(node) { return node.metadata && node.metadata.direction === "forward"; });
+  var directionNodes = reverse.length ? reverse : forward;
+  return directionNodes.reduce(function(latest, node) {
+    return !latest || Number(node.frame_index) > Number(latest.frame_index) ? node : latest;
+  }, null);
 }
 
 async function renderEnergyGraphWorkspace(job, options) {
@@ -14550,6 +14661,7 @@ async function renderEnergyGraphWorkspace(job, options) {
     energyGraphState.optimizationDomains = {};
     energyGraphState.optimizationPlot = null;
     energyGraphState.frameCandidates = { revision: 0, list: [] };
+    energyGraphState.lastFetchedJobStatus = "";
   }
   energyGraphState.jobId = String(jobId);
   energyGraphState.jobStatus = String((job && job.status) || "").toLowerCase();
@@ -14572,6 +14684,7 @@ async function renderEnergyGraphWorkspace(job, options) {
     if (token !== energyGraphState.requestToken || activeViewerTab !== "energy") return false;
     var candPayload = await candPromise;
     if (token !== energyGraphState.requestToken || activeViewerTab !== "energy") return false;
+    energyGraphState.lastFetchedJobStatus = String((job && job.status) || "").toLowerCase();
     // Restore server-authoritative saved-candidate state so badges survive
     // page refreshes, job re-selection and graph reloads.
     if (candPayload) energyGraphApplyFrameCandidates(candPayload);
@@ -14588,7 +14701,10 @@ async function renderEnergyGraphWorkspace(job, options) {
       energyGraphState.dataRevision = energyGraphDataRevision(data);
       energyGraphState.loading = false;
       energyGraphState.status = "empty";
-      energyGraphRenderState("empty", t("energy.irc_pending"));
+      var ircReason = String((data.metadata && data.metadata.reason) || "");
+      var ircTerminal = ["completed", "failed", "cancelled"].indexOf(String(data.status || "").toLowerCase()) >= 0;
+      var ircMessage = ircReason.indexOf("remote_fetch") === 0 ? t("energy.irc_remote_error") : ircTerminal ? t("energy.irc_missing") : t("energy.irc_pending");
+      energyGraphRenderState("empty", ircMessage);
       return true;
     }
     if (data && String(data.view_type || "") === "scan" && !(Array.isArray(data.nodes) && data.nodes.length) && !(Array.isArray(data.series) && data.series.length) && data.metadata && data.metadata.reason === "pes_scan_pending") {
@@ -14644,6 +14760,15 @@ async function renderEnergyGraphWorkspace(job, options) {
         if (scanNodes.length) energyGraphState.selectedNodeId = String(scanNodes[scanNodes.length - 1].id);
         energyGraphState.selectionOrigin = "follow";
         energyGraphState.liveFollow = true;
+      }
+    }
+    if (String(data.view_type || "") === "irc") {
+      var ircNodes = Array.isArray(data.nodes) ? data.nodes : [];
+      var selectedIrc = ircNodes.find(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); });
+      if (energyGraphState.liveFollow || !selectedIrc) {
+        var latestIrc = energyIrcLatestNode(data);
+        if (latestIrc) energyGraphState.selectedNodeId = String(latestIrc.id);
+        energyGraphState.selectionOrigin = "follow";
       }
     }
     if (!energyGraphState.seriesId) {
@@ -18174,7 +18299,7 @@ function clearStaleJobSelection() {
   folderCache = {};
   folderState = {};
   lastPinnedItems = [];
-  logCursor = { stdout: 0, stderr: 0, jobId: "" };
+  logCursor = { stdout: 0, stderr: 0, irc: 0, jobId: "" };
   updateInfoPanel(null);
   renderFileTree([], "");
   renderLogPlaceholder();
@@ -19193,7 +19318,7 @@ async function pollLogTail(jobId) {
   if (!jobId) return;
   var jid = String(jobId);
   if (logCursor.jobId !== jid) {
-    logCursor = { stdout: 0, stderr: 0, jobId: jid };
+    logCursor = { stdout: 0, stderr: 0, irc: 0, jobId: jid };
   }
   var token = ++logPollToken;
   var url = "/jobs/" + encodeURIComponent(jid) + "/logs?lines=300";
@@ -19226,6 +19351,19 @@ async function pollLogTail(jobId) {
   // Append stderr lines with distinct styling
   stderrLines.forEach(function(line) {
     if (line) appendLogLine("stderr", line);
+  });
+}
+
+async function pollIrcOutputTail(jobId) {
+  if (!lastSelectedJob || String((lastSelectedJob.spec || {}).workflow || lastSelectedJob.workflow || "") !== "irc") return;
+  var jid = String(jobId || "");
+  if (!jid || String(selectedJobId || "") !== jid) return;
+  if (logCursor.jobId !== jid) logCursor = { stdout: 0, stderr: 0, irc: 0, jobId: jid };
+  var resp = await api("/jobs/" + encodeURIComponent(jid) + "/irc/log-tail?offset=" + Number(logCursor.irc || 0));
+  if (String(selectedJobId || "") !== jid || !resp) return;
+  if (typeof resp.next_offset === "number") logCursor.irc = resp.next_offset;
+  (Array.isArray(resp.lines) ? resp.lines : []).forEach(function(line) {
+    if (line) appendLogLine("orca", "[ORCA] " + line);
   });
 }
 
@@ -19365,6 +19503,35 @@ window._svLoadXyzToViewer = function(xyzText, entryId) {
     updateInfoPanel(lastSelectedJob);
   } catch (e) {
     console.error("Structure viewer geometry load failed:", e);
+  }
+};
+
+// Bridge for structure_viewer.js: remove the outgoing task's geometry while
+// the newly selected task's catalog/geometry is loading (or when it has none).
+window._svClearViewerGeometry = function() {
+  try {
+    if (typeof stopFramePlayback === "function") stopFramePlayback();
+    molDoc.frames = [];
+    molDoc.currentFrame = 0;
+    molDoc.meta.source = "";
+    molDoc.meta.formula = "";
+    if (window.ACPGeometryStore) window.ACPGeometryStore.reset();
+    initialView = null;
+    currentModel = null;
+    currentModelAtoms = [];
+    if (viewer) {
+      viewer.removeAllModels();
+      viewer.removeAllShapes();
+      viewer.removeAllLabels();
+      viewer.setBackgroundColor(molDoc.bgColor);
+      viewer.render();
+    }
+    showEmpty();
+    renderMeasurementList();
+    updateFrameController();
+    updateInfoPanel(lastSelectedJob);
+  } catch (e) {
+    console.error("Structure viewer geometry clear failed:", e);
   }
 };
 
@@ -21121,25 +21288,27 @@ function renderMechanismPlanPanel() {
   });
 }
 
-function hookMechanismBuilder() {
-  // Called when the mechanism workflow modal opens: reset builder state and
-  // register the measurement-to-coordinate bridge.
-  mechCoordinatePlans = [];
-  mechStrategy = "guided-scan";
-  mechFidelity = "s3";
-  mechConformerMode = "censo-lite";
-  mechMaxSteps = 3;
-  mechPromotionPolicy = "all_confirmed";
-  mechScanPoints = 21;
-  mechIrcPoints = 30;
-  mechScanPointsDirty = false;
-  mechIrcPointsDirty = false;
-  reactionDefinition = createReactionDefinitionState();
-  reactionModel = null;
-  reactionManualPick = null;
-  reactionHoverShape = null;
-  reactionPreserveViewNext = false;
-  reactionManualCycleAt = 0;
+function hookMechanismBuilder(options) {
+  // New workflow selection starts clean; draft hydration reuses the restored
+  // model state while wiring controls and rebuilding its panels.
+  if (!(options && options.preserveState)) {
+    mechCoordinatePlans = [];
+    mechStrategy = "guided-scan";
+    mechFidelity = "s3";
+    mechConformerMode = "censo-lite";
+    mechMaxSteps = 3;
+    mechPromotionPolicy = "all_confirmed";
+    mechScanPoints = 21;
+    mechIrcPoints = 30;
+    mechScanPointsDirty = false;
+    mechIrcPointsDirty = false;
+    reactionDefinition = createReactionDefinitionState();
+    reactionModel = null;
+    reactionManualPick = null;
+    reactionHoverShape = null;
+    reactionPreserveViewNext = false;
+    reactionManualCycleAt = 0;
+  }
   var addBtn = document.getElementById("mech-add-coord");
   if (addBtn && !addBtn.dataset.hooked) {
     addBtn.dataset.hooked = "1";
@@ -22742,6 +22911,104 @@ const wizardState = {
 };
 
 var wizardDraft = null;
+var wizardDraftMeta = null;
+var wizardDraftSaveQueue = Promise.resolve();
+var wizardDraftAutosaveTimer = null;
+var wizardDraftEpoch = 0;
+
+function _wizardDraftName(snapshot) {
+  var fields = snapshot.fields || {};
+  var task = String((fields["modal-task-name"] || {}).value || "").trim();
+  var workflow = String(((snapshot.workflowState || {}).workflow || {}).label || "").trim();
+  return task || workflow || (currentLang === "zh-CN" ? "未命名草稿" : "Untitled draft");
+}
+
+function _wizardDraftErrorText(err) {
+  var message = err && err.message ? err.message : String(err || "");
+  if (message === "Not Found" || message === "HTTP 404") {
+    return currentLang === "zh-CN"
+      ? "草稿接口返回 404。请重启 ACP 后端，并确认已加载 /api/v1/drafts 路由。"
+      : "Draft API returned 404. Restart the ACP backend and confirm /api/v1/drafts is registered.";
+  }
+  if (message === "draft_not_found") {
+    return currentLang === "zh-CN" ? "这份草稿已不存在，请刷新草稿箱。" : "This draft no longer exists. Refresh the draft list.";
+  }
+  if (message === "revision_conflict") {
+    return currentLang === "zh-CN"
+      ? "这份草稿已在其他窗口更新。请重新载入草稿后继续编辑。"
+      : "This draft changed in another window. Reload it before continuing.";
+  }
+  return message || (currentLang === "zh-CN" ? "未知错误" : "Unknown error");
+}
+
+function _saveWizardDraft() {
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) return Promise.resolve();
+  var epoch = wizardDraftEpoch;
+  var statusEl = document.getElementById("wizard-draft-status");
+  if (statusEl) statusEl.textContent = currentLang === "zh-CN" ? "保存中…" : "Saving…";
+  var snapshot = _captureWizardDraft();
+  wizardDraft = snapshot;
+  var projectId = String((snapshot.fields["modal-project-select"] || {}).value || "");
+  var body = {
+    name: _wizardDraftName(snapshot), project_id: projectId,
+    workflow: String(((snapshot.workflowState || {}).workflow || {}).id || ""),
+    snapshot: snapshot
+  };
+  wizardDraftSaveQueue = wizardDraftSaveQueue.catch(function() {}).then(function() {
+    if (epoch !== wizardDraftEpoch) return null;
+    var existing = wizardDraftMeta;
+    var creating = !existing;
+    var path = existing ? "/drafts/" + encodeURIComponent(existing.draft_id) : "/drafts";
+    if (existing) body.expected_revision = existing.revision;
+    return api(path, {
+      method: existing ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function(meta) {
+      if (epoch !== wizardDraftEpoch) {
+        // A stale POST created an orphan that is safe to remove. A stale PUT
+        // updated the user's existing draft and must never delete it.
+        if (creating) {
+          return api("/drafts/" + encodeURIComponent(meta.draft_id), { method: "DELETE" }).then(function() { return null; });
+        }
+        return null;
+      }
+      wizardDraftMeta = meta;
+      if (statusEl) statusEl.textContent = currentLang === "zh-CN" ? "草稿已保存" : "Draft saved";
+      return meta;
+    });
+  }).catch(function(err) {
+    if (statusEl && epoch === wizardDraftEpoch) {
+      statusEl.textContent = (currentLang === "zh-CN" ? "草稿保存失败：" : "Draft save failed: ") + _wizardDraftErrorText(err);
+    }
+    throw err;
+  });
+  return wizardDraftSaveQueue;
+}
+
+function _scheduleWizardDraftAutosave() {
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) return;
+  if (document.getElementById("job-modal").style.display === "none") return;
+  if (wizardDraftAutosaveTimer) clearTimeout(wizardDraftAutosaveTimer);
+  wizardDraftAutosaveTimer = setTimeout(function() {
+    wizardDraftAutosaveTimer = null;
+    _saveWizardDraft().catch(function(err) { console.warn("Draft autosave failed", err); });
+  }, 1500);
+}
+
+function _discardSavedWizardDraft() {
+  wizardDraftEpoch++;
+  if (wizardDraftAutosaveTimer) clearTimeout(wizardDraftAutosaveTimer);
+  wizardDraftAutosaveTimer = null;
+  var old = wizardDraftMeta;
+  wizardDraftMeta = null;
+  wizardDraft = null;
+  if (old) wizardDraftSaveQueue.catch(function() {}).then(function() {
+    return api("/drafts/" + encodeURIComponent(old.draft_id), { method: "DELETE" });
+  }).catch(function(err) {
+    console.warn("Could not remove submitted draft", err);
+  });
+}
 
 function _captureWizardDraft() {
   var modal = document.getElementById("job-modal");
@@ -22758,9 +23025,35 @@ function _captureWizardDraft() {
     step: createWizardStep,
     fields: fields,
     workflowState: JSON.parse(JSON.stringify(wizardState)),
-    uploadFile: wizardUploadFile || null,
+    // File objects cannot survive JSON storage. Parsed structures carry the
+    // geometry needed for resuming an uploaded input.
+    uploadFile: null,
+    uploadName: wizardUploadFile ? wizardUploadFile.name : "",
     lastParsedStructureInput: lastParsedStructureInput,
     lastParsedUploadName: lastParsedUploadName,
+    pesSelection: {
+      mode: pesSelectionState.mode,
+      selectionKind: pesSelectionState.selectionKind,
+      coordinateKind: pesSelectionState.coordinateKind,
+      selectedAtoms: pesSelectionState.selectedAtoms.slice(),
+      structureKey: pesSelectionState.structureKey
+    },
+    mechanism: {
+      reactionDefinition: reactionDefinition ? JSON.parse(JSON.stringify(reactionDefinition)) : null,
+      productStructure: mechProductStructure ? JSON.parse(JSON.stringify(mechProductStructure)) : null,
+      tsGuessStructure: mechTsGuessStructure ? JSON.parse(JSON.stringify(mechTsGuessStructure)) : null,
+      coordinatePlans: mechCoordinatePlans.map(cloneMechanismCoordinateSpec),
+      studyId: mechStudyId || "",
+      strategy: mechStrategy,
+      fidelity: mechFidelity,
+      conformerMode: mechConformerMode,
+      maxSteps: mechMaxSteps,
+      promotionPolicy: mechPromotionPolicy,
+      scanPoints: mechScanPoints,
+      ircPoints: mechIrcPoints,
+      scanPointsDirty: mechScanPointsDirty,
+      ircPointsDirty: mechIrcPointsDirty
+    },
     restored: false
   };
 }
@@ -22780,11 +23073,69 @@ function _restoreWizardDraft(draft) {
   wizardUploadFile = draft.uploadFile || null;
   lastParsedStructureInput = draft.lastParsedStructureInput == null ? null : draft.lastParsedStructureInput;
   lastParsedUploadName = draft.lastParsedUploadName == null ? null : draft.lastParsedUploadName;
+  if (draft.pesSelection) Object.assign(pesSelectionState, draft.pesSelection);
+  var savedMechanism = draft.mechanism;
+  if (savedMechanism && typeof savedMechanism === "object") {
+    reactionDefinition = savedMechanism.reactionDefinition
+      ? JSON.parse(JSON.stringify(savedMechanism.reactionDefinition))
+      : createReactionDefinitionState();
+    mechProductStructure = savedMechanism.productStructure
+      ? JSON.parse(JSON.stringify(savedMechanism.productStructure)) : null;
+    mechTsGuessStructure = savedMechanism.tsGuessStructure
+      ? JSON.parse(JSON.stringify(savedMechanism.tsGuessStructure)) : null;
+    mechCoordinatePlans = Array.isArray(savedMechanism.coordinatePlans)
+      ? savedMechanism.coordinatePlans.map(cloneMechanismCoordinateSpec) : [];
+    mechStudyId = typeof savedMechanism.studyId === "string" ? savedMechanism.studyId : "";
+    mechStrategy = savedMechanism.strategy || "guided-scan";
+    mechFidelity = savedMechanism.fidelity || "s3";
+    mechConformerMode = savedMechanism.conformerMode || "censo-lite";
+    mechMaxSteps = Number(savedMechanism.maxSteps) >= 1 ? Number(savedMechanism.maxSteps) : 3;
+    mechPromotionPolicy = savedMechanism.promotionPolicy || "all_confirmed";
+    mechScanPoints = Number(savedMechanism.scanPoints) >= 5 ? Number(savedMechanism.scanPoints) : 21;
+    mechIrcPoints = Number(savedMechanism.ircPoints) >= 4 ? Number(savedMechanism.ircPoints) : 30;
+    mechScanPointsDirty = !!savedMechanism.scanPointsDirty;
+    mechIrcPointsDirty = !!savedMechanism.ircPointsDirty;
+  }
   updateConfigCards();
+  if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
+    var mechPanel = document.getElementById("mech-builder-panel");
+    if (mechPanel) mechPanel.style.display = "block";
+    hookMechanismBuilder({ preserveState: true });
+  }
+  if (draft.uploadName && !(draft.structures || []).length) {
+    window.alert(currentLang === "zh-CN"
+      ? "草稿中的上传文件尚未解析成结构，请重新上传：" + draft.uploadName
+      : "The uploaded file was not parsed into a structure. Please upload it again: " + draft.uploadName);
+  }
+}
+
+async function _revalidateDraftSources() {
+  var stale = 0;
+  await Promise.all(wizardStructures.map(async function(entry) {
+    if (!entry || !entry.source_uid) return;
+    try {
+      var current = await candidateApi("/structure-sources/" + encodeURIComponent(entry.source_uid));
+      var oldVersion = entry.version_id || entry.geometry_hash || "";
+      var newVersion = current.version_id || current.geometry_hash || "";
+      if (oldVersion && newVersion && oldVersion !== newVersion) {
+        entry.version_changed = true;
+        stale++;
+      }
+    } catch (err) {
+      if (err.status === 404) { entry.version_changed = true; stale++; }
+    }
+  }));
+  if (stale) {
+    renderLoadedStructuresList();
+    window.alert((currentLang === "zh-CN" ? "草稿中有 " + stale + " 个来源已删除或版本变化，请重新确认输入。" : stale + " draft sources were removed or changed. Please review the inputs."));
+  }
 }
 
 function openModal() {
-  var draftToRestore = wizardDraft;
+  var draftToRestore = window._pendingNewTask ? null : wizardDraft;
+  if (window._pendingNewTask) wizardDraftMeta = null;
+  var draftButton = document.getElementById("wizard-drafts-open");
+  if (draftButton) draftButton.textContent = currentLang === "zh-CN" ? "草稿箱" : "Drafts";
   if (draftToRestore) {
     wizardStructures = draftToRestore.structures || [];
     wizardSelectedStructureIndex = draftToRestore.selectedIndex || 0;
@@ -22917,14 +23268,27 @@ function openModal() {
       onOpenJob: function(jobId) { if (!jobId) return; closeJobModalGuarded(); selectJob(jobId); }
     });
   }
+  resetNodeSelector();
   _restoreWizardDraft(draftToRestore);
+  if (draftToRestore && draftToRestore.step === 3) renderCreateReview();
   renderLoadedStructuresList();
+  if (draftToRestore && wizardStructures.length) {
+    renderStructurePreview(wizardStructures, wizardParseWarnings);
+    _syncPickerSelection();
+    _loadPendingGeometry();
+    _revalidateDraftSources();
+  }
   document.getElementById("job-modal").style.display = "flex";
   updatePESSelectionVisibility();
-  applyPendingNewTask();
+  if (!draftToRestore) applyPendingNewTask();
+  if (draftToRestore && !wizardStructures.length && wizardInputMode === "structure" &&
+      document.getElementById("modal-structure-input").value.trim()) {
+    // A draft can be captured while parsing is still in flight. Re-parse its
+    // saved text on resume when no parsed geometry made it into the snapshot.
+    scheduleParseStructures();
+  }
   // Node selector: fresh tag selection per open; refresh fires after the
   // modal is visible (refreshNodeMatching no-ops while it is hidden).
-  resetNodeSelector();
   scheduleNodeMatchingRefresh();
 }
 
@@ -22941,20 +23305,63 @@ function renderCreateReview() {
   var projectSelect = document.getElementById("modal-project-select");
   var projectName = projectSelect && projectSelect.selectedOptions.length
     ? projectSelect.selectedOptions[0].textContent : "--";
-  var inactive = wizardStructures.filter(function(s) {
-    return s.usage_status && s.usage_status !== "active";
+  var workflowName = (wizardState.workflow && wizardState.workflow.label) || "--";
+  var protocolName = (wizardState.method && wizardState.method.profile_label) || t("wizard.review_custom");
+  var nproc = document.getElementById("modal-nproc").value || "--";
+  var memory = document.getElementById("modal-mem").value || "--";
+  var parallelism = document.getElementById("modal-parallelism").value || "1";
+  var reviewFlags = wizardStructures.map(function(s) {
+    if (s.usage_status && s.usage_status !== "active") return {kind:"failed", label:t("wizard.review_inactive_short")};
+    if (s.version_changed) return {kind:"warn", label:t("wizard.review_version_changed")};
+    var geometry = s.geometry_state || "ready";
+    if (geometry === "failed") return {kind:"failed", label:t("wizard.review_geometry_failed")};
+    if (geometry === "pending" || geometry === "loading") return {kind:"warn", label:t("wizard.review_geometry_pending")};
+    return {kind:"ready", label:t("wizard.review_ready")};
   });
-  var names = wizardStructures.map(function(s) { return s.name || s.asset_name || "--"; });
-  target.innerHTML = '<div class="create-review-grid">' +
-    '<span class="muted">' + t("wizard.review_project") + '</span><strong>' + escapeHtml(projectName) + '</strong>' +
-    '<span class="muted">' + t("wizard.review_input") + '</span><div>' + escapeHtml(names.join(t("wizard.review_separator")) || t("wizard.review_no_input")) + '</div>' +
-    '<span class="muted">' + t("wizard.review_workflow") + '</span><strong>' + escapeHtml((wizardState.workflow && wizardState.workflow.label) || "--") + '</strong>' +
-    '<span class="muted">' + t("wizard.review_protocol") + '</span><div>' + escapeHtml((wizardState.method && wizardState.method.profile_label) || t("wizard.review_custom")) + '</div>' +
-    '<span class="muted">' + t("wizard.review_resources") + '</span><div>' + escapeHtml(document.getElementById("modal-nproc").value + " " + t("wizard.review_cores") + " · " + document.getElementById("modal-mem").value) + '</div>' +
-    '<span class="muted">' + t("wizard.review_risk") + '</span><div>' + (inactive.length
-      ? '<span class="badge failed">' + t("wizard.review_inactive", {count: inactive.length}) + '</span>'
-      : '<span class="badge completed">' + t("wizard.review_all_ok") + '</span>') + '</div>' +
-    '</div>';
+  var flaggedCount = reviewFlags.filter(function(item) { return item.kind !== "ready"; }).length;
+  var statusHtml = flaggedCount
+    ? '<span class="create-review-status warn" title="' + escapeAttr(t("wizard.review_risk")) + '">' + t("wizard.review_attention_count", {count: flaggedCount}) + '</span>'
+    : '<span class="create-review-status" title="' + escapeAttr(t("wizard.review_risk")) + '">' + t("wizard.review_inputs_ready") + '</span>';
+  var rows = wizardStructures.map(function(s, i) {
+    var source = s.source_ref || {};
+    var sourceKind = s.source_kind || "";
+    var sourceKindLabel = sourceKind === "saved_candidate" ? t("wizard.source_candidate")
+      : sourceKind === "task_result" ? t("wizard.source_task_result")
+      : sourceKind === "upload" ? t("wizard.source_upload")
+      : sourceKind === "last_structure" ? t("wizard.source_last_structure")
+      : t("wizard.source_manual");
+    var sourceName = source.job_id
+      ? (s.job_resolved_name || s.source_job_name || source.job_id) + (source.path ? " · " + source.path : "")
+      : sourceKindLabel;
+    var rawRole = String(s.tag || s.role || "");
+    var role = rawRole === "TS" ? "TS" : rawRole === "INT" ? "INT" : t("wizard.review_role_normal");
+    var roleClass = rawRole === "TS" ? " ts" : rawRole === "INT" ? " int" : "";
+    var state = reviewFlags[i];
+    var charge = s.charge === undefined || s.charge === null ? 0 : s.charge;
+    var multiplicity = s.multiplicity || 1;
+    return '<tr>' +
+      '<td class="create-review-index">' + (i + 1) + '</td>' +
+      '<td class="create-review-structure" title="' + escapeAttr(s.name || s.asset_name || ("mol_" + (i + 1))) + '">' + escapeHtml(s.name || s.asset_name || ("mol_" + (i + 1))) + '</td>' +
+      '<td class="create-review-source" title="' + escapeAttr(sourceName) + '">' + escapeHtml(sourceName) + '</td>' +
+      '<td><span class="create-review-role' + roleClass + '">' + escapeHtml(role) + '</span></td>' +
+      '<td>' + escapeHtml("q " + charge + " · M " + multiplicity) + '</td>' +
+      '<td><span class="create-review-state ' + state.kind + '">' + escapeHtml(state.label) + '</span></td>' +
+      '</tr>';
+  }).join("");
+  target.innerHTML =
+    '<div class="create-review-heading"><div><p class="create-review-subtitle">' + t("wizard.review_intro") + '</p></div>' + statusHtml + '</div>' +
+    '<div class="create-review-stats">' +
+      '<div class="create-review-stat"><div class="create-review-stat-label">' + t("wizard.review_project") + '</div><div class="create-review-stat-value" title="' + escapeAttr(projectName) + '">' + escapeHtml(projectName) + '</div></div>' +
+      '<div class="create-review-stat"><div class="create-review-stat-label">' + t("wizard.review_workflow") + '</div><div class="create-review-stat-value" title="' + escapeAttr(workflowName) + '">' + escapeHtml(workflowName) + '</div></div>' +
+      '<div class="create-review-stat"><div class="create-review-stat-label">' + t("wizard.review_protocol") + '</div><div class="create-review-stat-value" title="' + escapeAttr(protocolName) + '">' + escapeHtml(protocolName) + '</div></div>' +
+      '<div class="create-review-stat"><div class="create-review-stat-label">' + t("wizard.review_resources") + '</div><div class="create-review-stat-value">' + escapeHtml(nproc + " " + t("wizard.review_cores") + " · " + memory) + '</div><div class="create-review-stat-meta">' + t("wizard.review_parallelism", {count: parallelism}) + '</div></div>' +
+    '</div>' +
+    '<section class="create-review-section" aria-label="' + escapeAttr(t("wizard.review_input")) + '">' +
+      '<div class="create-review-section-head"><span class="create-review-section-title">' + t("wizard.review_input") + '</span><span class="create-review-section-note">' + t("wizard.review_input_count", {count: wizardStructures.length}) + '</span></div>' +
+      (rows ? '<div class="create-review-table-wrap"><table class="create-review-table"><thead><tr>' +
+        '<th>' + t("wizard.review_index") + '</th><th>' + t("wizard.review_structure") + '</th><th>' + t("wizard.review_source") + '</th><th>' + t("wizard.review_role") + '</th><th>' + t("wizard.review_charge_spin") + '</th><th>' + t("wizard.review_state") + '</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="create-review-empty">' + t("wizard.review_no_input") + '</div>') +
+    '</section>';
 }
 
 function renderStepCompactSummary() {
@@ -23017,13 +23424,131 @@ function setCreateWizardStep(step) {
 
 // Closing with an edit draft in flight routes through ACPJobEditor so a
 // dirty draft asks 留在页面/放弃草稿 instead of silently vanishing (plan §4.2).
-function closeJobModalGuarded() {
+async function closeJobModalGuarded() {
   if (window.ACPJobEditor && ACPJobEditor.isActive()) {
     ACPJobEditor.cancelEditor(false);
     return;
   }
-  wizardDraft = _captureWizardDraft();
+  if (wizardDraftAutosaveTimer) clearTimeout(wizardDraftAutosaveTimer);
+  wizardDraftAutosaveTimer = null;
+  try {
+    await _saveWizardDraft();
+  } catch (err) {
+    window.alert((currentLang === "zh-CN" ? "草稿保存失败，窗口仍保持打开：" : "Draft save failed; the window is still open: ") + _wizardDraftErrorText(err));
+    return;
+  }
   closeModal();
+}
+
+async function openWizardDrafts() {
+  if (window.ACPJobEditor && ACPJobEditor.isActive()) return;
+  var overlay = document.getElementById("wizard-drafts-modal");
+  var list = document.getElementById("wizard-drafts-list");
+  if (!overlay || !list) return;
+  document.getElementById("wizard-drafts-title").textContent = currentLang === "zh-CN" ? "草稿箱" : "Drafts";
+  document.getElementById("wizard-drafts-new").textContent = currentLang === "zh-CN" ? "新建空白" : "New blank task";
+  overlay.style.display = "flex";
+  list.textContent = currentLang === "zh-CN" ? "正在加载…" : "Loading…";
+  try {
+    var data = await api("/drafts");
+    list.innerHTML = "";
+    if (!data.items || !data.items.length) {
+      list.textContent = currentLang === "zh-CN" ? "暂无草稿" : "No saved drafts";
+      return;
+    }
+    data.items.forEach(function(item) {
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-subtle,#333);";
+      var info = document.createElement("div");
+      info.style.cssText = "flex:1;min-width:0;";
+      var title = document.createElement("strong");
+      title.textContent = item.name || (currentLang === "zh-CN" ? "未命名草稿" : "Untitled draft");
+      var detail = document.createElement("div");
+      detail.className = "muted";
+      detail.style.fontSize = "11px";
+      detail.textContent = [item.workflow || "", String(item.structure_count || 0) + (currentLang === "zh-CN" ? " 个结构" : " structures"), new Date(item.updated_at).toLocaleString()].filter(Boolean).join(" · ");
+      info.appendChild(title); info.appendChild(detail);
+      var resume = document.createElement("button");
+      resume.type = "button"; resume.className = "btn primary";
+      resume.textContent = currentLang === "zh-CN" ? "继续" : "Resume";
+      resume.addEventListener("click", async function() {
+        try {
+          if (wizardDraftAutosaveTimer) clearTimeout(wizardDraftAutosaveTimer);
+          wizardDraftAutosaveTimer = null;
+          // Flush the open editor even when it is the same draft. Otherwise a
+          // change inside the debounce window is lost when Resume reloads it.
+          if (document.getElementById("job-modal").style.display !== "none") await _saveWizardDraft();
+          await wizardDraftSaveQueue.catch(function() {});
+          var saved = await api("/drafts/" + encodeURIComponent(item.draft_id));
+          wizardDraft = saved.snapshot;
+          wizardDraftMeta = saved;
+          var status = document.getElementById("wizard-draft-status");
+          if (status) status.textContent = currentLang === "zh-CN" ? "草稿已恢复" : "Draft restored";
+          overlay.style.display = "none";
+          openModal();
+        } catch (err) { window.alert(_wizardDraftErrorText(err)); }
+      });
+      var remove = document.createElement("button");
+      remove.type = "button"; remove.className = "btn ghost";
+      remove.textContent = currentLang === "zh-CN" ? "删除" : "Delete";
+      remove.addEventListener("click", async function() {
+        if (!window.confirm(currentLang === "zh-CN" ? "删除这份草稿？" : "Delete this draft?")) return;
+        try {
+          var removingCurrent = !!(wizardDraftMeta && wizardDraftMeta.draft_id === item.draft_id);
+          if (removingCurrent) {
+            if (wizardDraftAutosaveTimer) clearTimeout(wizardDraftAutosaveTimer);
+            wizardDraftAutosaveTimer = null;
+            wizardDraftEpoch++;
+            wizardDraftMeta = null;
+            wizardDraft = null;
+            await wizardDraftSaveQueue.catch(function() {});
+          }
+          await api("/drafts/" + encodeURIComponent(item.draft_id), { method: "DELETE" });
+          if (removingCurrent) {
+            var defaultWorkflow = resolveDefaultWorkflow("");
+            if (defaultWorkflow) {
+              wizardState.workflow = {
+                id: defaultWorkflow.id, label: defaultWorkflow.label,
+                schema_id: canonicalMethodSchemaId(defaultWorkflow.id, defaultWorkflow.method_schema_id)
+              };
+              loadDefaultMethodProfile(wizardState.workflow.schema_id);
+            }
+            openModal();
+          }
+          row.remove();
+          if (!list.children.length) list.textContent = currentLang === "zh-CN" ? "暂无草稿" : "No saved drafts";
+        } catch (err) { window.alert(_wizardDraftErrorText(err)); }
+      });
+      row.appendChild(info); row.appendChild(resume); row.appendChild(remove);
+      list.appendChild(row);
+    });
+  } catch (err) {
+    list.textContent = (currentLang === "zh-CN" ? "加载失败：" : "Could not load drafts: ") + _wizardDraftErrorText(err);
+  }
+}
+
+async function startBlankWizardDraft() {
+  try {
+    if (wizardDraftAutosaveTimer) clearTimeout(wizardDraftAutosaveTimer);
+    wizardDraftAutosaveTimer = null;
+    if (document.getElementById("job-modal").style.display !== "none") await _saveWizardDraft();
+    wizardDraftEpoch++;
+    wizardDraft = null;
+    wizardDraftMeta = null;
+    var status = document.getElementById("wizard-draft-status");
+    if (status) status.textContent = "";
+    var defaultWorkflow = resolveDefaultWorkflow("");
+    if (defaultWorkflow) {
+      wizardState.workflow = {
+        id: defaultWorkflow.id,
+        label: defaultWorkflow.label,
+        schema_id: canonicalMethodSchemaId(defaultWorkflow.id, defaultWorkflow.method_schema_id)
+      };
+      loadDefaultMethodProfile(wizardState.workflow.schema_id);
+    }
+    document.getElementById("wizard-drafts-modal").style.display = "none";
+    openModal();
+  } catch (err) { window.alert(err.message); }
 }
 
 function setWizardInputMode(mode) {
@@ -23235,12 +23760,13 @@ function handleParseResult(body) {
   if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
     var mechPanel = document.getElementById("mech-builder-panel");
     if (mechPanel) mechPanel.style.display = "block";
-    hookMechanismBuilder();
+    hookMechanismBuilder({ preserveState: true });
   }
    if (isPESsearchTask()) {
      syncPESSelectionFromWizard(true);
      attachPESPreviewSelection();
    }
+   _scheduleWizardDraftAutosave();
 }
 
 function showParseStatus(msg, isError) {
@@ -23412,15 +23938,18 @@ function _toggleInputListOverlay() {
   if (clearBtn && !clearBtn._acpWired) {
     clearBtn._acpWired = true;
     clearBtn.addEventListener("click", function() {
-      wizardDraft = null;
-      wizardStructures = [];
-      wizardParseWarnings = [];
-      wizardSelectedStructureIndex = 0;
-      renderLoadedStructuresList();
-      renderPreviewWaiting();
-      updateFooterSelectedCount();
-      _syncPickerSelection();
+      _discardSavedWizardDraft();
       _closeInputListOverlay();
+      var defaultWorkflow = resolveDefaultWorkflow("");
+      if (defaultWorkflow) {
+        wizardState.workflow = {
+          id: defaultWorkflow.id,
+          label: defaultWorkflow.label,
+          schema_id: canonicalMethodSchemaId(defaultWorkflow.id, defaultWorkflow.method_schema_id)
+        };
+        loadDefaultMethodProfile(wizardState.workflow.schema_id);
+      }
+      openModal();
     });
   }
 })();
@@ -23589,6 +24118,7 @@ function renderLoadedStructuresList() {
   }); });
   if (resultsPicker && typeof resultsPicker.render === "function") resultsPicker.render();
   if (candidatePicker && typeof candidatePicker.render === "function") candidatePicker.render();
+  refreshIrcSourceSummary();
 }
 
 function updatePreviewActionState() {
@@ -25113,6 +25643,7 @@ async function _loadPendingGeometry() {
     if (wizardSelectedStructureIndex === i) {
       renderStructurePreview(wizardStructures, wizardParseWarnings);
     }
+    _scheduleWizardDraftAutosave();
   }
 }
 
@@ -25187,6 +25718,7 @@ async function loadStructureSource(sourceId, rowEl, sourceMeta) {
       attachPESPreviewSelection();
     }
     updateInputModeVisibility();
+    _scheduleWizardDraftAutosave();
   } catch (e) {
     if (loadToken !== structureSourceLoadToken || (e && e.name === "AbortError")) return;
     if (errEl) {
@@ -25440,6 +25972,31 @@ function renderMethodDetail(schema, stages, loadState) {
   }
 }
 
+var ircSourcePreviewSequence = 0;
+function refreshIrcSourceSummary() {
+  var seq = ++ircSourcePreviewSequence;
+  if (!wizardState.workflow || wizardState.workflow.id !== "irc") return;
+  var desc = document.getElementById("method-card-desc");
+  if (!desc) return;
+  var entry = wizardStructures.length === 1 ? wizardStructures[0] : null;
+  var sourceId = entry && String((entry.source_ref && entry.source_ref.source_id) || entry.source_id || "").trim();
+  if (!sourceId) {
+    desc.textContent = wizardStructures.length > 1
+      ? "IRC 每次只能选择一个已验证的 TS 任务结果"
+      : "请选择已完成并通过频率验证的 TS 任务结果；计算方法将自动继承";
+    return;
+  }
+  desc.textContent = "正在核对 TS 结果与计算方法…";
+  api("/irc/ts-source?source_id=" + encodeURIComponent(sourceId)).then(function(source) {
+    if (seq !== ircSourcePreviewSequence) return;
+    desc.textContent = "已锁定来源 TS：" + source.method + (source.basis ? "/" + source.basis : "") +
+      " · 虚频 " + Number(source.imaginary_frequency_cm1).toFixed(2) + " cm⁻¹";
+  }).catch(function(error) {
+    if (seq !== ircSourcePreviewSequence) return;
+    desc.textContent = "不可用于 IRC：" + (error.message || String(error));
+  });
+}
+
 function updateConfigCards() {
   ensureWizardWorkflowValid();
   syncBatchOptimizeProfileSummary();
@@ -25524,6 +26081,7 @@ function updateConfigCards() {
     });
   }
   mtDesc.innerHTML = parts.join(" | ") || "--";
+  refreshIrcSourceSummary();
 
   updateInputModeVisibility();
 }
@@ -27661,6 +28219,27 @@ async function openMethodConfig() {
         window._batchRoles = _batchRoles;
         window._BATCH_ROLE_DEFAULTS = _BATCH_ROLE_DEFAULTS;
 
+        // Electronic state belongs to the batch level and applies to every
+        // structure/role in this submission. Keep it outside the INT/TS form.
+        var batchSpinField = document.createElement("div");
+        var batchSpinLabel = document.createElement("label");
+        batchSpinLabel.textContent = currentLang === "zh-CN" ? "电子态与自旋（全部结构）" : "Electronic state and spin (all structures)";
+        batchSpinField.appendChild(batchSpinLabel);
+        buildElectronicStateFieldRow(
+          "electronic_state",
+          batchSpinField,
+          (methodCatalogCache.field_definitions || {}).electronic_state || { presets: ["auto_ground_state"] },
+          getLevelState("batch").electronic_state
+        );
+        advDiv.appendChild(batchSpinField);
+        var batchSpinNote = document.createElement("div");
+        batchSpinNote.className = "muted";
+        batchSpinNote.style.cssText = "font-size:11px;margin:-4px 0 12px;";
+        batchSpinNote.textContent = currentLang === "zh-CN"
+          ? "应用于本次提交的全部结构和计算步骤。FlipSpin 预设翻转第 1 个原子；其他原子请用 CLI 的 --spin-config 自定义。"
+          : "Applies to all structures and steps. FlipSpin preset flips atom 1; use CLI --spin-config for another atom.";
+        advDiv.appendChild(batchSpinNote);
+
         // ── Role toggle buttons with counts ──
         var _batchRoleActive = "int";
         var intCount = 0, tsCount = 0;
@@ -28842,6 +29421,7 @@ async function submitPESsearchTask() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    _discardSavedWizardDraft();
     closeModal();
     await refreshJobs();
     if (result && result.job_id) await selectJob(result.job_id);
@@ -28931,6 +29511,19 @@ async function submitJobModal() {
   }
 
   var workflow = wizardState.workflow.id;
+  if (workflow === "irc") {
+    if (wizardStructures.length !== 1) {
+      window.alert("IRC 每次只能选择一个已验证的 TS 任务结果");
+      return;
+    }
+    var selectedTsSource = String((wizardStructures[0].source_ref && wizardStructures[0].source_ref.source_id) || wizardStructures[0].source_id || "").trim();
+    try {
+      await api("/irc/ts-source?source_id=" + encodeURIComponent(selectedTsSource));
+    } catch (error) {
+      window.alert("所选结构不可用于 IRC：" + (error.message || String(error)));
+      return;
+    }
+  }
   var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
   var mem = document.getElementById("modal-mem").value || "8GB";
   var remark = String(document.getElementById("modal-remark").value || "").trim();
@@ -29054,7 +29647,7 @@ async function submitJobModal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nmrBody),
       });
-      wizardDraft = null;
+      _discardSavedWizardDraft();
       closeModal();
       await refreshJobs();
       await selectJob(nmrResult.job_id);
@@ -29178,7 +29771,7 @@ async function submitJobModal() {
         body: JSON.stringify(mechBody),
       });
       // Mechanism study link retired — write endpoints return 410 Gone.
-      wizardDraft = null;
+      _discardSavedWizardDraft();
       closeModal();
       await refreshJobs();
       await selectJob(mechResult.job_id);
@@ -29227,6 +29820,15 @@ async function submitJobModal() {
       profile_id: wizardState.method.profile_id,
       levels: cleanedLevels
     };
+    if (workflow === "irc") {
+      var tsSourceId = String((s.source_ref && s.source_ref.source_id) || s.source_id || "").trim();
+      if (!tsSourceId || tsSourceId.indexOf("job_") !== 0) {
+        throw new Error("IRC 只能选择已完成 TS 计算任务的正式结果结构");
+      }
+      inputPayload = { source_id: tsSourceId, directions: ["forward", "reverse"] };
+      var ircSettings = cleanedLevels.irc || {};
+      methodPayload = { maxpoints: ircSettings.maxpoints || 100, step: ircSettings.step || 0.1 };
+    }
     if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
     if (workflow === "BatchOptimize") {
       applyBatchOptimizeMethodFields(methodPayload);
@@ -29343,10 +29945,10 @@ async function submitJobModal() {
 
     batchBodies.push(body);
   }
-  wizardDraft = null;
-  closeModal();
   try {
     await submitJobBatch(batchBodies);
+    _discardSavedWizardDraft();
+    closeModal();
   } catch (error) {
     window.alert(t("modal.submit_failed", { message: formatSubmitError(error) }));
   }
@@ -29729,6 +30331,20 @@ function setupEventListeners() {
   document.getElementById("btn-new-calc").addEventListener("click", openModal);
   document.getElementById("modal-close").addEventListener("click", closeJobModalGuarded);
   document.getElementById("modal-cancel").addEventListener("click", closeJobModalGuarded);
+  document.getElementById("wizard-drafts-open").addEventListener("click", openWizardDrafts);
+  document.getElementById("wizard-drafts-new").addEventListener("click", startBlankWizardDraft);
+  document.getElementById("wizard-drafts-close").addEventListener("click", function() { document.getElementById("wizard-drafts-modal").style.display = "none"; });
+  document.getElementById("wizard-drafts-modal").addEventListener("mousedown", function(event) {
+    if (event.target.id === "wizard-drafts-modal") event.currentTarget.style.display = "none";
+  });
+  ["input", "change", "click"].forEach(function(kind) {
+    document.addEventListener(kind, function(event) {
+      var target = event.target;
+      if (!target || !target.closest || !target.closest("#job-modal, #workflow-config-modal, #method-config-modal")) return;
+      if (target.id === "job-modal" || target.id === "modal-close" || target.id === "modal-cancel" || target.id === "wizard-drafts-open" || target.id === "modal-submit") return;
+      _scheduleWizardDraftAutosave();
+    });
+  });
   document.getElementById("modal-submit").addEventListener("click", handleModalSubmit);
   document.getElementById("modal-back").addEventListener("click", function() {
     if (window.ACPJobEditor && ACPJobEditor.isActive()) {
@@ -29792,7 +30408,7 @@ function setupEventListeners() {
     updatePESConfigNote();
   });
   document.getElementById("job-modal").addEventListener("mousedown", function(event) {
-    if (event.target.id === "job-modal") closeModal();
+    if (event.target.id === "job-modal") closeJobModalGuarded();
   });
 
   document.getElementById("btn-config-workflow").addEventListener("click", openWorkflowConfig);
@@ -30315,7 +30931,9 @@ function startPolling() {
       // Energy graph + mechanism refresh gated to5s (every other tick)
       if (localGen % 2 === 0) {
         var graphTaskActive = lastSelectedJob && (!lastSelectedJob.status || isActiveJobStatus(lastSelectedJob.status));
-        if (activeViewerTab === "energy" && lastSelectedJob && graphTaskActive && !energyGraphState.loading) {
+        var graphJobStatus = String((lastSelectedJob && lastSelectedJob.status) || "").toLowerCase();
+        var graphNeedsFinal = lastSelectedJob && !graphTaskActive && energyGraphState.lastFetchedJobStatus !== graphJobStatus;
+        if (activeViewerTab === "energy" && lastSelectedJob && (graphTaskActive || graphNeedsFinal) && !energyGraphState.loading) {
           await renderEnergyGraphWorkspace(lastSelectedJob, { silent: true });
         }
         if (appSection === "mechanism") await refreshMechSectionStudies(true);
@@ -30341,6 +30959,7 @@ function startPolling() {
     logPollInFlight = true;
     try {
       await pollLogTail(selectedJobId);
+      await pollIrcOutputTail(selectedJobId);
     } catch (e) { /* ignore */ }
     finally {
       logPollInFlight = false;
@@ -31158,6 +31777,7 @@ async function s2scanSubmit() {
     s2scanState.jobId = result.job_id || "";
     s2scanState.jobStatus = result.status || "queued";
     if (statusEl) { statusEl.className = "s2scan-success"; statusEl.textContent = t("s2scan.submit_ok") + ": " + s2scanState.jobId; }
+    _discardSavedWizardDraft();
     closeModal();
     await refreshJobs();
     if (s2scanState.jobId) await selectJob(s2scanState.jobId);

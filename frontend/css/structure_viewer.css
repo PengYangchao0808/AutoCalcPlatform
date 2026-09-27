@@ -1030,14 +1030,6 @@
   color: var(--sv-amber);
 }
 
-.sv-vib-dock-ts-threshold {
-  font-size: 11px;
-  color: var(--sv-text-tertiary);
-  padding: 2px 0;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
 .sv-vib-dock-ts-suffix {
   font-size: 11px;
   color: var(--sv-text-tertiary);
