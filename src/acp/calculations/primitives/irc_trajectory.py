@@ -20,6 +20,7 @@ import os
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -224,6 +225,7 @@ class IrcTrajectoryRecorder:
     directions: tuple[str, ...] = IRC_DIRECTIONS
     min_interval: float = 2.0
     persist: bool = True
+    on_snapshot: Callable[[dict[str, Any]], None] | None = None
     _lock: threading.RLock = field(
         default_factory=threading.RLock, init=False, repr=False, compare=False
     )
@@ -232,6 +234,8 @@ class IrcTrajectoryRecorder:
     )
     _last_refresh: float = field(default=0.0, init=False, repr=False, compare=False)
     _last_signature: str = field(default="", init=False, repr=False, compare=False)
+    _stop_event: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
+    _poll_thread: threading.Thread | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.result_dir = Path(self.result_dir)
@@ -248,19 +252,39 @@ class IrcTrajectoryRecorder:
             self._last_refresh = now
         _ = self.refresh()
 
+    def start(self) -> None:
+        """Poll trajectory files even when ORCA does not flush stdout."""
+        if not self.persist or self._poll_thread is not None:
+            return
+        self._stop_event.clear()
+        self._poll_thread = threading.Thread(
+            target=self._poll, name="irc-trajectory-recorder", daemon=True
+        )
+        self._poll_thread.start()
+
+    def _poll(self) -> None:
+        while not self._stop_event.wait(max(self.min_interval, 0.1)):
+            self.refresh()
+
+    def stop(self) -> None:
+        """Join the polling thread before the terminal snapshot is written."""
+        self._stop_event.set()
+        thread = self._poll_thread
+        if thread is not None:
+            thread.join()
+            self._poll_thread = None
+
     def refresh(self, *, force: bool = False) -> dict[str, Any] | None:
         """Re-read fully written frames and atomically replace the snapshot."""
         if not self.persist:
             return None
-        per_direction = collect_irc_path(self.target_dir)
-        signature = _signature(per_direction)
-        with self._lock:
-            if not force and signature == self._last_signature:
-                return None
-            self._last_signature = signature
         try:
             with self._write_lock:
-                return _materialize(
+                per_direction = collect_irc_path(self.target_dir)
+                signature = _signature(per_direction)
+                if not force and signature == self._last_signature:
+                    return None
+                payload = _materialize(
                     self.result_dir,
                     per_direction,
                     status="running",
@@ -270,6 +294,14 @@ class IrcTrajectoryRecorder:
                     warnings=None,
                     ts_energy=resolve_ts_energy(self.target_dir, per_direction),
                 )
+                if payload is not None:
+                    self._last_signature = signature
+            if payload is not None and self.on_snapshot is not None:
+                try:
+                    self.on_snapshot(payload)
+                except Exception:
+                    logger.debug("IRC progress callback failed", exc_info=True)
+            return payload
         except (OSError, ValueError):
             logger.debug("Could not refresh IRC trajectory snapshot", exc_info=True)
             return None
@@ -278,14 +310,10 @@ class IrcTrajectoryRecorder:
         """Publish the terminal snapshot after the backend call returns."""
         if not self.persist:
             return None
-        per_direction = collect_irc_path(self.target_dir)
-        signature = _signature(per_direction)
-        with self._lock:
-            self._last_signature = signature
-            self._last_refresh = time.monotonic()
         try:
             with self._write_lock:
-                return _materialize(
+                per_direction = collect_irc_path(self.target_dir)
+                payload = _materialize(
                     self.result_dir,
                     per_direction,
                     status=status,
@@ -295,6 +323,10 @@ class IrcTrajectoryRecorder:
                     warnings=None,
                     ts_energy=resolve_ts_energy(self.target_dir, per_direction),
                 )
+                if payload is not None:
+                    self._last_signature = _signature(per_direction)
+                    self._last_refresh = time.monotonic()
+                return payload
         except (OSError, ValueError):
             logger.debug("Could not finalize IRC trajectory snapshot", exc_info=True)
             return None

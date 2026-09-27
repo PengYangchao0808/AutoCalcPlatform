@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -394,12 +395,19 @@ def test_irc_cli_completes_reporter_after_workflow(
         fake_backend,
         output_dir=output_root / "WORK" / "07_PATH" / "ORCA",
     )
+    proof_path = tmp_path / "ts_source.json"
+    proof_path.write_text(json.dumps({
+        "schema": "irc_ts_source_v1", "method": "r2SCAN-3c", "basis": "",
+        "charge": 0, "multiplicity": 1,
+        "geometry_sha256": hashlib.sha256(ts.path.read_bytes()).hexdigest(),
+    }), encoding="utf-8")
     args = acp_cli.build_parser().parse_args(
         [
             "run",
             "irc",
             "--input",
             str(ts.path),
+            "--ts-provenance", str(proof_path),
             "--input-role",
             "transition_state",
             "--output",
@@ -579,7 +587,7 @@ def test_irc_cli_without_role_returns_usage_error(tmp_path: Path) -> None:
 
     # Then: the boundary rejects the ambiguous role with usage status 2.
     assert completed.returncode == 2
-    assert "--input-role transition_state" in f"{completed.stdout}\n{completed.stderr}"
+    assert "--ts-provenance" in f"{completed.stdout}\n{completed.stderr}"
 
 
 def test_irc_registry_entry_is_available() -> None:
@@ -612,6 +620,8 @@ def test_irc_scheduler_commands_forward_request_options(tmp_path: Path) -> None:
             "input_artifact": "inputs/ts.xyz",
             "input_role": "transition_state",
             "directions": ["forward"],
+            "charge": 0, "multiplicity": 1,
+            "ts_source": {"schema": "irc_ts_source_v1", "method": "M062X", "basis": "def2-SVP"},
         },
         method={"method": "M062X", "basis": "def2-SVP", "maxpoints": 33, "step": 0.2},
         resources={"nproc": 4, "mem": "2GB"},
@@ -641,6 +651,8 @@ def test_irc_scheduler_commands_preserve_both_directions(tmp_path: Path) -> None
             "input_artifact": "inputs/ts.xyz",
             "input_role": "transition_state",
             "directions": ["forward", "reverse"],
+            "charge": 0, "multiplicity": 1,
+            "ts_source": {"schema": "irc_ts_source_v1", "method": "M062X", "basis": ""},
         },
         method={},
     )
@@ -709,13 +721,17 @@ class TestIrcValidation:
         assert rmsd < 1e-10
 
     def test_classify_ts_identity_valid(self) -> None:
-        """Exactly one imaginary frequency below cutoff → valid TS."""
+        """Exactly one negative frequency → valid TS regardless of magnitude."""
         from acp.calculations.irc.validation import classify_ts_identity
 
         identity = classify_ts_identity([-800.0, 100.0, 200.0])
         assert identity.valid is True
         assert identity.imaginary_count == 1
         assert identity.imaginary_frequency_cm1 == -800.0
+
+        weak = classify_ts_identity([-34.22, 100.0, 200.0])
+        assert weak.valid is True
+        assert weak.imaginary_frequency_cm1 == -34.22
 
     def test_classify_ts_identity_no_imaginary(self) -> None:
         """No imaginary frequencies → not valid."""

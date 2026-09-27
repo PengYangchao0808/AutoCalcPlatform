@@ -57,7 +57,6 @@ from acp.calculations.tsmode.source import (
     verify_snapshot_hashes,
 )
 from acp.calculations.tsmode.validation import (
-    SIGNIFICANT_IMAGINARY_THRESHOLD_CM1,
     compare_mode_correspondence,
     validate_ts_frequencies,
 )
@@ -592,7 +591,6 @@ class TsmodeEngine:
                 imaginary.append(
                     {
                         "frequency_cm1": value,
-                        "significant": abs(value) >= SIGNIFICANT_IMAGINARY_THRESHOLD_CM1,
                     }
                 )
         return TsmodeReport(

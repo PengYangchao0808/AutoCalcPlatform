@@ -2,8 +2,7 @@
 
 Separates *execution* status from *chemical validation* status: an OptTS
 run can execute successfully and still fail to be a first-order saddle
-point.  All thresholds are recorded with the verdict so the report never
-pretends to more precision than the evidence supports.
+point. Every negative frequency counts, including low-barrier modes.
 """
 
 from __future__ import annotations
@@ -16,27 +15,22 @@ from numpy.typing import NDArray
 from acp.calculations.contracts import JsonValue
 
 __all__ = [
-    "SIGNIFICANT_IMAGINARY_THRESHOLD_CM1",
     "TsValidation",
     "validate_ts_frequencies",
     "compare_mode_correspondence",
 ]
-
-#: |ν| below which an imaginary frequency is treated as "near-zero weak
-#: imaginary" for interpretation (plan §5.3).  Interpretive only — the raw
-#: frequencies are always reported unfiltered.
-SIGNIFICANT_IMAGINARY_THRESHOLD_CM1 = 100.0
-
 
 @dataclass(frozen=True, slots=True)
 class TsValidation:
     """Validation verdict for the final frequency analysis."""
 
     classification: str
+    # Legacy report keys remain available; every negative mode now appears
+    # in both lists, and the fixed zero crossing is the only criterion.
     significant_imaginary_cm1: list[float] = field(default_factory=list)
     all_imaginary_cm1: list[float] = field(default_factory=list)
-    threshold_cm1: float = SIGNIFICANT_IMAGINARY_THRESHOLD_CM1
-    threshold_source: str = "default"
+    threshold_cm1: float = 0.0
+    threshold_source: str = "fixed"
     mode_correspondence: dict[str, JsonValue] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
@@ -54,50 +48,36 @@ class TsValidation:
 
 def validate_ts_frequencies(
     frequencies_cm1: list[float],
-    *,
-    threshold_cm1: float = SIGNIFICANT_IMAGINARY_THRESHOLD_CM1,
-    threshold_source: str = "default",
 ) -> TsValidation:
     """Classify a final frequency list (plan §12 table).
 
     Classifications:
-        ``first_order_saddle_candidate`` — exactly one significant imaginary.
-        ``higher_order_saddle``          — more than one significant imaginary.
-        ``no_significant_imaginary``     — zero significant imaginary.
+        ``first_order_saddle_candidate`` — exactly one negative frequency.
+        ``higher_order_saddle``          — more than one negative frequency.
+        ``no_imaginary``                 — zero negative frequencies.
         ``not_verified``                 — no frequencies at all.
     """
     if not frequencies_cm1:
         return TsValidation(
             classification="not_verified",
-            threshold_cm1=threshold_cm1,
-            threshold_source=threshold_source,
             notes=["final frequency analysis unavailable"],
         )
     all_imaginary = sorted(
         (float(value) for value in frequencies_cm1 if float(value) < 0.0),
         reverse=True,
     )
-    significant = [value for value in all_imaginary if abs(value) >= threshold_cm1]
     notes: list[str] = []
-    weak = [value for value in all_imaginary if abs(value) < threshold_cm1]
-    if weak:
-        notes.append(
-            f"{len(weak)} weak imaginary mode(s) below the {threshold_cm1:g} cm⁻¹ "
-            "interpretation threshold (raw values retained)"
-        )
-    if len(significant) == 1:
+    if len(all_imaginary) == 1:
         classification = "first_order_saddle_candidate"
-    elif len(significant) > 1:
+    elif len(all_imaginary) > 1:
         classification = "higher_order_saddle"
     else:
-        classification = "no_significant_imaginary"
-        notes.append("no significant imaginary frequency — not verified as a saddle")
+        classification = "no_imaginary"
+        notes.append("no negative frequency — not verified as a saddle")
     return TsValidation(
         classification=classification,
-        significant_imaginary_cm1=significant,
+        significant_imaginary_cm1=all_imaginary,
         all_imaginary_cm1=all_imaginary,
-        threshold_cm1=threshold_cm1,
-        threshold_source=threshold_source,
         notes=notes,
     )
 

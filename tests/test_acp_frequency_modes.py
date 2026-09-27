@@ -1050,11 +1050,11 @@ class TestChemistryTsGateConsistency:
     """TS imaginary counts consistent across gates (cross-language)."""
 
     _CASES: list[list[float]] = [
-        [-30.0, 100.0],                # k=0 significant (small negative above cutoff)
-        [-797.72, -30.0, 100.0],       # k=1
-        [-60.0, -800.0, 50.0],         # k=2
-        [-50.0, 120.0],                # exact-threshold boundary (at-or-below counts)
-        [-49.9999, 120.0],             # just above the threshold
+        [0.0, 100.0],
+        [-34.22, 100.0],
+        [-0.01, 100.0],
+        [-797.72, -30.0, 100.0],
+        [-60.0, -800.0, 50.0],
     ]
 
     def _frontend_ts_judgment(self, freqs: list[float]) -> tuple[int, str]:
@@ -1068,60 +1068,50 @@ class TestChemistryTsGateConsistency:
             f'require({json.dumps(str(_VIB_JS_MODULE_PATH))});\n'
             "var vib = window.ACPVibrationViewer;\n"
             f"var modes = {json.dumps([{'frequency_cm1': f} for f in freqs])};\n"
-            "var r = vib.tsJudgment(modes, -50.0);\n"
+            "var r = vib.tsJudgment(modes);\n"
             "console.log(JSON.stringify(r));\n"
         )
         result = subprocess.run(
             ["node", "-e", script], capture_output=True, text=True, timeout=10, check=True
         )
         parsed = json.loads(result.stdout.strip().splitlines()[-1])
-        return int(parsed["significantCount"]), str(parsed["hint"])
+        return int(parsed["imaginaryCount"]), str(parsed["hint"])
 
     def test_frontend_judgment_matches_batch_gate(self) -> None:
-        """For every case (k=0,1,2 + boundary): the frontend tsJudgment
-        significantCount equals the backend _count_significant_imaginary and
-        the first_order hint coincides exactly with the batch gate's
-        count==1 validity (both at-or-below -50 cm-1)."""
+        """Frontend evidence and BatchOptimize agree on every negative mode."""
         from acp.calculations.batch.engine import (
-            _count_significant_imaginary,
+            _count_imaginary,
             _ts_frequency_judgment,
         )
 
         for freqs in self._CASES:
-            py_count = _count_significant_imaginary(freqs, cutoff=-50.0)
-            py_valid = _ts_frequency_judgment(freqs, cutoff=-50.0)[0]
+            py_count = _count_imaginary(freqs)
+            py_valid = _ts_frequency_judgment(freqs)[0]
             js_count, js_hint = self._frontend_ts_judgment(freqs)
             assert js_count == py_count, f"{freqs}: JS {js_count} != PY {py_count}"
             assert (js_hint == "first_order") == py_valid, freqs
 
-    def test_irc_gate_shared_cutoff_and_documented_divergence(self) -> None:
-        """IRC classify_ts_identity shares the -50 cm-1 magnitude cutoff but
-        counts ALL negative frequencies (its imaginary_frequencies input is
-        expected pre-filtered to negatives). Where the inputs coincide the
-        gates agree; the [-60, -40] pair is a DOCUMENTED divergence: batch
-        ignores the small-magnitude -40 (valid TS), IRC rejects the second
-        negative outright (invalid) — different gates by design."""
+    def test_irc_gate_agrees_with_batch_on_frequency_count(self) -> None:
+        """IRC and BatchOptimize accept one negative mode and reject two."""
         from acp.calculations.batch.engine import _ts_frequency_judgment
         from acp.calculations.irc.validation import classify_ts_identity
 
         # single strong imaginary: both gates valid
-        assert _ts_frequency_judgment([-797.72, 100.0], cutoff=-50.0)[0] is True
+        assert _ts_frequency_judgment([-797.72, 100.0])[0] is True
         irc = classify_ts_identity([-797.72, 100.0])
         assert irc.valid is True
         assert irc.imaginary_count == 1
 
-        # no significant imaginary: both gates invalid
-        assert _ts_frequency_judgment([-30.0, 100.0], cutoff=-50.0)[0] is False
+        # A small negative frequency is valid in both gates.
+        assert _ts_frequency_judgment([-30.0, 100.0])[0] is True
         irc_small = classify_ts_identity([-30.0, 100.0])
-        assert irc_small.valid is False  # count==1 but above cutoff
-        assert "above cutoff" in "; ".join(irc_small.messages)
+        assert irc_small.valid is True
 
-        # boundary: exactly -50.0 is significant in the shared cutoff semantics
-        assert _ts_frequency_judgment([-50.0], cutoff=-50.0)[0] is True
-        assert classify_ts_identity([-50.0]).valid is True
+        assert _ts_frequency_judgment([0.0, 100.0])[0] is False
+        assert classify_ts_identity([0.0, 100.0]).valid is False
 
-        # documented divergence: two negatives, only one below the cutoff
-        assert _ts_frequency_judgment([-60.0, -40.0], cutoff=-50.0)[0] is True
+        # A second weak imaginary mode is still a second negative mode.
+        assert _ts_frequency_judgment([-60.0, -40.0])[0] is False
         irc_two = classify_ts_identity([-60.0, -40.0])
         assert irc_two.valid is False
         assert irc_two.imaginary_count == 2

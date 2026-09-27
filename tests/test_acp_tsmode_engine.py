@@ -20,7 +20,19 @@ from acp.calculations.tsmode.contracts import (
 )
 from acp.calculations.tsmode.engine import TsmodeEngine, compute_engine_fingerprint
 from acp.calculations.tsmode.source import load_bundle_from_files
+from acp.calculations.tsmode.validation import validate_ts_frequencies
 from tests.tsmode_synthetic import make_consistent_pair
+
+
+def test_tsmode_frequency_validation_counts_weak_imaginary_modes() -> None:
+    weak = validate_ts_frequencies([-34.22, 100.0])
+    assert weak.classification == "first_order_saddle_candidate"
+    assert weak.all_imaginary_cm1 == [-34.22]
+    assert weak.threshold_cm1 == 0.0
+
+    second = validate_ts_frequencies([-34.22, -0.01, 100.0])
+    assert second.classification == "higher_order_saddle"
+    assert validate_ts_frequencies([0.0, 100.0]).classification == "no_imaginary"
 
 
 def _request(**overrides) -> TsmodeRequest:

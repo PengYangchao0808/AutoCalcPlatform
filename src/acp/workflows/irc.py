@@ -38,6 +38,7 @@ def run_irc_workflow(
     profile: str = "default",
     resources: Mapping[str, JsonValue] | None = None,
     progress_reporter: ProgressReporter | None = None,
+    source_provenance: Mapping[str, JsonValue] | None = None,
 ) -> WorkflowResult:
     """Run an independent IRC request from a transition-state artifact."""
     if maxpoints < 1:
@@ -174,6 +175,7 @@ def run_irc_workflow(
         "endpoints": endpoint_paths,
         "endpoint_count": calculation.metadata.get("endpoint_count", 0),
         "errors": list(calculation.errors),
+        "ts_source": dict(source_provenance or {}),
     }
     report_tmp = report_path.with_name(report_path.name + ".tmp")
     _ = report_tmp.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")

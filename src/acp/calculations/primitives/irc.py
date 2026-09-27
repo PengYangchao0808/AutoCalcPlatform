@@ -126,6 +126,24 @@ def run_irc(
         recorder = IrcTrajectoryRecorder(result_dir, target_dir, directions=tuple(directions))
 
         direction_str = _resolve_direction(directions)
+
+        def _on_snapshot(payload: dict[str, Any]) -> None:
+            nonlocal active_stage
+            if progress_reporter is None:
+                return
+            frames = payload.get("frames") or []
+            forward_count = sum(frame.get("direction") == "forward" for frame in frames)
+            reverse_count = sum(frame.get("direction") == "reverse" for frame in frames)
+            if direction_str == "both" and reverse_count and active_stage == "irc_forward":
+                progress_reporter.complete_stage("irc_forward")
+                progress_reporter.start_stage("irc_backward")
+                active_stage = "irc_backward"
+            if active_stage is not None:
+                progress_reporter.set_stage_detail(
+                    active_stage, f"正向 {forward_count} 点 · 反向 {reverse_count} 点"
+                )
+
+        recorder.on_snapshot = _on_snapshot
         if progress_reporter is not None:
             progress_reporter.complete_stage("preparing")
             active_stage = None
@@ -138,6 +156,7 @@ def run_irc(
         irc_kwargs = _irc_kwargs(request)
         if selected_backend == "orca":
             irc_kwargs["output_callback"] = recorder.feed_line
+        recorder.start()
         try:
             raw_result = backend.irc(
                 inputs.coordinates,
@@ -149,6 +168,7 @@ def run_irc(
                 **irc_kwargs,
             )
         except _BACKEND_FAILURES as error:
+            recorder.stop()
             if progress_reporter is not None and active_stage is not None:
                 progress_reporter.fail_stage(active_stage, error_text(error))
             partial = recorder.finish(status="failed", complete=False)
@@ -167,10 +187,13 @@ def run_irc(
                 metadata=metadata,
                 status="failed",
             )
+        finally:
+            recorder.stop()
 
         # Normalise to QCResult
         qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
         success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
+        endpoints = _discover_endpoints(raw_result, target_dir, inputs)
         errors: list[str] = []
         if not success:
             raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
@@ -180,12 +203,15 @@ def run_irc(
             if progress_reporter is not None and active_stage is not None:
                 progress_reporter.fail_stage(active_stage, failure_message)
         elif progress_reporter is not None and active_stage is not None:
+            recorder.refresh(force=True)
+            completed_stage = active_stage
             progress_reporter.complete_stage(active_stage)
             active_stage = None
-            if direction_str == "both":
-                # ORCA executes both directions in one backend call. The second
-                # lifecycle stage represents the completed direction once that
-                # combined call has returned; it does not invent intermediate data.
+            if (
+                direction_str == "both"
+                and "reverse" in endpoints
+                and completed_stage == "irc_forward"
+            ):
                 progress_reporter.start_stage("irc_backward")
                 progress_reporter.complete_stage("irc_backward")
 
@@ -194,7 +220,6 @@ def run_irc(
             active_stage = "validating"
 
         # --- Parse endpoint geometries ---
-        endpoints = _discover_endpoints(raw_result, target_dir, inputs)
         if success and not endpoints:
             success = False
             message = "IRC produced no endpoint geometries"
@@ -248,6 +273,9 @@ def run_irc(
             status="completed" if success else "failed",
         )
     except Exception as error:
+        if "recorder" in locals():
+            recorder.stop()
+            recorder.finish(status="failed", complete=False)
         if progress_reporter is not None and active_stage is not None:
             progress_reporter.fail_stage(active_stage, error_text(error))
         raise
@@ -310,7 +338,10 @@ def _discover_endpoints(
     endpoints: dict[str, dict[str, Any]] = {}
 
     # 1. Try explicit endpoint paths from the result (IrcResult-style)
+    metadata = getattr(raw_result, "metadata", None)
     raw_endpoints = getattr(raw_result, "endpoints", None)
+    if not isinstance(raw_endpoints, dict) and isinstance(metadata, dict):
+        raw_endpoints = metadata.get("endpoints")
     if isinstance(raw_endpoints, dict):
         for direction, path_value in raw_endpoints.items():
             if direction in ("forward", "reverse") and path_value is not None:
@@ -326,6 +357,8 @@ def _discover_endpoints(
 
     # 2. Try final_geometries from the result
     final_geometries = getattr(raw_result, "final_geometries", None)
+    if not isinstance(final_geometries, dict) and isinstance(metadata, dict):
+        final_geometries = metadata.get("final_geometries")
     if isinstance(final_geometries, dict):
         for direction, geometry in final_geometries.items():
             if direction in endpoints or direction not in ("forward", "reverse"):
