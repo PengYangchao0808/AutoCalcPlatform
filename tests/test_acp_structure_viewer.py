@@ -1390,6 +1390,75 @@ class TestSimpleResolver:
         assert len(payload.entries) == 1
         assert payload.entries[0].source.kind == "formal_result"
 
+    def test_xtb_optimize_underscore_matches_hyphen(self, tmp_path: Path):
+        """xtb_optimize (underscore, real workflow id) ≡ xtb-optimize (historical)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_optimize_structure", "label": "optimize (step 0) — structure",
+             "path": "WORK/03_OPT/optimized.xyz", "kind": "structure"},
+            {"id": "step_0_optimize_energy", "label": "optimize (step 0) — energy",
+             "path": "", "kind": "energy_report", "metadata": {"energy_hartree": -1.25}},
+        ]
+
+        def _build(base: str, workflow: str):
+            root = tmp_path / base
+            root.mkdir()
+            task = _make_simple_task(root, workflow=workflow, products=products)
+            return build_structure_viewer_payload(
+                task, job_id="j1", workflow=workflow, job_status="completed"
+            )
+
+        payload_u = _build("u", "xtb_optimize")
+        payload_h = _build("h", "xtb-optimize")
+
+        assert payload_u.entries == payload_h.entries
+        assert payload_u.default_entry_id == payload_h.default_entry_id
+        assert payload_u.default_entry_id == "simple_optimize"
+        assert payload_u.entries[0].label == "xTB 优化"
+
+    def test_xtb_optimize_underscore_no_legacy_warning(self, tmp_path: Path):
+        """xtb_optimize resolves through the simple resolver: no legacy/compat markers."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_optimize_structure", "label": "optimize (step 0) — structure",
+             "path": "WORK/03_OPT/optimized.xyz", "kind": "structure"},
+        ]
+        task = _make_simple_task(tmp_path, workflow="xtb_optimize", products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="xtb_optimize", job_status="completed"
+        )
+        assert payload.warnings == ()
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.id == "simple_optimize"
+        assert entry.source.kind == "formal_result"
+        assert "兼容模式" not in entry.badges
+
+    def test_unknown_workflow_still_falls_back_to_legacy(self, tmp_path: Path):
+        """Unknown workflow keys keep the _resolve_legacy fallback semantics."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "no-such-wf",
+            "status": "completed",
+            "products": [
+                {"id": "p1", "label": "A", "path": "a.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="no-such-wf", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.id.startswith("legacy_")
+        assert "兼容模式" in entry.badges
+        assert payload.default_entry_id == entry.id
+
     def test_priority_formal_over_trajectory(self, tmp_path: Path):
         """Formal product takes priority over optimization trajectory."""
         from acp.results.structure_viewer import build_structure_viewer_payload

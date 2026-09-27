@@ -82,7 +82,7 @@ _SIMPLE_RESULT_LABELS: dict[str, str] = {
     "frequency": "频率计算结构",
 }
 _OPTIMIZE_WORKFLOW_KEYS = frozenset(
-    {"batch", "batchoptimize", "optimize", "xtb-optimize"}
+    {"batch", "batchoptimize", "optimize", "xtb-optimize", "xtb_optimize"}
 )
 _INPUT_LABEL_RE = re.compile(r"^input\b", re.IGNORECASE)
 _TS_LABEL_RE = re.compile(r"\bTS\b", re.IGNORECASE)
@@ -1080,7 +1080,7 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
 
 
 def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
-    """Resolve simple workflows (optimize/xtb-optimize/singlepoint/frequency).
+    """Resolve simple workflows (optimize/xtb-optimize/xtb_optimize/singlepoint/frequency).
 
     Priority chain: formal RESULT product > optimization trajectory (failed) >
     calculation input.  The workflow string selects which step kind to look for.
@@ -1091,6 +1091,7 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
     _WORKFLOW_STEP_KIND = {
         "optimize": "optimize",
         "xtb-optimize": "optimize",
+        "xtb_optimize": "optimize",
         "singlepoint": "singlepoint",
         "frequency": "frequency",
     }
@@ -1100,6 +1101,7 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
     _WORKFLOW_LABELS = {
         "optimize": "优化",
         "xtb-optimize": "xTB 优化",
+        "xtb_optimize": "xTB 优化",
         "singlepoint": "单点能",
         "frequency": "频率",
     }
@@ -1518,6 +1520,7 @@ _DISPATCH_TABLE: dict[str, _Resolver] = {
     "singlepoint": _resolve_simple,
     "frequency": _resolve_simple,
     "xtb-optimize": _resolve_simple,
+    "xtb_optimize": _resolve_simple,
     "scan": _resolve_scan,
     "irc": _resolve_irc,
 }
