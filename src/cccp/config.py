@@ -218,7 +218,6 @@ def _get_default_config() -> dict[str, Any]:
             },
             'frequency': {
                 'engine': 'orca',
-                'imaginary_threshold_cm1': -50.0,
             },
             'single_point': {
                 'method': 'wB97M-V',

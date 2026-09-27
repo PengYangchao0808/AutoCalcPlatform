@@ -15,7 +15,7 @@ from acp.backends.base import QCResult
 from acp.calculations.batch.engine import (
     _PROFILE_STEPS,
     BatchOptimizeEngine,
-    _count_significant_imaginary,
+    _count_imaginary,
     _ts_frequency_judgment,
 )
 from acp.calculations.batch.models import (
@@ -643,6 +643,45 @@ def test_batchoptimize_cli_passes_role_specific_method_options(tmp_path: Path) -
     })
 
 
+def test_batchoptimize_scheduler_passes_bs_state_to_cli_and_workflow() -> None:
+    """The wizard's batch-level state must reach the batch engine unchanged."""
+    import json
+
+    from acp.cli import _handle_batch_optimize, build_parser
+    from acp.core.workflow import WorkflowResult
+    from acp.scheduler.jobs import JobSpec
+    from acp.scheduler.runner import JobRunner
+
+    state = {
+        "execution_mode": "single",
+        "states": [{
+            "state_id": "s1_bs",
+            "target_multiplicity": 1,
+            "spin_mode": "broken_symmetry",
+            "guess": {"strategy": "guessmix", "guess_mix_angle": 45},
+        }],
+    }
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        input={"items_file": str(FIXTURES / "batch_structures_v1.json")},
+        method={
+            "profile": "opt_only",
+            "batch_roles": {"int": {}, "ts": {}},
+            "levels": {"batch": {"engine": "orca", "electronic_state": state}},
+        },
+    )
+    cmd = JobRunner()._build_cmd(spec, Path("."))
+    assert json.loads(cmd[cmd.index("--electronic-state-json") + 1]) == state
+
+    args = build_parser().parse_args(cmd[3:])
+    with patch("acp.workflows.batch_optimize.run_batch_optimize") as run, patch(
+        "acp.calculations.progress.ProgressReporter"
+    ):
+        run.return_value = WorkflowResult(status="completed")
+        assert _handle_batch_optimize(args) == 0
+    assert run.call_args.kwargs["electronic_state"] == state
+
+
 @pytest.mark.parametrize("source_key", ["from_artifact", "items_file"])
 def test_batchoptimize_runner_remote_command_parity(source_key: str) -> None:
     from acp.scheduler.jobs import JobSpec
@@ -793,30 +832,33 @@ def test_batchoptimize_pause_unpause_lifecycle(
 
 
 def test_ts_imaginary_judgment_valid() -> None:
-    """Exactly one imaginary below -50 cm⁻¹ is valid."""
+    """Exactly one negative frequency is valid, regardless of magnitude."""
     valid, msg = _ts_frequency_judgment([-500.0, 100.0, 200.0])
     assert valid is True
     assert msg == ""
+    assert _ts_frequency_judgment([-34.22, 100.0]) == (True, "")
+    assert _ts_frequency_judgment([-0.01, 100.0]) == (True, "")
 
 
 def test_ts_imaginary_judgment_too_many() -> None:
-    """Multiple significant imaginaries → higher_order_saddle."""
+    """Two negative frequencies remain a higher-order saddle."""
     valid, msg = _ts_frequency_judgment([-500.0, -200.0, 100.0])
     assert valid is False
     assert "higher_order_saddle" in msg
+    assert _ts_frequency_judgment([-60.0, -0.01])[0] is False
 
 
 def test_ts_imaginary_judgment_none() -> None:
-    """No significant imaginary → ts_no_imaginary."""
-    valid, msg = _ts_frequency_judgment([-10.0, 100.0, 200.0])
+    """No negative frequencies → ts_no_imaginary."""
+    valid, msg = _ts_frequency_judgment([0.0, 100.0, 200.0])
     assert valid is False
     assert "ts_no_imaginary" in msg
 
 
-def test_count_significant_imaginary() -> None:
-    assert _count_significant_imaginary([-500.0, -10.0, 100.0], cutoff=-50.0) == 1
-    assert _count_significant_imaginary([-500.0, -60.0, 100.0], cutoff=-50.0) == 2
-    assert _count_significant_imaginary([100.0, 200.0], cutoff=-50.0) == 0
+def test_count_imaginary() -> None:
+    assert _count_imaginary([-500.0, -10.0, 100.0]) == 2
+    assert _count_imaginary([-0.01, 0.0, 100.0]) == 1
+    assert _count_imaginary([0.0, 100.0, 200.0]) == 0
 
 
 # ── profile steps ────────────────────────────────────────────────────────
@@ -1187,7 +1229,7 @@ def test_ts_frequency_failure_aborts_item(
     engine: BatchOptimizeEngine,
     fake_backend: object,
 ) -> None:
-    """TS with no significant imaginary frequencies → item fails."""
+    """TS with no negative frequency → item fails."""
     from tests.conftest import FakeBackend
 
     assert isinstance(fake_backend, FakeBackend)
@@ -1214,6 +1256,43 @@ def test_ts_frequency_failure_aborts_item(
     outcome = engine.run([ts_item], profile="opt_freq", charge=0)
     assert outcome.items[0].status == "failed"
     assert "ts_no_imaginary" in outcome.items[0].error
+
+
+def test_ts_weak_imaginary_frequency_completes_item(
+    tmp_path: Path,
+    fake_backend: object,
+) -> None:
+    """A legacy -50 cutoff cannot reject a real -34.22 cm⁻¹ TS mode."""
+    from tests.conftest import FakeBackend
+
+    assert isinstance(fake_backend, FakeBackend)
+    engine = BatchOptimizeEngine(
+        config={"theory": {"frequency": {"imaginary_threshold_cm1": -50.0}}},
+        work_root=tmp_path / "task" / "WORK",
+        result_root=tmp_path / "task" / "RESULT",
+    )
+    ts_item = BatchStructureItem(
+        item_id="ts_weak",
+        name="TS weak mode",
+        tag="TS",
+        xyz="2\nTAG: TS\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+        candidate_id="ts_weak",
+    )
+    fake_backend.set_result(
+        "frequency",
+        QCResult(
+            success=True,
+            energy=-1.1,
+            coordinates=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.7]]),
+            symbols=["H", "H"],
+            frequencies=[-34.22, 100.0, 200.0],
+            has_frequencies=True,
+        ),
+    )
+
+    outcome = engine.run([ts_item], profile="opt_freq", charge=0)
+    assert outcome.items[0].status == "completed"
+    assert outcome.items[0].frequency["frequencies"] == [-34.22, 100.0, 200.0]
 
 
 # ── BatchMethodOptions → FakeBackend kwargs forwarding ──────────────────

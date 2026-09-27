@@ -318,26 +318,25 @@ def _trajectory_cycle_count(path: Path) -> int:
     return len(cycles) if isinstance(cycles, list) else -1
 
 
-def _count_significant_imaginary(frequencies: list[float], cutoff: float = -50.0) -> int:
-    """Count frequencies at or below *cutoff* (cm⁻¹)."""
-    return sum(1 for f in frequencies if float(f) <= cutoff)
+def _count_imaginary(frequencies: list[float]) -> int:
+    """Count all negative vibrational frequencies, regardless of magnitude."""
+    return sum(1 for f in frequencies if float(f) < 0.0)
 
 
 def _ts_frequency_judgment(
     frequencies: list[float],
-    *,
-    cutoff: float = -50.0,
 ) -> tuple[bool, str]:
     """Validate transition-state frequency signature.
 
-    Returns ``(valid, message)`` — valid when exactly one significant
-    imaginary frequency exists.
+    Returns ``(valid, message)`` — valid when exactly one negative
+    frequency exists. A shallow barrier can have a small-magnitude
+    imaginary mode, so magnitude alone does not invalidate a TS candidate.
     """
-    count = _count_significant_imaginary(frequencies, cutoff)
+    count = _count_imaginary(frequencies)
     if count > 1:
-        return False, f"higher_order_saddle ({count} significant imaginary frequencies)"
+        return False, f"higher_order_saddle ({count} imaginary frequencies)"
     if count == 0:
-        return False, "ts_no_imaginary (no frequency <= -50 cm⁻¹)"
+        return False, "ts_no_imaginary (no negative frequency)"
     return True, ""
 
 
@@ -354,7 +353,7 @@ class BatchOptimizeEngine:
         ``opt_freq_sp_thermo`` — optimize + frequency + single-point + thermochemistry
 
     TS items use ``transition_state_opt`` and include an imaginary-frequency
-    judgment (≤ -50 cm⁻¹).  INT items use ordinary ``optimize``.
+    judgment (exactly one negative frequency). INT items use ordinary ``optimize``.
 
     Item failure isolation: a failed item is recorded as ``"failed"`` in
     ``items_state`` but does NOT abort other items.  On re-run, items whose
@@ -397,22 +396,6 @@ class BatchOptimizeEngine:
     def task_root(self) -> Path:
         """Task root is one level above ``WORK/``."""
         return self._work_root.parent
-
-    @property
-    def _imaginary_threshold(self) -> float:
-        """Read the significant-imaginary cutoff from config (default -50.0 cm⁻¹)."""
-        if self._config is None:
-            return -50.0
-        theory = self._config.get("theory")
-        if not isinstance(theory, Mapping):
-            return -50.0
-        freq = theory.get("frequency")
-        if not isinstance(freq, Mapping):
-            return -50.0
-        raw = freq.get("imaginary_threshold_cm1")
-        if isinstance(raw, (int, float)):
-            return float(raw)
-        return -50.0
 
     def _item_work_dir(self, item: BatchStructureItem) -> Path:
         """Return the work root that owns *item* in the active layout."""
@@ -1034,9 +1017,7 @@ class BatchOptimizeEngine:
                 record.frequency["frequencies"] = frequency_values
                 record.frequency["status"] = "completed"
                 if is_ts:
-                    valid, msg = _ts_frequency_judgment(
-                        current_result.frequencies, cutoff=self._imaginary_threshold
-                    )
+                    valid, msg = _ts_frequency_judgment(current_result.frequencies)
                     if not valid:
                         raise RuntimeError(
                             f"TS frequency judgment failed for {item.item_id}: {msg}"
