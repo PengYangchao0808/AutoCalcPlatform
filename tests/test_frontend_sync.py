@@ -2151,6 +2151,89 @@ def test_structure_viewer_same_tick_terminal_race_regression() -> None:
     )
 
 
+# Todo 5: v2 HTML wiring — SSE terminal instant refresh (force) + job.cancelled
+# ---------------------------------------------------------------------------
+
+def test_workbench_sse_terminal_refresh_wiring() -> None:
+    """Contract: openSSE subscribes to job.cancelled, its terminal condition
+    matches completed/failed/cancelled/done, and the terminal branch (selected
+    job only) calls refreshPending with force — the SSE terminal event is the
+    authoritative signal and must bypass the stale job_status guard."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    sse = html.split("function openSSE(jobId)", 1)[1]
+
+    # SSE types subscription list includes job.cancelled
+    types_block = sse.split("var types = [", 1)[1].split("];", 1)[0]
+    for evt in ('"job.completed"', '"job.failed"', '"job.cancelled"', '"done"'):
+        assert evt in types_block, f"openSSE types must include {evt}"
+
+    # Terminal condition matches completed/failed/cancelled/done
+    terminal = sse.split("// Terminal events:", 1)[1].split(
+        'updateSSEState("connected");', 1
+    )[0]
+    assert (
+        'if (type === "job.completed" || type === "job.failed" '
+        '|| type === "job.cancelled" || type === "done") {'
+    ) in terminal, "terminal condition must match completed/failed/cancelled/done"
+
+    # Forced refreshPending call inside the selected-job branch
+    assert "window.ACPStructureViewer && window.ACPStructureViewer.refreshPending" in terminal
+    assert "refreshPending(jid, { force: true })" in terminal
+    sel_idx = terminal.index('String(selectedJobId || "") === jid')
+    force_idx = terminal.index("refreshPending(jid, { force: true })")
+    assert sel_idx < force_idx, (
+        "refreshPending must run only for the selected job (inside the jid guard)"
+    )
+
+    # job.cancelled appears exactly at the two wiring sites (types + condition)
+    assert html.count('"job.cancelled"') == 2
+
+
+def test_summary_refresh_has_no_retry_hook() -> None:
+    """Negative lock: refreshSelectedJobSummary must NOT call refreshPending —
+    terminal retries are owned solely by refreshIfChanged (same-tick race)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    summary_body = html.split("async function refreshSelectedJobSummary()", 1)[1]
+    summary_body = summary_body.split("\nfunction ", 1)[0]
+
+    assert "refreshPending" not in summary_body, (
+        "refreshSelectedJobSummary must not call refreshPending "
+        "(terminal retry ownership belongs to refreshIfChanged alone)"
+    )
+
+
+def test_summary_poll_refreshifchanged_outside_drawer_gate() -> None:
+    """Structural lock: in summaryPoll the refreshIfChanged() call site sits
+    AFTER the drawer-skip summary line AND inside the `localGen % 2 === 0`
+    branch — proving the periodic retry still covers the drawer-open path
+    (and is not dragged behind the drawer condition)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    summary_poll = html.split("async function summaryPoll()", 1)[1]
+    summary_poll = summary_poll.split("\n    } catch", 1)[0]
+
+    drawer_skip = "if (!drawerOpen) await refreshSelectedJobSummary();"
+    gate = "if (localGen % 2 === 0) {"
+    assert drawer_skip in summary_poll, "summaryPoll must keep the drawer-skip summary line"
+    assert gate in summary_poll, "summaryPoll must keep the 5s localGen gate"
+
+    # refreshIfChanged call lives inside the localGen branch ...
+    gen_branch = summary_poll.split(gate, 1)[1].split("\n      }", 1)[0]
+    assert "window.ACPStructureViewer.refreshIfChanged()" in gen_branch, (
+        "refreshIfChanged() must run inside the `localGen % 2 === 0)` branch"
+    )
+    assert drawer_skip not in gen_branch, (
+        "drawer-skip summary line must stay outside the 5s gate"
+    )
+
+    # ... and after the drawer-skip line (never pulled into the drawer condition)
+    assert summary_poll.index(drawer_skip) < summary_poll.index(gate) < (
+        summary_poll.index("window.ACPStructureViewer.refreshIfChanged()")
+    )
+
+
 def test_structure_viewer_node_logic_dirty_guard() -> None:
     """Node logic: dirty=true -> refreshIfChanged sets newerAvailable, not payload."""
     if not shutil.which("node"):
