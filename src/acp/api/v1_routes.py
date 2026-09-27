@@ -3035,12 +3035,15 @@ def get_structure_viewer_catalog(
             logger.debug("Remote IRC structure catalog refresh failed", exc_info=True)
 
     try:
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
         payload = build_structure_viewer_payload(
             work_dir,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
             item_id=item_id,
+            input_xyz=input_xyz_snapshot(record.spec.input),
         )
     except StructureViewerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -3128,11 +3131,14 @@ def get_structure_viewer_geometry(
     is_remote = _is_remote_job(record)
 
     try:
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
         payload = build_structure_viewer_payload(
             work_dir,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
+            input_xyz=input_xyz_snapshot(record.spec.input),
         )
     except StructureViewerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -3153,9 +3159,14 @@ def get_structure_viewer_geometry(
         )
 
     resolved = _resolve_geometry_path(work_dir, geometry_ref)
+    input_xyz = None
+    if resolved is None and geometry_ref == "input.xyz":
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
+        input_xyz = input_xyz_snapshot(record.spec.input)
 
     # Remote job: file absent locally → try cache or fetch
-    if resolved is None and is_remote:
+    if resolved is None and input_xyz is None and is_remote:
         cache = _remote_structure_cache(request)
         cached = cache.get_cached(job_id, geometry_ref)
         if cached is not None:
@@ -3178,16 +3189,19 @@ def get_structure_viewer_geometry(
         else:
             raise HTTPException(status_code=409, detail="pending_fetch")
 
-    if resolved is None:
+    if resolved is None and input_xyz is None:
         raise HTTPException(
             status_code=404,
             detail=f"Geometry file not found or unsafe: {geometry_ref}",
         )
 
-    try:
-        xyz_text = resolved.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise HTTPException(status_code=404, detail=f"Cannot read geometry file: {exc}") from exc
+    if input_xyz is not None:
+        xyz_text = input_xyz
+    else:
+        try:
+            xyz_text = resolved.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise HTTPException(status_code=404, detail=f"Cannot read geometry file: {exc}") from exc
 
     if entry.source.frame_index is not None:
         frame = read_traj_frame_xyz(resolved, entry.source.frame_index)
@@ -4782,6 +4796,27 @@ def get_job_files(
         )
         for item in manifest["files"]
     ]
+    # Queued BatchOptimize jobs have not reached runner-side materialization
+    # yet. Surface their persisted input snapshot as the task-root input.xyz.
+    record = manager.get(job_id)
+    if (
+        path is None
+        and record is not None
+        and record.spec.workflow == "BatchOptimize"
+        and not any(entry.path == "input.xyz" for entry in entries)
+    ):
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
+        xyz_snapshot = input_xyz_snapshot(record.spec.input)
+        if xyz_snapshot:
+            entries.append(
+                FileEntry(
+                    path="input.xyz",
+                    size=len(xyz_snapshot.encode("utf-8")),
+                    modified=datetime.now(timezone.utc).timestamp(),
+                    is_dir=False,
+                )
+            )
     return FileManifestResponse(
         work_dir=manifest["work_dir"],
         files=entries,
@@ -4794,13 +4829,24 @@ def get_job_files(
 
 
 @router.get("/jobs/{job_id}/files/{file_path:path}")
-def download_job_file(job_id: str, file_path: str, request: Request) -> FileResponse:
+def download_job_file(job_id: str, file_path: str, request: Request) -> Response:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     resolved = resolve_safe(work_dir, file_path)
     if resolved is None:
+        record = manager.get(job_id)
+        if file_path.replace("\\", "/") == "input.xyz" and record is not None:
+            from acp.scheduler.input_snapshot import input_xyz_snapshot
+
+            xyz_snapshot = input_xyz_snapshot(record.spec.input)
+            if xyz_snapshot:
+                return Response(
+                    content=xyz_snapshot,
+                    media_type="chemical/x-xyz; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="input.xyz"'},
+                )
         raise HTTPException(status_code=404, detail="File not found or outside work directory")
     return FileResponse(str(resolved), filename=resolved.name)
 

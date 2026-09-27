@@ -459,6 +459,11 @@
       try { structureViewerState._abortController.abort(); } catch (_) { /* ignore */ }
     }
 
+    /* Invalidate any geometry request started for the previously selected
+       job before clearing the canvas.  Catalog requests have their own token;
+       geometry requests are guarded by selectionToken. */
+    structureViewerState.selectionToken += 1;
+
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     structureViewerState._abortController = controller;
 
@@ -477,6 +482,11 @@
     structureViewerState.displayedSymbols = null;
     structureViewerState.displayedEntryId = null;
     structureViewerState.restoredMeasurements = null;
+    geometryStore.currentXyz = null;
+    geometryStore.loaderVersion += 1;
+    if (typeof window !== "undefined" && typeof window._svClearViewerGeometry === "function") {
+      try { window._svClearViewerGeometry(); } catch (_) { /* canvas cleanup is best-effort */ }
+    }
 
     var fetchFn = _getFetchImpl();
     if (!fetchFn) {

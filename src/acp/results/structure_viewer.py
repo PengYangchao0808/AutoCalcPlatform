@@ -1675,6 +1675,7 @@ def build_structure_viewer_payload(
     workflow: str,
     job_status: str,
     item_id: str | None = None,
+    input_xyz: str | None = None,
 ) -> StructureViewerPayload:
     """Build a ``structure_viewer_v1`` payload for a completed or failed job.
 
@@ -1689,6 +1690,8 @@ def build_structure_viewer_payload(
         workflow: Workflow name (dispatch key).
         job_status: Job status at build time (incorporated into revision).
         item_id: Optional BatchOptimize item filter.
+        input_xyz: Optional submitted input snapshot, used when a queued job
+            has not created its on-disk ``input.xyz`` yet.
 
     Returns:
         A valid ``StructureViewerPayload`` (never raises on manifest errors).
@@ -1712,7 +1715,19 @@ def build_structure_viewer_payload(
 
     _probe_result_manifest(root, warnings)
 
+    if workflow == "BatchOptimize" and input_xyz is None:
+        input_path = root / "input.xyz"
+        if input_path.is_file():
+            try:
+                input_xyz = input_path.read_text(encoding="utf-8")
+            except OSError:
+                input_xyz = None
+
     revision = _compute_revision(root, job_status)
+    if workflow == "BatchOptimize" and input_xyz:
+        revision = hashlib.sha256(
+            f"{revision}\n{job_status}\n{input_xyz}".encode("utf-8")
+        ).hexdigest()[:16]
 
     resolver = _DISPATCH_TABLE.get(workflow, _resolve_legacy)
     try:
@@ -1723,6 +1738,46 @@ def build_structure_viewer_payload(
         logger.warning("resolver for %s failed: %s", workflow, exc)
         warnings.append(f"Resolver for {workflow} failed: {exc}")
         groups_raw, entries_raw, default_id = [], [], None
+
+    # The calculation input remains useful evidence while queued and as a
+    # comparison entry after optimization. Put it beside formal batch results;
+    # it becomes the default only while no result geometry exists yet.
+    if workflow == "BatchOptimize" and input_xyz:
+        from acp.calculations.batch._tag import parse_tag_comment
+
+        input_lines = input_xyz.splitlines()
+        tag = parse_tag_comment(input_lines[1] if len(input_lines) > 1 else "")["tag"]
+        entry_id = "batch_input"
+        if not any(entry.id == entry_id for entry in entries_raw):
+            entries_raw.insert(
+                0,
+                StructureViewerEntry(
+                    id=entry_id,
+                    group_id="batch_input",
+                    label="起始结构",
+                    role="ts" if tag == "TS" else "minimum",
+                    status=job_status or "queued",
+                    geometry=StructureViewerGeometry(
+                        endpoint=(
+                            f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry"
+                        ),
+                        format="xyz",
+                    ),
+                    source=StructureViewerSource(
+                        kind="calculation_input", geometry_ref="input.xyz"
+                    ),
+                    badges=(tag,) if tag else ("input",),
+                    vibrations=StructureViewerVibrations(available=False),
+                ),
+            )
+            groups_raw.insert(
+                0,
+                StructureViewerGroup(
+                    id="batch_input", label="输入结构", kind="input"
+                ),
+            )
+        if default_id is None:
+            default_id = entry_id
 
     # Build typed tuples
     groups = tuple(groups_raw)

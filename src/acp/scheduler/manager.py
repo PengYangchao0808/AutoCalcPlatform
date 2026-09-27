@@ -34,6 +34,7 @@ from acp.scheduler.capabilities import (
     local_satisfies,
 )
 from acp.scheduler.events import JobEventLog
+from acp.scheduler.input_snapshot import input_xyz_snapshot
 from acp.scheduler.job_edit import (
     EditConflictError,
     JobEditOperationStore,
@@ -547,6 +548,16 @@ class JobManager:
             input_hash=spec.input_hash,
             group_id=group_id or job_id,
         )
+        # BatchOptimize tasks may wait in the queue before the runner stages
+        # their input. Keep the submitted geometry visible in the task folder
+        # and structure viewer from the moment the task is created.
+        if spec.workflow == "BatchOptimize":
+            xyz_snapshot = input_xyz_snapshot(spec.input)
+            if xyz_snapshot:
+                try:
+                    TaskStorage(work_dir).write_input_xyz(xyz_snapshot)
+                except OSError:
+                    logger.warning("Could not snapshot input.xyz for queued job %s", job_id)
         self.store.create(record)
         if self.tasks is not None:
             try:
