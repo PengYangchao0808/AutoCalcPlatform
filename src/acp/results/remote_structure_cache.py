@@ -5,6 +5,13 @@ Fetches required manifest/geometry/frequency files on demand via
 ``<run_root>/.remote_cache/<job_id>/<rel_path>`` (atomic tmp+``os.replace``,
 per-path ``threading.Lock``, permissions inherit run_root).
 
+The flat remote layout (``<remote_task_dir>/<rel_path>``) is always tried
+first.  Only when the flat read raises ``FileNotFoundError`` does a read-only
+one-level nested fallback probe ``<remote_task_dir>/<dir>/<rel_path>``
+candidates (legacy remote jobs created before scheduler markers were
+uploaded wrote results nested under ``<molecule>/``).  Discovery needs
+``fetcher.list_files``; fetchers without it degrade to the old behavior.
+
 Must NOT write inside task dirs.  Must NOT block the event loop on SFTP
 (uses the existing pool).
 """
@@ -90,6 +97,11 @@ class RemoteStructureCache:
         self._fetcher_factory = fetcher_factory
         self._master_lock = threading.Lock()
         self._path_locks: dict[str, threading.Lock] = {}
+        # Nested-layout fallback (read-only compat for pre-marker remote jobs):
+        # per-job memoized candidate prefix + per-job discovery locks.  SFTP
+        # calls are never wrapped in ``_master_lock`` (no global serialize).
+        self._nested_prefixes: dict[str, str] = {}
+        self._discovery_locks: dict[str, threading.Lock] = {}
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -129,6 +141,15 @@ class RemoteStructureCache:
             if lock is None:
                 lock = threading.Lock()
                 self._path_locks[cache_key] = lock
+            return lock
+
+    def _get_discovery_lock(self, job_id: str) -> threading.Lock:
+        """Return the per-job lock serializing nested-layout discovery."""
+        with self._master_lock:
+            lock = self._discovery_locks.get(job_id)
+            if lock is None:
+                lock = threading.Lock()
+                self._discovery_locks[job_id] = lock
             return lock
 
     # ------------------------------------------------------------------
@@ -176,8 +197,10 @@ class RemoteStructureCache:
             try:
                 data = fetcher.read_file(record, rel_path)
             except FileNotFoundError:
-                logger.debug("Remote file not found: %s/%s", job_id, rel_path)
-                return None
+                data = self._discover_nested(fetcher, record, job_id, rel_path)
+                if data is None:
+                    logger.debug("Remote file not found (flat or nested): %s/%s", job_id, rel_path)
+                    return None
             except Exception:
                 logger.warning("Failed to fetch %s/%s", job_id, rel_path, exc_info=True)
                 return None
@@ -204,6 +227,105 @@ class RemoteStructureCache:
 
             logger.info("Cached %s/%s -> %s", job_id, rel_path, target)
             return target
+
+    def _discover_nested(
+        self,
+        fetcher: Any,
+        record: Any,
+        job_id: str,
+        rel_path: str,
+    ) -> bytes | None:
+        """Read *rel_path* from a one-level nested remote layout.
+
+        Legacy remote jobs (created before scheduler markers were uploaded to
+        the remote dir) write results nested under
+        ``<remote_task_dir>/<molecule>/`` instead of flat at the task root.
+        Only called after the flat ``read_file`` raised ``FileNotFoundError``;
+        a flat hit never reaches here, so it costs zero extra SFTP calls.
+
+        Fetchers without ``list_files`` (e.g. minimal fakes) degrade to the
+        pre-fallback behavior.  The per-job memo only avoids repeated
+        ``list_files`` calls; every fetch still tries the flat path first,
+        then the memoized prefix, so mixed layouts (nested ``RESULT/...`` +
+        flat ``input.xyz``) both resolve.
+
+        Returns the remote bytes, or ``None`` when no candidate provides the
+        file.  Never raises.
+        """
+        list_fn = getattr(fetcher, "list_files", None)
+        if list_fn is None:
+            logger.debug(
+                "Fetcher for job %s has no list_files; nested fallback skipped for %s",
+                job_id,
+                rel_path,
+            )
+            return None
+
+        prefix = self._nested_prefixes.get(job_id)
+        if prefix is not None:
+            data = self._read_nested_candidate(fetcher, record, job_id, prefix, rel_path)
+            if data is not None:
+                return data
+
+        with self._get_discovery_lock(job_id):
+            try:
+                entries = list_fn(record)
+            except Exception:
+                logger.debug(
+                    "list_files failed for job %s; nested fallback unavailable",
+                    job_id,
+                    exc_info=True,
+                )
+                return None
+            candidates = sorted(
+                {
+                    str(getattr(entry, "name", "") or "")
+                    for entry in entries
+                    if getattr(entry, "is_dir", False)
+                }
+            )
+            for name in candidates:
+                if not name or name in {".", ".."}:
+                    continue
+                data = self._read_nested_candidate(fetcher, record, job_id, name, rel_path)
+                if data is None:
+                    continue
+                self._nested_prefixes[job_id] = name
+                logger.info(
+                    "Nested remote layout detected for job %s: using prefix %r",
+                    job_id,
+                    name,
+                )
+                return data
+            logger.debug("No nested candidate provides %s for job %s", rel_path, job_id)
+            return None
+
+    @staticmethod
+    def _read_nested_candidate(
+        fetcher: Any,
+        record: Any,
+        job_id: str,
+        prefix: str,
+        rel_path: str,
+    ) -> bytes | None:
+        """Try reading ``<prefix>/<rel_path>`` remotely; ``None`` on failure.
+
+        ``FileNotFoundError`` and any other read error move discovery on to
+        the next candidate (debug-logged).  Never raises.
+        """
+        candidate = f"{prefix}/{rel_path}"
+        try:
+            return fetcher.read_file(record, candidate)
+        except FileNotFoundError:
+            return None
+        except Exception:
+            logger.debug(
+                "Nested candidate read failed for %s/%s",
+                job_id,
+                candidate,
+                exc_info=True,
+            )
+            return None
 
     def fetch_catalog(self, record: Any, workflow: str) -> Path | None:
         """Fetch the small files required to build a remote viewer catalog.

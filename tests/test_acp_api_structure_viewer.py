@@ -1262,6 +1262,199 @@ class TestRemoteStructureCache:
         assert removed == 0
         assert target.exists()
 
+    def test_fetch_flat_miss_without_list_files_returns_none(self, tmp_path: Path) -> None:
+        """Fetcher without list_files + flat miss → None, no AttributeError."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                raise FileNotFoundError(filename)
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+
+        class FakeRecord:
+            id = "job-1"
+
+        assert cache.fetch(FakeRecord(), "RESULT/x.json") is None  # type: ignore[arg-type]
+
+    def test_fetch_nested_fallback_caches_flat(self, tmp_path: Path) -> None:
+        """Nested-only layout: discovery finds <dir>/<rel> and caches it flat."""
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        content = b'{"nested": true}'
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == "ethanol/RESULT/confsearch/confsearch_manifest.json":
+                    return content
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path=None):
+                return [
+                    types.SimpleNamespace(name="stdout.log", is_dir=False),
+                    types.SimpleNamespace(name="ethanol", is_dir=True),
+                ]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        result = cache.fetch(record, "RESULT/confsearch/confsearch_manifest.json")  # type: ignore[arg-type]
+        assert result is not None
+        assert result == cache.cache_path("job-1", "RESULT/confsearch/confsearch_manifest.json")
+        assert result.read_bytes() == content
+
+    def test_fetch_mixed_layout_flat_and_nested(self, tmp_path: Path) -> None:
+        """Mixed layout: nested RESULT/... AND flat input.xyz both resolve."""
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        manifest = b'{"schema_version": "result_manifest_v1"}'
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == "input.xyz":
+                    return b"3\n\nC 0 0 0\n"
+                if filename == "ethanol/RESULT/result_manifest.json":
+                    return manifest
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path=None):
+                return [types.SimpleNamespace(name="ethanol", is_dir=True)]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-mixed"})()
+
+        nested = cache.fetch(record, "RESULT/result_manifest.json")  # type: ignore[arg-type]
+        flat = cache.fetch(record, "input.xyz")  # type: ignore[arg-type]
+        assert nested is not None and nested.read_bytes() == manifest
+        assert flat is not None and flat.read_bytes() == b"3\n\nC 0 0 0\n"
+        # Cache layout stays flat either way
+        assert nested == cache.cache_path("job-mixed", "RESULT/result_manifest.json")
+        assert flat == cache.cache_path("job-mixed", "input.xyz")
+
+    def test_fetch_nested_prefix_memo_avoids_relist(self, tmp_path: Path) -> None:
+        """After a nested hit, the memoized prefix serves later nested fetches
+        without calling list_files again."""
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        list_calls = 0
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename in ("ethanol/A.json", "ethanol/B.json"):
+                    return filename.encode("utf-8")
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path=None):
+                nonlocal list_calls
+                list_calls += 1
+                return [types.SimpleNamespace(name="ethanol", is_dir=True)]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        r1 = cache.fetch(record, "A.json")  # type: ignore[arg-type]
+        r2 = cache.fetch(record, "B.json")  # type: ignore[arg-type]
+        assert r1 is not None and r1.read_bytes() == b"ethanol/A.json"
+        assert r2 is not None and r2.read_bytes() == b"ethanol/B.json"
+        assert list_calls == 1
+
+    def test_fetch_nested_candidate_error_skipped(self, tmp_path: Path) -> None:
+        """Candidate read raising a non-FileNotFoundError is skipped, discovery continues."""
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == "aaa/x.json":
+                    raise RuntimeError("transient SFTP failure")
+                if filename == "bbb/x.json":
+                    return b"hit"
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path=None):
+                return [
+                    types.SimpleNamespace(name="aaa", is_dir=True),
+                    types.SimpleNamespace(name="bbb", is_dir=True),
+                ]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        result = cache.fetch(record, "x.json")  # type: ignore[arg-type]
+        assert result is not None
+        assert result.read_bytes() == b"hit"
+
+    def test_fetch_list_files_error_degrades_silently(self, tmp_path: Path) -> None:
+        """list_files raising → silent degradation (None, no raise)."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path=None):
+                raise OSError("connection reset")
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+
+        class FakeRecord:
+            id = "job-1"
+
+        assert cache.fetch(FakeRecord(), "RESULT/x.json") is None  # type: ignore[arg-type]
+
+    def test_fetch_flat_error_never_probes_nested(self, tmp_path: Path) -> None:
+        """Flat read failing with a non-FileNotFoundError → None, list_files never called."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        list_calls = 0
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == "RESULT/x.json":
+                    raise RuntimeError("RemoteFileError-like failure")
+                return b"unexpected"
+
+            def list_files(self, record, relative_path=None):
+                nonlocal list_calls
+                list_calls += 1
+                return []
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        assert cache.fetch(record, "RESULT/x.json") is None  # type: ignore[arg-type]
+        assert list_calls == 0
+
+    def test_fetch_flat_hit_never_calls_list_files(self, tmp_path: Path) -> None:
+        """Flat hit → zero extra SFTP calls (list_files never invoked)."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        list_calls = 0
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                return b"flat content"
+
+            def list_files(self, record, relative_path=None):
+                nonlocal list_calls
+                list_calls += 1
+                return []
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        result = cache.fetch(record, "RESULT/x.json")  # type: ignore[arg-type]
+        assert result is not None
+        assert result.read_bytes() == b"flat content"
+        assert list_calls == 0
+
     def test_required_files_absent_confsearch(self, tmp_path: Path) -> None:
         """Confsearch: manifest missing → True."""
         from acp.results.remote_structure_cache import RemoteStructureCache
@@ -1395,6 +1588,83 @@ class TestRemoteAvailabilityEndpoints:
         )
         assert geometry.status_code == 200
         assert geometry.content == xyz_content
+
+    def test_catalog_fetch_nested_layout_with_list_files_fetcher(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Nested-only remote layout + list_files-capable fetcher → fetch=1 ready.
+
+        Legacy remote jobs write results under <remote_task_dir>/<molecule>/;
+        the nested fallback must project them from the flat cache without
+        writing inside the task dir.
+        """
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "conformers": [
+                {
+                    "conf_id": "0001",
+                    "geometry": "conformers/0001.xyz",
+                    "energy_hartree": -100.0,
+                    "relative_energy_kcal": 0.0,
+                    "boltzmann_weight": 1.0,
+                    "rank": 1,
+                }
+            ],
+        }
+        xyz_content = b"3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        nested = "ethanol"
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if filename == f"{nested}/RESULT/confsearch/confsearch_manifest.json":
+                    return json.dumps(manifest).encode("utf-8")
+                if filename == f"{nested}/RESULT/confsearch/conformers/0001.xyz":
+                    return xyz_content
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record: Any, relative_path: str | None = None):
+                return [types.SimpleNamespace(name=nested, is_dir=True)]
+
+        manager._remote_fetcher = FakeFetcher()  # type: ignore[attr-defined]
+
+        task_snapshot = set(Path(work_dir).rglob("*"))
+
+        response = sv_client.get("/api/v1/jobs/remote-001/structure-viewer?fetch=1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["availability"] == "ready"
+        assert body["default_entry_id"] == "conf_0001"
+        assert len(body["entries"]) == 1
+        assert not (work_dir / "RESULT/confsearch/confsearch_manifest.json").exists()
+        # No writes inside the task dir
+        assert set(Path(work_dir).rglob("*")) == task_snapshot
+
+        # Cache layout stays flat under run_root/.remote_cache/<job_id>/
+        flat_cache = RemoteStructureCache(manager.run_root)
+        assert (
+            flat_cache.get_cached("remote-001", "RESULT/confsearch/confsearch_manifest.json")
+            is not None
+        )
+
+        # Second catalog request without fetch → ready from cache
+        cached = sv_client.get("/api/v1/jobs/remote-001/structure-viewer")
+        assert cached.status_code == 200
+        assert cached.json()["availability"] == "ready"
+
+        # Geometry via the memoized nested prefix → 200
+        geometry = sv_client.get(
+            "/api/v1/jobs/remote-001/structure-viewer/entries/conf_0001/geometry?fetch=1"
+        )
+        assert geometry.status_code == 200
+        assert geometry.content == xyz_content
+        assert flat_cache.get_cached("remote-001", "RESULT/confsearch/conformers/0001.xyz") is not None
 
     def test_geometry_409_pending_fetch_when_unsynced(
         self, sv_client: TestClient, tmp_path: Path
