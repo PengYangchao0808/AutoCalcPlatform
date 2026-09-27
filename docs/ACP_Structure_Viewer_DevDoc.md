@@ -152,7 +152,7 @@ calculation_input 条目标签不受影响。详见 §2 `_normalize_display_labe
 
 | 端点 | 语义 | 错误码 |
 |------|------|--------|
-| `GET /api/v1/jobs/{id}/structure-viewer` | 目录载荷（+`availability: ready/pending_fetch`，`?item_id=` Batch 过滤） | 404 未知 job / 未知 item |
+| `GET /api/v1/jobs/{id}/structure-viewer` | 目录载荷（+`availability: ready/pending_fetch`，`?item_id=` Batch 过滤；`?fetch=1` 拉取纯远程任务目录元数据） | 404 未知 job / 未知 item |
 | `GET .../entries/{entry_id}/geometry` | `text/plain` XYZ 精确帧（frame_index 提取）；远程未同步首访 409，`?fetch=1` 同步拉取 | 404 未知 entry / 路径逃逸 / 文件缺失；409 `pending_fetch` |
 | `GET .../entries/{entry_id}/vibrations` | `available` + modes 或 `reason`（200，非 409）；`threshold_cm1` + `threshold_source: default/job_config`；`source: product/historical_projection` | 404 未知 job/entry；**从不 500** |
 | `GET .../structure-viewer/overlay?entry_a=&entry_b=` | 映射 + Kabsch RMSD + 最大位移原子；reason: `identity/mcs/unproven/geometry_unreadable/failed` | 404 未知 job/entry；映射失败 → `ok=false`（不 500） |
@@ -206,11 +206,14 @@ geometry_product_id, atom_count)` → frequency 基元落盘
 ## 8. 远程缓存
 
 `src/acp/results/remote_structure_cache.py::RemoteStructureCache`：
-`run_root/.remote_cache/<job_id>/<rel_path>`（拒绝 `..`）。目录不可用且为远程任务时
-catalog 返回 `availability="pending_fetch"`；geometry 首访 409，`?fetch=1` 经
-`RemoteResultFetcher` 同步拉取（tmp + `os.replace` 原子写、按 path 加锁、继承
-run_root 权限）。`sweep_expired(ttl_days=7)` 清理；`manager._purge_job_records`
-挂接 `purge_job` 随任务级联清除。
+`run_root/.remote_cache/<job_id>/<rel_path>`（拒绝绝对路径与 `..`）。目录不可用且为
+远程任务时 catalog 返回 `availability="pending_fetch"`；前端对终态任务自动以
+`?fetch=1` 重试一次，服务端只拉取 workflow 对应的 manifest/目录索引及 manifest
+引用的 `frequency_modes` 小产品，并直接从受控缓存根构建目录。geometry 首访 409，
+`?fetch=1` 经 `RemoteResultFetcher` 同步拉取（tmp + `os.replace` 原子写、按 path
+加锁、继承 run_root 权限），因此不会把完整远程任务树复制回本机 work_dir。
+`sweep_expired(ttl_days=7)` 清理；`manager._purge_job_records` 挂接 `purge_job`
+随任务级联清除。
 
 ## 9. 前端模块
 

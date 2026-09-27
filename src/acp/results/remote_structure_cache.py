@@ -11,6 +11,7 @@ Must NOT write inside task dirs.  Must NOT block the event loop on SFTP
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -30,18 +31,44 @@ __all__ = ["RemoteStructureCache"]
 
 _CACHE_DIR_NAME = ".remote_cache"
 
-_PRIMARY_MANIFEST: dict[str, str] = {
-    "Confsearch": "RESULT/confsearch/confsearch_manifest.json",
-    "PESsearch": "RESULT/pes_search/pes_profile.json",
-    "BatchOptimize": "RESULT/result_manifest.json",
-    "optimize": "RESULT/result_manifest.json",
-    "xtb-optimize": "RESULT/result_manifest.json",
-    "singlepoint": "RESULT/result_manifest.json",
-    "frequency": "RESULT/result_manifest.json",
-    "scan": "RESULT/trajectories/scan_trajectory.json",
-    "irc": "RESULT/irc/",
-    "legacy": "RESULT/result_manifest.json",
+_CATALOG_FETCH_PATHS: dict[str, tuple[str, ...]] = {
+    "Confsearch": ("RESULT/confsearch/confsearch_manifest.json",),
+    "PESsearch": (
+        "RESULT/pes_search/pes_recommendations.json",
+        "RESULT/pes_search/pes_review.json",
+        "RESULT/pes_search/pes_profile.json",
+    ),
+    "BatchOptimize": ("RESULT/result_manifest.json",),
+    "optimize": ("RESULT/result_manifest.json", "input.xyz"),
+    "xtb-optimize": ("RESULT/result_manifest.json", "input.xyz"),
+    "singlepoint": ("RESULT/result_manifest.json", "input.xyz"),
+    "frequency": ("RESULT/result_manifest.json", "input.xyz"),
+    "scan": ("RESULT/trajectories/scan_trajectory.json",),
+    # IRC trajectories are both catalog metadata and geometry.  The viewer
+    # must parse them to know how many frame entries to expose.
+    "irc": (
+        "RESULT/irc/irc_forward.xyz",
+        "RESULT/irc/irc_reverse.xyz",
+    ),
+    "legacy": (
+        "RESULT/result_manifest.json",
+        "RESULT/result_summary.json",
+    ),
 }
+
+_CATALOG_READY_PATHS: dict[str, tuple[str, ...]] = {
+    key: paths for key, paths in _CATALOG_FETCH_PATHS.items()
+}
+# PES profile data alone cannot produce structure entries; at least one of
+# recommendations/review must exist before the remote catalog is usable.
+_CATALOG_READY_PATHS["PESsearch"] = (
+    "RESULT/pes_search/pes_recommendations.json",
+    "RESULT/pes_search/pes_review.json",
+)
+# A simple-workflow input is only an optional fallback.  A completed remote
+# result is considered synchronized once its result manifest is available.
+for _simple_workflow in ("optimize", "xtb-optimize", "singlepoint", "frequency"):
+    _CATALOG_READY_PATHS[_simple_workflow] = ("RESULT/result_manifest.json",)
 
 
 class RemoteStructureCache:
@@ -72,13 +99,29 @@ class RemoteStructureCache:
         """Return the cache path for *job_id*/*rel_path*.
 
         Raises:
-            ValueError: If *rel_path* escapes the cache root (``..`` segments).
+            ValueError: If *job_id* or *rel_path* escapes the cache root.
         """
+        normalized_job = Path(job_id)
         normalized = Path(rel_path)
-        parts = normalized.parts
-        if any(p == ".." for p in parts):
+        if (
+            normalized_job.is_absolute()
+            or any(part == ".." for part in normalized_job.parts)
+            or normalized.is_absolute()
+            or any(part == ".." for part in normalized.parts)
+        ):
             raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
-        return (self._cache_root / job_id / rel_path).resolve()
+        cache_root = self._cache_root.resolve()
+        job_root = (cache_root / normalized_job).resolve()
+        if os.path.commonpath([str(cache_root), str(job_root)]) != str(cache_root):
+            raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
+        target = (job_root / normalized).resolve()
+        if os.path.commonpath([str(job_root), str(target)]) != str(job_root):
+            raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
+        return target
+
+    def job_root(self, job_id: str) -> Path:
+        """Return the controlled cache root used to project one remote job."""
+        return self.cache_path(job_id, ".")
 
     def _get_path_lock(self, cache_key: str) -> threading.Lock:
         with self._master_lock:
@@ -162,13 +205,51 @@ class RemoteStructureCache:
             logger.info("Cached %s/%s -> %s", job_id, rel_path, target)
             return target
 
+    def fetch_catalog(self, record: Any, workflow: str) -> Path | None:
+        """Fetch the small files required to build a remote viewer catalog.
+
+        Geometry remains lazy except for IRC, whose multi-frame XYZ files are
+        themselves the catalog index.  Missing optional files are tolerated.
+        Returns the cached job root when a usable catalog source is present.
+        """
+        paths = _CATALOG_FETCH_PATHS.get(workflow, _CATALOG_FETCH_PATHS["legacy"])
+        for rel_path in paths:
+            self.fetch(record, rel_path)
+        self._fetch_catalog_products(record)
+
+        root = self.job_root(record.id)
+        return root if self.catalog_ready(root, workflow) else None
+
+    def _fetch_catalog_products(self, record: Any) -> None:
+        """Fetch small auxiliary products referenced by a result manifest."""
+        manifest_path = self.get_cached(record.id, "RESULT/result_manifest.json")
+        if manifest_path is None:
+            return
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        products = payload.get("products") if isinstance(payload, dict) else None
+        if not isinstance(products, list):
+            return
+        for product in products:
+            if not isinstance(product, dict) or product.get("kind") != "frequency_modes":
+                continue
+            product_path = str(product.get("path") or "").replace("\\", "/")
+            if not product_path:
+                continue
+            rel_path = (
+                product_path if product_path.startswith("RESULT/") else f"RESULT/{product_path}"
+            )
+            self.fetch(record, rel_path)
+
     # ------------------------------------------------------------------
     # Eviction
     # ------------------------------------------------------------------
 
     def purge_job(self, job_id: str) -> None:
         """Remove the entire cache directory for *job_id*."""
-        job_dir = self._cache_root / job_id
+        job_dir = self.job_root(job_id)
         if job_dir.is_dir():
             shutil.rmtree(job_dir, ignore_errors=True)
             logger.info("Purged cache for job %s", job_id)
@@ -211,8 +292,9 @@ class RemoteStructureCache:
 
         Used by the catalog endpoint to decide ``pending_fetch``.
         """
-        primary = _PRIMARY_MANIFEST.get(workflow, "RESULT/result_manifest.json")
-        target = work_dir / primary
-        if primary.endswith("/"):
-            return not target.is_dir()
-        return not target.is_file()
+        return not self.catalog_ready(work_dir, workflow)
+
+    def catalog_ready(self, root: Path, workflow: str) -> bool:
+        """Return whether *root* contains enough metadata to build a catalog."""
+        paths = _CATALOG_READY_PATHS.get(workflow, _CATALOG_READY_PATHS["legacy"])
+        return any((Path(root) / rel_path).is_file() for rel_path in paths)

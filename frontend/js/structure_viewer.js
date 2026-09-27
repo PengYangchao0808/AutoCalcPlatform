@@ -434,12 +434,20 @@
   /**
    * @param {string} jobId
    * @param {string|null} itemId
+   * @param {boolean} [fetchRemote]
    * @returns {string}
    */
-  function _catalogUrl(jobId, itemId) {
+  function _catalogUrl(jobId, itemId, fetchRemote) {
     var base = "/api/v1/jobs/" + encodeURIComponent(jobId) + "/structure-viewer";
+    var params = [];
     if (itemId) {
-      base += "?item_id=" + encodeURIComponent(itemId);
+      params.push("item_id=" + encodeURIComponent(itemId));
+    }
+    if (fetchRemote) {
+      params.push("fetch=1");
+    }
+    if (params.length) {
+      base += "?" + params.join("&");
     }
     return base;
   }
@@ -490,12 +498,26 @@
       fetchOpts.signal = controller.signal;
     }
 
+    function parseCatalogResponse(resp) {
+      if (!resp.ok) {
+        throw new Error("HTTP " + resp.status + " " + resp.statusText);
+      }
+      return resp.json();
+    }
+
     return fetchFn(url, fetchOpts)
-      .then(function (resp) {
-        if (!resp.ok) {
-          throw new Error("HTTP " + resp.status + " " + resp.statusText);
+      .then(parseCatalogResponse)
+      .then(function (data) {
+        var status = data && String(data.job_status || "").toLowerCase();
+        var terminal = status === "completed" || status === "failed" || status === "cancelled";
+        if (data && data.availability === "pending_fetch" && terminal &&
+            capturedToken === structureViewerState.requestToken) {
+          /* Pure-remote jobs keep results on the compute node.  Fetch only
+             the small catalog metadata, then let geometry stay lazy. */
+          return fetchFn(_catalogUrl(jobId, itemId, true), fetchOpts)
+            .then(parseCatalogResponse);
         }
-        return resp.json();
+        return data;
       })
       .then(function (data) {
         _applyCatalogResponse(structureViewerState, capturedToken, data);
