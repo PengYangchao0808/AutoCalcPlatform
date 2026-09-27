@@ -218,7 +218,11 @@ def test_irc_catalog_is_active_simple_workflow() -> None:
     assert workflow["status"] == "active"
     assert workflow["default_backend"] == "orca"
     fields = {field_name for level in schema["method_levels"] for field_name in level["fields"]}
-    assert {"method", "basis", "maxpoints", "step"}.issubset(fields)
+    # Method/basis are inherited from the verified TS source (irc_ts_source_v1),
+    # not user-selectable; only path controls remain.
+    assert {"maxpoints", "step"}.issubset(fields)
+    assert "method" not in fields
+    assert "basis" not in fields
     assert schema["method_levels"][0]["allowed_engines"] == ["orca"]
 
 

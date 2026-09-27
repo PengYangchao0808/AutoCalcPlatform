@@ -4781,18 +4781,6 @@ option, optgroup {
               <button class="input-mode-tab" data-input-mode="structure" role="tab" aria-selected="false" data-i18n="modal.mode_structure_short">结构输入</button>
               <button class="input-mode-tab" data-input-mode="upload" role="tab" aria-selected="false" data-i18n="modal.mode_upload">上传</button>
             </div>
-            <div class="input-panel structure-library-filters" id="input-panel-task">
-              <span class="library-filter-label" data-i18n="wizard.library_filter">快速筛选</span>
-              <div class="library-filter-tabs" role="group" aria-label="结构库筛选">
-                <button type="button" class="library-filter active" data-source-group="" aria-pressed="true" data-i18n="wizard.library_all">全部</button>
-                <button type="button" class="library-filter" data-source-group="candidate" aria-pressed="false" data-i18n="wizard.library_candidates">已保存候选</button>
-                <button type="button" class="library-filter" data-source-group="task_result" aria-pressed="false" data-i18n="wizard.library_results">任务产物</button>
-              </div>
-              <div class="library-draft-actions">
-                <span id="wizard-draft-status" class="muted" style="font-size:11px;white-space:nowrap;"></span>
-                <button type="button" class="btn ghost" id="wizard-drafts-open">草稿箱</button>
-              </div>
-            </div>
           </div>
           <div class="tiw-toolbar-host" id="tiw-toolbar-host"></div>
           <div class="source-management-toolbar">
@@ -4966,6 +4954,18 @@ option, optgroup {
             <div class="charge-spin-row" id="charge-spin-row" style="display:none;">
               <label><span data-i18n="modal.col_charge">电荷</span> <input type="number" id="modal-charge" value="0" step="1"></label>
               <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
+            </div>
+          </div>
+          <div class="input-panel structure-library-filters" id="input-panel-task">
+            <span class="library-filter-label" data-i18n="wizard.library_filter">快速筛选</span>
+            <div class="library-filter-tabs" role="group" aria-label="结构库筛选">
+              <button type="button" class="library-filter active" data-source-group="" aria-pressed="true" data-i18n="wizard.library_all">全部</button>
+              <button type="button" class="library-filter" data-source-group="candidate" aria-pressed="false" data-i18n="wizard.library_candidates">已保存候选</button>
+              <button type="button" class="library-filter" data-source-group="task_result" aria-pressed="false" data-i18n="wizard.library_results">任务产物</button>
+            </div>
+            <div class="library-draft-actions">
+              <span id="wizard-draft-status" class="muted" style="font-size:11px;white-space:nowrap;"></span>
+              <button type="button" class="btn ghost" id="wizard-drafts-open">草稿箱</button>
             </div>
           </div>
           <div class="tiw-list-header" id="tiw-list-header">

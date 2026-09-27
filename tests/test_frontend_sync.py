@@ -10979,7 +10979,8 @@ def test_candidate_details_mount_called_in_open_modal() -> None:
     """ACPCandidateDetails.mount is called in openModal."""
     html = FRONTEND.read_text(encoding="utf-8")
     open_modal_start = html.index("function openModal()")
-    open_modal_section = html[open_modal_start:open_modal_start + 6000]
+    next_fn = html.find("\n  function ", open_modal_start + 1)
+    open_modal_section = html[open_modal_start:next_fn if next_fn != -1 else len(html)]
     assert "ACPCandidateDetails.mount" in open_modal_section, \
         "ACPCandidateDetails.mount must be called inside openModal"
 
