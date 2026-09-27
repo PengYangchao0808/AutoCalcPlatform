@@ -47,6 +47,8 @@ ACP 的前端文件树采用**本地磁盘直接映射**（后端 `build_manifes
 
 历史任务（`{job_id}/{safe_name}/…` 嵌套布局）不迁移、保持可读：`find_workflow_state` 浅层优先 + rglob、`runtime_file` 双布局解析、DB `work_dir` 列为路径权威来源。
 
+**远程任务同契约（2026-09-27）**：远程作业目录（`<remote_dir>`）提交时必须携带同一组 Zone A 调度器标记（scheduler markers）`job.json` + `task.json`，节点侧才判定为调度器语境、产物平铺（`<remote_dir>/RESULT/…`、`state.json`、`WORK/00_RUNTIME/checkpoint.json`）。实现：`RemoteJobRunner._prepare_and_submit` 在 `bsub` 前调用 `_upload_scheduler_markers`（`src/acp/scheduler/remote/runner.py`），本地缺失的标记先生成，再经 `FileStager.upload_file` 上传；上传失败即提交失败并清理远端目录（不得静默产出嵌套任务）。上传的 `job.json` 是**提交时快照**，节点侧仅按存在性判定（`workflows/_helpers.is_scheduler_task_dir`），无提交后刷新、不读取其内容。历史远程任务的嵌套布局（`<remote_dir>/<molecule>/RESULT/…`）由读取端（`RemoteStructureCache` 单层嵌套兜底）只读兼容，**不迁移磁盘、不重跑任务**。
+
 **v1 残留已移除**（2026-08-23）：小写脚手架目录 `inputs/ work/ results/` 停止创建；`_resolve_work_dir` 的 legacy job_id 分支、`JobSpec.task_dir_name` 的 legacy 回退、休眠的 set-based `dedup_task_dir_name` 已删除。
 
 ## 3. Zone 定义与规则
@@ -144,7 +146,7 @@ PESsearch（S2）的新任务使用 `WORK/07_PATH/pes_scan_001/`，不得再把�
 1. **`_SCHEDULER_MARKERS`**（`simple.py`）：调度器在 subprocess 启动前创建的任何文件（如 `metrics.json`）必须加入该集合，否则 `_resolve_output_dir` 会把 simple 工作流重定向到 `<work_dir>_1/` 兄弟目录。v1.2 起集合为：`submit.lsf` `.exit_code` `events.jsonl` `job.json` `stdout.log` `stderr.log` `mechanism_config.json` `metrics.json` `WORK` `RESULT` `input.xyz` `task.json` `input_source.json`（小写 `inputs/work/results` 已随脚手架移除而删除）。
 2. **resume 兼容**：`result_summary.json` 与 `metrics.json` 均为 **write-only by 工作流/调度器，绝不参与 resume/checkpoint 判定**。`state.json`、`.stage_*`、`WORK/08_ANALYSIS/**`（mechanism checkpoint，双探针兼容 legacy `mechanism_study/**`）才是 checkpoint 真相源。
 3. **display-only**：`metrics.json` 永不 gate 任何控制流（resume/purge/cleanup 不得依赖它）。
-4. **工作流侧调度器探测契约**：`workflows/_helpers.is_scheduler_task_dir`（`job.json` + `task.json` 双文件存在）。调度器将来新增预创建文件时若影响该判定，必须同步本契约。
+4. **工作流侧调度器探测契约**：`workflows/_helpers.is_scheduler_task_dir`（`job.json` + `task.json` 双文件存在）。调度器将来新增预创建文件时若影响该判定，必须同步本契约。远程作业目录同样适用：提交时由 `RemoteJobRunner._upload_scheduler_markers` 上传这两份标记（§2a）；缺失时节点产物嵌套到 `<molecule>/`，扁平结果拉取与远程 checkpoint 读取系统性失败。
 5. **旧布局只读兼容**：`{job_id}/{safe_name}/…` 历史任务不得迁移；所有读取路径（detail、文件树、purge、远程 state 观察）必须同时容忍两种布局（`find_workflow_state` 浅层优先 + rglob 模式是范例）。
 
 ## 6a. job_id 内化（v1.2 强制）
