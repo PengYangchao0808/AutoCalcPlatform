@@ -419,6 +419,24 @@ class JobStore:
             )
             conn.commit()
 
+    def update_work_dir_and_name(self, record: JobRecord) -> None:
+        """Persist a task-directory rename and its canonical name together."""
+        record.touch()
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE jobs SET work_dir=?, name=?, spec_json=?, updated_at=? WHERE id=?",
+                (
+                    record.work_dir,
+                    record.spec.name,
+                    _spec_to_json(record.spec),
+                    record.updated_at,
+                    record.id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(record.id)
+            conn.commit()
+
     def get_mechanism_study(self, study_id: str) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(

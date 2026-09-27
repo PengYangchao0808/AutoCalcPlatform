@@ -17,6 +17,7 @@ from acp.storage import (
     TaskRecord,
     TaskStorage,
     is_v2_task_dir,
+    sanitize_existing_task_dir_name,
     sanitize_task_dir_name,
 )
 
@@ -61,6 +62,34 @@ class TestSanitizeTaskDirName:
         name = sanitize_task_dir_name("m" * 80, "t" * 80)
         assert len(name) <= TASK_DIR_NAME_MAX_LEN
         assert not name.endswith("_")
+
+
+class TestSanitizeExistingTaskDirName:
+    def test_incident_leaf_sanitised(self) -> None:
+        # Incident 2026-09-26: parentheses aborted ORCA's startup shell command.
+        assert (
+            sanitize_existing_task_dir_name("frame_1_(TS,_opt_freq_sp_thermo)_irc")
+            == "frame_1_TS_opt_freq_sp_thermo_irc"
+        )
+
+    def test_safe_name_unchanged(self) -> None:
+        assert sanitize_existing_task_dir_name("ethanol_opt_r2scan") == "ethanol_opt_r2scan"
+
+    def test_dedupe_suffix_preserved(self) -> None:
+        assert sanitize_existing_task_dir_name("frame_1_(TS)_irc__03") == "frame_1_TS_irc__03"
+
+    def test_legacy_job_id_leaf_unchanged(self) -> None:
+        assert (
+            sanitize_existing_task_dir_name("20260823_001_Confsearch") == "20260823_001_Confsearch"
+        )
+
+    def test_empty_and_degenerate_names_unchanged(self) -> None:
+        assert sanitize_existing_task_dir_name("") == ""
+        assert sanitize_existing_task_dir_name("(((") == "task"
+
+    def test_idempotent(self) -> None:
+        once = sanitize_existing_task_dir_name("frame_1_(TS,_opt_freq_sp_thermo)_irc")
+        assert sanitize_existing_task_dir_name(once) == once
 
 
 class TestTaskLayoutConstants:

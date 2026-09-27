@@ -1169,6 +1169,163 @@ def test_rerun_preserves_job_identity_and_clears_work_dir_in_place(tmp_path: Pat
         mgr.shutdown()
 
 
+def test_rerun_migrates_unsafe_task_dir_name(tmp_path: Path) -> None:
+    """Rerun retires pre-sanitisation directory names with shell metacharacters.
+
+    Incident 2026-09-26: a task created before the forbidden-char fix kept
+    ``frame_1_(TS,_opt_freq_sp_thermo)_irc`` and every ORCA launch inside it
+    died with ``sh: Syntax error: "(" unexpected``.  In-place rerun must
+    rename the directory, follow the DB row / task index, and preserve the
+    task-identity files.
+    """
+    mgr = _make_manager(tmp_path)
+    try:
+        unsafe_dir = tmp_path / "runs/frame_1_(TS,_opt_freq_sp_thermo)_irc"
+        source = _seed_job(
+            mgr.store,
+            unsafe_dir,
+            "unsafe-irc",
+            status=JobStatus.FAILED,
+            exit_code=1,
+            error="ORCA finished by error termination in Startup",
+            project_id=mgr.default_project_id,
+        )
+        (unsafe_dir / "WORK" / "07_PATH" / "ORCA").mkdir(parents=True)
+        (unsafe_dir / "WORK" / "07_PATH" / "ORCA" / "irc.out").write_text(
+            'sh: 1: Syntax error: "(" unexpected\n'
+        )
+        (unsafe_dir / "input.xyz").write_text("3\n\nC 0 0 0\n")
+        (unsafe_dir / "job.json").write_text("{}")
+        (unsafe_dir / "task.json").write_text(
+            json.dumps({"task_id": source.id, "task_dir_name": unsafe_dir.name,
+                        "node_path": str(unsafe_dir), "status": "failed"}),
+            encoding="utf-8",
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("unsafe-irc")
+
+        assert rerun is not None
+        safe_dir = tmp_path / "runs/frame_1_TS_opt_freq_sp_thermo_irc"
+        assert not unsafe_dir.exists()
+        assert safe_dir.is_dir()
+        assert rerun.work_dir == str(safe_dir)
+        assert Path(rerun.work_dir).name == "frame_1_TS_opt_freq_sp_thermo_irc"
+        # DB row followed the rename.
+        stored = mgr.store.get("unsafe-irc")
+        assert stored is not None
+        assert stored.work_dir == str(safe_dir)
+        assert stored.spec.name == safe_dir.name
+        # Identity files survived the rename; attempt content was cleared.
+        assert (safe_dir / "input.xyz").is_file()
+        assert not (safe_dir / "WORK" / "07_PATH").exists()
+        assert (safe_dir / "WORK" / "00_RUNTIME").is_dir()
+        assert (safe_dir / "RESULT").is_dir()
+        # job.json rewritten at the new path with the new work_dir.
+        assert json.loads((safe_dir / "job.json").read_text(encoding="utf-8"))["work_dir"] == str(
+            safe_dir
+        )
+        task_json = json.loads((safe_dir / "task.json").read_text(encoding="utf-8"))
+        assert task_json["task_dir_name"] == safe_dir.name
+        assert task_json["node_path"] == str(safe_dir)
+        # Task index identity columns follow the rename.
+        with sqlite3.connect(mgr.store.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT task_dir_name, node_path FROM tasks WHERE task_id=?",
+                ("unsafe-irc",),
+            ).fetchone()
+        assert row is not None
+        assert row["task_dir_name"] == "frame_1_TS_opt_freq_sp_thermo_irc"
+        assert row["node_path"] == str(safe_dir)
+        # The rerun event records where the task came from.
+        events = (safe_dir / "WORK" / "00_RUNTIME" / "events.jsonl").read_text(encoding="utf-8")
+        assert json.loads(events.splitlines()[-1])["renamed_from"] == str(unsafe_dir)
+        _wait_submission(calls, source.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_unsafe_dir_cleanup_failure_keeps_original_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        unsafe_dir = tmp_path / "runs/frame_1_(TS)_irc"
+        _seed_job(
+            mgr.store, unsafe_dir, "unsafe-cleanup", status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        monkeypatch.setattr(
+            mgr, "_reset_work_dir_in_place",
+            lambda record, *, strict: (_ for _ in ()).throw(RuntimeError("cleanup failed")),
+        )
+        with pytest.raises(RuntimeError, match="cleanup failed"):
+            mgr.rerun_job("unsafe-cleanup")
+        stored = mgr.store.get("unsafe-cleanup")
+        assert stored is not None
+        assert stored.status == JobStatus.FAILED
+        assert stored.work_dir == str(unsafe_dir)
+        assert unsafe_dir.is_dir()
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_unsafe_dir_db_failure_rolls_back_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        unsafe_dir = tmp_path / "runs/frame_1_(TS)_irc"
+        _seed_job(
+            mgr.store, unsafe_dir, "unsafe-db", status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        monkeypatch.setattr(
+            mgr.store, "update_work_dir_and_name",
+            lambda record: (_ for _ in ()).throw(RuntimeError("db failed")),
+        )
+        with pytest.raises(RuntimeError, match="db failed"):
+            mgr.rerun_job("unsafe-db")
+        stored = mgr.store.get("unsafe-db")
+        assert stored is not None
+        assert stored.status == JobStatus.FAILED
+        assert stored.work_dir == str(unsafe_dir)
+        assert unsafe_dir.is_dir()
+        assert not (tmp_path / "runs/frame_1_TS_irc").exists()
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_unsafe_dir_dedupes_when_safe_name_taken(tmp_path: Path) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        occupied = tmp_path / "runs/frame_1_TS_irc"
+        occupied.mkdir(parents=True)
+        unsafe_dir = tmp_path / "runs/frame_1_(TS)_irc"
+        _seed_job(
+            mgr.store,
+            unsafe_dir,
+            "unsafe-irc-2",
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        (unsafe_dir / "input.xyz").write_text("3\n\nC 0 0 0\n")
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("unsafe-irc-2")
+
+        assert rerun is not None
+        assert occupied.exists()  # untouched
+        assert rerun.work_dir == str(tmp_path / "runs/frame_1_TS_irc__02")
+        assert (tmp_path / "runs/frame_1_TS_irc__02" / "input.xyz").is_file()
+        _wait_submission(calls, "unsafe-irc-2")
+    finally:
+        mgr.shutdown()
+
+
 def test_rerun_terminates_orphaned_task_process(tmp_path: Path) -> None:
     """An orphaned workflow process in the task dir dies before the rerun."""
     mgr = _make_manager(tmp_path)

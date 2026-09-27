@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import random
 import shutil
@@ -67,7 +68,7 @@ from acp.scheduler.runner import (
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.tasks import TaskIndex
-from acp.storage.layout import TaskStorage, runtime_file
+from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
 
 logger = logging.getLogger(__name__)
 
@@ -500,6 +501,9 @@ class JobManager:
                 f"Unsupported workflow: {spec.workflow}. Supported: {SUPPORTED_WORKFLOWS}"
             )
 
+        if spec.workflow == "irc":
+            spec = self._verified_irc_spec(spec)
+
         spec = replace(
             spec,
             project_id=spec.project_id or self.default_project_id,
@@ -557,6 +561,98 @@ class JobManager:
         self._start_submission_thread(job_id, f"acp-submit-{job_id}")
 
         return record
+
+    def _verified_irc_spec(self, spec: JobSpec) -> JobSpec:
+        """Build an IRC spec exclusively from a verified upstream TS result."""
+        from acp.calculations.irc.source import resolve_verified_ts_source
+
+        inp = spec.input
+        job_id = str(inp.get("source_job_id") or "").strip()
+        product_id = str(inp.get("source_product_id") or "").strip()
+        if not job_id or not product_id:
+            raise ValueError(
+                "IRC requires source_job_id and source_product_id from a verified TS result"
+            )
+        source_record = self.store.get(job_id)
+        if source_record is None:
+            raise ValueError(f"IRC source job not found: {job_id}")
+        source = resolve_verified_ts_source(
+            source_record, product_id, getattr(self, "_remote_fetcher", None)
+        )
+        previous = inp.get("ts_source")
+        if isinstance(previous, dict):
+            current = source.provenance()
+            locked_fields = (
+                "job_id", "product_id", "geometry_sha256", "method", "basis",
+                "charge", "multiplicity", "imaginary_frequency_cm1",
+                "frequency_evidence_sha256", "source_completed_at",
+            )
+            if any(previous.get(key) != current[key] for key in locked_fields):
+                raise ValueError("IRC source evidence changed since the previous submission")
+        requested = dict(spec.method)
+        levels = requested.get("levels")
+        irc_level = levels.get("irc") if isinstance(levels, dict) else None
+        for key, expected in (("charge", source.charge), ("multiplicity", source.multiplicity)):
+            if key in inp and inp[key] is not None:
+                try:
+                    override = int(inp[key])
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise ValueError(f"IRC {key} must match the source TS ({expected})") from exc
+                if override != expected:
+                    raise ValueError(f"IRC {key} must match the source TS ({expected})")
+        for key in ("method", "basis", "functional"):
+            for value in (
+                requested.get(key),
+                irc_level.get(key) if isinstance(irc_level, dict) else None,
+            ):
+                expected = source.basis if key == "basis" else source.method
+                if value not in (None, "", expected):
+                    raise ValueError(f"IRC {key} must match the source TS calculation ({expected})")
+        for key in ("solvent", "solvent_model", "dispersion", "grid", "electronic_state"):
+            for block in (requested, irc_level if isinstance(irc_level, dict) else {}):
+                if block.get(key) not in (None, "", "none"):
+                    raise ValueError(f"IRC {key} override is not supported for this TS source")
+        for block in (requested, irc_level if isinstance(irc_level, dict) else {}):
+            if block.get("engine") not in (None, "", "orca"):
+                raise ValueError("IRC engine must match the ORCA TS calculation")
+        maxpoints = requested.get("maxpoints") or (
+            irc_level.get("maxpoints") if isinstance(irc_level, dict) else None
+        ) or 100
+        step = requested.get("step") or (
+            irc_level.get("step") if isinstance(irc_level, dict) else None
+        ) or 0.1
+        try:
+            maxpoints = int(maxpoints)
+            step = float(step)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("IRC maxpoints and step must be valid numbers") from exc
+        if maxpoints < 1 or not math.isfinite(step) or step <= 0:
+            raise ValueError("IRC maxpoints and step must be positive finite numbers")
+        directions = inp.get("directions") or ["forward", "reverse"]
+        if (
+            not isinstance(directions, (list, tuple))
+            or not directions
+            or set(directions) - {"forward", "reverse"}
+        ):
+            raise ValueError("IRC directions must be forward and/or reverse")
+        # An XYZ snapshot is persisted in the IRC spec and materialized by
+        # the runner. No path into another task is used during execution.
+        return replace(
+            spec,
+            input={
+                "source_type": "xyz_text",
+                "source": source.xyz,
+                "input_role": "transition_state",
+                "directions": list(directions),
+                "source_job_id": job_id,
+                "source_product_id": product_id,
+                "ts_source": source.provenance(),
+                "charge": source.charge,
+                "multiplicity": source.multiplicity,
+            },
+            method=source.method_payload(maxpoints=maxpoints, step=step),
+            config_path=source_record.spec.config_path,
+        )
 
     def list_jobs(self, status: str | None = None, limit: int = 200) -> list[JobRecord]:
         return self.store.list(status=status, limit=limit)
@@ -621,7 +717,11 @@ class JobManager:
         queues a new execution attempt against that same task.  A failed or
         cancelled subprocess cannot retain its OS PID, so the scheduler may
         start a new child process, but it must never allocate a new
-        ``job_id``/``work_dir`` pair.
+        ``job_id``/``work_dir`` pair.  One exception: a pre-sanitisation
+        directory name carrying shell metacharacters is migrated to its
+        sanitised form first (``_migrate_unsafe_task_dir``) — the task
+        identity files move with the directory, only the unsafe leaf name
+        is retired.
 
         Before requeueing, every process still bound to the task directory
         (including orphans from a previous service run) is terminated, then
@@ -651,9 +751,9 @@ class JobManager:
             )
             if outcome is None:
                 return None
-            record, attempts, old_status, killed = outcome
+            record, attempts, old_status, killed, renamed_from = outcome
 
-        self._finish_inplace_requeue(record)
+        self._finish_inplace_requeue(record, renamed_from=renamed_from)
         self._event_log(record).append(
             "job.rerun",
             job_id=job_id,
@@ -661,6 +761,7 @@ class JobManager:
             attempts=attempts,
             work_dir=record.work_dir,
             killed_pids=killed,
+            renamed_from=renamed_from,
         )
         self._start_submission_thread(job_id, f"acp-rerun-{job_id}")
         return record
@@ -673,14 +774,15 @@ class JobManager:
         new_spec: JobSpec | None,
         expected_source_revision: str | None,
         project_id: str | None = None,
-    ) -> tuple[JobRecord, int, str, list[int]] | None:
+    ) -> tuple[JobRecord, int, str, list[int], str | None] | None:
         """Shared in-place requeue core (rerun + edit-recalculate, plan §10).
 
         Must be called while holding ``self._lock``; re-reads the record,
-        validates the state machine, clears the task directory, optionally
+        validates the state machine, migrates a shell-unsafe directory name
+        to its sanitised form, clears the task directory, optionally
         installs an edited spec, and flips the record to QUEUED.  Returns
-        ``(record, new_attempts, old_status, killed_pids)`` or ``None`` when
-        the job vanished between reads.
+        ``(record, new_attempts, old_status, killed_pids, renamed_from)``
+        or ``None`` when the job vanished between reads.
         """
         record = self.store.get(job_id)
         if record is None:
@@ -700,9 +802,7 @@ class JobManager:
                 )
         if new_spec is not None:
             if new_spec.workflow != record.spec.workflow:
-                raise ValueError(
-                    "原地重算锁定工作流；如需更换工作流请使用「创建新任务」"
-                )
+                raise ValueError("原地重算锁定工作流；如需更换工作流请使用「创建新任务」")
             # Lock physical identity: the directory allocator is the single
             # source of truth for the task label; project moves go through
             # move_job.
@@ -712,6 +812,8 @@ class JobManager:
                 output_dir=record.spec.output_dir,
                 project_id=current_project,
             )
+        if record.spec.workflow == "irc":
+            new_spec = self._verified_irc_spec(new_spec or record.spec)
 
         killed = self._terminate_stale_task_processes(record)
         if self._has_live_task_process(record):
@@ -719,6 +821,12 @@ class JobManager:
                 f"job {job_id} still has live process(es) in its task directory; "
                 "refusing to rerun — terminate them first"
             )
+
+        # Keep the persisted location unchanged if strict cleanup fails.
+        self._reset_work_dir_in_place(record, strict=True)
+        renamed_from = self._migrate_unsafe_task_dir(record)
+        if renamed_from is not None and new_spec is not None:
+            new_spec = replace(new_spec, name=record.spec.name)
 
         attempts = attempt_number(record) + 1
         old_status = record.status.value
@@ -739,10 +847,6 @@ class JobManager:
                 "error": record.error,
             }
         )
-        # Clear the task directory while the job is still terminal —
-        # flipping to QUEUED lets the poller dispatch a submission at
-        # any moment, and that submission must find a clean task root.
-        self._reset_work_dir_in_place(record, strict=True)
         if new_spec is not None and normalize_for_compare(new_spec.input) != normalize_for_compare(
             record.spec.input
         ):
@@ -789,15 +893,30 @@ class JobManager:
         record.touch()
         self._cancel_events[job_id] = threading.Event()
         self.store.update(record)
-        return record, attempts, old_status, killed
+        return record, attempts, old_status, killed, renamed_from
 
-    def _finish_inplace_requeue(self, record: JobRecord) -> None:
+    def _finish_inplace_requeue(
+        self, record: JobRecord, *, renamed_from: str | None = None
+    ) -> None:
         """Post-lock side effects shared by rerun and in-place edit-recalculate."""
         self._stage_task_observer.reset_job(record.id)
         self._reset_job_artifacts(record.id)
         TaskStorage(Path(record.work_dir)).ensure_layout()
         self._sync_task_status(record)
-        self._update_task_json_status(Path(record.work_dir), record.status.value)
+        if renamed_from is not None and self.tasks is not None:
+            # sync_job_transition only writes status/stage/progress; the
+            # path-derived identity columns need a full resync after a rename.
+            try:
+                self.tasks.sync_from_job(record)
+            except Exception:
+                logger.warning(
+                    "Task index identity sync failed after work-dir rename of %s",
+                    record.id,
+                    exc_info=True,
+                )
+        self._update_task_json_status(
+            Path(record.work_dir), record.status.value, record=record if renamed_from else None
+        )
         self._write_job_json(record)
 
     def edit_recalculate(
@@ -887,9 +1006,9 @@ class JobManager:
             )
             if outcome is None:
                 raise KeyError(job_id)
-            record, attempts, old_status, killed = outcome
+            record, attempts, old_status, killed, renamed_from = outcome
 
-        self._finish_inplace_requeue(record)
+        self._finish_inplace_requeue(record, renamed_from=renamed_from)
         if self.tasks is not None:
             try:
                 # Identity columns (molecule/task/remark) may have changed.
@@ -908,6 +1027,7 @@ class JobManager:
             changed_fields=[entry.get("path") for entry in diff_summary],
             killed_pids=killed,
             work_dir=record.work_dir,
+            renamed_from=renamed_from,
         )
         self._start_submission_thread(job_id, f"acp-edit-{job_id}")
         return {
@@ -945,6 +1065,60 @@ class JobManager:
             "replayed": False,
         }
 
+    def _migrate_unsafe_task_dir(self, record: JobRecord) -> str | None:
+        """Rename a pre-sanitisation task directory to a shell-safe leaf name.
+
+        Directories created before the forbidden-char policy (incident
+        2026-09-26: ``frame_1_(TS,_opt_freq_sp_thermo)_irc`` aborts ORCA's
+        unquoted startup command with ``sh: Syntax error: "(" unexpected``)
+        keep failing on every rerun because the in-place requeue reuses the
+        original directory.  Must be called while the job is terminal, no
+        live process holds the directory, and the manager lock is held.
+
+        Returns:
+            The previous work-dir path when a rename happened, else ``None``.
+
+        Raises:
+            RuntimeError: When the directory exists but cannot be renamed —
+                the requeue must be blocked rather than queue another
+                attempt inside the poison directory.
+        """
+        work_dir = Path(record.work_dir)
+        safe_name = sanitize_existing_task_dir_name(work_dir.name)
+        if safe_name == work_dir.name:
+            return None
+        target = self._dedupe_task_dir(work_dir.with_name(safe_name))
+        if work_dir.exists() and not work_dir.is_dir():
+            raise RuntimeError(f"任务目录不是文件夹，已阻断重跑: {work_dir}")
+        moved = False
+        if work_dir.is_dir():
+            try:
+                work_dir.rename(target)
+                moved = True
+            except OSError as exc:
+                raise RuntimeError(
+                    f"任务目录名含 shell 特殊字符且重命名失败，已阻断重跑: "
+                    f"{work_dir} -> {target}: {exc}"
+                ) from exc
+        old_spec = record.spec
+        record.work_dir = str(target)
+        record.spec = replace(record.spec, name=target.name)
+        try:
+            self.store.update_work_dir_and_name(record)
+        except Exception:
+            record.work_dir = str(work_dir)
+            record.spec = old_spec
+            if moved:
+                try:
+                    target.rename(work_dir)
+                except OSError:
+                    logger.exception(
+                        "Could not roll back task-dir rename %s -> %s", target, work_dir
+                    )
+            raise
+        logger.info("Migrated unsafe task dir %s -> %s for job %s", work_dir, target, record.id)
+        return str(work_dir)
+
     def _reset_work_dir_in_place(self, record: JobRecord, *, strict: bool = True) -> None:
         """Clear attempt-scoped content, keeping the task identity files.
 
@@ -979,8 +1153,7 @@ class JobManager:
                 failures.append(str(child))
         if failures and strict:
             raise RuntimeError(
-                f"清理旧尝试产物失败（{len(failures)} 项），已阻断排队: "
-                + "; ".join(failures[:5])
+                f"清理旧尝试产物失败（{len(failures)} 项），已阻断排队: " + "; ".join(failures[:5])
             )
 
     def _reset_job_artifacts(self, job_id: str) -> None:
@@ -2848,7 +3021,9 @@ class JobManager:
         except OSError:
             logger.debug("Restart event failed for %s", record.id, exc_info=True)
 
-    def _update_task_json_status(self, work_dir: Path, status: str) -> None:
+    def _update_task_json_status(
+        self, work_dir: Path, status: str, *, record: JobRecord | None = None
+    ) -> None:
         """Best-effort status refresh of the on-disk ``task.json``."""
         path = TaskStorage(work_dir).task_json()
         try:
@@ -2859,6 +3034,10 @@ class JobManager:
             return
         payload["status"] = status
         payload["updated_at"] = _utc_now_iso()
+        if record is not None:
+            payload["task_dir_name"] = work_dir.name
+            payload["display_name"] = work_dir.name
+            payload["node_path"] = str(work_dir)
         try:
             path.write_text(
                 json.dumps(payload, indent=2, sort_keys=True, default=str),

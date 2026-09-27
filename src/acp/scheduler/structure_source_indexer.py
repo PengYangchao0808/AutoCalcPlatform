@@ -205,16 +205,16 @@ class StructureSourceIndexer:
             from acp.scheduler.structure_sources import StructureSourceService
 
             service = StructureSourceService(self._store, self._run_root, self._fetcher)
-            entries = service.list_recent(
-                limit=50,
-                project_id=record.project_id or record.spec.project_id,
-                include_remote=False,
-            )
-            filtered = [e for e in entries if e.get("job_id") == job_id]
-            if not filtered:
+            if record.spec.workflow in {"singlepoint", "frequency"}:
+                entries = []
+            elif record.status.value == "completed":
+                entries = service._discover_job(record)
+            else:
+                entries = service._discover_terminal_sources(record)
+            if not entries:
                 self._source_store.mark_job_indexed(job_id, discovery_version=1)
                 return
-            index_rows = self._entries_to_index_rows(filtered, record)
+            index_rows = self._entries_to_index_rows(entries, record)
             if index_rows:
                 self._source_store.upsert_index_entries(index_rows, discovery_version=1)
             self._source_store.mark_job_indexed(job_id, discovery_version=1)

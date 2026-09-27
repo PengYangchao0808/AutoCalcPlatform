@@ -19,6 +19,7 @@ from acp.storage.layout import (
     TaskLayout,
     TaskStorage,
     is_v2_task_dir,
+    sanitize_existing_task_dir_name,
     sanitize_task_dir_name,
 )
 from acp.storage.manifest import MANIFEST_FILENAME, Product, ProductKind, ResultManifest
@@ -46,5 +47,6 @@ __all__ = [
     "TaskStorageBackend",
     "is_v2_task_dir",
     "open_storage",
+    "sanitize_existing_task_dir_name",
     "sanitize_task_dir_name",
 ]
