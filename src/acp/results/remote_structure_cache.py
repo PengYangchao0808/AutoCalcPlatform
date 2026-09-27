@@ -47,9 +47,10 @@ _CATALOG_FETCH_PATHS: dict[str, tuple[str, ...]] = {
     ),
     "BatchOptimize": ("RESULT/result_manifest.json",),
     "optimize": ("RESULT/result_manifest.json", "input.xyz"),
-    "xtb-optimize": ("RESULT/result_manifest.json", "input.xyz"),
+    "xtb_optimize": ("RESULT/result_manifest.json", "input.xyz"),
     "singlepoint": ("RESULT/result_manifest.json", "input.xyz"),
     "frequency": ("RESULT/result_manifest.json", "input.xyz"),
+    "nmr": ("RESULT/result_manifest.json",),
     "scan": ("RESULT/trajectories/scan_trajectory.json",),
     # IRC trajectories are both catalog metadata and geometry.  The viewer
     # must parse them to know how many frame entries to expose.
@@ -74,7 +75,7 @@ _CATALOG_READY_PATHS["PESsearch"] = (
 )
 # A simple-workflow input is only an optional fallback.  A completed remote
 # result is considered synchronized once its result manifest is available.
-for _simple_workflow in ("optimize", "xtb-optimize", "singlepoint", "frequency"):
+for _simple_workflow in ("optimize", "xtb_optimize", "singlepoint", "frequency"):
     _CATALOG_READY_PATHS[_simple_workflow] = ("RESULT/result_manifest.json",)
 
 

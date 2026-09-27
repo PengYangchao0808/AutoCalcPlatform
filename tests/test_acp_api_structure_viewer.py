@@ -1486,6 +1486,50 @@ class TestRemoteStructureCache:
         cache = RemoteStructureCache(tmp_path)
         assert cache.required_files_absent(tmp_path, "scan") is True
 
+    def test_catalog_keys_use_xtb_optimize_and_include_nmr(self) -> None:
+        """Catalog keys match real workflow ids (``xtb_optimize``, not hyphen)."""
+        from acp.results.remote_structure_cache import (
+            _CATALOG_FETCH_PATHS,
+            _CATALOG_READY_PATHS,
+        )
+
+        assert "xtb_optimize" in _CATALOG_FETCH_PATHS
+        assert _CATALOG_FETCH_PATHS["xtb_optimize"] == _CATALOG_FETCH_PATHS["optimize"]
+        assert _CATALOG_FETCH_PATHS["xtb_optimize"] == _CATALOG_FETCH_PATHS["frequency"]
+        assert _CATALOG_READY_PATHS["xtb_optimize"] == ("RESULT/result_manifest.json",)
+        assert "nmr" in _CATALOG_FETCH_PATHS
+        assert _CATALOG_FETCH_PATHS["nmr"] == ("RESULT/result_manifest.json",)
+        assert "xtb-optimize" not in _CATALOG_FETCH_PATHS
+        assert "xtb-optimize" not in _CATALOG_READY_PATHS
+
+    def test_fetch_catalog_xtb_optimize_ready_from_manifest_only(
+        self, tmp_path: Path
+    ) -> None:
+        """Remote xtb_optimize: only RESULT/result_manifest.json → catalog ready.
+
+        Regression: the fetch key used to be the stale hyphenated
+        ``xtb-optimize``, so real ``xtb_optimize`` jobs never matched and
+        stayed ``pending_fetch`` forever.
+        """
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        manifest = {"version": 2, "workflow": "xtb_optimize", "products": []}
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if filename == "RESULT/result_manifest.json":
+                    return json.dumps(manifest).encode("utf-8")
+                raise FileNotFoundError(filename)
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-xtb"})()
+
+        root = cache.fetch_catalog(record, "xtb_optimize")
+
+        assert root == cache.job_root("job-xtb")
+        assert cache.catalog_ready(root, "xtb_optimize") is True
+        assert (root / "RESULT/result_manifest.json").is_file()
+
 
 class TestRemoteAvailabilityEndpoints:
     """Integration tests for remote job availability in structure-viewer endpoints."""
@@ -1536,6 +1580,31 @@ class TestRemoteAvailabilityEndpoints:
         assert resp.status_code == 200
         body = resp.json()
         assert body["availability"] == "ready"
+
+    def test_catalog_fetch_xtb_optimize_ready_with_manifest_only(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """workflow=xtb_optimize + fetch=1 with only the manifest → availability=ready."""
+        self._seed_remote_job(sv_client, tmp_path, workflow="xtb_optimize")
+        manager = sv_client.app.state.job_manager
+        manifest = {"version": 2, "workflow": "xtb_optimize", "products": []}
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if filename == "RESULT/result_manifest.json":
+                    return json.dumps(manifest).encode("utf-8")
+                raise FileNotFoundError(filename)
+
+        manager._remote_fetcher = FakeFetcher()  # type: ignore[attr-defined]
+
+        response = sv_client.get("/api/v1/jobs/remote-001/structure-viewer?fetch=1")
+        assert response.status_code == 200
+        assert response.json()["availability"] == "ready"
+
+        # Second catalog request without fetch → still ready from cache
+        cached = sv_client.get("/api/v1/jobs/remote-001/structure-viewer")
+        assert cached.status_code == 200
+        assert cached.json()["availability"] == "ready"
 
     def test_catalog_fetch_projects_pure_remote_results_from_cache(
         self, sv_client: TestClient, tmp_path: Path
