@@ -220,6 +220,38 @@ class TestIndexerBackfill:
         rows = source_store.list_by_job("job_empty")
         assert len(rows) == 0
 
+    def test_batch_result_is_indexed_without_recent_list_cap(
+        self, job_store: JobStore, source_store: StructureSourceStore, tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from acp.scheduler.structure_sources import StructureSourceService
+
+        work_dir = tmp_path / "batch_result"
+        _write(work_dir / "RESULT" / "structures" / "item_001__TAG_TS__optimized.xyz", _XYZ_TS)
+        _write(
+            work_dir / "RESULT" / "result_manifest.json",
+            json.dumps({"products": [{
+                "id": "batch_item_001",
+                "label": "TS optimized result",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            }]}),
+        )
+        record = _make_record("batch_result", workflow="BatchOptimize", work_dir=work_dir)
+        job_store.create(record)
+
+        def fail_recent(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("per-job indexing must not use capped recent results")
+
+        monkeypatch.setattr(StructureSourceService, "list_recent", fail_recent)
+        indexer = StructureSourceIndexer(job_store, source_store, tmp_path)
+        indexer._index_job(record)
+
+        rows = source_store.list_by_job("batch_result")
+        assert len(rows) == 1
+        assert rows[0]["source_kind"] == "final"
+        assert rows[0]["role"] == "TS"
+
 
 class TestIncrementalSweep:
     """Incremental sweep picks up newly completed jobs."""
