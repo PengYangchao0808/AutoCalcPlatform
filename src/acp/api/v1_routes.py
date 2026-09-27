@@ -3374,6 +3374,7 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
         disk_state=disk_state,
         recovery=_compute_recovery(record, disk_state),
         metrics=_read_job_metrics(record),
+        effective_config=_read_effective_config(record),
     )
 
 
@@ -3396,6 +3397,18 @@ def _read_job_metrics(record: JobRecord) -> JobMetrics | None:
         opt_converged=payload.get("opt_converged"),
         updated_at=payload.get("updated_at"),
     )
+
+
+def _read_effective_config(record: JobRecord) -> dict[str, Any] | None:
+    """Read ``effective_config.json`` for BatchOptimize jobs."""
+    if record.spec.workflow != "BatchOptimize" or not record.work_dir:
+        return None
+    try:
+        from acp.calculations.batch.effective_config import read_effective_config
+
+        return read_effective_config(Path(record.work_dir))
+    except Exception:
+        return None
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=V1JobRecordModel)

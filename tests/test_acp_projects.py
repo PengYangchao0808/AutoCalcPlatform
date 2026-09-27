@@ -3,12 +3,28 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from pathlib import Path
 
 from acp.scheduler.jobs import JobSpec
 from acp.scheduler.manager import JobManager
 from acp.scheduler.migrations import migrate
 from acp.scheduler.store import JobStore
+
+
+def _wait_terminal(mgr: JobManager, job_ids: list[str], timeout: float = 15.0) -> None:
+    """Wait until each job reaches a terminal status.
+
+    Keeps fire-and-forget submission threads inside the owning test so their
+    failure logs cannot leak into later tests' captured output.
+    """
+    deadline = time.monotonic() + timeout
+    for job_id in job_ids:
+        while time.monotonic() < deadline:
+            record = mgr.get(job_id)
+            if record is None or record.status.is_terminal:
+                break
+            time.sleep(0.05)
 
 
 def test_migration_creates_projects_table(tmp_path: Path) -> None:
@@ -105,6 +121,7 @@ def test_job_list_by_project(tmp_path: Path) -> None:
 
         assert [job.id for job in alpha_jobs] == [first.id]
         assert [job.id for job in beta_jobs] == [second.id]
+        _wait_terminal(mgr, [first.id, second.id])
     finally:
         mgr.shutdown()
 
@@ -153,6 +170,7 @@ def test_project_rename_freezes_disk_dir(tmp_path: Path) -> None:
         )
         assert Path(second.work_dir).parent.name == "Original"
         assert Path(first.work_dir).parent == Path(second.work_dir).parent
+        _wait_terminal(mgr, [first.id, second.id])
     finally:
         mgr.shutdown()
 
@@ -164,5 +182,6 @@ def test_unknown_project_id_falls_back_to_sanitized_id(tmp_path: Path) -> None:
             JobSpec(workflow="fake", input={"source": "A"}, project_id="stale-id 01")
         )
         assert Path(record.work_dir).parent.name == "stale-id_01"
+        _wait_terminal(mgr, [record.id])
     finally:
         mgr.shutdown()

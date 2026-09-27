@@ -1,6 +1,6 @@
 /**
  * ACP Structure Editor — edits + transactions + asset save (Wave 6, todos 32-37)
- * @version 0.8.0
+ * @version 0.9.0
  *
  * Namespace: window.ACPStructureEditor
  *
@@ -23,7 +23,9 @@
  *   - applyBondLengthEdit(a, b, targetLength, moveSide) (orchestration)
  *   - applyBondAngleEdit(a, b, c, targetDeg, moveSide) (orchestration)
  *   - applyDihedralEdit(a, b, c, d, targetDeg, moveSide) (orchestration)
- *   - applyMeasuredEdit(kind, atomIds, target)  (measurement-tool hook)
+ *   - applyMeasuredEdit(kind, atomIds, target, measurementId?) (measurement-tool hook)
+ *   - validateEditableCoordinate(type, atomIds)  (measurement-time editability)
+ *   - REASON_MESSAGES / reasonMessage(reason)    (internal reason -> user message)
  *   - checkCollisions(symbols, coords, edges)   (PURE post-edit safety check)
  *   - bindEntry(entryId, symbols, coords) / confirmSwitch(action)
  *   - undoEdit() / redoEdit() / resetEdits() / isDirty() / syncDirtyFlag()
@@ -66,7 +68,7 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.8.0";
+  var VERSION = "0.9.0";
 
   /* ---- user-visible strings (zh fallback; i18n dictionary keys land in todo 36) ---- */
   var STR = {
@@ -91,6 +93,45 @@
     SAVED_ASSET: "\u5df2\u4fdd\u5b58",                                   // 已保存
     EDITED_SUFFIX: "\u5df2\u7f16\u8f91",                                 // 已编辑
   };
+
+  /**
+   * Internal rejection reason -> user-visible Chinese message (plan §3.3).
+   * Program strings like "no_bond" must never be shown directly; the UI
+   * translates them through reasonMessage() before rendering.
+   *
+   * @type {Object<string, string>}
+   */
+  var REASON_MESSAGES = {
+    no_bond: "\u6240\u9009\u539f\u5b50\u4e0d\u662f\u8fde\u7eed\u6210\u952e\u8def\u5f84\uff0c\u53ea\u80fd\u6d4b\u91cf\uff0c\u4e0d\u80fd\u8fd9\u6837\u4fee\u6539",
+    ring_bond: "\u4e2d\u5fc3\u952e\u4f4d\u4e8e\u73af\u4e2d\uff0c\u8f7b\u91cf\u7f16\u8f91\u5668\u6682\u4e0d\u652f\u6301\u65cb\u8f6c\u8be5\u7247\u6bb5",
+    degenerate: "\u5f53\u524d\u51e0\u4f55\u5171\u7ebf\u6216\u91cd\u5408\uff0c\u65e0\u6cd5\u5b9a\u4e49\u7a33\u5b9a\u65cb\u8f6c\u8f74",
+    out_of_range: "\u76ee\u6807\u503c\u8d85\u51fa\u5141\u8bb8\u8303\u56f4",
+    locked: "\u8bf7\u5148\u6682\u505c\u632f\u52a8\u52a8\u753b\u6216\u9000\u51fa\u51b2\u7a81\u6a21\u5f0f",
+    entry_mismatch: "\u5f53\u524d\u7ed3\u679c\u5df2\u5207\u6362\uff0c\u8bf7\u91cd\u65b0\u9009\u62e9\u539f\u5b50",
+    invalid_move_side: "\u4e0d\u652f\u6301\u7684\u79fb\u52a8\u4fa7\u8bbe\u7f6e",
+    no_structure: "\u5f53\u524d\u6ca1\u6709\u53ef\u7f16\u8f91\u7684\u7ed3\u6784",
+    nothing_to_undo: "\u6ca1\u6709\u53ef\u64a4\u9500\u7684\u64cd\u4f5c",
+    nothing_to_redo: "\u6ca1\u6709\u53ef\u91cd\u505a\u7684\u64cd\u4f5c",
+    dirty_switch: "\u5f53\u524d\u7ed3\u6784\u6709\u672a\u5e94\u7528\u7684\u4fee\u6539",
+    overlay_active: "\u53e0\u5408\u6a21\u5f0f\u4e0b\u4e0d\u80fd\u4fee\u6539\u7ed3\u6784",
+    irc_playing: "\u8f68\u8ff9\u64ad\u653e\u4e2d\u4e0d\u80fd\u4fee\u6539\u7ed3\u6784",
+    vibration_active: "\u8bf7\u5148\u6682\u505c\u632f\u52a8\u52a8\u753b",
+  };
+
+  /**
+   * Translate an internal edit/validation reason into a user-visible
+   * message; unknown reasons fall back to the raw string (never empty for
+   * truthy input).
+   *
+   * @param {string|null|undefined} reason
+   * @returns {string} localized message; "" for null/undefined/empty input
+   */
+  function reasonMessage(reason) {
+    if (Object.prototype.hasOwnProperty.call(REASON_MESSAGES, reason)) {
+      return REASON_MESSAGES[reason];
+    }
+    return reason ? String(reason) : "";
+  }
 
   /**
    * Covalent radii in Å (Cordero 2008 subset used by this project's
@@ -292,6 +333,296 @@
       }
     }
     return connectedComponents(kept, atomCount);
+  }
+
+  /* ---- authoritative geometry resolution + measurement editability ---- */
+
+  /** Atom-count arity per measurement type (mirrors ACPGeometryStore). */
+  var MEASUREMENT_ARITY = { distance: 2, angle: 3, dihedral: 4 };
+
+  /** Required bond/axis lengths below this count as degenerate geometry. */
+  var DEGENERATE_EPS = 1e-9;
+
+  /** Inferred-edge cache for validation, keyed by store entry + revision. */
+  var _validationGraphCache = { key: null, edges: null };
+
+  /** Store object whose change notifications invalidate the edge cache. */
+  var _validationSubscribedStore = null;
+
+  /**
+   * Resolve the geometry-store API when the module is loaded.
+   *
+   * @returns {Object|null}
+   */
+  function _storeApi() {
+    return (typeof window !== "undefined" && window.ACPGeometryStore)
+      ? window.ACPGeometryStore
+      : null;
+  }
+
+  /**
+   * Resolve the geometry store when it owns a loaded entry (entryId set).
+   *
+   * @returns {Object|null}
+   */
+  function _activeStore() {
+    var store = _storeApi();
+    if (!store || !store.state) return null;
+    var entryId = store.state.entryId;
+    return (entryId === null || entryId === undefined) ? null : store;
+  }
+
+  /**
+   * Extract usable geometry from a store's live state.
+   *
+   * @param {Object|null} store
+   * @returns {{symbols: Array<string>, coords: Array<Array<number>>}|null}
+   */
+  function _storeGeometry(store) {
+    if (!store || !store.state) return null;
+    var symbols = store.state.symbols;
+    var coords = store.state.coordinates;
+    if (!Array.isArray(symbols) || !Array.isArray(coords)) return null;
+    if (!symbols.length || symbols.length !== coords.length) return null;
+    return { symbols: symbols, coords: coords };
+  }
+
+  /**
+   * Extract usable geometry from the structure viewer's displayed state.
+   *
+   * @returns {{symbols: Array<string>, coords: Array<Array<number>>}|null}
+   */
+  function _viewerGeometry() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !Array.isArray(svState.displayedSymbols) ||
+        !Array.isArray(svState.displayedCoords)) {
+      return null;
+    }
+    if (!svState.displayedSymbols.length ||
+        svState.displayedSymbols.length !== svState.displayedCoords.length) {
+      return null;
+    }
+    return { symbols: svState.displayedSymbols, coords: svState.displayedCoords };
+  }
+
+  /**
+   * Resolve the authoritative geometry: ACPGeometryStore first (when it
+   * owns a loaded entry), structure-viewer displayed state as fallback.
+   *
+   * @returns {{store: Object|null, symbols: Array<string>,
+   *            coords: Array<Array<number>>}|null}
+   */
+  function _currentGeometry() {
+    var store = _activeStore();
+    var fromStore = _storeGeometry(store);
+    if (fromStore) {
+      return { store: store, symbols: fromStore.symbols, coords: fromStore.coords };
+    }
+    var fromViewer = _viewerGeometry();
+    if (fromViewer) {
+      return { store: null, symbols: fromViewer.symbols, coords: fromViewer.coords };
+    }
+    return null;
+  }
+
+  /**
+   * Normalize one atom id; integers >= 0 only.
+   *
+   * @param {*} value
+   * @returns {number|null}
+   */
+  function _toAtomId(value) {
+    var n = (typeof value === "string" && value !== "") ? Number(value) : value;
+    return (typeof n === "number" && Number.isInteger(n) && n >= 0) ? n : null;
+  }
+
+  /**
+   * Finite xyz point for one atom id; null when missing or non-finite.
+   *
+   * @param {Array<Array<number>>} coords
+   * @param {number} atomId
+   * @returns {Array<number>|null}
+   */
+  function _point3(coords, atomId) {
+    if (!Array.isArray(coords) || atomId >= coords.length) return null;
+    var row = coords[atomId];
+    if (!Array.isArray(row) || row.length < 3) return null;
+    var x = +row[0], y = +row[1], z = +row[2];
+    return (isFinite(x) && isFinite(y) && isFinite(z)) ? [x, y, z] : null;
+  }
+
+  /**
+   * Euclidean distance between two xyz points.
+   *
+   * @param {Array<number>} p
+   * @param {Array<number>} q
+   * @returns {number}
+   */
+  function _dist3(p, q) {
+    var dx = p[0] - q[0], dy = p[1] - q[1], dz = p[2] - q[2];
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+
+  /**
+   * Subscribe once per store object so "load"/"coordinates" mutations
+   * invalidate the validation edge cache (load() resets revision to 1, so
+   * entryId+revision alone can collide across frames of the same entry).
+   *
+   * @param {Object|null} store
+   * @returns {void}
+   */
+  function _ensureValidationInvalidation(store) {
+    if (!store || typeof store.subscribe !== "function") return;
+    if (_validationSubscribedStore === store) return;
+    _validationSubscribedStore = store;
+    store.subscribe(function (_snapshot, change) {
+      if (change === "load" || change === "coordinates") {
+        _validationGraphCache.key = null;
+        _validationGraphCache.edges = null;
+      }
+    });
+  }
+
+  /**
+   * Cheap O(N) topology fingerprint (rounded coordinates) guarding the
+   * cache against any coordinate change that did not bump the revision.
+   *
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @returns {number} 32-bit integer hash
+   */
+  function _geometryFingerprint(symbols, coords) {
+    var h = symbols.length | 0;
+    for (var i = 0; i < coords.length; i++) {
+      var row = coords[i];
+      if (!row) {
+        h = (h * 31 + 7) | 0;
+        continue;
+      }
+      h = (h * 31 + (Math.round((+row[0] || 0) * 1e6) | 0)) | 0;
+      h = (h * 31 + (Math.round((+row[1] || 0) * 1e6) | 0)) | 0;
+      h = (h * 31 + (Math.round((+row[2] || 0) * 1e6) | 0)) | 0;
+    }
+    return h;
+  }
+
+  /**
+   * Build (or reuse) the inferred adjacency edges used for validation.  The
+   * cache is keyed by store entryId + revision + geometry fingerprint and is
+   * invalidated on every store load/coordinates notification, so repeated
+   * calls during one pick session skip the O(N^2) inference; viewer-only
+   * geometry has no stable revision and is always rebuilt.
+   *
+   * @param {{store: Object|null, symbols: Array<string>,
+   *          coords: Array<Array<number>>}} geometry
+   * @returns {Array<{a: number, b: number, order: number, source: string}>}
+   */
+  function _validationEdges(geometry) {
+    var key = null;
+    if (geometry.store && geometry.store.state) {
+      _ensureValidationInvalidation(geometry.store);
+      key = String(geometry.store.state.entryId) + "@" +
+        String(geometry.store.state.revision) + "#" + String(geometry.symbols.length) +
+        ":" + String(_geometryFingerprint(geometry.symbols, geometry.coords));
+    }
+    if (key !== null && _validationGraphCache.key === key &&
+        _validationGraphCache.edges) {
+      return _validationGraphCache.edges;
+    }
+    var built = buildAdjacency(geometry.symbols, geometry.coords);
+    if (key !== null) {
+      _validationGraphCache.key = key;
+      _validationGraphCache.edges = built.edges;
+    }
+    return built.edges;
+  }
+
+  /**
+   * Not-editable verdict carrying the user-visible message.
+   *
+   * @param {string} reason
+   * @returns {{editable: boolean, reason: string, message: string}}
+   */
+  function _notEditable(reason) {
+    return { editable: false, reason: reason, message: reasonMessage(reason) };
+  }
+
+  /**
+   * Measurement-time editability check for an internal coordinate.  A
+   * measurement itself is always allowed; this verdict only decides whether
+   * the measured value may be MODIFIED, and explains why not in Chinese.
+   *
+   * Geometry comes from ACPGeometryStore.state when loaded, else from
+   * ACPStructureViewer.state.displayedSymbols/displayedCoords.  Edges are
+   * inferred with buildAdjacency() (explicit bond blocks are not consulted),
+   * so the check works before bindEntry() and never mutates any state.
+   *
+   * Rules: every required edge must exist ("no_bond"); cutting the central
+   * bond must separate the two sides ("ring_bond" when it does not);
+   * required bond/axis lengths must be >= 1e-9 and every coordinate finite
+   * ("degenerate").  Missing geometry yields "no_structure"; unknown type
+   * or wrong arity yields "no_bond".
+   *
+   * @param {string} type - "distance" | "angle" | "dihedral"
+   * @param {Array<number>} atomIds - 2 / 3 / 4 canonical atom ids
+   * @returns {{editable: boolean, reason: string|null, message: string|null}}
+   */
+  function validateEditableCoordinate(type, atomIds) {
+    var arity = MEASUREMENT_ARITY[type];
+    if (arity === undefined) return _notEditable("no_bond");
+    if (!Array.isArray(atomIds) || atomIds.length !== arity) {
+      return _notEditable("no_bond");
+    }
+    var ids = [];
+    for (var i = 0; i < atomIds.length; i++) {
+      var id = _toAtomId(atomIds[i]);
+      if (id === null) return _notEditable("no_bond");
+      ids.push(id);
+    }
+
+    var geometry = _currentGeometry();
+    if (!geometry) return _notEditable("no_structure");
+
+    var points = [];
+    for (var p = 0; p < ids.length; p++) {
+      var point = _point3(geometry.coords, ids[p]);
+      if (!point) return _notEditable("degenerate");
+      points.push(point);
+    }
+
+    var edges = _validationEdges(geometry);
+    var required = [];
+    if (type === "dihedral") {
+      required.push([ids[0], ids[1]], [ids[1], ids[2]], [ids[2], ids[3]]);
+    } else if (type === "angle") {
+      required.push([ids[0], ids[1]], [ids[1], ids[2]]);
+    } else {
+      required.push([ids[0], ids[1]]);
+    }
+    for (var r = 0; r < required.length; r++) {
+      if (!_hasEdge(edges, required[r][0], required[r][1])) {
+        return _notEditable("no_bond");
+      }
+    }
+    for (var b = 1; b < points.length; b++) {
+      if (_dist3(points[b - 1], points[b]) < DEGENERATE_EPS) {
+        return _notEditable("degenerate");
+      }
+    }
+
+    var cutA = (type === "distance") ? ids[0] : ids[1];
+    var cutB = (type === "distance") ? ids[1] : ids[2];
+    var sideLeftId = ids[0];
+    var sideRightId = (type === "distance") ? ids[1] : ids[2];
+    var fragments = fragmentsAfterCut(edges, geometry.symbols.length, cutA, cutB);
+    var sideLeft = _componentOf(fragments, sideLeftId);
+    var sideRight = _componentOf(fragments, sideRightId);
+    if (sideLeft && sideRight && sideLeft === sideRight) {
+      return _notEditable("ring_bond");
+    }
+    return { editable: true, reason: null, message: null };
   }
 
   /**
@@ -846,12 +1177,13 @@
     if (locked) return { ok: false, reason: "locked" };
     var guard = _entryScopeGuard();
     if (!guard.ok) return guard;
-    var svState = window.ACPStructureViewer.state;
+    var geometry = _currentGeometry();
+    if (!geometry) return { ok: false, reason: "no_structure" };
     var graph = editorState.graph || buildGraphFromCurrentEntry();
     if (!graph) return { ok: false, reason: "no_structure" };
 
     var result = editDihedral(
-      svState.displayedSymbols, svState.displayedCoords, graph.edges,
+      geometry.symbols, geometry.coords, graph.edges,
       atomA, atomB, atomC, atomD, targetDeg, moveSide
     );
     if (result.ok) {
@@ -886,12 +1218,13 @@
     if (locked) return { ok: false, reason: "locked" };
     var guard = _entryScopeGuard();
     if (!guard.ok) return guard;
-    var svState = window.ACPStructureViewer.state;
+    var geometry = _currentGeometry();
+    if (!geometry) return { ok: false, reason: "no_structure" };
     var graph = editorState.graph || buildGraphFromCurrentEntry();
     if (!graph) return { ok: false, reason: "no_structure" };
 
     var result = editBondAngle(
-      svState.displayedSymbols, svState.displayedCoords, graph.edges,
+      geometry.symbols, geometry.coords, graph.edges,
       atomA, atomB, atomC, targetDeg, moveSide
     );
     if (result.ok) {
@@ -929,16 +1262,17 @@
     if (locked) return { ok: false, reason: "locked" };
     var guard = _entryScopeGuard();
     if (!guard.ok) return guard;
-    var svState = window.ACPStructureViewer.state;
+    var geometry = _currentGeometry();
+    if (!geometry) return { ok: false, reason: "no_structure" };
     var graph = editorState.graph || buildGraphFromCurrentEntry();
     if (!graph) return { ok: false, reason: "no_structure" };
 
     var result = editBondLength(
-      svState.displayedSymbols, svState.displayedCoords, graph.edges,
+      geometry.symbols, geometry.coords, graph.edges,
       atomA, atomB, targetLength, moveSide
     );
     if (result.ok) {
-      var fragments = fragmentsAfterCut(graph.edges, svState.displayedCoords.length, atomA, atomB);
+      var fragments = fragmentsAfterCut(graph.edges, geometry.coords.length, atomA, atomB);
       editorState.pendingEdit = {
         type: "bond_length",
         atomA: atomA,
@@ -1096,9 +1430,12 @@
   /**
    * Shared commit path for every apply*: entry scoping, transaction record
    * {type, atom_ids, before, after, moved_atom_ids, collision_warnings},
-   * live application to the displayed coordinates, and a best-effort
-   * refresh of the 3D model via the app's xyz loading bridge.  Edits touch
-   * coordinates ONLY — symbols, bond orders, and topology never change.
+   * live application to the authoritative coordinates, and a best-effort
+   * refresh of the 3D model.  When ACPGeometryStore owns the entry the
+   * coordinates go through updateCoordinates() (selection + measurements
+   * survive, revision bumps); otherwise the legacy displayedCoords + xyz
+   * bridge path is kept.  Edits touch coordinates ONLY — symbols, bond
+   * orders, and topology never change.
    *
    * @param {string} type - "bond_length" | "bond_angle" | "dihedral"
    * @param {Array<number>} atomIds
@@ -1106,13 +1443,19 @@
    * @returns {void}
    */
   function _commitEdit(type, atomIds, afterCoords) {
-    var svState = window.ACPStructureViewer.state;
-    var before = svState.displayedCoords;
+    var geometry = _currentGeometry();
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    var before = geometry ? geometry.coords
+      : (svState ? svState.displayedCoords : []);
+    var symbols = geometry ? geometry.symbols
+      : (svState ? svState.displayedSymbols : []);
     var moved = [];
     for (var i = 0; i < afterCoords.length; i++) {
-      if (afterCoords[i] !== before[i]) moved.push(i);
+      if (_coordsDiffer(afterCoords[i], before ? before[i] : undefined)) moved.push(i);
     }
-    var warnings = checkCollisions(svState.displayedSymbols, afterCoords, _graphEdges());
+    var warnings = checkCollisions(symbols, afterCoords, _graphEdges());
     editorState.transactions.push({
       type: type,
       atom_ids: atomIds.slice(),
@@ -1122,9 +1465,45 @@
       collision_warnings: warnings,
     });
     editorState.redoStack = [];
-    svState.displayedCoords = afterCoords;
+    var viaStore = _writeCoordinates(afterCoords);
     syncDirtyFlag();
-    _pushModelToViewer();
+    if (!viaStore) _pushModelToViewer();
+  }
+
+  /**
+   * Value comparison for transaction moved_atom_ids: rows count as equal
+   * when all three components match, so store-owned rows and viewer rows
+   * carrying identical geometry never count as moved.
+   *
+   * @param {Array<number>|undefined} rowA
+   * @param {Array<number>|undefined} rowB
+   * @returns {boolean}
+   */
+  function _coordsDiffer(rowA, rowB) {
+    if (rowA === rowB) return false;
+    if (!rowA || !rowB) return true;
+    return +rowA[0] !== +rowB[0] || +rowA[1] !== +rowB[1] || +rowA[2] !== +rowB[2];
+  }
+
+  /**
+   * Write committed coordinates to the authoritative owner: the geometry
+   * store when loaded (measurements/selection survive; the store emits
+   * "coordinates"), otherwise the legacy viewer field.
+   *
+   * @param {Array<Array<number>>} coords
+   * @returns {boolean} true when the store accepted the coordinates
+   */
+  function _writeCoordinates(coords) {
+    var geometry = _currentGeometry();
+    if (geometry && geometry.store) {
+      geometry.store.updateCoordinates(coords);
+      return true;
+    }
+    if (typeof window !== "undefined" && window.ACPStructureViewer &&
+        window.ACPStructureViewer.state) {
+      window.ACPStructureViewer.state.displayedCoords = coords;
+    }
+    return false;
   }
 
   function _graphEdges() {
@@ -1144,9 +1523,13 @@
   /**
    * Best-effort refresh of the displayed 3D model through the app's
    * existing xyz bridge (no new viewer, no re-framing contract change).
+   * When ACPGeometryStore owns the loaded entry this is a no-op: the store
+   * subscription re-renders the canvas asynchronously and calling the bridge
+   * would reload the model (clearing selection + measurements).
    */
   function _pushModelToViewer() {
     if (typeof window === "undefined") return;
+    if (_activeStore()) return;
     var svState = window.ACPStructureViewer ? window.ACPStructureViewer.state : null;
     if (!svState || !svState.displayedCoords || !svState.displayedSymbols) return;
     if (typeof window._svLoadXyzToViewer === "function") {
@@ -1161,13 +1544,26 @@
 
   /**
    * Entry-scope guard shared by the apply* paths: rejects when the edit
-   * session is bound to a different entry than the viewer displays
-   * ("must NOT apply an edit outside the current entry"); auto-binds on
-   * the first edit of a session.
+   * session is bound to a different entry than the authoritative geometry
+   * (the ACPGeometryStore entry when loaded, else the viewer's displayed
+   * entry — "must NOT apply an edit outside the current entry"); auto-binds
+   * on the first edit of a session.
    *
    * @returns {{ok: boolean, reason?: string}}
    */
   function _entryScopeGuard() {
+    var store = _activeStore();
+    var storeGeometry = store ? _storeGeometry(store) : null;
+    if (storeGeometry) {
+      if (editorState.entryId === null) {
+        /* first edit of a session: adopt the store entry; a graph already
+           built/seeded for it stays valid */
+        _rebind(store.state.entryId, storeGeometry.symbols, storeGeometry.coords, true);
+      } else if (editorState.entryId !== store.state.entryId) {
+        return { ok: false, reason: "entry_mismatch" };
+      }
+      return { ok: true };
+    }
     var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
       ? window.ACPStructureViewer.state
       : null;
@@ -1187,9 +1583,10 @@
   }
 
   /**
-   * Undo the last transaction: displayed coordinates revert to `before`
-   * (byte-identical row references), the transaction moves to the redo
-   * stack.
+   * Undo the last transaction: coordinates revert to `before` (through
+   * ACPGeometryStore.updateCoordinates when loaded, else the legacy viewer
+   * field; byte-identical row references are preserved), the transaction
+   * moves to the redo stack.
    *
    * @returns {{ok: boolean, reason?: string}}
    */
@@ -1200,14 +1597,14 @@
     if (!editorState.transactions.length) return { ok: false, reason: "nothing_to_undo" };
     var txn = editorState.transactions.pop();
     editorState.redoStack.push(txn);
-    window.ACPStructureViewer.state.displayedCoords = txn.before;
+    var viaStore = _writeCoordinates(txn.before);
     syncDirtyFlag();
-    _pushModelToViewer();
+    if (!viaStore) _pushModelToViewer();
     return { ok: true, transaction: txn };
   }
 
   /**
-   * Redo the last undone transaction.
+   * Redo the last undone transaction (store-routed exactly like undo).
    *
    * @returns {{ok: boolean, reason?: string}}
    */
@@ -1218,15 +1615,15 @@
     if (!editorState.redoStack.length) return { ok: false, reason: "nothing_to_redo" };
     var txn = editorState.redoStack.pop();
     editorState.transactions.push(txn);
-    window.ACPStructureViewer.state.displayedCoords = txn.after;
+    var viaStore = _writeCoordinates(txn.after);
     syncDirtyFlag();
-    _pushModelToViewer();
+    if (!viaStore) _pushModelToViewer();
     return { ok: true, transaction: txn };
   }
 
   /**
-   * Revert ALL transactions: displayed coordinates return to the
-   * originalCoords snapshot captured when the entry was bound.
+   * Revert ALL transactions: coordinates return to the originalCoords
+   * snapshot captured when the entry was bound (store-routed when loaded).
    *
    * @returns {{ok: boolean, reason?: string}}
    */
@@ -1235,35 +1632,43 @@
     if (!editorState.originalCoords) return { ok: false, reason: "no_structure" };
     editorState.transactions = [];
     editorState.redoStack = [];
-    window.ACPStructureViewer.state.displayedCoords = editorState.originalCoords;
+    var viaStore = _writeCoordinates(editorState.originalCoords);
     syncDirtyFlag();
-    _pushModelToViewer();
+    if (!viaStore) _pushModelToViewer();
     return { ok: true };
   }
 
   /**
    * Measurement-tool hook: the app's 键长/键角/二面角 measurement UI
    * raises edit intent through this dispatcher (kind + selected atom ids
-   * + target).  Not wired into the HTML yet — exposed and documented for
-   * the measurement panel integration.
+   * + target).  On success the optional store measurement is marked applied
+   * — its value has already been recomputed by updateCoordinates().
    *
    * @param {string} kind - "bond_length" | "bond_angle" | "dihedral"
    * @param {Array<number>} atomIds - 2 / 3 / 4 atom indices
    * @param {number} target
+   * @param {string} [measurementId] - store measurement id to mark applied
    * @returns {{ok: boolean, reason?: string, coords?: Array, warning?: string}}
    */
-  function applyMeasuredEdit(kind, atomIds, target) {
+  function applyMeasuredEdit(kind, atomIds, target, measurementId) {
+    var result;
     if (!atomIds || !atomIds.length) return { ok: false, reason: "no_bond" };
     if (kind === "bond_length" && atomIds.length >= 2) {
-      return applyBondLengthEdit(atomIds[0], atomIds[1], target, null);
+      result = applyBondLengthEdit(atomIds[0], atomIds[1], target, null);
+    } else if (kind === "bond_angle" && atomIds.length >= 3) {
+      result = applyBondAngleEdit(atomIds[0], atomIds[1], atomIds[2], target, null);
+    } else if (kind === "dihedral" && atomIds.length >= 4) {
+      result = applyDihedralEdit(atomIds[0], atomIds[1], atomIds[2], atomIds[3], target, null);
+    } else {
+      return { ok: false, reason: "no_bond" };
     }
-    if (kind === "bond_angle" && atomIds.length >= 3) {
-      return applyBondAngleEdit(atomIds[0], atomIds[1], atomIds[2], target, null);
+    if (result && result.ok && measurementId) {
+      var store = _activeStore();
+      if (store && typeof store.markApplied === "function") {
+        store.markApplied(measurementId, true);
+      }
     }
-    if (kind === "dihedral" && atomIds.length >= 4) {
-      return applyDihedralEdit(atomIds[0], atomIds[1], atomIds[2], atomIds[3], target, null);
-    }
-    return { ok: false, reason: "no_bond" };
+    return result;
   }
 
   /* ---- export + save-as-asset + wizard handoff (todo 37) ---- */
@@ -1338,18 +1743,15 @@
   /**
    * Export the edited structure as an XYZ download (Blob + a.click).  In
    * Node (no DOM) the text is returned without any download attempt.
+   * Coordinates come from the authoritative geometry (store first).
    *
    * @returns {string|null} the exported XYZ text
    */
   function exportEditedXyz() {
-    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-      ? window.ACPStructureViewer.state
-      : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
-      return null;
-    }
+    var geometry = _currentGeometry();
+    if (!geometry) return null;
     var text = buildEditedXyz(
-      svState.displayedSymbols, svState.displayedCoords, "",
+      geometry.symbols, geometry.coords, "",
       _currentProvenanceInfo()
     );
     if (!text) return null;
@@ -1392,18 +1794,19 @@
    * @returns {Promise<{ok: boolean, assetId?: string, error?: string}>}
    */
   function saveEditedAsset(name) {
+    var geometry = _currentGeometry();
+    if (!geometry) {
+      return Promise.resolve({ ok: false, error: "no_structure" });
+    }
     var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
       ? window.ACPStructureViewer.state
       : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
-      return Promise.resolve({ ok: false, error: "no_structure" });
-    }
     var fetchFn = _getFetchImpl();
     if (!fetchFn) {
       return Promise.resolve({ ok: false, error: "fetch not available" });
     }
     var xyzText = buildEditedXyz(
-      svState.displayedSymbols, svState.displayedCoords, "",
+      geometry.symbols, geometry.coords, "",
       _currentProvenanceInfo()
     );
     var body = {
@@ -1411,7 +1814,7 @@
       xyz_text: xyzText,
       charge: 0,
       multiplicity: 1,
-      parent_job_id: svState.jobId,
+      parent_job_id: svState ? svState.jobId : null,
       parent_entry_id: editorState.entryId,
       edit_operations: editorState.transactions,
       provenance: {
@@ -1470,14 +1873,12 @@
    * @returns {{ok: boolean, xyz?: string, error?: string}}
    */
   function prefillNewCalculation() {
-    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-      ? window.ACPStructureViewer.state
-      : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+    var geometry = _currentGeometry();
+    if (!geometry) {
       return { ok: false, error: "no_structure" };
     }
     var xyzText = buildEditedXyz(
-      svState.displayedSymbols, svState.displayedCoords, "",
+      geometry.symbols, geometry.coords, "",
       _currentProvenanceInfo()
     );
     if (!xyzText) {
@@ -1494,24 +1895,22 @@
   }
 
   /**
-   * Build the graph for the structure viewer's currently displayed entry
-   * (reads ACPStructureViewer.state.displayedCoords/Symbols).  Explicit
-   * bonds may be passed by the future SDF wiring (todo 33+); otherwise
-   * bonds are inferred.  No-op returning null when the animation lock is
-   * held (todo 30) or no coordinates are displayed.  The result is cached
-   * on editorState for the inspector provenance line (rendered in todo 36).
+   * Build the graph for the currently displayed entry (reads
+   * ACPGeometryStore.state first, falls back to
+   * ACPStructureViewer.state.displayedCoords/Symbols).  Explicit bonds may
+   * be passed by the SDF wiring (todo 33+); otherwise bonds are inferred.
+   * No-op returning null when the animation lock is held (todo 30) or no
+   * coordinates are displayed.  The result is cached on editorState for the
+   * inspector provenance line.
    *
    * @param {Array<{a: number, b: number, order?: number}>|null} [explicitBonds]
    * @returns {{edges: Array, provenance: string}|null}
    */
   function buildGraphFromCurrentEntry(explicitBonds) {
     if (locked) return null;
-    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-      ? window.ACPStructureViewer.state
-      : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) return null;
-    if (svState.displayedCoords.length !== svState.displayedSymbols.length) return null;
-    var result = buildAdjacency(svState.displayedSymbols, svState.displayedCoords, explicitBonds);
+    var geometry = _currentGeometry();
+    if (!geometry) return null;
+    var result = buildAdjacency(geometry.symbols, geometry.coords, explicitBonds);
     editorState.graph = result;
     editorState.provenance = result.provenance;
     return result;
@@ -1525,8 +1924,30 @@
     BOND_TOLERANCE: BOND_TOLERANCE,
     DEFAULT_RADIUS: DEFAULT_RADIUS,
     editorState: editorState,
+    /**
+     * Set the animation mutual-exclusion lock and broadcast the new
+     * interaction state ("acp:interaction-state") so the app can disable
+     * measurement/edit affordances; also pokes the viewer refresh hook.
+     *
+     * @param {boolean} value
+     * @returns {void}
+     */
     setLocked: function (value) {
       locked = value === true;
+      try {
+        if (typeof window !== "undefined" && window.dispatchEvent &&
+            typeof CustomEvent === "function") {
+          window.dispatchEvent(new CustomEvent("acp:interaction-state", {
+            detail: { source: "editor", locked: value === true }
+          }));
+        }
+      } catch (_) { /* broadcast is best-effort */ }
+      try {
+        if (typeof window !== "undefined" &&
+            typeof window._svRefreshInteractionState === "function") {
+          window._svRefreshInteractionState();
+        }
+      } catch (_) { /* broadcast is best-effort */ }
     },
     isLocked: function () {
       return locked;
@@ -1549,6 +1970,9 @@
     applyBondAngleEdit: applyBondAngleEdit,
     applyDihedralEdit: applyDihedralEdit,
     applyMeasuredEdit: applyMeasuredEdit,
+    validateEditableCoordinate: validateEditableCoordinate,
+    REASON_MESSAGES: REASON_MESSAGES,
+    reasonMessage: reasonMessage,
     checkCollisions: checkCollisions,
     bindEntry: bindEntry,
     confirmSwitch: confirmSwitch,

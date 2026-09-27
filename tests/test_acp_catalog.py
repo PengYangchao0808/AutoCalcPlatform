@@ -69,6 +69,24 @@ _ADVANCED_FIELD_NAMES = frozenset(
         "transition_state_basis",
         # Electronic-state module (design doc §4.1: advanced composite card).
         "electronic_state",
+        # BatchOptimize optimization controls.
+        "opt_max_iter",
+        "opt_trust_radius",
+        "opt_initial_hessian",
+        "opt_recalc_hess",
+        "opt_rescue_policy",
+        "opt_max_rescue",
+        # BatchOptimize per-role optimization overrides (P2a).
+        "minimum_opt_trust_radius",
+        "minimum_opt_initial_hessian",
+        "minimum_opt_recalc_hess",
+        "transition_state_opt_trust_radius",
+        "transition_state_opt_initial_hessian",
+        "transition_state_opt_recalc_hess",
+        # BatchOptimize SCF controls.
+        "scf_max_iter",
+        "scf_strategy",
+        "scf_orbital_inherit",
         # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
         # md_temperature / md_seeds are regular (high-frequency user controls).
         "opt_level",

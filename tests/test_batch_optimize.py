@@ -27,8 +27,10 @@ from acp.calculations.batch.models import (
     load_items_from_result_manifest,
     parse_tag_comment,
 )
+from acp.calculations.batch.options import BatchMethodOptions
 from acp.calculations.checkpoint import CheckpointMismatchError
 from acp.calculations.contracts import StepKind, StructureRole
+from tests.conftest import FakeBackend, FakeBackendCall
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -306,6 +308,52 @@ def test_batchoptimize_method_flags() -> None:
     ]
 
 
+def test_batchoptimize_method_flags_advanced_opt_scf() -> None:
+    from acp.scheduler.jobs import batchoptimize_method_flags
+
+    flags = batchoptimize_method_flags(
+        {
+            "opt_max_iter": 400,
+            "opt_convergence": "verytight",
+            "opt_trust_radius": 0.1,
+            "opt_initial_hessian": "model",
+            "opt_recalc_hess": 20,
+            "opt_rescue_policy": "off",
+            "opt_max_rescue": 5,
+            "scf_max_iter": 500,
+            "scf_convergence": "tight",
+            "scf_strategy": "soscf",
+        }
+    )
+
+    assert flags == [
+        "--opt-max-iter", "400",
+        "--opt-convergence", "verytight",
+        "--opt-trust-radius", "0.1",
+        "--opt-initial-hessian", "model",
+        "--opt-rescue-policy", "off",
+        "--opt-max-rescue", "5",
+        "--scf-max-iter", "500",
+        "--scf-convergence", "tight",
+        "--scf-strategy", "soscf",
+        "--opt-recalc-hess", "20",
+    ]
+
+
+def test_batchoptimize_method_flags_scf_orbital_inherit_false() -> None:
+    from acp.scheduler.jobs import batchoptimize_method_flags
+
+    flags = batchoptimize_method_flags({"scf_orbital_inherit": False})
+    assert "--no-scf-orbital-inherit" in flags
+
+    flags_true = batchoptimize_method_flags({"scf_orbital_inherit": True})
+    assert "--no-scf-orbital-inherit" not in flags_true
+    assert "--scf-orbital-inherit" not in flags_true
+
+    flags_none = batchoptimize_method_flags({})
+    assert "--no-scf-orbital-inherit" not in flags_none
+
+
 def test_batchoptimize_method_flags_include_shared_settings() -> None:
     from acp.scheduler.jobs import batchoptimize_method_flags
 
@@ -319,6 +367,17 @@ def test_batchoptimize_method_flags_include_shared_settings() -> None:
             "temperature": 333.15,
             "pressure": 2.0,
             "scale_factor": 0.98,
+            "opt_max_iter": 400,
+            "opt_convergence": "verytight",
+            "opt_trust_radius": 0.1,
+            "opt_initial_hessian": "model",
+            "opt_recalc_hess": 20,
+            "opt_rescue_policy": "off",
+            "opt_max_rescue": 5,
+            "scf_max_iter": 500,
+            "scf_convergence": "tight",
+            "scf_strategy": "soscf",
+            "scf_orbital_inherit": False,
         }
     )
 
@@ -339,6 +398,27 @@ def test_batchoptimize_method_flags_include_shared_settings() -> None:
         "2.0",
         "--scale-factor",
         "0.98",
+        "--opt-max-iter",
+        "400",
+        "--opt-convergence",
+        "verytight",
+        "--opt-trust-radius",
+        "0.1",
+        "--opt-initial-hessian",
+        "model",
+        "--opt-rescue-policy",
+        "off",
+        "--opt-max-rescue",
+        "5",
+        "--scf-max-iter",
+        "500",
+        "--scf-convergence",
+        "tight",
+        "--scf-strategy",
+        "soscf",
+        "--opt-recalc-hess",
+        "20",
+        "--no-scf-orbital-inherit",
     ]
 
 
@@ -476,6 +556,27 @@ def test_batchoptimize_cli_passes_role_specific_method_options(tmp_path: Path) -
             "wB97X-D4",
             "--transition-state-basis",
             "def2-TZVPPD",
+            "--opt-max-iter",
+            "400",
+            "--opt-convergence",
+            "verytight",
+            "--opt-trust-radius",
+            "0.1",
+            "--opt-initial-hessian",
+            "model",
+            "--opt-recalc-hess",
+            "20",
+            "--opt-rescue-policy",
+            "off",
+            "--opt-max-rescue",
+            "5",
+            "--scf-max-iter",
+            "500",
+            "--scf-convergence",
+            "tight",
+            "--scf-strategy",
+            "soscf",
+            "--no-scf-orbital-inherit",
         ]
     )
 
@@ -489,6 +590,17 @@ def test_batchoptimize_cli_passes_role_specific_method_options(tmp_path: Path) -
         minimum_basis="def2-TZVP",
         transition_state_method="wB97X-D4",
         transition_state_basis="def2-TZVPPD",
+        opt_max_iter=400,
+        opt_convergence="verytight",
+        opt_trust_radius=0.1,
+        opt_initial_hessian="model",
+        opt_recalc_hess=20,
+        opt_rescue_policy="off",
+        opt_max_rescue=5,
+        scf_max_iter=500,
+        scf_convergence="tight",
+        scf_strategy="soscf",
+        scf_orbital_inherit=False,
     )
 
 
@@ -511,6 +623,17 @@ def test_batchoptimize_runner_remote_command_parity(source_key: str) -> None:
             "minimum_basis": "def2-TZVP",
             "transition_state_method": "wB97X-D4",
             "transition_state_basis": "def2-TZVPPD",
+            "opt_max_iter": 400,
+            "opt_convergence": "verytight",
+            "opt_trust_radius": 0.1,
+            "opt_initial_hessian": "model",
+            "opt_recalc_hess": 20,
+            "opt_rescue_policy": "off",
+            "opt_max_rescue": 5,
+            "scf_max_iter": 500,
+            "scf_convergence": "tight",
+            "scf_strategy": "soscf",
+            "scf_orbital_inherit": False,
         },
         resources={"nproc": 4, "mem": "4GB"},
     )
@@ -1052,3 +1175,563 @@ def test_ts_frequency_failure_aborts_item(
     outcome = engine.run([ts_item], profile="opt_freq", charge=0)
     assert outcome.items[0].status == "failed"
     assert "ts_no_imaginary" in outcome.items[0].error
+
+
+# ── BatchMethodOptions → FakeBackend kwargs forwarding ──────────────────
+
+
+class TestBatchMethodOptionsForwarding:
+
+    def _run_batch(
+        self,
+        tmp_path: Path,
+        fake_backend: object,
+        items: list[BatchStructureItem] | None = None,
+        methods: BatchMethodOptions | None = None,
+        profile: str = "opt_freq_sp",
+    ) -> list[FakeBackendCall]:
+        assert isinstance(fake_backend, FakeBackend)
+        if items is None:
+            items = [
+                BatchStructureItem(
+                    item_id="candidate_001",
+                    name="TS",
+                    tag="TS",
+                    xyz="2\nTAG: TS | candidate_id=candidate_001\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+                    candidate_id="candidate_001",
+                ),
+                BatchStructureItem(
+                    item_id="int_001",
+                    name="INT",
+                    tag="INT",
+                    xyz="2\nTAG: INT | candidate_id=int_001\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+                    candidate_id="int_001",
+                ),
+            ]
+        coordinates = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.7]])
+        fake_backend.set_results(
+            "frequency",
+            [
+                QCResult(
+                    success=True, coordinates=coordinates, symbols=["H", "H"],
+                    frequencies=[-500.0, 100.0], has_frequencies=True,
+                ),
+                QCResult(
+                    success=True, coordinates=coordinates, symbols=["H", "H"],
+                    frequencies=[100.0, 200.0], has_frequencies=True,
+                ),
+            ],
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+        )
+        engine.run(
+            items,
+            profile=profile,
+            charge=0,
+            methods=methods or BatchMethodOptions(),
+        )
+        return fake_backend.calls
+
+    def test_default_ts_gets_role_defaults(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        calls = self._run_batch(tmp_path, fake_backend)
+        ts_opt = next(
+            c for c in calls
+            if c.method in ("transition_state_opt", "optimize")
+            and "candidate_001" in str(c.kwargs.get("output_dir", ""))
+        )
+        assert ts_opt.kwargs["max_cycles"] == 200
+        assert ts_opt.kwargs["trust_radius"] == 0.3
+        assert ts_opt.kwargs["initial_hessian"] == "calculate"
+        assert ts_opt.kwargs["recalc_hess"] == 5
+        assert ts_opt.kwargs["opt_level"] == "tight"
+
+    def test_default_int_gets_bare_defaults(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        calls = self._run_batch(tmp_path, fake_backend)
+        int_opt = next(
+            c for c in calls
+            if c.method in ("transition_state_opt", "optimize")
+            and "int_001" in str(c.kwargs.get("output_dir", ""))
+        )
+        assert int_opt.kwargs["max_cycles"] == 200
+        assert "trust_radius" not in int_opt.kwargs
+        assert "initial_hessian" not in int_opt.kwargs
+        assert "recalc_hess" not in int_opt.kwargs
+
+    def test_user_overrides_reach_opt_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        methods = BatchMethodOptions(
+            opt_max_iter=100,
+            opt_convergence="verytight",
+            opt_trust_radius=0.2,
+            opt_initial_hessian="calculate",
+            opt_recalc_hess=10,
+        )
+        calls = self._run_batch(tmp_path, fake_backend, methods=methods)
+        ts_opt = next(
+            c for c in calls
+            if c.method in ("transition_state_opt", "optimize")
+            and "candidate_001" in str(c.kwargs.get("output_dir", ""))
+        )
+        assert ts_opt.kwargs["max_cycles"] == 100
+        assert ts_opt.kwargs["opt_level"] == "verytight"
+        assert ts_opt.kwargs["trust_radius"] == 0.2
+        assert ts_opt.kwargs["initial_hessian"] == "calculate"
+        assert ts_opt.kwargs["recalc_hess"] == 10
+
+    def test_scf_trio_forwarded_to_opt(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        methods = BatchMethodOptions(
+            scf_max_iter=500,
+            scf_convergence="verytight",
+            scf_strategy="slowconv",
+        )
+        calls = self._run_batch(tmp_path, fake_backend, methods=methods)
+        ts_opt = next(
+            c for c in calls
+            if c.method in ("transition_state_opt", "optimize")
+            and "candidate_001" in str(c.kwargs.get("output_dir", ""))
+        )
+        assert ts_opt.kwargs["scf_maxiter"] == 500
+        assert ts_opt.kwargs["scf_convergence"] == "verytight"
+        assert ts_opt.kwargs["scf_strategy"] == "slowconv"
+
+    def test_scf_trio_forwarded_to_freq(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        methods = BatchMethodOptions(
+            scf_max_iter=400,
+            scf_convergence="loose",
+            scf_strategy="soscf",
+        )
+        calls = self._run_batch(tmp_path, fake_backend, methods=methods)
+        freq_calls = [c for c in calls if c.method == "frequency"]
+        assert len(freq_calls) >= 2
+        for fc in freq_calls:
+            assert fc.kwargs["scf_maxiter"] == 400
+            assert fc.kwargs["scf_convergence"] == "loose"
+            assert fc.kwargs["scf_strategy"] == "soscf"
+
+    def test_scf_trio_forwarded_to_sp(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        methods = BatchMethodOptions(
+            scf_max_iter=600,
+            scf_convergence="tight",
+            scf_strategy="slowconv",
+        )
+        calls = self._run_batch(tmp_path, fake_backend, methods=methods)
+        sp_calls = [c for c in calls if c.method == "single_point"]
+        assert len(sp_calls) >= 2
+        for spc in sp_calls:
+            assert spc.kwargs["scf_maxiter"] == 600
+            assert spc.kwargs["scf_convergence"] == "tight"
+            assert spc.kwargs["scf_strategy"] == "slowconv"
+
+    def test_default_scf_trio_values(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        calls = self._run_batch(tmp_path, fake_backend)
+        ts_opt = next(
+            c for c in calls
+            if c.method in ("transition_state_opt", "optimize")
+            and "candidate_001" in str(c.kwargs.get("output_dir", ""))
+        )
+        assert ts_opt.kwargs["scf_maxiter"] == 300
+        assert ts_opt.kwargs["scf_convergence"] == "tight"
+        assert ts_opt.kwargs["scf_strategy"] == "normal"
+
+    def test_rescue_and_damp_shift_unchanged(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+        assert isinstance(fake_backend, FakeBackend)
+
+        methods = BatchMethodOptions(
+            opt_rescue_policy="none",
+            opt_max_rescue=0,
+            scf_damp=True,
+            scf_damp_fac=0.7,
+            scf_shift=True,
+            scf_shift_fac=0.5,
+        )
+        calls = self._run_batch(tmp_path, fake_backend, methods=methods)
+        ts_opt = next(
+            c for c in calls
+            if c.method in ("transition_state_opt", "optimize")
+        )
+        assert ts_opt.kwargs["opt_rescue_policy"] == "none"
+        assert ts_opt.kwargs["opt_max_rescue"] == 0
+        assert ts_opt.kwargs["scf_damp"] is True
+        assert ts_opt.kwargs["scf_damp_fac"] == 0.7
+        assert ts_opt.kwargs["scf_shift"] is True
+        assert ts_opt.kwargs["scf_shift_fac"] == 0.5
+
+
+# ── per-role override resolution (P2a) ────────────────────────────────────
+
+
+def _options_from_cli(tmp_path: Path, extra: list[str]) -> BatchMethodOptions:
+    """Parse extra BatchOptimize flags and capture the built options."""
+    from acp.cli import _handle_batch_optimize, build_parser
+    from acp.core.workflow import WorkflowResult
+
+    args = build_parser().parse_args(
+        [
+            "run",
+            "BatchOptimize",
+            "--items-file",
+            str(FIXTURES / "batch_structures_v1.json"),
+            "--output",
+            str(tmp_path / "batch_output"),
+            *extra,
+        ]
+    )
+    with patch("acp.workflows.batch_optimize.run_batch_optimize") as run:
+        run.return_value = WorkflowResult(status="completed")
+        assert _handle_batch_optimize(args) == 0
+    return run.call_args.kwargs["methods"]
+
+
+class TestRoleOverrides:
+    """resolve_role_options priority matrix + for_role fix + cross-contamination."""
+
+    # -- resolve_role_options: priority chain ──────────────────────────────
+
+    def test_ts_default_gets_role_defaults(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions()
+        resolved = opts.resolve_role_options(is_transition_state=True)
+        assert resolved["opt_trust_radius"] == 0.3
+        assert resolved["opt_initial_hessian"] == "calculate"
+        assert resolved["opt_recalc_hess"] == 5
+
+    def test_int_default_omits_all(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions()
+        resolved = opts.resolve_role_options(is_transition_state=False)
+        assert resolved == {}
+
+    def test_role_override_beats_common(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            opt_trust_radius=0.25,
+            transition_state_opt_trust_radius=0.15,
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_trust_radius"] == 0.15
+        int_resolved = opts.resolve_role_options(is_transition_state=False)
+        assert int_resolved["opt_trust_radius"] == 0.25
+
+    def test_int_role_override_beats_common(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            opt_trust_radius=0.25,
+            minimum_opt_trust_radius=0.10,
+        )
+        int_resolved = opts.resolve_role_options(is_transition_state=False)
+        assert int_resolved["opt_trust_radius"] == 0.10
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_trust_radius"] == 0.25
+
+    def test_empty_string_override_inherits_common(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            opt_trust_radius=0.20,
+            transition_state_opt_trust_radius="",
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_trust_radius"] == 0.20
+
+    def test_none_override_inherits_common(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            opt_initial_hessian="model",
+            transition_state_opt_initial_hessian=None,
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_initial_hessian"] == "model"
+
+    def test_auto_sentinel_inherits_common_for_hessian(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            opt_initial_hessian="model",
+            transition_state_opt_initial_hessian="auto",
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_initial_hessian"] == "model"
+
+    def test_auto_sentinel_for_recalc_hess_inherits_common(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            opt_recalc_hess=10,
+            transition_state_opt_recalc_hess="auto",
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_recalc_hess"] == 10
+
+    def test_none_common_falls_to_role_default(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions()
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        assert ts_resolved["opt_recalc_hess"] == 5
+
+    # -- cross-contamination: TS override never affects INT ────────────────
+
+    def test_ts_override_never_affects_int(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            transition_state_opt_trust_radius=0.15,
+            transition_state_opt_initial_hessian="model",
+            transition_state_opt_recalc_hess=3,
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        int_resolved = opts.resolve_role_options(is_transition_state=False)
+        assert ts_resolved["opt_trust_radius"] == 0.15
+        assert ts_resolved["opt_initial_hessian"] == "model"
+        assert ts_resolved["opt_recalc_hess"] == 3
+        assert int_resolved == {}
+
+    def test_int_override_never_affects_ts(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            minimum_opt_trust_radius=0.10,
+            minimum_opt_initial_hessian="calculate",
+            minimum_opt_recalc_hess=2,
+        )
+        ts_resolved = opts.resolve_role_options(is_transition_state=True)
+        int_resolved = opts.resolve_role_options(is_transition_state=False)
+        assert ts_resolved["opt_trust_radius"] == 0.3
+        assert ts_resolved["opt_initial_hessian"] == "calculate"
+        assert ts_resolved["opt_recalc_hess"] == 5
+        assert int_resolved["opt_trust_radius"] == 0.10
+        assert int_resolved["opt_initial_hessian"] == "calculate"
+        assert int_resolved["opt_recalc_hess"] == 2
+
+    # -- for_role priority fix ────────────────────────────────────────────
+
+    def test_for_role_int_override_beats_common(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            optimization_method="B3LYP",
+            minimum_method="r2SCAN-3c",
+        )
+        method, basis = opts.for_role(is_transition_state=False)
+        assert method == "r2SCAN-3c"
+
+    def test_for_role_ts_isolation_from_minimum(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            minimum_method="r2SCAN-3c",
+            optimization_method="B3LYP",
+        )
+        method, _ = opts.for_role(is_transition_state=True)
+        assert method == "B3LYP"
+
+    def test_for_role_ts_uses_transition_state_method(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions(
+            optimization_method="B3LYP",
+            transition_state_method="wB97X-D4",
+        )
+        method, _ = opts.for_role(is_transition_state=True)
+        assert method == "wB97X-D4"
+
+    # -- cache_key includes role-override fields ──────────────────────────
+
+    def test_cache_key_includes_role_overrides(self) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts_base = BatchMethodOptions()
+        opts_ts = BatchMethodOptions(transition_state_opt_trust_radius=0.15)
+        opts_int = BatchMethodOptions(minimum_opt_trust_radius=0.10)
+        assert opts_base.cache_key != opts_ts.cache_key
+        assert opts_base.cache_key != opts_int.cache_key
+        assert opts_ts.cache_key != opts_int.cache_key
+
+    # -- flags emission for role-override fields ──────────────────────────
+
+    def test_flags_emission_role_overrides(self) -> None:
+        from acp.scheduler.jobs import batchoptimize_method_flags
+
+        method = {
+            "transition_state_opt_trust_radius": 0.15,
+            "transition_state_opt_initial_hessian": "model",
+            "transition_state_opt_recalc_hess": 3,
+            "minimum_opt_trust_radius": 0.10,
+            "minimum_opt_initial_hessian": "calculate",
+            "minimum_opt_recalc_hess": 2,
+        }
+        flags = batchoptimize_method_flags(method)
+        assert "--transition-state-opt-trust-radius" in flags
+        assert "0.15" in flags
+        assert "--transition-state-opt-initial-hessian" in flags
+        assert "model" in flags
+        assert "--transition-state-opt-recalc-hess" in flags
+        assert "3" in flags
+        assert "--minimum-opt-trust-radius" in flags
+        assert "0.1" in flags
+        assert "--minimum-opt-initial-hessian" in flags
+        assert "calculate" in flags
+        assert "--minimum-opt-recalc-hess" in flags
+        assert "2" in flags
+
+    # -- CLI round trip with aliases ──────────────────────────────────────
+
+    def test_cli_round_trip_with_canonical_names(self, tmp_path: Path) -> None:
+        options = _options_from_cli(
+            tmp_path,
+            [
+                "--transition-state-opt-trust-radius", "0.15",
+                "--transition-state-opt-initial-hessian", "model",
+                "--transition-state-opt-recalc-hess", "3",
+                "--minimum-opt-trust-radius", "0.10",
+                "--minimum-opt-initial-hessian", "calculate",
+                "--minimum-opt-recalc-hess", "2",
+            ],
+        )
+        assert options.transition_state_opt_trust_radius == 0.15
+        assert options.transition_state_opt_initial_hessian == "model"
+        assert options.transition_state_opt_recalc_hess == 3
+        assert options.minimum_opt_trust_radius == 0.10
+        assert options.minimum_opt_initial_hessian == "calculate"
+        assert options.minimum_opt_recalc_hess == 2
+
+    def test_cli_round_trip_with_aliases(self, tmp_path: Path) -> None:
+        options = _options_from_cli(
+            tmp_path,
+            [
+                "--ts-opt-trust-radius", "0.15",
+                "--ts-opt-initial-hessian", "model",
+                "--ts-opt-recalc-hess", "3",
+                "--int-opt-trust-radius", "0.10",
+                "--int-opt-initial-hessian", "calculate",
+                "--int-opt-recalc-hess", "2",
+            ],
+        )
+        assert options.transition_state_opt_trust_radius == 0.15
+        assert options.transition_state_opt_initial_hessian == "model"
+        assert options.transition_state_opt_recalc_hess == 3
+        assert options.minimum_opt_trust_radius == 0.10
+        assert options.minimum_opt_initial_hessian == "calculate"
+        assert options.minimum_opt_recalc_hess == 2
+
+    def test_cli_recalc_hess_role_auto_normalized(self, tmp_path: Path) -> None:
+        options = _options_from_cli(
+            tmp_path,
+            ["--transition-state-opt-recalc-hess", "auto"],
+        )
+        assert options.transition_state_opt_recalc_hess == "auto"
+
+    # -- engine .inp level: TS override reaches input ─────────────────────
+
+    def test_ts_override_reaches_engine_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+
+        assert isinstance(fake_backend, FakeBackend)
+        methods = BatchMethodOptions(
+            transition_state_opt_trust_radius=0.15,
+            transition_state_opt_initial_hessian="model",
+            transition_state_opt_recalc_hess=3,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        kwargs = engine._optimization_kwargs(is_ts=True)
+        assert kwargs["trust_radius"] == 0.15
+        assert kwargs["initial_hessian"] == "model"
+        assert kwargs["recalc_hess"] == 3
+
+    def test_int_override_reaches_engine_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+
+        assert isinstance(fake_backend, FakeBackend)
+        methods = BatchMethodOptions(
+            minimum_opt_trust_radius=0.10,
+            minimum_opt_initial_hessian="calculate",
+            minimum_opt_recalc_hess=2,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        kwargs = engine._optimization_kwargs(is_ts=False)
+        assert kwargs["trust_radius"] == 0.10
+        assert kwargs["initial_hessian"] == "calculate"
+        assert kwargs["recalc_hess"] == 2
+
+    def test_ts_override_int_unaffected(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+
+        assert isinstance(fake_backend, FakeBackend)
+        methods = BatchMethodOptions(
+            transition_state_opt_trust_radius=0.15,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert ts_kwargs["trust_radius"] == 0.15
+        assert "trust_radius" not in int_kwargs
