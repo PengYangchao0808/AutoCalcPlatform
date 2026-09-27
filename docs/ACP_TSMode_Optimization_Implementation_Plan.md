@@ -127,7 +127,7 @@ Hessian 与模式可能体积很大，应设置上传大小和原子数资源边
 
 规则：
 
-- 默认显示全部负频率，并区分显著虚频与接近零的弱虚频；阈值用于解释，不删除原始数据。
+- 默认显示全部负频率；频率数量判定使用 `f < 0 cm⁻¹`，不设置虚频幅值门槛。
 - 允许切换查看全部模式，但首期提交目标必须是有完整位移的虚频。
 - 列表点击只预览；明确按钮确认目标。没有确认不得自动使用默认高亮模式提交。
 - 改变来源使确认失效；预览其他模式时显示“当前预览不同于已确认目标”。
@@ -364,12 +364,12 @@ INPUT 是当前任务拥有的快照；不要引用浏览器上传临时路径�
 |---|---|
 | 优化失败 | 执行失败，保留最后有效结构 |
 | 优化完成、最终频率失败 | 验证未完成，可恢复频率阶段 |
-| 无显著虚频 | 计算完成，未验证为一阶鞍点 |
-| 一个显著虚频 | 一阶鞍点候选；目标运动仍需检查 |
-| 多个显著虚频 | 高阶鞍点或需要进一步诊断 |
+| 无负频率 | 计算完成，未验证为一阶鞍点 |
+| 一个负频率 | 一阶鞍点候选；目标运动仍需检查 |
+| 多个负频率 | 高阶鞍点或需要进一步诊断 |
 | 模式对应无法判断 | 显示待人工确认，不给伪精确成功结论 |
 
-保留原始负频率与使用的阈值。目标一致性可展示内部坐标变化和可比较的向量证据；初末结构变化较大时不以简单向量重叠直接判断化学反应相同。
+保留原始负频率。目标一致性可展示内部坐标变化和可比较的向量证据；初末结构变化较大时不以简单向量重叠直接判断化学反应相同。
 
 结果页提供来源/最终振动对照、目标摘要、实际输入、重试历史、修改目标后重算和创建 IRC。最终结构以 TS 候选语义进入结构来源列表，标签不应被误读为已通过 IRC 验证。
 
@@ -511,7 +511,7 @@ INPUT 是当前任务拥有的快照；不要引用浏览器上传临时路径�
 | 注册面 | ✅ catalog（active + METHOD_SCHEMAS tsmode）/ CLI `acp run tsmode` / workflows/tsmode.py + registry / scheduler jobs（自动派生）/ stage_tasks / job_edit（EDIT_ACTIVE_WORKFLOWS + 覆盖审计通过）/ runner（白名单 + `_materialize_tsmode_bundle` 物化 + 命令分支）/ remote script_gen（白名单 + `build_remote_tsmode_tail`） |
 | API | ✅ `GET /api/v1/jobs/{id}/frequency-sources` + `POST /api/v1/jobs` tsmode 分支（来源解析→bundle 加载→目标解析→launch gate→`source_type: tsmode_bundle` 重写 + sha256） |
 | 结果 | ✅ structure_viewer `_resolve_tsmode`（optimized + source 快照条目 + 振动）/ manifest 产物（structure/frequency_modes/report/file） |
-| 前端 | ✅ `js/tsmode_editor.js`（ACPTsmodeEditor 三面板向导：来源→模式确认→设置；预览≠确认；request-token 防旧响应）+ vibration_viewer 0.8.0 快捷创建 + Workbench 提交分支 + i18n（zh/en） |
+| 前端 | ✅ `js/tsmode_editor.js`（ACPTsmodeEditor 三面板向导：来源→模式确认→设置；预览≠确认；request-token 防旧响应）+ vibration_viewer 0.8.1 快捷创建 + Workbench 提交分支 + i18n（zh/en） |
 | 测试 | ✅ tests/test_acp_tsmode_{source,mapping,engine,orca_inputs}.py + tests/test_acp_api_tsmode.py + tests/test_acp_structure_viewer_tsmode.py + tsmode_synthetic.py 合成夹具 + frontend_sync 10 项新契约 |
 
 ### 未完成（不冒充已通过）

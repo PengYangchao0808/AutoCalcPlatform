@@ -196,12 +196,11 @@ geometry_product_id, atom_count)` → frequency 基元落盘
 - **historical_projection 回退**：产品缺失时端点只读解析 `WORK/04_FREQ/*.out|*.log`
   （Batch 另探 `WORK/{item}/frequency/` 与 `WORK/04_FREQ/batch/{item}/frequency/`），
   `source="historical_projection"`，**不写任何文件**（API 快照测试 + 解析器级快照测试双重锁定）。
-- 阈值：`theory.frequency.imaginary_threshold_cm1`（默认 -50.0）；任务
-  `spec.method["imaginary_threshold_cm1"]` 覆盖（threshold_source=job_config）。
-- TS 门一致性：Batch `_count_significant_imaginary`（≤ 阈值，at-or-below）与前端
-  `tsJudgment` 逐例一致（k=0/1/2 + 精确 -50.0 边界，跨语言测试）；IRC
-  `classify_ts_identity` 共享 -50 幅值门但统计**全部**负频率（输入为预过滤虚频列表），
-  `[-60,-40]` 时 Batch 有效而 IRC 拒绝——设计差异，已锁定（todo 44）。
+- TS 频率数量判定统一使用 `f < 0 cm⁻¹`：Batch、IRC、TS Mode 和前端
+  `tsJudgment` 均要求恰好一个负频率；两个负频率属于高阶鞍点候选。
+  低势垒的弱虚频不会因为幅值小而自动失败，振动方向和 IRC 仍需检查。
+- 振动 API 的 `threshold_cm1=0.0`、`threshold_source="fixed"` 仅为旧客户端
+  保留；旧任务中的 `imaginary_threshold_cm1` 不再参与判定。
 
 ## 8. 远程缓存
 
@@ -217,7 +216,7 @@ run_root 权限）。`sweep_expired(ttl_days=7)` 清理；`manager._purge_job_re
 | 模块 | 命名空间 / 版本 | 职责 |
 |------|----------------|------|
 | `frontend/js/structure_viewer.js` | `window.ACPStructureViewer` 0.12.0 | **单列工作区布局**：渲染 summary bar + bottom strip + overlay drawers（旧 list panel / inspector panel 已移除）。**状态店**（jobId/payload/revision/selectionToken/requestToken/dirty/displayed*）；目录拉取 + 409 重试；**共享几何加载器** `sharedLoadGeometry({canvasId, source})` + `geometryStore{currentXyz, stylePreset, cameras, loaderVersion, userPresetChosen, lastLoadDegraded}` + `registerCanvasLoader`/`saveCamera`/`restoreCamera`/`setStylePreset`；IRC 播放 `playIrcPath/stopIrcPlayback`（~4 fps，相机不跳变）；叠合 `loadOverlay/renderOverlay/clearOverlay`（第二模型 cyanCarbon + 最大位移原子高亮，unproven → 测量清除提示）；性能阈值 `LIST_VIRTUALIZE_THRESHOLD=100`（head50+tail50 双窗口 + 强制含选中/默认）、`TRAJECTORY_SAMPLE_THRESHOLD=500 → TARGET=200`（首尾保留、stride 采样，列表分组与 IRC 播放共用）、`LARGE_SYSTEM_ATOM_THRESHOLD=200`（>200 原子按次降级线框 + aria-live 通知，用户显式选样式则不降级）；视图状态 `localStorage["acp.sv.view.{job}:{entry}"]` `{version:1, camera, stylePreset, measurements, atomCount, savedAt}`（相机恢复带 atomCount 守卫；损坏/版本不符静默默认）；listbox 无障碍（role/aria-selected/aria-activedescendant + 方向键/Enter）；**抽屉系统** `openDrawer(id)`/`closeDrawer(id)`/`closeAllDrawers()`/`_renderDrawerContent(id)` → `_renderSourceDrawer`/`_renderVibrationDrawer`/`_renderMeasureDrawer`/`_renderMoreDrawer`；**底部条** `_renderStripItem(entry)` + `_syncStripActive()`（选择同步 active 样式）；**切换器** `_openSwitcherDropdown`/`_closeSwitcherDropdown`（conformer/candidate/batch 三种 kind，过滤输入框 + rank 列表）；**输入/结果切换** `sv-input-result-toggle`（formal_result vs calculation_input 条目间切换）；**双向同步**：选择条目时调用 `window._energyGraphSyncFromStructure(entryId)` 反向推送能量图高亮 |
-| `frontend/js/vibration_viewer.js` | `window.ACPVibrationViewer` 0.7.0 | 频率检查器（负频置顶排序、IR 强度）、位移箭头（振幅 0.05-0.6、>50 原子跳氢）、rAF 动画（30fps 节流、getView/setView 相机保持、禁用内置 animate）、播放/编辑互斥（`ACPStructureEditor.setLocked`）、拆卸契约 `stopAnimationAndRestore/handleTeardown`（切 tab/切 job/销毁 viewer/切条目）、TS 证据 `tsJudgment`（仅证据展示，判定归 Batch/IRC）、`geometryMismatch` 几何绑定门、**底部停靠面板** `renderFrequencyInspector(dock)` 三列布局（TS 证据 / 模式浏览 / 动画控制）、**模式分类** `_categorizeModes`（虚频/有效/全部 + 零模折叠）、**筛选标签**（虚频 n / 有效模式 n / 全部 n）、**键盘导航** `_navigateMode`（左右键切换模式）、**默认选择顺序** `defaultModeIndex`（最负显著虚频 → 最负其他负频 → 首个正频） |
+| `frontend/js/vibration_viewer.js` | `window.ACPVibrationViewer` 0.8.1 | 频率检查器（负频置顶排序、IR 强度）、位移箭头（振幅 0.05-0.6、>50 原子跳氢）、rAF 动画（30fps 节流、getView/setView 相机保持、禁用内置 animate）、播放/编辑互斥（`ACPStructureEditor.setLocked`）、拆卸契约 `stopAnimationAndRestore/handleTeardown`（切 tab/切 job/销毁 viewer/切条目）、TS 证据 `tsJudgment`（仅证据展示，判定归 Batch/IRC）、`geometryMismatch` 几何绑定门、**底部停靠面板** `renderFrequencyInspector(dock)` 三列布局（TS 证据 / 模式浏览 / 动画控制）、**模式分类** `_categorizeModes`（虚频/有效/全部 + 零模折叠）、**筛选标签**（虚频 n / 有效模式 n / 全部 n）、**键盘导航** `_navigateMode`（左右键切换模式）、**默认选择顺序** `defaultModeIndex`（最负虚频 → 首个正频） |
 | `frontend/js/structure_editor.js` | `window.ACPStructureEditor` 0.8.0 | 邻接图（显式键或共价半径 1.3 推断）、键长 0.4-5.0 Å / 键角 1-179° / 二面角（(-180,180] 最短旋转）编辑、环/断开拒绝、事务引擎（undo/redo/reset 字节级还原、碰撞 <0.55·(ri+rj) 警告、entry 作用域）、dirty 同步到查看器刷新守卫、导出 XYZ + 另存为结构资产（POST `/structure-assets`，provenance 注释 + edit_operations 全量）+ 新建计算预填（**绝不**代提交） |
 | `frontend/css/structure_viewer.css` | 0.9.0 | 单列 flex 工作区（`.sv-layout { display:flex; flex-direction:column }`；`.sv-canvas-col { flex:1 1 auto }` 高度契约；≥1920px `width:100% + max-width:1600px` 居中）；summary bar / bottom strip / overlay drawers / switcher dropdown / 输入结果切换 / 播放条 / 降级通知 / 焦点可见样式；1100px 断点抽屉响应式；**振动停靠面板** `.sv-vibration-dock`（三列布局、筛选标签、模式轨道、控件网格）；**字体 token** `--font-ui` / `--font-mono`；响应式 800-1199px 双行 / <800px 底部 sheet |
 
