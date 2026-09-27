@@ -117,6 +117,7 @@ def run_batch_optimize(
     multiplicity: int = 1,
     select: BatchSelection = None,
     methods: BatchMethodOptions | None = None,
+    electronic_state: Mapping[str, JsonValue] | None = None,
     layout_mode: BatchLayoutMode = "batch",
     progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
@@ -152,6 +153,7 @@ def run_batch_optimize(
         multiplicity=multiplicity,
         workflow="BatchOptimize",
         methods=methods,
+        electronic_state=electronic_state,
         layout_mode=layout_mode,
         progress_reporter=progress_reporter,
     )
