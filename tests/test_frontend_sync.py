@@ -1548,6 +1548,69 @@ def test_structure_viewer_node_logic_stale_response_discarded() -> None:
     assert "PASS" in result.stdout
 
 
+def test_structure_viewer_remote_catalog_auto_fetch_retry() -> None:
+    """Pure-remote pending catalogs are retried once with ``fetch=1``."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        var urls = [];
+        ns._fetchImpl = function(url) {
+            urls.push(url);
+            var pending = url.indexOf("fetch=1") < 0;
+            return Promise.resolve({
+                ok: true, status: 200, statusText: "OK",
+                json: function() {
+                    return Promise.resolve({
+                        schema_version: "structure_viewer_v1",
+                        revision: pending ? "empty" : "remote-rev",
+                        availability: pending ? "pending_fetch" : "ready",
+                        job_status: "completed",
+                        default_entry_id: pending ? null : "conf_0001",
+                        groups: [],
+                        entries: pending ? [] : [{ id: "conf_0001" }],
+                        warnings: pending ? ["pending_fetch"] : []
+                    });
+                }
+            });
+        };
+
+        ns.loadStructureViewer("remote-job", { itemId: "item 1" }).then(function() {
+            if (urls.length !== 2) {
+                console.error("FAIL: expected 2 catalog calls, got " + urls.length);
+                process.exit(1);
+            }
+            if (urls[1].indexOf("item_id=item%201&fetch=1") < 0) {
+                console.error("FAIL: retry URL missing item_id/fetch=1: " + urls[1]);
+                process.exit(1);
+            }
+            if (ns.state.availability !== "ready" || ns.state.revision !== "remote-rev") {
+                console.error("FAIL: fetched catalog was not applied");
+                process.exit(1);
+            }
+            console.log("PASS");
+        }).catch(function(e) {
+            console.error("FAIL: unexpected error", e);
+            process.exit(1);
+        });
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node remote-catalog retry failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
 def test_structure_viewer_node_logic_dirty_guard() -> None:
     """Node logic: dirty=true -> refreshIfChanged sets newerAvailable, not payload."""
     if not shutil.which("node"):

@@ -1063,6 +1063,20 @@ class TestRemoteStructureCache:
         with pytest.raises(ValueError, match="escapes"):
             cache.cache_path("job-1", "RESULT/../../../etc/passwd")
 
+    def test_cache_path_rejects_absolute_path(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        with pytest.raises(ValueError, match="escapes"):
+            cache.cache_path("job-1", "/etc/passwd")
+
+    def test_cache_path_rejects_unsafe_job_id(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        with pytest.raises(ValueError, match="escapes"):
+            cache.cache_path("../job-1", "RESULT/result_manifest.json")
+
     def test_get_cached_miss(self, tmp_path: Path) -> None:
         from acp.results.remote_structure_cache import RemoteStructureCache
 
@@ -1122,6 +1136,66 @@ class TestRemoteStructureCache:
         r2 = cache.fetch(FakeRecord(), "RESULT/x.json")  # type: ignore[arg-type]
         assert r1 == r2
         assert call_count == 1
+
+    def test_fetch_catalog_populates_remote_projection_root(self, tmp_path: Path) -> None:
+        """Catalog metadata is cached and can be projected as a task root."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "conformers": [],
+        }
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                assert filename == "RESULT/confsearch/confsearch_manifest.json"
+                return json.dumps(manifest).encode("utf-8")
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        root = cache.fetch_catalog(record, "Confsearch")
+
+        assert root == cache.job_root("job-1")
+        assert cache.catalog_ready(root, "Confsearch") is True
+        assert (root / "RESULT/confsearch/confsearch_manifest.json").is_file()
+
+    def test_fetch_catalog_includes_frequency_mode_products(self, tmp_path: Path) -> None:
+        """Small vibration products referenced by the manifest are cached too."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        manifest = {
+            "version": 2,
+            "workflow": "frequency",
+            "products": [
+                {
+                    "id": "frequency_normal_modes",
+                    "label": "Normal modes",
+                    "path": "frequencies/normal_modes.json",
+                    "kind": "frequency_modes",
+                }
+            ],
+        }
+        modes = {"schema_version": "normal_modes_v1", "modes": []}
+        files = {
+            "RESULT/result_manifest.json": json.dumps(manifest).encode("utf-8"),
+            "RESULT/frequencies/normal_modes.json": json.dumps(modes).encode("utf-8"),
+        }
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == "input.xyz":
+                    raise FileNotFoundError(filename)
+                return files[filename]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-1"})()
+
+        root = cache.fetch_catalog(record, "frequency")
+
+        assert root is not None
+        assert (root / "RESULT/frequencies/normal_modes.json").is_file()
 
     def test_fetch_no_write_inside_task_dir(self, tmp_path: Path) -> None:
         """fetch() must NOT write inside the task work_dir."""
@@ -1269,6 +1343,58 @@ class TestRemoteAvailabilityEndpoints:
         assert resp.status_code == 200
         body = resp.json()
         assert body["availability"] == "ready"
+
+    def test_catalog_fetch_projects_pure_remote_results_from_cache(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """fetch=1 pulls a remote manifest; later catalog reads reuse the cache."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "conformers": [
+                {
+                    "conf_id": "0001",
+                    "geometry": "conformers/0001.xyz",
+                    "energy_hartree": -100.0,
+                    "relative_energy_kcal": 0.0,
+                    "boltzmann_weight": 1.0,
+                    "rank": 1,
+                }
+            ],
+        }
+        xyz_content = b"3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if filename == "RESULT/confsearch/confsearch_manifest.json":
+                    return json.dumps(manifest).encode("utf-8")
+                if filename == "RESULT/confsearch/conformers/0001.xyz":
+                    return xyz_content
+                raise FileNotFoundError(filename)
+
+        manager._remote_fetcher = FakeFetcher()  # type: ignore[attr-defined]
+
+        response = sv_client.get(
+            "/api/v1/jobs/remote-001/structure-viewer?fetch=1"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["availability"] == "ready"
+        assert body["default_entry_id"] == "conf_0001"
+        assert len(body["entries"]) == 1
+        assert not (work_dir / "RESULT/confsearch/confsearch_manifest.json").exists()
+
+        cached_response = sv_client.get("/api/v1/jobs/remote-001/structure-viewer")
+        assert cached_response.status_code == 200
+        assert cached_response.json()["availability"] == "ready"
+
+        geometry = sv_client.get(
+            "/api/v1/jobs/remote-001/structure-viewer/entries/conf_0001/geometry?fetch=1"
+        )
+        assert geometry.status_code == 200
+        assert geometry.content == xyz_content
 
     def test_geometry_409_pending_fetch_when_unsynced(
         self, sv_client: TestClient, tmp_path: Path
