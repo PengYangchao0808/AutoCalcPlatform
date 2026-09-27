@@ -182,7 +182,6 @@ from acp.api.v1_schemas import (
     ValidateMethodRequest,
     ValidateMethodResponse,
 )
-from acp.calculations.batch import normalize_tag, parse_tag_comment
 from acp.chem.embedding import (
     molfile_to_xyz,
     parse_xyz_first_frame,
@@ -190,7 +189,7 @@ from acp.chem.embedding import (
     xyz_formula,
 )
 from acp.core.stage_labels import stage_label
-from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
+from acp.results.manifest import MANIFEST_FILENAME
 from acp.results.pes_profile import (
     LEGACY_S2_PROFILE_RELATIVE_PATH,
     PES_PROFILE_RELATIVE_PATH,
@@ -1720,6 +1719,61 @@ def _inherit_stage_execution_fields(
     return inherited_mode, inherited_node
 
 
+def _resolve_irc_source_reference(inp: dict[str, Any], manager: Any) -> dict[str, Any]:
+    """Map a selected task-result source to its formal manifest product."""
+    from acp.calculations.irc.source import load_ts_result_manifest
+
+    if inp.get("source_job_id") and inp.get("source_product_id"):
+        return inp
+    ref = inp.get("source_ref")
+    source_id = str(
+        inp.get("source_id")
+        or (ref.get("source_id") if isinstance(ref, dict) else "")
+        or ""
+    )
+    prefix, separator, path = source_id.partition(":")
+    if not separator or not prefix.startswith("job_") or not path.startswith("RESULT/"):
+        raise HTTPException(status_code=422, detail="IRC input must be a TS task result")
+    source_job_id = prefix.removeprefix("job_")
+    record = manager.get(source_job_id)
+    if record is None or not record.work_dir:
+        raise HTTPException(status_code=404, detail="IRC source job not found")
+    try:
+        manifest = load_ts_result_manifest(record, getattr(manager, "remote_fetcher", None))
+    except (OSError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="IRC source manifest is invalid") from exc
+    if manifest is None:
+        raise HTTPException(status_code=422, detail="IRC source has no result manifest")
+    relative = path.removeprefix("RESULT/")
+    product = next((item for item in manifest.products if item.path == relative), None)
+    if product is None:
+        raise HTTPException(status_code=422, detail="IRC source is not a registered TS product")
+    return {
+        "source_job_id": source_job_id,
+        "source_product_id": product.id,
+        "directions": inp.get("directions") or ["forward", "reverse"],
+    }
+
+
+@router.get("/irc/ts-source")
+def preview_irc_ts_source(request: Request, source_id: str = Query(...)) -> dict[str, Any]:
+    """Return the locked IRC level for a selected formal TS result."""
+    from acp.calculations.irc.source import resolve_verified_ts_source
+
+    manager = _manager(request)
+    reference = _resolve_irc_source_reference({"source_id": source_id}, manager)
+    record = manager.get(reference["source_job_id"])
+    try:
+        source = resolve_verified_ts_source(
+            record,
+            reference["source_product_id"],
+            getattr(manager, "remote_fetcher", None),
+        )
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return source.provenance()
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1729,6 +1783,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    if req.workflow == "irc":
+        req.input = _resolve_irc_source_reference(req.input, manager)
     batch_snapshots: list[dict[str, Any]] = _snapshot_direct_source_input(req.input, request)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
@@ -2121,43 +2177,44 @@ def get_energy_graph(
         try:
             _manifest_path, s2_payload = _pes_profile_for_job(manager, job_id)
         except HTTPException as exc:
-            # Missing final profile on a running job → live/pending 200;
+            # Missing final profile on a running/failed job → live/pending 200;
             # corrupt-profile 422 and missing-job/work-dir 404 still raise.
             if exc.status_code != 404 or not str(exc.detail).startswith("No PES profile"):
                 raise
             _manifest_path, s2_payload = None, None
-        if s2_payload is not None:
-            manual_review = load_pes_review(work_dir)
-            if manual_review is not None:
-                selected_rows = []
-                for row in manual_review.get("selected") or []:
-                    if not isinstance(row, dict) or not row.get("candidate_id"):
-                        continue
-                    role_token = str(row.get("role") or "").upper()
-                    selected_rows.append(
-                        {
-                            "candidate_id": str(row.get("candidate_id") or ""),
-                            "frame_index": int(row.get("frame_index") or 0),
-                            "role": "ts" if role_token == "TS" else "intermediate",
-                            "active": True,
-                            "selection_source": str(row.get("selection_source") or "manual"),
-                        }
-                    )
-                s2_candidates = selected_rows or None
-                s2_review_state = {
-                    "status": str(manual_review.get("status") or "confirmed"),
-                    "decided_at": manual_review.get("confirmed_at"),
-                    "revision": manual_review.get("revision"),
-                }
-            else:
-                saved_review = read_s2_review(_manifest_path)
-                candidate_manifest = read_s2_candidate_manifest(_manifest_path)
-                s2_candidates = (
-                    candidate_manifest.get("candidates")
-                    if isinstance(candidate_manifest, dict)
-                    else None
+        # Manual review outranks the legacy s2 fallback even without a final
+        # profile — failed-task annotations must survive refresh.
+        manual_review = load_pes_review(work_dir)
+        if manual_review is not None:
+            selected_rows = []
+            for row in manual_review.get("selected") or []:
+                if not isinstance(row, dict) or not row.get("candidate_id"):
+                    continue
+                role_token = str(row.get("role") or "").upper()
+                selected_rows.append(
+                    {
+                        "candidate_id": str(row.get("candidate_id") or ""),
+                        "frame_index": int(row.get("frame_index") or 0),
+                        "role": "ts" if role_token == "TS" else "intermediate",
+                        "active": True,
+                        "selection_source": str(row.get("selection_source") or "manual"),
+                    }
                 )
-                s2_review_state = saved_review if isinstance(saved_review, dict) else None
+            s2_candidates = selected_rows or None
+            s2_review_state = {
+                "status": str(manual_review.get("status") or "confirmed"),
+                "decided_at": manual_review.get("confirmed_at"),
+                "revision": manual_review.get("revision"),
+            }
+        elif s2_payload is not None:
+            saved_review = read_s2_review(_manifest_path)
+            candidate_manifest = read_s2_candidate_manifest(_manifest_path)
+            s2_candidates = (
+                candidate_manifest.get("candidates")
+                if isinstance(candidate_manifest, dict)
+                else None
+            )
+            s2_review_state = saved_review if isinstance(saved_review, dict) else None
     elif workflow == "mechanism":
         store = _job_store(request)
         rows = store.list_mechanism_studies(limit=1, job_id=job_id)
@@ -2171,6 +2228,20 @@ def get_energy_graph(
     job_status = (
         record.status.value if getattr(record.status, "value", None) else str(record.status)
     )
+    irc_live_source = ""
+    irc_live_error = ""
+    if workflow == "irc" and _is_remote_job(record):
+        from acp.results.irc_remote_live import refresh_remote_irc
+
+        fetcher = manager.remote_fetcher
+        if fetcher is None:
+            irc_live_error = "remote_fetch_unavailable"
+        else:
+            try:
+                irc_live_source = refresh_remote_irc(record, work_dir, fetcher)
+            except (OSError, ValueError, RemoteFileError, json.JSONDecodeError) as exc:
+                logger.warning("Remote IRC live refresh failed for %s: %s", job_id, exc)
+                irc_live_error = "remote_fetch_failed"
     graph = build_energy_graph_from_job(
         job_id,
         workflow=workflow,
@@ -2204,9 +2275,103 @@ def get_energy_graph(
                 job_status=job_status,
             )
     graph_metadata = dict(graph.get("metadata") or {})
+    if workflow == "irc":
+        if irc_live_source:
+            graph_metadata["live_source"] = irc_live_source
+        if irc_live_error:
+            graph_metadata["live_error"] = irc_live_error
+            if not graph.get("nodes"):
+                graph_metadata["reason"] = irc_live_error
     graph_metadata.setdefault("job_status", job_status)
     graph["metadata"] = graph_metadata
     return EnergyGraphResponse.model_validate(graph)
+
+
+@router.get("/jobs/{job_id}/irc/frames/{direction}/{frame_index}/geometry")
+def get_irc_frame_geometry(
+    job_id: str, direction: str, frame_index: int, request: Request
+) -> dict[str, str]:
+    """Return exactly one IRC XYZ frame, including during a remote run."""
+    from acp.results.frame_candidate_geometry import (
+        FrameCandidateError,
+        resolve_frame_geometry,
+    )
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or record.spec.workflow != "irc" or not record.work_dir:
+        raise HTTPException(status_code=404, detail="IRC job not found")
+    valid_index = 0 <= frame_index <= 100000 or direction == "ts" and frame_index == -1
+    if direction not in {"forward", "reverse", "ts"} or not valid_index:
+        raise HTTPException(status_code=422, detail="Invalid IRC direction or frame index")
+    if direction == "ts" and frame_index != -1:
+        raise HTTPException(status_code=422, detail="TS frame index must be -1")
+    work_dir = Path(record.work_dir)
+    if _is_remote_job(record) and direction != "ts":
+        from acp.results.irc_remote_live import ensure_remote_irc_point, refresh_remote_irc
+
+        fetcher = manager.remote_fetcher
+        if fetcher is not None:
+            try:
+                refresh_remote_irc(record, work_dir, fetcher)
+                ensure_remote_irc_point(record, work_dir, fetcher, direction, frame_index)
+            except (OSError, ValueError, RemoteFileError, json.JSONDecodeError):
+                # An older job can still resolve a point from its mirrored raw
+                # trajectory or multi-frame path file.
+                logger.debug("Remote IRC point fetch unavailable", exc_info=True)
+    frame_id = "irc_ts" if direction == "ts" else f"irc_{direction}_{frame_index}"
+    try:
+        xyz = resolve_frame_geometry(
+            work_dir,
+            view_type="irc",
+            frame_index=frame_index,
+            workflow="irc",
+            frame_id=frame_id,
+        )
+    except FrameCandidateError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"xyz": xyz}
+
+
+@router.get("/jobs/{job_id}/irc/log-tail")
+def get_irc_log_tail(
+    job_id: str, request: Request, offset: int = Query(default=0, ge=0)
+) -> dict[str, Any]:
+    """Read complete new lines from the ORCA output during an IRC run."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or record.spec.workflow != "irc" or not record.work_dir:
+        raise HTTPException(status_code=404, detail="IRC job not found")
+    relative = "WORK/07_PATH/ORCA/irc.out"
+    limit = 64 * 1024
+    try:
+        if _is_remote_job(record):
+            fetcher = manager.remote_fetcher
+            if fetcher is None:
+                raise HTTPException(status_code=503, detail="Remote fetch unavailable")
+            info = fetcher.file_stat(record, relative)
+            start = offset if offset <= info.size else 0
+            data = fetcher.read_range(record, relative, start, limit)
+        else:
+            path = Path(record.work_dir) / relative
+            size = path.stat().st_size
+            start = offset if offset <= size else 0
+            with path.open("rb") as handle:
+                handle.seek(start)
+                data = handle.read(limit)
+    except FileNotFoundError:
+        return {"available": False, "lines": [], "next_offset": 0}
+    except (OSError, RemoteFileError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    last_newline = data.rfind(b"\n")
+    if last_newline < 0:
+        return {"available": True, "lines": [], "next_offset": start}
+    consumed = data[: last_newline + 1]
+    return {
+        "available": True,
+        "lines": consumed.decode("utf-8", errors="replace").splitlines(),
+        "next_offset": start + len(consumed),
+    }
 
 
 @router.get(
@@ -2449,16 +2614,23 @@ def save_job_s2_review(
 # ---------------------------------------------------------------------------
 # PES manual review (pes_review_v1): user-confirmed TS/INT selections are the
 # authoritative hand-off to BatchOptimize via RESULT/result_manifest.json.
+# Terminal non-completed jobs (FAILED/CANCELLED) may review their partial
+# scan frames (live snapshot / ORCA ledger / frame dirs) — running jobs
+# can never finalize, and unconfirmed partial data never goes downstream.
 # ---------------------------------------------------------------------------
 
+_PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
-def _pes_review_work_dir(request: Request, job_id: str, *, require_completed: bool) -> Path:
-    """Resolve the task dir of a canonical PESsearch job for manual review.
+
+def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
+    """Resolve (task dir, task status) of a PESsearch job for manual review.
 
     Raises:
-        404: job/work_dir missing or no canonical PES profile.
+        404: job/work_dir missing, or no reviewable data (neither a canonical
+            PES profile nor live scan frames).
         400: job is not a PESsearch job.
-        409: job has not completed yet (POST only).
+        409: job is still active (POST/restore only) — running tasks cannot
+            finalize a review.
         410: legacy mechanism task (read-only compatibility).
     """
     manager = _manager(request)
@@ -2473,6 +2645,12 @@ def _pes_review_work_dir(request: Request, job_id: str, *, require_completed: bo
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
     work_dir = Path(record.work_dir)
+    status = (
+        record.status.value if getattr(record.status, "value", None) else str(record.status)
+    )
+    status_key = str(status).strip().upper()
+    active_job = status_key not in {"COMPLETED", "FAILED", "CANCELLED"}
+
     canonical = work_dir / PES_PROFILE_RELATIVE_PATH
     legacy = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
     if not canonical.is_file():
@@ -2481,22 +2659,39 @@ def _pes_review_work_dir(request: Request, job_id: str, *, require_completed: bo
                 status_code=410,
                 detail="历史 mechanism 任务保持只读，不支持人工确认选点",
             )
-        raise HTTPException(
-            status_code=404,
-            detail=f"No PES profile for job {job_id}; expected {PES_PROFILE_RELATIVE_PATH}",
-        )
-    if require_completed and record.status != JobStatus.COMPLETED:
+        if for_write and active_job:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Job {job_id} is still active (status={status}); "
+                    "a review can only be finalized on a terminal task"
+                ),
+            )
+        from acp.results.pes_scan_live import collect_pes_scan_live_frames
+
+        if (
+            collect_pes_scan_live_frames(work_dir, include_incomplete=True) is None
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No reviewable PES scan data for job {job_id}; expected "
+                    f"{PES_PROFILE_RELATIVE_PATH} or live scan artifacts"
+                ),
+            )
+        return work_dir, status_key
+    if for_write and active_job:
         raise HTTPException(
             status_code=409,
-            detail=f"Job {job_id} is not completed yet (status={record.status.value})",
+            detail=f"Job {job_id} is not completed yet (status={status})",
         )
-    return work_dir
+    return work_dir, status_key
 
 
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=False)
+    work_dir, _task_status = _pes_review_work_dir(request, job_id, for_write=False)
 
     from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
 
@@ -2522,7 +2717,7 @@ def restore_pes_review_endpoint(
     request: Request,
 ) -> PesReviewRestoreResponse:
     """Re-activate a previous review backup; manifest switches to that round."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+    work_dir, task_status = _pes_review_work_dir(request, job_id, for_write=True)
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
@@ -2532,6 +2727,7 @@ def restore_pes_review_endpoint(
             work_dir,
             int(req.backup),
             expected_revision=req.expected_revision,
+            source_task_status=task_status,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -2540,12 +2736,16 @@ def restore_pes_review_endpoint(
         status_code = 404 if "not found" in message else 422
         raise HTTPException(status_code=status_code, detail=message) from exc
 
+    source_block = payload.get("source") or {}
     return PesReviewRestoreResponse(
         job_id=job_id,
         status=str(payload.get("status") or "confirmed"),
         restored_from=int(payload.get("restored_from") or req.backup),
         revision=int(payload.get("revision") or 0),
         selected_count=len(payload.get("selected") or []),
+        source_task_status=str(source_block.get("task_status") or ""),
+        scan_complete=source_block.get("scan_complete"),
+        frame_source=str(source_block.get("frame_source") or ""),
         candidates=[
             PesReviewCandidate(
                 candidate_id=str(row.get("candidate_id") or ""),
@@ -2566,7 +2766,7 @@ def save_pes_review_endpoint(
     request: Request,
 ) -> PesReviewResponse:
     """Confirm TS/INT selections: materialise RESULT/structures + pes_review.json + manifest."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+    work_dir, task_status = _pes_review_work_dir(request, job_id, for_write=True)
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
@@ -2578,12 +2778,14 @@ def save_pes_review_endpoint(
             candidates=[item.model_dump(exclude_none=True) for item in req.candidates],
             note=req.note or "",
             expected_revision=req.expected_revision,
+            source_task_status=task_status,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except PesReviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    source_block = payload.get("source") or {}
     return PesReviewResponse(
         job_id=job_id,
         status=str(payload.get("status") or "confirmed"),
@@ -2591,6 +2793,9 @@ def save_pes_review_endpoint(
         selected_count=len(payload.get("selected") or []),
         note=payload.get("note") or None,
         confirmed_at=payload.get("confirmed_at"),
+        source_task_status=str(source_block.get("task_status") or ""),
+        scan_complete=source_block.get("scan_complete"),
+        frame_source=str(source_block.get("frame_source") or ""),
         candidates=[
             PesReviewCandidate(
                 candidate_id=str(row.get("candidate_id") or ""),
@@ -2821,6 +3026,14 @@ def get_structure_viewer_catalog(
     workflow = str(record.spec.workflow or "")
     job_status = record.status.value
 
+    if workflow == "irc" and _is_remote_job(record) and manager.remote_fetcher is not None:
+        from acp.results.irc_remote_live import refresh_remote_irc
+
+        try:
+            refresh_remote_irc(record, work_dir, manager.remote_fetcher)
+        except (OSError, ValueError, RemoteFileError, json.JSONDecodeError):
+            logger.debug("Remote IRC structure catalog refresh failed", exc_info=True)
+
     try:
         payload = build_structure_viewer_payload(
             work_dir,
@@ -2991,8 +3204,8 @@ def _try_historical_mode_projection(
     work_dir: Path,
     entry_id_str: str,
     *,
-    threshold_cm1: float = -50.0,
-    threshold_source: str = "default",
+    threshold_cm1: float = 0.0,
+    threshold_source: str = "fixed",
 ) -> StructureViewerVibrationsResponse | None:
     """Read-only fallback: parse ORCA output on-the-fly when normal_modes.json is absent.
 
@@ -3128,16 +3341,9 @@ def get_structure_viewer_vibrations(
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
 
-    def _resolve_imaginary_threshold() -> tuple[float, str]:
-        """Read the significant-imaginary cutoff from job method metadata."""
-        method = record.spec.method
-        if isinstance(method, dict):
-            raw = method.get("imaginary_threshold_cm1")
-            if isinstance(raw, (int, float)):
-                return float(raw), "job_config"
-        return -50.0, "default"
-
-    threshold_val, threshold_src = _resolve_imaginary_threshold()
+    # Compatibility response fields; old per-job magnitude cutoffs no longer
+    # affect TS evidence or the BatchOptimize/IRC validation gates.
+    threshold_val, threshold_src = 0.0, "fixed"
 
     def _not_available(reason: str) -> StructureViewerVibrationsResponse:
         return StructureViewerVibrationsResponse(
@@ -4146,9 +4352,10 @@ def rerun_job(
 ) -> V1JobRecordModel:
     """Re-queue the existing task for a full in-place rerun.
 
-    Unlike ``/clone``, this endpoint never creates a new job row or task
-    directory.  The optional legacy ``project_id`` body is accepted only
-    when it matches the current project.
+    Unlike ``/clone``, this endpoint keeps the same job row and task identity.
+    A legacy task directory with shell-unsafe characters may be renamed before
+    queueing. The optional legacy ``project_id`` body is accepted only when it
+    matches the current project.
     """
     manager = _manager(request)
     try:
@@ -4185,7 +4392,12 @@ def _build_edited_spec(
     method = _expand_method_electronic_state(dict(req.method))
     inp = dict(req.input)
     batch_snapshots: list[dict[str, Any]] = []
-    if workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
+    if workflow == "irc":
+        try:
+            inp = _resolve_irc_source_reference(inp, manager)
+        except HTTPException as exc:
+            raise EditValidationError(str(exc.detail)) from exc
+    elif workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
         inp = _prepare_bond_scan_input(inp, manager)
     elif workflow == "PESsearch":
         inp = _resolve_stage_artifact_ref(workflow, inp, manager)
@@ -4226,6 +4438,11 @@ def _build_edited_spec(
         task_name=task_name,
         remark=req.remark,
     )
+    if workflow == "irc":
+        try:
+            spec = manager._verified_irc_spec(spec)
+        except ValueError as exc:
+            raise EditValidationError(str(exc)) from exc
     return spec, batch_snapshots
 
 
@@ -5047,13 +5264,15 @@ def run_irc_from_artifact(
     if not source_record.work_dir:
         raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
 
-    source_dir = Path(source_record.work_dir)
-    result_dir = source_dir / "RESULT"
-    manifest_path = result_dir / MANIFEST_FILENAME
-    if not source_dir.is_dir():
-        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+    from acp.calculations.irc.source import (
+        load_ts_result_manifest,
+        resolve_verified_ts_source,
+    )
+
     try:
-        manifest = load_result_manifest(source_dir)
+        manifest = load_ts_result_manifest(
+            source_record, getattr(manager, "remote_fetcher", None)
+        )
     except (
         OSError,
         UnicodeError,
@@ -5068,11 +5287,8 @@ def run_irc_from_artifact(
             detail=f"Invalid result manifest for job {job_id}: {exc}",
         ) from exc
     if manifest is None:
-        if manifest_path.is_file():
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid result manifest for job {job_id}",
-            )
+        if (Path(source_record.work_dir) / "RESULT" / MANIFEST_FILENAME).is_file():
+            raise HTTPException(status_code=422, detail="IRC source result manifest is invalid")
         raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
 
     product = next((item for item in manifest.products if item.id == artifact_id), None)
@@ -5084,72 +5300,23 @@ def run_irc_from_artifact(
             detail=f"Artifact {artifact_id} is not a structure product",
         )
 
-    structure_path = resolve_safe(result_dir, product.path)
-    if structure_path is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Artifact {artifact_id} has an invalid manifest path",
-        )
-
     try:
-        raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if not isinstance(raw_manifest, dict):
-            raise HTTPException(status_code=422, detail="Result manifest root must be an object")
-        raw_products = raw_manifest.get("products")
-        if not isinstance(raw_products, list):
-            raise HTTPException(status_code=422, detail="Result manifest products must be a list")
-        raw_product = next(
-            (
-                item
-                for item in raw_products
-                if isinstance(item, dict) and str(item.get("id", "")) == artifact_id
-            ),
-            {},
+        resolve_verified_ts_source(
+            source_record, artifact_id, getattr(manager, "remote_fetcher", None)
         )
-    except (
-        OSError,
-        UnicodeError,
-        json.JSONDecodeError,
-        ValueError,
-        TypeError,
-        AttributeError,
-    ) as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid result manifest for job {job_id}: {exc}",
-        ) from exc
-
-    metadata_tag: str | None = None
-    for key in ("role", "tag"):
-        raw_tag = raw_product.get(key)
-        if isinstance(raw_tag, str):
-            metadata_tag = normalize_tag(raw_tag)
-            if metadata_tag is not None:
-                break
-    try:
-        lines = structure_path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError) as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot read structure artifact {artifact_id}: {exc}",
-        ) from exc
-    comment_tag = parse_tag_comment(lines[1] if len(lines) > 1 else "").get("tag")
-    if (metadata_tag or comment_tag) != "TS":
-        raise HTTPException(
-            status_code=422,
-            detail=f"Artifact {artifact_id} must carry a TS role or TAG",
-        )
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     source_spec = source_record.spec
     irc_spec = JobSpec(
         workflow="irc",
         name=f"{source_spec.name or job_id}_irc",
         input={
-            "input_artifact": str(structure_path),
-            "input_role": "transition_state",
+            "source_job_id": job_id,
+            "source_product_id": artifact_id,
             "directions": ["forward", "reverse"],
         },
-        method=dict(source_spec.method),
+        method={},
         resources=dict(source_spec.resources),
         config_path=source_spec.config_path,
         tags=list(source_spec.tags),

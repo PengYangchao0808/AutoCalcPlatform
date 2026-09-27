@@ -1452,23 +1452,48 @@ def _irc_source_record(job_id: str, task_dir: Path) -> JobRecord:
 
 def test_run_irc_endpoint(client: TestClient, tmp_path: Path) -> None:
     source_dir = tmp_path / "irc-source"
+    product_id = "batch_item_001"
+    product_path = "structures/item_001__TAG_TS__optimized.xyz"
     _write_irc_manifest(
         source_dir,
         [
             {
-                "id": "ts_artifact",
+                "id": product_id,
                 "label": "TS candidate",
-                "path": "structures/ts.xyz",
+                "path": product_path,
                 "kind": "structure",
                 "role": "transition_state",
             }
         ],
         "TAG: TS | candidate_id=ts_001 | source=PESsearch",
     )
-    manager = _FakeIrcManager({"source-job": _irc_source_record("source-job", source_dir)})
+    runtime = source_dir / "WORK" / "00_RUNTIME"
+    runtime.mkdir(parents=True)
+    optimized = source_dir / "WORK" / "03_OPT" / "optimized.xyz"
+    optimized.parent.mkdir(parents=True)
+    optimized.write_text("2\noptimized\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n", encoding="utf-8")
+    (runtime / "checkpoint.json").write_text(json.dumps({"items_state": {
+        "item_001": {"status": "completed", "tag": "TS", "optimized_xyz": "WORK/03_OPT/optimized.xyz",
+                     "charge": 0, "multiplicity": 1,
+                     "frequency": {"status": "completed", "frequencies": [-130.0, 40.0]}}
+    }}), encoding="utf-8")
+    (source_dir / "RESULT" / "batch_provenance.json").write_text(json.dumps({"items": [{
+        "item_id": "item_001", "role": "ts",
+        "effective_config": {"method": "B97-3c", "basis": "def2-mTZVPP"},
+    }]}), encoding="utf-8")
+    source_record = JobRecord(
+        id="source-job", status=JobStatus.COMPLETED, work_dir=str(source_dir),
+        project_id="uncategorized",
+        spec=JobSpec(workflow="BatchOptimize", name="source-ts", project_id="uncategorized",
+                     resources={"nproc": 2}, method={"batch_roles": {
+                         "ts": {"method": "B97-3c", "basis": "def2-mTZVPP"},
+                         "int": {"method": "r2SCAN-3c", "basis": ""},
+                     }}),
+    )
+    manager = _FakeIrcManager({"source-job": source_record})
     client.app.state.job_manager = manager
 
-    response = client.post("/api/v1/jobs/source-job/artifacts/ts_artifact/run-irc")
+    response = client.post(f"/api/v1/jobs/source-job/artifacts/{product_id}/run-irc")
 
     assert response.status_code == 202
     assert response.json() == {
@@ -1480,11 +1505,11 @@ def test_run_irc_endpoint(client: TestClient, tmp_path: Path) -> None:
     assert manager.submitted is not None
     assert manager.submitted.workflow == "irc"
     assert manager.submitted.input == {
-        "input_artifact": str(source_dir / "RESULT" / "structures" / "ts.xyz"),
-        "input_role": "transition_state",
+        "source_job_id": "source-job",
+        "source_product_id": product_id,
         "directions": ["forward", "reverse"],
     }
-    assert manager.submitted.method == {"functional": "r2SCAN-3c"}
+    assert manager.submitted.method == {}
     assert manager.submitted.resources == {"nproc": 2}
 
 
@@ -1631,8 +1656,8 @@ def _setup_job_for_state(client: TestClient, state: str, tmp_path: Path) -> str:
         ("jobs/purge", "POST", None, 200),
         # 7. GET /jobs/{id}/artifacts — list artifacts for a job
         ("jobs/{id}/artifacts", "GET", "queued", 200),
-        # 8. POST /jobs/{id}/artifacts/{artifact_id}/run-irc — submit IRC from TS artifact
-        ("jobs/{id}/artifacts/{artifact_id}/run-irc", "POST", "irc", 202),
+        # 8. A PESsearch candidate label alone is not a verified TS calculation.
+        ("jobs/{id}/artifacts/{artifact_id}/run-irc", "POST", "irc", 422),
     ],
     ids=[
         "POST /jobs",

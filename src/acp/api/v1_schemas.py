@@ -1413,8 +1413,9 @@ class StructureViewerVibrationsResponse(BaseModel):
 
     available: bool
     reason: str | None = None
-    threshold_cm1: float = -50.0
-    threshold_source: str = "default"
+    # Retained for API compatibility; the TS criterion is simply f < 0.
+    threshold_cm1: float = 0.0
+    threshold_source: str = "fixed"
     modes: list[StructureViewerModeModel] = Field(default_factory=list)
     atom_count: int
     geometry_product_id: str | None = None
@@ -1663,6 +1664,11 @@ class PesReviewResponse(BaseModel):
     selected_count: int = 0
     note: str | None = None
     confirmed_at: str | None = None
+    # Provenance of the frame source this review was decided against
+    # (COMPLETED task + final profile, or FAILED/CANCELLED task + partial frames).
+    source_task_status: str = ""
+    scan_complete: bool | None = None
+    frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
     result_manifest: str = "RESULT/result_manifest.json"
 
@@ -1696,6 +1702,9 @@ class PesReviewRestoreResponse(BaseModel):
     restored_from: int
     revision: int = 0
     selected_count: int = 0
+    source_task_status: str = ""
+    scan_complete: bool | None = None
+    frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
 
 
