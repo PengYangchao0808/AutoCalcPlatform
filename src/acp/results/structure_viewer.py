@@ -55,6 +55,7 @@ _REVISION_SOURCES: list[tuple[str, str]] = [
     ("RESULT/pes_search/pes_profile.json", "pes_profile.json"),
     ("RESULT/pes_search/pes_recommendations.json", "pes_recommendations.json"),
     ("RESULT/pes_search/pes_review.json", "pes_review.json"),
+    ("RESULT/trajectories/irc_trajectory.json", "irc_trajectory.json"),
 ]
 
 _DEFAULT_TEMPERATURE_K = 298.15
@@ -576,6 +577,21 @@ def _compute_revision(task_root: Path, job_status: str) -> str:
                 continue
             hasher.update(filename.encode("utf-8"))
             hasher.update(data)
+            found_any = True
+
+    # Historical IRC jobs expose a growing ORCA trajectory without a RESULT
+    # snapshot. Include its file identity so the catalog refresh sees new
+    # frames while the calculation runs.
+    from cccp.qc.interfaces.orca_ts import discover_irc_trajectory_files
+
+    raw_irc_dir = task_root / "WORK" / "07_PATH" / "ORCA"
+    if raw_irc_dir.is_dir():
+        for direction, path in discover_irc_trajectory_files(raw_irc_dir).items():
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            hasher.update(f"irc:{direction}:{path.name}:{stat.st_size}:{stat.st_mtime_ns}".encode())
             found_any = True
 
     if not found_any:
@@ -1369,11 +1385,20 @@ def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str
     found: list[str] = []
 
     irc_dir = task_root / "RESULT" / "irc"
+    from cccp.qc.interfaces.orca_ts import discover_irc_trajectory_files
+
+    raw_files: dict[str, Path] = {}
+    for orca_dir in (task_root / "WORK" / "07_PATH" / "ORCA",):
+        if orca_dir.is_dir():
+            raw_files = discover_irc_trajectory_files(orca_dir)
+            break
 
     for direction in IRC_DIRECTIONS:
         path_file = irc_dir / f"irc_{direction}_path.xyz"
         endpoint_file = irc_dir / f"irc_{direction}.xyz"
         xyz_path = path_file if path_file.is_file() else endpoint_file
+        if not xyz_path.is_file():
+            xyz_path = raw_files.get(direction, xyz_path)
         if not xyz_path.is_file():
             continue
         frames = parse_irc_xyz_frames(xyz_path)
@@ -1381,7 +1406,7 @@ def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str
             warnings.append(f"IRC {direction} file has no parseable frames: {xyz_path.name}")
             continue
         found.append(direction)
-        geometry_ref = f"RESULT/irc/{xyz_path.name}"
+        geometry_ref = xyz_path.relative_to(task_root).as_posix()
 
         for frame in frames:
             entry_id = irc_entry_id(direction, frame.index)

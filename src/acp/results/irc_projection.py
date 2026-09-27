@@ -17,10 +17,12 @@ TS-identity validation (that belongs to ``acp.calculations.irc.validation``).
 # pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +84,7 @@ class _PathInput:
     merged: bool = False
     ts_energy: float | None = None
     ts_ref: str = ""
+    updated_at: str = ""
 
 
 def parse_irc_xyz_frames(path: Path) -> list[IrcFrameBlock]:
@@ -192,11 +195,8 @@ def _resolve_ts_from_work(
     return None
 
 
-def _trajectory_input(work_dir: Path) -> _PathInput | None:
-    """Build a projection input from the persisted ``irc_trajectory_v1`` file."""
-    payload = _read_json(work_dir / "RESULT" / "trajectories" / "irc_trajectory.json")
-    if payload is None:
-        return None
+def _trajectory_payload_input(payload: dict[str, Any], work_dir: Path) -> _PathInput | None:
+    """Normalize a local or remotely retrieved IRC trajectory snapshot."""
     raw_frames = payload.get("frames")
     if not isinstance(raw_frames, list):
         return None
@@ -237,7 +237,14 @@ def _trajectory_input(work_dir: Path) -> _PathInput | None:
         merged=True,
         ts_energy=ts_energy,
         ts_ref="input.xyz" if (work_dir / "input.xyz").is_file() else "",
+        updated_at=str(payload.get("updated_at") or ""),
     )
+
+
+def _trajectory_input(work_dir: Path) -> _PathInput | None:
+    """Build a projection input from the persisted ``irc_trajectory_v1`` file."""
+    payload = _read_json(work_dir / "RESULT" / "trajectories" / "irc_trajectory.json")
+    return _trajectory_payload_input(payload, work_dir) if payload is not None else None
 
 
 def _work_trajectory_input(work_dir: Path) -> _PathInput | None:
@@ -284,6 +291,13 @@ def _work_trajectory_input(work_dir: Path) -> _PathInput | None:
         from cccp.qc.interfaces.orca_ts import resolve_irc_ts_energy
 
         reverse_frames = len(per_direction.get("reverse") or [])
+        try:
+            latest_mtime = max(path.stat().st_mtime for path in files.values())
+            updated_at = datetime.fromtimestamp(latest_mtime, timezone.utc).isoformat(
+                timespec="seconds"
+            )
+        except OSError:
+            updated_at = ""
         return _PathInput(
             per_direction=per_direction,
             status=manifest_status or "running",
@@ -293,6 +307,7 @@ def _work_trajectory_input(work_dir: Path) -> _PathInput | None:
             merged=True,
             ts_energy=resolve_irc_ts_energy(orca_dir, reverse_frames=reverse_frames),
             ts_ref="input.xyz" if (work_dir / "input.xyz").is_file() else "",
+            updated_at=updated_at,
         )
     return None
 
@@ -348,14 +363,27 @@ def build_irc_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None
     NEVER reordered by energy.
     """
     work_dir = Path(work_dir)
-    path_input = _trajectory_input(work_dir) or _work_trajectory_input(work_dir)
+    path_input = _trajectory_input(work_dir)
+    raw_input = _work_trajectory_input(work_dir)
+    if raw_input is not None and (
+        path_input is None
+        or (not path_input.complete and sum(map(len, raw_input.per_direction.values()))
+            > sum(map(len, path_input.per_direction.values())))
+    ):
+        path_input = raw_input
     notes: list[str] = []
     if path_input is None:
         fallback = _endpoint_input(work_dir)
         if fallback is None:
             return None
         path_input, notes = fallback
-    return _build_graph(
+    return _project_input(job_id, path_input, notes)
+
+
+def _project_input(
+    job_id: str, path_input: _PathInput, notes: list[str]
+) -> dict[str, Any]:
+    graph = _build_graph(
         job_id,
         path_input.per_direction,
         notes,
@@ -367,20 +395,38 @@ def build_irc_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None
         ts_energy=path_input.ts_energy,
         ts_ref=path_input.ts_ref,
     )
+    revision_source = {
+        "status": path_input.status,
+        "complete": path_input.complete,
+        "ts_energy": path_input.ts_energy,
+        "frames": [
+            (direction, frame.index, frame.energy_raw, frame.geometry_ref)
+            for direction in IRC_DIRECTIONS
+            for frame in path_input.per_direction.get(direction, [])
+        ],
+    }
+    graph["revision"] = hashlib.sha256(
+        json.dumps(revision_source, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:16]
+    graph.setdefault("metadata", {})["updated_at"] = path_input.updated_at
+    return graph
 
 
-def build_irc_pending_energy_graph(job_id: str, work_dir: Path | None = None) -> dict[str, Any]:
+def build_irc_pending_energy_graph(
+    job_id: str, work_dir: Path | None = None, *, job_status: str | None = None
+) -> dict[str, Any]:
     """Projection returned while an IRC path has no usable points yet."""
     spec = VIEW_REGISTRY["irc"]
     manifest_status = _manifest_status(Path(work_dir)) if work_dir is not None else ""
+    manifest_status = str(job_status or manifest_status or "running").lower()
     terminal = manifest_status in {"completed", "failed", "cancelled"}
     return {
         "job_id": job_id,
         "view_type": "irc",
         "title": spec.title_zh,
-        "status": manifest_status or "running",
+        "status": manifest_status,
         "complete": False,
-        "revision": "",
+        "revision": f"pending:{manifest_status}",
         "default_series": "",
         "available_views": ["irc"],
         "x_axis": {"label": spec.x_label_zh, "unit": spec.x_unit},

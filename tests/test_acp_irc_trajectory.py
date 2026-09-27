@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import shutil
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -239,6 +240,41 @@ def test_recorder_concurrent_refresh_is_atomic(tmp_path: Path) -> None:
     )
     assert payload["frames"]
     assert not list((tmp_path / "RESULT").rglob("*.tmp"))
+
+
+def test_recorder_polls_new_frames_without_orca_stdout(tmp_path: Path) -> None:
+    orca = tmp_path / "WORK" / "07_PATH" / "ORCA"
+    orca.mkdir(parents=True)
+    trajectory = orca / "irc_IRC_F_trj.xyz"
+    lines = (FIXTURES / "h2o2_IRC_F_trj.xyz").read_text(encoding="utf-8").splitlines()
+    trajectory.write_text("\n".join(lines[:6]) + "\n", encoding="utf-8")
+    recorder = IrcTrajectoryRecorder(tmp_path / "RESULT", orca, min_interval=0.05)
+
+    def wait_for_count(expected: int) -> dict:
+        deadline = time.monotonic() + 3
+        snapshot_path = tmp_path / "RESULT" / "trajectories" / "irc_trajectory.json"
+        while time.monotonic() < deadline:
+            if snapshot_path.is_file():
+                payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+                if len(payload["frames"]) >= expected:
+                    return payload
+            time.sleep(0.02)
+        pytest.fail(f"IRC recorder did not publish {expected} frames")
+
+    recorder.start()
+    try:
+        first = wait_for_count(1)
+        first_graph = build_irc_energy_graph("live", tmp_path)
+        with trajectory.open("a", encoding="utf-8") as handle:
+            handle.write("\n".join(lines[6:12]) + "\n")
+        second = wait_for_count(2)
+        second_graph = build_irc_energy_graph("live", tmp_path)
+    finally:
+        recorder.stop()
+    assert len(first["frames"]) == 1
+    assert len(second["frames"]) == 2
+    assert first_graph is not None and second_graph is not None
+    assert first_graph["revision"] != second_graph["revision"]
 
 
 def test_parse_irc_ts_energy_real_output() -> None:

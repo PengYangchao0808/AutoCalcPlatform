@@ -364,6 +364,10 @@ def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
     inp = spec.input
     method = spec.method
     cmd: list[str] = ["--input", str(source), "--output", "."]
+    provenance = inp.get("ts_source")
+    if not isinstance(provenance, dict) or provenance.get("schema") != "irc_ts_source_v1":
+        raise ValueError("IRC requires verified TS source provenance")
+    cmd += ["--ts-provenance-json", json.dumps(provenance, sort_keys=True)]
     if spec.name:
         cmd += ["--name", spec.name]
     input_role = inp.get("input_role")
@@ -389,6 +393,7 @@ def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
     irc_basis = method.get("basis") or irc_level.get("basis")
     if irc_basis:
         cmd += ["--basis", str(irc_basis)]
+    cmd += ["--charge", str(inp["charge"]), "--multiplicity", str(inp["multiplicity"])]
     maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
     if maxpoints is not None:
         cmd += ["--maxpoints", str(maxpoints)]

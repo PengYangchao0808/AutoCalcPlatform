@@ -286,6 +286,139 @@ def test_pending_projection_running_vs_terminal_job() -> None:
     assert ended["metadata"]["reason"] == "pes_scan_no_data"
 
 
+# ── interrupted-scan review projection (terminal failed jobs) ──────────
+
+
+def test_live_graph_failed_job_marks_interrupted_and_review(tmp_path: Path) -> None:
+    writer = _make_writer(tmp_path, points_total=4)
+    writer.publish_point(_point(0, energy=-10.0))
+    writer.publish_point(_point(1, energy=-11.0))
+    writer.publish_point(_point(2, energy=-9.5, success=False, coordinates=None))
+    pes_scan_live._cache_clear()
+
+    graph = pes_scan_live.build_pes_scan_live_graph(
+        "job", tmp_path / "pes_task", job_status="failed"
+    )
+    assert graph is not None
+    assert graph["status"] == "interrupted"
+    metadata = graph["metadata"]
+    assert metadata["scan_interrupted"] is True
+    assert metadata["incomplete_reason"] == "task_failed"
+    assert metadata["scan_complete"] is False
+    assert metadata["review"]["editable"] is True
+    assert metadata["review"]["status"] == "pending"
+    assert metadata["review"]["saved"] is False
+    selectable = {node["frame_index"]: node["metadata"]["selectable"] for node in graph["nodes"]}
+    assert selectable == {0: True, 1: True, 2: False}
+    running = pes_scan_live.build_pes_scan_live_graph(
+        "job", tmp_path / "pes_task", job_status="running"
+    )
+    confirmed = pes_scan_live.build_pes_scan_live_graph(
+        "job",
+        tmp_path / "pes_task",
+        job_status="failed",
+        review_state={"status": "confirmed", "revision": 1},
+    )
+    assert running is not None and confirmed is not None
+    assert running["revision"] != graph["revision"]
+    assert confirmed["revision"] != graph["revision"]
+
+
+def test_live_graph_failed_job_complete_snapshot_not_interrupted(tmp_path: Path) -> None:
+    writer = _make_writer(tmp_path, points_total=2)
+    writer.publish_point(_point(0, energy=-10.0))
+    writer.publish_point(_point(1, energy=-11.0))
+    writer.finalize("completed")
+    pes_scan_live._cache_clear()
+
+    graph = pes_scan_live.build_pes_scan_live_graph(
+        "job", tmp_path / "pes_task", job_status="failed"
+    )
+    assert graph is not None
+    assert graph["status"] != "interrupted"
+    assert graph["metadata"]["scan_interrupted"] is False
+    assert graph["metadata"]["scan_complete"] is True
+    assert graph["metadata"]["review"]["editable"] is True
+
+
+def test_live_graph_running_job_has_no_review_metadata(tmp_path: Path) -> None:
+    writer = _make_writer(tmp_path)
+    writer.publish_point(_point(0, energy=-10.0))
+    pes_scan_live._cache_clear()
+
+    graph = pes_scan_live.build_pes_scan_live_graph(
+        "job", tmp_path / "pes_task", job_status="running"
+    )
+    assert graph is not None
+    assert "review" not in graph["metadata"]
+    assert "scan_interrupted" not in graph["metadata"]
+    assert graph["status"] == "running"
+
+
+def test_live_graph_restores_saved_review_annotations(tmp_path: Path) -> None:
+    writer = _make_writer(tmp_path)
+    writer.publish_point(_point(0, energy=-10.0))
+    writer.publish_point(_point(1, energy=-11.0))
+    pes_scan_live._cache_clear()
+
+    graph = pes_scan_live.build_pes_scan_live_graph(
+        "job",
+        tmp_path / "pes_task",
+        job_status="failed",
+        review_candidates=[
+            {
+                "candidate_id": "pes_ts_frame_001",
+                "frame_index": 1,
+                "role": "ts",
+                "active": True,
+            }
+        ],
+        review_state={"status": "confirmed", "decided_at": "2026-09-26T10:00:00", "revision": 2},
+    )
+    manual = [a for a in graph["annotations"] if a.get("selection_source") == "manual"]
+    assert len(manual) == 1
+    assert manual[0]["candidate_id"] == "pes_ts_frame_001"
+    assert manual[0]["saved"] is True
+    assert manual[0]["frame_index"] == 1
+    review = graph["metadata"]["review"]
+    assert review["status"] == "confirmed"
+    assert review["revision"] == 2
+    assert review["active_candidates"] == 1
+
+
+def test_provider_frame_dirs_include_incomplete(tmp_path: Path) -> None:
+    scan_dir = tmp_path / "WORK" / "07_PATH" / "pes_scan_001"
+    complete = scan_dir / "frame_000"
+    complete.mkdir(parents=True)
+    (scan_dir / "input.xyz").write_text(_water_xyz(), encoding="utf-8")
+    (complete / "xtbopt.xyz").write_text(_water_xyz(), encoding="utf-8")
+    (complete / ".xcontrol").write_text(
+        "$constrain\n  distance: 2, 3, 1.500000\n$end\n", encoding="utf-8"
+    )
+    (complete / "xtb.log").write_text(
+        "....\n         TOTAL ENERGY      -43.57791466 Eh\n....\n", encoding="utf-8"
+    )
+    crashed = scan_dir / "frame_001"
+    crashed.mkdir()
+    (crashed / "xtb_input.xyz").write_text(_water_xyz(), encoding="utf-8")
+    (crashed / "xtb.log").write_text(
+        "....\n         TOTAL ENERGY      -43.10000000 Eh\n....\n", encoding="utf-8"
+    )
+
+    pes_scan_live._cache_clear()
+    strict = pes_scan_live.collect_pes_scan_live_frames(tmp_path)
+    assert strict is not None
+    assert [frame["index"] for frame in strict.frames] == [0]
+
+    pes_scan_live._cache_clear()
+    partial = pes_scan_live.collect_pes_scan_live_frames(tmp_path, include_incomplete=True)
+    assert partial is not None
+    assert [frame["index"] for frame in partial.frames] == [0, 1]
+    assert partial.frames[1]["geometry_ref"] == ""
+    assert partial.frames[1]["converged"] is False
+    assert partial.frames[1]["status"] == "failed"
+
+
 # ── dispatch ───────────────────────────────────────────────────────────
 
 

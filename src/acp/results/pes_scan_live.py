@@ -343,7 +343,16 @@ def _frame_dir_target(frame_dir: Path) -> float | None:
     return None
 
 
-def _provider_frame_dirs(work_dir: Path) -> _LiveScan | None:
+def _provider_frame_dirs(work_dir: Path, *, include_incomplete: bool = False) -> _LiveScan | None:
+    """Back-fill frames from ``frame_NNN/`` directories (xTB / synchronous ORCA).
+
+    By default only complete frames (energy + geometry from the same
+    directory) are emitted.  With ``include_incomplete`` (interrupted-scan
+    review) frames that carry an energy but no usable geometry are also
+    emitted — they stay viewable on the curve but are marked not converged
+    and carry an empty ``geometry_ref`` so they can never be confirmed as
+    structure candidates.
+    """
     scan_dir = Path(work_dir) / PES_SCAN_RELATIVE_PATH
     frame_dirs = sorted(path for path in scan_dir.glob("frame_[0-9][0-9][0-9]") if path.is_dir())
     if not frame_dirs:
@@ -354,20 +363,26 @@ def _provider_frame_dirs(work_dir: Path) -> _LiveScan | None:
         index = int(frame_dir.name.rsplit("_", 1)[1])
         geometry = _frame_dir_geometry(frame_dir, input_atoms)
         energy = _frame_dir_energy(frame_dir)
-        if geometry is None or energy is None:
+        if energy is None:
+            continue
+        if geometry is None and not include_incomplete:
             continue
         frames.append(
             {
                 "index": index,
-                "status": "completed",
-                "converged": True,
+                "status": "completed" if geometry is not None else "failed",
+                "converged": geometry is not None,
                 "target_coordinate": _frame_dir_target(frame_dir),
                 "actual_coordinate": None,
                 "target_coordinates": {},
                 "actual_coordinates": {},
                 "coordinate_unit": "",
                 "energy_hartree": energy,
-                "geometry_ref": f"{PES_SCAN_RELATIVE_PATH}/{frame_dir.name}/{geometry.name}",
+                "geometry_ref": (
+                    f"{PES_SCAN_RELATIVE_PATH}/{frame_dir.name}/{geometry.name}"
+                    if geometry is not None
+                    else ""
+                ),
                 "sp_energy_hartree": None,
                 "sp_status": "pending",
             }
@@ -390,15 +405,28 @@ def _provider_frame_dirs(work_dir: Path) -> _LiveScan | None:
 # ── collection with TTL cache ──────────────────────────────────────────
 
 
-def collect_pes_scan_live_frames(work_dir: Path | str) -> _LiveScan | None:
-    """Return the best available live scan state (snapshot → native → frames)."""
+def collect_pes_scan_live_frames(
+    work_dir: Path | str,
+    *,
+    include_incomplete: bool = False,
+) -> _LiveScan | None:
+    """Return the best available live scan state (snapshot → native → frames).
+
+    With ``include_incomplete=True`` the frame-directory provider also emits
+    energy-only frames whose geometry is missing, so a terminal-failure review
+    can display them as view-only points (never confirmable as candidates).
+    """
     work = Path(work_dir)
-    cache_key = work / PES_SCAN_RELATIVE_PATH
+    cache_key = work / PES_SCAN_RELATIVE_PATH / ("incomplete" if include_incomplete else "strict")
     now = time.monotonic()
     cached = _scan_cache.get(cache_key)
     if cached is not None and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
-    result = _provider_snapshot(work) or _provider_native_orca(work) or _provider_frame_dirs(work)
+    result = (
+        _provider_snapshot(work)
+        or _provider_native_orca(work)
+        or _provider_frame_dirs(work, include_incomplete=include_incomplete)
+    )
     _scan_cache[cache_key] = (now, result)
     return result
 
@@ -415,11 +443,21 @@ def build_pes_scan_live_graph(
     work_dir: Path | str,
     *,
     job_status: str | None = None,
+    review_candidates: list[dict[str, Any]] | None = None,
+    review_state: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Project the live scan state through the frames contract."""
+    """Project the live scan state through the frames contract.
+
+    ``review_candidates`` / ``review_state`` carry the persisted manual-review
+    selection (``pes_review.json`` rows) so interrupted scans from terminal
+    (failed/cancelled) jobs render their saved TS/INT annotations and expose
+    ``metadata.review`` — the same contract the final-profile projection uses.
+    """
     from acp.results import energy_graph as _eg
 
-    live = collect_pes_scan_live_frames(work_dir)
+    status_key = str(job_status or "").strip().lower()
+    task_interrupted_source = status_key in {"failed", "cancelled"}
+    live = collect_pes_scan_live_frames(work_dir, include_incomplete=task_interrupted_source)
     if live is None or not live.frames:
         return None
     frames = sorted(live.frames, key=lambda frame: int(frame.get("index") or 0))
@@ -466,6 +504,8 @@ def build_pes_scan_live_graph(
             x = _number(frame.get("actual_coordinate"))
         if x is None:
             x = float(index)
+        geometry_ref = str(frame.get("geometry_ref") or "")
+        geometry_available = bool(geometry_ref) and (Path(work_dir) / geometry_ref).is_file()
         nodes.append(
             TrajectoryFrame(
                 frame_id=f"frame_{index}",
@@ -474,13 +514,16 @@ def build_pes_scan_live_graph(
                 x=x,
                 energy=default_values[position] if position < len(default_values) else None,
                 status="failed" if failed else "converged",
-                geometry_ref=str(frame.get("geometry_ref") or ""),
+                geometry_ref=geometry_ref,
                 metadata={
                     "target_coordinate": _number(frame.get("target_coordinate")),
                     "actual_coordinate": _number(frame.get("actual_coordinate")),
                     "scan_energy_hartree": energies[position],
                     "single_point_energy_hartree": single_point[position],
                     "single_point_status": frame.get("sp_status"),
+                    # Viewable-with-geometry frames are confirmable candidates;
+                    # energy-only frames stay view-only (never confirmable).
+                    "selectable": geometry_available,
                 },
             ).to_node(VIEW_REGISTRY["scan"].node_type)
         )
@@ -516,7 +559,54 @@ def build_pes_scan_live_graph(
                 ).to_annotation()
             )
 
+    saved_rows = [
+        dict(row)
+        for row in (review_candidates or [])
+        if isinstance(row, dict) and row.get("candidate_id")
+    ]
+    node_by_frame = {node["frame_index"]: node for node in nodes}
+    role_sequences: dict[str, int] = {}
+    for saved in sorted(saved_rows, key=lambda row: int(row.get("frame_index") or 0)):
+        frame_index = int(saved.get("frame_index") or 0)
+        node = node_by_frame.get(frame_index)
+        if node is None:
+            # Missing from the current partial data — the review record keeps
+            # the provenance, so the stale marker is dropped, not guessed.
+            continue
+        marker_type = str(saved.get("role") or "ts")
+        role_prefix = _eg._candidate_role_prefix(marker_type)
+        role_sequences[role_prefix] = role_sequences.get(role_prefix, 0) + 1
+        display_label = _eg._candidate_display_label(marker_type, role_sequences[role_prefix])
+        active = bool(saved.get("active", True))
+        annotations.append(
+            TrajectoryAnnotation(
+                id=str(saved["candidate_id"]),
+                type=marker_type,
+                label=display_label,
+                frame_index=frame_index,
+                x=node["x"],
+                y=node["energy"],
+                status=node["status"],
+                geometry_ref=node["geometry_ref"],
+                selected=active,
+                metadata={
+                    "candidate_id": str(saved["candidate_id"]),
+                    "active": active,
+                    "saved": True,
+                    "selection_source": str(saved.get("selection_source") or "manual"),
+                    "node_id": node["id"],
+                    "frame_number": frame_index + 1,
+                    "scan_step": frame_index,
+                    "display_label": display_label,
+                },
+            ).to_annotation()
+        )
+
     complete = live.stage in TERMINAL_STAGES
+    scan_complete = live.stage == "completed" or (
+        bool(live.points_total) and len(frames) >= live.points_total and complete
+    )
+    interrupted = task_interrupted_source and not scan_complete
     metadata: dict[str, Any] = {
         "live": True,
         "scan_stage": live.stage,
@@ -525,17 +615,43 @@ def build_pes_scan_live_graph(
         "frame_count": len(nodes),
         "x_source": live.x_source,
         "coordinate": live.coordinate,
+        "scan_complete": scan_complete,
     }
     if job_status:
         metadata["job_status"] = str(job_status)
+    if task_interrupted_source:
+        metadata["scan_interrupted"] = interrupted
+        metadata["incomplete_reason"] = (
+            "task_failed" if status_key == "failed" else "task_cancelled"
+        )
+    if status_key in _TERMINAL_JOB_STATUSES:
+        review_state_eff = review_state or {}
+        metadata["review"] = {
+            "status": str(review_state_eff.get("status") or "pending"),
+            "decided_at": review_state_eff.get("decided_at"),
+            "revision": review_state_eff.get("revision"),
+            "saved": bool(saved_rows) or str(review_state_eff.get("status") or "") == "confirmed",
+            "active_candidates": sum(1 for row in saved_rows if bool(row.get("active", True))),
+            "editable": True,
+            "frame_source": "live_partial",
+        }
     projection: dict[str, Any] = _eg._sanitize_json(
         {
             "job_id": job_id,
             "view_type": "scan",
             "title": VIEW_REGISTRY["scan"].title_zh,
-            "status": live.stage,
+            "status": "interrupted" if interrupted else live.stage,
             "complete": complete,
-            "revision": _eg._revision({"frames": frames, "stage": live.stage}),
+            # Terminal transition and manual review change what the user can
+            # do with identical frames, so both belong to the graph revision.
+            "revision": _eg._revision(
+                {
+                    "frames": frames,
+                    "stage": live.stage,
+                    "job_status": status_key,
+                    "review": metadata.get("review"),
+                }
+            ),
             "default_series": default_series,
             "available_views": ["scan"],
             "x_axis": _eg._coordinate_axis({"protocol": {"coordinate": live.coordinate}}),

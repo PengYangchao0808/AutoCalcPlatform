@@ -1467,9 +1467,13 @@ def _build_energy_graph_projection(
             build_pes_scan_pending_energy_graph,
         )
 
-        return build_pes_scan_live_graph(job_id, work_dir, job_status=job_status) or (
-            build_pes_scan_pending_energy_graph(job_id, job_status=job_status)
-        )
+        return build_pes_scan_live_graph(
+            job_id,
+            work_dir,
+            job_status=job_status,
+            review_candidates=s2_candidates,
+            review_state=s2_review_state,
+        ) or build_pes_scan_pending_energy_graph(job_id, job_status=job_status)
     if workflow == "mechanism" and mechanism_report:
         result = build_mechanism_energy_graph(job_id, mechanism_report)
         if result is not None:
@@ -1517,7 +1521,7 @@ def _build_energy_graph_projection(
 
         return build_irc_energy_graph(
             job_id, work_dir
-        ) or build_irc_pending_energy_graph(job_id, work_dir)
+        ) or build_irc_pending_energy_graph(job_id, work_dir, job_status=job_status)
     return build_unavailable_energy_graph(
         job_id, workflow=workflow, reason="workflow_has_no_energy_graph"
     )
