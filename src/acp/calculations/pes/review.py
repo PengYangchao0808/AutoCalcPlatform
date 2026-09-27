@@ -1,19 +1,30 @@
 """PES manual review — persist user-confirmed TS/INT selections.
 
-After a PESsearch job completes, the user may promote arbitrary scan frames
-to confirmed TS/INT candidates.  This module is the single writer for the
-manual-review artifacts:
+After a PESsearch job terminates, the user may promote scan frames to
+confirmed TS/INT candidates.  Two frame sources are supported:
+
+- ``RESULT/pes_search/pes_profile.json`` (``pes_profile_v2``) — the final
+  profile of a successful scan;
+- the live-scan artifacts (``RESULT/trajectories/pes_scan_trajectory.json``
+  snapshot, native-ORCA ledger, or ``frame_NNN/`` directories) — the partial
+  frames of an interrupted scan from a FAILED/CANCELLED task.
+
+This module is the single writer for the manual-review artifacts:
 
 - ``RESULT/pes_search/pes_review.json`` — authoritative review record
-  (schema ``pes_review_v1``) with a monotonic ``revision`` counter.
+  (schema ``pes_review_v1``) with a monotonic ``revision`` counter and a
+  ``source`` block recording the owning task status, scan completeness,
+  frame convergence, and the digest of the data the selection was made on;
 - ``RESULT/structures/<candidate_id>.xyz`` — one materialised XYZ per
   confirmed frame, with a rewritten TAG comment carrying the stable
-  ``candidate_id`` and ``selection_source=manual``.
+  ``candidate_id`` and ``selection_source=manual``;
 - ``RESULT/result_manifest.json`` — structure products are replaced so only
   the currently confirmed candidates remain visible to BatchOptimize.
   Algorithmic recommendations stay in ``pes_profile.json`` for audit.
 
-All candidates are validated before anything is written (all-or-nothing).
+Frames that carry an energy but no usable geometry file remain viewable on
+the curve but can never be confirmed as structure candidates.  All
+candidates are validated before anything is written (all-or-nothing).
 Re-saving the same selection is idempotent: candidate ids are derived
 deterministically from ``role + frame_index``, so repeat saves reuse the
 same files and manifest ids.
@@ -106,6 +117,26 @@ class _ValidatedCandidate:
     name: str
     frame_xyz: str
     tag_comment: str
+    frame_converged: bool
+
+
+@dataclass(frozen=True)
+class _FrameSource:
+    """Resolved frame lookup backing one review save.
+
+    ``kind`` is ``"final_profile"`` (geometry relative to ``geometry_base``
+    via the ``geometry_path`` field) or ``"live_partial"`` (task-root
+    relative ``geometry_ref`` from the live-scan artifacts).
+    """
+
+    kind: str
+    task_status: str
+    frames_by_index: dict[int, Mapping[str, Any]]
+    geometry_base: str
+    geometry_key: str
+    scan_complete: bool
+    data_source: str
+    data_sha256: str
 
 
 def _load_profile(task_root: Path) -> dict[str, Any]:
@@ -133,6 +164,92 @@ def _profile_digest(task_root: Path) -> str:
         return ""
 
 
+def _live_source_digest(task_root: Path, source: str) -> str:
+    """Digest the live-scan artifact a partial review was decided against."""
+    digest = hashlib.sha256()
+    if source.endswith("*"):
+        scan_dir = task_root / PES_SCAN_RELATIVE_PATH
+        if scan_dir.is_dir():
+            for item in sorted(scan_dir.rglob("*")):
+                if not item.is_file():
+                    continue
+                try:
+                    stat = item.stat()
+                except OSError:
+                    continue
+                digest.update(item.relative_to(scan_dir).as_posix().encode("utf-8"))
+                digest.update(str(stat.st_size).encode("utf-8"))
+                digest.update(str(int(stat.st_mtime)).encode("utf-8"))
+        return digest.hexdigest()
+    try:
+        return hashlib.sha256((task_root / source).read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
+def _resolve_frame_source(task_root: Path, *, task_status: str) -> _FrameSource:
+    """Load the final profile, else fall back to the live partial frames."""
+    if (task_root / PES_PROFILE_RELATIVE_PATH).is_file():
+        profile = _load_profile(task_root)
+        frames_by_index: dict[int, Mapping[str, Any]] = {}
+        for position, frame in enumerate(profile.get("frames") or []):
+            if not isinstance(frame, Mapping):
+                continue
+            try:
+                index = int(frame.get("index", position))
+            except (TypeError, ValueError):
+                index = position
+            frames_by_index[index] = frame
+        quality = (profile.get("scan") or {}).get("quality") or {}
+        scan_complete = bool(
+            quality.get(
+                "scan_complete",
+                str(profile.get("status") or "") in {"ready_for_review", "completed"},
+            )
+        )
+        return _FrameSource(
+            kind="final_profile",
+            task_status=task_status,
+            frames_by_index=frames_by_index,
+            geometry_base=str(profile.get("scan_dir") or PES_SCAN_RELATIVE_PATH),
+            geometry_key="geometry_path",
+            scan_complete=scan_complete,
+            data_source=PES_PROFILE_RELATIVE_PATH,
+            data_sha256=_profile_digest(task_root),
+        )
+
+    from acp.calculations.pes.scan_snapshot import TERMINAL_STAGES
+    from acp.results.pes_scan_live import collect_pes_scan_live_frames
+
+    live = collect_pes_scan_live_frames(task_root, include_incomplete=True)
+    if live is None or not live.frames:
+        raise PesReviewError(
+            "PES profile not found and no reviewable live scan frames: expected "
+            f"{PES_PROFILE_RELATIVE_PATH} or scan artifacts under {PES_SCAN_RELATIVE_PATH}"
+        )
+    partial_index: dict[int, Mapping[str, Any]] = {}
+    for frame in live.frames:
+        try:
+            partial_index[int(frame.get("index"))] = frame
+        except (TypeError, ValueError):
+            continue
+    scan_complete = live.stage == "completed" or (
+        bool(live.points_total)
+        and len(partial_index) >= live.points_total
+        and live.stage in TERMINAL_STAGES
+    )
+    return _FrameSource(
+        kind="live_partial",
+        task_status=task_status,
+        frames_by_index=partial_index,
+        geometry_base="",
+        geometry_key="geometry_ref",
+        scan_complete=scan_complete,
+        data_source=str(live.source),
+        data_sha256=_live_source_digest(task_root, str(live.source)),
+    )
+
+
 def _ensure_inside(task_root: Path, path: Path) -> Path:
     """Resolve *path* and refuse anything outside *task_root*."""
     resolved = path.resolve()
@@ -143,13 +260,27 @@ def _ensure_inside(task_root: Path, path: Path) -> Path:
     return resolved
 
 
+def _read_validated_xyz(path: Path) -> str:
+    """Read one frame geometry and refuse anything that is not a valid XYZ."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise PesReviewError(f"unreadable frame geometry: {path}") from exc
+    lines = text.strip().splitlines()
+    try:
+        atom_count = int(lines[0].strip())
+    except (IndexError, ValueError):
+        atom_count = -1
+    if atom_count <= 0 or len(lines) < atom_count + 2:
+        raise PesReviewError(f"frame geometry is not a valid XYZ file: {path}")
+    return text
+
+
 def _validate_candidates(
     task_root: Path,
-    profile: dict[str, Any],
+    source: _FrameSource,
     candidates: Sequence[Mapping[str, Any]],
 ) -> list[_ValidatedCandidate]:
-    frames = profile.get("frames") or []
-    scan_dir = str(profile.get("scan_dir") or PES_SCAN_RELATIVE_PATH)
     validated: list[_ValidatedCandidate] = []
     seen_ids: set[str] = set()
     seen_frames: set[int] = set()
@@ -161,27 +292,34 @@ def _validate_candidates(
             frame_index = int(raw.get("frame_index"))
         except (TypeError, ValueError):
             raise PesReviewError(f"candidate has no valid frame_index: {raw!r}") from None
-        if frame_index < 0 or frame_index >= len(frames):
-            raise PesReviewError(
-                f"frame_index {frame_index} out of range (profile has {len(frames)} frames)"
-            )
         if frame_index in seen_frames:
             raise PesReviewError(f"frame_index {frame_index} selected more than once")
         seen_frames.add(frame_index)
 
-        frame = frames[frame_index]
-        if not isinstance(frame, Mapping):
-            raise PesReviewError(f"frame {frame_index} is malformed in the PES profile")
-        geometry_rel = str(frame.get("geometry_path") or "")
+        frame = source.frames_by_index.get(frame_index)
+        if frame is None:
+            available = sorted(source.frames_by_index)
+            raise PesReviewError(
+                f"frame_index {frame_index} out of range (source has "
+                f"{len(available)} frames: {available})"
+            )
+
+        geometry_rel = str(frame.get(source.geometry_key) or "")
         if not geometry_rel:
-            raise PesReviewError(f"frame {frame_index} has no geometry_path")
-        frame_path = _ensure_inside(task_root, task_root / scan_dir / geometry_rel)
+            raise PesReviewError(
+                f"frame {frame_index} has energy but no usable geometry; "
+                "view-only frames cannot be confirmed as structure candidates"
+            )
+        frame_path = _ensure_inside(task_root, task_root / source.geometry_base / geometry_rel)
         if not frame_path.is_file():
             raise PesReviewError(f"frame geometry missing on disk: {frame_path}")
-        try:
-            frame_xyz = frame_path.read_text(encoding="utf-8")
-        except OSError as exc:
-            raise PesReviewError(f"unreadable frame geometry: {frame_path}") from exc
+        frame_xyz = _read_validated_xyz(frame_path)
+
+        frame_converged = (
+            bool(frame.get("optimization_converged", True))
+            if source.kind == "final_profile"
+            else bool(frame.get("converged", True))
+        )
 
         requested_id = str(raw.get("candidate_id") or "")
         if requested_id and not _ROLE_TOKEN_RE.match(requested_id):
@@ -192,12 +330,18 @@ def _validate_candidates(
         seen_ids.add(candidate_id)
 
         name = str(raw.get("name") or "") or candidate_id
+        extra = "selection_source=manual"
+        if source.kind == "live_partial":
+            extra += (
+                f" scan_complete={'true' if source.scan_complete else 'false'}"
+                f" task_status={source.task_status}"
+            )
         tag_comment = build_tag_title(
             role,
             candidate_id=candidate_id,
             source="PESsearch",
             frame=frame_index,
-            extra="selection_source=manual",
+            extra=extra,
         )
         validated.append(
             _ValidatedCandidate(
@@ -207,6 +351,7 @@ def _validate_candidates(
                 name=name,
                 frame_xyz=frame_xyz,
                 tag_comment=tag_comment,
+                frame_converged=frame_converged,
             )
         )
     return validated
@@ -272,6 +417,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
 def _update_result_manifest(
     result_dir: Path,
     task_id: str,
+    source: _FrameSource,
     validated: list[_ValidatedCandidate],
     entries: list[dict[str, str]],
 ) -> Path:
@@ -301,6 +447,10 @@ def _update_result_manifest(
                 "frame_index": candidate.frame_index,
                 "source": "PESsearch",
                 "selection_source": "manual",
+                "task_status": source.task_status,
+                "scan_complete": source.scan_complete,
+                "frame_converged": candidate.frame_converged,
+                "data_source": source.data_source,
             },
         )
     return manifest.write(result_dir)
@@ -315,8 +465,14 @@ def save_pes_review(
     expected_revision: int | None = None,
     now: datetime | None = None,
     restored_from: int | None = None,
+    source_task_status: str = "COMPLETED",
 ) -> dict[str, Any]:
     """Validate and persist a manual PES review (all-or-nothing).
+
+    Frame lookup accepts the final ``pes_profile.json`` (successful scans) or
+    the live partial frames (interrupted scans of FAILED/CANCELLED tasks);
+    the caller owns the policy — the API layer only allows partial frames
+    for terminal non-completed jobs.
 
     The previous confirmed state (revision >= 1) is first rotated into
     ``RESULT/pes_search/pes_review_backup_<n>.json`` (n = previous revision
@@ -333,6 +489,8 @@ def save_pes_review(
             match; otherwise a :class:`RevisionConflictError` is raised.
         now: Injectable timestamp (tests); defaults to local time now.
         restored_from: Set by :func:`restore_pes_review` for audit.
+        source_task_status: Status of the owning task at save time
+            (``COMPLETED``/``FAILED``/``CANCELLED``); recorded as provenance.
 
     Returns:
         The written ``pes_review.json`` payload.
@@ -342,7 +500,8 @@ def save_pes_review(
         RevisionConflictError: ``expected_revision`` does not match the stored one.
     """
     root = Path(task_root).expanduser().resolve()
-    profile = _load_profile(root)
+    task_status = re.sub(r"[^A-Za-z0-9_]", "_", str(source_task_status or "UNKNOWN")).upper()
+    source = _resolve_frame_source(root, task_status=task_status)
 
     existing = load_pes_review(root)
     current_revision = int(existing.get("revision", 0)) if existing else 0
@@ -351,14 +510,14 @@ def save_pes_review(
             f"review revision conflict: stored={current_revision}, expected={expected_revision}"
         )
 
-    validated = _validate_candidates(root, profile, candidates)
+    validated = _validate_candidates(root, source, candidates)
 
     result_dir = root / "RESULT"
     structures_dir = result_dir / "structures"
     if existing and current_revision >= 1:
         _rotate_backup(root, existing, current_revision)
     entries = _materialise_structures(structures_dir, validated)
-    manifest_path = _update_result_manifest(result_dir, job_id, validated, entries)
+    manifest_path = _update_result_manifest(result_dir, job_id, source, validated, entries)
 
     confirmed_at = (now or datetime.now().astimezone()).isoformat(timespec="seconds")
     selected = [
@@ -369,6 +528,7 @@ def save_pes_review(
             "name": candidate.name,
             "selection_source": "manual",
             "structure_path": entry["structure_path"],
+            "frame_converged": candidate.frame_converged,
         }
         for entry, candidate in zip(entries, validated)
     ]
@@ -379,7 +539,14 @@ def save_pes_review(
         "confirmed_at": confirmed_at,
         "revision": current_revision + 1,
         "attempt": current_revision + 1,
-        "profile_sha256": _profile_digest(root),
+        "profile_sha256": source.data_sha256 if source.kind == "final_profile" else "",
+        "source": {
+            "task_status": source.task_status,
+            "frame_source": source.kind,
+            "scan_complete": source.scan_complete,
+            "data_source": source.data_source,
+            "data_sha256": source.data_sha256,
+        },
         "note": str(note or ""),
         "selected": selected,
     }
@@ -436,6 +603,7 @@ def restore_pes_review(
     *,
     expected_revision: int | None = None,
     now: datetime | None = None,
+    source_task_status: str = "COMPLETED",
 ) -> dict[str, Any]:
     """Re-activate backup *backup_n* as the current review (rotation-aware).
 
@@ -477,6 +645,7 @@ def restore_pes_review(
         expected_revision=expected_revision,
         now=now,
         restored_from=int(backup_n),
+        source_task_status=source_task_status,
     )
     payload["restored_from"] = int(backup_n)
     return payload
