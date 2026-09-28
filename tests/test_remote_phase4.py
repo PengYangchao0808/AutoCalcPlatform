@@ -30,6 +30,7 @@ from acp.scheduler.remote.fetcher import (
     RemoteFileError,
     RemotePreviewConfig,
     RemoteResultFetcher,
+    RemoteWriteError,
     _safe_join,
 )
 from acp.scheduler.remote.sftp import FileStager
@@ -427,6 +428,38 @@ def test_read_file_nested_subdir():
     assert data == b"ORCA SP RESULT\n"
     pool.close()
     print("  [OK] read_file: nested subdir path works")
+
+
+def test_write_file_uploads_bytes_with_parent_dirs():
+    node = make_node()
+    sftp = FakeSFTP()
+    remote_dir = "/scratch/test/acp_jobs/job1"
+    fetcher, pool, factory = make_fetcher(sftp, node)
+    record = make_remote_record(remote_dir=remote_dir)
+    payload = b"3\nTS candidate\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+    with patch.object(ssh_mod, "_create_client", side_effect=factory):
+        fetcher.write_file(record, "RESULT/structures/pes_ts_frame_001.xyz", payload)
+
+    assert sftp.files[remote_dir + "/RESULT/structures/pes_ts_frame_001.xyz"] == payload
+    pool.close()
+    print("  [OK] write_file: uploads bytes and creates parent dirs")
+
+
+def test_write_file_wraps_upload_failure():
+    node = make_node()
+    sftp = FakeSFTP()
+    fetcher, pool, factory = make_fetcher(sftp, node)
+    record = make_remote_record()
+
+    with (
+        patch.object(ssh_mod, "_create_client", side_effect=factory),
+        patch.object(FileStager, "upload_file", side_effect=OSError("disk full")),
+    ):
+        with pytest.raises(RemoteWriteError, match="disk full"):
+            fetcher.write_file(record, "RESULT/result_manifest.json", b"{}")
+    pool.close()
+    print("  [OK] write_file: upload failures surface as RemoteWriteError")
 
 
 def test_read_file_missing():

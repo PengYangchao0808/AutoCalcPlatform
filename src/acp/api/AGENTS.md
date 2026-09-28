@@ -19,7 +19,7 @@ api/
 |------|------------|
 | `server.py` | `create_app()` factory — wires routers, lifespan starts `JobManager`, serves frontend at `/` and `/legacy/`; `/js` + `/css` mount `_RevalidatingStaticFiles` (`Cache-Control: no-cache`) so a normal reload always picks up newly deployed workbench JS/CSS |
 | `routes.py` | `/api/status` (service health + queue counts), `/api/backends` (capability discovery), `/api/jobs` (create/list/get/cancel/logs/files), `/api/jobs/{id}/events` (SSE stream) |
-| `v1_routes.py` | Higher-level job submission, molecule upload, task management (~700 lines); structure-viewer remote files go through the manager-owned `RemoteStructureCache` singleton (`JobManager.structure_cache`) — never build a second cache instance; PES/energy reads resolve remote jobs via `_job_read_root` (cache-first, terminal catalog fetch), remote review writes are 501 by design |
+| `v1_routes.py` | Higher-level job submission, molecule upload, task management (~700 lines); structure-viewer remote files go through the manager-owned `RemoteStructureCache` singleton (`JobManager.structure_cache`) — never build a second cache instance; PES/energy reads resolve remote jobs via `_job_read_root` (cache-first, terminal catalog fetch); remote PES review writes stage in the cache root and write back over SFTP (`_remote_review_setup` → `save_pes_review` → `_remote_review_write_back`) |
 | `schemas.py` | Shared Pydantic request/response models for status, backends, jobs, files |
 | `v1_schemas.py` | V1-specific Pydantic schemas |
 

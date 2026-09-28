@@ -1,6 +1,6 @@
 # 结构查看器（Structure Viewer）设计文档
 
-**状态**: v1.4（2026-09-28，终端态目录预取由后端拥有（`JobManager`）+ 前端资源 no-cache 重校验；v1.3：Confsearch `weight_source` / 真实温度透传 + canonical fill-only-missing 兜底；v1.2 远程调度器标记后的扁平布局 + 嵌套只读兜底 + 终态重试单一 owner 契约；UX spec v2.0 P0+P1 已交付；标签归一化 + default_entry_id 优先级锁定；测试矩阵与化学正确性套件见 §10）
+**状态**: v1.5（2026-09-28，远端缓存写回 `push_paths`/`fetch(force)` + 远程 PES 审阅写回；v1.4：终端态目录预取由后端拥有（`JobManager`）+ 前端资源 no-cache 重校验；v1.3：Confsearch `weight_source` / 真实温度透传 + canonical fill-only-missing 兜底；v1.2 远程调度器标记后的扁平布局 + 嵌套只读兜底 + 终态重试单一 owner 契约；UX spec v2.0 P0+P1 已交付；标签归一化 + default_entry_id 优先级锁定；测试矩阵与化学正确性套件见 §10）
 **范围**: Workbench「结构查看器」标签页的统一结构浏览、虚频可视化、轻量几何编辑，
 以及后端 `structure_viewer_v1` 目录契约 / `normal_modes_v1` 振动产物 / 4 个 REST 端点
 
@@ -246,6 +246,8 @@ geometry_product_id, atom_count)` → frequency 基元落盘
 **终态重试契约（前端 `frontend/js/structure_viewer.js`）**：终态 pending 重试由 `refreshIfChanged` **单一拥有**，`ACP_Workbench_v2.html` 的 `summaryPoll` 每 5s 调用（抽屉打开/SSE 丢失仍生效）；判定只用**本次新鲜响应**的 `job_status`/`availability`（不读可能过期的 `state.payload`），依次经 captured-token 守卫、dirty 守卫（置 `newerAvailable`，不覆盖编辑）、30s backoff，再委派内部 `_retryPendingFetch(jobId)`。`_retryPendingFetch` 无 availability/terminal 门槛（仅 in-flight 原子守卫），硬失败（`availability=""`）后下一轮仍可重试；其 `finally` 按 jobId 守卫（换 job 后不得清新 job 的 `pendingFetchInFlight`）。公共 `refreshPending(jobId, opts)` 是 SSE 即时入口：默认带 availability+terminal 守卫，`{force:true}` 跳过守卫（终态 SSE 是权威信号，不被过期 `payload.job_status` 拦截）；SSE 终态分支（completed/failed/cancelled/done）调用 `refreshPending(jid, {force:true})`。重试状态（`pendingFetchInFlight`/`pendingFetchNextRetryAt`）**仅在 `loadStructureViewer` 检测到 jobId 变化时重置**；`_applyCatalogResponse` 在 `availability="ready"` 时清零 backoff（必须位于 token 早退之后，避免陈旧响应误清）。终态自动 `?fetch=1` 条件 = `availability ∈ {pending_fetch, unavailable}`。
 
 **后端目录预取契约（2026-09-28，`JobManager`）**：前端 `?fetch=1` 只是快速路径，**绝不是唯一路径**。`JobManager._poll_job` 在远程任务终态跃迁时调用 `_queue_catalog_prefetch(job_id)`；`_queue_startup_catalog_prefetch()` 在服务启动时扫描最近 100×3（completed/failed/cancelled）条远程任务，为尚未缓存目录的任务补排队（单次上限 300）。独立守护线程 `acp-catalog-prefetch`（懒启动，队列 + `task_done`，单任务异常仅告警不杀线程）经 **`JobManager.structure_cache` 单例**（API 与预取共享；`v1_routes._remote_structure_cache` 直接委派该属性）只拉取 `_CATALOG_FETCH_PATHS` 小元数据，几何保持懒加载；`fetch()`/`fetch_catalog()` 的本地缓存命中与 `catalog_ready` 短路保证幂等。效果：任何前端版本（含缓存旧 JS、未刷新标签页）在任务完成后的下一次 catalog 轮询即看到 `availability=ready`——2026-09-28 事故（Pi 上旧 JS 无终态重试，完成的任务永远停在 pending_fetch，且整个时段零 SFTP 读取）由此根治。`/js`+`/css` 静态资源改为 `_RevalidatingStaticFiles`（`Cache-Control: no-cache`，未变文件 304），保证普通刷新必取到新前端。锁定：`tests/test_acp_remote_catalog_prefetch.py`（7 用例）。
+
+**缓存写回契约（2026-09-28）**：远端缓存同时服务写路径。`fetch(force=..., raise_errors=...)` 支持强制重读（可变文件刷新；远端缺失时删除本地陈旧副本）与传输错误上抛（写路径拒绝静默降级）；`push_paths(record, rel_paths)` 按缓存路径原样 SFTP 上传（目录自动创建，缺失缓存文件跳过，失败抛 `RemotePushError`）；`fetch_matching(record, dir_rel, prefix)` 经 `list_files` 前缀列举补拉（审阅备份轮次）。消费方：远程 PES 审阅写回（`_remote_review_setup` → `save_pes_review` → `_remote_review_write_back`，见 `docs/ACP_PES_Manual_Review_DevDoc.md` §3.3）与 `RemoteResultFetcher.write_file`。锁定：`TestRemoteStructureCache`（force/push/fetch_matching 用例）+ `tests/test_remote_phase4.py::test_write_file_*`。
 
 ## 9. 前端模块
 
