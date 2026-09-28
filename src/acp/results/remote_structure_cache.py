@@ -5,12 +5,20 @@ Fetches required manifest/geometry/frequency files on demand via
 ``<run_root>/.remote_cache/<job_id>/<rel_path>`` (atomic tmp+``os.replace``,
 per-path ``threading.Lock``, permissions inherit run_root).
 
+The flat remote layout (``<remote_task_dir>/<rel_path>``) is always tried
+first.  Only when the flat read raises ``FileNotFoundError`` does a read-only
+one-level nested fallback probe ``<remote_task_dir>/<dir>/<rel_path>``
+candidates (legacy remote jobs created before scheduler markers were
+uploaded wrote results nested under ``<molecule>/``).  Discovery needs
+``fetcher.list_files``; fetchers without it degrade to the old behavior.
+
 Must NOT write inside task dirs.  Must NOT block the event loop on SFTP
 (uses the existing pool).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -30,18 +38,45 @@ __all__ = ["RemoteStructureCache"]
 
 _CACHE_DIR_NAME = ".remote_cache"
 
-_PRIMARY_MANIFEST: dict[str, str] = {
-    "Confsearch": "RESULT/confsearch/confsearch_manifest.json",
-    "PESsearch": "RESULT/pes_search/pes_profile.json",
-    "BatchOptimize": "RESULT/result_manifest.json",
-    "optimize": "RESULT/result_manifest.json",
-    "xtb-optimize": "RESULT/result_manifest.json",
-    "singlepoint": "RESULT/result_manifest.json",
-    "frequency": "RESULT/result_manifest.json",
-    "scan": "RESULT/trajectories/scan_trajectory.json",
-    "irc": "RESULT/irc/",
-    "legacy": "RESULT/result_manifest.json",
+_CATALOG_FETCH_PATHS: dict[str, tuple[str, ...]] = {
+    "Confsearch": ("RESULT/confsearch/confsearch_manifest.json",),
+    "PESsearch": (
+        "RESULT/pes_search/pes_recommendations.json",
+        "RESULT/pes_search/pes_review.json",
+        "RESULT/pes_search/pes_profile.json",
+    ),
+    "BatchOptimize": ("RESULT/result_manifest.json",),
+    "optimize": ("RESULT/result_manifest.json", "input.xyz"),
+    "xtb_optimize": ("RESULT/result_manifest.json", "input.xyz"),
+    "singlepoint": ("RESULT/result_manifest.json", "input.xyz"),
+    "frequency": ("RESULT/result_manifest.json", "input.xyz"),
+    "nmr": ("RESULT/result_manifest.json",),
+    "scan": ("RESULT/trajectories/scan_trajectory.json",),
+    # IRC trajectories are both catalog metadata and geometry.  The viewer
+    # must parse them to know how many frame entries to expose.
+    "irc": (
+        "RESULT/irc/irc_forward.xyz",
+        "RESULT/irc/irc_reverse.xyz",
+    ),
+    "legacy": (
+        "RESULT/result_manifest.json",
+        "RESULT/result_summary.json",
+    ),
 }
+
+_CATALOG_READY_PATHS: dict[str, tuple[str, ...]] = {
+    key: paths for key, paths in _CATALOG_FETCH_PATHS.items()
+}
+# PES profile data alone cannot produce structure entries; at least one of
+# recommendations/review must exist before the remote catalog is usable.
+_CATALOG_READY_PATHS["PESsearch"] = (
+    "RESULT/pes_search/pes_recommendations.json",
+    "RESULT/pes_search/pes_review.json",
+)
+# A simple-workflow input is only an optional fallback.  A completed remote
+# result is considered synchronized once its result manifest is available.
+for _simple_workflow in ("optimize", "xtb_optimize", "singlepoint", "frequency"):
+    _CATALOG_READY_PATHS[_simple_workflow] = ("RESULT/result_manifest.json",)
 
 
 class RemoteStructureCache:
@@ -63,6 +98,11 @@ class RemoteStructureCache:
         self._fetcher_factory = fetcher_factory
         self._master_lock = threading.Lock()
         self._path_locks: dict[str, threading.Lock] = {}
+        # Nested-layout fallback (read-only compat for pre-marker remote jobs):
+        # per-job memoized candidate prefix + per-job discovery locks.  SFTP
+        # calls are never wrapped in ``_master_lock`` (no global serialize).
+        self._nested_prefixes: dict[str, str] = {}
+        self._discovery_locks: dict[str, threading.Lock] = {}
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -72,13 +112,29 @@ class RemoteStructureCache:
         """Return the cache path for *job_id*/*rel_path*.
 
         Raises:
-            ValueError: If *rel_path* escapes the cache root (``..`` segments).
+            ValueError: If *job_id* or *rel_path* escapes the cache root.
         """
+        normalized_job = Path(job_id)
         normalized = Path(rel_path)
-        parts = normalized.parts
-        if any(p == ".." for p in parts):
+        if (
+            normalized_job.is_absolute()
+            or any(part == ".." for part in normalized_job.parts)
+            or normalized.is_absolute()
+            or any(part == ".." for part in normalized.parts)
+        ):
             raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
-        return (self._cache_root / job_id / rel_path).resolve()
+        cache_root = self._cache_root.resolve()
+        job_root = (cache_root / normalized_job).resolve()
+        if os.path.commonpath([str(cache_root), str(job_root)]) != str(cache_root):
+            raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
+        target = (job_root / normalized).resolve()
+        if os.path.commonpath([str(job_root), str(target)]) != str(job_root):
+            raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
+        return target
+
+    def job_root(self, job_id: str) -> Path:
+        """Return the controlled cache root used to project one remote job."""
+        return self.cache_path(job_id, ".")
 
     def _get_path_lock(self, cache_key: str) -> threading.Lock:
         with self._master_lock:
@@ -86,6 +142,15 @@ class RemoteStructureCache:
             if lock is None:
                 lock = threading.Lock()
                 self._path_locks[cache_key] = lock
+            return lock
+
+    def _get_discovery_lock(self, job_id: str) -> threading.Lock:
+        """Return the per-job lock serializing nested-layout discovery."""
+        with self._master_lock:
+            lock = self._discovery_locks.get(job_id)
+            if lock is None:
+                lock = threading.Lock()
+                self._discovery_locks[job_id] = lock
             return lock
 
     # ------------------------------------------------------------------
@@ -133,8 +198,10 @@ class RemoteStructureCache:
             try:
                 data = fetcher.read_file(record, rel_path)
             except FileNotFoundError:
-                logger.debug("Remote file not found: %s/%s", job_id, rel_path)
-                return None
+                data = self._discover_nested(fetcher, record, job_id, rel_path)
+                if data is None:
+                    logger.debug("Remote file not found (flat or nested): %s/%s", job_id, rel_path)
+                    return None
             except Exception:
                 logger.warning("Failed to fetch %s/%s", job_id, rel_path, exc_info=True)
                 return None
@@ -162,13 +229,150 @@ class RemoteStructureCache:
             logger.info("Cached %s/%s -> %s", job_id, rel_path, target)
             return target
 
+    def _discover_nested(
+        self,
+        fetcher: Any,
+        record: Any,
+        job_id: str,
+        rel_path: str,
+    ) -> bytes | None:
+        """Read *rel_path* from a one-level nested remote layout.
+
+        Legacy remote jobs (created before scheduler markers were uploaded to
+        the remote dir) write results nested under
+        ``<remote_task_dir>/<molecule>/`` instead of flat at the task root.
+        Only called after the flat ``read_file`` raised ``FileNotFoundError``;
+        a flat hit never reaches here, so it costs zero extra SFTP calls.
+
+        Fetchers without ``list_files`` (e.g. minimal fakes) degrade to the
+        pre-fallback behavior.  The per-job memo only avoids repeated
+        ``list_files`` calls; every fetch still tries the flat path first,
+        then the memoized prefix, so mixed layouts (nested ``RESULT/...`` +
+        flat ``input.xyz``) both resolve.
+
+        Returns the remote bytes, or ``None`` when no candidate provides the
+        file.  Never raises.
+        """
+        list_fn = getattr(fetcher, "list_files", None)
+        if list_fn is None:
+            logger.debug(
+                "Fetcher for job %s has no list_files; nested fallback skipped for %s",
+                job_id,
+                rel_path,
+            )
+            return None
+
+        prefix = self._nested_prefixes.get(job_id)
+        if prefix is not None:
+            data = self._read_nested_candidate(fetcher, record, job_id, prefix, rel_path)
+            if data is not None:
+                return data
+
+        with self._get_discovery_lock(job_id):
+            try:
+                entries = list_fn(record)
+            except Exception:
+                logger.debug(
+                    "list_files failed for job %s; nested fallback unavailable",
+                    job_id,
+                    exc_info=True,
+                )
+                return None
+            candidates = sorted(
+                {
+                    str(getattr(entry, "name", "") or "")
+                    for entry in entries
+                    if getattr(entry, "is_dir", False)
+                }
+            )
+            for name in candidates:
+                if not name or name in {".", ".."}:
+                    continue
+                data = self._read_nested_candidate(fetcher, record, job_id, name, rel_path)
+                if data is None:
+                    continue
+                self._nested_prefixes[job_id] = name
+                logger.info(
+                    "Nested remote layout detected for job %s: using prefix %r",
+                    job_id,
+                    name,
+                )
+                return data
+            logger.debug("No nested candidate provides %s for job %s", rel_path, job_id)
+            return None
+
+    @staticmethod
+    def _read_nested_candidate(
+        fetcher: Any,
+        record: Any,
+        job_id: str,
+        prefix: str,
+        rel_path: str,
+    ) -> bytes | None:
+        """Try reading ``<prefix>/<rel_path>`` remotely; ``None`` on failure.
+
+        ``FileNotFoundError`` and any other read error move discovery on to
+        the next candidate (debug-logged).  Never raises.
+        """
+        candidate = f"{prefix}/{rel_path}"
+        try:
+            return fetcher.read_file(record, candidate)
+        except FileNotFoundError:
+            return None
+        except Exception:
+            logger.debug(
+                "Nested candidate read failed for %s/%s",
+                job_id,
+                candidate,
+                exc_info=True,
+            )
+            return None
+
+    def fetch_catalog(self, record: Any, workflow: str) -> Path | None:
+        """Fetch the small files required to build a remote viewer catalog.
+
+        Geometry remains lazy except for IRC, whose multi-frame XYZ files are
+        themselves the catalog index.  Missing optional files are tolerated.
+        Returns the cached job root when a usable catalog source is present.
+        """
+        paths = _CATALOG_FETCH_PATHS.get(workflow, _CATALOG_FETCH_PATHS["legacy"])
+        for rel_path in paths:
+            self.fetch(record, rel_path)
+        self._fetch_catalog_products(record)
+
+        root = self.job_root(record.id)
+        return root if self.catalog_ready(root, workflow) else None
+
+    def _fetch_catalog_products(self, record: Any) -> None:
+        """Fetch small auxiliary products referenced by a result manifest."""
+        manifest_path = self.get_cached(record.id, "RESULT/result_manifest.json")
+        if manifest_path is None:
+            return
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        products = payload.get("products") if isinstance(payload, dict) else None
+        if not isinstance(products, list):
+            return
+        for product in products:
+            if not isinstance(product, dict) or product.get("kind") != "frequency_modes":
+                continue
+            product_path = str(product.get("path") or "").replace("\\", "/")
+            if not product_path:
+                continue
+            rel_path = (
+                product_path if product_path.startswith("RESULT/") else f"RESULT/{product_path}"
+            )
+            self.fetch(record, rel_path)
+
     # ------------------------------------------------------------------
     # Eviction
     # ------------------------------------------------------------------
 
     def purge_job(self, job_id: str) -> None:
         """Remove the entire cache directory for *job_id*."""
-        job_dir = self._cache_root / job_id
+        job_dir = self.job_root(job_id)
         if job_dir.is_dir():
             shutil.rmtree(job_dir, ignore_errors=True)
             logger.info("Purged cache for job %s", job_id)
@@ -211,8 +415,9 @@ class RemoteStructureCache:
 
         Used by the catalog endpoint to decide ``pending_fetch``.
         """
-        primary = _PRIMARY_MANIFEST.get(workflow, "RESULT/result_manifest.json")
-        target = work_dir / primary
-        if primary.endswith("/"):
-            return not target.is_dir()
-        return not target.is_file()
+        return not self.catalog_ready(work_dir, workflow)
+
+    def catalog_ready(self, root: Path, workflow: str) -> bool:
+        """Return whether *root* contains enough metadata to build a catalog."""
+        paths = _CATALOG_READY_PATHS.get(workflow, _CATALOG_READY_PATHS["legacy"])
+        return any((Path(root) / rel_path).is_file() for rel_path in paths)

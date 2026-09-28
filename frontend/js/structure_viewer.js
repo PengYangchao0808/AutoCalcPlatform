@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.12.0
+ * @version 0.15.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -27,6 +27,8 @@
  *   - onEnergyNodeSelected(jobId, entryMeta) (energy-graph one-way push; phase A)
  *   - selectEntry(entryId, origin)
  *   - refreshIfChanged()
+ *   - refreshPending(jobId, opts) (SSE instant terminal refresh; {force:true}
+ *                                skips the availability/terminal guards)
  *   - loadSelectedGeometry()    (fetches geometry for selected entry)
  *   - injectManualEntry(relpath, label, xyzText?) (manual file injection)
  *   - renderStructureViewer()   (renders list panel from state.payload)
@@ -40,6 +42,8 @@
  *   - _mainViewerImpl           (default: app's global lexical `viewer`)
  *   - _canvasViewerImpl         (per-canvasId viewer resolution, non-main)
  *   - _applyCatalogResponse     (pure: applies a server response to state)
+ *   - _retryPendingFetch        (ungated terminal-retry atomic op, jobId-
+ *                                guarded finally)
  *   - _esc                      (XSS-safe text insertion)
  *   - _sha256hex(str)            (sync SHA-256 → hex string)
  *
@@ -49,7 +53,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.14.0";
+  var VERSION = "0.15.0";
 
   /* ---- performance thresholds (todo 41; the ONLY degradation knobs) ---- */
   var LIST_VIRTUALIZE_THRESHOLD = 100;   /* entry-list windowing above this */
@@ -305,6 +309,11 @@
    * @property {number} requestToken
    * @property {string} availability
    * @property {boolean} newerAvailable
+   * @property {boolean} pendingFetchInFlight - atomic guard for terminal
+   *   pending-fetch retries (owned by _retryPendingFetch; reset ONLY when
+   *   the loaded jobId changes)
+   * @property {number} pendingFetchNextRetryAt - epoch ms of the next
+   *   allowed terminal retry (30 s backoff; cleared on availability=ready)
    * @property {string|null} error
    * @property {AbortController|null} _abortController
    */
@@ -320,6 +329,8 @@
     requestToken: 0,
     availability: "",
     newerAvailable: false,
+    pendingFetchInFlight: false,
+    pendingFetchNextRetryAt: 0,
     error: null,
     geometryLoadedFor: null,
     pendingGeometryRetry: false,
@@ -418,6 +429,11 @@
     if (capturedToken !== state.requestToken) {
       return false;
     }
+    /* Success clears the terminal-retry backoff.  MUST stay AFTER the token
+       early-return: a discarded stale response must never clear it. */
+    if (data && data.availability === "ready") {
+      state.pendingFetchNextRetryAt = 0;
+    }
     state.payload = data;
     state.revision = data && data.revision ? data.revision : null;
     state.availability = data && data.availability ? data.availability : "";
@@ -434,12 +450,20 @@
   /**
    * @param {string} jobId
    * @param {string|null} itemId
+   * @param {boolean} [fetchRemote]
    * @returns {string}
    */
-  function _catalogUrl(jobId, itemId) {
+  function _catalogUrl(jobId, itemId, fetchRemote) {
     var base = "/api/v1/jobs/" + encodeURIComponent(jobId) + "/structure-viewer";
+    var params = [];
     if (itemId) {
-      base += "?item_id=" + encodeURIComponent(itemId);
+      params.push("item_id=" + encodeURIComponent(itemId));
+    }
+    if (fetchRemote) {
+      params.push("fetch=1");
+    }
+    if (params.length) {
+      base += "?" + params.join("&");
     }
     return base;
   }
@@ -470,6 +494,7 @@
     structureViewerState.requestToken += 1;
     var capturedToken = structureViewerState.requestToken;
 
+    var previousJobId = structureViewerState.jobId;
     structureViewerState.jobId = jobId;
     structureViewerState.payload = null;
     structureViewerState.revision = null;
@@ -487,6 +512,12 @@
     if (typeof window !== "undefined" && typeof window._svClearViewerGeometry === "function") {
       try { window._svClearViewerGeometry(); } catch (_) { /* canvas cleanup is best-effort */ }
     }
+    if (String(previousJobId || "") !== String(jobId || "")) {
+      /* Retry state belongs to a job; only a job switch resets it (same-job
+         reloads — including terminal retries — must keep backoff/in-flight). */
+      structureViewerState.pendingFetchInFlight = false;
+      structureViewerState.pendingFetchNextRetryAt = 0;
+    }
 
     var fetchFn = _getFetchImpl();
     if (!fetchFn) {
@@ -500,12 +531,27 @@
       fetchOpts.signal = controller.signal;
     }
 
+    function parseCatalogResponse(resp) {
+      if (!resp.ok) {
+        throw new Error("HTTP " + resp.status + " " + resp.statusText);
+      }
+      return resp.json();
+    }
+
     return fetchFn(url, fetchOpts)
-      .then(function (resp) {
-        if (!resp.ok) {
-          throw new Error("HTTP " + resp.status + " " + resp.statusText);
+      .then(parseCatalogResponse)
+      .then(function (data) {
+        var status = data && String(data.job_status || "").toLowerCase();
+        var terminal = status === "completed" || status === "failed" || status === "cancelled";
+        if (data && (data.availability === "pending_fetch" ||
+            data.availability === "unavailable") && terminal &&
+            capturedToken === structureViewerState.requestToken) {
+          /* Pure-remote jobs keep results on the compute node.  Fetch only
+             the small catalog metadata, then let geometry stay lazy. */
+          return fetchFn(_catalogUrl(jobId, itemId, true), fetchOpts)
+            .then(parseCatalogResponse);
         }
-        return resp.json();
+        return data;
       })
       .then(function (data) {
         _applyCatalogResponse(structureViewerState, capturedToken, data);
@@ -565,7 +611,52 @@
   }
 
   /**
+   * Retry the pending remote catalog fetch for a job.  Atomic op: in-flight
+   * guard ONLY — no availability/terminal gate, so it also retries after a
+   * hard fetch failure (availability="").  The finally is jobId-guarded: a
+   * stale job's completion must never clear a newer job's in-flight flag.
+   *
+   * @param {string} jobId
+   * @returns {Promise<void>}
+   */
+  function _retryPendingFetch(jobId) {
+    var state = structureViewerState;
+    if (!state || String(state.jobId || "") !== String(jobId || "")) return Promise.resolve();
+    if (state.pendingFetchInFlight) return Promise.resolve();
+    state.pendingFetchInFlight = true;
+    return loadStructureViewer(jobId).finally(function () {
+      if (String(structureViewerState.jobId || "") === String(jobId || "")) {
+        structureViewerState.pendingFetchInFlight = false;
+      }
+    });
+  }
+
+  /**
+   * Public SSE entry for instant terminal-triggered refresh.  Default guards
+   * (availability + terminal job status) may read a stale state.payload —
+   * callers holding an authoritative terminal event pass { force: true }.
+   *
+   * @param {string} jobId
+   * @param {{ force?: boolean }} [opts]
+   * @returns {Promise<void>}
+   */
+  function refreshPending(jobId, opts) {
+    opts = opts || {};
+    var state = structureViewerState;
+    if (!state || String(state.jobId || "") !== String(jobId || "")) return Promise.resolve();
+    if (!opts.force) {
+      if (state.availability !== "pending_fetch" && state.availability !== "unavailable") return Promise.resolve();
+      var status = String((state.payload && state.payload.job_status) || "").toLowerCase();
+      if (status !== "completed" && status !== "failed" && status !== "cancelled") return Promise.resolve();
+    }
+    return _retryPendingFetch(state.jobId);
+  }
+
+  /**
    * Refresh the catalog if the server revision changed since last load.
+   * Single owner of terminal pending-fetch retries: the retry decision uses
+   * ONLY the fresh response fields (never state.payload/state.availability),
+   * behind dirty + 30 s backoff guards, and delegates to _retryPendingFetch.
    *
    * @returns {Promise<void>}
    */
@@ -577,6 +668,7 @@
     var oldRevision = structureViewerState.revision;
     var wasDirty = structureViewerState.dirty;
     var prevSelected = structureViewerState.selectedEntryId;
+    var token = structureViewerState.requestToken;
 
     var fetchFn = _getFetchImpl();
     if (!fetchFn) {
@@ -598,6 +690,20 @@
         return resp.json();
       })
       .then(function (data) {
+        if (token !== structureViewerState.requestToken) { return; }
+        var st = String((data && data.job_status) || "").toLowerCase();
+        var term = st === "completed" || st === "failed" || st === "cancelled";
+        if (data && (data.availability === "pending_fetch" ||
+            data.availability === "unavailable") && term) {
+          if (wasDirty) {
+            structureViewerState.newerAvailable = true;
+            renderInspector();
+            return;
+          }
+          if (Date.now() < (structureViewerState.pendingFetchNextRetryAt || 0)) { return; }
+          structureViewerState.pendingFetchNextRetryAt = Date.now() + 30000;
+          return _retryPendingFetch(structureViewerState.jobId);
+        }
         var newRevision = data && data.revision ? data.revision : null;
         if (newRevision === oldRevision) { return; }
         if (wasDirty) {
@@ -3725,6 +3831,8 @@
     onEnergyNodeSelected: onEnergyNodeSelected,
     selectEntry: selectEntry,
     refreshIfChanged: refreshIfChanged,
+    refreshPending: refreshPending,
+    _retryPendingFetch: _retryPendingFetch,
     loadSelectedGeometry: loadSelectedGeometry,
     injectManualEntry: injectManualEntry,
     renderStructureViewer: renderStructureViewer,

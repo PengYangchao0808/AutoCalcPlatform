@@ -16,9 +16,13 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from acp.scheduler.nodes import ExecutionMode
+
+if TYPE_CHECKING:
+    from acp.storage.record import TaskRecord
 
 
 def _utc_now() -> datetime:
@@ -709,10 +713,46 @@ class JobRecord:
         }
 
 
+def build_task_record(record: JobRecord) -> TaskRecord:
+    """Project a scheduler :class:`JobRecord` onto a v2 :class:`TaskRecord`.
+
+    Single source of truth for the ``task.json`` payload: the local runner
+    writes it via :meth:`TaskStorage.write_task_json`, and the remote runner
+    reuses it to upload scheduler-context markers before ``bsub``. Field
+    mapping is frozen: ``result_manifest_path`` / ``layout_version`` stay at
+    their dataclass defaults, and ``project_id`` falls back to ``""`` when
+    the job has no project.
+
+    The storage import is lazy (same pattern as :meth:`JobSpec.task_dir_name`):
+    importing the ``acp.storage`` package pulls the paramiko-coupled remote
+    backend, which must not enter this module's import time.
+    """
+    from acp.storage.record import TaskRecord
+
+    return TaskRecord(
+        task_id=record.id,
+        project_id=record.project_id or "",
+        molecule_name=record.spec.molecule_name,
+        task_name=record.spec.task_name,
+        remark=record.spec.remark,
+        display_name=record.spec.name,
+        workflow=record.spec.workflow,
+        task_dir_name=Path(record.work_dir).name,
+        status=record.status.value,
+        node_id=record.node_id,
+        node_path=record.work_dir,
+        input_hash=record.input_hash,
+        current_stage=record.current_stage,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
 __all__ = [
     "JobStatus",
     "JobSpec",
     "JobRecord",
+    "build_task_record",
     "SUPPORTED_WORKFLOWS",
     "censo_preset_from_method",
     "censo_solvent_from_method",

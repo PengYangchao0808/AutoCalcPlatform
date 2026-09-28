@@ -329,6 +329,39 @@ def _remote_structure_cache(request: Request) -> Any:
     return cache
 
 
+def _structure_viewer_root(
+    request: Request,
+    record: JobRecord,
+    *,
+    fetch_remote_catalog: bool = False,
+) -> tuple[Path, bool]:
+    """Resolve the task root used to project a structure-viewer catalog.
+
+    Local/synchronized jobs use their normal work directory.  Pure-remote
+    jobs use the controlled remote cache once the small catalog files have
+    been fetched.  The boolean reports whether a remote catalog is ready.
+    """
+    work_dir = Path(record.work_dir)
+    if not _is_remote_job(record):
+        return work_dir, True
+
+    cache = _remote_structure_cache(request)
+    workflow = str(record.spec.workflow or "")
+    if cache.catalog_ready(work_dir, workflow):
+        return work_dir, True
+
+    cached_root = cache.job_root(record.id)
+    if cache.catalog_ready(cached_root, workflow):
+        return cached_root, True
+
+    if fetch_remote_catalog:
+        fetched_root = cache.fetch_catalog(record, workflow)
+        if fetched_root is not None:
+            return fetched_root, True
+
+    return work_dir, False
+
+
 def _db_path(request: Request) -> Path:
     db_path = getattr(request.app.state, "db_path", None)
     if not db_path:
@@ -2998,13 +3031,16 @@ def get_structure_viewer_catalog(
     job_id: str,
     request: Request,
     item_id: str | None = Query(default=None),
+    fetch: bool = Query(default=False),
 ) -> StructureViewerPayloadModel:
     """Return the structure-viewer catalog for a job.
 
     Resolves the job via the store and builds the payload via
     ``build_structure_viewer_payload``.  ``availability`` is ``ready`` for
     local jobs and ``pending_fetch`` for remote jobs whose primary manifest
-    files are absent locally (``RemoteStructureCache`` wiring, todo 11).
+    files are absent locally.  ``?fetch=1`` pulls the small catalog metadata
+    into ``RemoteStructureCache`` and projects directly from that controlled
+    cache; result geometry remains lazy.
 
     Retired/legacy workflows are served read-only (200 with legacy entries),
     not 410 — the structure viewer DISPLAYS retired jobs.
@@ -3024,9 +3060,16 @@ def get_structure_viewer_catalog(
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
 
-    work_dir = Path(record.work_dir)
     workflow = str(record.spec.workflow or "")
     job_status = record.status.value
+    task_root, remote_catalog_ready = _structure_viewer_root(
+        request,
+        record,
+        # Catalog files are immutable enough to cache only after the job is
+        # terminal.  Fetching a progressively-written batch manifest while a
+        # remote job is still running would leave a stale partial catalog.
+        fetch_remote_catalog=fetch and record.status.is_terminal,
+    )
 
     if workflow == "irc" and _is_remote_job(record) and manager.remote_fetcher is not None:
         from acp.results.irc_remote_live import refresh_remote_irc
@@ -3040,7 +3083,7 @@ def get_structure_viewer_catalog(
         from acp.scheduler.input_snapshot import input_xyz_snapshot
 
         payload = build_structure_viewer_payload(
-            work_dir,
+            task_root,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
@@ -3053,9 +3096,8 @@ def get_structure_viewer_catalog(
     body = payload.to_dict()
     warnings_list: list[str] = list(body.get("warnings") or [])
 
-    cache = _remote_structure_cache(request)
     is_remote = _is_remote_job(record)
-    if is_remote and cache.required_files_absent(work_dir, workflow):
+    if is_remote and not remote_catalog_ready:
         body["availability"] = "pending_fetch"
         warnings_list.append("pending_fetch")
     else:
@@ -3127,16 +3169,16 @@ def get_structure_viewer_geometry(
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
 
-    work_dir = Path(record.work_dir)
     workflow = str(record.spec.workflow or "")
     job_status = record.status.value
     is_remote = _is_remote_job(record)
+    task_root, _remote_catalog_ready = _structure_viewer_root(request, record)
 
     try:
         from acp.scheduler.input_snapshot import input_xyz_snapshot
 
         payload = build_structure_viewer_payload(
-            work_dir,
+            task_root,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
@@ -3160,7 +3202,7 @@ def get_structure_viewer_geometry(
             detail=f"Entry {entry_id} has no geometry reference",
         )
 
-    resolved = _resolve_geometry_path(work_dir, geometry_ref)
+    resolved = _resolve_geometry_path(task_root, geometry_ref)
     input_xyz = None
     if resolved is None and geometry_ref == "input.xyz":
         from acp.scheduler.input_snapshot import input_xyz_snapshot
@@ -3335,13 +3377,13 @@ def get_structure_viewer_vibrations(
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
 
-    work_dir = Path(record.work_dir)
     workflow = str(record.spec.workflow or "")
     job_status = record.status.value
+    task_root, _remote_catalog_ready = _structure_viewer_root(request, record)
 
     try:
         payload = build_structure_viewer_payload(
-            work_dir,
+            task_root,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
@@ -3373,7 +3415,7 @@ def get_structure_viewer_vibrations(
             imaginary_count=None,
         )
 
-    freq_dir = work_dir / "RESULT" / "frequencies"
+    freq_dir = task_root / "RESULT" / "frequencies"
     is_remote = _is_remote_job(record)
 
     entry_id_str = entry.id
@@ -3383,7 +3425,7 @@ def get_structure_viewer_vibrations(
     from acp.results.vibration_projection import find_vibration_source
 
     vib_source = find_vibration_source(
-        work_dir,
+        task_root,
         item_id=item_suffix,
         is_batch=is_batch_entry,
     )
@@ -3392,7 +3434,10 @@ def get_structure_viewer_vibrations(
         if is_remote and not freq_dir.is_dir():
             return _not_available("pending_fetch")
         projected = _try_historical_mode_projection(
-            work_dir, entry_id_str, threshold_cm1=threshold_val, threshold_source=threshold_src
+            task_root,
+            entry_id_str,
+            threshold_cm1=threshold_val,
+            threshold_source=threshold_src,
         )
         if projected is not None:
             return projected
@@ -3400,7 +3445,10 @@ def get_structure_viewer_vibrations(
 
     if vib_source.kind == "historical":
         projected = _try_historical_mode_projection(
-            work_dir, entry_id_str, threshold_cm1=threshold_val, threshold_source=threshold_src
+            task_root,
+            entry_id_str,
+            threshold_cm1=threshold_val,
+            threshold_source=threshold_src,
         )
         if projected is not None:
             return projected
@@ -3453,9 +3501,11 @@ def get_structure_viewer_vibrations(
                 mode_index=int(m.get("mode_index", 0)),
                 frequency_cm1=float(m.get("frequency_cm1", 0.0)),
                 imaginary=bool(m.get("imaginary", False)),
-                ir_intensity=float(m["ir_intensity"])
-                if m.get("ir_intensity") is not None
-                else None,
+                ir_intensity=(
+                    float(m["ir_intensity"])
+                    if m.get("ir_intensity") is not None
+                    else None
+                ),
                 vectors=vectors,
             )
             modes.append(mode)
@@ -3507,13 +3557,14 @@ def get_structure_viewer_overlay(
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
 
-    work_dir = Path(record.work_dir)
     if not entry_a or not entry_b:
         raise HTTPException(status_code=404, detail="entry_a and entry_b are required")
 
+    task_root, _remote_catalog_ready = _structure_viewer_root(request, record)
+
     try:
         payload = build_structure_viewer_payload(
-            work_dir,
+            task_root,
             job_id=job_id,
             workflow=str(record.spec.workflow or ""),
             job_status=record.status.value,
@@ -3535,7 +3586,7 @@ def get_structure_viewer_overlay(
         raise HTTPException(status_code=404, detail=f"Entry not found: {entry_b}")
 
     try:
-        result = compute_overlay(job_id, work_dir, entry_obj_a, entry_obj_b)
+        result = compute_overlay(job_id, task_root, entry_obj_a, entry_obj_b)
     except Exception as exc:  # noqa: BLE001 — mapping failure must not 500
         result = {
             "ok": False,

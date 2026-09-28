@@ -2581,5 +2581,95 @@ def test_batch_optimize_scheduler_cmd_always_flat(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
+# ====================================================================== #
+# build_task_record — task.json payload extraction (zero-behaviour refactor)
+# ====================================================================== #
+
+
+def _make_task_record_source(tmp_path: Path, *, project_id: str | None) -> JobRecord:
+    """A fully-populated JobRecord, built the same way as ``_seed_job``."""
+    work_dir = tmp_path / "runs" / "ethanol_opt_ts01"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    return JobRecord(
+        id="20260928_001_fake",
+        spec=JobSpec(
+            workflow="Confsearch",
+            name="ethanol_conf",
+            molecule_name="ethanol",
+            task_name="opt",
+            remark="ts01",
+            project_id=project_id,
+        ),
+        status=JobStatus.RUNNING,
+        work_dir=str(work_dir),
+        project_id=project_id,
+        node_id="node-a",
+        input_hash="abc123",
+        current_stage="S1",
+        created_at="2026-09-28T00:00:00+00:00",
+        updated_at="2026-09-28T00:01:00+00:00",
+    )
+
+
+def test_build_task_record_maps_every_field_from_job_record(tmp_path: Path) -> None:
+    """Field-by-field: helper mirrors the runner's inline task.json payload."""
+    from acp.scheduler.jobs import build_task_record
+
+    record = _make_task_record_source(tmp_path, project_id="proj-7")
+    payload = build_task_record(record)
+
+    assert payload.task_id == "20260928_001_fake"
+    assert payload.project_id == "proj-7"
+    assert payload.molecule_name == "ethanol"
+    assert payload.task_name == "opt"
+    assert payload.remark == "ts01"
+    assert payload.display_name == "ethanol_conf"
+    assert payload.workflow == "Confsearch"
+    assert payload.task_dir_name == "ethanol_opt_ts01"
+    assert payload.status == "running"  # JobStatus.value, not the enum
+    assert payload.node_id == "node-a"
+    assert payload.node_path == record.work_dir
+    assert payload.input_hash == "abc123"
+    assert payload.current_stage == "S1"
+    assert payload.created_at == "2026-09-28T00:00:00+00:00"
+    assert payload.updated_at == "2026-09-28T00:01:00+00:00"
+
+
+def test_build_task_record_project_id_falls_back_to_empty(tmp_path: Path) -> None:
+    """``project_id=record.project_id or ""`` — None must become ""."""
+    from acp.scheduler.jobs import build_task_record
+
+    record = _make_task_record_source(tmp_path, project_id=None)
+    assert record.project_id is None
+
+    payload = build_task_record(record)
+
+    assert payload.project_id == ""
+
+
+def test_build_task_record_task_dir_name_is_directory_leaf(tmp_path: Path) -> None:
+    """``task_dir_name`` equals the leaf of ``record.work_dir``."""
+    from acp.scheduler.jobs import build_task_record
+
+    record = _make_task_record_source(tmp_path, project_id="proj-7")
+
+    payload = build_task_record(record)
+
+    assert payload.task_dir_name == Path(record.work_dir).name
+    assert "/" not in payload.task_dir_name
+
+
+def test_build_task_record_keeps_result_manifest_and_layout_defaults(tmp_path: Path) -> None:
+    """``result_manifest_path``/``layout_version`` stay at dataclass defaults."""
+    from acp.scheduler.jobs import build_task_record
+
+    record = _make_task_record_source(tmp_path, project_id="proj-7")
+
+    payload = build_task_record(record)
+
+    assert payload.result_manifest_path is None
+    assert payload.layout_version == 2
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

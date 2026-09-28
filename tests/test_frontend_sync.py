@@ -1592,17 +1592,10 @@ def test_structure_viewer_state_store_contract() -> None:
     js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
 
     for field in (
-        "jobId",
-        "payload",
-        "revision",
-        "selectedEntryId",
-        "selectionOrigin",
-        "selectionToken",
-        "dirty",
-        "editState",
-        "requestToken",
-        "availability",
-        "newerAvailable",
+        "jobId", "payload", "revision", "selectedEntryId",
+        "selectionOrigin", "selectionToken", "dirty", "editState",
+        "requestToken", "availability", "newerAvailable",
+        "pendingFetchInFlight", "pendingFetchNextRetryAt",
     ):
         assert field in js, f"state field {field!r} missing from structure_viewer.js"
 
@@ -1697,6 +1690,691 @@ def test_structure_viewer_node_logic_stale_response_discarded() -> None:
         f"Node logic test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+def test_structure_viewer_remote_catalog_auto_fetch_retry() -> None:
+    """Pure-remote pending catalogs are retried once with ``fetch=1``."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        var urls = [];
+        ns._fetchImpl = function(url) {
+            urls.push(url);
+            var pending = url.indexOf("fetch=1") < 0;
+            return Promise.resolve({
+                ok: true, status: 200, statusText: "OK",
+                json: function() {
+                    return Promise.resolve({
+                        schema_version: "structure_viewer_v1",
+                        revision: pending ? "empty" : "remote-rev",
+                        availability: pending ? "pending_fetch" : "ready",
+                        job_status: "completed",
+                        default_entry_id: pending ? null : "conf_0001",
+                        groups: [],
+                        entries: pending ? [] : [{ id: "conf_0001" }],
+                        warnings: pending ? ["pending_fetch"] : []
+                    });
+                }
+            });
+        };
+
+        ns.loadStructureViewer("remote-job", { itemId: "item 1" }).then(function() {
+            if (urls.length !== 2) {
+                console.error("FAIL: expected 2 catalog calls, got " + urls.length);
+                process.exit(1);
+            }
+            if (urls[1].indexOf("item_id=item%201&fetch=1") < 0) {
+                console.error("FAIL: retry URL missing item_id/fetch=1: " + urls[1]);
+                process.exit(1);
+            }
+            if (ns.state.availability !== "ready" || ns.state.revision !== "remote-rev") {
+                console.error("FAIL: fetched catalog was not applied");
+                process.exit(1);
+            }
+            console.log("PASS");
+        }).catch(function(e) {
+            console.error("FAIL: unexpected error", e);
+            process.exit(1);
+        });
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node remote-catalog retry failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Todo 4: terminal-aware catalog refresh — retry state ownership (D4)
+# ---------------------------------------------------------------------------
+
+def _run_sv_node(body: str) -> None:
+    """Run a structure_viewer.js Node logic snippet under the standard harness.
+
+    Binds ``ns``/``state`` plus ``fail()``/``okResp()``/``catalogData()``
+    helpers, then evaluates ``body``, which must print ``PASS`` or fail().
+    Skips when node is unavailable.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = (
+        textwrap.dedent(
+            """\
+            var window = { fetch: null };
+            var AbortController = class { constructor() { this.signal = null; } abort() {} };
+            require(JS_PATH);
+            var ns = window.ACPStructureViewer;
+            var state = ns.state;
+            function fail(msg) { console.error("FAIL: " + msg); process.exit(1); }
+            function immediate() { return new Promise(function (r) { setImmediate(r); }); }
+            function okResp(data) {
+                return { ok: true, status: 200, statusText: "OK",
+                         json: function () { return Promise.resolve(data); } };
+            }
+            function catalogData(opts) {
+                opts = opts || {};
+                return {
+                    schema_version: "structure_viewer_v1",
+                    revision: opts.revision || "rev",
+                    availability: opts.availability || "ready",
+                    job_status: opts.job_status || "completed",
+                    default_entry_id: opts.default_entry_id || null,
+                    groups: [],
+                    entries: opts.entries || [],
+                    warnings: opts.warnings || []
+                };
+            }
+            """
+        ).replace("JS_PATH", json.dumps(str(js_path)))
+        + textwrap.dedent(body)
+    )
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 0, (
+        f"Node logic failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_pending_retry_source_contract() -> None:
+    """Contract: retry-ownership symbols exist, are exported, and the backoff
+    clear sits after the _applyCatalogResponse token early-return."""
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    assert "function _retryPendingFetch(jobId)" in js
+    assert "function refreshPending(jobId, opts)" in js
+    assert "refreshPending: refreshPending," in js
+    assert "_retryPendingFetch: _retryPendingFetch," in js
+    assert "pendingFetchInFlight" in js
+    assert "pendingFetchNextRetryAt" in js
+
+    early_idx = js.index("if (capturedToken !== state.requestToken)")
+    clear_idx = js.index("state.pendingFetchNextRetryAt = 0;")
+    payload_idx = js.index("state.payload = data;")
+    assert early_idx < clear_idx < payload_idx, (
+        "_applyCatalogResponse must clear the retry backoff only AFTER the "
+        "token early-return (stale responses must never clear it)"
+    )
+
+
+def test_structure_viewer_refresh_pending_guards_and_retry() -> None:
+    """(i) refreshPending: pending+terminal same job retries once via fetch=1;
+    ready / different job / non-terminal -> zero calls."""
+    _run_sv_node(
+        """\
+        var urls = [];
+        ns._fetchImpl = function (url) {
+            urls.push(url);
+            var fetchRemote = url.indexOf("fetch=1") >= 0;
+            return Promise.resolve(okResp(catalogData({
+                revision: fetchRemote ? "remote-rev" : "empty",
+                availability: fetchRemote ? "ready" : "pending_fetch",
+                job_status: "completed",
+                default_entry_id: fetchRemote ? "conf_0001" : null,
+                entries: fetchRemote ? [{ id: "conf_0001" }] : [],
+                warnings: fetchRemote ? [] : ["pending_fetch"]
+            })));
+        };
+
+        async function main() {
+            state.jobId = "jobP";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+            urls.length = 0;
+
+            await ns.refreshPending("jobP");
+            if (urls.length !== 2) fail("expected 2 catalog calls, got " + urls.length);
+            if (urls[1].indexOf("fetch=1") < 0) fail("retry URL missing fetch=1: " + urls[1]);
+            if (state.availability !== "ready") fail("expected ready, got " + state.availability);
+
+            urls.length = 0;
+            await ns.refreshPending("jobP");
+            if (urls.length !== 0) fail("ready state must not retry, got " + urls.length);
+
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed2", warnings: ["pending_fetch"]
+            }));
+            await ns.refreshPending("otherJob");
+            if (urls.length !== 0) fail("different jobId must not retry, got " + urls.length);
+
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "running",
+                revision: "seed3", warnings: ["pending_fetch"]
+            }));
+            await ns.refreshPending("jobP");
+            if (urls.length !== 0) fail("non-terminal job must not retry, got " + urls.length);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_pending_retry_state_ownership() -> None:
+    """(ii) pendingFetchInFlight is set synchronously (same-job reload must NOT
+    clear it) and blocks duplicate retries in the same window."""
+    _run_sv_node(
+        """\
+        var urls = [];
+        var resolvers = [];
+        ns._fetchImpl = function (url) {
+            urls.push(url);
+            return new Promise(function (resolve) {
+                resolvers.push(function () {
+                    var fetchRemote = url.indexOf("fetch=1") >= 0;
+                    resolve(okResp(catalogData({
+                        revision: fetchRemote ? "remote-rev" : "empty",
+                        availability: fetchRemote ? "ready" : "pending_fetch",
+                        job_status: "completed",
+                        default_entry_id: fetchRemote ? "c1" : null,
+                        entries: fetchRemote ? [{ id: "c1" }] : [],
+                        warnings: fetchRemote ? [] : ["pending_fetch"]
+                    })));
+                });
+            });
+        };
+
+        async function main() {
+            state.jobId = "jobS";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+            urls.length = 0;
+
+            var p1 = ns.refreshPending("jobS");
+            if (state.pendingFetchInFlight !== true) {
+                fail("pendingFetchInFlight must be true synchronously after refreshPending");
+            }
+            var p2 = ns.refreshPending("jobS");
+            if (urls.length !== 1) fail("in-flight window must not add calls, got " + urls.length);
+
+            while (resolvers.length) {
+                resolvers.shift()();
+                await immediate();
+            }
+            await p1;
+            await p2;
+            if (urls.length !== 2) fail("expected exactly 2 catalog calls, got " + urls.length);
+            if (state.pendingFetchInFlight !== false) fail("settled retry must clear in-flight");
+            if (state.availability !== "ready") fail("expected ready, got " + state.availability);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_refresh_if_changed_terminal_backoff() -> None:
+    """(iii) refreshIfChanged owns retries: first pending+terminal delegates
+    (fetch=1); a poll within 30 s adds none (backoff survives the reload);
+    a later ready response zeroes pendingFetchNextRetryAt."""
+    _run_sv_node(
+        """\
+        var fetch1Count = 0;
+        var fetch1Pending = true;
+        var pollRevision = "r-0";
+        var pollAvailability = "pending_fetch";
+        ns._fetchImpl = function (url) {
+            var fetchRemote = url.indexOf("fetch=1") >= 0;
+            if (fetchRemote) {
+                fetch1Count++;
+                return Promise.resolve(okResp(catalogData({
+                    revision: "r-auto",
+                    availability: fetch1Pending ? "pending_fetch" : "ready",
+                    job_status: "completed",
+                    warnings: fetch1Pending ? ["pending_fetch"] : []
+                })));
+            }
+            return Promise.resolve(okResp(catalogData({
+                revision: pollRevision,
+                availability: pollAvailability,
+                job_status: "completed",
+                warnings: pollAvailability === "ready" ? [] : ["pending_fetch"]
+            })));
+        };
+
+        async function main() {
+            state.jobId = "jobB";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+
+            await ns.refreshIfChanged();
+            if (fetch1Count !== 1) fail("first terminal poll must delegate once, got " + fetch1Count);
+            if (!(state.pendingFetchNextRetryAt > Date.now())) {
+                fail("backoff must survive the retry reload");
+            }
+
+            pollRevision = "r-1";
+            await ns.refreshIfChanged();
+            if (fetch1Count !== 1) fail("poll within 30s must not add fetch=1, got " + fetch1Count);
+
+            pollAvailability = "ready";
+            pollRevision = "r-final";
+            await ns.refreshIfChanged();
+            if (state.pendingFetchNextRetryAt !== 0) fail("ready response must clear the backoff");
+            if (state.availability !== "ready") fail("expected ready, got " + state.availability);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_pending_retry_hard_failure_no_deadlock() -> None:
+    """(iv) A rejected auto-fetch leaves availability empty; the NEXT
+    refreshIfChanged with a fresh pending+terminal response still retries
+    (no availability deadlock).  Backoff is reset explicitly to avoid 30s waits."""
+    _run_sv_node(
+        """\
+        var fetch1Count = 0;
+        var fetch1Reject = true;
+        var pollRevision = "r-0";
+        ns._fetchImpl = function (url) {
+            var fetchRemote = url.indexOf("fetch=1") >= 0;
+            if (fetchRemote) {
+                fetch1Count++;
+                if (fetch1Reject) return Promise.reject(new Error("network down"));
+                return Promise.resolve(okResp(catalogData({
+                    revision: "r-auto", availability: "ready", job_status: "completed"
+                })));
+            }
+            return Promise.resolve(okResp(catalogData({
+                revision: pollRevision, availability: "pending_fetch",
+                job_status: "completed", warnings: ["pending_fetch"]
+            })));
+        };
+
+        async function main() {
+            state.jobId = "jobH";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+
+            await ns.refreshIfChanged();
+            if (fetch1Count !== 1) fail("first retry must attempt fetch=1 once, got " + fetch1Count);
+            if (state.availability !== "") {
+                fail("hard failure must leave availability empty, got " + JSON.stringify(state.availability));
+            }
+
+            state.pendingFetchNextRetryAt = 0;
+            fetch1Reject = false;
+            pollRevision = "r-1";
+            await ns.refreshIfChanged();
+            if (fetch1Count !== 2) fail("hard failure must not deadlock retries, got " + fetch1Count);
+            if (state.availability !== "ready") fail("retry must recover to ready, got " + state.availability);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_refresh_pending_force_channel() -> None:
+    """(v) SSE force channel: stale payload job_status=running blocks the
+    unforced refreshPending but NOT the forced one."""
+    _run_sv_node(
+        """\
+        var urls = [];
+        ns._fetchImpl = function (url) {
+            urls.push(url);
+            var fetchRemote = url.indexOf("fetch=1") >= 0;
+            return Promise.resolve(okResp(catalogData({
+                revision: fetchRemote ? "remote-rev" : "empty",
+                availability: fetchRemote ? "ready" : "pending_fetch",
+                job_status: "completed",
+                default_entry_id: fetchRemote ? "c1" : null,
+                entries: fetchRemote ? [{ id: "c1" }] : [],
+                warnings: fetchRemote ? [] : ["pending_fetch"]
+            })));
+        };
+
+        async function main() {
+            state.jobId = "jobF";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "running",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+            urls.length = 0;
+
+            await ns.refreshPending("jobF");
+            if (urls.length !== 0) fail("unforced refresh must respect stale status guard, got " + urls.length);
+
+            await ns.refreshPending("jobF", { force: true });
+            if (urls.length !== 2) fail("force must trigger reload, got " + urls.length);
+            if (urls[1].indexOf("fetch=1") < 0) fail("forced retry URL missing fetch=1: " + urls[1]);
+            if (state.availability !== "ready") fail("forced retry must end ready, got " + state.availability);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_refresh_if_changed_dirty_terminal_guard() -> None:
+    """(vi) wasDirty: the terminal branch sets newerAvailable and does NOT
+    delegate (fetch=1 count unchanged)."""
+    _run_sv_node(
+        """\
+        var urls = [];
+        ns._fetchImpl = function (url) {
+            urls.push(url);
+            return Promise.resolve(okResp(catalogData({
+                revision: "r-next", availability: "pending_fetch",
+                job_status: "completed", warnings: ["pending_fetch"]
+            })));
+        };
+
+        async function main() {
+            state.jobId = "jobD";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "ready", job_status: "running", revision: "rev1"
+            }));
+            state.dirty = true;
+            urls.length = 0;
+
+            await ns.refreshIfChanged();
+            for (var i = 0; i < urls.length; i++) {
+                if (urls[i].indexOf("fetch=1") >= 0) fail("dirty guard must not delegate a fetch=1 retry");
+            }
+            if (state.newerAvailable !== true) fail("dirty guard must set newerAvailable");
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_pending_retry_job_switch_guard() -> None:
+    """(vii) A stale job's finally must NOT clear the new job's
+    pendingFetchInFlight."""
+    _run_sv_node(
+        """\
+        var resolvers = [];
+        ns._fetchImpl = function (url) {
+            return new Promise(function (resolve) {
+                resolvers.push({ url: url, resolve: resolve });
+            });
+        };
+
+        async function main() {
+            state.jobId = "oldJob";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+
+            var pOld = ns._retryPendingFetch("oldJob");
+            if (state.pendingFetchInFlight !== true) fail("old retry must set in-flight synchronously");
+
+            var pNewLoad = ns.loadStructureViewer("newJob");
+            if (String(state.jobId) !== "newJob") fail("expected job switch to newJob");
+
+            var pNew = ns.refreshPending("newJob", { force: true });
+            if (state.pendingFetchInFlight !== true) fail("new retry must set in-flight");
+
+            resolvers.shift().resolve(okResp(catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "old", warnings: ["pending_fetch"]
+            })));
+            await pOld;
+            if (state.pendingFetchInFlight !== true) {
+                fail("old finally must not clear the new job's pendingFetchInFlight");
+            }
+
+            while (resolvers.length) {
+                resolvers.shift().resolve(okResp(catalogData({
+                    availability: "ready", job_status: "completed", revision: "x"
+                })));
+                await immediate();
+            }
+            await pNewLoad;
+            await pNew;
+            if (state.pendingFetchInFlight !== false) fail("settled retry must clear in-flight");
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_auto_fetch_unavailable_terminal() -> None:
+    """(viii) availability=unavailable + terminal also auto-fetches with
+    fetch=1 (the real endpoint only emits ready/pending_fetch — stubbed)."""
+    _run_sv_node(
+        """\
+        var urls = [];
+        ns._fetchImpl = function (url) {
+            urls.push(url);
+            var fetchRemote = url.indexOf("fetch=1") >= 0;
+            return Promise.resolve(okResp(catalogData({
+                revision: fetchRemote ? "remote-rev" : "empty",
+                availability: fetchRemote ? "ready" : "unavailable",
+                job_status: "completed",
+                default_entry_id: fetchRemote ? "c1" : null,
+                entries: fetchRemote ? [{ id: "c1" }] : [],
+                warnings: fetchRemote ? [] : ["remote_missing"]
+            })));
+        };
+
+        async function main() {
+            await ns.loadStructureViewer("uJob");
+            if (urls.length !== 2) fail("expected 2 catalog calls, got " + urls.length);
+            if (urls[1].indexOf("fetch=1") < 0) fail("second URL must contain fetch=1: " + urls[1]);
+            if (state.availability !== "ready") fail("expected ready, got " + state.availability);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_stale_token_response_discarded_on_refresh() -> None:
+    """(ix) A stale refreshIfChanged response is discarded entirely, and a
+    stale ready response must never clear pendingFetchNextRetryAt."""
+    _run_sv_node(
+        """\
+        var held = null;
+        var mode = "immediate";
+        var nextData = null;
+        ns._fetchImpl = function (url) {
+            if (mode === "hold") {
+                mode = "immediate";
+                return new Promise(function (resolve) { held = resolve; });
+            }
+            return Promise.resolve(okResp(nextData));
+        };
+
+        async function main() {
+            nextData = catalogData({ availability: "ready", job_status: "completed", revision: "rev1" });
+            await ns.loadStructureViewer("jobT");
+
+            mode = "hold";
+            var pStale = ns.refreshIfChanged();
+
+            nextData = catalogData({ availability: "ready", job_status: "completed", revision: "rev2" });
+            await ns.loadStructureViewer("jobT");
+            if (state.revision !== "rev2") fail("expected rev2 applied, got " + state.revision);
+
+            held(okResp(catalogData({ availability: "ready", job_status: "completed", revision: "rev9" })));
+            await pStale;
+            if (state.revision !== "rev2") fail("stale refreshIfChanged response must be discarded, got " + state.revision);
+            if (state.newerAvailable !== false) fail("stale response must not set newerAvailable");
+
+            state.pendingFetchNextRetryAt = 424242;
+            var applied = ns._applyCatalogResponse(state, state.requestToken + 1,
+                catalogData({ availability: "ready", job_status: "completed", revision: "stale" }));
+            if (applied !== false) fail("stale _applyCatalogResponse must return false");
+            if (state.pendingFetchNextRetryAt !== 424242) {
+                fail("stale ready response must not clear the backoff");
+            }
+            ns._applyCatalogResponse(state, state.requestToken,
+                catalogData({ availability: "ready", job_status: "completed", revision: "fresh" }));
+            if (state.pendingFetchNextRetryAt !== 0) fail("fresh ready response must clear the backoff");
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+def test_structure_viewer_same_tick_terminal_race_regression() -> None:
+    """(x) refreshIfChanged + SSE terminal event in one tick -> ends ready."""
+    _run_sv_node(
+        """\
+        ns._fetchImpl = function (url) {
+            var fetchRemote = url.indexOf("fetch=1") >= 0;
+            return Promise.resolve(okResp(catalogData({
+                revision: fetchRemote ? "remote-rev" : "empty",
+                availability: fetchRemote ? "ready" : "pending_fetch",
+                job_status: "completed",
+                default_entry_id: fetchRemote ? "c1" : null,
+                entries: fetchRemote ? [{ id: "c1" }] : [],
+                warnings: fetchRemote ? [] : ["pending_fetch"]
+            })));
+        };
+
+        async function main() {
+            state.jobId = "raceJob";
+            ns._applyCatalogResponse(state, state.requestToken, catalogData({
+                availability: "pending_fetch", job_status: "completed",
+                revision: "seed", warnings: ["pending_fetch"]
+            }));
+
+            var pPoll = ns.refreshIfChanged();
+            var pSse = ns.refreshPending("raceJob", { force: true });
+            await pPoll;
+            await pSse;
+            if (state.availability !== "ready") fail("same-tick race must end ready, got " + state.availability);
+            console.log("PASS");
+        }
+        main().catch(function (e) { console.error("FAIL: unexpected error", e); process.exit(1); });
+        """
+    )
+
+
+# Todo 5: v2 HTML wiring — SSE terminal instant refresh (force) + job.cancelled
+# ---------------------------------------------------------------------------
+
+def test_workbench_sse_terminal_refresh_wiring() -> None:
+    """Contract: openSSE subscribes to job.cancelled, its terminal condition
+    matches completed/failed/cancelled/done, and the terminal branch (selected
+    job only) calls refreshPending with force — the SSE terminal event is the
+    authoritative signal and must bypass the stale job_status guard."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    sse = html.split("function openSSE(jobId)", 1)[1]
+
+    # SSE types subscription list includes job.cancelled
+    types_block = sse.split("var types = [", 1)[1].split("];", 1)[0]
+    for evt in ('"job.completed"', '"job.failed"', '"job.cancelled"', '"done"'):
+        assert evt in types_block, f"openSSE types must include {evt}"
+
+    # Terminal condition matches completed/failed/cancelled/done
+    terminal = sse.split("// Terminal events:", 1)[1].split(
+        'updateSSEState("connected");', 1
+    )[0]
+    assert (
+        'if (type === "job.completed" || type === "job.failed" '
+        '|| type === "job.cancelled" || type === "done") {'
+    ) in terminal, "terminal condition must match completed/failed/cancelled/done"
+
+    # Forced refreshPending call inside the selected-job branch
+    assert "window.ACPStructureViewer && window.ACPStructureViewer.refreshPending" in terminal
+    assert "refreshPending(jid, { force: true })" in terminal
+    sel_idx = terminal.index('String(selectedJobId || "") === jid')
+    force_idx = terminal.index("refreshPending(jid, { force: true })")
+    assert sel_idx < force_idx, (
+        "refreshPending must run only for the selected job (inside the jid guard)"
+    )
+
+    # job.cancelled appears exactly at the two wiring sites (types + condition)
+    assert html.count('"job.cancelled"') == 2
+
+
+def test_summary_refresh_has_no_retry_hook() -> None:
+    """Negative lock: refreshSelectedJobSummary must NOT call refreshPending —
+    terminal retries are owned solely by refreshIfChanged (same-tick race)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    summary_body = html.split("async function refreshSelectedJobSummary()", 1)[1]
+    summary_body = summary_body.split("\nfunction ", 1)[0]
+
+    assert "refreshPending" not in summary_body, (
+        "refreshSelectedJobSummary must not call refreshPending "
+        "(terminal retry ownership belongs to refreshIfChanged alone)"
+    )
+
+
+def test_summary_poll_refreshifchanged_outside_drawer_gate() -> None:
+    """Structural lock: in summaryPoll the refreshIfChanged() call site sits
+    AFTER the drawer-skip summary line AND inside the `localGen % 2 === 0`
+    branch — proving the periodic retry still covers the drawer-open path
+    (and is not dragged behind the drawer condition)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    summary_poll = html.split("async function summaryPoll()", 1)[1]
+    summary_poll = summary_poll.split("\n    } catch", 1)[0]
+
+    drawer_skip = "if (!drawerOpen) await refreshSelectedJobSummary();"
+    gate = "if (localGen % 2 === 0) {"
+    assert drawer_skip in summary_poll, "summaryPoll must keep the drawer-skip summary line"
+    assert gate in summary_poll, "summaryPoll must keep the 5s localGen gate"
+
+    # refreshIfChanged call lives inside the localGen branch ...
+    gen_branch = summary_poll.split(gate, 1)[1].split("\n      }", 1)[0]
+    assert "window.ACPStructureViewer.refreshIfChanged()" in gen_branch, (
+        "refreshIfChanged() must run inside the `localGen % 2 === 0)` branch"
+    )
+    assert drawer_skip not in gen_branch, (
+        "drawer-skip summary line must stay outside the 5s gate"
+    )
+
+    # ... and after the drawer-skip line (never pulled into the drawer condition)
+    assert summary_poll.index(drawer_skip) < summary_poll.index(gate) < (
+        summary_poll.index("window.ACPStructureViewer.refreshIfChanged()")
+    )
 
 
 def test_structure_viewer_node_logic_dirty_guard() -> None:

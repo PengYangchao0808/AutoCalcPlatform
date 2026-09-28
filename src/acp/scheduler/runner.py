@@ -37,6 +37,7 @@ from acp.scheduler.jobs import (
     JobRecord,
     JobSpec,
     batchoptimize_method_flags,
+    build_task_record,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
@@ -50,7 +51,6 @@ from acp.scheduler.processctl import find_task_processes, pid_is_alive, process_
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
-from acp.storage.record import TaskRecord
 
 logger = logging.getLogger(__name__)
 
@@ -573,25 +573,7 @@ class JobRunner:
                         storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
             except OSError:
                 logger.warning("Could not copy primary input.xyz for job %s", record.id)
-        storage.write_task_json(
-            TaskRecord(
-                task_id=record.id,
-                project_id=record.project_id or "",
-                molecule_name=record.spec.molecule_name,
-                task_name=record.spec.task_name,
-                remark=record.spec.remark,
-                display_name=record.spec.name,
-                workflow=record.spec.workflow,
-                task_dir_name=work_dir.name,
-                status=record.status.value,
-                node_id=record.node_id,
-                node_path=record.work_dir,
-                input_hash=record.input_hash,
-                current_stage=record.current_stage,
-                created_at=record.created_at,
-                updated_at=record.updated_at,
-            )
-        )
+        storage.write_task_json(build_task_record(record))
 
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)

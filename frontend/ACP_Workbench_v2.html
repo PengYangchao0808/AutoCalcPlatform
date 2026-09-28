@@ -22330,7 +22330,7 @@ function openSSE(jobId) {
       "job.created", "job.started", "job.status",
       "stage.started", "stage.progress", "stage.completed", "stage.failed",
       "log.stdout", "log.stderr", "log",
-      "job.completed", "job.failed", "job.paused", "job.resumed",
+      "job.completed", "job.failed", "job.cancelled", "job.paused", "job.resumed",
       "done", "error"
     ];
 
@@ -22354,11 +22354,16 @@ function openSSE(jobId) {
         appendLogLine(type, t("log.event", { type: type, message: message }));
 
         // Terminal events: final refresh then close SSE and mark job terminal
-        if (type === "job.completed" || type === "job.failed" || type === "done") {
+        if (type === "job.completed" || type === "job.failed" || type === "job.cancelled" || type === "done") {
           if (String(selectedJobId || "") === jid) {
             refreshLoadedFolders(jid);
             refreshSelectedJobDetail({ force: true });
             refreshJobs();
+            // SSE terminal event is the authoritative signal: force bypasses
+            // the possibly-stale state.payload.job_status guard.
+            if (window.ACPStructureViewer && window.ACPStructureViewer.refreshPending) {
+              window.ACPStructureViewer.refreshPending(jid, { force: true });
+            }
           }
           updateSSEState("closed");
           if (activeSSE) { activeSSE.close(); activeSSE = null; }
@@ -30958,6 +30963,10 @@ function startPolling() {
         }
         if (appSection === "mechanism") await refreshMechSectionStudies(true);
         // Structure viewer: refresh catalog if revision changed (dirty guard built-in).
+        // Terminal pending-fetch retries are owned solely by refreshIfChanged —
+        // it runs every 5s here (every other tick) and still applies when the
+        // drawer is open or the SSE stream is lost. Do not add retry hooks in
+        // refreshSelectedJobSummary (same-tick race with this call site).
         if (window.ACPStructureViewer && window.ACPStructureViewer.refreshIfChanged) {
           window.ACPStructureViewer.refreshIfChanged();
         }
