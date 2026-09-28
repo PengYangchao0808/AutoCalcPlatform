@@ -484,7 +484,12 @@ def test_api_rejects_conflicting_execution_request(tmp_path: Path) -> None:
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
-    from acp.api.server import create_app
+    try:
+        from acp.api.server import create_app
+    except RuntimeError as exc:
+        if "already owned by another ACP server process" in str(exc):
+            pytest.skip(f"ACP service holds the production run_root lock: {exc}")
+        raise
 
     app = create_app(run_root=tmp_path)
     with TestClient(app) as client:
@@ -660,7 +665,12 @@ def _app_client(tmp_path: Path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
-    from acp.api.server import create_app
+    try:
+        from acp.api.server import create_app
+    except RuntimeError as exc:
+        if "already owned by another ACP server process" in str(exc):
+            pytest.skip(f"ACP service holds the production run_root lock: {exc}")
+        raise
 
     return TestClient(create_app(run_root=tmp_path))
 
