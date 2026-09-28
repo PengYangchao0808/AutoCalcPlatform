@@ -30,6 +30,24 @@ REPORT_JSON_NAME = "final_report.json"
 XYZ_NAME = "final_conformers.xyz"
 
 
+def normalize_table_reference(raw: Any, mol_dir: Path) -> Any:
+    """Normalize a ``boltzmann_table_json`` metadata value for provenance blocks.
+
+    Paths (absolute or mol_dir-relative) that live under *mol_dir* become a
+    task-relative POSIX reference (``"RESULT/..."``); anything else — other
+    locations, non-string values, ``None`` — passes through unchanged.
+    """
+    if not isinstance(raw, str) or not raw:
+        return raw
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = Path(mol_dir) / candidate
+    try:
+        return candidate.resolve().relative_to(Path(mol_dir).resolve()).as_posix()
+    except ValueError:
+        return raw
+
+
 def write_final_report(
     confsearch_dir: Path,
     *,
@@ -68,7 +86,10 @@ def write_final_report(
             "source": outcome.weight_source,
             "method": outcome.weight_method,
             "population_coverage": outcome.population_coverage,
-            "reference": metadata.get("boltzmann_table_json"),
+            "reference": normalize_table_reference(
+                metadata.get("boltzmann_table_json"),
+                confsearch_dir.parent.parent,
+            ),
         },
         "conformers": [_conformer_block(entry, outcome, request) for entry in entries],
     }
@@ -190,6 +211,7 @@ def _write_frames_xyz(
 
 __all__ = [
     "FINAL_REPORT_SCHEMA_VERSION",
+    "normalize_table_reference",
     "register_final_report",
     "write_final_report",
 ]
