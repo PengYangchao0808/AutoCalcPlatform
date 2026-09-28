@@ -9116,7 +9116,7 @@ def _locale_weight_source_values(html: str, block_re: re.Pattern[str]) -> dict[s
     block = m.group(1)
     out: dict[str, str] = {}
     for key in _WEIGHT_SOURCE_I18N_KEYS:
-        vm = re.search(r'"%s":\s*"([^"]*)"' % re.escape(key), block)
+        vm = re.search(rf'"{re.escape(key)}":\s*"([^"]*)"', block)
         if vm:
             out[key] = vm.group(1)
     return out
@@ -9260,7 +9260,9 @@ def test_weight_provenance_rendering_exact_strings() -> None:
             energy: { temperature_k: 298.15 }
         });
         if (tip !== "50.0%\uff08CENSO, 298.15 K\uff09") {
-            console.error("FAIL: _weightBarTitle expected provenance string, got " + JSON.stringify(tip));
+            console.error(
+                "FAIL: _weightBarTitle expected provenance string, got " + JSON.stringify(tip)
+            );
             process.exit(1);
         }
         console.log("PASS");
