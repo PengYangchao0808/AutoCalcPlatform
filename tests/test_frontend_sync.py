@@ -9306,3 +9306,120 @@ def test_weight_provenance_boltzmann_bar_tooltips() -> None:
     assert "_formatWeightValue(" in inspector_tail, (
         "inspector weight row must render via _formatWeightValue"
     )
+
+
+def test_workbench_api_timeout_no_raw_abort_exception() -> None:
+    """api() timeouts surface a localized message, never the raw DOMException.
+
+    2026-09-28 regression: the blanket 8s AbortController timeout aborted slow
+    requests without a reason, so SFTP-backed remote endpoints (routinely >8s
+    on a Raspberry Pi) rendered "加载失败: signal is aborted without reason".
+    Timeouts now throw the localized ``api.timeout`` error, and remote-capable
+    endpoints opt into the ``apiRemote()`` budget instead.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "var API_TIMEOUT_MS = 8000;" in html
+    assert "var API_REMOTE_TIMEOUT_MS = 60000;" in html
+    assert "function apiRemote(path, opts)" in html
+    assert "var timedOut = false;" in html
+    assert 'throw new Error(t("api.timeout", { seconds: Math.round(timeoutMs / 1000) }));' in html
+    # Caller-provided aborts keep the AbortError name (silent-cancel filters).
+    assert "if (timedOut) {" in html
+    assert "throw e;" in html
+    assert '"api.timeout": "请求超时' in html
+    assert '"api.timeout": "Request timed out' in html
+
+    for fragment in (
+        'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/remote-files")',
+        'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review").then(',
+        'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review/restore", {',
+        'apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile")',
+        'apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates")',
+        'apiRemote("/structure-sources/" + encodeURIComponent(sourceId))',
+        "await apiRemote(url)",
+        "await apiRemote(s2scanUrl)",
+        "jobRemoteNodeName(job) ? await apiRemote(url) : await api(url)",
+        "apiRemote(s2Url, ac ? { signal: ac.signal } : {})",
+    ):
+        assert fragment in html, f"missing remote-budget call site: {fragment}"
+    assert html.count("selectedJobIsRemote ? await apiRemote(url) : await api(url)") == 2
+
+    for stale in (
+        'api("/jobs/" + encodeURIComponent(jobId) + "/remote-files")',
+        'api("/jobs/" + encodeURIComponent(jobId) + "/pes/review")',
+        'api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile")',
+        'api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates")',
+    ):
+        assert stale not in html, f"remote endpoint regressed to 8s default: {stale}"
+
+
+def test_workbench_api_timeout_behavior() -> None:
+    """Node behavior: own timeout → localized error; caller abort → AbortError."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    html = FRONTEND.read_text(encoding="utf-8")
+    match = re.search(
+        r"(var API_TIMEOUT_MS = 8000;[\s\S]*?function apiRemote\(path, opts\) \{[\s\S]*?\n\})",
+        html,
+    )
+    assert match, "api()/apiRemote() block not found in workbench HTML"
+    api_source = match.group(1)
+
+    script = (
+        "const API_BASE = '/api/v1';\n"
+        "function t(key, vars) { return key + (vars ? ':' + JSON.stringify(vars) : ''); }\n"
+        "function fail(msg) { console.error('FAIL: ' + msg); process.exit(1); }\n"
+        "class FakeAbortError extends Error { constructor() { super('signal is aborted without reason'); this.name = 'AbortError'; } }\n"
+        + api_source
+        + "\n"
+        + textwrap.dedent(
+            """
+            (async function main() {
+              // Own timeout: localized error, never the raw AbortError text.
+              global.fetch = function (url, opts) {
+                return new Promise(function (_resolve, reject) {
+                  if (opts && opts.signal) {
+                    opts.signal.addEventListener('abort', function () { reject(new FakeAbortError()); });
+                  }
+                });
+              };
+              try {
+                await api('/slow', { timeoutMs: 30 });
+                fail('timeout did not reject');
+              } catch (e) {
+                if (e.name === 'AbortError') fail('timeout leaked AbortError');
+                if (String(e.message).indexOf('aborted') >= 0) fail('timeout leaked raw abort text: ' + e.message);
+                if (String(e.message).indexOf('api.timeout') !== 0) fail('timeout message missing key: ' + e.message);
+              }
+
+              // Caller abort keeps the AbortError name for silent-cancel filters.
+              var ac = new AbortController();
+              var pending = api('/cancel', { signal: ac.signal });
+              setTimeout(function () { ac.abort(); }, 10);
+              try {
+                await pending;
+                fail('caller abort did not reject');
+              } catch (e) {
+                if (e.name !== 'AbortError') fail('caller abort lost AbortError name: ' + e.name);
+              }
+
+              // Happy path still resolves the JSON body.
+              global.fetch = function () {
+                return Promise.resolve({
+                  ok: true,
+                  headers: { get: function () { return 'application/json'; } },
+                  json: function () { return Promise.resolve({ ok: 1 }); }
+                });
+              };
+              var body = await api('/fast', { timeoutMs: 10000 });
+              if (!body || body.ok !== 1) fail('happy path body mismatch');
+              console.log('PASS');
+            })().catch(function (e) { console.error('FAIL: unexpected', e); process.exit(1); });
+            """
+        )
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, f"node failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    assert "PASS" in result.stdout
