@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ..contracts import ConfsearchRequest, ProtocolOutcome
-from ._common import coords_list
+from ._common import apply_xtb_provenance, coords_list
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,14 @@ def run_xtb_md(request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolO
     from acp.backends.registry import get_backend
     from acp.io.structures import StructureReader
     from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
-    from ..shared import resolve_crest_ewin, v2_stage_dir, xtb_passthrough_result
-    from acp.workflows.xtbmd_censo_energy import _batch_opt_frames, _filter_energy_window  # noqa: F401 — retired, lazy
+    from acp.workflows.xtbmd_censo_energy import (  # noqa: F401 — retired, lazy
+        _batch_opt_frames,
+        _filter_energy_window,
+    )
     from acp.workflows.xtbmd_md import run_md_replicas
     from cccp.config import load_config
+
+    from ..shared import resolve_crest_ewin, v2_stage_dir, xtb_passthrough_result
 
     cfg = request.config if request.config is not None else load_config()
 
@@ -163,7 +167,7 @@ def run_xtb_md(request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolO
         )
     if not records:
         raise RuntimeError("xtb-md protocol produced no conformers after filtering")
-    return ProtocolOutcome(
+    outcome = ProtocolOutcome(
         records=records,
         temperature_k=temperature_k,
         refined_conf_ids=[],
@@ -177,6 +181,9 @@ def run_xtb_md(request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolO
         stages_completed=["embed", "xtbmd", "batch_opt", "isostat", "energy_filter"],
         workflow_metadata={},
     )
+    apply_xtb_provenance(outcome)
+    outcome.energy_kind = "xtb"
+    return outcome
 
 
 __all__ = ["run_xtb_md"]

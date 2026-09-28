@@ -17,6 +17,11 @@ from typing import Any
 from ..contracts import ConfsearchRequest, ProtocolOutcome
 from ..selection import threshold_for_policy
 from ._common import (
+    apply_dft_provenance,
+    apply_screen_provenance,
+    apply_screening_weight_table,
+    config_with_censo_temperature,
+    levels_with_thermo_temperature,
     outcome_from_workflow_result,
     require_completed,
     threshold_from_levels,
@@ -38,7 +43,7 @@ def run_censo_crest(request: ConfsearchRequest, overlay: dict[str, Any]) -> Prot
             input_source=request.input_source,
             output_dir=str(request.output_dir),
             preset=preset,
-            config=request.config,
+            config=config_with_censo_temperature(request),
             name=request.name,
             charge=request.charge,
             multiplicity=request.multiplicity,
@@ -47,11 +52,15 @@ def run_censo_crest(request: ConfsearchRequest, overlay: dict[str, Any]) -> Prot
             ewin=request.energy_window,
         )
         require_completed(result)
-        return outcome_from_workflow_result(
+        metadata = dict(result.metadata or {})
+        outcome = outcome_from_workflow_result(
             result,
             sampling={"method": "crest-censo", "preset": preset},
-            temperature_k=298.15,
+            temperature_k=float(metadata.get("temperature_k") or 298.15),
         )
+        apply_screen_provenance(outcome, metadata)
+        outcome.energy_kind = "censo"
+        return outcome
 
     from acp.workflows.energy import run_conformer_energy
 
@@ -72,16 +81,23 @@ def run_censo_crest(request: ConfsearchRequest, overlay: dict[str, Any]) -> Prot
         solvent=request.solvent,
         nproc=request.nproc,
         rank1_only=policy == "rank1",
-        levels=request.levels,
+        levels=levels_with_thermo_temperature(request),
         threshold=threshold,
         ewin=request.energy_window,
     )
     require_completed(result)
-    return outcome_from_workflow_result(
+    metadata = dict(result.metadata or {})
+    outcome = outcome_from_workflow_result(
         result,
         sampling={"method": "crest-censo", "preset": preset, "policy": policy},
-        temperature_k=298.15,
+        temperature_k=float(metadata.get("temperature_k") or 298.15),
     )
+    if policy == "rank1":
+        apply_screening_weight_table(outcome, policy)
+    else:
+        apply_dft_provenance(outcome, metadata)
+    outcome.energy_kind = "censo"
+    return outcome
 
 
 __all__ = ["run_censo_crest"]
