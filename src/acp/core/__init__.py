@@ -1,5 +1,10 @@
 """Core domain models and workflows."""
 
+from acp.core.keywords import (
+    canonical_choice,
+    fold_keyword,
+    make_case_insensitive_type,
+)
 from acp.core.models import (
     JobSpec,
     JobStatus,
@@ -39,7 +44,10 @@ __all__ = [
     "WorkflowRunner",
     "WorkflowSpec",
     "WorkflowState",
+    "canonical_choice",
     "check_run_root_safety",
+    "fold_keyword",
+    "make_case_insensitive_type",
     "platform_default_run_root",
     "resolve_run_root",
     "stage_label",
