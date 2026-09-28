@@ -35,6 +35,7 @@ def _make_entry_dict(
     temperature_k: float | None = None,
     relative_energy_kcal: float | None = 0.0,
     boltzmann_weight: float | None = 0.5,
+    weight_source: str | None = None,
     source_kind: str = "formal_result",
     confirmed: bool | None = None,
     badges: list[str] | None = None,
@@ -51,6 +52,7 @@ def _make_entry_dict(
         "energy": {"value": energy_value, "unit": energy_unit, "kind": energy_kind},
         "relative_energy_kcal": relative_energy_kcal,
         "boltzmann_weight": boltzmann_weight,
+        "weight_source": weight_source,
         "source": {"kind": source_kind},
         "badges": badges if badges is not None else [],
         "vibrations": {"available": vib_available},
@@ -216,6 +218,90 @@ class TestStructureViewerEntryModel:
         d = _make_entry_dict(badges=["TS", "rank-1"])
         model = StructureViewerEntryModel.model_validate(d)
         assert model.badges == ["TS", "rank-1"]
+
+    def test_entry_weight_source_round_trips(self):
+        """weight_source round-trips through model_validate + model_dump."""
+        d = _make_entry_dict(weight_source="censo")
+        model = StructureViewerEntryModel.model_validate(d)
+        assert model.weight_source == "censo"
+        assert model.model_dump()["weight_source"] == "censo"
+
+    def test_entry_weight_source_defaults_to_none(self):
+        """Legacy payloads without weight_source validate with None default."""
+        d = _make_entry_dict()
+        assert d["weight_source"] is None
+        model = StructureViewerEntryModel.model_validate(d)
+        assert model.weight_source is None
+
+    def test_entry_weight_source_extra_keys_ignored(self):
+        """A legacy payload that OMITS the weight_source key entirely still validates."""
+        d = _make_entry_dict()
+        del d["weight_source"]
+        model = StructureViewerEntryModel.model_validate(d)
+        assert model.weight_source is None
+
+
+class TestPayloadWeightProvenance:
+    """Todo 8: the resolver payload dict (entry.weight_source + true
+    temperature) must survive StructureViewerPayloadModel construction —
+    this is exactly what the route does (model_validate(body))."""
+
+    def test_resolver_payload_round_trips_through_api_model(self, tmp_path: Path):
+        """build_structure_viewer_payload().to_dict() → payload model keeps
+        weight_source + temperature on every entry."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        cs_dir = tmp_path / "RESULT" / "confsearch"
+        cs_dir.mkdir(parents=True)
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "temperature_k": 350.0,
+            "conformers": [
+                {
+                    "conf_id": "0001",
+                    "geometry": "conformers/0001.xyz",
+                    "energy_hartree": -100.0,
+                    "free_energy_hartree": -99.5,
+                    "relative_energy_kcal": 0.0,
+                    "boltzmann_weight": 0.6,
+                    "weight_source": "censo",
+                    "rank": 1,
+                },
+                {
+                    "conf_id": "0002",
+                    "geometry": "conformers/0002.xyz",
+                    "energy_hartree": -99.8,
+                    "free_energy_hartree": -99.3,
+                    "relative_energy_kcal": 1.25,
+                    "boltzmann_weight": 0.3,
+                    "weight_source": "dft",
+                    "rank": 2,
+                },
+                {
+                    "conf_id": "0003",
+                    "geometry": "conformers/0003.xyz",
+                    "energy_hartree": -99.6,
+                    "free_energy_hartree": -99.1,
+                    "relative_energy_kcal": 2.51,
+                    "boltzmann_weight": 0.1,
+                    "rank": 3,
+                },
+            ],
+        }
+        (cs_dir / "confsearch_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (tmp_path / "job.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "task.json").write_text("{}", encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            tmp_path, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        model = StructureViewerPayloadModel.model_validate(payload.to_dict())
+        by_id = {e.id: e for e in model.entries}
+        assert by_id["conf_0001"].weight_source == "censo"
+        assert by_id["conf_0002"].weight_source == "dft"
+        assert by_id["conf_0003"].weight_source is None
+        assert all(e.energy.temperature_k == 350.0 for e in model.entries)
 
 
 # ── StructureViewerGroupModel ───────────────────────────────────────────────
@@ -498,6 +584,51 @@ class TestCatalogEndpoint:
         assert body["availability"] == "ready"
         assert len(body["entries"]) == 3
         assert body["default_entry_id"] is not None
+
+    def test_confsearch_weight_source_and_temperature_in_response(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """weight_source + top-level temperature_k survive the full route
+        (payload dict → StructureViewerPayloadModel.model_validate → JSON)."""
+        work_dir = _seed_job(sv_client, tmp_path, job_id="sv-prov-001")
+        cs_dir = work_dir / "RESULT" / "confsearch"
+        cs_dir.mkdir(parents=True, exist_ok=True)
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "temperature_k": 350.0,
+            "conformers": [
+                {
+                    "conf_id": "0001",
+                    "geometry": "conformers/0001.xyz",
+                    "energy_hartree": -100.0,
+                    "free_energy_hartree": -99.5,
+                    "relative_energy_kcal": 0.0,
+                    "boltzmann_weight": 0.6,
+                    "weight_source": "censo",
+                    "rank": 1,
+                },
+                {
+                    "conf_id": "0002",
+                    "geometry": "conformers/0002.xyz",
+                    "energy_hartree": -99.8,
+                    "free_energy_hartree": -99.3,
+                    "relative_energy_kcal": 1.25,
+                    "boltzmann_weight": 0.3,
+                    "weight_source": "dft",
+                    "rank": 2,
+                },
+            ],
+        }
+        (cs_dir / "confsearch_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        resp = sv_client.get("/api/v1/jobs/sv-prov-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        by_id = {e["id"]: e for e in body["entries"]}
+        assert by_id["conf_0001"]["weight_source"] == "censo"
+        assert by_id["conf_0002"]["weight_source"] == "dft"
+        assert all(e["energy"]["temperature_k"] == 350.0 for e in body["entries"])
 
     def test_unknown_job_404(self, sv_client: TestClient, tmp_path: Path) -> None:
         """Unknown job id → 404."""

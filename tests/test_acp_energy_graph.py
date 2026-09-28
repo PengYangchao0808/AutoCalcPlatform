@@ -843,6 +843,83 @@ def test_confsearch_manifest_builds_conformer_energy_projection(tmp_path: Path) 
     }
 
 
+def test_conformer_node_metadata_matches_inspector_field_specs(tmp_path: Path) -> None:
+    """Conformer node metadata must use the frontend conformer inspector spec keys.
+
+    ``ENERGY_INSPECTOR_FIELD_SPECS.conformer`` renders rank / gibbs_energy /
+    relative_energy_kcal / boltzmann_weight; the old aliases ``weight``/
+    ``gibbs_hartree`` (plus never-displayed ``energy_hartree``) made the
+    "Boltzmann 权重" row miss and leaked a raw ``weight`` row.
+    """
+    manifest_dir = tmp_path / "RESULT" / "confsearch"
+    manifest_dir.mkdir(parents=True)
+    (manifest_dir / "confsearch_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "status": "completed",
+                "conformers": [
+                    {
+                        "conf_id": "CONF1",
+                        "geometry": "conformers/CONF1.xyz",
+                        "energy_hartree": -10.1,
+                        "free_energy_hartree": -10.0,
+                        "relative_energy_kcal": 0.0,
+                        "boltzmann_weight": 0.8,
+                        "rank": 1,
+                    },
+                    {
+                        "conf_id": "CONF2",
+                        "geometry": "conformers/CONF2.xyz",
+                        "energy_hartree": -10.0,
+                        "free_energy_hartree": -9.99,
+                        "relative_energy_kcal": 6.275,
+                        "boltzmann_weight": 0.2,
+                        "rank": 2,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    graph = build_energy_graph_from_job(
+        "confsearch-meta", workflow="Confsearch", method=None, work_dir=tmp_path
+    )
+
+    assert graph["view_type"] == "conformer"
+    # Series ids are a locked wire contract — especially boltzmann_weight.
+    assert {item["id"] for item in graph["series"]} == {
+        "relative_gibbs",
+        "gibbs_energy",
+        "absolute_energy",
+        "boltzmann_weight",
+    }
+
+    spec_keys = {"rank", "gibbs_energy", "relative_energy_kcal", "boltzmann_weight"}
+    nodes = graph["nodes"]
+    assert len(nodes) == 2
+    for node in nodes:
+        metadata = node["metadata"]
+        assert spec_keys <= set(metadata), (
+            f"node {node['id']} metadata {sorted(metadata)} misses conformer spec keys"
+        )
+        assert "weight" not in metadata
+        assert "gibbs_hartree" not in metadata
+        assert set(metadata) == spec_keys
+
+    first = nodes[0]["metadata"]
+    assert first["rank"] == 1
+    assert first["gibbs_energy"] == -10.0
+    assert first["relative_energy_kcal"] == 0.0
+    assert first["boltzmann_weight"] == 0.8
+    second = nodes[1]["metadata"]
+    assert second["rank"] == 2
+    assert second["gibbs_energy"] == -9.99
+    assert second["relative_energy_kcal"] == 6.275
+    assert second["boltzmann_weight"] == 0.2
+
+
 def test_energy_workflow_without_data_returns_unavailable_projection(tmp_path: Path) -> None:
     graph = build_energy_graph_from_job(
         "missing", workflow="energy", method=None, work_dir=tmp_path

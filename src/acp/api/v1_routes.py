@@ -1304,6 +1304,50 @@ def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
     return method
 
 
+_BATCH_KEYWORD_FIELDS: tuple[str, ...] = (
+    "opt_convergence",
+    "scf_convergence",
+    "opt_initial_hessian",
+    "minimum_opt_initial_hessian",
+    "transition_state_opt_initial_hessian",
+    "opt_rescue_policy",
+    "scf_strategy",
+)
+
+
+def _canonicalize_batch_keywords(method: dict[str, Any]) -> None:
+    """Rewrite BatchOptimize enumerated keyword values to catalog spellings.
+
+    The Workbench submits both a flat mirror (``method[field]``, read by the
+    scheduler's ``batchoptimize_method_flags``) and a nested
+    ``method["levels"]["batch"]`` copy (read by the batch engine), so both are
+    canonicalized in place. Each value is matched case-insensitively against
+    ``FIELD_DEFINITIONS[field]["options"]`` and replaced with the catalog
+    spelling; ``None``/empty values, fields without options, and unknown
+    spellings are left untouched (free-form values are never folded).
+    """
+    from acp.catalog import FIELD_DEFINITIONS
+    from acp.core.keywords import canonical_choice
+
+    targets: list[dict[str, Any]] = [method]
+    levels = method.get("levels")
+    if isinstance(levels, dict):
+        batch = levels.get("batch")
+        if isinstance(batch, dict):
+            targets.append(batch)
+    for field in _BATCH_KEYWORD_FIELDS:
+        options = FIELD_DEFINITIONS.get(field, {}).get("options")
+        if not options:
+            continue
+        for target in targets:
+            value = target.get(field)
+            if value is None or value == "":
+                continue
+            canonical = canonical_choice(value, options)
+            if canonical is not None:
+                target[field] = canonical
+
+
 def _target_validation_detail(exc: Exception) -> dict[str, Any]:
     """Serialize a submission-time target error into the 400 body (D12).
 
@@ -1381,6 +1425,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    if req.workflow == "BatchOptimize":
+        _canonicalize_batch_keywords(req.method)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
     elif req.workflow == "PESsearch":

@@ -1184,10 +1184,10 @@ def _build_conformer_graph(
                 status="completed",
                 geometry_ref=str(record.get("geometry_ref") or ""),
                 metadata={
-                    "gibbs_hartree": gibbs[index],
-                    "energy_hartree": absolute[index],
-                    "weight": weights[index],
                     "rank": rank,
+                    "gibbs_energy": gibbs[index],
+                    "relative_energy_kcal": relative[index],
+                    "boltzmann_weight": weights[index],
                 },
             ).to_node(VIEW_REGISTRY["conformer"].node_type)
         )

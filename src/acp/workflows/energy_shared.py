@@ -939,6 +939,10 @@ def write_final_outputs(
         "total_gibbs_hartree": summary.total_gibbs_hartree,
         "total_gibbs_kcal_mol": summary.total_gibbs_kcal_mol,
         "ensemble_thermo_json": str(thermo_json),
+        "temperature_k": temperature_k,
+        "population_coverage": summary.population_coverage,
+        "weight_source": "dft" if external_weights is None else external_table_source,
+        "weight_method": summary.method,
     }
     if summary.censo_reference_gibbs_hartree is not None:
         outputs["total_gibbs_censo_hartree"] = summary.censo_reference_gibbs_hartree
@@ -1008,15 +1012,21 @@ def build_result_ensemble(
 ) -> StructureEnsemble:
     records: list[StructureRecord] = []
     for c in candidates:
+        conf_id = c.get("source") or f"{structure.id}_conf{c['index']:03d}"
         conf_struct = Structure(
-            id=f"{structure.id}_conf{c['index']:03d}",
+            id=conf_id,
             charge=structure.charge,
             multiplicity=structure.multiplicity,
             symbols=c["symbols"],
             coordinates=c["coordinates"].tolist()
             if isinstance(c["coordinates"], np.ndarray)
             else c["coordinates"],
-            metadata={"rank": c.get("rank"), "source": c.get("source")},
+            metadata={
+                "rank": c.get("rank"),
+                "source": c.get("source"),
+                # Screening join key consumed by the Confsearch protocols.
+                "conf_id": conf_id,
+            },
         )
         records.append(
             StructureRecord(

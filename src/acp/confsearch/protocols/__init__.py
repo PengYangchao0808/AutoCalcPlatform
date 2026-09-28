@@ -10,7 +10,13 @@ xtbmd_censo_energy) instead of duplicating CREST/CENSO/xTB orchestration
 from __future__ import annotations
 
 from ._common import (  # noqa: F401
+    apply_dft_provenance,
+    apply_screen_provenance,
+    apply_screening_weight_table,
+    apply_xtb_provenance,
+    config_with_censo_temperature,
     coords_list,
+    levels_with_thermo_temperature,
     outcome_from_workflow_result,
     records_from_ensemble_result,
     refined_ids_from_metadata,
@@ -31,7 +37,13 @@ PROTOCOL_RUNNERS = {
 
 __all__ = [
     "PROTOCOL_RUNNERS",
+    "apply_dft_provenance",
+    "apply_screen_provenance",
+    "apply_screening_weight_table",
+    "apply_xtb_provenance",
+    "config_with_censo_temperature",
     "coords_list",
+    "levels_with_thermo_temperature",
     "outcome_from_workflow_result",
     "records_from_ensemble_result",
     "refined_ids_from_metadata",
