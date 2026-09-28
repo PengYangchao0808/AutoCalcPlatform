@@ -1,6 +1,6 @@
 # 能量与轨迹（Energy & Trajectory）查看器设计文档
 
-**状态**: v1.0（2026-09-07）
+**状态**: v1.1（2026-09-28，远程任务读取路径经远端缓存解析）
 **范围**: PES 扫描、几何优化、构象搜索、独立扫描的统一能量与轨迹帧查看 + 帧保存候选 + 采样历史三视图
 
 ## 1. 目标与原则
@@ -212,6 +212,7 @@ TAG: <role> | candidate_id=<id> | source=<workflow> | frame=<NNN> | selection_so
 | | | `view=sampling` 返回采样历史投影（需 sampling_history.json 存在） |
 | | | `view` 缺省或无效时回退到默认视图（200，非 500） |
 | | | Confsearch 任务 `available_views` 包含 `"conformer"` + `"sampling"`（当采样文件存在时） |
+| | | **远程任务（LSF）**：读取根由 `_job_read_root` 解析——终态远程任务先经 `RemoteStructureCache.fetch_catalog` 拉取小目录元数据，再从缓存根构建投影；`_pes_profile_for_job` / `/s2/profile` / `/s2/candidates` / `/s2/frame` 同样缓存优先，帧 XYZ 按需懒拉取。不再出现 `No PES profile ... expected RESULT/pes_search/pes_profile.json`（2026-09-28 远程 PES 事故） |
 
 ### 4.2 帧候选 CRUD
 
@@ -348,4 +349,10 @@ PESsearch 任务隐藏此操作（条件渲染）。
    builder 或数据投影。前端收到这些视图时走 `unsupported` 兜底。
 
 8. **NO create-task 操作**：帧操作仅限"保存为候选"。任务创建统一走"新建任务"流程，
-   通过"载入全部候选"发现已保存的帧候选结构。
+   通过"载入全部候选"发现已保存的帧候选。
+
+9. **远程任务的写路径未支持（2026-09-28）**：远程任务的读取投影经远端缓存解析，
+   但写操作仍走本地 work_dir——`POST /pes/review`（及 restore）对远程任务返回 501
+   （审阅文件必须写回计算节点，否则下游 BatchOptimize 看不到）；帧候选保存对远程任务
+   同样只在本地可见。远程写回（SFTP 上传 + 远端 manifest 更新）为后续版本范围。
+   本地任务的阅读/写回路径不变。
