@@ -1396,6 +1396,209 @@ def test_runner_node_queue_none_script_byte_identical_to_prechange():
 
 
 # ====================================================================== #
+# Scheduler-context markers before bsub (remote pending-fetch root cause)
+# ====================================================================== #
+
+
+def _submit_markers_via_runner(node, config, workflow="ensemble"):
+    """Run the real submit_remote path against the fakes.
+
+    Returns ``(remote_dir, marker_bytes, local_task_text)`` where
+    *marker_bytes* are the job.json/task.json payloads captured from the
+    FakeSFTP upload and *local_task_text* is the locally generated
+    ``work_dir/task.json`` content.
+    """
+    pool = SSHConnectionPool()
+    sftp = FakeSFTP()
+    client = FakeSSHClient(sftp)
+    client.cmd_handler = lambda cmd: (
+        (0, "Job <54321> is submitted to queue <normal>.\n", "")
+        if "bsub" in cmd and "<" in cmd
+        else (0, "", "")
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "markjob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow=workflow, input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="markjob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+        remote_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
+
+        runner = RemoteJobRunner(pool, config, stager=FileStager(pool), poll_interval=0)
+        with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
+            runner.submit_remote(record, event_log)
+
+        marker_bytes = {
+            name: sftp.files[posixpath.join(remote_dir, name)]
+            for name in ("job.json", "task.json")
+        }
+        local_task_text = (work_dir / "task.json").read_text(encoding="utf-8")
+    pool.close()
+    return remote_dir, marker_bytes, local_task_text
+
+
+def test_submit_remote_uploads_scheduler_markers_before_bsub():
+    """job.json + task.json exist in the remote job dir AT bsub time.
+
+    Root-cause lock for the perpetual pending_fetch structure-viewer
+    banner: without the Zone-A markers the node-side workflow nests
+    products under ``<remote_job_dir>/<molecule>/`` and the flat
+    result-fetch layer never finds them.  The snapshot of FakeSFTP files
+    is taken inside a wrapped ``_submit_lsf``, proving the
+    markers-before-bsub ordering.
+    """
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
+    pool = SSHConnectionPool()
+    sftp = FakeSFTP()
+    client = FakeSSHClient(sftp)
+    client.cmd_handler = lambda cmd: (
+        (0, "Job <54321> is submitted to queue <normal>.\n", "")
+        if "bsub" in cmd and "<" in cmd
+        else (0, "", "")
+    )
+
+    snapshots = {"at_bsub": None}
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "orderjob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="orderjob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+        remote_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
+
+        runner = RemoteJobRunner(pool, config, stager=FileStager(pool), poll_interval=0)
+        original_submit_lsf = runner._submit_lsf
+
+        def snapshot_submit_lsf(n, script_path, remote_root):
+            snapshots["at_bsub"] = set(sftp.files)
+            return original_submit_lsf(n, script_path, remote_root)
+
+        runner._submit_lsf = snapshot_submit_lsf  # type: ignore[assignment]
+        with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
+            runner.submit_remote(record, event_log)
+
+        assert snapshots["at_bsub"] is not None, "bsub must have run"
+        assert posixpath.join(remote_dir, "job.json") in snapshots["at_bsub"]
+        assert posixpath.join(remote_dir, "task.json") in snapshots["at_bsub"]
+
+        # The locally generated task.json parses back as a TaskRecord.
+        from acp.storage.record import TaskRecord
+
+        parsed = TaskRecord.from_dict(json.loads((work_dir / "task.json").read_text("utf-8")))
+        assert parsed.task_id == "orderjob"
+        assert parsed.workflow == "ensemble"
+        assert parsed.task_dir_name == "orderjob"  # leaf of record.work_dir (T1 mapping)
+
+        # The event records filenames only — never file contents.
+        marker_events = [
+            e for e in event_log.read_all() if e.get("type") == "remote.markers_uploaded"
+        ]
+        assert marker_events, "remote.markers_uploaded event missing"
+        assert marker_events[0]["files"] == ["job.json", "task.json"]
+
+    pool.close()
+    print("  [OK] markers: job.json+task.json in remote dir before bsub; local task.json parses")
+
+
+def test_uploaded_markers_make_confsearch_output_root_flat():
+    """Marker payloads uploaded by the runner flip Confsearch's
+    ``resolve_task_output_root`` to the flat task root.
+
+    Both Confsearch sites — ``confsearch/engine.py:276`` and
+    ``confsearch/protocols/xtb_md.py:51`` — resolve their product root via
+    ``resolve_task_output_root(request.output_dir.resolve(), safe_name)``.
+    Materialising the exact uploaded marker bytes at a local dir root and
+    asserting the flat result mirrors
+    ``tests/test_acp_workflows_simple.py:148-165``.
+    """
+    from acp.workflows._helpers import resolve_task_output_root
+
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
+    remote_dir, markers, _local_task = _submit_markers_via_runner(node, config)
+    assert set(markers) == {"job.json", "task.json"}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / remote_dir.strip("/").replace("/", "_")
+        root.mkdir(parents=True)
+        for name, blob in markers.items():
+            (root / name).write_bytes(blob)
+
+        # Scheduler-context root (job.json + task.json) → flat task root.
+        assert resolve_task_output_root(root.resolve(), "mol") == root.resolve()
+
+        # Negative controls (same style as test_acp_workflows_simple.py):
+        # a root without markers nests under the molecule name.
+        bare = Path(tmp) / "bare"
+        bare.mkdir()
+        assert resolve_task_output_root(bare.resolve(), "mol") == bare.resolve() / "mol"
+
+    print("  [OK] markers: uploaded bytes make resolve_task_output_root flat (Confsearch sites)")
+
+
+def test_submit_remote_marker_upload_failure_cleans_remote_dir():
+    """A marker upload failure fails the submission visibly and the except
+    branch cleans up the remote job dir — never a silent nested-layout task."""
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
+    pool = SSHConnectionPool()
+    sftp = FakeSFTP()
+    client = FakeSSHClient(sftp)
+    bsub_ran = {"yes": False}
+
+    def cmd_handler(cmd):
+        if "bsub" in cmd:
+            bsub_ran["yes"] = True
+            return (0, "Job <54321> is submitted to queue <normal>.\n", "")
+        return (0, "", "")
+
+    client.cmd_handler = cmd_handler
+
+    stager = FileStager(pool)
+    original_upload = stager.upload_file
+
+    def failing_upload(n, local_path, remote_path):
+        if str(remote_path).endswith("task.json"):
+            raise OSError("SFTP connection reset during task.json upload")
+        return original_upload(n, local_path, remote_path)
+
+    stager.upload_file = failing_upload  # type: ignore[assignment]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "markfail"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="markfail", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+
+        runner = RemoteJobRunner(pool, config, stager=stager, poll_interval=0)
+        raised = False
+        with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
+            try:
+                runner.submit_remote(record, event_log)
+            except OSError:
+                raised = True
+
+        assert raised, "marker upload failure must propagate out of submit_remote"
+        assert bsub_ran["yes"] is False, "bsub must never run when marker upload fails"
+
+        events = event_log.read_all()
+        event_types = [e["type"] for e in events]
+        assert "remote.markers_uploaded" not in event_types
+        assert "remote.submitted" not in event_types
+        cleanup_events = [e for e in events if e["type"] == "remote.cleanup"]
+        assert cleanup_events, "_cleanup_remote_dir must be invoked on marker upload failure"
+        assert cleanup_events[0]["remote_dir"] == posixpath.join(
+            node.remote_work_dir, spec.task_dir_name()
+        )
+
+    pool.close()
+    print("  [OK] marker upload failure: submission raises, remote dir cleaned, bsub skipped")
+
+
+# ====================================================================== #
 # Config (Phase 2 additions)
 # ====================================================================== #
 
@@ -1475,6 +1678,10 @@ def main():
         test_runner_node_queue_override_emits_bsub_queue,
         test_runner_node_queue_none_falls_back_to_config_queue,
         test_runner_node_queue_none_script_byte_identical_to_prechange,
+        # scheduler-context markers before bsub (remote pending-fetch fix)
+        test_submit_remote_uploads_scheduler_markers_before_bsub,
+        test_uploaded_markers_make_confsearch_output_root_flat,
+        test_submit_remote_marker_upload_failure_cleans_remote_dir,
         # config
         test_remote_config_queue_walltime,
     ]

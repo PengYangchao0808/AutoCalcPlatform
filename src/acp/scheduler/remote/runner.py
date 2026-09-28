@@ -46,6 +46,7 @@ from acp.scheduler.jobs import (
     JobRecord,
     JobSpec,
     JobStatus,
+    build_task_record,
 )
 from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.provenance import build_provenance_for_job
@@ -63,6 +64,7 @@ from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
 from acp.scheduler.remote.sync import CodeSyncer
 from acp.scheduler.runner import materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
+from acp.storage.layout import TaskStorage
 
 logger = logging.getLogger(__name__)
 
@@ -809,6 +811,12 @@ class RemoteJobRunner:
         else:
             raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
 
+        # 3b. Scheduler-context markers (job.json + task.json): the node
+        # side detects them by existence only (workflows/_helpers.py) and
+        # otherwise nests products under <remote_job_dir>/<molecule>/,
+        # where the flat result-fetch layer never finds them.
+        self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
+
         # 4. Generate + upload LSF script
         py = self._resolve_node_python(node, job_id=record.id)
         lsf_spec, cli_cmd = build_lsf_script_spec(
@@ -851,6 +859,50 @@ class RemoteJobRunner:
             remote_dir=remote_job_dir,
         )
         return lsf_job_id, cli_cmd
+
+    def _upload_scheduler_markers(
+        self,
+        record: JobRecord,
+        node: RemoteNode,
+        remote_job_dir: str,
+        work_dir: Path,
+        event_log: JobEventLog,
+    ) -> None:
+        """Ensure + upload the scheduler-context markers ``job.json``/``task.json``.
+
+        These Zone-A markers make the node side treat *remote_job_dir* as
+        a scheduler task dir (``workflows/_helpers.py::is_scheduler_task_dir``)
+        so workflow products land flat (``RESULT/...``, ``state.json``,
+        ``WORK/00_RUNTIME/checkpoint.json``) instead of nested under
+        ``<remote_job_dir>/<molecule>/``.  The uploaded ``job.json`` is a
+        submission-time snapshot used only as an existence marker by the
+        node side — it is never refreshed after submission.
+
+        Missing local markers are generated first (the manager normally
+        writes ``job.json``; the legacy ``run()`` path needs the defensive
+        write); existing files are left untouched.  Upload failures
+        propagate like input-upload failures so the submission fails
+        visibly — never silently produce a nested-layout task.
+        """
+        task_json = work_dir / "task.json"
+        if not task_json.is_file():
+            TaskStorage(work_dir).write_task_json(build_task_record(record))
+        job_json = work_dir / "job.json"
+        if not job_json.is_file():
+            job_json.write_text(
+                json.dumps(record.to_dict(), indent=2, default=str), encoding="utf-8"
+            )
+
+        for marker in ("job.json", "task.json"):
+            self._stager.upload_file(
+                node, work_dir / marker, posixpath.join(remote_job_dir, marker)
+            )
+        event_log.append(
+            "remote.markers_uploaded",
+            job_id=record.id,
+            node=node.name,
+            files=["job.json", "task.json"],
+        )
 
     def _cleanup_remote_dir(
         self, node: RemoteNode, remote_job_dir: str, event_log: JobEventLog, job_id: str
