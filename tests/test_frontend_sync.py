@@ -8943,3 +8943,112 @@ def test_p2c_effective_config_rescue_not_in_api() -> None:
     assert "provenance" not in fields, (
         "provenance unexpectedly added — update frontend renderer to display rescue history"
     )
+
+
+# ---------------------------------------------------------------------------
+# Multi-frame playback bar (#frame-controller) visibility gate
+# ---------------------------------------------------------------------------
+
+
+def test_frame_controller_visibility_gate_uses_live_tab_id() -> None:
+    """updateFrameController() must gate #frame-controller on a LIVE tab id.
+
+    The 2026-09-11 canvas-tab rename (3d -> structure) missed the gate
+    literal inside updateFrameController(), so the condition was always
+    false and any frame change (play tick / prev / next / slider) hid the
+    playback bar. Locked two ways:
+
+    (a) STATIC: the exact stale pattern getAttribute("data-tab") === "3d"
+        occurs 0 times in the page, and the single gate literal inside the
+        extracted function names a tab id that actually renders
+        (data-tab="..." occurrences), so future renames cannot strand it.
+    (b) BEHAVIORAL (Node, DOM stubs): the extracted function shows the bar
+        ("flex") only on the structure tab with >1 frames; "none" on the
+        energy/path/wavefunction tabs, for a single-frame document, or when
+        no active canvas tab exists.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # --- STATIC half ---------------------------------------------------
+    # Exact pre-rename literal (was at the updateFrameController gate).
+    assert html.count('getAttribute("data-tab") === "3d"') == 0, (
+        'stale tab id "3d" must not be used in a getAttribute("data-tab") gate'
+    )
+
+    assert html.count("function updateFrameController()") == 1, (
+        "updateFrameController must be defined exactly once"
+    )
+    fn_body = html.split("function updateFrameController()", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    gate_literals = re.findall(r'getAttribute\("data-tab"\) === "([^"]+)"', fn_body)
+    assert len(gate_literals) == 1, (
+        "updateFrameController must contain exactly one data-tab gate literal, "
+        f"found {gate_literals!r}"
+    )
+    # The gated id must be one of the ids that actually render on the page
+    # (parsed live from data-tab="..." — not hardcoded, so tab evolution
+    # keeps this test honest without edits here).
+    rendered_tab_ids = set(re.findall(r'data-tab="([^"]+)"', html))
+    assert rendered_tab_ids, "page must render at least one data-tab button"
+    assert gate_literals[0] in rendered_tab_ids, (
+        f"updateFrameController gates on tab id {gate_literals[0]!r} which is "
+        f"not a rendered data-tab value (rendered: {sorted(rendered_tab_ids)})"
+    )
+
+    # --- BEHAVIORAL half -------------------------------------------------
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    fn_source = "function updateFrameController()" + fn_body
+    script = (
+        # DOM stubs: element registry + active canvas-tab id per case.
+        "var elements = {};\n"
+        "var activeTabId = null;\n"
+        "var document = {\n"
+        "  getElementById: function (id) {\n"
+        "    if (!elements[id]) elements[id] = { style: {}, textContent: '', max: '', value: '' };\n"
+        "    return elements[id];\n"
+        "  },\n"
+        "  querySelector: function (sel) {\n"
+        "    if (sel === '.canvas-tab.active') {\n"
+        "      return activeTabId === null ? null : { getAttribute: function () { return activeTabId; } };\n"
+        "    }\n"
+        "    return null;\n"
+        "  }\n"
+        "};\n"
+        "var molDoc = { frames: [], currentFrame: 0 };\n"
+        "var currentFrame = function () { return { energy: null }; };\n"
+        + fn_source
+        + "\n"
+        "function runCase(tabId, frameCount) {\n"
+        "  elements = {};\n"
+        "  activeTabId = tabId;\n"
+        "  molDoc = { frames: [], currentFrame: 0 };\n"
+        "  for (var i = 0; i < frameCount; i++) molDoc.frames.push({ energy: null });\n"
+        "  updateFrameController();\n"
+        "  return elements['frame-controller'].style.display;\n"
+        "}\n"
+        "var cases = [\n"
+        "  ['structure', 2, 'flex'],\n"  # <-- regression: was 'none' pre-fix
+        "  ['energy', 2, 'none'],\n"
+        "  ['path', 2, 'none'],\n"
+        "  ['wavefunction', 2, 'none'],\n"
+        "  ['structure', 1, 'none'],\n"
+        "  [null, 2, 'none'],\n"
+        "];\n"
+        "for (var c = 0; c < cases.length; c++) {\n"
+        "  var got = runCase(cases[c][0], cases[c][1]);\n"
+        "  if (got !== cases[c][2]) {\n"
+        "    console.error('FAIL: tabId=' + cases[c][0] + ' frames=' + cases[c][1]\n"
+        "      + ' expected display=' + cases[c][2] + ' got ' + got);\n"
+        "    process.exit(1);\n"
+        "  }\n"
+        "}\n"
+        "console.log('PASS');\n"
+    )
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node updateFrameController visibility test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

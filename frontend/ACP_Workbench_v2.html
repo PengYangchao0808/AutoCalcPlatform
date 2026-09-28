@@ -17945,7 +17945,7 @@ function updateFrameController() {
   document.getElementById("frame-slider").value = String(Math.max(molDoc.currentFrame, 0));
   const frame = currentFrame();
   document.getElementById("frame-energy").textContent = frame && frame.energy !== null ? String(frame.energy) : "";
-  controller.style.display = total > 1 && activeTab && activeTab.getAttribute("data-tab") === "3d" ? "flex" : "none";
+  controller.style.display = total > 1 && activeTab && activeTab.getAttribute("data-tab") === "structure" ? "flex" : "none"; /* the frame controller is visible only on the structure tab; tab ids live at lines 3613-3616 */
 }
 
 function setFrame(index) {
