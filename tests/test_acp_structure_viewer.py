@@ -205,11 +205,36 @@ class TestPayloadSchema:
         )
         d = entry.to_dict()
         expected_keys = {
-            "id", "group_id", "label", "role", "status",
-            "geometry", "energy", "relative_energy_kcal",
-            "boltzmann_weight", "source", "badges", "vibrations",
+            "id",
+            "group_id",
+            "label",
+            "role",
+            "status",
+            "geometry",
+            "energy",
+            "relative_energy_kcal",
+            "boltzmann_weight",
+            "weight_source",
+            "source",
+            "badges",
+            "vibrations",
         }
         assert set(d.keys()) == expected_keys
+
+    def test_entry_default_weight_source_is_none(self):
+        """weight_source defaults to None and serializes as null."""
+        from acp.results.structure_viewer import StructureViewerEntry
+
+        entry = StructureViewerEntry(id="test_entry")
+        assert entry.weight_source is None
+        assert entry.to_dict()["weight_source"] is None
+
+    def test_entry_weight_source_round_trips(self):
+        """weight_source set at construction round-trips through to_dict()."""
+        from acp.results.structure_viewer import StructureViewerEntry
+
+        entry = StructureViewerEntry(id="test_entry", weight_source="censo")
+        assert entry.to_dict()["weight_source"] == "censo"
 
     def test_group_to_dict_field_names(self):
         """Group to_dict() must expose id, label, kind."""
@@ -2936,3 +2961,171 @@ class TestDisplayLabelNormalization:
         formal_ids = [e.id for e in payload.entries if e.source.kind == "formal_result"]
         assert formal_ids, "formal result must be present when a structure product exists"
         assert payload.default_entry_id == formal_ids[0]
+
+
+# ---------------------------------------------------------------------------
+# Weight provenance + true temperature (plan todo 8)
+# ---------------------------------------------------------------------------
+
+
+class TestWeightProvenance:
+    """Confsearch resolver: top-level/provenance temperature, per-conformer
+    weight_source, and the canonical fill-only-missing fallback."""
+
+    @staticmethod
+    def _gibbs_conformers() -> list[dict]:
+        return [
+            _conf(conf_id="0001", rank=1, energy=-100.0, gibbs=-99.5),
+            _conf(conf_id="0002", rank=2, energy=-99.8, gibbs=-99.3),
+            _conf(conf_id="0003", rank=3, energy=-99.6, gibbs=-99.1),
+        ]
+
+    def test_top_level_temperature_wins_over_provenance(self, tmp_path: Path):
+        """Top-level temperature_k takes precedence over provenance.temperature_k."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = _confsearch_manifest(conformers=self._gibbs_conformers(), temperature_k=350.0)
+        manifest["provenance"] = {"temperature_k": 400.0}
+        task = _make_task_dir(tmp_path, confsearch_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].energy.temperature_k == 350.0
+
+    def test_provenance_temperature_fallback(self, tmp_path: Path):
+        """No top-level temperature_k → provenance.temperature_k is honored
+        (energy label AND computed weights both use it)."""
+        from acp.confsearch.shared.boltzmann import boltzmann_weights
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = _confsearch_manifest(conformers=self._gibbs_conformers())
+        manifest["provenance"] = {"temperature_k": 400.0}
+        task = _make_task_dir(tmp_path, confsearch_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].energy.temperature_k == 400.0
+
+        energies = [-99.5, -99.3, -99.1]
+        expected = boltzmann_weights(energies, 400.0, missing="none")
+        actual = [e.boltzmann_weight for e in payload.entries]
+        assert actual == expected
+
+    def test_provenance_malformed_falls_back_to_default(self, tmp_path: Path):
+        """Malformed provenance (non-dict / non-numeric T) → default 298.15, no crash."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        for provenance in ("garbage", {"temperature_k": "not-a-number"}, [1, 2]):
+            manifest = _confsearch_manifest(conformers=self._gibbs_conformers())
+            manifest["provenance"] = provenance
+            task = tmp_path / f"p_{abs(hash(json.dumps(provenance, default=str))) % 10_000}"
+            task.mkdir(parents=True, exist_ok=True)
+            task = _make_task_dir(task, confsearch_manifest=manifest)
+            payload = build_structure_viewer_payload(
+                task, job_id="j1", workflow="Confsearch", job_status="completed"
+            )
+            assert payload.entries[0].energy.temperature_k == 298.15
+
+    def test_weight_source_read_from_conformer(self, tmp_path: Path):
+        """Per-conformer weight_source lands on the entry; absent → None."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.6, gibbs=-99.5),
+            _conf(conf_id="0002", rank=2, energy=-99.8, weight=0.3, gibbs=-99.3),
+            _conf(conf_id="0003", rank=3, energy=-99.6, weight=0.1, gibbs=-99.1),
+        ]
+        conformers[0]["weight_source"] = "censo"
+        conformers[1]["weight_source"] = "dft"
+        task = _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].weight_source == "censo"
+        assert payload.entries[1].weight_source == "dft"
+        assert payload.entries[2].weight_source is None
+
+    def test_weight_source_survives_fill_only_missing(self, tmp_path: Path):
+        """Fill-only-missing rebuild must carry weight_source through; existing
+        weights stay verbatim (no renormalization)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5, gibbs=-99.5),
+            _conf(conf_id="0002", rank=2, energy=-99.9, weight=None, gibbs=-99.4),
+            _conf(conf_id="0003", rank=3, energy=-99.8, weight=0.3, gibbs=-99.1),
+        ]
+        conformers[0]["weight_source"] = "censo"
+        conformers[1]["weight_source"] = "xtb"
+        conformers[2]["weight_source"] = "dft"
+        task = _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        weights = [e.boltzmann_weight for e in payload.entries]
+        assert weights[0] == 0.5
+        assert weights[2] == 0.3
+        assert weights[1] is not None and 0.0 < weights[1] <= 1.0
+        assert [e.weight_source for e in payload.entries] == ["censo", "xtb", "dft"]
+
+    def test_legacy_manifest_fills_weights_and_warns(self, tmp_path: Path):
+        """Legacy manifest (no temperature/weight_source fields): weights still
+        filled at the default temperature with the canonical warning text."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, gibbs=-99.5),
+            _conf(conf_id="0002", rank=2, energy=-99.8, gibbs=-99.3),
+            _conf(conf_id="0003", rank=3, energy=-99.6, gibbs=-99.1),
+        ]
+        task = _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].energy.temperature_k == 298.15
+        assert all(e.weight_source is None for e in payload.entries)
+        assert all(e.boltzmann_weight is not None for e in payload.entries)
+        assert abs(sum(e.boltzmann_weight for e in payload.entries) - 1.0) < 1e-6
+        assert "Boltzmann weights missing from manifest; computed from energies" in payload.warnings
+
+    def test_computed_weights_match_canonical_helper_exactly(self, tmp_path: Path):
+        """The fill-only-missing fallback must delegate to the canonical
+        shared helper — bit-identical weights at the resolved temperature."""
+        from acp.confsearch.shared.boltzmann import boltzmann_weights
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = _confsearch_manifest(conformers=self._gibbs_conformers(), temperature_k=310.0)
+        task = _make_task_dir(tmp_path, confsearch_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        expected = boltzmann_weights([-99.5, -99.3, -99.1], 310.0, missing="none")
+        assert [e.boltzmann_weight for e in payload.entries] == expected
+
+    def test_non_finite_energy_row_treated_as_missing(self, tmp_path: Path):
+        """NaN-energy conformer: weight stays None, finite rows normalize to
+        1.0 (missing semantics widened to non-finite in the canonical helper)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, gibbs=-99.5),
+            _conf(conf_id="0002", rank=2, energy=float("nan"), gibbs=None),
+            _conf(conf_id="0003", rank=3, energy=-99.6, gibbs=-99.1),
+        ]
+        task = _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        by_id = {e.id: e for e in payload.entries}
+        assert by_id["conf_0002"].boltzmann_weight is None
+        finite = [by_id["conf_0001"].boltzmann_weight, by_id["conf_0003"].boltzmann_weight]
+        assert all(w is not None for w in finite)
+        assert abs(sum(finite) - 1.0) < 1e-6

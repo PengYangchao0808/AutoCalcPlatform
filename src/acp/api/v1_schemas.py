@@ -1238,6 +1238,7 @@ class StructureViewerEntryModel(BaseModel):
     energy: StructureViewerEnergyModel = Field(default_factory=StructureViewerEnergyModel)
     relative_energy_kcal: float | None = None
     boltzmann_weight: float | None = None
+    weight_source: str | None = None
     source: StructureViewerSourceModel = Field(default_factory=StructureViewerSourceModel)
     badges: list[str] = Field(default_factory=list)
     vibrations: StructureViewerVibrationsAvailabilityModel = Field(

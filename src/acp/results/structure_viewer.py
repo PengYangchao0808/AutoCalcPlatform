@@ -57,8 +57,6 @@ _REVISION_SOURCES: list[tuple[str, str]] = [
 ]
 
 _DEFAULT_TEMPERATURE_K = 298.15
-_R_KCAL_PER_MOL_K = 1.987204259e-3
-_HARTREE_TO_KCAL = 627.5094740631
 
 
 def _number(value: Any) -> float | None:
@@ -264,6 +262,8 @@ class StructureViewerEntry:
         energy: Energy information.
         relative_energy_kcal: Energy relative to the group minimum (kcal/mol).
         boltzmann_weight: Boltzmann weight (0–1), if computable.
+        weight_source: Where the weight came from (``"censo"``, ``"xtb"``,
+            ``"dft"``, ``"computed"``), when the manifest declares it.
         source: Source provenance.
         badges: List of display badges.
         vibrations: Vibration availability.
@@ -278,6 +278,7 @@ class StructureViewerEntry:
     energy: StructureViewerEnergy = field(default_factory=StructureViewerEnergy)
     relative_energy_kcal: float | None = None
     boltzmann_weight: float | None = None
+    weight_source: str | None = None
     source: StructureViewerSource = field(default_factory=StructureViewerSource)
     badges: tuple[str, ...] = ()
     vibrations: StructureViewerVibrations = field(default_factory=StructureViewerVibrations)
@@ -294,6 +295,7 @@ class StructureViewerEntry:
             "energy": self.energy.to_dict(),
             "relative_energy_kcal": self.relative_energy_kcal,
             "boltzmann_weight": self.boltzmann_weight,
+            "weight_source": self.weight_source,
             "source": self.source.to_dict(),
             "badges": list(self.badges),
             "vibrations": self.vibrations.to_dict(),
@@ -584,41 +586,6 @@ _ResolverResult = tuple[
 _Resolver = Any  # Callable[[Path, str, str, list[str], str | None], _ResolverResult]
 
 
-def _compute_boltzmann_weights(
-    energies: list[float | None],
-    temperature_k: float,
-) -> list[float | None]:
-    """Compute Boltzmann weights from a list of energies.
-
-    Args:
-        energies: Energy values (hartree). ``None`` entries get ``None`` weight.
-        temperature_k: Temperature in Kelvin.
-
-    Returns:
-        List of Boltzmann weights summing to 1.0, or ``None`` per missing entry.
-    """
-    valid = [(i, e) for i, e in enumerate(energies) if e is not None]
-    if not valid:
-        return [None] * len(energies)
-
-    e_min = min(e for _, e in valid)
-    rt = _R_KCAL_PER_MOL_K * temperature_k
-    raw: list[tuple[int, float]] = []
-    for i, e in valid:
-        delta_hartree = e - e_min
-        delta_kcal = delta_hartree * _HARTREE_TO_KCAL
-        raw.append((i, math.exp(-delta_kcal / rt)))
-
-    total = sum(w for _, w in raw)
-    if total <= 0:
-        return [None] * len(energies)
-
-    result: list[float | None] = [None] * len(energies)
-    for i, w in raw:
-        result[i] = w / total
-    return result
-
-
 def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Resolve Confsearch manifest → structure viewer entries.
 
@@ -627,6 +594,7 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
     manifest order, with rank-1 as the default selection.
     """
     from acp.confsearch.manifest import find_confsearch_manifest, read_manifest
+    from acp.confsearch.shared.boltzmann import HARTREE_TO_KCAL, boltzmann_weights
 
     manifest_path = find_confsearch_manifest(task_root)
     if manifest_path is None:
@@ -644,7 +612,13 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
         warnings.append("Confsearch manifest has no conformers")
         return [], [], None
 
-    temperature_k = _number(payload.get("temperature_k")) or _DEFAULT_TEMPERATURE_K
+    temperature_k = _number(payload.get("temperature_k"))
+    if temperature_k is None:
+        provenance = payload.get("provenance")
+        if isinstance(provenance, dict):
+            temperature_k = _number(provenance.get("temperature_k"))
+    if temperature_k is None:
+        temperature_k = _DEFAULT_TEMPERATURE_K
 
     groups = [StructureViewerGroup(id="final_conformers", label="最终构象", kind="ensemble")]
 
@@ -706,9 +680,13 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
 
         relative_kcal = _number(conformer.get("relative_energy_kcal"))
         if relative_kcal is None and energy_value is not None and min_energy is not None:
-            relative_kcal = (energy_value - min_energy) * _HARTREE_TO_KCAL
+            relative_kcal = (energy_value - min_energy) * HARTREE_TO_KCAL
 
         weight = _number(conformer.get("boltzmann_weight"))
+        weight_source_raw = conformer.get("weight_source")
+        weight_source = (
+            weight_source_raw if isinstance(weight_source_raw, str) and weight_source_raw else None
+        )
 
         badges: list[str] = []
         if rank is not None:
@@ -738,6 +716,7 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
             ),
             relative_energy_kcal=relative_kcal,
             boltzmann_weight=weight,
+            weight_source=weight_source,
             source=StructureViewerSource(
                 kind="formal_result",
                 geometry_ref=full_geometry_ref,
@@ -756,7 +735,7 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
         energies_for_weights: list[float | None] = [
             p.get("energy_val") if p else None for p in parsed
         ]
-        computed_weights = _compute_boltzmann_weights(energies_for_weights, temperature_k)
+        computed_weights = boltzmann_weights(energies_for_weights, temperature_k, missing="none")
         rebuilt: list[StructureViewerEntry] = []
         for entry, cw in zip(entries, computed_weights, strict=True):
             if entry.boltzmann_weight is None and cw is not None:
@@ -770,6 +749,7 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
                     energy=entry.energy,
                     relative_energy_kcal=entry.relative_energy_kcal,
                     boltzmann_weight=cw,
+                    weight_source=entry.weight_source,
                     source=entry.source,
                     badges=entry.badges,
                     vibrations=entry.vibrations,
