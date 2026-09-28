@@ -262,19 +262,8 @@ def _is_remote_job(record: Any) -> bool:
 
 
 def _remote_structure_cache(request: Request) -> Any:
-    """Return (or lazily create) the RemoteStructureCache singleton."""
-    from acp.results.remote_structure_cache import RemoteStructureCache
-
-    manager = _manager(request)
-    cache = getattr(manager, "_remote_structure_cache", None)
-    if cache is None:
-
-        def _fetcher_factory(job_id: str) -> Any:
-            return getattr(manager, "_remote_fetcher", None)
-
-        cache = RemoteStructureCache(manager.run_root, fetcher_factory=_fetcher_factory)
-        manager._remote_structure_cache = cache  # type: ignore[attr-defined]
-    return cache
+    """Return the manager-owned RemoteStructureCache singleton."""
+    return _manager(request).structure_cache
 
 
 def _structure_viewer_root(
