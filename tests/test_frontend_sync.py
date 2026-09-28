@@ -9052,3 +9052,45 @@ def test_frame_controller_visibility_gate_uses_live_tab_id() -> None:
         f"Node updateFrameController visibility test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Conformer energy-inspector key alignment (confsearch weight provenance)
+# ---------------------------------------------------------------------------
+
+
+def test_conformer_inspector_spec_matches_energy_graph_metadata_keys() -> None:
+    """Conformer inspector spec keys must match _build_conformer_graph metadata.
+
+    The energy-graph conformer node metadata is emitted via
+    ``TrajectoryFrame.to_node()`` with exactly the keys listed in
+    ``ENERGY_INSPECTOR_FIELD_SPECS.conformer`` (rank / gibbs_energy /
+    relative_energy_kcal / boltzmann_weight). The legacy aliases ``weight``/
+    ``gibbs_hartree`` must never reach node metadata, and must be listed in
+    ``_INSPECTOR_COMMON_KEYS`` so stale payloads cannot render raw duplicate
+    rows next to the localized "Boltzmann 权重" row.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    source = (REPO_ROOT / "src" / "acp" / "results" / "energy_graph.py").read_text(encoding="utf-8")
+
+    specs_block = html.split("var ENERGY_INSPECTOR_FIELD_SPECS = {", 1)[1].split("\n};", 1)[0]
+    conformer_block = specs_block.split("conformer: [", 1)[1].split("],", 1)[0]
+    spec_keys = set(re.findall(r'key: "([^"]+)"', conformer_block))
+    assert spec_keys == {"rank", "gibbs_energy", "relative_energy_kcal", "boltzmann_weight"}
+
+    builder_block = source.split("def _build_conformer_graph(", 1)[1].split("\ndef ", 1)[0]
+    metadata_block = builder_block.split("metadata={", 1)[1].split("}", 1)[0]
+    emitted_keys = set(re.findall(r'"([a-z_]+)":', metadata_block))
+    assert emitted_keys == spec_keys, (
+        "conformer node metadata keys must exactly match ENERGY_INSPECTOR_FIELD_SPECS.conformer"
+    )
+    assert "weight" not in emitted_keys and "gibbs_hartree" not in emitted_keys
+
+    common_block = html.split("var _INSPECTOR_COMMON_KEYS = {", 1)[1].split("\n};", 1)[0]
+    assert re.search(r"\bweight: 1\b", common_block), (
+        "legacy alias 'weight' must be suppressed from raw metadata rows"
+    )
+    assert re.search(r"\bgibbs_hartree: 1\b", common_block), (
+        "legacy alias 'gibbs_hartree' must be suppressed from raw metadata rows"
+    )
+    assert "_INSPECTOR_KEY_ALIASES" in html

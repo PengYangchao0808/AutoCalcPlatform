@@ -7236,7 +7236,10 @@ var _INSPECTOR_COMMON_KEYS = {
   rank: 1, gibbs_energy: 1, relative_energy_kcal: 1, boltzmann_weight: 1,
   time_ps: 1, step: 1, energy_kcal_mol: 1, relative_energy_kcal_mol: 1,
   basin_id: 1, coordinate_values: 1, energy_hartree: 1, review: 1,
+  weight: 1, gibbs_hartree: 1,
 };
+
+var _INSPECTOR_KEY_ALIASES = { boltzmann_weight: "weight", gibbs_energy: "gibbs_hartree" };
 
 /* ── Frame-candidate state (server-authoritative via /frame-candidates) ── */
 function energyGraphFrameCandidateFor(viewType, frameIndex) {
@@ -7448,6 +7451,7 @@ function energyInspectorMetadataRows(data, node, metadata) {
   var html = "";
   specs.forEach(function(spec) {
     var val = metadata[spec.key];
+    if (val == null && _INSPECTOR_KEY_ALIASES[spec.key]) val = metadata[_INSPECTOR_KEY_ALIASES[spec.key]];
     if (val == null) return;
     if (spec.decimals >= 0 && typeof val === "number") {
       html += '<dt>' + escapeHtml(spec.i18nKey) + '</dt><dd>' + escapeHtml(energyGraphFormatNumber(val, spec.decimals)) + (spec.unit ? ' ' + escapeHtml(spec.unit) : '') + '</dd>';
