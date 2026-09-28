@@ -259,7 +259,12 @@ def mechanism_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Generator[tuple[TestClient, str], None, None]:
     """TestClient with a historical COMPLETED mechanism job seeded."""
-    from acp.api.server import create_app
+    try:
+        from acp.api.server import create_app
+    except RuntimeError as exc:
+        if "already owned by another ACP server process" in str(exc):
+            pytest.skip(f"ACP service holds the production run_root lock: {exc}")
+        raise
 
     with TestClient(create_app(run_root=tmp_path, max_running=2)) as client:
         manager = client.app.state.job_manager
@@ -313,6 +318,8 @@ def test_e2e_remote_parity() -> None:
         inp: dict = {}
         if workflow == "BatchOptimize":
             inp = {"from_artifact": "/tmp/m.json"}
+        elif workflow == "irc":
+            inp = {"ts_source": {"schema": "irc_ts_source_v1"}, "charge": 0, "multiplicity": 1}
         spec = JobSpec(workflow=workflow, input=inp, method=method or {}, resources={"nproc": 4})
         return build_remote_cli_command(spec, input_path="input.xyz")
 

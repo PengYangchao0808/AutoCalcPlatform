@@ -310,7 +310,14 @@ def test_irc_local_remote_parity() -> None:
     sequences and CLI flags for IRC."""
     spec = _spec(
         "irc",
-        {"source": "CCO", "source_type": "smiles", "directions": ["forward", "reverse"]},
+        {
+            "source": "CCO",
+            "source_type": "smiles",
+            "directions": ["forward", "reverse"],
+            "ts_source": {"schema": "irc_ts_source_v1"},
+            "charge": 0,
+            "multiplicity": 1,
+        },
         {"method": "r2SCAN-3c"},
     )
     # Stage sequence: single irc stage
