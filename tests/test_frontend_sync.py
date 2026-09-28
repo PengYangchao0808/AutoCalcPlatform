@@ -7482,7 +7482,7 @@ _STR_DECLARED_KEY_MAP: dict[str, dict[str, str]] = {
 
 # STR names dispatched dynamically (map lookups) — covered by the dedicated
 # dynamic-key tests, never linked at a call site.
-_DYNAMIC_STR_NAMES = {"SOURCE_KINDS", "REASONS", "TS_HINTS"}
+_DYNAMIC_STR_NAMES = {"SOURCE_KINDS", "REASONS", "TS_HINTS", "WEIGHT_SOURCES"}
 
 
 def test_i18n_str_fallback_sweep() -> None:
@@ -9094,3 +9094,213 @@ def test_conformer_inspector_spec_matches_energy_graph_metadata_keys() -> None:
         "legacy alias 'gibbs_hartree' must be suppressed from raw metadata rows"
     )
     assert "_INSPECTOR_KEY_ALIASES" in html
+
+
+# ---------------------------------------------------------------------------
+# Weight provenance display (confsearch weight provenance, todo 9)
+# ---------------------------------------------------------------------------
+
+_WEIGHT_SOURCE_I18N_KEYS = (
+    "structure.weight_source.censo",
+    "structure.weight_source.xtb",
+    "structure.weight_source.dft",
+    "structure.weight_source.computed",
+)
+
+
+def _locale_weight_source_values(html: str, block_re: re.Pattern[str]) -> dict[str, str]:  # type: ignore[type-arg]
+    """Extract structure.weight_source.* key/value pairs from a locale block."""
+    m = block_re.search(html)
+    if not m:
+        return {}
+    block = m.group(1)
+    out: dict[str, str] = {}
+    for key in _WEIGHT_SOURCE_I18N_KEYS:
+        vm = re.search(r'"%s":\s*"([^"]*)"' % re.escape(key), block)
+        if vm:
+            out[key] = vm.group(1)
+    return out
+
+
+def test_weight_provenance_i18n_keys_and_js_refs() -> None:
+    """Contract: weight-source labels exist in BOTH locale dicts and
+    structure_viewer.js renders via them.
+
+    The inspector weight row must show ``xx.x%（<SOURCE>, <T> K）`` where
+    <SOURCE> comes from ``structure.weight_source.*`` i18n keys (zh ``计算值``
+    vs en ``computed``) and <T> from ``entry.energy.temperature_k``.  This
+    asserts the key set in both locales plus the JS references; removing a
+    key from one locale turns ``test_phase_a_i18n_structure_keys_complete_
+    across_locales`` red as well.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    zh = _locale_weight_source_values(html, _ZH_BLOCK_RE)
+    en = _locale_weight_source_values(html, _EN_BLOCK_RE)
+
+    for key in _WEIGHT_SOURCE_I18N_KEYS:
+        assert key in zh, f"{key} missing from zh-CN dict"
+        assert key in en, f"{key} missing from en-US dict"
+
+    assert zh["structure.weight_source.censo"] == "CENSO"
+    assert zh["structure.weight_source.xtb"] == "xTB"
+    assert zh["structure.weight_source.dft"] == "DFT"
+    assert zh["structure.weight_source.computed"] == "\u8ba1\u7b97\u503c"  # 计算值
+    assert en["structure.weight_source.censo"] == "CENSO"
+    assert en["structure.weight_source.xtb"] == "xTB"
+    assert en["structure.weight_source.dft"] == "DFT"
+    assert en["structure.weight_source.computed"] == "computed"
+
+    # JS must look labels up through the i18n keys and read the payload fields.
+    assert '"structure.weight_source."' in js, (
+        "structure_viewer.js must resolve labels via structure.weight_source.* keys"
+    )
+    assert "weight_source" in js
+    assert "temperature_k" in js
+    assert "WEIGHT_SOURCES" in js, "zh STR fallback table for weight sources missing"
+
+
+def test_weight_provenance_rendering_exact_strings() -> None:
+    """Node logic: exact rendered weight strings incl. edge cases.
+
+    Cases (weight 0.5 => ``50.0%``):
+      both      -> ``50.0%（CENSO, 298.15 K）``
+      source only -> ``50.0%（CENSO）``
+      temp only -> ``50.0%（298.15 K）``
+      neither   -> bare ``50.0%`` (must equal today's format exactly)
+      zh computed -> ``50.0%（计算值）`` vs en computed -> ``50.0%（computed）``
+      unknown source -> raw value shown; non-numeric temperature omitted.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        if (typeof ns._formatWeightValue !== "function") {
+            console.error("FAIL: _formatWeightValue not exposed on namespace");
+            process.exit(1);
+        }
+
+        // en locale labels via the app's t() shape (missing key => key itself)
+        var EN = {
+            "structure.weight_source.censo": "CENSO",
+            "structure.weight_source.xtb": "xTB",
+            "structure.weight_source.dft": "DFT",
+            "structure.weight_source.computed": "computed",
+        };
+
+        function setLang(lang) {
+            if (lang === "en") {
+                global.t = function(key) { return EN[key] || key; };
+            } else {
+                delete global.t;  // zh STR fallback path
+            }
+        }
+
+        var cases = [
+            // [lang, entry, expected]
+            ["en", { boltzmann_weight: 0.5, weight_source: "censo",
+                     energy: { temperature_k: 298.15 } },
+                "50.0%\uff08CENSO, 298.15 K\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "censo" },
+                "50.0%\uff08CENSO\uff09"],
+            ["en", { boltzmann_weight: 0.5,
+                     energy: { temperature_k: 298.15 } },
+                "50.0%\uff08298.15 K\uff09"],
+            ["en", { boltzmann_weight: 0.5 },
+                "50.0%"],
+            ["zh", { boltzmann_weight: 0.5, weight_source: "computed" },
+                "50.0%\uff08\u8ba1\u7b97\u503c\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "computed" },
+                "50.0%\uff08computed\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "mystery" },
+                "50.0%\uff08mystery\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "xtb",
+                     energy: { temperature_k: 298.1 } },
+                "50.0%\uff08xTB, 298.1 K\uff09"],
+            ["en", { boltzmann_weight: 0.5,
+                     energy: { temperature_k: 300 } },
+                "50.0%\uff08300 K\uff09"],
+            ["en", { boltzmann_weight: 0.5,
+                     energy: { temperature_k: 298.156 } },
+                "50.0%\uff08298.16 K\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "dft",
+                     energy: { temperature_k: "not-a-number" } },
+                "50.0%\uff08DFT\uff09"],
+            ["en", { boltzmann_weight: 0.005, weight_source: "censo" },
+                "0.5%\uff08CENSO\uff09"],
+        ];
+
+        for (var i = 0; i < cases.length; i++) {
+            setLang(cases[i][0]);
+            var got = ns._formatWeightValue(cases[i][1]);
+            if (got !== cases[i][2]) {
+                console.error("FAIL: lang=" + cases[i][0]
+                    + " entry=" + JSON.stringify(cases[i][1])
+                    + " expected=" + JSON.stringify(cases[i][2])
+                    + " got=" + JSON.stringify(got));
+                process.exit(1);
+            }
+        }
+
+        // Tooltip helper: empty without provenance, full string with it.
+        setLang("en");
+        if (ns._weightBarTitle({ boltzmann_weight: 0.5 }) !== "") {
+            console.error("FAIL: _weightBarTitle must be empty without provenance");
+            process.exit(1);
+        }
+        var tip = ns._weightBarTitle({
+            boltzmann_weight: 0.5, weight_source: "censo",
+            energy: { temperature_k: 298.15 }
+        });
+        if (tip !== "50.0%\uff08CENSO, 298.15 K\uff09") {
+            console.error("FAIL: _weightBarTitle expected provenance string, got " + JSON.stringify(tip));
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Weight provenance rendering test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_weight_provenance_boltzmann_bar_tooltips() -> None:
+    """JS contract: all three Boltzmann bars carry the provenance tooltip
+    when source/temperature present, and nothing when absent."""
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    for marker in (
+        'bar.className = "sv-switcher-item-boltz";',
+        'bar.className = "sv-strip-boltz";',
+        'bar.className = "sv-boltzmann-bar";',
+    ):
+        assert marker in js, f"bar site {marker!r} missing"
+        block = js.split(marker, 1)[1][:300]
+        assert "_weightBarTitle(" in block, (
+            f"{marker} block must set the provenance tooltip via _weightBarTitle"
+        )
+        assert 'setAttribute("title"' in block or ".title =" in block, (
+            f"{marker} block must expose the tooltip as a title attribute"
+        )
+
+    # _weightBarTitle must gate on provenance (empty => no title => unchanged)
+    helper = js.split("function _weightBarTitle(", 1)[1].split("\n  }", 1)[0]
+    assert "_weightProvenanceSuffix(" in helper
+
+    # Inspector weight row goes through the shared formatter.
+    inspector_tail = js.split('_t("structure.weight", STR.WEIGHT)', 1)[1][:200]
+    assert "_formatWeightValue(" in inspector_tail, (
+        "inspector weight row must render via _formatWeightValue"
+    )
