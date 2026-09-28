@@ -363,8 +363,8 @@ def test_diamond_dedup(client: TestClient) -> None:
             },
             {
                 "molecule_name": "ethanol",
-                "task_name": "irc",
-                "workflow": "irc",
+                "task_name": "scan",
+                "workflow": "scan",
                 "input": {"source": "CCO"},
             },
         ],
