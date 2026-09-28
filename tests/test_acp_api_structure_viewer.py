@@ -1268,6 +1268,115 @@ class TestRemoteStructureCache:
         assert r1 == r2
         assert call_count == 1
 
+    def test_fetch_force_refreshes_and_drops_stale_on_absence(self, tmp_path: Path) -> None:
+        """force=True re-reads the remote; a remote absence drops the stale copy."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        state: dict[str, bytes | None] = {"data": b"v1"}
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                data = state["data"]
+                if data is None:
+                    raise FileNotFoundError(filename)
+                return data
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-force"})()
+
+        assert cache.fetch(record, "RESULT/x.json").read_bytes() == b"v1"  # type: ignore[union-attr]
+        state["data"] = b"v2"
+        assert cache.fetch(record, "RESULT/x.json").read_bytes() == b"v1"  # type: ignore[union-attr]
+        assert cache.fetch(record, "RESULT/x.json", force=True).read_bytes() == b"v2"  # type: ignore[union-attr]
+
+        state["data"] = None
+        assert cache.fetch(record, "RESULT/x.json", force=True) is None
+        assert cache.get_cached("job-force", "RESULT/x.json") is None
+
+    def test_fetch_raise_errors_propagates_transport_failure(self, tmp_path: Path) -> None:
+        """Default fetch degrades to None; raise_errors surfaces the failure."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                raise RuntimeError("sftp down")
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-err"})()
+
+        assert cache.fetch(record, "RESULT/x.json") is None
+        with pytest.raises(RuntimeError, match="sftp down"):
+            cache.fetch(record, "RESULT/x.json", force=True, raise_errors=True)
+
+    def test_push_paths_uploads_cached_files_in_order(self, tmp_path: Path) -> None:
+        """push_paths uploads cached bytes; uncached paths are skipped."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def __init__(self) -> None:
+                self.writes: list[tuple[str, bytes]] = []
+
+            def read_file(self, record, filename: str) -> bytes:
+                raise FileNotFoundError(filename)
+
+            def write_file(self, record, filename: str, data: bytes) -> None:
+                self.writes.append((filename, data))
+
+        fetcher = FakeFetcher()
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: fetcher)
+        target = cache.cache_path("job-push", "RESULT/structures/a.xyz")
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"3\nA\n")
+
+        uploaded = cache.push_paths(
+            type("FakeRecord", (), {"id": "job-push"})(),
+            ["RESULT/structures/a.xyz", "RESULT/missing.json"],
+        )
+
+        assert uploaded == ["RESULT/structures/a.xyz"]
+        assert fetcher.writes == [("RESULT/structures/a.xyz", b"3\nA\n")]
+
+    def test_push_paths_requires_write_capability(self, tmp_path: Path) -> None:
+        """Read-only fetchers raise RemotePushError instead of silently no-oping."""
+        from acp.results.remote_structure_cache import RemotePushError, RemoteStructureCache
+
+        class ReadOnlyFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                raise FileNotFoundError(filename)
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: ReadOnlyFetcher())
+        with pytest.raises(RemotePushError, match="write-back"):
+            cache.push_paths(type("FakeRecord", (), {"id": "job-ro"})(), ["RESULT/a.json"])
+
+    def test_fetch_matching_filters_directory_entries(self, tmp_path: Path) -> None:
+        """fetch_matching pulls only <prefix>* files from one remote directory."""
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        backup = "RESULT/pes_search/pes_review_backup_001.json"
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == backup:
+                    return b"{}"
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path: str | None = None):
+                return [
+                    types.SimpleNamespace(name=backup, is_dir=False),
+                    types.SimpleNamespace(name="RESULT/pes_search/pes_profile.json", is_dir=False),
+                    types.SimpleNamespace(name="RESULT/pes_search/sub", is_dir=True),
+                ]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-match"})()
+
+        fetched = cache.fetch_matching(record, "RESULT/pes_search", "pes_review_backup_")
+
+        assert fetched == [backup]
+        assert cache.get_cached("job-match", backup) is not None
+
     def test_fetch_catalog_populates_remote_projection_root(self, tmp_path: Path) -> None:
         """Catalog metadata is cached and can be projected as a task root."""
         from acp.results.remote_structure_cache import RemoteStructureCache

@@ -24,8 +24,10 @@ import logging
 import os.path
 import posixpath
 import stat as stat_mod
+import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 
 from acp.scheduler.jobs import JobRecord
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
@@ -39,6 +41,7 @@ __all__ = [
     "RemoteFileError",
     "NotARemoteJobError",
     "RemotePreviewConfig",
+    "RemoteWriteError",
 ]
 
 # Maximum bytes read from the end of a log file when computing a tail.
@@ -74,6 +77,10 @@ class RemoteFileError(RuntimeError):
 
 class NotARemoteJobError(RemoteFileError):
     """The job record carries no remote execution metadata."""
+
+
+class RemoteWriteError(RemoteFileError):
+    """A write-back to the remote job directory failed."""
 
 
 class RemoteResultFetcher:
@@ -248,6 +255,30 @@ class RemoteResultFetcher:
                 )
             with sftp.file(path, "rb") as f:
                 return f.read()
+
+    def write_file(self, record: JobRecord, filename: str, data: bytes) -> None:
+        """Upload *data* to *filename* inside the remote job directory.
+
+        Missing parent directories are created (``FileStager.upload_file``).
+        Raises :class:`RemoteWriteError` when the upload fails, so write-back
+        callers can surface a hard error instead of a silent no-op.
+        """
+        node, remote_dir = self.resolve(record)
+        path = _safe_join(remote_dir, filename)
+        handle = tempfile.NamedTemporaryFile(delete=False, suffix=".tmp")
+        try:
+            handle.write(data)
+            handle.close()
+            self._stager.upload_file(node, Path(handle.name), path)
+        except Exception as exc:
+            raise RemoteWriteError(f"Failed to write {filename!r} on {node.name}: {exc}") from exc
+        finally:
+            handle.close()
+            try:
+                os.unlink(handle.name)
+            except OSError:
+                pass
+        logger.info("Wrote %s/%s (%d bytes)", record.id, filename, len(data))
 
     def stream_file(self, record: JobRecord, filename: str) -> Iterator[bytes]:
         """Yield *filename* in chunks for a streaming download.

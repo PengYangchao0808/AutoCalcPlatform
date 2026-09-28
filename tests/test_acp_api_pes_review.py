@@ -319,17 +319,39 @@ def test_unconfirmed_pes_batch_source_surfaces_confirmation_hint(
 
 
 class _RemoteTreeFetcher:
-    """Serves a cached remote task tree; records requested relative paths."""
+    """Serves a mutable remote task tree; records reads/writes like SFTP does."""
 
-    def __init__(self, files: dict[str, bytes]) -> None:
-        self.files = files
+    def __init__(self, files: dict[str, bytes], *, fail_writes: bool = False) -> None:
+        self.files = dict(files)
         self.calls: list[str] = []
+        self.writes: list[str] = []
+        self.fail_writes = fail_writes
 
     def read_file(self, record: object, filename: str) -> bytes:
         self.calls.append(filename)
         if filename in self.files:
             return self.files[filename]
         raise FileNotFoundError(filename)
+
+    def write_file(self, record: object, filename: str, data: bytes) -> None:
+        if self.fail_writes:
+            raise RuntimeError("SFTP upload failed")
+        self.writes.append(filename)
+        self.files[filename] = bytes(data)
+
+    def list_files(self, record: object, relative_path: str | None = None):
+        from types import SimpleNamespace
+
+        prefix = (relative_path.rstrip("/") + "/") if relative_path else ""
+        entries = []
+        for path in sorted(self.files):
+            if prefix and not path.startswith(prefix):
+                continue
+            rest = path[len(prefix) :] if prefix else path
+            if "/" in rest or not rest:
+                continue
+            entries.append(SimpleNamespace(name=prefix + rest, is_dir=False))
+        return entries
 
 
 def _remote_files(root: Path) -> dict[str, bytes]:
@@ -419,22 +441,119 @@ def test_remote_s2_frame_fetches_geometry_lazily(client: TestClient, tmp_path: P
     assert "WORK/07_PATH/pes_scan_001/scan_frames/frame_001.xyz" in fetcher.calls
 
 
-def test_remote_pes_review_reads_cache_and_rejects_write(
+def test_remote_pes_review_writes_back_authoritative_files(
     client: TestClient, tmp_path: Path
 ) -> None:
-    _inject_remote_tree(client, tmp_path)
-    job_id, _local = _register_remote_job(client, tmp_path)
+    """POST review stages locally, then uploads structures + manifest + review."""
+    fetcher = _inject_remote_tree(client, tmp_path)
+    job_id, local_work_dir = _register_remote_job(client, tmp_path)
+
+    response = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={"note": "round 1", "candidates": [{"frame_index": 1, "role": "TS"}]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "confirmed"
+    assert body["revision"] == 1
+
+    # Structures first, authoritative review file last (safe partial-failure order).
+    assert fetcher.writes == [
+        "RESULT/structures/pes_ts_frame_001.xyz",
+        "RESULT/result_manifest.json",
+        "RESULT/pes_search/pes_review.json",
+    ]
+    remote_review = json.loads(fetcher.files["RESULT/pes_search/pes_review.json"])
+    assert remote_review["status"] == "confirmed"
+    assert remote_review["revision"] == 1
+    remote_manifest = json.loads(fetcher.files["RESULT/result_manifest.json"])
+    structure_products = [
+        p["id"] for p in remote_manifest["products"] if p.get("kind") == "structure"
+    ]
+    assert structure_products == ["pes_candidate_pes_ts_frame_001"]
+    # The selected frame geometry was staged before validation.
+    assert "WORK/07_PATH/pes_scan_001/scan_frames/frame_001.xyz" in fetcher.calls
+    # Nothing was written into the local (empty) work dir.
+    assert not (local_work_dir / "RESULT").exists()
 
     read = client.get(f"/api/v1/jobs/{job_id}/pes/review")
     assert read.status_code == 200, read.text
-    assert read.json()["status"] == "pending"
+    assert read.json()["status"] == "confirmed"
+    assert read.json()["review"]["note"] == "round 1"
 
-    write = client.post(
+
+def test_remote_pes_review_conflict_uses_remote_revision(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Revision checks run against the compute node's current review state."""
+    fetcher = _inject_remote_tree(client, tmp_path)
+    remote_review = json.dumps({"schema_version": "pes_review_v1", "revision": 3}).encode()
+    fetcher.files["RESULT/pes_search/pes_review.json"] = remote_review
+    job_id, _local = _register_remote_job(client, tmp_path)
+
+    response = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={"candidates": [{"frame_index": 1, "role": "TS"}], "expected_revision": 1},
+    )
+    assert response.status_code == 409
+    assert fetcher.writes == []
+
+
+def test_remote_pes_review_multi_round_backup_and_restore(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Round 2 rotates a backup to the node; GET lists it; restore uploads again."""
+    fetcher = _inject_remote_tree(client, tmp_path)
+    job_id, _local = _register_remote_job(client, tmp_path)
+
+    first = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={"candidates": [{"frame_index": 0, "role": "TS"}]},
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={"candidates": [{"frame_index": 2, "role": "INT"}]},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["revision"] == 2
+    assert "RESULT/pes_search/pes_review_backup_001.json" in fetcher.writes
+    assert "RESULT/pes_search/pes_review_backup_001.json" in fetcher.files
+
+    state = client.get(f"/api/v1/jobs/{job_id}/pes/review")
+    assert state.status_code == 200, state.text
+    backups = state.json()["backups"]
+    assert [row["n"] for row in backups] == [1]
+    assert backups[0]["selected_count"] == 1
+
+    fetcher.writes.clear()
+    restored = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review/restore",
+        json={"backup": 1, "expected_revision": 2},
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["restored_from"] == 1
+    assert restored.json()["revision"] == 3
+    assert "RESULT/pes_search/pes_review.json" in fetcher.writes
+    remote_review = json.loads(fetcher.files["RESULT/pes_search/pes_review.json"])
+    assert remote_review["restored_from"] == 1
+    assert remote_review["selected"][0]["candidate_id"] == "pes_ts_frame_000"
+
+
+def test_remote_pes_review_write_failure_returns_502(client: TestClient, tmp_path: Path) -> None:
+    """Upload failures surface as 502 instead of a silent local-only success."""
+    remote_root = _make_pes_task(tmp_path / "remote")
+    fetcher = _RemoteTreeFetcher(_remote_files(remote_root), fail_writes=True)
+    manager = client.app.state.job_manager
+    manager._remote_fetcher = fetcher  # type: ignore[assignment]
+    job_id, _local = _register_remote_job(client, tmp_path)
+
+    response = client.post(
         f"/api/v1/jobs/{job_id}/pes/review",
         json={"candidates": [{"frame_index": 1, "role": "TS"}]},
     )
-    assert write.status_code == 501
-    assert "远程" in write.json()["detail"]
+    assert response.status_code == 502
+    assert "写回" in response.json()["detail"]
 
 
 def test_remote_pes_without_cached_files_keeps_404(client: TestClient, tmp_path: Path) -> None:

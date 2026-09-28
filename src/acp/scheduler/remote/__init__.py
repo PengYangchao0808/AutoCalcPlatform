@@ -38,6 +38,7 @@ from acp.scheduler.remote.fetcher import (
     NotARemoteJobError,
     RemoteFileError,
     RemoteResultFetcher,
+    RemoteWriteError,
 )
 from acp.scheduler.remote.monitor import RemoteJobMonitor
 from acp.scheduler.remote.node_manager import (
@@ -84,6 +85,7 @@ __all__ = [
     "RemoteNode",
     "RemoteNodeUnavailableError",
     "RemoteResultFetcher",
+    "RemoteWriteError",
     "RemoteSubmissionError",
     "SSHConnectionPool",
     "SSHExecutionError",

@@ -2127,21 +2127,19 @@ def _pes_review_work_dir(
     job_id: str,
     *,
     require_completed: bool,
-    for_write: bool = False,
 ) -> Path:
     """Resolve the task dir of a canonical PESsearch job for manual review.
 
-    Remote jobs read through the controlled remote cache; review *writes*
-    are rejected until write-back to the compute node is implemented, so the
-    caller never persists review state into a cache that the real pipeline
-    cannot see (and that the 7-day sweep would discard).
+    Remote jobs work on the controlled remote cache (staging root): reads are
+    served from it directly and writes (save/restore) are uploaded back to
+    the compute node by the caller, so the authoritative artifacts stay in
+    the remote ``RESULT/`` tree.
 
     Raises:
         404: job/work_dir missing or no canonical PES profile.
         400: job is not a PESsearch job.
         409: job has not completed yet (POST only).
         410: legacy mechanism task (read-only compatibility).
-        501: remote job review write (not supported yet).
     """
     manager = _manager(request)
     record = manager.get(job_id)
@@ -2155,14 +2153,6 @@ def _pes_review_work_dir(
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
     if _is_remote_job(record):
-        if for_write:
-            raise HTTPException(
-                status_code=501,
-                detail=(
-                    "远程 PES 任务的审阅写回暂不支持：pes_review.json 必须落在计算节点的 "
-                    "RESULT/ 下。请在本机运行 PESsearch，或等待后续版本的远程写回支持。"
-                ),
-            )
         work_dir = _job_read_root(request, record)
     else:
         work_dir = Path(record.work_dir)
@@ -2186,10 +2176,134 @@ def _pes_review_work_dir(
     return work_dir
 
 
+def _pes_frame_rel_paths(work_dir: Path, frame_indexes: set[int]) -> list[str]:
+    """Map selected frame indexes to task-root-relative geometry paths."""
+    profile_path = work_dir / PES_PROFILE_RELATIVE_PATH
+    try:
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    frames = profile.get("frames") if isinstance(profile, dict) else None
+    if not isinstance(frames, list):
+        return []
+    scan_dir = str(profile.get("scan_dir") or "").replace("\\", "/")
+    rel_paths: list[str] = []
+    for index in sorted(frame_indexes):
+        if index < 0 or index >= len(frames) or not isinstance(frames[index], dict):
+            continue
+        geometry = str(frames[index].get("geometry_path") or "").replace("\\", "/")
+        if geometry:
+            rel_paths.append(posixpath.join(scan_dir, geometry) if scan_dir else geometry)
+    return rel_paths
+
+
+def _remote_review_setup(
+    request: Request,
+    job_id: str,
+    *,
+    frame_indexes: set[int] | None = None,
+    backup_rel: str | None = None,
+) -> tuple[Any, JobRecord] | None:
+    """Stage mutable artifacts + frame geometries for a remote review write.
+
+    Remote is authoritative: the review/manifest (and the requested backup)
+    are force-refreshed so revision checks run against the compute node's
+    current state, and every selected frame geometry is pulled into the
+    staging root before validation.  Returns ``(cache, record)`` for remote
+    jobs, ``None`` for local ones; raises 502 when staging fails.
+    """
+    from acp.calculations.pes.review import PES_REVIEW_RELATIVE_PATH
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or not _is_remote_job(record):
+        return None
+    cache = _remote_structure_cache(request)
+    work_dir = cache.job_root(record.id)
+    try:
+        if backup_rel is not None:
+            backup_path = cache.fetch(record, backup_rel, force=True, raise_errors=True)
+            if backup_path is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"review backup not found: {backup_rel}",
+                )
+            try:
+                backup = json.loads(backup_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                backup = {}
+            frame_indexes = {
+                int(row["frame_index"])
+                for row in (backup.get("selected") or [])
+                if isinstance(row, dict) and row.get("frame_index") is not None
+            }
+        cache.fetch(record, PES_REVIEW_RELATIVE_PATH, force=True, raise_errors=True)
+        cache.fetch(record, "RESULT/result_manifest.json", force=True, raise_errors=True)
+        for rel_path in _pes_frame_rel_paths(work_dir, frame_indexes or set()):
+            cache.fetch(record, rel_path, raise_errors=True)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"审阅输入拉取失败（无法读取计算节点）: {exc}",
+        ) from exc
+    return cache, record
+
+
+def _remote_review_write_back(cache: Any, record: JobRecord, payload: dict[str, Any]) -> None:
+    """Upload staged review artifacts; the authoritative review file goes last.
+
+    Order: structures -> result manifest -> backup -> ``pes_review.json``.
+    A partial failure leaves extra files on the node at worst; re-saving the
+    same selection is idempotent, so the caller can simply retry.
+    """
+    from acp.calculations.pes.review import PES_REVIEW_BACKUP_TEMPLATE, PES_REVIEW_RELATIVE_PATH
+
+    rel_paths: list[str] = []
+    for row in payload.get("selected") or []:
+        structure_path = str((row or {}).get("structure_path") or "")
+        if structure_path:
+            rel_paths.append(f"RESULT/{structure_path}")
+    rel_paths.append("RESULT/result_manifest.json")
+    previous_revision = int(payload.get("revision") or 1) - 1
+    if previous_revision >= 1:
+        rel_paths.append(
+            f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=previous_revision)}"
+        )
+    rel_paths.append(PES_REVIEW_RELATIVE_PATH)
+    try:
+        cache.push_paths(record, rel_paths)
+    except Exception as exc:
+        # The staged cache now diverges from the node; restore coherence from
+        # the authoritative remote state (best-effort) before failing loudly.
+        for rel_path in ("RESULT/result_manifest.json", PES_REVIEW_RELATIVE_PATH):
+            try:
+                cache.fetch(record, rel_path, force=True)
+            except Exception:
+                logger.debug("Post-failure refresh failed for %s", rel_path, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail=f"审阅写回计算节点失败（远端可能部分更新，重试即可）: {exc}",
+        ) from exc
+
+
+def _stage_remote_review_backups(request: Request, job_id: str) -> None:
+    """Best-effort staging of review backups so GET exposes all rounds."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or not _is_remote_job(record):
+        return
+    _remote_structure_cache(request).fetch_matching(
+        record, "RESULT/pes_search", "pes_review_backup_"
+    )
+
+
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
     work_dir = _pes_review_work_dir(request, job_id, require_completed=False)
+    _stage_remote_review_backups(request, job_id)
 
     from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
 
@@ -2215,7 +2329,16 @@ def restore_pes_review_endpoint(
     request: Request,
 ) -> PesReviewRestoreResponse:
     """Re-activate a previous review backup; manifest switches to that round."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=True, for_write=True)
+    from acp.calculations.pes.review import PES_REVIEW_BACKUP_TEMPLATE
+
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+    remote_ctx = _remote_review_setup(
+        request,
+        job_id,
+        backup_rel=(
+            f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"
+        ),
+    )
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
@@ -2232,6 +2355,9 @@ def restore_pes_review_endpoint(
         message = str(exc)
         status_code = 404 if "not found" in message else 422
         raise HTTPException(status_code=status_code, detail=message) from exc
+
+    if remote_ctx is not None:
+        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
 
     return PesReviewRestoreResponse(
         job_id=job_id,
@@ -2259,7 +2385,12 @@ def save_pes_review_endpoint(
     request: Request,
 ) -> PesReviewResponse:
     """Confirm TS/INT selections: materialise RESULT/structures + pes_review.json + manifest."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=True, for_write=True)
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+    remote_ctx = _remote_review_setup(
+        request,
+        job_id,
+        frame_indexes={int(item.frame_index) for item in req.candidates},
+    )
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
@@ -2276,6 +2407,9 @@ def save_pes_review_endpoint(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except PesReviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if remote_ctx is not None:
+        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
 
     return PesReviewResponse(
         job_id=job_id,
