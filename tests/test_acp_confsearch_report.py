@@ -304,6 +304,53 @@ def test_final_conformers_xyz_skips_missing_geometry_but_raises_when_all_missing
         )
 
 
+def test_all_missing_geometries_raise_without_orphan_final_report(tmp_path: Path) -> None:
+    """A failed XYZ write must not leave an unregistered ``final_report.json``."""
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    geo1 = _write_geometry(confsearch_dir, "conf_0001", -101.2)
+    entries = [_entry("conf_0001", geo1, rank=1, refined=True)]
+    (confsearch_dir / geo1).unlink()  # all geometries deleted
+
+    with pytest.raises(FileNotFoundError, match="geometry"):
+        write_final_report(
+            confsearch_dir,
+            request=_make_request(tmp_path),
+            entries=entries,
+            outcome=_make_outcome(),
+        )
+
+    assert not (confsearch_dir / "final_report.json").exists()
+    assert not (confsearch_dir / "final_conformers.xyz").exists()
+    assert sorted(path.name for path in confsearch_dir.iterdir()) == ["conformers"]
+
+
+def test_failed_json_write_leaves_no_orphan_xyz(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed JSON write must clean up the already-written XYZ (pair atomicity)."""
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+
+    def _boom(path: Path, payload: dict) -> Path:
+        raise OSError("simulated JSON write failure")
+
+    monkeypatch.setattr("acp.confsearch.report.write_json_atomic", _boom)
+
+    with pytest.raises(OSError, match="simulated JSON write failure"):
+        write_final_report(
+            confsearch_dir,
+            request=_make_request(tmp_path),
+            entries=entries,
+            outcome=_make_outcome(),
+        )
+
+    assert not (confsearch_dir / "final_conformers.xyz").exists()
+    assert not (confsearch_dir / "final_report.json").exists()
+    assert sorted(path.name for path in confsearch_dir.iterdir()) == ["conformers"]
+
+
 # --------------------------------------------------------------------------- #
 # register_final_report — merge registration
 # --------------------------------------------------------------------------- #

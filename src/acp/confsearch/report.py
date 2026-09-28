@@ -97,8 +97,21 @@ def write_final_report(
         if key in metadata:
             payload[key] = metadata[key]
 
-    write_json_atomic(report_path, payload)
+    # Write the XYZ first so a geometry failure raises before any report JSON
+    # exists; the JSON is written last and rolls the XYZ back on failure —
+    # a failed write never leaves an orphan artifact pair.
     _write_frames_xyz(xyz_path, confsearch_dir, entries, outcome)
+    try:
+        write_json_atomic(report_path, payload)
+    except Exception:
+        try:
+            xyz_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning(
+                "final report: could not remove orphan %s after failed JSON write",
+                xyz_path,
+            )
+        raise
     return report_path, xyz_path
 
 
