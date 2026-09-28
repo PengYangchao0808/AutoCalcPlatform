@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import random
 import shutil
 import socket
@@ -97,6 +98,7 @@ _RETIRED_WORKFLOWS: frozenset[str] = _derive_retired_workflows()
 
 # Type-only import to avoid requiring paramiko when remote execution is off.
 if TYPE_CHECKING:
+    from acp.results.remote_structure_cache import RemoteStructureCache
     from acp.scheduler.local_cleanup import LocalCleanup, LocalCleanupReport, RetentionPolicy
     from acp.scheduler.remote.cleanup import RemoteCleanup
     from acp.scheduler.remote.config import RemoteExecutionConfig
@@ -246,6 +248,11 @@ class JobManager:
         self._poll_stop = threading.Event()
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True, name="acp-poller")
 
+        # Background remote-catalog prefetch (terminal remote jobs).  Worker
+        # is started lazily on first enqueue; see _queue_catalog_prefetch.
+        self._catalog_prefetch_queue: queue.Queue[str | None] = queue.Queue()
+        self._catalog_prefetch_thread: threading.Thread | None = None
+
         # Background local-cleanup thread (Phase 5B step 5B.3).
         self._cleanup_thread: threading.Thread | None = None
         self._cleanup_stop_event: threading.Event | None = None
@@ -257,6 +264,7 @@ class JobManager:
         with self._lock:
             self._rebuild_reservations()
         self._dispatch_queued_jobs()
+        self._queue_startup_catalog_prefetch()
         self._poll_thread.start()
 
     # ------------------------------------------------------------------ #
@@ -932,6 +940,30 @@ class JobManager:
         return self._remote_fetcher
 
     @property
+    def structure_cache(self) -> RemoteStructureCache:
+        """Shared controlled-area cache for remote structure-viewer files.
+
+        Lazy singleton: the API endpoints and the terminal-state catalog
+        prefetcher must share ONE instance so path locks and the on-disk
+        ``run_root/.remote_cache`` tree stay coherent.  The fetcher factory
+        reads :attr:`remote_fetcher` lazily, so the cache degrades to a
+        no-op when remote execution is disabled.
+        """
+        cache = getattr(self, "_remote_structure_cache", None)
+        if cache is None:
+            with self._lock:
+                cache = getattr(self, "_remote_structure_cache", None)
+                if cache is None:
+                    from acp.results.remote_structure_cache import RemoteStructureCache
+
+                    cache = RemoteStructureCache(
+                        self.run_root,
+                        fetcher_factory=lambda job_id: self._remote_fetcher,
+                    )
+                    self._remote_structure_cache = cache
+        return cache
+
+    @property
     def remote_cleanup(self) -> RemoteCleanup | None:
         """Remote file-lifecycle manager (``None`` when remote is off)."""
         return self._remote_cleanup
@@ -1554,6 +1586,12 @@ class JobManager:
         self._poll_stop.set()
         if self._poll_thread.is_alive():
             self._poll_thread.join(timeout=10)
+        prefetch_thread = self._catalog_prefetch_thread
+        if prefetch_thread is not None:
+            self._catalog_prefetch_queue.put(None)
+            prefetch_thread.join(timeout=5)
+            if not prefetch_thread.is_alive():
+                self._catalog_prefetch_thread = None
         with self._lock:
             for ev in self._cancel_events.values():
                 ev.set()
@@ -2124,6 +2162,96 @@ class JobManager:
                 f"({running + len(in_flight)}/{target.max_jobs})"
             )
 
+    # ------------------------------------------------------------------ #
+    # Remote catalog prefetch (terminal remote jobs)
+    # ------------------------------------------------------------------ #
+
+    def _queue_catalog_prefetch(self, job_id: str) -> None:
+        """Enqueue one terminal remote job for background catalog prefetch.
+
+        No-op when remote fetching is not configured.  The worker thread is
+        created lazily on the first enqueue and reused afterwards.
+        """
+        if self._remote_fetcher is None:
+            return
+        self._catalog_prefetch_queue.put(job_id)
+        with self._lock:
+            thread = self._catalog_prefetch_thread
+            if thread is None or not thread.is_alive():
+                thread = threading.Thread(
+                    target=self._catalog_prefetch_loop,
+                    daemon=True,
+                    name="acp-catalog-prefetch",
+                )
+                self._catalog_prefetch_thread = thread
+                thread.start()
+
+    def _catalog_prefetch_loop(self) -> None:
+        """Drain the prefetch queue; one failure never kills the worker."""
+        while True:
+            job_id = self._catalog_prefetch_queue.get()
+            try:
+                if job_id is None:
+                    return
+                self._prefetch_remote_catalog(job_id)
+            except Exception:
+                logger.warning("Remote catalog prefetch failed for %s", job_id, exc_info=True)
+            finally:
+                self._catalog_prefetch_queue.task_done()
+
+    def _prefetch_remote_catalog(self, job_id: str) -> None:
+        """Pull one terminal remote job's small catalog files into the cache.
+
+        The backend owns this sync so that ``availability`` flips from
+        ``pending_fetch`` to ``ready`` without depending on a browser issuing
+        ``?fetch=1`` (cached workbench JS may lack the terminal retry).
+        Geometry stays lazy; failures are logged and never propagate.
+        """
+        record = self.store.get(job_id)
+        if record is None or not record.status.is_terminal:
+            return
+        if not self._is_remote_job(record):
+            return
+        cache = self.structure_cache
+        workflow = str(record.spec.workflow or "")
+        if cache.catalog_ready(Path(record.work_dir), workflow):
+            return
+        if cache.catalog_ready(cache.job_root(job_id), workflow):
+            return
+        if cache.fetch_catalog(record, workflow) is not None:
+            logger.info("Prefetched remote structure catalog for job %s", job_id)
+        else:
+            logger.debug("Remote structure catalog not ready after prefetch for %s", job_id)
+
+    def _queue_startup_catalog_prefetch(self) -> None:
+        """Enqueue recent terminal remote jobs whose catalog is not cached yet.
+
+        Repairs jobs that reached a terminal state before this process started
+        (e.g. across an upgrade) so their viewers are ready on first open.
+        """
+        if self._remote_fetcher is None:
+            return
+        queued = 0
+        try:
+            for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+                for record in self.store.list(status=status.value, limit=100):
+                    if queued >= 300:
+                        break
+                    if not self._is_remote_job(record):
+                        continue
+                    cache = self.structure_cache
+                    workflow = str(record.spec.workflow or "")
+                    if cache.catalog_ready(Path(record.work_dir), workflow):
+                        continue
+                    if cache.catalog_ready(cache.job_root(record.id), workflow):
+                        continue
+                    self._queue_catalog_prefetch(record.id)
+                    queued += 1
+        except Exception:
+            logger.warning("Startup remote catalog prefetch sweep failed", exc_info=True)
+        if queued:
+            logger.info("Queued %d remote catalog prefetch(es) on startup", queued)
+
     def _poll_job(self, job_id: str) -> None:
         """Single non-blocking check of one job's status."""
         record = self.store.get(job_id)
@@ -2245,6 +2373,8 @@ class JobManager:
         with self._lock:
             self._cancel_events.pop(job_id, None)
         self._dispatch_queued_jobs()
+        if is_remote:
+            self._queue_catalog_prefetch(job_id)
 
     def _poll_loop(self) -> None:
         """Background daemon: periodically poll all RUNNING jobs."""
