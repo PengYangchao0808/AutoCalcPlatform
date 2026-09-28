@@ -43,7 +43,10 @@ v2.0 重构将结构查看器从三栏固定面板布局改为**单列弹性工�
 - **Overlay drawers**（`#sv-drawer-measure/vibration/source/more`）：四个可覆盖抽屉，默认 `display:none`；由 `openDrawer(id)` 打开、`closeDrawer(id)` 关闭；每次只允许一个抽屉打开（`closeAllDrawers()` 互斥）
 - **Switcher dropdown**：conformer/candidate/batch 三种 kind，点击 summary bar 中的切换器标签展开下拉列表，带过滤输入框和 rank/energy/boltzmann 权重显示
 - **Input/result toggle**：当条目同时包含 `formal_result` 和 `calculation_input` 时，显示"结果"/"输入"切换按钮，切换时重绘 summary bar 并选择对应条目
-- **Unified frame controller**：IRC/scan 路径的统一播放控件（prev/next/play/slider/energy display）
+- **Unified frame controller**：IRC/scan 路径与**多帧 XYZ 文件播放**（如 `all_conformers.xyz`）共用的统一播放控件（prev/next/play/slider/energy display）
+  - **可见性契约**：`#frame-controller`（`frontend/ACP_Workbench_v2.html:3743`）的显示/隐藏由 `updateFrameController()`（:17948）单一拥有，覆盖全部变更路径（Play/prev/next/滑块经 :17961、文件加载 :15283/:15308/:15330、i18n 重放 :7615）；其门控必须引用**存活的 `data-tab` 值**，结构页签 id 为 `structure`（页签按钮 :3613-3616）。`setViewerTab()` 另按帧数显示/隐藏（:12669）；旧 id `"3d"`/`"conformers"` 仅作为 `setViewerTab` 入参别名保留（:12630）。
+  - **已知缺口**：IRC 控制器在降级（大体系）状态复用同一元素时，`updateFrameController()` 先在子元素解引用处（:17942）抛异常、到不了门控，故本门控**不守护**该状态（另案跟踪）。
+  - **回归锁**：本不变式由 `tests/test_frontend_sync.py::test_frame_controller_visibility_gate_uses_live_tab_id`（静态存活 tab-id 集合断言 + Node 行为断言，:8953）与 Playwright 套件 `tests/test_frontend_multiframe_playback_browser.py` 锁定。
 
 **交互契约**：
 - 条目选择通过 `selectEntry(entryId, origin)` 统一入口，origin 区分 `"user"`（列表点击）、`"energy_graph"`（能量图推送）、`"input_toggle"`（输入/结果切换）、`"switcher"`（切换器选择）
