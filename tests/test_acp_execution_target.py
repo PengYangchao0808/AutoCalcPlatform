@@ -595,12 +595,17 @@ def test_validate_submission_target_auto_zero_remote_nodes_is_rejected(
     # permanent condition — fail fast at creation (HTTP 400) instead of
     # letting the job spin STARTING on the dispatch capacity-retry loop.
     monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+    monkeypatch.setattr(
+        "acp.scheduler.capabilities.local_missing_software", lambda required: ("crest",)
+    )
     reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
     from acp.scheduler.capabilities import NoCapableNodeError
 
     with pytest.raises(NoCapableNodeError) as ei:
         validate_submission_target(_confsearch_spec(), registry=reg)
     assert set(ei.value.missing_software) == {"xtb", "crest"}
+    assert ei.value.local_missing_software == ("crest",)
+    assert ei.value.remote_nodes_configured is False
 
 
 @requires_remote_config
@@ -708,6 +713,9 @@ def test_api_create_job_auto_no_capable_400(tmp_path: Path) -> None:
         manager.registry = reg
         monkeypatch = pytest.MonkeyPatch()
         monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+        monkeypatch.setattr(
+            "acp.scheduler.capabilities.local_missing_software", lambda required: ("crest",)
+        )
         try:
             resp = client.post(
                 "/api/v1/jobs",
@@ -723,6 +731,8 @@ def test_api_create_job_auto_no_capable_400(tmp_path: Path) -> None:
         body = resp.json()
         assert body["detail"]["code"] == "no_capable_node"
         assert body["detail"]["missing_software"] == ["crest"]
+        assert body["detail"]["local_missing_software"] == ["crest"]
+        assert body["detail"]["remote_nodes_configured"] is True
 
 
 @requires_remote_config

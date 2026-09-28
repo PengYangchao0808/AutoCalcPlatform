@@ -1663,6 +1663,8 @@ def _target_validation_detail(exc: Exception) -> dict[str, Any]:
         "message": str(exc),
         "missing_software": list(getattr(exc, "missing_software", ()) or ()),
         "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
+        "local_missing_software": list(getattr(exc, "local_missing_software", ()) or ()),
+        "remote_nodes_configured": getattr(exc, "remote_nodes_configured", None),
     }
 
 

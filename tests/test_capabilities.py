@@ -41,6 +41,7 @@ from acp.scheduler.capabilities import (
     NoCapableNodeError,
     derive_required_software,
     is_degraded,
+    local_missing_software,
     local_satisfies,
     matches_capabilities,
 )
@@ -506,6 +507,7 @@ def test_local_satisfies_one_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_config(monkeypatch, {})
     monkeypatch.setattr(cap, "resolve_executable", _fake_resolver({"orca"}))
     assert local_satisfies(["orca", "crest"]) is False
+    assert local_missing_software(["orca", "crest", "shermo"]) == ("crest", "shermo")
 
 
 def test_local_satisfies_empty_requirement(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -635,11 +637,15 @@ def test_no_capable_node_error_fields() -> None:
         "no node can run this job",
         missing_software=["censo", "orca"],
         missing_tags=["gpu"],
+        local_missing_software=["crest"],
+        remote_nodes_configured=False,
     )
     assert isinstance(err, RuntimeError)
     assert err.code == "no_capable_node"
     assert err.missing_software == ("censo", "orca")  # sorted
     assert err.missing_tags == ("gpu",)
+    assert err.local_missing_software == ("crest",)
+    assert err.remote_nodes_configured is False
     assert "no node can run this job" in str(err)
     bare = NoCapableNodeError("tags only", missing_tags=["mpi"])
     assert bare.missing_software == ()

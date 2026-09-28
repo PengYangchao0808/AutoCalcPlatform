@@ -6743,8 +6743,11 @@ const I18N = {
     "nodes.badge.mismatch": "声明不一致",
     "nodes.reason.offline": "离线",
     "nodes.reason.missing_software": "缺少软件: {software}",
+    "nodes.reason.local_missing_software": "本机未识别软件: {software}",
+    "nodes.reason.remote_missing_software": "远程节点均缺少: {software}",
+    "nodes.reason.no_remote_nodes": "未配置可用的远程节点",
     "nodes.reason.missing_tags": "缺少标签: {tags}",
-    "nodes.error.no_capable_node": "当前没有可运行该任务的节点（本机与远程均不满足软件/标签要求）",
+    "nodes.error.no_capable_node": "当前没有可运行该任务的节点",
     "nodes.error.target_node_incapable": "目标节点不具备运行该任务的能力",
     "nodes.error.unknown_target_node": "未知的目标节点",
     "nodes.error.target_node_disabled": "目标节点已禁用",
@@ -8246,8 +8249,11 @@ const I18N = {
     "nodes.badge.mismatch": "declared mismatch",
     "nodes.reason.offline": "offline",
     "nodes.reason.missing_software": "missing software: {software}",
+    "nodes.reason.local_missing_software": "local software not found: {software}",
+    "nodes.reason.remote_missing_software": "missing on all remote nodes: {software}",
+    "nodes.reason.no_remote_nodes": "no enabled remote nodes configured",
     "nodes.reason.missing_tags": "missing tags: {tags}",
-    "nodes.error.no_capable_node": "No capable node can run this job (local and remotes lack the required software/tags)",
+    "nodes.error.no_capable_node": "No capable node can run this job",
     "nodes.error.target_node_incapable": "The target node cannot run this job",
     "nodes.error.unknown_target_node": "Unknown target node",
     "nodes.error.target_node_disabled": "The target node is disabled",
@@ -21980,7 +21986,21 @@ function translateNodeError(err) {
   var translated = t(key);
   if (translated === key) translated = t("nodes.error.execution_target_error");
   var extras = [];
-  if (parsed.missing_software && parsed.missing_software.length) {
+  if (parsed.code === "no_capable_node" && parsed.remote_nodes_configured !== undefined &&
+      parsed.remote_nodes_configured !== null) {
+    if (parsed.local_missing_software && parsed.local_missing_software.length) {
+      extras.push(t("nodes.reason.local_missing_software", {
+        software: parsed.local_missing_software.join(", ")
+      }));
+    }
+    if (parsed.remote_nodes_configured === false) {
+      extras.push(t("nodes.reason.no_remote_nodes"));
+    } else if (parsed.missing_software && parsed.missing_software.length) {
+      extras.push(t("nodes.reason.remote_missing_software", {
+        software: parsed.missing_software.join(", ")
+      }));
+    }
+  } else if (parsed.missing_software && parsed.missing_software.length) {
     extras.push(t("nodes.reason.missing_software", { software: parsed.missing_software.join(", ") }));
   }
   if (parsed.missing_tags && parsed.missing_tags.length) {

@@ -319,12 +319,21 @@ def validate_submission_target(
         )
         missing_software &= frozenset(match.missing_software)
         missing_tags &= frozenset(match.missing_tags)
-    raise NoCapableNodeError(
-        "no enabled remote node can satisfy the job requirements "
+    reason = (
+        "no enabled remote nodes configured"
+        if not enabled_remotes
+        else "no enabled remote node can satisfy the job requirements "
         f"(missing everywhere: software={sorted(missing_software)}, "
-        f"tags={sorted(missing_tags)})",
+        f"tags={sorted(missing_tags)})"
+    )
+    raise NoCapableNodeError(
+        reason,
         missing_software=missing_software,
         missing_tags=missing_tags,
+        local_missing_software=(
+            _capabilities.local_missing_software(derived) if mode != "remote" else ()
+        ),
+        remote_nodes_configured=bool(enabled_remotes),
     )
 
 
