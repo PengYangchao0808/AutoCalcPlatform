@@ -25,9 +25,14 @@ def records_from_ensemble_result(result: Any) -> list[dict[str, Any]]:
     ensemble = getattr(result, "ensemble", None)
     for record in getattr(ensemble, "records", []) or []:
         structure = record.structure
+        # Join key for boltzmann_table.json (plan decision D12/Metis B1):
+        # manifest conf_NNNN ids are renumbered and must NEVER be used to
+        # join the screening table — metadata["source"] is the original key.
+        source_id = structure.metadata.get("source") or structure.metadata.get("conf_id")
         records.append(
             {
                 "conf_id": str(structure.metadata.get("conf_id") or structure.id),
+                "source_conf_id": str(source_id) if source_id is not None else None,
                 "symbols": list(structure.symbols),
                 "coordinates": (
                     coords_list(structure.coordinates)

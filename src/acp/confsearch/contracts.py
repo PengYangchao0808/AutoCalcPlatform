@@ -79,7 +79,15 @@ class ConfsearchRequest:
 
 @dataclass
 class ConformerEntry:
-    """One conformer row of the unified manifest (§5)."""
+    """One conformer row of the unified manifest (§5).
+
+    ``conf_id`` is the manifest-local ``conf_NNNN`` identifier; the additive
+    ``source_conf_id`` carries the original screening-table key (e.g. the
+    CENSO ``CONF1`` id) used to join ``boltzmann_table.json``.  ``weight_source``
+    names where the Boltzmann weight came from (``censo`` / ``xtb`` / ``dft``
+    / ``computed``) and ``refined`` marks entries that received the fine-DFT
+    refinement.
+    """
 
     conf_id: str
     geometry: str
@@ -88,6 +96,9 @@ class ConformerEntry:
     relative_energy_kcal: float | None = None
     boltzmann_weight: float | None = None
     rank: int = 0
+    source_conf_id: str | None = None
+    weight_source: str | None = None
+    refined: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -98,6 +109,9 @@ class ConformerEntry:
             "relative_energy_kcal": self.relative_energy_kcal,
             "boltzmann_weight": self.boltzmann_weight,
             "rank": self.rank,
+            "source_conf_id": self.source_conf_id,
+            "weight_source": self.weight_source,
+            "refined": self.refined,
         }
 
 
@@ -122,7 +136,8 @@ class ProtocolOutcome:
     """Normalized protocol output consumed by :class:`ConfsearchEngine`."""
 
     records: list[dict[str, Any]]
-    """Each row: ``conf_id``, ``symbols``, ``coordinates``, ``energy_hartree``,
+    """Each row: ``conf_id``, optional ``source_conf_id`` (screening-table
+    join key), ``symbols``, ``coordinates``, ``energy_hartree``,
     ``free_energy_hartree``, ``weight``, optional ``properties``."""
 
     temperature_k: float = 298.15
@@ -130,6 +145,19 @@ class ProtocolOutcome:
     sampling: dict[str, Any] = field(default_factory=dict)
     stages_completed: list[str] = field(default_factory=list)
     workflow_metadata: dict[str, Any] = field(default_factory=dict)
+    weight_table: dict[str, float] | None = None
+    """Authoritative screening weights keyed by ``source_conf_id``
+    (e.g. ``{"CONF1": 0.8442}``); ``None`` keeps the recomputed path."""
+    weight_source: str | None = None
+    """Where the authoritative weights came from: ``censo`` / ``xtb`` /
+    ``dft`` / ``computed`` (degraded)."""
+    weight_method: str | None = None
+    """Provenance method label (e.g. ``censo_table_rank1``)."""
+    population_coverage: float | None = None
+    """Fraction of the screening population covered by the table."""
+    energy_kind: str | None = None
+    """Energy model of the reported energies (e.g. ``dft`` / ``censo`` /
+    ``xtb``)."""
 
 
 def validate_request(request: ConfsearchRequest) -> None:
