@@ -5441,6 +5441,7 @@ const I18N = {
   "results.cross_project": "来源：项目 {source} → 新任务：项目 {target}",
     "results.loading": "加载中…",
     "results.error": "加载失败",
+    "api.timeout": "请求超时（{seconds} 秒）——远程任务需要从计算节点拉取数据，可能较慢；请稍后重试。",
     "results.load": "载入",
     "results.loading_structure": "载入中…",
     "results.reload": "刷新",
@@ -6449,6 +6450,7 @@ const I18N = {
   "results.cross_project": "Source: project {source} → new job: project {target}",
     "results.loading": "Loading…",
     "results.error": "Failed to load",
+    "api.timeout": "Request timed out after {seconds}s — remote jobs fetch data from the compute node and can be slow; please retry.",
     "results.load": "Load",
     "results.loading_structure": "Loading…",
     "results.reload": "Reload",
@@ -7372,7 +7374,7 @@ async function energyGraphLoadFrameGeometry(node) {
     if (!xyz && (view === "scan" || view === "scan_trajectory")) {
       try {
         var s2Url = "/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex);
-        var s2Resp = await api(s2Url, ac ? { signal: ac.signal } : {});
+        var s2Resp = await apiRemote(s2Url, ac ? { signal: ac.signal } : {});
         if (tk !== energyGraphState.requestToken) return;
         if (s2Resp && s2Resp.xyz) xyz = s2Resp.xyz;
       } catch (e) {
@@ -7445,7 +7447,7 @@ async function energyGraphFetchFrameXyz(node) {
   }
   if (view === "scan" || view === "scan_trajectory") {
     try {
-      var s2Resp = await api("/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex));
+      var s2Resp = await apiRemote("/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex));
       if (s2Resp && s2Resp.xyz) return s2Resp.xyz;
     } catch (e) {}
   }
@@ -7477,44 +7479,69 @@ function energyInspectorMetadataRows(data, node, metadata) {
   return html;
 }
 
+// Fast default budget for local endpoints; SFTP-backed remote endpoints
+// routinely exceed it (Pi/remote-cluster round trips), so they opt into the
+// remote budget via apiRemote().
+var API_TIMEOUT_MS = 8000;
+var API_REMOTE_TIMEOUT_MS = 60000;
+
 async function api(path, opts) {
   opts = opts || {};
-  // 8s timeout via AbortController unless caller already provides a signal
-  if (!opts.signal && typeof AbortController !== "undefined") {
+  var timeoutMs = (opts.timeoutMs != null) ? opts.timeoutMs : API_TIMEOUT_MS;
+  var timedOut = false;
+  var _timer = null;
+  if (!opts.signal && typeof AbortController !== "undefined" && timeoutMs > 0) {
     var _ac = new AbortController();
-    var _timer = setTimeout(function() { _ac.abort(); }, 8000);
+    _timer = setTimeout(function() { timedOut = true; _ac.abort(); }, timeoutMs);
     opts.signal = _ac.signal;
   }
-  const response = await fetch(API_BASE + path, opts);
-  if (_timer) clearTimeout(_timer);
-  if (!response.ok) {
-    let msg = "HTTP " + response.status;
-    try {
-      const body = await response.json();
-      if (body && body.detail) {
-        const d = body.detail;
-        if (typeof d === "string") {
-          msg = d;
-        } else if (Array.isArray(d)) {
-          // FastAPI 422 request-validation errors: detail is a list of
-          // {loc, msg, type} objects — flatten them into readable text
-          // instead of letting String() collapse them to "[object Object]".
-          msg = d.map(function(item) {
-            if (item && typeof item === "object") {
-              const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
-              return (loc ? loc + ": " : "") + (item.msg || JSON.stringify(item));
-            }
-            return String(item);
-          }).join("; ");
-        } else {
-          msg = JSON.stringify(d);
+  try {
+    const response = await fetch(API_BASE + path, opts);
+    if (!response.ok) {
+      let msg = "HTTP " + response.status;
+      try {
+        const body = await response.json();
+        if (body && body.detail) {
+          const d = body.detail;
+          if (typeof d === "string") {
+            msg = d;
+          } else if (Array.isArray(d)) {
+            // FastAPI 422 request-validation errors: detail is a list of
+            // {loc, msg, type} objects — flatten them into readable text
+            // instead of letting String() collapse them to "[object Object]".
+            msg = d.map(function(item) {
+              if (item && typeof item === "object") {
+                const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+                return (loc ? loc + ": " : "") + (item.msg || JSON.stringify(item));
+              }
+              return String(item);
+            }).join("; ");
+          } else {
+            msg = JSON.stringify(d);
+          }
         }
-      }
-    } catch (e) {}
-    throw new Error(msg);
+      } catch (e) {}
+      throw new Error(msg);
+    }
+    const ct = response.headers.get("content-type") || "";
+    return ct.includes("application/json") ? response.json() : response.text();
+  } catch (e) {
+    if (timedOut) {
+      // Own timeout: never leak the raw "signal is aborted without reason".
+      throw new Error(t("api.timeout", { seconds: Math.round(timeoutMs / 1000) }));
+    }
+    // Caller-provided signal aborts (job/tab switches) keep their AbortError
+    // name so existing silent-cancel filters continue to work.
+    throw e;
+  } finally {
+    if (_timer) clearTimeout(_timer);
   }
-  const ct = response.headers.get("content-type") || "";
-  return ct.includes("application/json") ? response.json() : response.text();
+}
+
+function apiRemote(path, opts) {
+  opts = opts || {};
+  if (opts.timeoutMs == null) opts.timeoutMs = API_REMOTE_TIMEOUT_MS;
+  return api(path, opts);
 }
 
 function t(key, vars) {
@@ -11813,7 +11840,7 @@ function energyGraphOpenSaveDialog() {
   (function loadReviewHistory() {
     var box = overlay.querySelector("[data-energy-review-history]");
     if (!box) return;
-    api("/jobs/" + encodeURIComponent(jobId) + "/pes/review").then(function(state) {
+    apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review").then(function(state) {
       if (!box.isConnected) return;
       var backups = (state && state.backups) || [];
       if (!backups.length) {
@@ -11837,7 +11864,7 @@ function energyGraphOpenSaveDialog() {
           try {
             var payload = { backup: n };
             if (s2scanState.revision) payload.expected_revision = s2scanState.revision;
-            var result = await api("/jobs/" + encodeURIComponent(jobId) + "/pes/review/restore", {
+            var result = await apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review/restore", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
@@ -11878,7 +11905,7 @@ function energyGraphOpenSaveDialog() {
 
       btn.disabled = true;
       try {
-        var result = await api("/jobs/" + encodeURIComponent(jobId) + "/pes/review", {
+        var result = await apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -13784,7 +13811,7 @@ async function fetchAndExpand(jobId, folderPath) {
     } else {
       url = "/jobs/" + encodeURIComponent(jobId) + "/files?path=" + encodeURIComponent(folderPath);
     }
-    var resp = await api(url);
+    var resp = selectedJobIsRemote ? await apiRemote(url) : await api(url);
     var files;
     if (selectedJobIsRemote) {
       files = (resp.files || []).map(function(f) {
@@ -13819,7 +13846,7 @@ async function refreshLoadedFolders(jobId) {
       url = "/jobs/" + encodeURIComponent(jobId) + "/files?path=" + encodeURIComponent(p);
     }
     try {
-      var resp = await api(url);
+      var resp = selectedJobIsRemote ? await apiRemote(url) : await api(url);
       var files;
       if (selectedJobIsRemote) {
         files = (resp.files || []).map(function(f) {
@@ -18207,7 +18234,7 @@ async function selectJob(jobId) {
   selectedJobIsRemote = !!lastRemoteNode;
   let filesResp;
   if (selectedJobIsRemote) {
-    filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/remote-files");
+    filesResp = await apiRemote("/jobs/" + encodeURIComponent(jobId) + "/remote-files");
     filesResp.files = (filesResp.files || []).map(function(f) {
       return {
         path: f.name,
@@ -18388,7 +18415,7 @@ async function fetchNmrReportJson(job) {
   } else {
     url = "/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(path);
   }
-  var resp = await api(url);
+  var resp = jobRemoteNodeName(job) ? await apiRemote(url) : await api(url);
   if (typeof resp === "string") { try { resp = JSON.parse(resp); } catch (e) { return null; } }
   return resp && typeof resp === "object" ? resp : null;
 }
@@ -19524,7 +19551,7 @@ async function loadStructureSources(force) {
     url += "&project_id=" + encodeURIComponent(mode);
   }
   try {
-    var body = await api(url);
+    var body = await apiRemote(url);
     resultsSources = (body && body.sources) || [];
     resultsLoaded = true;
     renderResultsList();
@@ -19719,7 +19746,7 @@ async function loadStructureSource(sourceId, rowEl) {
   if (btn) { btn.disabled = true; btn.textContent = t("results.loading_structure"); }
   showParseStatus(t("results.loading_structure"), false);
   try {
-    var body = await api("/structure-sources/" + encodeURIComponent(sourceId));
+    var body = await apiRemote("/structure-sources/" + encodeURIComponent(sourceId));
     var a = body.structure || {};
     var struct = structureFromSourceDetail(a, sourceId);
     struct.source_ref.checksum = body.checksum || "";
@@ -24907,7 +24934,7 @@ async function s2scanLoadStep5Data() {
   var intList = s2scanEl("s2scan-int-list");
   try {
     if (profileEl) profileEl.parentElement.querySelector(".s2scan-loading-note");
-    var profile = await api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile");
+    var profile = await apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile");
     s2scanState.profileData = profile;
     s2scanRenderChart(profile);
     s2scanRenderFrameTable(profile);
@@ -24915,7 +24942,7 @@ async function s2scanLoadStep5Data() {
     if (frameWrap) frameWrap.innerHTML = '<div class="s2scan-error">' + escapeHtml(e.message || String(e)) + '</div>';
   }
   try {
-    var candidates = await api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates");
+    var candidates = await apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates");
     s2scanState.candidatesData = candidates;
     s2scanRenderCandidates(candidates);
   } catch(e) {
@@ -25010,7 +25037,7 @@ function s2scanRenderChart(profile) {
 async function s2scanLoadResultFrame(frameIndex) {
   if (!s2scanState.jobId || frameIndex == null) return;
   try {
-    var frame = await api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/frame/" + encodeURIComponent(frameIndex));
+    var frame = await apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/frame/" + encodeURIComponent(frameIndex));
     var container = s2scanEl("s2scan-result-3d");
     if (container && typeof $3Dmol !== "undefined") {
       if (!s2scanState.resultViewer) {
@@ -25190,7 +25217,7 @@ async function s2scanLoadAssets() {
     var s2scanUrl = "/structure-sources/recent?limit=50&_t=" + Date.now();
     if (selectedProjectId) s2scanUrl += "&project_id=" + encodeURIComponent(selectedProjectId);
     else s2scanUrl += "&all_projects=true";
-    var resp = await api(s2scanUrl);
+    var resp = await apiRemote(s2scanUrl);
     var sources = (resp && resp.sources) || [];
     if (!sources.length) { listEl.innerHTML = '<div style="padding:8px;font-size:12px;color:var(--text-tertiary);">' + t("s2scan.no_assets") + '</div>'; return; }
     listEl.innerHTML = sources.map(function(s) {
@@ -25202,7 +25229,7 @@ async function s2scanLoadAssets() {
         item.classList.add("selected");
         try {
           var sourceId = item.getAttribute("data-source-id") || "";
-          var detail = await api("/structure-sources/" + encodeURIComponent(sourceId));
+          var detail = await apiRemote("/structure-sources/" + encodeURIComponent(sourceId));
           var structure = detail.structure || {};
           var created = await api("/structure-assets", {
             method: "POST",
