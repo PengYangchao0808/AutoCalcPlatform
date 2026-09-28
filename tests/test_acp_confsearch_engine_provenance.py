@@ -151,6 +151,79 @@ def test_engine_finalizes_manifest_with_provenance_and_final_report(
     assert products["confsearch_final_conformers"]["kind"] == "structure"
     assert products["confsearch_final_conformers"]["path"] == "confsearch/final_conformers.xyz"
 
+    # Provenance is additive: weights/weight_sum keep the pre-provenance shape.
+    boltzmann = json.loads((confsearch_dir / "boltzmann.json").read_text(encoding="utf-8"))
+    assert boltzmann["weights"] == {"conf_0001": TABLE_WEIGHT}
+    assert boltzmann["weight_sum"] == pytest.approx(TABLE_WEIGHT)
+    assert boltzmann["source"] == "censo"
+    assert boltzmann["method"] == "censo_table_rank1"
+    assert boltzmann["temperature_k"] == pytest.approx(310.0)
+    assert boltzmann["population_coverage"] == pytest.approx(1.0)
+    assert boltzmann["reference"] == "RESULT/ensembles/boltzmann_table.json"
+
+
+def test_engine_emits_boltzmann_provenance_for_cumulative_99(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cumulative-99 → DFT-table provenance + partial coverage in boltzmann.json."""
+    _seed_task_markers(tmp_path)
+
+    def _stub(request: ConfsearchRequest, _overlay: object) -> ProtocolOutcome:
+        return ProtocolOutcome(
+            records=[
+                {
+                    "conf_id": "CONF1",
+                    "source_conf_id": "CONF1",
+                    "symbols": ["O", "H", "H"],
+                    "coordinates": [[0.0, 0.0, 0.0], [0.9, 0.0, 0.0], [-0.3, 0.9, 0.0]],
+                    "energy_hartree": -76.01,
+                    "free_energy_hartree": -76.0,
+                },
+                {
+                    "conf_id": "CONF2",
+                    "source_conf_id": "CONF2",
+                    "symbols": ["O", "H", "H"],
+                    "coordinates": [[0.1, 0.0, 0.0], [0.9, 0.1, 0.0], [-0.2, 0.9, 0.1]],
+                    "energy_hartree": -76.00,
+                    "free_energy_hartree": -75.99,
+                },
+            ],
+            temperature_k=320.0,
+            refined_conf_ids=["CONF1", "CONF2"],
+            sampling={"method": "stub"},
+            weight_table={"CONF1": 0.6, "CONF2": 0.4},
+            weight_source="dft",
+            weight_method="dft_table_cumulative99",
+            population_coverage=0.87,
+        )
+
+    monkeypatch.setitem(PROTOCOL_RUNNERS, "censo-crest", _stub)
+
+    from acp.io.structures import StructureReader
+
+    monkeypatch.setattr(StructureReader, "read", lambda self, *a, **k: _stub_structure())
+    xyz = _seed_input(tmp_path)
+
+    request = ConfsearchRequest(
+        input_source=str(xyz),
+        output_dir=tmp_path,
+        protocol="censo-crest",
+        refinement_policy="cumulative-99",
+    )
+    result = ConfsearchEngine().run(request)
+
+    assert result.status == "completed"
+    assert result.quality_gates["G1"] == "PASS"
+    boltzmann = json.loads(
+        (tmp_path / "RESULT" / "confsearch" / "boltzmann.json").read_text(encoding="utf-8")
+    )
+    assert boltzmann["source"] == "dft"
+    assert boltzmann["method"] == "dft_table_cumulative99"
+    assert boltzmann["temperature_k"] == pytest.approx(320.0)
+    assert boltzmann["population_coverage"] == pytest.approx(0.87)
+    assert boltzmann["weights"] == {"conf_0001": 0.6, "conf_0002": 0.4}
+    assert "reference" not in boltzmann
+
 
 # --- failure path: report writer failure must surface as a failed result -----
 

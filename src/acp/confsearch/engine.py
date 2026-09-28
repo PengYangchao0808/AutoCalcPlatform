@@ -157,8 +157,20 @@ class ConfsearchEngine:
             progress_reporter.complete_stage("dedup")
             progress_reporter.start_stage("refinement")
         confsearch_dir = self._confsearch_dir(request)
+        mol_dir = confsearch_dir.parent.parent
+        table_reference = normalize_table_reference(
+            outcome.workflow_metadata.get("boltzmann_table_json"), mol_dir
+        )
         write_conformer_geometries(confsearch_dir, entries, sorted_records(outcome.records))
-        write_ensemble_table(confsearch_dir, entries)
+        write_ensemble_table(
+            confsearch_dir,
+            entries,
+            temperature_k=outcome.temperature_k,
+            weight_source=outcome.weight_source,
+            weight_method=outcome.weight_method,
+            population_coverage=outcome.population_coverage,
+            reference=table_reference,
+        )
 
         selected = select_for_refinement(
             request.refinement_policy,
@@ -200,7 +212,6 @@ class ConfsearchEngine:
 
         # Required deliverable: report failures must propagate (never swallow).
         # Degenerate zero-conformer runs keep the legacy no-report behavior.
-        mol_dir = confsearch_dir.parent.parent
         report_refs: dict[str, str] | None = None
         if entries:
             report_path, xyz_path = write_final_report(
@@ -218,12 +229,7 @@ class ConfsearchEngine:
                 ("source", outcome.weight_source),
                 ("method", outcome.weight_method),
                 ("population_coverage", outcome.population_coverage),
-                (
-                    "reference",
-                    normalize_table_reference(
-                        outcome.workflow_metadata.get("boltzmann_table_json"), mol_dir
-                    ),
-                ),
+                ("reference", table_reference),
             )
             if value is not None
         }
