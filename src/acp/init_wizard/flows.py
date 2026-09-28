@@ -167,6 +167,16 @@ def _run_local_flow(config_path: Path, target_data: dict[str, Any], prompts: Any
     print("\n== 本地计算软件检测 ==")
     entries = sniff_local(config_path)
     print(render_sniff_table(entries))
+    # A unique bounded-scan hit is safe to pin now.  Persisting the absolute
+    # path makes later service starts independent of their shell PATH.
+    scanned = {
+        name: str(entry.resolved)
+        for name, entry in entries.items()
+        if entry.source == "scan" and entry.resolved is not None
+    }
+    if scanned:
+        entries = apply_local_spec(config_path, target_data, scanned)
+        print("已固定自动发现的软件路径：" + ", ".join(sorted(scanned)))
     missing = [name for name, entry in entries.items() if not entry.resolved]
     specs = manual_spec_local(missing, prompts)
     if specs:
