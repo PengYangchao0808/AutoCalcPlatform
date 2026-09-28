@@ -576,8 +576,11 @@ def test_task_input_workspace_css_linked_after_picker_css() -> None:
     """task_input_workspace.css linked AFTER structure_source_picker.css."""
     html = FRONTEND.read_text(encoding="utf-8")
     sp_pos = html.index('<link rel="stylesheet" href="css/structure_source_picker.css">')
-    tiw_pos = html.index('<link rel="stylesheet" href="css/task_input_workspace.css?v=20260924-layout">')
-    assert tiw_pos > sp_pos, "task_input_workspace.css must load after structure_source_picker.css"
+    tiw_match = re.search(
+        r'<link rel="stylesheet" href="css/task_input_workspace\.css(?:\?v=[^"]*)?">', html
+    )
+    assert tiw_match is not None, "task_input_workspace.css link tag missing"
+    assert tiw_match.start() > sp_pos, "task_input_workspace.css must load after structure_source_picker.css"
 
 
 def test_task_input_workspace_js_loaded_in_html() -> None:
