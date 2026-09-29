@@ -65,6 +65,7 @@ coord.original
 *.log
 *.out
 *.chk
+!tests/fixtures/**
 scratch/
 /results/
 output/
