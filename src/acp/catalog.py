@@ -781,27 +781,27 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "label": "SCF Convergence",
         "label_zh": "SCF 收敛标准",
-        "options": ["normal", "tight", "verytight"],
+        "options": ["Normal", "Tight", "VeryTight"],
         "option_labels_zh": {
-            "normal": "标准",
-            "tight": "严格",
-            "verytight": "非常严格",
+            "Normal": "标准",
+            "Tight": "严格",
+            "VeryTight": "非常严格",
         },
-        "default": {"*": "tight"},
+        "default": {"*": "Tight"},
     },
     "opt_convergence": {
         "type": "select",
         "advanced": True,
         "label": "Convergence Criteria",
         "label_zh": "\u6536\u655b\u6807\u51c6",
-        "options": ["loose", "normal", "tight", "verytight"],
+        "options": ["Loose", "Normal", "Tight", "VeryTight"],
         "option_labels_zh": {
-            "loose": "\u5bbd\u677e",
-            "normal": "\u6807\u51c6",
-            "tight": "\u4e25\u683c",
-            "verytight": "\u975e\u5e38\u4e25\u683c",
+            "Loose": "\u5bbd\u677e",
+            "Normal": "\u6807\u51c6",
+            "Tight": "\u4e25\u683c",
+            "VeryTight": "\u975e\u5e38\u4e25\u683c",
         },
-        "default": {"*": "tight"},
+        "default": {"*": "Tight"},
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
     "method": {
@@ -4667,17 +4667,7 @@ def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
 # carry title-case values ("Tight"); membership here both validates them
 # case-insensitively (canonicalising to the lowercase schema options) and
 # lowercases them at CLI-flag emission (``method_levels_to_cli_flags``).
-_CASE_INSENSITIVE_FIELDS = frozenset(
-    {
-        "solvent_model",
-        "dispersion",
-        "opt_convergence",
-        "scf_convergence",
-        "scf_strategy",
-        "scan_optimizer_solvent_model",
-        "scan_optimizer_dispersion",
-    }
-)
+_CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"})
 
 
 def _normalize_solvent(levels: dict, schema: dict) -> dict:

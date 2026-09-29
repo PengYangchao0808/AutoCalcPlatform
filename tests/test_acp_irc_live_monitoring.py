@@ -52,6 +52,9 @@ def _remote_request(tmp_path: Path, files: dict[str, bytes]) -> SimpleNamespace:
     manager = SimpleNamespace(
         get=lambda _job_id: record,
         remote_fetcher=FakeRemoteFetcher(files),
+        structure_cache=SimpleNamespace(
+            job_root=lambda _job_id: tmp_path / ".remote_cache" / "irc-live",
+        ),
     )
     return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(job_manager=manager)))
 

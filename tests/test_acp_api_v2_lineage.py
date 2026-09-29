@@ -24,8 +24,11 @@ def _make_client(tmp_path: Path) -> TestClient:
 
 @pytest.fixture()
 def client(tmp_path: Path) -> Generator[TestClient, None, None]:
-    with _make_client(tmp_path) as c:
-        yield c
+    import unittest.mock as mock
+
+    with mock.patch("acp.scheduler.capabilities.local_satisfies", return_value=True):
+        with _make_client(tmp_path) as c:
+            yield c
 
 
 def _default_project_id(client: TestClient) -> str:

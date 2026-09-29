@@ -370,7 +370,16 @@ def test_local_flow_pins_unique_scanned_binary(
         nonlocal calls
         calls += 1
         source = "scan" if calls == 1 else "config"
-        return {"crest": SoftwareDiscovery(name="crest", resolved=hidden, source=source)}
+        entries = {
+            "crest": SoftwareDiscovery(name="crest", resolved=hidden, source=source),
+        }
+        for name in ("orca", "xtb", "censo", "shermo", "isostat", "molclus", "mpi"):
+            entries[name] = SoftwareDiscovery(
+                name=name,
+                resolved=hidden.parent / name,
+                source="config",
+            )
+        return entries
 
     monkeypatch.setattr(flows_module, "sniff_local", fake_sniff)
     monkeypatch.setattr(flows_module, "render_sniff_table", lambda entries: "TABLE")

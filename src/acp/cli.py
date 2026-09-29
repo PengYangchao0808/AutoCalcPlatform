@@ -361,10 +361,9 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         )
         parser.add_argument(
             "--opt-convergence",
-            type=str.lower,
-            default="tight",
-            choices=["loose", "normal", "tight", "verytight"],
-            help="Optimization convergence (default: tight; case-insensitive)",
+            default="Tight",
+            choices=["Loose", "Normal", "Tight", "VeryTight"],
+            help="Optimization convergence (default: Tight)",
         )
         # Hessian policy (plan §9): mutually-exclusive group replaces the
         # legacy --recalc-hess flag. Omit all three to follow config.
@@ -791,10 +790,9 @@ Examples:
     )
     batch.add_argument(
         "--opt-convergence",
-        type=str.lower,
         choices=["loose", "normal", "tight", "verytight"],
         default=None,
-        help="Geometry-optimization convergence level (case-insensitive)",
+        help="Geometry-optimization convergence level",
     )
     batch.add_argument(
         "--opt-trust-radius",
