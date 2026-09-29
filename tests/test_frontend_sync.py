@@ -9356,9 +9356,12 @@ def test_task_view_data_layer() -> None:
     #     calls (+2); T11 added auto-tag rules CRUD (+4); P4 structure
     #     picker added s2scan picker branch detail+asset calls (+2).
     #     candidate workspace added _loadPendingGeometry api call (+1).
+    #     After merging origin/main's api() timeout wave, 4 SFTP-backed
+    #     call sites moved to apiRemote() (60s budget) — floor lowered
+    #     accordingly.
     api_v1_count = html.count('api("/')
-    assert api_v1_count >= 64, (
-        f"v1 api('/ call count expected at least 64 (including IRC TS source checks), got {api_v1_count}"
+    assert api_v1_count >= 60, (
+        f"v1 api('/ call count expected at least 60 (including IRC TS source checks), got {api_v1_count}"
     )
 
 

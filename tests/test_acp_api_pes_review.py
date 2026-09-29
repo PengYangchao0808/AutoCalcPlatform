@@ -523,6 +523,17 @@ def test_restore_backup_on_failed_task_partial_frames(client: TestClient, tmp_pa
     )
     assert second.status_code == 200
 
+    restored = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review/restore",
+        json={"backup": 1, "expected_revision": 2},
+    )
+    assert restored.status_code == 200
+    body = restored.json()
+    assert body["restored_from"] == 1
+    assert body["revision"] == 3
+    assert body["source_task_status"] == "FAILED"
+    assert body["candidates"][0]["candidate_id"] == "pes_ts_frame_000"
+
 # Remote PES jobs (LSF): read projections resolve through the remote cache
 # ---------------------------------------------------------------------------
 
@@ -740,12 +751,6 @@ def test_remote_pes_review_multi_round_backup_and_restore(
         f"/api/v1/jobs/{job_id}/pes/review/restore",
         json={"backup": 1, "expected_revision": 2},
     )
-    assert restored.status_code == 200
-    body = restored.json()
-    assert body["restored_from"] == 1
-    assert body["revision"] == 3
-    assert body["source_task_status"] == "FAILED"
-    assert body["candidates"][0]["candidate_id"] == "pes_ts_frame_000"
     assert restored.status_code == 200, restored.text
     assert restored.json()["restored_from"] == 1
     assert restored.json()["revision"] == 3
