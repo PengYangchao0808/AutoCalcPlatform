@@ -373,8 +373,8 @@ def test_batchoptimize_method_flags_normalize_enum_casing() -> None:
     assert flag_value("--opt-initial-hessian") == "Auto"
     assert flag_value("--opt-rescue-policy") == "Adaptive"
     assert flag_value("--opt-recalc-hess") == "Auto"
-    assert flag_value("--minimum-opt-initial-hessian") == "calculate"
-    assert flag_value("--transition-state-opt-recalc-hess") == "auto"
+    assert flag_value("--minimum-opt-initial-hessian") == "Calculate"
+    assert flag_value("--transition-state-opt-recalc-hess") == "Auto"
     # Case-sensitive identifiers pass through untouched.
     assert flag_value("--method") == "r2SCAN-3c"
 

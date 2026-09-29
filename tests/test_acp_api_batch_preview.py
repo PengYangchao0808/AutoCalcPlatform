@@ -96,12 +96,11 @@ class TestDefaultPayload:
         for role_key in ("int", "ts"):
             eff = resp.json()["roles"][role_key]["effective"]
             assert eff["max_cycles"] == 200
-            # Catalog default for opt_convergence is "tight" (lowercase,
-            # aligned with CLI choices since 2026-09-13)
-            assert eff["opt_level"] == "tight"
+            # Catalog default for opt_convergence is "Tight" (capitalised)
+            assert eff["opt_level"] == "Tight"
             assert eff["scf_maxiter"] == 300
-            # Catalog default for scf_convergence is "tight"
-            assert eff["scf_convergence"] == "tight"
+            # Catalog default for scf_convergence is "Tight"
+            assert eff["scf_convergence"] == "Tight"
             assert eff["scf_strategy"] == "normal"
 
     def test_shared_sources_are_default(self, client: TestClient) -> None:
@@ -129,7 +128,7 @@ class TestUserOverrides:
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
             eff = resp.json()["roles"][role_key]["effective"]
-            assert eff["opt_level"] == "verytight"
+            assert eff["opt_level"] == "VeryTight"
             src = resp.json()["roles"][role_key]["sources"]
             assert src["opt_level"] == "user"
 
@@ -165,7 +164,7 @@ class TestUserOverrides:
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
             eff = resp.json()["roles"][role_key]["effective"]
-            assert eff["scf_convergence"] == "verytight"
+            assert eff["scf_convergence"] == "VeryTight"
             src = resp.json()["roles"][role_key]["sources"]
             assert src["scf_convergence"] == "user"
 
@@ -279,7 +278,7 @@ class TestRoleOverrides:
         assert int_role["sources"]["scf_maxiter"] == "user"
         # TS unaffected.
         ts = resp.json()["roles"]["ts"]
-        assert ts["effective"]["opt_level"] == "tight"
+        assert ts["effective"]["opt_level"] == "Tight"
         assert ts["effective"]["scf_maxiter"] == 300
 
     def test_role_rescue_override(self, client: TestClient) -> None:

@@ -382,6 +382,9 @@ def test_local_flow_pins_unique_scanned_binary(
         return entries
 
     monkeypatch.setattr(flows_module, "sniff_local", fake_sniff)
+    import acp.init_wizard.sniff_local as sniff_module
+
+    monkeypatch.setattr(sniff_module, "sniff_local", fake_sniff)
     monkeypatch.setattr(flows_module, "render_sniff_table", lambda entries: "TABLE")
     monkeypatch.setattr(
         flows_module,
@@ -393,7 +396,8 @@ def test_local_flow_pins_unique_scanned_binary(
 
     flows_module._run_local_flow(target, {}, flows_module.PromptBundle())
 
-    assert calls == 1
+    # Initial sniff + the D10 re-sniff after pinning the scanned hit.
+    assert calls == 2
     assert yaml.safe_load(target.read_text(encoding="utf-8"))["executables"]["crest"][
         "path"
     ] == str(hidden)
