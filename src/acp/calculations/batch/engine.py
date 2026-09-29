@@ -1179,6 +1179,21 @@ class BatchOptimizeEngine:
             return base
         return {**base, "wavefunction_bootstrap": inherit_gbw}
 
+    def _resource_config(self) -> dict[str, JsonValue]:
+        """Return the ``{"config": ...}`` entry merged into request resources.
+
+        ``acp.calculations.primitives._common._backend_config`` reads backend
+        configuration ONLY from ``request.resources["config"]``.  Omitting it
+        constructs ``ORCAInterface(config={})`` so ``resolve_executable``
+        degrades to a PATH lookup — under the systemd service PATH that
+        resolves to the unrelated GNOME screen reader ``/usr/bin/orca`` and
+        every item fails immediately.  Mirrors the simple workflow, which
+        threads ``context.config`` into the same resource key.
+        """
+        if self._config is None:
+            return {}
+        return {"config": dict(self._config)}
+
     def _build_opt_request(
         self,
         input_path: Path,
@@ -1199,6 +1214,7 @@ class BatchOptimizeEngine:
             "trajectory_item_id": trajectory_item_id or input_path.parent.name,
             "charge": charge,
             "multiplicity": multiplicity,
+            **self._resource_config(),
             **opt_kwargs,
         }
         if basis:
@@ -1237,6 +1253,7 @@ class BatchOptimizeEngine:
             "scf_maxiter": resolved.get("scf_maxiter", methods.scf_max_iter),
             "scf_convergence": resolved.get("scf_convergence", methods.scf_convergence),
             "scf_strategy": resolved.get("scf_strategy", methods.scf_strategy),
+            **self._resource_config(),
         }
         basis = resolved.get("basis")
         if basis:
@@ -1278,6 +1295,7 @@ class BatchOptimizeEngine:
             "scf_maxiter": resolved.get("scf_maxiter", methods.scf_max_iter),
             "scf_convergence": resolved.get("scf_convergence", methods.scf_convergence),
             "scf_strategy": resolved.get("scf_strategy", methods.scf_strategy),
+            **self._resource_config(),
         }
         basis = resolved.get("basis")
         if basis:

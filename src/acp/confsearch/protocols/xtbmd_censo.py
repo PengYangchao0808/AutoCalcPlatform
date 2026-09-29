@@ -13,7 +13,15 @@ from typing import Any
 
 from ..contracts import ConfsearchRequest, ProtocolOutcome
 from ..selection import threshold_for_policy
-from ._common import outcome_from_workflow_result, require_completed, threshold_from_levels
+from ._common import (
+    apply_dft_provenance,
+    apply_screen_provenance,
+    apply_screening_weight_table,
+    levels_with_thermo_temperature,
+    outcome_from_workflow_result,
+    require_completed,
+    threshold_from_levels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +51,7 @@ def run_xtbmd_censo(request: ConfsearchRequest, overlay: dict[str, Any]) -> Prot
         nproc=request.nproc,
         no_opt=policy == "screen",
         rank1_only=policy == "rank1",
-        levels=request.levels,
+        levels=levels_with_thermo_temperature(request),
         threshold=threshold_for_policy(policy, default=threshold_from_levels(request)),
         ewin=request.energy_window,
         md_temperature=float(md.get("md_temperature", 400.0)),
@@ -69,18 +77,25 @@ def run_xtbmd_censo(request: ConfsearchRequest, overlay: dict[str, Any]) -> Prot
         gdis=float(md.get("gdis", 0.25)),
     )
     require_completed(result)
-    return outcome_from_workflow_result(
+    metadata = dict(result.metadata or {})
+    outcome = outcome_from_workflow_result(
         result,
         sampling={
             "method": f"{md.get('md_method', 'gfnff')}-md",
             "preset": preset,
             "policy": policy,
-            **{
-                key: value for key, value in (result.metadata or {}).items() if key.startswith("n_")
-            },
+            **{key: value for key, value in metadata.items() if key.startswith("n_")},
         },
-        temperature_k=298.15,
+        temperature_k=float(metadata.get("temperature_k") or 298.15),
     )
+    if policy == "rank1":
+        apply_screening_weight_table(outcome, policy)
+    elif policy == "screen":
+        apply_screen_provenance(outcome, metadata)
+    else:
+        apply_dft_provenance(outcome, metadata)
+    outcome.energy_kind = "censo"
+    return outcome
 
 
 __all__ = ["run_xtbmd_censo"]

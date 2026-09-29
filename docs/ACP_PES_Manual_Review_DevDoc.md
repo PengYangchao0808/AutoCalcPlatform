@@ -134,6 +134,34 @@ POST 要求 COMPLETED（409）；**历史 mechanism 任务（legacy s2 manifest�
 `metadata.review`（status/decided_at/revision）与 annotations（`saved: true`、
 `selection_source: "manual"`、稳定 candidate_id），页面重开即恢复已确认状态。
 
+### 3.3 远程任务（LSF）写回（2026-09-28 起）
+
+远程 PES 任务的审阅**不再返回 501**：读路径经 `_job_read_root` 解析到
+`RemoteStructureCache` 缓存根；写路径在缓存根暂存并回传计算节点，权威文件仍落在
+节点的 `RESULT/` 下（下游 BatchOptimize / retention / 远端读取都以节点为准）。
+
+`POST /pes/review`（及 `/restore`）的远程增强流程（`v1_routes`）：
+
+1. `_pes_review_work_dir` → 缓存根 + canonical profile 校验（无 profile 仍 404）；
+2. `_remote_review_setup`：
+   - `fetch(force=True, raise_errors=True)` 强制刷新 `pes_review.json` 与
+     `result_manifest.json`（远端是权威：revision 冲突按节点现状判定；
+     远端不存在则丢弃本地陈旧副本）；
+   - `/restore` 额外强制拉取 `pes_review_backup_<n>.json` 并按其选点重新拉帧；
+   - 按 profile 的 `scan_dir`/`geometry_path` 拉取全部所选帧几何（校验前置）；
+   - 任一传输失败 → 502（"审阅输入拉取失败"），不会静默降级；
+3. `save_pes_review` 在缓存根执行标准管线（structures → manifest → review，含备份轮换）；
+4. `_remote_review_write_back` → `RemoteStructureCache.push_paths` 按
+   **structures → result_manifest → backup → `pes_review.json`（权威最后）** 顺序
+   SFTP 上传（`RemoteResultFetcher.write_file`，目录自动创建）；
+   上传失败 → 502（"写回计算节点失败"），并尽力 force 刷新 review/manifest
+   以恢复缓存一致性；重复提交幂等（相同选点生成相同文件）。
+5. `GET /pes/review` 对远程任务通过 `fetch_matching(record, "RESULT/pes_search",
+   "pes_review_backup_")` 补拉备份轮次，使 `backups` 列表与节点一致（best-effort）。
+
+缓存仍受 `sweep_expired(ttl_days=7)` 与任务 purge 管理；因权威副本已在节点，
+缓存过期不影响数据，仅影响下次读取时的重新拉取。
+
 ## 4. 前端（ACP_Workbench_v2.html）
 
 - 工具栏：`确认 PES 选点`（原"保存候选"）+ `确认并进入 BatchOptimize`。

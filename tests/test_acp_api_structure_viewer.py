@@ -35,6 +35,7 @@ def _make_entry_dict(
     temperature_k: float | None = None,
     relative_energy_kcal: float | None = 0.0,
     boltzmann_weight: float | None = 0.5,
+    weight_source: str | None = None,
     source_kind: str = "formal_result",
     confirmed: bool | None = None,
     badges: list[str] | None = None,
@@ -51,6 +52,7 @@ def _make_entry_dict(
         "energy": {"value": energy_value, "unit": energy_unit, "kind": energy_kind},
         "relative_energy_kcal": relative_energy_kcal,
         "boltzmann_weight": boltzmann_weight,
+        "weight_source": weight_source,
         "source": {"kind": source_kind},
         "badges": badges if badges is not None else [],
         "vibrations": {"available": vib_available},
@@ -216,6 +218,90 @@ class TestStructureViewerEntryModel:
         d = _make_entry_dict(badges=["TS", "rank-1"])
         model = StructureViewerEntryModel.model_validate(d)
         assert model.badges == ["TS", "rank-1"]
+
+    def test_entry_weight_source_round_trips(self):
+        """weight_source round-trips through model_validate + model_dump."""
+        d = _make_entry_dict(weight_source="censo")
+        model = StructureViewerEntryModel.model_validate(d)
+        assert model.weight_source == "censo"
+        assert model.model_dump()["weight_source"] == "censo"
+
+    def test_entry_weight_source_defaults_to_none(self):
+        """Legacy payloads without weight_source validate with None default."""
+        d = _make_entry_dict()
+        assert d["weight_source"] is None
+        model = StructureViewerEntryModel.model_validate(d)
+        assert model.weight_source is None
+
+    def test_entry_weight_source_extra_keys_ignored(self):
+        """A legacy payload that OMITS the weight_source key entirely still validates."""
+        d = _make_entry_dict()
+        del d["weight_source"]
+        model = StructureViewerEntryModel.model_validate(d)
+        assert model.weight_source is None
+
+
+class TestPayloadWeightProvenance:
+    """Todo 8: the resolver payload dict (entry.weight_source + true
+    temperature) must survive StructureViewerPayloadModel construction —
+    this is exactly what the route does (model_validate(body))."""
+
+    def test_resolver_payload_round_trips_through_api_model(self, tmp_path: Path):
+        """build_structure_viewer_payload().to_dict() → payload model keeps
+        weight_source + temperature on every entry."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        cs_dir = tmp_path / "RESULT" / "confsearch"
+        cs_dir.mkdir(parents=True)
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "temperature_k": 350.0,
+            "conformers": [
+                {
+                    "conf_id": "0001",
+                    "geometry": "conformers/0001.xyz",
+                    "energy_hartree": -100.0,
+                    "free_energy_hartree": -99.5,
+                    "relative_energy_kcal": 0.0,
+                    "boltzmann_weight": 0.6,
+                    "weight_source": "censo",
+                    "rank": 1,
+                },
+                {
+                    "conf_id": "0002",
+                    "geometry": "conformers/0002.xyz",
+                    "energy_hartree": -99.8,
+                    "free_energy_hartree": -99.3,
+                    "relative_energy_kcal": 1.25,
+                    "boltzmann_weight": 0.3,
+                    "weight_source": "dft",
+                    "rank": 2,
+                },
+                {
+                    "conf_id": "0003",
+                    "geometry": "conformers/0003.xyz",
+                    "energy_hartree": -99.6,
+                    "free_energy_hartree": -99.1,
+                    "relative_energy_kcal": 2.51,
+                    "boltzmann_weight": 0.1,
+                    "rank": 3,
+                },
+            ],
+        }
+        (cs_dir / "confsearch_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (tmp_path / "job.json").write_text("{}", encoding="utf-8")
+        (tmp_path / "task.json").write_text("{}", encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            tmp_path, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        model = StructureViewerPayloadModel.model_validate(payload.to_dict())
+        by_id = {e.id: e for e in model.entries}
+        assert by_id["conf_0001"].weight_source == "censo"
+        assert by_id["conf_0002"].weight_source == "dft"
+        assert by_id["conf_0003"].weight_source is None
+        assert all(e.energy.temperature_k == 350.0 for e in model.entries)
 
 
 # ── StructureViewerGroupModel ───────────────────────────────────────────────
@@ -498,6 +584,51 @@ class TestCatalogEndpoint:
         assert body["availability"] == "ready"
         assert len(body["entries"]) == 3
         assert body["default_entry_id"] is not None
+
+    def test_confsearch_weight_source_and_temperature_in_response(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """weight_source + top-level temperature_k survive the full route
+        (payload dict → StructureViewerPayloadModel.model_validate → JSON)."""
+        work_dir = _seed_job(sv_client, tmp_path, job_id="sv-prov-001")
+        cs_dir = work_dir / "RESULT" / "confsearch"
+        cs_dir.mkdir(parents=True, exist_ok=True)
+        manifest = {
+            "schema_version": "confsearch_v1",
+            "workflow": "Confsearch",
+            "temperature_k": 350.0,
+            "conformers": [
+                {
+                    "conf_id": "0001",
+                    "geometry": "conformers/0001.xyz",
+                    "energy_hartree": -100.0,
+                    "free_energy_hartree": -99.5,
+                    "relative_energy_kcal": 0.0,
+                    "boltzmann_weight": 0.6,
+                    "weight_source": "censo",
+                    "rank": 1,
+                },
+                {
+                    "conf_id": "0002",
+                    "geometry": "conformers/0002.xyz",
+                    "energy_hartree": -99.8,
+                    "free_energy_hartree": -99.3,
+                    "relative_energy_kcal": 1.25,
+                    "boltzmann_weight": 0.3,
+                    "weight_source": "dft",
+                    "rank": 2,
+                },
+            ],
+        }
+        (cs_dir / "confsearch_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        resp = sv_client.get("/api/v1/jobs/sv-prov-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        by_id = {e["id"]: e for e in body["entries"]}
+        assert by_id["conf_0001"]["weight_source"] == "censo"
+        assert by_id["conf_0002"]["weight_source"] == "dft"
+        assert all(e["energy"]["temperature_k"] == 350.0 for e in body["entries"])
 
     def test_unknown_job_404(self, sv_client: TestClient, tmp_path: Path) -> None:
         """Unknown job id → 404."""
@@ -1136,6 +1267,115 @@ class TestRemoteStructureCache:
         r2 = cache.fetch(FakeRecord(), "RESULT/x.json")  # type: ignore[arg-type]
         assert r1 == r2
         assert call_count == 1
+
+    def test_fetch_force_refreshes_and_drops_stale_on_absence(self, tmp_path: Path) -> None:
+        """force=True re-reads the remote; a remote absence drops the stale copy."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        state: dict[str, bytes | None] = {"data": b"v1"}
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                data = state["data"]
+                if data is None:
+                    raise FileNotFoundError(filename)
+                return data
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-force"})()
+
+        assert cache.fetch(record, "RESULT/x.json").read_bytes() == b"v1"  # type: ignore[union-attr]
+        state["data"] = b"v2"
+        assert cache.fetch(record, "RESULT/x.json").read_bytes() == b"v1"  # type: ignore[union-attr]
+        assert cache.fetch(record, "RESULT/x.json", force=True).read_bytes() == b"v2"  # type: ignore[union-attr]
+
+        state["data"] = None
+        assert cache.fetch(record, "RESULT/x.json", force=True) is None
+        assert cache.get_cached("job-force", "RESULT/x.json") is None
+
+    def test_fetch_raise_errors_propagates_transport_failure(self, tmp_path: Path) -> None:
+        """Default fetch degrades to None; raise_errors surfaces the failure."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                raise RuntimeError("sftp down")
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-err"})()
+
+        assert cache.fetch(record, "RESULT/x.json") is None
+        with pytest.raises(RuntimeError, match="sftp down"):
+            cache.fetch(record, "RESULT/x.json", force=True, raise_errors=True)
+
+    def test_push_paths_uploads_cached_files_in_order(self, tmp_path: Path) -> None:
+        """push_paths uploads cached bytes; uncached paths are skipped."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        class FakeFetcher:
+            def __init__(self) -> None:
+                self.writes: list[tuple[str, bytes]] = []
+
+            def read_file(self, record, filename: str) -> bytes:
+                raise FileNotFoundError(filename)
+
+            def write_file(self, record, filename: str, data: bytes) -> None:
+                self.writes.append((filename, data))
+
+        fetcher = FakeFetcher()
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: fetcher)
+        target = cache.cache_path("job-push", "RESULT/structures/a.xyz")
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"3\nA\n")
+
+        uploaded = cache.push_paths(
+            type("FakeRecord", (), {"id": "job-push"})(),
+            ["RESULT/structures/a.xyz", "RESULT/missing.json"],
+        )
+
+        assert uploaded == ["RESULT/structures/a.xyz"]
+        assert fetcher.writes == [("RESULT/structures/a.xyz", b"3\nA\n")]
+
+    def test_push_paths_requires_write_capability(self, tmp_path: Path) -> None:
+        """Read-only fetchers raise RemotePushError instead of silently no-oping."""
+        from acp.results.remote_structure_cache import RemotePushError, RemoteStructureCache
+
+        class ReadOnlyFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                raise FileNotFoundError(filename)
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: ReadOnlyFetcher())
+        with pytest.raises(RemotePushError, match="write-back"):
+            cache.push_paths(type("FakeRecord", (), {"id": "job-ro"})(), ["RESULT/a.json"])
+
+    def test_fetch_matching_filters_directory_entries(self, tmp_path: Path) -> None:
+        """fetch_matching pulls only <prefix>* files from one remote directory."""
+        import types
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        backup = "RESULT/pes_search/pes_review_backup_001.json"
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                if filename == backup:
+                    return b"{}"
+                raise FileNotFoundError(filename)
+
+            def list_files(self, record, relative_path: str | None = None):
+                return [
+                    types.SimpleNamespace(name=backup, is_dir=False),
+                    types.SimpleNamespace(name="RESULT/pes_search/pes_profile.json", is_dir=False),
+                    types.SimpleNamespace(name="RESULT/pes_search/sub", is_dir=True),
+                ]
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+        record = type("FakeRecord", (), {"id": "job-match"})()
+
+        fetched = cache.fetch_matching(record, "RESULT/pes_search", "pes_review_backup_")
+
+        assert fetched == [backup]
+        assert cache.get_cached("job-match", backup) is not None
 
     def test_fetch_catalog_populates_remote_projection_root(self, tmp_path: Path) -> None:
         """Catalog metadata is cached and can be projected as a task root."""

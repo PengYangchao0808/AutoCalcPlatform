@@ -11,7 +11,12 @@ import logging
 from typing import Any
 
 from ..contracts import ConfsearchRequest, ProtocolOutcome
-from ._common import outcome_from_workflow_result, require_completed
+from ._common import (
+    apply_xtb_provenance,
+    config_with_censo_temperature,
+    outcome_from_workflow_result,
+    require_completed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +30,7 @@ def run_xtb_crest(request: ConfsearchRequest, overlay: dict[str, Any]) -> Protoc
         input_source=request.input_source,
         output_dir=str(request.output_dir),
         preset="censo-zero",
-        config=request.config,
+        config=config_with_censo_temperature(request),
         name=request.name,
         charge=request.charge,
         multiplicity=request.multiplicity,
@@ -35,14 +40,18 @@ def run_xtb_crest(request: ConfsearchRequest, overlay: dict[str, Any]) -> Protoc
     )
     require_completed(result)
     assert result.ensemble is not None
-    return outcome_from_workflow_result(
+    metadata = dict(result.metadata or {})
+    outcome = outcome_from_workflow_result(
         result,
         sampling={
             "method": "crest-gfn2",
             "n_raw_frames": len(result.ensemble.records),
         },
-        temperature_k=298.15,
+        temperature_k=float(metadata.get("temperature_k") or 298.15),
     )
+    apply_xtb_provenance(outcome)
+    outcome.energy_kind = "xtb"
+    return outcome
 
 
 __all__ = ["run_xtb_crest"]

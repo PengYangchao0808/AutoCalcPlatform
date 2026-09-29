@@ -30,6 +30,13 @@ from .manifest import (
 )
 from .profiles import profile_overlay
 from .protocols import PROTOCOL_RUNNERS
+from .report import (
+    REPORT_JSON_NAME,
+    XYZ_NAME,
+    normalize_table_reference,
+    register_final_report,
+    write_final_report,
+)
 from .result_helpers import build_entries, quality_gates, refinement_block, sorted_records
 from .selection import select_for_refinement
 from .shared.provenance import input_block, provenance_block
@@ -150,8 +157,20 @@ class ConfsearchEngine:
             progress_reporter.complete_stage("dedup")
             progress_reporter.start_stage("refinement")
         confsearch_dir = self._confsearch_dir(request)
+        mol_dir = confsearch_dir.parent.parent
+        table_reference = normalize_table_reference(
+            outcome.workflow_metadata.get("boltzmann_table_json"), mol_dir
+        )
         write_conformer_geometries(confsearch_dir, entries, sorted_records(outcome.records))
-        write_ensemble_table(confsearch_dir, entries)
+        write_ensemble_table(
+            confsearch_dir,
+            entries,
+            temperature_k=outcome.temperature_k,
+            weight_source=outcome.weight_source,
+            weight_method=outcome.weight_method,
+            population_coverage=outcome.population_coverage,
+            reference=table_reference,
+        )
 
         selected = select_for_refinement(
             request.refinement_policy,
@@ -179,11 +198,43 @@ class ConfsearchEngine:
                         ),
                     ]
                 )
-        gates = quality_gates(entries, outcome, selected, protocol=request.protocol)
+        gates = quality_gates(
+            entries,
+            outcome,
+            selected,
+            protocol=request.protocol,
+            policy=request.refinement_policy,
+        )
 
         if progress_reporter is not None:
             progress_reporter.complete_stage("refinement")
             progress_reporter.start_stage("finalize")
+
+        # Required deliverable: report failures must propagate (never swallow).
+        # Degenerate zero-conformer runs keep the legacy no-report behavior.
+        report_refs: dict[str, str] | None = None
+        if entries:
+            report_path, xyz_path = write_final_report(
+                confsearch_dir, request=request, entries=entries, outcome=outcome
+            )
+            register_final_report(mol_dir, report_path, xyz_path)
+            report_refs = {
+                "json": f"confsearch/{REPORT_JSON_NAME}",
+                "xyz": f"confsearch/{XYZ_NAME}",
+            }
+
+        weight_table_meta: dict[str, Any] = {
+            key: value
+            for key, value in (
+                ("source", outcome.weight_source),
+                ("method", outcome.weight_method),
+                ("population_coverage", outcome.population_coverage),
+                ("reference", table_reference),
+            )
+            if value is not None
+        }
+        if weight_table_meta:
+            weight_table_meta["temperature_k"] = outcome.temperature_k
 
         payload = build_manifest_payload(
             protocol=request.protocol,
@@ -203,6 +254,9 @@ class ConfsearchEngine:
                 extra={"temperature_k": outcome.temperature_k},
             ),
             quality_gates=gates,
+            temperature_k=outcome.temperature_k,
+            weight_table=weight_table_meta or None,
+            report=report_refs,
         )
 
         # Sampling history capture for MD protocols (best-effort).

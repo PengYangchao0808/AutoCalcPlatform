@@ -7651,7 +7651,7 @@ _STR_DECLARED_KEY_MAP: dict[str, dict[str, str]] = {
 
 # STR names dispatched dynamically (map lookups) — covered by the dedicated
 # dynamic-key tests, never linked at a call site.
-_DYNAMIC_STR_NAMES = {"SOURCE_KINDS", "REASONS", "TS_HINTS"}
+_DYNAMIC_STR_NAMES = {"SOURCE_KINDS", "REASONS", "TS_HINTS", "WEIGHT_SOURCES"}
 
 
 def test_i18n_str_fallback_sweep() -> None:
@@ -11855,3 +11855,481 @@ def test_wizard_review_uses_i18n() -> None:
     assert 't("wizard.review_input")' in review_fn, "review_input i18n missing"
     assert 't("wizard.review_workflow")' in review_fn, "review_workflow i18n missing"
     assert 't("wizard.review_risk")' in review_fn, "review_risk i18n missing"
+# ---------------------------------------------------------------------------
+# Multi-frame playback bar (#frame-controller) visibility gate
+# ---------------------------------------------------------------------------
+
+
+def test_frame_controller_visibility_gate_uses_live_tab_id() -> None:
+    """updateFrameController() must gate #frame-controller on a LIVE tab id.
+
+    The 2026-09-11 canvas-tab rename (3d -> structure) missed the gate
+    literal inside updateFrameController(), so the condition was always
+    false and any frame change (play tick / prev / next / slider) hid the
+    playback bar. Locked two ways:
+
+    (a) STATIC: the exact stale pattern getAttribute("data-tab") === "3d"
+        occurs 0 times in the page, and the single gate literal inside the
+        extracted function names a tab id that actually renders
+        (data-tab="..." occurrences), so future renames cannot strand it.
+    (b) BEHAVIORAL (Node, DOM stubs): the extracted function shows the bar
+        ("flex") only on the structure tab with >1 frames; "none" on the
+        energy/path/wavefunction tabs, for a single-frame document, or when
+        no active canvas tab exists.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # --- STATIC half ---------------------------------------------------
+    # Exact pre-rename literal (was at the updateFrameController gate).
+    assert html.count('getAttribute("data-tab") === "3d"') == 0, (
+        'stale tab id "3d" must not be used in a getAttribute("data-tab") gate'
+    )
+
+    assert html.count("function updateFrameController()") == 1, (
+        "updateFrameController must be defined exactly once"
+    )
+    fn_body = html.split("function updateFrameController()", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    gate_literals = re.findall(r'getAttribute\("data-tab"\) === "([^"]+)"', fn_body)
+    assert len(gate_literals) == 1, (
+        "updateFrameController must contain exactly one data-tab gate literal, "
+        f"found {gate_literals!r}"
+    )
+    # The gated id must be one of the ids that actually render on the page
+    # (parsed live from data-tab="..." — not hardcoded, so tab evolution
+    # keeps this test honest without edits here).
+    rendered_tab_ids = set(re.findall(r'data-tab="([^"]+)"', html))
+    assert rendered_tab_ids, "page must render at least one data-tab button"
+    assert gate_literals[0] in rendered_tab_ids, (
+        f"updateFrameController gates on tab id {gate_literals[0]!r} which is "
+        f"not a rendered data-tab value (rendered: {sorted(rendered_tab_ids)})"
+    )
+
+    # --- BEHAVIORAL half -------------------------------------------------
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    fn_source = "function updateFrameController()" + fn_body
+    script = (
+        # DOM stubs: element registry + active canvas-tab id per case.
+        "var elements = {};\n"
+        "var activeTabId = null;\n"
+        "var document = {\n"
+        "  getElementById: function (id) {\n"
+        "    if (!elements[id]) elements[id] = { style: {}, textContent: '', max: '', value: '' };\n"
+        "    return elements[id];\n"
+        "  },\n"
+        "  querySelector: function (sel) {\n"
+        "    if (sel === '.canvas-tab.active') {\n"
+        "      return activeTabId === null ? null : { getAttribute: function () { return activeTabId; } };\n"
+        "    }\n"
+        "    return null;\n"
+        "  }\n"
+        "};\n"
+        "var molDoc = { frames: [], currentFrame: 0 };\n"
+        "var currentFrame = function () { return { energy: null }; };\n"
+        + fn_source
+        + "\n"
+        "function runCase(tabId, frameCount) {\n"
+        "  elements = {};\n"
+        "  activeTabId = tabId;\n"
+        "  molDoc = { frames: [], currentFrame: 0 };\n"
+        "  for (var i = 0; i < frameCount; i++) molDoc.frames.push({ energy: null });\n"
+        "  updateFrameController();\n"
+        "  return elements['frame-controller'].style.display;\n"
+        "}\n"
+        "var cases = [\n"
+        "  ['structure', 2, 'flex'],\n"  # <-- regression: was 'none' pre-fix
+        "  ['energy', 2, 'none'],\n"
+        "  ['path', 2, 'none'],\n"
+        "  ['wavefunction', 2, 'none'],\n"
+        "  ['structure', 1, 'none'],\n"
+        "  [null, 2, 'none'],\n"
+        "];\n"
+        "for (var c = 0; c < cases.length; c++) {\n"
+        "  var got = runCase(cases[c][0], cases[c][1]);\n"
+        "  if (got !== cases[c][2]) {\n"
+        "    console.error('FAIL: tabId=' + cases[c][0] + ' frames=' + cases[c][1]\n"
+        "      + ' expected display=' + cases[c][2] + ' got ' + got);\n"
+        "    process.exit(1);\n"
+        "  }\n"
+        "}\n"
+        "console.log('PASS');\n"
+    )
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node updateFrameController visibility test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Conformer energy-inspector key alignment (confsearch weight provenance)
+# ---------------------------------------------------------------------------
+
+
+def test_conformer_inspector_spec_matches_energy_graph_metadata_keys() -> None:
+    """Conformer inspector spec keys must match _build_conformer_graph metadata.
+
+    The energy-graph conformer node metadata is emitted via
+    ``TrajectoryFrame.to_node()`` with exactly the keys listed in
+    ``ENERGY_INSPECTOR_FIELD_SPECS.conformer`` (rank / gibbs_energy /
+    relative_energy_kcal / boltzmann_weight). The legacy aliases ``weight``/
+    ``gibbs_hartree`` must never reach node metadata, and must be listed in
+    ``_INSPECTOR_COMMON_KEYS`` so stale payloads cannot render raw duplicate
+    rows next to the localized "Boltzmann 权重" row.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    source = (REPO_ROOT / "src" / "acp" / "results" / "energy_graph.py").read_text(encoding="utf-8")
+
+    specs_block = html.split("var ENERGY_INSPECTOR_FIELD_SPECS = {", 1)[1].split("\n};", 1)[0]
+    conformer_block = specs_block.split("conformer: [", 1)[1].split("],", 1)[0]
+    spec_keys = set(re.findall(r'key: "([^"]+)"', conformer_block))
+    assert spec_keys == {"rank", "gibbs_energy", "relative_energy_kcal", "boltzmann_weight"}
+
+    builder_block = source.split("def _build_conformer_graph(", 1)[1].split("\ndef ", 1)[0]
+    metadata_block = builder_block.split("metadata={", 1)[1].split("}", 1)[0]
+    emitted_keys = set(re.findall(r'"([a-z_]+)":', metadata_block))
+    assert emitted_keys == spec_keys, (
+        "conformer node metadata keys must exactly match ENERGY_INSPECTOR_FIELD_SPECS.conformer"
+    )
+    assert "weight" not in emitted_keys and "gibbs_hartree" not in emitted_keys
+
+    common_block = html.split("var _INSPECTOR_COMMON_KEYS = {", 1)[1].split("\n};", 1)[0]
+    assert re.search(r"\bweight: 1\b", common_block), (
+        "legacy alias 'weight' must be suppressed from raw metadata rows"
+    )
+    assert re.search(r"\bgibbs_hartree: 1\b", common_block), (
+        "legacy alias 'gibbs_hartree' must be suppressed from raw metadata rows"
+    )
+    assert "_INSPECTOR_KEY_ALIASES" in html
+
+
+# ---------------------------------------------------------------------------
+# Weight provenance display (confsearch weight provenance, todo 9)
+# ---------------------------------------------------------------------------
+
+_WEIGHT_SOURCE_I18N_KEYS = (
+    "structure.weight_source.censo",
+    "structure.weight_source.xtb",
+    "structure.weight_source.dft",
+    "structure.weight_source.computed",
+)
+
+
+def _locale_weight_source_values(html: str, block_re: re.Pattern[str]) -> dict[str, str]:  # type: ignore[type-arg]
+    """Extract structure.weight_source.* key/value pairs from a locale block."""
+    m = block_re.search(html)
+    if not m:
+        return {}
+    block = m.group(1)
+    out: dict[str, str] = {}
+    for key in _WEIGHT_SOURCE_I18N_KEYS:
+        vm = re.search(rf'"{re.escape(key)}":\s*"([^"]*)"', block)
+        if vm:
+            out[key] = vm.group(1)
+    return out
+
+
+def test_weight_provenance_i18n_keys_and_js_refs() -> None:
+    """Contract: weight-source labels exist in BOTH locale dicts and
+    structure_viewer.js renders via them.
+
+    The inspector weight row must show ``xx.x%（<SOURCE>, <T> K）`` where
+    <SOURCE> comes from ``structure.weight_source.*`` i18n keys (zh ``计算值``
+    vs en ``computed``) and <T> from ``entry.energy.temperature_k``.  This
+    asserts the key set in both locales plus the JS references; removing a
+    key from one locale turns ``test_phase_a_i18n_structure_keys_complete_
+    across_locales`` red as well.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    zh = _locale_weight_source_values(html, _ZH_BLOCK_RE)
+    en = _locale_weight_source_values(html, _EN_BLOCK_RE)
+
+    for key in _WEIGHT_SOURCE_I18N_KEYS:
+        assert key in zh, f"{key} missing from zh-CN dict"
+        assert key in en, f"{key} missing from en-US dict"
+
+    assert zh["structure.weight_source.censo"] == "CENSO"
+    assert zh["structure.weight_source.xtb"] == "xTB"
+    assert zh["structure.weight_source.dft"] == "DFT"
+    assert zh["structure.weight_source.computed"] == "\u8ba1\u7b97\u503c"  # 计算值
+    assert en["structure.weight_source.censo"] == "CENSO"
+    assert en["structure.weight_source.xtb"] == "xTB"
+    assert en["structure.weight_source.dft"] == "DFT"
+    assert en["structure.weight_source.computed"] == "computed"
+
+    # JS must look labels up through the i18n keys and read the payload fields.
+    assert '"structure.weight_source."' in js, (
+        "structure_viewer.js must resolve labels via structure.weight_source.* keys"
+    )
+    assert "weight_source" in js
+    assert "temperature_k" in js
+    assert "WEIGHT_SOURCES" in js, "zh STR fallback table for weight sources missing"
+
+
+def test_weight_provenance_rendering_exact_strings() -> None:
+    """Node logic: exact rendered weight strings incl. edge cases.
+
+    Cases (weight 0.5 => ``50.0%``):
+      both      -> ``50.0%（CENSO, 298.15 K）``
+      source only -> ``50.0%（CENSO）``
+      temp only -> ``50.0%（298.15 K）``
+      neither   -> bare ``50.0%`` (must equal today's format exactly)
+      zh computed -> ``50.0%（计算值）`` vs en computed -> ``50.0%（computed）``
+      unknown source -> raw value shown; non-numeric temperature omitted.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        if (typeof ns._formatWeightValue !== "function") {
+            console.error("FAIL: _formatWeightValue not exposed on namespace");
+            process.exit(1);
+        }
+
+        // en locale labels via the app's t() shape (missing key => key itself)
+        var EN = {
+            "structure.weight_source.censo": "CENSO",
+            "structure.weight_source.xtb": "xTB",
+            "structure.weight_source.dft": "DFT",
+            "structure.weight_source.computed": "computed",
+        };
+
+        function setLang(lang) {
+            if (lang === "en") {
+                global.t = function(key) { return EN[key] || key; };
+            } else {
+                delete global.t;  // zh STR fallback path
+            }
+        }
+
+        var cases = [
+            // [lang, entry, expected]
+            ["en", { boltzmann_weight: 0.5, weight_source: "censo",
+                     energy: { temperature_k: 298.15 } },
+                "50.0%\uff08CENSO, 298.15 K\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "censo" },
+                "50.0%\uff08CENSO\uff09"],
+            ["en", { boltzmann_weight: 0.5,
+                     energy: { temperature_k: 298.15 } },
+                "50.0%\uff08298.15 K\uff09"],
+            ["en", { boltzmann_weight: 0.5 },
+                "50.0%"],
+            ["zh", { boltzmann_weight: 0.5, weight_source: "computed" },
+                "50.0%\uff08\u8ba1\u7b97\u503c\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "computed" },
+                "50.0%\uff08computed\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "mystery" },
+                "50.0%\uff08mystery\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "xtb",
+                     energy: { temperature_k: 298.1 } },
+                "50.0%\uff08xTB, 298.1 K\uff09"],
+            ["en", { boltzmann_weight: 0.5,
+                     energy: { temperature_k: 300 } },
+                "50.0%\uff08300 K\uff09"],
+            ["en", { boltzmann_weight: 0.5,
+                     energy: { temperature_k: 298.156 } },
+                "50.0%\uff08298.16 K\uff09"],
+            ["en", { boltzmann_weight: 0.5, weight_source: "dft",
+                     energy: { temperature_k: "not-a-number" } },
+                "50.0%\uff08DFT\uff09"],
+            ["en", { boltzmann_weight: 0.005, weight_source: "censo" },
+                "0.5%\uff08CENSO\uff09"],
+        ];
+
+        for (var i = 0; i < cases.length; i++) {
+            setLang(cases[i][0]);
+            var got = ns._formatWeightValue(cases[i][1]);
+            if (got !== cases[i][2]) {
+                console.error("FAIL: lang=" + cases[i][0]
+                    + " entry=" + JSON.stringify(cases[i][1])
+                    + " expected=" + JSON.stringify(cases[i][2])
+                    + " got=" + JSON.stringify(got));
+                process.exit(1);
+            }
+        }
+
+        // Tooltip helper: empty without provenance, full string with it.
+        setLang("en");
+        if (ns._weightBarTitle({ boltzmann_weight: 0.5 }) !== "") {
+            console.error("FAIL: _weightBarTitle must be empty without provenance");
+            process.exit(1);
+        }
+        var tip = ns._weightBarTitle({
+            boltzmann_weight: 0.5, weight_source: "censo",
+            energy: { temperature_k: 298.15 }
+        });
+        if (tip !== "50.0%\uff08CENSO, 298.15 K\uff09") {
+            console.error(
+                "FAIL: _weightBarTitle expected provenance string, got " + JSON.stringify(tip)
+            );
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Weight provenance rendering test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_weight_provenance_boltzmann_bar_tooltips() -> None:
+    """JS contract: all three Boltzmann bars carry the provenance tooltip
+    when source/temperature present, and nothing when absent."""
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    for marker in (
+        'bar.className = "sv-switcher-item-boltz";',
+        'bar.className = "sv-strip-boltz";',
+        'bar.className = "sv-boltzmann-bar";',
+    ):
+        assert marker in js, f"bar site {marker!r} missing"
+        block = js.split(marker, 1)[1][:300]
+        assert "_weightBarTitle(" in block, (
+            f"{marker} block must set the provenance tooltip via _weightBarTitle"
+        )
+        assert 'setAttribute("title"' in block or ".title =" in block, (
+            f"{marker} block must expose the tooltip as a title attribute"
+        )
+
+    # _weightBarTitle must gate on provenance (empty => no title => unchanged)
+    helper = js.split("function _weightBarTitle(", 1)[1].split("\n  }", 1)[0]
+    assert "_weightProvenanceSuffix(" in helper
+
+    # Inspector weight row goes through the shared formatter.
+    inspector_tail = js.split('_t("structure.weight", STR.WEIGHT)', 1)[1][:200]
+    assert "_formatWeightValue(" in inspector_tail, (
+        "inspector weight row must render via _formatWeightValue"
+    )
+
+
+def test_workbench_api_timeout_no_raw_abort_exception() -> None:
+    """api() timeouts surface a localized message, never the raw DOMException.
+
+    2026-09-28 regression: the blanket 8s AbortController timeout aborted slow
+    requests without a reason, so SFTP-backed remote endpoints (routinely >8s
+    on a Raspberry Pi) rendered "加载失败: signal is aborted without reason".
+    Timeouts now throw the localized ``api.timeout`` error, and remote-capable
+    endpoints opt into the ``apiRemote()`` budget instead.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "var API_TIMEOUT_MS = 8000;" in html
+    assert "var API_REMOTE_TIMEOUT_MS = 60000;" in html
+    assert "function apiRemote(path, opts)" in html
+    assert "var timedOut = false;" in html
+    assert 'throw new Error(t("api.timeout", { seconds: Math.round(timeoutMs / 1000) }));' in html
+    # Caller-provided aborts keep the AbortError name (silent-cancel filters).
+    assert "if (timedOut) {" in html
+    assert "throw e;" in html
+    assert '"api.timeout": "请求超时' in html
+    assert '"api.timeout": "Request timed out' in html
+
+    for fragment in (
+        'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/remote-files")',
+        'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review").then(',
+        'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review/restore", {',
+        'apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile")',
+        'apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates")',
+        'apiRemote("/structure-sources/" + encodeURIComponent(sourceId))',
+        "await apiRemote(url)",
+        "await apiRemote(s2scanUrl)",
+        "jobRemoteNodeName(job) ? await apiRemote(url) : await api(url)",
+        "apiRemote(s2Url, ac ? { signal: ac.signal } : {})",
+    ):
+        assert fragment in html, f"missing remote-budget call site: {fragment}"
+    assert html.count("selectedJobIsRemote ? await apiRemote(url) : await api(url)") == 2
+
+    for stale in (
+        'api("/jobs/" + encodeURIComponent(jobId) + "/remote-files")',
+        'api("/jobs/" + encodeURIComponent(jobId) + "/pes/review")',
+        'api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile")',
+        'api("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates")',
+    ):
+        assert stale not in html, f"remote endpoint regressed to 8s default: {stale}"
+
+
+def test_workbench_api_timeout_behavior() -> None:
+    """Node behavior: own timeout → localized error; caller abort → AbortError."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    html = FRONTEND.read_text(encoding="utf-8")
+    match = re.search(
+        r"(var API_TIMEOUT_MS = 8000;[\s\S]*?function apiRemote\(path, opts\) \{[\s\S]*?\n\})",
+        html,
+    )
+    assert match, "api()/apiRemote() block not found in workbench HTML"
+    api_source = match.group(1)
+
+    script = (
+        "const API_BASE = '/api/v1';\n"
+        "function t(key, vars) { return key + (vars ? ':' + JSON.stringify(vars) : ''); }\n"
+        "function fail(msg) { console.error('FAIL: ' + msg); process.exit(1); }\n"
+        "class FakeAbortError extends Error { constructor() { super('signal is aborted without reason'); this.name = 'AbortError'; } }\n"
+        + api_source
+        + "\n"
+        + textwrap.dedent(
+            """
+            (async function main() {
+              // Own timeout: localized error, never the raw AbortError text.
+              global.fetch = function (url, opts) {
+                return new Promise(function (_resolve, reject) {
+                  if (opts && opts.signal) {
+                    opts.signal.addEventListener('abort', function () { reject(new FakeAbortError()); });
+                  }
+                });
+              };
+              try {
+                await api('/slow', { timeoutMs: 30 });
+                fail('timeout did not reject');
+              } catch (e) {
+                if (e.name === 'AbortError') fail('timeout leaked AbortError');
+                if (String(e.message).indexOf('aborted') >= 0) fail('timeout leaked raw abort text: ' + e.message);
+                if (String(e.message).indexOf('api.timeout') !== 0) fail('timeout message missing key: ' + e.message);
+              }
+
+              // Caller abort keeps the AbortError name for silent-cancel filters.
+              var ac = new AbortController();
+              var pending = api('/cancel', { signal: ac.signal });
+              setTimeout(function () { ac.abort(); }, 10);
+              try {
+                await pending;
+                fail('caller abort did not reject');
+              } catch (e) {
+                if (e.name !== 'AbortError') fail('caller abort lost AbortError name: ' + e.name);
+              }
+
+              // Happy path still resolves the JSON body.
+              global.fetch = function () {
+                return Promise.resolve({
+                  ok: true,
+                  headers: { get: function () { return 'application/json'; } },
+                  json: function () { return Promise.resolve({ ok: 1 }); }
+                });
+              };
+              var body = await api('/fast', { timeoutMs: 10000 });
+              if (!body || body.ok !== 1) fail('happy path body mismatch');
+              console.log('PASS');
+            })().catch(function (e) { console.error('FAIL: unexpected', e); process.exit(1); });
+            """
+        )
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, f"node failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    assert "PASS" in result.stdout

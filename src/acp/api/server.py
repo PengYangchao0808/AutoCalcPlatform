@@ -16,6 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
 
 from acp import __version__
 from acp.api.batch_preview import router as batch_preview_router
@@ -28,6 +29,22 @@ from acp.api.v2_structure_sources import router as v2_struct_router
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
+
+
+class _RevalidatingStaticFiles(StaticFiles):
+    """Frontend JS/CSS: force revalidation so deploys reach open browsers.
+
+    A cached bundle must never keep running after the server is upgraded —
+    the 2026-09-28 remote pending-fetch incident was sustained by workbench JS
+    that predated the terminal retry fix.  ``no-cache`` sends If-None-Match on
+    every load; unchanged files answer 304 (cheap), changed files answer 200.
+    """
+
+    async def get_response(self, path: str, scope: object) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def _load_remote_config():
@@ -226,7 +243,7 @@ def create_app(
         if asset_dir.is_dir():
             app.mount(
                 f"/{sub}",
-                StaticFiles(directory=asset_dir),
+                _RevalidatingStaticFiles(directory=asset_dir),
                 name=f"frontend-{sub}",
             )
 

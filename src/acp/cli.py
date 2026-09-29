@@ -27,6 +27,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Final
 
+from acp.core.keywords import make_case_insensitive_type
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -1636,6 +1638,30 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _normalize_string_choices(parser: argparse.ArgumentParser) -> None:
+    """Make every string-valued ``choices=`` argument case-insensitive.
+
+    Recursively walks the parser's actions (descending into subparsers);
+    for each action whose choices are all strings and which declares no
+    ``type``, installs ``make_case_insensitive_type`` so any case spelling
+    is accepted and normalised to the canonical spelling. Actions that
+    already declare a ``type`` (e.g. int choices) are left untouched.
+    """
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for subparser in action.choices.values():
+                _normalize_string_choices(subparser)
+            continue
+        choices = action.choices
+        if not choices or action.type is not None:
+            continue
+        if not all(isinstance(choice, str) for choice in choices):
+            continue
+        canonical = list(choices)
+        action.choices = canonical
+        action.type = make_case_insensitive_type(canonical)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
     parser = argparse.ArgumentParser(
@@ -2423,6 +2449,8 @@ Examples:
         help="Server default execution target for jobs that don't specify one "
         "(overrides cluster.execution_mode; per-job execution_mode/target_node win)",
     )
+
+    _normalize_string_choices(parser)
 
     return parser
 

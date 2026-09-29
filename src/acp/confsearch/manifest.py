@@ -6,7 +6,7 @@ Every Confsearch protocol writes the same ``RESULT/confsearch/`` tree::
     ├── confsearch_manifest.json   ← the single handoff artifact (S1)
     ├── ensemble.xyz / ensemble.csv / energies.json / boltzmann.json
     ├── conformers/conf_NNNN.xyz
-    ├── refinement/                ← fine-DFT artifacts (policy-dependent)
+    ├── final_report.json / final_conformers.xyz   ← refined-geometry report
     └── quality_gates.json
 
 All geometry references inside the manifest are relative to the manifest's
@@ -89,8 +89,23 @@ def write_conformer_geometries(
         entry.geometry = f"conformers/{entry.conf_id}.xyz"
 
 
-def write_ensemble_table(confsearch_dir: Path, conformers: list[ConformerEntry]) -> None:
-    """Write ``ensemble.xyz``, ``ensemble.csv``, ``energies.json``, ``boltzmann.json``."""
+def write_ensemble_table(
+    confsearch_dir: Path,
+    conformers: list[ConformerEntry],
+    *,
+    temperature_k: float | None = None,
+    weight_source: str | None = None,
+    weight_method: str | None = None,
+    population_coverage: float | None = None,
+    reference: str | None = None,
+) -> None:
+    """Write ``ensemble.xyz``, ``ensemble.csv``, ``energies.json``, ``boltzmann.json``.
+
+    Provenance kwargs are additive: each non-None value is added to
+    ``boltzmann.json`` (``temperature_k`` / ``source`` / ``method`` /
+    ``population_coverage`` / ``reference``) while ``weights`` and
+    ``weight_sum`` keep exactly today's shape.
+    """
     # ensemble.xyz (multi-frame, single-symbol assumption avoided: parse from files)
     frames: list[str] = []
     symbols: list[str] | None = None
@@ -151,13 +166,21 @@ def write_ensemble_table(confsearch_dir: Path, conformers: list[ConformerEntry])
             ],
         },
     )
-    write_json_atomic(
-        confsearch_dir / "boltzmann.json",
-        {
-            "weights": {entry.conf_id: entry.boltzmann_weight for entry in conformers},
-            "weight_sum": sum(entry.boltzmann_weight or 0.0 for entry in conformers),
-        },
-    )
+    boltzmann: dict[str, Any] = {
+        "weights": {entry.conf_id: entry.boltzmann_weight for entry in conformers},
+        "weight_sum": sum(entry.boltzmann_weight or 0.0 for entry in conformers),
+    }
+    provenance_keys: list[tuple[str, Any]] = [
+        ("temperature_k", temperature_k),
+        ("source", weight_source),
+        ("method", weight_method),
+        ("population_coverage", population_coverage),
+        ("reference", reference),
+    ]
+    for key, value in provenance_keys:
+        if value is not None:
+            boltzmann[key] = value
+    write_json_atomic(confsearch_dir / "boltzmann.json", boltzmann)
 
 
 def _symbols_from_xyz(path: Path) -> list[str]:
@@ -186,9 +209,18 @@ def build_manifest_payload(
     refinement: dict[str, Any],
     provenance: dict[str, Any],
     quality_gates: dict[str, Any],
+    temperature_k: float | None = None,
+    weight_table: dict[str, Any] | None = None,
+    report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Assemble the ``confsearch_v1`` manifest payload (§5)."""
-    return {
+    """Assemble the ``confsearch_v1`` manifest payload (§5).
+
+    ``temperature_k``, ``weight_table`` and ``report`` are additive optional
+    keys: each is included only when provided, so callers that omit them keep
+    the exact pre-existing payload shape.  A non-dict ``weight_table`` is
+    omitted with a warning instead of raising.
+    """
+    payload: dict[str, Any] = {
         "schema_version": CONFSEARCH_SCHEMA_VERSION,
         "workflow": "Confsearch",
         "protocol": protocol,
@@ -203,6 +235,19 @@ def build_manifest_payload(
         "provenance": provenance,
         "quality_gates": quality_gates,
     }
+    if temperature_k is not None:
+        payload["temperature_k"] = temperature_k
+    if weight_table is not None:
+        if isinstance(weight_table, dict):
+            payload["weight_table"] = weight_table
+        else:
+            logger.warning(
+                "Ignoring malformed manifest weight_table (expected dict, got %s)",
+                type(weight_table).__name__,
+            )
+    if report is not None:
+        payload["report"] = report
+    return payload
 
 
 def write_manifest(confsearch_dir: Path, payload: dict[str, Any]) -> Path:

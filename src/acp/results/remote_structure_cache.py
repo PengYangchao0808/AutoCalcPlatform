@@ -21,11 +21,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import posixpath
 import shutil
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -34,7 +35,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["RemoteStructureCache"]
+__all__ = ["RemoteStructureCache", "RemotePushError"]
+
+
+class RemotePushError(RuntimeError):
+    """A cache-to-remote write-back could not be performed."""
+
 
 _CACHE_DIR_NAME = ".remote_cache"
 
@@ -170,11 +176,22 @@ class RemoteStructureCache:
         self,
         record: Any,
         rel_path: str,
+        *,
+        force: bool = False,
+        raise_errors: bool = False,
     ) -> Path | None:
         """Fetch *rel_path* from the remote node and cache it.
 
         Returns the local cached path on success, or ``None`` when no
         fetcher is configured or the remote file does not exist.
+
+        Args:
+            force: Re-read from the remote even when a cached copy exists
+                (mutable-file refresh before a write-back).  A genuinely
+                absent remote file drops the stale local copy.
+            raise_errors: Re-raise transport failures instead of degrading to
+                ``None``; write-back callers need to distinguish "remote file
+                missing" from "cannot reach the remote node".
 
         Must NOT write inside the task work_dir.
         """
@@ -184,16 +201,20 @@ class RemoteStructureCache:
         lock = self._get_path_lock(cache_key)
 
         with lock:
-            if target.is_file():
+            if not force and target.is_file():
                 return target
 
             if self._fetcher_factory is None:
                 logger.debug("No fetcher factory; cannot fetch %s/%s", job_id, rel_path)
+                if raise_errors:
+                    raise RemotePushError("Remote fetching is not configured")
                 return None
 
             fetcher = self._fetcher_factory(job_id)
             if fetcher is None:
                 logger.debug("Fetcher unavailable for job %s; cannot fetch %s", job_id, rel_path)
+                if raise_errors:
+                    raise RemotePushError(f"Fetcher unavailable for job {job_id}")
                 return None
             try:
                 data = fetcher.read_file(record, rel_path)
@@ -201,9 +222,13 @@ class RemoteStructureCache:
                 data = self._discover_nested(fetcher, record, job_id, rel_path)
                 if data is None:
                     logger.debug("Remote file not found (flat or nested): %s/%s", job_id, rel_path)
+                    if force:
+                        self._drop_cached(target)
                     return None
             except Exception:
                 logger.warning("Failed to fetch %s/%s", job_id, rel_path, exc_info=True)
+                if raise_errors:
+                    raise
                 return None
 
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -228,6 +253,77 @@ class RemoteStructureCache:
 
             logger.info("Cached %s/%s -> %s", job_id, rel_path, target)
             return target
+
+    @staticmethod
+    def _drop_cached(target: Path) -> None:
+        """Remove a stale cached copy after the remote confirmed absence."""
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Could not drop stale cache file %s", target, exc_info=True)
+
+    def push_paths(self, record: Any, rel_paths: Sequence[str]) -> list[str]:
+        """Upload cached files back to the remote job directory.
+
+        The relative layout is preserved (cache path == remote path), which
+        keeps manually-reviewed PES artifacts on the compute node — the
+        authoritative location that downstream jobs, remote fetches and the
+        retention cleanup operate on.
+
+        Returns:
+            The relative paths actually uploaded (missing cache files are
+            skipped).
+
+        Raises:
+            RemotePushError: Fetcher/write-back unavailable, or any upload
+                failed (partial uploads are possible; callers should surface
+                the error and allow a retry).
+        """
+        if self._fetcher_factory is None:
+            raise RemotePushError("Remote fetching is not configured")
+        fetcher = self._fetcher_factory(record.id)
+        write_fn = getattr(fetcher, "write_file", None) if fetcher is not None else None
+        if write_fn is None:
+            raise RemotePushError("Remote fetcher does not support write-back")
+
+        uploaded: list[str] = []
+        for rel_path in rel_paths:
+            target = self.cache_path(record.id, rel_path)
+            if not target.is_file():
+                logger.debug("Skipping write-back of uncached %s/%s", record.id, rel_path)
+                continue
+            write_fn(record, rel_path, target.read_bytes())
+            uploaded.append(rel_path)
+        logger.info("Wrote back %d file(s) for job %s", len(uploaded), record.id)
+        return uploaded
+
+    def fetch_matching(self, record: Any, dir_rel: str, prefix: str) -> list[str]:
+        """Fetch files named ``<prefix>*`` from one remote directory.
+
+        Best-effort helper for listing-style views (review backups).  Never
+        raises; fetchers without ``list_files`` return an empty list.
+        """
+        if self._fetcher_factory is None:
+            return []
+        fetcher = self._fetcher_factory(record.id)
+        list_fn = getattr(fetcher, "list_files", None) if fetcher is not None else None
+        if list_fn is None:
+            return []
+        try:
+            entries = list_fn(record, dir_rel)
+        except Exception:
+            logger.debug("list_files failed for %s/%s", record.id, dir_rel, exc_info=True)
+            return []
+
+        fetched: list[str] = []
+        for entry in entries:
+            name = str(getattr(entry, "name", "") or "")
+            if getattr(entry, "is_dir", False) or not name:
+                continue
+            if posixpath.basename(name).startswith(prefix):
+                if self.fetch(record, name) is not None:
+                    fetched.append(name)
+        return fetched
 
     def _discover_nested(
         self,

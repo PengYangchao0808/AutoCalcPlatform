@@ -4916,12 +4916,25 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     )
                     if multi_options is not None:
                         opt_strs = [str(o) for o in multi_options]
-                        if any(str(v) not in opt_strs for v in vals):
+                        canon_vals: list[Any] = []
+                        invalid = False
+                        for v in vals:
+                            if str(v) in opt_strs:
+                                canon_vals.append(v)
+                                continue
+                            match = _match_option_case_insensitive(multi_options, v)
+                            if match is None:
+                                invalid = True
+                                break
+                            _idx, canonical = match
+                            canon_vals.append(canonical)
+                        if invalid:
                             errors.append(
                                 f"Level '{lid}', field '{field_name}': "
                                 f"value '{user_val}' not in allowed options"
                             )
                             continue
+                        vals = canon_vals
                     normalized[field_name] = vals
                     continue
                 options = _resolve_field_options(
@@ -4955,14 +4968,16 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                         else:
                             user_val = canonical
                     elif str(user_val) not in [str(o) for o in options]:
-                        if (
+                        match = _match_option_case_insensitive(options, user_val)
+                        if match is not None:
+                            _idx, canonical = match
+                            user_val = canonical
+                        elif not (
                             fd
                             and fd.get("supports_custom")
                             and str(user_val).strip()
                             and len(options) > 1
                         ):
-                            pass
-                        else:
                             errors.append(
                                 f"Level '{lid}', field '{field_name}': "
                                 f"value '{user_val}' not in allowed options"

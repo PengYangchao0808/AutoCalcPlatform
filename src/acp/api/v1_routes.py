@@ -314,19 +314,8 @@ def _is_remote_job(record: Any) -> bool:
 
 
 def _remote_structure_cache(request: Request) -> Any:
-    """Return (or lazily create) the RemoteStructureCache singleton."""
-    from acp.results.remote_structure_cache import RemoteStructureCache
-
-    manager = _manager(request)
-    cache = getattr(manager, "_remote_structure_cache", None)
-    if cache is None:
-
-        def _fetcher_factory(job_id: str) -> Any:
-            return getattr(manager, "_remote_fetcher", None)
-
-        cache = RemoteStructureCache(manager.run_root, fetcher_factory=_fetcher_factory)
-        manager._remote_structure_cache = cache  # type: ignore[attr-defined]
-    return cache
+    """Return the manager-owned RemoteStructureCache singleton."""
+    return _manager(request).structure_cache
 
 
 def _structure_viewer_root(
@@ -360,6 +349,23 @@ def _structure_viewer_root(
             return fetched_root, True
 
     return work_dir, False
+
+
+def _job_read_root(request: Request, record: JobRecord) -> Path:
+    """Resolve the readable result root for a job projection.
+
+    Local jobs use their work dir.  Pure-remote jobs use the controlled
+    ``RemoteStructureCache`` root; for terminal jobs the small catalog files
+    are fetched synchronously first (the same recovery the structure-viewer
+    ``?fetch=1`` path performs), so energy/PES projections never depend on a
+    frontend retry.  Remote geometry stays lazy.
+    """
+    if not _is_remote_job(record):
+        return Path(record.work_dir)
+    cache = _remote_structure_cache(request)
+    if record.status.is_terminal:
+        cache.fetch_catalog(record, str(record.spec.workflow or ""))
+    return cache.job_root(record.id)
 
 
 def _db_path(request: Request) -> Path:
@@ -1684,6 +1690,50 @@ def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
     return method
 
 
+_BATCH_KEYWORD_FIELDS: tuple[str, ...] = (
+    "opt_convergence",
+    "scf_convergence",
+    "opt_initial_hessian",
+    "minimum_opt_initial_hessian",
+    "transition_state_opt_initial_hessian",
+    "opt_rescue_policy",
+    "scf_strategy",
+)
+
+
+def _canonicalize_batch_keywords(method: dict[str, Any]) -> None:
+    """Rewrite BatchOptimize enumerated keyword values to catalog spellings.
+
+    The Workbench submits both a flat mirror (``method[field]``, read by the
+    scheduler's ``batchoptimize_method_flags``) and a nested
+    ``method["levels"]["batch"]`` copy (read by the batch engine), so both are
+    canonicalized in place. Each value is matched case-insensitively against
+    ``FIELD_DEFINITIONS[field]["options"]`` and replaced with the catalog
+    spelling; ``None``/empty values, fields without options, and unknown
+    spellings are left untouched (free-form values are never folded).
+    """
+    from acp.catalog import FIELD_DEFINITIONS
+    from acp.core.keywords import canonical_choice
+
+    targets: list[dict[str, Any]] = [method]
+    levels = method.get("levels")
+    if isinstance(levels, dict):
+        batch = levels.get("batch")
+        if isinstance(batch, dict):
+            targets.append(batch)
+    for field in _BATCH_KEYWORD_FIELDS:
+        options = FIELD_DEFINITIONS.get(field, {}).get("options")
+        if not options:
+            continue
+        for target in targets:
+            value = target.get(field)
+            if value is None or value == "":
+                continue
+            canonical = canonical_choice(value, options)
+            if canonical is not None:
+                target[field] = canonical
+
+
 def _target_validation_detail(exc: Exception) -> dict[str, Any]:
     """Serialize a submission-time target error into the 400 body (D12).
 
@@ -1820,6 +1870,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     req.method = _expand_method_electronic_state(req.method)
     if req.workflow == "irc":
         req.input = _resolve_irc_source_reference(req.input, manager)
+    if req.workflow == "BatchOptimize":
+        _canonicalize_batch_keywords(req.method)
     batch_snapshots: list[dict[str, Any]] = _snapshot_direct_source_input(req.input, request)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
@@ -2139,35 +2191,44 @@ def promote_mechanism_study(study_id: str, request: Request) -> StudyPromoteResp
 # ---------------------------------------------------------------------------
 
 
-def _pes_profile_for_job(manager: Any, job_id: str) -> tuple[Path, dict[str, Any]]:
-    """Locate a canonical PES profile, with read-only legacy S2 fallback."""
-    record = manager.get(job_id)
-    if record is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    work_dir = Path(record.work_dir) if record.work_dir else None
-    if work_dir is None or not work_dir.is_dir():
+def _pes_profile_for_job(request: Request, record: JobRecord) -> tuple[Path, dict[str, Any]]:
+    """Locate a canonical PES profile, with read-only legacy S2 fallback.
+
+    Remote jobs probe the controlled remote cache first (catalog files are
+    fetched on demand for terminal jobs) and fall back to the local work dir.
+    """
+    job_id = record.id
+    if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
-    canonical_path = work_dir / PES_PROFILE_RELATIVE_PATH
-    if canonical_path.is_file():
-        try:
-            payload = load_pes_profile(
-                canonical_path,
-                source_path=PES_PROFILE_RELATIVE_PATH,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return canonical_path, payload
+    roots: list[Path] = [Path(record.work_dir)]
+    if _is_remote_job(record):
+        roots.insert(0, _job_read_root(request, record))
+    elif not roots[0].is_dir():
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
 
-    legacy_path = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
-    if legacy_path.is_file():
-        from acp.compat.legacy.manifests import read_s2_path_manifest
+    for root in roots:
+        canonical_path = root / PES_PROFILE_RELATIVE_PATH
+        if canonical_path.is_file():
+            try:
+                payload = load_pes_profile(
+                    canonical_path,
+                    source_path=PES_PROFILE_RELATIVE_PATH,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            return canonical_path, payload
 
-        try:
-            payload = read_s2_path_manifest(legacy_path)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        payload["_source_path"] = LEGACY_S2_PROFILE_RELATIVE_PATH
-        return legacy_path, payload
+    for root in roots:
+        legacy_path = root / LEGACY_S2_PROFILE_RELATIVE_PATH
+        if legacy_path.is_file():
+            from acp.compat.legacy.manifests import read_s2_path_manifest
+
+            try:
+                payload = read_s2_path_manifest(legacy_path)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            payload["_source_path"] = LEGACY_S2_PROFILE_RELATIVE_PATH
+            return legacy_path, payload
 
     raise HTTPException(
         status_code=404,
@@ -2199,7 +2260,7 @@ def get_energy_graph(
 
     workflow = str(record.spec.workflow or "")
     method = dict(record.spec.method or {})
-    work_dir = Path(record.work_dir) if record.work_dir else Path(".")
+    work_dir = _job_read_root(request, record) if record.work_dir else Path(".")
     s2_payload: dict[str, Any] | None = None
     mechanism_report: dict[str, Any] | None = None
     s2_candidates: list[dict[str, Any]] | None = None
@@ -2210,7 +2271,7 @@ def get_energy_graph(
         from acp.compat.legacy.manifests import read_s2_candidate_manifest, read_s2_review
 
         try:
-            _manifest_path, s2_payload = _pes_profile_for_job(manager, job_id)
+            _manifest_path, s2_payload = _pes_profile_for_job(request, record)
         except HTTPException as exc:
             # Missing final profile on a running/failed job → live/pending 200;
             # corrupt-profile 422 and missing-job/work-dir 404 still raise.
@@ -2552,7 +2613,10 @@ def preview_s2_structure(
 @router.get("/jobs/{job_id}/s2/profile", response_model=S2ProfileResponse)
 def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
     manager = _manager(request)
-    _manifest_path, payload = _pes_profile_for_job(manager, job_id)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _manifest_path, payload = _pes_profile_for_job(request, record)
     scan = payload.get("scan") or {}
     frames = [S2FrameModel(**frame) for frame in scan.get("frames") or []]
     return S2ProfileResponse(
@@ -2573,7 +2637,10 @@ def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
 @router.get("/jobs/{job_id}/s2/candidates", response_model=S2CandidatesResponse)
 def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
     manager = _manager(request)
-    _manifest_path, payload = _pes_profile_for_job(manager, job_id)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _manifest_path, payload = _pes_profile_for_job(request, record)
     return S2CandidatesResponse(
         job_id=job_id,
         mode=str(payload.get("mode") or ""),
@@ -2587,7 +2654,10 @@ def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
 @router.get("/jobs/{job_id}/s2/frame/{frame_index}", response_model=S2FrameResponse)
 def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResponse:
     manager = _manager(request)
-    manifest_path, payload = _pes_profile_for_job(manager, job_id)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    manifest_path, payload = _pes_profile_for_job(request, record)
     frames = (payload.get("scan") or {}).get("frames") or []
     frame = next(
         (f for f in frames if f.get("index") is not None and int(f.get("index")) == frame_index),
@@ -2604,6 +2674,14 @@ def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResp
         scan_dir.replace("\\", "/"), geometry_path.replace("\\", "/")
     )
     xyz_path = resolve_safe(task_root, relative_geometry)
+    if xyz_path is None and _is_remote_job(record):
+        cache = _remote_structure_cache(request)
+        try:
+            xyz_path = cache.get_cached(record.id, relative_geometry)
+            if xyz_path is None:
+                xyz_path = cache.fetch(record, relative_geometry)
+        except ValueError:
+            xyz_path = None
     xyz = ""
     if xyz_path is not None:
         xyz = xyz_path.read_text(encoding="utf-8")
@@ -2656,9 +2734,13 @@ def save_job_s2_review(
 
 _PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
-
 def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
     """Resolve (task dir, task status) of a PESsearch job for manual review.
+
+    Remote jobs work on the controlled remote cache (staging root): reads are
+    served from it directly and writes (save/restore) are uploaded back to
+    the compute node by the caller, so the authoritative artifacts stay in
+    the remote ``RESULT/`` tree.
 
     Raises:
         404: job/work_dir missing, or no reviewable data (neither a canonical
@@ -2679,13 +2761,16 @@ def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> t
         )
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
-    work_dir = Path(record.work_dir)
     status = (
         record.status.value if getattr(record.status, "value", None) else str(record.status)
     )
     status_key = str(status).strip().upper()
     active_job = status_key not in {"COMPLETED", "FAILED", "CANCELLED"}
 
+    if _is_remote_job(record):
+        work_dir = _job_read_root(request, record)
+    else:
+        work_dir = Path(record.work_dir)
     canonical = work_dir / PES_PROFILE_RELATIVE_PATH
     legacy = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
     if not canonical.is_file():
@@ -2723,10 +2808,134 @@ def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> t
     return work_dir, status_key
 
 
+def _pes_frame_rel_paths(work_dir: Path, frame_indexes: set[int]) -> list[str]:
+    """Map selected frame indexes to task-root-relative geometry paths."""
+    profile_path = work_dir / PES_PROFILE_RELATIVE_PATH
+    try:
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    frames = profile.get("frames") if isinstance(profile, dict) else None
+    if not isinstance(frames, list):
+        return []
+    scan_dir = str(profile.get("scan_dir") or "").replace("\\", "/")
+    rel_paths: list[str] = []
+    for index in sorted(frame_indexes):
+        if index < 0 or index >= len(frames) or not isinstance(frames[index], dict):
+            continue
+        geometry = str(frames[index].get("geometry_path") or "").replace("\\", "/")
+        if geometry:
+            rel_paths.append(posixpath.join(scan_dir, geometry) if scan_dir else geometry)
+    return rel_paths
+
+
+def _remote_review_setup(
+    request: Request,
+    job_id: str,
+    *,
+    frame_indexes: set[int] | None = None,
+    backup_rel: str | None = None,
+) -> tuple[Any, JobRecord] | None:
+    """Stage mutable artifacts + frame geometries for a remote review write.
+
+    Remote is authoritative: the review/manifest (and the requested backup)
+    are force-refreshed so revision checks run against the compute node's
+    current state, and every selected frame geometry is pulled into the
+    staging root before validation.  Returns ``(cache, record)`` for remote
+    jobs, ``None`` for local ones; raises 502 when staging fails.
+    """
+    from acp.calculations.pes.review import PES_REVIEW_RELATIVE_PATH
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or not _is_remote_job(record):
+        return None
+    cache = _remote_structure_cache(request)
+    work_dir = cache.job_root(record.id)
+    try:
+        if backup_rel is not None:
+            backup_path = cache.fetch(record, backup_rel, force=True, raise_errors=True)
+            if backup_path is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"review backup not found: {backup_rel}",
+                )
+            try:
+                backup = json.loads(backup_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                backup = {}
+            frame_indexes = {
+                int(row["frame_index"])
+                for row in (backup.get("selected") or [])
+                if isinstance(row, dict) and row.get("frame_index") is not None
+            }
+        cache.fetch(record, PES_REVIEW_RELATIVE_PATH, force=True, raise_errors=True)
+        cache.fetch(record, "RESULT/result_manifest.json", force=True, raise_errors=True)
+        for rel_path in _pes_frame_rel_paths(work_dir, frame_indexes or set()):
+            cache.fetch(record, rel_path, raise_errors=True)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"审阅输入拉取失败（无法读取计算节点）: {exc}",
+        ) from exc
+    return cache, record
+
+
+def _remote_review_write_back(cache: Any, record: JobRecord, payload: dict[str, Any]) -> None:
+    """Upload staged review artifacts; the authoritative review file goes last.
+
+    Order: structures -> result manifest -> backup -> ``pes_review.json``.
+    A partial failure leaves extra files on the node at worst; re-saving the
+    same selection is idempotent, so the caller can simply retry.
+    """
+    from acp.calculations.pes.review import PES_REVIEW_BACKUP_TEMPLATE, PES_REVIEW_RELATIVE_PATH
+
+    rel_paths: list[str] = []
+    for row in payload.get("selected") or []:
+        structure_path = str((row or {}).get("structure_path") or "")
+        if structure_path:
+            rel_paths.append(f"RESULT/{structure_path}")
+    rel_paths.append("RESULT/result_manifest.json")
+    previous_revision = int(payload.get("revision") or 1) - 1
+    if previous_revision >= 1:
+        rel_paths.append(
+            f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=previous_revision)}"
+        )
+    rel_paths.append(PES_REVIEW_RELATIVE_PATH)
+    try:
+        cache.push_paths(record, rel_paths)
+    except Exception as exc:
+        # The staged cache now diverges from the node; restore coherence from
+        # the authoritative remote state (best-effort) before failing loudly.
+        for rel_path in ("RESULT/result_manifest.json", PES_REVIEW_RELATIVE_PATH):
+            try:
+                cache.fetch(record, rel_path, force=True)
+            except Exception:
+                logger.debug("Post-failure refresh failed for %s", rel_path, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail=f"审阅写回计算节点失败（远端可能部分更新，重试即可）: {exc}",
+        ) from exc
+
+
+def _stage_remote_review_backups(request: Request, job_id: str) -> None:
+    """Best-effort staging of review backups so GET exposes all rounds."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or not _is_remote_job(record):
+        return
+    _remote_structure_cache(request).fetch_matching(
+        record, "RESULT/pes_search", "pes_review_backup_"
+    )
+
+
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
     work_dir, _task_status = _pes_review_work_dir(request, job_id, for_write=False)
+    _stage_remote_review_backups(request, job_id)
 
     from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
 
@@ -2752,7 +2961,16 @@ def restore_pes_review_endpoint(
     request: Request,
 ) -> PesReviewRestoreResponse:
     """Re-activate a previous review backup; manifest switches to that round."""
+    from acp.calculations.pes.review import PES_REVIEW_BACKUP_TEMPLATE
+
     work_dir, task_status = _pes_review_work_dir(request, job_id, for_write=True)
+    remote_ctx = _remote_review_setup(
+        request,
+        job_id,
+        backup_rel=(
+            f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"
+        ),
+    )
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
@@ -2772,6 +2990,9 @@ def restore_pes_review_endpoint(
         raise HTTPException(status_code=status_code, detail=message) from exc
 
     source_block = payload.get("source") or {}
+    if remote_ctx is not None:
+        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+
     return PesReviewRestoreResponse(
         job_id=job_id,
         status=str(payload.get("status") or "confirmed"),
@@ -2802,6 +3023,11 @@ def save_pes_review_endpoint(
 ) -> PesReviewResponse:
     """Confirm TS/INT selections: materialise RESULT/structures + pes_review.json + manifest."""
     work_dir, task_status = _pes_review_work_dir(request, job_id, for_write=True)
+    remote_ctx = _remote_review_setup(
+        request,
+        job_id,
+        frame_indexes={int(item.frame_index) for item in req.candidates},
+    )
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
@@ -2821,6 +3047,9 @@ def save_pes_review_endpoint(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     source_block = payload.get("source") or {}
+    if remote_ctx is not None:
+        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+
     return PesReviewResponse(
         job_id=job_id,
         status=str(payload.get("status") or "confirmed"),

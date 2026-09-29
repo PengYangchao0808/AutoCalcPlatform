@@ -76,6 +76,12 @@
     ENERGY: "\u80fd\u91cf",                                           // 能量
     DELTA_E: "\u0394E",                                               // ΔE
     WEIGHT: "Boltzmann \u6743\u91cd",                                // Boltzmann 权重
+    WEIGHT_SOURCES: {
+      censo: "CENSO",
+      xtb: "xTB",
+      dft: "DFT",
+      computed: "\u8ba1\u7b97\u503c",                             // 计算值
+    },
     VIBRATIONS: "\u632f\u52a8\u6a21\u5f0f",                         // 振动模式
     MEASUREMENTS: "\u6d4b\u91cf",                                     // 测量
     WARNINGS: "\u8b66\u544a",                                         // 警告
@@ -2113,6 +2119,8 @@
         if (e.boltzmann_weight != null) {
           var bar = document.createElement("div");
           bar.className = "sv-switcher-item-boltz";
+          var switcherTitle = _weightBarTitle(e);
+          if (switcherTitle) bar.setAttribute("title", switcherTitle);
           var fill = document.createElement("div");
           fill.className = "sv-switcher-item-boltz-fill";
           fill.style.width = Math.round(e.boltzmann_weight * 100) + "%";
@@ -2602,6 +2610,8 @@
     if (entry.boltzmann_weight != null) {
       var bar = document.createElement("div");
       bar.className = "sv-strip-boltz";
+      var stripTitle = _weightBarTitle(entry);
+      if (stripTitle) bar.setAttribute("title", stripTitle);
       bar.style.width = Math.round(entry.boltzmann_weight * 100) + "%";
       bar.style.maxWidth = "40px";
       item.appendChild(bar);
@@ -2753,6 +2763,8 @@
     if (entry.boltzmann_weight != null) {
       var bar = document.createElement("span");
       bar.className = "sv-boltzmann-bar";
+      var barTitle = _weightBarTitle(entry);
+      if (barTitle) bar.setAttribute("title", barTitle);
       var fill = document.createElement("span");
       fill.className = "sv-boltzmann-bar-fill";
       fill.style.width = Math.round(entry.boltzmann_weight * 100) + "%";
@@ -2790,6 +2802,43 @@
       return val.toFixed(6) + " Eh";
     }
     return val.toFixed(4) + " " + _esc(unit);
+  }
+
+  /* 298.15 -> "298.15 K"; trailing zeros trimmed; "" when absent/non-numeric */
+  function _formatTemperatureK(value) {
+    if (value == null || value === "") return "";
+    var num = Number(value);
+    if (!isFinite(num)) return "";
+    return String(parseFloat(num.toFixed(2))) + " K";
+  }
+
+  function _weightSourceLabel(source) {
+    var raw = source == null ? "" : String(source);
+    if (!raw) return "";
+    var fallback = STR.WEIGHT_SOURCES[raw] || _esc(raw);
+    return _t("structure.weight_source." + raw, fallback);
+  }
+
+  /* "（<SOURCE>, <T> K）" with whichever parts exist; "" when neither */
+  function _weightProvenanceSuffix(entry) {
+    var parts = [];
+    var sourceLabel = _weightSourceLabel(entry && entry.weight_source);
+    if (sourceLabel) parts.push(sourceLabel);
+    var tempText = _formatTemperatureK(entry && entry.energy && entry.energy.temperature_k);
+    if (tempText) parts.push(tempText);
+    if (!parts.length) return "";
+    return "\uff08" + parts.join(", ") + "\uff09";
+  }
+
+  function _formatWeightValue(entry) {
+    var pct = (entry.boltzmann_weight * 100).toFixed(1) + "%";
+    return pct + _weightProvenanceSuffix(entry);
+  }
+
+  /* "" without provenance -> caller omits the title attribute (unchanged UI) */
+  function _weightBarTitle(entry) {
+    var suffix = _weightProvenanceSuffix(entry);
+    return suffix ? _formatWeightValue(entry) : "";
   }
 
   /* ---- render: inspector (drawer-based) ---- */
@@ -3289,7 +3338,7 @@
     }
     if (entry.boltzmann_weight != null) {
       body.appendChild(_inspectorSection(_t("structure.weight", STR.WEIGHT),
-        (entry.boltzmann_weight * 100).toFixed(1) + "%"));
+        _formatWeightValue(entry)));
     }
     if (structureViewerState.newerAvailable) {
       var newerNotice = document.createElement("div");
@@ -3850,6 +3899,8 @@
     _applyCatalogResponse: _applyCatalogResponse,
     _esc: _esc,
     _t: _t,
+    _formatWeightValue: _formatWeightValue,
+    _weightBarTitle: _weightBarTitle,
     _sha256hex: _sha256hex,
     _manualEntryId: _manualEntryId,
     _entryIdFromEnergyNode: _entryIdFromEnergyNode,

@@ -29,7 +29,7 @@ remote/
 | LSF script | `script_gen.py` | `derive_lsf_resources` (nproc/mem/queue) → `generate_lsf_script`; shared flag resolution via `jobs.xtbmd_method_flags` (E7 parity — add new xtbmd flags in `scheduler/jobs.py`, NOT here) |
 | Job lifecycle | `runner.py` | `RemoteJobRunner.run()` — bsub submit → poll state.json → fetch results → cleanup; `state.json` observation on node |
 | Monitor | `monitor.py` | bjobs parse, per-job log tailing, bkill on cancel |
-| Result fetch | `fetcher.py` | On-demand file retrieval; `NotARemoteJobError` for local jobs |
+| Result fetch | `fetcher.py` | On-demand file retrieval; `NotARemoteJobError` for local jobs; `write_file` uploads bytes back into the remote job dir (PES review write-back; wraps failures in `RemoteWriteError`) |
 | Disk cleanup | `cleanup.py` | Retention-based sweeps + pre-submit disk-pressure check (`DISK_CLEANUP_THRESHOLD`/`DISK_SKIP_THRESHOLD`) |
 | Node state | `node_manager.py` | 30s TTL cache of node status — call through NodeManager, not direct SSH |
 

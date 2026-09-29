@@ -382,6 +382,7 @@ def run_ensemble_generation(
         )
 
     state.mark_completed()
+    is_xtb_passthrough = (preset or "").lower() == "censo-zero"
     return WorkflowResult(
         status="completed",
         ensemble=ensemble,
@@ -394,6 +395,10 @@ def run_ensemble_generation(
             "ensemble_json": str(mol_dir / "RESULT" / "ensembles" / "ensemble.json"),
             "ensemble_csv": str(mol_dir / "RESULT" / "ensembles" / "ensemble.csv"),
             "crest_skipped": crest_skipped,
+            "temperature_k": float(result.temperature),
+            "weight_source": "xtb" if is_xtb_passthrough else "censo",
+            "weight_method": "xtb_table" if is_xtb_passthrough else "censo_table",
+            "population_coverage": 1.0,
         },
     )
 
