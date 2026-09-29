@@ -2273,8 +2273,12 @@ def get_energy_graph(
         try:
             _manifest_path, s2_payload = _pes_profile_for_job(request, record)
         except HTTPException as exc:
-            # Missing final profile on a running/failed job → live/pending 200;
-            # corrupt-profile 422 and missing-job/work-dir 404 still raise.
+            # Local running/failed jobs degrade to a live/pending 200 when the
+            # final profile simply is not there yet. Remote reads keep their
+            # original error (e.g. a catalog fetch failure must surface as
+            # the clear 404, never a misleading pending graph).
+            if _is_remote_job(record):
+                raise
             if exc.status_code != 404 or not str(exc.detail).startswith("No PES profile"):
                 raise
             _manifest_path, s2_payload = None, None

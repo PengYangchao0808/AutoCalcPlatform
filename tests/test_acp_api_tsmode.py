@@ -24,8 +24,11 @@ def _make_client(
 def client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Generator[TestClient, None, None]:
-    with _make_client(tmp_path, monkeypatch) as c:
-        yield c
+    import unittest.mock as mock
+
+    with mock.patch("acp.scheduler.capabilities.local_satisfies", return_value=True):
+        with _make_client(tmp_path, monkeypatch) as c:
+            yield c
 
 
 def _seed_job(
