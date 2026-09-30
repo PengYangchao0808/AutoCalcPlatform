@@ -38,6 +38,7 @@ from cccp.qc.interfaces.orca_ts import (
     freq_block_for_ts,
     irc_block,
     irc_route,
+    orca_keyword_context,
     parse_irc_endpoints,
     parse_ts_frequency_map,
     parse_ts_mode_vectors,
@@ -45,7 +46,7 @@ from cccp.qc.interfaces.orca_ts import (
     ts_opt_route,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
-from cccp.qc.keyword_registry import method_family
+from cccp.qc.keyword_registry import method_family, resolve
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -424,46 +425,6 @@ def _is_orca_gfn_xtb_method(method: str | None) -> bool:
     if not method:
         return False
     return method_family(method) in {"gfn", "gfnff"}
-
-
-_OPT_LEVEL_MAP: dict[str, str] = {
-    "tight": "TightOpt",
-    "verytight": "VeryTightOpt",
-    # PES contracts spell the level "very_tight"; accept the alias here so
-    # the convergence setting actually reaches the route line (G3 fix).
-    "very_tight": "VeryTightOpt",
-    "loose": "LooseOpt",
-    # ``normal`` is ORCA's default for an optimization route.  The base
-    # ``calc_type="opt"`` already emits ``Opt``; adding it here duplicates
-    # the keyword (notably for ScanTS relaxed scans).
-}
-
-_SCF_CONVERGENCE_MAP: dict[str, str] = {
-    "tight": "TightSCF",
-    "verytight": "VeryTightSCF",
-    "loose": "LooseSCF",
-}
-
-_SCF_STRATEGY_MAP: dict[str, str] = {
-    "slowconv": "SlowConv",
-    "soscf": "SOSCF",
-}
-
-# ORCA-native integration-grid keywords (route line).  The PES scan
-# optimizer exposes the ORCA-native names (DefGrid1/2/3) rather than the
-# legacy SG1/Fine aliases to avoid a second mapping layer.
-_GRID_KEYWORD_MAP: dict[str, str] = {
-    "defgrid1": "DefGrid1",
-    "defgrid2": "DefGrid2",
-    "defgrid3": "DefGrid3",
-}
-
-_DISPERSION_KEYWORD_MAP: dict[str, str] = {
-    "d3": "D3",
-    "d3bj": "D3BJ",
-    "d4": "D4",
-    "vv10": "VV10",
-}
 
 
 def _looser_opt_level(opt_level: str | None) -> str | None:
@@ -1309,8 +1270,14 @@ class ORCAInterface(QCInterfaceBase):
 
         _extras_upper = {str(x).upper() for x in _route_extras}
 
+        _kw_family, _kw_implementation = orca_keyword_context(_method)
+
         if opt_level is not None:
-            _opt_kw = _OPT_LEVEL_MAP.get(opt_level.strip().lower())
+            _opt_kw, _opt_warning = resolve(
+                "opt_level", opt_level, family=_kw_family, implementation=_kw_implementation
+            )
+            if _opt_warning:
+                logger.warning("%s", _opt_warning)
             if _opt_kw and _opt_kw.upper() not in _extras_upper:
                 _route_extras.append(_opt_kw)
                 _extras_upper.add(_opt_kw.upper())
@@ -1319,7 +1286,14 @@ class ORCAInterface(QCInterfaceBase):
             not basis_inline and _method.lower() == "dlpno-ccsd(t)"
         )
         if scf_convergence is not None:
-            _scf_conv_kw = _SCF_CONVERGENCE_MAP.get(scf_convergence.strip().lower())
+            _scf_conv_kw, _scf_conv_warning = resolve(
+                "scf_convergence",
+                scf_convergence,
+                family=_kw_family,
+                implementation=_kw_implementation,
+            )
+            if _scf_conv_warning:
+                logger.warning("%s", _scf_conv_warning)
             if _scf_conv_kw:
                 if _scf_conv_kw.upper() not in _extras_upper and not (
                     _scf_conv_kw.upper() == "TIGHTSCF" and _dlpno_tight_scf
@@ -1328,7 +1302,14 @@ class ORCAInterface(QCInterfaceBase):
                     _extras_upper.add(_scf_conv_kw.upper())
 
         if scf_strategy is not None:
-            _scf_strat_kw = _SCF_STRATEGY_MAP.get(scf_strategy.strip().lower())
+            _scf_strat_kw, _scf_strat_warning = resolve(
+                "scf_strategy",
+                scf_strategy,
+                family=_kw_family,
+                implementation=_kw_implementation,
+            )
+            if _scf_strat_warning:
+                logger.warning("%s", _scf_strat_warning)
             if _scf_strat_kw and _scf_strat_kw.upper() not in _extras_upper:
                 _route_extras.append(_scf_strat_kw)
 
@@ -1345,20 +1326,26 @@ class ORCAInterface(QCInterfaceBase):
         _gfn_method = _is_orca_gfn_xtb_method(_method)
         if not _gfn_method:
             if grid:
-                _grid_kw = _GRID_KEYWORD_MAP.get(str(grid).strip().lower(), str(grid).strip())
+                _grid_kw, _grid_warning = resolve(
+                    "grid", grid, family=_kw_family, implementation=_kw_implementation
+                )
+                if _grid_warning:
+                    logger.warning("%s", _grid_warning)
                 if _grid_kw and _grid_kw.upper() not in _extras_upper:
                     _route_extras.append(_grid_kw)
                     _extras_upper.add(_grid_kw.upper())
             _meta_ri = (meta or {}).get("ri_support", "user")
-            if (
-                dispersion
-                and str(dispersion).strip().lower() != "none"
-                and _meta_ri == "user"
-            ):
-                _disp_kw = _DISPERSION_KEYWORD_MAP.get(
-                    str(dispersion).strip().lower(), str(dispersion).strip()
+            if dispersion:
+                _disp_kw, _disp_warning = resolve(
+                    "dispersion", dispersion, family=_kw_family, implementation=_kw_implementation
                 )
-                if _disp_kw and _disp_kw.upper() not in _extras_upper:
+                if _disp_warning:
+                    logger.warning("%s", _disp_warning)
+                if (
+                    _disp_kw
+                    and _meta_ri == "user"
+                    and _disp_kw.upper() not in _extras_upper
+                ):
                     _route_extras.append(_disp_kw)
                     _extras_upper.add(_disp_kw.upper())
 

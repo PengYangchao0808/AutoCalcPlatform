@@ -20,6 +20,12 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from cccp.qc.keyword_registry import (
+    IMPL_ORCA_DFT,
+    method_family,
+    resolve,
+    resolve_implementation,
+)
 from cccp.utils.constants import HARTREE_TO_KCAL
 
 logger = logging.getLogger(__name__)
@@ -28,12 +34,6 @@ _VIBRATIONAL_FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
 _VIBRATIONAL_FREQ_LINE_RE = re.compile(r"^\s*(\d+):\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
 _NORMAL_MODES_SECTION_HEADER = "NORMAL MODES"
 _INTEGER_TOKEN_RE = re.compile(r"^\d+$")
-_OPT_LEVEL_KEYWORDS = {
-    "loose": "LooseOpt",
-    "normal": None,
-    "tight": "TightOpt",
-    "verytight": "VeryTightOpt",
-}
 
 # ORCA IRC output files: ``*_IRC_[FB]_trj.xyz`` (per-direction path, energy in
 # each frame comment) and ``*_IRC_[FB].xyz`` (endpoint).  ``*_IRC_Full_trj.xyz``
@@ -311,6 +311,35 @@ def parse_irc_iteration_energies(log_text: str) -> dict[str, list[float]]:
     return energies
 
 
+def orca_keyword_context(method: str | None) -> tuple[str, str]:
+    """Return the registry ``(family, implementation)`` context for ORCA input builds.
+
+    Derived per input build from the effective method via
+    :func:`cccp.qc.keyword_registry.method_family` +
+    :func:`cccp.qc.keyword_registry.resolve_implementation` (``engine="orca"``).
+
+    Arbitrary/user-supplied DFT functionals are NOT in the registry's finite
+    method table (family ``"unknown"``) and MUST keep working — they run as
+    conventional ORCA DFT, so fall back to
+    ``("conventional_dft", IMPL_ORCA_DFT)`` instead of letting
+    ``resolve_implementation`` reject them. Only recognized GFN/3c methods
+    get family-specific behavior.
+
+    Args:
+        method: Effective method spelling (case/whitespace-insensitive).
+
+    Returns:
+        ``(family, implementation)`` suitable for
+        :func:`cccp.qc.keyword_registry.resolve`.
+    """
+    if not method:
+        return "conventional_dft", IMPL_ORCA_DFT
+    family = method_family(method)
+    if family == "unknown":
+        return "conventional_dft", IMPL_ORCA_DFT
+    return family, resolve_implementation(method, engine="orca")
+
+
 def ts_opt_route(
     method: str,
     basis: str = "",
@@ -330,11 +359,13 @@ def ts_opt_route(
     methods take ``<method> <basis>``. Grid/SCF/solvent keywords are appended
     when provided. ``OptTS`` is always emitted, and ``NumFreq`` is appended
     last so every TS run ends with the independent numerical frequency
-    verification. ``opt_level`` accepts
-    ``loose`` / ``normal`` / ``tight`` / ``verytight``; ``normal`` leaves the
-    route at plain ``OptTS`` because ORCA already uses the default optimization
-    thresholds there and emitting a second ``Opt`` run-type keyword would be
-    ambiguous. ``%pal nprocs`` is emitted when *nproc* is given.
+    verification. ``opt_level`` resolves through the keyword registry
+    (``loose`` / ``normal`` / ``tight`` / ``verytight`` / ``very_tight``
+    alias); ``normal`` leaves the route at plain ``OptTS`` because ORCA
+    already uses the default optimization thresholds there and emitting a
+    second ``Opt`` run-type keyword would be ambiguous. Unknown enum values
+    raise :class:`cccp.qc.keyword_registry.KeywordValueError` (fail-fast).
+    ``%pal nprocs`` is emitted when *nproc* is given.
     """
     method = method.strip()
     tokens = [method]
@@ -350,13 +381,12 @@ def ts_opt_route(
         tokens.append(f"{sm}({solvent})")
     tokens.append("OptTS")
     if opt_level is not None:
-        level_key = opt_level.strip().lower()
-        if level_key not in _OPT_LEVEL_KEYWORDS:
-            expected = sorted(_OPT_LEVEL_KEYWORDS)
-            raise ValueError(
-                f"Unsupported ORCA TS opt_level {opt_level!r}; expected one of {expected}"
-            )
-        opt_keyword = _OPT_LEVEL_KEYWORDS[level_key]
+        family, implementation = orca_keyword_context(method)
+        opt_keyword, opt_warning = resolve(
+            "opt_level", opt_level, family=family, implementation=implementation
+        )
+        if opt_warning:
+            logger.warning("%s", opt_warning)
         if opt_keyword:
             tokens.append(opt_keyword)
     tokens.append("NumFreq")
