@@ -466,10 +466,25 @@ _BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
     "minimum_opt_initial_hessian": "--minimum-opt-initial-hessian",
     "transition_state_opt_trust_radius": "--transition-state-opt-trust-radius",
     "transition_state_opt_initial_hessian": "--transition-state-opt-initial-hessian",
+    "minimum_opt_max_iter": "--minimum-opt-max-iter",
+    "minimum_opt_convergence": "--minimum-opt-convergence",
+    "minimum_scf_max_iter": "--minimum-scf-max-iter",
+    "minimum_scf_convergence": "--minimum-scf-convergence",
+    "minimum_scf_strategy": "--minimum-scf-strategy",
+    "minimum_opt_rescue_policy": "--minimum-opt-rescue-policy",
+    "minimum_opt_max_rescue": "--minimum-opt-max-rescue",
+    "transition_state_opt_max_iter": "--transition-state-opt-max-iter",
+    "transition_state_opt_convergence": "--transition-state-opt-convergence",
+    "transition_state_scf_max_iter": "--transition-state-scf-max-iter",
+    "transition_state_scf_convergence": "--transition-state-scf-convergence",
+    "transition_state_scf_strategy": "--transition-state-scf-strategy",
+    "transition_state_opt_rescue_policy": "--transition-state-opt-rescue-policy",
+    "transition_state_opt_max_rescue": "--transition-state-opt-max-rescue",
 }
 _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
     {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
 )
+
 
 
 def batchoptimize_method_flags(
@@ -477,6 +492,8 @@ def batchoptimize_method_flags(
     inp: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """Emit BatchOptimize profile, shared settings, and override flags."""
+    import json as _json
+
     flags: list[str] = []
     profile = method.get("profile") or method.get("profile_id")
     if profile is not None and str(profile) in _BATCHOPTIMIZE_PROFILES:
@@ -489,6 +506,16 @@ def batchoptimize_method_flags(
         flags += ["--select", ",".join(str(value) for value in selection)]
     elif isinstance(selection, str) and selection.strip():
         flags += ["--select", selection.strip()]
+
+    if "batch_roles" in method:
+        flags += ["--batch-roles-json", _json.dumps(method["batch_roles"], separators=(",", ":"))]
+        batch_level = (method.get("levels") or {}).get("batch", {})
+        if isinstance(batch_level, Mapping) and batch_level.get("electronic_state"):
+            flags += [
+                "--electronic-state-json",
+                _json.dumps(batch_level["electronic_state"], separators=(",", ":")),
+            ]
+        return flags
 
     for key, flag in _BATCHOPTIMIZE_SCALAR_FLAGS.items():
         value = method.get(key)
@@ -510,6 +537,13 @@ def batchoptimize_method_flags(
     orbital_inherit = method.get("scf_orbital_inherit")
     if orbital_inherit is False:
         flags += ["--no-scf-orbital-inherit"]
+
+    batch_level = (method.get("levels") or {}).get("batch", {})
+    if isinstance(batch_level, Mapping) and batch_level.get("electronic_state"):
+        flags += [
+            "--electronic-state-json",
+            _json.dumps(batch_level["electronic_state"], separators=(",", ":")),
+        ]
 
     return flags
 

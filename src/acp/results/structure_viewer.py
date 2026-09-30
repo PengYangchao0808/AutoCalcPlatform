@@ -35,6 +35,7 @@ __all__ = [
     "simple_entry_id",
     "scan_entry_id",
     "irc_entry_id",
+    "tsmode_entry_id",
     "manual_entry_id",
     "legacy_entry_id",
     "resolve_collision",
@@ -54,6 +55,7 @@ _REVISION_SOURCES: list[tuple[str, str]] = [
     ("RESULT/pes_search/pes_profile.json", "pes_profile.json"),
     ("RESULT/pes_search/pes_recommendations.json", "pes_recommendations.json"),
     ("RESULT/pes_search/pes_review.json", "pes_review.json"),
+    ("RESULT/trajectories/irc_trajectory.json", "irc_trajectory.json"),
 ]
 
 _DEFAULT_TEMPERATURE_K = 298.15
@@ -449,6 +451,18 @@ def irc_entry_id(endpoint: str, frame_index: int) -> str:
     return f"irc_{endpoint}_{frame_index}"
 
 
+def tsmode_entry_id(step: str) -> str:
+    """Build a tsmode entry id from a step label.
+
+    Args:
+        step: Step label (e.g. ``"optimized"``, ``"source"``).
+
+    Returns:
+        Deterministic entry id string.
+    """
+    return f"tsmode_{step}"
+
+
 def manual_entry_id(relpath: str) -> str:
     """Build a manual-file entry id from a relative path.
 
@@ -565,6 +579,21 @@ def _compute_revision(task_root: Path, job_status: str) -> str:
                 continue
             hasher.update(filename.encode("utf-8"))
             hasher.update(data)
+            found_any = True
+
+    # Historical IRC jobs expose a growing ORCA trajectory without a RESULT
+    # snapshot. Include its file identity so the catalog refresh sees new
+    # frames while the calculation runs.
+    from cccp.qc.interfaces.orca_ts import discover_irc_trajectory_files
+
+    raw_irc_dir = task_root / "WORK" / "07_PATH" / "ORCA"
+    if raw_irc_dir.is_dir():
+        for direction, path in discover_irc_trajectory_files(raw_irc_dir).items():
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            hasher.update(f"irc:{direction}:{path.name}:{stat.st_size}:{stat.st_mtime_ns}".encode())
             found_any = True
 
     if not found_any:
@@ -1338,17 +1367,28 @@ def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str
     found: list[str] = []
 
     irc_dir = task_root / "RESULT" / "irc"
+    from cccp.qc.interfaces.orca_ts import discover_irc_trajectory_files
+
+    raw_files: dict[str, Path] = {}
+    for orca_dir in (task_root / "WORK" / "07_PATH" / "ORCA",):
+        if orca_dir.is_dir():
+            raw_files = discover_irc_trajectory_files(orca_dir)
+            break
 
     for direction in IRC_DIRECTIONS:
-        xyz_path = irc_dir / f"irc_{direction}.xyz"
+        path_file = irc_dir / f"irc_{direction}_path.xyz"
+        endpoint_file = irc_dir / f"irc_{direction}.xyz"
+        xyz_path = path_file if path_file.is_file() else endpoint_file
+        if not xyz_path.is_file():
+            xyz_path = raw_files.get(direction, xyz_path)
         if not xyz_path.is_file():
             continue
         frames = parse_irc_xyz_frames(xyz_path)
         if not frames:
-            warnings.append(f"IRC {direction} file has no parseable frames: irc_{direction}.xyz")
+            warnings.append(f"IRC {direction} file has no parseable frames: {xyz_path.name}")
             continue
         found.append(direction)
-        geometry_ref = f"RESULT/irc/{xyz_path.name}"
+        geometry_ref = xyz_path.relative_to(task_root).as_posix()
 
         for frame in frames:
             entry_id = irc_entry_id(direction, frame.index)
@@ -1382,6 +1422,95 @@ def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str
     if default_id is None and entries:
         # Forward absent → first reverse frame is the path-center proxy.
         default_id = entries[0].id
+
+    return groups, entries, default_id
+
+
+def _resolve_tsmode(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+    """Resolve TS Mode results → structure viewer entries.
+
+    Reads ``RESULT/tsmode/optimized.xyz`` for the optimised transition state
+    and ``RESULT/tsmode/normal_modes.json`` for vibration data.  Also registers
+    the source snapshot ``INPUT/tsmode/source.xyz`` as a read-only entry when
+    present (discovered via ``RESULT/result_manifest.json``).
+    """
+    from acp.results.manifest import find_products, load_result_manifest
+
+    groups: list[StructureViewerGroup] = []
+    entries: list[StructureViewerEntry] = []
+    default_id: str | None = None
+
+    tsmode_dir = task_root / "RESULT" / "tsmode"
+
+    # ── 1. Optimised structure ──────────────────────────────────────────────
+    optimized_xyz = tsmode_dir / "optimized.xyz"
+    if optimized_xyz.is_file():
+        entry_id = tsmode_entry_id("optimized")
+        geometry_ref = "RESULT/tsmode/optimized.xyz"
+
+        # Read label from XYZ comment line (line 2)
+        label = "TS Mode 优化结果"
+        try:
+            lines = optimized_xyz.read_text(encoding="utf-8").splitlines()
+            if len(lines) >= 2:
+                comment = lines[1].strip()
+                if comment:
+                    label = comment
+        except OSError:
+            pass
+
+        # Probe vibrations — normal_modes.json in the tsmode dir
+        vibrations = StructureViewerVibrations(available=False)
+        normal_modes_path = tsmode_dir / "normal_modes.json"
+        if normal_modes_path.is_file():
+            vibrations = StructureViewerVibrations(
+                available=True,
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+                imaginary_count=None,
+                source="product",
+            )
+
+        entries.append(StructureViewerEntry(
+            id=entry_id,
+            group_id="",
+            label=label,
+            role="transition_state",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(),
+            source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
+            badges=(),
+            vibrations=vibrations,
+        ))
+        default_id = entry_id
+
+    # ── 2. Source snapshot from manifest ────────────────────────────────────
+    source_xyz = task_root / "INPUT" / "tsmode" / "source.xyz"
+    if source_xyz.is_file():
+        source_id = tsmode_entry_id("source")
+        entries.append(StructureViewerEntry(
+            id=source_id,
+            group_id="",
+            label="Source structure",
+            role="minimum",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{source_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(),
+            source=StructureViewerSource(kind="calculation_input", geometry_ref="INPUT/tsmode/source.xyz"),
+            badges=(),
+            vibrations=StructureViewerVibrations(available=False),
+        ))
+        if default_id is None:
+            default_id = source_id
+
+    if not entries:
+        warnings.append("tsmode results not found")
 
     return groups, entries, default_id
 
@@ -1503,6 +1632,7 @@ _DISPATCH_TABLE: dict[str, _Resolver] = {
     "xtb_optimize": _resolve_simple,
     "scan": _resolve_scan,
     "irc": _resolve_irc,
+    "tsmode": _resolve_tsmode,
 }
 
 
@@ -1528,6 +1658,7 @@ def build_structure_viewer_payload(
     workflow: str,
     job_status: str,
     item_id: str | None = None,
+    input_xyz: str | None = None,
 ) -> StructureViewerPayload:
     """Build a ``structure_viewer_v1`` payload for a completed or failed job.
 
@@ -1542,6 +1673,8 @@ def build_structure_viewer_payload(
         workflow: Workflow name (dispatch key).
         job_status: Job status at build time (incorporated into revision).
         item_id: Optional BatchOptimize item filter.
+        input_xyz: Optional submitted input snapshot, used when a queued job
+            has not created its on-disk ``input.xyz`` yet.
 
     Returns:
         A valid ``StructureViewerPayload`` (never raises on manifest errors).
@@ -1565,7 +1698,19 @@ def build_structure_viewer_payload(
 
     _probe_result_manifest(root, warnings)
 
+    if workflow == "BatchOptimize" and input_xyz is None:
+        input_path = root / "input.xyz"
+        if input_path.is_file():
+            try:
+                input_xyz = input_path.read_text(encoding="utf-8")
+            except OSError:
+                input_xyz = None
+
     revision = _compute_revision(root, job_status)
+    if workflow == "BatchOptimize" and input_xyz:
+        revision = hashlib.sha256(
+            f"{revision}\n{job_status}\n{input_xyz}".encode("utf-8")
+        ).hexdigest()[:16]
 
     resolver = _DISPATCH_TABLE.get(workflow, _resolve_legacy)
     try:
@@ -1576,6 +1721,46 @@ def build_structure_viewer_payload(
         logger.warning("resolver for %s failed: %s", workflow, exc)
         warnings.append(f"Resolver for {workflow} failed: {exc}")
         groups_raw, entries_raw, default_id = [], [], None
+
+    # The calculation input remains useful evidence while queued and as a
+    # comparison entry after optimization. Put it beside formal batch results;
+    # it becomes the default only while no result geometry exists yet.
+    if workflow == "BatchOptimize" and input_xyz:
+        from acp.calculations.batch._tag import parse_tag_comment
+
+        input_lines = input_xyz.splitlines()
+        tag = parse_tag_comment(input_lines[1] if len(input_lines) > 1 else "")["tag"]
+        entry_id = "batch_input"
+        if not any(entry.id == entry_id for entry in entries_raw):
+            entries_raw.insert(
+                0,
+                StructureViewerEntry(
+                    id=entry_id,
+                    group_id="batch_input",
+                    label="起始结构",
+                    role="ts" if tag == "TS" else "minimum",
+                    status=job_status or "queued",
+                    geometry=StructureViewerGeometry(
+                        endpoint=(
+                            f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry"
+                        ),
+                        format="xyz",
+                    ),
+                    source=StructureViewerSource(
+                        kind="calculation_input", geometry_ref="input.xyz"
+                    ),
+                    badges=(tag,) if tag else ("input",),
+                    vibrations=StructureViewerVibrations(available=False),
+                ),
+            )
+            groups_raw.insert(
+                0,
+                StructureViewerGroup(
+                    id="batch_input", label="输入结构", kind="input"
+                ),
+            )
+        if default_id is None:
+            default_id = entry_id
 
     # Build typed tuples
     groups = tuple(groups_raw)

@@ -116,6 +116,7 @@ _SCHEDULER_MARKERS: set[str] = {
     "metrics.json",
     "WORK",
     "RESULT",
+    "INPUT",
     "input.xyz",
     "task.json",
     "input_source.json",

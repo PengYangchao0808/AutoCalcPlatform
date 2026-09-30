@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import shutil
 import subprocess
 from pathlib import Path
@@ -360,4 +361,81 @@ def test_parse_frequencies_no_section_returns_empty(tmp_path: Path) -> None:
 
 def test_parse_frequencies_missing_file_returns_empty(tmp_path: Path) -> None:
     assert _parse_frequencies(tmp_path / "does_not_exist.out") == []
+
+
+ORCA_ERROR_TERMINATION_OUTPUT = """Working dir.: /tmp/frame_1_(TS)_irc/ORCA
+STDERR:
+sh: 1: Syntax error: "(" unexpected
+
+ORCA finished by error termination in Startup
+Calling Command: /opt/orca/orca_startup /tmp/frame_1_(TS)_irc/ORCA/irc.int.tmp
+[file orca_tools/qcmsg.cpp, line 394]:
+  .... aborting the run
+"""
+
+
+def test_run_orca_treats_error_termination_as_failure(
+    sample_config: dict[str, object], tmp_path: Path
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["orca", "irc.inp"],
+        returncode=0,
+        stdout=ORCA_ERROR_TERMINATION_OUTPUT,
+        stderr='sh: 1: Syntax error: "(" unexpected\n',
+    )
+    with (
+        patch("cccp.qc.interfaces.orca.subprocess.run", return_value=completed),
+        patch("cccp.qc.interfaces.orca.resolve_executable", return_value=Path("/fake/orca")),
+    ):
+        interface = ORCAInterface(sample_config)
+        ok = interface._run_orca(tmp_path / "irc.inp", tmp_path / "irc.out")
+
+    assert ok is False
+
+
+def test_run_orca_streaming_treats_error_termination_as_failure(
+    sample_config: dict[str, object], tmp_path: Path
+) -> None:
+    class _FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = io.StringIO(ORCA_ERROR_TERMINATION_OUTPUT)
+            self.stderr = io.StringIO('sh: 1: Syntax error: "(" unexpected\n')
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+        def kill(self) -> None:
+            pass
+
+    with (
+        patch("cccp.qc.interfaces.orca.subprocess.Popen", return_value=_FakeProcess()),
+        patch("cccp.qc.interfaces.orca.resolve_executable", return_value=Path("/fake/orca")),
+    ):
+        interface = ORCAInterface(sample_config)
+        ok = interface._run_orca(
+            tmp_path / "irc.inp",
+            tmp_path / "irc.out",
+            output_callback=lambda _line: None,
+        )
+
+    assert ok is False
+
+
+def test_run_orca_zero_exit_with_normal_termination_succeeds(
+    sample_config: dict[str, object], tmp_path: Path
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["orca", "opt.inp"],
+        returncode=0,
+        stdout="FINAL SINGLE POINT ENERGY      -1.0\n****ORCA TERMINATED NORMALLY****\n",
+        stderr="",
+    )
+    with (
+        patch("cccp.qc.interfaces.orca.subprocess.run", return_value=completed),
+        patch("cccp.qc.interfaces.orca.resolve_executable", return_value=Path("/fake/orca")),
+    ):
+        interface = ORCAInterface(sample_config)
+        ok = interface._run_orca(tmp_path / "opt.inp", tmp_path / "opt.out")
+
+    assert ok is True
 

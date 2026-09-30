@@ -66,21 +66,31 @@ def build_effective_role(
 ) -> dict[str, Any]:
     """Build per-role effective dict from resolved options.
 
-    Combines ``resolve_role_options`` (trust/hessian/recalc) with engine
-    constants (max_cycles, opt_level, scf trio).
+    Role-resolved values (trust/hessian/recalc/iterations/convergence/SCF/
+    rescue) take priority; keys without a role resolution fall back to the
+    shared common value (engine constants where ``None``).
     """
+    from acp.calculations.batch.options import _ROLE_OVERRIDE_FIELDS
+
     role_opts = opts.resolve_role_options(is_ts)
     effective: dict[str, Any] = {}
-    for name in ("opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess"):
+    for name in _ROLE_OVERRIDE_FIELDS:
         if name in role_opts:
             effective[name] = role_opts[name]
+    max_cycles = role_opts.get("opt_max_iter")
+    if max_cycles is None:
+        max_cycles = opts.opt_max_iter
     effective["max_cycles"] = (
-        opts.opt_max_iter if opts.opt_max_iter is not None else _ENGINE_MAX_CYCLES_DEFAULT
+        int(max_cycles) if max_cycles is not None else _ENGINE_MAX_CYCLES_DEFAULT
     )
-    effective["opt_level"] = opts.opt_convergence
-    effective["scf_maxiter"] = opts.scf_max_iter
-    effective["scf_convergence"] = opts.scf_convergence
-    effective["scf_strategy"] = opts.scf_strategy
+    effective["opt_level"] = role_opts.get("opt_convergence") or opts.opt_convergence
+    scf_maxiter = role_opts.get("scf_max_iter")
+    effective["scf_maxiter"] = int(scf_maxiter) if scf_maxiter is not None else opts.scf_max_iter
+    effective["scf_convergence"] = role_opts.get("scf_convergence") or opts.scf_convergence
+    effective["scf_strategy"] = role_opts.get("scf_strategy") or opts.scf_strategy
+    effective["rescue_policy"] = role_opts.get("opt_rescue_policy") or opts.opt_rescue_policy
+    max_rescue = role_opts.get("opt_max_rescue")
+    effective["max_rescue"] = int(max_rescue) if max_rescue is not None else opts.opt_max_rescue
     return effective
 
 
@@ -105,7 +115,7 @@ def build_orca_summary(effective: dict[str, Any]) -> list[str]:
     if hessian == "calculate":
         parts.append("Calc_Hess")
     recalc = effective.get("opt_recalc_hess")
-    if isinstance(recalc, int):
+    if isinstance(recalc, int) and recalc > 0:
         parts.append(f"Recalc_Hess {recalc}")
     strategy = str(effective.get("scf_strategy", "normal")).lower()
     if strategy != "normal":
@@ -152,73 +162,12 @@ def build_batch_effective_config(opts: BatchMethodOptions) -> dict[str, Any]:
 def build_opts_from_method_dict(method: dict[str, Any]) -> BatchMethodOptions:
     """Construct ``BatchMethodOptions`` from a normalised method payload.
 
-    Mirrors ``batch_preview._build_batch_method_options`` — importable
-    from the shared module so the preview endpoint can converge here
-    later.
+    Routes through :meth:`BatchMethodOptions.from_method_dict` — the single
+    entry point that handles both legacy flat dicts and new-style
+    ``batch_roles`` payloads.  Importable from the shared module so the
+    preview endpoint can converge here.
     """
-    from acp.chem.composition import normalize_recalc_hess
-
-    kwargs: dict[str, Any] = {}
-    if method.get("functional"):
-        kwargs["optimization_method"] = method["functional"]
-    if method.get("basis"):
-        kwargs["optimization_basis"] = method["basis"]
-    if method.get("single_point_method"):
-        kwargs["single_point_method"] = method["single_point_method"]
-    if method.get("single_point_basis"):
-        kwargs["single_point_basis"] = method["single_point_basis"]
-    if method.get("minimum_method"):
-        kwargs["minimum_method"] = method["minimum_method"]
-    if method.get("minimum_basis"):
-        kwargs["minimum_basis"] = method["minimum_basis"]
-    if method.get("transition_state_method"):
-        kwargs["transition_state_method"] = method["transition_state_method"]
-    if method.get("transition_state_basis"):
-        kwargs["transition_state_basis"] = method["transition_state_basis"]
-    if method.get("temperature") is not None:
-        kwargs["temperature"] = float(method["temperature"])
-    if method.get("pressure") is not None:
-        kwargs["pressure"] = float(method["pressure"])
-    if method.get("scale_factor") is not None:
-        kwargs["scale_factor"] = float(method["scale_factor"])
-
-    # Optimization controls
-    if method.get("opt_max_iter") is not None:
-        kwargs["opt_max_iter"] = int(method["opt_max_iter"])
-    if method.get("opt_convergence"):
-        kwargs["opt_convergence"] = method["opt_convergence"]
-    if method.get("opt_trust_radius") is not None:
-        kwargs["opt_trust_radius"] = float(method["opt_trust_radius"])
-    if method.get("opt_initial_hessian") is not None:
-        kwargs["opt_initial_hessian"] = method["opt_initial_hessian"]
-    if method.get("opt_recalc_hess") is not None:
-        kwargs["opt_recalc_hess"] = normalize_recalc_hess(method["opt_recalc_hess"])
-    if method.get("opt_rescue_policy"):
-        kwargs["opt_rescue_policy"] = method["opt_rescue_policy"]
-    if method.get("opt_max_rescue") is not None:
-        kwargs["opt_max_rescue"] = int(method["opt_max_rescue"])
-
-    # SCF controls
-    if method.get("scf_max_iter") is not None:
-        kwargs["scf_max_iter"] = int(method["scf_max_iter"])
-    if method.get("scf_convergence"):
-        kwargs["scf_convergence"] = method["scf_convergence"]
-    if method.get("scf_strategy"):
-        kwargs["scf_strategy"] = method["scf_strategy"]
-    if method.get("scf_orbital_inherit") is not None:
-        kwargs["scf_orbital_inherit"] = bool(method["scf_orbital_inherit"])
-
-    # Per-role overrides
-    for prefix in ("minimum_", "transition_state_"):
-        for name in ("opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess"):
-            field = f"{prefix}{name}"
-            if method.get(field) is not None:
-                if name == "opt_recalc_hess":
-                    kwargs[field] = normalize_recalc_hess(method[field])
-                else:
-                    kwargs[field] = method[field]
-
-    return BatchMethodOptions(**kwargs)
+    return BatchMethodOptions.from_method_dict(method)
 
 
 # ── Compute from raw method dict (submission convenience) ──────────────

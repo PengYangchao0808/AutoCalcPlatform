@@ -135,6 +135,7 @@ _ALLOWED_REMOTE_WORKFLOWS: frozenset[str] = frozenset(
         "frequency",
         "scan",
         "irc",
+        "tsmode",
         "xtb_optimize",
     }
 )
@@ -184,6 +185,11 @@ def build_remote_cli_command(
         elif items_file:
             source = str(items_file)
             cmd += ["--items-file", str(items_file), "--output", "."]
+        elif inp.get("source_type") == "batch_structures" and input_path:
+            # Batch structures are staged as a JSON request file. Preserve
+            # its suffix so the CLI dispatches to the JSON request loader.
+            source = str(input_path)
+            cmd += ["--items-file", str(input_path), "--output", "."]
         elif input_path:
             # RemoteJobRunner stages one structure as input.xyz for each
             # independent scheduler job.  Treat that file as a one-item
@@ -275,6 +281,8 @@ def build_remote_cli_command(
             cmd += scan_method_flags(method, inp)
     elif wf == "irc":
         cmd += build_remote_irc_tail(spec, source)
+    elif wf == "tsmode":
+        cmd += build_remote_tsmode_tail(spec, source)
     elif wf == "xtb_optimize":
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
@@ -356,6 +364,10 @@ def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
     inp = spec.input
     method = spec.method
     cmd: list[str] = ["--input", str(source), "--output", "."]
+    provenance = inp.get("ts_source")
+    if not isinstance(provenance, dict) or provenance.get("schema") != "irc_ts_source_v1":
+        raise ValueError("IRC requires verified TS source provenance")
+    cmd += ["--ts-provenance-json", json.dumps(provenance, sort_keys=True)]
     if spec.name:
         cmd += ["--name", spec.name]
     input_role = inp.get("input_role")
@@ -381,6 +393,7 @@ def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
     irc_basis = method.get("basis") or irc_level.get("basis")
     if irc_basis:
         cmd += ["--basis", str(irc_basis)]
+    cmd += ["--charge", str(inp["charge"]), "--multiplicity", str(inp["multiplicity"])]
     maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
     if maxpoints is not None:
         cmd += ["--maxpoints", str(maxpoints)]
@@ -391,6 +404,25 @@ def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
 
 
 # ── Stage tail (PESsearch bond-scan only) ───────────────────────────────
+
+
+def build_remote_tsmode_tail(spec: JobSpec, source: str) -> list[str]:
+    """Generate argv tail for TS Mode remote execution.
+
+    The scheduler materializes ``INPUT/tsmode/bundle.json`` (with relative
+    file references) into the synced work dir, so the remote command
+    consumes the same staged snapshot as the local runner (plan §11).
+    """
+    inp = spec.input
+    bundle_reference = str(inp.get("bundle_path") or "INPUT/tsmode/bundle.json")
+    cmd: list[str] = ["--source-bundle", bundle_reference, "--output", "."]
+    mode_index = inp.get("source_mode_index")
+    if not isinstance(mode_index, int) or isinstance(mode_index, bool):
+        raise ValueError("tsmode remote job requires an integer source_mode_index")
+    cmd += ["--source-mode-index", str(mode_index)]
+    if spec.name:
+        cmd += ["--name", spec.name]
+    return cmd
 
 
 def build_remote_scan_config_payload(spec: JobSpec) -> dict[str, Any] | None:

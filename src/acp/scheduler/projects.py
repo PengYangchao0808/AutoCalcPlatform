@@ -114,6 +114,13 @@ class ProjectManager:
 
         now = _utc_now_iso()
         merged = dict(project)
+        # Deep-merge settings: new keys overlay existing ones, not replace wholesale.
+        if "settings" in updates:
+            existing_settings = _normalize_settings(merged.get("settings"))
+            new_settings = _normalize_settings(updates["settings"])
+            merged_settings = dict(existing_settings)
+            merged_settings.update(new_settings)
+            updates["settings"] = merged_settings
         merged.update(updates)
 
         with self._lock, self._connect() as conn:
@@ -257,13 +264,18 @@ def _normalize_settings(settings: Any) -> dict[str, Any]:
 
 
 def _row_to_project(row: sqlite3.Row) -> dict[str, Any]:
+    raw_settings = row["settings"]
+    try:
+        settings = json.loads(raw_settings) if raw_settings else {}
+    except (json.JSONDecodeError, TypeError):
+        settings = {}
     return {
         "project_id": row["project_id"],
         "name": row["name"],
         "description": row["description"],
         "tags": json.loads(row["tags"]) if row["tags"] else [],
         "run_root": row["run_root"],
-        "settings": json.loads(row["settings"]) if row["settings"] else {},
+        "settings": settings,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }

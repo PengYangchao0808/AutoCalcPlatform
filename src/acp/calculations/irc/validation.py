@@ -128,16 +128,15 @@ def classify_ts_identity(
     *,
     mode_match_score: float | None = None,
     topology_sane: bool = True,
-    imaginary_cutoff_cm1: float = -50.0,
     mode_match_threshold: float = 0.05,
     rc_alignment: float | None = None,
     rc_alignment_threshold: float = 0.5,
 ) -> TsIdentity:
     """Build a :class:`TsIdentity` from frequency + mode-overlap evidence.
 
-    Valid when exactly one imaginary frequency exists, it is below
-    *imaginary_cutoff_cm1*, the mode-match score (when computed) is at or
-    above *mode_match_threshold*, and the topology is sane.
+    Valid when exactly one negative frequency exists, the mode-match score
+    (when computed) is at or above *mode_match_threshold*, and the topology
+    is sane. Imaginary-mode magnitude is not a validity gate.
     """
     imaginary = [float(f) for f in imaginary_frequencies if float(f) < 0.0]
     count = len(imaginary)
@@ -146,10 +145,6 @@ def classify_ts_identity(
 
     if count != 1:
         messages.append(f"imaginary frequency count = {count} (expected 1)")
-    elif lowest is not None and lowest > imaginary_cutoff_cm1:
-        messages.append(
-            f"imaginary frequency {lowest:.1f} cm⁻¹ above cutoff {imaginary_cutoff_cm1:.1f}"
-        )
     if mode_match_score is not None and mode_match_score < mode_match_threshold:
         messages.append(
             f"reaction-coordinate mode overlap {mode_match_score:.3f} "
@@ -165,7 +160,6 @@ def classify_ts_identity(
 
     valid = (
         count == 1
-        and (lowest is None or lowest <= imaginary_cutoff_cm1)
         and (mode_match_score is None or mode_match_score >= mode_match_threshold)
         and (rc_alignment is None or rc_alignment >= rc_alignment_threshold)
         and topology_sane

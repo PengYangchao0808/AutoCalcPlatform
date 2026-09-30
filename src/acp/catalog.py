@@ -69,6 +69,23 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "tsmode",
+        "label": "TS Mode Optimization",
+        "label_zh": "TS 模式定向优化",
+        "category": "simple",
+        "description": (
+            "Directed OptTS along a chosen imaginary mode of an existing "
+            "frequency result (reads its Hessian), with final frequency "
+            "verification"
+        ),
+        "method_schema_id": "tsmode",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "requires_source": True,
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "casscf",
         "label": "CASSCF / NEVPT2",
         "label_zh": "CASSCF / NEVPT2",
@@ -452,6 +469,7 @@ _BASIS_CATALOG_REF = "<basis-catalog>"
 METHOD_META: dict[str, dict[str, Any]] = {
     # ── 3c composite methods (built-in basis set, RI fully fixed) ──
     "r2SCAN-3c": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": False,
         "ri_support": "composite",
         "basis": ("def2-mTZVPP",),
@@ -461,6 +479,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
     "PBEh-3c": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": False,
         "ri_support": "composite",
         "basis": ("def2-mSVP",),
@@ -470,6 +489,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
     "B97-3c": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": False,
         "ri_support": "composite",
         "basis": ("mTZVP",),
@@ -480,6 +500,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Ordinary hybrid functionals (user-selectable RI, no /C needed) ──
     "B3LYP": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -490,6 +511,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D4",
     },
     "PBE0": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -500,6 +522,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D4",
     },
     "M062X": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -512,6 +535,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     # Goodman GIAO NMR level (DP4/DP5 error model) — Pople-style basis,
     # no dispersion correction in the original parametrisation.
     "mPW1PW91": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -523,6 +547,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Range-separated single-hybrid functionals ──
     "wB97X-D4": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -533,6 +558,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
     "wB97M-V": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": False,
@@ -544,6 +570,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Double-hybrid functionals (need /J + /C) ──
     "PWPB95": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": True,
@@ -554,6 +581,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D3BJ",
     },
     "revDSD-PBEP86": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": True,
         "ri_support": "user",
         "needs_aux_c": True,
@@ -565,6 +593,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     # ── Post-HF wavefunction methods ──
     "DLPNO-CCSD(T)": {
+        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
         "basis_inline": False,
         "ri_support": "automatic",
         "needs_aux_c": True,
@@ -763,7 +792,15 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "opt_convergence": {
         "type": "select",
         "advanced": True,
+        "label": "Convergence Criteria",
+        "label_zh": "\u6536\u655b\u6807\u51c6",
         "options": ["Loose", "Normal", "Tight", "VeryTight"],
+        "option_labels_zh": {
+            "Loose": "\u5bbd\u677e",
+            "Normal": "\u6807\u51c6",
+            "Tight": "\u4e25\u683c",
+            "VeryTight": "\u975e\u5e38\u4e25\u683c",
+        },
         "default": {"*": "Tight"},
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
@@ -1193,11 +1230,109 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "scan_optimizer_method": {
         "type": "select",
-        "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF"],
+        "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF", "B97-3c", "r2SCAN-3c", "B3LYP", "PBE0"],
+        "option_groups": [
+            {"group_id": "xtb", "label": "xTB", "label_zh": "xTB 半经验",
+             "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF"]},
+            {"group_id": "composite_dft", "label": "Composite DFT (3c)", "label_zh": "复合 DFT（3c）",
+             "options": ["B97-3c", "r2SCAN-3c"]},
+            {"group_id": "conventional_dft", "label": "Conventional DFT", "label_zh": "常规 DFT",
+             "options": ["B3LYP", "PBE0"]},
+        ],
         "default": {"*": "GFN2-xTB"},
+        "normalize_method_alias": True,
         "label": "Scan Optimization Method",
         "label_zh": "扫描点优化方法",
-        "help": "Low-cost method used to relax each point on the PES scan.",
+        "help": "Level of theory used to relax each point on the PES scan.",
+        "help_zh": "逐点约束优化所用的计算级别；DFT 方法下每个扫描点都在对应 DFT 势能面上优化。",
+    },
+    "scan_optimizer_basis": {
+        "type": "select",
+        "label": "Scan Optimization Basis",
+        "label_zh": "扫描点优化基组",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": ""},
+        "supports_custom": True,
+        "help": "Basis set for the per-point optimizer; 3c composite methods carry a built-in basis (locked).",
+        "help_zh": "逐点优化基组；3c 复合方法使用内置基组（锁定）。",
+    },
+    "scan_optimizer_dispersion": {
+        "type": "select",
+        "label": "Scan Optimization Dispersion",
+        "label_zh": "扫描点优化色散校正",
+        "options": ["none", "D3", "D3BJ", "D4"],
+        "option_labels_zh": {"none": "无", "D3": "D3", "D3BJ": "D3BJ", "D4": "D4"},
+        "default": {"*": "none"},
+        "help": "Dispersion correction for the per-point optimizer; 3c methods carry a built-in correction (locked).",
+        "help_zh": "逐点优化色散校正；3c 复合方法内置色散（锁定）。",
+    },
+    "scan_optimizer_solvent_model": {
+        "type": "select",
+        "label": "Scan Optimization Solvation Model",
+        "label_zh": "扫描点优化溶剂模型",
+        "options": ["none", "CPCM", "SMD"],
+        "option_labels_zh": {"none": "不使用溶剂", "CPCM": "CPCM（连续介质）", "SMD": "SMD（溶剂化）"},
+        "default": {"*": "none"},
+        "help": "Implicit solvation model for the per-point optimizer; 'none' explicitly disables solvation.",
+        "help_zh": "逐点优化的隐式溶剂模型；'none' 显式表示不使用溶剂。",
+    },
+    "scan_optimizer_solvent": {
+        "type": "select",
+        "label": "Scan Optimization Solvent",
+        "label_zh": "扫描点优化溶剂",
+        "options": ["water", "methanol", "ethanol", "acetone", "dichloromethane", "toluene", "THF", "DMSO", "acetonitrile", "chloroform", "hexane", "benzene"],
+        "default": {"*": ""},
+        "depends_on": {"field": "scan_optimizer_solvent_model", "not_values": ["none"]},
+        "help": "Solvent for the per-point optimizer (required when a solvent model is active).",
+        "help_zh": "逐点优化溶剂（启用溶剂模型时必选）。",
+    },
+    "scan_optimizer_grid": {
+        "type": "select",
+        "advanced": True,
+        "label": "Scan Optimization Integration Grid",
+        "label_zh": "扫描点优化积分网格",
+        "options": ["DefGrid1", "DefGrid2", "DefGrid3"],
+        "option_labels_zh": {
+            "DefGrid1": "DefGrid1（粗）",
+            "DefGrid2": "DefGrid2（默认精度档）",
+            "DefGrid3": "DefGrid3（细）",
+        },
+        "default": {"*": ""},
+        "help": "ORCA integration grid for the per-point optimizer; empty keeps the ORCA default.",
+        "help_zh": "逐点优化的 ORCA 积分网格；留空使用 ORCA 缺省网格。",
+    },
+    "scan_optimizer_scf_convergence": {
+        "type": "select",
+        "advanced": True,
+        "label": "Scan Optimization SCF Convergence",
+        "label_zh": "扫描点优化 SCF 收敛标准",
+        "options": ["normal", "tight", "verytight"],
+        "option_labels_zh": {"normal": "标准", "tight": "严格", "verytight": "非常严格"},
+        "default": {"*": ""},
+        "help": "SCF convergence for the per-point optimizer; empty keeps the ORCA default.",
+        "help_zh": "逐点优化的 SCF 收敛标准；留空使用 ORCA 缺省。",
+    },
+    "scan_optimizer_scf_max_iterations": {
+        "type": "int",
+        "advanced": True,
+        "min": 1,
+        "max": 5000,
+        "default": {"*": 200},
+        "label": "Scan Optimization SCF Max Iterations",
+        "label_zh": "扫描点优化 SCF 最大迭代",
+        "help": "Maximum SCF cycles per scan point.",
+        "help_zh": "每个扫描点允许的最大 SCF 迭代数。",
+    },
+    "scan_optimizer_ri_approximation": {
+        "type": "select",
+        "advanced": True,
+        "label": "Scan Optimization RI Approximation",
+        "label_zh": "扫描点优化 RI 近似",
+        "options": ["none", "RI", "RIJCOSX", "RIJK"],
+        "option_labels_zh": {"none": "不使用", "RI": "RI", "RIJCOSX": "RIJCOSX", "RIJK": "RIJK"},
+        "default": {"*": "none"},
+        "help": "RI approximation for the per-point optimizer; 3c composite methods fix their RI chain (locked).",
+        "help_zh": "逐点优化的 RI 近似；3c 复合方法 RI 链固定（锁定）。",
     },
     "scan_optimizer_max_iterations": {
         "type": "int",
@@ -1605,32 +1740,248 @@ FIELD_DEFINITIONS: dict[str, Any] = {
                 "role_override": "transition_state",
                 "inherits": "opt_recalc_hess",
             },
+            "minimum_opt_max_iter": {
+                "type": "int",
+                "advanced": True,
+                "label": "INT Max Opt Cycles",
+                "label_zh": "INT 最大优化循环",
+                "min": 1,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "INT role max optimization iterations override",
+                "help_zh": "INT 角色最大优化循环覆盖",
+                "role_override": "minimum",
+                "inherits": "opt_max_iter",
+            },
+            "minimum_opt_convergence": {
+                "type": "select",
+                "advanced": True,
+                "label": "INT Opt Convergence",
+                "label_zh": "INT 优化收敛标准",
+                "options": ["loose", "normal", "tight", "verytight"],
+                "option_labels_zh": {
+                    "loose": "LooseOpt",
+                    "normal": "Opt",
+                    "tight": "TightOpt",
+                    "verytight": "VeryTightOpt",
+                },
+                "default": {"*": None},
+                "help": "INT role optimization convergence level override",
+                "help_zh": "INT 角色优化收敛标准覆盖",
+                "role_override": "minimum",
+                "inherits": "opt_convergence",
+            },
+            "minimum_scf_max_iter": {
+                "type": "int",
+                "advanced": True,
+                "label": "INT SCF Max Iterations",
+                "label_zh": "INT SCF 最大循环",
+                "min": 1,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "INT role max SCF iterations override",
+                "help_zh": "INT 角色 SCF 最大循环覆盖",
+                "role_override": "minimum",
+                "inherits": "scf_max_iter",
+            },
+            "minimum_scf_convergence": {
+                "type": "select",
+                "advanced": True,
+                "label": "INT SCF Convergence",
+                "label_zh": "INT SCF 收敛标准",
+                "options": ["loose", "tight", "verytight"],
+                "option_labels_zh": {
+                    "loose": "LooseSCF",
+                    "tight": "TightSCF",
+                    "verytight": "VeryTightSCF",
+                },
+                "default": {"*": None},
+                "help": "INT role SCF convergence level override",
+                "help_zh": "INT 角色 SCF 收敛标准覆盖",
+                "role_override": "minimum",
+                "inherits": "scf_convergence",
+            },
+            "minimum_scf_strategy": {
+                "type": "select",
+                "advanced": True,
+                "label": "INT SCF Strategy",
+                "label_zh": "INT SCF 策略",
+                "options": ["normal", "slowconv", "soscf"],
+                "option_labels_zh": {
+                    "normal": "标准",
+                    "slowconv": "慢收敛",
+                    "soscf": "SOSCF",
+                },
+                "default": {"*": None},
+                "help": "INT role SCF convergence strategy override",
+                "help_zh": "INT 角色 SCF 策略覆盖",
+                "role_override": "minimum",
+                "inherits": "scf_strategy",
+            },
+            "minimum_opt_rescue_policy": {
+                "type": "select",
+                "advanced": True,
+                "label": "INT Auto-Retry Policy",
+                "label_zh": "INT 失败后自动重试策略",
+                "options": ["off", "adaptive"],
+                "option_labels_zh": {
+                    "off": "关闭",
+                    "adaptive": "自适应",
+                },
+                "default": {"*": None},
+                "help": "INT role auto-retry strategy override",
+                "help_zh": "INT 角色失败后自动重试策略覆盖",
+                "role_override": "minimum",
+                "inherits": "opt_rescue_policy",
+            },
+            "minimum_opt_max_rescue": {
+                "type": "int",
+                "advanced": True,
+                "label": "INT Max Retry Attempts",
+                "label_zh": "INT 重试次数上限",
+                "min": 0,
+                "max": 10,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "INT role maximum auto-retry attempts override",
+                "help_zh": "INT 角色重试次数上限覆盖",
+                "role_override": "minimum",
+                "inherits": "opt_max_rescue",
+            },
+            "transition_state_opt_max_iter": {
+                "type": "int",
+                "advanced": True,
+                "label": "TS Max Opt Cycles",
+                "label_zh": "TS 最大优化循环",
+                "min": 1,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "TS role max optimization iterations override",
+                "help_zh": "TS 角色最大优化循环覆盖",
+                "role_override": "transition_state",
+                "inherits": "opt_max_iter",
+            },
+            "transition_state_opt_convergence": {
+                "type": "select",
+                "advanced": True,
+                "label": "TS Opt Convergence",
+                "label_zh": "TS 优化收敛标准",
+                "options": ["loose", "normal", "tight", "verytight"],
+                "option_labels_zh": {
+                    "loose": "LooseOpt",
+                    "normal": "Opt",
+                    "tight": "TightOpt",
+                    "verytight": "VeryTightOpt",
+                },
+                "default": {"*": None},
+                "help": "TS role optimization convergence level override",
+                "help_zh": "TS 角色优化收敛标准覆盖",
+                "role_override": "transition_state",
+                "inherits": "opt_convergence",
+            },
+            "transition_state_scf_max_iter": {
+                "type": "int",
+                "advanced": True,
+                "label": "TS SCF Max Iterations",
+                "label_zh": "TS SCF 最大循环",
+                "min": 1,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "TS role max SCF iterations override",
+                "help_zh": "TS 角色 SCF 最大循环覆盖",
+                "role_override": "transition_state",
+                "inherits": "scf_max_iter",
+            },
+            "transition_state_scf_convergence": {
+                "type": "select",
+                "advanced": True,
+                "label": "TS SCF Convergence",
+                "label_zh": "TS SCF 收敛标准",
+                "options": ["loose", "tight", "verytight"],
+                "option_labels_zh": {
+                    "loose": "LooseSCF",
+                    "tight": "TightSCF",
+                    "verytight": "VeryTightSCF",
+                },
+                "default": {"*": None},
+                "help": "TS role SCF convergence level override",
+                "help_zh": "TS 角色 SCF 收敛标准覆盖",
+                "role_override": "transition_state",
+                "inherits": "scf_convergence",
+            },
+            "transition_state_scf_strategy": {
+                "type": "select",
+                "advanced": True,
+                "label": "TS SCF Strategy",
+                "label_zh": "TS SCF 策略",
+                "options": ["normal", "slowconv", "soscf"],
+                "option_labels_zh": {
+                    "normal": "标准",
+                    "slowconv": "慢收敛",
+                    "soscf": "SOSCF",
+                },
+                "default": {"*": None},
+                "help": "TS role SCF convergence strategy override",
+                "help_zh": "TS 角色 SCF 策略覆盖",
+                "role_override": "transition_state",
+                "inherits": "scf_strategy",
+            },
+            "transition_state_opt_rescue_policy": {
+                "type": "select",
+                "advanced": True,
+                "label": "TS Auto-Retry Policy",
+                "label_zh": "TS 失败后自动重试策略",
+                "options": ["off", "adaptive"],
+                "option_labels_zh": {
+                    "off": "关闭",
+                    "adaptive": "自适应",
+                },
+                "default": {"*": None},
+                "help": "TS role auto-retry strategy override",
+                "help_zh": "TS 角色失败后自动重试策略覆盖",
+                "role_override": "transition_state",
+                "inherits": "opt_rescue_policy",
+            },
+            "transition_state_opt_max_rescue": {
+                "type": "int",
+                "advanced": True,
+                "label": "TS Max Retry Attempts",
+                "label_zh": "TS 重试次数上限",
+                "min": 0,
+                "max": 10,
+                "nullable": True,
+                "default": {"*": None},
+                "help": "TS role maximum auto-retry attempts override",
+                "help_zh": "TS 角色重试次数上限覆盖",
+                "role_override": "transition_state",
+                "inherits": "opt_max_rescue",
+            },
         }.items()
     },
     "opt_rescue_policy": {
         "type": "select",
         "advanced": True,
-        "label": "Rescue Policy",
-        "label_zh": "救援策略",
+        "label": "Auto-Retry Policy",
+        "label_zh": "失败后自动重试策略",
         "options": ["off", "adaptive"],
         "option_labels_zh": {
             "off": "关闭",
             "adaptive": "自适应",
         },
         "default": {"*": "adaptive"},
-        "help": "Optimization rescue strategy for failed steps",
-        "help_zh": "优化失败步骤的救援策略",
+        "help": "Automatic retry strategy after optimization failures",
+        "help_zh": "优化失败后是否自动重试及策略（数值收敛调整；方法/电子态变化作为独立可追踪尝试）",
     },
     "opt_max_rescue": {
         "type": "int",
         "advanced": True,
-        "label": "Max Rescue Attempts",
-        "label_zh": "最大救援次数",
+        "label": "Max Retry Attempts",
+        "label_zh": "重试次数上限",
         "min": 0,
         "max": 10,
         "default": {"*": 2},
-        "help": "Maximum number of rescue attempts per optimization",
-        "help_zh": "每次优化的最大救援次数",
+        "help": "Maximum number of automatic retry attempts per optimization",
+        "help_zh": "每次优化允许的自动重试次数上限",
     },
     # ── BatchOptimize SCF controls ──────────────────────────────────────
     "scf_max_iter": {
@@ -1661,11 +2012,11 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "scf_orbital_inherit": {
         "type": "bool",
         "advanced": True,
-        "label": "Orbital Inheritance",
-        "label_zh": "轨道继承",
+        "label": "Inherit Orbitals From Previous Step",
+        "label_zh": "沿用上一计算步骤的轨道初猜",
         "default": {"*": True},
-        "help": "Inherit orbitals from previous calculation",
-        "help_zh": "继承前一计算的轨道",
+        "help": "Use the previous calculation step's orbitals as the SCF initial guess (when supported)",
+        "help_zh": "将上一计算步骤的轨道作为 SCF 初猜（仅在后端支持时生效）",
     },
     "cas_active_electrons": {
         "type": "int",
@@ -2204,10 +2555,10 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
             {
                 "level_id": "irc",
                 "label": "Intrinsic Reaction Coordinate",
-                "label_zh": "\u5185\u7968\u53cd\u5e94\u5750\u6807",
+                "label_zh": "内禀反应坐标",
                 "required": True,
                 "allowed_engines": ["orca"],
-                "fields": ["method", "basis", "maxpoints", "step", "electronic_state"],
+                "fields": ["maxpoints", "step"],
             }
         ],
         "stages": {"mode": "static", "static": ["irc"]},
@@ -2216,14 +2567,56 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "profile_id": "default",
                 "label": "Default IRC",
                 "label_zh": "标准 IRC",
-                "summary": "r2SCAN-3c IRC in both directions",
+                "summary": "IRC at the verified source TS calculation level",
                 "levels": {
                     "irc": {
                         "engine": "orca",
-                        "method": "r2SCAN-3c",
-                        "basis": "",
                         "maxpoints": 100,
                         "step": 0.1,
+                    }
+                },
+            }
+        ],
+    },
+    "tsmode": {
+        "method_levels": [
+            {
+                "level_id": "tsmode",
+                "label": "TS Mode Directed Optimization",
+                "label_zh": "TS 模式定向优化",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["method", "basis", "max_steps", "recalc_hess"],
+            }
+        ],
+        "stages": {
+            "mode": "static",
+            "static": [
+                "prepare_source",
+                "resolve_target",
+                "optimize_ts",
+                "frequency_final",
+                "validate_ts",
+                "publish_results",
+            ],
+        },
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default TS Mode",
+                "label_zh": "标准 TS 模式优化",
+                "summary": (
+                    "Directed OptTS reading the source Hessian; level of "
+                    "theory, charge and multiplicity are inherited from the "
+                    "frequency source"
+                ),
+                "levels": {
+                    "tsmode": {
+                        "engine": "orca",
+                        "method": "",
+                        "basis": "",
+                        "max_steps": 250,
+                        "recalc_hess": 0,
                     }
                 },
             }
@@ -2632,11 +3025,19 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "label": "Per-Point Optimization",
                 "label_zh": "扫描点优化",
                 "required": True,
-                "allowed_engines": ["xtb"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "scan_optimizer_method",
+                    "scan_optimizer_basis",
+                    "scan_optimizer_dispersion",
+                    "scan_optimizer_solvent_model",
+                    "scan_optimizer_solvent",
                     "scan_optimizer_max_iterations",
                     "scan_optimizer_convergence",
+                    "scan_optimizer_grid",
+                    "scan_optimizer_scf_convergence",
+                    "scan_optimizer_scf_max_iterations",
+                    "scan_optimizer_ri_approximation",
                     "scan_optimizer_retries",
                     "scan_optimizer_retry_strategy",
                 ],
@@ -2702,10 +3103,18 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "scan_use_scants": False,
                     },
                     "scan_optimizer": {
-                        "engine": "xtb",
+                        "engine": "orca",
                         "scan_optimizer_method": "GFN2-xTB",
+                        "scan_optimizer_basis": "",
+                        "scan_optimizer_dispersion": "none",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
                         "scan_optimizer_max_iterations": 250,
                         "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
                         "scan_optimizer_retries": 2,
                         "scan_optimizer_retry_strategy": "previous_geometry",
                     },
@@ -2737,6 +3146,135 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "select_candidates",
                         "finalize",
                     ],
+                },
+            },
+            {
+                "profile_id": "economy-dft",
+                "label": "Economy DFT Scan (B97-3c)",
+                "label_zh": "经济型 DFT 扫描（B97-3c）",
+                "summary": "ORCA relaxed scan | B97-3c point optimization (built-in basis/dispersion) | single points off",
+                "summary_zh": "ORCA 松弛扫描｜B97-3c 扫描点优化（内置基组/色散）｜单点能关闭",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "B97-3c",
+                        "scan_optimizer_basis": "",
+                        "scan_optimizer_dispersion": "none",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
+                },
+            },
+            {
+                "profile_id": "standard-dft",
+                "label": "Standard DFT Scan (r2SCAN-3c)",
+                "label_zh": "标准 DFT 扫描（r2SCAN-3c）",
+                "summary": "ORCA relaxed scan | r2SCAN-3c point optimization (built-in basis/dispersion) | single points off",
+                "summary_zh": "ORCA 松弛扫描｜r2SCAN-3c 扫描点优化（内置基组/色散）｜单点能关闭",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "r2SCAN-3c",
+                        "scan_optimizer_basis": "",
+                        "scan_optimizer_dispersion": "none",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
+                },
+            },
+            {
+                "profile_id": "hybrid-dft",
+                "label": "Hybrid DFT Scan (B3LYP-D3BJ/def2-SVP)",
+                "label_zh": "杂化 DFT 扫描（B3LYP-D3BJ/def2-SVP）",
+                "summary": "ORCA relaxed scan | B3LYP-D3BJ/def2-SVP point optimization | single points off",
+                "summary_zh": "ORCA 松弛扫描｜B3LYP-D3BJ/def2-SVP 扫描点优化｜单点能关闭",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "orca",
+                        "scan_optimizer_method": "B3LYP",
+                        "scan_optimizer_basis": "def2-SVP",
+                        "scan_optimizer_dispersion": "D3BJ",
+                        "scan_optimizer_solvent_model": "none",
+                        "scan_optimizer_solvent": "",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_grid": "",
+                        "scan_optimizer_scf_convergence": "",
+                        "scan_optimizer_scf_max_iterations": 200,
+                        "scan_optimizer_ri_approximation": "none",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {"engine": "orca", "_disabled": True},
                 },
             },
         ],
@@ -2879,6 +3417,20 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                     "transition_state_opt_trust_radius",
                     "transition_state_opt_initial_hessian",
                     "transition_state_opt_recalc_hess",
+                    "minimum_opt_max_iter",
+                    "minimum_opt_convergence",
+                    "minimum_scf_max_iter",
+                    "minimum_scf_convergence",
+                    "minimum_scf_strategy",
+                    "minimum_opt_rescue_policy",
+                    "minimum_opt_max_rescue",
+                    "transition_state_opt_max_iter",
+                    "transition_state_opt_convergence",
+                    "transition_state_scf_max_iter",
+                    "transition_state_scf_convergence",
+                    "transition_state_scf_strategy",
+                    "transition_state_opt_rescue_policy",
+                    "transition_state_opt_max_rescue",
                     "opt_rescue_policy",
                     "opt_max_rescue",
                     "scf_max_iter",
@@ -3125,8 +3677,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3198,8 +3750,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3380,8 +3932,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3511,8 +4063,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3853,6 +4405,21 @@ def _case_insensitive_get(mapping: dict[str, Any], key: str) -> Any | None:
     return None
 
 
+# Level → field name carrying that level's electronic-structure method.
+# Levels without a ``functional`` field (currently ``scan_optimizer``) use
+# this mapping so basis/dispersion/RI options resolve against the level's
+# own method with the same METHOD_META linkage as functional levels.
+_LEVEL_METHOD_FIELD: dict[str, str] = {"scan_optimizer": "scan_optimizer_method"}
+
+# Level-scoped field → shared base field name used for METHOD_META /
+# FUNCTIONAL_OPTIONS_MAP lookups (PES DFT-scan extension, 2026-09).
+_LEVEL_SCOPED_FIELD_BASE: dict[str, str] = {
+    "scan_optimizer_basis": "basis",
+    "scan_optimizer_dispersion": "dispersion",
+    "scan_optimizer_ri_approximation": "ri_approximation",
+}
+
+
 def _resolve_field_options(
     field_name: str,
     engine: str,
@@ -3867,11 +4434,15 @@ def _resolve_field_options(
 
     For ``aux_j_basis`` / ``aux_c_basis``, dynamic options are generated
     from ``BASIS_CATALOG`` based on the current *basis*.
+
+    Level-scoped fields (e.g. ``scan_optimizer_basis``) reuse the shared
+    base-field (``basis``) functional linkage via ``_LEVEL_SCOPED_FIELD_BASE``.
     """
-    if functional and field_name in ("basis", "dispersion"):
+    base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+    if functional and base_name in ("basis", "dispersion"):
         mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
-        if mapping and field_name in mapping:
-            return mapping[field_name]
+        if mapping and base_name in mapping:
+            return mapping[base_name]
     fd = FIELD_DEFINITIONS.get(field_name)
     if not fd:
         return None
@@ -3935,17 +4506,18 @@ def _resolve_field_default(
         else:
             global_default = dflt
 
+    base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
     if functional:
         meta = _case_insensitive_get(METHOD_META, functional)
         if meta:
-            if field_name == "basis" and meta.get("default_basis") is not None:
+            if base_name == "basis" and meta.get("default_basis") is not None:
                 return meta["default_basis"]
-            if field_name == "dispersion" and meta.get("default_dispersion") is not None:
+            if base_name == "dispersion" and meta.get("default_dispersion") is not None:
                 return meta["default_dispersion"]
 
             ri_support = meta.get("ri_support", "user")
             if ri_support in ("composite", "automatic"):
-                if field_name == "ri_approximation":
+                if base_name == "ri_approximation":
                     return "none"
                 if field_name in ("aux_j_basis", "aux_c_basis"):
                     return ""
@@ -3964,10 +4536,10 @@ def _resolve_field_default(
                         return basis_meta["aux_c"]
                     return global_default
 
-        if field_name in ("basis", "dispersion"):
+        if base_name in ("basis", "dispersion"):
             mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, functional)
-            if mapping and field_name in mapping:
-                opts = mapping[field_name]
+            if mapping and base_name in mapping:
+                opts = mapping[base_name]
                 if opts:
                     if global_default and global_default in opts:
                         return global_default
@@ -4072,6 +4644,13 @@ def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
     for level_id, level in levels.items():
         if not isinstance(level, dict):
             continue
+        if level_id == "scan_optimizer" and str(level.get("engine") or "").lower() == "xtb":
+            # PES DFT-scan extension (2026-09): scan_optimizer now executes
+            # exclusively through ORCA (allowed_engines ["orca"]); migrate the
+            # legacy "xtb" marker at read time so edit-recalculate passes
+            # normalize_and_validate. New level fields are NOT injected —
+            # missing keys fall back to schema defaults downstream.
+            level["engine"] = "orca"
         if "aux_basis" in level and "aux_j_basis" not in level and "aux_c_basis" not in level:
             func = level.get("functional")
             meta = _case_insensitive_get(METHOD_META, func) if func else None
@@ -4083,6 +4662,11 @@ def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
     return method
 
 
+# ``solvent_model`` / ``dispersion`` legacy members plus the opt/SCF
+# enum trio (2026-09-13): historical payloads and pre-2026-09 presets
+# carry title-case values ("Tight"); membership here both validates them
+# case-insensitively (canonicalising to the lowercase schema options) and
+# lowercases them at CLI-flag emission (``method_levels_to_cli_flags``).
 _CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"})
 
 
@@ -4169,9 +4753,78 @@ def _normalize_electronic_state_module(
     return expanded, []
 
 
+def _validate_batch_roles(
+    batch_roles: dict[str, Any],
+    schema: dict[str, Any],
+    errors: list[str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Validate new-style ``batch_roles`` payload against the schema.
+
+    Returns (normalised_batch_roles_dict, errors).  Each role's fields are
+    validated against the ``batch`` level's field definitions.
+    """
+    for lv_def in schema.get("method_levels", []):
+        if lv_def.get("level_id") == "batch":
+            break
+
+    validated_roles: dict[str, Any] = {}
+    for role_key in ("int", "ts"):
+        role_cfg = batch_roles.get(role_key, {})
+        if not isinstance(role_cfg, dict):
+            errors.append(f"batch_roles.{role_key}: must be an object")
+            continue
+        validated: dict[str, Any] = {}
+        for field_name, field_val in role_cfg.items():
+            if field_val is None:
+                validated[field_name] = None
+                continue
+            fd = FIELD_DEFINITIONS.get(field_name)
+            if fd and fd.get("type") == "hessian_interval" and field_name in ("opt_recalc_hess",):
+                try:
+                    validated[field_name] = normalize_recalc_hess(field_val)
+                except ValueError as exc:
+                    errors.append(f"batch_roles.{role_key}.{field_name}: {exc}")
+                continue
+            if fd and fd.get("options"):
+                options = fd["options"]
+                ci_fields = _CASE_INSENSITIVE_FIELDS
+                if field_name in ci_fields or field_name == "functional":
+                    match = _match_option_case_insensitive(options, field_val)
+                    if match is None:
+                        errors.append(
+                            f"batch_roles.{role_key}.{field_name}: "
+                            f"value '{field_val}' not in allowed options"
+                        )
+                        continue
+                    _, canonical = match
+                    if field_name == "solvent_model":
+                        validated[field_name] = str(field_val).lower()
+                    else:
+                        validated[field_name] = canonical
+                elif str(field_val) not in [str(o) for o in options]:
+                    if fd.get("supports_custom") and str(field_val).strip() and len(options) > 1:
+                        validated[field_name] = field_val
+                    else:
+                        errors.append(
+                            f"batch_roles.{role_key}.{field_name}: "
+                            f"value '{field_val}' not in allowed options"
+                        )
+                        continue
+                else:
+                    validated[field_name] = field_val
+            else:
+                validated[field_name] = field_val
+        validated_roles[role_key] = validated
+
+    return {"batch_roles": validated_roles}, errors
+
+
 def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
     """Return (normalized_levels, errors)."""
     errors: list[str] = []
+
+    if "batch_roles" in method:
+        return _validate_batch_roles(method["batch_roles"], schema, errors)
 
     levels: dict[str, Any] = {}
     for lv_def in schema.get("method_levels", []):
@@ -4190,15 +4843,17 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
             continue
 
         normalized: dict[str, Any] = {"engine": engine}
+        method_field = _LEVEL_METHOD_FIELD.get(lid, "functional")
         for field_name in lv_def.get("fields", []):
             user_val = user_lv.get(field_name)
+            level_method = normalized.get(method_field)
             fd = FIELD_DEFINITIONS.get(field_name)
             # hessian_interval is a self-validating scalar: route through the
             # shared normaliser so CLI/API/catalog/scheduler all agree.
             if fd and fd.get("type") == "hessian_interval" and field_name in ("recalc_hess", "opt_recalc_hess"):
                 if user_val is None or user_val == "":
                     default_val = _resolve_field_default(
-                        field_name, engine, normalized.get("functional")
+                        field_name, engine, level_method
                     )
                     normalized[field_name] = default_val
                     continue
@@ -4231,6 +4886,12 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     normalized[field_name] = expanded_module
                 continue
             if user_val is not None and user_val != "":
+                if fd and fd.get("normalize_method_alias") and isinstance(user_val, str):
+                    # Lazy import: levels.py depends on this module (one-way);
+                    # resolving at call time keeps the dependency acyclic.
+                    from acp.calculations.levels import normalize_method_alias
+
+                    user_val = normalize_method_alias(user_val)
                 # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
                 # or a list, validate every item against the allowed options,
                 # and normalise to a list so downstream CLI-flag emission
@@ -4240,7 +4901,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     multi_options = _resolve_field_options(
                         field_name,
                         engine,
-                        normalized.get("functional"),
+                        level_method,
                         basis=normalized.get("basis") or user_lv.get("basis"),
                     )
                     if multi_options is not None:
@@ -4269,7 +4930,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 options = _resolve_field_options(
                     field_name,
                     engine,
-                    normalized.get("functional"),
+                    level_method,
                     basis=normalized.get("basis") or user_lv.get("basis"),
                 )
                 if options is not None:
@@ -4317,7 +4978,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 default_val = _resolve_field_default(
                     field_name,
                     engine,
-                    normalized.get("functional"),
+                    level_method,
                     basis=normalized.get("basis"),
                 )
                 normalized[field_name] = default_val
@@ -4457,6 +5118,20 @@ _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     "minimum_opt_initial_hessian": "minimum-opt-initial-hessian",
     "transition_state_opt_trust_radius": "transition-state-opt-trust-radius",
     "transition_state_opt_initial_hessian": "transition-state-opt-initial-hessian",
+    "minimum_opt_max_iter": "minimum-opt-max-iter",
+    "minimum_opt_convergence": "minimum-opt-convergence",
+    "minimum_scf_max_iter": "minimum-scf-max-iter",
+    "minimum_scf_convergence": "minimum-scf-convergence",
+    "minimum_scf_strategy": "minimum-scf-strategy",
+    "minimum_opt_rescue_policy": "minimum-opt-rescue-policy",
+    "minimum_opt_max_rescue": "minimum-opt-max-rescue",
+    "transition_state_opt_max_iter": "transition-state-opt-max-iter",
+    "transition_state_opt_convergence": "transition-state-opt-convergence",
+    "transition_state_scf_max_iter": "transition-state-scf-max-iter",
+    "transition_state_scf_convergence": "transition-state-scf-convergence",
+    "transition_state_scf_strategy": "transition-state-scf-strategy",
+    "transition_state_opt_rescue_policy": "transition-state-opt-rescue-policy",
+    "transition_state_opt_max_rescue": "transition-state-opt-max-rescue",
     "opt_rescue_policy": "opt-rescue-policy",
     "opt_max_rescue": "opt-max-rescue",
     "scf_max_iter": "scf-max-iter",

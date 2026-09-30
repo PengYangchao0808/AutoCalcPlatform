@@ -397,7 +397,7 @@ def test_irc_stages_hessian_and_populates_endpoint_geometries(
     hess_source = tmp_path / "source.hess"
     _ = hess_source.write_text("fake hessian", encoding="utf-8")
 
-    def _fake_run(input_file: Path, output_file: Path) -> bool:
+    def _fake_run(input_file: Path, output_file: Path, output_callback=None) -> bool:
         output_file.write_text(IRC_OUTPUT, encoding="utf-8")
         _ = (input_file.parent / "irc_case_IRC_F.xyz").write_text(
             "3\nforward\nH 0.0 0.0 0.0\nC 1.1 0.0 0.0\nH 0.0 1.0 0.0\n",
@@ -449,7 +449,7 @@ def test_irc_midpoint_reseed_changes_direction_and_skips_missing_hessian(
 ) -> None:
     interface = ORCAInterface(sample_config)
 
-    def _fake_run(_input_file: Path, output_file: Path) -> bool:
+    def _fake_run(_input_file: Path, output_file: Path, output_callback=None) -> bool:
         _ = output_file.write_text(IRC_OUTPUT, encoding="utf-8")
         return True
 

@@ -1063,3 +1063,97 @@ class TestCandidateIdFormat:
         result = candidate_id_for("opt", 5, item_id="item with spaces!")
         assert " " not in result
         assert "!" not in result
+
+
+# ---------------------------------------------------------------------------
+# IRC direction-aware frame candidates
+# ---------------------------------------------------------------------------
+
+
+def _write_irc_task(root: Path) -> None:
+    trajectories = root / "RESULT" / "trajectories"
+    trajectories.mkdir(parents=True, exist_ok=True)
+    irc_dir = root / "RESULT" / "irc"
+    irc_dir.mkdir(parents=True, exist_ok=True)
+    frames = []
+    for direction in ("forward", "reverse"):
+        for index in range(3):
+            point_path = irc_dir / f"irc_{direction}_point_{index:04d}.xyz"
+            point_path.write_text(
+                _SAMPLE_XYZ.replace("sample molecule", f"IRC {direction} point {index}"),
+                encoding="utf-8",
+            )
+            frames.append(
+                {
+                    "direction": direction,
+                    "index": index,
+                    "frame_index": index,
+                    "energy_hartree": -100.0 + index * 0.01,
+                    "status": "completed",
+                    "geometry_ref": f"RESULT/irc/irc_{direction}_point_{index:04d}.xyz",
+                }
+            )
+    (trajectories / "irc_trajectory.json").write_text(
+        json.dumps(
+            {
+                "schema": "irc_trajectory_v1",
+                "workflow": "irc",
+                "status": "completed",
+                "complete": True,
+                "frames": frames,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.fixture()
+def irc_task(tmp_path: Path) -> Path:
+    _write_irc_task(tmp_path)
+    return tmp_path
+
+
+class TestIrcFrameCandidates:
+    """IRC forward/reverse points share frame indexes; frame_id disambiguates."""
+
+    def test_resolve_forward_and_reverse(self, irc_task: Path) -> None:
+        forward = resolve_frame_geometry(
+            irc_task, view_type="irc", frame_index=1, workflow="irc", frame_id="irc_forward_1"
+        )
+        reverse = resolve_frame_geometry(
+            irc_task, view_type="irc", frame_index=1, workflow="irc", frame_id="irc_reverse_1"
+        )
+        assert "IRC forward point 1" in forward
+        assert "IRC reverse point 1" in reverse
+
+    def test_resolve_without_direction_is_ambiguous(self, irc_task: Path) -> None:
+        with pytest.raises(FrameCandidateError):
+            resolve_frame_geometry(irc_task, view_type="irc", frame_index=1, workflow="irc")
+
+    def test_save_keeps_direction_identity(self, irc_task: Path) -> None:
+        forward = save_frame_candidate(
+            irc_task,
+            job_id="job-irc",
+            workflow="irc",
+            view_type="irc",
+            frame_index=1,
+            role="TS",
+            frame_id="irc_forward_1",
+        )
+        reverse = save_frame_candidate(
+            irc_task,
+            job_id="job-irc",
+            workflow="irc",
+            view_type="irc",
+            frame_index=1,
+            role="INT",
+            frame_id="irc_reverse_1",
+        )
+        assert forward["candidate_id"] == "irc_forward_frame_0001"
+        assert reverse["candidate_id"] == "irc_reverse_frame_0001"
+        assert forward["direction"] == "forward"
+        assert reverse["direction"] == "reverse"
+        payload = list_frame_candidates(irc_task)
+        directions = {str(entry.get("direction")) for entry in payload["candidates"]}
+        assert directions == {"forward", "reverse"}

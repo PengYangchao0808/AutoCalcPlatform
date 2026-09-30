@@ -42,7 +42,7 @@ Workbench "能量与轨迹"标签页是 PES 扫描、几何优化、构象搜索
 - 通用帧操作：查看结构 / 锁定 / 导出 XYZ / 保存为候选（TS / INT / NONE）
 - xtb-md / xtbmd-censo 协议额外提供采样历史三视图：能量轨迹、采样空间（MDS 二维散点）、覆盖度（饱和度指标 + 累计唯一曲线）
 - 优化视图收敛面板：RMS/MAX 梯度和位移 vs 阈值达标判定
-- IRC / NEB 视图已注册（能量图数据投影暂未接线；IRC 逐帧结构浏览与路径动画由下方结构查看器提供）
+- IRC / NEB 视图已注册（IRC 能量曲线已接线：`irc_trajectory_v1` 正/反向双 series，运行中自动刷新，可从历史 `WORK/<stage>/ORCA` 轨迹只读回填；NEB 投影仍未实现）。IRC 逐帧结构浏览与路径动画由下方结构查看器提供
 
 详见 `docs/ACP_Energy_Trajectory_Viewer_DevDoc.md`
 
@@ -106,8 +106,11 @@ Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中�
 - **暂停 / 恢复**：运行中任务可暂停（`PAUSED`），本地 SIGSTOP/SIGCONT 进程组冻结/复活、远程 LSF `bstop`/`bresume`；**暂停不释放内存/磁盘配额**，适合临时让出算力
 - **断点续算**：失败/取消任务按检查点继续（`continue` 操作）
 - **重新运行**：一键以同 spec 另起新任务（`{name}__rerun`）
-- **清除**：单任务级联删除（jobs + stage_tasks + artifacts），支持按状态/项目/时间批量清除
+- **清除**：单任务级联删除（jobs + stage_tasks + artifacts + tasks 索引行），支持按状态/项目/时间批量清除
 - **任务详情**：阶段 stepper、错误详情（error + stderr 尾部）、产物摘要、恢复操作建议
+- **分组浏览**：按分子/备注/任务类型/提交批次分组（默认分子折叠）；多维筛选（状态/工作流/标签/分子/批次，同维并集、跨维交集）；排序（创建时间/完成时间/最近活动/名称自然排序）；手动标签、归档、批量操作；整项目计数不受分页影响
+- **分子管理**：分子别名解析（大小写不敏感匹配）、合并建议、分组显示名设置
+- **来源链路**：只读浏览任务上下游依赖关系（BFS ≤10 跳）
 
 队列操作端点：`GET /api/v1/jobs/{id}/detail` · `POST /api/v1/jobs/{id}/pause|unpause|continue|rerun` · `POST /api/v1/jobs/purge`
 

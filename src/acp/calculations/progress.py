@@ -108,6 +108,14 @@ class ProgressReporter:
             self._stages[name]["detail"] = detail or f"{completed}/{total}"
         self._write()  # throttled
 
+    def set_stage_detail(self, name: str, detail: str) -> None:
+        """Update a stage's observation without claiming percent complete."""
+        with self._lock:
+            if name not in self._stages:
+                return
+            self._stages[name]["detail"] = detail
+        self._write()
+
     def complete_stage(self, name: str, result: dict | None = None) -> None:
         """Mark a stage as completed."""
         now = _iso_now()

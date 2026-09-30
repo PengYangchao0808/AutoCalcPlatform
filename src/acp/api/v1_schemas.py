@@ -318,6 +318,11 @@ class V1JobRecordModel(BaseModel):
     snapshot_version: int | None = None  # epoch seconds of state.json mtime
     live_status: JobLiveStatus | None = None
     display_method: str | None = None
+    custom_name: str | None = None
+    resolved_name: str = ""
+    default_name: str = ""
+    name_revision: int = 0
+    name_updated_at: str | None = None
 
 
 class V1JobCreateRequest(BaseModel):
@@ -569,6 +574,121 @@ class V1JobPurgeResult(BaseModel):
 
 class V1JobPurgeResponse(BaseModel):
     results: list[V1JobPurgeResult] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Edit & recalculate (docs/ACP_Edit_And_Recalculate_Plan.md §9) —
+# GET /jobs/{id}/edit-draft · POST /jobs/{id}/edit-recalculate/preview ·
+# POST /jobs/{id}/edit-recalculate.
+# ---------------------------------------------------------------------------
+
+
+class V1EditCapabilities(BaseModel):
+    """Server-computed action availability plus human-readable block reasons."""
+
+    can_edit: bool
+    can_in_place: bool
+    can_new_job: bool
+    disabled_reasons: list[str] = Field(default_factory=list)
+
+
+class V1EditDraftResponse(BaseModel):
+    job_id: str
+    workflow: str
+    workflow_status: str
+    job_status: str
+    attempt: int
+    source_revision: str
+    editable_spec: dict[str, Any]
+    input_refs: dict[str, Any]
+    effective_config: dict[str, Any] = Field(default_factory=dict)
+    capabilities: V1EditCapabilities
+    preserved_fields: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list)
+    migration_hint: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class V1EditPreviewRequest(BaseModel):
+    """Body for the edit-recalculate preview (validation + diff, no writes)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    mode: str
+    workflow: str | None = None
+    input: dict[str, Any] = Field(default_factory=dict)
+    method: dict[str, Any] = Field(default_factory=dict)
+    resources: dict[str, Any] = Field(default_factory=dict)
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
+    project_id: str | None = None
+    execution_mode: str | None = None
+    target_node: str | None = None
+    expected_source_revision: str | None = None
+
+
+class V1EditDiffEntry(BaseModel):
+    path: str
+    kind: str
+    old: Any = None
+    new: Any = None
+
+
+class V1EditPreviewResponse(BaseModel):
+    ok: bool
+    mode: str
+    workflow: str
+    job_id: str
+    diff: list[V1EditDiffEntry] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    blocking_reasons: list[str] = Field(default_factory=list)
+    preview_fingerprint: str
+    source_revision: str
+
+
+class V1EditRecalculateRequest(BaseModel):
+    """Body for the edit-recalculate submission (plan §9).
+
+    ``mode``: ``in_place`` reuses the task identity; ``new_job`` performs one
+    regular submit with lineage.  ``request_id`` drives exactly-once
+    semantics; ``expected_source_revision`` guards against stale drafts;
+    ``preview_fingerprint`` (when provided) must match the server-side
+    canonical fingerprint of the submitted configuration.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    mode: str
+    workflow: str | None = None
+    name: str = ""
+    input: dict[str, Any] = Field(default_factory=dict)
+    method: dict[str, Any] = Field(default_factory=dict)
+    resources: dict[str, Any] = Field(default_factory=dict)
+    output_dir: str | None = None
+    config_path: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
+    project_id: str | None = None
+    execution_mode: str | None = None
+    target_node: str | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    expected_source_revision: str | None = None
+    preview_fingerprint: str | None = None
+    request_id: str
+
+
+class V1EditRecalculateResponse(BaseModel):
+    job_id: str
+    attempt: int
+    operation: str
+    status: str
+    replayed: bool = False
+    diff_summary: list[V1EditDiffEntry] = Field(default_factory=list)
 
 
 class V1JobListResponse(BaseModel):
@@ -874,6 +994,16 @@ class StructureSourceSummary(BaseModel):
     job_status: str = ""
     source_kind: str = ""  # final | saved_candidate | partial_result
     available_at: str = ""
+    # Org-store enrichment fields (optional — absent on old DBs).
+    custom_name: str | None = None
+    resolved_name: str | None = None
+    default_name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    role: str = ""
+    role_evidence: str = ""
+    source_uid: str = ""
+    job_resolved_name: str | None = None
+    usage_status: str = "active"
 
 
 class StructureSourceListResponse(BaseModel):
@@ -1284,8 +1414,9 @@ class StructureViewerVibrationsResponse(BaseModel):
 
     available: bool
     reason: str | None = None
-    threshold_cm1: float = -50.0
-    threshold_source: str = "default"
+    # Retained for API compatibility; the TS criterion is simply f < 0.
+    threshold_cm1: float = 0.0
+    threshold_source: str = "fixed"
     modes: list[StructureViewerModeModel] = Field(default_factory=list)
     atom_count: int
     geometry_product_id: str | None = None
@@ -1534,6 +1665,11 @@ class PesReviewResponse(BaseModel):
     selected_count: int = 0
     note: str | None = None
     confirmed_at: str | None = None
+    # Provenance of the frame source this review was decided against
+    # (COMPLETED task + final profile, or FAILED/CANCELLED task + partial frames).
+    source_task_status: str = ""
+    scan_complete: bool | None = None
+    frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
     result_manifest: str = "RESULT/result_manifest.json"
 
@@ -1567,18 +1703,22 @@ class PesReviewRestoreResponse(BaseModel):
     restored_from: int
     revision: int = 0
     selected_count: int = 0
+    source_task_status: str = ""
+    scan_complete: bool | None = None
+    frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
 
 
 class V1FrameCandidateRequest(BaseModel):
     """Body for POST /jobs/{job_id}/frame-candidate."""
 
-    view_type: str  # scan | optimization | sampling | conformer
+    view_type: str  # scan | optimization | sampling | conformer | irc
     frame_index: int
     role: str  # TS | INT
     name: str | None = None
     expected_revision: int | None = None
     item_id: str | None = None  # BatchOptimize item scoping
+    frame_id: str | None = None  # IRC direction disambiguation (irc_{forward|reverse}_{index})
 
 
 class V1FrameCandidateInfo(BaseModel):
@@ -1625,6 +1765,43 @@ class V1SamplingFrameResponse(BaseModel):
     relative_energy_kcal_mol: float | None = None
     basin_id: int | None = None
     xyz: str = ""
+
+
+# ---------------------------------------------------------------------------
+# TS Mode frequency sources (docs/ACP_TSMode_Optimization_Implementation_Plan.md §8).
+# ---------------------------------------------------------------------------
+
+
+class FrequencySourceOriginModel(BaseModel):
+    """Provenance of a frequency source."""
+
+    job_id: str = ""
+    item_id: str | None = None
+    entry_id: str = ""
+
+
+class FrequencySourceEntryModel(BaseModel):
+    """One discovered frequency source for a job."""
+
+    entry_id: str
+    item_id: str | None = None
+    label: str = ""
+    output_path: str = ""
+    hess_path: str | None = None
+    complete: bool = True
+    hessian_available: bool = False
+    imaginary_count: int = 0
+    atom_count: int = 0
+    mode_count: int = 0
+    origin: FrequencySourceOriginModel = Field(default_factory=FrequencySourceOriginModel)
+
+
+class FrequencySourcesResponse(BaseModel):
+    """Response for ``GET /jobs/{job_id}/frequency-sources``."""
+
+    job_id: str
+    sources: list[FrequencySourceEntryModel] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class EnergyGraphSeriesModel(BaseModel):
@@ -1754,6 +1931,9 @@ __all__ = [
     "EnergyGraphNodeModel",
     "EnergyGraphResponse",
     "EnergyGraphSeriesModel",
+    "FrequencySourceEntryModel",
+    "FrequencySourceOriginModel",
+    "FrequencySourcesResponse",
     "V1FrameCandidateInfo",
     "V1FrameCandidateListResponse",
     "V1FrameCandidateRequest",

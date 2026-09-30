@@ -21,14 +21,21 @@ __all__ = [
     "TaskStorage",
     "is_v2_task_dir",
     "runtime_file",
+    "sanitize_existing_task_dir_name",
     "sanitize_task_dir_name",
 ]
 
 TASK_DIR_NAME_MAX_LEN = 100
 
-_FORBIDDEN_CHARS = re.compile(r'[/\\:*?"<>|]')
+# Path separators + Windows-illegal chars + shell metacharacters.  ORCA's
+# startup helper interpolates the input path into an unquoted shell command,
+# so a directory like ``frame_1_(TS,_opt_freq_sp_thermo)_irc`` aborts with
+# ``sh: Syntax error: "(" unexpected`` (incident 2026-09-26).
+_FORBIDDEN_CHARS = re.compile(r"""[/\\:*?"<>|()\[\]{};&$`'!#~,]""")
 _WHITESPACE = re.compile(r"\s+")
 _REPEAT_UNDERSCORE = re.compile(r"_+")
+#: Trailing ``__NN`` dedupe suffix added by ``JobManager._dedupe_task_dir``.
+_DEDUPE_SUFFIX = re.compile(r"^(?P<stem>.+)__(?P<suffix>\d{2,})$")
 
 
 @dataclass(frozen=True)
@@ -118,6 +125,31 @@ def sanitize_task_dir_name(molecule_name: str, task_name: str, remark: str = "")
     if len(name) > TASK_DIR_NAME_MAX_LEN:
         name = name[:TASK_DIR_NAME_MAX_LEN].rstrip("_")
     return name
+
+
+def sanitize_existing_task_dir_name(name: str) -> str:
+    """Sanitise an already-created task directory leaf name.
+
+    Counterpart to :func:`sanitize_task_dir_name` for directories created
+    before the forbidden-char policy existed (incident 2026-09-26: a
+    ``frame_1_(TS,_opt_freq_sp_thermo)_irc`` leaf breaks ORCA's unquoted
+    startup shell command).  A trailing ``__NN`` dedupe suffix is preserved
+    so a migrated directory keeps its allocation identity.
+
+    Args:
+        name: Current directory leaf name (no parent components).
+
+    Returns:
+        The sanitised leaf; *name* itself when already safe or empty.
+    """
+    if not name:
+        return name
+    match = _DEDUPE_SUFFIX.match(name)
+    stem, suffix = (match.group("stem"), match.group("suffix")) if match else (name, "")
+    cleaned = _sanitize_component(stem)
+    if not cleaned:
+        cleaned = "task"
+    return f"{cleaned}__{suffix}" if suffix else cleaned
 
 
 def is_v2_task_dir(path: Path | str) -> bool:

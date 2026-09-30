@@ -331,6 +331,110 @@ def _materialize_batch_structures(inp: dict[str, Any], inputs_dir: Path) -> Path
     return dest
 
 
+def _batch_structures_xyz_snapshot(inp: dict[str, Any]) -> str | None:
+    """Return the included XYZ geometries for the task-level input snapshot."""
+    items = inp.get("items")
+    if not isinstance(items, list):
+        return None
+    geometries = [
+        item["xyz"].strip()
+        for item in items
+        if isinstance(item, dict)
+        and item.get("include") is not False
+        and isinstance(item.get("xyz"), str)
+        and item["xyz"].strip()
+    ]
+    return "\n".join(geometries) + "\n" if geometries else None
+
+
+def _materialize_tsmode_bundle(inp: dict[str, Any], inputs_dir: Path) -> Path | None:
+    """Stage TS Mode source assets and write ``INPUT/tsmode/bundle.json``.
+
+    ``spec.input`` carries the API-resolved source (``frequency_out`` /
+    ``hess`` / optional ``geometry`` absolute paths, ``source_mode_index``,
+    charge/multiplicity/level snapshot).  The assets are copied into the
+    task's own ``INPUT/tsmode/`` so the job owns its snapshot (plan §11 —
+    remote nodes never touch the web API), and SHA-256 checksums are
+    verified when supplied.
+    """
+    if str(inp.get("source_type") or "") != "tsmode_bundle":
+        return None
+    frequency_out = inp.get("frequency_out")
+    hess = inp.get("hess")
+    if not isinstance(frequency_out, str) or not isinstance(hess, str):
+        raise ValueError("tsmode_bundle input requires frequency_out and hess paths")
+
+    bundle_dir = inputs_dir / "INPUT" / "tsmode"
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+    staged: dict[str, str] = {}
+    checksums: dict[str, str] = {
+        "frequency_out": "frequency_out_sha256",
+        "hess": "hess_sha256",
+        "geometry": "geometry_sha256",
+    }
+    for key, filename in (
+        ("frequency_out", "source.out"),
+        ("hess", "source.hess"),
+        ("geometry", "source.xyz"),
+    ):
+        raw = inp.get(key)
+        if not isinstance(raw, str) or not raw:
+            continue
+        source_path = Path(raw)
+        if not source_path.is_file():
+            raise ValueError(f"tsmode source asset not found: {raw}")
+        dest = bundle_dir / filename
+        shutil.copy2(source_path, dest)
+        expected = inp.get(checksums[key])
+        if isinstance(expected, str) and expected:
+            import hashlib
+
+            digest = hashlib.sha256(dest.read_bytes()).hexdigest()
+            if digest != expected:
+                raise ValueError(
+                    f"tsmode source asset {key} hash mismatch (expected {expected[:12]}…, "
+                    f"got {digest[:12]}…)"
+                )
+        staged[key] = filename
+
+    if "frequency_out" not in staged or "hess" not in staged:
+        raise ValueError("tsmode_bundle input requires both frequency_out and hess")
+
+    payload: dict[str, Any] = {
+        "schema_version": "tsmode_bundle_v1",
+        "files": {
+            "output": staged["frequency_out"],
+            "hessian": staged["hess"],
+        },
+        "origin": inp.get("origin") or {"kind": "scheduler"},
+    }
+    if "geometry" in staged:
+        payload["files"]["geometry"] = staged["geometry"]
+    for key in ("charge", "multiplicity"):
+        if isinstance(inp.get(key), int):
+            payload[key] = inp[key]
+    if isinstance(inp.get("level"), dict):
+        payload["level"] = dict(inp["level"])
+    optimization: dict[str, Any] = {}
+    for key in (
+        "max_iterations",
+        "recalc_hess",
+        "trust_radius",
+        "retry_limit",
+        "allow_unverified_mapping",
+    ):
+        if inp.get(key) is not None:
+            optimization[key] = inp[key]
+    if inp.get("final_frequency") is not None:
+        payload["final_frequency"] = bool(inp["final_frequency"])
+    if optimization:
+        payload["optimization"] = optimization
+
+    bundle_path = bundle_dir / "bundle.json"
+    bundle_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return bundle_path
+
+
 def materialize_job_input(
     inp: dict[str, Any],
     inputs_dir: Path,
@@ -344,6 +448,10 @@ def materialize_job_input(
         materialized = _materialize_batch_structures(inp, inputs_dir)
         if materialized is not None:
             return materialized
+
+    tsmode_bundle = _materialize_tsmode_bundle(inp, inputs_dir)
+    if tsmode_bundle is not None:
+        return tsmode_bundle
 
     return _materialize_single_input(inp, inputs_dir, run_root)
 
@@ -456,7 +564,13 @@ class JobRunner:
         )
         if materialized is not None and materialized != work_dir / "input.xyz":
             try:
-                storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
+                if record.spec.workflow != "tsmode":
+                    if record.spec.input.get("source_type") == "batch_structures":
+                        xyz_snapshot = _batch_structures_xyz_snapshot(record.spec.input)
+                        if xyz_snapshot is not None:
+                            storage.write_input_xyz(xyz_snapshot)
+                    else:
+                        storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
             except OSError:
                 logger.warning("Could not copy primary input.xyz for job %s", record.id)
         storage.write_task_json(build_task_record(record))
@@ -1103,6 +1217,7 @@ class JobRunner:
             "frequency",
             "scan",
             "irc",
+            "tsmode",
             "casscf",
             "xtb_optimize",
         ):
@@ -1120,6 +1235,34 @@ class JobRunner:
         if wf == "nmr":
             return self._build_nmr_cmd(spec, work_dir)
 
+        if wf == "tsmode":
+            bundle_path = Path(input_path) if input_path else None
+            if bundle_path is None or not bundle_path.is_file() or not str(
+                bundle_path
+            ).endswith("bundle.json"):
+                raise ValueError(
+                    "tsmode job requires a materialized INPUT/tsmode/bundle.json"
+                )
+            cmd += [
+                "--source-bundle",
+                bundle_path.as_posix(),
+                "--output",
+                cli_work_dir,
+            ]
+            mode_index = inp.get("source_mode_index")
+            if not isinstance(mode_index, int) or isinstance(mode_index, bool):
+                raise ValueError("tsmode job requires an integer source_mode_index")
+            cmd += ["--source-mode-index", str(mode_index)]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            if res.get("nproc") is not None:
+                cmd += ["--nproc", str(res["nproc"])]
+            if res.get("mem"):
+                cmd += ["--mem", str(res["mem"])]
+            if spec.config_path:
+                cmd += ["--config", str(spec.config_path)]
+            return cmd
+
         if wf == "BatchOptimize":
             artifact = inp.get("from_artifact")
             items_file = inp.get("items_file")
@@ -1127,6 +1270,10 @@ class JobRunner:
                 cmd += ["--from-artifact", str(artifact), "--output", cli_work_dir]
             elif items_file:
                 cmd += ["--items-file", str(items_file), "--output", cli_work_dir]
+            elif inp.get("source_type") == "batch_structures":
+                if not input_path or not Path(input_path).is_file():
+                    raise ValueError("BatchOptimize batch_structures input was not materialized")
+                cmd += ["--items-file", Path(input_path).as_posix(), "--output", cli_work_dir]
             elif input_path and Path(input_path).is_file():
                 # The Workbench creates one scheduler job per structure.  Its
                 # materialized input.xyz is therefore a valid one-item XYZ
@@ -1271,6 +1418,10 @@ class JobRunner:
                 cmd += _electronic_state_cli_flags(casscf_level["electronic_state"], work_dir)
         elif wf == "irc":
             cmd += ["--input", str(source), "--output", cli_work_dir]
+            provenance = inp.get("ts_source")
+            if not isinstance(provenance, dict) or provenance.get("schema") != "irc_ts_source_v1":
+                raise ValueError("IRC requires verified TS source provenance")
+            cmd += ["--ts-provenance-json", json.dumps(provenance, sort_keys=True)]
             if spec.name:
                 cmd += ["--name", spec.name]
             input_role = inp.get("input_role")
@@ -1297,6 +1448,7 @@ class JobRunner:
             irc_basis = method.get("basis") or irc_level.get("basis")
             if irc_basis:
                 cmd += ["--basis", str(irc_basis)]
+            cmd += ["--charge", str(inp["charge"]), "--multiplicity", str(inp["multiplicity"])]
             maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
             if maxpoints is not None:
                 cmd += ["--maxpoints", str(maxpoints)]

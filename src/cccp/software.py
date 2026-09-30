@@ -10,15 +10,15 @@ Grimme CENSO / MolSSI QCEngine / autodE model:
         -> CONFSEARCH_*_PATH env
         -> shutil.which() over PATH + current Python env
         -> tiny legacy fallback list
+        -> unique executable in bounded conventional install layouts
         -> None
 
 Resolution is deliberately first-hit-wins with a fixed priority order
 (explicit pin wins; no auto-prefer-newest).  *Discovery*, however, is
 informational: :func:`discover_candidates` / :func:`discover_all_detailed`
-enumerate *all* installs visible from each source (including a small
-glob-based filesystem scan of conventional install dirs) so the API can
-surface multi-install situations.  Discovery never feeds back into
-resolution order.
+enumerate *all* installs visible from each source.  A bounded filesystem
+scan can resolve a missing binary only when it finds exactly one distinct
+executable; ambiguous installs remain visible for an operator to pin.
 
 Author: QCcalc Team
 """
@@ -91,11 +91,9 @@ _VERSION_FLAGS: dict[str, tuple[str, ...]] = {
     "molclus": (),
 }
 
-#: Glob patterns for the informational filesystem scan (discovery only —
-#: never consulted by :func:`resolve_executable`).  Only patterns that are
-#: trivially safe (conventional, non-recursive install layouts) belong here;
-#: software without such a layout simply has no entry.  Missing or
-#: unreadable directories are skipped silently.
+#: Bounded, non-recursive conventional install layouts.  A scan result is
+#: used for execution only when one distinct executable is found.  Keep
+#: names exact so an unrelated binary cannot satisfy a QC requirement.
 SCAN_PATTERNS: dict[str, tuple[str, ...]] = {
     "orca": (
         "/opt/orca*/orca",
@@ -103,6 +101,29 @@ SCAN_PATTERNS: dict[str, tuple[str, ...]] = {
         "/usr/local/orca*/orca",
         "~/orca*/orca",
     ),
+    "xtb": (
+        "/opt/software/xtb*/bin/xtb",
+        "/opt/xtb*/bin/xtb",
+        "/usr/local/xtb*/bin/xtb",
+    ),
+    "crest": (
+        "/opt/software/crest*/crest",
+        "/opt/crest*/crest",
+        "/usr/local/crest*/crest",
+    ),
+    "censo": (
+        "/opt/software/censo*/censo",
+        "/opt/censo*/censo",
+        "/usr/local/censo*/censo",
+    ),
+    "shermo": (
+        "/opt/software/shermo*/Shermo",
+        "/opt/software/shermo*/shermo",
+        "/opt/Shermo*/Shermo",
+        "/usr/local/Shermo*/Shermo",
+    ),
+    "isostat": ("/opt/software/molclus*/isostat", "/opt/software/isostat*/isostat"),
+    "molclus": ("/opt/software/molclus*/molclus", "/opt/molclus*/molclus"),
 }
 
 #: TTL (seconds) for the module-level version-probe cache.
@@ -196,6 +217,12 @@ def _resolve(name: str, configured_path: str | Path | None) -> tuple[Path | None
         if path:
             return path, "fallback"
 
+    # 5. Conventional install directories: never choose arbitrarily among
+    # multiple distinct versions.  An explicit pin remains the way to select.
+    scanned = set(_scan_candidates(name))
+    if len(scanned) == 1:
+        return scanned.pop(), "scan"
+
     return None, None
 
 
@@ -214,6 +241,8 @@ def resolve_executable(
        the process PATH plus the directory of ``sys.executable``, so
        conda/venv installs are found without extra machinery.
     4. **Legacy fallbacks** — the small :data:`FALLBACKS` list.
+    5. **Bounded scan** — one unambiguous executable in a conventional
+       install directory.
 
     Returns the *absolute* path (never the bare command name), so callers
     can hand it straight to :func:`subprocess.run` — required by ORCA,
@@ -231,7 +260,7 @@ def resolve_executable_with_source(
 
     Returns:
         ``(path, source)`` where *source* is one of ``"config"``,
-        ``"env"``, ``"path"``, ``"fallback"`` — both ``None`` when the
+        ``"env"``, ``"path"``, ``"fallback"``, ``"scan"`` — both ``None`` when the
         executable cannot be resolved.  Same priority order and semantics
         as :func:`resolve_executable`.
     """
@@ -316,9 +345,8 @@ def discover_candidates(
     ``env`` (``CONFSEARCH_<NAME>_PATH``), ``path`` (every hit along the
     ``sys.executable``-dir + PATH search path, in PATH order),
     ``fallback`` (:data:`FALLBACKS` hits), then ``scan`` (:data:`SCAN_PATTERNS`
-    glob hits, only for software with declared patterns).  This never
-    affects :func:`resolve_executable` — the first-hit-wins resolution
-    semantics are unchanged.
+    glob hits, only for software with declared patterns).  The resolver
+    accepts a scan hit only when there is one distinct executable.
     """
     candidates: list[SoftwareCandidate] = []
     seen: set[Path] = set()

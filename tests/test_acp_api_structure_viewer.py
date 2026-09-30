@@ -332,12 +332,12 @@ class TestStructureViewerVibrationsResponse:
     """Vibrations response model validation."""
 
     def test_defaults(self):
-        """Default threshold_cm1=-50.0, threshold_source='default', modes=[]"""
+        """Compatibility fields report the fixed zero crossing."""
         model = StructureViewerVibrationsResponse(available=False, atom_count=3)
         assert model.available is False
         assert model.reason is None
-        assert model.threshold_cm1 == -50.0
-        assert model.threshold_source == "default"
+        assert model.threshold_cm1 == 0.0
+        assert model.threshold_source == "fixed"
         assert model.modes == []
         assert model.atom_count == 3
         assert model.geometry_product_id is None
@@ -890,8 +890,8 @@ class TestVibrationsEndpoint:
         body = resp.json()
         assert body["available"] is True
         assert body["reason"] is None
-        assert body["threshold_cm1"] == -50.0
-        assert body["threshold_source"] == "default"
+        assert body["threshold_cm1"] == 0.0
+        assert body["threshold_source"] == "fixed"
         assert body["atom_count"] == 3
         assert len(body["modes"]) == 3
 
@@ -1111,12 +1111,12 @@ class TestHistoricalModeProjection:
 
 
 class TestThresholdSource:
-    """Configurable significant-imaginary threshold (todo 26)."""
+    """Legacy threshold metadata cannot change the negative-mode criterion."""
 
     def test_default_threshold_source(
         self, sv_client: TestClient, tmp_path: Path
     ) -> None:
-        """No imaginary_threshold_cm1 in job method → threshold=-50.0, source=default."""
+        """Without legacy metadata, the compatibility fields describe f < 0."""
         work_dir = _seed_job(sv_client, tmp_path)
         _write_confsearch_manifest_with_xyz(work_dir)
         _write_normal_modes(work_dir, _make_normal_modes_json())
@@ -1129,13 +1129,13 @@ class TestThresholdSource:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["threshold_cm1"] == -50.0
-        assert body["threshold_source"] == "default"
+        assert body["threshold_cm1"] == 0.0
+        assert body["threshold_source"] == "fixed"
 
     def test_job_config_threshold_source(
         self, sv_client: TestClient, tmp_path: Path
     ) -> None:
-        """imaginary_threshold_cm1 in job method → threshold from config, source=job_config."""
+        """A saved magnitude cutoff from an old job no longer changes the rule."""
         manager = sv_client.app.state.job_manager
         work_dir = tmp_path / "sv-threshold-001"
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -1163,8 +1163,8 @@ class TestThresholdSource:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["threshold_cm1"] == -30.0
-        assert body["threshold_source"] == "job_config"
+        assert body["threshold_cm1"] == 0.0
+        assert body["threshold_source"] == "fixed"
 
 
 # ── Remote structure cache tests (todo 11) ─────────────────────────────────

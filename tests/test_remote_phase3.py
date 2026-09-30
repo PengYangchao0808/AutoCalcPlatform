@@ -440,6 +440,10 @@ def test_load_remote_config_succeeds():
         from acp.api.server import _load_remote_config
     except ImportError:
         pytest.skip("fastapi not installed")
+    except RuntimeError as exc:
+        if "already owned by another ACP server process" in str(exc):
+            pytest.skip(f"ACP service holds the production run_root lock: {exc}")
+        raise
     cfg = _load_remote_config()
     assert cfg.execution_mode in ("local", "remote")
     assert isinstance(cfg.poll_interval, int)
@@ -452,6 +456,10 @@ def test_load_remote_config_degrades_on_exception():
         import acp.api.server as srv
     except ImportError:
         pytest.skip("fastapi not installed")
+    except RuntimeError as exc:
+        if "already owned by another ACP server process" in str(exc):
+            pytest.skip(f"ACP service holds the production run_root lock: {exc}")
+        raise
     with patch("cccp.config.load_config", side_effect=RuntimeError("boom")):
         cfg = srv._load_remote_config()
     assert cfg.execution_mode == "local"

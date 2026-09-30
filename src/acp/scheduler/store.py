@@ -122,6 +122,42 @@ class JobStore:
             row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return _row_to_record(row) if row else None
 
+    def list_terminal_jobs_paged(
+        self,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> list[JobRecord]:
+        """Page through all terminal jobs, ordered by terminal timestamp desc."""
+        query = (
+            "SELECT * FROM jobs "
+            "WHERE status IN (?, ?, ?) "
+            "ORDER BY COALESCE(completed_at, updated_at, created_at) DESC "
+            "LIMIT ? OFFSET ?"
+        )
+        params: tuple[Any, ...] = (
+            JobStatus.COMPLETED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+            limit,
+            offset,
+        )
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_record(r) for r in rows]
+
+    def count_terminal_jobs(self) -> int:
+        """Count all terminal (COMPLETED/FAILED/CANCELLED) jobs."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as n FROM jobs WHERE status IN (?, ?, ?)",
+                (
+                    JobStatus.COMPLETED.value,
+                    JobStatus.FAILED.value,
+                    JobStatus.CANCELLED.value,
+                ),
+            ).fetchone()
+        return row["n"] if row else 0
+
     def list(
         self,
         status: str | None = None,
@@ -312,18 +348,37 @@ class JobStore:
             conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
             conn.commit()
 
+    def has_job_dependents(self, job_id: str) -> bool:
+        """Return True when any child table still holds rows for *job_id*.
+
+        Covers exactly the tables :meth:`purge_cascade` cleans
+        (``tasks`` / ``stage_tasks`` / ``artifacts`` /
+        ``mechanism_studies``).  Used to distinguish "job never existed"
+        from ghost index entries left behind by a non-cascading delete of
+        the ``jobs`` row.
+        """
+        with self._lock, self._connect() as conn:
+            for table in ("tasks", "stage_tasks", "artifacts", "mechanism_studies"):
+                row = conn.execute(
+                    f"SELECT 1 FROM {table} WHERE job_id=? LIMIT 1", (job_id,)
+                ).fetchone()
+                if row is not None:
+                    return True
+        return False
+
     def purge_cascade(self, job_id: str) -> None:
         """Delete a job row plus every dependent row, in one connection.
 
         No FK cascades exist in the schema, so children are removed
-        explicitly in dependency order: ``stage_tasks`` and ``artifacts``
-        by ``job_id``; ``decision_points`` via ``mechanism_studies``
-        subselect (it has no ``job_id`` column); then ``mechanism_studies``
-        and finally the ``jobs`` row itself.
+        explicitly in dependency order: ``stage_tasks``, ``artifacts``,
+        and ``tasks`` by ``job_id``; ``decision_points`` via
+        ``mechanism_studies`` subselect (it has no ``job_id`` column);
+        then ``mechanism_studies`` and finally the ``jobs`` row itself.
         """
         with self._lock, self._connect() as conn:
             conn.execute("DELETE FROM stage_tasks WHERE job_id=?", (job_id,))
             conn.execute("DELETE FROM artifacts WHERE job_id=?", (job_id,))
+            conn.execute("DELETE FROM tasks WHERE job_id=?", (job_id,))
             conn.execute(
                 "DELETE FROM decision_points WHERE study_id IN "
                 "(SELECT id FROM mechanism_studies WHERE job_id=?)",
@@ -362,6 +417,24 @@ class JobStore:
                 "UPDATE jobs SET project_id=?, work_dir=?, spec_json=?, updated_at=? WHERE id=?",
                 (project_id, work_dir, _spec_to_json(record.spec), record.updated_at, job_id),
             )
+            conn.commit()
+
+    def update_work_dir_and_name(self, record: JobRecord) -> None:
+        """Persist a task-directory rename and its canonical name together."""
+        record.touch()
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE jobs SET work_dir=?, name=?, spec_json=?, updated_at=? WHERE id=?",
+                (
+                    record.work_dir,
+                    record.spec.name,
+                    _spec_to_json(record.spec),
+                    record.updated_at,
+                    record.id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(record.id)
             conn.commit()
 
     def get_mechanism_study(self, study_id: str) -> dict[str, Any] | None:

@@ -15,7 +15,7 @@ from acp.backends.base import QCResult
 from acp.calculations.batch.engine import (
     _PROFILE_STEPS,
     BatchOptimizeEngine,
-    _count_significant_imaginary,
+    _count_imaginary,
     _ts_frequency_judgment,
 )
 from acp.calculations.batch.models import (
@@ -29,7 +29,7 @@ from acp.calculations.batch.models import (
 )
 from acp.calculations.batch.options import BatchMethodOptions
 from acp.calculations.checkpoint import CheckpointMismatchError
-from acp.calculations.contracts import StepKind, StructureRole
+from acp.calculations.contracts import CalculationResult, StepKind, StructureRole
 from tests.conftest import FakeBackend, FakeBackendCall
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -340,6 +340,45 @@ def test_batchoptimize_method_flags_advanced_opt_scf() -> None:
     ]
 
 
+def test_batchoptimize_method_flags_normalize_enum_casing() -> None:
+    """Enum flags round-trip through the case-insensitive BatchOptimize parser.
+
+    Historical payloads (pre-2026-09 catalog presets, stored JobSpec method
+    dicts) carry "Tight"/"Normal"/"Auto"; since the keyword-case contract
+    (AGENTS.md #33) the emit side passes values through unchanged and the
+    parser folds any casing to its declared spelling.
+    """
+    from acp.scheduler.jobs import batchoptimize_method_flags
+
+    method = {
+        "opt_convergence": "Tight",
+        "scf_convergence": "Tight",
+        "scf_strategy": "Normal",
+        "opt_initial_hessian": "Auto",
+        "opt_rescue_policy": "Adaptive",
+        "opt_recalc_hess": "Auto",
+        "minimum_opt_initial_hessian": "Calculate",
+        "transition_state_opt_recalc_hess": "Auto",
+        "optimization_method": "r2SCAN-3c",
+    }
+    flags = batchoptimize_method_flags(method)
+
+    def flag_value(flag: str) -> str:
+        assert flag in flags, f"missing flag {flag} in {flags}"
+        return flags[flags.index(flag) + 1]
+
+    assert flag_value("--opt-convergence") == "Tight"
+    assert flag_value("--scf-convergence") == "Tight"
+    assert flag_value("--scf-strategy") == "Normal"
+    assert flag_value("--opt-initial-hessian") == "Auto"
+    assert flag_value("--opt-rescue-policy") == "Adaptive"
+    assert flag_value("--opt-recalc-hess") == "Auto"
+    assert flag_value("--minimum-opt-initial-hessian") == "Calculate"
+    assert flag_value("--transition-state-opt-recalc-hess") == "Auto"
+    # Case-sensitive identifiers pass through untouched.
+    assert flag_value("--method") == "r2SCAN-3c"
+
+
 def test_batchoptimize_method_flags_scf_orbital_inherit_false() -> None:
     from acp.scheduler.jobs import batchoptimize_method_flags
 
@@ -585,23 +624,62 @@ def test_batchoptimize_cli_passes_role_specific_method_options(tmp_path: Path) -
         assert _handle_batch_optimize(args) == 0
 
     assert run.call_args is not None
-    assert run.call_args.kwargs["methods"] == BatchMethodOptions(
-        minimum_method="r2SCAN-3c",
-        minimum_basis="def2-TZVP",
-        transition_state_method="wB97X-D4",
-        transition_state_basis="def2-TZVPPD",
-        opt_max_iter=400,
-        opt_convergence="verytight",
-        opt_trust_radius=0.1,
-        opt_initial_hessian="model",
-        opt_recalc_hess=20,
-        opt_rescue_policy="off",
-        opt_max_rescue=5,
-        scf_max_iter=500,
-        scf_convergence="tight",
-        scf_strategy="soscf",
-        scf_orbital_inherit=False,
+    assert run.call_args.kwargs["methods"] == BatchMethodOptions.from_method_dict({
+        "minimum_method": "r2SCAN-3c",
+        "minimum_basis": "def2-TZVP",
+        "transition_state_method": "wB97X-D4",
+        "transition_state_basis": "def2-TZVPPD",
+        "opt_max_iter": 400,
+        "opt_convergence": "verytight",
+        "opt_trust_radius": 0.1,
+        "opt_initial_hessian": "model",
+        "opt_recalc_hess": 20,
+        "opt_rescue_policy": "off",
+        "opt_max_rescue": 5,
+        "scf_max_iter": 500,
+        "scf_convergence": "tight",
+        "scf_strategy": "soscf",
+        "scf_orbital_inherit": False,
+    })
+
+
+def test_batchoptimize_scheduler_passes_bs_state_to_cli_and_workflow() -> None:
+    """The wizard's batch-level state must reach the batch engine unchanged."""
+    import json
+
+    from acp.cli import _handle_batch_optimize, build_parser
+    from acp.core.workflow import WorkflowResult
+    from acp.scheduler.jobs import JobSpec
+    from acp.scheduler.runner import JobRunner
+
+    state = {
+        "execution_mode": "single",
+        "states": [{
+            "state_id": "s1_bs",
+            "target_multiplicity": 1,
+            "spin_mode": "broken_symmetry",
+            "guess": {"strategy": "guessmix", "guess_mix_angle": 45},
+        }],
+    }
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        input={"items_file": str(FIXTURES / "batch_structures_v1.json")},
+        method={
+            "profile": "opt_only",
+            "batch_roles": {"int": {}, "ts": {}},
+            "levels": {"batch": {"engine": "orca", "electronic_state": state}},
+        },
     )
+    cmd = JobRunner()._build_cmd(spec, Path("."))
+    assert json.loads(cmd[cmd.index("--electronic-state-json") + 1]) == state
+
+    args = build_parser().parse_args(cmd[3:])
+    with patch("acp.workflows.batch_optimize.run_batch_optimize") as run, patch(
+        "acp.calculations.progress.ProgressReporter"
+    ):
+        run.return_value = WorkflowResult(status="completed")
+        assert _handle_batch_optimize(args) == 0
+    assert run.call_args.kwargs["electronic_state"] == state
 
 
 @pytest.mark.parametrize("source_key", ["from_artifact", "items_file"])
@@ -754,30 +832,33 @@ def test_batchoptimize_pause_unpause_lifecycle(
 
 
 def test_ts_imaginary_judgment_valid() -> None:
-    """Exactly one imaginary below -50 cm⁻¹ is valid."""
+    """Exactly one negative frequency is valid, regardless of magnitude."""
     valid, msg = _ts_frequency_judgment([-500.0, 100.0, 200.0])
     assert valid is True
     assert msg == ""
+    assert _ts_frequency_judgment([-34.22, 100.0]) == (True, "")
+    assert _ts_frequency_judgment([-0.01, 100.0]) == (True, "")
 
 
 def test_ts_imaginary_judgment_too_many() -> None:
-    """Multiple significant imaginaries → higher_order_saddle."""
+    """Two negative frequencies remain a higher-order saddle."""
     valid, msg = _ts_frequency_judgment([-500.0, -200.0, 100.0])
     assert valid is False
     assert "higher_order_saddle" in msg
+    assert _ts_frequency_judgment([-60.0, -0.01])[0] is False
 
 
 def test_ts_imaginary_judgment_none() -> None:
-    """No significant imaginary → ts_no_imaginary."""
-    valid, msg = _ts_frequency_judgment([-10.0, 100.0, 200.0])
+    """No negative frequencies → ts_no_imaginary."""
+    valid, msg = _ts_frequency_judgment([0.0, 100.0, 200.0])
     assert valid is False
     assert "ts_no_imaginary" in msg
 
 
-def test_count_significant_imaginary() -> None:
-    assert _count_significant_imaginary([-500.0, -10.0, 100.0], cutoff=-50.0) == 1
-    assert _count_significant_imaginary([-500.0, -60.0, 100.0], cutoff=-50.0) == 2
-    assert _count_significant_imaginary([100.0, 200.0], cutoff=-50.0) == 0
+def test_count_imaginary() -> None:
+    assert _count_imaginary([-500.0, -10.0, 100.0]) == 2
+    assert _count_imaginary([-0.01, 0.0, 100.0]) == 1
+    assert _count_imaginary([0.0, 100.0, 200.0]) == 0
 
 
 # ── profile steps ────────────────────────────────────────────────────────
@@ -1148,7 +1229,7 @@ def test_ts_frequency_failure_aborts_item(
     engine: BatchOptimizeEngine,
     fake_backend: object,
 ) -> None:
-    """TS with no significant imaginary frequencies → item fails."""
+    """TS with no negative frequency → item fails."""
     from tests.conftest import FakeBackend
 
     assert isinstance(fake_backend, FakeBackend)
@@ -1175,6 +1256,43 @@ def test_ts_frequency_failure_aborts_item(
     outcome = engine.run([ts_item], profile="opt_freq", charge=0)
     assert outcome.items[0].status == "failed"
     assert "ts_no_imaginary" in outcome.items[0].error
+
+
+def test_ts_weak_imaginary_frequency_completes_item(
+    tmp_path: Path,
+    fake_backend: object,
+) -> None:
+    """A legacy -50 cutoff cannot reject a real -34.22 cm⁻¹ TS mode."""
+    from tests.conftest import FakeBackend
+
+    assert isinstance(fake_backend, FakeBackend)
+    engine = BatchOptimizeEngine(
+        config={"theory": {"frequency": {"imaginary_threshold_cm1": -50.0}}},
+        work_root=tmp_path / "task" / "WORK",
+        result_root=tmp_path / "task" / "RESULT",
+    )
+    ts_item = BatchStructureItem(
+        item_id="ts_weak",
+        name="TS weak mode",
+        tag="TS",
+        xyz="2\nTAG: TS\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+        candidate_id="ts_weak",
+    )
+    fake_backend.set_result(
+        "frequency",
+        QCResult(
+            success=True,
+            energy=-1.1,
+            coordinates=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.7]]),
+            symbols=["H", "H"],
+            frequencies=[-34.22, 100.0, 200.0],
+            has_frequencies=True,
+        ),
+    )
+
+    outcome = engine.run([ts_item], profile="opt_freq", charge=0)
+    assert outcome.items[0].status == "completed"
+    assert outcome.items[0].frequency["frequencies"] == [-34.22, 100.0, 200.0]
 
 
 # ── BatchMethodOptions → FakeBackend kwargs forwarding ──────────────────
@@ -1668,7 +1786,8 @@ class TestRoleOverrides:
             tmp_path,
             ["--transition-state-opt-recalc-hess", "auto"],
         )
-        assert options.transition_state_opt_recalc_hess == "auto"
+        ts_resolved = options.resolve_role_options(is_transition_state=True)
+        assert ts_resolved.get("opt_recalc_hess") == 5
 
     # -- engine .inp level: TS override reaches input ─────────────────────
 
@@ -1735,3 +1854,294 @@ class TestRoleOverrides:
         int_kwargs = engine._optimization_kwargs(is_ts=False)
         assert ts_kwargs["trust_radius"] == 0.15
         assert "trust_radius" not in int_kwargs
+
+    # -- extended role overrides: optimizer / SCF / rescue ────────────────
+
+    def test_ts_scf_and_max_iter_override_reaches_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            transition_state_opt_max_iter=350,
+            transition_state_scf_strategy="slowconv",
+            transition_state_scf_max_iter=500,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert ts_kwargs["max_cycles"] == 350
+        assert ts_kwargs["scf_strategy"] == "slowconv"
+        assert ts_kwargs["scf_maxiter"] == 500
+        # INT keeps the engine defaults.
+        assert int_kwargs["max_cycles"] == 200
+        assert int_kwargs["scf_strategy"] == "normal"
+        assert int_kwargs["scf_maxiter"] == 300
+
+    def test_int_rescue_override_reaches_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            minimum_opt_rescue_policy="off",
+            minimum_opt_max_rescue=0,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert int_kwargs["opt_rescue_policy"] == "off"
+        assert int_kwargs["opt_max_rescue"] == 0
+        # TS keeps the common default policy.
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        assert ts_kwargs["opt_rescue_policy"] == "adaptive"
+        assert ts_kwargs["opt_max_rescue"] == 2
+
+    def test_role_convergence_override_reaches_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            minimum_opt_convergence="normal",
+            transition_state_opt_convergence="verytight",
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        assert engine._optimization_kwargs(is_ts=False)["opt_level"] == "normal"
+        assert engine._optimization_kwargs(is_ts=True)["opt_level"] == "verytight"
+
+    def test_new_role_fields_do_not_cross_contaminate(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            transition_state_scf_max_iter=500,
+            minimum_opt_max_iter=400,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert ts_kwargs["scf_maxiter"] == 500
+        assert ts_kwargs["max_cycles"] == 200
+        assert int_kwargs["max_cycles"] == 400
+        assert int_kwargs["scf_maxiter"] == 300
+
+
+# ── legacy migration equivalence (TestLegacyMigration) ───────────────────
+
+_ROLE_CONFIG_KEYS = frozenset({
+    "method", "basis", "sp_method", "sp_basis",
+    "opt_max_iter", "opt_convergence", "opt_trust_radius",
+    "opt_initial_hessian", "opt_recalc_hess", "opt_rescue_policy", "opt_max_rescue",
+    "scf_max_iter", "scf_convergence", "scf_strategy",
+    "scf_orbital_inherit", "scf_damp", "scf_damp_fac", "scf_shift", "scf_shift_fac",
+    "temperature", "pressure", "scale_factor",
+})
+
+
+class TestLegacyMigration:
+    """Migrate→from_method_dict round-trip produces identical resolve_role_options."""
+
+    @pytest.mark.parametrize(
+        "legacy",
+        [
+            {},
+            {"functional": "B3LYP", "basis": "def2-SVP"},
+            {
+                "functional": "B3LYP",
+                "opt_max_iter": 400,
+                "opt_trust_radius": 0.25,
+                "scf_strategy": "slowconv",
+            },
+            {
+                "transition_state_opt_trust_radius": 0.15,
+                "transition_state_opt_recalc_hess": 3,
+            },
+            {"minimum_opt_trust_radius": 0.1},
+            {
+                "opt_trust_radius": 0.25,
+                "transition_state_opt_trust_radius": 0.15,
+                "minimum_opt_trust_radius": 0.10,
+            },
+            {
+                "opt_initial_hessian": "",
+                "transition_state_opt_recalc_hess": "",
+                "opt_recalc_hess": "",
+            },
+            {"opt_initial_hessian": None, "transition_state_opt_recalc_hess": None},
+        ],
+        ids=[
+            "empty", "common_only", "common_overrides", "ts_only",
+            "int_only", "mixed", "empty_string_sentinels", "none_sentinels",
+        ],
+    )
+    def test_resolve_role_options_identical(self, legacy: dict) -> None:
+        from acp.calculations.batch.options import (
+            BatchMethodOptions,
+            migrate_legacy_method_dict,
+        )
+        opts_direct = BatchMethodOptions.from_method_dict(legacy)
+        migrated = migrate_legacy_method_dict(legacy)
+        opts_migrated = BatchMethodOptions.from_method_dict(migrated)
+
+        for is_ts in (False, True):
+            direct = opts_direct.resolve_role_options(is_ts)
+            roundtrip = opts_migrated.resolve_role_options(is_ts)
+            assert direct == roundtrip, (
+                f"is_ts={is_ts}: direct={direct} != roundtrip={roundtrip}"
+            )
+
+    def test_migrated_dict_complete_key_set(self) -> None:
+        from acp.calculations.batch.options import migrate_legacy_method_dict
+        migrated = migrate_legacy_method_dict({})
+        for role_key in ("int", "ts"):
+            assert set(migrated["batch_roles"][role_key].keys()) == _ROLE_CONFIG_KEYS
+
+    def test_omitted_fields_become_null(self) -> None:
+        from acp.calculations.batch.options import migrate_legacy_method_dict
+        migrated = migrate_legacy_method_dict({})
+        int_cfg = migrated["batch_roles"]["int"]
+        assert int_cfg["opt_trust_radius"] is None
+        assert int_cfg["opt_initial_hessian"] == "auto"
+        assert int_cfg["opt_recalc_hess"] == "auto"
+        assert int_cfg["opt_max_iter"] is None
+
+    def test_ts_role_defaults_frozen(self) -> None:
+        from acp.calculations.batch.options import migrate_legacy_method_dict
+        migrated = migrate_legacy_method_dict({})
+        ts_cfg = migrated["batch_roles"]["ts"]
+        assert ts_cfg["opt_trust_radius"] == 0.3
+        assert ts_cfg["opt_initial_hessian"] == "calculate"
+        assert ts_cfg["opt_recalc_hess"] == 5
+
+    def test_common_values_freeze_into_both_roles(self) -> None:
+        from acp.calculations.batch.options import migrate_legacy_method_dict
+        migrated = migrate_legacy_method_dict({"opt_max_iter": 400, "scf_strategy": "slowconv"})
+        int_cfg = migrated["batch_roles"]["int"]
+        ts_cfg = migrated["batch_roles"]["ts"]
+        assert int_cfg["opt_max_iter"] == 400
+        assert ts_cfg["opt_max_iter"] == 400
+        assert int_cfg["scf_strategy"] == "slowconv"
+        assert ts_cfg["scf_strategy"] == "slowconv"
+
+    def test_role_override_wins_over_common(self) -> None:
+        from acp.calculations.batch.options import migrate_legacy_method_dict
+        migrated = migrate_legacy_method_dict({
+            "opt_trust_radius": 0.25,
+            "transition_state_opt_trust_radius": 0.15,
+        })
+        int_cfg = migrated["batch_roles"]["int"]
+        ts_cfg = migrated["batch_roles"]["ts"]
+        assert int_cfg["opt_trust_radius"] == 0.25
+        assert ts_cfg["opt_trust_radius"] == 0.15
+
+    def test_int_ts_independence(self) -> None:
+        from acp.calculations.batch.options import migrate_legacy_method_dict
+        migrated = migrate_legacy_method_dict({
+            "minimum_opt_trust_radius": 0.10,
+            "transition_state_opt_recalc_hess": 3,
+        })
+        int_cfg = migrated["batch_roles"]["int"]
+        ts_cfg = migrated["batch_roles"]["ts"]
+        assert int_cfg["opt_trust_radius"] == 0.10
+        assert int_cfg["opt_recalc_hess"] == "auto"
+        assert ts_cfg["opt_trust_radius"] == 0.3
+        assert ts_cfg["opt_recalc_hess"] == 3
+
+
+# ── engine per-role SP / thermo (test 5) ─────────────────────────────────
+
+
+class TestEnginePerRoleSpThermo:
+    """New-style config where int.sp_method/temperature differ from ts."""
+
+    def test_per_role_sp_method_reaches_sp_request(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+
+        assert isinstance(fake_backend, FakeBackend)
+        methods = BatchMethodOptions.from_method_dict({
+            "batch_roles": {
+                "int": {"method": "B3LYP", "basis": "def2-SVP",
+                        "sp_method": "wB97M-V", "sp_basis": "def2-TZVPP"},
+                "ts": {"method": "wB97X-D4", "basis": "def2-TZVP"},
+            }
+        })
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        result = CalculationResult(coords=[[0.0, 0.0, 0.0], [0.0, 0.0, 0.7]])
+        int_item = BatchStructureItem(
+            item_id="int_001", name="INT", tag="INT",
+            xyz="2\nTAG: INT\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+            candidate_id="int_001",
+        )
+        ts_item = BatchStructureItem(
+            item_id="ts_001", name="TS", tag="TS",
+            xyz="2\nTAG: TS\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+            candidate_id="ts_001",
+        )
+        int_sp = engine._build_sp_request(
+            result, int_item, 0, 1, tmp_path / "sp_int", ["H", "H"], methods,
+        )
+        ts_sp = engine._build_sp_request(
+            result, ts_item, 0, 1, tmp_path / "sp_ts", ["H", "H"], methods,
+        )
+        assert int_sp.method == "wB97M-V"
+        assert int_sp.resources.get("basis") == "def2-TZVPP"
+        assert ts_sp.method == "wB97M-V"
+        assert ts_sp.resources.get("basis") == "def2-TZVPP"
+
+    def test_per_role_thermo_temperature_reaches_calc(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from unittest.mock import patch
+
+        from acp.calculations.batch.options import BatchMethodOptions
+        from tests.conftest import FakeBackend
+
+        assert isinstance(fake_backend, FakeBackend)
+        work_root = tmp_path / "task" / "WORK"
+        result_root = tmp_path / "task" / "RESULT"
+        freq_log = work_root / "03_OPT" / "batch" / "int_001" / "frequency" / "frequency.log"
+        freq_log.parent.mkdir(parents=True, exist_ok=True)
+        freq_log.write_text("freq output", encoding="utf-8")
+
+        methods = BatchMethodOptions.from_method_dict({
+            "batch_roles": {
+                "int": {"method": "B3LYP", "temperature": 350.0, "pressure": 2.0},
+                "ts": {"method": "B3LYP", "temperature": 298.15, "pressure": 1.0},
+            }
+        })
+        engine = BatchOptimizeEngine(work_root=work_root, result_root=result_root)
+        item = BatchStructureItem(
+            item_id="int_001", name="INT", tag="INT",
+            xyz="2\nTAG: INT\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+            candidate_id="int_001",
+        )
+        with patch("acp.calculations.primitives.thermochemistry.run_shermo") as mock_shermo:
+            mock_shermo.return_value = {"g_sum": -1.0, "h_sum": -0.9, "s_sum": 0.01}
+            engine.run([item], profile="opt_freq_sp_thermo", charge=0, methods=methods)
+            assert mock_shermo.call_count == 1
+            assert mock_shermo.call_args.kwargs["temperature_k"] == 350.0
+            assert mock_shermo.call_args.kwargs["pressure_atm"] == 2.0

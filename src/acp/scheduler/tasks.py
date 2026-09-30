@@ -12,9 +12,13 @@ compute node.
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import threading
+import unicodedata
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -44,7 +48,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     storage_mode TEXT NOT NULL DEFAULT 'local',
     layout_version INTEGER NOT NULL DEFAULT 2,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    custom_name TEXT,
+    name_revision INTEGER NOT NULL DEFAULT 0,
+    name_updated_at TEXT
 )
 """
 
@@ -69,6 +76,20 @@ _TASK_COLUMNS: tuple[str, ...] = (
     "layout_version",
     "created_at",
     "updated_at",
+    # T1 org columns
+    "molecule_key",
+    "tags",
+    "archived",
+    "batch_id",
+    "last_activity_at",
+    "started_at",
+    "completed_at",
+    "group_id",
+    "progress",
+    # custom-name columns (Wave 1)
+    "custom_name",
+    "name_revision",
+    "name_updated_at",
 )
 
 #: Mirrors the SQL column defaults for keys absent (or None) in the payload.
@@ -76,11 +97,99 @@ _COLUMN_DEFAULTS: dict[str, Any] = {
     "status": "pending",
     "storage_mode": "local",
     "layout_version": 2,
+    "molecule_key": "",
+    "tags": "[]",
+    "archived": 0,
+    "batch_id": None,
+    "last_activity_at": None,
+    "started_at": None,
+    "completed_at": None,
+    "group_id": None,
+    "progress": None,
+    "custom_name": None,
+    "name_revision": 0,
+    "name_updated_at": None,
 }
+
+
+#: Columns that sync_from_job / sync_job_transition own (updated on conflict).
+_SYNC_COLUMNS: tuple[str, ...] = (
+    "display_name",
+    "task_dir_name",
+    "workflow",
+    "status",
+    "current_stage",
+    "node_id",
+    "node_path",
+    "storage_mode",
+    "layout_version",
+    "input_hash",
+    "result_manifest_path",
+    "updated_at",
+)
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class NameRevisionConflictError(Exception):
+    """Raised when an update_custom_name call has a stale expected_name_revision."""
+
+    def __init__(self, current_projection: dict[str, Any]) -> None:
+        self.current_projection = current_projection
+        rev = current_projection.get("name_revision")
+        super().__init__(f"name_revision conflict — current is {rev}")
+
+
+def validate_custom_name(value: str | None) -> str | None:
+    """Validate and normalise a custom task name.
+
+    ``None`` passes through (restore default).  Otherwise: strip, reject
+    empty, reject length > 200, reject control characters (Unicode Cc).
+    Returns the stripped value or raises ``ValueError``.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("custom_name must not be empty after trimming")
+    if len(stripped) > 200:
+        raise ValueError(f"custom_name exceeds 200 characters (got {len(stripped)})")
+    for ch in stripped:
+        if unicodedata.category(ch) == "Cc":
+            raise ValueError(f"custom_name contains control character: {ch!r}")
+    return stripped
+
+
+def resolve_task_names(row_or_dict: dict[str, Any]) -> dict[str, Any]:
+    """Produce a name projection from a task row.
+
+    Returns ``default_name`` (display_name), ``resolved_name``
+    (custom_name or display_name), ``custom_name``, ``name_revision``,
+    and ``name_updated_at``.
+    """
+    display_name = row_or_dict.get("display_name") or ""
+    custom_name = row_or_dict.get("custom_name")
+    return {
+        "default_name": display_name,
+        "resolved_name": custom_name if custom_name else display_name,
+        "custom_name": custom_name,
+        "name_revision": row_or_dict.get("name_revision") or 0,
+        "name_updated_at": row_or_dict.get("name_updated_at"),
+    }
+
+
+def jobs_table_exists(conn: sqlite3.Connection) -> bool:
+    """Return True when the scheduler ``jobs`` table exists in *conn*.
+
+    Shared probe for ghost-entry guards: the task index normally lives in
+    the scheduler DB next to ``jobs`` (so task rows can be validated
+    against it), but a standalone index DB has no ``jobs`` table and
+    cannot be validated.
+    """
+    row = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone()
+    return row is not None
 
 
 class TaskIndex:
@@ -130,6 +239,25 @@ class TaskIndex:
                 if self._shared_conn is None:
                     conn.close()
 
+    # ------------------------------------------------------------------ #
+    # Public accessors (used by molecule_groups / task_views)
+    # ------------------------------------------------------------------ #
+
+    def query_rows(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
+        """Execute a read query and return all rows (thread-safe)."""
+        return self._query(sql, params)
+
+    @contextmanager
+    def writer_connection(self) -> Iterator[sqlite3.Connection]:
+        """Yield a connection for batch writes; closes only if not shared."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                yield conn
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
     def _init_schema(self) -> None:
         self._run(_TASKS_SCHEMA)
         if self.db_path is not None:
@@ -140,11 +268,11 @@ class TaskIndex:
     # ------------------------------------------------------------------ #
 
     def upsert(self, record: dict[str, Any]) -> None:
-        """Insert or replace a task row keyed by ``task_id``.
+        """Insert or update a task row keyed by ``task_id``.
 
-        Expects §9.1 field names as dict keys; ``None``/missing values are
-        coerced to ``''`` (or the SQL column default for the defaulted
-        columns ``status``/``storage_mode``/``layout_version``).
+        First-write-wins columns (project_id, molecule_name, task_name,
+        remark, molecule_key, tags, archived, batch_id, created_at) are
+        only set on INSERT.  Sync-owned columns are updated on conflict.
         """
         row: dict[str, Any] = {}
         for col in _TASK_COLUMNS:
@@ -156,8 +284,11 @@ class TaskIndex:
             row["layout_version"] = 2
         columns = ", ".join(_TASK_COLUMNS)
         placeholders = ", ".join("?" for _ in _TASK_COLUMNS)
+
+        update_parts = ", ".join(f"{c}=excluded.{c}" for c in _SYNC_COLUMNS)
         self._run(
-            f"INSERT OR REPLACE INTO tasks ({columns}) VALUES ({placeholders})",
+            f"INSERT INTO tasks ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(task_id) DO UPDATE SET {update_parts}",
             tuple(row[col] for col in _TASK_COLUMNS),
         )
 
@@ -212,16 +343,24 @@ class TaskIndex:
         node = result.get("node") or result.get("execution_target")
         if not isinstance(node, str) or not node:
             node = "remote" if remote else "local"
+
+        tags_list = record.spec.tags or []
+        tags_json = json.dumps(tags_list)
+        batch_id = (
+            record.spec.resources.get("batch_id")
+            if isinstance(record.spec.resources, dict)
+            else None
+        )
+        last_activity_at = record.completed_at or record.started_at or record.created_at
+        project_id = record.project_id or record.spec.project_id
         self.upsert(
             {
                 "task_id": record.id,
                 "job_id": record.id,
-                "project_id": record.project_id or record.spec.project_id,
+                "project_id": project_id,
                 "molecule_name": record.spec.molecule_name,
                 "task_name": record.spec.task_name,
                 "remark": record.spec.remark,
-                # Keep the task index aligned with the physical directory;
-                # historical JobRecords may still carry a legacy spec.name.
                 "display_name": Path(record.work_dir).name if record.work_dir else record.spec.name,
                 "workflow": record.spec.workflow,
                 "task_dir_name": Path(record.work_dir).name if record.work_dir else "",
@@ -235,8 +374,328 @@ class TaskIndex:
                 "layout_version": layout_version,
                 "created_at": record.created_at,
                 "updated_at": record.updated_at,
+                "molecule_key": self.compute_molecule_key(
+                    project_id,
+                    record.spec.molecule_name,
+                ),
+                "tags": tags_json,
+                "archived": 0,
+                "batch_id": batch_id,
+                "last_activity_at": last_activity_at,
+                "started_at": record.started_at,
+                "completed_at": record.completed_at,
+                "group_id": record.group_id or record.id,
+                "progress": record.progress,
             }
         )
 
+    def sync_job_transition(self, record: JobRecord) -> None:
+        """Sync status transition with compare-before-write optimization.
 
-__all__ = ["TaskIndex"]
+        If the task row does not exist, falls back to sync_from_job.
+        Only writes when status/stage/progress actually changed.
+        """
+        rows = self._query(
+            "SELECT status, current_stage, progress FROM tasks WHERE task_id=?",
+            (record.id,),
+        )
+        if not rows:
+            self.sync_from_job(record)
+            return
+
+        stored = rows[0]
+        now = _utc_now_iso()
+
+        status_changed = stored["status"] != record.status.value
+        stage_changed = (stored["current_stage"] or "") != (record.current_stage or "")
+
+        if status_changed or stage_changed:
+            terminal = record.status.is_terminal
+            if terminal and record.completed_at is not None:
+                ca_sql = "completed_at=?"
+                ca_param: tuple[Any, ...] = (record.completed_at,)
+            else:
+                ca_sql = "completed_at=completed_at"
+                ca_param = ()
+            self._run(
+                f"UPDATE tasks SET status=?, current_stage=?, "
+                f"started_at=COALESCE(started_at,?), "
+                f"{ca_sql}, last_activity_at=?, updated_at=? "
+                f"WHERE task_id=?",
+                (
+                    record.status.value,
+                    record.current_stage,
+                    record.started_at,
+                    *ca_param,
+                    now,
+                    now,
+                    record.id,
+                ),
+            )
+            return
+
+        stored_progress = stored["progress"]
+        new_progress = record.progress
+        if new_progress is not None and stored_progress != new_progress:
+            self._run(
+                "UPDATE tasks SET progress=?, updated_at=? WHERE task_id=?",
+                (new_progress, now, record.id),
+            )
+
+    def delete(self, task_id: str) -> None:
+        """Remove a task row. No-op if absent."""
+        self._run("DELETE FROM tasks WHERE task_id=?", (task_id,))
+
+    def find_orphan_task_ids(self) -> list[str]:
+        """Ghost index entries: task rows whose ``jobs`` row is gone.
+
+        Produced by historical non-cascading deletes of the ``jobs`` row.
+        Returns ``[]`` when the ``jobs`` table is absent from the index DB
+        (standalone index) — orphans are only definable against the
+        scheduler schema.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                if not jobs_table_exists(conn):
+                    return []
+                rows = conn.execute(
+                    "SELECT t.task_id FROM tasks t "
+                    "WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.id = t.job_id) "
+                    "ORDER BY t.created_at"
+                ).fetchall()
+                return [row["task_id"] for row in rows]
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    def update_project(self, task_id: str, project_id: str) -> None:
+        """Update project_id for an existing task row. No-op if absent."""
+        self._run(
+            "UPDATE tasks SET project_id=?, updated_at=? WHERE task_id=?",
+            (project_id, _utc_now_iso(), task_id),
+        )
+
+    def rewrite_tags(
+        self,
+        project_id: str,
+        transform: Callable[[list[str]], list[str]],
+    ) -> int:
+        """Apply *transform* to the tags list of every task in *project_id*.
+
+        Runs under a single lock + connection: SELECT all rows, apply
+        *transform*, write back changed rows, commit once.  Returns the
+        number of rows whose tags were actually modified.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT task_id, tags FROM tasks WHERE project_id=?",
+                    (project_id,),
+                ).fetchall()
+                updated = 0
+                for row in rows:
+                    raw = row["tags"]
+                    try:
+                        current: list[str] = json.loads(raw) if raw else []
+                    except (json.JSONDecodeError, TypeError):
+                        current = []
+                    if not isinstance(current, list):
+                        current = []
+                    new_tags = transform(current)
+                    # Dedupe preserving order
+                    seen: set[str] = set()
+                    deduped: list[str] = []
+                    for t in new_tags:
+                        if t not in seen:
+                            seen.add(t)
+                            deduped.append(t)
+                    if deduped != current:
+                        conn.execute(
+                            "UPDATE tasks SET tags=?, updated_at=? WHERE task_id=?",
+                            (json.dumps(deduped), _utc_now_iso(), row["task_id"]),
+                        )
+                        updated += 1
+                conn.commit()
+                return updated
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    def update_display_fields(
+        self,
+        task_id: str,
+        *,
+        molecule_name: str | None = None,
+        task_name: str | None = None,
+        remark: str | None = None,
+        tags: list[str] | None = None,
+    ) -> bool:
+        """Update only the user-editable display columns.
+
+        When *molecule_name* is provided the ``molecule_key`` is recomputed.
+        *tags* are stored as a JSON-serialised list.  Never touches the
+        ``jobs`` table or ``spec_json``.
+
+        Returns ``True`` when the row existed and was updated.
+        """
+        existing = self.get(task_id)
+        if existing is None:
+            return False
+
+        sets: list[str] = []
+        params: list[Any] = []
+
+        if molecule_name is not None:
+            sets.append("molecule_name=?")
+            params.append(molecule_name)
+            sets.append("molecule_key=?")
+            params.append(
+                self.compute_molecule_key(
+                    existing.get("project_id"),
+                    molecule_name,
+                )
+            )
+
+        if task_name is not None:
+            sets.append("task_name=?")
+            params.append(task_name)
+
+        if remark is not None:
+            sets.append("remark=?")
+            params.append(remark)
+
+        if tags is not None:
+            sets.append("tags=?")
+            params.append(json.dumps(tags))
+
+        if not sets:
+            return False
+
+        sets.append("updated_at=?")
+        params.append(_utc_now_iso())
+        params.append(task_id)
+        self._run(
+            f"UPDATE tasks SET {', '.join(sets)} WHERE task_id=?",
+            tuple(params),
+        )
+        return True
+
+    def update_custom_name(
+        self,
+        task_id: str,
+        custom_name: str | None,
+        expected_name_revision: int,
+    ) -> dict[str, Any]:
+        """Set or clear a task's custom name within one transaction.
+
+        *custom_name* ``None`` restores the default.  Validates the name,
+        checks the revision for optimistic concurrency, bumps the revision,
+        and writes an audit row to ``organization_events`` — all atomically.
+
+        Returns a name projection dict.  Raises ``LookupError`` if the task
+        does not exist, ``NameRevisionConflictError`` on stale revision, or
+        ``ValueError`` on validation failure.
+        """
+        validated = validate_custom_name(custom_name)
+        now = _utc_now_iso()
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute("SELECT * FROM tasks WHERE task_id=?", (task_id,)).fetchall()
+                if not rows:
+                    raise LookupError(f"task {task_id!r} not found")
+
+                current = dict(rows[0])
+                current_rev = current["name_revision"]
+                if expected_name_revision != current_rev:
+                    raise NameRevisionConflictError(resolve_task_names(current))
+
+                if validated == current["custom_name"]:
+                    return resolve_task_names(current)
+
+                new_rev = current_rev + 1
+                action = "restore_default_name" if validated is None else "rename"
+                old_value = current["custom_name"]
+                new_value = validated
+
+                conn.execute(
+                    "UPDATE tasks SET custom_name=?, name_revision=?, "
+                    "name_updated_at=?, updated_at=? WHERE task_id=?",
+                    (validated, new_rev, now, now, task_id),
+                )
+                conn.execute(
+                    "INSERT INTO organization_events "
+                    "(object_type, object_id, action, old_value, new_value, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        "task",
+                        task_id,
+                        action,
+                        json.dumps(old_value),
+                        json.dumps(new_value),
+                        now,
+                    ),
+                )
+                conn.commit()
+
+                return {
+                    "default_name": current["display_name"] or "",
+                    "resolved_name": validated if validated else current["display_name"] or "",
+                    "custom_name": validated,
+                    "name_revision": new_rev,
+                    "name_updated_at": now,
+                }
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    # ------------------------------------------------------------------ #
+    # Name projections (batch, for v1 enrichment)
+    # ------------------------------------------------------------------ #
+
+    def get_name_projections_by_job_ids(self, job_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Return ``{job_id: name_projection}`` for the given job IDs.
+
+        Each projection contains ``custom_name``, ``resolved_name``,
+        ``default_name``, ``name_revision``, and ``name_updated_at``.
+        Missing task rows are silently omitted.
+        """
+        if not job_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in job_ids)
+        rows = self._query(
+            f"SELECT task_id, display_name, custom_name, name_revision, name_updated_at "
+            f"FROM tasks WHERE task_id IN ({placeholders})",
+            tuple(job_ids),
+        )
+        return {row["task_id"]: resolve_task_names(dict(row)) for row in rows}
+
+    # ------------------------------------------------------------------ #
+    # Molecule key resolution (alias-aware)
+    # ------------------------------------------------------------------ #
+
+    def compute_molecule_key(self, project_id: str | None, molecule_name: str) -> str:
+        """Resolve *molecule_name* to the effective ``molecule_key``.
+
+        Uses the two-tier alias lookup when *project_id* is available;
+        falls back to bare ``molecule_group_key`` when project is empty.
+        """
+        if not project_id:
+            from acp.scheduler.naming import molecule_group_key
+
+            return molecule_group_key(molecule_name)
+        from acp.scheduler.molecule_groups import resolve_molecule_key
+
+        return resolve_molecule_key(self, project_id, molecule_name)
+
+
+__all__ = [
+    "NameRevisionConflictError",
+    "TaskIndex",
+    "jobs_table_exists",
+    "resolve_task_names",
+    "validate_custom_name",
+]

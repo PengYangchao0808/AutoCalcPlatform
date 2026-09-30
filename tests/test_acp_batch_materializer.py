@@ -173,17 +173,21 @@ class TestResolveBatchStructuresInput:
                 {"name": "b", "tag": "TS", "source_id": "job_p1:RESULT/structures/ts.xyz"},
             ],
         }
-        resolved = v1_routes._resolve_batch_structures_input(inp, request=None)
+        resolved, snapshots = v1_routes._resolve_batch_structures_input(inp, request=None)
         assert resolved["items"][0] == {"name": "a", "xyz": _XYZ}
         assert resolved["items"][1]["xyz"] == _XYZ
         assert "source_id" not in resolved["items"][1]
         assert resolved["items"][1]["tag"] == "TS"
+        assert len(snapshots) == 1
+        assert snapshots[0]["source_id"] == "job_p1:RESULT/structures/ts.xyz"
 
     def test_passes_through_without_source_ids(self) -> None:
         from acp.api import v1_routes
 
         inp = {"source_type": "batch_structures", "items": [{"name": "a", "xyz": _XYZ}]}
-        assert v1_routes._resolve_batch_structures_input(inp, request=None) is inp
+        resolved, snapshots = v1_routes._resolve_batch_structures_input(inp, request=None)
+        assert resolved is inp
+        assert snapshots == []
 
     def test_bad_source_id_raises_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from fastapi import HTTPException

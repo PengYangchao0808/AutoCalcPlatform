@@ -16,14 +16,34 @@ from pydantic import BaseModel, Field, field_validator
 from acp.api.v1_schemas import normalize_node_tags
 
 __all__ = [
+    "V2BatchOpItemResult",
+    "V2BatchOpsRequest",
+    "V2BatchOpsResult",
     "V2FileEntry",
+    "V2MoleculeAliasUpsert",
+    "V2MoleculeGroupInfo",
+    "V2MoleculeGroupSuggestion",
+    "V2MoleculeGroupUpsert",
+    "V2MoleculeMergeRequest",
     "V2ProjectSummary",
     "V2TaskBatchItem",
     "V2TaskBatchRequest",
     "V2TaskBatchResponse",
     "V2TaskDetail",
+    "V2TaskPatchRequest",
+    "V2TaskRowModel",
     "V2TaskSummary",
+    "V2TaskViewFacetsModel",
+    "V2TaskViewGroupModel",
+    "V2TaskViewResponse",
+    "V2TagDeleteRequest",
+    "V2TagInfo",
+    "V2TagMergeRequest",
+    "V2TagOpResult",
+    "V2TagRenameRequest",
     "V2TreeResponse",
+    "V2LineageNode",
+    "V2LineageResponse",
 ]
 
 
@@ -53,6 +73,11 @@ class V2TaskSummary(BaseModel):
     project_id: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    custom_name: str | None = None
+    resolved_name: str = ""
+    default_name: str = ""
+    name_revision: int = 0
+    name_updated_at: str | None = None
 
 
 class V2TaskDetail(V2TaskSummary):
@@ -122,3 +147,247 @@ class V2TaskBatchResponse(BaseModel):
 
     created: list[V2TaskSummary] = Field(default_factory=list)
     failed: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ── Task-view models (T3) ────────────────────────────────────────────────
+
+
+class V2TaskRowModel(BaseModel):
+    """Flat task row for the grouped task view, aligned with
+    ``task_views._row_to_task`` output plus optional active-row enrichment."""
+
+    id: str
+    status: str
+    group_id: str | None = None
+    project_id: str = ""
+    project_name: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+    started_at: str | None = None
+    completed_at: str | None = None
+    last_activity_at: str | None = None
+    current_stage: str | None = None
+    progress: float | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    display_name: str = ""
+    task_dir_name: str = ""
+    workflow: str = ""
+    tags: list[str] = Field(default_factory=list)
+    archived: bool = False
+    batch_id: str | None = None
+    spec: dict[str, Any] = Field(default_factory=dict)
+    custom_name: str | None = None
+    resolved_name: str = ""
+    default_name: str = ""
+    name_revision: int = 0
+    name_updated_at: str | None = None
+    # Active-row enrichment fields (populated only for active-status rows)
+    stage_index: int | None = None
+    stage_total: int | None = None
+    stage_detail: str | None = None
+    progress_state: str | None = None
+    live_status: dict[str, Any] | None = None
+    display_method: str | None = None
+
+
+class V2TaskViewGroupModel(BaseModel):
+    """One group in the grouped task view response."""
+
+    key: str
+    display_name: str = ""
+    unassigned: bool = False
+    retired: bool = False
+    count: int = 0
+    truncated: bool = False
+    min_created_at: str | None = None
+    jobs: list[V2TaskRowModel] = Field(default_factory=list)
+
+
+class V2TaskViewFacetsModel(BaseModel):
+    """Faceted counts for each filter dimension."""
+
+    statuses: dict[str, int] = Field(default_factory=dict)
+    workflows: list[dict[str, Any]] = Field(default_factory=list)
+    molecules: list[dict[str, Any]] = Field(default_factory=list)
+    tags: list[dict[str, Any]] = Field(default_factory=list)
+    batches: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class V2TaskViewResponse(BaseModel):
+    """Full task-view response with groups, facets, counts, and query echo."""
+
+    groups: list[V2TaskViewGroupModel] = Field(default_factory=list)
+    facets: V2TaskViewFacetsModel = Field(default_factory=V2TaskViewFacetsModel)
+    total: int = 0
+    truncated: bool = False
+    counts: dict[str, int] = Field(default_factory=dict)
+    query: dict[str, Any] = Field(default_factory=dict)
+
+
+class V2TaskPatchRequest(BaseModel):
+    """Request body for PATCH /tasks/{task_id} — user-editable display fields only.
+
+    ``custom_name``: explicit ``null`` restores the default name; omitted
+    leaves it unchanged.  ``expected_name_revision`` is required when
+    ``custom_name`` is present (optimistic-concurrency guard).
+    """
+
+    molecule_name: str | None = None
+    task_name: str | None = None
+    remark: str | None = None
+    tags: list[str] | None = None
+    custom_name: str | None = None
+    expected_name_revision: int | None = None
+
+
+# ── Tag registry models (T7) ──────────────────────────────────────────
+
+
+class V2TagInfo(BaseModel):
+    """One tag entry with its usage count across the project."""
+
+    tag: str
+    count: int
+
+
+class V2TagRenameRequest(BaseModel):
+    """Rename a tag across all tasks in a project."""
+
+    source: str
+    target: str
+
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("target must be non-empty")
+        if len(v) > 32:
+            raise ValueError("target must be ≤ 32 characters")
+        return v
+
+
+class V2TagMergeRequest(BaseModel):
+    """Merge multiple source tags into a single target tag."""
+
+    sources: list[str] = Field(min_length=1)
+    target: str
+
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("target must be non-empty")
+        if len(v) > 32:
+            raise ValueError("target must be ≤ 32 characters")
+        return v
+
+
+class V2TagDeleteRequest(BaseModel):
+    """Remove a tag from all tasks (never deletes tasks themselves)."""
+
+    tag: str
+
+
+class V2TagOpResult(BaseModel):
+    """Result of a tag registry mutation (rename/merge/delete)."""
+
+    updated: int
+
+
+class V2BatchOpsRequest(BaseModel):
+    """Batch operation on multiple tasks.
+
+    Supported ops: add_tags, remove_tags, archive, unarchive, set_molecule_name.
+    """
+
+    task_ids: list[str] = Field(min_length=1, max_length=500)
+    op: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class V2BatchOpItemResult(BaseModel):
+    """Per-task outcome of a batch operation."""
+
+    task_id: str
+    ok: bool
+    error: str | None = None
+
+
+class V2BatchOpsResult(BaseModel):
+    """Aggregate result of a batch-ops request."""
+
+    results: list[V2BatchOpItemResult] = Field(default_factory=list)
+    updated: int = 0
+
+
+# ── Molecule group / alias models (T8) ──────────────────────────────────
+
+
+class V2MoleculeGroupInfo(BaseModel):
+    """One molecule group with its alias list and task count."""
+
+    group_key: str
+    display_name: str
+    aliases: list[str] = Field(default_factory=list)
+    task_count: int = 0
+
+
+class V2MoleculeMergeRequest(BaseModel):
+    """Merge one or more alias keys into a target key.
+
+    All tasks whose ``molecule_key`` matches any ``alias_key`` will be
+    rewritten to ``target_key``.
+    """
+
+    alias_keys: list[str] = Field(min_length=1)
+    target_key: str
+
+
+class V2MoleculeGroupSuggestion(BaseModel):
+    """A read-only merge hint — never auto-applied."""
+
+    a: str
+    b: str
+    reason: str
+
+
+class V2MoleculeGroupUpsert(BaseModel):
+    """Create or update a molecule group's display name."""
+
+    group_key: str
+    display_name: str
+
+
+class V2MoleculeAliasUpsert(BaseModel):
+    """Register an alias mapping to a group."""
+
+    alias_key: str
+    group_key: str
+
+
+# ── Lineage models (T12) ───────────────────────────────────────────────
+
+
+class V2LineageNode(BaseModel):
+    """One node in the lineage chain (upstream or downstream)."""
+
+    task_id: str
+    workflow: str = ""
+    status: str = ""
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    relation: str = ""
+    depth: int = 0
+
+
+class V2LineageResponse(BaseModel):
+    """Upstream/downstream lineage for a task (read-only)."""
+
+    task_id: str
+    upstream: list[V2LineageNode] = Field(default_factory=list)
+    downstream: list[V2LineageNode] = Field(default_factory=list)

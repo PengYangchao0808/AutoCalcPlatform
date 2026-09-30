@@ -169,7 +169,10 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         ),
     )
     p.set_defaults(workflow="irc")
-    p.add_argument("--input", "-i", required=True, help="Transition-state XYZ input")
+    p.add_argument("--input", "-i", required=True, help="Verified transition-state XYZ snapshot")
+    proof = p.add_mutually_exclusive_group(required=True)
+    proof.add_argument("--ts-provenance", help="Verified upstream TS result provenance file")
+    proof.add_argument("--ts-provenance-json", help="Scheduler supplied TS provenance JSON")
     p.add_argument("--input-role", choices=["transition_state"], help="Explicit input role")
     p.add_argument(
         "--direction",
@@ -178,13 +181,75 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         help="IRC direction (default: both)",
     )
     p.add_argument("--output", "-o", default="./irc_output", help="Output directory")
-    p.add_argument("--method", default="r2SCAN-3c", help="IRC method (default: r2SCAN-3c)")
+    p.add_argument("--method", default="", help="Inherited TS method (scheduler supplied)")
     p.add_argument("--basis", default="", help="Basis set (default: empty)")
     p.add_argument("--maxpoints", "--max-points", dest="maxpoints", type=int, default=100)
     p.add_argument("--step", type=float, default=0.1, help="IRC step size (default: 0.1)")
-    p.add_argument("--charge", type=int, default=0)
-    p.add_argument("--multiplicity", type=int, default=1)
+    p.add_argument("--charge", type=int, default=None)
+    p.add_argument("--multiplicity", type=int, default=None)
     p.add_argument("--name", type=str, help="Task name")
+    p.add_argument("--nproc", type=int, help="Number of CPU cores")
+    p.add_argument("--mem", type=str, help="Memory limit")
+    p.add_argument("--config", type=str, help="Configuration YAML file")
+    p.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    # TS Mode directed optimization (source-bundle driven, plan §8)
+    p = run_sub.add_parser(
+        "tsmode",
+        help="Directed TS optimization along a chosen imaginary mode",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  acp run tsmode --source-bundle bundle.json --source-mode-index 7 --output ./out\n"
+            "\n"
+            "bundle.json references validated frequency-source files:\n"
+            '  {"files": {"output": "freq.out", "hessian": "freq.hess"},\n'
+            '   "charge": 0, "multiplicity": 1,\n'
+            '   "level": {"method": "r2SCAN-3c", "basis": ""},\n'
+            '   "origin": {"kind": "files"}}'
+        ),
+    )
+    p.set_defaults(workflow="tsmode")
+    p.add_argument(
+        "--source-bundle",
+        required=True,
+        help="Frequency-source bundle description (bundle.json)",
+    )
+    p.add_argument(
+        "--source-mode-index",
+        type=int,
+        required=True,
+        help="Native printed mode index of the target imaginary frequency",
+    )
+    p.add_argument("--output", "-o", default="./tsmode_output", help="Output directory")
+    p.add_argument("--name", type=str, help="Task name")
+    p.add_argument("--max-steps", type=int, help="Geometry optimization MaxIter")
+    p.add_argument("--recalc-hess", type=int, help="Recalc Hessian every N steps (0=off)")
+    p.add_argument("--trust-radius", type=float, help="Initial trust radius")
+    p.add_argument(
+        "--retry-limit",
+        type=int,
+        default=2,
+        help="SCF rescue attempts that preserve the target (default: 2)",
+    )
+    p.add_argument(
+        "--no-final-frequency",
+        action="store_true",
+        help="Skip the fixed final frequency verification stage",
+    )
+    p.add_argument(
+        "--allow-unverified-mapping",
+        action="store_true",
+        help=(
+            "Proceed although the TS_Mode eigenvalue-rank mapping is not yet "
+            "verified against real ORCA samples (plan §6, milestone P0)"
+        ),
+    )
     p.add_argument("--nproc", type=int, help="Number of CPU cores")
     p.add_argument("--mem", type=str, help="Memory limit")
     p.add_argument("--config", type=str, help="Configuration YAML file")
@@ -564,6 +629,37 @@ Examples:
     pes.add_argument("--scan-end", type=float, help="Scan end distance (Angstrom)")
     pes.add_argument("--scan-points", type=int, help="Scan point count (3–101)")
     pes.add_argument("--scan-method", help="Scan optimisation method (default: GFN2-xTB)")
+    pes.add_argument("--scan-basis", help="Scan optimisation basis (3c methods: built-in)")
+    pes.add_argument(
+        "--scan-dispersion",
+        help="Scan optimisation dispersion correction (none/D3/D3BJ/D4; 3c methods: built-in)",
+    )
+    pes.add_argument(
+        "--scan-solvent-model",
+        choices=["none", "CPCM", "SMD"],
+        help="Scan optimisation solvation model (default: none)",
+    )
+    pes.add_argument("--scan-solvent", help="Scan optimisation solvent (e.g. water)")
+    pes.add_argument(
+        "--scan-grid",
+        choices=["DefGrid1", "DefGrid2", "DefGrid3"],
+        help="Scan optimisation ORCA integration grid (default: ORCA default)",
+    )
+    pes.add_argument(
+        "--scan-scf-convergence",
+        choices=["normal", "tight", "verytight"],
+        help="Scan optimisation SCF convergence (default: ORCA default)",
+    )
+    pes.add_argument(
+        "--scan-scf-max-iter",
+        type=int,
+        help="Scan optimisation SCF max iterations (default: 200)",
+    )
+    pes.add_argument(
+        "--scan-ri-approximation",
+        choices=["none", "RI", "RIJCOSX", "RIJK"],
+        help="Scan optimisation RI approximation (3c methods: locked)",
+    )
     pes.add_argument("--sp-method", help="Single-point method (default: B97-3c)")
     pes.add_argument("--sp-basis", help="Single-point basis (composite methods: none)")
     pes.add_argument("--no-sp", action="store_true", help="Disable the single-point refinement")
@@ -642,6 +738,12 @@ Examples:
         ),
     )
     batch.add_argument("--select", help="Comma-separated item or candidate ids")
+    batch.add_argument(
+        "--electronic-state-json",
+        help="Job-level electronic-state module as JSON (used by the scheduler)",
+    )
+    batch.add_argument("--spin-preset", help="Built-in electronic-state preset id")
+    batch.add_argument("--spin-config", help="Electronic-state module YAML/JSON file")
     batch.add_argument(
         "--method",
         "--optimization-method",
@@ -750,6 +852,56 @@ Examples:
         default=None,
         help="TS role Hessian recalculation: auto / off / integer interval (default 5)",
     )
+    # ── per-role optimizer / SCF / rescue overrides ──────────────────────
+    for _role_flag_prefix, _role_dest_prefix, _role_label in (
+        ("--minimum", "minimum_", "INT"),
+        ("--transition-state", "transition_state_", "TS"),
+    ):
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-max-iter",
+            type=int,
+            default=None,
+            help=f"{_role_label} role max optimization iterations override",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-convergence",
+            type=str.lower,
+            choices=["loose", "normal", "tight", "verytight"],
+            default=None,
+            help=f"{_role_label} role optimization convergence level",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-scf-max-iter",
+            type=int,
+            default=None,
+            help=f"{_role_label} role max SCF iterations override",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-scf-convergence",
+            type=str.lower,
+            choices=["loose", "tight", "verytight"],
+            default=None,
+            help=f"{_role_label} role SCF convergence level",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-scf-strategy",
+            type=str.lower,
+            choices=["normal", "slowconv", "soscf"],
+            default=None,
+            help=f"{_role_label} role SCF convergence strategy",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-rescue-policy",
+            choices=["off", "adaptive"],
+            default=None,
+            help=f"{_role_label} role rescue strategy override",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-max-rescue",
+            type=int,
+            default=None,
+            help=f"{_role_label} role maximum rescue attempts override",
+        )
     batch.add_argument(
         "--opt-rescue-policy",
         choices=["off", "adaptive"],
@@ -770,15 +922,17 @@ Examples:
     )
     batch.add_argument(
         "--scf-convergence",
+        type=str.lower,
         choices=["normal", "tight", "verytight"],
         default=None,
-        help="SCF convergence level",
+        help="SCF convergence level (case-insensitive)",
     )
     batch.add_argument(
         "--scf-strategy",
+        type=str.lower,
         choices=["normal", "slowconv", "soscf"],
         default=None,
-        help="SCF convergence accelerator strategy",
+        help="SCF convergence accelerator strategy (case-insensitive)",
     )
     scf_inherit = batch.add_mutually_exclusive_group()
     scf_inherit.add_argument(
@@ -810,6 +964,12 @@ Examples:
     batch.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
     batch.add_argument("--mem", type=str, help="Memory limit (overrides config)")
     batch.add_argument("--config", type=str, help="Configuration YAML file")
+    batch.add_argument(
+        "--batch-roles-json",
+        type=str,
+        default=None,
+        help="New-style per-role config as JSON string (e.g. '{\"int\":{...},\"ts\":{...}}')",
+    )
     batch.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -1289,6 +1449,22 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
         coordinate["n_points"] = args.scan_points
     if getattr(args, "scan_method", None):
         protocol.setdefault("scan_optimizer", {})["method"] = args.scan_method
+    # DFT scan-level flags (2026-09): setdefault semantics — a scheduler
+    # --scan-config payload always wins over CLI flags.
+    _scan_level_flags = {
+        "scan_basis": "basis",
+        "scan_dispersion": "dispersion",
+        "scan_solvent_model": "solvent_model",
+        "scan_solvent": "solvent",
+        "scan_grid": "grid",
+        "scan_scf_convergence": "scf_convergence",
+        "scan_scf_max_iter": "scf_max_iterations",
+        "scan_ri_approximation": "ri_approximation",
+    }
+    for arg_name, protocol_key in _scan_level_flags.items():
+        value = getattr(args, arg_name, None)
+        if value is not None:
+            protocol.setdefault("scan_optimizer", {}).setdefault(protocol_key, value)
     if getattr(args, "sp_method", None):
         protocol.setdefault("single_point", {})["method"] = args.sp_method
     if getattr(args, "sp_basis", None):
@@ -1332,61 +1508,96 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     else:
         source = args.items_file or args.from_artifact
 
-    method_kwargs: dict[str, Any] = {
-        "optimization_method": args.optimization_method,
-        "optimization_basis": args.optimization_basis,
-        "single_point_method": args.single_point_method,
-        "single_point_basis": args.single_point_basis,
-        "temperature": args.temperature,
-        "pressure": args.pressure,
-        "scale_factor": args.scale_factor,
-        "minimum_method": args.minimum_method or "",
-        "minimum_basis": args.minimum_basis or "",
-        "transition_state_method": args.transition_state_method or "",
-        "transition_state_basis": args.transition_state_basis or "",
-    }
-    if args.opt_max_iter is not None:
-        method_kwargs["opt_max_iter"] = args.opt_max_iter
-    if args.opt_convergence is not None:
-        method_kwargs["opt_convergence"] = args.opt_convergence
-    if args.opt_trust_radius is not None:
-        method_kwargs["opt_trust_radius"] = args.opt_trust_radius
-    if args.opt_initial_hessian is not None:
-        method_kwargs["opt_initial_hessian"] = args.opt_initial_hessian
-    if args.opt_recalc_hess is not None:
-        method_kwargs["opt_recalc_hess"] = normalize_recalc_hess(args.opt_recalc_hess)
-    if getattr(args, "minimum_opt_trust_radius", None) is not None:
-        method_kwargs["minimum_opt_trust_radius"] = args.minimum_opt_trust_radius
-    if getattr(args, "minimum_opt_initial_hessian", None) is not None:
-        method_kwargs["minimum_opt_initial_hessian"] = args.minimum_opt_initial_hessian
-    if getattr(args, "minimum_opt_recalc_hess", None) is not None:
-        method_kwargs["minimum_opt_recalc_hess"] = normalize_recalc_hess(
-            args.minimum_opt_recalc_hess
-        )
-    if getattr(args, "transition_state_opt_trust_radius", None) is not None:
-        method_kwargs["transition_state_opt_trust_radius"] = (
-            args.transition_state_opt_trust_radius
-        )
-    if getattr(args, "transition_state_opt_initial_hessian", None) is not None:
-        method_kwargs["transition_state_opt_initial_hessian"] = (
-            args.transition_state_opt_initial_hessian
-        )
-    if getattr(args, "transition_state_opt_recalc_hess", None) is not None:
-        method_kwargs["transition_state_opt_recalc_hess"] = normalize_recalc_hess(
-            args.transition_state_opt_recalc_hess
-        )
-    if args.opt_rescue_policy is not None:
-        method_kwargs["opt_rescue_policy"] = args.opt_rescue_policy
-    if args.opt_max_rescue is not None:
-        method_kwargs["opt_max_rescue"] = args.opt_max_rescue
-    if args.scf_max_iter is not None:
-        method_kwargs["scf_max_iter"] = args.scf_max_iter
-    if args.scf_convergence is not None:
-        method_kwargs["scf_convergence"] = args.scf_convergence
-    if args.scf_strategy is not None:
-        method_kwargs["scf_strategy"] = args.scf_strategy
-    if args.scf_orbital_inherit is not None:
-        method_kwargs["scf_orbital_inherit"] = args.scf_orbital_inherit
+    electronic_state = None
+    if args.electronic_state_json:
+        try:
+            electronic_state = json.loads(args.electronic_state_json)
+        except json.JSONDecodeError as exc:
+            logger.error("Invalid --electronic-state-json: %s", exc)
+            return 2
+        if not isinstance(electronic_state, dict):
+            logger.error("--electronic-state-json must be a JSON object")
+            return 2
+    else:
+        electronic_state = _resolve_spin_flags(args.spin_preset, args.spin_config)
+
+    batch_roles_json = getattr(args, "batch_roles_json", None)
+    if batch_roles_json is not None:
+        try:
+            parsed_roles = json.loads(batch_roles_json)
+        except json.JSONDecodeError as exc:
+            logger.error("Invalid --batch-roles-json: %s", exc)
+            return 2
+        method_kwargs: dict[str, Any] = {"batch_roles": parsed_roles}
+    else:
+        method_kwargs = {
+            "optimization_method": args.optimization_method,
+            "optimization_basis": args.optimization_basis,
+            "single_point_method": args.single_point_method,
+            "single_point_basis": args.single_point_basis,
+            "temperature": args.temperature,
+            "pressure": args.pressure,
+            "scale_factor": args.scale_factor,
+            "minimum_method": args.minimum_method or "",
+            "minimum_basis": args.minimum_basis or "",
+            "transition_state_method": args.transition_state_method or "",
+            "transition_state_basis": args.transition_state_basis or "",
+        }
+        if args.opt_max_iter is not None:
+            method_kwargs["opt_max_iter"] = args.opt_max_iter
+        if args.opt_convergence is not None:
+            method_kwargs["opt_convergence"] = args.opt_convergence
+        if args.opt_trust_radius is not None:
+            method_kwargs["opt_trust_radius"] = args.opt_trust_radius
+        if args.opt_initial_hessian is not None:
+            method_kwargs["opt_initial_hessian"] = args.opt_initial_hessian
+        if args.opt_recalc_hess is not None:
+            method_kwargs["opt_recalc_hess"] = normalize_recalc_hess(args.opt_recalc_hess)
+        if getattr(args, "minimum_opt_trust_radius", None) is not None:
+            method_kwargs["minimum_opt_trust_radius"] = args.minimum_opt_trust_radius
+        if getattr(args, "minimum_opt_initial_hessian", None) is not None:
+            method_kwargs["minimum_opt_initial_hessian"] = args.minimum_opt_initial_hessian
+        if getattr(args, "minimum_opt_recalc_hess", None) is not None:
+            method_kwargs["minimum_opt_recalc_hess"] = normalize_recalc_hess(
+                args.minimum_opt_recalc_hess
+            )
+        if getattr(args, "transition_state_opt_trust_radius", None) is not None:
+            method_kwargs["transition_state_opt_trust_radius"] = (
+                args.transition_state_opt_trust_radius
+            )
+        if getattr(args, "transition_state_opt_initial_hessian", None) is not None:
+            method_kwargs["transition_state_opt_initial_hessian"] = (
+                args.transition_state_opt_initial_hessian
+            )
+        if getattr(args, "transition_state_opt_recalc_hess", None) is not None:
+            method_kwargs["transition_state_opt_recalc_hess"] = normalize_recalc_hess(
+                args.transition_state_opt_recalc_hess
+            )
+        for _prefix in ("minimum_", "transition_state_"):
+            for _name in (
+                "opt_max_iter",
+                "opt_convergence",
+                "scf_max_iter",
+                "scf_convergence",
+                "scf_strategy",
+                "opt_rescue_policy",
+                "opt_max_rescue",
+            ):
+                _value = getattr(args, f"{_prefix}{_name}", None)
+                if _value is not None:
+                    method_kwargs[f"{_prefix}{_name}"] = _value
+        if args.opt_rescue_policy is not None:
+            method_kwargs["opt_rescue_policy"] = args.opt_rescue_policy
+        if args.opt_max_rescue is not None:
+            method_kwargs["opt_max_rescue"] = args.opt_max_rescue
+        if args.scf_max_iter is not None:
+            method_kwargs["scf_max_iter"] = args.scf_max_iter
+        if args.scf_convergence is not None:
+            method_kwargs["scf_convergence"] = args.scf_convergence
+        if args.scf_strategy is not None:
+            method_kwargs["scf_strategy"] = args.scf_strategy
+        if args.scf_orbital_inherit is not None:
+            method_kwargs["scf_orbital_inherit"] = args.scf_orbital_inherit
 
     try:
         result = run_batch_optimize(
@@ -1397,7 +1608,8 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
             charge=args.charge,
             multiplicity=args.multiplicity,
             select=_parse_select(args.select),
-            methods=BatchMethodOptions(**method_kwargs),
+            methods=BatchMethodOptions.from_method_dict(method_kwargs),
+            electronic_state=electronic_state,
             layout_mode=args.layout_mode,
             progress_reporter=reporter,
         )
@@ -2608,6 +2820,8 @@ def _handle_scan(args: argparse.Namespace) -> int:
 
 def _handle_irc(args: argparse.Namespace) -> int:
     """Execute an independent IRC request from one transition-state artifact."""
+    import hashlib
+
     from acp.calculations.contracts import StructureArtifact
     from acp.calculations.progress import ProgressReporter
     from acp.workflows.irc import run_irc_workflow
@@ -2622,19 +2836,37 @@ def _handle_irc(args: argparse.Namespace) -> int:
     stages.append("validating")
     reporter = ProgressReporter(Path(args.output), job_name="irc", stages=stages)
     try:
+        proof_text = args.ts_provenance_json or Path(args.ts_provenance).read_text(encoding="utf-8")
+        proof = json.loads(proof_text)
+        if not isinstance(proof, dict) or proof.get("schema") != "irc_ts_source_v1":
+            raise ValueError("IRC requires verified TS source provenance")
+        xyz_hash = hashlib.sha256(Path(args.input).read_bytes()).hexdigest()
+        if xyz_hash != proof.get("geometry_sha256"):
+            raise ValueError("IRC TS geometry differs from its verified source")
+        method = str(proof.get("method") or "")
+        basis = str(proof.get("basis") or "")
+        charge = int(proof["charge"])
+        multiplicity = int(proof["multiplicity"])
+        if not method or (args.method and args.method != method) or (args.basis and args.basis != basis):
+            raise ValueError("IRC method and basis must match the verified TS source")
+        if args.charge is not None and args.charge != charge:
+            raise ValueError("IRC charge must match the verified TS source")
+        if args.multiplicity is not None and args.multiplicity != multiplicity:
+            raise ValueError("IRC multiplicity must match the verified TS source")
         result = run_irc_workflow(
             input_artifact=StructureArtifact(path=Path(args.input), source="cli"),
             directions=directions,
             output_dir=Path(args.output),
             config=_build_config(args),
-            method=args.method,
-            basis=args.basis,
+            method=method,
+            basis=basis,
             maxpoints=args.maxpoints,
             step=args.step,
             input_role=args.input_role,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
+            charge=charge,
+            multiplicity=multiplicity,
             progress_reporter=reporter,
+            source_provenance=proof,
         )
     except ValueError as exc:
         logger.error("IRC input error: %s", exc)
@@ -2656,6 +2888,69 @@ def _handle_irc(args: argparse.Namespace) -> int:
         return 0
     logger.error("IRC failed: %s", result.error)
     reporter.fail(result.error or "IRC failed")
+    return 1
+
+
+def _handle_tsmode(args: argparse.Namespace) -> int:
+    """Run the TS Mode directed optimization workflow from a bundle file."""
+    from acp.calculations.progress import ProgressReporter
+    from acp.calculations.tsmode import TsmodeError
+    from acp.workflows.tsmode import run_tsmode
+
+    setup_logging(args.log_level)
+    reporter = ProgressReporter(
+        Path(args.output),
+        job_name="tsmode",
+        stages=[
+            "prepare_source",
+            "resolve_target",
+            "optimize_ts",
+            "frequency_final",
+            "validate_ts",
+            "publish_results",
+        ],
+    )
+    try:
+        result = run_tsmode(
+            args.source_bundle,
+            args.source_mode_index,
+            output_dir=args.output,
+            config=_build_config(args),
+            name=args.name,
+            optimization_overrides={
+                "max_iterations": args.max_steps,
+                "recalc_hess": args.recalc_hess,
+                "trust_radius": args.trust_radius,
+                "retry_limit": args.retry_limit,
+                "final_frequency": (not args.no_final_frequency) or None,
+                "allow_unverified_mapping": args.allow_unverified_mapping or None,
+            },
+            resources={"nproc": args.nproc, "mem": args.mem},
+            progress_reporter=reporter,
+        )
+    except TsmodeError as exc:
+        logger.error("TS Mode %s: %s", exc.error_code, exc.detail)
+        reporter.fail(f"{exc.error_code}: {exc.detail}")
+        return 2
+    except (ValueError, FileNotFoundError) as exc:
+        logger.error("TS Mode input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except KeyboardInterrupt:
+        logger.warning("TS Mode interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+    except (OSError, RuntimeError, TypeError) as exc:
+        logger.exception("TS Mode failed: %s", exc)
+        reporter.fail(str(exc))
+        return 1
+
+    if result.status == "completed":
+        logger.info("TS Mode completed")
+        reporter.complete()
+        return 0
+    logger.error("TS Mode failed: %s", result.error)
+    reporter.fail(result.error or "tsmode failed")
     return 1
 
 
@@ -3133,6 +3428,7 @@ def main(argv: list[str] | None = None) -> int:
             "frequency": _handle_frequency,
             "scan": _handle_scan,
             "irc": _handle_irc,
+            "tsmode": _handle_tsmode,
             "casscf": _handle_casscf,
             "xtb_optimize": _handle_xtb_optimize,
         }

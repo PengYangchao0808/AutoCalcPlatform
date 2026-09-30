@@ -20,10 +20,12 @@ from starlette.responses import Response
 
 from acp import __version__
 from acp.api.batch_preview import router as batch_preview_router
+from acp.api.drafts import router as drafts_router
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
 from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
 from acp.api.v2_routes import router as v2_router
+from acp.api.v2_structure_sources import router as v2_struct_router
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
@@ -228,9 +230,11 @@ def create_app(
         )
 
     app.include_router(v1_router, prefix="/api/v1")
+    app.include_router(drafts_router, prefix="/api/v1")
     app.include_router(mechanism_readonly_router, prefix="/api/v1")
     app.include_router(batch_preview_router, prefix="/api/v1")
     app.include_router(v2_router, prefix="/api/v2")
+    app.include_router(v2_struct_router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
 
     # Without these mounts /js|/css 404 and the viewer tabs render blank (46a5626 regression).

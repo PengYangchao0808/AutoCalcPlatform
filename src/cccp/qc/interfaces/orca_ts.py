@@ -12,12 +12,15 @@ Author: QCcalc Team
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
+
+from cccp.utils.constants import HARTREE_TO_KCAL
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,24 @@ _OPT_LEVEL_KEYWORDS = {
     "tight": "TightOpt",
     "verytight": "VeryTightOpt",
 }
+
+# ORCA IRC output files: ``*_IRC_[FB]_trj.xyz`` (per-direction path, energy in
+# each frame comment) and ``*_IRC_[FB].xyz`` (endpoint).  ``*_IRC_Full_trj.xyz``
+# interleaves both directions with the TS and is deliberately excluded.
+_IRC_TRJ_FILE_RE = re.compile(r"_IRC_([FB])_trj\.xyz$", re.IGNORECASE)
+_IRC_ENDPOINT_FILE_RE = re.compile(r"_IRC_([FB])\.xyz$", re.IGNORECASE)
+_IRC_DIRECTION_BANNER_RE = re.compile(r"\b(FORWARD|BACKWARD|REVERSE)\b.*\bIRC\b", re.IGNORECASE)
+_IRC_ITERATION_ROW_RE = re.compile(
+    r"^\s*(\d+)\s+([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)"
+    r"\s+([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)"
+    r"\s+([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)"
+    r"\s+([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)\s*$"
+)
+_IRC_ENERGY_COMMENT_RE = re.compile(r"(?:^|\s)E\s+([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)")
+_IRC_ENERGY_ANCHORED_RE = re.compile(
+    r"(?:energy|e)\s*[=:]\s*([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)", re.IGNORECASE
+)
+_IRC_ENERGY_FLOAT_RE = re.compile(r"([-+]?\d+\.\d+(?:[EeDd][-+]?\d+)?)")
 
 
 @dataclass(frozen=True)
@@ -71,6 +92,16 @@ class TsOptResult:
             return None
         return min(self.all_frequencies)
 
+    @property
+    def energy(self) -> float | None:
+        """Alias so ``to_qc_result`` normalization can lift the energy."""
+        return self.energy_hartree
+
+    @property
+    def frequencies(self) -> list[float]:
+        """Alias so ``to_qc_result`` normalization can lift frequencies."""
+        return list(self.all_frequencies)
+
 
 @dataclass(frozen=True)
 class IrcResult:
@@ -94,6 +125,190 @@ class IrcResult:
     log_file: Path | None = None
     error_message: str | None = None
     final_geometries: dict[str, NDArray[np.float64]] = field(default_factory=dict)
+    trajectory_files: dict[str, Path] | None = None
+
+
+@dataclass(frozen=True)
+class IrcPathPoint:
+    """One point on an ORCA IRC path (geometry + energy, same frame).
+
+    Attributes:
+        direction: ``"forward"`` or ``"reverse"``.
+        index: 0-based position within the direction, in ORCA calculation order.
+        energy_hartree: Frame energy parsed from the trajectory comment.
+        coordinates: ``(N, 3)`` geometry in Å.
+        symbols: Element symbols for the frame.
+        comment: Raw ORCA frame comment.
+    """
+
+    direction: str
+    index: int
+    energy_hartree: float | None = None
+    coordinates: NDArray[np.float64] | None = None
+    symbols: list[str] = field(default_factory=list)
+    comment: str = ""
+
+
+def _irc_float(value: str) -> float:
+    """Parse ORCA's Fortran ``D`` exponent notation."""
+    return float(value.replace("D", "E").replace("d", "e"))
+
+
+def irc_energy_from_comment(comment: str) -> float | None:
+    """Extract the path energy embedded in an ORCA IRC frame comment.
+
+    Handles the native ``E -151.527934162309`` form, ``Energy:``/``E =``
+    anchors, and finally a lone decimal float.  Returns ``None`` when no
+    unambiguous energy is present.
+    """
+    if not comment:
+        return None
+    native = _IRC_ENERGY_COMMENT_RE.search(comment)
+    if native:
+        return _irc_float(native.group(1))
+    anchored = _IRC_ENERGY_ANCHORED_RE.search(comment)
+    if anchored:
+        return _irc_float(anchored.group(1))
+    decimals = _IRC_ENERGY_FLOAT_RE.findall(comment)
+    if len(decimals) == 1:
+        return _irc_float(decimals[0])
+    return None
+
+
+def discover_irc_trajectory_files(work_dir: Path, *, stem: str | None = None) -> dict[str, Path]:
+    """Map direction to the best ORCA IRC file found in *work_dir*.
+
+    Per-direction trajectory files (``*_IRC_[FB]_trj.xyz``) are preferred over
+    single-frame endpoints (``*_IRC_[FB].xyz``).  ``*_IRC_Full_trj.xyz`` is
+    ignored because it interleaves both directions with the TS.  When *stem*
+    is given, a file whose name starts with it wins over an unrelated sibling.
+    """
+    work_dir = Path(work_dir)
+    trajectories: dict[str, Path] = {}
+    endpoints: dict[str, Path] = {}
+    try:
+        paths = list(work_dir.glob("*.xyz"))
+    except OSError:
+        return {}
+    for path in paths:
+        name = path.name
+        trj_match = _IRC_TRJ_FILE_RE.search(name)
+        if trj_match:
+            direction = "forward" if trj_match.group(1).upper() == "F" else "reverse"
+            if direction not in trajectories or (stem and name.startswith(stem)):
+                trajectories[direction] = path
+            continue
+        endpoint_match = _IRC_ENDPOINT_FILE_RE.search(name)
+        if endpoint_match:
+            direction = "forward" if endpoint_match.group(1).upper() == "F" else "reverse"
+            if direction not in endpoints or (stem and name.startswith(stem)):
+                endpoints[direction] = path
+    chosen: dict[str, Path] = {}
+    for direction in ("forward", "reverse"):
+        path = trajectories.get(direction) or endpoints.get(direction)
+        if path is not None:
+            chosen[direction] = path
+    return chosen
+
+
+def parse_irc_trajectory_xyz(path: Path, direction: str) -> list[IrcPathPoint]:
+    """Parse a (possibly partial) ORCA IRC trajectory into ordered points.
+
+    Walks standard XYZ blocks and stops at the first incomplete trailing
+    frame, so a file being written by a running ORCA job never yields a
+    half-read point.  Each complete frame keeps its comment energy and
+    geometry together.
+    """
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        logger.debug("Cannot read IRC trajectory %s", path, exc_info=True)
+        return []
+    lines = text.splitlines()
+    points: list[IrcPathPoint] = []
+    offset = 0
+    index = 0
+    while offset < len(lines):
+        header = lines[offset].strip()
+        if not header:
+            offset += 1
+            continue
+        try:
+            atom_count = int(header)
+        except ValueError:
+            offset += 1
+            continue
+        if atom_count <= 0:
+            break
+        end = offset + 2 + atom_count
+        if end > len(lines):
+            break
+        comment = lines[offset + 1].strip()
+        symbols: list[str] = []
+        rows: list[list[float]] = []
+        complete = True
+        for row_index in range(atom_count):
+            parts = lines[offset + 2 + row_index].split()
+            if len(parts) < 4:
+                complete = False
+                break
+            try:
+                rows.append([float(parts[1]), float(parts[2]), float(parts[3])])
+            except ValueError:
+                complete = False
+                break
+            symbols.append(str(parts[0]))
+        if complete and rows:
+            points.append(
+                IrcPathPoint(
+                    direction=direction,
+                    index=index,
+                    energy_hartree=irc_energy_from_comment(comment),
+                    coordinates=np.asarray(rows, dtype=np.float64),
+                    symbols=symbols,
+                    comment=comment,
+                )
+            )
+        index += 1
+        offset = end
+    return points
+
+
+def parse_irc_iteration_energies(log_text: str) -> dict[str, list[float]]:
+    """Extract per-direction IRC iteration energies from an ORCA ``.out``.
+
+    Parses the ``FORWARD IRC`` / ``BACKWARD IRC`` iteration tables as a
+    fallback for runs whose trajectory files are missing.  The trailing
+    ``IRC PATH SUMMARY`` re-lists every step, so parsing stops there to avoid
+    duplicating points into the reverse direction.
+    """
+    energies: dict[str, list[float]] = {"forward": [], "reverse": []}
+    current: str | None = None
+    for line in str(log_text).splitlines():
+        marker = _IRC_DIRECTION_BANNER_RE.search(line)
+        if marker:
+            token = marker.group(1).lower()
+            current = "reverse" if token in {"backward", "reverse"} else "forward"
+            continue
+        lowered = line.lower()
+        if "irc forward direction" in lowered:
+            current = "forward"
+            continue
+        if "irc reverse direction" in lowered or "irc backward direction" in lowered:
+            current = "reverse"
+            continue
+        if "irc path summary" in lowered or "suggested citations" in lowered:
+            current = None
+            continue
+        if current is None:
+            continue
+        row = _IRC_ITERATION_ROW_RE.match(line)
+        if row:
+            try:
+                energies[current].append(_irc_float(row.group(2)))
+            except ValueError:
+                logger.debug("Malformed IRC iteration row: %s", line)
+    return energies
 
 
 def ts_opt_route(
@@ -160,6 +375,7 @@ def ts_geom_block(
     *,
     ts_mode: bool | int = False,
     max_iter: int | None = None,
+    hess_file_name: str | None = None,
 ) -> str:
     """Render the ``%geom`` block for a TS optimization.
 
@@ -167,10 +383,27 @@ def ts_geom_block(
     ``"calculate"`` (model/read Hessians omit it). ``trust_radius`` maps to the
     ORCA ``Trust`` keyword (positive value = initial trust radius with
     trust-radius update; negative = fixed). ``max_iter`` emits ORCA's ``MaxIter``
-    keyword; ``None`` leaves it out so ORCA's default applies. ``ts_mode`` emits
-    ORCA's ``TS_Mode {M n} end`` selector, where *n* is the 0-based normal-mode
-    index from the frequency run. ``True`` maps to mode ``0``.
+    keyword; ``None`` leaves it out so ORCA's default applies.
+
+    ``ts_mode`` emits ORCA's ``TS_Mode {M n} end`` selector.  **The index *n*
+    is the optimizer-side mode number defined by ORCA's eigenvalue ordering
+    of the Hessian it reads (``M 0`` = lowest eigenvalue), NOT the printed
+    vibrational-frequency index of a frequency output.**  Callers that only
+    have a frequency-output mode number must first resolve it through an
+    explicit mapping (see ``acp.calculations.tsmode.mode_mapping``);
+    ``True`` maps to mode ``0`` (legacy lowest-mode rescue behaviour).
+
+    *hess_file_name* emits ``InHess Read`` + ``InHessName "<name>"`` so the
+    optimization starts from a staged ``.hess`` file; it requires
+    *initial_hessian* to be ``"read"`` and suppresses ``Calc_Hess true`` so a
+    read source is never silently combined with Hessian recomputation.
     """
+    if hess_file_name is not None and initial_hessian not in ("read", "model"):
+        raise ValueError(
+            "hess_file_name requires initial_hessian='read' (got "
+            f"{initial_hessian!r}); refusing to mix a read Hessian with "
+            "'calculate'"
+        )
     lines = ["%geom"]
     if initial_hessian == "calculate":
         lines.append("  Calc_Hess true")
@@ -180,6 +413,9 @@ def ts_geom_block(
         lines.append(f"  Trust {float(trust_radius):g}")
     if max_iter is not None:
         lines.append(f"  MaxIter {int(max_iter)}")
+    if hess_file_name:
+        lines.append("  InHess Read")
+        lines.append(f'  InHessName "{hess_file_name}"')
     emit_ts_mode = False
     mode_index = 0
     if isinstance(ts_mode, bool):
@@ -188,6 +424,11 @@ def ts_geom_block(
         emit_ts_mode = True
         mode_index = int(ts_mode)
     if emit_ts_mode:
+        if not isinstance(ts_mode, (bool, int, np.integer)):
+            raise TypeError(
+                f"TS_Mode index must be an int, got {type(ts_mode).__name__}; "
+                "resolve frequency-output indices through the tsmode mapping first"
+            )
         if mode_index < 0:
             raise ValueError(f"ORCA TS_Mode index must be >= 0, got {mode_index}")
         lines.append(f"  TS_Mode {{M {mode_index}}} end")
@@ -389,6 +630,92 @@ def parse_ts_mode_vectors(log_text: str) -> dict[int, NDArray[np.float64]]:
     return vectors
 
 
+def parse_irc_ts_energy(log_text: str) -> float | None:
+    """Extract the TS reference energy from an ORCA IRC output.
+
+    Prefers the ``IRC PATH SUMMARY`` row flagged ``<= TS``.  Otherwise derives
+    it from the first iteration row of either direction, where ORCA prints the
+    offset ``dE`` (kcal/mol) relative to the TS: ``E_TS = E - dE/627.509``.
+    """
+    lines = str(log_text).splitlines()
+    for line in lines:
+        if "<= TS" not in line:
+            continue
+        row = _IRC_ITERATION_ROW_RE.match(line.replace("<= TS", "").rstrip())
+        if row:
+            try:
+                return _irc_float(row.group(2))
+            except ValueError:
+                continue
+    for line in lines:
+        row = _IRC_ITERATION_ROW_RE.match(line)
+        if not row:
+            continue
+        try:
+            energy = _irc_float(row.group(2))
+            delta = _irc_float(row.group(3))
+        except ValueError:
+            continue
+        return energy - delta / HARTREE_TO_KCAL
+    return None
+
+
+def _pick_irc_output_file(work_dir: Path) -> Path | None:
+    preferred = work_dir / "irc.out"
+    if preferred.is_file():
+        return preferred
+    try:
+        candidates = [path for path in work_dir.glob("*.out") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime_ns)
+
+
+def _pick_irc_full_trajectory(work_dir: Path) -> Path | None:
+    try:
+        candidates = [path for path in work_dir.glob("*_IRC_Full_trj.xyz") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime_ns)
+
+
+def _read_text_tail(path: Path, max_bytes: int) -> str:
+    with open(path, "rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        handle.seek(max(0, size - max_bytes))
+        return handle.read().decode("utf-8", errors="replace")
+
+
+def resolve_irc_ts_energy(work_dir: Path, *, reverse_frames: int = 0) -> float | None:
+    """TS reference energy from an ORCA IRC work directory.
+
+    Reads the ``.out`` tail first (PATH SUMMARY / iteration rows); falls back
+    to the TS frame of ``*_IRC_Full_trj.xyz`` at index *reverse_frames* (the
+    combined trajectory is backward-reversed + TS + forward).
+    """
+    work_dir = Path(work_dir)
+    output = _pick_irc_output_file(work_dir)
+    if output is not None:
+        try:
+            text = _read_text_tail(output, 512_000)
+        except OSError:
+            text = ""
+        ts_energy = parse_irc_ts_energy(text)
+        if ts_energy is not None:
+            return ts_energy
+    full_trajectory = _pick_irc_full_trajectory(work_dir)
+    if full_trajectory is not None and reverse_frames > 0:
+        points = parse_irc_trajectory_xyz(full_trajectory, "forward")
+        if len(points) > reverse_frames:
+            return points[reverse_frames].energy_hartree
+    return None
+
+
 def parse_irc_endpoints(log_text: str, work_dir: Path) -> dict[str, Path]:
     """Locate IRC endpoint XYZ files produced in *work_dir*.
 
@@ -446,13 +773,20 @@ def parse_final_energy_hartree(log_text: str) -> float | None:
 
 
 __all__ = [
+    "IrcPathPoint",
     "IrcResult",
     "TsOptResult",
+    "discover_irc_trajectory_files",
     "freq_block_for_ts",
     "irc_block",
+    "irc_energy_from_comment",
     "irc_route",
     "parse_final_energy_hartree",
     "parse_irc_endpoints",
+    "parse_irc_iteration_energies",
+    "parse_irc_ts_energy",
+    "parse_irc_trajectory_xyz",
+    "resolve_irc_ts_energy",
     "parse_ts_frequency_map",
     "parse_ts_frequencies",
     "parse_ts_mode_vectors",

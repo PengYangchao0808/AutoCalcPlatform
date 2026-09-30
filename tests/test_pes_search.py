@@ -156,7 +156,7 @@ H   1.845000  -0.934000   0.000000
 """
 
 
-def _pes_request(n_points: int = 5) -> dict[str, Any]:
+def _pes_request(n_points: int = 5, *, start: float = 1.2, end: float = 2.5) -> dict[str, Any]:
     return {
         "mode": "bond_length_scan",
         "source": {
@@ -168,8 +168,8 @@ def _pes_request(n_points: int = 5) -> dict[str, Any]:
         "coordinate": {
             "kind": "distance",
             "atoms": [0, 1],
-            "start": 1.2,
-            "end": 2.5,
+            "start": start,
+            "end": end,
             "n_points": n_points,
         },
     }
@@ -180,6 +180,8 @@ def _pes_scan_result(
     coords: np.ndarray[Any, Any],
     symbols: list[str],
     *,
+    start: float = 1.2,
+    end: float = 2.5,
     energies: list[float] | None = None,
     success: bool = True,
     output_dir: Path | None = None,
@@ -188,7 +190,7 @@ def _pes_scan_result(
         energies = [-1.0 + 0.5 * (i / max(n_points - 1, 1) - 0.5) ** 2 for i in range(n_points)]
     points: list[RelaxedScanPoint] = []
     for i in range(n_points):
-        target = 1.2 + i * (2.5 - 1.2) / max(n_points - 1, 1)
+        target = start + i * (end - start) / max(n_points - 1, 1)
         frame_coordinates = coords.copy()
         # driven pair must track the target schedule to pass constraint gating
         frame_coordinates[1, 0] = frame_coordinates[0, 0] + target
@@ -227,6 +229,23 @@ class TestPesContracts:
     def test_coordinate_step_distance(self) -> None:
         coord = ScanCoordinate(kind="distance", atoms=(0, 1), start=1.0, end=2.0, n_points=11)
         assert coordinate_step(coord) == pytest.approx(0.1)
+
+    def test_coordinate_step_descending_distance_is_positive(self) -> None:
+        coord = ScanCoordinate(kind="distance", atoms=(0, 1), start=2.5, end=1.2, n_points=11)
+        step = coordinate_step(coord)
+        assert step is not None
+        assert step == pytest.approx(0.13)
+
+    def test_validate_scan_coordinate_accepts_descending_distance(self) -> None:
+        coord = ScanCoordinate(kind="distance", atoms=(0, 1), start=2.5, end=1.2, n_points=10)
+        validate_scan_coordinate(coord)
+
+    def test_scan_coordinate_roundtrip_preserves_descending_range(self) -> None:
+        coord = ScanCoordinate(kind="distance", atoms=(0, 1), start=2.5, end=1.2, n_points=10)
+        restored = ScanCoordinate.from_dict(coord.to_dict())
+        assert restored == coord
+        assert restored.start == pytest.approx(2.5)
+        assert restored.end == pytest.approx(1.2)
 
     def test_validate_scan_coordinate_valid(self) -> None:
         coord = ScanCoordinate(kind="distance", atoms=(0, 1), start=1.0, end=2.0, n_points=10)
@@ -351,6 +370,57 @@ def test_scan_five_frames_profile(
     assert (scan_dir / "scan_frames" / "frame_000.xyz").exists()
     assert (scan_dir / "scan_frames" / "frame_004.xyz").exists()
     assert not (tmp_path / "WORK" / "02_SEARCH" / "pes_scan_001").exists()
+
+
+def test_scan_descending_range_tracks_far_to_near_targets(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """start > end (far→near) is a supported scan direction.
+
+    Frame 0 stays the reference/reactant end (``endpoint_direction="start"``),
+    so frame targets decrease strictly from start toward end.
+    """
+    coords = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [2.50, 0.0, 0.0],
+            [-0.51, 0.93, 0.0],
+            [-0.51, -0.93, 0.0],
+            [3.01, 0.93, 0.0],
+            [3.01, -0.93, 0.0],
+        ]
+    )
+    symbols = ["C", "C", "H", "H", "H", "H"]
+    n_points = 5
+
+    scan_result = _pes_scan_result(
+        n_points, coords, symbols, start=2.5, end=1.2, output_dir=tmp_path
+    )
+    fake_backend.set_result("relaxed_scan", scan_result)
+
+    sp_energies = [-1.0, -0.8, -0.5, -0.8, -1.0]
+    fake_backend.set_results(
+        "single_point",
+        [QCResult(success=True, energy=energy) for energy in sp_energies],
+    )
+
+    result = run_pes_scan(
+        request=_pes_request(n_points, start=2.5, end=1.2),
+        output_dir=tmp_path,
+        config={"resources": {"nproc": 1}},
+    )
+
+    frames = result["frames"]
+    targets = [float(frame["target_coordinate"]) for frame in frames]
+    assert targets[0] == pytest.approx(2.5)
+    assert targets[-1] == pytest.approx(1.2)
+    assert all(later < earlier for earlier, later in zip(targets, targets[1:]))
+
+    profile = result["profile"]
+    assert profile["energy_source"] == "single_point"
+    assert len(profile["raw_hartree"]) == n_points
+    assert all(value is not None for value in profile["raw_hartree"])
 
 
 def test_single_points_report_live_metrics_during_and_after_execution(

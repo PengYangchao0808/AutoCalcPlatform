@@ -90,7 +90,7 @@ class TestDefaultPayload:
         assert "opt_recalc_hess" not in int_eff
 
     def test_engine_constants_shared(self, client: TestClient) -> None:
-        """max_cycles=200, opt_level=Tight (catalog default), scf trio defaults."""
+        """max_cycles=200, opt_level=tight (catalog default), scf trio defaults."""
         resp = client.post(_URL, json={"method": {}})
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
@@ -122,6 +122,8 @@ class TestUserOverrides:
     """User-provided values → 'user' source."""
 
     def test_user_opt_convergence(self, client: TestClient) -> None:
+        # Title-case input: validated case-insensitively, canonicalised to
+        # the lowercase schema option (legacy-payload compatibility).
         resp = client.post(_URL, json={"method": {"opt_convergence": "VeryTight"}})
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
@@ -233,6 +235,79 @@ class TestRoleOverrides:
         int_role = resp.json()["roles"]["int"]
         assert int_role["effective"]["opt_trust_radius"] == 0.2
         assert int_role["sources"]["opt_trust_radius"] == "user"
+
+    # ── extended role overrides (optimizer / SCF / rescue, 2026-09) ──
+
+    def test_ts_role_max_iter_and_scf_strategy(self, client: TestClient) -> None:
+        resp = client.post(
+            _URL,
+            json={
+                "method": {
+                    "transition_state_opt_max_iter": 350,
+                    "transition_state_scf_strategy": "slowconv",
+                }
+            },
+        )
+        assert resp.status_code == 200
+        ts = resp.json()["roles"]["ts"]
+        assert ts["effective"]["max_cycles"] == 350
+        assert ts["effective"]["scf_strategy"] == "slowconv"
+        assert ts["sources"]["max_cycles"] == "user"
+        assert ts["sources"]["scf_strategy"] == "user"
+        # INT stays on engine defaults.
+        int_role = resp.json()["roles"]["int"]
+        assert int_role["effective"]["max_cycles"] == 200
+        assert int_role["effective"]["scf_strategy"] == "normal"
+        assert int_role["sources"]["max_cycles"] == "default"
+
+    def test_int_role_convergence_and_scf_max_iter(self, client: TestClient) -> None:
+        resp = client.post(
+            _URL,
+            json={
+                "method": {
+                    "minimum_opt_convergence": "loose",
+                    "minimum_scf_max_iter": 500,
+                }
+            },
+        )
+        assert resp.status_code == 200
+        int_role = resp.json()["roles"]["int"]
+        assert int_role["effective"]["opt_level"] == "loose"
+        assert int_role["effective"]["scf_maxiter"] == 500
+        assert int_role["sources"]["opt_level"] == "user"
+        assert int_role["sources"]["scf_maxiter"] == "user"
+        # TS unaffected.
+        ts = resp.json()["roles"]["ts"]
+        assert ts["effective"]["opt_level"] == "Tight"
+        assert ts["effective"]["scf_maxiter"] == 300
+
+    def test_role_rescue_override(self, client: TestClient) -> None:
+        resp = client.post(
+            _URL,
+            json={
+                "method": {
+                    "transition_state_opt_rescue_policy": "off",
+                    "transition_state_opt_max_rescue": 0,
+                }
+            },
+        )
+        assert resp.status_code == 200
+        ts = resp.json()["roles"]["ts"]
+        assert ts["effective"]["rescue_policy"] == "off"
+        assert ts["effective"]["max_rescue"] == 0
+        assert ts["sources"]["rescue_policy"] == "user"
+
+    def test_response_contains_config_key(self, client: TestClient) -> None:
+        """config_key ties the preview to the engine-side cache identity."""
+        resp = client.post(_URL, json={"method": {"opt_recalc_hess": 1}})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data.get("config_key"), str) and data["config_key"]
+        # Same payload → same key; changed payload → different key.
+        resp2 = client.post(_URL, json={"method": {"opt_recalc_hess": 1}})
+        assert resp2.json()["config_key"] == data["config_key"]
+        resp3 = client.post(_URL, json={"method": {"opt_recalc_hess": 2}})
+        assert resp3.json()["config_key"] != data["config_key"]
 
 
 # ── invalid input → 422 ─────────────────────────────────────────────────
@@ -350,3 +425,100 @@ class TestOrcaSummary:
         assert resp.status_code == 200
         ts_summary = resp.json()["orca_summary"]["ts"]
         assert "Calc_Hess" not in ts_summary
+
+
+# ── preview new-style batch_roles (test 4) ────────────────────────────────
+
+
+class TestPreviewNewStyle:
+    """POST batch_roles body → 200, correct effective values and source labels."""
+
+    def test_new_style_200_with_correct_effective(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "basis": "def2-SVP"},
+                    "ts": {"method": "wB97X-D4", "basis": "def2-TZVP"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["schema"] == "batch_optimize_preview_v1"
+        assert "int" in data["roles"]
+        assert "ts" in data["roles"]
+
+    def test_new_style_effective_matches_payload(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_trust_radius": 0.1},
+                    "ts": {"method": "wB97X-D4", "opt_trust_radius": 0.3},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_eff = resp.json()["roles"]["int"]["effective"]
+        ts_eff = resp.json()["roles"]["ts"]["effective"]
+        assert int_eff["opt_trust_radius"] == 0.1
+        assert ts_eff["opt_trust_radius"] == 0.3
+
+    def test_new_style_source_labels(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_trust_radius": 0.1},
+                    "ts": {"method": "wB97X-D4"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_sources = resp.json()["roles"]["int"]["sources"]
+        ts_sources = resp.json()["roles"]["ts"]["sources"]
+        assert int_sources["opt_trust_radius"] == "user"
+        assert ts_sources["opt_trust_radius"] == "engine_default"
+
+    def test_new_style_null_source_is_engine_default(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_initial_hessian": None},
+                    "ts": {"method": "B3LYP"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_sources = resp.json()["roles"]["int"]["sources"]
+        assert int_sources["opt_initial_hessian"] == "engine_default"
+
+    def test_new_style_invalid_enum_422(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_convergence": "SuperTight"},
+                    "ts": {"method": "B3LYP"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 422
+
+    def test_new_style_orca_summary(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_recalc_hess": 1},
+                    "ts": {"method": "B3LYP", "opt_recalc_hess": 5},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_summary = resp.json()["orca_summary"]["int"]
+        ts_summary = resp.json()["orca_summary"]["ts"]
+        assert "Recalc_Hess 1" in int_summary
+        assert "Recalc_Hess 5" in ts_summary

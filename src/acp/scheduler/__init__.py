@@ -8,6 +8,7 @@ from acp.scheduler.artifacts import (
     ParserStatus,
     capture_stage_artifacts,
 )
+from acp.scheduler.auto_tags import AutoTagRule, apply_auto_tag_rules
 from acp.scheduler.capabilities import (
     MatchResult,
     NoCapableNodeError,
@@ -17,6 +18,19 @@ from acp.scheduler.capabilities import (
     matches_capabilities,
 )
 from acp.scheduler.events import JobEventLog
+from acp.scheduler.job_edit import (
+    EDIT_ACTIVE_WORKFLOWS,
+    EditConflictError,
+    EditValidationError,
+    JobEditOperationStore,
+    audit_workflow_edit_coverage,
+    build_edit_draft,
+    compute_source_revision,
+    diff_editable_specs,
+    editable_spec_from_record,
+    effective_config_info,
+    resolve_last_structure,
+)
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.local_cleanup import (
     DEFAULT_MAX_DIRS_PER_SWEEP,
@@ -29,6 +43,11 @@ from acp.scheduler.local_cleanup import (
 )
 from acp.scheduler.manager import JobManager
 from acp.scheduler.metrics import MetricsExtractor
+from acp.scheduler.molecule_groups import (
+    apply_group_merge,
+    resolve_molecule_key,
+    suggest_group_merges,
+)
 from acp.scheduler.nodes import (
     ExecutionCapacityUnavailable,
     ExecutionMode,
@@ -45,6 +64,13 @@ from acp.scheduler.runner import JobRunner
 from acp.scheduler.stage_tasks import StagePlan, StageTask, StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
+from acp.scheduler.task_views import (
+    ArchivedFilter,
+    GroupBy,
+    TaskSort,
+    TaskViewQuery,
+    query_project_tasks,
+)
 from acp.scheduler.tasks import TaskIndex
 
 __all__ = [
@@ -55,9 +81,14 @@ __all__ = [
     "JobSpec",
     "JobStatus",
     "JobStore",
+    "EDIT_ACTIVE_WORKFLOWS",
+    "EditConflictError",
+    "EditValidationError",
+    "JobEditOperationStore",
     "MatchResult",
     "MetricsExtractor",
     "NoCapableNodeError",
+    "AutoTagRule",
     "Artifact",
     "ArtifactRegistry",
     "DEFAULT_MAX_DIRS_PER_SWEEP",
@@ -85,6 +116,22 @@ __all__ = [
     "StageTaskStore",
     "StructureSourceService",
     "TaskIndex",
+    "audit_workflow_edit_coverage",
+    "build_edit_draft",
+    "compute_source_revision",
+    "diff_editable_specs",
+    "editable_spec_from_record",
+    "effective_config_info",
+    "resolve_last_structure",
+    "apply_group_merge",
+    "resolve_molecule_key",
+    "suggest_group_merges",
+    "ArchivedFilter",
+    "GroupBy",
+    "TaskSort",
+    "TaskViewQuery",
+    "query_project_tasks",
+    "apply_auto_tag_rules",
     "capture_stage_artifacts",
     "compute_input_hash",
     "derive_required_software",

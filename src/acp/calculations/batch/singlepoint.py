@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import final
@@ -49,6 +50,7 @@ class BatchSinglePointExecutor:
         cache_profile: str = "singlepoint",
         progress_callback: Callable[[int, int], None] | None = None,
         on_frame_start: Callable[[str, int, int], None] | None = None,
+        on_frame_done: Callable[[str, float | None, str], None] | None = None,
         **sp_kwargs: object,
     ) -> None:
         self._frames = list(frames) if frames is not None else None
@@ -70,6 +72,7 @@ class BatchSinglePointExecutor:
         self._cache_profile = cache_profile
         self._progress_callback = progress_callback
         self._on_frame_start = on_frame_start
+        self._on_frame_done = on_frame_done
         self._sp_kwargs = dict(sp_kwargs)
 
     def run(
@@ -121,6 +124,14 @@ class BatchSinglePointExecutor:
             ),
         )
         records = dict(failures)
+        if failures and self._on_frame_done is not None:
+            for failed_id in failures:
+                try:
+                    self._on_frame_done(failed_id, None, "failed")
+                except Exception as exc:  # noqa: BLE001 - live callbacks must not break the run
+                    logging.getLogger(__name__).warning(
+                        "single-point on_frame_done callback failed for %s: %s", failed_id, exc
+                    )
         if prepared:
             backend = self._resolve_backend()
             records.update(
@@ -139,6 +150,7 @@ class BatchSinglePointExecutor:
                     ),
                     progress_callback=self._progress_callback,
                     on_frame_start=self._on_frame_start,
+                    on_frame_done=self._on_frame_done,
                 )
             )
         return BatchSinglePointResult(

@@ -38,6 +38,7 @@ from ._common import (
     output_dir,
     result_from_qc,
 )
+from .irc_trajectory import IrcTrajectoryRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +122,28 @@ def run_irc(
         backend = backend_for_request(request, selected_backend)
         target_dir = output_dir(request) or Path.cwd() / "irc_work"
         target_dir.mkdir(parents=True, exist_ok=True)
+        result_dir = _result_dir(request, target_dir)
+        recorder = IrcTrajectoryRecorder(result_dir, target_dir, directions=tuple(directions))
 
         direction_str = _resolve_direction(directions)
+
+        def _on_snapshot(payload: dict[str, Any]) -> None:
+            nonlocal active_stage
+            if progress_reporter is None:
+                return
+            frames = payload.get("frames") or []
+            forward_count = sum(frame.get("direction") == "forward" for frame in frames)
+            reverse_count = sum(frame.get("direction") == "reverse" for frame in frames)
+            if direction_str == "both" and reverse_count and active_stage == "irc_forward":
+                progress_reporter.complete_stage("irc_forward")
+                progress_reporter.start_stage("irc_backward")
+                active_stage = "irc_backward"
+            if active_stage is not None:
+                progress_reporter.set_stage_detail(
+                    active_stage, f"正向 {forward_count} 点 · 反向 {reverse_count} 点"
+                )
+
+        recorder.on_snapshot = _on_snapshot
         if progress_reporter is not None:
             progress_reporter.complete_stage("preparing")
             active_stage = None
@@ -132,6 +153,10 @@ def run_irc(
             active_stage = direction_stage
 
         # --- Backend call ---
+        irc_kwargs = _irc_kwargs(request)
+        if selected_backend == "orca":
+            irc_kwargs["output_callback"] = recorder.feed_line
+        recorder.start()
         try:
             raw_result = backend.irc(
                 inputs.coordinates,
@@ -140,24 +165,35 @@ def run_irc(
                 multiplicity=inputs.multiplicity,
                 output_dir=target_dir,
                 direction=direction_str,
-                **_irc_kwargs(request),
+                **irc_kwargs,
             )
         except _BACKEND_FAILURES as error:
+            recorder.stop()
             if progress_reporter is not None and active_stage is not None:
                 progress_reporter.fail_stage(active_stage, error_text(error))
+            partial = recorder.finish(status="failed", complete=False)
+            partial_artifacts = _register_trajectory_products(
+                result_dir, selected_backend, partial
+            )
+            metadata = _irc_metadata(directions)
+            if partial is not None:
+                metadata["trajectory_frame_count"] = len(partial.get("frames") or [])
             return result_from_qc(
                 request,
                 selected_backend,
                 None,
                 [error_text(error)],
-                [],
-                metadata=_irc_metadata(directions),
+                partial_artifacts,
+                metadata=metadata,
                 status="failed",
             )
+        finally:
+            recorder.stop()
 
         # Normalise to QCResult
         qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
         success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
+        endpoints = _discover_endpoints(raw_result, target_dir, inputs)
         errors: list[str] = []
         if not success:
             raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
@@ -167,12 +203,15 @@ def run_irc(
             if progress_reporter is not None and active_stage is not None:
                 progress_reporter.fail_stage(active_stage, failure_message)
         elif progress_reporter is not None and active_stage is not None:
+            recorder.refresh(force=True)
+            completed_stage = active_stage
             progress_reporter.complete_stage(active_stage)
             active_stage = None
-            if direction_str == "both":
-                # ORCA executes both directions in one backend call. The second
-                # lifecycle stage represents the completed direction once that
-                # combined call has returned; it does not invent intermediate data.
+            if (
+                direction_str == "both"
+                and "reverse" in endpoints
+                and completed_stage == "irc_forward"
+            ):
                 progress_reporter.start_stage("irc_backward")
                 progress_reporter.complete_stage("irc_backward")
 
@@ -181,7 +220,13 @@ def run_irc(
             active_stage = "validating"
 
         # --- Parse endpoint geometries ---
-        endpoints = _discover_endpoints(raw_result, target_dir, inputs)
+        if success and not endpoints:
+            success = False
+            message = "IRC produced no endpoint geometries"
+            errors.append(message)
+            if progress_reporter is not None and active_stage is not None:
+                progress_reporter.fail_stage(active_stage, message)
+                active_stage = None
 
         # ORCAInterface.forward_points/reverse_points currently count direction
         # header occurrences, not validated IRC iterations. Until a parser is
@@ -189,7 +234,6 @@ def run_irc(
         # metric rather than exposing a fabricated count.
 
         # --- Materialise endpoint structures ---
-        result_dir = _result_dir(request, target_dir)
         artifacts = _write_endpoint_products(
             request,
             selected_backend,
@@ -198,6 +242,11 @@ def run_irc(
             inputs,
             success,
         )
+        trajectory = recorder.finish(
+            status="completed" if success else "failed",
+            complete=bool(success),
+        )
+        artifacts.extend(_register_trajectory_products(result_dir, selected_backend, trajectory))
 
         if success and progress_reporter is not None and active_stage is not None:
             progress_reporter.complete_stage(active_stage)
@@ -209,6 +258,10 @@ def run_irc(
             key = f"{direction}_endpoint"
             if direction in endpoints:
                 metadata[key] = str(endpoints[direction]["path"])
+        if trajectory is not None:
+            metadata["trajectory_path"] = "trajectories/irc_trajectory.json"
+            metadata["trajectory_frame_count"] = len(trajectory.get("frames") or [])
+            metadata["path_files"] = dict(trajectory.get("geometry_files") or {})
 
         return result_from_qc(
             request,
@@ -220,6 +273,9 @@ def run_irc(
             status="completed" if success else "failed",
         )
     except Exception as error:
+        if "recorder" in locals():
+            recorder.stop()
+            recorder.finish(status="failed", complete=False)
         if progress_reporter is not None and active_stage is not None:
             progress_reporter.fail_stage(active_stage, error_text(error))
         raise
@@ -282,7 +338,10 @@ def _discover_endpoints(
     endpoints: dict[str, dict[str, Any]] = {}
 
     # 1. Try explicit endpoint paths from the result (IrcResult-style)
+    metadata = getattr(raw_result, "metadata", None)
     raw_endpoints = getattr(raw_result, "endpoints", None)
+    if not isinstance(raw_endpoints, dict) and isinstance(metadata, dict):
+        raw_endpoints = metadata.get("endpoints")
     if isinstance(raw_endpoints, dict):
         for direction, path_value in raw_endpoints.items():
             if direction in ("forward", "reverse") and path_value is not None:
@@ -298,6 +357,8 @@ def _discover_endpoints(
 
     # 2. Try final_geometries from the result
     final_geometries = getattr(raw_result, "final_geometries", None)
+    if not isinstance(final_geometries, dict) and isinstance(metadata, dict):
+        final_geometries = metadata.get("final_geometries")
     if isinstance(final_geometries, dict):
         for direction, geometry in final_geometries.items():
             if direction in endpoints or direction not in ("forward", "reverse"):
@@ -384,6 +445,53 @@ def _write_endpoint_products(
             kind=ProductKind.IRC_ENDPOINT,
         )
 
+    _ = manifest.write(result_dir)
+    return artifacts
+
+
+def _register_trajectory_products(
+    result_dir: Path,
+    backend: str,
+    trajectory: dict[str, Any] | None,
+) -> list[ArtifactRef]:
+    """Register the IRC path trajectory and per-direction geometry products."""
+    if trajectory is None:
+        return []
+    artifacts: list[ArtifactRef] = []
+    trajectory_path = result_dir / "trajectories" / "irc_trajectory.json"
+    if trajectory_path.is_file():
+        artifacts.append(ArtifactRef(path=trajectory_path, type="trajectory", source=backend))
+    try:
+        manifest = ResultManifest.read(result_dir)
+    except FileNotFoundError:
+        manifest = ResultManifest(
+            task_id="",
+            workflow="irc",
+            status=str(trajectory.get("status") or "running"),
+        )
+    manifest.workflow = "irc"
+    manifest.status = str(trajectory.get("status") or manifest.status)
+    _ = manifest.add_product(
+        id="irc_trajectory",
+        label="IRC path trajectory",
+        path="trajectories/irc_trajectory.json",
+        kind=ProductKind.TRAJECTORY,
+    )
+    geometry_files = trajectory.get("geometry_files") or {}
+    if isinstance(geometry_files, dict):
+        for direction in ("forward", "reverse"):
+            relative_path = geometry_files.get(direction)
+            if not relative_path:
+                continue
+            path = result_dir / str(relative_path)
+            if path.is_file():
+                artifacts.append(ArtifactRef(path=path, type="structure", source=backend))
+            _ = manifest.add_product(
+                id=f"irc_{direction}_path",
+                label=f"IRC {direction} path",
+                path=str(relative_path),
+                kind=ProductKind.STRUCTURE,
+            )
     _ = manifest.write(result_dir)
     return artifacts
 

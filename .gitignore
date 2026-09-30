@@ -65,8 +65,10 @@ coord.original
 *.log
 *.out
 *.chk
+!tests/fixtures/**
 scratch/
 /results/
 output/
 irc_output/
 uploads/
+.omo/

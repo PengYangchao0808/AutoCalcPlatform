@@ -165,6 +165,61 @@ def test_resolve_executable_with_source_not_found(monkeypatch: pytest.MonkeyPatc
     assert resolve_executable("orca") is None
 
 
+def test_scan_resolves_one_hidden_crest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hidden = _make_executable(tmp_path / "opt" / "software" / "crest", "crest")
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(software, "FALLBACKS", {})
+    monkeypatch.setattr(software, "SCAN_PATTERNS", {"crest": (str(hidden),)})
+
+    assert resolve_executable_with_source("crest", configured_path="crest") == (
+        hidden.resolve(),
+        "scan",
+    )
+    detail = discover_all_detailed(config={"executables": {"crest": {"path": "crest"}}})
+    assert detail["crest"].resolved == hidden.resolve()
+    assert detail["crest"].source == "scan"
+    configured = _make_executable(tmp_path / "pinned", "crest")
+    assert resolve_executable_with_source("crest", configured_path=configured) == (
+        configured.resolve(),
+        "config",
+    )
+
+
+def test_scan_does_not_choose_between_distinct_installs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _make_executable(tmp_path / "crest_v1", "crest")
+    second = _make_executable(tmp_path / "crest_v2", "crest")
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(software, "FALLBACKS", {})
+    monkeypatch.setattr(software, "SCAN_PATTERNS", {"crest": (str(first), str(second))})
+
+    assert resolve_executable_with_source("crest") == (None, None)
+    assert [c.path for c in discover_candidates("crest")] == [first, second]
+    assert resolve_executable("crest", configured_path=second) == second.resolve()
+
+
+def test_scan_deduplicates_symlink_and_skips_non_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = _make_executable(tmp_path / "crest", "crest")
+    alias = tmp_path / "alias"
+    alias.symlink_to(real)
+    invalid = tmp_path / "invalid"
+    invalid.write_text("not executable", encoding="utf-8")
+    invalid.chmod(0o644)
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setattr(software, "FALLBACKS", {})
+    monkeypatch.setattr(
+        software, "SCAN_PATTERNS", {"crest": (str(real), str(alias), str(invalid))}
+    )
+
+    assert resolve_executable_with_source("crest") == (real.resolve(), "scan")
+    assert [c.path for c in discover_candidates("crest")] == [real.resolve()]
+
+
 # --- candidate enumeration --------------------------------------------------
 
 

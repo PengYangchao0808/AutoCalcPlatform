@@ -318,26 +318,25 @@ def _trajectory_cycle_count(path: Path) -> int:
     return len(cycles) if isinstance(cycles, list) else -1
 
 
-def _count_significant_imaginary(frequencies: list[float], cutoff: float = -50.0) -> int:
-    """Count frequencies at or below *cutoff* (cm⁻¹)."""
-    return sum(1 for f in frequencies if float(f) <= cutoff)
+def _count_imaginary(frequencies: list[float]) -> int:
+    """Count all negative vibrational frequencies, regardless of magnitude."""
+    return sum(1 for f in frequencies if float(f) < 0.0)
 
 
 def _ts_frequency_judgment(
     frequencies: list[float],
-    *,
-    cutoff: float = -50.0,
 ) -> tuple[bool, str]:
     """Validate transition-state frequency signature.
 
-    Returns ``(valid, message)`` — valid when exactly one significant
-    imaginary frequency exists.
+    Returns ``(valid, message)`` — valid when exactly one negative
+    frequency exists. A shallow barrier can have a small-magnitude
+    imaginary mode, so magnitude alone does not invalidate a TS candidate.
     """
-    count = _count_significant_imaginary(frequencies, cutoff)
+    count = _count_imaginary(frequencies)
     if count > 1:
-        return False, f"higher_order_saddle ({count} significant imaginary frequencies)"
+        return False, f"higher_order_saddle ({count} imaginary frequencies)"
     if count == 0:
-        return False, "ts_no_imaginary (no frequency <= -50 cm⁻¹)"
+        return False, "ts_no_imaginary (no negative frequency)"
     return True, ""
 
 
@@ -354,7 +353,7 @@ class BatchOptimizeEngine:
         ``opt_freq_sp_thermo`` — optimize + frequency + single-point + thermochemistry
 
     TS items use ``transition_state_opt`` and include an imaginary-frequency
-    judgment (≤ -50 cm⁻¹).  INT items use ordinary ``optimize``.
+    judgment (exactly one negative frequency). INT items use ordinary ``optimize``.
 
     Item failure isolation: a failed item is recorded as ``"failed"`` in
     ``items_state`` but does NOT abort other items.  On re-run, items whose
@@ -397,22 +396,6 @@ class BatchOptimizeEngine:
     def task_root(self) -> Path:
         """Task root is one level above ``WORK/``."""
         return self._work_root.parent
-
-    @property
-    def _imaginary_threshold(self) -> float:
-        """Read the significant-imaginary cutoff from config (default -50.0 cm⁻¹)."""
-        if self._config is None:
-            return -50.0
-        theory = self._config.get("theory")
-        if not isinstance(theory, Mapping):
-            return -50.0
-        freq = theory.get("frequency")
-        if not isinstance(freq, Mapping):
-            return -50.0
-        raw = freq.get("imaginary_threshold_cm1")
-        if isinstance(raw, (int, float)):
-            return float(raw)
-        return -50.0
 
     def _item_work_dir(self, item: BatchStructureItem) -> Path:
         """Return the work root that owns *item* in the active layout."""
@@ -965,6 +948,8 @@ class BatchOptimizeEngine:
                             "scf_maxiter": opt_kwargs.get("scf_maxiter"),
                             "scf_convergence": opt_kwargs.get("scf_convergence"),
                             "scf_strategy": opt_kwargs.get("scf_strategy"),
+                            "rescue_policy": opt_kwargs.get("opt_rescue_policy"),
+                            "max_rescue": opt_kwargs.get("opt_max_rescue"),
                             "method": resolved_methods.for_step(
                                 StepKind.OPTIMIZE, is_ts
                             )[0],
@@ -973,9 +958,18 @@ class BatchOptimizeEngine:
                             )[1],
                         },
                         "role_resolution": {
-                            "opt_trust_radius": role_opts.get("opt_trust_radius"),
-                            "opt_initial_hessian": role_opts.get("opt_initial_hessian"),
-                            "opt_recalc_hess": role_opts.get("opt_recalc_hess"),
+                            key: role_opts.get(key) for key in (
+                                "opt_max_iter",
+                                "opt_convergence",
+                                "opt_trust_radius",
+                                "opt_initial_hessian",
+                                "opt_recalc_hess",
+                                "opt_rescue_policy",
+                                "opt_max_rescue",
+                                "scf_max_iter",
+                                "scf_convergence",
+                                "scf_strategy",
+                            )
                         },
                     }
                     rescue_meta = current_result.metadata.get("rescue_attempts")
@@ -1023,9 +1017,7 @@ class BatchOptimizeEngine:
                 record.frequency["frequencies"] = frequency_values
                 record.frequency["status"] = "completed"
                 if is_ts:
-                    valid, msg = _ts_frequency_judgment(
-                        current_result.frequencies, cutoff=self._imaginary_threshold
-                    )
+                    valid, msg = _ts_frequency_judgment(current_result.frequencies)
                     if not valid:
                         raise RuntimeError(
                             f"TS frequency judgment failed for {item.item_id}: {msg}"
@@ -1059,6 +1051,15 @@ class BatchOptimizeEngine:
             elif step_kind is StepKind.THERMOCHEMISTRY:
                 if frequency_log_path is None or sp_energy is None:
                     raise RuntimeError(f"thermochemistry requires freq + sp for {item.item_id}")
+                thermo_resolved = resolved_methods.resolve_for_step(
+                    StepKind.THERMOCHEMISTRY, is_ts
+                )
+                thermo_temp = float(
+                    thermo_resolved.get("temperature", resolved_methods.temperature)
+                )
+                thermo_press = float(
+                    thermo_resolved.get("pressure", resolved_methods.pressure)
+                )
                 current_result = ThermochemistryCalculator(
                     config=self._config,
                     output_dir=step_dir,
@@ -1066,8 +1067,8 @@ class BatchOptimizeEngine:
                 ).compute(
                     freq_log_path=frequency_log_path,
                     sp_energy_hartree=sp_energy,
-                    temperature=resolved_methods.temperature,
-                    pressure=resolved_methods.pressure,
+                    temperature=thermo_temp,
+                    pressure=thermo_press,
                     standard_state="1atm",
                 )
                 thermochemistry: dict[str, BatchJsonValue] = {
@@ -1097,18 +1098,31 @@ class BatchOptimizeEngine:
     def _optimization_kwargs(self, is_ts: bool) -> dict[str, JsonValue]:
         """Build optimization keyword arguments for a request.
 
-        Delegates trust_radius / initial_hessian / recalc_hess resolution
-        to :meth:`BatchMethodOptions.resolve_role_options` — the single
-        source of per-role defaults (plan §5.4).
+        Delegates all per-role-resolvable controls (trust radius, Hessian
+        strategy, recalc interval, iteration cap, convergence level, SCF
+        trio, rescue policy) to :meth:`BatchMethodOptions.resolve_role_options`
+        — the single source of per-role resolution (plan §5.4).  Keys the
+        role did not override fall back to the shared common value.
         """
         m = self._active_methods
+        role_opts = m.resolve_role_options(is_ts)
+
+        max_cycles = role_opts.get("opt_max_iter")
+        if max_cycles is None:
+            max_cycles = m.opt_max_iter if m.opt_max_iter is not None else 200
+        scf_maxiter = role_opts.get("scf_max_iter")
+        if scf_maxiter is None:
+            scf_maxiter = m.scf_max_iter
+        max_rescue = role_opts.get("opt_max_rescue")
+        if max_rescue is None:
+            max_rescue = m.opt_max_rescue
+
         kwargs: dict[str, JsonValue] = {
-            "max_cycles": m.opt_max_iter if m.opt_max_iter is not None else 200,
-            "opt_level": m.opt_convergence,
+            "max_cycles": max_cycles,
+            "opt_level": role_opts.get("opt_convergence") or m.opt_convergence,
             "structure_kind": "ts" if is_ts else "minimum",
         }
 
-        role_opts = m.resolve_role_options(is_ts)
         if "opt_trust_radius" in role_opts:
             kwargs["trust_radius"] = role_opts["opt_trust_radius"]
         if "opt_initial_hessian" in role_opts:
@@ -1116,9 +1130,8 @@ class BatchOptimizeEngine:
         if "opt_recalc_hess" in role_opts:
             kwargs["recalc_hess"] = role_opts["opt_recalc_hess"]
 
-        # rescue + scf damping/shifting (unchanged)
-        kwargs["opt_rescue_policy"] = m.opt_rescue_policy
-        kwargs["opt_max_rescue"] = m.opt_max_rescue
+        kwargs["opt_rescue_policy"] = role_opts.get("opt_rescue_policy") or m.opt_rescue_policy
+        kwargs["opt_max_rescue"] = max_rescue
         if m.scf_damp:
             kwargs["scf_damp"] = True
             kwargs["scf_damp_fac"] = m.scf_damp_fac
@@ -1127,9 +1140,9 @@ class BatchOptimizeEngine:
             kwargs["scf_shift_fac"] = m.scf_shift_fac
 
         # SCF trio forwarded to ORCA optimize
-        kwargs["scf_maxiter"] = m.scf_max_iter
-        kwargs["scf_convergence"] = m.scf_convergence
-        kwargs["scf_strategy"] = m.scf_strategy
+        kwargs["scf_maxiter"] = scf_maxiter
+        kwargs["scf_convergence"] = role_opts.get("scf_convergence") or m.scf_convergence
+        kwargs["scf_strategy"] = role_opts.get("scf_strategy") or m.scf_strategy
 
         return kwargs
 
@@ -1229,18 +1242,20 @@ class BatchOptimizeEngine:
     ) -> CalculationRequest:
         coordinates = _json_coordinates(opt_result.coords)
         symbols_json = _json_text_list(symbols)
-        method, basis = methods.for_step(StepKind.FREQUENCY, item.tag == "TS")
+        is_ts = item.tag == "TS"
+        resolved = methods.resolve_for_step(StepKind.FREQUENCY, is_ts)
         resources: dict[str, JsonValue] = {
             "output_dir": str(output_dir),
             "charge": charge,
             "multiplicity": multiplicity,
             "coordinates": coordinates,
             "symbols": symbols_json,
-            "scf_maxiter": methods.scf_max_iter,
-            "scf_convergence": methods.scf_convergence,
-            "scf_strategy": methods.scf_strategy,
+            "scf_maxiter": resolved.get("scf_maxiter", methods.scf_max_iter),
+            "scf_convergence": resolved.get("scf_convergence", methods.scf_convergence),
+            "scf_strategy": resolved.get("scf_strategy", methods.scf_strategy),
             **self._resource_config(),
         }
+        basis = resolved.get("basis")
         if basis:
             resources["basis"] = basis
         if electronic_state:
@@ -1248,9 +1263,9 @@ class BatchOptimizeEngine:
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self._item_input_path(item),
-                role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
+                role=StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM,
             ),
-            method=method,
+            method=resolved.get("method", ""),
             resources=resources,
             workflow="BatchOptimize",
         )
@@ -1269,18 +1284,20 @@ class BatchOptimizeEngine:
     ) -> CalculationRequest:
         coordinates = _json_coordinates(result.coords)
         symbols_json = _json_text_list(symbols)
-        method, basis = methods.for_step(StepKind.SINGLEPOINT, item.tag == "TS")
+        is_ts = item.tag == "TS"
+        resolved = methods.resolve_for_step(StepKind.SINGLEPOINT, is_ts)
         resources: dict[str, JsonValue] = {
             "output_dir": str(output_dir),
             "charge": charge,
             "multiplicity": multiplicity,
             "coordinates": coordinates,
             "symbols": symbols_json,
-            "scf_maxiter": methods.scf_max_iter,
-            "scf_convergence": methods.scf_convergence,
-            "scf_strategy": methods.scf_strategy,
+            "scf_maxiter": resolved.get("scf_maxiter", methods.scf_max_iter),
+            "scf_convergence": resolved.get("scf_convergence", methods.scf_convergence),
+            "scf_strategy": resolved.get("scf_strategy", methods.scf_strategy),
             **self._resource_config(),
         }
+        basis = resolved.get("basis")
         if basis:
             resources["basis"] = basis
         if electronic_state:
@@ -1288,9 +1305,9 @@ class BatchOptimizeEngine:
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self._item_input_path(item),
-                role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
+                role=StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM,
             ),
-            method=method,
+            method=resolved.get("method", ""),
             resources=resources,
             workflow="BatchOptimize",
         )

@@ -1,0 +1,320 @@
+/**
+ * ACP TS Mode Editor — Stylesheet
+ * @version 0.1.0
+ *
+ * Dark-theme tokens inherited from ACP_Workbench_v2.html :root variables
+ * and structure_source_picker.css conventions.
+ */
+
+/* ===== Root ===== */
+.tsme-root {
+  font-family: var(--font-ui, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif);
+  font-size: 13px;
+  color: var(--sv-text-primary, var(--text-primary, #e5edf5));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* ===== Panel navigation ===== */
+.tsme-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tsme-panel {
+  display: none;
+}
+.tsme-panel.tsme-active {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tsme-panel-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sv-text-primary, var(--text-primary, #e5edf5));
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--sv-border-subtle, var(--border-subtle, #1e2832));
+}
+
+/* ===== Source panel ===== */
+.tsme-job-select-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tsme-job-select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--sv-border-default, var(--border-default, #24303b));
+  border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
+  background: var(--sv-bg-elevated, var(--bg-elevated, #1a2332));
+  color: var(--sv-text-primary, var(--text-primary, #e5edf5));
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+.tsme-job-select:focus {
+  border-color: var(--sv-accent, var(--accent, #4ea1ff));
+}
+.tsme-source-list {
+  border: 1px solid var(--sv-border-subtle, var(--border-subtle, #1e2832));
+  border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
+  background: var(--sv-bg-panel, var(--bg-panel, #111821));
+  max-height: 200px;
+  overflow-y: auto;
+  min-height: 60px;
+}
+.tsme-source-row {
+  padding: 6px 10px;
+  border-top: 1px solid var(--sv-border-subtle, var(--border-subtle, #1e2832));
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tsme-source-row:first-child {
+  border-top: none;
+}
+.tsme-source-row:hover:not(.tsme-disabled) {
+  background: var(--sv-accent-dim, var(--accent-dim, rgba(78, 161, 255, 0.10)));
+}
+.tsme-source-row.tsme-selected {
+  background: var(--sv-accent-soft, rgba(78, 161, 255, 0.18));
+}
+.tsme-source-row.tsme-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.tsme-source-label {
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tsme-source-meta {
+  font-size: 11px;
+  color: var(--sv-text-tertiary, var(--text-tertiary, #6b7b8a));
+  white-space: nowrap;
+}
+.tsme-source-note {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--sv-text-tertiary, var(--text-tertiary, #6b7b8a));
+  font-size: 12px;
+}
+.tsme-source-note.tsme-err {
+  color: var(--sv-red, var(--red, #e55353));
+}
+
+/* ===== Badges ===== */
+.tsme-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.tsme-badge-hess {
+  color: var(--sv-green, var(--green, #38c172));
+  background: rgba(56, 193, 114, 0.14);
+}
+.tsme-badge-no-hess {
+  color: var(--sv-amber, var(--amber, #f2b84b));
+  background: rgba(242, 184, 75, 0.14);
+}
+.tsme-badge-imag {
+  color: var(--sv-red, var(--red, #e55353));
+  background: rgba(229, 83, 83, 0.14);
+}
+
+/* ===== Mode panel ===== */
+.tsme-mode-list {
+  border: 1px solid var(--sv-border-subtle, var(--border-subtle, #1e2832));
+  border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
+  background: var(--sv-bg-panel, var(--bg-panel, #111821));
+  max-height: 220px;
+  overflow-y: auto;
+  min-height: 60px;
+}
+.tsme-mode-row {
+  padding: 6px 10px;
+  border-top: 1px solid var(--sv-border-subtle, var(--border-subtle, #1e2832));
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tsme-mode-row:first-child {
+  border-top: none;
+}
+.tsme-mode-row:hover {
+  background: var(--sv-accent-dim, var(--accent-dim, rgba(78, 161, 255, 0.10)));
+}
+.tsme-mode-row.tsme-preview {
+  background: var(--sv-accent-soft, rgba(78, 161, 255, 0.12));
+}
+.tsme-mode-row.tsme-confirmed {
+  background: rgba(56, 193, 114, 0.14);
+  border-left: 3px solid var(--sv-green, var(--green, #38c172));
+}
+.tsme-mode-idx {
+  font-weight: 600;
+  min-width: 40px;
+  color: var(--sv-text-secondary, var(--text-secondary, #b0bec8));
+}
+.tsme-mode-freq {
+  font-weight: 500;
+  min-width: 80px;
+}
+.tsme-mode-freq.tsme-imag {
+  color: var(--sv-red, var(--red, #e55353));
+}
+.tsme-mode-confirm-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--sv-green, var(--green, #38c172));
+  border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
+  background: transparent;
+  color: var(--sv-green, var(--green, #38c172));
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.tsme-mode-confirm-btn:hover {
+  background: rgba(56, 193, 114, 0.14);
+}
+.tsme-mode-hint {
+  font-size: 11px;
+  color: var(--sv-amber, var(--amber, #f2b84b));
+  padding: 4px 0;
+}
+.tsme-mode-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--sv-text-tertiary, var(--text-tertiary, #6b7b8a));
+  font-size: 12px;
+}
+
+/* ===== Settings panel ===== */
+.tsme-settings-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  align-items: center;
+}
+.tsme-settings-label {
+  font-size: 12px;
+  color: var(--sv-text-secondary, var(--text-secondary, #b0bec8));
+  white-space: nowrap;
+}
+.tsme-settings-value {
+  font-size: 12px;
+  color: var(--sv-text-primary, var(--text-primary, #e5edf5));
+}
+.tsme-settings-input {
+  padding: 4px 8px;
+  border: 1px solid var(--sv-border-default, var(--border-default, #24303b));
+  border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
+  background: var(--sv-bg-elevated, var(--bg-elevated, #1a2332));
+  color: var(--sv-text-primary, var(--text-primary, #e5edf5));
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tsme-settings-input:focus {
+  border-color: var(--sv-accent, var(--accent, #4ea1ff));
+}
+.tsme-settings-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.tsme-settings-checkbox-row input[type="checkbox"] {
+  accent-color: var(--sv-accent, var(--accent, #4ea1ff));
+  cursor: pointer;
+}
+.tsme-settings-checkbox-label {
+  font-size: 12px;
+  color: var(--sv-text-secondary, var(--text-secondary, #b0bec8));
+  cursor: pointer;
+}
+.tsme-settings-warning {
+  font-size: 11px;
+  color: var(--sv-amber, var(--amber, #f2b84b));
+  padding: 4px 0 4px 22px;
+}
+
+/* ===== Footer / actions ===== */
+.tsme-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--sv-border-subtle, var(--border-subtle, #1e2832));
+}
+.tsme-footer-nav {
+  display: flex;
+  gap: 6px;
+}
+.tsme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border: 1px solid var(--sv-border-default, var(--border-default, #24303b));
+  border-radius: var(--sv-radius-sm, var(--radius-sm, 6px));
+  background: var(--sv-bg-elevated, var(--bg-elevated, #1a2332));
+  color: var(--sv-text-secondary, var(--text-secondary, #b0bec8));
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.tsme-btn:hover:not(:disabled) {
+  border-color: var(--sv-accent, var(--accent, #4ea1ff));
+  color: var(--sv-text-primary, var(--text-primary, #e5edf5));
+}
+.tsme-btn:focus-visible {
+  outline: 2px solid var(--sv-accent, var(--accent, #4ea1ff));
+  outline-offset: 1px;
+}
+.tsme-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tsme-btn-primary {
+  background: var(--sv-accent, var(--accent, #4ea1ff));
+  color: #fff;
+  border-color: var(--sv-accent, var(--accent, #4ea1ff));
+}
+.tsme-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.tsme-error {
+  font-size: 11px;
+  color: var(--sv-red, var(--red, #e55353));
+  padding: 4px 0;
+}
+
+/* ===== Loading spinner ===== */
+.tsme-loading {
+  text-align: center;
+  padding: 16px 12px;
+  color: var(--sv-text-tertiary, var(--text-tertiary, #6b7b8a));
+  font-size: 12px;
+}

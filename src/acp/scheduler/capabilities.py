@@ -49,6 +49,7 @@ __all__ = [
     "NoCapableNodeError",
     "derive_required_software",
     "is_degraded",
+    "local_missing_software",
     "local_satisfies",
     "matches_capabilities",
 ]
@@ -433,29 +434,35 @@ def matches_capabilities(
 # --------------------------------------------------------------------- #
 
 
-def local_satisfies(required_software: Iterable[str]) -> bool:
-    """Whether the server-local machine provides every required binary.
+def local_missing_software(required_software: Iterable[str]) -> tuple[str, ...]:
+    """Return the software the server-local process cannot resolve.
 
     Resolves each name via :func:`cccp.software.resolve_executable`, seeded
     with the ``executables.<name>.path`` from the cccp YAML config
     (``~/.cccp.yaml``) so config-only installs count as present — mirrors
     the CLI preflight (cli.py ``_preflight_workflow``).  Per-name order:
-    configured path → env → PATH → fallbacks.  No SSH: this describes the
+    configured path → env → PATH → fallbacks → bounded scan.  No SSH: this describes the
     head node the scheduler runs on (D14).
     """
     names = list(required_software)
     if not names:
-        return True
+        return ()
     try:
         configured_executables = load_config().get("executables") or {}
     except Exception:
         configured_executables = {}
+    missing: list[str] = []
     for name in names:
         configured = configured_executables.get(name)
         configured_path = configured.get("path") if isinstance(configured, dict) else None
         if resolve_executable(name, configured_path=configured_path) is None:
-            return False
-    return True
+            missing.append(name)
+    return tuple(sorted(set(missing)))
+
+
+def local_satisfies(required_software: Iterable[str]) -> bool:
+    """Whether the server-local machine provides every required binary."""
+    return not local_missing_software(required_software)
 
 
 def is_degraded(node_status: Any) -> bool:
@@ -499,6 +506,8 @@ class NoCapableNodeError(RuntimeError):
         missing_software: Software no node provided (sorted tuple; empty
             when the failure is tag-driven or context-dependent).
         missing_tags: Tags no node declared (sorted tuple).
+        local_missing_software: Software missing from the server-local process.
+        remote_nodes_configured: Whether any enabled remote node was present.
     """
 
     def __init__(
@@ -507,8 +516,12 @@ class NoCapableNodeError(RuntimeError):
         *,
         missing_software: Iterable[str] | None = None,
         missing_tags: Iterable[str] | None = None,
+        local_missing_software: Iterable[str] | None = None,
+        remote_nodes_configured: bool | None = None,
     ) -> None:
         super().__init__(message)
         self.code = "no_capable_node"
         self.missing_software = tuple(sorted(missing_software or ()))
         self.missing_tags = tuple(sorted(missing_tags or ()))
+        self.local_missing_software = tuple(sorted(local_missing_software or ()))
+        self.remote_nodes_configured = remote_nodes_configured

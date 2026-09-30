@@ -72,6 +72,9 @@ from acp.api.v1_schemas import (
     DecisionResolveResponse,
     DiskUsageResponse,
     EnergyGraphResponse,
+    FrequencySourceEntryModel,
+    FrequencySourceOriginModel,
+    FrequencySourcesResponse,
     HessianPreviewRequest,
     HessianPreviewResponse,
     HessianPreviewResult,
@@ -151,6 +154,12 @@ from acp.api.v1_schemas import (
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
+    V1EditDiffEntry,
+    V1EditDraftResponse,
+    V1EditPreviewRequest,
+    V1EditPreviewResponse,
+    V1EditRecalculateRequest,
+    V1EditRecalculateResponse,
     V1FrameCandidateInfo,
     V1FrameCandidateListResponse,
     V1FrameCandidateRequest,
@@ -173,7 +182,6 @@ from acp.api.v1_schemas import (
     ValidateMethodRequest,
     ValidateMethodResponse,
 )
-from acp.calculations.batch import normalize_tag, parse_tag_comment
 from acp.chem.embedding import (
     molfile_to_xyz,
     parse_xyz_first_frame,
@@ -181,7 +189,7 @@ from acp.chem.embedding import (
     xyz_formula,
 )
 from acp.core.stage_labels import stage_label
-from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
+from acp.results.manifest import MANIFEST_FILENAME
 from acp.results.pes_profile import (
     LEGACY_S2_PROFILE_RELATIVE_PATH,
     PES_PROFILE_RELATIVE_PATH,
@@ -197,6 +205,18 @@ from acp.scheduler.capabilities import (
 )
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import build_manifest, resolve_safe
+from acp.scheduler.job_edit import (
+    EditConflictError,
+    EditValidationError,
+    build_edit_draft,
+    compute_payload_hash,
+    compute_preview_fingerprint,
+    compute_source_revision,
+    diff_editable_specs,
+    editable_spec_from_parts,
+    editable_spec_from_record,
+    workflow_edit_status,
+)
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
@@ -220,6 +240,7 @@ from acp.scheduler.runner import find_workflow_state
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
+from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
 
 UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
@@ -253,6 +274,37 @@ def _manager(request: Request) -> JobManager:
     if manager is None:
         raise HTTPException(status_code=503, detail="Job scheduler not initialized")
     return manager
+
+
+def _apply_auto_tag_rules_on_submit(manager: JobManager, record: Any) -> None:
+    """Apply project auto-tag rules after a task is created."""
+    from acp.scheduler.auto_tags import apply_auto_tag_rules
+
+    project_id = getattr(record, "project_id", None)
+    if not project_id:
+        return
+    project = manager.projects.get_project(project_id)
+    if project is None:
+        return
+    settings = project.get("settings", {})
+    rules = settings.get("auto_tag_rules")
+    if not rules or not isinstance(rules, list):
+        return
+    task_row = manager.tasks.get(record.id)
+    if task_row is None:
+        return
+    matched = apply_auto_tag_rules(rules, task_row)
+    if not matched:
+        return
+    existing_tags: list[str] = []
+    raw_tags = task_row.get("tags", "[]")
+    try:
+        existing_tags = json.loads(raw_tags) if isinstance(raw_tags, str) else list(raw_tags)
+    except (json.JSONDecodeError, TypeError):
+        existing_tags = []
+    merged = list(dict.fromkeys(existing_tags + matched))
+    if merged != existing_tags:
+        manager.tasks.update_display_fields(record.id, tags=merged)
 
 
 def _is_remote_job(record: Any) -> bool:
@@ -531,6 +583,24 @@ def _record_to_v1_model(
         study_status=study_status,
         result=record.result,
         progress_state=_compute_progress_state(record),
+    )
+
+
+def _enrich_v1_with_names(
+    model: V1JobRecordModel,
+    name_projection: dict[str, Any] | None,
+) -> V1JobRecordModel:
+    """Merge task name projection fields onto a V1 job model."""
+    if not name_projection:
+        return model
+    return model.model_copy(
+        update={
+            "custom_name": name_projection.get("custom_name"),
+            "resolved_name": name_projection.get("resolved_name", ""),
+            "default_name": name_projection.get("default_name", ""),
+            "name_revision": name_projection.get("name_revision", 0),
+            "name_updated_at": name_projection.get("name_updated_at"),
+        }
     )
 
 
@@ -1231,21 +1301,24 @@ def _prepare_bond_scan_input(
     return prepared
 
 
-def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> dict[str, Any]:
-    """Inline ``source_id`` references in a Workbench ``batch_structures`` payload.
+def _resolve_batch_structures_input(
+    inp: dict[str, Any], request: Request
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Inline ``source_id`` references and capture metadata snapshots.
 
-    Items may reference reusable structures via ``source_id``
-    (``job_<id>:<rel_path>``).  The runner materializer only understands
-    inline XYZ, so references are expanded here while the API still has
-    store + remote-fetcher access (works for local and remote source jobs).
+    Returns ``(resolved_input, snapshots)`` where *snapshots* is a list of
+    per-item metadata dicts captured at materialisation time.  Snapshots are
+    written to ``events.jsonl`` after job submission — they never feed into
+    the ``JobSpec`` or ``input_hash`` computation.
     """
     items = inp.get("items")
     if not isinstance(items, list) or not items:
-        return inp
+        return inp, []
     if not any(isinstance(item, dict) and item.get("source_id") for item in items):
-        return inp
+        return inp, []
     service = _structure_source_service(request)
     resolved_items: list[Any] = []
+    snapshots: list[dict[str, Any]] = []
     for item in items:
         if not isinstance(item, dict):
             resolved_items.append(item)
@@ -1258,12 +1331,319 @@ def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> di
             asset, _ = service.get(source_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        resolved = {key: value for key, value in item.items() if key != "source_id"}
+        resolved = {
+            key: value
+            for key, value in item.items()
+            if key not in {"source_id", "allow_disabled_use", "disabled_use_reason"}
+        }
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
+        # Capture metadata snapshot (plan §7).
+        snapshot: dict[str, Any] = {
+            "source_id": source_id,
+            "source_uid": "",
+            "job_id": "",
+            "relative_path": "",
+            "custom_name": None,
+            "default_name": asset.get("name", ""),
+            "resolved_name": asset.get("name", ""),
+            "tags": [],
+            "role": asset.get("tag", ""),
+            "role_evidence": "",
+            "candidate_id": asset.get("candidate_id", ""),
+            "metadata_revision": 0,
+        }
+        try:
+            from acp.scheduler.structure_sources import StructureSourceService
+
+            parsed_id, parsed_path = StructureSourceService.parse_source_id(source_id)
+            snapshot["job_id"] = parsed_id
+            snapshot["relative_path"] = parsed_path
+        except (ValueError, ImportError):
+            pass
+        # Enrich from org store when available.
+        try:
+            from acp.scheduler.structure_source_store import StructureSourceStore
+
+            manager = _manager(request)
+            org_store = StructureSourceStore(manager.store.db_path)
+            org_entry = org_store.get_by_legacy_source_id(source_id)
+            if org_entry is not None:
+                from acp.scheduler.structure_source_store import CandidateUseConflictError
+
+                allow_disabled = bool(item.get("allow_disabled_use"))
+                exception_reason = str(item.get("disabled_use_reason") or "")
+                try:
+                    org_entry = org_store.validate_candidate_use(
+                        org_entry["source_uid"],
+                        allow_disabled=allow_disabled,
+                        justification=exception_reason,
+                    )
+                except CandidateUseConflictError as exc:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "error": "candidate_not_active",
+                            "source_uid": org_entry["source_uid"],
+                            "current": exc.projection,
+                        },
+                    ) from exc
+                snapshot["source_uid"] = org_entry.get("source_uid", "")
+                snapshot["candidate_record_id"] = org_entry.get("candidate_record_id", "")
+                snapshot["version_id"] = org_entry.get("version_id", "")
+                snapshot["geometry_hash"] = org_entry.get("geometry_hash", "")
+                snapshot["source_revision"] = org_entry.get("source_revision", "")
+                snapshot["usage_status"] = org_entry.get("usage_status", "active")
+                snapshot["custom_name"] = org_entry.get("custom_name")
+                snapshot["default_name"] = org_entry.get("default_name", "")
+                snapshot["resolved_name"] = org_entry.get("resolved_name", "")
+                snapshot["tags"] = org_entry.get("tags", [])
+                org_role = org_entry.get("role", "")
+                if org_role:
+                    snapshot["role"] = org_role
+                snapshot["role_evidence"] = org_entry.get("role_evidence", "")
+                snapshot["metadata_revision"] = org_entry.get("metadata_revision", 0)
+                snapshot["disabled_exception"] = bool(
+                    org_entry.get("usage_status") == "disabled" and allow_disabled
+                )
+                snapshot["exception_reason"] = exception_reason
+        except HTTPException:
+            raise
+        except Exception:
+            logger.debug("Org-store snapshot enrichment skipped", exc_info=True)
+        snapshot["captured_at"] = _utc_now_iso()
+        snapshots.append(snapshot)
     resolved_inp = dict(inp)
     resolved_inp["items"] = resolved_items
-    return resolved_inp
+    return resolved_inp, snapshots
+
+
+def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list[dict[str, Any]]:
+    """Validate and snapshot a directly reused candidate without guessing legacy links."""
+    ref = inp.get("source_ref")
+    if not isinstance(ref, dict):
+        return []
+    job_id = str(ref.get("job_id") or "").strip()
+    rel_path = str(ref.get("path") or "").strip()
+    if not job_id or not rel_path:
+        return []
+    source_id = f"job_{job_id}:{rel_path}"
+    from acp.scheduler.structure_source_store import (
+        CandidateUseConflictError,
+        StructureSourceStore,
+    )
+
+    manager = _manager(request)
+    store = StructureSourceStore(manager.store.db_path)
+    projection = store.get_by_legacy_source_id(source_id)
+    if projection is None:
+        return []
+    allow_disabled = bool(ref.get("allow_disabled_use"))
+    exception_reason = str(ref.get("disabled_use_reason") or "")
+    try:
+        projection = store.validate_candidate_use(
+            projection["source_uid"],
+            allow_disabled=allow_disabled,
+            justification=exception_reason,
+        )
+    except CandidateUseConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "candidate_not_active",
+                "source_uid": projection["source_uid"],
+                "current": exc.projection,
+            },
+        ) from exc
+    return [
+        {
+            "source_id": source_id,
+            "source_uid": projection["source_uid"],
+            "candidate_record_id": projection["candidate_record_id"],
+            "version_id": projection["version_id"],
+            "geometry_hash": projection["geometry_hash"],
+            "source_revision": projection["source_revision"],
+            "usage_status": projection["usage_status"],
+            "metadata_revision": projection.get("metadata_revision", 0),
+            "disabled_exception": bool(
+                projection.get("usage_status") == "disabled" and allow_disabled
+            ),
+            "exception_reason": exception_reason,
+            "input_snapshot": {
+                "source_type": inp.get("source_type"),
+                "source": inp.get("source"),
+                "charge": inp.get("charge"),
+                "multiplicity": inp.get("multiplicity"),
+                "source_ref": ref,
+            },
+            "captured_at": _utc_now_iso(),
+        }
+    ]
+
+
+def _tsmode_error_to_http(exc: Any) -> HTTPException:
+    """Map a TsmodeError to an HTTPException with the correct status code."""
+    return HTTPException(
+        status_code=getattr(exc, "http_status", 422),
+        detail={"error": exc.error_code, "detail": exc.detail},
+    )
+
+
+def _prepare_tsmode_input(inp: dict[str, Any], manager: JobManager) -> dict[str, Any]:
+    """Validate and rewrite tsmode submission input for scheduler materialization.
+
+    Loads the frequency source bundle, resolves the target mode, and rewrites
+    ``inp`` to the ``source_type: tsmode_bundle`` form consumed by
+    ``runner._materialize_tsmode_bundle``.
+    """
+    from acp.calculations.tsmode.contracts import TsmodeError, sha256_file
+    from acp.calculations.tsmode.mode_mapping import (
+        enforce_launch_gate,
+        resolve_target_mode,
+    )
+    from acp.calculations.tsmode.source import load_bundle_from_files
+
+    source_job_id = inp.get("source_job_id")
+    if not isinstance(source_job_id, str) or not source_job_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "frequency_source_incomplete",
+                "detail": "source_job_id is required",
+            },
+        )
+
+    source_record = manager.get(source_job_id)
+    if source_record is None:
+        raise HTTPException(status_code=404, detail=f"Source job not found: {source_job_id}")
+    if not source_record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Source job has no work dir: {source_job_id}")
+
+    source_work_dir = Path(source_record.work_dir)
+    entry_id = inp.get("entry_id")
+    sources = _discover_frequency_sources(source_work_dir, source_job_id)
+
+    if not sources:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "frequency_source_incomplete",
+                "detail": f"No frequency sources found in job {source_job_id}",
+            },
+        )
+
+    matched_source = None
+    if isinstance(entry_id, str) and entry_id:
+        for src in sources:
+            if src.entry_id == entry_id:
+                matched_source = src
+                break
+    elif len(sources) == 1:
+        matched_source = sources[0]
+
+    if matched_source is None:
+        available = [s.entry_id for s in sources]
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "frequency_source_incomplete",
+                "detail": (
+                    f"Cannot resolve frequency source (entry_id={entry_id!r}); "
+                    f"available: {available}"
+                ),
+            },
+        )
+
+    if not matched_source.hessian_available:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "hessian_missing",
+                "detail": f"No Hessian file found for source {matched_source.entry_id}",
+            },
+        )
+
+    out_abs = source_work_dir / matched_source.output_path
+    hess_abs = source_work_dir / matched_source.hess_path  # type: ignore[arg-type]
+
+    source_mode_index = inp.get("source_mode_index")
+    if isinstance(source_mode_index, bool) or not isinstance(source_mode_index, int):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "target_mode_invalid",
+                "detail": (
+                    f"source_mode_index must be an int, got {type(source_mode_index).__name__}"
+                ),
+            },
+        )
+
+    try:
+        bundle = load_bundle_from_files(
+            str(out_abs),
+            str(hess_abs),
+            charge=None,
+            multiplicity=None,
+            level=None,
+            origin={"kind": "job", "job_id": source_job_id, "entry_id": matched_source.entry_id},
+        )
+    except TsmodeError as exc:
+        raise _tsmode_error_to_http(exc) from exc
+
+    try:
+        resolution = resolve_target_mode(bundle, source_mode_index)
+    except TsmodeError as exc:
+        raise _tsmode_error_to_http(exc) from exc
+
+    try:
+        enforce_launch_gate(
+            resolution,
+            require_verified=not bool(inp.get("allow_unverified_mapping")),
+            orca_version=bundle.level.orca_version,
+        )
+    except TsmodeError as exc:
+        raise _tsmode_error_to_http(exc) from exc
+
+    hess_sha = sha256_file(hess_abs)
+    out_sha = sha256_file(out_abs)
+
+    resolved: dict[str, Any] = {
+        "source_type": "tsmode_bundle",
+        "frequency_out": str(out_abs),
+        "hess": str(hess_abs),
+        "hess_sha256": hess_sha,
+        "frequency_out_sha256": out_sha,
+        "geometry": None,
+        "source_mode_index": source_mode_index,
+        "charge": bundle.charge,
+        "multiplicity": bundle.multiplicity,
+        "level": bundle.level.to_dict(),
+        "origin": {
+            "kind": "job",
+            "job_id": source_job_id,
+            "entry_id": matched_source.entry_id,
+            "source_mode_index": source_mode_index,
+            "target_mode_id": resolution.target_mode_id,
+        },
+    }
+
+    for key in ("max_iterations", "recalc_hess", "trust_radius", "retry_limit", "final_frequency"):
+        if inp.get(key) is not None:
+            resolved[key] = inp[key]
+    if inp.get("allow_unverified_mapping") is not None:
+        resolved["allow_unverified_mapping"] = inp["allow_unverified_mapping"]
+
+    level_overrides = inp.get("level_overrides")
+    if isinstance(level_overrides, dict):
+        allowed_keys = {"solvent", "solvent_model", "scf"}
+        filtered = {k: v for k, v in level_overrides.items() if k in allowed_keys}
+        if filtered:
+            resolved_level = dict(resolved.get("level") or {})
+            resolved_level.update(filtered)
+            resolved["level"] = resolved_level
+
+    resolved["_bundle_level"] = bundle.level.to_dict()
+    return resolved
 
 
 def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
@@ -1366,6 +1746,8 @@ def _target_validation_detail(exc: Exception) -> dict[str, Any]:
         "message": str(exc),
         "missing_software": list(getattr(exc, "missing_software", ()) or ()),
         "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
+        "local_missing_software": list(getattr(exc, "local_missing_software", ()) or ()),
+        "remote_nodes_configured": getattr(exc, "remote_nodes_configured", None),
     }
 
 
@@ -1422,6 +1804,61 @@ def _inherit_stage_execution_fields(
     return inherited_mode, inherited_node
 
 
+def _resolve_irc_source_reference(inp: dict[str, Any], manager: Any) -> dict[str, Any]:
+    """Map a selected task-result source to its formal manifest product."""
+    from acp.calculations.irc.source import load_ts_result_manifest
+
+    if inp.get("source_job_id") and inp.get("source_product_id"):
+        return inp
+    ref = inp.get("source_ref")
+    source_id = str(
+        inp.get("source_id")
+        or (ref.get("source_id") if isinstance(ref, dict) else "")
+        or ""
+    )
+    prefix, separator, path = source_id.partition(":")
+    if not separator or not prefix.startswith("job_") or not path.startswith("RESULT/"):
+        raise HTTPException(status_code=422, detail="IRC input must be a TS task result")
+    source_job_id = prefix.removeprefix("job_")
+    record = manager.get(source_job_id)
+    if record is None or not record.work_dir:
+        raise HTTPException(status_code=404, detail="IRC source job not found")
+    try:
+        manifest = load_ts_result_manifest(record, getattr(manager, "remote_fetcher", None))
+    except (OSError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="IRC source manifest is invalid") from exc
+    if manifest is None:
+        raise HTTPException(status_code=422, detail="IRC source has no result manifest")
+    relative = path.removeprefix("RESULT/")
+    product = next((item for item in manifest.products if item.path == relative), None)
+    if product is None:
+        raise HTTPException(status_code=422, detail="IRC source is not a registered TS product")
+    return {
+        "source_job_id": source_job_id,
+        "source_product_id": product.id,
+        "directions": inp.get("directions") or ["forward", "reverse"],
+    }
+
+
+@router.get("/irc/ts-source")
+def preview_irc_ts_source(request: Request, source_id: str = Query(...)) -> dict[str, Any]:
+    """Return the locked IRC level for a selected formal TS result."""
+    from acp.calculations.irc.source import resolve_verified_ts_source
+
+    manager = _manager(request)
+    reference = _resolve_irc_source_reference({"source_id": source_id}, manager)
+    record = manager.get(reference["source_job_id"])
+    try:
+        source = resolve_verified_ts_source(
+            record,
+            reference["source_product_id"],
+            getattr(manager, "remote_fetcher", None),
+        )
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return source.provenance()
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1431,14 +1868,29 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    if req.workflow == "irc":
+        req.input = _resolve_irc_source_reference(req.input, manager)
     if req.workflow == "BatchOptimize":
         _canonicalize_batch_keywords(req.method)
+    batch_snapshots: list[dict[str, Any]] = _snapshot_direct_source_input(req.input, request)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
     elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
-        req.input = _resolve_batch_structures_input(req.input, request)
+        req.input, resolved_batch_snapshots = _resolve_batch_structures_input(req.input, request)
+        batch_snapshots.extend(resolved_batch_snapshots)
+    elif req.workflow == "tsmode":
+        req.input = _prepare_tsmode_input(req.input, manager)
+        bundle_level = req.input.pop("_bundle_level", None)
+        if bundle_level and not req.method.get("levels"):
+            req.method["levels"] = {
+                "tsmode": {
+                    "engine": "orca",
+                    "method": bundle_level.get("method", ""),
+                    "basis": bundle_level.get("basis", ""),
+                }
+            }
     req.execution_mode, req.target_node = _inherit_stage_execution_fields(
         req.workflow, req.input, req.execution_mode, req.target_node, manager
     )
@@ -1477,6 +1929,34 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         record = manager.submit(spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if batch_snapshots:
+        try:
+            events_path = runtime_file(record.work_dir, "events.jsonl")
+            JobEventLog(events_path).append(
+                "structure_source_snapshot",
+                job_id=record.id,
+                snapshots=batch_snapshots,
+            )
+            from acp.scheduler.structure_source_store import StructureSourceStore
+
+            usage_store = StructureSourceStore(manager.store.db_path)
+            for snapshot in batch_snapshots:
+                source_uid = str(snapshot.get("source_uid") or "")
+                if source_uid:
+                    usage_store.record_usage(
+                        source_uid,
+                        record.id,
+                        snapshot,
+                        disabled_exception=bool(snapshot.get("disabled_exception")),
+                        exception_reason=str(snapshot.get("exception_reason") or ""),
+                    )
+        except Exception:
+            logger.debug("Snapshot event log failed for job %s", record.id, exc_info=True)
+    # --- auto-tag rules hook (T11) ---
+    try:
+        _apply_auto_tag_rules_on_submit(manager, record)
+    except Exception:  # noqa: BLE001 — rule errors must never fail submission
+        pass
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,
@@ -1494,6 +1974,7 @@ def list_jobs(
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
     store = _job_store(request)
+    manager = _manager(request)
     if project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
         if status is not None:
@@ -1503,6 +1984,8 @@ def list_jobs(
     if workflow:
         enriched = [item for item in enriched if item["record"].spec.workflow == workflow]
     jobs = []
+    job_ids = [item["record"].id for item in enriched]
+    name_map = manager.tasks.get_name_projections_by_job_ids(job_ids)
     for item in enriched:
         model = _record_to_v1_model(
             item["record"],
@@ -1511,6 +1994,7 @@ def list_jobs(
             study_status=item["study_status"],
         )
         model = _enrich_job_snapshot(item["record"], model, include_event=False)
+        model = _enrich_v1_with_names(model, name_map.get(item["record"].id))
         jobs.append(model)
     return V1JobListResponse(
         jobs=jobs,
@@ -1786,39 +2270,51 @@ def get_energy_graph(
         from acp.calculations.pes.review import load_pes_review
         from acp.compat.legacy.manifests import read_s2_candidate_manifest, read_s2_review
 
-        _manifest_path, s2_payload = _pes_profile_for_job(request, record)
-        if s2_payload is not None:
-            manual_review = load_pes_review(work_dir)
-            if manual_review is not None:
-                selected_rows = []
-                for row in manual_review.get("selected") or []:
-                    if not isinstance(row, dict) or not row.get("candidate_id"):
-                        continue
-                    role_token = str(row.get("role") or "").upper()
-                    selected_rows.append(
-                        {
-                            "candidate_id": str(row.get("candidate_id") or ""),
-                            "frame_index": int(row.get("frame_index") or 0),
-                            "role": "ts" if role_token == "TS" else "intermediate",
-                            "active": True,
-                            "selection_source": str(row.get("selection_source") or "manual"),
-                        }
-                    )
-                s2_candidates = selected_rows or None
-                s2_review_state = {
-                    "status": str(manual_review.get("status") or "confirmed"),
-                    "decided_at": manual_review.get("confirmed_at"),
-                    "revision": manual_review.get("revision"),
-                }
-            else:
-                saved_review = read_s2_review(_manifest_path)
-                candidate_manifest = read_s2_candidate_manifest(_manifest_path)
-                s2_candidates = (
-                    candidate_manifest.get("candidates")
-                    if isinstance(candidate_manifest, dict)
-                    else None
+        try:
+            _manifest_path, s2_payload = _pes_profile_for_job(request, record)
+        except HTTPException as exc:
+            # Local running/failed jobs degrade to a live/pending 200 when the
+            # final profile simply is not there yet. Remote reads keep their
+            # original error (e.g. a catalog fetch failure must surface as
+            # the clear 404, never a misleading pending graph).
+            if _is_remote_job(record):
+                raise
+            if exc.status_code != 404 or not str(exc.detail).startswith("No PES profile"):
+                raise
+            _manifest_path, s2_payload = None, None
+        # Manual review outranks the legacy s2 fallback even without a final
+        # profile — failed-task annotations must survive refresh.
+        manual_review = load_pes_review(work_dir)
+        if manual_review is not None:
+            selected_rows = []
+            for row in manual_review.get("selected") or []:
+                if not isinstance(row, dict) or not row.get("candidate_id"):
+                    continue
+                role_token = str(row.get("role") or "").upper()
+                selected_rows.append(
+                    {
+                        "candidate_id": str(row.get("candidate_id") or ""),
+                        "frame_index": int(row.get("frame_index") or 0),
+                        "role": "ts" if role_token == "TS" else "intermediate",
+                        "active": True,
+                        "selection_source": str(row.get("selection_source") or "manual"),
+                    }
                 )
-                s2_review_state = saved_review if isinstance(saved_review, dict) else None
+            s2_candidates = selected_rows or None
+            s2_review_state = {
+                "status": str(manual_review.get("status") or "confirmed"),
+                "decided_at": manual_review.get("confirmed_at"),
+                "revision": manual_review.get("revision"),
+            }
+        elif s2_payload is not None:
+            saved_review = read_s2_review(_manifest_path)
+            candidate_manifest = read_s2_candidate_manifest(_manifest_path)
+            s2_candidates = (
+                candidate_manifest.get("candidates")
+                if isinstance(candidate_manifest, dict)
+                else None
+            )
+            s2_review_state = saved_review if isinstance(saved_review, dict) else None
     elif workflow == "mechanism":
         store = _job_store(request)
         rows = store.list_mechanism_studies(limit=1, job_id=job_id)
@@ -1829,6 +2325,23 @@ def get_energy_graph(
             report = _build_mechanism_report(study_id, job_id, study_dir)
             mechanism_report = report.model_dump()
 
+    job_status = (
+        record.status.value if getattr(record.status, "value", None) else str(record.status)
+    )
+    irc_live_source = ""
+    irc_live_error = ""
+    if workflow == "irc" and _is_remote_job(record):
+        from acp.results.irc_remote_live import refresh_remote_irc
+
+        fetcher = manager.remote_fetcher
+        if fetcher is None:
+            irc_live_error = "remote_fetch_unavailable"
+        else:
+            try:
+                irc_live_source = refresh_remote_irc(record, work_dir, fetcher)
+            except (OSError, ValueError, RemoteFileError, json.JSONDecodeError) as exc:
+                logger.warning("Remote IRC live refresh failed for %s: %s", job_id, exc)
+                irc_live_error = "remote_fetch_failed"
     graph = build_energy_graph_from_job(
         job_id,
         workflow=workflow,
@@ -1840,6 +2353,7 @@ def get_energy_graph(
         s2_review_state=s2_review_state,
         item_id=item_id,
         view=view,
+        job_status=job_status,
     )
     # view_type or explicit view param must match the returned projection;
     # unknown views safely default to the default projection (200, never 500)
@@ -1858,8 +2372,106 @@ def get_energy_graph(
                 s2_review_state=s2_review_state,
                 item_id=item_id,
                 view=None,
+                job_status=job_status,
             )
+    graph_metadata = dict(graph.get("metadata") or {})
+    if workflow == "irc":
+        if irc_live_source:
+            graph_metadata["live_source"] = irc_live_source
+        if irc_live_error:
+            graph_metadata["live_error"] = irc_live_error
+            if not graph.get("nodes"):
+                graph_metadata["reason"] = irc_live_error
+    graph_metadata.setdefault("job_status", job_status)
+    graph["metadata"] = graph_metadata
     return EnergyGraphResponse.model_validate(graph)
+
+
+@router.get("/jobs/{job_id}/irc/frames/{direction}/{frame_index}/geometry")
+def get_irc_frame_geometry(
+    job_id: str, direction: str, frame_index: int, request: Request
+) -> dict[str, str]:
+    """Return exactly one IRC XYZ frame, including during a remote run."""
+    from acp.results.frame_candidate_geometry import (
+        FrameCandidateError,
+        resolve_frame_geometry,
+    )
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or record.spec.workflow != "irc" or not record.work_dir:
+        raise HTTPException(status_code=404, detail="IRC job not found")
+    valid_index = 0 <= frame_index <= 100000 or direction == "ts" and frame_index == -1
+    if direction not in {"forward", "reverse", "ts"} or not valid_index:
+        raise HTTPException(status_code=422, detail="Invalid IRC direction or frame index")
+    if direction == "ts" and frame_index != -1:
+        raise HTTPException(status_code=422, detail="TS frame index must be -1")
+    work_dir = Path(record.work_dir)
+    if _is_remote_job(record) and direction != "ts":
+        from acp.results.irc_remote_live import ensure_remote_irc_point, refresh_remote_irc
+
+        fetcher = manager.remote_fetcher
+        if fetcher is not None:
+            try:
+                refresh_remote_irc(record, work_dir, fetcher)
+                ensure_remote_irc_point(record, work_dir, fetcher, direction, frame_index)
+            except (OSError, ValueError, RemoteFileError, json.JSONDecodeError):
+                # An older job can still resolve a point from its mirrored raw
+                # trajectory or multi-frame path file.
+                logger.debug("Remote IRC point fetch unavailable", exc_info=True)
+    frame_id = "irc_ts" if direction == "ts" else f"irc_{direction}_{frame_index}"
+    try:
+        xyz = resolve_frame_geometry(
+            work_dir,
+            view_type="irc",
+            frame_index=frame_index,
+            workflow="irc",
+            frame_id=frame_id,
+        )
+    except FrameCandidateError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"xyz": xyz}
+
+
+@router.get("/jobs/{job_id}/irc/log-tail")
+def get_irc_log_tail(
+    job_id: str, request: Request, offset: int = Query(default=0, ge=0)
+) -> dict[str, Any]:
+    """Read complete new lines from the ORCA output during an IRC run."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None or record.spec.workflow != "irc" or not record.work_dir:
+        raise HTTPException(status_code=404, detail="IRC job not found")
+    relative = "WORK/07_PATH/ORCA/irc.out"
+    limit = 64 * 1024
+    try:
+        if _is_remote_job(record):
+            fetcher = manager.remote_fetcher
+            if fetcher is None:
+                raise HTTPException(status_code=503, detail="Remote fetch unavailable")
+            info = fetcher.file_stat(record, relative)
+            start = offset if offset <= info.size else 0
+            data = fetcher.read_range(record, relative, start, limit)
+        else:
+            path = Path(record.work_dir) / relative
+            size = path.stat().st_size
+            start = offset if offset <= size else 0
+            with path.open("rb") as handle:
+                handle.seek(start)
+                data = handle.read(limit)
+    except FileNotFoundError:
+        return {"available": False, "lines": [], "next_offset": 0}
+    except (OSError, RemoteFileError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    last_newline = data.rfind(b"\n")
+    if last_newline < 0:
+        return {"available": True, "lines": [], "next_offset": start}
+    consumed = data[: last_newline + 1]
+    return {
+        "available": True,
+        "lines": consumed.decode("utf-8", errors="replace").splitlines(),
+        "next_offset": start + len(consumed),
+    }
 
 
 @router.get(
@@ -2119,16 +2731,15 @@ def save_job_s2_review(
 # ---------------------------------------------------------------------------
 # PES manual review (pes_review_v1): user-confirmed TS/INT selections are the
 # authoritative hand-off to BatchOptimize via RESULT/result_manifest.json.
+# Terminal non-completed jobs (FAILED/CANCELLED) may review their partial
+# scan frames (live snapshot / ORCA ledger / frame dirs) — running jobs
+# can never finalize, and unconfirmed partial data never goes downstream.
 # ---------------------------------------------------------------------------
 
+_PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
-def _pes_review_work_dir(
-    request: Request,
-    job_id: str,
-    *,
-    require_completed: bool,
-) -> Path:
-    """Resolve the task dir of a canonical PESsearch job for manual review.
+def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
+    """Resolve (task dir, task status) of a PESsearch job for manual review.
 
     Remote jobs work on the controlled remote cache (staging root): reads are
     served from it directly and writes (save/restore) are uploaded back to
@@ -2136,9 +2747,11 @@ def _pes_review_work_dir(
     the remote ``RESULT/`` tree.
 
     Raises:
-        404: job/work_dir missing or no canonical PES profile.
+        404: job/work_dir missing, or no reviewable data (neither a canonical
+            PES profile nor live scan frames).
         400: job is not a PESsearch job.
-        409: job has not completed yet (POST only).
+        409: job is still active (POST/restore only) — running tasks cannot
+            finalize a review.
         410: legacy mechanism task (read-only compatibility).
     """
     manager = _manager(request)
@@ -2152,6 +2765,12 @@ def _pes_review_work_dir(
         )
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+    status = (
+        record.status.value if getattr(record.status, "value", None) else str(record.status)
+    )
+    status_key = str(status).strip().upper()
+    active_job = status_key not in {"COMPLETED", "FAILED", "CANCELLED"}
+
     if _is_remote_job(record):
         work_dir = _job_read_root(request, record)
     else:
@@ -2164,16 +2783,33 @@ def _pes_review_work_dir(
                 status_code=410,
                 detail="历史 mechanism 任务保持只读，不支持人工确认选点",
             )
-        raise HTTPException(
-            status_code=404,
-            detail=f"No PES profile for job {job_id}; expected {PES_PROFILE_RELATIVE_PATH}",
-        )
-    if require_completed and record.status != JobStatus.COMPLETED:
+        if for_write and active_job:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Job {job_id} is still active (status={status}); "
+                    "a review can only be finalized on a terminal task"
+                ),
+            )
+        from acp.results.pes_scan_live import collect_pes_scan_live_frames
+
+        if (
+            collect_pes_scan_live_frames(work_dir, include_incomplete=True) is None
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No reviewable PES scan data for job {job_id}; expected "
+                    f"{PES_PROFILE_RELATIVE_PATH} or live scan artifacts"
+                ),
+            )
+        return work_dir, status_key
+    if for_write and active_job:
         raise HTTPException(
             status_code=409,
-            detail=f"Job {job_id} is not completed yet (status={record.status.value})",
+            detail=f"Job {job_id} is not completed yet (status={status})",
         )
-    return work_dir
+    return work_dir, status_key
 
 
 def _pes_frame_rel_paths(work_dir: Path, frame_indexes: set[int]) -> list[str]:
@@ -2302,7 +2938,7 @@ def _stage_remote_review_backups(request: Request, job_id: str) -> None:
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=False)
+    work_dir, _task_status = _pes_review_work_dir(request, job_id, for_write=False)
     _stage_remote_review_backups(request, job_id)
 
     from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
@@ -2331,7 +2967,7 @@ def restore_pes_review_endpoint(
     """Re-activate a previous review backup; manifest switches to that round."""
     from acp.calculations.pes.review import PES_REVIEW_BACKUP_TEMPLATE
 
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+    work_dir, task_status = _pes_review_work_dir(request, job_id, for_write=True)
     remote_ctx = _remote_review_setup(
         request,
         job_id,
@@ -2348,6 +2984,7 @@ def restore_pes_review_endpoint(
             work_dir,
             int(req.backup),
             expected_revision=req.expected_revision,
+            source_task_status=task_status,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -2356,6 +2993,7 @@ def restore_pes_review_endpoint(
         status_code = 404 if "not found" in message else 422
         raise HTTPException(status_code=status_code, detail=message) from exc
 
+    source_block = payload.get("source") or {}
     if remote_ctx is not None:
         _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
 
@@ -2365,6 +3003,9 @@ def restore_pes_review_endpoint(
         restored_from=int(payload.get("restored_from") or req.backup),
         revision=int(payload.get("revision") or 0),
         selected_count=len(payload.get("selected") or []),
+        source_task_status=str(source_block.get("task_status") or ""),
+        scan_complete=source_block.get("scan_complete"),
+        frame_source=str(source_block.get("frame_source") or ""),
         candidates=[
             PesReviewCandidate(
                 candidate_id=str(row.get("candidate_id") or ""),
@@ -2385,7 +3026,7 @@ def save_pes_review_endpoint(
     request: Request,
 ) -> PesReviewResponse:
     """Confirm TS/INT selections: materialise RESULT/structures + pes_review.json + manifest."""
-    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+    work_dir, task_status = _pes_review_work_dir(request, job_id, for_write=True)
     remote_ctx = _remote_review_setup(
         request,
         job_id,
@@ -2402,12 +3043,14 @@ def save_pes_review_endpoint(
             candidates=[item.model_dump(exclude_none=True) for item in req.candidates],
             note=req.note or "",
             expected_revision=req.expected_revision,
+            source_task_status=task_status,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except PesReviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    source_block = payload.get("source") or {}
     if remote_ctx is not None:
         _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
 
@@ -2418,6 +3061,9 @@ def save_pes_review_endpoint(
         selected_count=len(payload.get("selected") or []),
         note=payload.get("note") or None,
         confirmed_at=payload.get("confirmed_at"),
+        source_task_status=str(source_block.get("task_status") or ""),
+        scan_complete=source_block.get("scan_complete"),
+        frame_source=str(source_block.get("frame_source") or ""),
         candidates=[
             PesReviewCandidate(
                 candidate_id=str(row.get("candidate_id") or ""),
@@ -2429,6 +3075,180 @@ def save_pes_review_endpoint(
             for row in payload.get("selected") or []
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# TS Mode frequency sources
+# ---------------------------------------------------------------------------
+
+
+def _discover_frequency_sources(work_dir: Path, job_id: str) -> list[FrequencySourceEntryModel]:
+    """Walk *work_dir* for ORCA frequency outputs and matching Hessians.
+
+    Probes ``WORK/`` for ``.out`` files containing ``VIBRATIONAL FREQUENCIES``
+    and ``RESULT/result_manifest.json`` for ``kind: frequency_modes`` products.
+    For each ``.out``, a matching ``.hess`` is located via sibling-stem or
+    single-glob fallback (reimplements ``_discover_sibling_hessian`` semantics
+    from ``cccp.qc.interfaces.orca``).
+    """
+    from cccp.qc.interfaces.orca_ts import parse_ts_frequency_map
+
+    entries: list[FrequencySourceEntryModel] = []
+    seen: set[str] = set()
+
+    def _add_source(
+        out_path: Path,
+        *,
+        label: str = "",
+        item_id: str | None = None,
+        entry_id: str = "",
+    ) -> None:
+        if str(out_path) in seen:
+            return
+        seen.add(str(out_path))
+        out_rel = str(out_path.relative_to(work_dir))
+        hess_path = _discover_sibling_hess(out_path)
+        hess_rel = str(hess_path.relative_to(work_dir)) if hess_path else None
+        imaginary_count = 0
+        mode_count = 0
+        atom_count = 0
+        try:
+            text = out_path.read_text(encoding="utf-8", errors="replace")
+            freq_map = parse_ts_frequency_map(text)
+            mode_count = len(freq_map)
+            imaginary_count = sum(1 for f in freq_map.values() if f < 0.0)
+            atom_count = _count_atoms_from_output(text)
+        except Exception:  # noqa: BLE001
+            pass
+        eid = entry_id or out_path.stem
+        entries.append(
+            FrequencySourceEntryModel(
+                entry_id=eid,
+                item_id=item_id,
+                label=label or out_path.stem,
+                output_path=out_rel,
+                hess_path=hess_rel,
+                complete=True,
+                hessian_available=hess_path is not None and hess_path.is_file(),
+                imaginary_count=imaginary_count,
+                atom_count=atom_count,
+                mode_count=mode_count,
+                origin=FrequencySourceOriginModel(job_id=job_id, item_id=item_id, entry_id=eid),
+            )
+        )
+
+    # 1) Walk WORK/ for .out files with vibrational frequencies
+    work = work_dir / "WORK"
+    if work.is_dir():
+        for out_file in sorted(work.rglob("*.out")):
+            try:
+                head = out_file.read_text(encoding="utf-8", errors="replace")[:8192]
+            except OSError:
+                continue
+            if "VIBRATIONAL FREQUENCIES" in head:
+                _add_source(out_file)
+
+    # 2) Walk RESULT/result_manifest.json for frequency_modes products
+    manifest_path = work_dir / "RESULT" / "result_manifest.json"
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            manifest = {}
+        for product in manifest.get("products", []):
+            if product.get("kind") != "frequency_modes":
+                continue
+            prod_path = work_dir / product.get("path", "")
+            if not prod_path.is_file():
+                continue
+            sibling_out = prod_path.with_suffix(".out")
+            if not sibling_out.is_file():
+                continue
+            item_id = product.get("item_id")
+            entry_id = product.get("entry_id", sibling_out.stem)
+            _add_source(
+                sibling_out,
+                label=str(product.get("label") or sibling_out.stem),
+                item_id=str(item_id) if item_id else None,
+                entry_id=str(entry_id),
+            )
+
+    return entries
+
+
+def _discover_sibling_hess(out_path: Path) -> Path | None:
+    """Find a ``.hess`` sibling for an ORCA ``.out`` file.
+
+    Same semantics as ``cccp.qc.interfaces.orca._discover_sibling_hessian``:
+    exact stem match first, then single-glob fallback.
+    """
+    parent = out_path.parent
+    exact = parent / f"{out_path.stem}.hess"
+    if exact.exists():
+        return exact
+    matches = sorted(parent.glob("*.hess"))
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _count_atoms_from_output(text: str) -> int:
+    """Best-effort atom count from ORCA ``CARTESIAN COORDINATES`` section."""
+    lines = text.splitlines()
+    for idx in range(len(lines) - 1, -1, -1):
+        if "CARTESIAN COORDINATES" in lines[idx]:
+            count = 0
+            cursor = idx + 2
+            while cursor < len(lines):
+                stripped = lines[cursor].strip()
+                cursor += 1
+                if not stripped:
+                    continue
+                parts = stripped.split()
+                if len(parts) >= 4:
+                    try:
+                        int(parts[0])
+                        float(parts[2])
+                        count += 1
+                        continue
+                    except (IndexError, ValueError):
+                        pass
+                break
+            if count > 0:
+                return count
+    return 0
+
+
+@router.get(
+    "/jobs/{job_id}/frequency-sources",
+    response_model=FrequencySourcesResponse,
+)
+def get_frequency_sources(
+    job_id: str,
+    request: Request,
+) -> FrequencySourcesResponse:
+    """Return available frequency sources for a job.
+
+    404 when the job is unknown.  Remote jobs with absent local files return
+    200 with ``sources: []`` and a ``pending_fetch`` warning.
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    work_dir = Path(record.work_dir)
+    warnings: list[str] = []
+
+    is_remote = _is_remote_job(record)
+    if is_remote and not work_dir.is_dir():
+        warnings.append("pending_fetch")
+        return FrequencySourcesResponse(job_id=job_id, sources=[], warnings=warnings)
+
+    sources = _discover_frequency_sources(work_dir, job_id)
+    return FrequencySourcesResponse(job_id=job_id, sources=sources, warnings=warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -2484,13 +3304,24 @@ def get_structure_viewer_catalog(
         fetch_remote_catalog=fetch and record.status.is_terminal,
     )
 
+    if workflow == "irc" and _is_remote_job(record) and manager.remote_fetcher is not None:
+        from acp.results.irc_remote_live import refresh_remote_irc
+
+        try:
+            refresh_remote_irc(record, work_dir, manager.remote_fetcher)
+        except (OSError, ValueError, RemoteFileError, json.JSONDecodeError):
+            logger.debug("Remote IRC structure catalog refresh failed", exc_info=True)
+
     try:
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
         payload = build_structure_viewer_payload(
             task_root,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
             item_id=item_id,
+            input_xyz=input_xyz_snapshot(record.spec.input),
         )
     except StructureViewerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -2577,11 +3408,14 @@ def get_structure_viewer_geometry(
     task_root, _remote_catalog_ready = _structure_viewer_root(request, record)
 
     try:
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
         payload = build_structure_viewer_payload(
             task_root,
             job_id=job_id,
             workflow=workflow,
             job_status=job_status,
+            input_xyz=input_xyz_snapshot(record.spec.input),
         )
     except StructureViewerError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -2602,9 +3436,14 @@ def get_structure_viewer_geometry(
         )
 
     resolved = _resolve_geometry_path(task_root, geometry_ref)
+    input_xyz = None
+    if resolved is None and geometry_ref == "input.xyz":
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
+        input_xyz = input_xyz_snapshot(record.spec.input)
 
     # Remote job: file absent locally → try cache or fetch
-    if resolved is None and is_remote:
+    if resolved is None and input_xyz is None and is_remote:
         cache = _remote_structure_cache(request)
         cached = cache.get_cached(job_id, geometry_ref)
         if cached is not None:
@@ -2627,18 +3466,19 @@ def get_structure_viewer_geometry(
         else:
             raise HTTPException(status_code=409, detail="pending_fetch")
 
-    if resolved is None:
+    if resolved is None and input_xyz is None:
         raise HTTPException(
             status_code=404,
             detail=f"Geometry file not found or unsafe: {geometry_ref}",
         )
 
-    try:
-        xyz_text = resolved.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise HTTPException(
-            status_code=404, detail=f"Cannot read geometry file: {exc}"
-        ) from exc
+    if input_xyz is not None:
+        xyz_text = input_xyz
+    else:
+        try:
+            xyz_text = resolved.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise HTTPException(status_code=404, detail=f"Cannot read geometry file: {exc}") from exc
 
     if entry.source.frame_index is not None:
         frame = read_traj_frame_xyz(resolved, entry.source.frame_index)
@@ -2655,8 +3495,8 @@ def _try_historical_mode_projection(
     work_dir: Path,
     entry_id_str: str,
     *,
-    threshold_cm1: float = -50.0,
-    threshold_source: str = "default",
+    threshold_cm1: float = 0.0,
+    threshold_source: str = "fixed",
 ) -> StructureViewerVibrationsResponse | None:
     """Read-only fallback: parse ORCA output on-the-fly when normal_modes.json is absent.
 
@@ -2703,11 +3543,7 @@ def _try_historical_mode_projection(
             vectors_tuple = calc.mode_vectors.get(mode_idx, ())
             if not atom_count and vectors_tuple:
                 atom_count = len(vectors_tuple)
-            ir = (
-                calc.mode_ir_intensities.get(mode_idx)
-                if calc.mode_ir_intensities
-                else None
-            )
+            ir = calc.mode_ir_intensities.get(mode_idx) if calc.mode_ir_intensities else None
             try:
                 mode = StructureViewerModeModel(
                     mode_index=mode_idx,
@@ -2796,16 +3632,9 @@ def get_structure_viewer_vibrations(
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
 
-    def _resolve_imaginary_threshold() -> tuple[float, str]:
-        """Read the significant-imaginary cutoff from job method metadata."""
-        method = record.spec.method
-        if isinstance(method, dict):
-            raw = method.get("imaginary_threshold_cm1")
-            if isinstance(raw, (int, float)):
-                return float(raw), "job_config"
-        return -50.0, "default"
-
-    threshold_val, threshold_src = _resolve_imaginary_threshold()
+    # Compatibility response fields; old per-job magnitude cutoffs no longer
+    # affect TS evidence or the BatchOptimize/IRC validation gates.
+    threshold_val, threshold_src = 0.0, "fixed"
 
     def _not_available(reason: str) -> StructureViewerVibrationsResponse:
         return StructureViewerVibrationsResponse(
@@ -3076,6 +3905,7 @@ def save_frame_candidate_endpoint(
             name=req.name,
             expected_revision=req.expected_revision,
             item_id=req.item_id,
+            frame_id=req.frame_id,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -3291,7 +4121,11 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return _record_to_v1_model(record)
+    model = _record_to_v1_model(record)
+    task_row = manager.tasks.get(job_id)
+    if task_row is not None:
+        model = _enrich_v1_with_names(model, resolve_task_names(task_row))
+    return model
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -3301,7 +4135,11 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     model = _record_to_v1_model(record)
-    return _enrich_job_snapshot(record, model, include_event=True)
+    model = _enrich_job_snapshot(record, model, include_event=True)
+    task_row = manager.tasks.get(job_id)
+    if task_row is not None:
+        model = _enrich_v1_with_names(model, resolve_task_names(task_row))
+    return model
 
 
 # ---------------------------------------------------------------------- #
@@ -3648,6 +4486,9 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     job_model = _record_to_v1_model(record)
     job_model = _enrich_job_snapshot(record, job_model, include_event=True)
+    task_row = manager.tasks.get(job_id)
+    if task_row is not None:
+        job_model = _enrich_v1_with_names(job_model, resolve_task_names(task_row))
     if record.result is None:
         backfilled = _backfill_result_from_disk(record)
         if backfilled is not None:
@@ -3811,9 +4652,10 @@ def rerun_job(
 ) -> V1JobRecordModel:
     """Re-queue the existing task for a full in-place rerun.
 
-    Unlike ``/clone``, this endpoint never creates a new job row or task
-    directory.  The optional legacy ``project_id`` body is accepted only
-    when it matches the current project.
+    Unlike ``/clone``, this endpoint keeps the same job row and task identity.
+    A legacy task directory with shell-unsafe characters may be renamed before
+    queueing. The optional legacy ``project_id`` body is accepted only when it
+    matches the current project.
     """
     manager = _manager(request)
     try:
@@ -3825,6 +4667,310 @@ def rerun_job(
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return _record_to_v1_model(record)
+
+
+def _build_edited_spec(
+    record: JobRecord,
+    req: V1EditPreviewRequest | V1EditRecalculateRequest,
+    request: Request,
+    manager: JobManager,
+) -> tuple[JobSpec, list[dict[str, Any]]]:
+    """Rebuild a validated JobSpec from an edit request.
+
+    Shares the exact parameter resolvers of POST ``/jobs`` (electronic-state
+    expansion, bond-scan preparation, stage-artifact resolution, batch
+    structure inlining, stage execution inheritance) so a configuration that
+    is legal at creation is legal for recalculation and vice versa (plan §9).
+    """
+    workflow = req.workflow or record.spec.workflow
+    edit_status = workflow_edit_status(workflow)
+    if not edit_status["editable"]:
+        raise EditValidationError(
+            f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算；"
+            f"迁移建议：{edit_status.get('migration_hint') or '—'}"
+        )
+    method = _expand_method_electronic_state(dict(req.method))
+    inp = dict(req.input)
+    batch_snapshots: list[dict[str, Any]] = []
+    if workflow == "irc":
+        try:
+            inp = _resolve_irc_source_reference(inp, manager)
+        except HTTPException as exc:
+            raise EditValidationError(str(exc.detail)) from exc
+    elif workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
+        inp = _prepare_bond_scan_input(inp, manager)
+    elif workflow == "PESsearch":
+        inp = _resolve_stage_artifact_ref(workflow, inp, manager)
+    elif workflow == "BatchOptimize":
+        inp, batch_snapshots = _resolve_batch_structures_input(inp, request)
+
+    original_execution_mode = (
+        getattr(record.spec.execution_mode, "value", None) or record.spec.execution_mode
+    )
+    execution_mode = (
+        req.execution_mode if req.execution_mode is not None else original_execution_mode
+    )
+    target_node = req.target_node if req.target_node is not None else record.spec.target_node
+    execution_mode, target_node = _inherit_stage_execution_fields(
+        workflow, inp, execution_mode, target_node, manager
+    )
+    molecule_name = req.molecule_name or record.spec.molecule_name
+    # Edit parity: an omitted/empty task_name keeps the ORIGINAL value (even
+    # empty — scheduler/legacy records may carry '') instead of re-defaulting
+    # to the workflow id, so an unmodified resubmission diffs empty. Downstream
+    # task-dir naming already applies ``task_name or workflow``.
+    task_name = str(req.task_name or "").strip() or record.spec.task_name
+    is_submit = isinstance(req, V1EditRecalculateRequest)
+    spec = JobSpec(
+        workflow=workflow,
+        name=req.name if is_submit else record.spec.name,
+        input=inp,
+        method=method,
+        resources=dict(req.resources),
+        output_dir=req.output_dir if is_submit else None,
+        config_path=(req.config_path if is_submit and req.config_path else record.spec.config_path),
+        tags=list(req.tags),
+        node_tags=list(req.node_tags),
+        project_id=req.project_id or (record.project_id or record.spec.project_id),
+        execution_mode=execution_mode,
+        target_node=target_node,
+        molecule_name=molecule_name,
+        task_name=task_name,
+        remark=req.remark,
+    )
+    if workflow == "irc":
+        try:
+            spec = manager._verified_irc_spec(spec)
+        except ValueError as exc:
+            raise EditValidationError(str(exc)) from exc
+    return spec, batch_snapshots
+
+
+def _edited_spec_diff(record: JobRecord, spec: JobSpec) -> list[dict[str, Any]]:
+    return diff_editable_specs(
+        editable_spec_from_record(record),
+        editable_spec_from_parts(
+            workflow=spec.workflow,
+            input_spec=spec.input,
+            method=spec.method,
+            resources=spec.resources,
+            molecule_name=spec.molecule_name,
+            task_name=spec.task_name,
+            remark=spec.remark,
+            tags=spec.tags,
+            node_tags=spec.node_tags,
+            project_id=spec.project_id,
+            execution_mode=getattr(spec.execution_mode, "value", None) or spec.execution_mode,
+            target_node=spec.target_node,
+            config_path=spec.config_path,
+        ),
+    )
+
+
+def _validate_edited_execution(spec: JobSpec, manager: JobManager) -> None:
+    try:
+        validate_execution_request(spec)
+    except ExecutionTargetError as exc:
+        detail = _target_validation_detail(exc)
+        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
+        raise HTTPException(status_code=400, detail=detail) from exc
+    try:
+        validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+
+
+def _edit_payload_dict(
+    job_id: str, body: V1EditPreviewRequest | V1EditRecalculateRequest, spec: JobSpec
+) -> dict[str, Any]:
+    return {
+        "job_id": job_id,
+        "mode": body.mode,
+        "workflow": spec.workflow,
+        "input": spec.input,
+        "method": spec.method,
+        "resources": spec.resources,
+        "molecule_name": spec.molecule_name,
+        "task_name": spec.task_name,
+        "remark": spec.remark,
+        "tags": spec.tags,
+        "node_tags": spec.node_tags,
+        "project_id": spec.project_id,
+        "execution_mode": getattr(spec.execution_mode, "value", None) or spec.execution_mode,
+        "target_node": spec.target_node,
+    }
+
+
+@router.get("/jobs/{job_id}/edit-draft", response_model=V1EditDraftResponse)
+def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
+    """Restore the original submission configuration as an editable draft."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    draft = build_edit_draft(record, run_root=manager.run_root)
+    return V1EditDraftResponse(**draft)
+
+
+@router.post("/jobs/{job_id}/edit-recalculate/preview", response_model=V1EditPreviewResponse)
+def preview_job_edit_recalculate(
+    job_id: str,
+    body: V1EditPreviewRequest,
+    request: Request,
+) -> V1EditPreviewResponse:
+    """Validate an edited spec and return the normalised diff (no writes)."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if body.mode not in ("in_place", "new_job"):
+        raise HTTPException(status_code=422, detail=f"invalid mode: {body.mode!r}")
+    source_revision = compute_source_revision(record)
+    if body.expected_source_revision and body.expected_source_revision != source_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "source_revision_conflict",
+                "message": "源任务配置已变化，请刷新编辑草稿后重试",
+                "current": source_revision,
+            },
+        )
+    try:
+        spec, _ = _build_edited_spec(record, body, request, manager)
+    except EditValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _validate_edited_execution(spec, manager)
+
+    blocking: list[str] = []
+    if body.mode == "in_place":
+        if spec.workflow != record.spec.workflow:
+            blocking.append("原地重算锁定工作流；请切换为「创建新任务」以更换工作流")
+        if not record.status.is_terminal:
+            blocking.append(
+                f"任务状态 {record.status.value} 非终态；请先取消并等待终态后再原地重算"
+            )
+    diff = _edited_spec_diff(record, spec)
+    warnings: list[str] = []
+    for entry in diff:
+        if entry.get("kind") == "input":
+            warnings.append(f"输入已修改（{entry['path']}）；提交后将重新物化输入")
+        if entry.get("kind") == "resource":
+            warnings.append(f"资源已修改（{entry['path']}）")
+    fingerprint = compute_preview_fingerprint(
+        job_id, source_revision, spec.workflow, spec.input, spec.method, spec.resources
+    )
+    return V1EditPreviewResponse(
+        ok=not blocking,
+        mode=body.mode,
+        workflow=spec.workflow,
+        job_id=job_id,
+        diff=[V1EditDiffEntry(**entry) for entry in diff],
+        warnings=warnings,
+        blocking_reasons=blocking,
+        preview_fingerprint=fingerprint,
+        source_revision=source_revision,
+    )
+
+
+@router.post("/jobs/{job_id}/edit-recalculate", response_model=V1EditRecalculateResponse)
+def submit_job_edit_recalculate(
+    job_id: str,
+    body: V1EditRecalculateRequest,
+    request: Request,
+) -> V1EditRecalculateResponse:
+    """Apply an edited configuration as an in-place attempt or a new task."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if body.mode not in ("in_place", "new_job"):
+        raise HTTPException(status_code=422, detail=f"invalid mode: {body.mode!r}")
+    if not str(body.request_id or "").strip():
+        raise HTTPException(status_code=422, detail="request_id is required")
+    from acp.scheduler.job_edit import JobEditOperationStore
+
+    known_request = False
+    existing_op = JobEditOperationStore(manager.store.db_path).get(body.request_id)
+    if existing_op is not None:
+        if existing_op["job_id"] != job_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"request_id {body.request_id} 已用于其他任务；请使用新的 request_id",
+            )
+        # A replayed request may legitimately carry a stale revision and
+        # fingerprint — the manager's payload-hash check arbitrates it.
+        known_request = True
+    source_status = workflow_edit_status(record.spec.workflow)
+    if body.mode == "in_place":
+        if not source_status["editable"]:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
+                    "历史任务仅支持查看与迁移，原地编辑重算已禁用"
+                ),
+            )
+        if body.workflow and body.workflow != record.spec.workflow:
+            raise HTTPException(
+                status_code=422,
+                detail="原地重算锁定工作流；如需更换工作流请使用「创建新任务」模式",
+            )
+    source_revision = compute_source_revision(record)
+    if (
+        not known_request
+        and body.expected_source_revision
+        and body.expected_source_revision != source_revision
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "source_revision_conflict",
+                "message": "源任务配置已变化，请刷新编辑草稿后重试",
+                "current": source_revision,
+            },
+        )
+    try:
+        spec, _batch_snapshots = _build_edited_spec(record, body, request, manager)
+    except EditValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _validate_edited_execution(spec, manager)
+    if body.preview_fingerprint and not known_request:
+        expected = compute_preview_fingerprint(
+            job_id, source_revision, spec.workflow, spec.input, spec.method, spec.resources
+        )
+        if body.preview_fingerprint != expected:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "preview_fingerprint_conflict",
+                    "message": "提交的配置与预览时不一致，请重新预览后提交",
+                },
+            )
+    diff = _edited_spec_diff(record, spec)
+    payload = _edit_payload_dict(job_id, body, spec)
+    try:
+        result = manager.edit_recalculate(
+            job_id,
+            mode=body.mode,
+            new_spec=spec,
+            expected_source_revision=body.expected_source_revision,
+            request_id=body.request_id,
+            payload_hash=compute_payload_hash(payload),
+            payload_json=json.dumps(payload, default=str, sort_keys=True),
+            diff_summary=diff,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
+    except EditConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return V1EditRecalculateResponse(
+        **{key: value for key, value in result.items() if key != "diff"},
+        diff_summary=[V1EditDiffEntry(**entry) for entry in diff],
+    )
 
 
 @router.post("/jobs/purge", response_model=V1JobPurgeResponse)
@@ -3936,6 +5082,27 @@ def get_job_files(
         )
         for item in manifest["files"]
     ]
+    # Queued BatchOptimize jobs have not reached runner-side materialization
+    # yet. Surface their persisted input snapshot as the task-root input.xyz.
+    record = manager.get(job_id)
+    if (
+        path is None
+        and record is not None
+        and record.spec.workflow == "BatchOptimize"
+        and not any(entry.path == "input.xyz" for entry in entries)
+    ):
+        from acp.scheduler.input_snapshot import input_xyz_snapshot
+
+        xyz_snapshot = input_xyz_snapshot(record.spec.input)
+        if xyz_snapshot:
+            entries.append(
+                FileEntry(
+                    path="input.xyz",
+                    size=len(xyz_snapshot.encode("utf-8")),
+                    modified=datetime.now(timezone.utc).timestamp(),
+                    is_dir=False,
+                )
+            )
     return FileManifestResponse(
         work_dir=manifest["work_dir"],
         files=entries,
@@ -3948,13 +5115,24 @@ def get_job_files(
 
 
 @router.get("/jobs/{job_id}/files/{file_path:path}")
-def download_job_file(job_id: str, file_path: str, request: Request) -> FileResponse:
+def download_job_file(job_id: str, file_path: str, request: Request) -> Response:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     resolved = resolve_safe(work_dir, file_path)
     if resolved is None:
+        record = manager.get(job_id)
+        if file_path.replace("\\", "/") == "input.xyz" and record is not None:
+            from acp.scheduler.input_snapshot import input_xyz_snapshot
+
+            xyz_snapshot = input_xyz_snapshot(record.spec.input)
+            if xyz_snapshot:
+                return Response(
+                    content=xyz_snapshot,
+                    media_type="chemical/x-xyz; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="input.xyz"'},
+                )
         raise HTTPException(status_code=404, detail="File not found or outside work directory")
     return FileResponse(str(resolved), filename=resolved.name)
 
@@ -4418,13 +5596,15 @@ def run_irc_from_artifact(
     if not source_record.work_dir:
         raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
 
-    source_dir = Path(source_record.work_dir)
-    result_dir = source_dir / "RESULT"
-    manifest_path = result_dir / MANIFEST_FILENAME
-    if not source_dir.is_dir():
-        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+    from acp.calculations.irc.source import (
+        load_ts_result_manifest,
+        resolve_verified_ts_source,
+    )
+
     try:
-        manifest = load_result_manifest(source_dir)
+        manifest = load_ts_result_manifest(
+            source_record, getattr(manager, "remote_fetcher", None)
+        )
     except (
         OSError,
         UnicodeError,
@@ -4439,11 +5619,8 @@ def run_irc_from_artifact(
             detail=f"Invalid result manifest for job {job_id}: {exc}",
         ) from exc
     if manifest is None:
-        if manifest_path.is_file():
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid result manifest for job {job_id}",
-            )
+        if (Path(source_record.work_dir) / "RESULT" / MANIFEST_FILENAME).is_file():
+            raise HTTPException(status_code=422, detail="IRC source result manifest is invalid")
         raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
 
     product = next((item for item in manifest.products if item.id == artifact_id), None)
@@ -4455,72 +5632,23 @@ def run_irc_from_artifact(
             detail=f"Artifact {artifact_id} is not a structure product",
         )
 
-    structure_path = resolve_safe(result_dir, product.path)
-    if structure_path is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Artifact {artifact_id} has an invalid manifest path",
-        )
-
     try:
-        raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if not isinstance(raw_manifest, dict):
-            raise HTTPException(status_code=422, detail="Result manifest root must be an object")
-        raw_products = raw_manifest.get("products")
-        if not isinstance(raw_products, list):
-            raise HTTPException(status_code=422, detail="Result manifest products must be a list")
-        raw_product = next(
-            (
-                item
-                for item in raw_products
-                if isinstance(item, dict) and str(item.get("id", "")) == artifact_id
-            ),
-            {},
+        resolve_verified_ts_source(
+            source_record, artifact_id, getattr(manager, "remote_fetcher", None)
         )
-    except (
-        OSError,
-        UnicodeError,
-        json.JSONDecodeError,
-        ValueError,
-        TypeError,
-        AttributeError,
-    ) as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid result manifest for job {job_id}: {exc}",
-        ) from exc
-
-    metadata_tag: str | None = None
-    for key in ("role", "tag"):
-        raw_tag = raw_product.get(key)
-        if isinstance(raw_tag, str):
-            metadata_tag = normalize_tag(raw_tag)
-            if metadata_tag is not None:
-                break
-    try:
-        lines = structure_path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError) as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot read structure artifact {artifact_id}: {exc}",
-        ) from exc
-    comment_tag = parse_tag_comment(lines[1] if len(lines) > 1 else "").get("tag")
-    if (metadata_tag or comment_tag) != "TS":
-        raise HTTPException(
-            status_code=422,
-            detail=f"Artifact {artifact_id} must carry a TS role or TAG",
-        )
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     source_spec = source_record.spec
     irc_spec = JobSpec(
         workflow="irc",
         name=f"{source_spec.name or job_id}_irc",
         input={
-            "input_artifact": str(structure_path),
-            "input_role": "transition_state",
+            "source_job_id": job_id,
+            "source_product_id": artifact_id,
             "directions": ["forward", "reverse"],
         },
-        method=dict(source_spec.method),
+        method={},
         resources=dict(source_spec.resources),
         config_path=source_spec.config_path,
         tags=list(source_spec.tags),
@@ -4706,9 +5834,33 @@ def list_structure_sources(
         workflow=workflow,
         include_remote=include_remote,
     )
-    return StructureSourceListResponse(
-        sources=[StructureSourceSummary(**entry) for entry in entries]
-    )
+    sources = [StructureSourceSummary(**entry) for entry in entries]
+    # Enrich with org-store fields (custom_name, tags, role, etc.)
+    # when the org store is available.  Old DBs without org tables
+    # silently skip enrichment — the optional fields stay at defaults.
+    try:
+        manager = _manager(request)
+        from acp.scheduler.structure_source_store import StructureSourceStore
+
+        org_store = StructureSourceStore(manager.store.db_path)
+        for s in sources:
+            org_entry = org_store.get_by_legacy_source_id(s.source_id)
+            if org_entry is None:
+                continue
+            s.custom_name = org_entry.get("custom_name")
+            s.resolved_name = org_entry.get("resolved_name")
+            s.default_name = org_entry.get("default_name")
+            s.tags = org_entry.get("tags", [])
+            org_role = org_entry.get("role", "")
+            if org_role:
+                s.role = org_role
+            s.role_evidence = org_entry.get("role_evidence", "")
+            s.source_uid = org_entry.get("source_uid", "")
+            s.job_resolved_name = org_entry.get("job_resolved_name")
+            s.usage_status = org_entry.get("usage_status", "active")
+    except Exception:
+        logger.debug("Org-store enrichment skipped (store unavailable)", exc_info=True)
+    return StructureSourceListResponse(sources=sources)
 
 
 @router.get("/structure-sources/{source_id:path}", response_model=StructureSourceDetailResponse)

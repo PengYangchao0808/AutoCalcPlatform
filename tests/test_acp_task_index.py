@@ -34,6 +34,20 @@ _EXPECTED_COLUMNS = {
     "layout_version",
     "created_at",
     "updated_at",
+    # T1 org columns (migration 014)
+    "molecule_key",
+    "tags",
+    "archived",
+    "batch_id",
+    "last_activity_at",
+    "started_at",
+    "completed_at",
+    "group_id",
+    "progress",
+    # Wave 1 custom-name columns (migration 017)
+    "custom_name",
+    "name_revision",
+    "name_updated_at",
 }
 
 
@@ -294,9 +308,7 @@ except ImportError:  # pragma: no cover
     RemoteExecutionConfig = None
     RemoteNode = None
 
-_requires_remote_config = pytest.mark.skipif(
-    RemoteNode is None, reason="paramiko not installed"
-)
+_requires_remote_config = pytest.mark.skipif(RemoteNode is None, reason="paramiko not installed")
 
 
 def _real_node(name: str, max_jobs: int = 8) -> RemoteNode:

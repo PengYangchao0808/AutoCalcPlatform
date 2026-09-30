@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -66,6 +67,8 @@ def _fake_irc_with_endpoints(
     backend: Any,
     directions: tuple[str, ...] = ("forward", "reverse"),
     output_dir: Path | None = None,
+    forward_points: int | None = None,
+    reverse_points: int | None = None,
 ) -> None:
     """Configure the fake backend to create IRC endpoint files and return them."""
     output_dir = output_dir or tmp_path / "irc_work"
@@ -100,22 +103,24 @@ def _fake_irc_with_endpoints(
     endpoints_dict = {d: info["path"] for d, info in endpoint_data.items()}
     final_geometries = {d: info["coordinates"] for d, info in endpoint_data.items()}
 
-    backend.set_result(
-        "irc",
-        QCResult(
-            success=True,
-            energy=-77.0,
-            coordinates=np.zeros((6, 3)),
-            symbols=symbols,
-            converged=True,
-            output_file=output_dir / "irc.out",
-            log_file=output_dir / "irc.log",
-            metadata={
-                "endpoints": {d: str(p) for d, p in endpoints_dict.items()},
-                "final_geometries": {d: coords.tolist() for d, coords in final_geometries.items()},
-            },
-        ),
+    response = QCResult(
+        success=True,
+        energy=-77.0,
+        coordinates=np.zeros((6, 3)),
+        symbols=symbols,
+        converged=True,
+        output_file=output_dir / "irc.out",
+        log_file=output_dir / "irc.log",
+        metadata={
+            "endpoints": {d: str(p) for d, p in endpoints_dict.items()},
+            "final_geometries": {d: coords.tolist() for d, coords in final_geometries.items()},
+        },
     )
+    if forward_points is not None:
+        setattr(response, "forward_points", forward_points)
+    if reverse_points is not None:
+        setattr(response, "reverse_points", reverse_points)
+    backend.set_result("irc", response)
 
 
 # ---------------------------------------------------------------------------
@@ -288,10 +293,13 @@ def test_irc_progress_does_not_expose_legacy_header_counts(
 ) -> None:
     """Legacy forward_points fields are not reliable path-point evidence."""
     ts = _ts_artifact(tmp_path)
-    response = QCResult(success=True, coordinates=np.zeros((6, 3)), symbols=ts.elements)
-    setattr(response, "forward_points", 12)
-    setattr(response, "reverse_points", 18)
-    fake_backend.set_result("irc", response)
+    _fake_irc_with_endpoints(
+        tmp_path,
+        fake_backend,
+        output_dir=tmp_path / "irc_work",
+        forward_points=12,
+        reverse_points=18,
+    )
     progress_dir = tmp_path / "progress"
     reporter = ProgressReporter(
         progress_dir,
@@ -311,6 +319,39 @@ def test_irc_progress_does_not_expose_legacy_header_counts(
     assert result.status == "completed"
     state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
     assert "live_metrics" not in state
+
+
+def test_irc_without_endpoints_is_reported_as_failure(
+    tmp_path: Path,
+    fake_backend: Any,
+) -> None:
+    """Backend success with zero endpoint products must not publish completed."""
+    ts = _ts_artifact(tmp_path)
+    fake_backend.set_result(
+        "irc",
+        QCResult(success=True, coordinates=np.zeros((6, 3)), symbols=ts.elements),
+    )
+    progress_dir = tmp_path / "progress"
+    reporter = ProgressReporter(
+        progress_dir,
+        stages=["preparing", "irc_forward", "irc_backward", "validating"],
+        min_interval=0.0,
+    )
+
+    result = primitive_run_irc(
+        ts,
+        resources={
+            "output_dir": str(tmp_path / "irc_work"),
+            "result_dir": str(tmp_path / "RESULT"),
+        },
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "failed"
+    assert any("no endpoint" in error for error in result.errors)
+    state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert state["stages"]["validating"]["status"] == "failed"
 
 
 def test_irc_progress_marks_backend_failure(
@@ -354,12 +395,19 @@ def test_irc_cli_completes_reporter_after_workflow(
         fake_backend,
         output_dir=output_root / "WORK" / "07_PATH" / "ORCA",
     )
+    proof_path = tmp_path / "ts_source.json"
+    proof_path.write_text(json.dumps({
+        "schema": "irc_ts_source_v1", "method": "r2SCAN-3c", "basis": "",
+        "charge": 0, "multiplicity": 1,
+        "geometry_sha256": hashlib.sha256(ts.path.read_bytes()).hexdigest(),
+    }), encoding="utf-8")
     args = acp_cli.build_parser().parse_args(
         [
             "run",
             "irc",
             "--input",
             str(ts.path),
+            "--ts-provenance", str(proof_path),
             "--input-role",
             "transition_state",
             "--output",
@@ -539,7 +587,7 @@ def test_irc_cli_without_role_returns_usage_error(tmp_path: Path) -> None:
 
     # Then: the boundary rejects the ambiguous role with usage status 2.
     assert completed.returncode == 2
-    assert "--input-role transition_state" in f"{completed.stdout}\n{completed.stderr}"
+    assert "--ts-provenance" in f"{completed.stdout}\n{completed.stderr}"
 
 
 def test_irc_registry_entry_is_available() -> None:
@@ -572,6 +620,8 @@ def test_irc_scheduler_commands_forward_request_options(tmp_path: Path) -> None:
             "input_artifact": "inputs/ts.xyz",
             "input_role": "transition_state",
             "directions": ["forward"],
+            "charge": 0, "multiplicity": 1,
+            "ts_source": {"schema": "irc_ts_source_v1", "method": "M062X", "basis": "def2-SVP"},
         },
         method={"method": "M062X", "basis": "def2-SVP", "maxpoints": 33, "step": 0.2},
         resources={"nproc": 4, "mem": "2GB"},
@@ -601,6 +651,8 @@ def test_irc_scheduler_commands_preserve_both_directions(tmp_path: Path) -> None
             "input_artifact": "inputs/ts.xyz",
             "input_role": "transition_state",
             "directions": ["forward", "reverse"],
+            "charge": 0, "multiplicity": 1,
+            "ts_source": {"schema": "irc_ts_source_v1", "method": "M062X", "basis": ""},
         },
         method={},
     )
@@ -669,13 +721,17 @@ class TestIrcValidation:
         assert rmsd < 1e-10
 
     def test_classify_ts_identity_valid(self) -> None:
-        """Exactly one imaginary frequency below cutoff → valid TS."""
+        """Exactly one negative frequency → valid TS regardless of magnitude."""
         from acp.calculations.irc.validation import classify_ts_identity
 
         identity = classify_ts_identity([-800.0, 100.0, 200.0])
         assert identity.valid is True
         assert identity.imaginary_count == 1
         assert identity.imaginary_frequency_cm1 == -800.0
+
+        weak = classify_ts_identity([-34.22, 100.0, 200.0])
+        assert weak.valid is True
+        assert weak.imaginary_frequency_cm1 == -34.22
 
     def test_classify_ts_identity_no_imaginary(self) -> None:
         """No imaginary frequencies → not valid."""

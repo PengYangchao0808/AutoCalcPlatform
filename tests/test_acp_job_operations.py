@@ -1169,6 +1169,163 @@ def test_rerun_preserves_job_identity_and_clears_work_dir_in_place(tmp_path: Pat
         mgr.shutdown()
 
 
+def test_rerun_migrates_unsafe_task_dir_name(tmp_path: Path) -> None:
+    """Rerun retires pre-sanitisation directory names with shell metacharacters.
+
+    Incident 2026-09-26: a task created before the forbidden-char fix kept
+    ``frame_1_(TS,_opt_freq_sp_thermo)_irc`` and every ORCA launch inside it
+    died with ``sh: Syntax error: "(" unexpected``.  In-place rerun must
+    rename the directory, follow the DB row / task index, and preserve the
+    task-identity files.
+    """
+    mgr = _make_manager(tmp_path)
+    try:
+        unsafe_dir = tmp_path / "runs/frame_1_(TS,_opt_freq_sp_thermo)_irc"
+        source = _seed_job(
+            mgr.store,
+            unsafe_dir,
+            "unsafe-irc",
+            status=JobStatus.FAILED,
+            exit_code=1,
+            error="ORCA finished by error termination in Startup",
+            project_id=mgr.default_project_id,
+        )
+        (unsafe_dir / "WORK" / "07_PATH" / "ORCA").mkdir(parents=True)
+        (unsafe_dir / "WORK" / "07_PATH" / "ORCA" / "irc.out").write_text(
+            'sh: 1: Syntax error: "(" unexpected\n'
+        )
+        (unsafe_dir / "input.xyz").write_text("3\n\nC 0 0 0\n")
+        (unsafe_dir / "job.json").write_text("{}")
+        (unsafe_dir / "task.json").write_text(
+            json.dumps({"task_id": source.id, "task_dir_name": unsafe_dir.name,
+                        "node_path": str(unsafe_dir), "status": "failed"}),
+            encoding="utf-8",
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("unsafe-irc")
+
+        assert rerun is not None
+        safe_dir = tmp_path / "runs/frame_1_TS_opt_freq_sp_thermo_irc"
+        assert not unsafe_dir.exists()
+        assert safe_dir.is_dir()
+        assert rerun.work_dir == str(safe_dir)
+        assert Path(rerun.work_dir).name == "frame_1_TS_opt_freq_sp_thermo_irc"
+        # DB row followed the rename.
+        stored = mgr.store.get("unsafe-irc")
+        assert stored is not None
+        assert stored.work_dir == str(safe_dir)
+        assert stored.spec.name == safe_dir.name
+        # Identity files survived the rename; attempt content was cleared.
+        assert (safe_dir / "input.xyz").is_file()
+        assert not (safe_dir / "WORK" / "07_PATH").exists()
+        assert (safe_dir / "WORK" / "00_RUNTIME").is_dir()
+        assert (safe_dir / "RESULT").is_dir()
+        # job.json rewritten at the new path with the new work_dir.
+        assert json.loads((safe_dir / "job.json").read_text(encoding="utf-8"))["work_dir"] == str(
+            safe_dir
+        )
+        task_json = json.loads((safe_dir / "task.json").read_text(encoding="utf-8"))
+        assert task_json["task_dir_name"] == safe_dir.name
+        assert task_json["node_path"] == str(safe_dir)
+        # Task index identity columns follow the rename.
+        with sqlite3.connect(mgr.store.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT task_dir_name, node_path FROM tasks WHERE task_id=?",
+                ("unsafe-irc",),
+            ).fetchone()
+        assert row is not None
+        assert row["task_dir_name"] == "frame_1_TS_opt_freq_sp_thermo_irc"
+        assert row["node_path"] == str(safe_dir)
+        # The rerun event records where the task came from.
+        events = (safe_dir / "WORK" / "00_RUNTIME" / "events.jsonl").read_text(encoding="utf-8")
+        assert json.loads(events.splitlines()[-1])["renamed_from"] == str(unsafe_dir)
+        _wait_submission(calls, source.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_unsafe_dir_cleanup_failure_keeps_original_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        unsafe_dir = tmp_path / "runs/frame_1_(TS)_irc"
+        _seed_job(
+            mgr.store, unsafe_dir, "unsafe-cleanup", status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        monkeypatch.setattr(
+            mgr, "_reset_work_dir_in_place",
+            lambda record, *, strict: (_ for _ in ()).throw(RuntimeError("cleanup failed")),
+        )
+        with pytest.raises(RuntimeError, match="cleanup failed"):
+            mgr.rerun_job("unsafe-cleanup")
+        stored = mgr.store.get("unsafe-cleanup")
+        assert stored is not None
+        assert stored.status == JobStatus.FAILED
+        assert stored.work_dir == str(unsafe_dir)
+        assert unsafe_dir.is_dir()
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_unsafe_dir_db_failure_rolls_back_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        unsafe_dir = tmp_path / "runs/frame_1_(TS)_irc"
+        _seed_job(
+            mgr.store, unsafe_dir, "unsafe-db", status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        monkeypatch.setattr(
+            mgr.store, "update_work_dir_and_name",
+            lambda record: (_ for _ in ()).throw(RuntimeError("db failed")),
+        )
+        with pytest.raises(RuntimeError, match="db failed"):
+            mgr.rerun_job("unsafe-db")
+        stored = mgr.store.get("unsafe-db")
+        assert stored is not None
+        assert stored.status == JobStatus.FAILED
+        assert stored.work_dir == str(unsafe_dir)
+        assert unsafe_dir.is_dir()
+        assert not (tmp_path / "runs/frame_1_TS_irc").exists()
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_unsafe_dir_dedupes_when_safe_name_taken(tmp_path: Path) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        occupied = tmp_path / "runs/frame_1_TS_irc"
+        occupied.mkdir(parents=True)
+        unsafe_dir = tmp_path / "runs/frame_1_(TS)_irc"
+        _seed_job(
+            mgr.store,
+            unsafe_dir,
+            "unsafe-irc-2",
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        (unsafe_dir / "input.xyz").write_text("3\n\nC 0 0 0\n")
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("unsafe-irc-2")
+
+        assert rerun is not None
+        assert occupied.exists()  # untouched
+        assert rerun.work_dir == str(tmp_path / "runs/frame_1_TS_irc__02")
+        assert (tmp_path / "runs/frame_1_TS_irc__02" / "input.xyz").is_file()
+        _wait_submission(calls, "unsafe-irc-2")
+    finally:
+        mgr.shutdown()
+
+
 def test_rerun_terminates_orphaned_task_process(tmp_path: Path) -> None:
     """An orphaned workflow process in the task dir dies before the rerun."""
     mgr = _make_manager(tmp_path)
@@ -1571,6 +1728,127 @@ def test_purge_jobs_filter_by_status(tmp_path: Path) -> None:
         assert {entry["job_id"] for entry in report} == {"failed-1"}
         assert mgr.get("failed-1") is None
         assert mgr.get("completed-1") is not None
+    finally:
+        mgr.shutdown()
+
+
+def test_purge_jobs_cleans_ghost_entries(tmp_path: Path) -> None:
+    """Regression (2026-09-18): jobs row deleted but tasks index survives.
+
+    ``purge_jobs`` must cascade-clean the residual rows instead of
+    erroring with ``job not found`` and leaving the queue polluted.
+    """
+    mgr = _make_manager(tmp_path)
+    try:
+        db = mgr.store.db_path
+        record = _seed_job(
+            mgr.store, tmp_path / "runs/ghost", "ghost-1", status=JobStatus.COMPLETED
+        )
+        mgr.tasks.sync_from_job(record)
+        StageTaskStore(db).create(
+            StageTask(task_id="st-ghost", job_id="ghost-1", stage_name="opt", state="completed")
+        )
+
+        # Reproduce the historical bug: bare single-table delete.
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute("DELETE FROM jobs WHERE id='ghost-1'")
+            conn.commit()
+
+        assert mgr.store.get("ghost-1") is None
+        assert mgr.store.has_job_dependents("ghost-1") is True
+
+        report = mgr.purge_jobs(["ghost-1", "never-existed"])
+        by_id = {entry["job_id"]: entry for entry in report}
+        assert by_id["ghost-1"] == {
+            "job_id": "ghost-1",
+            "ok": True,
+            "action": "purged_orphan",
+            "error": None,
+        }
+        # An id with neither jobs nor child rows is still a plain error.
+        assert by_id["never-existed"]["ok"] is False
+        assert by_id["never-existed"]["error"] == "job not found"
+
+        assert _table_count(db, "tasks", "task_id=?", ("ghost-1",)) == 0
+        assert _table_count(db, "stage_tasks", "job_id=?", ("ghost-1",)) == 0
+        assert mgr.store.has_job_dependents("ghost-1") is False
+    finally:
+        mgr.shutdown()
+
+
+def test_delete_project_leaves_no_ghost_rows(tmp_path: Path) -> None:
+    """Regression (2026-09-18): project deletion must cascade, not bare-delete."""
+    mgr = _make_manager(tmp_path)
+    try:
+        project = mgr.projects.create_project("GhostPrj")
+        pid = project["project_id"]
+        for i in (1, 2):
+            record = _seed_job(
+                mgr.store,
+                tmp_path / f"runs/prj{i}",
+                f"prj-job-{i}",
+                status=JobStatus.COMPLETED,
+                project_id=pid,
+            )
+            mgr.tasks.sync_from_job(record)
+            StageTaskStore(mgr.store.db_path).create(
+                StageTask(
+                    task_id=f"st-prj-{i}",
+                    job_id=f"prj-job-{i}",
+                    stage_name="opt",
+                    state="completed",
+                )
+            )
+
+        assert mgr.delete_project(pid, delete_data=True) is True
+
+        db = mgr.store.db_path
+        assert _table_count(db, "jobs", "project_id=?", (pid,)) == 0
+        assert _table_count(db, "tasks", "project_id=?", (pid,)) == 0
+        assert _table_count(db, "tasks", "task_id=?", ("prj-job-1",)) == 0
+        assert _table_count(db, "tasks", "task_id=?", ("prj-job-2",)) == 0
+        assert _table_count(db, "stage_tasks", "job_id=?", ("prj-job-1",)) == 0
+        assert mgr.find_orphan_tasks() == []
+    finally:
+        mgr.shutdown()
+
+
+def test_find_and_purge_orphan_tasks(tmp_path: Path) -> None:
+    """Orphan check & repair: discovery + DB-only cascade purge."""
+    mgr = _make_manager(tmp_path)
+    try:
+        db = mgr.store.db_path
+        survivor = None
+        for i in (1, 2, 3):
+            record = _seed_job(
+                mgr.store,
+                tmp_path / f"runs/orph{i}",
+                f"orph-{i}",
+                status=JobStatus.COMPLETED,
+            )
+            mgr.tasks.sync_from_job(record)
+            if i == 2:
+                survivor = record
+
+        # Two jobs fall to the historical bare-delete; one stays intact.
+        with sqlite3.connect(str(db)) as conn:
+            conn.execute("DELETE FROM jobs WHERE id IN ('orph-1', 'orph-3')")
+            conn.commit()
+
+        assert mgr.find_orphan_tasks() == ["orph-1", "orph-3"]
+
+        report = mgr.purge_orphan_tasks()
+        by_id = {entry["job_id"]: entry for entry in report}
+        assert set(by_id) == {"orph-1", "orph-3"}
+        assert all(entry["ok"] and entry["action"] == "purged_orphan" for entry in report)
+
+        assert mgr.find_orphan_tasks() == []
+        assert _table_count(db, "tasks", "task_id=?", ("orph-1",)) == 0
+        assert _table_count(db, "tasks", "task_id=?", ("orph-3",)) == 0
+        # Intact job untouched.
+        assert mgr.get("orph-2") is not None
+        assert _table_count(db, "tasks", "task_id=?", ("orph-2",)) == 1
+        assert survivor is not None
     finally:
         mgr.shutdown()
 

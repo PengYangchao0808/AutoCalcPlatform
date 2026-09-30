@@ -357,6 +357,52 @@ def test_local_flow_applies_specs_and_prints_final_table(
     assert "TABLE(2)" in out  # initial + final table both rendered
 
 
+def test_local_flow_pins_unique_scanned_binary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    hidden = tmp_path / "opt" / "software" / "crest" / "crest"
+    hidden.parent.mkdir(parents=True)
+    hidden.write_text("#!/bin/sh\n", encoding="utf-8")
+    hidden.chmod(0o755)
+    calls = 0
+
+    def fake_sniff(target: Path) -> dict[str, SoftwareDiscovery]:
+        nonlocal calls
+        calls += 1
+        source = "scan" if calls == 1 else "config"
+        entries = {
+            "crest": SoftwareDiscovery(name="crest", resolved=hidden, source=source),
+        }
+        for name in ("orca", "xtb", "censo", "shermo", "isostat", "molclus", "mpi"):
+            entries[name] = SoftwareDiscovery(
+                name=name,
+                resolved=hidden.parent / name,
+                source="config",
+            )
+        return entries
+
+    monkeypatch.setattr(flows_module, "sniff_local", fake_sniff)
+    import acp.init_wizard.sniff_local as sniff_module
+
+    monkeypatch.setattr(sniff_module, "sniff_local", fake_sniff)
+    monkeypatch.setattr(flows_module, "render_sniff_table", lambda entries: "TABLE")
+    monkeypatch.setattr(
+        flows_module,
+        "manual_spec_local",
+        lambda missing, prompts: (_ for _ in ()).throw(AssertionError(missing)) if missing else {},
+    )
+    target = tmp_path / "cfg.yaml"
+    target.write_text("{}\n", encoding="utf-8")
+
+    flows_module._run_local_flow(target, {}, flows_module.PromptBundle())
+
+    # Initial sniff + the D10 re-sniff after pinning the scanned hit.
+    assert calls == 2
+    assert yaml.safe_load(target.read_text(encoding="utf-8"))["executables"]["crest"][
+        "path"
+    ] == str(hidden)
+
+
 # ---------------------------------------------------------------------------
 # existing-node flow happy path (seams patched at the flows module)
 # ---------------------------------------------------------------------------

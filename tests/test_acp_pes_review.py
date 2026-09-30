@@ -122,6 +122,10 @@ class TestSavePesReview:
             "frame_index": 1,
             "source": "PESsearch",
             "selection_source": "manual",
+            "task_status": "COMPLETED",
+            "scan_complete": True,
+            "frame_converged": True,
+            "data_source": "RESULT/pes_search/pes_profile.json",
         }
 
     def test_resave_is_idempotent(self, pes_task: Path) -> None:
@@ -273,6 +277,181 @@ class TestSavePesReview:
         assert payload["selected"] == []
         manifest = ResultManifest.read(pes_task / "RESULT")
         assert [p for p in manifest.products if p.kind.value == "structure"] == []
+
+
+class TestPartialFrameReview:
+    """Failed-task saves resolved against live partial frames (no final profile)."""
+
+    @staticmethod
+    def _write_partial_snapshot(
+        root: Path, *, stage: str = "running", points_total: int = 4
+    ) -> None:
+        scan_frames = root / "WORK" / "07_PATH" / "pes_scan_001" / "scan_frames"
+        scan_frames.mkdir(parents=True, exist_ok=True)
+        for index in range(2):
+            (scan_frames / f"frame_{index:03d}.xyz").write_text(_xyz(), encoding="utf-8")
+        frames = [
+            {
+                "frame_id": f"frame_{index:03d}",
+                "index": index,
+                # frame 0 converged; frame 1 unconverged but with geometry
+                # (annotatable, recorded as frame_converged=false); frame 2
+                # crashed without geometry (view-only).
+                "status": "completed" if index == 0 else "failed",
+                "converged": index == 0,
+                "target_coordinate": 1.0 + 0.1 * index,
+                "actual_coordinate": 1.0 + 0.1 * index,
+                "target_coordinates": {},
+                "actual_coordinates": {},
+                "coordinate_unit": "angstrom",
+                "energy_hartree": -76.0 - 0.01 * index,
+                "geometry_ref": (
+                    f"WORK/07_PATH/pes_scan_001/scan_frames/frame_{index:03d}.xyz"
+                    if index < 2
+                    else ""
+                ),
+                "sp_energy_hartree": None,
+                "sp_status": "pending",
+            }
+            for index in range(3)
+        ]
+        payload = {
+            "schema_version": "pes_scan_trajectory_v1",
+            "scan_stage": stage,
+            "driver": "xtb",
+            "points_total": points_total,
+            "coordinate": {
+                "kind": "distance",
+                "atoms": [1, 2],
+                "unit": "angstrom",
+                "start": 1.0,
+                "end": 2.0,
+                "n_points": points_total,
+            },
+            "coordinates": [],
+            "frames": frames,
+        }
+        target = root / "RESULT" / "trajectories" / "pes_scan_trajectory.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_failed_task_partial_save_records_provenance(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        payload = save_pes_review(
+            tmp_path,
+            job_id="job_f",
+            candidates=[{"frame_index": 0, "role": "TS"}],
+            now=FIXED_NOW,
+            source_task_status="FAILED",
+        )
+        assert payload["source"]["task_status"] == "FAILED"
+        assert payload["source"]["frame_source"] == "live_partial"
+        assert payload["source"]["scan_complete"] is False
+        assert payload["source"]["data_source"] == ("RESULT/trajectories/pes_scan_trajectory.json")
+        assert payload["source"]["data_sha256"]
+        assert payload["selected"][0]["frame_converged"] is True
+        assert payload["profile_sha256"] == ""
+
+        ts_xyz = tmp_path / "RESULT" / "structures" / "pes_ts_frame_000.xyz"
+        assert ts_xyz.is_file()
+        comment = ts_xyz.read_text(encoding="utf-8").splitlines()[1]
+        assert "selection_source=manual" in comment
+        assert "scan_complete=false" in comment
+        assert "task_status=FAILED" in comment
+
+        manifest = ResultManifest.read(tmp_path / "RESULT")
+        structures = [p for p in manifest.products if p.kind.value == "structure"]
+        assert [p.metadata["candidate_id"] for p in structures] == ["pes_ts_frame_000"]
+        assert structures[0].metadata["task_status"] == "FAILED"
+        assert structures[0].metadata["scan_complete"] is False
+        assert structures[0].metadata["frame_converged"] is True
+        assert structures[0].metadata["data_source"] == (
+            "RESULT/trajectories/pes_scan_trajectory.json"
+        )
+
+    def test_unconverged_partial_frame_is_annotatable_and_recorded(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        payload = save_pes_review(
+            tmp_path,
+            job_id="job_f",
+            candidates=[{"frame_index": 1, "role": "INT"}],
+            now=FIXED_NOW,
+            source_task_status="FAILED",
+        )
+        assert payload["selected"][0]["frame_converged"] is False
+
+    def test_energy_without_geometry_view_only_rejected(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        with pytest.raises(PesReviewError, match="no usable geometry"):
+            save_pes_review(
+                tmp_path,
+                job_id="job_f",
+                candidates=[{"frame_index": 2, "role": "TS"}],
+                now=FIXED_NOW,
+                source_task_status="FAILED",
+            )
+        assert load_pes_review(tmp_path) is None
+
+    def test_partial_geometry_file_missing_rejected(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        (tmp_path / "WORK" / "07_PATH" / "pes_scan_001" / "scan_frames" / "frame_000.xyz").unlink()
+        with pytest.raises(PesReviewError, match="missing on disk"):
+            save_pes_review(
+                tmp_path,
+                job_id="job_f",
+                candidates=[{"frame_index": 0, "role": "TS"}],
+                now=FIXED_NOW,
+                source_task_status="FAILED",
+            )
+
+    def test_partial_geometry_invalid_xyz_rejected(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        (
+            tmp_path / "WORK" / "07_PATH" / "pes_scan_001" / "scan_frames" / "frame_000.xyz"
+        ).write_text("not an xyz file\n", encoding="utf-8")
+        with pytest.raises(PesReviewError, match="not a valid XYZ"):
+            save_pes_review(
+                tmp_path,
+                job_id="job_f",
+                candidates=[{"frame_index": 0, "role": "TS"}],
+                now=FIXED_NOW,
+                source_task_status="FAILED",
+            )
+
+    def test_partial_frame_absent_from_source_rejected(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        with pytest.raises(PesReviewError, match="out of range"):
+            save_pes_review(
+                tmp_path,
+                job_id="job_f",
+                candidates=[{"frame_index": 99, "role": "TS"}],
+                now=FIXED_NOW,
+                source_task_status="FAILED",
+            )
+
+    def test_partial_save_then_restore_round_trip(self, tmp_path: Path) -> None:
+        self._write_partial_snapshot(tmp_path)
+        save_pes_review(
+            tmp_path,
+            job_id="job_f",
+            candidates=[{"frame_index": 0, "role": "TS"}],
+            note="round1",
+            now=FIXED_NOW,
+            source_task_status="FAILED",
+        )
+        save_pes_review(
+            tmp_path,
+            job_id="job_f",
+            candidates=[{"frame_index": 1, "role": "INT"}],
+            note="round2",
+            now=FIXED_NOW,
+            source_task_status="FAILED",
+        )
+        payload = restore_pes_review(tmp_path, 1, now=FIXED_NOW, source_task_status="FAILED")
+        assert payload["selected"][0]["candidate_id"] == "pes_ts_frame_000"
+        assert payload["source"]["task_status"] == "FAILED"
+        items = load_items_from_result_manifest(tmp_path)
+        assert [item.candidate_id for item in items] == ["pes_ts_frame_000"]
 
 
 class TestHelpers:

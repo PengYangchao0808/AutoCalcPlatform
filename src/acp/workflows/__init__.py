@@ -29,6 +29,7 @@ __all__ = [
     "run_frequency",
     "run_scan",
     "run_irc",
+    "run_tsmode",
 ]
 
 # Maps each public name to the submodule that defines it.  The submodule is
@@ -41,6 +42,7 @@ _LAZY_SOURCES: dict[str, str] = {
     "run_frequency": "acp.workflows.simple",
     "run_scan": "acp.workflows.simple",
     "run_irc": "acp.workflows.simple",
+    "run_tsmode": "acp.workflows.tsmode",
     "run_ensemble_generation": "acp.workflows.ensemble",
     "run_conformer_energy": "acp.workflows.energy",
     "run_nmr_analysis": "acp.workflows.nmr",

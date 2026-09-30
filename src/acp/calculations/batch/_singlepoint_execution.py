@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -21,6 +22,8 @@ from ._singlepoint_models import (
     FrameInput,
     PreparedFrame,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +62,7 @@ class _FrameCallbacks:
 
     on_start: Callable[[str], None] | None
     on_done: Callable[[int, int], None]
+    on_result: Callable[[str, float | None, str], None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,38 +103,68 @@ class _SignallingBackend:
 
         cached_record = self.context.cached_records.get(frame_index)
         if cached_record is not None:
-            return QCResult(
+            result = QCResult(
                 success=True,
                 energy=cached_record.energy_hartree,
                 output_file=cached_record.output_path,
             )
-
-        result = to_qc_result(
-            self.backend.single_point(
-                coordinates,
-                symbols,
-                charge=charge,
-                multiplicity=multiplicity,
-                output_dir=output_dir,
-                **kwargs,
+        else:
+            result = to_qc_result(
+                self.backend.single_point(
+                    coordinates,
+                    symbols,
+                    charge=charge,
+                    multiplicity=multiplicity,
+                    output_dir=output_dir,
+                    **kwargs,
+                )
             )
-        )
-        cache_path = self.context.cache_paths.get(frame_index)
-        if cache_path is not None and result.success and result.energy is not None:
-            frame_dir = output_dir if output_dir is not None else Path.cwd()
-            output_path = batch_backend._normalize_output_path(result.output_file, frame_dir)
-            try:
-                output_ref = output_path.relative_to(self.context.cache_root)
-            except ValueError:
-                output_ref = output_path
-            batch_backend._write_cache(
-                cache_path,
-                {
-                    "energy_hartree": float(result.energy),
-                    "output_ref": str(output_ref),
-                },
-            )
+            cache_path = self.context.cache_paths.get(frame_index)
+            if cache_path is not None and result.success and result.energy is not None:
+                frame_dir = output_dir if output_dir is not None else Path.cwd()
+                output_path = batch_backend._normalize_output_path(result.output_file, frame_dir)
+                try:
+                    output_ref = output_path.relative_to(self.context.cache_root)
+                except ValueError:
+                    output_ref = output_path
+                batch_backend._write_cache(
+                    cache_path,
+                    {
+                        "energy_hartree": float(result.energy),
+                        "output_ref": str(output_ref),
+                    },
+                )
+        _signal_frame_result(self.context.callbacks, frame.frame_id, result)
         return result
+
+
+def _signal_frame_result(
+    callbacks: _FrameCallbacks,
+    frame_id: str,
+    result: QCResult,
+) -> None:
+    """Emit one ``on_result`` frame-resolution event; never raise into workers."""
+    if callbacks.on_result is None:
+        return
+    energy = float(result.energy) if result.success and result.energy is not None else None
+    status = "completed" if energy is not None else "failed"
+    try:
+        callbacks.on_result(frame_id, energy, status)
+    except Exception as exc:  # noqa: BLE001 - live view callbacks must not break workers
+        logger.warning("single-point on_frame_done callback failed for %s: %s", frame_id, exc)
+
+
+def _signal_frame_failure(
+    callbacks: _FrameCallbacks | None,
+    frame_id: str,
+) -> None:
+    """Emit a failed ``on_result`` event for frames that bypassed the backend."""
+    if callbacks is None or callbacks.on_result is None:
+        return
+    try:
+        callbacks.on_result(frame_id, None, "failed")
+    except Exception as exc:  # noqa: BLE001 - live view callbacks must not break workers
+        logger.warning("single-point on_frame_done callback failed for %s: %s", frame_id, exc)
 
 
 def prepare_frames(
@@ -208,17 +242,21 @@ def run_prepared_frames(
     settings: BatchSinglePointExecutionOptions,
     progress_callback: Callable[[int, int], None] | None = None,
     on_frame_start: Callable[[str, int, int], None] | None = None,
+    on_frame_done: Callable[[str, float | None, str], None] | None = None,
 ) -> dict[str, BatchSinglePointFrameResult]:
     """Run normalized frames through the shared threaded/cache helper.
 
     Each resolved frame emits ``on_frame_start(frame_id, done_so_far, total)``
     immediately before its backend call (or cache return), followed by
-    ``progress_callback(done, total)``.  With sequential workers, the
-    deterministic order is ``start(f0), done(1), start(f1), done(2), ...``;
-    cache hits therefore emit start and done back-to-back, and failures still
-    emit done before siblings continue.  With concurrent workers, start
-    callbacks may interleave; a consumer's current frame is the most recently
-    started frame, so that value is an approximation under parallelism.
+    ``progress_callback(done, total)``.  ``on_frame_done(frame_id, energy,
+    status)`` fires as each frame resolves (backend return, cache hit, or
+    preparation failure) so live consumers can publish incremental results.
+    With sequential workers, the deterministic order is
+    ``start(f0), done(1), start(f1), done(2), ...``; cache hits therefore
+    emit start and done back-to-back, and failures still emit done before
+    siblings continue.  With concurrent workers, start callbacks may
+    interleave; a consumer's current frame is the most recently started
+    frame, so that value is an approximation under parallelism.
     """
     batch_root = settings.output_dir / ".batch_sp" / scope([frame.cache_key for frame in prepared])
     groups: dict[tuple[tuple[str, ...], int, int], list[PreparedFrame]] = {}
@@ -229,7 +267,9 @@ def run_prepared_frames(
     total_frames = len(prepared)
     completed_frames = 0
     progress_lock = Lock()
-    signalling = progress_callback is not None or on_frame_start is not None
+    signalling = (
+        progress_callback is not None or on_frame_start is not None or on_frame_done is not None
+    )
 
     def notify_frame_start(frame_id_value: str) -> None:
         """Forward a worker start event with the global completed count."""
@@ -251,6 +291,7 @@ def run_prepared_frames(
         _FrameCallbacks(
             on_start=notify_frame_start if on_frame_start is not None else None,
             on_done=notify_frame_done,
+            on_result=on_frame_done,
         )
         if signalling
         else None
@@ -373,6 +414,8 @@ def _run_group(
         )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         message = str(exc).strip() or type(exc).__name__
+        for frame in frames:
+            _signal_frame_failure(callbacks, frame.frame_id)
         return {
             frame.frame_id: BatchSinglePointFrameResult(
                 frame_id=frame.frame_id,
@@ -385,15 +428,16 @@ def _run_group(
         }
 
     by_index = {record.index: record for record in batch_result.records}
-    return {
-        frame.frame_id: replace(
-            _frame_result(frame, by_index.get(index)),
-            cache_hit=True,
+    results: dict[str, BatchSinglePointFrameResult] = {}
+    for index, frame in enumerate(frames):
+        record = by_index.get(index)
+        if record is None:
+            _signal_frame_failure(callbacks, frame.frame_id)
+        frame_result = _frame_result(frame, record)
+        results[frame.frame_id] = (
+            replace(frame_result, cache_hit=True) if index in cached_records else frame_result
         )
-        if index in cached_records
-        else _frame_result(frame, by_index.get(index))
-        for index, frame in enumerate(frames)
-    }
+    return results
 
 
 def _frame_result(

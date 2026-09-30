@@ -60,14 +60,60 @@ def test_double_bond_scan_accepts_separate_and_adjacent_groups() -> None:
         parse_functional_atom_selection("double_bond_scan", [0, 1, 1, 2], symbols, coordinates)
 
 
-def test_nonbonded_pair_is_rejected_for_bond_stretch() -> None:
-    with pytest.raises(ValueError, match="not a bond"):
+def test_nonbonded_pair_accepted_for_bond_stretch() -> None:
+    """A distance scan is legal for any two distinct atoms (bond not required).
+
+    Forming/breaking-bond scans at TS-like frames routinely target pairs
+    outside the perceived bond graph; adjacency metadata is simply empty.
+    """
+    selection = parse_functional_atom_selection(
+        "bond_stretch",
+        [0, 1],
+        ["C", "C"],
+        [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+    )
+
+    assert selection.kind == "bond_stretch"
+    assert selection.atoms == (0, 1)
+    assert selection.bond_pairs == ((0, 1),)
+    assert selection.adjacency == ()
+
+
+def test_nonbonded_chain_is_still_rejected_for_angle() -> None:
+    with pytest.raises(ValueError, match="must form A-B-C"):
         parse_functional_atom_selection(
-            "bond_stretch",
-            [0, 1],
-            ["C", "C"],
-            [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]],
+            "angle",
+            [0, 1, 2],
+            ["C", "C", "C"],
+            [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [5.4, 0.0, 0.0]],
         )
+
+
+def test_nonbonded_chain_is_still_rejected_for_dihedral() -> None:
+    with pytest.raises(ValueError, match="must form A-B-C-D"):
+        parse_functional_atom_selection(
+            "dihedral",
+            [0, 1, 2, 3],
+            ["C", "C", "C", "C"],
+            [[0.0, 0.0, 0.0], [1.4, 0.0, 0.0], [2.8, 0.0, 0.0], [5.0, 0.0, 0.0]],
+        )
+
+
+def test_nonbonded_groups_are_still_rejected_for_double_bond_scan() -> None:
+    symbols = ["C"] * 5
+    coordinates = [
+        [0.0, 0.0, 0.0],
+        [1.4, 0.0, 0.0],
+        [2.8, 0.0, 0.0],
+        [4.2, 0.0, 0.0],
+        [5.6, 0.0, 0.0],
+    ]
+
+    with pytest.raises(ValueError, match="first double-scan group must be an adjacent pair"):
+        parse_functional_atom_selection("double_bond_scan", [0, 2, 3, 4], symbols, coordinates)
+
+    with pytest.raises(ValueError, match="second double-scan group must be an adjacent pair"):
+        parse_functional_atom_selection("double_bond_scan", [0, 1, 2, 4], symbols, coordinates)
 
 
 def test_double_scan_request_roundtrip_preserves_both_coordinates() -> None:

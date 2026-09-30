@@ -415,7 +415,14 @@ def test_script_gen_remote_tail_irc() -> None:
 
     spec = JobSpec(
         workflow="irc",
-        input={"source": "CCO", "source_type": "smiles", "input_role": "transition_state"},
+        input={
+            "source": "CCO",
+            "source_type": "smiles",
+            "input_role": "transition_state",
+            "ts_source": {"schema": "irc_ts_source_v1"},
+            "charge": 0,
+            "multiplicity": 1,
+        },
         method={"method": "r2SCAN-3c"},
         resources={},
     )
