@@ -65,6 +65,7 @@ a { color: var(--accent); text-decoration: none; }
   width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
   border-radius: 5px; padding: 6px 8px; font-size: 12px; font-family: inherit;
 }
+.memory-input-group { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 6px; }
 .ctrl input:focus, .ctrl select:focus { outline: none; border-color: var(--accent); }
 .ctrl .err { color: var(--red); font-size: 10px; margin-top: 3px; }
 .row { display: flex; gap: 8px; }
@@ -189,7 +190,14 @@ tbody tr.selected { background: rgba(88,166,255,.1); }
       </div>
       <div class="ctrl">
         <label>memory</label>
-        <input id="wf-mem" type="text" placeholder="32GB">
+        <div class="memory-input-group">
+          <input id="wf-mem" type="number" min="0.01" step="any" placeholder="32">
+          <select id="wf-mem-unit" aria-label="Memory unit">
+            <option value="GB" selected>GB</option>
+            <option value="MB">MB</option>
+            <option value="TB">TB</option>
+          </select>
+        </div>
       </div>
     </div>
     <button class="btn primary" id="btn-run">&gt;&gt; Submit Job</button>
@@ -214,6 +222,7 @@ tbody tr.selected { background: rgba(88,166,255,.1); }
   </aside>
 </div>
 
+<script src="js/memory_input.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -525,9 +534,20 @@ async function submitJob(quickFake) {
     resources: {},
   };
   const nproc = $("wf-nproc").value.trim();
-  const mem = $("wf-mem").value.trim();
   if (nproc) body.resources.nproc = parseInt(nproc, 10);
-  if (mem) body.resources.mem = mem;
+  const rawMemory = $("wf-mem").value.trim();
+  if (rawMemory) {
+    if (!$("wf-mem").checkValidity()) {
+      $("wf-mem").reportValidity();
+      return;
+    }
+    const mem = ACPMemoryInput.normalize(rawMemory, $("wf-mem-unit").value);
+    if (!mem) {
+      $("wf-mem").reportValidity();
+      return;
+    }
+    body.resources.mem = mem;
+  }
 
   const btn = $("btn-run");
   btn.disabled = true;

@@ -685,11 +685,11 @@ def _coerce_int(value: Any) -> int | None:
 
 
 def _parse_total_mem_mb(value: Any) -> int | None:
-    """Parse a memory specification into megabytes."""
+    """Parse memory into megabytes; a bare numeric value is interpreted as GB."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return int(value)
+        return int(float(value) * 1024)
     text = str(value).strip().lower().replace(" ", "")
     if not text:
         return None
@@ -709,6 +709,7 @@ def _parse_total_mem_mb(value: Any) -> int | None:
             except ValueError:
                 return None
     try:
-        return int(float(text))
+        # Unitless resource values follow the Workbench default: GB.
+        return int(float(text) * 1024)
     except ValueError:
         return None

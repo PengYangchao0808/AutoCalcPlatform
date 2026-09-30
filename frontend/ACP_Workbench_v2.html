@@ -3338,6 +3338,8 @@ option, optgroup {
 .batch-remark { min-height: 68px; resize: vertical; }
 .resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .resource-field { display: flex; flex-direction: column; gap: 6px; }
+.memory-input-group { display: grid; grid-template-columns: minmax(0, 1fr) 78px; gap: 6px; }
+.memory-input-hint { color: var(--text-tertiary); font-size: 11px; line-height: 1.4; }
 .resource-field label { font-size: 12px; color: var(--text-secondary); }
 .resource-field-wide { grid-column: 1 / -1; }
 @media (max-width: 680px) { .resource-grid { grid-template-columns: 1fr; } }
@@ -5094,7 +5096,15 @@ option, optgroup {
                 </div>
                 <div class="resource-field">
                   <label for="modal-mem" data-i18n="modal.memory">内存</label>
-                  <input id="modal-mem" class="modal-input" type="text" value="8GB">
+                  <div class="memory-input-group">
+                    <input id="modal-mem" class="modal-input" type="number" min="0.01" step="any" value="8" required>
+                    <select id="modal-mem-unit" class="modal-select" aria-label="Memory unit">
+                      <option value="GB" selected>GB</option>
+                      <option value="MB">MB</option>
+                      <option value="TB">TB</option>
+                    </select>
+                  </div>
+                  <small class="memory-input-hint" data-i18n="modal.memory_hint">默认 GB，可选 MB 或 TB；提交时会保留所选单位。</small>
                 </div>
                 <div class="resource-field">
                   <label for="modal-parallelism" data-i18n="modal.parallelism">并行数量</label>
@@ -5788,6 +5798,7 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
 <script src="js/vibration_viewer.js"></script>
 <script src="js/structure_source_picker.js"></script>
 <script src="js/tsmode_editor.js"></script>
+<script src="js/memory_input.js"></script>
 <script src="js/job_editor.js"></script>
 <script src="js/task_input_workspace.js"></script>
 <script src="js/candidate_details.js"></script>
@@ -6259,6 +6270,13 @@ const I18N = {
     "edit.loading_draft": "正在恢复原任务配置…",
     "edit.load_failed": "配置恢复失败：{message}",
     "edit.banner_source": "来源：{name} · {status} · 第 {attempt} 次尝试",
+    "edit.saved_structure_hint": "可在“结构库”选择已保存结构作为新起点；更换结构后会创建独立新任务，原任务与结果保留。",
+    "edit.source_requires_new_job": "已更换结构来源，将创建独立新任务；不能原地覆盖原任务。",
+    "edit.source_label": "结构来源",
+    "edit.source_original": "原任务输入",
+    "edit.source_last_structure": "原任务末次结构",
+    "edit.source_manual": "手动输入结构",
+    "edit.source_upload": "上传结构",
     "edit.migration_hint": "迁移建议：{hint}",
     "edit.missing_fields": "缺失依赖（需补齐后提交）：{fields}",
     "edit.input_mode": "输入：",
@@ -6665,6 +6683,7 @@ const I18N = {
     "modal.project_current": "将提交到项目",
     "modal.nproc": "核数",
     "modal.memory": "内存",
+    "modal.memory_hint": "默认 GB，可选 MB 或 TB；提交时会保留所选单位。",
     "modal.parallelism": "并行数量",
     "modal.cancel": "取消",
     "modal.submit": "提交",
@@ -7770,6 +7789,13 @@ const I18N = {
     "edit.loading_draft": "Restoring the original configuration…",
     "edit.load_failed": "Failed to restore configuration: {message}",
     "edit.banner_source": "Source: {name} · {status} · attempt {attempt}",
+    "edit.saved_structure_hint": "Choose a saved structure from the library as the new starting geometry. Replacing the structure creates a separate task and keeps the original task and results.",
+    "edit.source_requires_new_job": "The structure source changed. This will create a separate task; the original task cannot be overwritten.",
+    "edit.source_label": "Structure source",
+    "edit.source_original": "Original task input",
+    "edit.source_last_structure": "Last structure from this task",
+    "edit.source_manual": "Manually entered structure",
+    "edit.source_upload": "Uploaded structure",
     "edit.migration_hint": "Migration hint: {hint}",
     "edit.missing_fields": "Missing dependencies (fill them before submitting): {fields}",
     "edit.input_mode": "Input:",
@@ -8176,6 +8202,7 @@ const I18N = {
     "modal.project_current": "Will submit to project",
     "modal.nproc": "Cores",
     "modal.memory": "Memory",
+    "modal.memory_hint": "Default unit is GB. MB and TB are also available.",
     "modal.parallelism": "Parallel jobs",
     "modal.cancel": "Cancel",
     "modal.submit": "Submit",
@@ -23235,6 +23262,9 @@ function openModal() {
   document.getElementById("modal-remark").value = "";
   document.getElementById("modal-task-name").value = "";
   document.getElementById("modal-parallelism").value = "1";
+  if (!(window.ACPJobEditor && ACPJobEditor.isActive())) {
+    ACPMemoryInput.set("modal-mem", "modal-mem-unit", "8GB");
+  }
   wizardUploadFile = null;
   var dzSpan = document.querySelector(".upload-dropzone span");
   if (dzSpan) dzSpan.textContent = t("modal.upload_hint");
@@ -23372,7 +23402,7 @@ function renderCreateReview() {
   var workflowName = (wizardState.workflow && wizardState.workflow.label) || "--";
   var protocolName = (wizardState.method && wizardState.method.profile_label) || t("wizard.review_custom");
   var nproc = document.getElementById("modal-nproc").value || "--";
-  var memory = document.getElementById("modal-mem").value || "--";
+  var memory = ACPMemoryInput.format("modal-mem", "modal-mem-unit") || "--";
   var parallelism = document.getElementById("modal-parallelism").value || "1";
   var reviewFlags = wizardStructures.map(function(s) {
     if (s.usage_status && s.usage_status !== "active") return {kind:"failed", label:t("wizard.review_inactive_short")};
@@ -25683,6 +25713,8 @@ function _mergeLoadedGeometry(entry, struct, sourceId) {
   entry.source_ref = Object.assign({}, entry.source_ref || {}, struct.source_ref || {}, {
     source_uid: entry.source_uid || (entry.source_ref && entry.source_ref.source_uid) || "",
     source_id: sourceId,
+    version_id: entry.version_id || (entry.source_ref && entry.source_ref.version_id) || "",
+    geometry_hash: entry.geometry_hash || (entry.source_ref && entry.source_ref.geometry_hash) || "",
   });
 }
 
@@ -25698,6 +25730,7 @@ async function _loadPendingGeometry() {
       var body = await api("/structure-sources/" + encodeURIComponent(sourceId));
       var a = body.structure || {};
       var struct = structureFromSourceDetail(a, sourceId, entry);
+      struct.source_ref.checksum = body.checksum || struct.source_ref.checksum || "";
       _mergeLoadedGeometry(entry, struct, sourceId);
     } catch (e) {
       entry.geometry_state = "failed";
@@ -26346,6 +26379,7 @@ function stageBatchAddItem(name, tag, xyz, charge, multiplicity, atomCount, form
     formula: formula || "",
     sourceType: sourceType || "upload",
     sourceRef: sourceRef || "",
+    sourceMeta: sourceMeta && typeof sourceMeta === "object" ? Object.assign({}, sourceMeta) : null,
     allowDisabledUse: !!(sourceMeta && sourceMeta.allow_disabled_use),
     disabledUseReason: (sourceMeta && sourceMeta.disabled_use_reason) || ""
   });
@@ -26460,6 +26494,11 @@ function stageBatchFromWizard() {
     var sourceRef = s.source_ref || {};
     var reusableSourceId = sourceRef.job_id && sourceRef.path
       ? "job_" + sourceRef.job_id + ":" + sourceRef.path : "";
+    var sourceMeta = Object.assign({}, sourceRef, {
+      source_uid: s.source_uid || sourceRef.source_uid || "",
+      version_id: s.version_id || sourceRef.version_id || "",
+      geometry_hash: s.geometry_hash || sourceRef.geometry_hash || "",
+    });
     stageBatchAddItem(
       s.name || s.molecule_name || "mol_" + (i + 1),
       tag,
@@ -26470,7 +26509,7 @@ function stageBatchFromWizard() {
       s.formula || "",
       reusableSourceId ? "job_artifact" : "upload",
       reusableSourceId,
-      s.source_ref || null
+      sourceMeta
     );
   }
 }
@@ -26751,6 +26790,16 @@ function collectStageJobPayload(workflow, methodBase) {
       var entry = { name: bItem.name, tag: bItem.tag || "", charge: bItem.charge, multiplicity: bItem.multiplicity, include: true };
       if (bItem.sourceType === "job_artifact" && bItem.sourceRef) {
         entry.source_id = bItem.sourceRef;
+        var sourceMeta = bItem.sourceMeta || {};
+        var nestedSourceRef = sourceMeta.source_ref || {};
+        entry.source_ref = Object.assign({}, nestedSourceRef, sourceMeta, {
+          source_id: bItem.sourceRef,
+          source_uid: sourceMeta.source_uid || nestedSourceRef.source_uid || "",
+          job_id: sourceMeta.job_id || nestedSourceRef.job_id || "",
+          version_id: sourceMeta.version_id || nestedSourceRef.version_id || "",
+          geometry_hash: sourceMeta.geometry_hash || nestedSourceRef.geometry_hash || "",
+          checksum: sourceMeta.checksum || nestedSourceRef.checksum || "",
+        });
         if (bItem.allowDisabledUse) {
           entry.allow_disabled_use = true;
           entry.disabled_use_reason = bItem.disabledUseReason;
@@ -26800,7 +26849,8 @@ function collectStageJobPayload(workflow, methodBase) {
 
 async function submitStageWorkflowJob(workflow) {
   var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
-  var mem = document.getElementById("modal-mem").value || "8GB";
+  var mem = ACPMemoryInput.read("modal-mem", "modal-mem-unit");
+  if (!mem) return;
   var remark = String(document.getElementById("modal-remark").value || "").trim();
   var taskName = String(document.getElementById("modal-task-name").value || "").trim();
   var methodBase = {
@@ -29382,7 +29432,8 @@ async function submitPESsearchTask() {
   var charge = parseInt(document.getElementById("modal-charge").value, 10) || 0;
   var multiplicity = parseInt(document.getElementById("modal-mult").value, 10) || 1;
   var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
-  var mem = document.getElementById("modal-mem").value || "8GB";
+  var mem = ACPMemoryInput.read("modal-mem", "modal-mem-unit");
+  if (!mem) return;
   var body = {
     workflow: "PESsearch",
     name: taskName || "PESsearch",
@@ -29589,7 +29640,8 @@ async function submitJobModal() {
     }
   }
   var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
-  var mem = document.getElementById("modal-mem").value || "8GB";
+  var mem = ACPMemoryInput.read("modal-mem", "modal-mem-unit");
+  if (!mem) return;
   var remark = String(document.getElementById("modal-remark").value || "").trim();
   // Task name = middle segment of the <molecule>_<task>_<remark> dir layout.
   // Client-side mirror of the server's _sanitize_component: drop path-hostile
@@ -30082,7 +30134,7 @@ function buildMechModuleJobBody(moduleId) {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   const name = MECH_MODULE_WORKFLOWS[moduleId] + "_" + stamp;
   const nproc = parseInt(mechSectionVal(pfx + "nproc"), 10) || 4;
-  const mem = mechSectionVal(pfx + "mem") || "8GB";
+  const mem = ACPMemoryInput.normalize(mechSectionVal(pfx + "mem"), "GB") || "8GB";
   const output = mechSectionVal(pfx + "output");
   const method = { schema_id: MECH_MODULE_WORKFLOWS[moduleId] };
   let input = null;
@@ -31822,9 +31874,11 @@ async function s2scanSubmit() {
       },
     };
     body.remark = String(document.getElementById("modal-remark").value || "").trim();
+    var memory = ACPMemoryInput.read("modal-mem", "modal-mem-unit");
+    if (!memory) return;
     body.resources = {
       nproc: parseInt(document.getElementById("modal-nproc").value, 10) || 4,
-      mem: document.getElementById("modal-mem").value || "8GB",
+      mem: memory,
     };
     var ordinaryProject = String((projectSelect && projectSelect.value) || "").trim();
     if (ordinaryProject) body.project_id = ordinaryProject;

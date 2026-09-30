@@ -189,7 +189,11 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
     p.add_argument("--multiplicity", type=int, default=None)
     p.add_argument("--name", type=str, help="Task name")
     p.add_argument("--nproc", type=int, help="Number of CPU cores")
-    p.add_argument("--mem", type=str, help="Memory limit")
+    p.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
     p.add_argument("--config", type=str, help="Configuration YAML file")
     p.add_argument(
         "--log-level",
@@ -251,7 +255,11 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         ),
     )
     p.add_argument("--nproc", type=int, help="Number of CPU cores")
-    p.add_argument("--mem", type=str, help="Memory limit")
+    p.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
     p.add_argument("--config", type=str, help="Configuration YAML file")
     p.add_argument(
         "--log-level",
@@ -303,7 +311,11 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     )
     parser.add_argument("--solvent", default="", help="Solvent name (e.g. water, methanol)")
     parser.add_argument("--nproc", type=int, help="Number of CPU cores")
-    parser.add_argument("--mem", type=str, help="Memory limit (e.g. 32GB, 4096MB)")
+    parser.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
     parser.add_argument("--config", type=str, help="Configuration YAML file")
     parser.add_argument(
         "--log-level",
@@ -523,7 +535,11 @@ Examples:
     conf.add_argument("--multiplicity", type=int, help="Spin multiplicity (default: 1)")
     conf.add_argument("--name", type=str, help="Molecule name")
     conf.add_argument("--nproc", type=int, help="Number of processors")
-    conf.add_argument("--mem", type=str, help="Memory limit")
+    conf.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
     conf.add_argument("--config", type=str, help="Configuration YAML file")
     conf.add_argument("--save-config", type=str, help="Save the merged configuration to YAML")
     conf.add_argument(
@@ -686,7 +702,7 @@ Examples:
     pes.add_argument(
         "--mem",
         type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
     )
     pes.add_argument("--config", type=str, help="Configuration YAML file")
     pes.add_argument(
@@ -962,7 +978,11 @@ Examples:
     batch.add_argument("--charge", type=int, default=0, help="Default molecular charge")
     batch.add_argument("--multiplicity", type=int, default=1, help="Default spin multiplicity")
     batch.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
-    batch.add_argument("--mem", type=str, help="Memory limit (overrides config)")
+    batch.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
     batch.add_argument("--config", type=str, help="Configuration YAML file")
     batch.add_argument(
         "--batch-roles-json",
@@ -1774,7 +1794,7 @@ Examples:
     ens.add_argument(
         "--mem",
         type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
     )
     ens.add_argument(
         "--log-level",
@@ -1908,7 +1928,7 @@ Examples:
     energy.add_argument(
         "--mem",
         type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
     )
     energy.add_argument(
         "--log-level",
@@ -2078,7 +2098,11 @@ Spectrum file format (DevDoc §6.2):
         ),
     )
     nmr.add_argument("--nproc", type=int, help="Number of CPU cores")
-    nmr.add_argument("--mem", type=str, help="Memory limit (e.g. 32GB)")
+    nmr.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
     nmr.add_argument(
         "--log-level",
         type=str,
@@ -2193,7 +2217,7 @@ Examples:
     xtbmd.add_argument(
         "--mem",
         type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
     )
     xtbmd.add_argument(
         "--log-level",
