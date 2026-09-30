@@ -44,6 +44,7 @@ __all__ = [
     "editable_spec_from_parts",
     "editable_spec_from_record",
     "effective_config_info",
+    "input_structure_changed",
     "normalize_for_compare",
     "resolve_last_structure",
     "workflow_edit_status",
@@ -186,6 +187,61 @@ def compute_payload_hash(payload: dict[str, Any]) -> str:
     """Hash a submit request payload for request_id idempotency comparison."""
     canonical = normalize_for_compare(payload)
     return "ph_" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
+
+
+def _structure_input_identity(value: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return stable geometry and source identities embedded in an input."""
+    geometries: list[str] = []
+    sources: list[str] = []
+
+    def visit(item: Any) -> None:
+        if isinstance(item, dict):
+            source_ref = item.get("source_ref")
+            if isinstance(source_ref, dict):
+                source_id = str(source_ref.get("source_id") or "").strip()
+                if not source_id:
+                    job_id = str(source_ref.get("job_id") or "").strip()
+                    rel_path = str(source_ref.get("path") or "").strip()
+                    source_id = f"job_{job_id}:{rel_path}" if job_id and rel_path else ""
+                source_identity = (
+                    source_id,
+                    str(source_ref.get("source_uid") or "").strip(),
+                    str(source_ref.get("version_id") or "").strip(),
+                    str(source_ref.get("geometry_hash") or "").strip(),
+                    str(source_ref.get("checksum") or "").strip(),
+                )
+                if any(source_identity):
+                    sources.append("|".join(source_identity))
+            source_id = str(item.get("source_id") or "").strip()
+            if source_id:
+                sources.append(source_id)
+
+            source_type = str(item.get("source_type") or "").lower()
+            source = item.get("source")
+            if source_type in {"xyz_text", "smiles"} and isinstance(source, str) and source.strip():
+                geometries.append(
+                    hashlib.sha256(source.strip().encode("utf-8")).hexdigest()
+                )
+            for key in ("xyz", "xyz_text"):
+                geometry = item.get(key)
+                if isinstance(geometry, str) and geometry.strip():
+                    geometries.append(
+                        hashlib.sha256(geometry.strip().encode("utf-8")).hexdigest()
+                    )
+            for child in item.values():
+                if isinstance(child, (dict, list, tuple)):
+                    visit(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    return tuple(geometries), tuple(sources)
+
+
+def input_structure_changed(original: dict[str, Any], updated: dict[str, Any]) -> bool:
+    """Whether an edit changes the supplied geometry or its saved source."""
+    return _structure_input_identity(original) != _structure_input_identity(updated)
 
 
 def compute_preview_fingerprint(
@@ -442,7 +498,12 @@ def project_original_structure_items(record: JobRecord) -> list[dict[str, Any]]:
     return projected
 
 
-def resolve_last_structure(work_dir: Path | str) -> dict[str, Any] | None:
+def resolve_last_structure(
+    work_dir: Path | str,
+    *,
+    job_id: str = "",
+    project_id: str | None = None,
+) -> dict[str, Any] | None:
     """Resolve the task's best ``kind=structure`` product for re-use as input.
 
     Returns ``{"available": True, "entry_id", "label", "path", "xyz_text"}``
@@ -463,13 +524,28 @@ def resolve_last_structure(work_dir: Path | str) -> dict[str, Any] | None:
             continue
         if not xyz_text.strip():
             continue
-        return {
+        try:
+            checksum = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        relative_path = f"RESULT/{product.path}"
+        result: dict[str, Any] = {
             "available": True,
             "entry_id": product.id,
             "label": product.label,
-            "path": f"RESULT/{product.path}",
+            "path": relative_path,
             "xyz_text": xyz_text,
         }
+        if job_id:
+            result["source_ref"] = {
+                "origin": "job_artifact",
+                "job_id": job_id,
+                "source_id": f"job_{job_id}:{relative_path}",
+                "path": relative_path,
+                "checksum": checksum,
+                "project_id": project_id or "",
+            }
+        return result
     return None
 
 
@@ -585,7 +661,15 @@ def build_edit_draft(
         "mode": "original",
         "original": _describe_original_input(record, run_root=run_root),
         "structure_items": project_original_structure_items(record),
-        "last_structure": resolve_last_structure(record.work_dir) if editable else None,
+        "last_structure": (
+            resolve_last_structure(
+                record.work_dir,
+                job_id=record.id,
+                project_id=record.project_id or spec.project_id,
+            )
+            if editable
+            else None
+        ),
     }
     method = spec.method if isinstance(spec.method, dict) else {}
     notes: list[str] = []
