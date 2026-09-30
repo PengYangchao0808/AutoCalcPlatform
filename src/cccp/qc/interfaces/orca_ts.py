@@ -22,6 +22,7 @@ from numpy.typing import NDArray
 
 from cccp.qc.interfaces.route_render import (
     RouteKeyword,
+    orca_gfn_solvent_token,
     orca_keyword_context,
     render_route_line,
 )
@@ -348,8 +349,10 @@ def ts_opt_route(
     the default optimization thresholds there and emitting a second ``Opt``
     run-type keyword would be ambiguous. Unknown enum values raise
     :class:`cccp.qc.keyword_registry.KeywordValueError` (fail-fast — nothing
-    is passed through verbatim). ``%pal nprocs`` is emitted when *nproc* is
-    given.
+    is passed through verbatim). Solvent follows the shared GFN rule
+    (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`:
+    ALPB-only under ORCA) and stays verbatim for DFT.
+    ``%pal nprocs`` is emitted when *nproc* is given.
     """
     method = method.strip()
     is_composite = method.lower().endswith("3c") or basis in ("", None)
@@ -358,7 +361,11 @@ def ts_opt_route(
         segments.append(RouteKeyword("basis", basis))
     segments.append(RouteKeyword("grid", grid))
     segments.append(RouteKeyword("scf_convergence", scf))
-    if solvent and solvent_model:
+    if orca_keyword_context(method)[0] in ("gfn", "gfnff"):
+        _gfn_token = orca_gfn_solvent_token(method, solvent, solvent_model)
+        if _gfn_token:
+            segments.append(_gfn_token)
+    elif solvent and solvent_model:
         sm = solvent_model.upper()
         segments.append(f"{sm}({solvent})")
     segments.append("OptTS")
@@ -459,13 +466,19 @@ def irc_route(
     so the route prefix and any future governed keywords share the single
     renderer; free-form method/basis/solvent tokens are emitted verbatim for
     DFT, while the GFN family strips the basis with a warning (T6 — this
-    entry point bypasses ``_build_input_blocks``).
+    entry point bypasses ``_build_input_blocks``) and follows the shared
+    ALPB-only solvent rule
+    (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
     """
     is_composite = method.lower().endswith("3c") or basis in ("", None)
     segments: list[str | RouteKeyword] = ["IRC", method]
     if not is_composite and basis:
         segments.append(RouteKeyword("basis", basis))
-    if solvent and solvent_model:
+    if orca_keyword_context(method)[0] in ("gfn", "gfnff"):
+        _gfn_token = orca_gfn_solvent_token(method, solvent, solvent_model)
+        if _gfn_token:
+            segments.append(_gfn_token)
+    elif solvent and solvent_model:
         sm = solvent_model.upper()
         segments.append(f"{sm}({solvent})")
     return render_route_line(segments, method=method)

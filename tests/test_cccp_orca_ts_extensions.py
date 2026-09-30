@@ -19,6 +19,7 @@ from cccp.qc.interfaces.constraints import (
 )
 from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.orca_ts import irc_block, ts_geom_block, ts_opt_route
+from cccp.qc.keyword_registry import KeywordValueError
 
 TS_COORDINATES = np.array(
     [
@@ -265,6 +266,86 @@ def test_relaxed_scan_writes_scants_input_and_parses_output(
     assert "ALPB(Acetone)" in input_text
     assert "%cpcm" not in input_text
     assert "B 0 1 = 1.50000000, 3.40000000, 3" in input_text
+
+
+# ── T7: GFN solvent semantics on the scan path (ALPB-only under ORCA) ──────
+#
+# _orca_scan_route_settings must route GFN solvent through the shared rule:
+# ALPB emits ALPB(<solvent>), none/unset emits nothing (the historical silent
+# coercion of "none"/unknown models to ALPB is deleted), GBSA/CPCM/SMD raise
+# KeywordValueError (PLATFORM POLICY — never silently rewritten, never
+# emitted, no %cpcm fallback).
+
+
+def test_relaxed_scan_gfn_alpb_water_emits_alpb_token(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    monkeypatch.setattr(interface, "_run_orca", lambda *args, **kwargs: False)
+    interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(
+            id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4
+        ),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_alpb",
+        solvent="water",
+        solvent_model="ALPB",
+    )
+    input_text = (tmp_path / "scan_alpb.inp").read_text(encoding="utf-8")
+    assert "ALPB(Water)" in input_text
+    assert "%cpcm" not in input_text and "SMDsolvent" not in input_text
+
+
+def test_relaxed_scan_gfn_none_solvent_model_emits_nothing(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    monkeypatch.setattr(interface, "_run_orca", lambda *args, **kwargs: False)
+    interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(
+            id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4
+        ),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_none",
+        solvent="water",
+        solvent_model="none",
+    )
+    input_text = (tmp_path / "scan_none.inp").read_text(encoding="utf-8")
+    # "none" is a true no-op: the old coercion silently rewrote it to ALPB.
+    assert "ALPB" not in input_text
+    assert "Water" not in input_text
+    assert "%cpcm" not in input_text
+
+
+def test_relaxed_scan_gfn_gbsa_solvent_model_rejected(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    with pytest.raises(KeywordValueError) as exc:
+        interface.relaxed_scan(
+            TS_COORDINATES,
+            TS_SYMBOLS,
+            scan_coordinate=CoordinateSpec(
+                id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4
+            ),
+            points=3,
+            output_dir=tmp_path,
+            output_name="scan_gbsa",
+            solvent="water",
+            solvent_model="gbsa",
+        )
+    assert "PLATFORM POLICY" in str(exc.value)
 
 
 def test_constrained_optimize_writes_constraint_block_and_parses_output(

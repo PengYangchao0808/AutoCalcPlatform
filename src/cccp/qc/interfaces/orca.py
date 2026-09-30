@@ -46,6 +46,7 @@ from cccp.qc.interfaces.orca_ts import (
 )
 from cccp.qc.interfaces.route_render import (
     RouteKeyword,
+    orca_gfn_solvent_token,
     orca_keyword_context,
     render_route_line,
 )
@@ -832,11 +833,16 @@ def _orca_scan_route_settings(
         extras = [str(item) for item in route_extras if item]
     if use_scants:
         extras.append("ScanTS")
-    if _is_orca_gfn_xtb_method(method) and solvent:
-        normalized_model = str(solvent_model or "ALPB").strip().upper() or "ALPB"
-        if normalized_model not in {"ALPB", "GBSA"}:
-            normalized_model = "ALPB"
-        extras.append(f"{normalized_model}({orca_smd_solvent(solvent)})")
+    if _is_orca_gfn_xtb_method(method):
+        # GFN solvent rule (T7): ALPB-only under ORCA, keyed by
+        # resolve_implementation via orca_keyword_context — ALPB emits
+        # ALPB(<solvent>), none/unset emits nothing, GBSA/CPCM/SMD raise
+        # KeywordValueError (PLATFORM POLICY; see orca_gfn_solvent_token
+        # for the capability/dependency/policy split). The model is never
+        # rewritten and no %cpcm block is reachable for GFN.
+        token = orca_gfn_solvent_token(method, solvent, solvent_model)
+        if token:
+            extras.append(token)
         return extras, None, "none"
     return extras, solvent, solvent_model
 
@@ -1146,7 +1152,9 @@ class ORCAInterface(QCInterfaceBase):
             method: DFT method
             basis: Basis set
             solvent: Solvent model
-            solvent_model: Solvent model type - none, smd, cpcm (default none)
+            solvent_model: Solvent model type - none, smd, cpcm (default
+                none). GFN methods accept only none/ALPB (GBSA/CPCM/SMD
+                raise ``KeywordValueError`` — PLATFORM POLICY).
             **kwargs: Additional parameters
         """
         super().__init__(config, **kwargs)
@@ -1323,6 +1331,14 @@ class ORCAInterface(QCInterfaceBase):
                 )
             )
 
+        # GFN solvent rule (T7): one shared rule for the whole GFN family —
+        # ALPB emits ALPB(<solvent>) on the ! line, none/unset emits nothing,
+        # GBSA/CPCM/SMD raise KeywordValueError (PLATFORM POLICY; the %cpcm
+        # block below is DFT-only and unreachable for GFN).
+        _gfn_solvent_token = (
+            orca_gfn_solvent_token(_method, _solvent, _solvent_model) if _gfn_method else None
+        )
+
         calc_type_map = {
             "opt": "Opt",
             "freq": "Freq",
@@ -1380,6 +1396,9 @@ class ORCAInterface(QCInterfaceBase):
 
         if builtin:
             _filtered_extras = [x for x in _filtered_extras if str(x).upper() != builtin.upper()]
+
+        if _gfn_solvent_token:
+            _filtered_extras.append(_gfn_solvent_token)
 
         _route_segments: list[str | RouteKeyword] = [
             *_filtered_extras,
@@ -1523,7 +1542,9 @@ class ORCAInterface(QCInterfaceBase):
                         raise ValueError(message)
                     blocks.append(str(blk))
 
-        if _solvent and _solvent_model.lower() != "none":
+        if not _gfn_method and _solvent and _solvent_model.lower() != "none":
+            # DFT-only solvent block; the GFN family never reaches here
+            # (ALPB route token emitted above; GBSA/CPCM/SMD raise earlier).
             blocks.append("%cpcm")
             if _solvent_model.lower() == "cpcm":
                 blocks.append(f'  SMDsolvent "{orca_smd_solvent(_solvent)}"')
@@ -2047,9 +2068,7 @@ class ORCAInterface(QCInterfaceBase):
         eff_basis = basis if basis is not None else self.basis
         eff_solvent = solvent if solvent is not None else self.solvent
         eff_solvent_model = (
-            solvent_model
-            if solvent_model is not None
-            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+            solvent_model if solvent_model is not None else self.solvent_model
         )
         recalc_hess = kwargs.pop("recalc_hess", 0)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
@@ -2225,9 +2244,7 @@ class ORCAInterface(QCInterfaceBase):
         eff_basis = basis if basis is not None else self.basis
         eff_solvent = solvent if solvent is not None else self.solvent
         eff_solvent_model = (
-            solvent_model
-            if solvent_model is not None
-            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+            solvent_model if solvent_model is not None else self.solvent_model
         )
         resolved_route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
             eff_method,
@@ -3318,7 +3335,9 @@ class ORCAInterface(QCInterfaceBase):
         Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
         when neither the override nor the instance default is set to an NMR
         level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
-        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention.
+        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
+        the GFN family follows the shared ALPB-only rule
+        (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
         """
         _method = method if method is not None else self.method
         if not _method:
@@ -3329,14 +3348,25 @@ class ORCAInterface(QCInterfaceBase):
         _solvent = solvent if solvent is not None else self.solvent
         _solvent_model = (
             solvent_model if solvent_model is not None else self.solvent_model
-        ) or "cpcm"
+        )
+        _gfn_nmr = _is_orca_gfn_xtb_method(_method)
+        if not _gfn_nmr:
+            # "cpcm" is a DFT-only NMR default; for the GFN family an unset
+            # model stays unset (never gains solvation by default).
+            _solvent_model = _solvent_model or "cpcm"
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
 
         lines: list[str] = [
             render_route_line([_method, RouteKeyword("basis", _basis), "TightSCF"], method=_method)
         ]
-        if _solvent and _solvent_model.lower() != "none":
+        if _gfn_nmr:
+            # GFN solvent rule (T7): ALPB-only under ORCA (PLATFORM POLICY),
+            # same shared rule as every other !-line site.
+            _gfn_token = orca_gfn_solvent_token(_method, _solvent, _solvent_model)
+            if _gfn_token:
+                lines.append(render_route_line([_gfn_token]))
+        elif _solvent and _solvent_model.lower() != "none":
             solv_name = orca_smd_solvent(_solvent)
             model = _solvent_model.lower()
             model_token = "SMD" if model == "smd" else "CPCM"

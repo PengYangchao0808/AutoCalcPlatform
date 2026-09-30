@@ -42,16 +42,19 @@ from dataclasses import dataclass, field
 
 from cccp.qc.keyword_registry import (
     IMPL_ORCA_DFT,
+    KeywordValueError,
     is_applicable,
     method_family,
     resolve,
     resolve_implementation,
 )
+from cccp.utils.solvent_map import orca_smd_solvent
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "RouteKeyword",
+    "orca_gfn_solvent_token",
     "orca_keyword_context",
     "render_route_line",
 ]
@@ -221,3 +224,93 @@ def _render_governed(
     if keyword.prefix:
         return [keyword.prefix, token]
     return [token]
+
+
+# ── GFN solvent rule (T7: ALPB-only under ORCA) ─────────────────────────────
+
+
+def orca_gfn_solvent_token(
+    method: str | None,
+    solvent: str | None,
+    solvent_model: str | None,
+) -> str | None:
+    """Return the ORCA GFN-family solvent route token (``ALPB(<name>)``) or None.
+
+    THE single GFN solvent rule under the ORCA engine (external xTB and
+    native alike), used by every ``!``-line site (``_build_input_blocks``,
+    ``_orca_scan_route_settings``, ``_write_nmr_input``, ``ts_opt_route``,
+    ``irc_route``):
+
+    * model ``ALPB`` (any case) + a solvent -> ``ALPB(<ORCA solvent name>)``
+      on the ``!`` line (the name is mapped via
+      :func:`cccp.utils.solvent_map.orca_smd_solvent`);
+    * model ``none`` or unset -> emit NOTHING (a true no-op — no token, no
+      warning, and never a silent default to ALPB);
+    * any other model (``GBSA`` / ``CPCM`` / ``SMD`` / unknown) ->
+      :class:`cccp.qc.keyword_registry.KeywordValueError` raised by the
+      registry ``resolve`` policy gate. The user model is NEVER rewritten.
+
+    **Capability vs dependency vs policy (three-way distinction — recorded
+    per T22; probe results update capability/dependency records only and
+    NEVER auto-rewrite policy):**
+
+    * *capability* — ORCA 6.1's external-xTB interface implements ALPB
+      (T22 case 3: ``! GFN2-xTB ALPB(water)`` = valid completion, otool
+      ``--alpb WATER``, Gsolv present). GBSA is not an ORCA keyword at all
+      (T22 case 4: ``! GFN2-xTB GBSA(water)`` = ``UNRECOGNIZED OR
+      DUPLICATED KEYWORD(S) IN SIMPLE INPUT LINE: GBSA(WATER)``, rc=4).
+    * *dependency* — none; no optional package gates this rule.
+    * *policy* — PLATFORM POLICY (decision Q1): ORCA GFN solvent models are
+      restricted to ``{none, ALPB}``. This is a platform choice, not a claim
+      about software capability — it would hold even if ORCA gained GBSA
+      support tomorrow. The standalone xTB binary keeps
+      ``{none, ALPB, GBSA}`` (``resolve_xtb_solvent``, T9).
+
+    Args:
+        method: Effective method spelling (GFN family only).
+        solvent: Effective solvent spelling (any case/alias; mapped to the
+            ORCA name at emission). ``None``/empty suppresses the token.
+        solvent_model: Effective solvent model; ``None``/empty is treated as
+            ``none`` (emit nothing) — an unset model must never silently
+            gain solvation.
+
+    Returns:
+        The ``ALPB(...)`` route token, or ``None`` when nothing is emitted.
+
+    Raises:
+        ValueError: ``method`` is not GFN-family (misuse — this helper is
+            GFN-only; DFT solvent emission is site-owned and unchanged).
+        cccp.qc.keyword_registry.KeywordValueError: Policy violation via the
+            registry ``resolve`` (e.g. ``GBSA`` under ORCA), with the
+            ``PLATFORM POLICY`` message naming the legal models.
+    """
+    family, implementation = orca_keyword_context(method)
+    if family not in ("gfn", "gfnff"):
+        raise ValueError(
+            f"orca_gfn_solvent_token is GFN-family only (method={method!r}, "
+            f"family={family!r}); DFT solvent emission is site-owned"
+        )
+    canonical, warning = resolve(
+        "solvent_model",
+        solvent_model,
+        family=family,
+        implementation=implementation,
+    )
+    if warning:
+        logger.warning("%s", warning)
+    if canonical is None:
+        return None
+    folded = str(canonical).strip().lower()
+    if folded == "none":
+        return None
+    if folded != "alpb":
+        # Unreachable while the policy set is exactly {none, ALPB}; guards
+        # against silently rewriting a future allowed model to ALPB.
+        raise KeywordValueError(
+            f"solvent_model {canonical!r} has no ORCA GFN route token "
+            f"(family={family!r}, implementation={implementation!r}); "
+            "policy allows exactly {none, ALPB} — refusing to rewrite the model"
+        )
+    if not solvent:
+        return None
+    return f"ALPB({orca_smd_solvent(solvent)})"

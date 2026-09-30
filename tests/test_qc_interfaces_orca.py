@@ -17,6 +17,7 @@ from cccp.qc.interfaces.orca import (
     _is_orca_gfn_xtb_method,
     _parse_frequencies,
 )
+from cccp.qc.keyword_registry import KeywordValueError
 from tests.conftest import requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
@@ -337,6 +338,47 @@ def test_orca_build_input_blocks_uppercase_solvent_model(sample_config: dict[str
     )
     blocks, _ = interface._build_input_blocks("sp")
     assert "smd true" in blocks
+
+
+# ── T7: GFN solvent semantics (ALPB-only under ORCA) ───────────────────────
+#
+# The historical %cpcm-for-GFN path is deleted: GFN solvation rides the
+# ALPB(<solvent>) route token (PLATFORM POLICY, decision Q1 {none, ALPB});
+# GBSA/CPCM/SMD raise KeywordValueError and are never emitted. DFT solvent
+# emission (the %cpcm block above) stays byte-identical.
+
+
+def test_orca_build_input_blocks_gfn_alpb_solvent_emits_route_token_not_cpcm(
+    sample_config: dict[str, object],
+) -> None:
+    interface = ORCAInterface(
+        sample_config, method="GFN2-xTB", solvent="water", solvent_model="ALPB"
+    )
+    blocks, _ = interface._build_input_blocks("sp")
+    route = blocks.splitlines()[0]
+    assert "ALPB(Water)" in route.split()
+    assert "%cpcm" not in blocks and "SMDsolvent" not in blocks
+
+
+def test_orca_build_input_blocks_gfn_solvent_model_none_emits_nothing(
+    sample_config: dict[str, object],
+) -> None:
+    interface = ORCAInterface(
+        sample_config, method="GFN2-xTB", solvent="water", solvent_model="none"
+    )
+    blocks, _ = interface._build_input_blocks("sp")
+    assert "ALPB" not in blocks
+    assert "Water" not in blocks and "%cpcm" not in blocks
+
+
+def test_orca_build_input_blocks_gfn_gbsa_rejected(
+    sample_config: dict[str, object],
+) -> None:
+    interface = ORCAInterface(
+        sample_config, method="GFN2-xTB", solvent="water", solvent_model="gbsa"
+    )
+    with pytest.raises(KeywordValueError):
+        interface._build_input_blocks("sp")
 
 
 def test_parse_frequencies_real_orca_format_takes_last_section(

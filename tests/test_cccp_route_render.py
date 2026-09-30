@@ -29,6 +29,7 @@ from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.orca_ts import irc_route, ts_opt_route
 from cccp.qc.interfaces.route_render import (
     RouteKeyword,
+    orca_gfn_solvent_token,
     orca_keyword_context,
     render_route_line,
 )
@@ -469,3 +470,136 @@ def test_synchronous_relaxed_scan_gfn_strips_inherited_default_basis(
     assert route.split() == ["!", "GFN2-xTB", "Opt"]
     assert "def2" not in input_text and "%basis" not in input_text
     assert _warned(caplog, "never emitted")
+
+
+# ── T7: GFN solvent semantics (ALPB-only under ORCA) ───────────────────────
+#
+# PLATFORM POLICY (decision Q1: {none, ALPB} only) — distinct from software
+# capability: ALPB is implemented by ORCA's external xTB (T22 case 3) and
+# GBSA is not an ORCA keyword at all (T22 case 4, rc=4), but the rule is
+# policy and would hold even if ORCA gained GBSA. The standalone xTB binary
+# keeps {none, ALPB, GBSA} (T9). The user model is never silently rewritten.
+
+
+def test_gfn_solvent_token_alpb_emits_mapped_orca_name() -> None:
+    assert orca_gfn_solvent_token("GFN2-xTB", "water", "ALPB") == "ALPB(Water)"
+    assert orca_gfn_solvent_token("GFN2-xTB", "acetone", "alpb") == "ALPB(Acetone)"
+    assert orca_gfn_solvent_token("GFN-FF", "toluene", "Alpb") == "ALPB(Toluene)"
+    assert orca_gfn_solvent_token("Native-GFN2-xTB", "water", "ALPB") == "ALPB(Water)"
+
+
+def test_gfn_solvent_token_none_and_unset_emit_nothing() -> None:
+    assert orca_gfn_solvent_token("GFN2-xTB", "water", "none") is None
+    assert orca_gfn_solvent_token("GFN2-xTB", "water", "None") is None
+    assert orca_gfn_solvent_token("GFN2-xTB", "water", None) is None
+    assert orca_gfn_solvent_token("GFN2-xTB", "water", "") is None
+    assert orca_gfn_solvent_token("GFN2-xTB", None, "ALPB") is None
+    assert orca_gfn_solvent_token("GFN2-xTB", None, None) is None
+
+
+@pytest.mark.parametrize("model", ["GBSA", "gbsa", "CPCM", "SMD", "smd", "custom"])
+def test_gfn_solvent_token_gbsa_and_dft_models_rejected(model: str) -> None:
+    with pytest.raises(KeywordValueError) as exc:
+        orca_gfn_solvent_token("GFN2-xTB", "water", model)
+    assert "PLATFORM POLICY" in str(exc.value)
+
+
+def test_gfn_solvent_token_rejects_non_gfn_misuse() -> None:
+    with pytest.raises(ValueError):
+        orca_gfn_solvent_token("B3LYP", "water", "ALPB")
+
+
+def test_ts_opt_route_gfn_alpb_solvent_emits_token() -> None:
+    route = ts_opt_route("GFN2-xTB", "", solvent="water", solvent_model="ALPB")
+    assert "ALPB(Water)" in route.split()
+
+
+def test_ts_opt_route_gfn_none_solvent_model_emits_nothing() -> None:
+    route = ts_opt_route("GFN2-xTB", "", solvent="water", solvent_model="none")
+    assert "ALPB" not in route and "Water" not in route
+
+
+def test_ts_opt_route_gfn_gbsa_rejected() -> None:
+    with pytest.raises(KeywordValueError):
+        ts_opt_route("GFN2-xTB", "", solvent="water", solvent_model="GBSA")
+
+
+def test_irc_route_gfn_solvent_alpb_only() -> None:
+    route = irc_route("GFN2-xTB", "", solvent="water", solvent_model="ALPB")
+    assert "ALPB(Water)" in route.split()
+    assert "ALPB" not in irc_route("GFN2-xTB", "", solvent="water", solvent_model="none")
+    with pytest.raises(KeywordValueError):
+        irc_route("GFN2-xTB", "", solvent="water", solvent_model="gbsa")
+
+
+def test_ts_and_irc_route_dft_solvent_verbatim_unchanged() -> None:
+    dft_ts = ts_opt_route("B3LYP", "def2-SVP", solvent="toluene", solvent_model="SMD")
+    assert dft_ts == "! B3LYP def2-SVP SMD(toluene) OptTS NumFreq"
+    dft_irc = irc_route("B3LYP", "def2-SVP", solvent="toluene", solvent_model="SMD")
+    assert dft_irc == "! IRC B3LYP def2-SVP SMD(toluene)"
+
+
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_build_input_blocks_gfn_alpb_solvent_emits_token_no_cpcm(method: str) -> None:
+    iface = _bare_orca(method=method, basis="")
+    out, _ = iface._build_input_blocks(
+        "opt", solvent="water", solvent_model="ALPB", recalc_hess=0
+    )
+    route = out.splitlines()[0]
+    assert "ALPB(Water)" in route.split()
+    assert "%cpcm" not in out and "SMDsolvent" not in out
+
+
+def test_build_input_blocks_gfn_none_solvent_model_emits_nothing() -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="")
+    out, _ = iface._build_input_blocks(
+        "opt", solvent="water", solvent_model="none", recalc_hess=0
+    )
+    assert "ALPB" not in out and "Water" not in out and "%cpcm" not in out
+
+
+def test_build_input_blocks_gfn_gbsa_rejected() -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="")
+    with pytest.raises(KeywordValueError):
+        iface._build_input_blocks(
+            "opt", solvent="water", solvent_model="gbsa", recalc_hess=0
+        )
+
+
+def test_build_input_blocks_dft_solvent_still_cpcm_block() -> None:
+    iface = _bare_orca(method="B3LYP", basis="def2-SVP")
+    out, _ = iface._build_input_blocks(
+        "opt", solvent="water", solvent_model="smd", recalc_hess=0
+    )
+    assert "%cpcm" in out and "smd true" in out and 'SMDsolvent "Water"' in out
+    assert "ALPB" not in out
+
+
+def test_nmr_route_gfn_alpb_solvent_emits_alpb_token(tmp_path: Path) -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="")
+    coords = np.zeros((1, 3))
+    iface._write_nmr_input(
+        tmp_path / "nmr.inp", coords, ["C"], 0, 1, solvent="water", solvent_model="ALPB"
+    )
+    lines = (tmp_path / "nmr.inp").read_text().splitlines()
+    assert "! ALPB(Water)" in lines
+    assert all("CPCM" not in line and "SMD" not in line for line in lines)
+
+
+def test_nmr_route_gfn_gbsa_rejected(tmp_path: Path) -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="")
+    coords = np.zeros((1, 3))
+    with pytest.raises(KeywordValueError):
+        iface._write_nmr_input(
+            tmp_path / "nmr.inp", coords, ["C"], 0, 1, solvent="water", solvent_model="gbsa"
+        )
+
+
+def test_nmr_route_dft_solvent_unchanged(tmp_path: Path) -> None:
+    iface = _bare_orca(method="B3LYP", basis="def2-SVP")
+    coords = np.zeros((1, 3))
+    iface._write_nmr_input(
+        tmp_path / "nmr.inp", coords, ["C"], 0, 1, solvent="water", solvent_model="smd"
+    )
+    lines = (tmp_path / "nmr.inp").read_text().splitlines()
+    assert "! SMD(Water)" in lines
