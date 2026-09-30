@@ -41,9 +41,18 @@ from cccp.utils.resource_utils import (
     resolve_executable_config,
 )
 from cccp.utils.solvent_map import (
+    LEGAL_SOLVENT_MODELS,
     SOLVENT_ALIASES,
+    XTB_ALPB_SOLVENTS,
+    XTB_GBSA_METHOD_RESTRICTIONS,
+    XTB_GBSA_SOLVENTS,
+    XTB_SOLVENT_ALIASES,
+    SolventValueError,
     orca_smd_solvent,
+    resolve_xtb_solvent,
+    xtb_method_name,
     xtb_solvent,
+    xtb_solvent_args,
 )
 
 __all__ = [
@@ -77,4 +86,13 @@ __all__ = [
     "orca_smd_solvent",
     "xtb_solvent",
     "SOLVENT_ALIASES",
+    "SolventValueError",
+    "XTB_SOLVENT_ALIASES",
+    "XTB_ALPB_SOLVENTS",
+    "XTB_GBSA_SOLVENTS",
+    "XTB_GBSA_METHOD_RESTRICTIONS",
+    "LEGAL_SOLVENT_MODELS",
+    "xtb_method_name",
+    "resolve_xtb_solvent",
+    "xtb_solvent_args",
 ]

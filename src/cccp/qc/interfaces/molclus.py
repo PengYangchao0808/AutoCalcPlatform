@@ -21,7 +21,7 @@ from numpy.typing import NDArray
 from cccp.qc.interfaces.base import QCResult
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils.file_io import read_xyz_multiframe
-from cccp.utils.solvent_map import xtb_solvent
+from cccp.utils.solvent_map import xtb_method_name, xtb_solvent_args
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +54,13 @@ def _md_method_args(md_method: Optional[str], gfn_level: int) -> List[str]:
     return ["--gfn", str(gfn_level)]
 
 
-def _solvent_args(solvent: Optional[str], solvent_model: Optional[str]) -> List[str]:
-    """Return the xTB solvation flags for the given solvent / model."""
-    model = (solvent_model or "none").lower()
-    if not solvent or model == "none":
-        return []
-    if model == "gbsa":
-        return ["--gbsa", xtb_solvent(solvent)]
-    return ["--alpb", xtb_solvent(solvent)]
+def _solvent_args(
+    solvent: Optional[str], solvent_model: Optional[str], method: str
+) -> List[str]:
+    """Return the xTB solvation flags for the EFFECTIVE solvent/model/method."""
+    return xtb_solvent_args(
+        solvent, method=method, solvent_model=solvent_model or "none"
+    )
 
 
 def _mapping_value(config: Mapping[str, object], key: str) -> Dict[str, object]:
@@ -463,7 +462,13 @@ class MolclusInterface:
             xtb_cmd.extend(_md_method_args(md_method, gfn_level))
             if seed_value is not None:
                 xtb_cmd.extend(["--seed", str(seed_value)])
-            xtb_cmd.extend(_solvent_args(kwargs.get("solvent"), kwargs.get("solvent_model")))
+            xtb_cmd.extend(
+                _solvent_args(
+                    kwargs.get("solvent"),
+                    kwargs.get("solvent_model"),
+                    xtb_method_name(md_method or gfn_level),
+                )
+            )
             if charge != 0:
                 xtb_cmd.extend(["--chrg", str(charge)])
             if multiplicity > 1:
@@ -674,7 +679,9 @@ class MolclusInterface:
             ]
             xtb_cmd.extend(_md_method_args(md_method, gfn_level))
             xtb_cmd.extend(["--seed", str(seed)])
-            xtb_cmd.extend(_solvent_args(solvent, solvent_model))
+            xtb_cmd.extend(
+                _solvent_args(solvent, solvent_model, xtb_method_name(md_method or gfn_level))
+            )
             if charge != 0:
                 xtb_cmd.extend(["--chrg", str(charge)])
             if multiplicity > 1:

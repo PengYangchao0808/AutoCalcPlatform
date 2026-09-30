@@ -27,7 +27,7 @@ from cccp.qc.interfaces.xtb_thermo import XTBThermoResult, _xyz_to_coord, run_xt
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, write_xyz
-from cccp.utils.solvent_map import xtb_solvent
+from cccp.utils.solvent_map import xtb_method_name, xtb_solvent_args
 
 logger = logging.getLogger(__name__)
 
@@ -100,14 +100,15 @@ class XTBInterface:
     def is_available(self) -> bool:
         return self.executable is not None
 
-    def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
-        """Return xTB solvation command-line flags based on solvent_model."""
+    def _solvent_args(self, solvent: Optional[str] = None, gfn_level: Optional[int] = None) -> List[str]:
+        """Return xTB solvation flags for the EFFECTIVE solvent/method/model."""
         sol = solvent if solvent is not None else self.solvent
-        if not sol or self.solvent_model == "none":
-            return []
-        if self.solvent_model == "gbsa":
-            return ["--gbsa", xtb_solvent(sol)]
-        return ["--alpb", xtb_solvent(sol)]
+        level = self.gfn_level if gfn_level is None else gfn_level
+        return xtb_solvent_args(
+            sol,
+            method=xtb_method_name(level),
+            solvent_model=self.solvent_model,
+        )
 
     def optimize(
         self,
