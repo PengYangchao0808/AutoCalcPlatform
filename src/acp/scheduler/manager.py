@@ -1069,6 +1069,24 @@ class JobManager:
             )
         new_spec = replace(new_spec, output_dir=None)
         created = self.submit(new_spec, group_id=record.group_id)
+        source_ref = (
+            new_spec.input.get("source_ref")
+            if isinstance(new_spec.input, dict)
+            else None
+        )
+        source_job_id = (
+            str(source_ref.get("job_id") or "")
+            if isinstance(source_ref, dict)
+            else ""
+        )
+        if not source_job_id and isinstance(new_spec.input, dict):
+            source_job_id = str(new_spec.input.get("source_job_id") or "")
+        self._event_log(created).append(
+            "job.edit_recalculate_parent",
+            job_id=created.id,
+            parent_job_id=record.id,
+            source_job_id=source_job_id or None,
+        )
         self._event_log(record).append(
             "job.edit_recalculate",
             job_id=record.id,

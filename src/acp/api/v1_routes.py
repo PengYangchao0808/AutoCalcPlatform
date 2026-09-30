@@ -11,8 +11,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import posixpath
 import re
+import sqlite3
 import threading
 import urllib.parse
 from collections import Counter, OrderedDict
@@ -215,6 +217,7 @@ from acp.scheduler.job_edit import (
     diff_editable_specs,
     editable_spec_from_parts,
     editable_spec_from_record,
+    input_structure_changed,
     workflow_edit_status,
 )
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -1328,13 +1331,31 @@ def _resolve_batch_structures_input(
             resolved_items.append(item)
             continue
         try:
-            asset, _ = service.get(source_id)
+            asset, source_checksum = service.get(source_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        source_ref = item.get("source_ref")
+        source_ref = source_ref if isinstance(source_ref, dict) else {}
+        declared_source_id = str(source_ref.get("source_id") or "").strip()
+        if declared_source_id and declared_source_id != source_id:
+            raise HTTPException(status_code=422, detail="批量结构来源 ID 不匹配")
+        declared_checksum = str(source_ref.get("checksum") or "").strip()
+        if declared_checksum and declared_checksum != source_checksum:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "structure_source_changed",
+                    "message": "所选批量结构自加载后已变化，请重新选择并确认几何。",
+                    "source_id": source_id,
+                    "expected_checksum": declared_checksum,
+                    "current_checksum": source_checksum,
+                },
+            )
         resolved = {
             key: value
             for key, value in item.items()
-            if key not in {"source_id", "allow_disabled_use", "disabled_use_reason"}
+            if key
+            not in {"source_id", "source_ref", "allow_disabled_use", "disabled_use_reason"}
         }
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
@@ -1351,6 +1372,16 @@ def _resolve_batch_structures_input(
             "role": asset.get("tag", ""),
             "role_evidence": "",
             "candidate_id": asset.get("candidate_id", ""),
+            "checksum": source_checksum,
+            "input_xyz_hash": hashlib.sha256(
+                resolved["xyz"].encode("utf-8")
+            ).hexdigest(),
+            "input_snapshot": {
+                "charge": resolved.get("charge", asset.get("charge")),
+                "multiplicity": resolved.get(
+                    "multiplicity", asset.get("multiplicity")
+                ),
+            },
             "metadata_revision": 0,
         }
         try:
@@ -1359,6 +1390,7 @@ def _resolve_batch_structures_input(
             parsed_id, parsed_path = StructureSourceService.parse_source_id(source_id)
             snapshot["job_id"] = parsed_id
             snapshot["relative_path"] = parsed_path
+            snapshot["source_ref"] = source_ref
         except (ValueError, ImportError):
             pass
         # Enrich from org store when available.
@@ -1369,6 +1401,25 @@ def _resolve_batch_structures_input(
             org_store = StructureSourceStore(manager.store.db_path)
             org_entry = org_store.get_by_legacy_source_id(source_id)
             if org_entry is not None:
+                declared_uid = str(source_ref.get("source_uid") or "").strip()
+                if declared_uid and declared_uid != str(org_entry.get("source_uid") or ""):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="批量结构候选来源已变化，请重新选择后重试。",
+                    )
+                for key in ("version_id", "geometry_hash"):
+                    declared_value = str(source_ref.get(key) or "").strip()
+                    current_value = str(org_entry.get(key) or "").strip()
+                    if declared_value and declared_value != current_value:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "error": "structure_source_changed",
+                                "message": "所选批量结构版本已变化，请重新选择后重试。",
+                                "source_id": source_id,
+                                "field": key,
+                            },
+                        )
                 from acp.scheduler.structure_source_store import CandidateUseConflictError
 
                 allow_disabled = bool(item.get("allow_disabled_use"))
@@ -1418,9 +1469,97 @@ def _resolve_batch_structures_input(
     return resolved_inp, snapshots
 
 
-def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list[dict[str, Any]]:
-    """Validate and snapshot a directly reused candidate without guessing legacy links."""
+def _xyz_atom_data(xyz_text: str) -> tuple[tuple[str, tuple[float, float, float]], ...]:
+    """Return the first XYZ frame's element order and coordinates."""
+    from acp.intake import parse_xyz_text
+
+    parsed = parse_xyz_text(xyz_text)
+    if not parsed.structures or parsed.errors:
+        raise HTTPException(status_code=422, detail="所选结构不是有效的 XYZ 几何")
+    lines = str(parsed.structures[0].xyz or "").strip().splitlines()
+    try:
+        atom_count = int(lines[0].strip())
+    except (IndexError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="所选结构缺少有效的 XYZ 原子数") from exc
+    atom_lines = lines[2 : 2 + atom_count]
+    if atom_count <= 0 or len(atom_lines) != atom_count:
+        raise HTTPException(status_code=422, detail="所选结构的 XYZ 原子行不完整")
+    atoms: list[tuple[str, tuple[float, float, float]]] = []
+    for line in atom_lines:
+        fields = line.split()
+        if len(fields) < 4:
+            raise HTTPException(status_code=422, detail="所选结构包含不完整的 XYZ 原子行")
+        try:
+            coordinates = [float(value) for value in fields[1:4]]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="所选结构包含无效坐标") from exc
+        if not all(math.isfinite(value) for value in coordinates):
+            raise HTTPException(status_code=422, detail="所选结构包含非有限坐标")
+        atoms.append((fields[0], (coordinates[0], coordinates[1], coordinates[2])))
+    return tuple(atoms)
+
+
+def _same_xyz_geometry(left: str, right: str) -> bool:
+    """Compare two XYZ geometries independent of whitespace and formatting."""
+    left_atoms = _xyz_atom_data(left)
+    right_atoms = _xyz_atom_data(right)
+    if len(left_atoms) != len(right_atoms):
+        return False
+    for (left_symbol, left_xyz), (right_symbol, right_xyz) in zip(
+        left_atoms, right_atoms, strict=True
+    ):
+        if left_symbol != right_symbol or any(
+            not math.isclose(a, b, rel_tol=0.0, abs_tol=1e-7)
+            for a, b in zip(left_xyz, right_xyz, strict=True)
+        ):
+            return False
+    return True
+
+
+def _validate_structure_electronic_state(inp: dict[str, Any]) -> None:
+    """Reject invalid charge/multiplicity before reusing saved geometry."""
+    charge = inp.get("charge", 0)
+    multiplicity = inp.get("multiplicity", 1)
+    if isinstance(charge, bool) or isinstance(multiplicity, bool):
+        raise HTTPException(status_code=422, detail="电荷和自旋多重度必须为整数")
+    try:
+        charge_value = int(charge)
+        multiplicity_value = int(multiplicity)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="电荷和自旋多重度必须为整数") from exc
+    if isinstance(charge, float) and charge != charge_value:
+        raise HTTPException(status_code=422, detail="电荷必须为整数")
+    if isinstance(multiplicity, float) and multiplicity != multiplicity_value:
+        raise HTTPException(status_code=422, detail="自旋多重度必须为整数")
+    if multiplicity_value < 1:
+        raise HTTPException(status_code=422, detail="自旋多重度必须至少为 1")
+
+
+def _snapshot_direct_source_input(
+    inp: dict[str, Any],
+    request: Request,
+    *,
+    verify_geometry: bool = False,
+    include_unindexed: bool = False,
+) -> list[dict[str, Any]]:
+    """Validate and snapshot a directly reused structure source."""
     ref = inp.get("source_ref")
+    if not isinstance(ref, dict):
+        direct_source_id = str(inp.get("source_id") or "").strip()
+        if direct_source_id:
+            try:
+                parsed_job_id, parsed_path = StructureSourceService.parse_source_id(
+                    direct_source_id
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            ref = {
+                "source_id": direct_source_id,
+                "job_id": parsed_job_id,
+                "path": parsed_path,
+                "source_uid": str(inp.get("source_uid") or ""),
+                "checksum": str(inp.get("checksum") or ""),
+            }
     if not isinstance(ref, dict):
         return []
     job_id = str(ref.get("job_id") or "").strip()
@@ -1428,6 +1567,40 @@ def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list
     if not job_id or not rel_path:
         return []
     source_id = f"job_{job_id}:{rel_path}"
+    declared_source_id = str(ref.get("source_id") or "").strip()
+    if declared_source_id and declared_source_id != source_id:
+        raise HTTPException(status_code=422, detail="结构来源 ID 与来源任务/路径不匹配")
+
+    source_checksum = str(ref.get("checksum") or "").strip()
+    current_checksum = ""
+    if verify_geometry:
+        _validate_structure_electronic_state(inp)
+        try:
+            asset, current_checksum = _structure_source_service(request).get(source_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if source_checksum and source_checksum != current_checksum:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "structure_source_changed",
+                    "message": "所选保存结构自加载后已变化，请重新选择并确认几何。",
+                    "source_id": source_id,
+                    "expected_checksum": source_checksum,
+                    "current_checksum": current_checksum,
+                },
+            )
+        if str(inp.get("source_type") or "") == "xyz_text":
+            submitted_xyz = str(inp.get("source") or inp.get("xyz_text") or "")
+            source_xyz = str(asset.get("xyz") or "")
+            if not submitted_xyz or not source_xyz:
+                raise HTTPException(status_code=422, detail="保存结构缺少可用 XYZ 几何")
+            if not _same_xyz_geometry(submitted_xyz, source_xyz):
+                raise HTTPException(
+                    status_code=422,
+                    detail="提交几何与所选保存结构不一致；请重新选择来源结构后提交",
+                )
+
     from acp.scheduler.structure_source_store import (
         CandidateUseConflictError,
         StructureSourceStore,
@@ -1436,49 +1609,78 @@ def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list
     manager = _manager(request)
     store = StructureSourceStore(manager.store.db_path)
     projection = store.get_by_legacy_source_id(source_id)
-    if projection is None:
+    if projection is None and not include_unindexed:
         return []
     allow_disabled = bool(ref.get("allow_disabled_use"))
     exception_reason = str(ref.get("disabled_use_reason") or "")
-    try:
-        projection = store.validate_candidate_use(
-            projection["source_uid"],
-            allow_disabled=allow_disabled,
-            justification=exception_reason,
-        )
-    except CandidateUseConflictError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "candidate_not_active",
-                "source_uid": projection["source_uid"],
-                "current": exc.projection,
-            },
-        ) from exc
-    return [
-        {
-            "source_id": source_id,
-            "source_uid": projection["source_uid"],
-            "candidate_record_id": projection["candidate_record_id"],
-            "version_id": projection["version_id"],
-            "geometry_hash": projection["geometry_hash"],
-            "source_revision": projection["source_revision"],
-            "usage_status": projection["usage_status"],
-            "metadata_revision": projection.get("metadata_revision", 0),
-            "disabled_exception": bool(
-                projection.get("usage_status") == "disabled" and allow_disabled
-            ),
-            "exception_reason": exception_reason,
-            "input_snapshot": {
-                "source_type": inp.get("source_type"),
-                "source": inp.get("source"),
-                "charge": inp.get("charge"),
-                "multiplicity": inp.get("multiplicity"),
-                "source_ref": ref,
-            },
-            "captured_at": _utc_now_iso(),
-        }
-    ]
+    if projection is not None:
+        declared_uid = str(ref.get("source_uid") or "").strip()
+        if declared_uid and declared_uid != str(projection.get("source_uid") or ""):
+            raise HTTPException(
+                status_code=409,
+                detail="结构候选来源已变化，请重新选择保存结构后重试。",
+            )
+        for key in ("version_id", "geometry_hash"):
+            declared_value = str(ref.get(key) or "").strip()
+            current_value = str(projection.get(key) or "").strip()
+            if declared_value and declared_value != current_value:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "structure_source_changed",
+                        "message": "所选保存结构版本已变化，请重新选择后重试。",
+                        "source_id": source_id,
+                        "field": key,
+                    },
+                )
+        try:
+            projection = store.validate_candidate_use(
+                projection["source_uid"],
+                allow_disabled=allow_disabled,
+                justification=exception_reason,
+            )
+        except CandidateUseConflictError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "candidate_not_active",
+                    "source_uid": projection["source_uid"],
+                    "current": exc.projection,
+                },
+            ) from exc
+    source_uid = str((projection or {}).get("source_uid") or ref.get("source_uid") or "")
+    input_xyz = str(inp.get("source") or inp.get("xyz_text") or "")
+    snapshot = {
+        "source_id": source_id,
+        "source_uid": source_uid,
+        "job_id": job_id,
+        "relative_path": rel_path,
+        "checksum": source_checksum or current_checksum or None,
+        "input_xyz_hash": (
+            hashlib.sha256(input_xyz.encode("utf-8")).hexdigest() if input_xyz else None
+        ),
+        "candidate_record_id": (projection or {}).get("candidate_record_id", ""),
+        "version_id": (projection or {}).get("version_id", ""),
+        "geometry_hash": (projection or {}).get("geometry_hash", ""),
+        "source_revision": (projection or {}).get("source_revision", ""),
+        "usage_status": (projection or {}).get("usage_status", "active"),
+        "metadata_revision": (projection or {}).get("metadata_revision", 0),
+        "disabled_exception": bool(
+            projection
+            and projection.get("usage_status") == "disabled"
+            and allow_disabled
+        ),
+        "exception_reason": exception_reason,
+        "input_snapshot": {
+            "source_type": inp.get("source_type"),
+            "source": inp.get("source"),
+            "charge": inp.get("charge"),
+            "multiplicity": inp.get("multiplicity"),
+            "source_ref": ref,
+        },
+        "captured_at": _utc_now_iso(),
+    }
+    return [snapshot]
 
 
 def _tsmode_error_to_http(exc: Any) -> HTTPException:
@@ -4692,6 +4894,23 @@ def _build_edited_spec(
     method = _expand_method_electronic_state(dict(req.method))
     inp = dict(req.input)
     batch_snapshots: list[dict[str, Any]] = []
+    structure_changed = input_structure_changed(
+        record.spec.input if isinstance(record.spec.input, dict) else {},
+        inp,
+    )
+    if structure_changed and req.mode == "in_place":
+        raise EditValidationError(
+            "已更换计算输入结构；为保留原任务及结果，请选择“创建新任务”后再提交。"
+        )
+    if structure_changed or req.mode == "new_job":
+        batch_snapshots.extend(
+            _snapshot_direct_source_input(
+                inp,
+                request,
+                verify_geometry=True,
+                include_unindexed=True,
+            )
+        )
     if workflow == "irc":
         try:
             inp = _resolve_irc_source_reference(inp, manager)
@@ -4702,7 +4921,8 @@ def _build_edited_spec(
     elif workflow == "PESsearch":
         inp = _resolve_stage_artifact_ref(workflow, inp, manager)
     elif workflow == "BatchOptimize":
-        inp, batch_snapshots = _resolve_batch_structures_input(inp, request)
+        inp, resolved_snapshots = _resolve_batch_structures_input(inp, request)
+        batch_snapshots.extend(resolved_snapshots)
 
     original_execution_mode = (
         getattr(record.spec.execution_mode, "value", None) or record.spec.execution_mode
@@ -4930,7 +5150,7 @@ def submit_job_edit_recalculate(
             },
         )
     try:
-        spec, _batch_snapshots = _build_edited_spec(record, body, request, manager)
+        spec, source_snapshots = _build_edited_spec(record, body, request, manager)
     except EditValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _validate_edited_execution(spec, manager)
@@ -4967,6 +5187,35 @@ def submit_job_edit_recalculate(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if result.get("operation") == "new_job" and not result.get("replayed"):
+        created = manager.get(str(result.get("job_id") or ""))
+        if created is not None and created.work_dir and source_snapshots:
+            try:
+                JobEventLog(runtime_file(created.work_dir, "events.jsonl")).append(
+                    "structure_source_snapshot",
+                    job_id=created.id,
+                    parent_job_id=record.id,
+                    snapshots=source_snapshots,
+                )
+                from acp.scheduler.structure_source_store import StructureSourceStore
+
+                usage_store = StructureSourceStore(manager.store.db_path)
+                for snapshot in source_snapshots:
+                    source_uid = str(snapshot.get("source_uid") or "")
+                    if source_uid and snapshot.get("candidate_record_id"):
+                        usage_store.record_usage(
+                            source_uid,
+                            created.id,
+                            snapshot,
+                            disabled_exception=bool(snapshot.get("disabled_exception")),
+                            exception_reason=str(snapshot.get("exception_reason") or ""),
+                        )
+            except (OSError, ValueError, sqlite3.Error):
+                logger.warning(
+                    "Could not persist recalculation structure provenance for job %s",
+                    created.id,
+                    exc_info=True,
+                )
     return V1EditRecalculateResponse(
         **{key: value for key, value in result.items() if key != "diff"},
         diff_summary=[V1EditDiffEntry(**entry) for entry in diff],
