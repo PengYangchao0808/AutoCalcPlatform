@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from cccp.qc import keyword_registry
 from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePlan
 from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.orca_ts import irc_route, ts_opt_route
@@ -398,12 +399,30 @@ def test_irc_route_gfn_strips_basis(
 
 
 @pytest.mark.parametrize("method", GFN_METHODS)
-def test_nmr_route_gfn_strips_basis(
+def test_nmr_route_gfn_rejected_by_default(
     method: str,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     iface = _bare_orca(method=method, basis="")
+    coords = np.zeros((1, 3))
+    with pytest.raises(KeywordValueError) as exc:
+        iface._write_nmr_input(tmp_path / "nmr.inp", coords, ["C"], 0, 1)
+    assert "NMR 仅支持 DFT/复合方法" in str(exc.value)
+    # The policy gate runs before any write — no half-written input exists.
+    assert not (tmp_path / "nmr.inp").exists()
+
+
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_nmr_route_gfn_allow_switch_no_implicit_basis(
+    method: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Reserved switch open (simulated artifact-level evidence): GFN NMR never
+    # gains an implicit DFT basis — an explicit one is stripped by T6.
+    monkeypatch.setattr(keyword_registry, "GFN_NMR_DEFAULT_ALLOWED", True)
+    iface = _bare_orca(method=method, basis="def2-TZVPP")
     coords = np.zeros((1, 3))
     with caplog.at_level(logging.WARNING):
         iface._write_nmr_input(tmp_path / "nmr.inp", coords, ["C"], 0, 1)
@@ -575,7 +594,10 @@ def test_build_input_blocks_dft_solvent_still_cpcm_block() -> None:
     assert "ALPB" not in out
 
 
-def test_nmr_route_gfn_alpb_solvent_emits_alpb_token(tmp_path: Path) -> None:
+def test_nmr_route_gfn_alpb_solvent_emits_alpb_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(keyword_registry, "GFN_NMR_DEFAULT_ALLOWED", True)
     iface = _bare_orca(method="GFN2-xTB", basis="")
     coords = np.zeros((1, 3))
     iface._write_nmr_input(
@@ -586,7 +608,10 @@ def test_nmr_route_gfn_alpb_solvent_emits_alpb_token(tmp_path: Path) -> None:
     assert all("CPCM" not in line and "SMD" not in line for line in lines)
 
 
-def test_nmr_route_gfn_gbsa_rejected(tmp_path: Path) -> None:
+def test_nmr_route_gfn_gbsa_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Switch open so the rejection is the GFN solvent policy (ALPB-only),
+    # not the GFN+NMR default-reject gate.
+    monkeypatch.setattr(keyword_registry, "GFN_NMR_DEFAULT_ALLOWED", True)
     iface = _bare_orca(method="GFN2-xTB", basis="")
     coords = np.zeros((1, 3))
     with pytest.raises(KeywordValueError):

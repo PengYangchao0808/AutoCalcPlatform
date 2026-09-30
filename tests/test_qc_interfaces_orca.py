@@ -11,6 +11,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+from cccp.qc import keyword_registry
 from cccp.qc.interfaces.orca import (
     NmrShieldingParser,
     ORCAInterface,
@@ -509,4 +510,84 @@ def test_run_orca_zero_exit_with_normal_termination_succeeds(
         ok = interface._run_orca(tmp_path / "opt.inp", tmp_path / "opt.out")
 
     assert ok is True
+
+
+# ── T8: GFN NMR default reject + reserved allow switch ─────────────────────
+#
+# The historical implicit ``6-311G(d)`` fill for GFN is removed. GFN+NMR is
+# rejected by default through the registry calculation policy (T22 case 11:
+# rc=0 but ZERO parsed shielding tensors — not artifact-level evidence). The
+# module-level ``GFN_NMR_DEFAULT_ALLOWED`` switch opens the path; when open
+# the GFN NMR solvent route is ALPB-only. DFT NMR emission is unchanged.
+
+
+def _bare_nmr_interface(method: str, basis: str = "") -> ORCAInterface:
+    interface = ORCAInterface.__new__(ORCAInterface)
+    interface.method = method
+    interface.basis = basis
+    interface.solvent = None
+    interface.solvent_model = "none"
+    interface.maxcore = 1000
+    interface.nproc = 1
+    return interface
+
+
+def test_nmr_gfn_rejected_by_default_with_actionable_message(tmp_path: Path) -> None:
+    interface = _bare_nmr_interface("GFN2-xTB")
+    with pytest.raises(KeywordValueError) as exc:
+        interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
+    message = str(exc.value)
+    assert "NMR 仅支持 DFT/复合方法" in message
+    assert "GFN2-xTB" in message
+    # The policy gate runs before any write — no half-written input exists.
+    assert not (tmp_path / "nmr.inp").exists()
+
+
+def test_nmr_dft_implicit_basis_unchanged(tmp_path: Path) -> None:
+    interface = _bare_nmr_interface("mPW1PW91")
+    interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
+    lines = (tmp_path / "nmr.inp").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "! mPW1PW91 6-311G(d) TightSCF"
+    assert lines[1] == "%eprnmr"
+
+
+def test_nmr_gfn_allow_switch_no_implicit_basis_and_alpb_solvent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(keyword_registry, "GFN_NMR_DEFAULT_ALLOWED", True)
+    interface = _bare_nmr_interface("GFN2-xTB")
+    interface._write_nmr_input(
+        tmp_path / "nmr.inp",
+        COORDINATES,
+        SYMBOLS,
+        0,
+        1,
+        solvent="water",
+        solvent_model="ALPB",
+    )
+    text = (tmp_path / "nmr.inp").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    assert lines[0] == "! GFN2-xTB TightSCF"
+    assert "6-311G(d)" not in text
+    assert "! ALPB(Water)" in lines
+    assert "CPCM" not in text and "SMD" not in text
+
+
+def test_nmr_gfn_allow_switch_rejects_cpcm_smd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(keyword_registry, "GFN_NMR_DEFAULT_ALLOWED", True)
+    interface = _bare_nmr_interface("GFN2-xTB")
+    for model in ("SMD", "CPCM"):
+        with pytest.raises(KeywordValueError):
+            interface._write_nmr_input(
+                tmp_path / "nmr.inp",
+                COORDINATES,
+                SYMBOLS,
+                0,
+                1,
+                solvent="water",
+                solvent_model=model,
+            )
+    assert not (tmp_path / "nmr.inp").exists()
 

@@ -51,7 +51,13 @@ from cccp.qc.interfaces.route_render import (
     render_route_line,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
-from cccp.qc.keyword_registry import method_family, resolve
+from cccp.qc.keyword_registry import (
+    KeywordValueError,
+    calculation_policy,
+    method_family,
+    resolve,
+    resolve_implementation,
+)
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -3342,17 +3348,47 @@ class ORCAInterface(QCInterfaceBase):
         _method = method if method is not None else self.method
         if not _method:
             _method = "mPW1PW91"
+        _gfn_nmr = _is_orca_gfn_xtb_method(_method)
+
+        if _gfn_nmr:
+            # T8 [Q9]: GFN+NMR is REJECTED by default. The xTB path produces
+            # no artifact: ORCA terminates normally (rc=0) but the shielding
+            # parser finds ZERO tensors (T22 case 11), so "ORCA exited 0" is
+            # NOT acceptable evidence. The reserved switch
+            # ``keyword_registry.GFN_NMR_DEFAULT_ALLOWED`` opens the path only
+            # on artifact-level GIAO evidence (T17); opening it is a PLATFORM
+            # POLICY decision and a probe verdict never auto-flips it.
+            _family = method_family(_method)
+            _implementation = resolve_implementation(_method, engine="orca")
+            _nmr_decision = calculation_policy(
+                "nmr", family=_family, implementation=_implementation
+            )
+            if not _nmr_decision.allowed:
+                # Policy gate runs BEFORE any write — no half-written input.
+                raise KeywordValueError(
+                    "NMR 仅支持 DFT/复合方法 (NMR is supported for DFT/composite "
+                    f"methods only): GFN method {_method!r} has no artifact-level "
+                    f"GIAO shielding support. {_nmr_decision.reason}. "
+                    f"Policy: {_nmr_decision.policy}"
+                )
+
         _basis = basis if basis is not None else self.basis
-        if not _basis:
+        if not _basis and not _gfn_nmr:
+            # DFT/composite NMR default level (Goodman DP4/DP5 reference).
+            # The GFN family NEVER receives an implicit DFT basis (T8): it
+            # consumes no basis, and the renderer would only strip it with a
+            # warning. An EXPLICIT GFN basis is still stripped by the
+            # renderer (T6).
             _basis = "6-311G(d)"
         _solvent = solvent if solvent is not None else self.solvent
         _solvent_model = (
             solvent_model if solvent_model is not None else self.solvent_model
         )
-        _gfn_nmr = _is_orca_gfn_xtb_method(_method)
         if not _gfn_nmr:
             # "cpcm" is a DFT-only NMR default; for the GFN family an unset
-            # model stays unset (never gains solvation by default).
+            # model stays unset (never gains solvation by default). When the
+            # reserved switch is open, GFN solvent routes through ALPB only
+            # (:func:`orca_gfn_solvent_token` — never CPCM/SMD).
             _solvent_model = _solvent_model or "cpcm"
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
