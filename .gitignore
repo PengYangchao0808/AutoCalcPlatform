@@ -12,6 +12,11 @@ build/
 *.pyc
 *.pyo
 
+# --- pytest manual/debug basetemp dirs (ephemeral) ---
+/.pytest_*/
+/pytest_*/
+/.test_tmp_*/
+
 # --- Virtual environments ---
 venv/
 .venv/
