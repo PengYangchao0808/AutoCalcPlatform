@@ -686,6 +686,10 @@ def _extract_frames(
                 invalid_reasons.append(f"{coordinate_id}:unmeasured")
                 continue
             residual = float(value - float(target_values[coordinate_id]))
+            if coordinate_item.kind in {"angle", "dihedral"}:
+                # Periodic residual: a scan crossing ±180° (targets up to
+                # 359°) must not read as a ±360° violation.
+                residual = ((residual + 180.0) % 360.0) - 180.0
             residuals[coordinate_id] = residual
             tolerance = float(resolved_tolerances.get(coordinate_item.kind, 0.01))
             if abs(residual) > tolerance:

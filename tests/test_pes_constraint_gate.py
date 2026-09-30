@@ -8,9 +8,11 @@ coordinate instead of drifting actuals.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from acp.calculations.pes.contracts import (
     EnergyProfile,
@@ -56,6 +58,65 @@ def _profile() -> EnergyProfile:
         relative_energies_kcal_mol=(0.0, 1.0, 2.0),
         raw_hartree=(-100.0, -99.99, -99.98),
     )
+
+
+def _dihedral_geometry(phi_deg: float) -> np.ndarray:
+    """Four atoms whose (i, j, k, l) torsion is exactly ``phi_deg``."""
+    phi = math.radians(phi_deg)
+    coords = np.zeros((4, 3), dtype=float)
+    coords[0] = (0.0, 1.0, 0.0)  # i
+    coords[1] = (0.0, 0.0, 0.0)  # j
+    coords[2] = (1.0, 0.0, 0.0)  # k
+    coords[3] = (1.0, math.cos(phi), math.sin(phi))  # l
+    return coords
+
+
+def _extract_single_dihedral_frame(tmp_path: Path, phi_deg: float, target: float):
+    coordinate = ScanCoordinate(
+        kind="dihedral", atoms=(0, 1, 2, 3), start=target, end=target, n_points=1
+    )
+    point = RelaxedScanPoint(
+        frame_index=0,
+        progress=0.0,
+        coordinates=_dihedral_geometry(phi_deg),
+        symbols=["C", "C", "C", "C"],
+        energy_hartree=-10.0,
+        success=True,
+        coordinate_values={"dihedral": target},
+    )
+    result = RelaxedScanResult(
+        points=[point], input_xyz=tmp_path / "start.xyz", scan_dir=tmp_path, success=True
+    )
+    frames = _extract_frames(result, coordinate, tmp_path, tolerances={"dihedral": 1.0})
+    assert len(frames) == 1
+    return frames[0]
+
+
+@pytest.mark.parametrize(
+    ("target", "measured"),
+    [(359.0, -1.0), (200.0, -160.0)],
+)
+def test_extract_frames_wraps_periodic_angular_residuals(
+    tmp_path: Path, target: float, measured: float
+) -> None:
+    frame = _extract_single_dihedral_frame(tmp_path, measured, target)
+    residual = frame.constraint_residuals["dihedral"]
+    assert residual == pytest.approx(0.0, abs=1e-9)
+    assert -180.0 <= residual < 180.0
+    # the naive (unwrapped) ±360° residual must never appear
+    assert abs(abs(residual) - 360.0) > 1e-9
+    assert frame.constraint_residual_ok is True
+    assert frame.max_constraint_residual == pytest.approx(0.0, abs=1e-9)
+    assert frame.invalid_reasons == ()
+
+
+def test_extract_frames_wrapping_keeps_off_constraint_frames_flagged(tmp_path: Path) -> None:
+    frame = _extract_single_dihedral_frame(tmp_path, 350.0, 359.0)
+    residual = frame.constraint_residuals["dihedral"]
+    assert residual == pytest.approx(-9.0, abs=1e-9)
+    assert frame.constraint_residual_ok is False
+    assert frame.max_constraint_residual == pytest.approx(9.0, abs=1e-9)
+    assert frame.invalid_reasons
 
 
 def test_constraint_tolerances_default_and_override() -> None:
