@@ -11,7 +11,12 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from cccp.qc.interfaces.orca import NmrShieldingParser, ORCAInterface, _parse_frequencies
+from cccp.qc.interfaces.orca import (
+    NmrShieldingParser,
+    ORCAInterface,
+    _is_orca_gfn_xtb_method,
+    _parse_frequencies,
+)
 from tests.conftest import requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
@@ -41,6 +46,30 @@ H      0.0000000000    0.0000000000    0.2000000000
 
 ****ORCA-CHEMISTRY JOB DONE****
 """
+
+
+@pytest.mark.parametrize(
+    "method,expected",
+    [
+        ("GFN2-xTB", True),
+        ("GFN1-xTB", True),
+        ("GFN0-xTB", True),
+        ("GFN-FF", True),
+        ("GFNFF", True),
+        ("Native-GFN2-xTB", True),
+        ("gfn2-xtb", True),
+        ("  GFN-FF ", True),
+        ("  native-gfn-ff ", True),
+        ("B97-3c", False),
+        ("r2SCAN-3c", False),
+        ("PBE0", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_is_orca_gfn_xtb_method_registry_driven(method: str | None, expected: bool) -> None:
+    """T3: GFN-FF/GFN0-xTB/GFN2-xTB classify via the keyword registry (case/space-insensitive)."""
+    assert _is_orca_gfn_xtb_method(method) is expected
 
 
 def test_orca_interface_instantiates_with_minimal_config(

@@ -45,6 +45,7 @@ from cccp.qc.interfaces.orca_ts import (
     ts_opt_route,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
+from cccp.qc.keyword_registry import method_family
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -422,8 +423,7 @@ def _parse_frequencies(output_file: Path) -> list[float]:
 def _is_orca_gfn_xtb_method(method: str | None) -> bool:
     if not method:
         return False
-    normalized = method.strip().upper().replace(" ", "")
-    return normalized.startswith("GFN") and normalized.endswith("-XTB")
+    return method_family(method) in {"gfn", "gfnff"}
 
 
 _OPT_LEVEL_MAP: dict[str, str] = {
