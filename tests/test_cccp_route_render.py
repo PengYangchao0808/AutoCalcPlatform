@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePlan
 from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.orca_ts import irc_route, ts_opt_route
 from cccp.qc.interfaces.route_render import (
@@ -280,3 +281,191 @@ def test_nmr_route_goes_through_renderer() -> None:
 def test_irc_route_goes_through_renderer() -> None:
     assert irc_route("B3LYP", "def2-SVP") == "! IRC B3LYP def2-SVP"
     assert irc_route("r2SCAN-3c", "x") == "! IRC r2SCAN-3c"
+
+
+# ── T6: GFN parameter stripping across EVERY entry point ────────────────────
+#
+# `ts_opt_route` / `irc_route` bypass `_build_input_blocks` entirely, so the
+# renderer's applicability gate is the single stripping point. These tests
+# pin: no basis token, no %basis block, no governed grid/dispersion/ri/aux
+# tokens for the whole GFN family — with a warning — while conventional DFT
+# and composite 3c output stays byte-identical.
+
+GFN_METHODS = ["GFN2-xTB", "GFN1-xTB", "GFN0-xTB", "GFN-FF", "Native-GFN2-xTB"]
+
+
+@pytest.mark.parametrize("calc_type,run_token", [("opt", "Opt"), ("sp", "SP"), ("freq", "Freq")])
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_build_input_blocks_gfn_strips_basis_and_basis_block(
+    method: str,
+    calc_type: str,
+    run_token: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    iface = _bare_orca(method=method, basis="def2-TZVPP")
+    with caplog.at_level(logging.WARNING):
+        out, _ = iface._build_input_blocks(
+            calc_type,
+            basis="def2-SVP",
+            aux_j_basis="def2/J",
+            aux_c_basis="def2-TZVPP/C",
+            grid="DefGrid2",
+            dispersion="D4",
+            recalc_hess=0,
+        )
+    route = out.splitlines()[0]
+    assert route.split() == ["!", method, run_token]
+    assert "def2" not in route
+    assert "%basis" not in out and "auxJ" not in out and "auxC" not in out
+    assert "DefGrid" not in route and "D4" not in route
+    assert _warned(caplog, "never emitted")
+
+
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_build_input_blocks_gfn_strips_inherited_default_basis(
+    method: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    iface = _bare_orca(method=method, basis="def2-TZVPP")
+    with caplog.at_level(logging.WARNING):
+        out, _ = iface._build_input_blocks("sp", recalc_hess=0)
+    route = out.splitlines()[0]
+    assert route.split() == ["!", method, "SP"]
+    assert "def2-TZVPP" not in out
+    assert _warned(caplog, "never emitted")
+
+
+def test_build_input_blocks_gfn_keeps_route_extras_verbatim(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="")
+    with caplog.at_level(logging.WARNING):
+        out, _ = iface._build_input_blocks(
+            "opt", route_extras=["RIJCOSX", "MyCustomKeyword", "def2/J"], recalc_hess=0
+        )
+    route = out.splitlines()[0]
+    assert "RIJCOSX" in route and "MyCustomKeyword" in route
+    assert "def2/J" not in out and "%basis" not in out
+    assert _warned(caplog, "never emitted")
+
+
+def test_build_input_blocks_dft_basis_and_basis_block_unchanged() -> None:
+    iface = _bare_orca(method="B3LYP", basis="def2-TZVPP")
+    out, _ = iface._build_input_blocks("opt", basis="def2-SVP", aux_j_basis="def2/J", recalc_hess=0)
+    route = out.splitlines()[0]
+    assert route == "! B3LYP def2-SVP Opt"
+    assert "%basis" in out and 'auxJ  "def2/J"' in out
+
+
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_ts_opt_route_gfn_strips_basis_ri_aux(
+    method: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        route = ts_opt_route(
+            method,
+            "def2-SVP",
+            grid="DefGrid2",
+            scf="tight",
+            aux_j="def2/J",
+            ri_approximation="RIJCOSX",
+        )
+    assert route.split() == ["!", method, "TightSCF", "OptTS", "NumFreq"]
+    assert "def2" not in route and "RIJCOSX" not in route and "DefGrid" not in route
+    assert " aux " not in f" {route} "
+    assert _warned(caplog, "never emitted")
+
+
+def test_ts_opt_route_ri_aux_group_unchanged_for_dft_and_3c() -> None:
+    dft = ts_opt_route("B3LYP", "def2-SVP", aux_j="def2/J", ri_approximation="RIJCOSX")
+    assert dft == "! B3LYP def2-SVP OptTS NumFreq RIJCOSX aux def2/J"
+    composite = ts_opt_route("r2SCAN-3c", "def2-mTZVPP", aux_j="def2/J", ri_approximation="RIJCOSX")
+    assert composite == "! r2SCAN-3c OptTS NumFreq RIJCOSX aux def2/J"
+
+
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_irc_route_gfn_strips_basis(
+    method: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        route = irc_route(method, "def2-SVP")
+    assert route.split() == ["!", "IRC", method]
+    assert "def2" not in route
+    assert _warned(caplog, "never emitted")
+
+
+@pytest.mark.parametrize("method", GFN_METHODS)
+def test_nmr_route_gfn_strips_basis(
+    method: str,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    iface = _bare_orca(method=method, basis="")
+    coords = np.zeros((1, 3))
+    with caplog.at_level(logging.WARNING):
+        iface._write_nmr_input(tmp_path / "nmr.inp", coords, ["C"], 0, 1)
+    first = (tmp_path / "nmr.inp").read_text().splitlines()[0]
+    assert first.split() == ["!", method, "TightSCF"]
+    assert "6-311G(d)" not in first
+    assert _warned(caplog, "never emitted")
+
+
+def test_relaxed_scan_gfn_strips_inherited_default_basis(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="def2-TZVPP")
+    monkeypatch.setattr(iface, "_run_orca", lambda *args, **kwargs: False)
+    with caplog.at_level(logging.WARNING):
+        result = iface.relaxed_scan(
+            np.zeros((1, 3)),
+            ["H"],
+            scan_coordinate=CoordinateSpec(
+                id="rc1", kind="distance", atoms=(0, 0), start=1.0, end=2.0
+            ),
+            points=2,
+            output_dir=tmp_path,
+            output_name="gfn_scan",
+        )
+    assert result.success is False
+    input_text = (tmp_path / "gfn_scan.inp").read_text()
+    route = input_text.splitlines()[0]
+    assert route.split() == ["!", "GFN2-xTB", "Opt", "ScanTS"]
+    assert "def2" not in input_text and "%basis" not in input_text
+    assert _warned(caplog, "never emitted")
+
+
+def test_synchronous_relaxed_scan_gfn_strips_inherited_default_basis(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    iface = _bare_orca(method="GFN2-xTB", basis="def2-TZVPP")
+    monkeypatch.setattr(iface, "_run_orca", lambda *args, **kwargs: False)
+    plan = ReactionCoordinatePlan(
+        coordinates=(
+            CoordinateSpec(id="rc1", kind="distance", atoms=(0, 0), start=1.0, end=2.0),
+            CoordinateSpec(id="rc2", kind="distance", atoms=(0, 0), start=3.0, end=4.0),
+        ),
+        points=2,
+    )
+    with caplog.at_level(logging.WARNING):
+        result = iface.relaxed_scan(
+            np.zeros((1, 3)),
+            ["H"],
+            plan=plan,
+            charge=0,
+            multiplicity=1,
+            output_dir=tmp_path,
+            output_name="gfn_sync",
+        )
+    assert result.success is False
+    frame_input = tmp_path / "frame_000" / "gfn_sync_try1.inp"
+    input_text = frame_input.read_text()
+    route = input_text.splitlines()[0]
+    assert route.split() == ["!", "GFN2-xTB", "Opt"]
+    assert "def2" not in input_text and "%basis" not in input_text
+    assert _warned(caplog, "never emitted")

@@ -50,7 +50,7 @@ from cccp.qc.interfaces.route_render import (
     render_route_line,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
-from cccp.qc.keyword_registry import method_family
+from cccp.qc.keyword_registry import method_family, resolve
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -1401,9 +1401,13 @@ class ORCAInterface(QCInterfaceBase):
                 )
             )
         else:
+            # basis is a governed segment (T6): GFN-family values are
+            # stripped with a warning by the renderer; an EMPTY basis keeps
+            # its historical spacing slot (the `! B3LYP  Opt` double space).
+            _basis_segment: str | RouteKeyword = RouteKeyword("basis", _basis) if _basis else ""
             blocks.append(
                 render_route_line(
-                    [_method, _basis, route, *_route_segments],
+                    [_method, _basis_segment, route, *_route_segments],
                     context=(_kw_family, _kw_implementation),
                     seen=_extras_upper,
                 )
@@ -1418,6 +1422,22 @@ class ORCAInterface(QCInterfaceBase):
                 and (meta.get("default_aux_j") or meta.get("default_aux_c"))
             )
         )
+        if _gfn_method and needs_basis_block:
+            # T6: GFN family consumes no auxiliary basis — the whole %basis
+            # block is DFT-only and is suppressed; every dropped aux value
+            # (explicit params and route_extras-extracted /J //C alike) gets
+            # the registry strip warning.
+            for _aux_value in (_aux_j, _aux_c):
+                if _aux_value:
+                    _, _aux_warning = resolve(
+                        "aux",
+                        str(_aux_value),
+                        family=_kw_family,
+                        implementation=_kw_implementation,
+                    )
+                    if _aux_warning:
+                        logger.warning("%s", _aux_warning)
+            needs_basis_block = False
         if needs_basis_block:
             blocks.append("%basis")
             if not basis_inline:
@@ -2024,11 +2044,7 @@ class ORCAInterface(QCInterfaceBase):
         )
 
         eff_method = method or self.method or "GFN2-xTB"
-        eff_basis = (
-            basis
-            if basis is not None
-            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
-        )
+        eff_basis = basis if basis is not None else self.basis
         eff_solvent = solvent if solvent is not None else self.solvent
         eff_solvent_model = (
             solvent_model
@@ -2206,11 +2222,7 @@ class ORCAInterface(QCInterfaceBase):
         if not drive_coordinates:
             raise ValueError("synchronous relaxed scan requires a drive coordinate")
         eff_method = method or self.method or "GFN2-xTB"
-        eff_basis = (
-            basis
-            if basis is not None
-            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
-        )
+        eff_basis = basis if basis is not None else self.basis
         eff_solvent = solvent if solvent is not None else self.solvent
         eff_solvent_model = (
             solvent_model
@@ -2763,7 +2775,11 @@ class ORCAInterface(QCInterfaceBase):
                 route_keywords.append("Moread")
 
         lines: list[str] = []
-        route_parts = [_basis] + route_keywords if _basis else list(route_keywords)
+        route_parts = (
+            [RouteKeyword("basis", _basis)] + route_keywords
+            if _basis
+            else list(route_keywords)
+        )
         lines.append(render_route_line(route_parts))
 
         lines.append("%casscf")
@@ -3317,7 +3333,9 @@ class ORCAInterface(QCInterfaceBase):
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
 
-        lines: list[str] = [render_route_line([_method, _basis, "TightSCF"])]
+        lines: list[str] = [
+            render_route_line([_method, RouteKeyword("basis", _basis), "TightSCF"], method=_method)
+        ]
         if _solvent and _solvent_model.lower() != "none":
             solv_name = orca_smd_solvent(_solvent)
             model = _solvent_model.lower()

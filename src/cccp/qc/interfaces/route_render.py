@@ -14,17 +14,22 @@ Segment kinds:
   passthrough). Emitted verbatim and registered in the dedup set, but never
   deduplicated or case-folded themselves (free-form passthrough semantics
   are unchanged).
-* :class:`RouteKeyword` — one registry-governed enumerated parameter
-  (``opt_level`` / ``scf_convergence`` / ``scf_strategy`` / ``grid`` /
-  ``dispersion``). Resolved through
-  :func:`cccp.qc.keyword_registry.resolve` (case-insensitive, fail-fast on
-  unknown enum values), so ``normal``/``none`` no-ops are skipped, legacy
-  grid aliases (``SG1``/``Fine``/``UltraFine``/``SuperFine``) canonicalize
-  to ``DefGrid1/2/3`` with a migration warning, and the family ×
-  implementation applicability rules (via ``resolve`` + the explicit
+* :class:`RouteKeyword` — one registry-governed parameter (enum domains
+  ``opt_level`` / ``scf_convergence`` / ``scf_strategy`` / ``grid`` /
+  ``dispersion``; free-form domains ``basis`` / ``ri`` / ``aux``). Enum
+  values resolve through :func:`cccp.qc.keyword_registry.resolve`
+  (case-insensitive, fail-fast on unknown enum values), so ``normal``/
+  ``none`` no-ops are skipped and legacy grid aliases (``SG1``/``Fine``/
+  ``UltraFine``/``SuperFine``) canonicalize to ``DefGrid1/2/3`` with a
+  migration warning. Free-form values pass through verbatim (never
+  case-folded). Either way, the family × implementation applicability
+  rules (via ``resolve`` + the explicit
   :func:`cccp.qc.keyword_registry.is_applicable` emission gate) strip
-  values that never apply (e.g. GFN x grid/dispersion). The raw token is
-  never written to the ``!`` line.
+  values that never apply with a warning — for the GFN family that is the
+  DFT-only parameter set ``basis`` / ``dispersion`` / ``grid`` / ``ri`` /
+  ``aux`` (T6: stripped at EVERY ``!``-line entry point, including
+  ``ts_opt_route`` / ``irc_route`` which bypass ``_build_input_blocks``).
+  The raw token is never written to the ``!`` line.
 
 Author: QCcalc Team
 """
@@ -83,13 +88,16 @@ def orca_keyword_context(method: str | None) -> tuple[str, str]:
 
 @dataclass(frozen=True)
 class RouteKeyword:
-    """One registry-governed enumerated route parameter.
+    """One registry-governed route parameter.
 
     Attributes:
-        domain: Enum domain name (``opt_level`` / ``scf_convergence`` /
-            ``scf_strategy`` / ``grid`` / ``dispersion``).
-        value: User input spelling (any case); ``None``/empty is an unset
-            parameter and renders nothing.
+        domain: Domain name — enum domains (``opt_level`` /
+            ``scf_convergence`` / ``scf_strategy`` / ``grid`` /
+            ``dispersion``) or free-form domains (``basis`` / ``ri`` /
+            ``aux``).
+        value: User input spelling (any case for enums, verbatim for
+            free-form); ``None``/empty is an unset parameter and renders
+            nothing.
         emit: Emission gate evaluated AFTER resolution — validation always
             runs first so a bogus value cannot hide behind a suppressed
             emission (``False`` reproduces e.g. the ``ri_support == "user"``
@@ -100,6 +108,12 @@ class RouteKeyword:
         register: Whether the emitted token joins the dedup set. Default
             ``True``; ``False`` reproduces the historical ``scf_strategy``
             non-registration quirk.
+        prefix: Optional free-form keyword word emitted immediately before
+            the resolved token — ORCA spells some parameters as
+            ``<keyword> <value>`` (e.g. ``aux def2/J``). The word rides with
+            the governed value, so an applicability strip (GFN x aux)
+            removes keyword and value together and never leaves a dangling
+            token on the route line.
     """
 
     domain: str
@@ -107,6 +121,7 @@ class RouteKeyword:
     emit: bool = True
     suppress_tokens: frozenset[str] = field(default_factory=frozenset)
     register: bool = True
+    prefix: str | None = None
 
 
 def render_route_line(
@@ -193,7 +208,8 @@ def _render_governed(
     if not is_applicable(keyword.domain, family=family, implementation=implementation):
         # ``resolve`` already strips inapplicable values; this explicit gate
         # keeps the family x implementation emission policy visible at the
-        # single token-emission point (T6 stripping hook).
+        # single token-emission point (T6 stripping hook: GFN-family basis /
+        # ri / aux / grid / dispersion never reach the route line here).
         return []
     key = token.upper()
     if key in {str(item).upper() for item in keyword.suppress_tokens}:
@@ -202,4 +218,6 @@ def _render_governed(
         return []
     if keyword.register:
         seen.add(key)
+    if keyword.prefix:
+        return [keyword.prefix, token]
     return [token]

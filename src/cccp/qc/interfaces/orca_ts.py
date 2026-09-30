@@ -326,7 +326,11 @@ def ts_opt_route(
     """Build the ORCA ``!`` route line for an OptTS run.
 
     Composite 3c methods (``*3c`` suffixes) carry no basis keyword; ordinary
-    methods take ``<method> <basis>``. ``OptTS`` is always emitted, and
+    methods take ``<method> <basis>`` — and for the GFN family the basis (and
+    any ``ri``/``aux`` pair) is stripped with a warning by the renderer's
+    applicability gate (T6: ``ts_opt_route`` bypasses
+    ``_build_input_blocks``, so the renderer is the single stripping point).
+    ``OptTS`` is always emitted, and
     ``NumFreq`` is appended last so every TS run ends with the independent
     numerical frequency verification. All enumerated parameters resolve
     through the keyword registry via
@@ -351,7 +355,7 @@ def ts_opt_route(
     is_composite = method.lower().endswith("3c") or basis in ("", None)
     segments: list[str | RouteKeyword] = [method]
     if not is_composite and basis:
-        segments.append(basis)
+        segments.append(RouteKeyword("basis", basis))
     segments.append(RouteKeyword("grid", grid))
     segments.append(RouteKeyword("scf_convergence", scf))
     if solvent and solvent_model:
@@ -361,7 +365,8 @@ def ts_opt_route(
     segments.append(RouteKeyword("opt_level", opt_level))
     segments.append("NumFreq")
     if aux_j and ri_approximation:
-        segments.extend([ri_approximation, "aux", aux_j])
+        segments.append(RouteKeyword("ri", ri_approximation))
+        segments.append(RouteKeyword("aux", aux_j, prefix="aux"))
     route = render_route_line(segments, method=method)
     if nproc:
         route += f"\n%pal nprocs {nproc} end"
@@ -452,12 +457,14 @@ def irc_route(
 
     Assembled through :func:`cccp.qc.interfaces.route_render.render_route_line`
     so the route prefix and any future governed keywords share the single
-    renderer; free-form method/basis/solvent tokens are emitted verbatim.
+    renderer; free-form method/basis/solvent tokens are emitted verbatim for
+    DFT, while the GFN family strips the basis with a warning (T6 — this
+    entry point bypasses ``_build_input_blocks``).
     """
     is_composite = method.lower().endswith("3c") or basis in ("", None)
     segments: list[str | RouteKeyword] = ["IRC", method]
     if not is_composite and basis:
-        segments.append(basis)
+        segments.append(RouteKeyword("basis", basis))
     if solvent and solvent_model:
         sm = solvent_model.upper()
         segments.append(f"{sm}({solvent})")
