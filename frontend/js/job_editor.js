@@ -85,6 +85,7 @@
       source_id: item.source_id || "",
       source_kind: item.source_kind || "original_input",
       item_id: item.item_id || "",
+      candidate_id: item.candidate_id || "",
       name: item.name || item.item_id || "structure",
       molecule_name: item.name || item.item_id || "structure",
       tag: item.tag || "",
@@ -98,7 +99,41 @@
       warnings: [],
       errors: available ? [] : [item.geometry_error || "该来源没有可用几何"],
       geometry_ref: deepCopy(item.geometry_ref || {}),
+      source_ref: deepCopy(item.source_ref || {}),
     };
+  }
+
+  function sourceRequiresIndependentJob(ctx) {
+    if (!ctx) return false;
+    if (ctx.mode === "new_from_job") return true;
+    return ["last_structure", "job_result", "task_result", "saved_candidate", "manual_input", "upload"].indexOf(
+      ctx.sourceSelection && ctx.sourceSelection.kind
+    ) >= 0;
+  }
+
+  function syncSourceExecutionMode(ctx) {
+    if (!ctx) return;
+    ctx.sourceRequiresNewJob = sourceRequiresIndependentJob(ctx);
+    if (ctx.sourceRequiresNewJob) ctx.executionMode = "new_job";
+    renderFooter();
+    updateEditorUiState();
+  }
+
+  function selectedSourceSummary(ctx) {
+    var selection = ctx && ctx.sourceSelection;
+    var item = selection && selection.payload;
+    if (!item) return t("edit.source_original");
+    var ref = item.source_ref || {};
+    var jobId = String(ref.job_id || item.job_id || "");
+    var path = String(ref.path || "");
+    var name = String(item.name || item.label || item.item_id || "");
+    if (jobId && path) return [name, jobId, path].filter(Boolean).join(" · ");
+    if (selection.kind === "last_structure") {
+      return name || t("edit.source_last_structure");
+    }
+    if (selection.kind === "manual_input") return t("edit.source_manual");
+    if (selection.kind === "upload") return t("edit.source_upload");
+    return name || t("edit.source_original");
   }
 
   function hydrateTaskStructures(ctx, draft) {
@@ -122,6 +157,7 @@
         multiplicity: ((ctx.originalSpec || {}).input || {}).multiplicity,
         geometry_status: "available",
         geometry_ref: { kind: "inline_xyz", item_id: last.entry_id || "last_structure" },
+        source_ref: deepCopy(last.source_ref || {}),
         xyz_text: last.xyz_text,
       });
     }
@@ -139,6 +175,7 @@
       kind: first ? (first.source_kind || "original_input") : "original_input",
       payload: first,
     };
+    syncSourceExecutionMode(ctx);
   }
 
   // 原地可复用的"简单结构"输入：表单重建等价于原输入。
@@ -1032,7 +1069,9 @@
       spec.task_name && spec.task_name !== spec.workflow ? spec.task_name : "";
     var res = spec.resources || {};
     if (res.nproc) document.getElementById("modal-nproc").value = String(res.nproc);
-    if (res.mem) document.getElementById("modal-mem").value = String(res.mem);
+    if (res.mem !== undefined && res.mem !== null && res.mem !== "") {
+      ACPMemoryInput.set("modal-mem", "modal-mem-unit", res.mem);
+    }
     if (res.parallelism && document.getElementById("modal-parallelism")) {
       document.getElementById("modal-parallelism").value = String(res.parallelism);
     }
@@ -1144,12 +1183,19 @@
     if (kind === "last_structure") {
       var ls = ((ctx.draft && ctx.draft.input_refs) || {}).last_structure;
       if (!ls || !ls.xyz_text) throw new Error(t("edit.last_structure_missing"));
+      var selectedLast = ctx.sourceSelection.payload || {};
+      var sourceRef = deepCopy(selectedLast.source_ref || ls.source_ref || {});
       return {
         source_type: "xyz_text",
-        source: ls.xyz_text,
+        source: selectedLast.xyz || selectedLast.xyz_text || ls.xyz_text,
         charge: orig.charge,
         multiplicity: orig.multiplicity,
-        edit_input_origin: { mode: "last_structure", entry_id: ls.entry_id },
+        source_ref: sourceRef,
+        edit_input_origin: {
+          mode: "last_structure",
+          entry_id: ls.entry_id,
+          source_id: sourceRef.source_id || "",
+        },
       };
     }
     if (kind === "original_input") {
@@ -1307,8 +1353,9 @@
           "/m" + (item.multiplicity || 1);
       });
     var inputSummary = inputRows.length ? inputRows.join("；") : (zh ? "沿用原任务输入" : "Original task input");
+    var sourceSummary = selectedSourceSummary(ctx);
     var resources = fieldVal("modal-nproc") + " " + (zh ? "核" : "cores") +
-      " · " + fieldVal("modal-mem") + " · " + (zh ? "并行" : "parallel") + " " +
+      " · " + (ACPMemoryInput.format("modal-mem", "modal-mem-unit") || "—") + " · " + (zh ? "并行" : "parallel") + " " +
       (fieldVal("modal-parallelism") || "1");
     var changedCount = countLocalChanges();
     var taskName = fieldVal("modal-task-name").trim() || ctx.originalSpec.task_name || "—";
@@ -1323,6 +1370,7 @@
     target.innerHTML = '<div class="create-review-grid">' +
       '<span class="muted">' + (zh ? "目标项目" : "Target project") + '</span><strong>' + escapeHtml(projectName) + '</strong>' +
       '<span class="muted">' + (zh ? "输入结构" : "Input structures") + '</span><div>' + escapeHtml(inputSummary) + '</div>' +
+      '<span class="muted">' + t("edit.source_label") + '</span><div>' + escapeHtml(sourceSummary) + '</div>' +
       '<span class="muted">' + (zh ? "工作流" : "Workflow") + '</span><strong>' + escapeHtml(workflow) + '</strong>' +
       '<span class="muted">' + (zh ? "计算方案" : "Calculation method") + '</span><div><strong>' + escapeHtml(methodTitle) + '</strong>' +
       (methodDesc ? '<div class="muted">' + escapeHtml(methodDesc) + '</div>' : "") + '</div>' +
@@ -1357,7 +1405,7 @@
       input: {},
       resources: {
         nproc: parseInt(fieldVal("modal-nproc"), 10) || 4,
-        mem: fieldVal("modal-mem") || "8GB",
+        mem: ACPMemoryInput.read("modal-mem", "modal-mem-unit"),
       },
       tags: [],
     };
@@ -1389,6 +1437,7 @@
     var ctx = editorContext;
     if (!ctx || ctx.submitting || ctx.collecting) return;
     if (!ctx.draft) return;
+    if (!ACPMemoryInput.read("modal-mem", "modal-mem-unit")) return;
     if (ctx.editStep < 3) {
       setEditStep(ctx.editStep + 1);
       return;
@@ -1509,7 +1558,7 @@
       remark: fieldVal("modal-remark"),
       task_name: fieldVal("modal-task-name").trim(),
       nproc: fieldVal("modal-nproc"),
-      mem: fieldVal("modal-mem"),
+      mem: ACPMemoryInput.format("modal-mem", "modal-mem-unit"),
       parallelism: fieldVal("modal-parallelism"),
       charge: isBatch ? null : fieldVal("modal-charge"),
       mult: isBatch ? null : fieldVal("modal-mult"),
@@ -1595,6 +1644,7 @@
         restoreBatchItems(ctx.baselineBatchItems);
       }
     }
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1614,6 +1664,7 @@
       structures: deepCopy(structures),
       selectedIndex: wizardSelectedStructureIndex || 0,
     };
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1623,11 +1674,12 @@
     var kind = structure.source_kind || "";
     if (kind === "last_structure") {
       ctx.sourceSelection = { kind: "last_structure", payload: structure };
-    } else if (kind === "job_result") {
+    } else if (kind === "job_result" || kind === "task_result" || kind === "saved_candidate") {
       ctx.sourceSelection = { kind: "job_result", payload: structure };
     } else if (wizardInputMode === "task") {
       ctx.sourceSelection = { kind: "original_input", payload: structure };
     }
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1637,6 +1689,7 @@
     if (structure) structure.source_kind = "job_result";
     ctx.activeSourceTab = "task";
     ctx.sourceSelection = { kind: "job_result", payload: structure || null };
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1811,6 +1864,8 @@
     var effKey = effectiveConfigHintKey(ctx.effectiveConfig);
     if (effKey) htmlParts.push('<span class="edit-context-meta">' + t(effKey) + "</span>");
     htmlParts.push("</div>");
+    htmlParts.push('<div class="edit-banner-hint">' +
+      escapeHtml(t("edit.saved_structure_hint")) + "</div>");
     if (d.migration_hint) {
       htmlParts.push('<div class="edit-banner-hint">' + t("edit.migration_hint", { hint: d.migration_hint }) + "</div>");
     }
@@ -1844,22 +1899,35 @@
     var el = footerEl();
     if (!el || !ctx || !ctx.draft) return;
     var caps = ctx.draft.capabilities || {};
+    var requiresNewJob = sourceRequiresIndependentJob(ctx);
     var htmlParts = ['<div class="edit-banner-row"><span class="edit-row-label">' +
       t("edit.execution_mode") + "</span>"];
-    htmlParts.push('<label class="edit-radio' + (caps.can_in_place ? "" : " disabled") + '">' +
+    htmlParts.push('<label class="edit-radio' + (caps.can_in_place && !requiresNewJob ? "" : " disabled") + '">' +
       '<input type="radio" name="edit-exec-mode" value="in_place"' +
       (ctx.executionMode === "in_place" ? " checked" : "") +
-      (caps.can_in_place ? "" : " disabled") + "> " + t("edit.exec_in_place") + "</label>");
+      (caps.can_in_place && !requiresNewJob ? "" : " disabled") + "> " + t("edit.exec_in_place") + "</label>");
     htmlParts.push('<label class="edit-radio"><input type="radio" name="edit-exec-mode" value="new_job"' +
       (ctx.executionMode === "new_job" ? " checked" : "") + "> " + t("edit.exec_new_job") + "</label>");
     htmlParts.push('<span class="flex-spacer"></span>');
     htmlParts.push('<span class="edit-changed-badge" id="edit-changed-badge"></span>');
     htmlParts.push("</div>");
+    if (requiresNewJob && ctx.mode !== "new_from_job") {
+      htmlParts.push('<div class="edit-banner-hint">' +
+        escapeHtml(t("edit.source_requires_new_job")) + "</div>");
+    }
     el.innerHTML = htmlParts.join("");
     el.style.display = "block";
     el.querySelectorAll('input[name="edit-exec-mode"]').forEach(function (radio) {
       radio.addEventListener("change", function () {
-        if (radio.checked) { ctx.executionMode = radio.value; updateEditorUiState(); }
+        if (!radio.checked) return;
+        if (radio.value === "in_place" && sourceRequiresIndependentJob(ctx)) {
+          ctx.executionMode = "new_job";
+          renderFooter();
+          updateEditorUiState();
+          return;
+        }
+        ctx.executionMode = radio.value;
+        updateEditorUiState();
       });
     });
   }
@@ -1898,7 +1966,8 @@
     var btn = modalSubmitBtn();
     if (btn && !ctx.collecting && !ctx.submitting) {
       var caps = ctx.draft.capabilities || {};
-      btn.disabled = ctx.executionMode === "in_place" && !caps.can_in_place;
+      btn.disabled = ctx.executionMode === "in_place" &&
+        (!caps.can_in_place || sourceRequiresIndependentJob(ctx));
       btn.title = btn.disabled ? t("edit.in_place_blocked") : "";
     }
   }
@@ -1963,6 +2032,7 @@
     }).join("");
     var isRemote = editorContext && editorContext.executionMode === "new_job";
     var batchRoleSummary = renderBatchRoleSummary(editorContext);
+    var sourceSummary = selectedSourceSummary(editorContext);
     overlay.innerHTML =
       '<div class="modal-dialog"><div class="modal-header"><h2>' + t("edit.summary_title") +
       '</h2><button class="modal-close" id="edit-summary-x">X</button></div><div class="modal-body">' +
@@ -1970,6 +2040,7 @@
       "<div><b>" + t("edit.summary_workflow") + ":</b> " + escapeHtml(preview.workflow) + "</div>" +
       "<div><b>" + t("edit.summary_mode") + ":</b> " +
       t(isRemote ? "edit.exec_new_job" : "edit.exec_in_place") + "</div>" +
+      "<div><b>" + t("edit.source_label") + ":</b> " + escapeHtml(sourceSummary) + "</div>" +
       (isRemote ? "" : '<div class="edit-warn">' + t("edit.summary_cleanup_warning") + "</div>") +
       "</div>" + warns + batchRoleSummary +
       (diffRows ? '<table class="edit-diff-table"><thead><tr><th>' + t("edit.diff_field") +
