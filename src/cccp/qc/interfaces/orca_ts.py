@@ -20,11 +20,10 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from cccp.qc.keyword_registry import (
-    IMPL_ORCA_DFT,
-    method_family,
-    resolve,
-    resolve_implementation,
+from cccp.qc.interfaces.route_render import (
+    RouteKeyword,
+    orca_keyword_context,
+    render_route_line,
 )
 from cccp.utils.constants import HARTREE_TO_KCAL
 
@@ -311,35 +310,6 @@ def parse_irc_iteration_energies(log_text: str) -> dict[str, list[float]]:
     return energies
 
 
-def orca_keyword_context(method: str | None) -> tuple[str, str]:
-    """Return the registry ``(family, implementation)`` context for ORCA input builds.
-
-    Derived per input build from the effective method via
-    :func:`cccp.qc.keyword_registry.method_family` +
-    :func:`cccp.qc.keyword_registry.resolve_implementation` (``engine="orca"``).
-
-    Arbitrary/user-supplied DFT functionals are NOT in the registry's finite
-    method table (family ``"unknown"``) and MUST keep working — they run as
-    conventional ORCA DFT, so fall back to
-    ``("conventional_dft", IMPL_ORCA_DFT)`` instead of letting
-    ``resolve_implementation`` reject them. Only recognized GFN/3c methods
-    get family-specific behavior.
-
-    Args:
-        method: Effective method spelling (case/whitespace-insensitive).
-
-    Returns:
-        ``(family, implementation)`` suitable for
-        :func:`cccp.qc.keyword_registry.resolve`.
-    """
-    if not method:
-        return "conventional_dft", IMPL_ORCA_DFT
-    family = method_family(method)
-    if family == "unknown":
-        return "conventional_dft", IMPL_ORCA_DFT
-    return family, resolve_implementation(method, engine="orca")
-
-
 def ts_opt_route(
     method: str,
     basis: str = "",
@@ -356,43 +326,43 @@ def ts_opt_route(
     """Build the ORCA ``!`` route line for an OptTS run.
 
     Composite 3c methods (``*3c`` suffixes) carry no basis keyword; ordinary
-    methods take ``<method> <basis>``. Grid/SCF/solvent keywords are appended
-    when provided. ``OptTS`` is always emitted, and ``NumFreq`` is appended
-    last so every TS run ends with the independent numerical frequency
-    verification. ``opt_level`` resolves through the keyword registry
-    (``loose`` / ``normal`` / ``tight`` / ``verytight`` / ``very_tight``
-    alias); ``normal`` leaves the route at plain ``OptTS`` because ORCA
-    already uses the default optimization thresholds there and emitting a
-    second ``Opt`` run-type keyword would be ambiguous. Unknown enum values
-    raise :class:`cccp.qc.keyword_registry.KeywordValueError` (fail-fast).
-    ``%pal nprocs`` is emitted when *nproc* is given.
+    methods take ``<method> <basis>``. ``OptTS`` is always emitted, and
+    ``NumFreq`` is appended last so every TS run ends with the independent
+    numerical frequency verification. All enumerated parameters resolve
+    through the keyword registry via
+    :func:`cccp.qc.interfaces.route_render.render_route_line`:
+
+    * ``grid`` (``DefGrid1/2/3``; legacy ``SG1``/``Fine``/``UltraFine``/
+      ``SuperFine`` aliases canonicalize with a migration warning and the
+      raw token is never emitted),
+    * ``scf`` (the ``scf_convergence`` domain: ``loose`` / ``normal`` /
+      ``tight`` / ``verytight``),
+    * ``opt_level`` (``loose`` / ``normal`` / ``tight`` / ``verytight`` /
+      ``very_tight`` alias).
+
+    ``normal`` leaves the route at plain ``OptTS`` because ORCA already uses
+    the default optimization thresholds there and emitting a second ``Opt``
+    run-type keyword would be ambiguous. Unknown enum values raise
+    :class:`cccp.qc.keyword_registry.KeywordValueError` (fail-fast — nothing
+    is passed through verbatim). ``%pal nprocs`` is emitted when *nproc* is
+    given.
     """
     method = method.strip()
-    tokens = [method]
     is_composite = method.lower().endswith("3c") or basis in ("", None)
+    segments: list[str | RouteKeyword] = [method]
     if not is_composite and basis:
-        tokens.append(basis)
-    if grid:
-        tokens.append(grid)
-    if scf:
-        tokens.append(scf)
+        segments.append(basis)
+    segments.append(RouteKeyword("grid", grid))
+    segments.append(RouteKeyword("scf_convergence", scf))
     if solvent and solvent_model:
         sm = solvent_model.upper()
-        tokens.append(f"{sm}({solvent})")
-    tokens.append("OptTS")
-    if opt_level is not None:
-        family, implementation = orca_keyword_context(method)
-        opt_keyword, opt_warning = resolve(
-            "opt_level", opt_level, family=family, implementation=implementation
-        )
-        if opt_warning:
-            logger.warning("%s", opt_warning)
-        if opt_keyword:
-            tokens.append(opt_keyword)
-    tokens.append("NumFreq")
-    route = "! " + " ".join(tokens)
+        segments.append(f"{sm}({solvent})")
+    segments.append("OptTS")
+    segments.append(RouteKeyword("opt_level", opt_level))
+    segments.append("NumFreq")
     if aux_j and ri_approximation:
-        route += f" {ri_approximation} aux {aux_j}"
+        segments.extend([ri_approximation, "aux", aux_j])
+    route = render_route_line(segments, method=method)
     if nproc:
         route += f"\n%pal nprocs {nproc} end"
     return route
@@ -478,15 +448,20 @@ def irc_route(
     solvent: str | None = None,
     solvent_model: str | None = None,
 ) -> str:
-    """Build the ORCA ``!`` route line for an IRC run."""
-    tokens = [method]
+    """Build the ORCA ``!`` route line for an IRC run.
+
+    Assembled through :func:`cccp.qc.interfaces.route_render.render_route_line`
+    so the route prefix and any future governed keywords share the single
+    renderer; free-form method/basis/solvent tokens are emitted verbatim.
+    """
     is_composite = method.lower().endswith("3c") or basis in ("", None)
+    segments: list[str | RouteKeyword] = ["IRC", method]
     if not is_composite and basis:
-        tokens.append(basis)
+        segments.append(basis)
     if solvent and solvent_model:
         sm = solvent_model.upper()
-        tokens.append(f"{sm}({solvent})")
-    return "! IRC " + " ".join(tokens)
+        segments.append(f"{sm}({solvent})")
+    return render_route_line(segments, method=method)
 
 
 def irc_block(
@@ -811,6 +786,7 @@ __all__ = [
     "irc_block",
     "irc_energy_from_comment",
     "irc_route",
+    "orca_keyword_context",
     "parse_final_energy_hartree",
     "parse_irc_endpoints",
     "parse_irc_iteration_energies",

@@ -38,15 +38,19 @@ from cccp.qc.interfaces.orca_ts import (
     freq_block_for_ts,
     irc_block,
     irc_route,
-    orca_keyword_context,
     parse_irc_endpoints,
     parse_ts_frequency_map,
     parse_ts_mode_vectors,
     ts_geom_block,
     ts_opt_route,
 )
+from cccp.qc.interfaces.route_render import (
+    RouteKeyword,
+    orca_keyword_context,
+    render_route_line,
+)
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
-from cccp.qc.keyword_registry import method_family, resolve
+from cccp.qc.keyword_registry import method_family
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -1272,46 +1276,26 @@ class ORCAInterface(QCInterfaceBase):
 
         _kw_family, _kw_implementation = orca_keyword_context(_method)
 
-        if opt_level is not None:
-            _opt_kw, _opt_warning = resolve(
-                "opt_level", opt_level, family=_kw_family, implementation=_kw_implementation
-            )
-            if _opt_warning:
-                logger.warning("%s", _opt_warning)
-            if _opt_kw and _opt_kw.upper() not in _extras_upper:
-                _route_extras.append(_opt_kw)
-                _extras_upper.add(_opt_kw.upper())
-
         _dlpno_tight_scf = (
             not basis_inline and _method.lower() == "dlpno-ccsd(t)"
         )
-        if scf_convergence is not None:
-            _scf_conv_kw, _scf_conv_warning = resolve(
+
+        # Governed enumerated params go through the single route renderer;
+        # site quirks are declared as RouteKeyword flags, not inline token logic.
+        builtin = (meta or {}).get("builtin_dispersion")
+        _governed_keywords: list[RouteKeyword] = [
+            RouteKeyword("opt_level", opt_level),
+            RouteKeyword(
                 "scf_convergence",
                 scf_convergence,
-                family=_kw_family,
-                implementation=_kw_implementation,
-            )
-            if _scf_conv_warning:
-                logger.warning("%s", _scf_conv_warning)
-            if _scf_conv_kw:
-                if _scf_conv_kw.upper() not in _extras_upper and not (
-                    _scf_conv_kw.upper() == "TIGHTSCF" and _dlpno_tight_scf
-                ):
-                    _route_extras.append(_scf_conv_kw)
-                    _extras_upper.add(_scf_conv_kw.upper())
-
-        if scf_strategy is not None:
-            _scf_strat_kw, _scf_strat_warning = resolve(
-                "scf_strategy",
-                scf_strategy,
-                family=_kw_family,
-                implementation=_kw_implementation,
-            )
-            if _scf_strat_warning:
-                logger.warning("%s", _scf_strat_warning)
-            if _scf_strat_kw and _scf_strat_kw.upper() not in _extras_upper:
-                _route_extras.append(_scf_strat_kw)
+                suppress_tokens=(
+                    frozenset({"TightSCF"}) if _dlpno_tight_scf else frozenset()
+                ),
+            ),
+            # Historical quirk preserved: scf_strategy tokens never joined
+            # the dedup set.
+            RouteKeyword("scf_strategy", scf_strategy, register=False),
+        ]
 
         if scf_maxiter is not None and scf_maxiter > 0:
             if scf_options is None:
@@ -1322,32 +1306,22 @@ class ORCAInterface(QCInterfaceBase):
         # used to be reachable only through raw route_extras.  Composite 3c
         # and GFN methods are immune — the former strip the token via the
         # builtin-dispersion filter below, the latter have no basis/dispersion
-        # layer at all.
+        # layer at all. The `not _gfn_method` guard keeps the lookup itself
+        # out of the registry for GFN methods (no warning, no emission).
         _gfn_method = _is_orca_gfn_xtb_method(_method)
         if not _gfn_method:
-            if grid:
-                _grid_kw, _grid_warning = resolve(
-                    "grid", grid, family=_kw_family, implementation=_kw_implementation
-                )
-                if _grid_warning:
-                    logger.warning("%s", _grid_warning)
-                if _grid_kw and _grid_kw.upper() not in _extras_upper:
-                    _route_extras.append(_grid_kw)
-                    _extras_upper.add(_grid_kw.upper())
+            _governed_keywords.append(RouteKeyword("grid", grid))
             _meta_ri = (meta or {}).get("ri_support", "user")
-            if dispersion:
-                _disp_kw, _disp_warning = resolve(
-                    "dispersion", dispersion, family=_kw_family, implementation=_kw_implementation
+            _governed_keywords.append(
+                RouteKeyword(
+                    "dispersion",
+                    dispersion,
+                    emit=_meta_ri == "user",
+                    suppress_tokens=(
+                        frozenset({builtin}) if builtin else frozenset()
+                    ),
                 )
-                if _disp_warning:
-                    logger.warning("%s", _disp_warning)
-                if (
-                    _disp_kw
-                    and _meta_ri == "user"
-                    and _disp_kw.upper() not in _extras_upper
-                ):
-                    _route_extras.append(_disp_kw)
-                    _extras_upper.add(_disp_kw.upper())
+            )
 
         calc_type_map = {
             "opt": "Opt",
@@ -1404,12 +1378,13 @@ class ORCAInterface(QCInterfaceBase):
             if ri_support == "composite":
                 _aux_c = None
 
-        builtin = (meta or {}).get("builtin_dispersion")
         if builtin:
             _filtered_extras = [x for x in _filtered_extras if str(x).upper() != builtin.upper()]
 
-        extras_str = (" " + " ".join(_filtered_extras)) if _filtered_extras else ""
-
+        _route_segments: list[str | RouteKeyword] = [
+            *_filtered_extras,
+            *_governed_keywords,
+        ]
         if not basis_inline:
             method_name = _method
             if _method.lower() == "dlpno-ccsd(t)":
@@ -1418,9 +1393,21 @@ class ORCAInterface(QCInterfaceBase):
             route_prefix = ""
             if method_name == "DLPNO-CCSD(T)":
                 route_prefix = " TightSCF"
-            blocks.append(f"! {method_name}{route_prefix} {route}{extras_str}")
+            blocks.append(
+                render_route_line(
+                    [f"{method_name}{route_prefix}", route, *_route_segments],
+                    context=(_kw_family, _kw_implementation),
+                    seen=_extras_upper,
+                )
+            )
         else:
-            blocks.append(f"! {_method} {_basis} {route}{extras_str}")
+            blocks.append(
+                render_route_line(
+                    [_method, _basis, route, *_route_segments],
+                    context=(_kw_family, _kw_implementation),
+                    seen=_extras_upper,
+                )
+            )
 
         needs_basis_block = (
             _aux_j
@@ -2776,8 +2763,8 @@ class ORCAInterface(QCInterfaceBase):
                 route_keywords.append("Moread")
 
         lines: list[str] = []
-        route = " ".join([_basis] + route_keywords) if _basis else " ".join(route_keywords)
-        lines.append(f"! {route}")
+        route_parts = [_basis] + route_keywords if _basis else list(route_keywords)
+        lines.append(render_route_line(route_parts))
 
         lines.append("%casscf")
         lines.append(f"  nel {int(active_electrons)}")
@@ -3330,14 +3317,12 @@ class ORCAInterface(QCInterfaceBase):
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
 
-        lines: list[str] = [f"! {_method} {_basis} TightSCF"]
+        lines: list[str] = [render_route_line([_method, _basis, "TightSCF"])]
         if _solvent and _solvent_model.lower() != "none":
             solv_name = orca_smd_solvent(_solvent)
             model = _solvent_model.lower()
-            if model == "smd":
-                lines.append(f"! SMD({solv_name})")
-            else:  # cpcm (default for NMR)
-                lines.append(f"! CPCM({solv_name})")
+            model_token = "SMD" if model == "smd" else "CPCM"
+            lines.append(render_route_line([f"{model_token}({solv_name})"]))
 
         if target_elements:
             lines.append("%eprnmr")
