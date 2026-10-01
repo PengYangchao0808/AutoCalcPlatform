@@ -139,10 +139,17 @@ def test_pes_e2e_propylene_rerun_acceptance(scan_config_copy: Path, tmp_path: Pa
         "--mem",
         "16GB",
     ]
+    # conftest's autouse ACP_DISABLE_MPI_SNIFF=1 is for fake-subprocess
+    # fixtures; this E2E runs real ORCA, so opt back out locally.  Without the
+    # sniff, cccp's rc-file fallback finds a conda Hydra launcher and every
+    # parallel ORCA job dies on the MPI ABI mismatch.
+    child_env = dict(os.environ)
+    child_env.pop("ACP_DISABLE_MPI_SNIFF", None)
     started = time.monotonic()
     proc = subprocess.run(
         cmd,
         cwd=Path(__file__).resolve().parents[1],
+        env=child_env,
         capture_output=True,
         text=True,
         timeout=E2E_TIMEOUT_S,
