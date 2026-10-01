@@ -127,14 +127,24 @@ scan_optimizer level 字段族，全部带 `scan_optimizer_` 前缀，与现有 
 | 新字段 | 类型 | options / 默认 | 说明 |
 |---|---|---|---|
 | `scan_optimizer_method`（扩展） | select 分组 | `["GFN2-xTB","GFN1-xTB","GFN-FF","B97-3c","r2SCAN-3c","B3LYP","PBE0"]` + `option_groups: [{xtb},{composite_dft},{conventional_dft}]` 元数据 | 默认仍 `GFN2-xTB`；大小写规范化走 `normalize_method_alias` |
-| `scan_optimizer_basis` | select, supports_custom | 依赖所选方法动态解析（B3LYP→def2-SVP 默认；3c→显示"内置"锁定） | |
-| `scan_optimizer_dispersion` | select | none/D3/D3BJ/D4；3c 方法锁定"内置" | |
-| `scan_optimizer_solvent_model` | select | none/CPCM/SMD（默认 none） | |
+| `scan_optimizer_basis` | select, supports_custom | 依赖所选方法动态解析（B3LYP→def2-SVP 默认；3c→显示"内置"锁定；**GFN→空集锁定**，`METHOD_META` 条目 `basis: ()`） | |
+| `scan_optimizer_dispersion` | select | none/D3/D3BJ/D4；3c 方法锁定"内置"；**GFN 锁定空集**（内置色散 GFN2→D4 / GFN1→D3 / GFN-FF→力场内置） | |
+| `scan_optimizer_solvent_model` | select | **按方法族作用域**：DFT/3c → `none/CPCM/SMD`（默认 none）；**GFN → `["none","ALPB"]`**（注册表派生 `METHOD_META[key].solvent_models`；ORCA 路径平台策略 {none, ALPB}——GBSA 非 ORCA 关键字、CPCM/SMD 被 ORCA 拒绝） | |
 | `scan_optimizer_solvent` | select | depends_on solvent_model | |
-| `scan_optimizer_grid` | select, advanced | **DefGrid1/DefGrid2/DefGrid3**（ORCA 原生命名，label 注明精度档；默认留空=ORCA 缺省） | 不复用 single_point 的 SG1/Fine 命名，避免二次映射 |
-| `scan_optimizer_scf_convergence` | select, advanced | normal/tight/verytight | |
-| `scan_optimizer_scf_max_iterations` | int, advanced | 默认 200 | |
-| `scan_optimizer_ri_approximation` | select, advanced | none/RI/RIJCOSX/RIJK；3c 锁定 | |
+| `scan_optimizer_grid` | select, advanced | **DefGrid1/DefGrid2/DefGrid3**（ORCA 原生命名，label 注明精度档；默认留空=ORCA 缺省）；legacy 别名 SG1/Fine/UltraFine/SuperFine 迁移映射+告警；**GFN 不适用（字段族锁定）** | 不复用 single_point 的 SG1/Fine 命名，避免二次映射 |
+| `scan_optimizer_scf_convergence` | select, advanced | normal/tight/verytight；**GFN 不适用（字段族锁定）** | |
+| `scan_optimizer_scf_max_iterations` | int, advanced | 默认 200（标量上限，GFN 保留） | |
+| `scan_optimizer_ri_approximation` | select, advanced | none/RI/RIJCOSX/RIJK；3c 锁定；**GFN 锁定 none（RI 不适用）** | |
+
+> **2026-10 正确性加固落地差异（cccp-correctness-hardening，与上表已对齐）**：
+> GFN 家族（`GFN2-xTB`/`GFN1-xTB`/`GFN0-xTB`/`GFN-FF`）的字段适用性由 cccp 关键字注册表
+> （`cccp.qc.keyword_registry`）派生，`METHOD_META` 条目含派生键 `family`/`implementation`/
+> `solvent_models`；不适用的 basis/dispersion/RI/aux/grid/scf 在 ORCA 输入装配层（统一
+> 渲染器）剥离并告警，提交期校验（strict 新建 / migration 历史重算）拒绝或迁移非法组合。
+> single_point level 的共享 `grid` 字段同步改为 `DefGrid1/2/3`、默认 `""`（全目录已无
+> `UltraFine` 默认残留）。GFN + NMR 维持默认拒绝（`GFN_NMR_DEFAULT_ALLOWED = False`，
+> 开关关闭）：T17 真机证据 `! GFN2-xTB NMR` rc=0 但零屏蔽张量 → 产物级
+> calculation_failure；能力/依赖/策略三分记录见 `docs/ACP_Scan_OptTS_GFN_DevPlan.md` §2.1。
 
 #### (b) METHOD_SCHEMAS["pes_scan"] 修改
 

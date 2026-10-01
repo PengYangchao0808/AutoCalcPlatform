@@ -1214,9 +1214,49 @@ def _resolve_stage_artifact_ref(
     return resolved
 
 
+def _baseline_bond_scan_protocol(record: JobRecord) -> dict[str, Any] | None:
+    """Return the historical protocol dict of *record* for edit context."""
+    inp = record.spec.input or {}
+    protocol = inp.get("protocol")
+    if isinstance(protocol, dict):
+        return protocol
+    scan_request = inp.get("scan_request")
+    if isinstance(scan_request, dict):
+        protocol = scan_request.get("protocol")
+        if isinstance(protocol, dict):
+            return protocol
+    return None
+
+
+def _resolve_bond_scan_protocol_levels(
+    protocol: dict[str, Any],
+    *,
+    entry: Any,
+    baseline_protocol: dict[str, Any] | None,
+) -> tuple[dict[str, Any], list[str]]:
+    """API entry of the shared Q7 protocol-level resolver (T14).
+
+    Delegates to :func:`acp.calculations.pes.scan.resolve_scan_protocol_levels`
+    (the same resolver the runner path uses) and rejects with 422 when the
+    layered resolution reports errors.  Migration warnings are collectable —
+    the caller persists them under ``scan_request["level_warnings"]``.
+    """
+    from acp.calculations.pes.scan import resolve_scan_protocol_levels
+
+    out, warnings_out, errors = resolve_scan_protocol_levels(
+        protocol, context=entry, baseline_protocol=baseline_protocol
+    )
+    if errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
+    return out, warnings_out
+
+
 def _prepare_bond_scan_input(
     inp: dict[str, Any],
     manager: Any,
+    *,
+    entry: Any = "strict",
+    baseline_protocol: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate + pin a PESsearch ``mode=bond_length_scan`` job input (§7/§11).
 
@@ -1224,6 +1264,13 @@ def _prepare_bond_scan_input(
     scheduler runner can forward it verbatim; resolves/pins a task-artifact
     source manifest into ``input["from"]`` (and the source's artifact_path)
     so handoff copying works for both local and remote execution.
+
+    The entry context (``entry``) is EXPLICIT (plan Scope entry-behavior
+    contract): ``"strict"`` for new submissions (API / wizard / CLI),
+    ``"edit"`` + ``baseline_protocol`` for edit-recalculate, where unchanged
+    level fields migrate with warnings and user-changed fields are strict.
+    Migration warnings are stored under
+    ``scan_request["level_warnings"]`` (collectable — surfaced by T14/T24).
     """
 
     try:
@@ -1284,7 +1331,12 @@ def _prepare_bond_scan_input(
             status_code=422, detail="bond_length_scan requires coordinate with atoms"
         )
     if not isinstance(protocol, dict):
-        protocol = {}
+        scan_request = inp.get("scan_request")
+        inherited = scan_request.get("protocol") if isinstance(scan_request, dict) else None
+        protocol = inherited if isinstance(inherited, dict) else {}
+    protocol, level_warnings = _resolve_bond_scan_protocol_levels(
+        protocol, entry=entry, baseline_protocol=baseline_protocol
+    )
     if coordinates is not None and (
         not isinstance(coordinates, list)
         or not coordinates
@@ -1307,7 +1359,47 @@ def _prepare_bond_scan_input(
         **({"selection": selection} if isinstance(selection, dict) else {}),
         "protocol": protocol,
     }
+    if level_warnings:
+        prepared["scan_request"]["level_warnings"] = level_warnings
     return prepared
+
+
+def _scan_request_level_warnings(inp: dict[str, Any] | None) -> list[str]:
+    """Collect the migration warnings ``_prepare_bond_scan_input`` stored."""
+    scan_request = (inp or {}).get("scan_request")
+    if not isinstance(scan_request, dict):
+        return []
+    return [str(message) for message in (scan_request.get("level_warnings") or [])]
+
+
+def _persist_method_warning_event(
+    manager: Any,
+    source_record: Any,
+    edit_result: dict[str, Any],
+    spec: JobSpec,
+) -> None:
+    """Persist one ``method_validation_warning`` event on the target job (T14).
+
+    The job RECORD already carries the warnings (``spec.input.scan_request
+    .level_warnings``, persisted with job.json); this adds the events.jsonl
+    entry so rerun/direct-CLI consumers that bypass this endpoint still see
+    the audit trail.  Best-effort: a failed append never fails the edit.
+    """
+    warnings = _scan_request_level_warnings(spec.input)
+    if not warnings:
+        return
+    try:
+        job_id = str(edit_result.get("job_id") or source_record.id)
+        target = manager.get(job_id) or source_record
+        events_path = runtime_file(Path(target.work_dir), "events.jsonl")
+        JobEventLog(events_path).append(
+            "method_validation_warning",
+            job_id=job_id,
+            source="edit_recalculate",
+            warnings=warnings,
+        )
+    except Exception:
+        logger.debug("method_validation_warning event append failed", exc_info=True)
 
 
 def _resolve_batch_structures_input(
@@ -2094,7 +2186,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         _canonicalize_batch_keywords(req.method)
     batch_snapshots: list[dict[str, Any]] = _snapshot_direct_source_input(req.input, request)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
-        req.input = _prepare_bond_scan_input(req.input, manager)
+        req.input = _prepare_bond_scan_input(req.input, manager, entry="strict")
     elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
@@ -4979,7 +5071,12 @@ def _build_edited_spec(
         except HTTPException as exc:
             raise EditValidationError(str(exc.detail)) from exc
     elif workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
-        inp = _prepare_bond_scan_input(inp, manager)
+        inp = _prepare_bond_scan_input(
+            inp,
+            manager,
+            entry="edit",
+            baseline_protocol=_baseline_bond_scan_protocol(record),
+        )
     elif workflow == "PESsearch":
         inp = _resolve_stage_artifact_ref(workflow, inp, manager)
     elif workflow == "BatchOptimize":
@@ -5312,6 +5409,8 @@ def preview_job_edit_recalculate(
             warnings.append(f"输入已修改（{entry['path']}）；提交后将重新物化输入")
         if entry.get("kind") == "resource":
             warnings.append(f"资源已修改（{entry['path']}）")
+    # T14 warning channel (edit-recalculate preview) for migrated configs.
+    warnings.extend(_scan_request_level_warnings(spec.input))
     fingerprint = compute_preview_fingerprint(
         job_id, source_revision, spec.workflow, spec.input, spec.method, spec.resources
     )
@@ -5423,6 +5522,8 @@ def submit_job_edit_recalculate(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not result.get("replayed"):
+        _persist_method_warning_event(manager, record, result, spec)
     if result.get("operation") == "new_job" and not result.get("replayed"):
         created = manager.get(str(result.get("job_id") or ""))
         if created is not None and created.work_dir and source_snapshots:
@@ -6433,10 +6534,12 @@ def validate_method(req: ValidateMethodRequest) -> ValidateMethodResponse:
         return ValidateMethodResponse(valid=False, errors=[f"Unknown schema: {req.schema_id}"])
 
     method = {"levels": req.levels}
-    normalized, errors = normalize_and_validate_method_config(method, schema)
+    warnings: list[str] = []
+    normalized, errors = normalize_and_validate_method_config(method, schema, warnings)
     return ValidateMethodResponse(
         valid=not errors,
         errors=errors,
+        warnings=warnings,
         normalized_levels=normalized,
     )
 

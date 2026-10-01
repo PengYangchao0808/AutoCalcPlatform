@@ -1152,12 +1152,23 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
             # Form ⑤: scheduler --scan-config / direct bond-scan source args
             from acp.workflows.pes_search import run_bond_length_scan
 
-            result = run_bond_length_scan(
-                scan_request=_build_bond_scan_request(args),
-                output_dir=Path(args.output),
-                config=cfg,
-                progress_reporter=reporter,
-            )
+            scan_request = _build_bond_scan_request(args)
+            strict_errors = _strict_method_config_errors(scan_request, args)
+            if strict_errors:
+                # T14: plain-CLI new submissions hard-reject (no QC work queued).
+                for err_message in strict_errors:
+                    print(f"[method-config] ERROR: {err_message}", file=sys.stderr)
+                error_msg = "invalid method config: " + "; ".join(strict_errors)
+                logger.error("%s", error_msg)
+                rc = 2
+            else:
+                result = run_bond_length_scan(
+                    scan_request=scan_request,
+                    output_dir=Path(args.output),
+                    config=cfg,
+                    progress_reporter=reporter,
+                )
+                _report_method_config_warnings(Path(args.output), result)
         elif input_xyz_str:
             # Form ③: direct XYZ + coordinate
             input_xyz = Path(input_xyz_str).expanduser().resolve()
@@ -1506,6 +1517,61 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
     if selection:
         result["selection"] = selection
     return result
+
+
+def _strict_method_config_errors(scan_request: dict[str, Any], args: argparse.Namespace) -> list[str]:
+    """Strict new-submission gate for direct CLI bond-scan sources (T14).
+
+    A ``--scan-config`` document is the scheduler/recompute contract — its
+    levels resolve through the migration lane inside :func:`run_pes_scan`
+    (warn + canonicalize, never hard-reject).  Direct source flags
+    (``--xyz-text`` / ``--asset-path`` / ``--source-type``) are a plain-CLI
+    NEW submission, so user-EXPLICIT conflicts reject here with actionable
+    errors before any QC work starts.
+    """
+    if getattr(args, "scan_config", None):
+        return []
+    from acp.calculations.levels import LevelEntryContext
+    from acp.calculations.pes.scan import resolve_scan_protocol_levels
+
+    _protocol, _warnings, errors = resolve_scan_protocol_levels(
+        scan_request.get("protocol"), context=LevelEntryContext.STRICT
+    )
+    return errors
+
+
+def _append_method_config_events(output_dir: Path, warnings: list[str]) -> None:
+    """Append one ``method_validation_warning`` event on scheduler task dirs."""
+    from acp.storage.layout import runtime_file
+    from acp.workflows._helpers import is_scheduler_task_dir
+
+    if not is_scheduler_task_dir(output_dir):
+        return
+    try:
+        from acp.scheduler.events import JobEventLog
+
+        JobEventLog(runtime_file(output_dir, "events.jsonl")).append(
+            "method_validation_warning",
+            source="pes_bond_scan_runner",
+            warnings=list(warnings),
+        )
+    except OSError:
+        logger.debug("method-config warning event append failed", exc_info=True)
+
+
+def _report_method_config_warnings(output_dir: Path, result: Any) -> None:
+    """Surface runner-lane migration warnings on stderr + the event stream.
+
+    The CLI logging handler writes to stdout, so the warnings are printed
+    to stderr EXPLICITLY (T14: the CLI warning channel must be stderr).
+    """
+    metadata = getattr(result, "metadata", None) or {}
+    warnings = [str(message) for message in (metadata.get("level_warnings") or [])]
+    if not warnings:
+        return
+    for message in warnings:
+        print(f"[method-config] WARNING: {message}", file=sys.stderr)
+    _append_method_config_events(output_dir, warnings)
 
 
 def _handle_batch_optimize(args: argparse.Namespace) -> int:

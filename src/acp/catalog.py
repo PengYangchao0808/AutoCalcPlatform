@@ -3,9 +3,26 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from acp.chem.composition import normalize_recalc_hess
+
+# cccp's unified keyword registry is the SINGLE authority for method-family
+# classification, implementation resolution, field applicability, and
+# solvent-model policy (import direction acp -> cccp only; cccp never
+# imports acp at import time).  METHOD_META never re-encodes these facts:
+# the values are DERIVED from the registry below and re-checked by the
+# derivation-consistency tests in tests/test_acp_catalog.py.
+from cccp.qc.keyword_registry import (
+    KeywordValueError,
+    is_applicable,
+    method_family,
+    resolve,
+    resolve_implementation,
+)
+
+logger = logging.getLogger(__name__)
 
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
     {
@@ -466,6 +483,51 @@ _BASIS_CATALOG_REF = "<basis-catalog>"
 # two structures permanently in sync — DevDoc §2.1 specifies that
 # ``functional_options_map`` values are "由 METHOD_META 自动生成".
 
+# Solvent-model spellings probed against the registry policy when deriving
+# the per-method ``solvent_models`` offer (union of the catalog's
+# per-backend solvent_model options).
+_SOLVENT_MODEL_PROBE: tuple[str, ...] = ("none", "CPCM", "SMD", "ALPB", "GBSA")
+
+
+def _derive_registry_fields(method: str) -> dict[str, Any]:
+    """Derive ``family`` / ``implementation`` / ``solvent_models`` for *method*.
+
+    Everything comes from ``cccp.qc.keyword_registry`` (the single
+    authority): family via :func:`method_family`, the ORCA implementation
+    via :func:`resolve_implementation`, and ``solvent_models`` only when the
+    registry POLICY restricts the set for the family (e.g. GFN under ORCA
+    is ``{none, ALPB}`` — GBSA/CPCM/SMD raise ``KeywordValueError``).
+    Unrestricted methods get no ``solvent_models`` key (the field-level
+    ``per_backend`` options remain their offer).
+
+    Raises:
+        ValueError: The method is unknown to the registry.  Fix by extending
+            ``cccp.qc.keyword_registry._METHOD_FAMILY_TABLE`` (+ its tests),
+            never by silently gating the method.
+    """
+    family = method_family(method)
+    if family == "unknown":
+        raise ValueError(
+            f"METHOD_META method {method!r} classifies as 'unknown' in "
+            "cccp.qc.keyword_registry; extend _METHOD_FAMILY_TABLE there "
+            "(and its tests) instead of gating it silently"
+        )
+    implementation = resolve_implementation(method, engine="orca")
+    derived: dict[str, Any] = {"family": family, "implementation": implementation}
+    allowed: list[str] = []
+    restricted = False
+    for model in _SOLVENT_MODEL_PROBE:
+        try:
+            resolve("solvent_model", model, family=family, implementation=implementation)
+        except KeywordValueError:
+            restricted = True
+            continue
+        allowed.append(model)
+    if restricted:
+        derived["solvent_models"] = allowed
+    return derived
+
+
 METHOD_META: dict[str, dict[str, Any]] = {
     # ── 3c composite methods (built-in basis set, RI fully fixed) ──
     "r2SCAN-3c": {
@@ -605,7 +667,55 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_aux_j": "def2/J",
         "default_aux_c": "def2-TZVPP/C",
     },
+    # ── GFN semi-empirical methods (no basis / dispersion / RI layer) ──
+    # ``basis: ()`` -> ``functional_options_map`` derives ``[]`` (NOT
+    # ``[""]``): GFN advertises no basis at all.  ``dispersion: ()`` is the
+    # same locked/empty set (the built-in correction can never be
+    # overridden).  ``ri_support: "composite"`` makes canonical_level /
+    # _resolve_field_default clear RI/aux to none/empty.  ``family``,
+    # ``implementation`` and ``solvent_models`` are DERIVED from the cccp
+    # keyword registry (see _derive_registry_fields) — never hand-encoded.
+    "GFN2-xTB": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "D4",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "GFN1-xTB": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "D3",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "GFN0-xTB": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "D4",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "GFN-FF": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "builtin",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
 }
+
+
+for _method_name, _method_meta in METHOD_META.items():
+    _method_meta.update(_derive_registry_fields(_method_name))
 
 
 def _derive_functional_options_map() -> dict[str, dict[str, list[str]]]:
@@ -655,6 +765,10 @@ FIELD_DEFINITIONS: dict[str, Any] = {
                 "PWPB95",
                 "revDSD-PBEP86",
                 "DLPNO-CCSD(T)",
+                "GFN2-xTB",
+                "GFN1-xTB",
+                "GFN0-xTB",
+                "GFN-FF",
             ],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
@@ -767,14 +881,13 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "label": "Integration Grid",
         "label_zh": "积分网格",
-        "options": ["SG1", "Fine", "UltraFine", "SuperFine"],
+        "options": ["DefGrid1", "DefGrid2", "DefGrid3"],
         "option_labels_zh": {
-            "SG1": "SG1（粗）",
-            "Fine": "Fine（细）",
-            "UltraFine": "UltraFine（超细）",
-            "SuperFine": "SuperFine（特细）",
+            "DefGrid1": "DefGrid1（粗）",
+            "DefGrid2": "DefGrid2（默认精度档）",
+            "DefGrid3": "DefGrid3（细）",
         },
-        "default": {"*": "UltraFine"},
+        "default": {"*": ""},
     },
     "scf_convergence": {
         "type": "select",
@@ -2253,7 +2366,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2298,7 +2411,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2343,7 +2456,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2444,7 +2557,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                 },
@@ -2715,7 +2828,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2728,7 +2841,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "thermo": {
@@ -3128,7 +3241,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                         "single_point_resume": True,
                     },
@@ -3674,7 +3787,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -3747,7 +3860,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -3929,7 +4042,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -4060,7 +4173,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -4417,6 +4530,113 @@ _LEVEL_SCOPED_FIELD_BASE: dict[str, str] = {
     "scan_optimizer_ri_approximation": "ri_approximation",
 }
 
+_SCAN_OPT_PREFIX = "scan_optimizer_"
+_CLEARED_FIELD_VALUES = ("", "none")
+
+# Registry domains whose option sets collapse to the locked/empty set when
+# the method family carries no DFT layer (GFN / GFN-FF): no basis, no
+# dispersion correction to specify, no integration grid.
+_FAMILY_GOVERNED_DOMAINS: dict[str, str] = {
+    "basis": "basis",
+    "dispersion": "dispersion",
+    "grid": "grid",
+}
+
+
+def _family_locked_options(
+    field_name: str,
+    engine: str,
+    functional: str | None,
+) -> list[str] | None:
+    """Return the locked/empty option set for family-inapplicable fields.
+
+    Authority is ``cccp.qc.keyword_registry`` (never a second catalog
+    table); ``None`` means "no family opinion" and resolution falls through
+    to the normal field/function option logic.
+
+    Rules (T11):
+
+    * ``basis`` / ``dispersion`` / ``grid`` follow registry
+      :func:`is_applicable` — stripped for the GFN/GFN-FF families on every
+      implementation, so the offerable set is empty (locked).
+    * ONE minimal "field unavailable for family" rule covering ``grid`` /
+      ``scf_*``: families that consume no DFT basis layer also get no
+      integration-grid or SCF dropdowns.  Fields without an option set
+      (scalar caps such as ``scf_max_iterations``) pass through untouched —
+      the platform's own GFN scan profile ships
+      ``scan_optimizer_scf_max_iterations: 200``.
+    """
+    if not functional:
+        return None
+    family = method_family(functional)
+    if family == "unknown":
+        return None
+    try:
+        implementation = resolve_implementation(functional, engine=engine)
+    except KeywordValueError:
+        return None
+
+    base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+    if base_name.startswith(_SCAN_OPT_PREFIX):
+        base_name = base_name[len(_SCAN_OPT_PREFIX) :]
+
+    domain = _FAMILY_GOVERNED_DOMAINS.get(base_name)
+    if domain is not None:
+        if not is_applicable(domain, family=family, implementation=implementation):
+            return []
+        return None
+
+    fd = FIELD_DEFINITIONS.get(field_name) or {}
+    if not (fd.get("options") or fd.get("per_backend")):
+        return None
+    if base_name == "grid" or base_name.startswith("scf_"):
+        if not is_applicable("basis", family=family, implementation=implementation):
+            return []
+    return None
+
+
+def _migrate_legacy_grid_value(
+    value: Any,
+    functional: str | None,
+    engine: str,
+) -> tuple[str | None, str | None]:
+    """Canonicalize a legacy (Gaussian-era) grid alias.
+
+    The catalog's ``grid``/``scan_optimizer_grid`` options are ORCA-native
+    (DefGrid1/2/3); legacy spellings are still legal INPUTS and route
+    through ``cccp.qc.keyword_registry.resolve`` (T2), which maps them to
+    the canonical token AND emits a migration warning.  Returns
+    ``(canonical, warning)``: ``canonical`` is the canonical token when a
+    legacy alias was migrated, else ``None`` (the value is either already
+    canonical or not a grid alias); ``warning`` is the registry's
+    legacy-alias migration message (T24: surfaced to the user, never
+    logger-only).
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None, None
+    if value in FIELD_DEFINITIONS["grid"]["options"]:
+        return None, None
+    if not functional:
+        return None, None
+    family = method_family(functional)
+    if family == "unknown":
+        return None, None
+    try:
+        implementation = resolve_implementation(functional, engine=engine)
+        canonical, warning = resolve("grid", value, family=family, implementation=implementation)
+    except KeywordValueError:
+        return None, None
+    if canonical and warning:
+        logger.warning(
+            "Legacy grid value %r migrated to %r for method %r (%s)",
+            value,
+            canonical,
+            functional,
+            warning,
+        )
+        return canonical, warning
+    return None, None
+
 
 def _resolve_field_options(
     field_name: str,
@@ -4435,8 +4655,21 @@ def _resolve_field_options(
 
     Level-scoped fields (e.g. ``scan_optimizer_basis``) reuse the shared
     base-field (``basis``) functional linkage via ``_LEVEL_SCOPED_FIELD_BASE``.
+
+    Family gating (T11) runs FIRST: fields the method family does not apply
+    to resolve to the locked/empty set (see ``_family_locked_options``).
     """
+    locked = _family_locked_options(field_name, engine, functional)
+    if locked is not None:
+        return locked
     base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+    if base_name.startswith(_SCAN_OPT_PREFIX):
+        base_name = base_name[len(_SCAN_OPT_PREFIX) :]
+    if functional and base_name == "solvent_model":
+        meta = _case_insensitive_get(METHOD_META, functional)
+        restricted = (meta or {}).get("solvent_models")
+        if restricted is not None:
+            return list(restricted)
     if functional and base_name in ("basis", "dispersion"):
         mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
         if mapping and base_name in mapping:
@@ -4603,6 +4836,9 @@ def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
         if key not in mapping or key not in level:
             continue
         allowed = mapping[key]
+        if not allowed:
+            level[key] = ""
+            continue
         current = level[key]
         if not current or current == "__custom__":
             continue
@@ -4817,8 +5053,28 @@ def _validate_batch_roles(
     return {"batch_roles": validated_roles}, errors
 
 
-def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
-    """Return (normalized_levels, errors)."""
+def _canonicalization_warning(lid: str, field_name: str, raw: Any, canonical: Any) -> str:
+    """Human-readable migration/canonicalization message (T24)."""
+    return (
+        f"Level '{lid}', field '{field_name}': value '{raw}' "
+        f"canonicalized to '{canonical}'"
+    )
+
+
+def normalize_and_validate_method_config(
+    method: dict,
+    schema: dict[str, Any],
+    warnings_out: list[str] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    """Return (normalized_levels, errors).
+
+    When *warnings_out* is a list, migration/canonicalization warnings are
+    appended to it (T24): legacy grid aliases routed through the keyword
+    registry (``UltraFine`` → ``DefGrid3``), method alias normalization
+    (``b973c`` → ``B97-3c``), and case-canonicalized enum values.  Callers
+    that omit the parameter keep the historical silent-normalization
+    behaviour.
+    """
     errors: list[str] = []
 
     if "batch_roles" in method:
@@ -4889,7 +5145,12 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     # resolving at call time keeps the dependency acyclic.
                     from acp.calculations.levels import normalize_method_alias
 
-                    user_val = normalize_method_alias(user_val)
+                    canonical_method = normalize_method_alias(user_val)
+                    if canonical_method != user_val and warnings_out is not None:
+                        warnings_out.append(
+                            _canonicalization_warning(lid, field_name, user_val, canonical_method)
+                        )
+                    user_val = canonical_method
                 # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
                 # or a list, validate every item against the allowed options,
                 # and normalise to a list so downstream CLI-flag emission
@@ -4925,6 +5186,35 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                         vals = canon_vals
                     normalized[field_name] = vals
                     continue
+                locked = _family_locked_options(field_name, engine, level_method)
+                if locked is not None:
+                    # Family-locked field (T11): profile/legacy payloads carry
+                    # the cleared spelling ("none"/"") and are accepted as-is;
+                    # any real value is an inapplicable override and fails
+                    # fast.  Strict-vs-migration entry contexts are T13's.
+                    base = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+                    if str(user_val).strip().lower() in _CLEARED_FIELD_VALUES:
+                        normalized[field_name] = "none" if base == "dispersion" else ""
+                    else:
+                        errors.append(
+                            f"Level '{lid}', field '{field_name}': value "
+                            f"'{user_val}' is not available for method "
+                            f"'{level_method}' (family-locked field)"
+                        )
+                    continue
+                field_base = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+                if field_base.startswith(_SCAN_OPT_PREFIX):
+                    field_base = field_base[len(_SCAN_OPT_PREFIX) :]
+                if field_base == "grid":
+                    migrated_grid, grid_warning = _migrate_legacy_grid_value(
+                        user_val, level_method, engine
+                    )
+                    if migrated_grid is not None:
+                        user_val = migrated_grid
+                        if warnings_out is not None and grid_warning:
+                            warnings_out.append(
+                                f"Level '{lid}', field '{field_name}': {grid_warning}"
+                            )
                 options = _resolve_field_options(
                     field_name,
                     engine,
@@ -4955,11 +5245,27 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             user_val = str(user_val).lower()
                         else:
                             user_val = canonical
+                        if warnings_out is not None and str(user_val) != str(
+                            user_lv.get(field_name)
+                        ):
+                            warnings_out.append(
+                                _canonicalization_warning(
+                                    lid, field_name, user_lv.get(field_name), user_val
+                                )
+                            )
                     elif str(user_val) not in [str(o) for o in options]:
                         match = _match_option_case_insensitive(options, user_val)
                         if match is not None:
                             _idx, canonical = match
                             user_val = canonical
+                            if warnings_out is not None and str(canonical) != str(
+                                user_lv.get(field_name)
+                            ):
+                                warnings_out.append(
+                                    _canonicalization_warning(
+                                        lid, field_name, user_lv.get(field_name), canonical
+                                    )
+                                )
                         elif not (
                             fd
                             and fd.get("supports_custom")
@@ -5069,7 +5375,9 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
     return converted
 
 
-def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str) -> dict:
+def method_levels_to_workflow_config(
+    levels: dict[str, Any], schema_id: str, workflow: str
+) -> dict[str, Any]:
     """Convert normalized method levels to workflow config (written to method_config.json)."""
     config: dict[str, Any] = {}
     if schema_id == "confsearch":

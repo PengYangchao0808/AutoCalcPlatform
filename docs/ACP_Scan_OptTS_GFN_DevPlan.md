@@ -39,20 +39,48 @@
 
 ### 2.1 GFN 方法
 
-ORCA 5.0+ 内置 xTB 半经验方法,作为普通 method 使用,**无需基组**:
+> **状态(2026-10 正确性加固落地后,本文档已与实现对齐)**:GFN 选项集的单一事实源是
+> `src/cccp/qc/keyword_registry.py`(方法族 × 实现 × 参数适用性表);`src/acp/catalog.py`
+> 的 METHOD_META GFN 条目(`family` / `implementation` / `solvent_models`)由注册表派生,
+> 不得手工二次编码。
+
+ORCA 的 xTB 半经验方法(`GFN2-xTB` / `GFN1-xTB` / `GFN0-xTB` / `GFN-FF`;ORCA 路径的
+实现均为 `orca_external_xtb`)作为普通 method 使用,**无需基组**:
 
 ```
-! GFN2-xTB Opt TightSCF
+! GFN2-xTB Opt
 ! GFN1-xTB Freq
-! GFN0-xTB SP
 ! GFN-FF Opt
 ```
 
-- 溶剂:GFN 方法使用 **`ALPB(<solvent>)` 路由关键字**(非 `%cpcm` 块):
+方法 × 参数适用性(ORCA 路径,全入口一致;GFN 下不适用的参数在装配层经统一渲染器
+剥离并记录告警,不会进入 `!` 行):
+
+| 参数 | GFN 行为 |
+|---|---|
+| basis | **不适用**——METHOD_META 条目 `basis: ()`,目录选项为空集;显式传入被剥离+告警 |
+| dispersion | **锁定内置**(GFN2→D4 / GFN1→D3 / GFN-FF→内置力场色散);不接受外部叠加 |
+| RI / aux basis | **不适用**——`ri_support: "composite"`,RI/auxJ/auxC 一律剥离 |
+| grid / scf_* | **不适用**——目录字段族锁定(前端隐藏;标量上限如 `scf_max_iterations` 保留);`TightSCF` 例外(有效,透传为 `otool_xtb --acc`) |
+| solvent_model | **平台策略 {none, ALPB}**——见下;GBSA 不是 ORCA 关键字(真机 rc=4 UNRECOGNIZED),CPCM/SMD 被 ORCA 自身拒绝(rc=25) |
+
+- 溶剂:GFN 方法使用 **`ALPB(<solvent>)` 路由关键字**(非 `%cpcm` 块),`none`/未设置
+  不发射任何溶剂关键字,GBSA/CPCM/SMD 直接报错(不静默改写):
   ```
-  ! GFN2-xTB Opt ALPB(water)
+  ! GFN2-xTB Opt ALPB(water)      # 合法
   ```
-- 不使用 RI / aux basis / 色散校正 / 积分网格。
+- 网格:DFT 路径统一 ORCA 原生 **`DefGrid1/DefGrid2/DefGrid3`**(目录默认空 = ORCA 缺省);
+  legacy 别名(SG1→DefGrid1、Fine→DefGrid2、UltraFine/SuperFine→DefGrid3)迁移映射并告警;
+  GFN 路径不适用(剥离)。
+- **NMR:默认拒绝(开关保持关闭)**。真机证据(T17,ORCA 6.1.1):`! GFN2-xTB NMR`
+  rc=0 且正常结束、有能量,但**零屏蔽张量输出**(`NmrShieldingParser` 解析为空)→
+  产物级 calculation_failure。按能力/依赖/策略三分记录:
+  - **能力(capability)**:ORCA 6.1 实测不产出 GFN 屏蔽张量(探针结果可更新本记录)。
+  - **依赖(dependency)**:与参数文件无关(GFN0-xTB 的 `param_gfn0-xtb.txt` 缺失是另一项
+    依赖缺口,勿混淆)。
+  - **策略(policy)**:`keyword_registry.GFN_NMR_DEFAULT_ALLOWED = False`——NMR 仅支持
+    DFT/复合方法;只有产物级验收(非空屏蔽张量)加显式策略决策才能打开开关,
+    探针结果不得自动改写策略。
 
 ### 2.2 弛豫表面扫描(Relaxed Surface Scan)
 
@@ -166,39 +194,52 @@ if _solvent and _solvent_model.lower() != "none":
 
 #### A2.1 新增 4 个 GFN 条目
 
-**位置**: `METHOD_META` 字典,`DLPNO-CCSD(T)` 条目之后(line ~397)。
+> **状态(已实现,T11/T12,2026-10 文档对齐)**:落地值与最初草案有一处**有意偏差**与
+> 两处扩展——① `basis_inline: True`(非草案的 False):orca.py 的 `not basis_inline`
+> 路径会把继承基组静默丢弃,破坏 T6 的"剥离必须带告警"契约,故 GFN 走受管内联段
+> (渲染器负责剥离+告警);② `dispersion: ()` 全空集(非草案的 `("none",)`),
+> `_derive_functional_options_map` 因此派生 `[]`(锁定空,不是 `[""]`);③ 新增
+> `family` / `implementation` / `solvent_models` 三个**派生键**,由
+> `_derive_registry_fields()` 在 import 时从 cccp 注册表计算,永不手工编码。
+
+**位置**: `METHOD_META` 字典(`src/acp/catalog.py`,复合方法条目之后)。
 
 ```python
-# ── GFN semi-empirical methods (ORCA built-in xTB; no basis, no RI) ──
+# ── GFN semi-empirical methods (ORCA external xTB; no basis, no RI) ──
 "GFN2-xTB": {
-    "basis_inline": False,
+    "basis_inline": True,
     "ri_support": "composite",
     "basis": (),
-    "dispersion": ("none",),
-    "builtin_dispersion": None,
+    "dispersion": (),
+    "builtin_dispersion": "D4",
     "default_basis": "",
     "default_dispersion": "none",
-    "family": "gfn",
 },
-"GFN1-xTB": {  # 同 GFN2-xTB
-    "basis_inline": False, "ri_support": "composite", "basis": (),
-    "dispersion": ("none",), "builtin_dispersion": None,
-    "default_basis": "", "default_dispersion": "none", "family": "gfn",
+"GFN1-xTB": {  # 同 GFN2-xTB,builtin_dispersion="D3"
+    "basis_inline": True, "ri_support": "composite", "basis": (),
+    "dispersion": (), "builtin_dispersion": "D3",
+    "default_basis": "", "default_dispersion": "none",
 },
-"GFN0-xTB": {  # 同上
-    "basis_inline": False, "ri_support": "composite", "basis": (),
-    "dispersion": ("none",), "builtin_dispersion": None,
-    "default_basis": "", "default_dispersion": "none", "family": "gfn",
+"GFN0-xTB": {  # 同上;ORCA 路径策略性拒绝(xTB 二进制专属),builtin_dispersion="D4"
+    "basis_inline": True, "ri_support": "composite", "basis": (),
+    "dispersion": (), "builtin_dispersion": "D4",
+    "default_basis": "", "default_dispersion": "none",
 },
-"GFN-FF": {  # 力场, family 标记区分
-    "basis_inline": False, "ri_support": "composite", "basis": (),
-    "dispersion": ("none",), "builtin_dispersion": None,
-    "default_basis": "", "default_dispersion": "none", "family": "gfnff",
+"GFN-FF": {  # 力场, family 派生为 "gfnff";色散即内置力场,builtin_dispersion="builtin"
+    "basis_inline": True, "ri_support": "composite", "basis": (),
+    "dispersion": (), "builtin_dispersion": "builtin",
+    "default_basis": "", "default_dispersion": "none",
 },
 ```
 
-> `family` 字段是单一事实源,前端(§E1)与后端(§A1)都读它判断 GFN 行为。
-> `_derive_functional_options_map()` (line 401) 会自动从 METHOD_META 派生 `functional_options_map`,无需手改。GFN 条目的 `basis: ()` → 派生为空列表。
+> `family` / `implementation` / `solvent_models` 由 `_derive_registry_fields()` 从
+> `cccp.qc.keyword_registry`(`method_family` / `resolve_implementation` /
+> `resolve("solvent_model", ...)`)派生:GFN 条目得到 `family="gfn"`(GFN-FF 为
+> `"gfnff"`)、`implementation="orca_external_xtb"`、`solvent_models=["none","ALPB"]`;
+> DFT/3c 条目不产生 `solvent_models` 键。`test_method_meta_consistent_with_cccp_registry`
+> 对每个条目断言派生一致性;某方法在注册表分类为 `unknown` 时 import 即失败(不许静默门控)。
+> `_derive_functional_options_map()` 自动从 METHOD_META 派生 `functional_options_map`:
+> GFN 的 `basis: ()` → `basis: []`(锁定空集),`dispersion: ()` → `[]`。
 
 #### A2.2 functional 可选项追加 GFN
 
@@ -221,13 +262,24 @@ if _solvent and _solvent_model.lower() != "none":
 
 #### A2.3 solvent_model 追加 ALPB
 
-**位置**: `FIELD_DEFINITIONS["solvent_model"].per_backend["orca"]`(line ~459-463)。
+> **状态(已实现,T11/T12,与草案不同——不是全局追加)**:`FIELD_DEFINITIONS["solvent_model"]
+> .per_backend["orca"]` 保持 `["none", "CPCM", "SMD"]` 不变(orca 路径的 DFT 溶剂语义未变);
+> GFN 的溶剂选项按**方法族作用域**提供——`_resolve_field_options` 读到
+> `METHOD_META[functional].solvent_models`(注册表派生)时直接返回它,GFN 得到
+> `["none","ALPB"]`,DFT/3c 无该键、维持 `["none","CPCM","SMD"]`。cccp 层面上
+> GBSA 在 ORCA 路径直接报错(平台策略),因此不应出现在任何 orca 选项集中。
 
 ```python
-"per_backend": {
-    "orca": ["none", "CPCM", "SMD", "ALPB"],   # 追加 ALPB
-    "xtb": ["none", "ALPB", "GBSA"],
-},
+# 目录层面(per_backend 不追加 ALPB):
+"solvent_model": {
+    ...
+    "per_backend": {
+        "orca": ["none", "CPCM", "SMD"],
+        "xtb": ["none", "ALPB", "GBSA"],
+    },
+}
+# GFN 作用域选项经 METHOD_META[key].solvent_models == ["none", "ALPB"] 派生,
+# 前端(CatalogUtils.getFieldOptions / method_meta payload)与后端校验同源。
 ```
 
 ### A3. `src/acp/workflows/simple.py` — GFN kwargs 过滤
@@ -253,6 +305,12 @@ return kwargs
 
 ### A4. Part A 测试
 
+> **状态(已实现,2026-10)**:三个 dev-plan 点名测试(GAP-6 缺口)已全部落地——
+> `test_functional_options_map_gfn_basis_empty` 在 `tests/test_acp_catalog.py`(T11),
+> `test_orca_input_blocks_gfn_no_basis` / `test_orca_input_blocks_gfn_alpb_solvent` 在
+> `tests/test_qc_interfaces_orca.py`(T19)。示例代码中的 `basis_inline is False` 断言
+> 已按 A2.1 的落地偏差修正为 `True`。
+
 **文件**: `tests/test_acp_workflows_simple.py`(或新建 `tests/test_orca_gfn.py`)。
 
 ```python
@@ -260,7 +318,7 @@ def test_method_meta_gfn_entries():
     from acp.catalog import METHOD_META
     for gfn in ("GFN2-xTB", "GFN1-xTB", "GFN0-xTB", "GFN-FF"):
         m = METHOD_META[gfn]
-        assert m["basis_inline"] is False
+        assert m["basis_inline"] is True
         assert m["basis"] == ()
         assert m["family"].startswith("gfn")
 
@@ -955,10 +1013,10 @@ if (liveFamily.startsWith("gfn")) {
 
 | 测试 | Part | 断言要点 |
 |------|------|----------|
-| `test_method_meta_gfn_entries` | A | 4 个 GFN 条目 basis_inline=False, basis=(), family 以 gfn 开头 |
-| `test_functional_options_map_gfn_basis_empty` | A | GFN2-xTB 的 basis 列表为空 |
-| `test_orca_input_blocks_gfn_no_basis` | A | GFN2-xTB 路由无 basis / %basis 块 |
-| `test_orca_input_blocks_gfn_alpb_solvent` | A | ALPB( 在路由, %cpcm 不出现 |
+| `test_method_meta_gfn_entries` | A | 4 个 GFN 条目 basis_inline=True, basis=(), family 以 gfn 开头 |
+| `test_functional_options_map_gfn_basis_empty` | A | GFN2-xTB 的 basis 列表为空 ✅ `tests/test_acp_catalog.py` |
+| `test_orca_input_blocks_gfn_no_basis` | A | GFN2-xTB 路由无 basis / %basis 块 ✅ `tests/test_qc_interfaces_orca.py` |
+| `test_orca_input_blocks_gfn_alpb_solvent` | A | ALPB( 在路由, %cpcm 不出现 ✅ `tests/test_qc_interfaces_orca.py` |
 | `test_build_method_kwargs_gfn_strips_basis` | A | GFN method 时 basis/ri 字段被清 |
 | `test_scan_optts_in_catalog_and_active` | B/C | scan/optts 在 WORKFLOW_CATALOG 且 status=active |
 | `test_orca_input_blocks_scan_geom_block` | B | scan_defs 生成 `%geom Scan ... end` |

@@ -20,6 +20,12 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from cccp.qc.interfaces.route_render import (
+    RouteKeyword,
+    orca_gfn_solvent_token,
+    orca_keyword_context,
+    render_route_line,
+)
 from cccp.utils.constants import HARTREE_TO_KCAL
 
 logger = logging.getLogger(__name__)
@@ -28,12 +34,6 @@ _VIBRATIONAL_FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
 _VIBRATIONAL_FREQ_LINE_RE = re.compile(r"^\s*(\d+):\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
 _NORMAL_MODES_SECTION_HEADER = "NORMAL MODES"
 _INTEGER_TOKEN_RE = re.compile(r"^\d+$")
-_OPT_LEVEL_KEYWORDS = {
-    "loose": "LooseOpt",
-    "normal": None,
-    "tight": "TightOpt",
-    "verytight": "VeryTightOpt",
-}
 
 # ORCA IRC output files: ``*_IRC_[FB]_trj.xyz`` (per-direction path, energy in
 # each frame comment) and ``*_IRC_[FB].xyz`` (endpoint).  ``*_IRC_Full_trj.xyz``
@@ -329,43 +329,56 @@ def ts_opt_route(
     """Build the ORCA ``!`` route line for an OptTS run.
 
     Composite 3c methods (``*3c`` suffixes) carry no basis keyword; ordinary
-    methods take ``<method> <basis>``. Grid/SCF/solvent keywords are appended
-    when provided. ``OptTS`` is always emitted; ``calculate_frequencies``
-    controls the final ``NumFreq`` keyword (True by default for compatibility).
-    ``opt_level`` accepts
-    ``loose`` / ``normal`` / ``tight`` / ``verytight``; ``normal`` leaves the
-    route at plain ``OptTS`` because ORCA already uses the default optimization
-    thresholds there and emitting a second ``Opt`` run-type keyword would be
-    ambiguous. ``%pal nprocs`` is emitted when *nproc* is given.
+    methods take ``<method> <basis>`` — and for the GFN family the basis (and
+    any ``ri``/``aux`` pair) is stripped with a warning by the renderer's
+    applicability gate (T6: ``ts_opt_route`` bypasses
+    ``_build_input_blocks``, so the renderer is the single stripping point).
+    ``OptTS`` is always emitted; ``calculate_frequencies`` (default ``True``)
+    controls the final ``NumFreq`` keyword so every full TS run ends with the
+    independent numerical frequency verification (staged-Hessian callers may
+    opt out). All enumerated parameters resolve
+    through the keyword registry via
+    :func:`cccp.qc.interfaces.route_render.render_route_line`:
+
+    * ``grid`` (``DefGrid1/2/3``; legacy ``SG1``/``Fine``/``UltraFine``/
+      ``SuperFine`` aliases canonicalize with a migration warning and the
+      raw token is never emitted),
+    * ``scf`` (the ``scf_convergence`` domain: ``loose`` / ``normal`` /
+      ``tight`` / ``verytight``),
+    * ``opt_level`` (``loose`` / ``normal`` / ``tight`` / ``verytight`` /
+      ``very_tight`` alias).
+
+    ``normal`` leaves the route at plain ``OptTS`` because ORCA already uses
+    the default optimization thresholds there and emitting a second ``Opt``
+    run-type keyword would be ambiguous. Unknown enum values raise
+    :class:`cccp.qc.keyword_registry.KeywordValueError` (fail-fast — nothing
+    is passed through verbatim). Solvent follows the shared GFN rule
+    (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`:
+    ALPB-only under ORCA) and stays verbatim for DFT.
+    ``%pal nprocs`` is emitted when *nproc* is given.
     """
     method = method.strip()
-    tokens = [method]
     is_composite = method.lower().endswith("3c") or basis in ("", None)
+    segments: list[str | RouteKeyword] = [method]
     if not is_composite and basis:
-        tokens.append(basis)
-    if grid:
-        tokens.append(grid)
-    if scf:
-        tokens.append(scf)
-    if solvent and solvent_model:
+        segments.append(RouteKeyword("basis", basis))
+    segments.append(RouteKeyword("grid", grid))
+    segments.append(RouteKeyword("scf_convergence", scf))
+    if orca_keyword_context(method)[0] in ("gfn", "gfnff"):
+        _gfn_token = orca_gfn_solvent_token(method, solvent, solvent_model)
+        if _gfn_token:
+            segments.append(_gfn_token)
+    elif solvent and solvent_model:
         sm = solvent_model.upper()
-        tokens.append(f"{sm}({solvent})")
-    tokens.append("OptTS")
-    if opt_level is not None:
-        level_key = opt_level.strip().lower()
-        if level_key not in _OPT_LEVEL_KEYWORDS:
-            expected = sorted(_OPT_LEVEL_KEYWORDS)
-            raise ValueError(
-                f"Unsupported ORCA TS opt_level {opt_level!r}; expected one of {expected}"
-            )
-        opt_keyword = _OPT_LEVEL_KEYWORDS[level_key]
-        if opt_keyword:
-            tokens.append(opt_keyword)
+        segments.append(f"{sm}({solvent})")
+    segments.append("OptTS")
+    segments.append(RouteKeyword("opt_level", opt_level))
     if calculate_frequencies:
-        tokens.append("NumFreq")
-    route = "! " + " ".join(tokens)
+        segments.append("NumFreq")
     if aux_j and ri_approximation:
-        route += f" {ri_approximation} aux {aux_j}"
+        segments.append(RouteKeyword("ri", ri_approximation))
+        segments.append(RouteKeyword("aux", aux_j, prefix="aux"))
+    route = render_route_line(segments, method=method)
     if nproc:
         route += f"\n%pal nprocs {nproc} end"
     return route
@@ -451,15 +464,28 @@ def irc_route(
     solvent: str | None = None,
     solvent_model: str | None = None,
 ) -> str:
-    """Build the ORCA ``!`` route line for an IRC run."""
-    tokens = [method]
+    """Build the ORCA ``!`` route line for an IRC run.
+
+    Assembled through :func:`cccp.qc.interfaces.route_render.render_route_line`
+    so the route prefix and any future governed keywords share the single
+    renderer; free-form method/basis/solvent tokens are emitted verbatim for
+    DFT, while the GFN family strips the basis with a warning (T6 — this
+    entry point bypasses ``_build_input_blocks``) and follows the shared
+    ALPB-only solvent rule
+    (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
+    """
     is_composite = method.lower().endswith("3c") or basis in ("", None)
+    segments: list[str | RouteKeyword] = ["IRC", method]
     if not is_composite and basis:
-        tokens.append(basis)
-    if solvent and solvent_model:
+        segments.append(RouteKeyword("basis", basis))
+    if orca_keyword_context(method)[0] in ("gfn", "gfnff"):
+        _gfn_token = orca_gfn_solvent_token(method, solvent, solvent_model)
+        if _gfn_token:
+            segments.append(_gfn_token)
+    elif solvent and solvent_model:
         sm = solvent_model.upper()
-        tokens.append(f"{sm}({solvent})")
-    return "! IRC " + " ".join(tokens)
+        segments.append(f"{sm}({solvent})")
+    return render_route_line(segments, method=method)
 
 
 def irc_block(
@@ -784,6 +810,7 @@ __all__ = [
     "irc_block",
     "irc_energy_from_comment",
     "irc_route",
+    "orca_keyword_context",
     "parse_final_energy_hartree",
     "parse_irc_endpoints",
     "parse_irc_iteration_energies",

@@ -18,7 +18,7 @@ from cccp.qc.interfaces.base import QCResult
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils.file_io import write_xyz, read_xyz_multiframe, write_xyz_multiframe
 from cccp.utils import ensure_dir
-from cccp.utils.solvent_map import xtb_solvent
+from cccp.utils.solvent_map import xtb_method_name, xtb_solvent_args
 
 logger = logging.getLogger(__name__)
 
@@ -75,14 +75,17 @@ class CRESTInterface:
         """Return True when the CREST binary resolved successfully."""
         return self.executable is not None
 
-    def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
-        """Return CREST solvation command-line flags based on solvent_model."""
+    def _solvent_args(
+        self, solvent: Optional[str] = None, gfn_level: Optional[int] = None
+    ) -> List[str]:
+        """Return CREST solvation flags for the EFFECTIVE solvent/method/model."""
         sol = solvent if solvent is not None else self.solvent
-        if not sol or self.solvent_model == "none":
-            return []
-        if self.solvent_model == "gbsa":
-            return ["--gbsa", xtb_solvent(sol)]
-        return ["--alpb", xtb_solvent(sol)]
+        level = self.gfn_level if gfn_level is None else gfn_level
+        return xtb_solvent_args(
+            sol,
+            method=xtb_method_name(level),
+            solvent_model=self.solvent_model,
+        )
 
     def run_conformer_search(
         self,
@@ -140,7 +143,7 @@ class CRESTInterface:
         if ew is not None:
             crest_args.extend(["-ewin", str(ew)])
 
-        crest_args.extend(self._solvent_args())
+        crest_args.extend(self._solvent_args(gfn_level=gfn_level))
 
         custom_flags = kwargs.get('crest_flags', '')
         if custom_flags:
@@ -233,7 +236,7 @@ class CRESTInterface:
         multiplicity: int = 1,
         solvent: str = None,
         additional_flags: str = None,
-        energy_window: Optional[float] = None
+        energy_window: float | None = None
     ) -> QCResult:
         """
         Run CREST batch optimization (-mdopt mode) on an ensemble of conformers.
@@ -288,7 +291,7 @@ class CRESTInterface:
             crest_args.extend(["-ewin", str(ew)])
 
         sol = solvent if solvent is not None else self.solvent
-        crest_args.extend(self._solvent_args(sol))
+        crest_args.extend(self._solvent_args(sol, gfn_level=gfn_level))
 
         if additional_flags:
             crest_args.extend(additional_flags.split())

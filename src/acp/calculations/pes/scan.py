@@ -69,6 +69,8 @@ from acp.calculations.pes.contracts import (
     ScanQuality,
     SinglePointSpec,
     StructureSource,
+    optimizer_to_level,
+    single_point_to_level,
     validate_scan_coordinates,
     validate_scan_protocol,
 )
@@ -155,6 +157,93 @@ def _is_constraint_kind(value: str) -> TypeGuard[ConstraintKind]:
     return value in ("distance", "angle", "dihedral")
 
 
+def resolve_scan_protocol_levels(
+    protocol: dict[str, Any] | None,
+    *,
+    context: Any,
+    baseline_protocol: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Run the Q7 layered level resolution over a bond-scan protocol dict.
+
+    This is the ONE shared protocol-level resolver (T14): the API submit /
+    edit entry (`v1_routes._resolve_bond_scan_protocol_levels`) and the
+    runner path (:func:`run_pes_scan`) both route through it, so an invalid
+    GFN combination cannot slip past the entry that skipped validation.
+    Validation logic itself is T13's (`resolve_level_for_entry` /
+    `validate_level_for_purpose`) — nothing is re-encoded here.
+
+    Args:
+        protocol: Raw protocol dict (``scan_optimizer`` / ``single_point``
+            sub-dicts); ``None``/empty yields catalog defaults.
+        context: Entry context — ``"strict"`` (new submissions), ``"edit"``
+            (+ *baseline_protocol*) for edit-recalculate, or ``"migration"``
+            for the runner/historical recompute lane.
+        baseline_protocol: Historical protocol for EDIT changed-field
+            detection (unchanged fields migrate, user-changed are strict).
+
+    Returns:
+        ``(protocol, warnings, errors)`` — *errors* are labeled per level
+        (``"invalid scan optimizer level: ..."`` / ``"invalid single_point
+        level: ..."``) and stop at the FIRST failing level, mirroring the
+        original v1_routes semantics.  Never raises for level errors; the
+        caller decides how to reject (HTTP 4xx / ValueError).
+    """
+    from acp.calculations.levels import (
+        LevelEntryContext,
+        changed_level_fields,
+        resolve_level_for_entry,
+    )
+    from acp.calculations.pes.contracts import (
+        ScanOptimizer,
+        SinglePointSpec,
+        optimizer_to_level,
+        single_point_to_level,
+    )
+
+    entry_context = LevelEntryContext(context)
+    out = dict(protocol or {})
+    warnings_out: list[str] = []
+
+    def _optimizer_level(sub: dict[str, Any]) -> Any:
+        return optimizer_to_level(ScanOptimizer.from_dict(sub))
+
+    def _sp_level(sub: dict[str, Any]) -> Any:
+        return single_point_to_level(SinglePointSpec.from_dict(sub))
+
+    level_specs = (
+        ("scan_optimizer", "scan_optimization", _optimizer_level),
+        ("single_point", "single_point", _sp_level),
+    )
+    for key, purpose, parse in level_specs:
+        sub = dict(out.get(key) or {})
+        if key == "single_point" and sub.get("enabled") is False:
+            # Disabled SP never executes; the strict final validator skips it too.
+            continue
+        raw = parse(sub)
+        changed: set[str] | None = None
+        if entry_context is LevelEntryContext.EDIT:
+            if baseline_protocol is None:
+                changed = None
+            else:
+                changed = changed_level_fields(raw, parse(dict(baseline_protocol.get(key) or {})))
+        resolution = resolve_level_for_entry(
+            raw, purpose=purpose, context=entry_context, changed_fields=changed
+        )
+        if resolution.errors:
+            label = "scan optimizer level" if key == "scan_optimizer" else "single_point level"
+            return out, warnings_out, [f"invalid {label}: " + "; ".join(resolution.errors)]
+        warnings_out.extend(resolution.warnings)
+        updates = {
+            field_name: getattr(resolution.level, field_name)
+            for field_name in changed_level_fields(raw, resolution.level)
+        }
+        if updates:
+            merged = dict(sub)
+            merged.update(updates)
+            out[key] = merged
+    return out, warnings_out, []
+
+
 # ── main pipeline ──────────────────────────────────────────────────────
 
 
@@ -180,7 +269,26 @@ def run_pes_scan(
         ValueError: On invalid requests or protocol values.
         RuntimeError: On QC execution failure.
     """
-    req = request if isinstance(request, PesScanRequest) else PesScanRequest.from_dict(request)
+    # Q7 runner lane: MIGRATION canonicalization must run BEFORE the strict
+    # final validation (validate_scan_protocol), so a historical scan_config
+    # (pre-T13 rerun) warns+normalizes while genuinely invalid combinations
+    # still fail fast here — the last line of defense before cccp.
+    level_warnings: list[str] = []
+    if isinstance(request, PesScanRequest):
+        req = request
+    else:
+        payload: dict[str, Any] | None = None
+        if isinstance(request, dict):
+            resolved_protocol, level_warnings, level_errors = resolve_scan_protocol_levels(
+                request.get("protocol"), context="migration"
+            )
+            if level_errors:
+                raise ValueError("; ".join(level_errors))
+            if level_warnings:
+                for message in level_warnings:
+                    logger.warning("PES scan method-config migration: %s", message)
+                payload = {**request, "protocol": resolved_protocol}
+        req = PesScanRequest.from_dict(payload if payload is not None else request)
     if req.mode not in ("bond_length_scan", "coordinate_scan"):
         raise ValueError(
             f"request.mode must be 'bond_length_scan' or 'coordinate_scan', got {req.mode!r}"
@@ -214,7 +322,10 @@ def run_pes_scan(
         # Canonical per-point optimization level (shared model).  Computed
         # once here so the backend call, the frame records, and the
         # pes_profile payload all describe the same level.
-        optimizer_level = scan_optimizer_level(protocol.scan_optimizer)
+        optimizer_warnings: list[str] = []
+        optimizer_level = scan_optimizer_level(protocol.scan_optimizer, warnings=optimizer_warnings)
+        for message in optimizer_warnings:
+            logger.warning("scan optimizer level migration: %s", message)
         optimizer_level_fingerprint = level_fingerprint(optimizer_level)
         # Single drive coordinate → ORCA native relaxed scan (single
         # subprocess, no per-point retry); multiple coordinates → per-point
@@ -399,6 +510,7 @@ def run_pes_scan(
         "protocol": protocol.to_dict(),
         "optimization_level": optimizer_level.to_dict(),
         "optimization_level_fingerprint": optimizer_level_fingerprint,
+        "level_warnings": list(level_warnings),
         "execution_mode": execution_mode,
         "scan_dir": str(scan_dir),
         "scan_dir_rel": PES_SCAN_RELATIVE_PATH,
@@ -467,23 +579,29 @@ def _materialize_xyz_text(source: StructureSource, work_root: Path) -> Path:
 # ── relaxed scan via backend ───────────────────────────────────────────
 
 
-def scan_optimizer_level(optimizer: ScanOptimizer) -> CalculationLevel:
-    """Build the canonical per-point optimization level from the protocol."""
-    return canonical_level(
-        CalculationLevel(
-            method=optimizer.method,
-            basis=optimizer.basis,
-            dispersion=optimizer.dispersion,
-            solvent_model=optimizer.solvent_model,
-            solvent=optimizer.solvent,
-            grid=optimizer.grid,
-            scf_convergence=optimizer.scf_convergence,
-            scf_max_iterations=optimizer.scf_max_iterations,
-            ri_approximation=optimizer.ri_approximation,
-            aux_j_basis=optimizer.aux_j_basis,
-            aux_c_basis=optimizer.aux_c_basis,
-        )
-    )
+def scan_optimizer_level(
+    optimizer: ScanOptimizer, *, warnings: list[str] | None = None
+) -> CalculationLevel:
+    """Build the canonical per-point optimization level from the protocol.
+
+    ``warnings`` collects the Q7 historical-lane messages emitted while
+    canonicalizing (GFN basis/dispersion/RI clearing, CPCM/SMD→ALPB); the
+    caller decides how to surface them (never logger-only).
+    """
+    return canonical_level(optimizer_to_level(optimizer), warnings=warnings)
+
+
+def single_point_level(
+    spec: SinglePointSpec, *, warnings: list[str] | None = None
+) -> CalculationLevel:
+    """Build the canonical post-scan single-point level from the protocol.
+
+    The PES single-point level passes through the same shared model as the
+    scan optimizer (``acp.calculations.levels``): method aliases, composite
+    and GFN locking, and solvent normalization all apply before the level
+    reaches the SP executor.
+    """
+    return canonical_level(single_point_to_level(spec), warnings=warnings)
 
 
 def _snapshot_sp_publisher(
@@ -667,6 +785,10 @@ def _extract_frames(
                 invalid_reasons.append(f"{coordinate_id}:unmeasured")
                 continue
             residual = float(value - float(target_values[coordinate_id]))
+            if coordinate_item.kind in {"angle", "dihedral"}:
+                # Periodic residual: a scan crossing ±180° (targets up to
+                # 359°) must not read as a ±360° violation.
+                residual = ((residual + 180.0) % 360.0) - 180.0
             residuals[coordinate_id] = residual
             tolerance = float(resolved_tolerances.get(coordinate_item.kind, 0.01))
             if abs(residual) > tolerance:
@@ -928,12 +1050,16 @@ def _run_single_points(
             )
     frame_paths = [scan_dir / frame.geometry_path for frame in frames]
     sp_workers, sp_cfg = _sp_resource_plan(cfg)
+    sp_warnings: list[str] = []
+    sp_level = single_point_level(sp_spec, warnings=sp_warnings)
+    for message in sp_warnings:
+        logger.warning("single_point level migration: %s", message)
     result = BatchSinglePointExecutor(
         frames=frame_paths,
-        method=sp_spec.method,
+        method=sp_level.method,
         backend_name=sp_spec.software,
         output_dir=scan_dir / "sp",
-        basis=sp_spec.basis,
+        basis=sp_level.basis,
         charge=charge,
         multiplicity=multiplicity,
         frame_ids=[f"frame_{frame.index:03d}" for frame in frames],
@@ -943,14 +1069,14 @@ def _run_single_points(
         cache_profile=(
             f"pes_scan:{cache_scope}" if cache_scope else "pes_scan"
         ),
-        solvent_model=sp_spec.solvent_model,
-        solvent=sp_spec.solvent,
-        dispersion=sp_spec.dispersion,
-        ri_approximation=sp_spec.ri_approximation,
-        aux_j_basis=sp_spec.aux_j_basis,
-        aux_c_basis=sp_spec.aux_c_basis,
-        grid=sp_spec.grid,
-        scf_convergence=sp_spec.scf_convergence,
+        solvent_model=sp_level.solvent_model,
+        solvent=sp_level.solvent,
+        dispersion=sp_level.dispersion,
+        ri_approximation=sp_level.ri_approximation,
+        aux_j_basis=sp_level.aux_j_basis,
+        aux_c_basis=sp_level.aux_c_basis,
+        grid=sp_level.grid,
+        scf_convergence=sp_level.scf_convergence,
         progress_callback=sp_callback,
         on_frame_start=on_frame_start,
         on_frame_done=on_frame_done,
@@ -1518,5 +1644,6 @@ __all__ = [
     "PES_SCAN_STAGES",
     "SCAN_DIR_NAME",
     "build_coordinate_plan",
+    "resolve_scan_protocol_levels",
     "run_pes_scan",
 ]

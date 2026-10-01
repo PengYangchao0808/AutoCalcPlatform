@@ -3504,6 +3504,7 @@ option, optgroup {
 .preview-warn { color: var(--amber); }
 
 .parse-errors { margin-top: 10px; padding: 10px 14px; border: 1px solid rgba(229,83,83,0.3); border-radius: 8px; background: rgba(229,83,83,0.06); color: var(--red); font-size: 12px; }
+.mc-validation-warnings { margin-top: 10px; padding: 10px 14px; border: 1px solid rgba(210,153,34,0.35); border-radius: 8px; background: rgba(210,153,34,0.08); color: var(--warn, #d29922); font-size: 12px; line-height: 1.6; }
 
 .wizard-input-section { padding: 16px; border: 1px solid var(--border-subtle); border-radius: 14px; background: rgba(255,255,255,0.02); }
 
@@ -5496,6 +5497,7 @@ option, optgroup {
         <div class="mc-left" id="mc-levels-container"></div>
       </div>
       <div id="mc-validation-errors" class="parse-errors" style="display:none;margin-top:10px;"></div>
+      <div id="mc-validation-warnings" class="mc-validation-warnings" style="display:none;margin-top:10px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="mt-config-cancel" data-i18n="modal.cancel">取消</button>
@@ -5878,6 +5880,9 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
             </div>
             <div>
               <label data-i18n="s2scan.scan_method">扫描优化方法</label>
+              <!-- HISTORICAL-COMPAT (T23g): legacy S2 scan panel default; mirrors
+                   FIELD_DEFINITIONS.scan_optimizer_method.default ("GFN2-xTB"),
+                   parity-locked by tests/test_frontend_sync.py -->
               <input class="modal-input" id="s2scan-scan-method" value="GFN2-xTB">
             </div>
           </div>
@@ -5890,6 +5895,8 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
             </div>
             <div>
               <label data-i18n="s2scan.sp_method">单点能方法</label>
+              <!-- HISTORICAL-COMPAT (T23g): legacy S2 panel single-point default
+                   "B97-3c" (predates/diverges from FIELD_DEFINITIONS.functional.default) -->
               <input class="modal-input" id="s2scan-sp-method" value="B97-3c">
             </div>
           </div>
@@ -6522,6 +6529,7 @@ const I18N = {
     "edit.source_manual": "手动输入结构",
     "edit.source_upload": "上传结构",
     "edit.migration_hint": "迁移建议：{hint}",
+    "draft.grid_migration_hint": "积分网格已迁移：{hint}（旧版 Gaussian 网格名已改为 ORCA 原生 DefGrid）",
     "edit.missing_fields": "缺失依赖（需补齐后提交）：{fields}",
     "edit.input_mode": "输入：",
     "edit.input_original": "原始输入",
@@ -8058,6 +8066,7 @@ const I18N = {
     "edit.source_manual": "Manually entered structure",
     "edit.source_upload": "Uploaded structure",
     "edit.migration_hint": "Migration hint: {hint}",
+    "draft.grid_migration_hint": "Integration grid migrated: {hint} (legacy Gaussian grid names map to native ORCA DefGrid)",
     "edit.missing_fields": "Missing dependencies (fill them before submitting): {fields}",
     "edit.input_mode": "Input:",
     "edit.input_original": "Original input",
@@ -23180,9 +23189,217 @@ var CatalogUtils = (function() {
     return !!(fd && fd.advanced);
   }
 
+  // ── method-family field availability (T15) ──────────────────────────
+  // Mirrors acp.catalog._family_locked_options / _resolve_field_options
+  // over the catalog payload ONLY. The family signal is the empty option
+  // offer: a family that carries no DFT basis layer advertises
+  // functional_options_map[method].basis === [] (T11 locked/empty set).
+  // Never keyed on method names — the catalog/registry is the single
+  // source (AGENTS anti-pattern #27).
+
+  // Level-scoped field -> shared base field name, mirroring
+  // acp.catalog._LEVEL_SCOPED_FIELD_BASE + the scan_optimizer_ prefix
+  // strip (scan_optimizer_basis -> basis, scan_optimizer_grid -> grid).
+  function fieldBaseName(fieldName) {
+    var scoped = {
+      "scan_optimizer_basis": "basis",
+      "scan_optimizer_dispersion": "dispersion",
+      "scan_optimizer_ri_approximation": "ri_approximation"
+    };
+    if (scoped[fieldName]) return scoped[fieldName];
+    if (fieldName.indexOf("scan_optimizer_") === 0) return fieldName.slice("scan_optimizer_".length);
+    return fieldName;
+  }
+
+  // True when the selected method family offers no options for this field
+  // (the locked/empty set), mirroring acp.catalog._family_locked_options:
+  // a family without a DFT basis layer governs no basis/dispersion/grid and
+  // no SCF dropdowns (grid / scf_* selects only — scalar caps such as
+  // scf_max_iterations pass through untouched).
+  function isFieldFamilyLocked(catalog, fieldName, functional) {
+    if (!functional) return false;
+    var funcFilter = lookupCI((catalog && catalog.functional_options_map) || {}, functional);
+    if (!funcFilter) return false;
+    var base = fieldBaseName(fieldName);
+    // basis / dispersion: the family's own offer is the gate (empty = locked).
+    if (base === "basis" || base === "dispersion") {
+      var offer = funcFilter[base];
+      return Array.isArray(offer) && offer.length === 0;
+    }
+    // RI family (T16): a method whose RI layer is composite/automatic
+    // (METHOD_META.ri_support !== "user") accepts no user RI/aux choice —
+    // the same payload signal buildFieldRow uses for the RI immutable
+    // badge and the method-change handlers use for their RI reset step.
+    if (base === "ri_approximation" || base === "aux_j_basis" || base === "aux_c_basis") {
+      var riMeta = lookupCI((catalog && catalog.method_meta) || {}, functional) || {};
+      return (riMeta.ri_support || "user") !== "user";
+    }
+    // grid / scf_* selects: no DFT basis layer ⇒ no integration grid or
+    // SCF dropdowns (mirrors the backend's is_applicable("basis") rule).
+    var noBasisLayer = Array.isArray(funcFilter.basis) && funcFilter.basis.length === 0;
+    if (!noBasisLayer) return false;
+    if (base === "grid") return true;
+    if (base.indexOf("scf_") === 0) {
+      var fd = ((catalog && catalog.field_definitions) || {})[fieldName] || {};
+      return !!(fd.options || fd.per_backend);
+    }
+    return false;
+  }
+
+  // After a method change: clear/lock family-locked fields and reset any
+  // value the new family's scoped option set no longer admits back to the
+  // METHOD_META/FIELD_DEFINITIONS default. `fieldNames` is the level's
+  // catalog field list (lvDef.fields) — never a hardcoded field list.
+  function applyMethodFamilyState(catalog, levelState, fieldNames, engine, functional) {
+    if (!levelState) return;
+    (fieldNames || []).forEach(function(fn) {
+      if (isFieldFamilyLocked(catalog, fn, functional)) {
+        // Cleared spelling mirrors buildFieldRow / the method-change
+        // handlers: dispersion and ri_approximation clear to "none", the
+        // remaining family-locked fields (basis / grid / scf_* / aux) to "".
+        var lockedBase = fieldBaseName(fn);
+        levelState[fn] = (lockedBase === "dispersion" || lockedBase === "ri_approximation") ? "none" : "";
+        return;
+      }
+      var fd = ((catalog && catalog.field_definitions) || {})[fn] || {};
+      if (fd.supports_custom || fd.multi) return;
+      var cur = levelState[fn];
+      if (cur == null || cur === "" || cur === "__custom__") return;
+      if (typeof cur !== "string") return;
+      var opts = getFieldOptions(catalog, fn, engine, functional,
+        levelState.basis || levelState.scan_optimizer_basis);
+      if (!opts || !opts.length) return;
+      for (var i = 0; i < opts.length; i++) {
+        if (String(opts[i]).toLowerCase() === cur.toLowerCase()) return;
+      }
+      levelState[fn] = getFieldDefault(catalog, fn, engine, functional,
+        levelState.basis || levelState.scan_optimizer_basis);
+    });
+  }
+
+  // ── copy scan level → single_point (T16) ─────────────────────────────
+  // Copy the per-point optimization level into the single-point level, then
+  // reconcile EVERY destination field against the COPIED method's family —
+  // the method travels with the copy (scan_optimizer_method → functional),
+  // so the pre-copy target method must never decide what stays valid. A GFN
+  // scan level therefore yields a GFN single-point level with basis/
+  // dispersion/RI/aux/grid/SCF cleared, even when the destination held a
+  // stale DFT configuration (empty source values are not copied, so only the
+  // family sweep can retire those). The gate is the catalog-driven
+  // applyMethodFamilyState above — never a hardcoded inapplicable-field list
+  // (AGENTS anti-pattern #27). The copy field projection is DERIVED from the
+  // catalog level field lists (T23g) — see the body below.
+  function copyScanLevelFields(catalog, srcState, dstState, fieldNames, engine) {
+    if (!srcState || !dstState) return dstState;
+    // (T23g) The copy projection is DERIVED from the catalog level field
+    // lists: every scan_optimizer_* source field whose base name also
+    // exists on the destination level travels with the copy. Two documented
+    // semantic exceptions (feature contract, locked by
+    // tests/test_frontend_sync.py):
+    //   1. the method field travels as the destination's "functional";
+    //   2. the RI family (ri_approximation / aux_j_basis / aux_c_basis) is
+    //      deliberately NOT copied — it is method-family owned and the
+    //      family sweep below decides it (T16 contract).
+    // For the current catalog the derived projection is exactly the
+    // historical 7-pair map (method/basis/dispersion/solvent_model/solvent/
+    // grid/scf_convergence); the retired inline copyMap literal must never
+    // come back (AGENTS anti-pattern #27).
+    var dstFieldSet = {};
+    (fieldNames || []).forEach(function(fn) { dstFieldSet[fn] = true; });
+    var skipCopyBases = { "ri_approximation": true, "aux_j_basis": true, "aux_c_basis": true };
+    Object.keys(srcState).forEach(function(sk) {
+      if (sk.indexOf("scan_optimizer_") !== 0) return;
+      var base = fieldBaseName(sk);
+      if (skipCopyBases[base]) return;
+      var dstKey = base === "method" ? "functional" : base;
+      if (!dstFieldSet[dstKey]) return;
+      if (srcState[sk] !== undefined && srcState[sk] !== "") {
+        dstState[dstKey] = srcState[sk];
+      }
+    });
+    if (!dstState.engine) dstState.engine = engine || "orca";
+    delete dstState._disabled;
+    // Reconcile against the COPIED method (read AFTER the copy loop) so the
+    // sweep retires every family-inapplicable field — copied or stale.
+    var copiedMethod = dstState.functional || "";
+    applyMethodFamilyState(catalog, dstState, fieldNames, engine, copiedMethod);
+    return dstState;
+  }
+
+  // ── legacy grid migration (T23f) ────────────────────────────────────
+  // HISTORICAL-COMPAT (T23g): legacy Gaussian-era grid alias mirror of
+  // cccp.qc.keyword_registry._ENUM_TABLES["grid"] legacy rows. The registry
+  // is the single authority (its aliases stay legal INPUTS by design); this
+  // mirror only lets draft hydration migrate + warn before submission, and
+  // is parity-locked to the registry by tests/test_frontend_sync.py. Method
+  // and field literals may live ONLY in this historical-compat branch.
+  var HISTORICAL_COMPAT_GRID_ALIASES = {
+    "sg1": "DefGrid1",
+    "fine": "DefGrid2",
+    "ultrafine": "DefGrid3",
+    "superfine": "DefGrid3",
+  };
+
+  // Canonicalize one legacy grid value. Returns {from, to} when the value is
+  // a legacy alias needing migration, else null (canonical DefGrid* / blank
+  // / non-grid values are left untouched — never invent a target).
+  function migrateLegacyGridValue(catalog, value) {
+    if (typeof value !== "string" || !value) return null;
+    var gridFd = ((catalog && catalog.field_definitions) || {}).grid || {};
+    var opts = gridFd.options || [];
+    for (var i = 0; i < opts.length; i++) {
+      if (String(opts[i]).toLowerCase() === value.toLowerCase()) return null;
+    }
+    var target = HISTORICAL_COMPAT_GRID_ALIASES[value.toLowerCase().replace(/\s+/g, "")];
+    if (!target) return null;
+    return { from: value, to: target };
+  }
+
+  // Sweep every level state of `stages` ({level_id: state}), migrating
+  // legacy grid fields (fieldBaseName == "grid") in place. Returns the hint
+  // list [{level, field, from, to}] the hydration path renders (T23f).
+  function migrateLegacyGridInStates(catalog, stages) {
+    var hints = [];
+    if (!stages || typeof stages !== "object") return hints;
+    Object.keys(stages).forEach(function(levelId) {
+      var st = stages[levelId];
+      if (!st || typeof st !== "object") return;
+      Object.keys(st).forEach(function(fieldName) {
+        if (fieldBaseName(fieldName) !== "grid") return;
+        var mig = migrateLegacyGridValue(catalog, st[fieldName]);
+        if (!mig) return;
+        st[fieldName] = mig.to;
+        hints.push({ level: levelId, field: fieldName, from: mig.from, to: mig.to });
+      });
+    });
+    return hints;
+  }
+
   function getFieldOptions(catalog, fieldName, engine, functional, basis) {
     var fd = ((catalog && catalog.field_definitions) || {})[fieldName];
     if (!fd) return null;
+
+    // Family gate first (mirrors acp.catalog._resolve_field_options, which
+    // consults _family_locked_options before any option lookup).
+    if (isFieldFamilyLocked(catalog, fieldName, functional)) return [];
+
+    // Method-family-scoped solvent models: scan_optimizer_solvent_model (and
+    // solvent_model) resolve to METHOD_META.solvent_models when the family
+    // restricts the offer (e.g. ["none","ALPB"] for GFN under ORCA).
+    if (functional && fieldBaseName(fieldName) === "solvent_model") {
+      var smMeta = lookupCI((catalog.method_meta || {}), functional);
+      if (smMeta && Array.isArray(smMeta.solvent_models)) return smMeta.solvent_models.slice();
+    }
+
+    // Method-scoped basis / dispersion offers (FUNCTIONAL_OPTIONS_MAP),
+    // mirroring acp.catalog._resolve_field_options so every consumer shares
+    // one resolution point. An empty set is the family-locked offer (T11).
+    var scopedBase = fieldBaseName(fieldName);
+    if (functional && (scopedBase === "basis" || scopedBase === "dispersion")) {
+      var famFilter = lookupCI((catalog.functional_options_map || {}), functional);
+      var scopedOffer = famFilter ? famFilter[scopedBase] : undefined;
+      if (Array.isArray(scopedOffer)) return scopedOffer.slice();
+    }
 
     if ((fieldName === "aux_j_basis" || fieldName === "aux_c_basis") && fd.options_source === "dynamic_aux_basis") {
       var auxKind = fd.aux_kind;
@@ -23223,6 +23440,9 @@ var CatalogUtils = (function() {
     var fieldDefs = (catalog && catalog.field_definitions) || {};
     var methodMeta = (catalog && catalog.method_meta) || {};
     var basisCatalog = (catalog && catalog.basis_catalog_v2) || {};
+    // Level-scoped fields (scan_optimizer_basis, ...) derive METHOD_META
+    // defaults through their base name, like the backend resolver.
+    var base = fieldBaseName(fieldName);
 
     // ── Priority 1: functional-level defaults (METHOD_META) ──
     if (functional) {
@@ -23231,7 +23451,7 @@ var CatalogUtils = (function() {
         var riSupport = funcMeta.ri_support || "user";
 
         if (riSupport !== "user") {
-          if (fieldName === "ri_approximation") return "none";
+          if (base === "ri_approximation") return "none";
           if (fieldName === "aux_j_basis") return "";
           if (fieldName === "aux_c_basis") return "";
         }
@@ -23247,8 +23467,8 @@ var CatalogUtils = (function() {
           }
         }
 
-        if (fieldName === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
-        if (fieldName === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
+        if (base === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
+        if (base === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
       }
     }
 
@@ -23266,6 +23486,13 @@ var CatalogUtils = (function() {
   return {
     lookupCI: lookupCI,
     isFieldAdvanced: isFieldAdvanced,
+    fieldBaseName: fieldBaseName,
+    isFieldFamilyLocked: isFieldFamilyLocked,
+    applyMethodFamilyState: applyMethodFamilyState,
+    copyScanLevelFields: copyScanLevelFields,
+    HISTORICAL_COMPAT_GRID_ALIASES: HISTORICAL_COMPAT_GRID_ALIASES,
+    migrateLegacyGridValue: migrateLegacyGridValue,
+    migrateLegacyGridInStates: migrateLegacyGridInStates,
     getFieldOptions: getFieldOptions,
     getFieldDefault: getFieldDefault
   };
@@ -23473,6 +23700,19 @@ function _restoreWizardDraft(draft) {
     mechIrcPoints = Number(savedMechanism.ircPoints) >= 4 ? Number(savedMechanism.ircPoints) : 30;
     mechScanPointsDirty = !!savedMechanism.scanPointsDirty;
     mechIrcPointsDirty = !!savedMechanism.ircPointsDirty;
+  }
+  // ── legacy grid migration hint (T23f) ────────────────────────────────
+  // Drafts saved before the ORCA-native grid migration (T12) can carry
+  // legacy Gaussian grid aliases (e.g. UltraFine → DefGrid3). Migrate them
+  // in place on hydration and surface the migration hint — never fail at
+  // hydrate and never keep an ORCA-illegal value to blow up at submit.
+  var gridMigrations = CatalogUtils.migrateLegacyGridInStates(
+    methodCatalogCache, wizardState.method && wizardState.method.stages);
+  if (gridMigrations.length) {
+    var _gridHint = gridMigrations.map(function(m) {
+      return m.field + ": " + m.from + " → " + m.to;
+    }).join("; ");
+    window.alert(t("draft.grid_migration_hint", { hint: _gridHint }));
   }
   updateConfigCards();
   if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
@@ -26447,6 +26687,17 @@ function renderMethodDetail(schema, stages, loadState) {
     fallback.textContent = isChinese ? "阶段参数按所选协议默认值执行。" : "Stage parameters use the selected protocol defaults.";
     list.appendChild(fallback);
   }
+  // T24: surface method-validation migration/canonicalization warnings
+  // (legacy grid aliases, method aliases, case folding) in the wizard
+  // summary — non-blocking, mirrors the modal's amber warning block.
+  var methodWarnings = (wizardState.method && wizardState.method.warnings) || [];
+  methodWarnings.forEach(function(w) {
+    var warnItem = document.createElement("li");
+    warnItem.className = "method-detail-warning";
+    warnItem.style.color = "var(--warn, #d29922)";
+    warnItem.textContent = "\u26a0 " + w;
+    list.appendChild(warnItem);
+  });
 }
 
 var ircSourcePreviewSequence = 0;
@@ -27497,6 +27748,18 @@ async function openMethodConfig() {
     return CatalogUtils.isFieldAdvanced(methodCatalogCache, fieldName);
   }
 
+  function fieldBaseName(fieldName) {
+    return CatalogUtils.fieldBaseName(fieldName);
+  }
+
+  function isFieldFamilyLocked(fieldName, functional) {
+    return CatalogUtils.isFieldFamilyLocked(methodCatalogCache, fieldName, functional);
+  }
+
+  function applyMethodFamilyState(levelState, fieldNames, engine, functional) {
+    return CatalogUtils.applyMethodFamilyState(methodCatalogCache, levelState, fieldNames, engine, functional);
+  }
+
   function buildLevelCard(lvDef, stateData) {
     var engine = (stateData && stateData.engine) || lvDef.allowed_engines[0] || "";
     var expanded = true;
@@ -27576,23 +27839,13 @@ async function openMethodConfig() {
         ev.stopPropagation();
         var _src = wizardState.method.stages.scan_optimizer || {};
         var _dst = getLevelState("single_point");
-        // Copy canonical fields from scan_optimizer → single_point
-        var _fieldMap = {
-          scan_optimizer_method: "functional",
-          scan_optimizer_basis: "basis",
-          scan_optimizer_dispersion: "dispersion",
-          scan_optimizer_solvent_model: "solvent_model",
-          scan_optimizer_solvent: "solvent",
-          scan_optimizer_grid: "grid",
-          scan_optimizer_scf_convergence: "scf_convergence",
-        };
-        for (var _sk in _fieldMap) {
-          if (_src[_sk] !== undefined && _src[_sk] !== "") {
-            _dst[_fieldMap[_sk]] = _src[_sk];
-          }
-        }
-        if (!_dst.engine) _dst.engine = "orca";
-        delete _dst._disabled;
+        // T16: copy + family reconciliation in one catalog-driven step.
+        // The method travels with the copy (scan_optimizer_method →
+        // functional), so copyScanLevelFields reconciles every destination
+        // field against the COPIED method's family — copying a GFN scan
+        // level must yield a GFN single-point level with basis/dispersion/
+        // RI/aux/grid/SCF cleared, never a stale DFT configuration.
+        CatalogUtils.copyScanLevelFields(methodCatalogCache, _src, _dst, lvDef.fields || [], engine);
         rebuildLevelCard("single_point");
         scheduleValidate();
       });
@@ -27781,13 +28034,52 @@ async function openMethodConfig() {
         }
       }
 
+      // ── family-unavailable fields (T15) ─────────────────────────────
+      // Driven entirely by the catalog payload: isFieldFamilyLocked mirrors
+      // acp.catalog._family_locked_options — the empty option offer
+      // (functional_options_map[method].basis === []) marks a method family
+      // with no DFT layer (T11). Basis locks to its built-in value,
+      // dispersion keeps its built-in badge (handled above), RI locks to
+      // "none" (handled above via ri_support), and grid/SCF selects are
+      // hidden with their values cleared so a stale selection can never
+      // reach the protocol payload. Never keyed on method names
+      // (AGENTS anti-pattern #27) — the catalog is the single source.
+      if (isFieldFamilyLocked(fieldName, functional)) {
+        var famBase = fieldBaseName(fieldName);
+        var famState = getLevelState(lvDef.level_id);
+        if (famBase === "basis") {
+          famState[fieldName] = "";
+          var famBasisSpan = document.createElement("span");
+          famBasisSpan.className = "mc-basis-readonly";
+          famBasisSpan.textContent = (currentLang === "zh-CN" ? "内置：" : "Built-in: ")
+            + ((funcMeta && funcMeta.default_basis) || (currentLang === "zh-CN" ? "无独立基组" : "none"));
+          famBasisSpan.title = (currentLang === "zh-CN" ? "由 " + functional + " 固定" : "Fixed by " + functional);
+          fDiv.appendChild(famBasisSpan);
+          dest.appendChild(fDiv);
+          return;
+        }
+        if (famBase === "dispersion") {
+          famState[fieldName] = "none";
+          var famDispSpan = document.createElement("span");
+          famDispSpan.className = "mc-builtin-badge";
+          famDispSpan.textContent = ((funcMeta && funcMeta.builtin_dispersion) || (currentLang === "zh-CN" ? "内置" : "built in"))
+            + " (" + (t("modal.builtin") || "内置") + ")";
+          fDiv.appendChild(famDispSpan);
+          dest.appendChild(fDiv);
+          return;
+        }
+        // grid / scf_* selects: hidden entirely for this family.
+        famState[fieldName] = "";
+        return;
+      }
+
       var funcOptsMap = (methodCatalogCache && methodCatalogCache.functional_options_map) || {};
       var funcFilter = lookupCI(funcOptsMap, functional);
 
-      // Map level-scoped field names to their base names for funcFilter lookup.
-      // scan_optimizer_basis → basis, scan_optimizer_dispersion → dispersion
-      var _scopedFieldBase = { "scan_optimizer_basis": "basis", "scan_optimizer_dispersion": "dispersion" };
-      var filterFieldName = _scopedFieldBase[fieldName] || fieldName;
+      // (T23g) base-name resolution delegates to the single authority,
+      // CatalogUtils.fieldBaseName (scan_optimizer_basis → basis, …) — the
+      // inline _scopedFieldBase duplicate is retired.
+      var filterFieldName = fieldBaseName(fieldName);
 
       var opts = null;
       if ((filterFieldName === "basis" || filterFieldName === "dispersion") && funcFilter && funcFilter[filterFieldName]) {
@@ -27803,8 +28095,16 @@ async function openMethodConfig() {
       var fieldFd = (methodCatalogCache.field_definitions || {})[fieldName];
       var optLabelsZh = fieldFd && fieldFd.option_labels_zh ? fieldFd.option_labels_zh : {};
       var useOptZh = currentLang === "zh-CN" && Object.keys(optLabelsZh).length > 0;
-      var supportsCustom = ["basis", "single_point_basis", "scan_optimizer_basis", "aux_j_basis", "aux_c_basis"].indexOf(fieldName) >= 0
-        && !isBasisSingleLocked && fieldFd && fieldFd.supports_custom;
+      // Optional per-level override fields ("不覆盖（使用统一设置）" empty
+      // option). T23g audit: field-name list kept — it encodes UI override
+      // rendering semantics, not method data (the catalog declares no
+      // override flag for these).
+      var isOptionalOverride = ["minimum_method", "minimum_basis", "transition_state_method", "transition_state_basis"].indexOf(fieldName) >= 0;
+      // (T23g) custom-input support is the catalog's supports_custom flag
+      // gated by the override / basis-single-locked render states — the old
+      // hardcoded basis-family allowlist duplicated exactly this (the
+      // catalog flag minus the override fields) and is retired.
+      var supportsCustom = fieldFd && fieldFd.supports_custom && !isOptionalOverride && !isBasisSingleLocked;
       var isCustomActive = supportsCustom && curVal && (
         String(curVal) === "__custom__" || (opts && opts.indexOf(String(curVal)) < 0)
       );
@@ -27838,7 +28138,6 @@ async function openMethodConfig() {
         var sel = document.createElement("select");
         var hasMatch = false;
         var optionMeta = ((methodCatalogCache.field_definitions || {})[fieldName] || {}).option_meta || {};
-        var isOptionalOverride = ["minimum_method", "minimum_basis", "transition_state_method", "transition_state_basis"].indexOf(fieldName) >= 0;
         if (isOptionalOverride && !curVal) {
           var emptyOpt = document.createElement("option");
           emptyOpt.value = "";
@@ -27846,6 +28145,19 @@ async function openMethodConfig() {
           emptyOpt.selected = true;
           hasMatch = true;
           sel.appendChild(emptyOpt);
+        }
+        // ── explicit empty default (T15) ──
+        // Selects whose catalog default is "" (e.g. grid: DefGrid1/2/3 with
+        // default "" = keep the ORCA default) must be able to represent that
+        // default; otherwise the browser silently displays the first option
+        // while the stored value stays "".
+        if (!isOptionalOverride && !supportsCustom && curVal === "" && opts.indexOf("") < 0) {
+          var defaultEmptyOpt = document.createElement("option");
+          defaultEmptyOpt.value = "";
+          defaultEmptyOpt.textContent = currentLang === "zh-CN" ? "默认（留空）" : "Default (empty)";
+          defaultEmptyOpt.selected = true;
+          hasMatch = true;
+          sel.appendChild(defaultEmptyOpt);
         }
         // ── optgroup rendering (Item 1: catalog-driven option_groups) ──
         // When the field definition carries option_groups, render <optgroup>
@@ -27971,6 +28283,12 @@ async function openMethodConfig() {
               }
             }
 
+            // 4. Family sweep (T15): clear fields the new method family does
+            //    not offer and re-default any value its scoped option set no
+            //    longer admits. Field list comes from the level schema
+            //    (lvDef.fields) — never a hardcoded field list.
+            applyMethodFamilyState(st, lvDef.fields || [], engine, newFunctional);
+
             rebuildLevelCard(lvDef.level_id);
             scheduleValidate();
           });
@@ -27989,6 +28307,8 @@ async function openMethodConfig() {
                     : liveFilter.basis[0];
               }
             }
+            // Family sweep (T15): lock/clear fields the new family omits.
+            applyMethodFamilyState(st, lvDef.fields || [], engine, newMethod);
             rebuildLevelCard(lvDef.level_id);
             scheduleValidate();
           });
@@ -28032,6 +28352,11 @@ async function openMethodConfig() {
                 st.scan_optimizer_ri_approximation = getFieldDefault("scan_optimizer_ri_approximation", engine, newMethod);
               }
             }
+
+            // 4. Family sweep (T15): clear fields the new method family does
+            //    not offer (grid/SCF under a family with no DFT layer) and
+            //    re-default any value its scoped option set no longer admits.
+            applyMethodFamilyState(st, lvDef.fields || [], engine, newMethod);
 
             rebuildLevelCard(lvDef.level_id);
             scheduleValidate();
@@ -28612,8 +28937,14 @@ async function openMethodConfig() {
     // shows orca unavailable, show a non-blocking warning banner.
     if (lvDef.level_id === "scan_optimizer") {
       var _soMethod = (getLevelState(lvDef.level_id) || {}).scan_optimizer_method || "";
-      var _xtbMethods = ["GFN2-xTB", "GFN1-xTB", "GFN-FF"];
-      var _isDftMethod = _soMethod && _xtbMethods.indexOf(_soMethod) < 0;
+      // ── catalog family gate (T23d) ──
+      // Methods whose family offers a DFT basis layer (conventional DFT /
+      // composite) run on the ORCA stack and need the ORCA-availability
+      // warning; xTB-family methods (locked/empty basis offer) run on the
+      // standalone xTB path. Payload-derived via the T15 family gate — the
+      // retired hardcoded _xtbMethods list must never come back
+      // (AGENTS anti-pattern #27).
+      var _isDftMethod = _soMethod && !isFieldFamilyLocked("basis", _soMethod);
       if (_isDftMethod) {
         var _orcaAvailable = false;
         if (typeof backendsCache !== "undefined" && backendsCache.length) {
@@ -29488,6 +29819,7 @@ async function openMethodConfig() {
   function refreshMethodValidationState() {
     var vr = _lastValidationResult;
     var errEl = document.getElementById("mc-validation-errors");
+    var warnEl = document.getElementById("mc-validation-warnings");
 
     // Show validation errors
     if (vr && vr.errors && vr.errors.length) {
@@ -29498,6 +29830,23 @@ async function openMethodConfig() {
     } else {
       errEl.style.display = "none";
       errEl.innerHTML = "";
+    }
+
+    // T24: migration/canonicalization warnings are non-blocking — show them
+    // (amber block) and remember them so the wizard summary card can render
+    // the same list after the modal closes.
+    var methodWarnings = (vr && vr.warnings) || [];
+    if (wizardState.method) wizardState.method.warnings = methodWarnings;
+    if (warnEl) {
+      if (methodWarnings.length) {
+        warnEl.style.display = "block";
+        warnEl.innerHTML = methodWarnings.map(function(w) {
+          return "<div>\u26a0 " + escapeHtml(w) + "</div>";
+        }).join("");
+      } else {
+        warnEl.style.display = "none";
+        warnEl.innerHTML = "";
+      }
     }
 
     // Collect per-level errors for status dots
@@ -29690,13 +30039,43 @@ function buildPESProtocolFromMethod(charge, multiplicity) {
   var singlePointHasState = Object.keys(singlePoint).length > 0;
   var singlePointEnabled = singlePoint._disabled !== true &&
     (!singlePointHasState || !!singlePoint.engine);
+  // (T23g) method defaults resolve from the catalog (FIELD_DEFINITIONS) —
+  // no hardcoded method literals outside historical-compat branches.
+  var scanOptimizerDefaultMethod = String(
+    CatalogUtils.getFieldDefault(methodCatalogCache, "scan_optimizer_method", "orca", null) || ""
+  );
+  // HISTORICAL-COMPAT (T23g): empty single_point fallback "B97-3c" is a
+  // behavior-preserving historical default (predates and diverges from
+  // FIELD_DEFINITIONS.functional.default "r2SCAN-3c" — do NOT re-default).
   var singlePointMethod = String(singlePoint.functional || singlePoint.method || "B97-3c").trim();
-  var scanOptimizerMethod = String(optimizer.scan_optimizer_method || "GFN2-xTB").trim();
+  var scanOptimizerMethod = String(optimizer.scan_optimizer_method || scanOptimizerDefaultMethod).trim();
   var scanOptimizerMeta = lookupCI(methodCatalogCache.method_meta || {}, scanOptimizerMethod) || {};
   var scanOptimizerIsComposite = scanOptimizerMeta.ri_support === "composite";
-  var scanOptimizerBasis = scanOptimizerIsComposite || !optimizer.scan_optimizer_basis
+  // ── serialization defense (T23a) ──────────────────────────────────────
+  // Family-locked methods (xTB family: no DFT basis/dispersion offer — the
+  // T15 catalog family gate) must never serialize basis/dispersion/RI/aux
+  // overrides: stale wizard state (pre-gating drafts, copy leaks) must not
+  // reach the job payload. Defense-in-depth on top of T11's
+  // ri_support:"composite" basis nulling and of the T15/T16 UI gating —
+  // these frontend checks never replace backend validation (T13/T14).
+  var scanOptimizerFamilyLocked = CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "basis", scanOptimizerMethod)
+    || CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "dispersion", scanOptimizerMethod);
+  var scanOptimizerRiLocked = CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "ri_approximation", scanOptimizerMethod);
+  var scanOptimizerBasis = scanOptimizerIsComposite || scanOptimizerFamilyLocked || !optimizer.scan_optimizer_basis
     ? null
     : String(optimizer.scan_optimizer_basis);
+  var scanOptimizerDispersion = scanOptimizerFamilyLocked
+    ? null
+    : (optimizer.scan_optimizer_dispersion ? String(optimizer.scan_optimizer_dispersion) : null);
+  var scanOptimizerRi = scanOptimizerRiLocked
+    ? "none"
+    : String(optimizer.scan_optimizer_ri_approximation || "none");
+  // (T23a) same family-locked serialization defense for the single-point
+  // level — a GFN level arrives here via copy-scan-level (T16) or a stale
+  // pre-gating draft, and must not leak overrides into the job payload.
+  var singlePointFamilyLocked = CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "basis", singlePointMethod)
+    || CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "dispersion", singlePointMethod);
+  var singlePointRiLocked = CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "ri_approximation", singlePointMethod);
   return {
     scan_driver: {
       software: String(driver.engine || "orca"),
@@ -29711,15 +30090,16 @@ function buildPESProtocolFromMethod(charge, multiplicity) {
     scan_optimizer: {
       method: scanOptimizerMethod,
       // The UI may display a composite method's built-in basis label, but
-      // it must not be serialized as a separate basis override.
+      // it must not be serialized as a separate basis override
+      // (T23a: family-locked xTB methods null basis/dispersion/RI too).
       basis: scanOptimizerBasis,
-      dispersion: optimizer.scan_optimizer_dispersion ? String(optimizer.scan_optimizer_dispersion) : null,
+      dispersion: scanOptimizerDispersion,
       solvent_model: String(optimizer.scan_optimizer_solvent_model || "none"),
       solvent: optimizer.scan_optimizer_solvent ? String(optimizer.scan_optimizer_solvent) : null,
       grid: optimizer.scan_optimizer_grid ? String(optimizer.scan_optimizer_grid) : null,
       scf_convergence: optimizer.scan_optimizer_scf_convergence ? String(optimizer.scan_optimizer_scf_convergence) : null,
       scf_max_iterations: optimizer.scan_optimizer_scf_max_iterations ? parseInt(optimizer.scan_optimizer_scf_max_iterations, 10) : null,
-      ri_approximation: String(optimizer.scan_optimizer_ri_approximation || "none"),
+      ri_approximation: scanOptimizerRi,
       max_iterations: optimizerMaxIterations,
       convergence: String(optimizer.scan_optimizer_convergence || "normal"),
       retry_count: Math.max(0, parseInt(optimizer.scan_optimizer_retries, 10) || 0),
@@ -29729,11 +30109,13 @@ function buildPESProtocolFromMethod(charge, multiplicity) {
       enabled: singlePointEnabled,
       software: String(singlePoint.engine || "orca"),
       method: singlePointMethod,
-      basis: singlePoint.basis ? String(singlePoint.basis) : null,
-      dispersion: singlePoint.dispersion ? String(singlePoint.dispersion) : null,
-      ri_approximation: String(singlePoint.ri_approximation || "none"),
-      aux_j_basis: singlePoint.aux_j_basis ? String(singlePoint.aux_j_basis) : null,
-      aux_c_basis: singlePoint.aux_c_basis ? String(singlePoint.aux_c_basis) : null,
+      // (T23a) family-locked serialization defense: basis/dispersion/RI/aux
+      // overrides never reach the job payload for xTB-family methods.
+      basis: singlePointFamilyLocked ? null : (singlePoint.basis ? String(singlePoint.basis) : null),
+      dispersion: singlePointFamilyLocked ? null : (singlePoint.dispersion ? String(singlePoint.dispersion) : null),
+      ri_approximation: singlePointRiLocked ? "none" : String(singlePoint.ri_approximation || "none"),
+      aux_j_basis: singlePointRiLocked ? null : (singlePoint.aux_j_basis ? String(singlePoint.aux_j_basis) : null),
+      aux_c_basis: singlePointRiLocked ? null : (singlePoint.aux_c_basis ? String(singlePoint.aux_c_basis) : null),
       solvent_model: String(singlePoint.solvent_model || "none"),
       solvent: singlePoint.solvent ? String(singlePoint.solvent) : null,
       grid: singlePoint.grid ? String(singlePoint.grid) : null,
@@ -29871,7 +30253,11 @@ async function submitPESsearchTask() {
   var _sp = _protocol.single_point || {};
   var _isNativeSingleCoord = selectionKind !== "double_bond_scan";
   // Build summary text
-  var _scanMethodLabel = _so.method || "GFN2-xTB";
+  // (T23g) fallback resolves from the catalog default (the protocol builder
+  // already guarantees a non-empty method; this is pure defense).
+  var _scanMethodLabel = _so.method || String(
+    CatalogUtils.getFieldDefault(methodCatalogCache, "scan_optimizer_method", "orca", null) || ""
+  );
   var _scanSolventSummary = (_so.solvent_model && _so.solvent_model !== "none")
     ? (_so.solvent_model + "(" + (_so.solvent || "?") + ")") : "";
   var _scanConvLabel = _so.convergence || "normal";
@@ -31551,9 +31937,14 @@ var s2scanState = {
   startDist: 1.0,
   endDist: 3.0,
   nPoints: 21,
-  scanMethod: "GFN2-xTB",
+  // HISTORICAL-COMPAT (T23g): legacy S2 scan panel defaults — method literals
+  // live ONLY in this legacy branch; they mirror
+  // FIELD_DEFINITIONS.scan_optimizer_method.default ("GFN2-xTB") and the
+  // historical single-point default "B97-3c" (parity-locked by
+  // tests/test_frontend_sync.py).
+  scanMethod: "GFN2-xTB", // HISTORICAL-COMPAT (T23g)
   spEnabled: true,
-  spMethod: "B97-3c",
+  spMethod: "B97-3c", // HISTORICAL-COMPAT (T23g)
   maxIter: 200,
   projectId: "",
   jobId: "",
@@ -31664,9 +32055,9 @@ function s2scanResetState() {
   s2scanState.startDist = 1.0;
   s2scanState.endDist = 3.0;
   s2scanState.nPoints = 21;
-  s2scanState.scanMethod = "GFN2-xTB";
+  s2scanState.scanMethod = "GFN2-xTB"; // HISTORICAL-COMPAT (T23g) legacy S2 panel default
   s2scanState.spEnabled = true;
-  s2scanState.spMethod = "B97-3c";
+  s2scanState.spMethod = "B97-3c"; // HISTORICAL-COMPAT (T23g) legacy S2 panel default
   s2scanState.maxIter = 200;
   s2scanState.projectId = "";
   s2scanState.jobId = "";
@@ -32113,9 +32504,9 @@ function s2scanStep3Next() {
   s2scanState.nPoints = parseInt(s2scanEl("s2scan-n-points").value, 10) || 21;
   if (s2scanState.nPoints < 3) s2scanState.nPoints = 3;
   if (s2scanState.nPoints > 101) s2scanState.nPoints = 101;
-  s2scanState.scanMethod = s2scanEl("s2scan-scan-method").value || "GFN2-xTB";
+  s2scanState.scanMethod = s2scanEl("s2scan-scan-method").value || "GFN2-xTB"; // HISTORICAL-COMPAT (T23g) legacy S2 panel default
   s2scanState.spEnabled = s2scanEl("s2scan-enable-sp").checked;
-  s2scanState.spMethod = s2scanEl("s2scan-sp-method").value || "B97-3c";
+  s2scanState.spMethod = s2scanEl("s2scan-sp-method").value || "B97-3c"; // HISTORICAL-COMPAT (T23g) legacy S2 panel default
   s2scanState.maxIter = parseInt(s2scanEl("s2scan-max-iter").value, 10) || 200;
   var step = Math.abs(s2scanState.endDist - s2scanState.startDist) / Math.max(1, s2scanState.nPoints - 1);
   if (s2scanState.startDist === s2scanState.endDist) {
