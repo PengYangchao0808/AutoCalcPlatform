@@ -163,6 +163,22 @@ class TestCalculationLevels:
         assert level.ri_approximation == "none"
         assert level.aux_j_basis is None
 
+    def test_canonical_level_clears_gfn_basis_dispersion_ri(self) -> None:
+        for method in ("GFN2-xTB", "GFN1-xTB", "GFN0-xTB", "GFN-FF", "gfn2"):
+            level = canonical_level(
+                CalculationLevel(
+                    method=method,
+                    basis="def2-SVP",
+                    dispersion="D4",
+                    ri_approximation="RIJCOSX",
+                    aux_j_basis="def2/J",
+                )
+            )
+            assert level.basis is None, method
+            assert level.dispersion is None, method
+            assert level.ri_approximation == "none", method
+            assert level.aux_j_basis is None, method
+
     def test_canonical_level_applies_basis_inline_defaults(self) -> None:
         level = canonical_level(CalculationLevel(method="B3LYP"))
         assert level.basis == "def2-TZVPP"

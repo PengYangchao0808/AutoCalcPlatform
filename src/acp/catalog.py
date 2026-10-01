@@ -7,6 +7,20 @@ from typing import Any
 
 from acp.chem.composition import normalize_recalc_hess
 
+# cccp's unified keyword registry is the SINGLE authority for method-family
+# classification, implementation resolution, field applicability, and
+# solvent-model policy (import direction acp -> cccp only; cccp never
+# imports acp at import time).  METHOD_META never re-encodes these facts:
+# the values are DERIVED from the registry below and re-checked by the
+# derivation-consistency tests in tests/test_acp_catalog.py.
+from cccp.qc.keyword_registry import (
+    KeywordValueError,
+    is_applicable,
+    method_family,
+    resolve,
+    resolve_implementation,
+)
+
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
     {
         "id": "singlepoint",
@@ -466,6 +480,51 @@ _BASIS_CATALOG_REF = "<basis-catalog>"
 # two structures permanently in sync — DevDoc §2.1 specifies that
 # ``functional_options_map`` values are "由 METHOD_META 自动生成".
 
+# Solvent-model spellings probed against the registry policy when deriving
+# the per-method ``solvent_models`` offer (union of the catalog's
+# per-backend solvent_model options).
+_SOLVENT_MODEL_PROBE: tuple[str, ...] = ("none", "CPCM", "SMD", "ALPB", "GBSA")
+
+
+def _derive_registry_fields(method: str) -> dict[str, Any]:
+    """Derive ``family`` / ``implementation`` / ``solvent_models`` for *method*.
+
+    Everything comes from ``cccp.qc.keyword_registry`` (the single
+    authority): family via :func:`method_family`, the ORCA implementation
+    via :func:`resolve_implementation`, and ``solvent_models`` only when the
+    registry POLICY restricts the set for the family (e.g. GFN under ORCA
+    is ``{none, ALPB}`` — GBSA/CPCM/SMD raise ``KeywordValueError``).
+    Unrestricted methods get no ``solvent_models`` key (the field-level
+    ``per_backend`` options remain their offer).
+
+    Raises:
+        ValueError: The method is unknown to the registry.  Fix by extending
+            ``cccp.qc.keyword_registry._METHOD_FAMILY_TABLE`` (+ its tests),
+            never by silently gating the method.
+    """
+    family = method_family(method)
+    if family == "unknown":
+        raise ValueError(
+            f"METHOD_META method {method!r} classifies as 'unknown' in "
+            "cccp.qc.keyword_registry; extend _METHOD_FAMILY_TABLE there "
+            "(and its tests) instead of gating it silently"
+        )
+    implementation = resolve_implementation(method, engine="orca")
+    derived: dict[str, Any] = {"family": family, "implementation": implementation}
+    allowed: list[str] = []
+    restricted = False
+    for model in _SOLVENT_MODEL_PROBE:
+        try:
+            resolve("solvent_model", model, family=family, implementation=implementation)
+        except KeywordValueError:
+            restricted = True
+            continue
+        allowed.append(model)
+    if restricted:
+        derived["solvent_models"] = allowed
+    return derived
+
+
 METHOD_META: dict[str, dict[str, Any]] = {
     # ── 3c composite methods (built-in basis set, RI fully fixed) ──
     "r2SCAN-3c": {
@@ -605,7 +664,55 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_aux_j": "def2/J",
         "default_aux_c": "def2-TZVPP/C",
     },
+    # ── GFN semi-empirical methods (no basis / dispersion / RI layer) ──
+    # ``basis: ()`` -> ``functional_options_map`` derives ``[]`` (NOT
+    # ``[""]``): GFN advertises no basis at all.  ``dispersion: ()`` is the
+    # same locked/empty set (the built-in correction can never be
+    # overridden).  ``ri_support: "composite"`` makes canonical_level /
+    # _resolve_field_default clear RI/aux to none/empty.  ``family``,
+    # ``implementation`` and ``solvent_models`` are DERIVED from the cccp
+    # keyword registry (see _derive_registry_fields) — never hand-encoded.
+    "GFN2-xTB": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "D4",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "GFN1-xTB": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "D3",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "GFN0-xTB": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "D4",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "GFN-FF": {
+        "basis_inline": True,
+        "ri_support": "composite",
+        "basis": (),
+        "dispersion": (),
+        "builtin_dispersion": "builtin",
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
 }
+
+
+for _method_name, _method_meta in METHOD_META.items():
+    _method_meta.update(_derive_registry_fields(_method_name))
 
 
 def _derive_functional_options_map() -> dict[str, dict[str, list[str]]]:
@@ -655,6 +762,10 @@ FIELD_DEFINITIONS: dict[str, Any] = {
                 "PWPB95",
                 "revDSD-PBEP86",
                 "DLPNO-CCSD(T)",
+                "GFN2-xTB",
+                "GFN1-xTB",
+                "GFN0-xTB",
+                "GFN-FF",
             ],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
@@ -4419,6 +4530,70 @@ _LEVEL_SCOPED_FIELD_BASE: dict[str, str] = {
     "scan_optimizer_ri_approximation": "ri_approximation",
 }
 
+_SCAN_OPT_PREFIX = "scan_optimizer_"
+_CLEARED_FIELD_VALUES = ("", "none")
+
+# Registry domains whose option sets collapse to the locked/empty set when
+# the method family carries no DFT layer (GFN / GFN-FF): no basis, no
+# dispersion correction to specify, no integration grid.
+_FAMILY_GOVERNED_DOMAINS: dict[str, str] = {
+    "basis": "basis",
+    "dispersion": "dispersion",
+    "grid": "grid",
+}
+
+
+def _family_locked_options(
+    field_name: str,
+    engine: str,
+    functional: str | None,
+) -> list[str] | None:
+    """Return the locked/empty option set for family-inapplicable fields.
+
+    Authority is ``cccp.qc.keyword_registry`` (never a second catalog
+    table); ``None`` means "no family opinion" and resolution falls through
+    to the normal field/function option logic.
+
+    Rules (T11):
+
+    * ``basis`` / ``dispersion`` / ``grid`` follow registry
+      :func:`is_applicable` — stripped for the GFN/GFN-FF families on every
+      implementation, so the offerable set is empty (locked).
+    * ONE minimal "field unavailable for family" rule covering ``grid`` /
+      ``scf_*``: families that consume no DFT basis layer also get no
+      integration-grid or SCF dropdowns.  Fields without an option set
+      (scalar caps such as ``scf_max_iterations``) pass through untouched —
+      the platform's own GFN scan profile ships
+      ``scan_optimizer_scf_max_iterations: 200``.
+    """
+    if not functional:
+        return None
+    family = method_family(functional)
+    if family == "unknown":
+        return None
+    try:
+        implementation = resolve_implementation(functional, engine=engine)
+    except KeywordValueError:
+        return None
+
+    base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+    if base_name.startswith(_SCAN_OPT_PREFIX):
+        base_name = base_name[len(_SCAN_OPT_PREFIX) :]
+
+    domain = _FAMILY_GOVERNED_DOMAINS.get(base_name)
+    if domain is not None:
+        if not is_applicable(domain, family=family, implementation=implementation):
+            return []
+        return None
+
+    fd = FIELD_DEFINITIONS.get(field_name) or {}
+    if not (fd.get("options") or fd.get("per_backend")):
+        return None
+    if base_name == "grid" or base_name.startswith("scf_"):
+        if not is_applicable("basis", family=family, implementation=implementation):
+            return []
+    return None
+
 
 def _resolve_field_options(
     field_name: str,
@@ -4437,7 +4612,13 @@ def _resolve_field_options(
 
     Level-scoped fields (e.g. ``scan_optimizer_basis``) reuse the shared
     base-field (``basis``) functional linkage via ``_LEVEL_SCOPED_FIELD_BASE``.
+
+    Family gating (T11) runs FIRST: fields the method family does not apply
+    to resolve to the locked/empty set (see ``_family_locked_options``).
     """
+    locked = _family_locked_options(field_name, engine, functional)
+    if locked is not None:
+        return locked
     base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
     if functional and base_name in ("basis", "dispersion"):
         mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
@@ -4605,6 +4786,9 @@ def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
         if key not in mapping or key not in level:
             continue
         allowed = mapping[key]
+        if not allowed:
+            level[key] = ""
+            continue
         current = level[key]
         if not current or current == "__custom__":
             continue
@@ -4926,6 +5110,22 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             continue
                         vals = canon_vals
                     normalized[field_name] = vals
+                    continue
+                locked = _family_locked_options(field_name, engine, level_method)
+                if locked is not None:
+                    # Family-locked field (T11): profile/legacy payloads carry
+                    # the cleared spelling ("none"/"") and are accepted as-is;
+                    # any real value is an inapplicable override and fails
+                    # fast.  Strict-vs-migration entry contexts are T13's.
+                    base = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+                    if str(user_val).strip().lower() in _CLEARED_FIELD_VALUES:
+                        normalized[field_name] = "none" if base == "dispersion" else ""
+                    else:
+                        errors.append(
+                            f"Level '{lid}', field '{field_name}': value "
+                            f"'{user_val}' is not available for method "
+                            f"'{level_method}' (family-locked field)"
+                        )
                     continue
                 options = _resolve_field_options(
                     field_name,

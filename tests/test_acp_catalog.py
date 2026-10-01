@@ -49,6 +49,10 @@ _ALL_FUNCTIONALS = frozenset(
         "PBEh-3c",
         "B97-3c",
         "DLPNO-CCSD(T)",
+        "GFN2-xTB",
+        "GFN1-xTB",
+        "GFN0-xTB",
+        "GFN-FF",
     }
 )
 
@@ -1018,3 +1022,147 @@ def test_convert_method_levels_passes_recalc_hess() -> None:
         {"dft_opt": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": 5}}
     )
     assert out["optimization"]["recalc_hess"] == 5
+
+
+# =====================================================================
+# T11: GFN entries in METHOD_META + method-family-aware field gating
+# =====================================================================
+
+_GFN_METHOD_NAMES = ("GFN2-xTB", "GFN1-xTB", "GFN0-xTB", "GFN-FF")
+
+
+def test_functional_options_map_gfn_basis_empty() -> None:
+    from acp.catalog import _derive_functional_options_map
+
+    derived = _derive_functional_options_map()
+    for name in _GFN_METHOD_NAMES:
+        assert derived[name]["basis"] == [], name
+        assert FUNCTIONAL_OPTIONS_MAP[name]["basis"] == [], name
+        assert derived[name]["dispersion"] == [], name
+
+
+def test_method_meta_consistent_with_cccp_registry() -> None:
+    from cccp.qc.keyword_registry import KeywordValueError, method_family, resolve_implementation
+
+    for name, meta in METHOD_META.items():
+        family = method_family(name)
+        assert family != "unknown", (
+            f"{name} classifies as 'unknown' in the cccp registry — extend "
+            "cccp.qc.keyword_registry._METHOD_FAMILY_TABLE (+ its tests)"
+        )
+        assert meta["family"] == family, f"{name} family drifted from the registry"
+        assert meta["implementation"] == resolve_implementation(name, engine="orca"), (
+            f"{name} implementation drifted from the registry"
+        )
+
+    for name in ("GFN2-xTB", "GFN1-xTB", "GFN0-xTB"):
+        assert METHOD_META[name]["family"] == "gfn"
+    assert METHOD_META["GFN-FF"]["family"] == "gfnff"
+    for name in _GFN_METHOD_NAMES:
+        meta = METHOD_META[name]
+        assert meta["solvent_models"] == ["none", "ALPB"], name
+        assert meta["ri_support"] == "composite", name
+        assert meta["basis"] == (), name
+        assert meta["default_basis"] == ""
+        assert meta["default_dispersion"] == "none"
+
+    assert METHOD_META["GFN2-xTB"]["builtin_dispersion"] == "D4"
+    assert METHOD_META["GFN1-xTB"]["builtin_dispersion"] == "D3"
+    assert METHOD_META["GFN-FF"]["builtin_dispersion"] == "builtin"
+
+    from cccp.qc.keyword_registry import resolve
+
+    for name in _GFN_METHOD_NAMES:
+        meta = METHOD_META[name]
+        for model in ("GBSA", "CPCM", "SMD"):
+            with pytest.raises(KeywordValueError):
+                resolve(
+                    "solvent_model",
+                    model,
+                    family=meta["family"],
+                    implementation=meta["implementation"],
+                )
+
+
+def test_gfn_field_options_locked_for_family() -> None:
+    from acp.catalog import _resolve_field_default, _resolve_field_options
+
+    for name in _GFN_METHOD_NAMES:
+        assert _resolve_field_options("scan_optimizer_basis", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_dispersion", "orca", name) == [], name
+        assert _resolve_field_options("basis", "orca", name) == [], name
+        assert _resolve_field_options("dispersion", "orca", name) == [], name
+        assert _resolve_field_options("grid", "orca", name) == [], name
+        assert _resolve_field_options("scf_convergence", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_grid", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_scf_convergence", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_scf_max_iterations", "orca", name) is None, (
+            name
+        )
+        assert _resolve_field_default("basis", "orca", name) == ""
+        assert _resolve_field_default("dispersion", "orca", name) == "none"
+        assert _resolve_field_default("ri_approximation", "orca", name) == "none"
+        assert _resolve_field_default("scan_optimizer_basis", "orca", name) == ""
+        assert _resolve_field_default("scan_optimizer_dispersion", "orca", name) == "none"
+        assert _resolve_field_default("scan_optimizer_ri_approximation", "orca", name) == "none"
+
+    assert _resolve_field_options("grid", "orca", "B3LYP") == FIELD_DEFINITIONS["grid"]["options"]
+    assert (
+        _resolve_field_options("scf_convergence", "orca", "B3LYP")
+        == (FIELD_DEFINITIONS["scf_convergence"]["options"])
+    )
+    assert _resolve_field_options("scan_optimizer_basis", "orca", "r2SCAN-3c") == ["def2-mTZVPP"]
+    assert (
+        _resolve_field_options("scan_optimizer_grid", "orca", "B97-3c")
+        == (FIELD_DEFINITIONS["scan_optimizer_grid"]["options"])
+    )
+
+
+def test_gfn_locked_fields_accept_cleared_form_only() -> None:
+    from acp.catalog import get_method_schema, normalize_and_validate_method_config
+
+    schema = get_method_schema("pes_scan")
+    assert schema is not None
+
+    profile_shaped = {
+        "levels": {
+            "scan_optimizer": {
+                "engine": "orca",
+                "scan_optimizer_method": "GFN2-xTB",
+                "scan_optimizer_basis": "",
+                "scan_optimizer_dispersion": "none",
+                "scan_optimizer_grid": "",
+                "scan_optimizer_scf_convergence": "",
+                "scan_optimizer_scf_max_iterations": 200,
+            },
+            "single_point": {"engine": "orca", "_disabled": True},
+        }
+    }
+    levels, errors = normalize_and_validate_method_config(profile_shaped, schema)
+    assert errors == [], errors
+    assert levels["scan_optimizer"]["scan_optimizer_dispersion"] == "none"
+    assert levels["scan_optimizer"]["scan_optimizer_scf_max_iterations"] == 200
+
+    override = {
+        "levels": {
+            "scan_optimizer": {
+                "engine": "orca",
+                "scan_optimizer_method": "GFN2-xTB",
+                "scan_optimizer_basis": "def2-SVP",
+                "scan_optimizer_dispersion": "D4",
+                "scan_optimizer_grid": "DefGrid2",
+                "scan_optimizer_scf_convergence": "tight",
+            },
+            "single_point": {"engine": "orca", "_disabled": True},
+        }
+    }
+    _, errors = normalize_and_validate_method_config(override, schema)
+    joined = " | ".join(errors)
+    for field in (
+        "scan_optimizer_basis",
+        "scan_optimizer_dispersion",
+        "scan_optimizer_grid",
+        "scan_optimizer_scf_convergence",
+    ):
+        assert field in joined, (field, errors)
+    assert "family-locked field" in joined

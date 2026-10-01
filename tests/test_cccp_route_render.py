@@ -337,18 +337,19 @@ def test_build_input_blocks_gfn_strips_inherited_default_basis(
     assert _warned(caplog, "never emitted")
 
 
-def test_build_input_blocks_gfn_keeps_route_extras_verbatim(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_build_input_blocks_gfn_keeps_route_extras_verbatim() -> None:
+    # T11: GFN METHOD_META declares ri_support="composite", so RI keywords
+    # (RIJCOSX/RI/RIJK) and /J //C aux patterns in route_extras are dropped
+    # by the composite RI gate — the same silent drop 3c/DLPNO get.  Genuinely
+    # free-form extras stay verbatim; no basis/aux/%basis can leak through.
     iface = _bare_orca(method="GFN2-xTB", basis="")
-    with caplog.at_level(logging.WARNING):
-        out, _ = iface._build_input_blocks(
-            "opt", route_extras=["RIJCOSX", "MyCustomKeyword", "def2/J"], recalc_hess=0
-        )
+    out, _ = iface._build_input_blocks(
+        "opt", route_extras=["RIJCOSX", "MyCustomKeyword", "def2/J"], recalc_hess=0
+    )
     route = out.splitlines()[0]
-    assert "RIJCOSX" in route and "MyCustomKeyword" in route
+    assert "MyCustomKeyword" in route
+    assert "RIJCOSX" not in route
     assert "def2/J" not in out and "%basis" not in out
-    assert _warned(caplog, "never emitted")
 
 
 def test_build_input_blocks_dft_basis_and_basis_block_unchanged() -> None:
