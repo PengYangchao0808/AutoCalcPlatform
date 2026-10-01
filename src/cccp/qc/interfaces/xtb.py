@@ -100,7 +100,9 @@ class XTBInterface:
     def is_available(self) -> bool:
         return self.executable is not None
 
-    def _solvent_args(self, solvent: Optional[str] = None, gfn_level: Optional[int] = None) -> List[str]:
+    def _solvent_args(
+        self, solvent: Optional[str] = None, gfn_level: Optional[int] = None
+    ) -> List[str]:
         """Return xTB solvation flags for the EFFECTIVE solvent/method/model."""
         sol = solvent if solvent is not None else self.solvent
         level = self.gfn_level if gfn_level is None else gfn_level
@@ -539,7 +541,7 @@ class XTBInterface:
         charge: int = 0,
         multiplicity: int = 1,
         solvent: Optional[str] = None,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
     ) -> XTBThermoResult:
         """
         Run xTB single-point Hessian + MRRHO (--bhess --enso) calculation.

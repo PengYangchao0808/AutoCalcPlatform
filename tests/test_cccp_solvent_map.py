@@ -19,16 +19,15 @@ from typing import Any
 
 import pytest
 
-from cccp.qc.keyword_registry import KeywordValueError
 from cccp.qc.interfaces.crest import CRESTInterface
 from cccp.qc.interfaces.xtb import XTBInterface
 from cccp.qc.interfaces.xtb_path import XTBPathInterface
+from cccp.qc.keyword_registry import KeywordValueError
 from cccp.utils.solvent_map import (
     LEGAL_SOLVENT_MODELS,
     XTB_ALPB_SOLVENTS,
     XTB_GBSA_METHOD_RESTRICTIONS,
     XTB_GBSA_SOLVENTS,
-    XTB_SOLVENT_ALIASES,
     SolventValueError,
     resolve_xtb_solvent,
     xtb_method_name,
@@ -39,17 +38,52 @@ from cccp.utils.solvent_map import (
 XTB_REAL_BIN = Path("/home/xieningke/xtb-dist/bin/xtb")
 XTB_REAL_SHARE = Path("/home/xieningke/xtb-dist/share/xtb")
 
-ALPB_OFFICIAL = frozenset({
-    "acetone", "acetonitrile", "aniline", "benzaldehyde", "benzene",
-    "ch2cl2", "chcl3", "cs2", "dioxane", "dmf", "dmso", "ether",
-    "ethylacetate", "furane", "hexadecane", "hexane", "methanol",
-    "nitromethane", "octanol", "woctanol", "phenol", "toluene", "thf",
-    "water",
-})
-GBSA_OFFICIAL = frozenset({
-    "acetone", "acetonitrile", "benzene", "ch2cl2", "chcl3", "cs2", "dmf",
-    "dmso", "ether", "h2o", "methanol", "n-hexane", "thf", "toluene",
-})
+ALPB_OFFICIAL = frozenset(
+    {
+        "acetone",
+        "acetonitrile",
+        "aniline",
+        "benzaldehyde",
+        "benzene",
+        "ch2cl2",
+        "chcl3",
+        "cs2",
+        "dioxane",
+        "dmf",
+        "dmso",
+        "ether",
+        "ethylacetate",
+        "furane",
+        "hexadecane",
+        "hexane",
+        "methanol",
+        "nitromethane",
+        "octanol",
+        "woctanol",
+        "phenol",
+        "toluene",
+        "thf",
+        "water",
+    }
+)
+GBSA_OFFICIAL = frozenset(
+    {
+        "acetone",
+        "acetonitrile",
+        "benzene",
+        "ch2cl2",
+        "chcl3",
+        "cs2",
+        "dmf",
+        "dmso",
+        "ether",
+        "h2o",
+        "methanol",
+        "n-hexane",
+        "thf",
+        "toluene",
+    }
+)
 
 WATER_XYZ = "3\nwater\nO 0.0 0.0 0.0\nH 0.96 0.0 0.0\nH -0.24 0.93 0.0\n"
 
@@ -110,9 +144,7 @@ def test_unknown_name_raises_with_per_model_legal_list() -> None:
 def test_unknown_name_is_never_passed_through() -> None:
     for model in sorted(LEGAL_SOLVENT_MODELS - {"none"}):
         with pytest.raises(SolventValueError):
-            xtb_solvent_args(
-                "unobtainium", method="GFN2-xTB", solvent_model=model
-            )
+            xtb_solvent_args("unobtainium", method="GFN2-xTB", solvent_model=model)
 
 
 # ── official sets ──────────────────────────────────────────────────────
@@ -146,73 +178,82 @@ def test_gfn0_plus_alpb_rejected() -> None:
 
 
 def test_gfn1_gbsa_benzene_legal_gfn2_rejected() -> None:
-    assert (
-        resolve_xtb_solvent("benzene", method="GFN1-xTB", solvent_model="gbsa")
-        == "benzene"
-    )
+    assert resolve_xtb_solvent("benzene", method="GFN1-xTB", solvent_model="gbsa") == "benzene"
     with pytest.raises(SolventValueError) as excinfo:
         resolve_xtb_solvent("benzene", method="GFN2-xTB", solvent_model="gbsa")
     assert "GFN1-only" in str(excinfo.value)
 
 
 def test_gfn2_gbsa_dmf_legal_gfn1_rejected() -> None:
-    assert (
-        resolve_xtb_solvent("dmf", method="GFN2-xTB", solvent_model="gbsa") == "dmf"
-    )
+    assert resolve_xtb_solvent("dmf", method="GFN2-xTB", solvent_model="gbsa") == "dmf"
     with pytest.raises(SolventValueError) as excinfo:
         resolve_xtb_solvent("dmf", method="GFN1-xTB", solvent_model="gbsa")
     assert "GFN2-only" in str(excinfo.value)
 
 
 def test_gbsa_n_hexane_is_gfn2_only() -> None:
-    assert (
-        resolve_xtb_solvent("n-hexane", method="GFN2-xTB", solvent_model="gbsa")
-        == "hexane"
-    )
-    assert (
-        resolve_xtb_solvent("hexane", method="GFN2-xTB", solvent_model="gbsa")
-        == "hexane"
-    )
+    assert resolve_xtb_solvent("n-hexane", method="GFN2-xTB", solvent_model="gbsa") == "hexane"
+    assert resolve_xtb_solvent("hexane", method="GFN2-xTB", solvent_model="gbsa") == "hexane"
     for method in ("GFN1-xTB", "GFN0-xTB", "GFN-FF"):
         with pytest.raises(SolventValueError) as excinfo:
-            resolve_xtb_solvent(
-                "n-hexane", method=method, solvent_model="gbsa"
-            )
+            resolve_xtb_solvent("n-hexane", method=method, solvent_model="gbsa")
         assert "GFN2-only" in str(excinfo.value)
 
 
 def test_gbsa_base_set_legal_for_gfn0_and_gfnff() -> None:
     for method in ("GFN0-xTB", "GFN-FF"):
         for name in ("acetone", "water", "toluene"):
-            assert resolve_xtb_solvent(
-                name, method=method, solvent_model="gbsa"
-            ), (name, method)
+            assert resolve_xtb_solvent(name, method=method, solvent_model="gbsa"), (name, method)
 
 
 def test_alpb_set_legal_for_all_non_gfn0_methods() -> None:
     for name in sorted(XTB_ALPB_SOLVENTS):
         for method in ("GFN1-xTB", "GFN2-xTB", "GFN-FF"):
-            assert (
-                resolve_xtb_solvent(name, method=method, solvent_model="alpb")
-                == xtb_solvent(name)
+            assert resolve_xtb_solvent(name, method=method, solvent_model="alpb") == xtb_solvent(
+                name
             ), (name, method)
 
 
 def test_gbsa_set_legal_per_method() -> None:
     cases = {
-        "GFN1-xTB": {"acetone", "acetonitrile", "benzene", "ch2cl2", "chcl3",
-                     "cs2", "dmso", "ether", "h2o", "methanol", "thf", "toluene"},
-        "GFN2-xTB": {"acetone", "acetonitrile", "ch2cl2", "chcl3", "cs2", "dmf",
-                     "dmso", "ether", "h2o", "methanol", "n-hexane", "thf",
-                     "toluene"},
+        "GFN1-xTB": {
+            "acetone",
+            "acetonitrile",
+            "benzene",
+            "ch2cl2",
+            "chcl3",
+            "cs2",
+            "dmso",
+            "ether",
+            "h2o",
+            "methanol",
+            "thf",
+            "toluene",
+        },
+        "GFN2-xTB": {
+            "acetone",
+            "acetonitrile",
+            "ch2cl2",
+            "chcl3",
+            "cs2",
+            "dmf",
+            "dmso",
+            "ether",
+            "h2o",
+            "methanol",
+            "n-hexane",
+            "thf",
+            "toluene",
+        },
     }
     for method, names in cases.items():
         assert names <= XTB_GBSA_SOLVENTS
         for name in sorted(XTB_GBSA_SOLVENTS):
             if name in names:
-                assert resolve_xtb_solvent(
-                    name, method=method, solvent_model="gbsa"
-                ), (name, method)
+                assert resolve_xtb_solvent(name, method=method, solvent_model="gbsa"), (
+                    name,
+                    method,
+                )
             else:
                 with pytest.raises(SolventValueError):
                     resolve_xtb_solvent(name, method=method, solvent_model="gbsa")
@@ -231,10 +272,12 @@ def test_water_and_hexane_render_model_independent_canonical_names() -> None:
     assert resolve_xtb_solvent("water", method="GFN2-xTB", solvent_model="gbsa") == "water"
     assert resolve_xtb_solvent("n-hexane", method="GFN2-xTB", solvent_model="alpb") == "hexane"
     assert xtb_solvent_args("dcm", method="GFN2-xTB", solvent_model="alpb") == [
-        "--alpb", "ch2cl2",
+        "--alpb",
+        "ch2cl2",
     ]
     assert xtb_solvent_args("chloroform", method="GFN2-xTB", solvent_model="gbsa") == [
-        "--gbsa", "chcl3",
+        "--gbsa",
+        "chcl3",
     ]
 
 
@@ -283,9 +326,7 @@ def test_non_xtb_binary_methods_are_rejected_via_registry() -> None:
 def test_override_gfn_level_validated_by_override_not_init_default(
     sample_config: dict[str, Any],
 ) -> None:
-    interface = XTBPathInterface(
-        sample_config, gfn_level=2, solvent="dmf", solvent_model="gbsa"
-    )
+    interface = XTBPathInterface(sample_config, gfn_level=2, solvent="dmf", solvent_model="gbsa")
     assert interface._solvent_args(gfn_level=2) == ["--gbsa", "dmf"]
     with pytest.raises(SolventValueError) as excinfo:
         interface._solvent_args(gfn_level=1)
@@ -295,9 +336,7 @@ def test_override_gfn_level_validated_by_override_not_init_default(
 def test_override_solvent_rendered_by_override_not_init_default(
     sample_config: dict[str, Any],
 ) -> None:
-    interface = XTBInterface(
-        sample_config, gfn_level=2, solvent="toluene", solvent_model="alpb"
-    )
+    interface = XTBInterface(sample_config, gfn_level=2, solvent="toluene", solvent_model="alpb")
     assert interface._solvent_args() == ["--alpb", "toluene"]
     assert interface._solvent_args("DiChloroMethane") == ["--alpb", "ch2cl2"]
 
@@ -319,9 +358,7 @@ def test_path_search_public_call_uses_override_method(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    interface = XTBPathInterface(
-        sample_config, gfn_level=2, solvent="dmf", solvent_model="gbsa"
-    )
+    interface = XTBPathInterface(sample_config, gfn_level=2, solvent="dmf", solvent_model="gbsa")
     interface.executable = Path("/usr/bin/xtb")
     start_xyz = tmp_path / "start.xyz"
     end_xyz = tmp_path / "end.xyz"

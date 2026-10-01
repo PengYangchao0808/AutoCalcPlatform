@@ -254,12 +254,12 @@ def test_validate_method_method_alias_and_case_canonicalization_warn(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert any(
-        "b973c" in w and "B97-3c" in w for w in body["warnings"]
-    ), f"method alias warning missing: {body['warnings']}"
-    assert any(
-        "canonicalized to 'tight'" in w and "Tight" in w for w in body["warnings"]
-    ), f"case canonicalization warning missing: {body['warnings']}"
+    assert any("b973c" in w and "B97-3c" in w for w in body["warnings"]), (
+        f"method alias warning missing: {body['warnings']}"
+    )
+    assert any("canonicalized to 'tight'" in w and "Tight" in w for w in body["warnings"]), (
+        f"case canonicalization warning missing: {body['warnings']}"
+    )
 
 
 def test_validate_method_unknown_schema_still_has_empty_warnings(

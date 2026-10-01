@@ -46,7 +46,7 @@ def _coords_for_dihedral(phi_deg: float) -> np.ndarray:
     )
 
 
-def _rdkit_dihedral(coords: np.ndarray, i: int, j: int, k: int, l: int) -> float:
+def _rdkit_dihedral(coords: np.ndarray, i: int, j: int, k: int, atom_l: int) -> float:
     """Independent reference dihedral via RDKit.
 
     Verified against the installed RDKit (2026.03.6)::
@@ -65,7 +65,7 @@ def _rdkit_dihedral(coords: np.ndarray, i: int, j: int, k: int, l: int) -> float
     for idx, (x, y, z) in enumerate(coords):
         conf.SetAtomPosition(idx, (float(x), float(y), float(z)))
     mol.AddConformer(conf)
-    return float(rdMolTransforms.GetDihedralDeg(mol.GetConformer(), i, j, k, l))
+    return float(rdMolTransforms.GetDihedralDeg(mol.GetConformer(), i, j, k, atom_l))
 
 
 # Synthetic planar cases: cis (0), trans (+-180), +-30, +-150.

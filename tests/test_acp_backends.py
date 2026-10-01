@@ -129,9 +129,9 @@ def test_orca_backend_gfn_single_point_emits_no_basis() -> None:
     assert route.split() == ["!", "GFN2-xTB", "SP"]
     assert "def2" not in route
 
-    opt_route = backend._interface._build_input_blocks(
-        "opt", symbols=["C", "H"], recalc_hess=0
-    )[0].splitlines()[0]
+    opt_route = backend._interface._build_input_blocks("opt", symbols=["C", "H"], recalc_hess=0)[
+        0
+    ].splitlines()[0]
     assert "def2" not in opt_route
     assert opt_route.split()[1] == "GFN2-xTB"
 

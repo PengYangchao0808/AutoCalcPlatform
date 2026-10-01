@@ -11410,25 +11410,37 @@ def test_catalogutils_family_gating_behavior_node() -> None:
         eq("gfn scf select locked",
             CatalogUtils.getFieldOptions(catalog, "scan_optimizer_scf_convergence", "orca", "GFN2-xTB"), []);
         eq("gfn scf scalar passes through",
-            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_scf_max_iterations", "orca", "GFN2-xTB"), null);
+            CatalogUtils.getFieldOptions(
+                catalog, "scan_optimizer_scf_max_iterations", "orca", "GFN2-xTB"), null);
         eq("dft grid stays open",
             CatalogUtils.getFieldOptions(catalog, "grid", "orca", "B3LYP"),
             ["DefGrid1", "DefGrid2", "DefGrid3"]);
         eq("3c basis scoped to the family offer",
-            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_basis", "orca", "B97-3c"), ["mTZVP"]);
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_basis", "orca", "B97-3c"),
+            ["mTZVP"]);
 
         // (3) gate booleans.
-        eq("gfn basis locked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_basis", "GFN2-xTB"), true);
+        eq("gfn basis locked?",
+            CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_basis", "GFN2-xTB"), true);
         eq("gfn grid locked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "GFN2-xTB"), true);
-        eq("gfn solvent_model unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_solvent_model", "GFN2-xTB"), false);
-        eq("gfn scf scalar unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_scf_max_iterations", "GFN2-xTB"), false);
-        eq("3c basis unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_basis", "B97-3c"), false);
-        eq("3c grid unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "B97-3c"), false);
+        eq("gfn solvent_model unlocked?",
+            CatalogUtils.isFieldFamilyLocked(
+                catalog, "scan_optimizer_solvent_model", "GFN2-xTB"), false);
+        eq("gfn scf scalar unlocked?",
+            CatalogUtils.isFieldFamilyLocked(
+                catalog, "scan_optimizer_scf_max_iterations", "GFN2-xTB"), false);
+        eq("3c basis unlocked?",
+            CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_basis", "B97-3c"), false);
+        eq("3c grid unlocked?",
+            CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "B97-3c"), false);
 
         // (4) single_point grid default ''.
         eq("grid default", CatalogUtils.getFieldDefault(catalog, "grid", "orca", "B3LYP"), "");
-        eq("gfn basis default", CatalogUtils.getFieldDefault(catalog, "scan_optimizer_basis", "orca", "GFN2-xTB"), "");
-        eq("3c basis default from METHOD_META", CatalogUtils.getFieldDefault(catalog, "scan_optimizer_basis", "orca", "B97-3c"), "mTZVP");
+        eq("gfn basis default",
+            CatalogUtils.getFieldDefault(catalog, "scan_optimizer_basis", "orca", "GFN2-xTB"), "");
+        eq("3c basis default from METHOD_META",
+            CatalogUtils.getFieldDefault(
+                catalog, "scan_optimizer_basis", "orca", "B97-3c"), "mTZVP");
 
         // (5) method-change sweep: GFN clears/locks inapplicable fields.
         const scanLevel = catalog.method_schemas.pes_scan.method_levels.find(
@@ -11453,8 +11465,11 @@ def test_catalogutils_family_gating_behavior_node() -> None:
 
         // (6) switching back to B97-3c restores visibility and keeps values
         // the family admits.
-        eq("restored grid unlocked", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "B97-3c"), false);
-        eq("restored scf unlocked", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_scf_convergence", "B97-3c"), false);
+        eq("restored grid unlocked",
+            CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "B97-3c"), false);
+        eq("restored scf unlocked",
+            CatalogUtils.isFieldFamilyLocked(
+                catalog, "scan_optimizer_scf_convergence", "B97-3c"), false);
         const st2 = {
             scan_optimizer_basis: "mTZVP",
             scan_optimizer_grid: "DefGrid2",
@@ -12330,7 +12345,9 @@ def test_candidate_inspector_i18n_keys_in_both_locales() -> None:
     only_zh = zh_keys - en_keys
     only_en = en_keys - zh_keys
     assert not only_zh, f"candidate.inspector keys in zh-CN but missing from en-US: {sorted(only_zh)}"
-    assert not only_en, f"candidate.inspector keys in en-US but missing from zh-CN: {sorted(only_en)}"
+    assert not only_en, (
+        f"candidate.inspector keys in en-US but missing from zh-CN: {sorted(only_en)}"
+    )
 
     required = {
         "candidate.inspector.empty",
@@ -12354,7 +12371,9 @@ def test_candidate_inspector_i18n_keys_in_both_locales() -> None:
         "candidate.inspector.reason.wrong_reaction_mode",
         "candidate.inspector.reason.other",
     }
-    assert required <= zh_keys, f"Missing zh-CN candidate.inspector keys: {sorted(required - zh_keys)}"
+    assert required <= zh_keys, (
+        f"Missing zh-CN candidate.inspector keys: {sorted(required - zh_keys)}"
+    )
 
 
 def test_wizard_footer_selected_count_element() -> None:
@@ -12854,7 +12873,8 @@ def test_frame_controller_visibility_gate_uses_live_tab_id() -> None:
         "var activeTabId = null;\n"
         "var document = {\n"
         "  getElementById: function (id) {\n"
-        "    if (!elements[id]) elements[id] = { style: {}, textContent: '', max: '', value: '' };\n"
+        "    if (!elements[id]) elements[id] = "
+        "{ style: {}, textContent: '', max: '', value: '' };\n"
         "    return elements[id];\n"
         "  },\n"
         "  querySelector: function (sel) {\n"
@@ -12897,7 +12917,8 @@ def test_frame_controller_visibility_gate_uses_live_tab_id() -> None:
 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
-        f"Node updateFrameController visibility test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+        f"Node updateFrameController visibility test failed:\nstdout={result.stdout}"
+        f"\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
 
@@ -13238,7 +13259,8 @@ def test_workbench_api_timeout_behavior() -> None:
                 fail('timeout did not reject');
               } catch (e) {
                 if (e.name === 'AbortError') fail('timeout leaked AbortError');
-                if (String(e.message).indexOf('aborted') >= 0) fail('timeout leaked raw abort text: ' + e.message);
+                if (String(e.message).indexOf('aborted') >= 0)
+                    fail('timeout leaked raw abort text: ' + e.message);
                 if (String(e.message).indexOf('api.timeout') !== 0) fail('timeout message missing key: ' + e.message);
               }
 

@@ -31,7 +31,7 @@ names are already valid for ORCA ALPB/SMD (Table 3.24, case-insensitive).
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 SOLVENT_ALIASES: Dict[str, str] = {
     "acetone": "Acetone",
@@ -78,7 +78,7 @@ XTB_GBSA_SOLVENTS: frozenset[str] = frozenset({
 #: GBSA names that are parameterized for specific GFN methods only.
 #: Keyed by the official GBSA spelling; the value is the set of allowed
 #: GFN variants (``gfn0``/``gfn1``/``gfn2``/``gfnff``).
-XTB_GBSA_METHOD_RESTRICTIONS: Dict[str, frozenset[str]] = {
+XTB_GBSA_METHOD_RESTRICTIONS: dict[str, frozenset[str]] = {
     "benzene": frozenset({"gfn1"}),
     "dmf": frozenset({"gfn2"}),
     "n-hexane": frozenset({"gfn2"}),
@@ -90,7 +90,7 @@ _WATER_IDENTITY = "water"
 _HEXANE_IDENTITY = "hexane"
 
 #: Official GBSA spelling per identity where it differs from the canonical.
-_GBSA_OFFICIAL_BY_IDENTITY: Dict[str, str] = {
+_GBSA_OFFICIAL_BY_IDENTITY: dict[str, str] = {
     _WATER_IDENTITY: "h2o",
     _HEXANE_IDENTITY: "n-hexane",
 }
@@ -107,7 +107,7 @@ _GBSA_IDENTITIES: frozenset[str] = frozenset({
 # Keys are pre-folded (whitespace-stripped, lower-case); values are the
 # canonical identity names.
 
-XTB_SOLVENT_ALIASES: Dict[str, str] = {
+XTB_SOLVENT_ALIASES: dict[str, str] = {
     # identity spellings (canonical names themselves)
     "acetone": "acetone",
     "acetonitrile": "acetonitrile",
@@ -162,7 +162,7 @@ XTB_SOLVENT_ALIASES: Dict[str, str] = {
 }
 
 
-def _fold(solvent: Optional[str]) -> str:
+def _fold(solvent: str | None) -> str:
     """Fold case and whitespace; other punctuation is preserved."""
     if not solvent:
         return ""
@@ -178,7 +178,7 @@ def _normalize(solvent: Optional[str]) -> str:
 def _legal_names_message(model: str) -> str:
     """Return the legal-name listing for *model* (``"any"`` = union)."""
     if model == "alpb":
-        names: List[str] = sorted(XTB_ALPB_SOLVENTS)
+        names: list[str] = sorted(XTB_ALPB_SOLVENTS)
     elif model == "gbsa":
         names = sorted(XTB_GBSA_SOLVENTS)
     else:
@@ -216,7 +216,7 @@ def xtb_solvent(solvent: Optional[str]) -> str:
 
 # ── Layer (b): combination legality (implementation × model × solvent) ──
 
-_GFN_VARIANT_BY_METHOD: Dict[str, str] = {
+_GFN_VARIANT_BY_METHOD: dict[str, str] = {
     "GFN0-XTB": "gfn0",
     "GFN1-XTB": "gfn1",
     "GFN2-XTB": "gfn2",
@@ -224,7 +224,7 @@ _GFN_VARIANT_BY_METHOD: Dict[str, str] = {
     "GFNFF": "gfnff",
 }
 
-_METHOD_BY_GFN_VARIANT: Dict[str, str] = {
+_METHOD_BY_GFN_VARIANT: dict[str, str] = {
     "gfn0": "GFN0-xTB",
     "gfn1": "GFN1-xTB",
     "gfn2": "GFN2-xTB",
@@ -248,7 +248,12 @@ def xtb_method_name(gfn: int | str) -> str:
     Raises:
         ValueError: The level/spelling is not a known GFN method.
     """
-    if isinstance(gfn, int) and not isinstance(gfn, bool):
+    if isinstance(gfn, bool):
+        # bool subclasses int: without this guard ``True`` aliases GFN level 1.
+        raise ValueError(
+            f"Unknown GFN level {gfn!r}; legal levels: 0, 1, 2 ('gfnff')"
+        )
+    if isinstance(gfn, int):
         variant = {0: "gfn0", 1: "gfn1", 2: "gfn2"}.get(gfn)
         if variant is None:
             raise ValueError(
@@ -290,7 +295,7 @@ def _official_name(identity: str, model: str) -> str:
     return identity
 
 
-def _normalize_model(solvent_model: Optional[str]) -> str:
+def _normalize_model(solvent_model: str | None) -> str:
     model = (solvent_model or "none").strip().lower()
     if model not in LEGAL_SOLVENT_MODELS:
         raise SolventValueError(
@@ -301,7 +306,7 @@ def _normalize_model(solvent_model: Optional[str]) -> str:
 
 
 def resolve_xtb_solvent(
-    solvent: Optional[str],
+    solvent: str | None,
     *,
     method: str,
     solvent_model: str,
@@ -389,12 +394,12 @@ def resolve_xtb_solvent(
 
 
 def xtb_solvent_args(
-    solvent: Optional[str],
+    solvent: str | None,
     *,
     method: str,
     solvent_model: str,
     engine: str = "xtb",
-) -> List[str]:
+) -> list[str]:
     """Return the xTB solvation flags (``[]``, or ``--alpb``/``--gbsa`` + name).
 
     Thin wrapper over :func:`resolve_xtb_solvent` so every interface emits

@@ -562,9 +562,7 @@ def test_ts_and_irc_route_dft_solvent_verbatim_unchanged() -> None:
 @pytest.mark.parametrize("method", GFN_METHODS)
 def test_build_input_blocks_gfn_alpb_solvent_emits_token_no_cpcm(method: str) -> None:
     iface = _bare_orca(method=method, basis="")
-    out, _ = iface._build_input_blocks(
-        "opt", solvent="water", solvent_model="ALPB", recalc_hess=0
-    )
+    out, _ = iface._build_input_blocks("opt", solvent="water", solvent_model="ALPB", recalc_hess=0)
     route = out.splitlines()[0]
     assert "ALPB(Water)" in route.split()
     assert "%cpcm" not in out and "SMDsolvent" not in out
@@ -572,25 +570,19 @@ def test_build_input_blocks_gfn_alpb_solvent_emits_token_no_cpcm(method: str) ->
 
 def test_build_input_blocks_gfn_none_solvent_model_emits_nothing() -> None:
     iface = _bare_orca(method="GFN2-xTB", basis="")
-    out, _ = iface._build_input_blocks(
-        "opt", solvent="water", solvent_model="none", recalc_hess=0
-    )
+    out, _ = iface._build_input_blocks("opt", solvent="water", solvent_model="none", recalc_hess=0)
     assert "ALPB" not in out and "Water" not in out and "%cpcm" not in out
 
 
 def test_build_input_blocks_gfn_gbsa_rejected() -> None:
     iface = _bare_orca(method="GFN2-xTB", basis="")
     with pytest.raises(KeywordValueError):
-        iface._build_input_blocks(
-            "opt", solvent="water", solvent_model="gbsa", recalc_hess=0
-        )
+        iface._build_input_blocks("opt", solvent="water", solvent_model="gbsa", recalc_hess=0)
 
 
 def test_build_input_blocks_dft_solvent_still_cpcm_block() -> None:
     iface = _bare_orca(method="B3LYP", basis="def2-SVP")
-    out, _ = iface._build_input_blocks(
-        "opt", solvent="water", solvent_model="smd", recalc_hess=0
-    )
+    out, _ = iface._build_input_blocks("opt", solvent="water", solvent_model="smd", recalc_hess=0)
     assert "%cpcm" in out and "smd true" in out and 'SMDsolvent "Water"' in out
     assert "ALPB" not in out
 

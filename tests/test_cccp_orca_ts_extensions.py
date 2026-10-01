@@ -287,9 +287,7 @@ def test_relaxed_scan_gfn_alpb_water_emits_alpb_token(
     interface.relaxed_scan(
         TS_COORDINATES,
         TS_SYMBOLS,
-        scan_coordinate=CoordinateSpec(
-            id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4
-        ),
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
         points=3,
         output_dir=tmp_path,
         output_name="scan_alpb",
@@ -311,9 +309,7 @@ def test_relaxed_scan_gfn_none_solvent_model_emits_nothing(
     interface.relaxed_scan(
         TS_COORDINATES,
         TS_SYMBOLS,
-        scan_coordinate=CoordinateSpec(
-            id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4
-        ),
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
         points=3,
         output_dir=tmp_path,
         output_name="scan_none",

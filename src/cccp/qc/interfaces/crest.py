@@ -75,7 +75,9 @@ class CRESTInterface:
         """Return True when the CREST binary resolved successfully."""
         return self.executable is not None
 
-    def _solvent_args(self, solvent: Optional[str] = None, gfn_level: Optional[int] = None) -> List[str]:
+    def _solvent_args(
+        self, solvent: Optional[str] = None, gfn_level: Optional[int] = None
+    ) -> List[str]:
         """Return CREST solvation flags for the EFFECTIVE solvent/method/model."""
         sol = solvent if solvent is not None else self.solvent
         level = self.gfn_level if gfn_level is None else gfn_level
@@ -234,7 +236,7 @@ class CRESTInterface:
         multiplicity: int = 1,
         solvent: str = None,
         additional_flags: str = None,
-        energy_window: Optional[float] = None
+        energy_window: float | None = None
     ) -> QCResult:
         """
         Run CREST batch optimization (-mdopt mode) on an ensemble of conformers.

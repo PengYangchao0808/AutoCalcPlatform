@@ -54,13 +54,9 @@ def _md_method_args(md_method: Optional[str], gfn_level: int) -> List[str]:
     return ["--gfn", str(gfn_level)]
 
 
-def _solvent_args(
-    solvent: Optional[str], solvent_model: Optional[str], method: str
-) -> List[str]:
+def _solvent_args(solvent: Optional[str], solvent_model: Optional[str], method: str) -> List[str]:
     """Return the xTB solvation flags for the EFFECTIVE solvent/model/method."""
-    return xtb_solvent_args(
-        solvent, method=method, solvent_model=solvent_model or "none"
-    )
+    return xtb_solvent_args(solvent, method=method, solvent_model=solvent_model or "none")
 
 
 def _mapping_value(config: Mapping[str, object], key: str) -> Dict[str, object]:

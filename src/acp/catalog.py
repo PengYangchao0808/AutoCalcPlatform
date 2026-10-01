@@ -5065,9 +5065,9 @@ def _canonicalization_warning(lid: str, field_name: str, raw: Any, canonical: An
 
 def normalize_and_validate_method_config(
     method: dict,
-    schema: dict,
+    schema: dict[str, Any],
     warnings_out: list[str] | None = None,
-) -> tuple[dict, list[str]]:
+) -> tuple[dict[str, Any], list[str]]:
     """Return (normalized_levels, errors).
 
     When *warnings_out* is a list, migration/canonicalization warnings are
@@ -5377,7 +5377,9 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
     return converted
 
 
-def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str) -> dict:
+def method_levels_to_workflow_config(
+    levels: dict[str, Any], schema_id: str, workflow: str
+) -> dict[str, Any]:
     """Convert normalized method levels to workflow config (written to method_config.json)."""
     config: dict[str, Any] = {}
     if schema_id == "confsearch":

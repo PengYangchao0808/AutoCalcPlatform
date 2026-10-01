@@ -499,9 +499,7 @@ def validate_level_for_purpose(level: CalculationLevel, purpose: str) -> list[st
     errors.extend(message for _field, message in explicit_level_conflicts(level))
 
     if canonical.solvent_model != "none" and not canonical.solvent:
-        errors.append(
-            f"solvent is required when solvent_model is {canonical.solvent_model!r}"
-        )
+        errors.append(f"solvent is required when solvent_model is {canonical.solvent_model!r}")
     return errors
 
 

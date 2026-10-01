@@ -274,18 +274,21 @@ def run_pes_scan(
     # (pre-T13 rerun) warns+normalizes while genuinely invalid combinations
     # still fail fast here — the last line of defense before cccp.
     level_warnings: list[str] = []
-    req_payload: dict[str, Any] | PesScanRequest = request
-    if isinstance(request, dict):
-        resolved_protocol, level_warnings, level_errors = resolve_scan_protocol_levels(
-            request.get("protocol"), context="migration"
-        )
-        if level_errors:
-            raise ValueError("; ".join(level_errors))
-        if level_warnings:
-            for message in level_warnings:
-                logger.warning("PES scan method-config migration: %s", message)
-            req_payload = {**request, "protocol": resolved_protocol}
-    req = request if isinstance(request, PesScanRequest) else PesScanRequest.from_dict(req_payload)
+    if isinstance(request, PesScanRequest):
+        req = request
+    else:
+        payload: dict[str, Any] | None = None
+        if isinstance(request, dict):
+            resolved_protocol, level_warnings, level_errors = resolve_scan_protocol_levels(
+                request.get("protocol"), context="migration"
+            )
+            if level_errors:
+                raise ValueError("; ".join(level_errors))
+            if level_warnings:
+                for message in level_warnings:
+                    logger.warning("PES scan method-config migration: %s", message)
+                payload = {**request, "protocol": resolved_protocol}
+        req = PesScanRequest.from_dict(payload if payload is not None else request)
     if req.mode not in ("bond_length_scan", "coordinate_scan"):
         raise ValueError(
             f"request.mode must be 'bond_length_scan' or 'coordinate_scan', got {req.mode!r}"
