@@ -1084,6 +1084,40 @@ def test_method_meta_consistent_with_cccp_registry() -> None:
                 )
 
 
+# T17 contract: registry↔METHOD_META consistency lock in BOTH directions —
+# catalog → registry is test_method_meta_consistent_with_cccp_registry above.
+def test_cccp_registry_method_table_fully_covered_by_method_meta() -> None:
+    """Every cccp-registry method is representable in METHOD_META.
+
+    Checks the registry → catalog direction: family and implementation must
+    agree, and every non-``unknown`` registry family must have at least one
+    METHOD_META entry.
+    """
+    from cccp.qc.keyword_registry import (
+        _METHOD_FAMILY_TABLE,
+        FAMILIES,
+        resolve_implementation,
+    )
+
+    meta_ci = {name.upper(): name for name in METHOD_META}
+    # Registry classification keys that are alternate spellings of a catalog
+    # display name — NOT case variants (deleting this map breaks the lock).
+    registry_aliases = {"MPW1PW": "mPW1PW91", "GFNFF": "GFN-FF"}
+
+    for method, family in sorted(_METHOD_FAMILY_TABLE.items()):
+        catalog_name = registry_aliases.get(method) or meta_ci.get(method.upper())
+        assert catalog_name is not None, (
+            f"cccp registry method {method!r} has no METHOD_META entry — "
+            "add it with family/implementation consistent with the registry"
+        )
+        meta = METHOD_META[catalog_name]
+        assert meta["family"] == family, (method, catalog_name, meta["family"], family)
+        assert meta["implementation"] == resolve_implementation(method, engine="orca"), method
+
+    represented = {meta["family"] for meta in METHOD_META.values()}
+    assert represented == FAMILIES - {"unknown"}
+
+
 def test_gfn_field_options_locked_for_family() -> None:
     from acp.catalog import _resolve_field_default, _resolve_field_options
 

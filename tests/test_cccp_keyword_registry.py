@@ -754,3 +754,84 @@ def test_t22_every_probe_verdict_maps_to_a_registry_decision() -> None:
         case = by_id[case_id]
         assert case["outcome_class"] == expected_outcome, case_id
         check(case)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Anti-pattern #33: emit→parse round trip for EVERY registry enum, ANY casing
+# ─────────────────────────────────────────────────────────────────────────
+#
+# The 2026-09 incident (scheduler emitted catalog-cased `--opt-convergence
+# Tight` and argparse rejected it) is locked at the CLI/catalog choke points
+# by test_keyword_parser_parity / test_cli_keyword_case /
+# test_catalog_keyword_case.  This suite locks the REMAINING choke point —
+# the registry itself — for every enum value it knows (a superset of the
+# catalog-declared options, since legal_values() includes the legacy alias
+# spellings):
+#
+#   emit: user value in ANY casing ──resolve()──▶ canonical token
+#   parse: canonical token ──resolve()──▶ same canonical token, no warning
+#
+# i.e. parse(emit(x)) == parse(x) for any casing of x, and the canonical
+# token is a stable fixed point (parse(parse(x)) == parse(x)).  Casing must
+# never change ANY registry decision: same canonical token, same
+# warning-presence, in every (family, implementation) context.
+
+
+def _casing_variants(value: str) -> list[str]:
+    """Deterministic casing spread for one legal input spelling."""
+    variants = {value, value.lower(), value.upper(), value.title()}
+    if len(value) > 1:
+        variants.add(value[0].lower() + value[1:].upper())
+    return sorted(variants)
+
+
+_ROUND_TRIP_CONTEXTS: list[tuple[str, str]] = [
+    ("conventional_dft", IMPL_ORCA_DFT),
+    ("composite_3c", IMPL_ORCA_DFT),
+    ("gfn", IMPL_ORCA_EXTERNAL_XTB),
+    ("gfn", IMPL_XTB_BINARY),
+    ("gfnff", IMPL_ORCA_EXTERNAL_XTB),
+]
+
+
+@pytest.mark.parametrize("domain", sorted(ENUM_DOMAINS))
+@pytest.mark.parametrize(
+    "family,implementation",
+    _ROUND_TRIP_CONTEXTS,
+    ids=["dft-orca", "3c-orca", "gfn-orca-ext", "gfn-xtb-bin", "gfnff-orca-ext"],
+)
+def test_enum_round_trip_any_casing(domain: str, family: str, implementation: str) -> None:
+    for value in legal_values(domain):
+        base_canonical, base_warning = resolve(
+            domain, value, family=family, implementation=implementation
+        )
+        for variant in _casing_variants(value):
+            canonical, warning = resolve(
+                domain, variant, family=family, implementation=implementation
+            )
+            assert canonical == base_canonical, (domain, value, variant, family)
+            assert (warning is None) == (base_warning is None), (
+                domain,
+                value,
+                variant,
+                family,
+                warning,
+            )
+        # Emit→parse: where the canonical token is itself a legal input
+        # spelling (grid DefGrid3 / dispersion D4 — the catalog emits token
+        # spellings and re-normalization feeds them back, e.g. the T12
+        # legacy-grid migration), re-parsing it is a stable fixed point with
+        # NO warning.  Where the dialects differ (opt_level LooseOpt,
+        # scf_* TightSCF), the registry must fail fast rather than silently
+        # misinterpret its own token — a KeywordValueError is the contract.
+        if base_canonical is not None:
+            token_inputs = {v.lower() for v in legal_values(domain)}
+            if base_canonical.lower() in token_inputs:
+                again, again_warning = resolve(
+                    domain, base_canonical, family=family, implementation=implementation
+                )
+                assert again == base_canonical, (domain, base_canonical, family)
+                assert again_warning is None, (domain, base_canonical, family, again_warning)
+            else:
+                with pytest.raises(KeywordValueError):
+                    resolve(domain, base_canonical, family=family, implementation=implementation)
