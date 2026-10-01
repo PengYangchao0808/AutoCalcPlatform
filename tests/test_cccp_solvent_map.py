@@ -52,6 +52,7 @@ ALPB_OFFICIAL = frozenset(
         "dmf",
         "dmso",
         "ether",
+        "ethanol",
         "ethylacetate",
         "furane",
         "hexadecane",
@@ -155,7 +156,17 @@ def test_official_sets_match_xtb_documentation() -> None:
     assert XTB_GBSA_SOLVENTS == GBSA_OFFICIAL
     for name in ("aniline", "benzaldehyde", "phenol", "woctanol", "octanol"):
         assert name in XTB_ALPB_SOLVENTS
+    assert "ethanol" in XTB_ALPB_SOLVENTS
+    assert "ethanol" not in XTB_GBSA_SOLVENTS
     assert XTB_GBSA_SOLVENTS != XTB_ALPB_SOLVENTS
+
+
+def test_ethanol_is_alpb_only() -> None:
+    assert xtb_solvent("ethanol") == "ethanol"
+    assert resolve_xtb_solvent("ethanol", method="GFN2-xTB", solvent_model="alpb") == "ethanol"
+    with pytest.raises(SolventValueError) as excinfo:
+        resolve_xtb_solvent("ethanol", method="GFN2-xTB", solvent_model="gbsa")
+    assert "not parameterized for GBSA" in str(excinfo.value)
 
 
 def test_gbsa_method_restrictions_documented() -> None:
@@ -420,6 +431,7 @@ def test_real_xtb_accepts_canonical_solvent_names(
         ("GFN2-xTB", "alpb", "woctanol", "woctanol"),
         ("GFN2-xTB", "gbsa", "h2o", "water"),
         ("GFN1-xTB", "alpb", "Me CN", "acetonitrile"),
+        ("GFN2-xTB", "alpb", "ethanol", "ethanol"),
     ]
     for method, model, user_name, expected in cases:
         flags = xtb_solvent_args(user_name, method=method, solvent_model=model)

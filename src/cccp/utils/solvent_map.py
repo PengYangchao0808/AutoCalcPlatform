@@ -59,11 +59,11 @@ class SolventValueError(ValueError):
 
 # ── Official per-model solvent sets (xTB documentation) ─────────────────
 
-#: Official ALPB solvent names (24).
+#: Official ALPB solvent names (25).
 XTB_ALPB_SOLVENTS: frozenset[str] = frozenset({
     "acetone", "acetonitrile", "aniline", "benzaldehyde", "benzene",
     "ch2cl2", "chcl3", "cs2", "dioxane", "dmf", "dmso", "ether",
-    "ethylacetate", "furane", "hexadecane", "hexane", "methanol",
+    "ethanol", "ethylacetate", "furane", "hexadecane", "hexane", "methanol",
     "nitromethane", "octanol", "woctanol", "phenol", "toluene", "thf",
     "water",
 })
@@ -121,6 +121,7 @@ XTB_SOLVENT_ALIASES: dict[str, str] = {
     "dmf": "dmf",
     "dmso": "dmso",
     "ether": "ether",
+    "ethanol": "ethanol",
     "ethylacetate": "ethylacetate",
     "furane": "furane",
     "hexadecane": "hexadecane",
