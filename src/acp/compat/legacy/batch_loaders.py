@@ -172,15 +172,10 @@ def load_items_from_s2_path_manifest(
         rows = [row for row in rows if row.get("active", True) is not False]
         return _load_rows(candidate_path, payload, rows, select), payload  # type: ignore[arg-type,return-value]  # structurally identical JsonValue; nominal mismatch between manifests and _items TypeAliases
     rows = _rows(payload.get("candidates"))
-    recommendations = _mapping(payload.get("recommendations")) or {}
+    rows = [row for row in rows if row.get("confirmed") is True
+            or row.get("selection_source") in {"manual", "manual_frame"}]
     if not rows:
-        for key in ("ts", "intermediates"):
-            for row in _rows(recommendations.get(key)):
-                row.setdefault("id", row.get("candidate_id"))
-                row.setdefault("kind", "ts" if key == "ts" else "minimum")
-                rows.append(row)
-    if not rows:
-        raise ValueError("Manifest carries no structure candidates")
+        raise ValueError("PES manual_only: manifest carries no manually confirmed structure candidates")
     if not select:
         ts_rows = [row for row in rows if _row_tag(row) == "TS"]
         rows = ts_rows or rows

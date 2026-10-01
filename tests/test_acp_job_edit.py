@@ -1165,3 +1165,57 @@ def test_rerun_endpoint_still_works_after_refactor(client: TestClient) -> None:
     fetched = client.get("/api/v1/jobs/rr1").json()
     assert fetched["result"]["attempts"] == 2
     assert fetched["result"]["attempt_history"][0]["mode"] == "rerun"
+
+
+def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path) -> None:
+    from acp.storage.manifest import ResultManifest
+    from acp.scheduler.structure_sources import StructureSourceService
+    manager = _make_manager(tmp_path)
+    try:
+        record = _seed(manager, "snapshot_opt", workflow="optimize")
+        root = Path(record.work_dir)
+        (root / "RESULT" / "optimized.xyz").write_text(XYZ_COOH, encoding="utf-8")
+        manifest = ResultManifest(workflow="optimize", status="failed")
+        manifest.add_product("opt", "OPT", "optimized.xyz", "structure",
+                             metadata={"optimization_status":"converged"})
+        manifest.write(root / "RESULT")
+        manager.edit_recalculate(record.id, mode="in_place", new_spec=record.spec,
+                                 expected_source_revision=compute_source_revision(record),
+                                 request_id="snapshot_request", payload_hash="snapshot_hash", payload_json="{}")
+        assert not (root / "RESULT" / "optimized.xyz").exists()
+        refs = json.loads((root / ".structure_history" / "sources.json").read_text(encoding="utf-8"))
+        assert len(refs) == 1
+        assert (root / refs[0]["path"]).read_text(encoding="utf-8") == XYZ_COOH
+        assert (root / ".structure_history" / "input_1.xyz").is_file()
+        service = StructureSourceService(manager.store, manager.run_root)
+        asset, checksum = service.get(refs[0]["source_ref"]["source_id"])
+        assert asset["atom_count"] == 3
+        for actual, expected in zip(asset["xyz"].splitlines()[2:], XYZ_COOH.splitlines()[2:], strict=True):
+            assert actual.split()[0] == expected.split()[0]
+            assert [float(v) for v in actual.split()[1:]] == pytest.approx([float(v) for v in expected.split()[1:]])
+        old_asset, _ = service.get(f"job_{record.id}:RESULT/optimized.xyz")
+        assert old_asset["atom_count"] == 3
+        assert checksum.startswith("sha256:")
+    finally:
+        manager.shutdown()
+
+
+def test_inplace_snapshot_failure_does_not_cleanup_or_queue(tmp_path: Path) -> None:
+    from acp.storage.manifest import ResultManifest
+    manager = _make_manager(tmp_path)
+    try:
+        record = _seed(manager, "snapshot_invalid", workflow="optimize")
+        root = Path(record.work_dir)
+        (root / "RESULT" / "optimized.xyz").write_text("1\ninvalid\nH nan 0 0\n", encoding="utf-8")
+        manifest = ResultManifest(workflow="optimize", status="failed")
+        manifest.add_product("opt", "OPT", "optimized.xyz", "structure", metadata={"optimization_status":"converged"})
+        manifest.write(root / "RESULT")
+        with pytest.raises(ValueError, match="单帧"):
+            manager.edit_recalculate(record.id, mode="in_place", new_spec=record.spec,
+                                     expected_source_revision=compute_source_revision(record),
+                                     request_id="invalid_snapshot", payload_hash="hash", payload_json="{}")
+        assert (root / "RESULT" / "optimized.xyz").is_file()
+        assert (root / "WORK" / "old.out").is_file()
+        assert manager.get(record.id).status == JobStatus.FAILED
+    finally:
+        manager.shutdown()

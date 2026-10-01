@@ -482,12 +482,12 @@ class StageTaskObserver:
             self.store.update(task)
 
     def poll_and_mirror(self, job_id: str, work_dir: Path) -> list[StageTask]:
+        updated = {task.task_id: task for task in self._mirror_workflow_state(job_id, work_dir)}
         stage_root = work_dir / "stage_tasks"
         if not stage_root.exists():
-            return []
+            return list(updated.values())
 
         tasks_by_id = {task.task_id: task for task in self.store.list_by_job(job_id)}
-        updated: dict[str, StageTask] = {}
         for path in sorted(stage_root.rglob("*.json"), key=_stage_event_sort_key):
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
@@ -518,6 +518,43 @@ class StageTaskObserver:
                 self.store.update(task)
                 updated[task.task_id] = task
         return list(updated.values())
+
+    def _mirror_workflow_state(self, job_id: str, work_dir: Path) -> list[StageTask]:
+        """Persist ProgressReporter lifecycle facts, including batch item resets."""
+        from acp.scheduler.runner import find_workflow_state
+
+        try:
+            path = find_workflow_state(work_dir)
+            data = json.loads(path.read_text(encoding="utf-8")) if path else {}
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(data, dict) or not isinstance(data.get("stages"), dict):
+            return []
+        by_name = {task.stage_name: task for task in self.store.list_by_job(job_id)}
+        updated: list[StageTask] = []
+        for name, info in data["stages"].items():
+            if not isinstance(info, dict) or info.get("status") not in {
+                "pending", "running", "completed", "failed", "cancelled", "skipped",
+            }:
+                continue
+            task = by_name.get(name)
+            if task is None:
+                task = StageTask(task_id=str(uuid.uuid4()), job_id=job_id, stage_name=name)
+                self.store.create(task)
+            before = _task_snapshot(task)
+            # Batch stages describe the current item; terminal states from a
+            # previous item must not prevent its successor from running.
+            if "batch_item_index" in data or task.state not in _TERMINAL_TASK_STATES:
+                task.state = info["status"]
+                task.started_at = info.get("started_at")
+                task.completed_at = info.get("completed_at")
+                task.stderr_summary = info.get("error")
+                task.status_detail = info.get("detail") or (name if task.state == "running" else None)
+                task.updated_at = data.get("updated_at") or task.updated_at
+            if before != _task_snapshot(task):
+                self.store.update(task)
+                updated.append(task)
+        return updated
 
     def finalize_job(self, job_id: str, final_status: str) -> None:
         now = _utc_now_iso()

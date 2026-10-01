@@ -98,6 +98,9 @@
         return;
       }
       _host.hidden = false;
+      var active = document.activeElement;
+      var focusId = active && _host.contains(active) ? active.id : null;
+      var caret = active && active.selectionStart;
       var e = _entry;
       var d = _detail || {};
       var name = e.resolved_name || e.custom_name || e.default_name || e.candidate_id || e.source_uid || "";
@@ -109,6 +112,10 @@
       var tags = Array.isArray(e.tags) ? e.tags : [];
       var notes = d.assessments && d.assessments.length ? (d.assessments[0].note || "") : "";
       var latestAssessment = d.assessments && d.assessments.length ? d.assessments[0] : null;
+      if (_editing) {
+        latestAssessment = Object.assign({}, latestAssessment || {}, _dirtyFields);
+        if (_dirtyFields.note !== undefined) notes = _dirtyFields.note;
+      }
 
       var html = "";
 
@@ -142,7 +149,7 @@
       html += '<div class="cd-row cd-edit-only"' + (_editing ? '' : ' hidden') + '>' +
         '<label class="cd-label" for="cd-edit-name">' + esc(_(inst, "cd.rename", "重命名")) + '</label>' +
         '<div class="cd-value"><input id="cd-edit-name" class="cd-input" type="text" ' +
-        'value="' + esc(e.custom_name || "") + '" placeholder="' + esc(name) + '" ' +
+        'value="' + esc(_dirtyFields.custom_name !== undefined ? _dirtyFields.custom_name : (e.custom_name || "")) + '" placeholder="' + esc(name) + '" ' +
         'aria-label="' + esc(_(inst, "cd.rename", "重命名")) + '" /></div></div>';
 
       /* Role */
@@ -274,6 +281,10 @@
 
       _host.innerHTML = html;
       _bindEvents();
+      if (focusId && _editing) {
+        var field = _host.querySelector("#" + focusId);
+        if (field) { field.focus(); if (typeof caret === "number" && field.setSelectionRange) field.setSelectionRange(caret, caret); }
+      }
     }
 
     /* ── Bind events ─────────────────────────────────────────────────── */
@@ -370,13 +381,7 @@
       var reloadBtn = _host.querySelector(".cd-conflict-reload");
       if (reloadBtn) reloadBtn.addEventListener("click", function () { _conflict = false; refresh(); });
 
-      /* Esc closes inline dialogs (focus on host) */
-      _host.addEventListener("keydown", function (e) {
-        if (e.key === "Escape" && _isDirty()) {
-          e.preventDefault();
-          _cancelEdits();
-        }
-      });
+
     }
 
     function _markDirty(event) {
@@ -486,6 +491,7 @@
         _conflict = false;
         if (liveEl) liveEl.textContent = _(inst, "candidate.inspector.save_success", "评价已保存");
         await refresh();
+        if (typeof _opts.onSaved === "function") _opts.onSaved(_entry);
       } catch (err) {
         if (err && err.status === 409) {
           _conflict = true;
@@ -521,12 +527,19 @@
           _entry.resolved_name = detail.resolved_name || _entry.resolved_name;
         }
         _conflict = false;
-        _render();
+        // Keep the live form and caret while the user is editing.
+        if (!_editing) _render();
       } catch (err) {
         if (_destroyed || token !== _requestToken) return;
         /* Non-fatal: keep last known state */
       }
     }
+
+    function onHostKeydown(e) {
+      if (e.key === "Escape" && _editing) { e.preventDefault(); _cancelEdits(); }
+      if (e.key === "Enter" && e.target.id === "cd-edit-name") { e.preventDefault(); _save(); }
+    }
+    _host.addEventListener("keydown", onHostKeydown);
 
     /* ── Instance ────────────────────────────────────────────────────── */
     var inst = {
@@ -536,6 +549,8 @@
       setEntry: function (entry) {
         if (_destroyed) return false;
         if (_saving) return false;
+        if (_entry && entry && _entry.source_uid === entry.source_uid &&
+            (_entry.version_id || "") === (entry.version_id || "")) return true;
         /* Guard: prompt if dirty */
         if (_isDirty()) {
           var msg = _(inst, "candidate.inspector.discard_confirm", "当前评价尚未保存，切换候选将放弃修改。");
@@ -554,9 +569,18 @@
         return true;
       },
 
+      rename: function(entry) {
+        if (entry && inst.setEntry(entry) === false) return false;
+        _editing = true;
+        _render();
+        var field = _host.querySelector("#cd-edit-name");
+        if (field) { field.focus(); field.select(); }
+        return true;
+      },
       refresh: refresh,
 
       destroy: function () {
+        _host.removeEventListener("keydown", onHostKeydown);
         _destroyed = true;
         _requestToken++;
         if (_abort) { try { _abort.abort(); } catch (_) {} }

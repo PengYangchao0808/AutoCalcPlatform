@@ -979,6 +979,29 @@ def run_nmr_analysis(
             )
         resolved_ensembles.append(ensemble)
         generated_ensembles.append(True)
+        # Publish successful structure generation before GIAO can fail.
+        from acp.results.frame_candidate_store import atomic_write_text
+        from acp.results.structure_policy import single_geometry
+        try:
+            generated_manifest = ResultManifest.read(storage.result_dir())
+        except FileNotFoundError:
+            generated_manifest = ResultManifest(workflow="nmr", status="running")
+        for rank, (generated, _weight, _energy) in enumerate(_select_conformers(ensemble, nmr_config), 1):
+            lines = [str(len(generated.symbols)), f"NMR generated conformer rank={rank}"]
+            if generated.coordinates is None:
+                continue
+            lines.extend(f"{symbol} {float(row[0]):.10f} {float(row[1]):.10f} {float(row[2]):.10f}"
+                         for symbol, row in zip(generated.symbols, generated.coordinates))
+            xyz = "\n".join(lines) + "\n"
+            if single_geometry(xyz) is None:
+                continue
+            rel = f"structures/nmr_{idx}_{rank}.xyz"
+            atomic_write_text(storage.result_dir() / rel, xyz)
+            generated_manifest.add_product(f"nmr_conformer_{idx}_{rank}",
+                f"NMR conformer {idx + 1}/{rank}", rel, "structure",
+                metadata={"source_kind":"conformer", "rank":rank, "stage_id":"conformer_generation", "policy_version":1})
+        generated_manifest.write(storage.result_dir())
+
 
     if progress_reporter is not None:
         skipped = {"status": "skipped"} if not needs_generation else None
@@ -1144,7 +1167,11 @@ def run_nmr_analysis(
             continue
     write_result_summary(output_root, workflow="nmr", products=products)
 
-    manifest = ResultManifest(task_id="", workflow="nmr", status="completed")
+    try:
+        manifest = ResultManifest.read(storage.result_dir())
+    except FileNotFoundError:
+        manifest = ResultManifest(task_id="", workflow="nmr")
+    manifest.status = "completed"
     manifest.add_product(
         "nmr_report", "NMR report (JSON)", f"reports/{paths['json'].name}", "report"
     )

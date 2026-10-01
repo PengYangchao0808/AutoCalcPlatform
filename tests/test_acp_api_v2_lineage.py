@@ -552,6 +552,8 @@ def test_corrupt_spec_json_skipped(client: TestClient) -> None:
 
 def test_read_only_snapshot(client: TestClient) -> None:
     pid = _default_project_id(client)
+    # Freeze execution so background lifecycle writes cannot race the snapshot.
+    client.app.state.job_manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
     a_id, b_id, c_id = _create_chain(client, pid)
 
     snapshot_before = _db_hex_snapshot(client)

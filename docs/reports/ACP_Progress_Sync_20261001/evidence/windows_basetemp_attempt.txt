@@ -1,0 +1,85 @@
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE..EE.EEEEE................ [ 55%]
+E:\Anaconda\Lib\site-packages\_pytest\main.py:306: PluggyTeardownRaisedWarning: A plugin raised an exception during an old-style hookwrapper teardown.
+Plugin: terminalreporter, Hook: pytest_sessionfinish
+PermissionError: [WinError 5] �ܾ����ʡ�: 'E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\.pytest_progress_audit_61cf7f73b2764495b57f8327795f9a2d'
+For more information see https://pluggy.readthedocs.io/en/stable/api_reference.html#pluggy.PluggyTeardownRaisedWarning
+  config.hook.pytest_sessionfinish(
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "E:\Anaconda\Lib\site-packages\pytest\__main__.py", line 5, in <module>
+    raise SystemExit(pytest.console_main())
+                     ^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Anaconda\Lib\site-packages\_pytest\config\__init__.py", line 192, in console_main
+    code = main()
+           ^^^^^^
+  File "E:\Anaconda\Lib\site-packages\_pytest\config\__init__.py", line 169, in main
+    ret: Union[ExitCode, int] = config.hook.pytest_cmdline_main(
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 167, in _multicall
+    raise exception
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Anaconda\Lib\site-packages\_pytest\main.py", line 318, in pytest_cmdline_main
+    return wrap_session(config, _main)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Anaconda\Lib\site-packages\_pytest\main.py", line 306, in wrap_session
+    config.hook.pytest_sessionfinish(
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 167, in _multicall
+    raise exception
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 139, in _multicall
+    teardown.throw(exception)
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 53, in run_old_style_hookwrapper
+    return result.get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_result.py", line 103, in get_result
+    raise exc.with_traceback(tb)
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    res = yield
+          ^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 139, in _multicall
+    teardown.throw(exception)
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 43, in run_old_style_hookwrapper
+    teardown.send(result)
+  File "E:\Anaconda\Lib\site-packages\_pytest\terminal.py", line 857, in pytest_sessionfinish
+    outcome.get_result()
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_result.py", line 103, in get_result
+    raise exc.with_traceback(tb)
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    res = yield
+          ^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 139, in _multicall
+    teardown.throw(exception)
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 53, in run_old_style_hookwrapper
+    return result.get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_result.py", line 103, in get_result
+    raise exc.with_traceback(tb)
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    res = yield
+          ^^^^^
+  File "C:\Users\���ﳬ\AppData\Roaming\Python\Python312\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Anaconda\Lib\site-packages\_pytest\tmpdir.py", line 315, in pytest_sessionfinish
+    cleanup_dead_symlinks(basetemp)
+  File "E:\Anaconda\Lib\site-packages\_pytest\pathlib.py", line 358, in cleanup_dead_symlinks
+    for left_dir in root.iterdir():
+  File "E:\Anaconda\Lib\pathlib.py", line 1056, in iterdir
+    for name in os.listdir(self):
+                ^^^^^^^^^^^^^^^^
+PermissionError: [WinError 5] �ܾ����ʡ�: 'E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\.pytest_progress_audit_61cf7f73b2764495b57f8327795f9a2d'
+.........................................EEEEEE..........                [100%]

@@ -291,6 +291,7 @@ O 1.200000 0.000000 0.000000
                     {
                         "id": "s2_candidate_ts_guess_017",
                         "label": "S2 candidate ts_guess_017 (TS)",
+                        "metadata": {"selection_source": "manual"},
                         "path": "structures/ts_guess_017.xyz",
                         "kind": "structure",
                     }

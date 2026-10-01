@@ -302,7 +302,7 @@ def run_optimize(
             qc_result,
             errors + state_errors,
             all_artifacts,
-            {"electronic_state": state_metadata} if state_metadata else None,
+            {"optimization_status": "converged", "electronic_state": state_metadata},
             status=forced_status,
         )
 
@@ -366,6 +366,7 @@ def run_optimize(
             all_artifacts.extend(
                 write_state_artifacts(inputs, qc_result, target_dir, selected_backend)
             )
+            rescue_metadata["optimization_status"] = "converged"
             if state_metadata:
                 rescue_metadata["electronic_state"] = state_metadata
             return result_from_qc(
@@ -437,7 +438,7 @@ def _run_attempt(
                     "converged": "converged",
                     "failed": "failed",
                 }.get(status, "running")
-                reporter.set_live_metrics(
+                reporter.update_live_metrics(
                     [
                         LiveMetric(
                             key="opt_step",

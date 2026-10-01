@@ -1205,10 +1205,8 @@ def test_v1_batch_structures_inline_xyz_submission(
     tasks = client.get(f"/api/v1/jobs/{job['job_id']}/tasks")
     assert tasks.status_code == 200
     assert [task["stage_name"] for task in tasks.json()["tasks"]] == [
-        "prepare",
         "optimize",
         "frequency",
-        "finalize",
     ]
 
 
@@ -1757,10 +1755,7 @@ def test_batchoptimize_submit_stageplan(client: TestClient, qc_capable_local: No
     tasks = client.get(f"/api/v1/jobs/{job['job_id']}/tasks")
     assert tasks.status_code == 200
     stage_names = [task["stage_name"] for task in tasks.json()["tasks"]]
-    assert "prepare" in stage_names
-    assert "optimize" in stage_names
-    assert "frequency" in stage_names
-    assert "finalize" in stage_names
+    assert stage_names == ["optimize", "frequency"]
 
 
 def test_non_ts_artifact_role_mismatch_422(client: TestClient, tmp_path: Path) -> None:

@@ -83,6 +83,7 @@ class TsOptResult:
     log_file: Path | None = None
     error_message: str | None = None
     mode_vector: NDArray[np.float64] | None = None
+    metadata: dict = field(default_factory=dict)
 
     def has_single_imaginary(self) -> bool:
         return len(self.imaginary_frequencies) == 1
@@ -323,14 +324,15 @@ def ts_opt_route(
     aux_j: str | None = None,
     ri_approximation: str | None = None,
     opt_level: str | None = None,
+    calculate_frequencies: bool = True,
 ) -> str:
     """Build the ORCA ``!`` route line for an OptTS run.
 
     Composite 3c methods (``*3c`` suffixes) carry no basis keyword; ordinary
     methods take ``<method> <basis>``. Grid/SCF/solvent keywords are appended
-    when provided. ``OptTS`` is always emitted, and ``NumFreq`` is appended
-    last so every TS run ends with the independent numerical frequency
-    verification. ``opt_level`` accepts
+    when provided. ``OptTS`` is always emitted; ``calculate_frequencies``
+    controls the final ``NumFreq`` keyword (True by default for compatibility).
+    ``opt_level`` accepts
     ``loose`` / ``normal`` / ``tight`` / ``verytight``; ``normal`` leaves the
     route at plain ``OptTS`` because ORCA already uses the default optimization
     thresholds there and emitting a second ``Opt`` run-type keyword would be
@@ -359,7 +361,8 @@ def ts_opt_route(
         opt_keyword = _OPT_LEVEL_KEYWORDS[level_key]
         if opt_keyword:
             tokens.append(opt_keyword)
-    tokens.append("NumFreq")
+    if calculate_frequencies:
+        tokens.append("NumFreq")
     route = "! " + " ".join(tokens)
     if aux_j and ri_approximation:
         route += f" {ri_approximation} aux {aux_j}"

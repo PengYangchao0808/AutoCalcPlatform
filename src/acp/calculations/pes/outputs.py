@@ -91,11 +91,12 @@ def persist_pes_outputs(
 
     quality = dict(scan_result.get("quality") or {})
     frames = list(scan_result.get("frames") or [])
-    ts_candidates = list(scan_result.get("ts_recommendations") or [])
-    int_candidates = list(scan_result.get("int_recommendations") or [])
+    ts_candidates = []
+    int_candidates = []
     scan_dir = str(scan_result.get("scan_dir_rel") or PES_SCAN_RELATIVE_PATH)
     payload: dict[str, Any] = {
         "schema_version": "pes_profile_v2",
+        "selection_mode": "manual_only",
         "workflow": "PESsearch",
         "mode": str(scan_result.get("mode") or "bond_length_scan"),
         "status": status,

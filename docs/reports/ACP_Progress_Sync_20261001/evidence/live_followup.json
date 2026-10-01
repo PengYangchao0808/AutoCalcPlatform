@@ -1,0 +1,665 @@
+{
+  "captured_at": "2026-10-01T15:01:25.594302+08:00",
+  "state": {
+    "version": "1.0",
+    "job_name": "BatchOptimize",
+    "status": "running",
+    "current_stage": "frequency",
+    "overall_progress": 0.25,
+    "stage_index": 2,
+    "stage_total": 4,
+    "stage_progress": null,
+    "stage_detail": null,
+    "progress_state": "indeterminate",
+    "created_at": "2026-10-01T05:30:14.405743+00:00",
+    "updated_at": "2026-10-01T06:57:24.534952+00:00",
+    "stages": {
+      "optimize": {
+        "status": "completed",
+        "started_at": "2026-10-01T05:30:14.445662+00:00",
+        "completed_at": "2026-10-01T06:57:24.533114+00:00"
+      },
+      "frequency": {
+        "status": "running",
+        "started_at": "2026-10-01T06:57:24.534295+00:00"
+      },
+      "single_point": {
+        "status": "pending"
+      },
+      "thermochemistry": {
+        "status": "pending"
+      }
+    },
+    "live_metrics": [
+      {
+        "key": "batch_item",
+        "label_key": "live.batch_item",
+        "label": null,
+        "value": "1 / 1",
+        "kind": "count",
+        "priority": 100,
+        "detail": null
+      },
+      {
+        "key": "batch_step",
+        "label_key": "live.batch_step",
+        "label": "频率计算",
+        "value": "frequency",
+        "kind": "status",
+        "priority": 90,
+        "detail": null
+      }
+    ]
+  },
+  "summary": {
+    "id": "20260930_110815_003_BatchOptimize",
+    "spec": {
+      "workflow": "BatchOptimize",
+      "name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+      "input": {
+        "source_type": "batch_structures",
+        "charge": 0,
+        "multiplicity": 1,
+        "items": [
+          {
+            "item_id": "input_001",
+            "candidate_id": "input_001",
+            "name": "TS2_STEPWISE",
+            "tag": "TS",
+            "xyz": "29\nTAG: TS | candidate_id=opt_item_001_frame_0018 | source=batch-opt_freq_sp_thermo\nO -0.276655 2.019140 0.364252\nC -0.634266 0.901181 0.057321\nN 0.211866 -0.184312 -0.228323\nC -0.510345 -1.292551 -0.668945\nC -1.853520 -0.999068 -0.730662\nC -2.940145 -1.679135 -1.220342\nC -3.959043 0.224049 0.662969\nC -3.323553 1.044367 -0.400840\nC -2.017854 0.316852 -0.042116\nC -2.668284 -0.030650 1.344368\nC 1.627079 -0.155638 -0.089121\nC 2.205218 -0.466403 1.133216\nC 3.584812 -0.430723 1.267687\nC 4.380702 -0.085478 0.184385\nC 3.796494 0.227629 -1.034964\nC 2.417201 0.195014 -1.174269\nH 0.020451 -2.173952 -0.987138\nH -3.881161 -1.186531 -1.375914\nH -2.879630 -2.725045 -1.490217\nH -4.985339 0.108717 0.979721\nH -3.258938 2.116642 -0.177871\nH -3.662223 0.937419 -1.437218\nH -2.432511 -1.025396 1.725932\nH -2.403028 0.713183 2.107907\nH 1.570362 -0.727069 1.968725\nH 4.037744 -0.669476 2.220336\nH 5.456657 -0.055932 0.291783\nH 4.414560 0.503847 -1.878372\nH 1.945653 0.447808 -2.113710\n",
+            "charge": 0,
+            "multiplicity": 1,
+            "include": true,
+            "source_ref": {
+              "source_uid": "ss_233b1e2d4f94a483b4b3cf3d",
+              "source_id": "job_20260919_094049_001_BatchOptimize:RESULT/structures/item_001__TAG_TS__optimized.xyz",
+              "job_id": "20260919_094049_001_BatchOptimize",
+              "job_name": "TS2_Concerted_BatchOptimize",
+              "path": "RESULT/structures/item_001__TAG_TS__optimized.xyz",
+              "project_id": "",
+              "origin": "job_artifact",
+              "checksum": "",
+              "job_status": "",
+              "allow_disabled_use": false,
+              "disabled_use_reason": ""
+            }
+          }
+        ]
+      },
+      "method": {
+        "schema_id": "batch_optimize",
+        "profile_id": "opt_freq_sp_thermo",
+        "levels": {
+          "batch": {
+            "steps": [
+              "optimize",
+              "frequency",
+              "singlepoint",
+              "thermochemistry"
+            ],
+            "engine": "orca",
+            "functional": "r2SCAN-3c",
+            "basis": "def2-mTZVPP",
+            "single_point_method": "wB97M-V",
+            "single_point_basis": "def2-TZVPP",
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905,
+            "minimum_method": "",
+            "minimum_basis": "",
+            "transition_state_method": "",
+            "transition_state_basis": "",
+            "opt_max_iter": null,
+            "opt_convergence": "Tight",
+            "opt_trust_radius": null,
+            "opt_initial_hessian": "auto",
+            "opt_recalc_hess": "auto",
+            "minimum_opt_trust_radius": null,
+            "minimum_opt_initial_hessian": "auto",
+            "minimum_opt_recalc_hess": "auto",
+            "transition_state_opt_trust_radius": null,
+            "transition_state_opt_initial_hessian": "auto",
+            "transition_state_opt_recalc_hess": "auto",
+            "minimum_opt_max_iter": null,
+            "minimum_opt_convergence": null,
+            "minimum_scf_max_iter": null,
+            "minimum_scf_convergence": null,
+            "minimum_scf_strategy": null,
+            "minimum_opt_rescue_policy": null,
+            "minimum_opt_max_rescue": null,
+            "transition_state_opt_max_iter": null,
+            "transition_state_opt_convergence": null,
+            "transition_state_scf_max_iter": null,
+            "transition_state_scf_convergence": null,
+            "transition_state_scf_strategy": null,
+            "transition_state_opt_rescue_policy": null,
+            "transition_state_opt_max_rescue": null,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "scf_max_iter": 300,
+            "scf_convergence": "Tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "electronic_state": {
+              "schema_version": 1,
+              "execution_mode": "single",
+              "default_state_id": "",
+              "states": [
+                {
+                  "state_id": "s1_bs",
+                  "label": "BS singlet (GuessMix)",
+                  "target_multiplicity": 1,
+                  "spin_mode": "broken_symmetry",
+                  "spatial_symmetry": "disable",
+                  "reference_state_id": "",
+                  "guess": {
+                    "strategy": "guessmix",
+                    "reference_multiplicity": null,
+                    "final_ms": null,
+                    "flip_atoms": [],
+                    "atom_index_base": 1,
+                    "guess_mix_angle": 45.0,
+                    "orbital_source": null,
+                    "broken_sym_na": null,
+                    "broken_sym_nb": null
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "profile": "opt_freq_sp_thermo",
+        "temperature": 298.15,
+        "pressure": 1,
+        "scale_factor": 0.9905,
+        "batch_roles": {
+          "int": {
+            "method": "wB97X-D4",
+            "basis": "def2-SVP",
+            "sp_method": "wB97M-V",
+            "sp_basis": "def2-TZVPP",
+            "dispersion": "none",
+            "aux_j_basis": "def2/J",
+            "aux_c_basis": "",
+            "ri_approximation": "none",
+            "opt_max_iter": null,
+            "opt_convergence": "tight",
+            "opt_trust_radius": 0.01,
+            "opt_initial_hessian": "calculate",
+            "opt_recalc_hess": 5,
+            "scf_max_iter": 300,
+            "scf_convergence": "tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "scf_damp": false,
+            "scf_damp_fac": 0.5,
+            "scf_shift": false,
+            "scf_shift_fac": 0.3,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905
+          },
+          "ts": {
+            "method": "wB97X-D4",
+            "basis": "def2-SVP",
+            "sp_method": "wB97M-V",
+            "sp_basis": "def2-TZVPP",
+            "dispersion": "none",
+            "aux_j_basis": "def2/J",
+            "aux_c_basis": "",
+            "ri_approximation": "none",
+            "opt_max_iter": null,
+            "opt_convergence": "tight",
+            "opt_trust_radius": 0.3,
+            "opt_initial_hessian": "calculate",
+            "opt_recalc_hess": 5,
+            "scf_max_iter": 300,
+            "scf_convergence": "tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "scf_damp": false,
+            "scf_damp_fac": 0.5,
+            "scf_shift": false,
+            "scf_shift_fac": 0.3,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905
+          }
+        },
+        "optimization_method": "wB97X-D4",
+        "optimization_basis": "def2-SVP",
+        "single_point_method": "wB97M-V",
+        "single_point_basis": "def2-TZVPP"
+      },
+      "resources": {
+        "nproc": 16,
+        "mem": "32",
+        "parallelism": 1,
+        "batch_id": "batch_munizla9",
+        "batch_index": 2,
+        "batch_total": 3
+      },
+      "output_dir": null,
+      "config_path": null,
+      "tags": [],
+      "node_tags": [],
+      "project_id": "f8022072-48bf-43c8-83e6-d4daac8106b0",
+      "execution_mode": null,
+      "target_node": null,
+      "molecule_name": "TS2_STEPWISE",
+      "task_name": "BatchOptimize",
+      "remark": "PUBLICATION"
+    },
+    "status": "running",
+    "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "project_id": "f8022072-48bf-43c8-83e6-d4daac8106b0",
+    "project_name": null,
+    "input_hash": "sha256:6c7240f86ac0fff5e275337fb32786e3954180717e028f96559ecd05030c5b85",
+    "created_at": "2026-09-30T03:08:15.710728+00:00",
+    "updated_at": "2026-10-01T06:57:26.730916+00:00",
+    "started_at": "2026-10-01T05:30:12.567404+00:00",
+    "completed_at": null,
+    "current_stage": "frequency",
+    "progress": 0.25,
+    "error": null,
+    "pid": 114434,
+    "exit_code": null,
+    "remote_job_id": null,
+    "group_id": "20260930_110815_003_BatchOptimize",
+    "node_id": "local",
+    "host": "DESKTOP-VHTRF8G",
+    "study_id": null,
+    "study_status": null,
+    "result": {
+      "attempts": 2,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "mode": "edit_recalculate",
+          "status": "failed",
+          "completed_at": "2026-09-30T06:15:55.934426+00:00",
+          "exit_code": 1,
+          "error": "workflow exited with code 1"
+        }
+      ],
+      "required_software": [
+        "orca",
+        "shermo"
+      ],
+      "execution_target": "local",
+      "execution_kind": "local"
+    },
+    "progress_state": "indeterminate",
+    "stage_index": 2,
+    "stage_total": 4,
+    "stage_progress": null,
+    "stage_detail": null,
+    "latest_event": "stage.started: frequency",
+    "snapshot_version": 1790837844,
+    "live_status": {
+      "stage_label": "频率计算",
+      "stage_index": 2,
+      "stage_total": 4,
+      "metrics": [
+        {
+          "key": "batch_item",
+          "label_key": "live.batch_item",
+          "label": null,
+          "value": "1 / 1",
+          "kind": "count",
+          "priority": 100,
+          "detail": null
+        },
+        {
+          "key": "batch_step",
+          "label_key": "live.batch_step",
+          "label": "频率计算",
+          "value": "frequency",
+          "kind": "status",
+          "priority": 90,
+          "detail": null
+        }
+      ]
+    },
+    "display_method": "wB97X-D4 / def2-SVP",
+    "custom_name": null,
+    "resolved_name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "default_name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "name_revision": 0,
+    "name_updated_at": null
+  },
+  "raw": {
+    "id": "20260930_110815_003_BatchOptimize",
+    "spec": {
+      "workflow": "BatchOptimize",
+      "name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+      "input": {
+        "source_type": "batch_structures",
+        "charge": 0,
+        "multiplicity": 1,
+        "items": [
+          {
+            "item_id": "input_001",
+            "candidate_id": "input_001",
+            "name": "TS2_STEPWISE",
+            "tag": "TS",
+            "xyz": "29\nTAG: TS | candidate_id=opt_item_001_frame_0018 | source=batch-opt_freq_sp_thermo\nO -0.276655 2.019140 0.364252\nC -0.634266 0.901181 0.057321\nN 0.211866 -0.184312 -0.228323\nC -0.510345 -1.292551 -0.668945\nC -1.853520 -0.999068 -0.730662\nC -2.940145 -1.679135 -1.220342\nC -3.959043 0.224049 0.662969\nC -3.323553 1.044367 -0.400840\nC -2.017854 0.316852 -0.042116\nC -2.668284 -0.030650 1.344368\nC 1.627079 -0.155638 -0.089121\nC 2.205218 -0.466403 1.133216\nC 3.584812 -0.430723 1.267687\nC 4.380702 -0.085478 0.184385\nC 3.796494 0.227629 -1.034964\nC 2.417201 0.195014 -1.174269\nH 0.020451 -2.173952 -0.987138\nH -3.881161 -1.186531 -1.375914\nH -2.879630 -2.725045 -1.490217\nH -4.985339 0.108717 0.979721\nH -3.258938 2.116642 -0.177871\nH -3.662223 0.937419 -1.437218\nH -2.432511 -1.025396 1.725932\nH -2.403028 0.713183 2.107907\nH 1.570362 -0.727069 1.968725\nH 4.037744 -0.669476 2.220336\nH 5.456657 -0.055932 0.291783\nH 4.414560 0.503847 -1.878372\nH 1.945653 0.447808 -2.113710\n",
+            "charge": 0,
+            "multiplicity": 1,
+            "include": true,
+            "source_ref": {
+              "source_uid": "ss_233b1e2d4f94a483b4b3cf3d",
+              "source_id": "job_20260919_094049_001_BatchOptimize:RESULT/structures/item_001__TAG_TS__optimized.xyz",
+              "job_id": "20260919_094049_001_BatchOptimize",
+              "job_name": "TS2_Concerted_BatchOptimize",
+              "path": "RESULT/structures/item_001__TAG_TS__optimized.xyz",
+              "project_id": "",
+              "origin": "job_artifact",
+              "checksum": "",
+              "job_status": "",
+              "allow_disabled_use": false,
+              "disabled_use_reason": ""
+            }
+          }
+        ]
+      },
+      "method": {
+        "schema_id": "batch_optimize",
+        "profile_id": "opt_freq_sp_thermo",
+        "levels": {
+          "batch": {
+            "steps": [
+              "optimize",
+              "frequency",
+              "singlepoint",
+              "thermochemistry"
+            ],
+            "engine": "orca",
+            "functional": "r2SCAN-3c",
+            "basis": "def2-mTZVPP",
+            "single_point_method": "wB97M-V",
+            "single_point_basis": "def2-TZVPP",
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905,
+            "minimum_method": "",
+            "minimum_basis": "",
+            "transition_state_method": "",
+            "transition_state_basis": "",
+            "opt_max_iter": null,
+            "opt_convergence": "Tight",
+            "opt_trust_radius": null,
+            "opt_initial_hessian": "auto",
+            "opt_recalc_hess": "auto",
+            "minimum_opt_trust_radius": null,
+            "minimum_opt_initial_hessian": "auto",
+            "minimum_opt_recalc_hess": "auto",
+            "transition_state_opt_trust_radius": null,
+            "transition_state_opt_initial_hessian": "auto",
+            "transition_state_opt_recalc_hess": "auto",
+            "minimum_opt_max_iter": null,
+            "minimum_opt_convergence": null,
+            "minimum_scf_max_iter": null,
+            "minimum_scf_convergence": null,
+            "minimum_scf_strategy": null,
+            "minimum_opt_rescue_policy": null,
+            "minimum_opt_max_rescue": null,
+            "transition_state_opt_max_iter": null,
+            "transition_state_opt_convergence": null,
+            "transition_state_scf_max_iter": null,
+            "transition_state_scf_convergence": null,
+            "transition_state_scf_strategy": null,
+            "transition_state_opt_rescue_policy": null,
+            "transition_state_opt_max_rescue": null,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "scf_max_iter": 300,
+            "scf_convergence": "Tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "electronic_state": {
+              "schema_version": 1,
+              "execution_mode": "single",
+              "default_state_id": "",
+              "states": [
+                {
+                  "state_id": "s1_bs",
+                  "label": "BS singlet (GuessMix)",
+                  "target_multiplicity": 1,
+                  "spin_mode": "broken_symmetry",
+                  "spatial_symmetry": "disable",
+                  "reference_state_id": "",
+                  "guess": {
+                    "strategy": "guessmix",
+                    "reference_multiplicity": null,
+                    "final_ms": null,
+                    "flip_atoms": [],
+                    "atom_index_base": 1,
+                    "guess_mix_angle": 45.0,
+                    "orbital_source": null,
+                    "broken_sym_na": null,
+                    "broken_sym_nb": null
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "profile": "opt_freq_sp_thermo",
+        "temperature": 298.15,
+        "pressure": 1,
+        "scale_factor": 0.9905,
+        "batch_roles": {
+          "int": {
+            "method": "wB97X-D4",
+            "basis": "def2-SVP",
+            "sp_method": "wB97M-V",
+            "sp_basis": "def2-TZVPP",
+            "dispersion": "none",
+            "aux_j_basis": "def2/J",
+            "aux_c_basis": "",
+            "ri_approximation": "none",
+            "opt_max_iter": null,
+            "opt_convergence": "tight",
+            "opt_trust_radius": 0.01,
+            "opt_initial_hessian": "calculate",
+            "opt_recalc_hess": 5,
+            "scf_max_iter": 300,
+            "scf_convergence": "tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "scf_damp": false,
+            "scf_damp_fac": 0.5,
+            "scf_shift": false,
+            "scf_shift_fac": 0.3,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905
+          },
+          "ts": {
+            "method": "wB97X-D4",
+            "basis": "def2-SVP",
+            "sp_method": "wB97M-V",
+            "sp_basis": "def2-TZVPP",
+            "dispersion": "none",
+            "aux_j_basis": "def2/J",
+            "aux_c_basis": "",
+            "ri_approximation": "none",
+            "opt_max_iter": null,
+            "opt_convergence": "tight",
+            "opt_trust_radius": 0.3,
+            "opt_initial_hessian": "calculate",
+            "opt_recalc_hess": 5,
+            "scf_max_iter": 300,
+            "scf_convergence": "tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "scf_damp": false,
+            "scf_damp_fac": 0.5,
+            "scf_shift": false,
+            "scf_shift_fac": 0.3,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905
+          }
+        },
+        "optimization_method": "wB97X-D4",
+        "optimization_basis": "def2-SVP",
+        "single_point_method": "wB97M-V",
+        "single_point_basis": "def2-TZVPP"
+      },
+      "resources": {
+        "nproc": 16,
+        "mem": "32",
+        "parallelism": 1,
+        "batch_id": "batch_munizla9",
+        "batch_index": 2,
+        "batch_total": 3
+      },
+      "output_dir": null,
+      "config_path": null,
+      "tags": [],
+      "node_tags": [],
+      "project_id": "f8022072-48bf-43c8-83e6-d4daac8106b0",
+      "execution_mode": null,
+      "target_node": null,
+      "molecule_name": "TS2_STEPWISE",
+      "task_name": "BatchOptimize",
+      "remark": "PUBLICATION"
+    },
+    "status": "running",
+    "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "project_id": "f8022072-48bf-43c8-83e6-d4daac8106b0",
+    "project_name": null,
+    "input_hash": "sha256:6c7240f86ac0fff5e275337fb32786e3954180717e028f96559ecd05030c5b85",
+    "created_at": "2026-09-30T03:08:15.710728+00:00",
+    "updated_at": "2026-10-01T07:01:24.312829+00:00",
+    "started_at": "2026-10-01T05:30:12.567404+00:00",
+    "completed_at": null,
+    "current_stage": "frequency",
+    "progress": 0.25,
+    "error": null,
+    "pid": 114434,
+    "exit_code": null,
+    "remote_job_id": null,
+    "group_id": "20260930_110815_003_BatchOptimize",
+    "node_id": "local",
+    "host": "DESKTOP-VHTRF8G",
+    "study_id": null,
+    "study_status": null,
+    "result": {
+      "attempts": 2,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "mode": "edit_recalculate",
+          "status": "failed",
+          "completed_at": "2026-09-30T06:15:55.934426+00:00",
+          "exit_code": 1,
+          "error": "workflow exited with code 1"
+        }
+      ],
+      "required_software": [
+        "orca",
+        "shermo"
+      ],
+      "execution_target": "local",
+      "execution_kind": "local"
+    },
+    "progress_state": "determinate",
+    "stage_index": null,
+    "stage_total": null,
+    "stage_progress": null,
+    "stage_detail": null,
+    "latest_event": null,
+    "snapshot_version": null,
+    "live_status": null,
+    "display_method": null,
+    "custom_name": null,
+    "resolved_name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "default_name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "name_revision": 0,
+    "name_updated_at": null
+  },
+  "work_files": {
+    "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "files": [
+      {
+        "path": "WORK/00_RUNTIME",
+        "size": 0,
+        "modified": 1790832612.6204376,
+        "is_dir": true
+      },
+      {
+        "path": "WORK/03_OPT",
+        "size": 0,
+        "modified": 1790837844.4973633,
+        "is_dir": true
+      },
+      {
+        "path": "WORK/04_FREQ",
+        "size": 0,
+        "modified": 1790838064.0079052,
+        "is_dir": true
+      },
+      {
+        "path": "WORK/optimized.xyz",
+        "size": 1334,
+        "modified": 1790837844.506937,
+        "is_dir": false
+      }
+    ],
+    "truncated": false,
+    "pinned": []
+  },
+  "output_markers": [
+    {
+      "line": 896,
+      "text": " Hartree-Fock type      HFTyp           .... RHF"
+    },
+    {
+      "line": 71176,
+      "text": "                    ***        THE OPTIMIZATION HAS CONVERGED     ***"
+    },
+    {
+      "line": 71796,
+      "text": " Hartree-Fock type      HFTyp           .... RHF"
+    },
+    {
+      "line": 72774,
+      "text": "                           ORCA NUMERICAL FREQUENCIES"
+    },
+    {
+      "line": 74813,
+      "text": "                             ****ORCA TERMINATED NORMALLY****"
+    }
+  ],
+  "output_tail": [
+    "List of optional additional citations",
+    "",
+    "  1. Neese, F.",
+    "     Approximate second-order SCF convergence for spin unrestricted wavefunctions",
+    "     Chem. Phys. Lett. 2000 325(1-3), 93-98",
+    "     doi.org/10.1016/s0009-2614(00)00662-x",
+    "",
+    "Timings for individual modules:",
+    "",
+    "Sum of individual times          ...     3424.728 sec (=  57.079 min)",
+    "Startup calculation              ...      140.625 sec (=   2.344 min)   4.1 %",
+    "SCF iterations                   ...      844.303 sec (=  14.072 min)  24.7 %",
+    "Property calculations            ...        1.849 sec (=   0.031 min)   0.1 %",
+    "SCF Gradient evaluation          ...      371.532 sec (=   6.192 min)  10.8 %",
+    "Geometry relaxation              ...        0.671 sec (=   0.011 min)   0.0 %",
+    "Numerical frequency calculation  ...     2065.748 sec (=  34.429 min)  60.3 %",
+    "                             ****ORCA TERMINATED NORMALLY****",
+    "TOTAL RUN TIME: 0 days 1 hours 27 minutes 9 seconds 414 msec"
+  ]
+}

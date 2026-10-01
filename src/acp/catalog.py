@@ -3443,16 +3443,14 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
         "stages": {
             "mode": "by_profile",
             "by_profile": {
-                "opt_only": ["prepare", "optimize", "finalize"],
-                "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
-                "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
+                "opt_only": ["optimize"],
+                "opt_freq": ["optimize", "frequency"],
+                "opt_freq_sp": ["optimize", "frequency", "single_point"],
                 "opt_freq_sp_thermo": [
-                    "prepare",
                     "optimize",
                     "frequency",
                     "single_point",
                     "thermochemistry",
-                    "finalize",
                 ],
             },
         },

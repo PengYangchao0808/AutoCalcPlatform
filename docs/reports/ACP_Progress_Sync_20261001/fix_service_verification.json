@@ -1,0 +1,1264 @@
+{
+  "tasks": [
+    {
+      "task_id": "2307f142-1be2-4c9d-a1c8-b329364fa389",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "optimize",
+      "task_type": null,
+      "state": "completed",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": "2026-10-01T13:30:14.445662+08:00",
+      "completed_at": "2026-10-01T14:57:24.533114+08:00",
+      "updated_at": "2026-10-01T13:30:12.513491+08:00"
+    },
+    {
+      "task_id": "bec639f9-9897-4253-9187-884265586783",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "frequency",
+      "task_type": null,
+      "state": "completed",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": "2026-10-01T14:57:24.534295+08:00",
+      "completed_at": "2026-10-01T15:02:41.331896+08:00",
+      "updated_at": "2026-10-01T13:30:12.513491+08:00"
+    },
+    {
+      "task_id": "344b98a9-7696-49bd-b343-273d81fac13e",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "single_point",
+      "task_type": null,
+      "state": "completed",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": "2026-10-01T15:02:41.332199+08:00",
+      "completed_at": "2026-10-01T15:04:31.521184+08:00",
+      "updated_at": "2026-10-01T13:30:12.513491+08:00"
+    },
+    {
+      "task_id": "d569e30a-fbad-4fdb-95ad-1bd37c30e365",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "thermochemistry",
+      "task_type": null,
+      "state": "completed",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": "2026-10-01T15:04:31.521495+08:00",
+      "completed_at": "2026-10-01T15:04:31.532327+08:00",
+      "updated_at": "2026-10-01T13:30:12.513491+08:00"
+    }
+  ],
+  "job": {
+    "id": "20260930_110815_003_BatchOptimize",
+    "spec": {
+      "workflow": "BatchOptimize",
+      "name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+      "input": {
+        "source_type": "batch_structures",
+        "charge": 0,
+        "multiplicity": 1,
+        "items": [
+          {
+            "item_id": "input_001",
+            "candidate_id": "input_001",
+            "name": "TS2_STEPWISE",
+            "tag": "TS",
+            "xyz": "29\nTAG: TS | candidate_id=opt_item_001_frame_0018 | source=batch-opt_freq_sp_thermo\nO -0.276655 2.019140 0.364252\nC -0.634266 0.901181 0.057321\nN 0.211866 -0.184312 -0.228323\nC -0.510345 -1.292551 -0.668945\nC -1.853520 -0.999068 -0.730662\nC -2.940145 -1.679135 -1.220342\nC -3.959043 0.224049 0.662969\nC -3.323553 1.044367 -0.400840\nC -2.017854 0.316852 -0.042116\nC -2.668284 -0.030650 1.344368\nC 1.627079 -0.155638 -0.089121\nC 2.205218 -0.466403 1.133216\nC 3.584812 -0.430723 1.267687\nC 4.380702 -0.085478 0.184385\nC 3.796494 0.227629 -1.034964\nC 2.417201 0.195014 -1.174269\nH 0.020451 -2.173952 -0.987138\nH -3.881161 -1.186531 -1.375914\nH -2.879630 -2.725045 -1.490217\nH -4.985339 0.108717 0.979721\nH -3.258938 2.116642 -0.177871\nH -3.662223 0.937419 -1.437218\nH -2.432511 -1.025396 1.725932\nH -2.403028 0.713183 2.107907\nH 1.570362 -0.727069 1.968725\nH 4.037744 -0.669476 2.220336\nH 5.456657 -0.055932 0.291783\nH 4.414560 0.503847 -1.878372\nH 1.945653 0.447808 -2.113710\n",
+            "charge": 0,
+            "multiplicity": 1,
+            "include": true,
+            "source_ref": {
+              "source_uid": "ss_233b1e2d4f94a483b4b3cf3d",
+              "source_id": "job_20260919_094049_001_BatchOptimize:RESULT/structures/item_001__TAG_TS__optimized.xyz",
+              "job_id": "20260919_094049_001_BatchOptimize",
+              "job_name": "TS2_Concerted_BatchOptimize",
+              "path": "RESULT/structures/item_001__TAG_TS__optimized.xyz",
+              "project_id": "",
+              "origin": "job_artifact",
+              "checksum": "",
+              "job_status": "",
+              "allow_disabled_use": false,
+              "disabled_use_reason": ""
+            }
+          }
+        ]
+      },
+      "method": {
+        "schema_id": "batch_optimize",
+        "profile_id": "opt_freq_sp_thermo",
+        "levels": {
+          "batch": {
+            "steps": [
+              "optimize",
+              "frequency",
+              "singlepoint",
+              "thermochemistry"
+            ],
+            "engine": "orca",
+            "functional": "r2SCAN-3c",
+            "basis": "def2-mTZVPP",
+            "single_point_method": "wB97M-V",
+            "single_point_basis": "def2-TZVPP",
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905,
+            "minimum_method": "",
+            "minimum_basis": "",
+            "transition_state_method": "",
+            "transition_state_basis": "",
+            "opt_max_iter": null,
+            "opt_convergence": "Tight",
+            "opt_trust_radius": null,
+            "opt_initial_hessian": "auto",
+            "opt_recalc_hess": "auto",
+            "minimum_opt_trust_radius": null,
+            "minimum_opt_initial_hessian": "auto",
+            "minimum_opt_recalc_hess": "auto",
+            "transition_state_opt_trust_radius": null,
+            "transition_state_opt_initial_hessian": "auto",
+            "transition_state_opt_recalc_hess": "auto",
+            "minimum_opt_max_iter": null,
+            "minimum_opt_convergence": null,
+            "minimum_scf_max_iter": null,
+            "minimum_scf_convergence": null,
+            "minimum_scf_strategy": null,
+            "minimum_opt_rescue_policy": null,
+            "minimum_opt_max_rescue": null,
+            "transition_state_opt_max_iter": null,
+            "transition_state_opt_convergence": null,
+            "transition_state_scf_max_iter": null,
+            "transition_state_scf_convergence": null,
+            "transition_state_scf_strategy": null,
+            "transition_state_opt_rescue_policy": null,
+            "transition_state_opt_max_rescue": null,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "scf_max_iter": 300,
+            "scf_convergence": "Tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "electronic_state": {
+              "schema_version": 1,
+              "execution_mode": "single",
+              "default_state_id": "",
+              "states": [
+                {
+                  "state_id": "s1_bs",
+                  "label": "BS singlet (GuessMix)",
+                  "target_multiplicity": 1,
+                  "spin_mode": "broken_symmetry",
+                  "spatial_symmetry": "disable",
+                  "reference_state_id": "",
+                  "guess": {
+                    "strategy": "guessmix",
+                    "reference_multiplicity": null,
+                    "final_ms": null,
+                    "flip_atoms": [],
+                    "atom_index_base": 1,
+                    "guess_mix_angle": 45.0,
+                    "orbital_source": null,
+                    "broken_sym_na": null,
+                    "broken_sym_nb": null
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "profile": "opt_freq_sp_thermo",
+        "temperature": 298.15,
+        "pressure": 1,
+        "scale_factor": 0.9905,
+        "batch_roles": {
+          "int": {
+            "method": "wB97X-D4",
+            "basis": "def2-SVP",
+            "sp_method": "wB97M-V",
+            "sp_basis": "def2-TZVPP",
+            "dispersion": "none",
+            "aux_j_basis": "def2/J",
+            "aux_c_basis": "",
+            "ri_approximation": "none",
+            "opt_max_iter": null,
+            "opt_convergence": "tight",
+            "opt_trust_radius": 0.01,
+            "opt_initial_hessian": "calculate",
+            "opt_recalc_hess": 5,
+            "scf_max_iter": 300,
+            "scf_convergence": "tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "scf_damp": false,
+            "scf_damp_fac": 0.5,
+            "scf_shift": false,
+            "scf_shift_fac": 0.3,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905
+          },
+          "ts": {
+            "method": "wB97X-D4",
+            "basis": "def2-SVP",
+            "sp_method": "wB97M-V",
+            "sp_basis": "def2-TZVPP",
+            "dispersion": "none",
+            "aux_j_basis": "def2/J",
+            "aux_c_basis": "",
+            "ri_approximation": "none",
+            "opt_max_iter": null,
+            "opt_convergence": "tight",
+            "opt_trust_radius": 0.3,
+            "opt_initial_hessian": "calculate",
+            "opt_recalc_hess": 5,
+            "scf_max_iter": 300,
+            "scf_convergence": "tight",
+            "scf_strategy": "normal",
+            "scf_orbital_inherit": true,
+            "scf_damp": false,
+            "scf_damp_fac": 0.5,
+            "scf_shift": false,
+            "scf_shift_fac": 0.3,
+            "opt_rescue_policy": "adaptive",
+            "opt_max_rescue": 2,
+            "temperature": 298.15,
+            "pressure": 1,
+            "scale_factor": 0.9905
+          }
+        },
+        "optimization_method": "wB97X-D4",
+        "optimization_basis": "def2-SVP",
+        "single_point_method": "wB97M-V",
+        "single_point_basis": "def2-TZVPP"
+      },
+      "resources": {
+        "nproc": 16,
+        "mem": "32",
+        "parallelism": 1,
+        "batch_id": "batch_munizla9",
+        "batch_index": 2,
+        "batch_total": 3
+      },
+      "output_dir": null,
+      "config_path": null,
+      "tags": [],
+      "node_tags": [],
+      "project_id": "f8022072-48bf-43c8-83e6-d4daac8106b0",
+      "execution_mode": null,
+      "target_node": null,
+      "molecule_name": "TS2_STEPWISE",
+      "task_name": "BatchOptimize",
+      "remark": "PUBLICATION"
+    },
+    "status": "completed",
+    "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "project_id": "f8022072-48bf-43c8-83e6-d4daac8106b0",
+    "project_name": null,
+    "input_hash": "sha256:6c7240f86ac0fff5e275337fb32786e3954180717e028f96559ecd05030c5b85",
+    "created_at": "2026-09-30T11:08:15.710728+08:00",
+    "updated_at": "2026-10-01T15:04:35.836933+08:00",
+    "started_at": "2026-10-01T13:30:12.567404+08:00",
+    "completed_at": "2026-10-01T15:04:35.545604+08:00",
+    "current_stage": null,
+    "progress": 1.0,
+    "error": null,
+    "pid": 114434,
+    "exit_code": 0,
+    "remote_job_id": null,
+    "group_id": "20260930_110815_003_BatchOptimize",
+    "node_id": "local",
+    "host": "DESKTOP-VHTRF8G",
+    "study_id": null,
+    "study_status": null,
+    "result": {
+      "attempts": 2,
+      "attempt_history": [
+        {
+          "attempt": 1,
+          "mode": "edit_recalculate",
+          "status": "failed",
+          "completed_at": "2026-09-30T14:15:55.934426+08:00",
+          "exit_code": 1,
+          "error": "workflow exited with code 1"
+        }
+      ],
+      "required_software": [
+        "orca",
+        "shermo"
+      ],
+      "execution_target": "local",
+      "execution_kind": "local",
+      "state": {
+        "version": "1.0",
+        "job_name": "BatchOptimize",
+        "status": "completed",
+        "current_stage": null,
+        "overall_progress": 1.0,
+        "stage_index": 4,
+        "stage_total": 4,
+        "stage_progress": null,
+        "stage_detail": null,
+        "progress_state": "determinate",
+        "created_at": "2026-10-01T13:30:14.405743+08:00",
+        "updated_at": "2026-10-01T15:04:31.540504+08:00",
+        "stages": {
+          "optimize": {
+            "status": "completed",
+            "started_at": "2026-10-01T13:30:14.445662+08:00",
+            "completed_at": "2026-10-01T14:57:24.533114+08:00"
+          },
+          "frequency": {
+            "status": "completed",
+            "started_at": "2026-10-01T14:57:24.534295+08:00",
+            "completed_at": "2026-10-01T15:02:41.331896+08:00"
+          },
+          "single_point": {
+            "status": "completed",
+            "started_at": "2026-10-01T15:02:41.332199+08:00",
+            "completed_at": "2026-10-01T15:04:31.521184+08:00"
+          },
+          "thermochemistry": {
+            "status": "completed",
+            "started_at": "2026-10-01T15:04:31.521495+08:00",
+            "completed_at": "2026-10-01T15:04:31.532327+08:00"
+          }
+        },
+        "live_metrics": [
+          {
+            "key": "batch_item",
+            "label_key": "live.batch_item",
+            "label": null,
+            "value": "1 / 1",
+            "kind": "count",
+            "priority": 100,
+            "detail": null
+          },
+          {
+            "key": "batch_step",
+            "label_key": "live.batch_step",
+            "label": "热化学修正",
+            "value": "thermochemistry",
+            "kind": "status",
+            "priority": 90,
+            "detail": null
+          }
+        ]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "dbccee76-af59-4c4e-b344-81a0e13449aa",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "json",
+          "file_path": "RESULT/batch_provenance.json",
+          "checksum": "sha256:f6ccdf565b968a532b39efc937c8e0be34d479f9d5ca1dbc4d8d4d5a23675d0d",
+          "size_bytes": 1005,
+          "parser_status": "pending",
+          "mime_type": "application/json",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.548332+08:00"
+        },
+        {
+          "artifact_id": "c7f50fce-b8f1-4ed9-a6d0-189190445f02",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "json",
+          "file_path": "RESULT/frequencies/item_001__normal_modes.json",
+          "checksum": "sha256:19b8fddb5b2bc15378529dc2b745be4889d154ef1198420c66f63bf3dd5708c8",
+          "size_bytes": 214417,
+          "parser_status": "pending",
+          "mime_type": "application/json",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.554416+08:00"
+        },
+        {
+          "artifact_id": "e617a6cf-bd59-4e96-8afc-cda1c46bd378",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "json",
+          "file_path": "RESULT/result_manifest.json",
+          "checksum": "sha256:ad2956573f145fe646bc2d3b6290642d33edb25b2bf29edd238e3276886989cf",
+          "size_bytes": 4331,
+          "parser_status": "pending",
+          "mime_type": "application/json",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.559804+08:00"
+        },
+        {
+          "artifact_id": "fd929c7f-1100-4602-b7d3-7e4ff5a5d02b",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "optimized_xyz",
+          "file_path": "RESULT/structures/item_001__TAG_TS__optimized.xyz",
+          "checksum": "sha256:57d0ec66dc8fa177b38ce22baf3362faa7148d76e610912b5a5567a4af787d82",
+          "size_bytes": 1392,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.564674+08:00"
+        },
+        {
+          "artifact_id": "4ca4bd3f-2cd1-495f-af1c-062f33daa246",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0001.xyz",
+          "checksum": "sha256:b6f06418e7308508e417df8ef53afd10d8a95bb1b91df8c2a9abf8200560dbfa",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.569952+08:00"
+        },
+        {
+          "artifact_id": "cfd29e1d-5ce2-4a13-8c94-18ce1620d32e",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0002.xyz",
+          "checksum": "sha256:1ba3f9e2212caf3fddbe24f97d33ea9d2510c93c60fc9ae1da670621f93939ab",
+          "size_bytes": 1288,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.576958+08:00"
+        },
+        {
+          "artifact_id": "28492f1a-414d-49f5-9a31-57586ff0080f",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0003.xyz",
+          "checksum": "sha256:8034e3ddcfd69439a5daec686049c9ed4ef2bbafbb8b7f2376cacdc40dc6d489",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.581561+08:00"
+        },
+        {
+          "artifact_id": "dcd78b8d-7e29-4f36-8abb-4831fbb169bb",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0004.xyz",
+          "checksum": "sha256:2905214f46b41b91aa8ce3670f52ae3424192243122f610e23a35384c42569ce",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.586495+08:00"
+        },
+        {
+          "artifact_id": "1031972a-2648-4ddd-9d93-166e8bc73f15",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0005.xyz",
+          "checksum": "sha256:83caa6e63c754e8a73b84c67de9309e88cf9838678d45d3f60e4c522c1c84863",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.591353+08:00"
+        },
+        {
+          "artifact_id": "77a81ac4-ee6b-4a2a-b757-211113db973c",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0006.xyz",
+          "checksum": "sha256:77330985197694c49a753ecc8a32d5014d9f8fa731e66356cd47cdbcaacbe73e",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.596059+08:00"
+        },
+        {
+          "artifact_id": "52859b29-f865-4e93-9e0d-42adfe87820b",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0007.xyz",
+          "checksum": "sha256:fff2f007112c28b57a3449309c8015c26dbb8d9f11af476b9b4019cb6af6203b",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.601386+08:00"
+        },
+        {
+          "artifact_id": "f0494389-6265-4c9a-b789-b7ad132a1fd9",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0008.xyz",
+          "checksum": "sha256:3af9bc0f14eae9d0a1b2542a16254d213b5d4b2409634669adf3ba27fd00f223",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.606544+08:00"
+        },
+        {
+          "artifact_id": "ad856a95-2f74-4174-ab7b-79ca513f1147",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0009.xyz",
+          "checksum": "sha256:46f194710dd2dbd08e0f3b8cadfc1f7e9492719fbd6772ab543e07ced416a855",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.615207+08:00"
+        },
+        {
+          "artifact_id": "22d8af90-5f16-473c-b537-cb1a08450bdd",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0010.xyz",
+          "checksum": "sha256:5e71528b35ed2311231daaa652fd622873a6d48ea5eecad8a037fca52b8577b6",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.620297+08:00"
+        },
+        {
+          "artifact_id": "13ae6b86-8312-4e0a-9f20-b016435241d2",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0011.xyz",
+          "checksum": "sha256:111d12f742aaa789293950aa3adab5a1916122986b01b2d1af9a329196eb45ae",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.625401+08:00"
+        },
+        {
+          "artifact_id": "8dbe6670-082e-49b0-830a-b94eae0ca73b",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0012.xyz",
+          "checksum": "sha256:6807f8b4819b96c0c4f00c3a9c4d6131a7da395204ca4eae2b0c3bf9ddcd327e",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.62997+08:00"
+        },
+        {
+          "artifact_id": "fe879740-17c9-4480-80e6-036c9d01e7e7",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0013.xyz",
+          "checksum": "sha256:2b8e9985411e9e6fb50e9d170b269a53a5f045418bbafdf5082171eeeaea8016",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.634691+08:00"
+        },
+        {
+          "artifact_id": "94b03fae-6343-45c8-9b9f-016de42da542",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0014.xyz",
+          "checksum": "sha256:9194f1cd607afc6af83f8af329c07c65f6eb638890f7ae90efae31f0be09e601",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.639475+08:00"
+        },
+        {
+          "artifact_id": "63bc09f2-e2c8-4b3e-8fbc-c5e3eb715fcb",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0015.xyz",
+          "checksum": "sha256:79349c673cfe9dbc3c3d9b0df1699421215967469396482ed1579e97fee785d5",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.644646+08:00"
+        },
+        {
+          "artifact_id": "0546deef-0cc8-4054-b10e-57564e67ffaf",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0016.xyz",
+          "checksum": "sha256:099b6d55e3f60286531273e29f8d336c63356ecfdd79157cf272dcd45e4ea027",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.649624+08:00"
+        },
+        {
+          "artifact_id": "ae5d9bc2-6738-437e-aa2a-47c2500ccc71",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0017.xyz",
+          "checksum": "sha256:3fb0e2e2beba306cbbde9e3f209e3c3934791fba5322e529a46f7799c7a8eced",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.654441+08:00"
+        },
+        {
+          "artifact_id": "51c8c22c-1243-4293-9e8a-1a60a5113f61",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0018.xyz",
+          "checksum": "sha256:dfde0c8bd08de6bc2a14329727baf425b5446f5dd9859d5740073f9af1108236",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.65937+08:00"
+        },
+        {
+          "artifact_id": "742351ac-3266-4c6d-8015-7c54898500df",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0019.xyz",
+          "checksum": "sha256:0ca3005fe2f1f690dcb4300ab095fd8ceff8c6b823763bd44767fbca25aea10d",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.664295+08:00"
+        },
+        {
+          "artifact_id": "d6810ad6-8fe1-449a-badf-f952b35a32b8",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0020.xyz",
+          "checksum": "sha256:cb74b0f3a3acc687c2f4e8a5ecd493934bacce248c47ab5572b605960037beaf",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.669452+08:00"
+        },
+        {
+          "artifact_id": "a3b4515f-854d-4cb0-bbdb-766b313ea6c4",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0021.xyz",
+          "checksum": "sha256:0c9ff2f8dcf0eb684ba8c3fca761db6b1c2a584364e5b1d0e67762eb7c307b10",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.674147+08:00"
+        },
+        {
+          "artifact_id": "09babf91-359d-4dbb-8b85-f9b2eb53ca96",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0022.xyz",
+          "checksum": "sha256:d2d6e22ea2f59324bb96e8897dcfdcca56859de01779b4e60e7c7946159630c2",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.678944+08:00"
+        },
+        {
+          "artifact_id": "58ae792c-27f3-4ab1-89d2-d63b76090a05",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0023.xyz",
+          "checksum": "sha256:9276653fc877a5731e4f02914694f2b0523fe2b3434db5e891557b6757145a39",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.684359+08:00"
+        },
+        {
+          "artifact_id": "f6e5032b-dd59-4018-87a7-0a30759fd0d0",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0024.xyz",
+          "checksum": "sha256:d76db0aee6d61cbede177697395921aca0ef6b0a833f7f3e7da98d7e6f078c01",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.689585+08:00"
+        },
+        {
+          "artifact_id": "e2fdde82-a753-4103-955d-60305c6cdb52",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0025.xyz",
+          "checksum": "sha256:1cd29362bf9b62fd408ad9c73017d7ece4141aa0290480c19146ccb3b333a706",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.694818+08:00"
+        },
+        {
+          "artifact_id": "c67ad9b5-4ce3-4d5f-b2ef-15feb56cfca2",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0026.xyz",
+          "checksum": "sha256:e7c3aaec7e5e10f0dd796aafa6af0e1c5531a1818de3f93685757385d964e103",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.700285+08:00"
+        },
+        {
+          "artifact_id": "202839d9-9bdd-440c-b13a-832e65303d86",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0027.xyz",
+          "checksum": "sha256:5937cf4c50ab046aa989cdb3ea83374b622c300ede9630e299c560312579ca74",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.705235+08:00"
+        },
+        {
+          "artifact_id": "cbcc9e5b-f1a5-450c-a630-87fef94cbdce",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0028.xyz",
+          "checksum": "sha256:27f43c9e37581b8087f71f497a28f1347e53228907c7ba95b29a71ec57b4c621",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.710228+08:00"
+        },
+        {
+          "artifact_id": "d44fa0fa-d502-4c18-9da8-b444961ddf6e",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0029.xyz",
+          "checksum": "sha256:6d81f93dc8218dcf05bb6f06631f241198fb704aee9475a7fd52320ceed3a234",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.718003+08:00"
+        },
+        {
+          "artifact_id": "fbc580d9-8cfb-4efe-b2a5-dcdbade55862",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0030.xyz",
+          "checksum": "sha256:4af2508d56abb6a2b72aa0e207b39f35acdd5f19d524539dc127bea73f7fa527",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.722846+08:00"
+        },
+        {
+          "artifact_id": "8ae92497-b783-4e7f-9149-6ee6ba6166a6",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0031.xyz",
+          "checksum": "sha256:3133547f8463cdb3a155726b63000fb340773041b313904d8bbe16ee88fdcfbd",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.727624+08:00"
+        },
+        {
+          "artifact_id": "3795f5c2-0e6b-4108-9587-4194e37139ca",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0032.xyz",
+          "checksum": "sha256:1e7674740186559fce44af0a1188c202011af97173a47e190e13e8bc764b7ba6",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.73289+08:00"
+        },
+        {
+          "artifact_id": "79f17e97-611f-44e2-92a2-6e0895ab4ede",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0033.xyz",
+          "checksum": "sha256:41f9a774c9006f821e283d3a114b32acb36ac95d5dd2f7ab1d0ca5302ca6d83c",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.738107+08:00"
+        },
+        {
+          "artifact_id": "c211bf64-4e1d-4e5c-8668-3a6e5d482d01",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0034.xyz",
+          "checksum": "sha256:2c195244a8a031f58341c21df86aee9d1b04101b3e1a379a493cb29cf4463b80",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.743421+08:00"
+        },
+        {
+          "artifact_id": "b60177d0-c3d7-4206-bd03-d49ddfc669d5",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0035.xyz",
+          "checksum": "sha256:3a11120255fb8a1ddf216767327b2f7ab08d2901766cd33f3132bf78242b9126",
+          "size_bytes": 1292,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.748732+08:00"
+        },
+        {
+          "artifact_id": "599f81fb-d9fa-4b96-945b-a98ac91e12bc",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0036.xyz",
+          "checksum": "sha256:780eddfa3a82847e1194c55dbb8fa4bd9d41316e626ab2932f3208ef193993d2",
+          "size_bytes": 1292,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.753533+08:00"
+        },
+        {
+          "artifact_id": "f1f1f7b8-cc5a-40b1-a995-606c00b20759",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0037.xyz",
+          "checksum": "sha256:d93244bfe594ede963311e08f5f65014dfd0d4abb66b0dc3b5c18d10baf20a51",
+          "size_bytes": 1292,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.758535+08:00"
+        },
+        {
+          "artifact_id": "b054da03-1caa-4a37-a0c6-444306fca1f0",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0038.xyz",
+          "checksum": "sha256:554c3410daae635745ee6d311b53308b11dc44a7ee80ee03417dfa7177779e94",
+          "size_bytes": 1292,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.763254+08:00"
+        },
+        {
+          "artifact_id": "7d68e35d-2515-4b0c-aafe-cc4646e1a98f",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0039.xyz",
+          "checksum": "sha256:8d08ff4fb35dc56e4a716357b9d675e86a120e63e27745ee6efc4efe5163dd78",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.768265+08:00"
+        },
+        {
+          "artifact_id": "69dd4b8e-75a1-42c4-acb5-a2635c268324",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0040.xyz",
+          "checksum": "sha256:6ba77d3529cf8e1b1a8f91920730fb606814a7a672a05cf23556213d08f0864c",
+          "size_bytes": 1291,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.773207+08:00"
+        },
+        {
+          "artifact_id": "c651fa2d-2e53-4d22-956a-b2210c2bee86",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0041.xyz",
+          "checksum": "sha256:f1499c48b677d5334fb0aa28aa8570a0af9f80969366979a7bbb2beb45c3c994",
+          "size_bytes": 1290,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.778387+08:00"
+        },
+        {
+          "artifact_id": "7193d66b-f616-4270-b1c2-859f762c05a8",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0042.xyz",
+          "checksum": "sha256:40ce5f982ef0700ae1ac08309804518f125b92cd91a04404d69cc6ed8f856deb",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.784212+08:00"
+        },
+        {
+          "artifact_id": "c804cd61-9bac-47f8-bacc-e40410001d45",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0043.xyz",
+          "checksum": "sha256:ff77fe2c23d3fbf8da0aa9234db472f046f5cfd9e5cff500516a566b710f08d3",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.789204+08:00"
+        },
+        {
+          "artifact_id": "0fb6223c-d463-48d9-9748-34e7a2213c2a",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0044.xyz",
+          "checksum": "sha256:40ec2972384a7a942d15ce86929b02382526bf56d428b4b3b4e48776f4645b67",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.794199+08:00"
+        },
+        {
+          "artifact_id": "301ac9b3-2629-4ef4-98f1-e117471ca3a2",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0045.xyz",
+          "checksum": "sha256:26cff24ed8d215087864b763b8ea7d0807a672c3466c1139f671df9c9d55dfa3",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.799146+08:00"
+        },
+        {
+          "artifact_id": "47444e0f-3a16-4db4-bac8-cee7b8a98fcf",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0046.xyz",
+          "checksum": "sha256:b854e9ebea772f60a16b451058dfdf3511de2e4b2fd4283f09a81b9e1d289dbd",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.803983+08:00"
+        },
+        {
+          "artifact_id": "5a7f6134-2671-465c-bbc7-a46237b44c32",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "xyz",
+          "file_path": "RESULT/trajectories/cycles/cycle_0047.xyz",
+          "checksum": "sha256:160476bd2d48445b6cdd4b7d0c3ccc4e2944fd02dc81dd87a54bc7b9398dd7a6",
+          "size_bytes": 1289,
+          "parser_status": "pending",
+          "mime_type": "chemical/x-xyz",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.81345+08:00"
+        },
+        {
+          "artifact_id": "70928d0a-e1ce-423a-a1f6-e0127a453682",
+          "task_id": null,
+          "job_id": "20260930_110815_003_BatchOptimize",
+          "artifact_type": "json",
+          "file_path": "RESULT/trajectories/optimization.json",
+          "checksum": "sha256:c05ef09f0c44b04e9193605764b47e0f46ea49d74395513785b67cbafd4d088e",
+          "size_bytes": 16831,
+          "parser_status": "pending",
+          "mime_type": "application/json",
+          "metadata": {
+            "stage_dir": "RESULT"
+          },
+          "created_at": "2026-10-01T15:04:35.818359+08:00"
+        }
+      ],
+      "provenance": {
+        "input_hash": "sha256:6c7240f86ac0fff5e275337fb32786e3954180717e028f96559ecd05030c5b85",
+        "molecule_hash": null,
+        "acp_version": "0.1.3",
+        "backend_name": "BatchOptimize",
+        "backend_version": "",
+        "method": "BatchOptimize",
+        "basis": null,
+        "solvent": null,
+        "command_line": "",
+        "hostname": "DESKTOP-VHTRF8G",
+        "ncores": 16,
+        "memory_gb": 32.0,
+        "wall_time_seconds": 5662.9782,
+        "routine": "BatchOptimize",
+        "creator": null,
+        "schema_version": "1.0"
+      }
+    },
+    "progress_state": "determinate",
+    "stage_index": null,
+    "stage_total": null,
+    "stage_order": [
+      "optimize",
+      "frequency",
+      "single_point",
+      "thermochemistry"
+    ],
+    "stage_progress": null,
+    "stage_detail": null,
+    "latest_event": "job.completed",
+    "snapshot_version": 1790838271,
+    "live_status": {
+      "stage_label": null,
+      "stage_index": 4,
+      "stage_total": 4,
+      "metrics": [
+        {
+          "key": "batch_item",
+          "label_key": "live.batch_item",
+          "label": null,
+          "value": "1 / 1",
+          "kind": "count",
+          "priority": 100,
+          "detail": null
+        },
+        {
+          "key": "batch_step",
+          "label_key": "live.batch_step",
+          "label": "热化学修正",
+          "value": "thermochemistry",
+          "kind": "status",
+          "priority": 90,
+          "detail": null
+        }
+      ]
+    },
+    "display_method": "wB97X-D4 / def2-SVP",
+    "custom_name": null,
+    "resolved_name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "default_name": "TS2_STEPWISE_BatchOptimize_PUBLICATION",
+    "name_revision": 0,
+    "name_updated_at": null
+  },
+  "queue": {
+    "queued": 0,
+    "pending": 0,
+    "running": 0,
+    "paused": 0,
+    "completed": 18,
+    "failed": 6,
+    "cancelled": 0
+  },
+  "detail_stages": [
+    {
+      "stage_name": "optimize",
+      "status": "completed",
+      "started_at": "2026-10-01T13:30:14.445662+08:00",
+      "completed_at": "2026-10-01T14:57:24.533114+08:00",
+      "error": null,
+      "retry_count": 0,
+      "status_detail": "optimize",
+      "label": "结构优化",
+      "progress": null,
+      "detail": "optimize"
+    },
+    {
+      "stage_name": "frequency",
+      "status": "completed",
+      "started_at": "2026-10-01T14:57:24.534295+08:00",
+      "completed_at": "2026-10-01T15:02:41.331896+08:00",
+      "error": null,
+      "retry_count": 0,
+      "status_detail": "frequency",
+      "label": "频率计算",
+      "progress": null,
+      "detail": "frequency"
+    },
+    {
+      "stage_name": "single_point",
+      "status": "completed",
+      "started_at": "2026-10-01T15:02:41.332199+08:00",
+      "completed_at": "2026-10-01T15:04:31.521184+08:00",
+      "error": null,
+      "retry_count": 0,
+      "status_detail": "single_point",
+      "label": "单点能",
+      "progress": null,
+      "detail": "single_point"
+    },
+    {
+      "stage_name": "thermochemistry",
+      "status": "completed",
+      "started_at": "2026-10-01T15:04:31.521495+08:00",
+      "completed_at": "2026-10-01T15:04:31.532327+08:00",
+      "error": null,
+      "retry_count": 0,
+      "status_detail": null,
+      "label": "热化学修正",
+      "progress": null,
+      "detail": null
+    }
+  ],
+  "service": "ok",
+  "uptime": 44.1
+}

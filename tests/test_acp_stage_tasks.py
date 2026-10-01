@@ -71,38 +71,32 @@ def test_mechanism_stage_plan_uses_study_phases() -> None:
                 "finalize",
             ],
         ),
-        ("BatchOptimize", {"profile": "opt_only"}, ["prepare", "optimize", "finalize"]),
+        ("BatchOptimize", {"profile": "opt_only"}, ["optimize"]),
         (
             "BatchOptimize",
             {"profile": "opt_freq"},
             [
-                "prepare",
                 "optimize",
                 "frequency",
-                "finalize",
             ],
         ),
         (
             "BatchOptimize",
             {"profile": "opt_freq_sp"},
             [
-                "prepare",
                 "optimize",
                 "frequency",
                 "single_point",
-                "finalize",
             ],
         ),
         (
             "BatchOptimize",
             {"profile": "opt_freq_sp_thermo"},
             [
-                "prepare",
                 "optimize",
                 "frequency",
                 "single_point",
                 "thermochemistry",
-                "finalize",
             ],
         ),
     ],
@@ -120,8 +114,8 @@ def test_plancompiler_batchoptimize_profile() -> None:
     plan = PlanCompiler.compile(spec)
     names = [s.stage_name for s in plan]
     assert "thermochemistry" in names
-    assert names[0] == "prepare"
-    assert names[-1] == "finalize"
+    assert names[0] == "optimize"
+    assert names[-1] == "thermochemistry"
 
 
 def test_plancompiler_rejects_retired() -> None:

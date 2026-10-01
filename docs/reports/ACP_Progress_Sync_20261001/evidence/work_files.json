@@ -1,0 +1,19 @@
+{
+  "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+  "files": [
+    {
+      "path": "WORK/00_RUNTIME",
+      "size": 0,
+      "modified": 1790832612.6204376,
+      "is_dir": true
+    },
+    {
+      "path": "WORK/03_OPT",
+      "size": 0,
+      "modified": 1790837573.6012495,
+      "is_dir": true
+    }
+  ],
+  "truncated": false,
+  "pinned": []
+}

@@ -121,7 +121,7 @@ def test_s2_projection_contains_series_nodes_and_annotations() -> None:
         "convergence",
     }
     assert len(graph["nodes"]) == 2
-    assert any(item["type"] == "ts" and item["selected"] for item in graph["annotations"])
+    assert not any(item["type"] in {"ts", "intermediate"} for item in graph["annotations"])
     assert any(item["type"] == "failed" for item in graph["annotations"])
     assert any(item["type"] == "minimum" for item in graph["annotations"])
 
@@ -189,19 +189,8 @@ def test_s2_candidate_display_labels_are_sequenced_per_role_by_frame_index() -> 
         for item in graph["annotations"]
         if item["type"] in {"ts", "intermediate"}
     }
-    assert candidates["ts_guess_030"]["label"] == "TS-01"
-    assert candidates["ts_guess_045"]["label"] == "TS-02"
-    assert candidates["int_guess_012"]["label"] == "INT-01"
-    for item in candidates.values():
-        frame_index = item["frame_index"]
-        assert item["display_label"] == item["label"]
-        assert item["node_id"] == f"frame_{frame_index}"
-        assert item["frame_number"] == frame_index + 1
-        assert item["scan_step"] == frame_index
-        node = next(node for node in graph["nodes"] if node["id"] == item["node_id"])
-        assert node["metadata"]["frame_number"] == frame_index + 1
-        assert node["metadata"]["scan_step"] == frame_index
-    assert graph["metadata"]["consistency_warnings"] == []
+    assert candidates == {}
+    assert len(graph["nodes"]) == 3
 
 
 def test_s2_candidate_with_missing_node_is_skipped_with_consistency_warning() -> None:
@@ -216,9 +205,7 @@ def test_s2_candidate_with_missing_node_is_skipped_with_consistency_warning() ->
         for warning in graph["metadata"]["consistency_warnings"]
         if warning["code"] == "candidate_node_missing"
     ]
-    assert len(missing) == 1
-    assert missing[0]["candidate_id"] == "ts_guess_001"
-    assert missing[0]["frame_index"] == 7
+    assert missing == []
 
 
 def test_s2_duplicate_candidate_frames_emit_annotations_and_warning() -> None:
@@ -243,19 +230,8 @@ def test_s2_duplicate_candidate_frames_emit_annotations_and_warning() -> None:
     graph = build_s2_energy_graph("job-duplicate", payload)
 
     ts_annotations = [item for item in graph["annotations"] if item["type"] == "ts"]
-    assert {item["candidate_id"] for item in ts_annotations} == {
-        "ts_guess_001",
-        "ts_guess_002",
-    }
-    assert {item["display_label"] for item in ts_annotations} == {"TS-01", "TS-02"}
-    duplicates = [
-        warning
-        for warning in graph["metadata"]["consistency_warnings"]
-        if warning["code"] == "duplicate_candidate_frame"
-    ]
-    assert len(duplicates) == 1
-    assert duplicates[0]["candidate_id"] == "ts_guess_002"
-    assert duplicates[0]["frame_index"] == 1
+    assert ts_annotations == []
+    assert len(graph["nodes"]) == 2
 
 
 def _scan_trajectory_payload() -> dict[str, Any]:
@@ -467,7 +443,7 @@ def test_four_view_projections_preserve_pre_migration_wire_key_sets(tmp_path: Pa
 
     # When: each projection is inspected at the frontend wire boundary.
     expected_annotation_key_sets = [
-        {frozenset(ANNOTATION_WIRE_KEYS), frozenset(ANNOTATION_CANDIDATE_KEYS)},
+        {frozenset(ANNOTATION_WIRE_KEYS)},
         {frozenset(ANNOTATION_WIRE_KEYS)},
         {frozenset(ANNOTATION_WIRE_KEYS)},
         {frozenset(ANNOTATION_WIRE_KEYS)},

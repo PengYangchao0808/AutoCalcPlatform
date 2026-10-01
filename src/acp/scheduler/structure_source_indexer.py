@@ -65,11 +65,13 @@ class StructureSourceIndexer:
         *,
         page_size: int = _SWEEP_PAGE_SIZE,
         sweep_interval: float = 60.0,
+        structure_cache: Any = None,
     ) -> None:
         self._store = store
         self._source_store = source_store
         self._run_root = Path(run_root)
         self._fetcher = fetcher
+        self._structure_cache = structure_cache
         self._page_size = page_size
         self._sweep_interval = sweep_interval
 
@@ -174,7 +176,7 @@ class StructureSourceIndexer:
             self._index_job(record)
             return
         indexed_at = self._get_indexed_at(record.id)
-        if indexed_at and record.updated_at and record.updated_at > indexed_at:
+        if self._is_remote(record) or (indexed_at and record.updated_at and record.updated_at > indexed_at):
             self._index_job(record)
 
     def _get_indexed_at(self, job_id: str) -> str | None:
@@ -196,7 +198,7 @@ class StructureSourceIndexer:
         job_id = record.id
         is_remote = self._is_remote(record)
 
-        if is_remote:
+        if is_remote and self._structure_cache is None:
             self._index_remote_placeholder(record)
             self._source_store.mark_job_indexed(job_id, discovery_version=1)
             return
@@ -205,18 +207,45 @@ class StructureSourceIndexer:
             from acp.scheduler.structure_sources import StructureSourceService
 
             service = StructureSourceService(self._store, self._run_root, self._fetcher)
+            original_record = record
+            if not is_remote and record.status.value in {"failed", "cancelled"}:
+                from acp.results.structure_migration import backfill_successful_optimizations
+                backfill_successful_optimizations(Path(record.work_dir), record.spec.workflow)
+            if is_remote:
+                from dataclasses import replace
+                from acp.results.manifest import load_result_manifest
+                root = self._structure_cache.fetch_catalog(record, record.spec.workflow)
+                if root is None:
+                    if not self._source_store.list_by_job(job_id):
+                        self._index_remote_placeholder(record)
+                    return
+                manifest = load_result_manifest(root)
+                from acp.confsearch.manifest import find_confsearch_manifest
+                if manifest is None and find_confsearch_manifest(root) is None:
+                    return  # A network failure is never authoritative emptiness.
+                self._structure_cache.fetch_reusable_geometries(record, root)
+                record = replace(record, work_dir=str(root))
+
             if record.spec.workflow in {"singlepoint", "frequency"}:
                 entries = []
             elif record.status.value == "completed":
                 entries = service._discover_job(record)
+            elif is_remote:
+                from acp.scheduler.structure_sources import (_select_terminal_registered_products,
+                    _select_pes_candidates_generic, _select_frame_candidate_products)
+                entries = service._discover_product_listings(record,
+                    selectors=(("result_manifest.json", _select_pes_candidates_generic if record.spec.workflow == "PESsearch"
+                               else _select_frame_candidate_products if record.spec.workflow == "scan"
+                               else _select_terminal_registered_products),))
             else:
                 entries = service._discover_terminal_sources(record)
-            if not entries:
-                self._source_store.mark_job_indexed(job_id, discovery_version=1)
-                return
+            entries.extend(service._history_entries(original_record))
+            if is_remote:
+                for entry in entries:
+                    if not str(entry.get("path") or "").startswith(".structure_history/"):
+                        entry["remote"] = True
             index_rows = self._entries_to_index_rows(entries, record)
-            if index_rows:
-                self._source_store.upsert_index_entries(index_rows, discovery_version=1)
+            self._source_store.upsert_index_entries(index_rows, discovery_version=2, replace_job_id=job_id)
             self._source_store.mark_job_indexed(job_id, discovery_version=1)
             self._retry_queue.pop(job_id, None)
         except Exception:
@@ -307,6 +336,8 @@ class StructureSourceIndexer:
                     "remote": int(bool(entry.get("remote"))),
                     "availability": availability,
                     "produced_at": entry.get("completed_at", ""),
+                    "content_checksum": entry.get("content_checksum"),
+                    "structure_facts": entry.get("structure_facts", {}),
                 }
             )
         return rows
@@ -325,7 +356,6 @@ class StructureSourceIndexer:
             return 0
         if not record.status.is_terminal:
             return 0
-        self._source_store.delete_by_job(job_id)
         self._index_job(record)
         new_rows = self._source_store.list_by_job(job_id)
         return len(new_rows)

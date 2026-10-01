@@ -841,6 +841,33 @@ class JobManager:
                 "refusing to rerun — terminate them first"
             )
 
+        from acp.scheduler.job_edit import resolve_previous_outputs
+        from acp.results.structure_snapshots import preserve_outputs
+        read_root = Path(record.work_dir)
+        from acp.scheduler.structure_sources import StructureSourceService
+        if StructureSourceService._is_remote(record):
+            cached_root = self.structure_cache.fetch_catalog(record, record.spec.workflow)
+            from acp.results.manifest import load_result_manifest
+            from acp.confsearch.manifest import find_confsearch_manifest
+            if cached_root is None or (
+                load_result_manifest(cached_root) is None
+                and find_confsearch_manifest(cached_root) is None
+            ):
+                logger.warning(
+                    "No synced remote results for %s; rerun proceeds without preserving old outputs",
+                    record.id,
+                )
+                previous_outputs = []
+            else:
+                self.structure_cache.fetch_reusable_geometries(record, cached_root)
+                previous_outputs = resolve_previous_outputs(cached_root, job_id=record.id,
+                    project_id=current_project, attempt=attempt_number(record), strict=True)
+        else:
+            previous_outputs = resolve_previous_outputs(read_root, job_id=record.id,
+                project_id=current_project, attempt=attempt_number(record), strict=True)
+        preserved_outputs = preserve_outputs(self.run_root, Path(record.work_dir), previous_outputs,
+            job_id=record.id, attempt=attempt_number(record), input_spec=record.spec.input)
+
         # Keep the persisted location unchanged if strict cleanup fails.
         self._reset_work_dir_in_place(record, strict=True)
         renamed_from = self._migrate_unsafe_task_dir(record)
@@ -863,6 +890,7 @@ class JobManager:
                 "status": old_status,
                 "completed_at": record.completed_at,
                 "exit_code": record.exit_code,
+                "previous_outputs": preserved_outputs,
                 "error": record.error,
             }
         )
@@ -1173,7 +1201,7 @@ class JobManager:
             return
         failures: list[str] = []
         for child in list(work_dir.iterdir()):
-            if child.name in _RERUN_STABLE_FILES:
+            if child.name in _RERUN_STABLE_FILES or child.name == ".structure_history":
                 continue
             try:
                 if child.is_dir() and not child.is_symlink():

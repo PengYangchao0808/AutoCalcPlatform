@@ -31,6 +31,7 @@ from acp.confsearch.manifest import (
     resolve_manifest_geometry,
 )
 from acp.intake import parse_xyz_text
+from acp.results.structure_policy import STRUCTURE_KINDS, reusable_product, single_geometry
 from acp.scheduler.artifacts import compute_checksum
 from acp.scheduler.files import resolve_safe
 from acp.scheduler.jobs import JobRecord, JobStatus
@@ -48,7 +49,7 @@ _RESULT_MANIFEST_FILENAME = "result_manifest.json"
 _CONFSEARCH_MANIFEST_FILENAME = "confsearch_manifest.json"
 #: Product kinds that carry a reusable 3D structure (batch plan §6): the
 #: unified v2 manifest writes ``structure``; legacy summaries write ``xyz``.
-_STRUCTURE_KINDS = frozenset({"xyz", "structure"})
+_STRUCTURE_KINDS = STRUCTURE_KINDS
 _ROLE_FINAL_STRUCTURE = "final_stable_structure"
 # Workflows with an explicit structure-source contract.  Retired names remain
 # here so historical jobs continue to resolve through the same policy.
@@ -149,8 +150,9 @@ def _tag_from_item(item: dict[str, Any]) -> str:
     metadata = item.get("metadata")
     if isinstance(metadata, dict):
         role = str(metadata.get("role") or metadata.get("tag") or "").strip().upper()
-        if role == "TS":
-            return "TS"
+        role = {"TRANSITION_STATE":"TS", "TS_CANDIDATE":"TS", "MINIMUM":"INT", "INTERMEDIATE":"INT"}.get(role, role)
+        if role in {"TS", "INT"}:
+            return role
     for value in (item.get("tag"), item.get("id"), item.get("label"), item.get("path")):
         text = str(value or "")
         if re.search(r"\bTS\b", text, re.IGNORECASE):
@@ -231,7 +233,7 @@ def _legacy_filename_matches(rel_path: str) -> bool:
 def _product_is_xyz(item: dict[str, Any]) -> bool:
     kind = str(item.get("kind") or "")
     if kind:
-        return kind in _STRUCTURE_KINDS
+        return reusable_product(item)
     return str(item.get("path") or "").endswith(".xyz")
 
 
@@ -307,7 +309,7 @@ def _select_frame_candidate_products(products: list[Any]) -> list[dict[str, Any]
         if not _product_is_xyz(item):
             continue
         metadata = item.get("metadata")
-        if isinstance(metadata, dict) and metadata.get("selection_source") == "manual_frame":
+        if isinstance(metadata, dict) and metadata.get("selection_source") in {"manual", "manual_frame"}:
             selected.append(item)
     return selected
 
@@ -374,6 +376,7 @@ def _select_pes_candidates_generic(products: list[Any]) -> list[dict[str, Any]]:
         item
         for item in products
         if isinstance(item, dict) and item.get("path") and _is_pes_candidate_item(item)
+        and (item.get("metadata") or {}).get("selection_source") in {"manual", "manual_frame"}
     ]
 
 
@@ -383,6 +386,7 @@ def _select_legacy_s2_products(products: list[Any]) -> list[dict[str, Any]]:
         item
         for item in products
         if isinstance(item, dict) and item.get("path") and _is_legacy_s2_candidate_item(item)
+        and (item.get("metadata") or {}).get("selection_source") in {"manual", "manual_frame"}
     ]
 
 
@@ -443,11 +447,12 @@ class StructureSourceService:
 
         entries: list[dict[str, Any]] = []
         for record in records:
+            entries.extend(self._history_entries(record))
             if len(entries) >= limit:
                 break
             if record.spec.workflow in _EXCLUDED_WORKFLOWS:
                 continue
-            if record.status != JobStatus.COMPLETED:
+            if record.status != JobStatus.COMPLETED and record.status.is_terminal:
                 entries.extend(self._discover_terminal_sources(record))
                 continue
             if record.status != JobStatus.COMPLETED:
@@ -469,7 +474,10 @@ class StructureSourceService:
 
     def _discover_terminal_sources(self, record: JobRecord) -> list[dict[str, Any]]:
         """Return only formally registered products from a non-completed terminal job."""
-        selectors = ((_RESULT_MANIFEST_FILENAME, _select_terminal_registered_products),)
+        selector = (_select_pes_candidates_generic if record.spec.workflow == "PESsearch"
+                    else _select_frame_candidate_products if record.spec.workflow == "scan"
+                    else _select_terminal_registered_products)
+        selectors = ((_RESULT_MANIFEST_FILENAME, selector),)
         if self._is_remote(record):
             return (
                 self._probe_remote_product_listings(
@@ -491,7 +499,7 @@ class StructureSourceService:
                 # Rank-1 entries have no candidate_id and share the legacy
                 # "minimum" identity (one card per job); manually saved frame
                 # candidates keep their own identity so they survive alongside.
-                identity = str(entry.get("candidate_id") or "") or "minimum"
+                identity = str(entry.get("candidate_id") or entry.get("path") or "minimum")
             elif workflow in _PESSEARCH_WORKFLOWS:
                 identity = str(entry.get("candidate_id") or entry.get("path") or "")
             else:
@@ -524,7 +532,14 @@ class StructureSourceService:
         record = self._store.get(job_id)
         if record is None:
             raise ValueError(f"Job not found: {job_id}")
-        if record.status != JobStatus.COMPLETED:
+        if not rel_path.startswith(".structure_history/"):
+            current = resolve_safe(record.work_dir, rel_path)
+            if current is None or not current.is_file():
+                aliases = [row for row in self._history_entries(record)
+                           if row.get("structure_facts", {}).get("original_path") == rel_path]
+                if aliases:
+                    rel_path = aliases[-1]["path"]
+        if record.status != JobStatus.COMPLETED and not rel_path.startswith(".structure_history/"):
             if not record.status.is_terminal:
                 raise ValueError(f"Job {job_id} is not completed (status={record.status.value})")
             allowed_paths = {
@@ -537,7 +552,7 @@ class StructureSourceService:
                 f"Workflow {record.spec.workflow!r} does not provide reusable structures"
             )
 
-        if self._is_remote(record):
+        if self._is_remote(record) and not rel_path.startswith(".structure_history/"):
             data = self._fetch_remote_xyz(record, rel_path)
             checksum = "sha256:" + hashlib.sha256(data).hexdigest()
             text = data.decode("utf-8", errors="replace")
@@ -554,6 +569,7 @@ class StructureSourceService:
         asset = self._build_asset(record, rel_path, text)
         if asset is None:
             raise ValueError(f"Source file is not a parseable XYZ structure: {rel_path}")
+        checksum = single_geometry(text)["content_checksum"]
         return asset, checksum
 
     @staticmethod
@@ -572,9 +588,37 @@ class StructureSourceService:
     # Local discovery
     # ------------------------------------------------------------------ #
 
+    def _history_entries(self, record: JobRecord) -> list[dict[str, Any]]:
+        """Read immutable earlier-attempt aliases independently of remote TTL."""
+        history = Path(record.work_dir) / ".structure_history" / "sources.json"
+        if not history.is_file():
+            return []
+        try:
+            refs = json.loads(history.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        entries = []
+        for ref in refs:
+            rel = ref.get("path") or ""
+            path = resolve_safe(record.work_dir, rel)
+            if path is None:
+                continue
+            try:
+                meta = self._parse_structure_meta(record, path.read_text(encoding="utf-8"), rel)
+            except (OSError, UnicodeError):
+                continue
+            if meta:
+                item = {"id": ref["entry_id"], "kind": "structure", "path": rel,
+                        "label": str(ref.get("label") or "") + f" · attempt {ref['attempt']}",
+                        "metadata": ref}
+                entries.append(self._entry(record, item, rel, meta, remote=False, needs_fetch=False))
+        return entries
+
     def _discover_job(self, record: JobRecord) -> list[dict[str, Any]]:
         """Apply the workflow-specific structure-source policy."""
         workflow = record.spec.workflow
+        if workflow == "scan":
+            return self._discover_product_listings(record, selectors=((_RESULT_MANIFEST_FILENAME, _select_frame_candidate_products),))
         if workflow == "Confsearch":
             return self._discover_confsearch_job(record)
         if workflow in _CONFORMER_SEARCH_WORKFLOWS:
@@ -605,38 +649,36 @@ class StructureSourceService:
         return entries
 
     def _confsearch_rank1_entries(self, record: JobRecord) -> list[dict[str, Any]]:
-        """Return only rank-1 from the active Confsearch manifest."""
+        """Discover all formally published single conformers, in rank order."""
         root = Path(record.work_dir)
         manifest_path = find_confsearch_manifest(root)
         if manifest_path is None:
             return self._discover_conformer_legacy_job(record)
         try:
             payload = read_manifest(manifest_path)
-            conformer = _select_rank1_conformer(payload)
-            if conformer is None:
-                return []
-            geometry = resolve_manifest_geometry(
-                manifest_path, str(conformer.get("geometry") or "")
-            )
-            rel_posix = geometry.resolve().relative_to(root.resolve()).as_posix()
-            resolved = resolve_safe(root, rel_posix)
-            if resolved is None:
-                return []
-            text = resolved.read_text(encoding="utf-8")
-        except (OSError, UnicodeError, ValueError, KeyError):
-            logger.debug("Confsearch manifest unreadable for job %s", record.id, exc_info=True)
+        except (OSError, ValueError):
             return []
-        meta = self._parse_structure_meta(record, text, rel_posix)
-        if meta is None:
-            return []
-        conf_id = str(conformer.get("conf_id") or "rank_1")
-        item = {
-            "id": f"confsearch_{conf_id}",
-            "label": f"Lowest-energy conformer ({conf_id})",
-            "path": rel_posix,
-            "kind": "structure",
-        }
-        return [self._entry(record, item, rel_posix, meta, remote=False, needs_fetch=False)]
+        entries = []
+        seen = set()
+        for conformer in sorted(payload.get("conformers") or [], key=_conformer_sort_key):
+            try:
+                geometry = resolve_manifest_geometry(manifest_path, str(conformer.get("geometry") or ""))
+                rel = geometry.resolve().relative_to(root.resolve()).as_posix()
+                resolved = resolve_safe(root, rel)
+                if resolved is None or rel in seen:
+                    continue
+                text = resolved.read_text(encoding="utf-8")
+                meta = self._parse_structure_meta(record, text, rel)
+                if meta is None:
+                    continue
+                seen.add(rel)
+                conf_id = str(conformer.get("conf_id") or "conformer")
+                item = {"id": f"confsearch_{conf_id}", "label": f"Conformer ({conf_id})",
+                        "path": rel, "kind": "structure", "metadata": {"source_kind": "conformer", "rank": conformer.get("rank")}}
+                entries.append(self._entry(record, item, rel, meta, remote=False, needs_fetch=False))
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+        return entries
 
     def _discover_conformer_legacy_job(self, record: JobRecord) -> list[dict[str, Any]]:
         """Return one final minimum structure for legacy conformer workflows."""
@@ -905,26 +947,22 @@ class StructureSourceService:
                 )
                 if not isinstance(payload, dict):
                     continue
-                conformer = _select_rank1_conformer(payload)
-                if conformer is None:
-                    continue
-                geometry_ref = str(conformer.get("geometry") or "")
-                rel_posix = self._remote_join(posixpath.dirname(listing_rel), geometry_ref)
-                if rel_posix is None or not self._fetcher.file_exists(record, rel_posix):
-                    continue
-                data = self._fetcher.read_file(record, rel_posix)
-                text = data.decode("utf-8", errors="replace")
-                meta = self._parse_structure_meta(record, text, rel_posix)
-                if meta is None:
-                    continue
-                conf_id = str(conformer.get("conf_id") or "rank_1")
-                item = {
-                    "id": f"confsearch_{conf_id}",
-                    "label": f"Lowest-energy conformer ({conf_id})",
-                    "path": rel_posix,
-                    "kind": "structure",
-                }
-                return [self._entry(record, item, rel_posix, meta, remote=True, needs_fetch=False)]
+                found = []
+                for conformer in sorted(payload.get("conformers") or [], key=_conformer_sort_key):
+                    geometry_ref = str(conformer.get("geometry") or "")
+                    rel_posix = self._remote_join(posixpath.dirname(listing_rel), geometry_ref)
+                    if rel_posix is None or not self._fetcher.file_exists(record, rel_posix):
+                        continue
+                    text = self._fetcher.read_file(record, rel_posix).decode("utf-8", errors="replace")
+                    meta = self._parse_structure_meta(record, text, rel_posix)
+                    if meta is None:
+                        continue
+                    conf_id = str(conformer.get("conf_id") or "conformer")
+                    item = {"id": f"confsearch_{conf_id}", "label": f"Conformer ({conf_id})",
+                            "path": rel_posix, "kind": "structure",
+                            "metadata": {"source_kind": "conformer", "rank": conformer.get("rank")}}
+                    found.append(self._entry(record, item, rel_posix, meta, remote=True, needs_fetch=False))
+                return found
         except _REMOTE_ERRORS as exc:
             logger.debug("Remote Confsearch probe failed for job %s: %s", record.id, exc)
             return None
@@ -1144,6 +1182,8 @@ class StructureSourceService:
         tag_hint: str = "",
     ) -> dict[str, Any] | None:
         """Parse the first XYZ frame into listing metadata (None on failure)."""
+        if single_geometry(text) is None:
+            return None
         try:
             result = parse_xyz_text(text)
         except (ValueError, IndexError):
@@ -1169,14 +1209,14 @@ class StructureSourceService:
             inferred_role = ""
         # Resolve the full role (TS / INT / '') with evidence tracking.
         raw_tag = tag_match.group(1).upper() if tag_match else ""
-        role = raw_tag or (tag_hint or inferred_role)
+        role = tag_hint or raw_tag or inferred_role
         if role not in ("TS", "INT"):
             role = ""
         # Determine evidence source for role assignment.
-        if raw_tag:
-            role_evidence = "xyz_tag"
-        elif tag_hint:
+        if tag_hint:
             role_evidence = "manifest"
+        elif raw_tag:
+            role_evidence = "xyz_tag"
         elif inferred_role:
             role_evidence = "inferred:path"
         else:
@@ -1190,6 +1230,7 @@ class StructureSourceService:
             "charge": charge,
             "multiplicity": mult,
             "has_3d": first.has_3d,
+            "content_checksum": single_geometry(text)["content_checksum"],
             "tag": "TS" if role == "TS" else "",
             "role": role,
             "role_evidence": role_evidence,
@@ -1220,6 +1261,8 @@ class StructureSourceService:
 
     def _build_asset(self, record: JobRecord, rel_path: str, text: str) -> dict[str, Any] | None:
         """Build a ``StructureAssetModel``-shaped dict from XYZ text."""
+        if single_geometry(text) is None:
+            return None
         try:
             result = parse_xyz_text(text)
         except (ValueError, IndexError):
@@ -1302,7 +1345,7 @@ class StructureSourceService:
     ) -> dict[str, Any]:
         metadata = item.get("metadata")
         is_manual = (
-            isinstance(metadata, dict) and metadata.get("selection_source") == "manual_frame"
+            isinstance(metadata, dict) and metadata.get("selection_source") in {"manual", "manual_frame"}
         )
         if record.status == JobStatus.COMPLETED:
             source_kind = "saved_candidate" if is_manual else "final"
@@ -1322,6 +1365,8 @@ class StructureSourceService:
             "completed_at": record.completed_at or "",
             "job_status": record.status.value,
             "source_kind": source_kind,
+            "structure_facts": dict(metadata or {}),
+            "content_checksum": meta.get("content_checksum"),
             "available_at": _available_at(record),
             "label": str(item.get("label") or item.get("path") or ""),
             "path": rel_posix,
