@@ -69,6 +69,8 @@ from acp.calculations.pes.contracts import (
     ScanQuality,
     SinglePointSpec,
     StructureSource,
+    optimizer_to_level,
+    single_point_to_level,
     validate_scan_coordinates,
     validate_scan_protocol,
 )
@@ -214,7 +216,10 @@ def run_pes_scan(
         # Canonical per-point optimization level (shared model).  Computed
         # once here so the backend call, the frame records, and the
         # pes_profile payload all describe the same level.
-        optimizer_level = scan_optimizer_level(protocol.scan_optimizer)
+        optimizer_warnings: list[str] = []
+        optimizer_level = scan_optimizer_level(protocol.scan_optimizer, warnings=optimizer_warnings)
+        for message in optimizer_warnings:
+            logger.warning("scan optimizer level migration: %s", message)
         optimizer_level_fingerprint = level_fingerprint(optimizer_level)
         # Single drive coordinate → ORCA native relaxed scan (single
         # subprocess, no per-point retry); multiple coordinates → per-point
@@ -486,23 +491,29 @@ def _materialize_xyz_text(source: StructureSource, work_root: Path) -> Path:
 # ── relaxed scan via backend ───────────────────────────────────────────
 
 
-def scan_optimizer_level(optimizer: ScanOptimizer) -> CalculationLevel:
-    """Build the canonical per-point optimization level from the protocol."""
-    return canonical_level(
-        CalculationLevel(
-            method=optimizer.method,
-            basis=optimizer.basis,
-            dispersion=optimizer.dispersion,
-            solvent_model=optimizer.solvent_model,
-            solvent=optimizer.solvent,
-            grid=optimizer.grid,
-            scf_convergence=optimizer.scf_convergence,
-            scf_max_iterations=optimizer.scf_max_iterations,
-            ri_approximation=optimizer.ri_approximation,
-            aux_j_basis=optimizer.aux_j_basis,
-            aux_c_basis=optimizer.aux_c_basis,
-        )
-    )
+def scan_optimizer_level(
+    optimizer: ScanOptimizer, *, warnings: list[str] | None = None
+) -> CalculationLevel:
+    """Build the canonical per-point optimization level from the protocol.
+
+    ``warnings`` collects the Q7 historical-lane messages emitted while
+    canonicalizing (GFN basis/dispersion/RI clearing, CPCM/SMD→ALPB); the
+    caller decides how to surface them (never logger-only).
+    """
+    return canonical_level(optimizer_to_level(optimizer), warnings=warnings)
+
+
+def single_point_level(
+    spec: SinglePointSpec, *, warnings: list[str] | None = None
+) -> CalculationLevel:
+    """Build the canonical post-scan single-point level from the protocol.
+
+    The PES single-point level passes through the same shared model as the
+    scan optimizer (``acp.calculations.levels``): method aliases, composite
+    and GFN locking, and solvent normalization all apply before the level
+    reaches the SP executor.
+    """
+    return canonical_level(single_point_to_level(spec), warnings=warnings)
 
 
 def _snapshot_sp_publisher(
@@ -951,12 +962,16 @@ def _run_single_points(
             )
     frame_paths = [scan_dir / frame.geometry_path for frame in frames]
     sp_workers, sp_cfg = _sp_resource_plan(cfg)
+    sp_warnings: list[str] = []
+    sp_level = single_point_level(sp_spec, warnings=sp_warnings)
+    for message in sp_warnings:
+        logger.warning("single_point level migration: %s", message)
     result = BatchSinglePointExecutor(
         frames=frame_paths,
-        method=sp_spec.method,
+        method=sp_level.method,
         backend_name=sp_spec.software,
         output_dir=scan_dir / "sp",
-        basis=sp_spec.basis,
+        basis=sp_level.basis,
         charge=charge,
         multiplicity=multiplicity,
         frame_ids=[f"frame_{frame.index:03d}" for frame in frames],
@@ -966,14 +981,14 @@ def _run_single_points(
         cache_profile=(
             f"pes_scan:{cache_scope}" if cache_scope else "pes_scan"
         ),
-        solvent_model=sp_spec.solvent_model,
-        solvent=sp_spec.solvent,
-        dispersion=sp_spec.dispersion,
-        ri_approximation=sp_spec.ri_approximation,
-        aux_j_basis=sp_spec.aux_j_basis,
-        aux_c_basis=sp_spec.aux_c_basis,
-        grid=sp_spec.grid,
-        scf_convergence=sp_spec.scf_convergence,
+        solvent_model=sp_level.solvent_model,
+        solvent=sp_level.solvent,
+        dispersion=sp_level.dispersion,
+        ri_approximation=sp_level.ri_approximation,
+        aux_j_basis=sp_level.aux_j_basis,
+        aux_c_basis=sp_level.aux_c_basis,
+        grid=sp_level.grid,
+        scf_convergence=sp_level.scf_convergence,
         progress_callback=sp_callback,
         on_frame_start=on_frame_start,
         on_frame_done=on_frame_done,

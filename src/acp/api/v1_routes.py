@@ -1205,9 +1205,97 @@ def _resolve_stage_artifact_ref(
     return resolved
 
 
+def _baseline_bond_scan_protocol(record: JobRecord) -> dict[str, Any] | None:
+    """Return the historical protocol dict of *record* for edit context."""
+    inp = record.spec.input or {}
+    protocol = inp.get("protocol")
+    if isinstance(protocol, dict):
+        return protocol
+    scan_request = inp.get("scan_request")
+    if isinstance(scan_request, dict):
+        protocol = scan_request.get("protocol")
+        if isinstance(protocol, dict):
+            return protocol
+    return None
+
+
+def _resolve_bond_scan_protocol_levels(
+    protocol: dict[str, Any],
+    *,
+    entry: Any,
+    baseline_protocol: dict[str, Any] | None,
+) -> tuple[dict[str, Any], list[str]]:
+    """Run the Q7 layered level resolution over a bond-scan protocol dict.
+
+    Each protocol level (``scan_optimizer`` / ``single_point``) resolves via
+    ``resolve_level_for_entry`` with the EXPLICIT entry context: strict
+    submission rejects user-EXPLICIT conflicts, the historical lane
+    normalizes them with collectable warnings, and the FINAL config is
+    validated uniformly.  Only rewritten fields are written back so a clean
+    payload stays byte-identical.
+    """
+    from acp.calculations.levels import (
+        LevelEntryContext,
+        changed_level_fields,
+        resolve_level_for_entry,
+    )
+    from acp.calculations.pes.contracts import (
+        ScanOptimizer,
+        SinglePointSpec,
+        optimizer_to_level,
+        single_point_to_level,
+    )
+
+    entry_context = LevelEntryContext(entry)
+    out = dict(protocol or {})
+    warnings_out: list[str] = []
+
+    def _optimizer_level(sub: dict[str, Any]) -> Any:
+        return optimizer_to_level(ScanOptimizer.from_dict(sub))
+
+    def _sp_level(sub: dict[str, Any]) -> Any:
+        return single_point_to_level(SinglePointSpec.from_dict(sub))
+
+    level_specs = (
+        ("scan_optimizer", "scan_optimization", _optimizer_level),
+        ("single_point", "single_point", _sp_level),
+    )
+    for key, purpose, parse in level_specs:
+        sub = dict(out.get(key) or {})
+        raw = parse(sub)
+        changed: set[str] | None = None
+        if entry_context is LevelEntryContext.EDIT:
+            if baseline_protocol is None:
+                changed = None
+            else:
+                changed = changed_level_fields(raw, parse(dict(baseline_protocol.get(key) or {})))
+        resolution = resolve_level_for_entry(
+            raw, purpose=purpose, context=entry_context, changed_fields=changed
+        )
+        if resolution.errors:
+            label = "scan optimizer level" if key == "scan_optimizer" else "single_point level"
+            raise HTTPException(
+                status_code=422,
+                detail=f"invalid {label}: " + "; ".join(resolution.errors),
+            )
+        warnings_out.extend(resolution.warnings)
+        updates = {
+            field_name: getattr(resolution.level, field_name)
+            for field_name in changed_level_fields(raw, resolution.level)
+        }
+        if updates:
+            merged = dict(sub)
+            merged.update(updates)
+            out[key] = merged
+    return out, warnings_out
+
+
 def _prepare_bond_scan_input(
     inp: dict[str, Any],
     manager: Any,
+    *,
+    entry: Any = "strict",
+    baseline_protocol: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate + pin a PESsearch ``mode=bond_length_scan`` job input (§7/§11).
 
@@ -1215,6 +1303,13 @@ def _prepare_bond_scan_input(
     scheduler runner can forward it verbatim; resolves/pins a task-artifact
     source manifest into ``input["from"]`` (and the source's artifact_path)
     so handoff copying works for both local and remote execution.
+
+    The entry context (``entry``) is EXPLICIT (plan Scope entry-behavior
+    contract): ``"strict"`` for new submissions (API / wizard / CLI),
+    ``"edit"`` + ``baseline_protocol`` for edit-recalculate, where unchanged
+    level fields migrate with warnings and user-changed fields are strict.
+    Migration warnings are stored under
+    ``scan_request["level_warnings"]`` (collectable — surfaced by T14/T24).
     """
 
     try:
@@ -1275,7 +1370,12 @@ def _prepare_bond_scan_input(
             status_code=422, detail="bond_length_scan requires coordinate with atoms"
         )
     if not isinstance(protocol, dict):
-        protocol = {}
+        scan_request = inp.get("scan_request")
+        inherited = scan_request.get("protocol") if isinstance(scan_request, dict) else None
+        protocol = inherited if isinstance(inherited, dict) else {}
+    protocol, level_warnings = _resolve_bond_scan_protocol_levels(
+        protocol, entry=entry, baseline_protocol=baseline_protocol
+    )
     if coordinates is not None and (
         not isinstance(coordinates, list)
         or not coordinates
@@ -1298,6 +1398,8 @@ def _prepare_bond_scan_input(
         **({"selection": selection} if isinstance(selection, dict) else {}),
         "protocol": protocol,
     }
+    if level_warnings:
+        prepared["scan_request"]["level_warnings"] = level_warnings
     return prepared
 
 
@@ -1874,7 +1976,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         _canonicalize_batch_keywords(req.method)
     batch_snapshots: list[dict[str, Any]] = _snapshot_direct_source_input(req.input, request)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
-        req.input = _prepare_bond_scan_input(req.input, manager)
+        req.input = _prepare_bond_scan_input(req.input, manager, entry="strict")
     elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
@@ -4698,7 +4800,12 @@ def _build_edited_spec(
         except HTTPException as exc:
             raise EditValidationError(str(exc.detail)) from exc
     elif workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
-        inp = _prepare_bond_scan_input(inp, manager)
+        inp = _prepare_bond_scan_input(
+            inp,
+            manager,
+            entry="edit",
+            baseline_protocol=_baseline_bond_scan_protocol(record),
+        )
     elif workflow == "PESsearch":
         inp = _resolve_stage_artifact_ref(workflow, inp, manager)
     elif workflow == "BatchOptimize":

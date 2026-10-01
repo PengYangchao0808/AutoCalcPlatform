@@ -21,15 +21,19 @@ import pytest
 
 from acp.calculations.levels import (
     CalculationLevel,
+    LevelEntryContext,
     canonical_level,
+    changed_level_fields,
     level_fingerprint,
     normalize_method_alias,
+    resolve_level_for_entry,
     scan_optimization_methods,
     validate_level_for_purpose,
 )
 from acp.calculations.pes.contracts import (
     ScanCoordinate,
     ScanProtocol,
+    SinglePointSpec,
     validate_scan_protocol,
 )
 from acp.calculations.pes.outputs import persist_pes_outputs
@@ -149,6 +153,14 @@ class TestCalculationLevels:
         assert normalize_method_alias("b3lyp") == "B3LYP"
         assert normalize_method_alias("Unknown-Method") == "Unknown-Method"
 
+    def test_gfn0_alias_maps_to_gfn0_xtb(self) -> None:
+        from acp.calculations.levels import _METHOD_ALIASES
+
+        assert _METHOD_ALIASES["gfn0"] == "GFN0-xTB"
+        assert normalize_method_alias("gfn0") == "GFN0-xTB"
+        assert normalize_method_alias("GFN0") == "GFN0-xTB"
+        assert normalize_method_alias("gfn-ff") == "GFN-FF"
+
     def test_canonical_level_locks_composite_3c(self) -> None:
         level = canonical_level(
             CalculationLevel(
@@ -225,6 +237,385 @@ class TestCalculationLevels:
         assert a == b  # alias + composite locking converge
         assert a != c
         assert len(a) == 16
+
+
+# ── Q7/Q8: GFN + single_point validation (T13) ────────────────────────
+
+
+class TestGfnLevelValidation:
+    @pytest.mark.parametrize("method", ["GFN2-xTB", "GFN1-xTB", "GFN-FF", "gfn2"])
+    def test_gfn_with_explicit_basis_raises(self, method: str) -> None:
+        errors = validate_level_for_purpose(
+            CalculationLevel(method=method, basis="def2-SVP"), purpose="scan_optimization"
+        )
+        assert any("GFN" in error and "basis" in error for error in errors), errors
+
+    @pytest.mark.parametrize("method", ["GFN2-xTB", "GFN1-xTB", "GFN-FF"])
+    def test_gfn_with_explicit_dispersion_or_ri_raises(self, method: str) -> None:
+        for override in (
+            {"dispersion": "D4"},
+            {"ri_approximation": "RIJCOSX"},
+            {"aux_j_basis": "def2/J"},
+        ):
+            errors = validate_level_for_purpose(
+                CalculationLevel(method=method, **override), purpose="scan_optimization"
+            )
+            assert errors, (method, override)
+
+    @pytest.mark.parametrize("method", ["GFN2-xTB", "GFN1-xTB", "GFN-FF"])
+    def test_gfn_with_alpb_passes(self, method: str) -> None:
+        errors = validate_level_for_purpose(
+            CalculationLevel(method=method, solvent_model="alpb", solvent="water"),
+            purpose="scan_optimization",
+        )
+        assert errors == [], errors
+
+    @pytest.mark.parametrize("model", ["smd", "cpcm", "gbsa"])
+    def test_gfn_rejects_non_alpb_solvent_models(self, model: str) -> None:
+        errors = validate_level_for_purpose(
+            CalculationLevel(method="GFN2-xTB", solvent_model=model, solvent="water"),
+            purpose="scan_optimization",
+        )
+        assert errors and "ALPB" in errors[0], errors
+
+    def test_gfn0_rejected_on_orca_path_with_three_level_record(self) -> None:
+        errors = validate_level_for_purpose(
+            CalculationLevel(method="GFN0-xTB"), purpose="scan_optimization"
+        )
+        assert errors, errors
+        message = errors[0]
+        assert "capability" in message and "dependency" in message and "policy" in message
+        assert "param_gfn0-xtb.txt" in message
+        assert "xTB" in message
+
+    def test_gfnff_offer_stands_on_orca_path(self) -> None:
+        errors = validate_level_for_purpose(
+            CalculationLevel(method="GFN-FF", solvent_model="ALPB", solvent="toluene"),
+            purpose="scan_optimization",
+        )
+        assert errors == [], errors
+
+    def test_single_point_purpose_validates_level(self) -> None:
+        errors = validate_level_for_purpose(
+            CalculationLevel(method="GFN2-xTB", basis="def2-SVP"), purpose="single_point"
+        )
+        assert any("GFN" in error for error in errors), errors
+        errors = validate_level_for_purpose(
+            CalculationLevel(method="GFN0-xTB"), purpose="single_point"
+        )
+        assert any("policy" in error for error in errors), errors
+        assert validate_level_for_purpose(CalculationLevel(method="B97-3c"), "single_point") == []
+        assert (
+            validate_level_for_purpose(
+                CalculationLevel(method="GFN2-xTB", solvent_model="alpb", solvent="water"),
+                "single_point",
+            )
+            == []
+        )
+        with pytest.raises(ValueError, match="purpose"):
+            validate_level_for_purpose(CalculationLevel(method="B3LYP"), "unknown_purpose")
+
+
+class TestHistoricalMigrationLane:
+    def test_canonical_level_warns_on_gfn_clear(self) -> None:
+        warnings: list[str] = []
+        level = canonical_level(
+            CalculationLevel(
+                method="GFN2-xTB",
+                basis="def2-SVP",
+                dispersion="D4",
+                ri_approximation="RIJCOSX",
+            ),
+            warnings=warnings,
+        )
+        assert level.basis is None
+        assert level.dispersion is None
+        assert level.ri_approximation == "none"
+        assert len(warnings) == 3, warnings
+        assert all("GFN" in message for message in warnings)
+
+    @pytest.mark.parametrize("model", ["cpcm", "smd", "gbsa"])
+    def test_canonical_level_migrates_solvent_model_with_warning(self, model: str) -> None:
+        warnings: list[str] = []
+        level = canonical_level(
+            CalculationLevel(method="GFN2-xTB", solvent_model=model, solvent="water"),
+            warnings=warnings,
+        )
+        assert level.solvent_model == "alpb"
+        assert level.solvent == "water"
+        assert warnings and "alpb" in warnings[0]
+
+    def test_migration_context_normalizes_and_warns(self) -> None:
+        result = resolve_level_for_entry(
+            CalculationLevel(
+                method="GFN2-xTB", basis="def2-SVP", solvent_model="cpcm", solvent="water"
+            ),
+            purpose="scan_optimization",
+            context=LevelEntryContext.MIGRATION,
+        )
+        assert result.errors == [], result.errors
+        assert result.level.basis is None
+        assert result.level.solvent_model == "alpb"
+        assert len(result.warnings) == 2
+        assert set(result.normalized_fields) == {"basis", "solvent_model"}
+
+    def test_strict_context_rejects_same_config(self) -> None:
+        result = resolve_level_for_entry(
+            CalculationLevel(
+                method="GFN2-xTB", basis="def2-SVP", solvent_model="smd", solvent="water"
+            ),
+            purpose="scan_optimization",
+            context=LevelEntryContext.STRICT,
+        )
+        assert len(result.errors) == 2, result.errors
+
+    def test_edit_context_is_strict_per_changed_field_only(self) -> None:
+        raw = CalculationLevel(
+            method="GFN2-xTB", basis="def2-SVP", solvent_model="cpcm", solvent="water"
+        )
+        changed_only_basis = resolve_level_for_entry(
+            raw,
+            purpose="scan_optimization",
+            context=LevelEntryContext.EDIT,
+            changed_fields={"basis"},
+        )
+        assert len(changed_only_basis.errors) == 1
+        assert "basis" in changed_only_basis.errors[0]
+        assert changed_only_basis.normalized_fields == ["solvent_model"]
+
+        nothing_changed = resolve_level_for_entry(
+            raw,
+            purpose="scan_optimization",
+            context=LevelEntryContext.EDIT,
+            changed_fields=set(),
+        )
+        assert nothing_changed.errors == []
+        assert set(nothing_changed.normalized_fields) == {"basis", "solvent_model"}
+
+        unknown_baseline = resolve_level_for_entry(
+            raw,
+            purpose="scan_optimization",
+            context=LevelEntryContext.EDIT,
+            changed_fields=None,
+        )
+        assert unknown_baseline.errors
+
+    def test_composite_3c_never_migrates(self) -> None:
+        result = resolve_level_for_entry(
+            CalculationLevel(method="B97-3c", basis="def2-SVP"),
+            purpose="scan_optimization",
+            context=LevelEntryContext.MIGRATION,
+        )
+        assert any("built-in basis" in error for error in result.errors), result.errors
+
+    def test_changed_level_fields_value_semantics(self) -> None:
+        baseline = CalculationLevel(method="B97-3c", basis="def2-SVP")
+        assert changed_level_fields(baseline, baseline) == set()
+        assert changed_level_fields(
+            CalculationLevel(method="b973c", basis="def2-SVP"), baseline
+        ) == set()
+        assert changed_level_fields(
+            CalculationLevel(method="B97-3c", basis=""), baseline
+        ) == {"basis"}
+        assert changed_level_fields(CalculationLevel(method="B3LYP"), baseline) == {
+            "method",
+            "basis",
+        }
+
+
+class TestSinglePointLevelEndToEnd:
+    def test_validate_scan_protocol_rejects_invalid_sp_level(self) -> None:
+        coordinate = ScanCoordinate(kind="distance", atoms=(0, 1), start=1.0, end=3.0, n_points=21)
+        protocol_payload: dict[str, Any] = {
+            "coordinate": {
+                "kind": "distance",
+                "atoms": [0, 1],
+                "start": 1.0,
+                "end": 3.0,
+                "n_points": 21,
+            },
+            "scan_optimizer": {"method": "GFN2-xTB"},
+        }
+        protocol = ScanProtocol.from_dict(
+            dict(
+                protocol_payload,
+                single_point={"enabled": True, "method": "GFN2-xTB", "basis": "def2-SVP"},
+            )
+        )
+        with pytest.raises(ValueError, match="single_point level"):
+            validate_scan_protocol(coordinate, protocol)
+        protocol = ScanProtocol.from_dict(
+            dict(protocol_payload, single_point={"enabled": True, "method": "GFN0-xTB"})
+        )
+        with pytest.raises(ValueError, match="policy"):
+            validate_scan_protocol(coordinate, protocol)
+
+    def test_single_point_level_passes_through_canonical_level(self) -> None:
+        from acp.calculations.pes.scan import single_point_level
+
+        warnings: list[str] = []
+        level = single_point_level(
+            SinglePointSpec(method="gfn2", basis="def2-SVP"), warnings=warnings
+        )
+        assert level.method == "GFN2-xTB"
+        assert level.basis is None
+        assert warnings
+
+    def test_run_single_points_forwards_canonical_sp_level(
+        self, fake_backend: FakeBackend, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: dict[str, Any] = {}
+
+        class _SpyExecutor:
+            def __init__(self, **kwargs: Any) -> None:
+                captured.update(kwargs)
+
+            def run(self) -> Any:
+                from acp.calculations.batch._singlepoint_models import (
+                    BatchSinglePointFrameResult,
+                    BatchSinglePointResult,
+                )
+
+                return BatchSinglePointResult(
+                    {
+                        frame_id: BatchSinglePointFrameResult(
+                            frame_id=frame_id,
+                            energy_hartree=-1.0,
+                            status="completed",
+                            cache_key="",
+                        )
+                        for frame_id in captured["frame_ids"]
+                    }
+                )
+
+        monkeypatch.setattr("acp.calculations.pes.scan.BatchSinglePointExecutor", _SpyExecutor)
+        fake_backend.set_result("relaxed_scan", _fake_scan_result(3, tmp_path))
+        request = _dft_request({"method": "GFN2-xTB"}, n_points=3)
+        request["protocol"]["single_point"] = {
+            "enabled": True,
+            "method": "gfn2",
+            "solvent_model": "none",
+            "solvent": "water",
+        }
+        run_pes_scan(request=request, output_dir=tmp_path)
+        assert captured["method"] == "GFN2-xTB"
+        assert captured["solvent"] is None
+        assert captured["solvent_model"] == "none"
+
+
+class TestBondScanEntryContext:
+    """_prepare_bond_scan_input threads the entry context explicitly."""
+
+    @staticmethod
+    def _job_input(protocol: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "source": {
+                "source_type": "xyz_text",
+                "xyz_text": _ETHYLENE_XYZ,
+                "charge": 0,
+                "multiplicity": 1,
+            },
+            "coordinate": {
+                "kind": "distance",
+                "atoms": [0, 1],
+                "start": 1.2,
+                "end": 2.5,
+                "n_points": 5,
+            },
+            "protocol": protocol,
+        }
+
+    def test_strict_submission_rejects_gfn_basis(self) -> None:
+        from fastapi import HTTPException
+
+        from acp.api.v1_routes import _prepare_bond_scan_input
+
+        inp = self._job_input({"scan_optimizer": {"method": "GFN2-xTB", "basis": "def2-SVP"}})
+        with pytest.raises(HTTPException) as excinfo:
+            _prepare_bond_scan_input(inp, object(), entry="strict")
+        assert excinfo.value.status_code == 422
+        assert "basis" in str(excinfo.value.detail)
+
+    def test_strict_submission_rejects_gfn_solvent_model_and_gfn0(self) -> None:
+        from fastapi import HTTPException
+
+        from acp.api.v1_routes import _prepare_bond_scan_input
+
+        inp = self._job_input(
+            {"scan_optimizer": {"method": "GFN2-xTB", "solvent_model": "gbsa", "solvent": "water"}}
+        )
+        with pytest.raises(HTTPException) as excinfo:
+            _prepare_bond_scan_input(inp, object(), entry="strict")
+        assert "ALPB" in str(excinfo.value.detail)
+
+        inp = self._job_input({"scan_optimizer": {"method": "gfn0"}})
+        with pytest.raises(HTTPException) as excinfo:
+            _prepare_bond_scan_input(inp, object(), entry="strict")
+        assert "policy" in str(excinfo.value.detail)
+
+    def test_strict_submission_validates_single_point_level(self) -> None:
+        from fastapi import HTTPException
+
+        from acp.api.v1_routes import _prepare_bond_scan_input
+
+        inp = self._job_input(
+            {"single_point": {"enabled": True, "method": "GFN2-xTB", "basis": "def2-SVP"}}
+        )
+        with pytest.raises(HTTPException) as excinfo:
+            _prepare_bond_scan_input(inp, object(), entry="strict")
+        assert "single_point level" in str(excinfo.value.detail)
+
+    def test_strict_clean_payload_is_byte_identical(self) -> None:
+        from acp.api.v1_routes import _prepare_bond_scan_input
+
+        protocol: dict[str, Any] = {
+            "scan_optimizer": {"method": "GFN2-xTB", "solvent_model": "ALPB", "solvent": "water"},
+            "single_point": {"enabled": True, "method": "B97-3c"},
+        }
+        prepared = _prepare_bond_scan_input(self._job_input(protocol), object(), entry="strict")
+        assert prepared["scan_request"]["protocol"] == protocol
+        assert "level_warnings" not in prepared["scan_request"]
+
+    def test_edit_unchanged_fields_migrate_with_warnings(self) -> None:
+        from acp.api.v1_routes import _prepare_bond_scan_input
+
+        historical = {
+            "scan_optimizer": {
+                "method": "GFN2-xTB",
+                "basis": "def2-SVP",
+                "solvent_model": "cpcm",
+                "solvent": "water",
+            }
+        }
+        prepared = _prepare_bond_scan_input(
+            self._job_input(historical),
+            object(),
+            entry="edit",
+            baseline_protocol=historical,
+        )
+        scan_optimizer = prepared["scan_request"]["protocol"]["scan_optimizer"]
+        assert scan_optimizer["basis"] is None
+        assert scan_optimizer["solvent_model"] == "alpb"
+        assert scan_optimizer["solvent"] == "water"
+        warnings = prepared["scan_request"]["level_warnings"]
+        assert len(warnings) == 2
+        assert all("historical" in message for message in warnings)
+
+    def test_edit_changed_field_is_strict(self) -> None:
+        from fastapi import HTTPException
+
+        from acp.api.v1_routes import _prepare_bond_scan_input
+
+        baseline = {"scan_optimizer": {"method": "GFN2-xTB", "basis": "def2-SVP"}}
+        edited = {"scan_optimizer": {"method": "GFN2-xTB", "basis": "ma-def2-SVP"}}
+        with pytest.raises(HTTPException) as excinfo:
+            _prepare_bond_scan_input(
+                self._job_input(edited),
+                object(),
+                entry="edit",
+                baseline_protocol=baseline,
+            )
+        assert "basis" in str(excinfo.value.detail)
 
 
 # ── V-1 / V-2: ORCA input emission ─────────────────────────────────────
