@@ -22903,6 +22903,14 @@ var CatalogUtils = (function() {
       var offer = funcFilter[base];
       return Array.isArray(offer) && offer.length === 0;
     }
+    // RI family (T16): a method whose RI layer is composite/automatic
+    // (METHOD_META.ri_support !== "user") accepts no user RI/aux choice —
+    // the same payload signal buildFieldRow uses for the RI immutable
+    // badge and the method-change handlers use for their RI reset step.
+    if (base === "ri_approximation" || base === "aux_j_basis" || base === "aux_c_basis") {
+      var riMeta = lookupCI((catalog && catalog.method_meta) || {}, functional) || {};
+      return (riMeta.ri_support || "user") !== "user";
+    }
     // grid / scf_* selects: no DFT basis layer ⇒ no integration grid or
     // SCF dropdowns (mirrors the backend's is_applicable("basis") rule).
     var noBasisLayer = Array.isArray(funcFilter.basis) && funcFilter.basis.length === 0;
@@ -22923,7 +22931,11 @@ var CatalogUtils = (function() {
     if (!levelState) return;
     (fieldNames || []).forEach(function(fn) {
       if (isFieldFamilyLocked(catalog, fn, functional)) {
-        levelState[fn] = fieldBaseName(fn) === "dispersion" ? "none" : "";
+        // Cleared spelling mirrors buildFieldRow / the method-change
+        // handlers: dispersion and ri_approximation clear to "none", the
+        // remaining family-locked fields (basis / grid / scf_* / aux) to "".
+        var lockedBase = fieldBaseName(fn);
+        levelState[fn] = (lockedBase === "dispersion" || lockedBase === "ri_approximation") ? "none" : "";
         return;
       }
       var fd = ((catalog && catalog.field_definitions) || {})[fn] || {};
@@ -22940,6 +22952,44 @@ var CatalogUtils = (function() {
       levelState[fn] = getFieldDefault(catalog, fn, engine, functional,
         levelState.basis || levelState.scan_optimizer_basis);
     });
+  }
+
+  // ── copy scan level → single_point (T16) ─────────────────────────────
+  // Copy the per-point optimization level into the single-point level, then
+  // reconcile EVERY destination field against the COPIED method's family —
+  // the method travels with the copy (scan_optimizer_method → functional),
+  // so the pre-copy target method must never decide what stays valid. A GFN
+  // scan level therefore yields a GFN single-point level with basis/
+  // dispersion/RI/aux/grid/SCF cleared, even when the destination held a
+  // stale DFT configuration (empty source values are not copied, so only the
+  // family sweep can retire those). The gate is the catalog-driven
+  // applyMethodFamilyState above — never a hardcoded inapplicable-field list
+  // (AGENTS anti-pattern #27). The copy field map itself is the feature's
+  // canonical projection (T23 audits it for catalog-driving).
+  function copyScanLevelFields(catalog, srcState, dstState, fieldNames, engine) {
+    if (!srcState || !dstState) return dstState;
+    // Canonical scan_optimizer_* → single_point field projection.
+    var copyMap = {
+      scan_optimizer_method: "functional",
+      scan_optimizer_basis: "basis",
+      scan_optimizer_dispersion: "dispersion",
+      scan_optimizer_solvent_model: "solvent_model",
+      scan_optimizer_solvent: "solvent",
+      scan_optimizer_grid: "grid",
+      scan_optimizer_scf_convergence: "scf_convergence",
+    };
+    for (var sk in copyMap) {
+      if (srcState[sk] !== undefined && srcState[sk] !== "") {
+        dstState[copyMap[sk]] = srcState[sk];
+      }
+    }
+    if (!dstState.engine) dstState.engine = engine || "orca";
+    delete dstState._disabled;
+    // Reconcile against the COPIED method (read AFTER the copy loop) so the
+    // sweep retires every family-inapplicable field — copied or stale.
+    var copiedMethod = dstState.functional || "";
+    applyMethodFamilyState(catalog, dstState, fieldNames, engine, copiedMethod);
+    return dstState;
   }
 
   function getFieldOptions(catalog, fieldName, engine, functional, basis) {
@@ -23056,6 +23106,7 @@ var CatalogUtils = (function() {
     fieldBaseName: fieldBaseName,
     isFieldFamilyLocked: isFieldFamilyLocked,
     applyMethodFamilyState: applyMethodFamilyState,
+    copyScanLevelFields: copyScanLevelFields,
     getFieldOptions: getFieldOptions,
     getFieldDefault: getFieldDefault
   };
@@ -27260,23 +27311,13 @@ async function openMethodConfig() {
         ev.stopPropagation();
         var _src = wizardState.method.stages.scan_optimizer || {};
         var _dst = getLevelState("single_point");
-        // Copy canonical fields from scan_optimizer → single_point
-        var _fieldMap = {
-          scan_optimizer_method: "functional",
-          scan_optimizer_basis: "basis",
-          scan_optimizer_dispersion: "dispersion",
-          scan_optimizer_solvent_model: "solvent_model",
-          scan_optimizer_solvent: "solvent",
-          scan_optimizer_grid: "grid",
-          scan_optimizer_scf_convergence: "scf_convergence",
-        };
-        for (var _sk in _fieldMap) {
-          if (_src[_sk] !== undefined && _src[_sk] !== "") {
-            _dst[_fieldMap[_sk]] = _src[_sk];
-          }
-        }
-        if (!_dst.engine) _dst.engine = "orca";
-        delete _dst._disabled;
+        // T16: copy + family reconciliation in one catalog-driven step.
+        // The method travels with the copy (scan_optimizer_method →
+        // functional), so copyScanLevelFields reconciles every destination
+        // field against the COPIED method's family — copying a GFN scan
+        // level must yield a GFN single-point level with basis/dispersion/
+        // RI/aux/grid/SCF cleared, never a stale DFT configuration.
+        CatalogUtils.copyScanLevelFields(methodCatalogCache, _src, _dst, lvDef.fields || [], engine);
         rebuildLevelCard("single_point");
         scheduleValidate();
       });

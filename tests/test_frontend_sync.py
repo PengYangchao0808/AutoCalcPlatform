@@ -11492,6 +11492,273 @@ def test_catalogutils_family_gating_behavior_node() -> None:
 
 
 # ---------------------------------------------------------------------------
+# T16 — copy-scan-level must not propagate family-inapplicable fields
+# ---------------------------------------------------------------------------
+
+
+def _pes_protocol_builder_source(html: str) -> str:
+    """Extract buildPESProtocolFromMethod(charge, multiplicity) from the HTML."""
+    start = html.index("function buildPESProtocolFromMethod(charge, multiplicity) {")
+    end = html.index("\nasync function submitPESsearchTask()", start)
+    return html[start:end]
+
+
+def test_copy_scan_level_reconciles_against_copied_method_family() -> None:
+    """T16: copy-scan-level reconciles ALL destination fields against the
+    COPIED method's family — never the pre-copy target state.
+
+    The method travels with the copy (scan_optimizer_method → functional),
+    so the family sweep must read the destination's POST-copy functional.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    src = _catalogutils_source(html)
+
+    # The copy procedure lives in CatalogUtils (single testable authority).
+    assert "function copyScanLevelFields(catalog, srcState, dstState, fieldNames, engine)" in src
+    assert "copyScanLevelFields: copyScanLevelFields" in src
+
+    fn = src.split("function copyScanLevelFields(", 1)[1]
+
+    # The canonical copy field map is intact — the copy feature survives —
+    # and the method itself travels with the copy.
+    for mapping in (
+        'scan_optimizer_method: "functional"',
+        'scan_optimizer_basis: "basis"',
+        'scan_optimizer_dispersion: "dispersion"',
+        'scan_optimizer_solvent_model: "solvent_model"',
+        'scan_optimizer_solvent: "solvent"',
+        'scan_optimizer_grid: "grid"',
+        'scan_optimizer_scf_convergence: "scf_convergence"',
+    ):
+        assert mapping in fn, f"copy field map lost {mapping}"
+
+    # Reconciliation runs AFTER the copy loop and keys on the COPIED method
+    # (the destination's post-copy functional) — not the pre-copy target.
+    loop_at = fn.index("for (var sk in copyMap)")
+    sweep_at = fn.index("applyMethodFamilyState(catalog, dstState,")
+    assert loop_at < sweep_at, "family sweep must run after the copy loop"
+    assert 'var copiedMethod = dstState.functional' in fn
+    assert "applyMethodFamilyState(catalog, dstState, fieldNames, engine, copiedMethod)" in fn
+
+    # The DOM handler delegates to the tested helper instead of an inline map.
+    handler = html.split('copyBtn.addEventListener("click"', 1)[1].split(
+        "hdr.appendChild(copyBtn)", 1
+    )[0]
+    assert "CatalogUtils.copyScanLevelFields(methodCatalogCache, _src, _dst, lvDef.fields" in handler
+    assert "_fieldMap" not in handler, "inline copy map must live in CatalogUtils"
+
+    # The family gate covers the RI/aux trio through the ri_support payload
+    # signal (never a hardcoded method list).
+    gate = src.split("function isFieldFamilyLocked(", 1)[1].split(
+        "function applyMethodFamilyState(", 1
+    )[0]
+    assert 'base === "ri_approximation"' in gate
+    assert '(riMeta.ri_support || "user") !== "user"' in gate
+
+    # Locked RI clears to the "none" spelling (dispersion-like), aux to "".
+    sweep = src.split("function applyMethodFamilyState(", 1)[1].split(
+        "function copyScanLevelFields(", 1
+    )[0]
+    assert 'lockedBase === "ri_approximation"' in sweep
+
+
+def test_copy_scan_level_serialized_payload_node() -> None:
+    """T16 behavioral contract: copy a GFN scan level into the single_point
+    level and assert the FINAL SERIALIZED payload (the captured
+    buildPESProtocolFromMethod JSON), not just UI state.
+
+    Copying a GFN scan level over a stale DFT single_point configuration
+    must yield a GFN single-point level whose basis/dispersion/RI/aux/grid/
+    SCF are cleared; a DFT copy must still transfer the valid shared fields.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    from acp.catalog import get_method_catalog
+
+    catalog = get_method_catalog()
+    html = FRONTEND.read_text(encoding="utf-8")
+    cu_src = _catalogutils_source(html)
+    pes_src = _pes_protocol_builder_source(html)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".js", delete=False, encoding="utf-8"
+    ) as f:
+        _ = f.write(cu_src)
+        cu_path = f.name
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".js", delete=False, encoding="utf-8"
+    ) as f:
+        _ = f.write(pes_src)
+        pes_path = f.name
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    ) as f:
+        _ = f.write(json.dumps(catalog))
+        cat_path = f.name
+
+    script = textwrap.dedent(
+        r"""
+        const fs = require("fs");
+        const cuSrc = fs.readFileSync(CU_PATH, "utf8");
+        const pesSrc = fs.readFileSync(PES_PATH, "utf8");
+        const catalog = JSON.parse(fs.readFileSync(CAT_PATH, "utf8"));
+        const CatalogUtils = eval(
+            "(" + cuSrc.replace(/^var\s+CatalogUtils\s*=\s*/, "").replace(/;\s*$/, "") + ")"
+        );
+
+        // Stubs consumed by buildPESProtocolFromMethod (real function source).
+        var methodCatalogCache = catalog;
+        var lookupCI = CatalogUtils.lookupCI;
+        var wizardState = { method: { stages: {} } };
+        const buildPESProtocolFromMethod = eval("(" + pesSrc + ")");
+
+        function eq(name, actual, expected) {
+          const a = JSON.stringify(actual), e = JSON.stringify(expected);
+          if (a !== e) {
+            console.error("FAIL " + name + ": got " + a + " want " + e);
+            process.exit(1);
+          }
+        }
+        function ok(name, cond, detail) {
+          if (!cond) {
+            console.error("FAIL " + name + ": " + detail);
+            process.exit(1);
+          }
+        }
+
+        const spFields = catalog.method_schemas.pes_scan.method_levels.find(
+          (l) => l.level_id === "single_point"
+        ).fields;
+
+        function runCopy(srcLevel, dstLevel) {
+          wizardState.method.stages = {
+            scan_driver: {},
+            scan_optimizer: srcLevel,
+            single_point: dstLevel,
+          };
+          CatalogUtils.copyScanLevelFields(
+            catalog,
+            wizardState.method.stages.scan_optimizer,
+            wizardState.method.stages.single_point,
+            spFields,
+            "orca"
+          );
+          return buildPESProtocolFromMethod(0, 1);
+        }
+
+        // A stale DFT single_point configuration the copy must reconcile.
+        function staleDftTarget() {
+          return {
+            engine: "orca",
+            functional: "B3LYP",
+            basis: "def2-TZVP",
+            dispersion: "D4",
+            ri_approximation: "RIJCOSX",
+            aux_j_basis: "def2/J",
+            aux_c_basis: "AutoAux",
+            solvent_model: "CPCM",
+            solvent: "chloroform",
+            grid: "DefGrid2",
+            scf_convergence: "Tight",
+            single_point_resume: true,
+          };
+        }
+
+        // ── (A) GFN copy: stale DFT target must be reconciled away ──
+        const gfnPayload = runCopy({
+          scan_optimizer_method: "GFN2-xTB",
+          scan_optimizer_basis: "",
+          scan_optimizer_dispersion: "none",
+          scan_optimizer_solvent_model: "ALPB",
+          scan_optimizer_solvent: "water",
+          scan_optimizer_grid: "",
+          scan_optimizer_scf_convergence: "",
+        }, staleDftTarget());
+        const captured = JSON.stringify(gfnPayload);
+        const sp = gfnPayload.single_point;
+        eq("gfn copy: method is the copied one", sp.method, "GFN2-xTB");
+        eq("gfn copy: basis cleared", sp.basis, null);
+        ok("gfn copy: dispersion cleared",
+           sp.dispersion === "none" || sp.dispersion === null, captured);
+        ok("gfn copy: ri cleared",
+           sp.ri_approximation === "none" || sp.ri_approximation === null, captured);
+        eq("gfn copy: aux_j cleared", sp.aux_j_basis, null);
+        eq("gfn copy: aux_c cleared", sp.aux_c_basis, null);
+        eq("gfn copy: grid cleared", sp.grid, null);
+        eq("gfn copy: scf_convergence cleared", sp.scf_convergence, null);
+        // Valid shared fields still travel with the copy.
+        eq("gfn copy: solvent model copied", sp.solvent_model, "ALPB");
+        eq("gfn copy: solvent copied", sp.solvent, "water");
+        eq("gfn copy: single_point enabled", gfnPayload.single_point.enabled, true);
+        // No stale family-inapplicable value may reach the captured payload.
+        for (const stale of ["def2-TZVP", "RIJCOSX", "def2/J", "AutoAux",
+                             "DefGrid2", "CPCM", "chloroform", "D4"]) {
+          ok("captured payload free of stale '" + stale + "'",
+             captured.indexOf(stale) < 0, captured);
+        }
+
+        // ── (B) DFT copy: valid shared fields still copy ──
+        const dftPayload = runCopy({
+          scan_optimizer_method: "B3LYP",
+          scan_optimizer_basis: "def2-TZVP",
+          scan_optimizer_dispersion: "D4",
+          scan_optimizer_solvent_model: "SMD",
+          scan_optimizer_solvent: "toluene",
+          scan_optimizer_grid: "DefGrid2",
+          scan_optimizer_scf_convergence: "Tight",
+        }, {
+          engine: "orca",
+          functional: "r2SCAN-3c",
+          basis: "mTZVP",
+          dispersion: "none",
+          ri_approximation: "none",
+          aux_j_basis: "",
+          aux_c_basis: "",
+          solvent_model: "none",
+          solvent: "",
+          grid: "",
+          scf_convergence: "Tight",
+          single_point_resume: true,
+        });
+        const sp2 = dftPayload.single_point;
+        eq("dft copy: method copied", sp2.method, "B3LYP");
+        eq("dft copy: basis copied", sp2.basis, "def2-TZVP");
+        eq("dft copy: dispersion copied", sp2.dispersion, "D4");
+        eq("dft copy: solvent model copied", sp2.solvent_model, "SMD");
+        eq("dft copy: solvent copied", sp2.solvent, "toluene");
+        eq("dft copy: grid copied", sp2.grid, "DefGrid2");
+        eq("dft copy: scf_convergence copied", sp2.scf_convergence, "Tight");
+        eq("dft copy: ri left at target spelling", sp2.ri_approximation, "none");
+
+        console.log("PASS");
+        """
+    )
+    script = (
+        script.replace("CU_PATH", json.dumps(cu_path))
+        .replace("PES_PATH", json.dumps(pes_path))
+        .replace("CAT_PATH", json.dumps(cat_path))
+    )
+
+    try:
+        result = subprocess.run(
+            ["node", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"copy-scan-level serialized-payload node test failed:\n"
+            f"stdout={result.stdout}\nstderr={result.stderr}"
+        )
+        assert "PASS" in result.stdout
+    finally:
+        Path(cu_path).unlink(missing_ok=True)
+        Path(pes_path).unlink(missing_ok=True)
+        Path(cat_path).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
 # TS Mode Editor — module integration + vibration viewer quick-create
 # ---------------------------------------------------------------------------
 
