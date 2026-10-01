@@ -108,9 +108,9 @@ def test_picker_css_file_exists() -> None:
 def test_picker_css_linked_in_html() -> None:
     """CSS file is linked in ACP_Workbench_v2.html."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert '<link rel="stylesheet" href="css/structure_source_picker.css">' in html, (
-        "structure_source_picker.css not linked in HTML"
-    )
+    assert re.search(
+        r'<link rel="stylesheet" href="css/structure_source_picker\.css(?:\?v=[^"]*)?">', html
+    ), "structure_source_picker.css not linked in HTML"
 
 
 def test_editor_density_uses_compact_inline_controls() -> None:
@@ -392,8 +392,11 @@ def test_picker_css_loads_after_structure_viewer_css() -> None:
     """picker CSS loads after structure_viewer.css (correct cascade order)."""
     html = FRONTEND.read_text(encoding="utf-8")
     sv_pos = html.index('<link rel="stylesheet" href="css/structure_viewer.css">')
-    sp_pos = html.index('<link rel="stylesheet" href="css/structure_source_picker.css">')
-    assert sp_pos > sv_pos, "picker CSS must load after structure_viewer.css"
+    sp_match = re.search(
+        r'<link rel="stylesheet" href="css/structure_source_picker\.css(?:\?v=[^"]*)?">', html
+    )
+    assert sp_match is not None, "structure_source_picker.css link tag missing"
+    assert sp_match.start() > sv_pos, "picker CSS must load after structure_viewer.css"
 
 
 def test_picker_js_loads_after_vibration_viewer() -> None:
@@ -575,7 +578,11 @@ def test_task_input_workspace_css_has_design_tokens() -> None:
 def test_task_input_workspace_css_linked_after_picker_css() -> None:
     """task_input_workspace.css linked AFTER structure_source_picker.css."""
     html = FRONTEND.read_text(encoding="utf-8")
-    sp_pos = html.index('<link rel="stylesheet" href="css/structure_source_picker.css">')
+    sp_match = re.search(
+        r'<link rel="stylesheet" href="css/structure_source_picker\.css(?:\?v=[^"]*)?">', html
+    )
+    assert sp_match is not None, "structure_source_picker.css link tag missing"
+    sp_pos = sp_match.start()
     tiw_match = re.search(
         r'<link rel="stylesheet" href="css/task_input_workspace\.css(?:\?v=[^"]*)?">', html
     )

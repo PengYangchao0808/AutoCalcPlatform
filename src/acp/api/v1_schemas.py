@@ -312,6 +312,7 @@ class V1JobRecordModel(BaseModel):
     progress_state: str | None = None  # "determinate" | "indeterminate" | None
     stage_index: int | None = None  # 1-based index of current stage
     stage_total: int | None = None  # total number of stages
+    stage_order: list[str] = Field(default_factory=list)
     stage_progress: float | None = None  # 0-1 progress within current stage
     stage_detail: str | None = None  # e.g. "17/40 scan points"
     latest_event: str | None = None  # human-readable last event
@@ -776,6 +777,7 @@ class V1JobDetailResponse(BaseModel):
     recovery: JobRecovery = Field(default_factory=JobRecovery)
     metrics: JobMetrics | None = None
     effective_config: dict[str, Any] | None = None
+    structure_summary: dict[str, Any] = Field(default_factory=dict)
 
 
 class DecisionPointModel(BaseModel):
@@ -1004,6 +1006,8 @@ class StructureSourceSummary(BaseModel):
     source_uid: str = ""
     job_resolved_name: str | None = None
     usage_status: str = "active"
+    structure_facts: dict[str, Any] = Field(default_factory=dict)
+    content_checksum: str | None = None
 
 
 class StructureSourceListResponse(BaseModel):
@@ -1535,6 +1539,7 @@ class S2FrameModel(BaseModel):
 
 
 class S2ProfileResponse(BaseModel):
+    selection_mode: str = "manual_only"
     job_id: str
     mode: str
     status: str
@@ -1549,6 +1554,7 @@ class S2ProfileResponse(BaseModel):
 
 
 class S2CandidatesResponse(BaseModel):
+    selection_mode: str = "manual_only"
     job_id: str
     mode: str
     status: str

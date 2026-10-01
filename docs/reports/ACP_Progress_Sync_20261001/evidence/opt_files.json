@@ -1,0 +1,7561 @@
+{
+  "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+  "files": [
+    {
+      "path": "WORK/03_OPT/cycles",
+      "size": 0,
+      "modified": 1790835759.2090275,
+      "is_dir": true
+    },
+    {
+      "path": "WORK/03_OPT/optimization_trajectory.json",
+      "size": 15558,
+      "modified": 1790835774.074434,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.001.hess",
+      "size": 336925,
+      "modified": 1790832820.8127697,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.002.hess",
+      "size": 336925,
+      "modified": 1790833151.004,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.003.hess",
+      "size": 336925,
+      "modified": 1790833476.3163996,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.004.hess",
+      "size": 336925,
+      "modified": 1790833800.5013564,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.005.hess",
+      "size": 336925,
+      "modified": 1790834123.4699676,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.006.hess",
+      "size": 336925,
+      "modified": 1790834443.633331,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.007.hess",
+      "size": 336925,
+      "modified": 1790834768.9499047,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.008.hess",
+      "size": 336925,
+      "modified": 1790835085.8884685,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.009.hess",
+      "size": 336925,
+      "modified": 1790835404.9485345,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.010.hess",
+      "size": 336925,
+      "modified": 1790835731.3193996,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.bas0",
+      "size": 644228,
+      "modified": 1790832614.5400536,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.bas1",
+      "size": 1623716,
+      "modified": 1790832614.5499485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.bas2",
+      "size": 4,
+      "modified": 1790832614.5499485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.bas3",
+      "size": 4,
+      "modified": 1790832614.5499485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.bas4",
+      "size": 4,
+      "modified": 1790832614.5499485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.bas5",
+      "size": 4,
+      "modified": 1790832614.5499485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790835778.6787753,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.densities",
+      "size": 1336336,
+      "modified": 1790835787.7923777,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835787.7923777,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.engrad",
+      "size": 3427,
+      "modified": 1790835774.1914341,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.gbw",
+      "size": 1935508,
+      "modified": 1790835787.907747,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.gbw1",
+      "size": 1935508,
+      "modified": 1790835787.907747,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.geometries.tmp.0",
+      "size": 120992,
+      "modified": 1790835797.3208442,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.hess",
+      "size": 336925,
+      "modified": 1790835729.0436628,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.hostnames",
+      "size": 256,
+      "modified": 1790835787.907747,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.inp",
+      "size": 1623,
+      "modified": 1790832614.460894,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.lastgrad",
+      "size": 5489,
+      "modified": 1790835797.2167249,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.lastint",
+      "size": 9196,
+      "modified": 1790835778.6883864,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.lastscf",
+      "size": 14768,
+      "modified": 1790835787.8981328,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.opt",
+      "size": 24332,
+      "modified": 1790835756.4108,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.out",
+      "size": 3827633,
+      "modified": 1790837570.8593173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.property.txt",
+      "size": 5968775,
+      "modified": 1790835775.9644341,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.propint.tmp.0",
+      "size": 2324944,
+      "modified": 1790835787.7923777,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt.xyz",
+      "size": 2337,
+      "modified": 1790835774.182434,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.densities",
+      "size": 1336336,
+      "modified": 1790835911.4027877,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835911.4027877,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.gbw",
+      "size": 1935508,
+      "modified": 1790835911.505207,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.hostnames",
+      "size": 16,
+      "modified": 1790835800.711297,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.property.txt",
+      "size": 10797,
+      "modified": 1790835987.9039743,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.res.Dipoles",
+      "size": 28,
+      "modified": 1790835987.971316,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00000.res.Gradients",
+      "size": 700,
+      "modified": 1790835987.9135945,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.densities",
+      "size": 1336336,
+      "modified": 1790835896.7490516,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835896.7490516,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.gbw",
+      "size": 1935508,
+      "modified": 1790835896.8547456,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.hostnames",
+      "size": 16,
+      "modified": 1790835800.537195,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.property.txt",
+      "size": 10851,
+      "modified": 1790835971.4031332,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.res.Dipoles",
+      "size": 28,
+      "modified": 1790835971.469168,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00001.res.Gradients",
+      "size": 700,
+      "modified": 1790835971.4125667,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.densities",
+      "size": 1336336,
+      "modified": 1790835916.3257957,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835916.3257957,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.gbw",
+      "size": 1935508,
+      "modified": 1790835916.432424,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.hostnames",
+      "size": 16,
+      "modified": 1790835800.508178,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.property.txt",
+      "size": 10797,
+      "modified": 1790835991.7546875,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.res.Dipoles",
+      "size": 28,
+      "modified": 1790835991.8159053,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00002.res.Gradients",
+      "size": 700,
+      "modified": 1790835991.7648904,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.densities",
+      "size": 1336336,
+      "modified": 1790835918.2354133,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835918.2354133,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.gbw",
+      "size": 1935508,
+      "modified": 1790835918.3517354,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.hostnames",
+      "size": 16,
+      "modified": 1790835800.653263,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.property.txt",
+      "size": 10851,
+      "modified": 1790835997.5336957,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.res.Dipoles",
+      "size": 28,
+      "modified": 1790835997.6105838,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00003.res.Gradients",
+      "size": 700,
+      "modified": 1790835997.5529177,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.densities",
+      "size": 1336336,
+      "modified": 1790835911.998682,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835911.998682,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.gbw",
+      "size": 1935508,
+      "modified": 1790835912.1104121,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.hostnames",
+      "size": 16,
+      "modified": 1790835800.537195,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.property.txt",
+      "size": 10792,
+      "modified": 1790835986.864984,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.res.Dipoles",
+      "size": 28,
+      "modified": 1790835986.922706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00004.res.Gradients",
+      "size": 700,
+      "modified": 1790835986.8746045,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.densities",
+      "size": 1336336,
+      "modified": 1790835915.56001,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835915.56001,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.gbw",
+      "size": 1935508,
+      "modified": 1790835915.6763318,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.hostnames",
+      "size": 16,
+      "modified": 1790835800.6919525,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.property.txt",
+      "size": 10738,
+      "modified": 1790835993.417772,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.res.Dipoles",
+      "size": 28,
+      "modified": 1790835993.4789898,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00005.res.Gradients",
+      "size": 700,
+      "modified": 1790835993.427975,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.densities",
+      "size": 1336336,
+      "modified": 1790835920.4164488,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835920.4164488,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.gbw",
+      "size": 1935508,
+      "modified": 1790835920.5133836,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.hostnames",
+      "size": 16,
+      "modified": 1790835800.5855567,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.property.txt",
+      "size": 10797,
+      "modified": 1790835996.860925,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.res.Dipoles",
+      "size": 28,
+      "modified": 1790835996.918591,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00006.res.Gradients",
+      "size": 700,
+      "modified": 1790835996.870536,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.densities",
+      "size": 1336336,
+      "modified": 1790835919.9220808,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835919.9220808,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.gbw",
+      "size": 1935508,
+      "modified": 1790835920.0287092,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.hostnames",
+      "size": 16,
+      "modified": 1790835800.7209694,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.property.txt",
+      "size": 10797,
+      "modified": 1790836000.841727,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.res.Dipoles",
+      "size": 28,
+      "modified": 1790836000.9076638,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00007.res.Gradients",
+      "size": 700,
+      "modified": 1790836000.8511465,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.densities",
+      "size": 1336336,
+      "modified": 1790835906.840471,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835906.840471,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.gbw",
+      "size": 1935508,
+      "modified": 1790835906.9335794,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.hostnames",
+      "size": 16,
+      "modified": 1790835800.4888334,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.property.txt",
+      "size": 10797,
+      "modified": 1790835981.814338,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.res.Dipoles",
+      "size": 28,
+      "modified": 1790835981.8720598,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00008.res.Gradients",
+      "size": 700,
+      "modified": 1790835981.8335786,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.densities",
+      "size": 1336336,
+      "modified": 1790835907.1663506,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835907.1663506,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.gbw",
+      "size": 1935508,
+      "modified": 1790835907.2594593,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.hostnames",
+      "size": 16,
+      "modified": 1790835800.4694886,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.property.txt",
+      "size": 10797,
+      "modified": 1790835981.7950976,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.res.Dipoles",
+      "size": 28,
+      "modified": 1790835981.8528192,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00009.res.Gradients",
+      "size": 700,
+      "modified": 1790835981.8047178,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.densities",
+      "size": 1336336,
+      "modified": 1790835906.5145912,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835906.5145912,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.gbw",
+      "size": 1935508,
+      "modified": 1790835906.6263213,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.hostnames",
+      "size": 16,
+      "modified": 1790835800.5565398,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.property.txt",
+      "size": 10851,
+      "modified": 1790835981.3814256,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.res.Dipoles",
+      "size": 28,
+      "modified": 1790835981.4487674,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00010.res.Gradients",
+      "size": 700,
+      "modified": 1790835981.400666,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.densities",
+      "size": 1336336,
+      "modified": 1790835911.7845325,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835911.7845325,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.gbw",
+      "size": 1935508,
+      "modified": 1790835911.9055736,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.hostnames",
+      "size": 16,
+      "modified": 1790835800.68228,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.property.txt",
+      "size": 10797,
+      "modified": 1790835990.060994,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.res.Dipoles",
+      "size": 28,
+      "modified": 1790835990.1426177,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00011.res.Gradients",
+      "size": 700,
+      "modified": 1790835990.0814,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.densities",
+      "size": 1336336,
+      "modified": 1790835926.3117094,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835926.3117094,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.gbw",
+      "size": 1935508,
+      "modified": 1790835926.4233139,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.hostnames",
+      "size": 16,
+      "modified": 1790835800.6339183,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.property.txt",
+      "size": 10851,
+      "modified": 1790836005.730466,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.res.Dipoles",
+      "size": 28,
+      "modified": 1790836005.786983,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00012.res.Gradients",
+      "size": 700,
+      "modified": 1790836005.7398853,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.densities",
+      "size": 1336336,
+      "modified": 1790835915.3758335,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835915.3758335,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.gbw",
+      "size": 1935508,
+      "modified": 1790835915.4727685,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.hostnames",
+      "size": 16,
+      "modified": 1790835800.450144,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.property.txt",
+      "size": 10797,
+      "modified": 1790835991.1119,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.res.Dipoles",
+      "size": 28,
+      "modified": 1790835991.183321,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00013.res.Gradients",
+      "size": 700,
+      "modified": 1790835991.1221032,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.densities",
+      "size": 1336336,
+      "modified": 1790835919.4470997,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835919.4470997,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.gbw",
+      "size": 1935508,
+      "modified": 1790835919.5440347,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.hostnames",
+      "size": 16,
+      "modified": 1790835800.68228,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.property.txt",
+      "size": 10797,
+      "modified": 1790836000.116423,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.res.Dipoles",
+      "size": 28,
+      "modified": 1790836000.1823595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00014.res.Gradients",
+      "size": 700,
+      "modified": 1790836000.1258423,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.densities",
+      "size": 1336336,
+      "modified": 1790835920.5327706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.densitiesinfo",
+      "size": 1838,
+      "modified": 1790835920.5327706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.gbw",
+      "size": 1935508,
+      "modified": 1790835920.6297057,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.hostnames",
+      "size": 16,
+      "modified": 1790835800.68228,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.property.txt",
+      "size": 10797,
+      "modified": 1790836001.651807,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.res.Dipoles",
+      "size": 28,
+      "modified": 1790836001.7083242,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00015.res.Gradients",
+      "size": 700,
+      "modified": 1790836001.6612265,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.densities",
+      "size": 1336336,
+      "modified": 1790836097.7168818,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836097.7168818,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.gbw",
+      "size": 1935508,
+      "modified": 1790836097.832251,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.hostnames",
+      "size": 16,
+      "modified": 1790835974.1338782,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.property.txt",
+      "size": 10797,
+      "modified": 1790836178.0242836,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.res.Dipoles",
+      "size": 28,
+      "modified": 1790836178.0913339,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00016.res.Gradients",
+      "size": 700,
+      "modified": 1790836178.033862,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.densities",
+      "size": 1336336,
+      "modified": 1790836101.8802814,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836101.8802814,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.gbw",
+      "size": 1935508,
+      "modified": 1790836102.0052845,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.hostnames",
+      "size": 16,
+      "modified": 1790835984.2963698,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.property.txt",
+      "size": 10851,
+      "modified": 1790836178.6756282,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.res.Dipoles",
+      "size": 28,
+      "modified": 1790836178.7330997,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00017.res.Gradients",
+      "size": 700,
+      "modified": 1790836178.6852067,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.densities",
+      "size": 1336336,
+      "modified": 1790836108.2360103,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836108.2360103,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.gbw",
+      "size": 1935508,
+      "modified": 1790836108.3321536,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.hostnames",
+      "size": 16,
+      "modified": 1790835984.6619403,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.property.txt",
+      "size": 10797,
+      "modified": 1790836184.3579597,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.res.Dipoles",
+      "size": 28,
+      "modified": 1790836184.415286,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00018.res.Gradients",
+      "size": 700,
+      "modified": 1790836184.3675141,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.densities",
+      "size": 1336336,
+      "modified": 1790836100.4667845,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836100.4667845,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.gbw",
+      "size": 1935508,
+      "modified": 1790836100.582172,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.hostnames",
+      "size": 16,
+      "modified": 1790835984.6619403,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.property.txt",
+      "size": 10738,
+      "modified": 1790836176.7215946,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.res.Dipoles",
+      "size": 28,
+      "modified": 1790836176.7982233,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00019.res.Gradients",
+      "size": 700,
+      "modified": 1790836176.731173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.densities",
+      "size": 1336336,
+      "modified": 1790836106.4284723,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836106.4284723,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.gbw",
+      "size": 1935508,
+      "modified": 1790836106.5438597,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.hostnames",
+      "size": 16,
+      "modified": 1790835989.7242959,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.property.txt",
+      "size": 10797,
+      "modified": 1790836182.0266953,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.res.Dipoles",
+      "size": 28,
+      "modified": 1790836182.0935757,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00020.res.Gradients",
+      "size": 700,
+      "modified": 1790836182.045804,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.densities",
+      "size": 1336336,
+      "modified": 1790836106.072694,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836106.072694,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.gbw",
+      "size": 1935508,
+      "modified": 1790836106.178466,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.hostnames",
+      "size": 16,
+      "modified": 1790835990.9486525,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.property.txt",
+      "size": 10797,
+      "modified": 1790836182.752827,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.res.Dipoles",
+      "size": 28,
+      "modified": 1790836182.8292618,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00021.res.Gradients",
+      "size": 700,
+      "modified": 1790836182.7719355,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.densities",
+      "size": 1336336,
+      "modified": 1790836117.148284,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836117.148284,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.gbw",
+      "size": 1935508,
+      "modified": 1790836117.2732599,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.hostnames",
+      "size": 16,
+      "modified": 1790835993.2851334,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.property.txt",
+      "size": 10797,
+      "modified": 1790836197.1766465,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.res.Dipoles",
+      "size": 28,
+      "modified": 1790836197.243915,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00022.res.Gradients",
+      "size": 700,
+      "modified": 1790836197.195866,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.densities",
+      "size": 1336336,
+      "modified": 1790836110.745345,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836110.745345,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.gbw",
+      "size": 1935508,
+      "modified": 1790836110.8607168,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.hostnames",
+      "size": 16,
+      "modified": 1790835994.2285771,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.property.txt",
+      "size": 10797,
+      "modified": 1790836187.6159976,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.res.Dipoles",
+      "size": 28,
+      "modified": 1790836187.6733236,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00023.res.Gradients",
+      "size": 700,
+      "modified": 1790836187.6255517,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.densities",
+      "size": 1336336,
+      "modified": 1790836114.8602636,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836114.8602636,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.gbw",
+      "size": 1935508,
+      "modified": 1790836114.9852395,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.hostnames",
+      "size": 16,
+      "modified": 1790835996.1400993,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.property.txt",
+      "size": 10792,
+      "modified": 1790836193.3807673,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.res.Dipoles",
+      "size": 28,
+      "modified": 1790836193.457646,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00024.res.Gradients",
+      "size": 700,
+      "modified": 1790836193.399987,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.densities",
+      "size": 1336336,
+      "modified": 1790836124.2048101,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836124.2048101,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.gbw",
+      "size": 1935508,
+      "modified": 1790836124.3201883,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.hostnames",
+      "size": 16,
+      "modified": 1790835997.76436,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.property.txt",
+      "size": 10797,
+      "modified": 1790836204.47504,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.res.Dipoles",
+      "size": 28,
+      "modified": 1790836204.542911,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00025.res.Gradients",
+      "size": 700,
+      "modified": 1790836204.484736,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.densities",
+      "size": 1336336,
+      "modified": 1790836111.485647,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836111.485647,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.gbw",
+      "size": 1935508,
+      "modified": 1790836111.6010187,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.hostnames",
+      "size": 16,
+      "modified": 1790835999.6360264,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.property.txt",
+      "size": 10851,
+      "modified": 1790836186.9280834,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.res.Dipoles",
+      "size": 28,
+      "modified": 1790836186.9854095,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00026.res.Gradients",
+      "size": 700,
+      "modified": 1790836186.9376378,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.densities",
+      "size": 1336336,
+      "modified": 1790836116.119636,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836116.119636,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.gbw",
+      "size": 1935508,
+      "modified": 1790836116.244612,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.hostnames",
+      "size": 16,
+      "modified": 1790836000.4178479,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.property.txt",
+      "size": 10797,
+      "modified": 1790836194.3129199,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.res.Dipoles",
+      "size": 28,
+      "modified": 1790836194.3705788,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00027.res.Gradients",
+      "size": 700,
+      "modified": 1790836194.3225298,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.densities",
+      "size": 1336336,
+      "modified": 1790836122.7529721,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836122.7529721,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.gbw",
+      "size": 1935508,
+      "modified": 1790836122.8587298,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.hostnames",
+      "size": 16,
+      "modified": 1790836002.9611225,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.property.txt",
+      "size": 10797,
+      "modified": 1790836204.3296022,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.res.Dipoles",
+      "size": 28,
+      "modified": 1790836204.3877773,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00028.res.Gradients",
+      "size": 700,
+      "modified": 1790836204.3489938,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.densities",
+      "size": 1336336,
+      "modified": 1790836123.8202157,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836123.8202157,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.gbw",
+      "size": 1935508,
+      "modified": 1790836123.9259791,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.hostnames",
+      "size": 16,
+      "modified": 1790836003.761783,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.property.txt",
+      "size": 10851,
+      "modified": 1790836205.560976,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.res.Dipoles",
+      "size": 28,
+      "modified": 1790836205.628847,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00029.res.Gradients",
+      "size": 700,
+      "modified": 1790836205.5803676,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.densities",
+      "size": 1336336,
+      "modified": 1790836122.4934068,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836122.4934068,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.gbw",
+      "size": 1935508,
+      "modified": 1790836122.5895422,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.hostnames",
+      "size": 16,
+      "modified": 1790836004.4965067,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.property.txt",
+      "size": 10797,
+      "modified": 1790836200.616089,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.res.Dipoles",
+      "size": 28,
+      "modified": 1790836200.6742642,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00030.res.Gradients",
+      "size": 700,
+      "modified": 1790836200.6257849,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.densities",
+      "size": 1336336,
+      "modified": 1790836126.0797074,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836126.0797074,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.gbw",
+      "size": 1935508,
+      "modified": 1790836126.2047007,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.hostnames",
+      "size": 16,
+      "modified": 1790836008.4953651,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.property.txt",
+      "size": 10851,
+      "modified": 1790836206.7535663,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.res.Dipoles",
+      "size": 28,
+      "modified": 1790836206.8117416,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00031.res.Gradients",
+      "size": 700,
+      "modified": 1790836206.7632623,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.densities",
+      "size": 1336336,
+      "modified": 1790836285.5759616,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836285.5759616,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.gbw",
+      "size": 1935508,
+      "modified": 1790836285.6886277,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.hostnames",
+      "size": 16,
+      "modified": 1790836179.5951734,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.property.txt",
+      "size": 10738,
+      "modified": 1790836361.8662546,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.res.Dipoles",
+      "size": 28,
+      "modified": 1790836361.9239223,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00032.res.Gradients",
+      "size": 700,
+      "modified": 1790836361.885477,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.densities",
+      "size": 1336336,
+      "modified": 1790836294.9955292,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836294.9955292,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.gbw",
+      "size": 1935508,
+      "modified": 1790836295.1301775,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.hostnames",
+      "size": 16,
+      "modified": 1790836180.9936485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.property.txt",
+      "size": 10738,
+      "modified": 1790836377.2825902,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.res.Dipoles",
+      "size": 28,
+      "modified": 1790836377.3498662,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00033.res.Gradients",
+      "size": 700,
+      "modified": 1790836377.301812,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.densities",
+      "size": 1336336,
+      "modified": 1790836292.2640944,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836292.2640944,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.gbw",
+      "size": 1935508,
+      "modified": 1790836292.3891249,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.hostnames",
+      "size": 16,
+      "modified": 1790836181.5871947,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.property.txt",
+      "size": 10797,
+      "modified": 1790836369.2958815,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.res.Dipoles",
+      "size": 28,
+      "modified": 1790836369.3631587,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00034.res.Gradients",
+      "size": 700,
+      "modified": 1790836369.3054926,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.densities",
+      "size": 1336336,
+      "modified": 1790836295.7649477,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836295.7649477,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.gbw",
+      "size": 1935508,
+      "modified": 1790836295.8803604,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.hostnames",
+      "size": 16,
+      "modified": 1790836184.8738954,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.property.txt",
+      "size": 10797,
+      "modified": 1790836373.9956686,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.res.Dipoles",
+      "size": 28,
+      "modified": 1790836374.0725555,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00035.res.Gradients",
+      "size": 700,
+      "modified": 1790836374.0148904,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.densities",
+      "size": 1336336,
+      "modified": 1790836294.9570584,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836294.9570584,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.gbw",
+      "size": 1935508,
+      "modified": 1790836295.0724711,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.hostnames",
+      "size": 16,
+      "modified": 1790836185.580918,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.property.txt",
+      "size": 10797,
+      "modified": 1790836371.967745,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.res.Dipoles",
+      "size": 28,
+      "modified": 1790836372.0254111,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00036.res.Gradients",
+      "size": 700,
+      "modified": 1790836371.977356,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.densities",
+      "size": 1336336,
+      "modified": 1790836303.698455,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836303.698455,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.gbw",
+      "size": 1935508,
+      "modified": 1790836303.8330092,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.hostnames",
+      "size": 16,
+      "modified": 1790836187.262486,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.property.txt",
+      "size": 10851,
+      "modified": 1790836383.4623098,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.res.Dipoles",
+      "size": 28,
+      "modified": 1790836383.5391932,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00037.res.Gradients",
+      "size": 700,
+      "modified": 1790836383.4815307,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.densities",
+      "size": 1336336,
+      "modified": 1790836299.2156522,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836299.2156522,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.gbw",
+      "size": 1935508,
+      "modified": 1790836299.3348155,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.hostnames",
+      "size": 16,
+      "modified": 1790836189.7770846,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.property.txt",
+      "size": 10797,
+      "modified": 1790836377.849632,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.res.Dipoles",
+      "size": 28,
+      "modified": 1790836377.9169083,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00038.res.Gradients",
+      "size": 700,
+      "modified": 1790836377.859243,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.densities",
+      "size": 1336336,
+      "modified": 1790836303.1506274,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836303.1506274,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.gbw",
+      "size": 1935508,
+      "modified": 1790836303.2755706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.hostnames",
+      "size": 16,
+      "modified": 1790836190.4786017,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.property.txt",
+      "size": 10797,
+      "modified": 1790836382.2610092,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.res.Dipoles",
+      "size": 28,
+      "modified": 1790836382.3282819,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00039.res.Gradients",
+      "size": 700,
+      "modified": 1790836382.2706196,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.densities",
+      "size": 1336336,
+      "modified": 1790836311.525442,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836311.525442,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.gbw",
+      "size": 1935508,
+      "modified": 1790836311.628978,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.hostnames",
+      "size": 16,
+      "modified": 1790836196.1868348,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.property.txt",
+      "size": 10797,
+      "modified": 1790836391.3619668,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.res.Dipoles",
+      "size": 28,
+      "modified": 1790836391.4292352,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00040.res.Gradients",
+      "size": 700,
+      "modified": 1790836391.3811862,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.densities",
+      "size": 1336336,
+      "modified": 1790836309.1911721,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836309.1911721,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.gbw",
+      "size": 1935508,
+      "modified": 1790836309.3041205,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.hostnames",
+      "size": 16,
+      "modified": 1790836197.090158,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.property.txt",
+      "size": 10797,
+      "modified": 1790836386.4799776,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.res.Dipoles",
+      "size": 28,
+      "modified": 1790836386.556861,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00041.res.Gradients",
+      "size": 700,
+      "modified": 1790836386.489588,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.densities",
+      "size": 1336336,
+      "modified": 1790836302.0891707,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836302.0891707,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.gbw",
+      "size": 1935508,
+      "modified": 1790836302.1984036,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.hostnames",
+      "size": 16,
+      "modified": 1790836201.5953705,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.property.txt",
+      "size": 10851,
+      "modified": 1790836382.3378923,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.res.Dipoles",
+      "size": 28,
+      "modified": 1790836382.4051652,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00042.res.Gradients",
+      "size": 700,
+      "modified": 1790836382.3571131,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.densities",
+      "size": 1336336,
+      "modified": 1790836313.0973089,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836313.0973089,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.gbw",
+      "size": 1935508,
+      "modified": 1790836313.2196698,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.hostnames",
+      "size": 16,
+      "modified": 1790836203.4763668,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.property.txt",
+      "size": 10797,
+      "modified": 1790836390.304893,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.res.Dipoles",
+      "size": 28,
+      "modified": 1790836390.381771,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00043.res.Gradients",
+      "size": 700,
+      "modified": 1790836390.3241127,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.densities",
+      "size": 1336336,
+      "modified": 1790836309.3888319,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836309.3888319,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.gbw",
+      "size": 1935508,
+      "modified": 1790836309.5111928,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.hostnames",
+      "size": 16,
+      "modified": 1790836207.3422234,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.property.txt",
+      "size": 10851,
+      "modified": 1790836390.103088,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.res.Dipoles",
+      "size": 28,
+      "modified": 1790836390.1703563,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00044.res.Gradients",
+      "size": 700,
+      "modified": 1790836390.1126978,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.densities",
+      "size": 1336336,
+      "modified": 1790836304.3904479,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836304.3904479,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.gbw",
+      "size": 1935508,
+      "modified": 1790836304.50578,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.hostnames",
+      "size": 16,
+      "modified": 1790836207.304431,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.property.txt",
+      "size": 10738,
+      "modified": 1790836381.2999384,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.res.Dipoles",
+      "size": 28,
+      "modified": 1790836381.3576038,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00045.res.Gradients",
+      "size": 700,
+      "modified": 1790836381.3095493,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.densities",
+      "size": 1336336,
+      "modified": 1790836311.6948645,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836311.6948645,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.gbw",
+      "size": 1935508,
+      "modified": 1790836311.7984006,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.hostnames",
+      "size": 16,
+      "modified": 1790836208.5137908,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.property.txt",
+      "size": 10797,
+      "modified": 1790836392.2652845,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.res.Dipoles",
+      "size": 28,
+      "modified": 1790836392.3421626,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00046.res.Gradients",
+      "size": 700,
+      "modified": 1790836392.284504,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.densities",
+      "size": 1336336,
+      "modified": 1790836311.854875,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836311.854875,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.gbw",
+      "size": 1935508,
+      "modified": 1790836311.9678235,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.hostnames",
+      "size": 16,
+      "modified": 1790836209.581429,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.property.txt",
+      "size": 10797,
+      "modified": 1790836393.8508952,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.res.Dipoles",
+      "size": 28,
+      "modified": 1790836393.937383,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00047.res.Gradients",
+      "size": 700,
+      "modified": 1790836393.8701146,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.densities",
+      "size": 1336336,
+      "modified": 1790836479.2412035,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836479.2412035,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.gbw",
+      "size": 1935508,
+      "modified": 1790836479.3660812,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.hostnames",
+      "size": 16,
+      "modified": 1790836364.8073056,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.property.txt",
+      "size": 10792,
+      "modified": 1790836552.991989,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.res.Dipoles",
+      "size": 28,
+      "modified": 1790836553.0687718,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00048.res.Gradients",
+      "size": 700,
+      "modified": 1790836553.001587,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.densities",
+      "size": 1336336,
+      "modified": 1790836487.511869,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836487.511869,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.gbw",
+      "size": 1935508,
+      "modified": 1790836487.6271389,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.hostnames",
+      "size": 16,
+      "modified": 1790836372.3041306,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.property.txt",
+      "size": 10851,
+      "modified": 1790836562.7819805,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.res.Dipoles",
+      "size": 28,
+      "modified": 1790836562.8396602,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00049.res.Gradients",
+      "size": 700,
+      "modified": 1790836562.7915938,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.densities",
+      "size": 1336336,
+      "modified": 1790836486.1094165,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836486.1094165,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.gbw",
+      "size": 1935508,
+      "modified": 1790836486.2342923,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.hostnames",
+      "size": 16,
+      "modified": 1790836374.9567568,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.property.txt",
+      "size": 10797,
+      "modified": 1790836559.7730172,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.res.Dipoles",
+      "size": 28,
+      "modified": 1790836559.830697,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00050.res.Gradients",
+      "size": 700,
+      "modified": 1790836559.7826304,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.densities",
+      "size": 1336336,
+      "modified": 1790836489.7788467,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836489.7788467,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.gbw",
+      "size": 1935508,
+      "modified": 1790836489.8941169,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.hostnames",
+      "size": 16,
+      "modified": 1790836376.9365983,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.property.txt",
+      "size": 10797,
+      "modified": 1790836565.4539685,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.res.Dipoles",
+      "size": 28,
+      "modified": 1790836565.5212157,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00051.res.Gradients",
+      "size": 700,
+      "modified": 1790836565.473182,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.densities",
+      "size": 1336336,
+      "modified": 1790836499.5312588,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836499.5312588,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.gbw",
+      "size": 1935508,
+      "modified": 1790836499.64654,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.hostnames",
+      "size": 16,
+      "modified": 1790836380.3965156,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.property.txt",
+      "size": 10851,
+      "modified": 1790836579.4871626,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.res.Dipoles",
+      "size": 28,
+      "modified": 1790836579.5530784,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00052.res.Gradients",
+      "size": 700,
+      "modified": 1790836579.4965792,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.densities",
+      "size": 1336336,
+      "modified": 1790836493.1898584,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836493.1898584,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.gbw",
+      "size": 1935508,
+      "modified": 1790836493.305162,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.hostnames",
+      "size": 16,
+      "modified": 1790836380.7425075,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.property.txt",
+      "size": 10797,
+      "modified": 1790836569.3639078,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.res.Dipoles",
+      "size": 28,
+      "modified": 1790836569.4215481,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00053.res.Gradients",
+      "size": 700,
+      "modified": 1790836569.3735144,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.densities",
+      "size": 1336336,
+      "modified": 1790836496.3126674,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836496.3126674,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.gbw",
+      "size": 1935508,
+      "modified": 1790836496.4183624,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.hostnames",
+      "size": 16,
+      "modified": 1790836384.2984154,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.property.txt",
+      "size": 10797,
+      "modified": 1790836574.7600574,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.res.Dipoles",
+      "size": 28,
+      "modified": 1790836574.8353899,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00054.res.Gradients",
+      "size": 700,
+      "modified": 1790836574.7788906,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.densities",
+      "size": 1336336,
+      "modified": 1790836485.7828178,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836485.7828178,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.gbw",
+      "size": 1935508,
+      "modified": 1790836485.898088,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.hostnames",
+      "size": 16,
+      "modified": 1790836385.240235,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.property.txt",
+      "size": 10851,
+      "modified": 1790836563.6183376,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.res.Dipoles",
+      "size": 28,
+      "modified": 1790836563.6856308,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00055.res.Gradients",
+      "size": 700,
+      "modified": 1790836563.627951,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.densities",
+      "size": 1336336,
+      "modified": 1790836506.5112689,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836506.5112689,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.gbw",
+      "size": 1935508,
+      "modified": 1790836506.62655,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.hostnames",
+      "size": 16,
+      "modified": 1790836385.4612744,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.property.txt",
+      "size": 10797,
+      "modified": 1790836584.4659288,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.res.Dipoles",
+      "size": 28,
+      "modified": 1790836584.5234005,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00056.res.Gradients",
+      "size": 700,
+      "modified": 1790836584.4755073,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.densities",
+      "size": 1336336,
+      "modified": 1790836504.7532318,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836504.7532318,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.gbw",
+      "size": 1935508,
+      "modified": 1790836504.8685129,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.hostnames",
+      "size": 16,
+      "modified": 1790836386.53764,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.property.txt",
+      "size": 10797,
+      "modified": 1790836583.0003977,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.res.Dipoles",
+      "size": 28,
+      "modified": 1790836583.0770266,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00057.res.Gradients",
+      "size": 700,
+      "modified": 1790836583.0099761,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.densities",
+      "size": 1336336,
+      "modified": 1790836489.2409198,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836489.2409198,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.gbw",
+      "size": 1935508,
+      "modified": 1790836489.35619,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.hostnames",
+      "size": 16,
+      "modified": 1790836389.4688141,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.property.txt",
+      "size": 10797,
+      "modified": 1790836565.68453,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.res.Dipoles",
+      "size": 28,
+      "modified": 1790836565.7421706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00058.res.Gradients",
+      "size": 700,
+      "modified": 1790836565.6941369,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.densities",
+      "size": 1336336,
+      "modified": 1790836495.294151,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836495.294151,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.gbw",
+      "size": 1935508,
+      "modified": 1790836495.3998463,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.hostnames",
+      "size": 16,
+      "modified": 1790836393.091724,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.property.txt",
+      "size": 10797,
+      "modified": 1790836573.9784844,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.res.Dipoles",
+      "size": 28,
+      "modified": 1790836574.0444002,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00059.res.Gradients",
+      "size": 700,
+      "modified": 1790836573.987901,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.densities",
+      "size": 1336336,
+      "modified": 1790836510.5261614,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836510.5261614,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.gbw",
+      "size": 1935508,
+      "modified": 1790836510.622207,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.hostnames",
+      "size": 16,
+      "modified": 1790836393.24548,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.property.txt",
+      "size": 10851,
+      "modified": 1790836584.7532878,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.res.Dipoles",
+      "size": 28,
+      "modified": 1790836584.8203382,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00060.res.Gradients",
+      "size": 700,
+      "modified": 1790836584.772445,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.densities",
+      "size": 1336336,
+      "modified": 1790836520.8608015,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836520.8608015,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.gbw",
+      "size": 1935508,
+      "modified": 1790836520.9856637,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.hostnames",
+      "size": 16,
+      "modified": 1790836394.3986516,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.property.txt",
+      "size": 10797,
+      "modified": 1790836597.9242902,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.res.Dipoles",
+      "size": 28,
+      "modified": 1790836597.982127,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00061.res.Gradients",
+      "size": 700,
+      "modified": 1790836597.9339297,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.densities",
+      "size": 1336336,
+      "modified": 1790836513.4747608,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836513.4747608,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.gbw",
+      "size": 1935508,
+      "modified": 1790836513.580411,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.hostnames",
+      "size": 16,
+      "modified": 1790836395.3211887,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.property.txt",
+      "size": 10851,
+      "modified": 1790836591.942144,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.res.Dipoles",
+      "size": 28,
+      "modified": 1790836592.000049,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00062.res.Gradients",
+      "size": 700,
+      "modified": 1790836591.9517949,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.densities",
+      "size": 1336336,
+      "modified": 1790836515.2708132,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836515.2708132,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.gbw",
+      "size": 1935508,
+      "modified": 1790836515.3956742,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.hostnames",
+      "size": 16,
+      "modified": 1790836396.87797,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.property.txt",
+      "size": 10851,
+      "modified": 1790836592.617706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.res.Dipoles",
+      "size": 28,
+      "modified": 1790836592.6852622,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00063.res.Gradients",
+      "size": 700,
+      "modified": 1790836592.6370077,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.densities",
+      "size": 1336336,
+      "modified": 1790836669.3305833,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836669.3305833,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.gbw",
+      "size": 1935508,
+      "modified": 1790836669.4364166,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.hostnames",
+      "size": 16,
+      "modified": 1790836555.8233595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.property.txt",
+      "size": 10797,
+      "modified": 1790836746.0124772,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.res.Dipoles",
+      "size": 28,
+      "modified": 1790836746.0701933,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00064.res.Gradients",
+      "size": 700,
+      "modified": 1790836746.0220966,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.densities",
+      "size": 1336336,
+      "modified": 1790836682.9105568,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836682.9105568,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.gbw",
+      "size": 1935508,
+      "modified": 1790836683.0355418,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.hostnames",
+      "size": 16,
+      "modified": 1790836562.5897145,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.property.txt",
+      "size": 10797,
+      "modified": 1790836759.1683333,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.res.Dipoles",
+      "size": 28,
+      "modified": 1790836759.2357712,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00065.res.Gradients",
+      "size": 700,
+      "modified": 1790836759.1876013,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.densities",
+      "size": 1336336,
+      "modified": 1790836680.4490764,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836680.4490764,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.gbw",
+      "size": 1935508,
+      "modified": 1790836680.5644686,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.hostnames",
+      "size": 16,
+      "modified": 1790836565.722957,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.property.txt",
+      "size": 10851,
+      "modified": 1790836757.1837358,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.res.Dipoles",
+      "size": 28,
+      "modified": 1790836757.2608075,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00066.res.Gradients",
+      "size": 700,
+      "modified": 1790836757.2126377,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.densities",
+      "size": 1336336,
+      "modified": 1790836691.6889002,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836691.6889002,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.gbw",
+      "size": 1935508,
+      "modified": 1790836691.7946866,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.hostnames",
+      "size": 16,
+      "modified": 1790836566.5299222,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.property.txt",
+      "size": 10797,
+      "modified": 1790836771.9253294,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.res.Dipoles",
+      "size": 28,
+      "modified": 1790836771.9923575,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00067.res.Gradients",
+      "size": 700,
+      "modified": 1790836771.9444804,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.densities",
+      "size": 1336336,
+      "modified": 1790836672.1977053,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836672.1977053,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.gbw",
+      "size": 1935508,
+      "modified": 1790836672.3035386,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.hostnames",
+      "size": 16,
+      "modified": 1790836568.3167741,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.property.txt",
+      "size": 10797,
+      "modified": 1790836748.4268537,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.res.Dipoles",
+      "size": 28,
+      "modified": 1790836748.4845142,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00068.res.Gradients",
+      "size": 700,
+      "modified": 1790836748.4364638,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.densities",
+      "size": 1336336,
+      "modified": 1790836680.651013,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836680.651013,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.gbw",
+      "size": 1935508,
+      "modified": 1790836680.7664053,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.hostnames",
+      "size": 16,
+      "modified": 1790836568.5473356,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.property.txt",
+      "size": 10797,
+      "modified": 1790836757.2126377,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.res.Dipoles",
+      "size": 28,
+      "modified": 1790836757.2704415,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00069.res.Gradients",
+      "size": 700,
+      "modified": 1790836757.2222717,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.densities",
+      "size": 1336336,
+      "modified": 1790836685.689069,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836685.689069,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.gbw",
+      "size": 1935508,
+      "modified": 1790836685.8044398,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.hostnames",
+      "size": 16,
+      "modified": 1790836572.130646,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.property.txt",
+      "size": 10797,
+      "modified": 1790836762.2223012,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.res.Dipoles",
+      "size": 28,
+      "modified": 1790836762.280105,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00070.res.Gradients",
+      "size": 700,
+      "modified": 1790836762.2319353,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.densities",
+      "size": 1336336,
+      "modified": 1790836697.3511481,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836697.3511481,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.gbw",
+      "size": 1935508,
+      "modified": 1790836697.4761684,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.hostnames",
+      "size": 16,
+      "modified": 1790836576.9258626,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.property.txt",
+      "size": 10797,
+      "modified": 1790836777.8215957,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.res.Dipoles",
+      "size": 28,
+      "modified": 1790836777.8978112,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00071.res.Gradients",
+      "size": 700,
+      "modified": 1790836777.8501766,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.densities",
+      "size": 1336336,
+      "modified": 1790836698.9379425,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836698.9379425,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.gbw",
+      "size": 1935508,
+      "modified": 1790836699.0534034,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.hostnames",
+      "size": 16,
+      "modified": 1790836577.556771,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.property.txt",
+      "size": 10797,
+      "modified": 1790836776.078169,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.res.Dipoles",
+      "size": 28,
+      "modified": 1790836776.1448576,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00072.res.Gradients",
+      "size": 700,
+      "modified": 1790836776.0972228,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.densities",
+      "size": 1336336,
+      "modified": 1790836701.5956051,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836701.5956051,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.gbw",
+      "size": 1935508,
+      "modified": 1790836701.7207892,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.hostnames",
+      "size": 16,
+      "modified": 1790836582.5023086,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.property.txt",
+      "size": 10797,
+      "modified": 1790836782.1784756,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.res.Dipoles",
+      "size": 28,
+      "modified": 1790836782.2359629,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00073.res.Gradients",
+      "size": 700,
+      "modified": 1790836782.1880567,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.densities",
+      "size": 1336336,
+      "modified": 1790836696.8318336,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836696.8318336,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.gbw",
+      "size": 1935508,
+      "modified": 1790836696.947237,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.hostnames",
+      "size": 16,
+      "modified": 1790836585.9697742,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.property.txt",
+      "size": 10851,
+      "modified": 1790836777.1642382,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.res.Dipoles",
+      "size": 28,
+      "modified": 1790836777.2309265,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00074.res.Gradients",
+      "size": 700,
+      "modified": 1790836777.173765,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.densities",
+      "size": 1336336,
+      "modified": 1790836694.6124487,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836694.6124487,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.gbw",
+      "size": 1935508,
+      "modified": 1790836694.718235,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.hostnames",
+      "size": 16,
+      "modified": 1790836587.4161482,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.property.txt",
+      "size": 10797,
+      "modified": 1790836776.7641075,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.res.Dipoles",
+      "size": 28,
+      "modified": 1790836776.8403227,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00075.res.Gradients",
+      "size": 700,
+      "modified": 1790836776.7736344,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.densities",
+      "size": 1336336,
+      "modified": 1790836701.1719048,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836701.1719048,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.gbw",
+      "size": 1935508,
+      "modified": 1790836701.297089,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.hostnames",
+      "size": 16,
+      "modified": 1790836587.578985,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.property.txt",
+      "size": 10797,
+      "modified": 1790836778.5646956,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.res.Dipoles",
+      "size": 28,
+      "modified": 1790836778.6409109,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00076.res.Gradients",
+      "size": 700,
+      "modified": 1790836778.5837495,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.densities",
+      "size": 1336336,
+      "modified": 1790836711.2376418,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836711.2376418,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.gbw",
+      "size": 1935508,
+      "modified": 1790836711.3530111,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.hostnames",
+      "size": 16,
+      "modified": 1790836594.9628716,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.property.txt",
+      "size": 10851,
+      "modified": 1790836787.9080398,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.res.Dipoles",
+      "size": 28,
+      "modified": 1790836787.9751081,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00077.res.Gradients",
+      "size": 700,
+      "modified": 1790836787.9272022,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.densities",
+      "size": 1336336,
+      "modified": 1790836718.0726206,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836718.0726206,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.gbw",
+      "size": 1935508,
+      "modified": 1790836718.207189,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.hostnames",
+      "size": 16,
+      "modified": 1790836595.5612266,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.property.txt",
+      "size": 10797,
+      "modified": 1790836799.8764029,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.res.Dipoles",
+      "size": 28,
+      "modified": 1790836799.9341793,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00078.res.Gradients",
+      "size": 700,
+      "modified": 1790836799.8860323,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.densities",
+      "size": 1336336,
+      "modified": 1790836719.8989077,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836719.8989077,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.gbw",
+      "size": 1935508,
+      "modified": 1790836720.023864,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.hostnames",
+      "size": 16,
+      "modified": 1790836600.8643303,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.property.txt",
+      "size": 10797,
+      "modified": 1790836800.685274,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.res.Dipoles",
+      "size": 28,
+      "modified": 1790836800.7526798,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00079.res.Gradients",
+      "size": 700,
+      "modified": 1790836800.7045326,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.densities",
+      "size": 1336336,
+      "modified": 1790836857.2098374,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836857.2098374,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.gbw",
+      "size": 1935508,
+      "modified": 1790836857.325666,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.hostnames",
+      "size": 16,
+      "modified": 1790836749.0034602,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.property.txt",
+      "size": 10738,
+      "modified": 1790836938.9224136,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.res.Dipoles",
+      "size": 28,
+      "modified": 1790836938.9800797,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00080.res.Gradients",
+      "size": 700,
+      "modified": 1790836938.9320247,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.densities",
+      "size": 1336336,
+      "modified": 1790836853.823518,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836853.823518,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.gbw",
+      "size": 1935508,
+      "modified": 1790836853.938849,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.hostnames",
+      "size": 16,
+      "modified": 1790836751.2426157,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.property.txt",
+      "size": 10797,
+      "modified": 1790836929.4251475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.res.Dipoles",
+      "size": 28,
+      "modified": 1790836929.4927661,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00081.res.Gradients",
+      "size": 700,
+      "modified": 1790836929.444467,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.densities",
+      "size": 1336336,
+      "modified": 1790836873.9570618,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836873.9570618,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.gbw",
+      "size": 1935508,
+      "modified": 1790836874.0723922,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.hostnames",
+      "size": 16,
+      "modified": 1790836760.150998,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.property.txt",
+      "size": 10851,
+      "modified": 1790836950.8007946,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.res.Dipoles",
+      "size": 28,
+      "modified": 1790836950.875118,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00082.res.Gradients",
+      "size": 700,
+      "modified": 1790836950.8193755,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.densities",
+      "size": 1336336,
+      "modified": 1790836874.6202111,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836874.6202111,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.gbw",
+      "size": 1935508,
+      "modified": 1790836874.7259305,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.hostnames",
+      "size": 16,
+      "modified": 1790836760.141364,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.property.txt",
+      "size": 10797,
+      "modified": 1790836951.6276414,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.res.Dipoles",
+      "size": 28,
+      "modified": 1790836951.683384,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00083.res.Gradients",
+      "size": 700,
+      "modified": 1790836951.636932,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.densities",
+      "size": 1336336,
+      "modified": 1790836873.5245683,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836873.5245683,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.gbw",
+      "size": 1935508,
+      "modified": 1790836873.6399004,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.hostnames",
+      "size": 16,
+      "modified": 1790836762.260837,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.property.txt",
+      "size": 10797,
+      "modified": 1790836949.4908462,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.res.Dipoles",
+      "size": 28,
+      "modified": 1790836949.5465887,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00084.res.Gradients",
+      "size": 700,
+      "modified": 1790836949.5001366,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.densities",
+      "size": 1336336,
+      "modified": 1790836885.6374495,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836885.6374495,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.gbw",
+      "size": 1935508,
+      "modified": 1790836885.7591012,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.hostnames",
+      "size": 16,
+      "modified": 1790836766.3715787,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.property.txt",
+      "size": 10797,
+      "modified": 1790836967.4755216,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.res.Dipoles",
+      "size": 28,
+      "modified": 1790836967.5448825,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00085.res.Gradients",
+      "size": 700,
+      "modified": 1790836967.495339,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.densities",
+      "size": 1336336,
+      "modified": 1790836879.1565366,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836879.1565366,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.gbw",
+      "size": 1935508,
+      "modified": 1790836879.2814777,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.hostnames",
+      "size": 16,
+      "modified": 1790836774.9254115,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.property.txt",
+      "size": 10738,
+      "modified": 1790836957.9550192,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.res.Dipoles",
+      "size": 28,
+      "modified": 1790836958.0223792,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00086.res.Gradients",
+      "size": 700,
+      "modified": 1790836957.9742649,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.densities",
+      "size": 1336336,
+      "modified": 1790836883.1950605,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836883.1950605,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.gbw",
+      "size": 1935508,
+      "modified": 1790836883.316712,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.hostnames",
+      "size": 16,
+      "modified": 1790836778.98388,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.property.txt",
+      "size": 10797,
+      "modified": 1790836959.9661899,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.res.Dipoles",
+      "size": 28,
+      "modified": 1790836960.0239267,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00087.res.Gradients",
+      "size": 700,
+      "modified": 1790836959.9758127,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.densities",
+      "size": 1336336,
+      "modified": 1790836894.6365607,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836894.6365607,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.gbw",
+      "size": 1935508,
+      "modified": 1790836894.76157,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.hostnames",
+      "size": 16,
+      "modified": 1790836779.7746146,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.property.txt",
+      "size": 10851,
+      "modified": 1790836976.4021094,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.res.Dipoles",
+      "size": 28,
+      "modified": 1790836976.4784145,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00088.res.Gradients",
+      "size": 700,
+      "modified": 1790836976.4116473,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.densities",
+      "size": 1336336,
+      "modified": 1790836896.8097982,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836896.8097982,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.gbw",
+      "size": 1935508,
+      "modified": 1790836896.9251912,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.hostnames",
+      "size": 16,
+      "modified": 1790836780.1366377,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.property.txt",
+      "size": 10851,
+      "modified": 1790836978.4337394,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.res.Dipoles",
+      "size": 28,
+      "modified": 1790836978.519583,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00089.res.Gradients",
+      "size": 700,
+      "modified": 1790836978.4528158,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.densities",
+      "size": 1336336,
+      "modified": 1790836900.216277,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836900.216277,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.gbw",
+      "size": 1935508,
+      "modified": 1790836900.3634982,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.hostnames",
+      "size": 16,
+      "modified": 1790836780.7844684,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.property.txt",
+      "size": 10797,
+      "modified": 1790836980.7896674,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.res.Dipoles",
+      "size": 28,
+      "modified": 1790836980.8468964,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00090.res.Gradients",
+      "size": 700,
+      "modified": 1790836980.7992055,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.densities",
+      "size": 1336336,
+      "modified": 1790836904.6231017,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836904.6231017,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.gbw",
+      "size": 1935508,
+      "modified": 1790836904.7408788,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.hostnames",
+      "size": 16,
+      "modified": 1790836781.556149,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.property.txt",
+      "size": 10738,
+      "modified": 1790836982.222335,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.res.Dipoles",
+      "size": 28,
+      "modified": 1790836982.2873595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00091.res.Gradients",
+      "size": 700,
+      "modified": 1790836982.2316244,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.densities",
+      "size": 1336336,
+      "modified": 1790836889.184588,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836889.184588,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.gbw",
+      "size": 1935508,
+      "modified": 1790836889.3095312,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.hostnames",
+      "size": 16,
+      "modified": 1790836785.1199074,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.property.txt",
+      "size": 10797,
+      "modified": 1790836966.3756561,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.res.Dipoles",
+      "size": 28,
+      "modified": 1790836966.4351084,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00092.res.Gradients",
+      "size": 700,
+      "modified": 1790836966.3855648,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.densities",
+      "size": 1336336,
+      "modified": 1790836891.040141,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836891.040141,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.gbw",
+      "size": 1935508,
+      "modified": 1790836891.1459181,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.hostnames",
+      "size": 16,
+      "modified": 1790836790.7427433,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.property.txt",
+      "size": 10797,
+      "modified": 1790836969.2491784,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.res.Dipoles",
+      "size": 28,
+      "modified": 1790836969.3185391,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00093.res.Gradients",
+      "size": 700,
+      "modified": 1790836969.259087,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.densities",
+      "size": 1336336,
+      "modified": 1790836919.9849255,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836919.9849255,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.gbw",
+      "size": 1935508,
+      "modified": 1790836920.1098452,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.hostnames",
+      "size": 16,
+      "modified": 1790836802.7652278,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.property.txt",
+      "size": 10797,
+      "modified": 1790837001.553103,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.res.Dipoles",
+      "size": 28,
+      "modified": 1790837001.6236386,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00094.res.Gradients",
+      "size": 700,
+      "modified": 1790837001.5631795,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.densities",
+      "size": 1336336,
+      "modified": 1790836917.9669936,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.densitiesinfo",
+      "size": 1838,
+      "modified": 1790836917.9669936,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.gbw",
+      "size": 1935508,
+      "modified": 1790836918.091913,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.hostnames",
+      "size": 16,
+      "modified": 1790836803.6126163,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.property.txt",
+      "size": 10797,
+      "modified": 1790836997.1969774,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.res.Dipoles",
+      "size": 28,
+      "modified": 1790836997.264277,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00095.res.Gradients",
+      "size": 700,
+      "modified": 1790836997.2065916,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.densities",
+      "size": 1336336,
+      "modified": 1790837026.0033674,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837026.0033674,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.gbw",
+      "size": 1935508,
+      "modified": 1790837026.1285114,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.hostnames",
+      "size": 16,
+      "modified": 1790836933.712263,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.property.txt",
+      "size": 10851,
+      "modified": 1790837105.6132853,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.res.Dipoles",
+      "size": 28,
+      "modified": 1790837105.6709514,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00096.res.Gradients",
+      "size": 700,
+      "modified": 1790837105.6228962,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.densities",
+      "size": 1336336,
+      "modified": 1790837042.0387433,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837042.0387433,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.gbw",
+      "size": 1935508,
+      "modified": 1790837042.1438901,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.hostnames",
+      "size": 16,
+      "modified": 1790836941.89372,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.property.txt",
+      "size": 10797,
+      "modified": 1790837121.449359,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.res.Dipoles",
+      "size": 28,
+      "modified": 1790837121.5055544,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00097.res.Gradients",
+      "size": 700,
+      "modified": 1790837121.4680908,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.densities",
+      "size": 1336336,
+      "modified": 1790837046.9137342,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837046.9137342,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.gbw",
+      "size": 1935508,
+      "modified": 1790837047.0379987,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.hostnames",
+      "size": 16,
+      "modified": 1790836952.2965512,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.property.txt",
+      "size": 10797,
+      "modified": 1790837122.0862417,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.res.Dipoles",
+      "size": 28,
+      "modified": 1790837122.1518033,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00098.res.Gradients",
+      "size": 700,
+      "modified": 1790837122.0956075,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.densities",
+      "size": 1336336,
+      "modified": 1790837048.4144666,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837048.4144666,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.gbw",
+      "size": 1935508,
+      "modified": 1790837048.538731,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.hostnames",
+      "size": 16,
+      "modified": 1790836953.5611053,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.property.txt",
+      "size": 10797,
+      "modified": 1790837124.453457,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.res.Dipoles",
+      "size": 28,
+      "modified": 1790837124.5114279,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00099.res.Gradients",
+      "size": 700,
+      "modified": 1790837124.463119,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.densities",
+      "size": 1336336,
+      "modified": 1790837049.4352872,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837049.4352872,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.gbw",
+      "size": 1935508,
+      "modified": 1790837049.553624,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.hostnames",
+      "size": 16,
+      "modified": 1790836954.4164853,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.property.txt",
+      "size": 10797,
+      "modified": 1790837126.2408905,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.res.Dipoles",
+      "size": 28,
+      "modified": 1790837126.2988613,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00100.res.Gradients",
+      "size": 700,
+      "modified": 1790837126.260214,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.densities",
+      "size": 1336336,
+      "modified": 1790837057.780545,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837057.780545,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.gbw",
+      "size": 1935508,
+      "modified": 1790837057.8960295,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.hostnames",
+      "size": 16,
+      "modified": 1790836960.8803582,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.property.txt",
+      "size": 10797,
+      "modified": 1790837138.2199512,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.res.Dipoles",
+      "size": 28,
+      "modified": 1790837138.287228,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00101.res.Gradients",
+      "size": 700,
+      "modified": 1790837138.2391732,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.densities",
+      "size": 1336336,
+      "modified": 1790837062.9003663,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837062.9003663,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.gbw",
+      "size": 1935508,
+      "modified": 1790837063.015851,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.hostnames",
+      "size": 16,
+      "modified": 1790836962.8049233,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.property.txt",
+      "size": 10738,
+      "modified": 1790837141.1513095,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.res.Dipoles",
+      "size": 28,
+      "modified": 1790837141.2185864,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00102.res.Gradients",
+      "size": 700,
+      "modified": 1790837141.1705315,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.densities",
+      "size": 1336336,
+      "modified": 1790837069.7011967,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837069.7011967,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.gbw",
+      "size": 1935508,
+      "modified": 1790837069.822924,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.hostnames",
+      "size": 16,
+      "modified": 1790836969.358174,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.property.txt",
+      "size": 10797,
+      "modified": 1790837146.606591,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.res.Dipoles",
+      "size": 28,
+      "modified": 1790837146.6720407,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00103.res.Gradients",
+      "size": 700,
+      "modified": 1790837146.6159408,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.densities",
+      "size": 1336336,
+      "modified": 1790837075.175668,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837075.175668,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.gbw",
+      "size": 1935508,
+      "modified": 1790837075.2883573,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.hostnames",
+      "size": 16,
+      "modified": 1790836970.636396,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.property.txt",
+      "size": 10797,
+      "modified": 1790837152.063161,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.res.Dipoles",
+      "size": 28,
+      "modified": 1790837152.1387298,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00104.res.Gradients",
+      "size": 700,
+      "modified": 1790837152.072607,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.densities",
+      "size": 1336336,
+      "modified": 1790837072.4091787,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837072.4091787,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.gbw",
+      "size": 1935508,
+      "modified": 1790837072.5245109,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.hostnames",
+      "size": 16,
+      "modified": 1790836972.1632936,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.property.txt",
+      "size": 10738,
+      "modified": 1790837148.7944868,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.res.Dipoles",
+      "size": 28,
+      "modified": 1790837148.8692865,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00105.res.Gradients",
+      "size": 700,
+      "modified": 1790837148.8131866,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.densities",
+      "size": 1336336,
+      "modified": 1790837076.912961,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837076.912961,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.gbw",
+      "size": 1935508,
+      "modified": 1790837077.035041,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.hostnames",
+      "size": 16,
+      "modified": 1790836979.3398654,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.property.txt",
+      "size": 10797,
+      "modified": 1790837156.8334444,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.res.Dipoles",
+      "size": 28,
+      "modified": 1790837156.8995671,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00106.res.Gradients",
+      "size": 700,
+      "modified": 1790837156.8428905,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.densities",
+      "size": 1336336,
+      "modified": 1790837077.6923954,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837077.6923954,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.gbw",
+      "size": 1935508,
+      "modified": 1790837077.8144755,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.hostnames",
+      "size": 16,
+      "modified": 1790836981.4668772,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.property.txt",
+      "size": 10738,
+      "modified": 1790837157.0318127,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.res.Dipoles",
+      "size": 28,
+      "modified": 1790837157.0979354,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00107.res.Gradients",
+      "size": 700,
+      "modified": 1790837157.0507047,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.densities",
+      "size": 1336336,
+      "modified": 1790837078.0304632,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837078.0304632,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.gbw",
+      "size": 1935508,
+      "modified": 1790837078.1431525,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.hostnames",
+      "size": 16,
+      "modified": 1790836983.7364767,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.property.txt",
+      "size": 10797,
+      "modified": 1790837158.358424,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.res.Dipoles",
+      "size": 28,
+      "modified": 1790837158.41639,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00108.res.Gradients",
+      "size": 700,
+      "modified": 1790837158.368085,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.densities",
+      "size": 1336336,
+      "modified": 1790837076.0208375,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837076.0208375,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.gbw",
+      "size": 1935508,
+      "modified": 1790837076.1335268,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.hostnames",
+      "size": 16,
+      "modified": 1790836985.0555446,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.property.txt",
+      "size": 10851,
+      "modified": 1790837152.9699872,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.res.Dipoles",
+      "size": 28,
+      "modified": 1790837153.0172176,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00109.res.Gradients",
+      "size": 700,
+      "modified": 1790837152.9794333,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.densities",
+      "size": 1336336,
+      "modified": 1790837116.710202,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837116.710202,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.gbw",
+      "size": 1935508,
+      "modified": 1790837116.8225932,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.hostnames",
+      "size": 16,
+      "modified": 1790837001.704251,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.property.txt",
+      "size": 10797,
+      "modified": 1790837197.2255967,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.res.Dipoles",
+      "size": 28,
+      "modified": 1790837197.292957,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00110.res.Gradients",
+      "size": 700,
+      "modified": 1790837197.2448425,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.densities",
+      "size": 1336336,
+      "modified": 1790837102.0230794,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837102.0230794,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.gbw",
+      "size": 1935508,
+      "modified": 1790837102.144867,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.hostnames",
+      "size": 16,
+      "modified": 1790837004.646603,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.property.txt",
+      "size": 10738,
+      "modified": 1790837181.8587158,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.res.Dipoles",
+      "size": 28,
+      "modified": 1790837181.9259927,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00111.res.Gradients",
+      "size": 700,
+      "modified": 1790837181.8779378,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.densities",
+      "size": 1336336,
+      "modified": 1790837218.6356525,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837218.6356525,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.gbw",
+      "size": 1935508,
+      "modified": 1790837218.756574,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.hostnames",
+      "size": 16,
+      "modified": 1790837108.4887722,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.property.txt",
+      "size": 10797,
+      "modified": 1790837296.5693426,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.res.Dipoles",
+      "size": 28,
+      "modified": 1790837296.6271284,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00112.res.Gradients",
+      "size": 700,
+      "modified": 1790837296.5789735,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.densities",
+      "size": 1336336,
+      "modified": 1790837223.5280948,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837223.5280948,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.gbw",
+      "size": 1935508,
+      "modified": 1790837223.6530378,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.hostnames",
+      "size": 16,
+      "modified": 1790837124.4921043,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.property.txt",
+      "size": 10797,
+      "modified": 1790837306.6620526,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.res.Dipoles",
+      "size": 28,
+      "modified": 1790837306.7293298,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00113.res.Gradients",
+      "size": 700,
+      "modified": 1790837306.6812747,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.densities",
+      "size": 1336336,
+      "modified": 1790837230.721002,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837230.721002,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.gbw",
+      "size": 1935508,
+      "modified": 1790837230.8364027,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.hostnames",
+      "size": 16,
+      "modified": 1790837124.9075618,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.property.txt",
+      "size": 10797,
+      "modified": 1790837310.7596085,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.res.Dipoles",
+      "size": 28,
+      "modified": 1790837310.8252835,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00114.res.Gradients",
+      "size": 700,
+      "modified": 1790837310.7689905,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.densities",
+      "size": 1336336,
+      "modified": 1790837229.6150794,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837229.6150794,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.gbw",
+      "size": 1935508,
+      "modified": 1790837229.73048,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.hostnames",
+      "size": 16,
+      "modified": 1790837127.3519976,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.property.txt",
+      "size": 10851,
+      "modified": 1790837310.2154436,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.res.Dipoles",
+      "size": 28,
+      "modified": 1790837310.2905006,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00115.res.Gradients",
+      "size": 700,
+      "modified": 1790837310.2342079,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.densities",
+      "size": 1336336,
+      "modified": 1790837226.4511788,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837226.4511788,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.gbw",
+      "size": 1935508,
+      "modified": 1790837226.5665796,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.hostnames",
+      "size": 16,
+      "modified": 1790837129.0717983,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.property.txt",
+      "size": 10738,
+      "modified": 1790837309.4085784,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.res.Dipoles",
+      "size": 28,
+      "modified": 1790837309.4742534,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00116.res.Gradients",
+      "size": 700,
+      "modified": 1790837309.4273427,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.densities",
+      "size": 1336336,
+      "modified": 1790837243.5886657,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837243.5886657,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.gbw",
+      "size": 1935508,
+      "modified": 1790837243.699975,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.hostnames",
+      "size": 16,
+      "modified": 1790837141.2089756,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.property.txt",
+      "size": 10851,
+      "modified": 1790837321.5480454,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.res.Dipoles",
+      "size": 28,
+      "modified": 1790837321.6230872,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00117.res.Gradients",
+      "size": 700,
+      "modified": 1790837321.5668058,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.densities",
+      "size": 1336336,
+      "modified": 1790837239.8136578,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837239.8136578,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.gbw",
+      "size": 1935508,
+      "modified": 1790837239.919379,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.hostnames",
+      "size": 16,
+      "modified": 1790837143.960546,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.property.txt",
+      "size": 10797,
+      "modified": 1790837319.6626236,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.res.Dipoles",
+      "size": 28,
+      "modified": 1790837319.7376654,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00118.res.Gradients",
+      "size": 700,
+      "modified": 1790837319.672004,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.densities",
+      "size": 1336336,
+      "modified": 1790837242.5405018,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837242.5405018,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.gbw",
+      "size": 1935508,
+      "modified": 1790837242.6518114,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.hostnames",
+      "size": 16,
+      "modified": 1790837149.4654818,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.property.txt",
+      "size": 10792,
+      "modified": 1790837321.351061,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.res.Dipoles",
+      "size": 28,
+      "modified": 1790837321.4073424,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00119.res.Gradients",
+      "size": 700,
+      "modified": 1790837321.3604412,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.densities",
+      "size": 1336336,
+      "modified": 1790837244.488417,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837244.488417,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.gbw",
+      "size": 1935508,
+      "modified": 1790837244.609002,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.hostnames",
+      "size": 16,
+      "modified": 1790837151.6947627,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.property.txt",
+      "size": 10797,
+      "modified": 1790837322.4110246,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.res.Dipoles",
+      "size": 28,
+      "modified": 1790837322.476686,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00120.res.Gradients",
+      "size": 700,
+      "modified": 1790837322.429785,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.densities",
+      "size": 1336336,
+      "modified": 1790837247.2618768,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837247.2618768,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.gbw",
+      "size": 1935508,
+      "modified": 1790837247.3917377,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.hostnames",
+      "size": 16,
+      "modified": 1790837154.9914536,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.property.txt",
+      "size": 10797,
+      "modified": 1790837326.6274939,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.res.Dipoles",
+      "size": 28,
+      "modified": 1790837326.7050288,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00121.res.Gradients",
+      "size": 700,
+      "modified": 1790837326.6468775,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.densities",
+      "size": 1336336,
+      "modified": 1790837263.4441018,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837263.4441018,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.gbw",
+      "size": 1935508,
+      "modified": 1790837263.5792818,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.hostnames",
+      "size": 16,
+      "modified": 1790837155.8321571,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.property.txt",
+      "size": 10797,
+      "modified": 1790837346.8707938,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.res.Dipoles",
+      "size": 28,
+      "modified": 1790837346.9355721,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00122.res.Gradients",
+      "size": 700,
+      "modified": 1790837346.8893018,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.densities",
+      "size": 1336336,
+      "modified": 1790837255.9433472,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837255.9433472,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.gbw",
+      "size": 1935508,
+      "modified": 1790837256.0951598,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.hostnames",
+      "size": 16,
+      "modified": 1790837159.8172336,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.property.txt",
+      "size": 10797,
+      "modified": 1790837337.5443554,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.res.Dipoles",
+      "size": 28,
+      "modified": 1790837337.6404655,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00123.res.Gradients",
+      "size": 700,
+      "modified": 1790837337.5635774,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.densities",
+      "size": 1336336,
+      "modified": 1790837258.7707357,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837258.7707357,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.gbw",
+      "size": 1935508,
+      "modified": 1790837258.9252272,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.hostnames",
+      "size": 16,
+      "modified": 1790837159.9138436,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.property.txt",
+      "size": 10851,
+      "modified": 1790837343.132149,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.res.Dipoles",
+      "size": 28,
+      "modified": 1790837343.1876736,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00124.res.Gradients",
+      "size": 700,
+      "modified": 1790837343.1414032,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.densities",
+      "size": 1336336,
+      "modified": 1790837260.4025514,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837260.4025514,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.gbw",
+      "size": 1935508,
+      "modified": 1790837260.5570428,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.hostnames",
+      "size": 16,
+      "modified": 1790837161.3340092,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.property.txt",
+      "size": 10851,
+      "modified": 1790837344.2703998,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.res.Dipoles",
+      "size": 28,
+      "modified": 1790837344.3351784,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00125.res.Gradients",
+      "size": 700,
+      "modified": 1790837344.2796538,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.densities",
+      "size": 1336336,
+      "modified": 1790837278.5865726,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837278.5865726,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.gbw",
+      "size": 1935508,
+      "modified": 1790837278.7069542,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.hostnames",
+      "size": 16,
+      "modified": 1790837184.8069892,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.property.txt",
+      "size": 10797,
+      "modified": 1790837357.3311396,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.res.Dipoles",
+      "size": 28,
+      "modified": 1790837357.3887725,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00126.res.Gradients",
+      "size": 700,
+      "modified": 1790837357.3503506,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.densities",
+      "size": 1336336,
+      "modified": 1790837306.6332197,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837306.6332197,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.gbw",
+      "size": 1935508,
+      "modified": 1790837306.7773848,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.hostnames",
+      "size": 16,
+      "modified": 1790837201.7307339,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.property.txt",
+      "size": 10851,
+      "modified": 1790837389.0793455,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.res.Dipoles",
+      "size": 28,
+      "modified": 1790837389.146579,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00127.res.Gradients",
+      "size": 700,
+      "modified": 1790837389.098555,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.densities",
+      "size": 1336336,
+      "modified": 1790837405.8618655,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837405.8618655,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.gbw",
+      "size": 1935508,
+      "modified": 1790837405.9675865,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.hostnames",
+      "size": 16,
+      "modified": 1790837299.5519962,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.property.txt",
+      "size": 10797,
+      "modified": 1790837482.7767887,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.res.Dipoles",
+      "size": 28,
+      "modified": 1790837482.8343782,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00128.res.Gradients",
+      "size": 700,
+      "modified": 1790837482.7959852,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.densities",
+      "size": 1336336,
+      "modified": 1790837425.4359953,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837425.4359953,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.gbw",
+      "size": 1935508,
+      "modified": 1790837425.5512702,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.hostnames",
+      "size": 16,
+      "modified": 1790837309.6618965,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.property.txt",
+      "size": 10851,
+      "modified": 1790837507.4549186,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.res.Dipoles",
+      "size": 28,
+      "modified": 1790837507.5220854,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00129.res.Gradients",
+      "size": 700,
+      "modified": 1790837507.4645138,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.densities",
+      "size": 1336336,
+      "modified": 1790837430.431241,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837430.431241,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.gbw",
+      "size": 1935508,
+      "modified": 1790837430.546516,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.hostnames",
+      "size": 16,
+      "modified": 1790837312.3076637,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.property.txt",
+      "size": 10797,
+      "modified": 1790837511.9557447,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.res.Dipoles",
+      "size": 28,
+      "modified": 1790837512.0133293,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00130.res.Gradients",
+      "size": 700,
+      "modified": 1790837511.9749396,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.densities",
+      "size": 1336336,
+      "modified": 1790837426.377407,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837426.377407,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.gbw",
+      "size": 1935508,
+      "modified": 1790837426.5022883,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.hostnames",
+      "size": 16,
+      "modified": 1790837313.0770004,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.property.txt",
+      "size": 10797,
+      "modified": 1790837503.89625,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.res.Dipoles",
+      "size": 28,
+      "modified": 1790837503.9538217,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00131.res.Gradients",
+      "size": 700,
+      "modified": 1790837503.9058454,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.densities",
+      "size": 1336336,
+      "modified": 1790837406.1501958,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837406.1501958,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.gbw",
+      "size": 1935508,
+      "modified": 1790837406.265528,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.hostnames",
+      "size": 16,
+      "modified": 1790837313.6024008,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.property.txt",
+      "size": 10851,
+      "modified": 1790837482.8055835,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.res.Dipoles",
+      "size": 28,
+      "modified": 1790837482.8727713,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00132.res.Gradients",
+      "size": 700,
+      "modified": 1790837482.82478,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.densities",
+      "size": 1336336,
+      "modified": 1790837420.5930967,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837420.5930967,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.gbw",
+      "size": 1935508,
+      "modified": 1790837420.6987998,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.hostnames",
+      "size": 16,
+      "modified": 1790837322.7393317,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.property.txt",
+      "size": 10851,
+      "modified": 1790837499.5208094,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.res.Dipoles",
+      "size": 28,
+      "modified": 1790837499.5879765,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00133.res.Gradients",
+      "size": 700,
+      "modified": 1790837499.54,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.densities",
+      "size": 1336336,
+      "modified": 1790837418.7480977,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837418.7480977,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.gbw",
+      "size": 1935508,
+      "modified": 1790837418.86341,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.hostnames",
+      "size": 16,
+      "modified": 1790837324.2458086,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.property.txt",
+      "size": 10797,
+      "modified": 1790837496.2392256,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.res.Dipoles",
+      "size": 28,
+      "modified": 1790837496.2967973,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00134.res.Gradients",
+      "size": 700,
+      "modified": 1790837496.248821,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.densities",
+      "size": 1336336,
+      "modified": 1790837427.29,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837427.29,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.gbw",
+      "size": 1935508,
+      "modified": 1790837427.4052749,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.hostnames",
+      "size": 16,
+      "modified": 1790837324.44764,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.property.txt",
+      "size": 10797,
+      "modified": 1790837506.3610585,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.res.Dipoles",
+      "size": 28,
+      "modified": 1790837506.4378204,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00135.res.Gradients",
+      "size": 700,
+      "modified": 1790837506.3706536,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.densities",
+      "size": 1336336,
+      "modified": 1790837417.6045825,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837417.6045825,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.gbw",
+      "size": 1935508,
+      "modified": 1790837417.7102857,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.hostnames",
+      "size": 16,
+      "modified": 1790837325.21248,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.property.txt",
+      "size": 10797,
+      "modified": 1790837494.9438636,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.res.Dipoles",
+      "size": 28,
+      "modified": 1790837495.0110307,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00136.res.Gradients",
+      "size": 700,
+      "modified": 1790837494.953459,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.densities",
+      "size": 1336336,
+      "modified": 1790837424.2638764,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837424.2638764,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.gbw",
+      "size": 1935508,
+      "modified": 1790837424.3791888,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.hostnames",
+      "size": 16,
+      "modified": 1790837329.8161204,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.property.txt",
+      "size": 10797,
+      "modified": 1790837503.272558,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.res.Dipoles",
+      "size": 28,
+      "modified": 1790837503.3589153,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00137.res.Gradients",
+      "size": 700,
+      "modified": 1790837503.3013437,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.densities",
+      "size": 1336336,
+      "modified": 1790837436.7414832,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837436.7414832,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.gbw",
+      "size": 1935508,
+      "modified": 1790837438.4581358,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.hostnames",
+      "size": 16,
+      "modified": 1790837341.0043194,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.property.txt",
+      "size": 10797,
+      "modified": 1790837517.1095722,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.res.Dipoles",
+      "size": 28,
+      "modified": 1790837517.1767337,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00138.res.Gradients",
+      "size": 700,
+      "modified": 1790837517.1191666,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.densities",
+      "size": 1336336,
+      "modified": 1790837444.8634086,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837444.8634086,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.gbw",
+      "size": 1935508,
+      "modified": 1790837444.978635,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.hostnames",
+      "size": 16,
+      "modified": 1790837346.1582303,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.property.txt",
+      "size": 10738,
+      "modified": 1790837525.6678813,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.res.Dipoles",
+      "size": 28,
+      "modified": 1790837525.7254493,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00139.res.Gradients",
+      "size": 700,
+      "modified": 1790837525.6870706,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.densities",
+      "size": 1336336,
+      "modified": 1790837445.8716404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837445.8716404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.gbw",
+      "size": 1935508,
+      "modified": 1790837445.986867,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.hostnames",
+      "size": 16,
+      "modified": 1790837347.2039404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.property.txt",
+      "size": 10797,
+      "modified": 1790837526.8096485,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.res.Dipoles",
+      "size": 28,
+      "modified": 1790837526.886406,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00140.res.Gradients",
+      "size": 700,
+      "modified": 1790837526.8192432,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.densities",
+      "size": 1336336,
+      "modified": 1790837447.331176,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837447.331176,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.gbw",
+      "size": 1935508,
+      "modified": 1790837447.4368005,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.hostnames",
+      "size": 16,
+      "modified": 1790837349.8868275,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.property.txt",
+      "size": 10738,
+      "modified": 1790837527.826685,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.res.Dipoles",
+      "size": 28,
+      "modified": 1790837527.8938477,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00141.res.Gradients",
+      "size": 700,
+      "modified": 1790837527.8458743,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.densities",
+      "size": 1336336,
+      "modified": 1790837455.903672,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837455.903672,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.gbw",
+      "size": 1935508,
+      "modified": 1790837456.0188513,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.hostnames",
+      "size": 16,
+      "modified": 1790837360.2571847,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.property.txt",
+      "size": 10797,
+      "modified": 1790837533.1901135,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.res.Dipoles",
+      "size": 28,
+      "modified": 1790837533.257277,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00142.res.Gradients",
+      "size": 700,
+      "modified": 1790837533.1997082,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.densities",
+      "size": 1336336,
+      "modified": 1790837489.7720177,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.densitiesinfo",
+      "size": 1838,
+      "modified": 1790837489.7720177,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.gbw",
+      "size": 1935508,
+      "modified": 1790837489.8871605,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.hostnames",
+      "size": 16,
+      "modified": 1790837392.021787,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.property.txt",
+      "size": 10792,
+      "modified": 1790837570.456348,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.res.Dipoles",
+      "size": 28,
+      "modified": 1790837570.513915,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00143.res.Gradients",
+      "size": 700,
+      "modified": 1790837570.4659426,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837485.5980878,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.densities",
+      "size": 668168,
+      "modified": 1790837485.69404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837485.69404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837503.013486,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837485.7516117,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837485.7516117,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.gbw",
+      "size": 1935508,
+      "modified": 1790837537.5653322,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.gbw1",
+      "size": 1935508,
+      "modified": 1790837483.1703172,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.hostnames",
+      "size": 16,
+      "modified": 1790837485.69404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.lastint",
+      "size": 8906,
+      "modified": 1790837485.607683,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.lastscf",
+      "size": 7566,
+      "modified": 1790837546.1526554,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.property.txt",
+      "size": 2613,
+      "modified": 1790837485.7132306,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.propint.tmp.0",
+      "size": 1645540,
+      "modified": 1790837485.6748497,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00144.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837537.5557375,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837485.6172783,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.densities",
+      "size": 668168,
+      "modified": 1790837485.7036355,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837485.7036355,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837502.6104846,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837485.770802,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837485.770802,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.gbw",
+      "size": 1935508,
+      "modified": 1790837535.9246252,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.gbw1",
+      "size": 1935508,
+      "modified": 1790837483.2087102,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.hostnames",
+      "size": 16,
+      "modified": 1790837485.7036355,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.lastint",
+      "size": 8906,
+      "modified": 1790837485.6268735,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.lastscf",
+      "size": 7566,
+      "modified": 1790837544.0796742,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.property.txt",
+      "size": 2613,
+      "modified": 1790837485.7420163,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.propint.tmp.0",
+      "size": 1645581,
+      "modified": 1790837485.69404,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00145.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837535.9150305,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837497.6689215,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.densities",
+      "size": 668168,
+      "modified": 1790837497.755279,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837497.755279,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837516.1690218,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837497.8032553,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837497.8032553,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.gbw",
+      "size": 1935508,
+      "modified": 1790837557.753356,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.gbw1",
+      "size": 1935508,
+      "modified": 1790837495.33727,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.hostnames",
+      "size": 16,
+      "modified": 1790837497.755279,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.lastint",
+      "size": 8906,
+      "modified": 1790837497.6689215,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.lastscf",
+      "size": 7648,
+      "modified": 1790837564.2583277,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.property.txt",
+      "size": 2613,
+      "modified": 1790837497.7744696,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.propint.tmp.0",
+      "size": 1645547,
+      "modified": 1790837497.7360885,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00146.soscfv.tmp.0",
+      "size": 1258880,
+      "modified": 1790837557.753356,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837499.0986173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.densities",
+      "size": 668168,
+      "modified": 1790837499.19457,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837499.19457,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837517.522136,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837499.261737,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837499.261737,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.gbw",
+      "size": 1935508,
+      "modified": 1790837552.4381835,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.gbw1",
+      "size": 1935508,
+      "modified": 1790837496.632632,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.hostnames",
+      "size": 16,
+      "modified": 1790837499.19457,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.lastint",
+      "size": 8906,
+      "modified": 1790837499.0986173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.lastscf",
+      "size": 7566,
+      "modified": 1790837559.969641,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.property.txt",
+      "size": 2613,
+      "modified": 1790837499.2137606,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.propint.tmp.0",
+      "size": 1645485,
+      "modified": 1790837499.1657844,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00147.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837552.4381835,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837502.4185793,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.densities",
+      "size": 668168,
+      "modified": 1790837502.514532,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837502.514532,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837521.4846666,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837502.5721037,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837502.5721037,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.gbw",
+      "size": 1935508,
+      "modified": 1790837565.0066893,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.gbw1",
+      "size": 1935508,
+      "modified": 1790837499.971787,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.hostnames",
+      "size": 16,
+      "modified": 1790837502.514532,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.lastint",
+      "size": 8906,
+      "modified": 1790837502.4281747,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.lastscf",
+      "size": 7648,
+      "modified": 1790837573.4861152,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.property.txt",
+      "size": 2613,
+      "modified": 1790837502.5337226,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.propint.tmp.0",
+      "size": 1645468,
+      "modified": 1790837502.4857464,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00148.soscfv.tmp.0",
+      "size": 1258880,
+      "modified": 1790837564.9875004,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837507.4645138,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.densities",
+      "size": 668168,
+      "modified": 1790837507.5508711,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837507.5508711,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837524.5549083,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837507.618038,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837507.618038,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.gbw",
+      "size": 1935508,
+      "modified": 1790837558.6648054,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.gbw1",
+      "size": 1935508,
+      "modified": 1790837503.6947496,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.hostnames",
+      "size": 16,
+      "modified": 1790837507.5508711,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.lastint",
+      "size": 8906,
+      "modified": 1790837507.4645138,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.lastscf",
+      "size": 7566,
+      "modified": 1790837565.1601994,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.property.txt",
+      "size": 2613,
+      "modified": 1790837507.5700617,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.propint.tmp.0",
+      "size": 1645525,
+      "modified": 1790837507.5316806,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00149.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837558.6648054,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837508.0978012,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.densities",
+      "size": 668168,
+      "modified": 1790837508.1841586,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837508.1841586,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837525.2265258,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837508.2417302,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837508.2417302,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.gbw",
+      "size": 1935508,
+      "modified": 1790837559.0102031,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.gbw1",
+      "size": 1935508,
+      "modified": 1790837505.6510088,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.hostnames",
+      "size": 16,
+      "modified": 1790837508.1841586,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.lastint",
+      "size": 8906,
+      "modified": 1790837508.1073966,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.lastscf",
+      "size": 7566,
+      "modified": 1790837566.244364,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.property.txt",
+      "size": 2613,
+      "modified": 1790837508.2129445,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.propint.tmp.0",
+      "size": 1645564,
+      "modified": 1790837508.164968,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00150.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837559.0102031,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837509.124499,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.densities",
+      "size": 668168,
+      "modified": 1790837509.2204735,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837509.2204735,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837526.4738345,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837509.278058,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837509.278058,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.gbw",
+      "size": 1935508,
+      "modified": 1790837559.0293918,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.gbw1",
+      "size": 1935508,
+      "modified": 1790837506.7640595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.hostnames",
+      "size": 16,
+      "modified": 1790837509.2204735,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.lastint",
+      "size": 8906,
+      "modified": 1790837509.1340964,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.lastscf",
+      "size": 7566,
+      "modified": 1790837565.3808699,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.property.txt",
+      "size": 2613,
+      "modified": 1790837509.2396684,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.propint.tmp.0",
+      "size": 1645556,
+      "modified": 1790837509.1916811,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00151.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837559.0293918,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837510.2569973,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.densities",
+      "size": 668168,
+      "modified": 1790837510.3337767,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837510.3337767,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837527.9993892,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837510.3913615,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837510.3913615,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.gbw",
+      "size": 1935508,
+      "modified": 1790837570.8401282,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.gbw1",
+      "size": 1935508,
+      "modified": 1790837507.8675148,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.hostnames",
+      "size": 16,
+      "modified": 1790837510.3337767,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.lastint",
+      "size": 8906,
+      "modified": 1790837510.2569973,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.lastscf",
+      "size": 7320,
+      "modified": 1790837570.8401282,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.property.txt",
+      "size": 2613,
+      "modified": 1790837510.3529718,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.propint.tmp.0",
+      "size": 1645528,
+      "modified": 1790837510.3145819,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00152.soscfv.tmp.0",
+      "size": 1258880,
+      "modified": 1790837570.8305337,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837514.9021595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.densities",
+      "size": 668168,
+      "modified": 1790837515.0077314,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837515.0077314,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837533.247682,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837515.065316,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837515.065316,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.gbw",
+      "size": 1935508,
+      "modified": 1790837567.5779965,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.gbw1",
+      "size": 1935508,
+      "modified": 1790837512.3876295,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.hostnames",
+      "size": 16,
+      "modified": 1790837515.0077314,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.lastint",
+      "size": 8906,
+      "modified": 1790837514.911757,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.lastscf",
+      "size": 7238,
+      "modified": 1790837567.5779965,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.property.txt",
+      "size": 2613,
+      "modified": 1790837515.0269263,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.propint.tmp.0",
+      "size": 1645483,
+      "modified": 1790837514.9693415,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00153.soscfv.tmp.0",
+      "size": 945692,
+      "modified": 1790837567.568402,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837520.0358963,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.densities",
+      "size": 668168,
+      "modified": 1790837520.1414359,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837520.1414359,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837539.3586564,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837520.199003,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837520.199003,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.gbw",
+      "size": 1935508,
+      "modified": 1790837564.7764242,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.gbw1",
+      "size": 1935508,
+      "modified": 1790837517.5317304,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.hostnames",
+      "size": 16,
+      "modified": 1790837520.1414359,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.lastint",
+      "size": 8906,
+      "modified": 1790837520.0454907,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.lastscf",
+      "size": 7096,
+      "modified": 1790837564.7764242,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.property.txt",
+      "size": 2613,
+      "modified": 1790837520.160625,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.propint.tmp.0",
+      "size": 1645438,
+      "modified": 1790837520.1222467,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00154.soscfv.tmp.0",
+      "size": 632504,
+      "modified": 1790837564.7764242,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837528.5942595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.densities",
+      "size": 668168,
+      "modified": 1790837528.6806116,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837528.6806116,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837548.1104708,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837528.73818,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837528.73818,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.gbw",
+      "size": 1935508,
+      "modified": 1790837566.3690908,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.gbw1",
+      "size": 1935508,
+      "modified": 1790837526.061263,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.hostnames",
+      "size": 16,
+      "modified": 1790837528.6806116,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.lastint",
+      "size": 8906,
+      "modified": 1790837528.5942595,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.lastscf",
+      "size": 7014,
+      "modified": 1790837566.3690908,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.property.txt",
+      "size": 2613,
+      "modified": 1790837528.699801,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.propint.tmp.0",
+      "size": 1645464,
+      "modified": 1790837528.6614223,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00155.soscfv.tmp.0",
+      "size": 319316,
+      "modified": 1790837566.3594966,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837529.64008,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.densities",
+      "size": 668168,
+      "modified": 1790837529.7456217,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837529.7456217,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837548.7534788,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837529.8031898,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837529.8031898,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.gbw",
+      "size": 1935508,
+      "modified": 1790837566.3019302,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.gbw1",
+      "size": 1935508,
+      "modified": 1790837527.22222,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.hostnames",
+      "size": 16,
+      "modified": 1790837529.7456217,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.lastint",
+      "size": 8906,
+      "modified": 1790837529.6496747,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.lastscf",
+      "size": 7014,
+      "modified": 1790837566.3019302,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.property.txt",
+      "size": 2613,
+      "modified": 1790837529.764811,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.propint.tmp.0",
+      "size": 1645522,
+      "modified": 1790837529.726432,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00156.soscfv.tmp.0",
+      "size": 319316,
+      "modified": 1790837566.3019302,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837530.8010368,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.densities",
+      "size": 668168,
+      "modified": 1790837530.8969836,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837530.8969836,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837550.1642575,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837530.9545517,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837530.9545517,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.gbw",
+      "size": 1935508,
+      "modified": 1790837568.345557,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.gbw1",
+      "size": 1935508,
+      "modified": 1790837528.3064191,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.hostnames",
+      "size": 16,
+      "modified": 1790837530.8969836,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.lastint",
+      "size": 8906,
+      "modified": 1790837530.8010368,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.lastscf",
+      "size": 7014,
+      "modified": 1790837568.345557,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.property.txt",
+      "size": 2613,
+      "modified": 1790837530.916173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.propint.tmp.0",
+      "size": 1645550,
+      "modified": 1790837530.8777943,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00157.soscfv.tmp.0",
+      "size": 319316,
+      "modified": 1790837568.345557,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.cpscfdata.tmp.0",
+      "size": 57848,
+      "modified": 1790837535.9534094,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.densities",
+      "size": 668168,
+      "modified": 1790837536.0301678,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.densitiesinfo",
+      "size": 1177,
+      "modified": 1790837536.0301678,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.diisao.tmp.0",
+      "size": 1006652,
+      "modified": 1790837554.7503796,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.diise.tmp.0",
+      "size": 522072,
+      "modified": 1790837536.0973313,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.diist.tmp.0",
+      "size": 522072,
+      "modified": 1790837536.0973313,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.gbw",
+      "size": 1935508,
+      "modified": 1790837573.6012495,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.gbw1",
+      "size": 1935508,
+      "modified": 1790837533.593094,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.hostnames",
+      "size": 16,
+      "modified": 1790837536.0301678,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.lastint",
+      "size": 8906,
+      "modified": 1790837535.9630044,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.lastscf",
+      "size": 7014,
+      "modified": 1790837573.6012495,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.property.txt",
+      "size": 2613,
+      "modified": 1790837536.0685468,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.propint.tmp.0",
+      "size": 1645521,
+      "modified": 1790837536.0109782,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00158.soscfv.tmp.0",
+      "size": 319316,
+      "modified": 1790837573.6012495,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00159.gbw",
+      "size": 1260392,
+      "modified": 1790837571.0991797,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00159.gbw1",
+      "size": 1935508,
+      "modified": 1790837570.8593173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00159.lastint",
+      "size": 7509,
+      "modified": 1790837573.6780055,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_D00159.property.txt",
+      "size": 2453,
+      "modified": 1790837570.8593173,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/03_OPT/ts_opt_trj.xyz",
+      "size": 73200,
+      "modified": 1790835774.182434,
+      "is_dir": false
+    }
+  ],
+  "truncated": false,
+  "pinned": []
+}

@@ -432,12 +432,33 @@ class RemoteStructureCache:
         Returns the cached job root when a usable catalog source is present.
         """
         paths = _CATALOG_FETCH_PATHS.get(workflow, _CATALOG_FETCH_PATHS["legacy"])
+        paths = tuple(dict.fromkeys((*paths, "RESULT/result_manifest.json", "RESULT/frame_candidates.json")))
         for rel_path in paths:
             self.fetch(record, rel_path)
         self._fetch_catalog_products(record)
 
         root = self.job_root(record.id)
         return root if self.catalog_ready(root, workflow) else None
+
+    def fetch_reusable_geometries(self, record: Any, root: Path) -> None:
+        """Fetch every formal geometry before indexing or destructive rerun."""
+        from acp.results.manifest import load_result_manifest
+        from acp.results.structure_policy import reusable_product
+        from acp.confsearch.manifest import find_confsearch_manifest, read_manifest, resolve_manifest_geometry
+        paths: set[str] = set()
+        manifest = load_result_manifest(root)
+        if manifest:
+            for product in manifest.products:
+                if reusable_product(product.to_dict()):
+                    paths.add(product.path if product.path.startswith("RESULT/") else "RESULT/" + product.path)
+        conformers = find_confsearch_manifest(root)
+        if conformers:
+            for row in read_manifest(conformers).get("conformers") or []:
+                geometry = resolve_manifest_geometry(conformers, str(row.get("geometry") or ""))
+                paths.add(geometry.resolve().relative_to(root.resolve()).as_posix())
+        for rel in sorted(paths):
+            if self.fetch(record, rel, raise_errors=True) is None:
+                raise ValueError(f"远程结构尚未同步: {rel}")
 
     def _fetch_catalog_products(self, record: Any) -> None:
         """Fetch small auxiliary products referenced by a result manifest."""

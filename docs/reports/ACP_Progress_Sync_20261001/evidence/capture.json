@@ -1,0 +1,67 @@
+{
+  "captured_at": "2026-10-01T14:52:52.526551+08:00",
+  "job_id": "20260930_110815_003_BatchOptimize",
+  "base_url": "http://127.0.0.1:8765",
+  "requests": [
+    {
+      "path": "/api/status",
+      "file": "service_status.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize",
+      "file": "job_raw.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/summary",
+      "file": "job_summary.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/detail",
+      "file": "job_detail.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/tasks",
+      "file": "stage_tasks.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/files/state.json",
+      "file": "state.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/logs?lines=100",
+      "file": "runtime_logs.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/energy-graph?view_type=optimization",
+      "file": "optimization_energy_graph.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/files",
+      "file": "root_files.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/files?path=WORK",
+      "file": "work_files.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/files?path=WORK/03_OPT",
+      "file": "opt_files.json",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/jobs/20260930_110815_003_BatchOptimize/files/WORK/03_OPT/optimization_trajectory.json",
+      "file": "optimization_trajectory.json",
+      "status": 200
+    }
+  ]
+}

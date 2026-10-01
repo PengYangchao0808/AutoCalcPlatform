@@ -66,11 +66,40 @@ class ProgressReporter:
         self._created_at = _iso_now()
         self._lock = threading.Lock()
         self._write_lock = threading.Lock()
+        self._batch_steps: tuple[str, ...] = ()
+        self._batch_total = 0
+        self._batch_item = 0
+        self._batch_settled: set[tuple[int, str]] = set()
         for name in self._stage_names:
             self._stages[name] = {"status": "pending"}
 
     def initialize(self) -> None:
         """Write initial state.json with all stages pending."""
+        self._write(force=True)
+
+    def configure_batch(self, item_total: int, stages: list[str]) -> None:
+        """Count completed/settled item-step units across an entire batch."""
+        with self._lock:
+            self._batch_steps = tuple(stages)
+            self._stage_names = list(stages)
+            self._stages = {name: {"status": "pending"} for name in stages}
+            self._batch_total = item_total
+            self._batch_settled.clear()
+
+    def begin_batch_item(self, index: int) -> None:
+        """Reset per-item stage observations while retaining aggregate progress."""
+        with self._lock:
+            self._batch_item = index
+            self._status = "running"
+            self._current_stage = None
+            self._live_metrics = ()
+            for name in self._batch_steps:
+                self._stages[name] = {"status": "pending"}
+
+    def finish_batch_item(self, index: int) -> None:
+        """Account for completed, cache-skipped, or failed item processing."""
+        with self._lock:
+            self._batch_settled.update((index, name) for name in self._batch_steps)
         self._write(force=True)
 
     @property
@@ -87,6 +116,10 @@ class ProgressReporter:
                 self._stages[name] = {}
                 self._stage_names.append(name)
             self._stages[name]["status"] = "running"
+            self._stages[name].pop("progress", None)
+            self._stages[name].pop("detail", None)
+            self._stages[name].pop("completed_at", None)
+            self._stages[name].pop("error", None)
             self._stages[name]["started_at"] = now
             self._current_stage = name
         self._write(force=True)
@@ -124,6 +157,8 @@ class ProgressReporter:
                 self._stages[name] = {}
             self._stages[name]["status"] = "completed"
             self._stages[name]["completed_at"] = now
+            if self._batch_steps and name in self._batch_steps:
+                self._batch_settled.add((self._batch_item, name))
             if result:
                 self._stages[name]["result"] = result
             self._current_stage = None
@@ -181,6 +216,12 @@ class ProgressReporter:
             self._live_metrics = normalized
         self._write(force=True)
 
+    def update_live_metrics(self, metrics: list[LiveMetric]) -> None:
+        """Update stage observations without discarding batch context."""
+        with self._lock:
+            context = [metric for metric in self._live_metrics if metric.key == "batch_item"]
+        self.set_live_metrics([*context, *metrics])
+
     def _overall_progress(self) -> float:
         """Compute overall progress including sub-stage fraction."""
         with self._lock:
@@ -193,6 +234,13 @@ class ProgressReporter:
         current_frac = 0.0
         if self._current_stage and self._current_stage in self._stages:
             current_frac = self._stages[self._current_stage].get("progress", 0.0)
+        if self._batch_total and self._batch_steps:
+            if (self._batch_item, self._current_stage) in self._batch_settled:
+                current_frac = 0.0
+            return min(1.0, round(
+                (len(self._batch_settled) + current_frac)
+                / (self._batch_total * len(self._batch_steps)), 3,
+            ))
         return round((done + current_frac) / total, 3)
 
     def _stage_index(self) -> int | None:
@@ -256,6 +304,7 @@ class ProgressReporter:
                     "overall_progress": self._overall_progress_unlocked(),
                     "stage_index": self._stage_index_unlocked(),
                     "stage_total": len(stages),
+                    "stage_order": list(self._stage_names),
                     "stage_progress": (
                         stages[current_stage].get("progress")
                         if current_stage and current_stage in stages
@@ -271,6 +320,9 @@ class ProgressReporter:
                     "updated_at": _iso_now(),
                     "stages": stages,
                 }
+                if self._batch_total:
+                    data["batch_item_index"] = self._batch_item
+                    data["batch_item_total"] = self._batch_total
                 if self._live_metrics:
                     data["live_metrics"] = [
                         {

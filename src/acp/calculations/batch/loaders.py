@@ -96,7 +96,11 @@ def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructure
     if manifest is None:
         _raise_unconfirmed_pes(root)
         return []
-    products = find_products(manifest, "structure")
+    from acp.results.structure_policy import reusable_product, single_geometry
+    products = [p for p in manifest.products if reusable_product(p.to_dict())]
+    if manifest.workflow == "PESsearch":
+        products = [p for p in products if p.metadata.get("selection_source") in {"manual", "manual_frame"}]
+
     if not products:
         _raise_unconfirmed_pes(root)
         import logging
@@ -113,6 +117,8 @@ def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructure
             continue
         metadata = metadata_by_id.get(product.id, {})
         text = geometry.read_text(encoding="utf-8")
+        if single_geometry(text) is None:
+            continue
         tag = _product_tag(product.id, product.label, product.path, metadata, _first_comment(text))
         candidate_id = _product_candidate(product.id, product.label, product.path, metadata)
         product_items = _items_from_text(

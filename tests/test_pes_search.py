@@ -363,8 +363,8 @@ def test_scan_five_frames_profile(
     assert quality["scan_complete"] is True
 
     ts_recs = result["ts_recommendations"]
-    assert len(ts_recs) >= 1
-    assert ts_recs[0]["kind"] == "ts"
+    assert ts_recs == []
+    assert result["selection_mode"] == "manual_only"
 
     scan_dir = tmp_path / "WORK" / "07_PATH" / "pes_scan_001"
     assert (scan_dir / "scan_frames" / "frame_000.xyz").exists()
@@ -849,7 +849,8 @@ def test_from_confsearch_manifest(
 
     assert result.status == "complete"
     assert result.profile.get("energy_source") == "single_point"
-    assert len(result.ts_candidates) >= 1
+    # manual_only: automatic TS/INT candidates are disabled until PES2TS is accepted.
+    assert result.ts_candidates == []
     assert result.pes_profile_path is not None
     assert result.pes_profile_path.exists()
     assert (tmp_path / "RESULT" / "result_manifest.json").exists()
@@ -872,7 +873,7 @@ def test_from_confsearch_manifest(
         )
     )
     assert recommendations["schema_version"] == "pes_recommendations_v1"
-    assert len(recommendations["ts"]) >= 1
+    assert recommendations["ts"] == []
 
 
 def test_bad_manifest_structured_error(
@@ -1054,7 +1055,7 @@ def test_entry_from_artifact(
     )
 
     assert result.status == "completed"
-    assert result.metadata["ts_candidates"] >= 1
+    assert result.metadata["ts_candidates"] == 0
     pes_profile = tmp_path / "RESULT" / "pes_search" / "pes_profile.json"
     assert pes_profile.exists()
     profile = __import__("json").loads(pes_profile.read_text(encoding="utf-8"))
@@ -1087,7 +1088,7 @@ def test_entry_from_direct_input(
     )
 
     assert result.status == "completed"
-    assert result.metadata["ts_candidates"] >= 1
+    assert result.metadata["ts_candidates"] == 0
 
 
 def test_entry_from_job_missing(tmp_path: Path) -> None:
@@ -1319,21 +1320,10 @@ def test_distance_scan_knee_selection_resolves(
     energies = [float(-1.0 + 0.03 * np.exp(-((i - 9) ** 2) / 8.0)) for i in range(15)]
     result = _run_barrier_scan(fake_backend, tmp_path, energies=energies)
 
-    ts_recs = result["ts_recommendations"]
-    assert len(ts_recs) == 1
-    ts = ts_recs[0]
-    assert ts["evidence"]["selection_algorithm"] == "endpoint_knee_shift_midpoint_v1"
-    assert 5 <= ts["frame_index"] <= 13
-    assert ts["confidence"] in ("medium", "high")
-    assert ts["evidence"]["barrier_from_reactant_kcal_mol"] is not None
-
-    int_recs = result["int_recommendations"]
-    assert len(int_recs) == 1
-    assert int_recs[0]["frame_index"] > ts["frame_index"]
-
-    quality = result["quality"]
-    assert "distance_selection_knee_shift_v1" in quality["notes"]
-    assert quality["needs_review"] is False
+    assert result["selection_mode"] == "manual_only"
+    assert result["ts_recommendations"] == []
+    assert result["int_recommendations"] == []
+    assert result["quality"]["needs_review"] is True
 
 
 def test_distance_scan_monotonic_rise_no_endpoint_ts(
@@ -1344,12 +1334,10 @@ def test_distance_scan_monotonic_rise_no_endpoint_ts(
     energies = [float(-1.0 + 0.03 * (1.0 - np.exp(-i / 4.0))) for i in range(15)]
     result = _run_barrier_scan(fake_backend, tmp_path, energies=energies)
 
-    ts_recs = result["ts_recommendations"]
-    assert len(ts_recs) == 1
-    ts = ts_recs[0]
-    assert ts["frame_index"] <= 13
-    assert ts["evidence"]["selection_algorithm"] == "endpoint_knee_shift_midpoint_v1"
-    assert "distance_selection_knee_shift_v1" in result["quality"]["notes"]
+    assert result["selection_mode"] == "manual_only"
+    assert result["ts_recommendations"] == []
+    assert result["int_recommendations"] == []
+    assert result["quality"]["needs_review"] is True
 
 
 def test_distance_scan_selection_config_gate_triggers_fallback(
@@ -1369,13 +1357,10 @@ def test_distance_scan_selection_config_gate_triggers_fallback(
     }
     result = _run_barrier_scan(fake_backend, tmp_path, energies=energies, config=config)
 
-    quality = result["quality"]
-    assert "distance_selection_fallback:insufficient_barrier" in quality["notes"]
-    assert quality["needs_review"] is True
-
-    ts = result["ts_recommendations"][0]
-    assert ts["evidence"]["peak_index"] == 9
-    assert "selection_algorithm" not in ts["evidence"]
+    assert result["selection_mode"] == "manual_only"
+    assert result["ts_recommendations"] == []
+    assert result["int_recommendations"] == []
+    assert result["quality"]["needs_review"] is True
 
 
 def test_engine_candidates_match_persisted_recommendations(
@@ -1413,10 +1398,10 @@ def test_engine_candidates_match_persisted_recommendations(
         c["candidate_id"] for c in profile_payload["int_candidates"]
     }
     search_result = result.metadata["search_result"]
-    assert search_result["selected_ts_id"] == result.ts_candidates[0].candidate_id
-    assert search_result["selected_ts_id"] in {
-        c["candidate_id"] for c in profile_payload["ts_candidates"]
-    }
+    assert search_result["selected_ts_id"] is None
+    assert search_result["selected_int_id"] is None
+    assert result.ts_candidates == []
+    assert result.int_candidates == []
 
 
 def test_coordinate_scan_ids_rank_ordered() -> None:

@@ -675,7 +675,7 @@
   grid-template-columns: 32px minmax(0, 46fr) 56px minmax(0, 30fr) minmax(0, 24fr) 36px;
   gap: var(--tiw-spacing-sm);
   align-items: center;
-  min-height: 64px;
+  min-height: 44px;
   padding: var(--tiw-spacing-xs) var(--tiw-spacing-md);
   border-bottom: 1px solid rgba(255,255,255,0.04);
 }
@@ -1054,8 +1054,6 @@
 .tiw-left > .config-cards-row { flex:0 0 auto; overflow-y:auto; }
 .tiw-left > .task-info-details { flex:0 0 auto; overflow-y:auto; }
 .tiw-left > .create-review { flex:1 1 auto; overflow-y:auto; }
-#job-modal.edit-mode .create-stepper,
-#job-modal.edit-mode #modal-back { display:none !important; }
 .preview-more-menu { position:relative; }
 .preview-more-menu > summary { list-style:none; cursor:pointer; }
 .preview-more-menu > summary::-webkit-details-marker { display:none; }
@@ -1063,15 +1061,21 @@
 .preview-more-menu-panel .btn { justify-content:flex-start; border:0; }
 #edit-recalc-footer { display: flex; flex: 1 1 420px; min-width: 0; }
 #edit-recalc-footer .edit-banner-row { width: 100%; margin: 0; }
+#edit-recalc-banner { padding: 0 16px 8px 16px; }
 #job-modal .edit-banner {
   margin: 0;
-  padding: 12px 16px;
-  border: 0;
-  border-radius: 12px;
-  background: rgba(78, 161, 255, 0.10);
+  padding: 6px 12px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 8px;
+  background: rgba(96, 165, 250, 0.08);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-#job-modal .edit-banner-source { margin: 0; }
-#job-modal .edit-context-meta { margin-left: 12px; color: var(--text-secondary); }
+#job-modal .edit-banner-source { margin: 0; font-size: 12px; color: var(--text-primary); }
+#job-modal .edit-context-meta { margin-left: 8px; color: var(--text-secondary); font-size: 11px; }
 #job-modal .wizard-input-section { padding: 0; border: 0; background: transparent; }
 #job-modal .source-section-header {
   display: grid;
@@ -1121,6 +1125,13 @@
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 48px;
   padding: 0 12px 0 16px;
+  align-items: center;
+}
+#job-modal .preview-right-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 #job-modal .preview-right-title {
   min-width: 0;
@@ -1128,7 +1139,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+#job-modal .edit-default-start-badge {
+  display: none;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 #job-modal .preview-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: max-content;
   justify-content: flex-end;
 }
@@ -1260,11 +1287,14 @@
 #job-modal .tiw-title-row, #job-modal .modal-footer, #job-modal .create-stepper { flex:0 0 auto; }
 #job-modal .modal-body { display:flex; flex-direction:column; min-width:0; overflow:hidden; }
 #job-modal .wizard-input-section { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
-#job-modal .tiw-grid { flex:1; height:auto; min-height:0; width:100%; box-sizing:border-box; }
-#job-modal .tiw-info-panel { max-height:60%; }
+#job-modal .tiw-info-panel { max-height: min(220px, 35%); }
+#job-modal .tiw-info-panel-header { padding: 6px 16px; }
+#job-modal .tiw-info-panel-body { padding: 6px 16px 8px; }
 #job-modal .footer-selected-count { display:none !important; }
 #job-modal .footer-input-count { border:1px solid var(--tiw-border); background:var(--tiw-bg-elevated); color:var(--tiw-text-primary); }
 #wizard-input-form .wif-paired-grid .wif-row-readonly { grid-template-columns:64px minmax(0,1fr); }
+#wizard-input-form .wif-paired-grid .wif-row-name { grid-template-columns: auto minmax(0, 1fr); }
+#wizard-input-form .wif-paired-grid .wif-row-name .wif-label { white-space: nowrap; }
 #job-modal .wif-inline-action { min-height:28px; padding:0 6px; border:0; }
 #job-modal .wif-row-readonly .wif-readonly { padding:0; }
 @container (min-width:560px) {

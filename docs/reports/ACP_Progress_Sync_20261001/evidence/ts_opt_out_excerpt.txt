@@ -1,0 +1,248 @@
+52: 
+53: 
+54:                          Program Version 6.1.1  -  RELEASE   -
+55:                                 (GIT: $487d211c$)
+56:                           ($2025-11-21 10:33:24 +0100$)
+57: 
+58: 
+201: 
+202: WARNING: The environment variable RSH_COMMAND is not set!
+203:   ===> : All Displacements for the Numerical Hessian or Gradient calculation
+204:          will be started on localhost
+205: 
+206: WARNING: Geometry Optimization
+207:   ===> : Switching off AutoStart
+270: Max. Gradient            TolMAXG  ....  1.0000e-04 Eh/bohr
+271: RMS Gradient             TolRMSG  ....  3.0000e-05 Eh/bohr
+272: Max. Displacement        TolMAXD  ....  1.0000e-03 bohr
+273: RMS Displacement         TolRMSD  ....  6.0000e-04 bohr
+274: Strict Convergence                .... False
+275: 
+276: ------------------------------------------------------------------------------
+277:                         ORCA OPTIMIZATION COORDINATE SETUP
+2135: 
+2136: -----------------------
+2137: VIBRATIONAL FREQUENCIES
+2138: -----------------------
+2139: 
+2140: Scaling factor for frequencies =  1.000000000  (already applied!)
+2141: 
+2233: ------------
+2234: 
+2235: These modes are the Cartesian displacements weighted by the diagonal matrix
+2236: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+2237: Thus, these vectors are normalized but *not* orthogonal
+2238: 
+2239:                   0          1          2          3          4          5    
+9779: 
+9780: -----------------------
+9781: VIBRATIONAL FREQUENCIES
+9782: -----------------------
+9783: 
+9784: Scaling factor for frequencies =  1.000000000  (already applied!)
+9785: 
+9877: ------------
+9878: 
+9879: These modes are the Cartesian displacements weighted by the diagonal matrix
+9880: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+9881: Thus, these vectors are normalized but *not* orthogonal
+9882: 
+9883:                   0          1          2          3          4          5    
+17067: 
+17068: -----------------------
+17069: VIBRATIONAL FREQUENCIES
+17070: -----------------------
+17071: 
+17072: Scaling factor for frequencies =  1.000000000  (already applied!)
+17073: 
+17165: ------------
+17166: 
+17167: These modes are the Cartesian displacements weighted by the diagonal matrix
+17168: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+17169: Thus, these vectors are normalized but *not* orthogonal
+17170: 
+17171:                   0          1          2          3          4          5    
+24354: 
+24355: -----------------------
+24356: VIBRATIONAL FREQUENCIES
+24357: -----------------------
+24358: 
+24359: Scaling factor for frequencies =  1.000000000  (already applied!)
+24360: 
+24452: ------------
+24453: 
+24454: These modes are the Cartesian displacements weighted by the diagonal matrix
+24455: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+24456: Thus, these vectors are normalized but *not* orthogonal
+24457: 
+24458:                   0          1          2          3          4          5    
+32003: 
+32004: -----------------------
+32005: VIBRATIONAL FREQUENCIES
+32006: -----------------------
+32007: 
+32008: Scaling factor for frequencies =  1.000000000  (already applied!)
+32009: 
+32101: ------------
+32102: 
+32103: These modes are the Cartesian displacements weighted by the diagonal matrix
+32104: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+32105: Thus, these vectors are normalized but *not* orthogonal
+32106: 
+32107:                   0          1          2          3          4          5    
+39294: 
+39295: -----------------------
+39296: VIBRATIONAL FREQUENCIES
+39297: -----------------------
+39298: 
+39299: Scaling factor for frequencies =  1.000000000  (already applied!)
+39300: 
+39392: ------------
+39393: 
+39394: These modes are the Cartesian displacements weighted by the diagonal matrix
+39395: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+39396: Thus, these vectors are normalized but *not* orthogonal
+39397: 
+39398:                   0          1          2          3          4          5    
+46934: 
+46935: -----------------------
+46936: VIBRATIONAL FREQUENCIES
+46937: -----------------------
+46938: 
+46939: Scaling factor for frequencies =  1.000000000  (already applied!)
+46940: 
+47032: ------------
+47033: 
+47034: These modes are the Cartesian displacements weighted by the diagonal matrix
+47035: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+47036: Thus, these vectors are normalized but *not* orthogonal
+47037: 
+47038:                   0          1          2          3          4          5    
+54580: 
+54581: -----------------------
+54582: VIBRATIONAL FREQUENCIES
+54583: -----------------------
+54584: 
+54585: Scaling factor for frequencies =  1.000000000  (already applied!)
+54586: 
+54678: ------------
+54679: 
+54680: These modes are the Cartesian displacements weighted by the diagonal matrix
+54681: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+54682: Thus, these vectors are normalized but *not* orthogonal
+54683: 
+54684:                   0          1          2          3          4          5    
+61518: 
+61519: -----------------------
+61520: VIBRATIONAL FREQUENCIES
+61521: -----------------------
+61522: 
+61523: Scaling factor for frequencies =  1.000000000  (already applied!)
+61524: 
+61616: ------------
+61617: 
+61618: These modes are the Cartesian displacements weighted by the diagonal matrix
+61619: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+61620: Thus, these vectors are normalized but *not* orthogonal
+61621: 
+61622:                   0          1          2          3          4          5    
+68257: 
+68258: -----------------------
+68259: VIBRATIONAL FREQUENCIES
+68260: -----------------------
+68261: 
+68262: Scaling factor for frequencies =  1.000000000  (already applied!)
+68263: 
+68355: ------------
+68356: 
+68357: These modes are the Cartesian displacements weighted by the diagonal matrix
+68358: M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+68359: Thus, these vectors are normalized but *not* orthogonal
+68360: 
+68361:                   0          1          2          3          4          5    
+71174: 
+71175:                     ***********************HURRAY********************
+71176:                     ***        THE OPTIMIZATION HAS CONVERGED     ***
+71177:                     *************************************************
+71178: 
+71179: 
+71180:     ---------------------------------------------------------------------------
+72772: 
+72773: ----------------------------------------------------------------------------
+72774:                            ORCA NUMERICAL FREQUENCIES
+72775:                               (16-process run)
+72776: ----------------------------------------------------------------------------
+72777: 
+72778: Number of atoms                ... 29
+72779: Central differences            ... used
+72780: Translation invariance         ... used
+72781: Number of displacements        ... 174 - 6
+72782: Numerical increment            ... 5.000e-03 bohr
+72783: IR-spectrum generation         ... on
+72784: Raman-spectrum generation      ... off
+72785: Surface Crossing Hessian       ... off
+72890: 	<< Calculating gradient on displaced geometry  96 (of 168) >>
+72891: 	<< Calculating gradient on displaced geometry  97 (of 168) >>
+72892: 	<< Calculating gradient on displaced geometry  98 (of 168) >>
+72893: 	<< Calculating gradient on displaced geometry  99 (of 168) >>
+72894: 	<< Calculating gradient on displaced geometry 100 (of 168) >>
+72895: 	<< Calculating gradient on displaced geometry 101 (of 168) >>
+72896: 	<< Calculating gradient on displaced geometry 102 (of 168) >>
+72897: 	<< Calculating gradient on displaced geometry 103 (of 168) >>
+72898: 	<< Calculating gradient on displaced geometry 104 (of 168) >>
+72899: 	<< Calculating gradient on displaced geometry 105 (of 168) >>
+72900: 	<< Calculating gradient on displaced geometry 106 (of 168) >>
+72901: 	<< Calculating gradient on displaced geometry 107 (of 168) >>
+72902: 	<< Calculating gradient on displaced geometry 108 (of 168) >>
+72903: 	<< Calculating gradient on displaced geometry 109 (of 168) >>
+72904: 	<< Calculating gradient on displaced geometry 110 (of 168) >>
+72905: 	<< Calculating gradient on displaced geometry 111 (of 168) >>
+72906: 	<< Calculating gradient on displaced geometry 112 (of 168) >>
+72907: 	<< Calculating gradient on displaced geometry 113 (of 168) >>
+72908: 	<< Calculating gradient on displaced geometry 114 (of 168) >>
+72909: 	<< Calculating gradient on displaced geometry 115 (of 168) >>
+72910: 	<< Calculating gradient on displaced geometry 116 (of 168) >>
+72911: 	<< Calculating gradient on displaced geometry 117 (of 168) >>
+72912: 	<< Calculating gradient on displaced geometry 118 (of 168) >>
+72913: 	<< Calculating gradient on displaced geometry 119 (of 168) >>
+72914: 	<< Calculating gradient on displaced geometry 120 (of 168) >>
+72915: 	<< Calculating gradient on displaced geometry 121 (of 168) >>
+72916: 	<< Calculating gradient on displaced geometry 122 (of 168) >>
+72917: 	<< Calculating gradient on displaced geometry 123 (of 168) >>
+72918: 	<< Calculating gradient on displaced geometry 124 (of 168) >>
+72919: 	<< Calculating gradient on displaced geometry 125 (of 168) >>
+72920: 	<< Calculating gradient on displaced geometry 126 (of 168) >>
+72921: 	<< Calculating gradient on displaced geometry 127 (of 168) >>
+72922: 	<< Calculating gradient on displaced geometry 128 (of 168) >>
+72923: 	<< Calculating gradient on displaced geometry 129 (of 168) >>
+72924: 	<< Calculating gradient on displaced geometry 130 (of 168) >>
+72925: 	<< Calculating gradient on displaced geometry 131 (of 168) >>
+72926: 	<< Calculating gradient on displaced geometry 132 (of 168) >>
+72927: 	<< Calculating gradient on displaced geometry 133 (of 168) >>
+72928: 	<< Calculating gradient on displaced geometry 134 (of 168) >>
+72929: 	<< Calculating gradient on displaced geometry 135 (of 168) >>
+72930: 	<< Calculating gradient on displaced geometry 136 (of 168) >>
+72931: 	<< Calculating gradient on displaced geometry 137 (of 168) >>
+72932: 	<< Calculating gradient on displaced geometry 138 (of 168) >>
+72933: 	<< Calculating gradient on displaced geometry 139 (of 168) >>
+72934: 	<< Calculating gradient on displaced geometry 140 (of 168) >>
+72935: 	<< Calculating gradient on displaced geometry 141 (of 168) >>
+72936: 	<< Calculating gradient on displaced geometry 142 (of 168) >>
+72937: 	<< Calculating gradient on displaced geometry 143 (of 168) >>
+72938: 	<< Calculating gradient on displaced geometry 144 (of 168) >>
+72939: 	<< Calculating gradient on displaced geometry 145 (of 168) >>
+72940: 	<< Calculating gradient on displaced geometry 146 (of 168) >>
+72941: 	<< Calculating gradient on displaced geometry 147 (of 168) >>
+72942: 	<< Calculating gradient on displaced geometry 148 (of 168) >>
+72943: 	<< Calculating gradient on displaced geometry 149 (of 168) >>
+72944: 	<< Calculating gradient on displaced geometry 150 (of 168) >>
+72945: 	<< Calculating gradient on displaced geometry 151 (of 168) >>
+72946: 	<< Calculating gradient on displaced geometry 152 (of 168) >>
+72947: 	<< Calculating gradient on displaced geometry 153 (of 168) >>
+72948: 	<< Calculating gradient on displaced geometry 154 (of 168) >>
+72949: 	<< Calculating gradient on displaced geometry 155 (of 168) >>
+72950: 	<< Calculating gradient on displaced geometry 156 (of 168) >>
+72951: 	<< Calculating gradient on displaced geometry 157 (of 168) >>
+72952: 	<< Calculating gradient on displaced geometry 158 (of 168) >>
+72953: 	<< Calculating gradient on displaced geometry 159 (of 168) >>
+72954: 	<< Calculating gradient on displaced geometry 160 (of 168) >>

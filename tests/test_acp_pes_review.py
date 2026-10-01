@@ -649,7 +649,7 @@ class TestRecommendationIsolation:
             )
         )
         assert recommendations["schema_version"] == "pes_recommendations_v1"
-        assert recommendations["ts"][0]["candidate_id"] == "ts_guess_001"
+        assert recommendations["ts"] == []
         assert not (tmp_path / "RESULT" / "structures" / "ts_guess_001.xyz").exists()
 
 

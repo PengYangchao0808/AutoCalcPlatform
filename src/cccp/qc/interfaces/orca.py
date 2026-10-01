@@ -2992,12 +2992,12 @@ class ORCAInterface(QCInterfaceBase):
         initial_hessian: str = "calculate",
         recalc_hess: int = 5,
         trust_radius: float = 0.15,
+        calculate_frequencies: bool = True,
         **kwargs,
     ) -> TsOptResult:
-        """Run an ORCA OptTS + independent-frequency transition-state search.
+        """Run OptTS, optionally followed by independent frequency validation.
 
-        The input carries an ``! OptTS NumFreq`` route (built via
-        :func:`cccp.qc.interfaces.orca_ts.ts_opt_route`), a ``%geom`` block
+        By default the input carries an ``! OptTS NumFreq`` route and a ``%geom`` block
         requesting a calculated Hessian / RecalcHess / Trust (initial trust
         radius); the ``NumFreq`` keyword requests the independent numerical
         frequency analysis used to verify the transition state (exactly one
@@ -3017,6 +3017,8 @@ class ORCAInterface(QCInterfaceBase):
                 ``InHess Read`` source.
             recalc_hess: Recalculate Hessian every N steps (0 disables).
             trust_radius: Initial Trust (trust radius) for the TS optimizer.
+            calculate_frequencies: Include NumFreq validation. Calculation plans
+                with an explicit FREQ step pass False to avoid a hidden extra run.
             **kwargs: ``solvent`` / ``solvent_model`` / ``grid`` / ``scf`` /
                 ``nproc`` / ``ts_mode`` / ``opt_level`` /
                 ``geom_maxiter`` / ``max_cycles`` /
@@ -3053,6 +3055,26 @@ class ORCAInterface(QCInterfaceBase):
         _output_callback = kwargs.pop("output_callback", None)
         _hess_file = kwargs.pop("hess_file", None)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
+        # Use the same electronic-state and SCF rendering as ordinary OPT/FREQ.
+        scf_options = dict(kwargs.pop("scf_options", None) or {})
+        mo_read_path = kwargs.pop("mo_read_path", None)
+        if mo_read_path:
+            scf_options.setdefault("mo_read_path", mo_read_path)
+        for name in ("scf_damp", "scf_damp_fac", "scf_shift", "scf_shift_fac"):
+            value = kwargs.pop(name, None)
+            if value is not None:
+                option_name = {"scf_damp_fac": "dampfac", "scf_shift_fac": "shiftfac"}.get(name, name.removeprefix("scf_"))
+                scf_options.setdefault(option_name, value)
+        input_options = {
+            name: kwargs.pop(name, None)
+            for name in (
+                "scf_maxiter", "scf_convergence", "scf_strategy", "route_extras",
+                "extra_blocks", "aux_basis", "aux_j_basis", "aux_c_basis", "dispersion",
+            )
+        }
+        # Rescue controls are owned by the calculation primitive, not ORCA.
+        kwargs.pop("opt_rescue_policy", None)
+        kwargs.pop("opt_max_rescue", None)
         if kwargs:
             logger.warning(
                 "Unused ORCA transition_state_opt kwargs for %s: %s",
@@ -3092,16 +3114,20 @@ class ORCAInterface(QCInterfaceBase):
                 str(_mode_displacement_sign),
             )
 
-        route = ts_opt_route(
-            eff_method,
-            eff_basis or "",
-            grid=_grid,
-            scf=_scf,
-            solvent=_solvent,
-            solvent_model=_solvent_model,
-            nproc=_nproc or self.nproc,
-            opt_level=_opt_level,
+        route_extras = list(input_options.pop("route_extras") or [])
+        if _scf:
+            route_extras.append(_scf)
+        route, _ = self._build_input_blocks(
+            "OptTS", method=eff_method, basis=eff_basis,
+            route_extras=route_extras, grid=_grid, opt_level=_opt_level,
+            solvent=_solvent, solvent_model=_solvent_model,
+            scf_options=scf_options or None, symbols=symbols, **input_options,
         )
+        if calculate_frequencies:
+            first_line, remainder = route.split("\n", 1)
+            route = first_line + " NumFreq\n" + remainder
+        if _nproc is not None:
+            route = route.replace(f"%pal nprocs {self.nproc} end", f"%pal nprocs {_nproc} end")
         blocks = "\n".join(
             part
             for part in (
@@ -3144,7 +3170,8 @@ class ORCAInterface(QCInterfaceBase):
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
         coords, syms, _ = LogParser.extract_last_converged_coords(output_file, "orca")
         energy = LogParser.extract_energy(output_file, "orca")
-        frequency_map = parse_ts_frequency_map(output_text)
+        # Initial/recalculated optimization Hessians are not final frequencies.
+        frequency_map = parse_ts_frequency_map(output_text) if calculate_frequencies else {}
         frequencies = list(frequency_map.values())
         imaginary = [f for f in frequencies if f < 0.0]
         mode_vectors = parse_ts_mode_vectors(output_text)
@@ -3168,6 +3195,7 @@ class ORCAInterface(QCInterfaceBase):
             output_file=input_file,
             log_file=output_file,
             mode_vector=mode_vector,
+            metadata=_with_spin_metadata({"frequency_validation": calculate_frequencies}, output_file),
         )
 
     def irc(

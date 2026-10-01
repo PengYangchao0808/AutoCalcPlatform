@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "job_name": "BatchOptimize",
+  "status": "running",
+  "current_stage": "optimize",
+  "overall_progress": 0.0,
+  "stage_index": 1,
+  "stage_total": 4,
+  "stage_progress": null,
+  "stage_detail": null,
+  "progress_state": "indeterminate",
+  "created_at": "2026-10-01T05:30:14.405743+00:00",
+  "updated_at": "2026-10-01T06:22:36.432089+00:00",
+  "stages": {
+    "optimize": {
+      "status": "running",
+      "started_at": "2026-10-01T05:30:14.445662+00:00"
+    },
+    "frequency": {
+      "status": "pending"
+    },
+    "single_point": {
+      "status": "pending"
+    },
+    "thermochemistry": {
+      "status": "pending"
+    }
+  },
+  "live_metrics": [
+    {
+      "key": "opt_step",
+      "label_key": "live.opt_step",
+      "label": null,
+      "value": "Step 47",
+      "kind": "iteration",
+      "priority": 100,
+      "detail": null
+    },
+    {
+      "key": "opt_convergence",
+      "label_key": "live.opt_convergence",
+      "label": null,
+      "value": "converged",
+      "kind": "status",
+      "priority": 90,
+      "detail": null
+    }
+  ]
+}

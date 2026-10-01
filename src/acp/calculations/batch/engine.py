@@ -475,6 +475,8 @@ class BatchOptimizeEngine:
         self._active_layout_mode = resolved_layout
 
         expanded_items = self._expand_item_states(items, electronic_state, charge)
+        if active_progress_reporter is not None:
+            active_progress_reporter.configure_batch(len(expanded_items), batch_stage_names(profile))
 
         fingerprint = _batch_plan_fingerprint(
             expanded_items, profile, resolved_methods, resolved_layout
@@ -491,8 +493,13 @@ class BatchOptimizeEngine:
         carried: list[BatchCalculationItem] = []
         executed_count = 0
         self._provenance_records: list[dict[str, object]] = []
+        self._item_stage_facts = {}
+        self._active_profile = profile
+        self._active_workflow = workflow
 
         for index, item in enumerate(expanded_items):
+            if active_progress_reporter is not None:
+                active_progress_reporter.begin_batch_item(index)
             record = BatchCalculationItem.from_item(item, charge, multiplicity)
             record.cache_key = item_cache_key(
                 item,
@@ -546,6 +553,8 @@ class BatchOptimizeEngine:
                         )
                 except Exception as exc:
                     record.status = "failed"
+                    if record.frequency.get("status") == "running":
+                        record.frequency["status"] = "failed"
                     record.error = str(exc) or type(exc).__name__
                     if active_progress_reporter is not None:
                         current_stage = active_progress_reporter.current_stage
@@ -553,6 +562,8 @@ class BatchOptimizeEngine:
                             active_progress_reporter.fail_stage(current_stage, record.error)
                     logger.warning("Batch item %s failed: %s", item.item_id, exc)
 
+            if active_progress_reporter is not None:
+                active_progress_reporter.finish_batch_item(index)
             records.append(record)
             checkpoint_items_state[item.item_id] = _to_checkpoint_json(record.to_dict())
             next_index = index + 1
@@ -898,6 +909,8 @@ class BatchOptimizeEngine:
                         ),
                     ]
                 )
+            self._item_stage_facts[item.item_id] = {"stage_id": step_kind.value,
+                "method_fingerprint": resolved_methods.cache_key}
             step_dir = self._step_dir(item, step_kind)
             step_dir.mkdir(parents=True, exist_ok=True)
             step_electronic_state = self._step_state_payload(
@@ -920,17 +933,26 @@ class BatchOptimizeEngine:
                     current_result = run_optimize(req)
                 else:
                     current_result = run_optimize(req, progress_reporter=progress.reporter)
-                if current_result.status == "failed":
-                    raise RuntimeError(
-                        f"optimization failed for {item.item_id}: "
-                        + "; ".join(current_result.errors)
-                    )
                 if not current_symbols and current_result.coords is not None:
                     current_symbols = self._read_symbols_from_xyz(
                         input_path, len(current_result.coords)
                     )
                 if current_result.coords is not None:
                     optimized_coords = [[float(v) for v in row] for row in current_result.coords]
+                # Publish before starting any property calculation.
+                if optimized_coords is not None and (current_result.status == "completed" or current_result.metadata.get("optimization_status") == "converged"):
+                    optimized_path = item_dir / "optimized.xyz"
+                    self._write_xyz(optimized_path, optimized_coords, current_symbols, item.item_id)
+                    record.optimized_xyz = _rel_to(self.task_root, optimized_path)
+                    self._materialize_result_products(BatchCalculationManifest(
+                        profile=self._active_profile, items=[record], workflow=self._active_workflow,
+                        created_at=_utc_now_iso(), updated_at=_utc_now_iso(),
+                    ))
+                if current_result.status == "failed":
+                    raise RuntimeError(
+                        f"optimization failed for {item.item_id}: "
+                        + "; ".join(current_result.errors)
+                    )
                 gbw_name = "ts_opt.gbw" if is_ts else "optimize.gbw"
                 last_optimize_gbw = (step_dir / gbw_name).as_posix()
 
@@ -1004,8 +1026,10 @@ class BatchOptimizeEngine:
                     resolved_methods,
                     electronic_state=step_electronic_state,
                 )
+                record.frequency["status"] = "running"
                 current_result = run_frequency(req)
                 if current_result.status == "failed":
+                    record.frequency["status"] = "failed"
                     raise RuntimeError(
                         f"frequency failed for {item.item_id}: " + "; ".join(current_result.errors)
                     )
@@ -1018,6 +1042,7 @@ class BatchOptimizeEngine:
                 record.frequency["status"] = "completed"
                 if is_ts:
                     valid, msg = _ts_frequency_judgment(current_result.frequencies)
+                    record.frequency["ts_validation"] = "passed" if valid else "failed"
                     if not valid:
                         raise RuntimeError(
                             f"TS frequency judgment failed for {item.item_id}: {msg}"
@@ -1219,6 +1244,9 @@ class BatchOptimizeEngine:
         }
         if basis:
             resources["basis"] = basis
+        if is_ts:
+            # FREQ is an explicit profile step; opt_only is genuinely OPT-only.
+            resources["calculate_frequencies"] = False
         if electronic_state:
             resources["electronic_state"] = dict(electronic_state)
         return CalculationRequest(
@@ -1337,7 +1365,7 @@ class BatchOptimizeEngine:
     def _materialize_result_products(self, manifest: BatchCalculationManifest) -> None:
         """Copy optimized geometries/trajectories to ``RESULT/`` products."""
         structures_dir = self._result_root / BATCH_STRUCTURES_SUBDIR
-        completed = [i for i in manifest.items if i.status in {"completed", "skipped"}]
+        completed = [i for i in manifest.items if i.optimized_xyz]
         if not completed:
             return
         structures_dir.mkdir(parents=True, exist_ok=True)
@@ -1353,6 +1381,10 @@ class BatchOptimizeEngine:
                     item.item_id,
                     item.optimized_xyz,
                 )
+                continue
+            from acp.results.structure_policy import single_geometry
+            if single_geometry(source.read_text(encoding="utf-8")) is None:
+                logger.warning("Ignoring invalid single geometry for batch item %s", item.item_id)
                 continue
             target = structures_dir / f"{item.item_id}__TAG_{item.tag}__optimized.xyz"
             if source.resolve() != target.resolve():
@@ -1372,6 +1404,12 @@ class BatchOptimizeEngine:
                 f"{item.name} ({item.tag}, {manifest.profile})",
                 item.optimized_xyz,
                 ProductKind.STRUCTURE,
+                metadata={"optimization_status": "converged", "auto_reusable": True,
+                          "source_kind": "optimization", "item_id": item.item_id,
+                          "stage_status": item.status, "frequency": item.frequency,
+                          "failure_reason": item.error, "policy_version": 1,
+                          "frequency_status": item.frequency.get("status", "pending"),
+                          **self._item_stage_facts.get(item.item_id, {})},
             )
         _ = result_manifest.write(self._result_root)
 

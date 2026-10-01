@@ -656,3 +656,42 @@
   opacity: 0.45;
   pointer-events: none;
 }
+/* Color 1: Current starting input (Blue) */
+.sp-row-current-input {
+  border-left: 3px solid #60a5fa;
+  background: rgba(96, 165, 250, 0.04);
+}
+.sp-badge-current-input {
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Color 2: Previous task result (Outputs & Candidates, Purple) */
+.sp-row-previous-result,
+.sp-row-previous-output {
+  border-left: 3px solid #c084fc;
+  background: rgba(192, 132, 252, 0.04);
+}
+.sp-badge-previous-result,
+.sp-badge-previous-output {
+  color: #c084fc;
+  border: 1px solid rgba(192, 132, 252, 0.5);
+  background: rgba(192, 132, 252, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Dual identity: Current starting input that is also previous result */
+.sp-row-current-input.sp-row-previous-result,
+.sp-row-current-input.sp-row-previous-output {
+  border-left: 3px solid #60a5fa;
+  border-right: 3px solid #c084fc;
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.06) 0%, rgba(192, 132, 252, 0.06) 100%);
+}

@@ -104,6 +104,7 @@ def test_models(tmp_path: Path) -> None:
                         "label": "TS candidate",
                         "path": "structures/ts_001.xyz",
                         "kind": "structure",
+                        "metadata": {"selection_source":"manual"},
                         "role": "transition_state",
                         "candidate_id": "ts_001",
                     },
@@ -112,6 +113,7 @@ def test_models(tmp_path: Path) -> None:
                         "label": "Minimum candidate",
                         "path": "structures/int_001.xyz",
                         "kind": "structure",
+                        "metadata": {"selection_source":"manual"},
                         "role": "minimum",
                         "candidate_id": "int_001",
                     },
@@ -135,9 +137,8 @@ def test_models(tmp_path: Path) -> None:
     legacy_manifest = legacy_task / "s2_path_manifest.json"
     legacy_manifest.parent.mkdir(parents=True, exist_ok=True)
     legacy_manifest.write_text(json.dumps(legacy_payload), encoding="utf-8")
-    legacy_items, legacy_read = load_items_from_s2_path_manifest(legacy_manifest)
-    assert legacy_read["schema_version"] == "s2_path_v2"
-    assert [(item.candidate_id, item.tag) for item in legacy_items] == [("ts_guess_001", "TS")]
+    with pytest.raises(ValueError, match="manual_only"):
+        load_items_from_s2_path_manifest(legacy_manifest)
 
     request_items = load_batch_request(FIXTURES / "batch_structures_v1.json")
     assert [(item.item_id, item.role) for item in request_items] == [
@@ -727,16 +728,14 @@ def test_batchoptimize_stage_plan_is_profile_driven() -> None:
     from acp.scheduler.stage_tasks import get_stage_plan
 
     expected = {
-        "opt_only": ["prepare", "optimize", "finalize"],
-        "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
-        "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
+        "opt_only": ["optimize"],
+        "opt_freq": ["optimize", "frequency"],
+        "opt_freq_sp": ["optimize", "frequency", "single_point"],
         "opt_freq_sp_thermo": [
-            "prepare",
             "optimize",
             "frequency",
             "single_point",
             "thermochemistry",
-            "finalize",
         ],
     }
     for profile, stage_names in expected.items():
@@ -766,10 +765,8 @@ def test_batchoptimize_job_submission_initializes_stage_tasks(
         work_dir = Path(record.work_dir)
         assert (work_dir / "job.json").is_file()
         assert [task.stage_name for task in manager.stage_tasks.list_by_job(record.id)] == [
-            "prepare",
             "optimize",
             "frequency",
-            "finalize",
         ]
     finally:
         manager.shutdown()
@@ -1256,6 +1253,13 @@ def test_ts_frequency_failure_aborts_item(
     outcome = engine.run([ts_item], profile="opt_freq", charge=0)
     assert outcome.items[0].status == "failed"
     assert "ts_no_imaginary" in outcome.items[0].error
+    from acp.storage.manifest import ResultManifest
+    products = ResultManifest.read(engine._result_root).products
+    structure = next(p for p in products if p.kind.value == "structure")
+    assert structure.metadata["optimization_status"] == "converged"
+    assert structure.metadata["frequency"]["ts_validation"] == "failed"
+    assert (engine._result_root / structure.path).is_file()
+
 
 
 def test_ts_weak_imaginary_frequency_completes_item(

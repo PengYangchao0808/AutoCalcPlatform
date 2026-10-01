@@ -130,6 +130,7 @@ def atomic_write_text(path: Path, text: str) -> None:
         delete=False,
         mode="w",
         encoding="utf-8",
+        newline="",
     )
     try:
         handle.write(text)

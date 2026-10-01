@@ -106,6 +106,7 @@ def _get_stores(request: Request) -> tuple[StructureSourceStore, StructureSource
             store=manager.store,
             source_store=source_store,
             run_root=Path(run_root),
+            structure_cache=getattr(manager, "structure_cache", None),
         )
         indexer.ensure_started()
         _singletons[run_root] = (source_store, indexer)
@@ -243,6 +244,7 @@ def list_structure_sources(
     group_by: str = "none",
     limit: int = Query(default=50, le=100),
     cursor: str | None = None,
+    context_workflow: str | None = None,
 ) -> dict[str, Any]:
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
@@ -271,6 +273,7 @@ def list_structure_sources(
             group_by=group_by,
             limit=limit,
             cursor=cursor,
+            context_workflow=context_workflow,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

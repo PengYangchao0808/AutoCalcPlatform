@@ -916,7 +916,7 @@ def test_remote_traversal_rejected(store: JobStore, tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_confsearch_manifest_returns_only_rank_one_geometry(service, store, tmp_path) -> None:
+def test_confsearch_manifest_returns_all_published_geometries(service, store, tmp_path) -> None:
     work_dir = tmp_path / "uncategorized" / "confsearch_job"
     conf_dir = work_dir / "RESULT" / "confsearch"
     _write(
@@ -954,9 +954,9 @@ def test_confsearch_manifest_returns_only_rank_one_geometry(service, store, tmp_
     )
 
     entries = service.list_recent()
-    assert len(entries) == 1
+    assert len(entries) == 2
     assert entries[0]["path"] == "RESULT/confsearch/conformers/conf_0001.xyz"
-    assert entries[0]["label"] == "Lowest-energy conformer (conf_0001)"
+    assert entries[0]["label"] == "Conformer (conf_0001)"
     assert entries[0]["candidate_id"] == ""
 
 
@@ -1079,12 +1079,14 @@ def test_discover_result_manifest_structure_products(service, store, tmp_path) -
                 "label": "S2 candidate ts_guess_001 (TS)",
                 "path": "mechanism/ts_guesses/ts_guess_001.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
             },
             {
                 "id": "s2_candidate_int_guess_002",
                 "label": "S2 candidate int_guess_002 (INT)",
                 "path": "mechanism/intermediate_guesses/int_guess_002.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
             },
             {
                 "id": "s2_path_manifest",
@@ -1214,12 +1216,14 @@ def test_duplicate_candidate_id_is_listed_once(service, store, tmp_path) -> None
                 "label": "candidate A",
                 "path": "structures/a.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
             },
             {
                 "id": "s2_candidate_int_guess_002_b",
                 "label": "candidate B",
                 "path": "structures/b.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
             },
         ],
     )
@@ -1246,6 +1250,7 @@ def test_remote_probe_reads_result_manifest(store, tmp_path) -> None:
                     "label": "S2 candidate ts_001 (TS)",
                     "path": "mechanism/ts_guesses/ts_guess_001.xyz",
                     "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
                 }
             ],
         }
@@ -1273,6 +1278,7 @@ def test_pessearch_new_manifest_candidates(service, store, tmp_path) -> None:
                 "label": "TS guess 001",
                 "path": "structures/ts_guess_001.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
                 "tag": "TS",
                 "candidate_id": "ts_guess_001",
             },
@@ -1281,6 +1287,7 @@ def test_pessearch_new_manifest_candidates(service, store, tmp_path) -> None:
                 "label": "Intermediate guess 002",
                 "path": "structures/int_guess_002.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
                 "candidate_id": "int_guess_002",
             },
             {
@@ -1412,9 +1419,7 @@ def test_pes_frame_relative_path_without_metadata(service, store, tmp_path) -> N
     store.create(_make_record("20260905_002_PESsearch", workflow="PESsearch", work_dir=work_dir))
 
     entries = service.list_recent()
-    assert len(entries) == 1
-    assert entries[0]["candidate_id"] == "pes_ts_frame_007"
-    assert entries[0]["tag"] == "TS"
+    assert entries == []
 
 
 def test_pes_frame_tag_from_metadata_role(service, store, tmp_path) -> None:
@@ -1429,7 +1434,7 @@ def test_pes_frame_tag_from_metadata_role(service, store, tmp_path) -> None:
                 "label": "PESsearch TS candidate pes_ts_frame_003",
                 "path": "structures/pes_ts_frame_003.xyz",
                 "kind": "structure",
-                "metadata": {"candidate_id": "pes_ts_frame_003", "role": "TS"},
+                "metadata": {"candidate_id": "pes_ts_frame_003", "role": "TS", "selection_source": "manual"},
             }
         ],
     )
@@ -1463,7 +1468,7 @@ def test_remote_probe_reads_pes_review_manifest(store, tmp_path) -> None:
                         "label": "PESsearch TS candidate pes_ts_frame_012 (manual)",
                         "path": "structures/pes_ts_frame_012.xyz",
                         "kind": "structure",
-                        "metadata": {"candidate_id": "pes_ts_frame_012", "role": "TS"},
+                        "metadata": {"candidate_id": "pes_ts_frame_012", "role": "TS", "selection_source": "manual"},
                     }
                 ],
             }
@@ -1491,12 +1496,14 @@ def test_pessearch_legacy_s2_fallback(service, store, tmp_path) -> None:
                 "label": "S2 candidate ts_guess_001 (TS)",
                 "path": "mechanism/ts_guesses/ts_guess_001.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
             },
             {
                 "id": "s2_candidate_int_guess_002",
                 "label": "S2 candidate int_guess_002 (INT)",
                 "path": "mechanism/intermediate_guesses/int_guess_002.xyz",
                 "kind": "structure",
+                    "metadata": {"selection_source": "manual"},
             },
         ],
     )

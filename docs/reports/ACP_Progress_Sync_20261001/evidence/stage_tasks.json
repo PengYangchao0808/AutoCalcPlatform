@@ -1,0 +1,88 @@
+{
+  "tasks": [
+    {
+      "task_id": "8921b6ee-0ce7-4ac7-a5c5-116440ddd826",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "prepare",
+      "task_type": null,
+      "state": "pending",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": null,
+      "completed_at": null,
+      "updated_at": "2026-10-01T05:30:12.513491+00:00"
+    },
+    {
+      "task_id": "2307f142-1be2-4c9d-a1c8-b329364fa389",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "optimize",
+      "task_type": null,
+      "state": "pending",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": null,
+      "completed_at": null,
+      "updated_at": "2026-10-01T05:30:12.513491+00:00"
+    },
+    {
+      "task_id": "bec639f9-9897-4253-9187-884265586783",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "frequency",
+      "task_type": null,
+      "state": "pending",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": null,
+      "completed_at": null,
+      "updated_at": "2026-10-01T05:30:12.513491+00:00"
+    },
+    {
+      "task_id": "344b98a9-7696-49bd-b343-273d81fac13e",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "single_point",
+      "task_type": null,
+      "state": "pending",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": null,
+      "completed_at": null,
+      "updated_at": "2026-10-01T05:30:12.513491+00:00"
+    },
+    {
+      "task_id": "d569e30a-fbad-4fdb-95ad-1bd37c30e365",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "thermochemistry",
+      "task_type": null,
+      "state": "pending",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": null,
+      "completed_at": null,
+      "updated_at": "2026-10-01T05:30:12.513491+00:00"
+    },
+    {
+      "task_id": "96173ec9-572e-44e9-9d05-6a912eeb43ec",
+      "job_id": "20260930_110815_003_BatchOptimize",
+      "stage_name": "finalize",
+      "task_type": null,
+      "state": "pending",
+      "exit_status": null,
+      "retry_count": 0,
+      "pid": null,
+      "stderr_summary": null,
+      "started_at": null,
+      "completed_at": null,
+      "updated_at": "2026-10-01T05:30:12.513491+00:00"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+  "files": [
+    {
+      "path": "RESULT",
+      "size": 0,
+      "modified": 1790832612.5313833,
+      "is_dir": true
+    },
+    {
+      "path": "WORK",
+      "size": 0,
+      "modified": 1790832614.4312093,
+      "is_dir": true
+    },
+    {
+      "path": "batch_items.json",
+      "size": 1246,
+      "modified": 1790832612.6204376,
+      "is_dir": false
+    },
+    {
+      "path": "effective_config.json",
+      "size": 1604,
+      "modified": 1790832612.570963,
+      "is_dir": false
+    },
+    {
+      "path": "input.xyz",
+      "size": 973,
+      "modified": 1790832614.4312093,
+      "is_dir": false
+    },
+    {
+      "path": "job.json",
+      "size": 8859,
+      "modified": 1790832612.6402276,
+      "is_dir": false
+    },
+    {
+      "path": "state.json",
+      "size": 1076,
+      "modified": 1790835756.421212,
+      "is_dir": false
+    },
+    {
+      "path": "task.json",
+      "size": 787,
+      "modified": 1790832612.6204376,
+      "is_dir": false
+    }
+  ],
+  "truncated": false,
+  "pinned": []
+}

@@ -187,6 +187,7 @@
   /* ---- Sort / group option maps ---- */
 
   var SORT_OPTIONS = [
+    { value: "context", labelKey: "按目标任务排序" },
     { value: "produced_desc", labelKey: "picker.sort.produced_desc" },
     { value: "produced_asc", labelKey: "picker.sort.produced_asc" },
     { value: "name_asc", labelKey: "picker.sort.name_asc" },
@@ -236,6 +237,7 @@
     var onChanged = typeof opts.onChanged === "function" ? opts.onChanged : null;
     var onLoadItem = typeof opts.onLoadItem === "function" ? opts.onLoadItem : null;
     var onPreviewItem = typeof opts.onPreviewItem === "function" ? opts.onPreviewItem : null;
+    var getRowAnnotation = typeof opts.getRowAnnotation === "function" ? opts.getRowAnnotation : null;
     var onTrashItem = typeof opts.onTrashItem === "function" ? opts.onTrashItem : null;
     var onRowMenu = typeof opts.onRowMenu === "function" ? opts.onRowMenu : null;
     var onBatchTrash = typeof opts.onBatchTrash === "function" ? opts.onBatchTrash : null;
@@ -282,7 +284,7 @@
     var filterRole = "";
     var filterTags = [];
     var filterTagMatch = prefs.tag_match || "any";
-    var filterSort = prefs.sort || "produced_desc";
+    var filterSort = prefs.sort || "context";
     var filterGroupBy = density === "editor"
       ? "none"
       : (mode === "multi" ? prefs.group_by || "job" : prefs.group_by || "none");
@@ -311,6 +313,7 @@
     var sortSelect = null;
     var groupSelect = null;
     var listEl = null;
+    var pinsEl = null;
     var paginationEl = null;
     var indexingEl = null;
     var selectionBarEl = null;
@@ -680,6 +683,8 @@
 
       // Sort & group
       params.set("sort", filterSort);
+      var contextWorkflow = typeof opts.getContextWorkflow === "function" ? opts.getContextWorkflow() : null;
+      if (contextWorkflow) params.set("context_workflow", contextWorkflow);
       params.set("group_by", filterGroupBy);
       params.set("limit", String(filterLimit));
       params.set("usage_status", usageStatus);
@@ -1045,11 +1050,17 @@
       var jobName = item.job_resolved_name || item.job_name || "";
       var candidateId = item.candidate_id || "--";
       var isAvailable = item.availability === "available" && item.usage_status === "active";
-      var role = item.role === "TS" || item.role === "INT" ? item.role : "--";
       var isCollection = item.input_kind === "collection" || /(?:trajectory|path_collection)/i.test(item.source_kind || "");
       var isSelectable = usageStatus === "trash" || (item.availability === "available" && !isCollection);
-      var roleClass = item.role === "TS" ? " sp-badge-ts" : item.role === "INT" ? " sp-badge-int" : "";
-      var html = '<div class="sp-row' + (uid === previewUid ? ' sp-row-previewing' : '') + '" data-uid="' + _esc(uid) + '"><div class="sp-row-main">';
+      var annotation = (typeof getRowAnnotation === "function") ? getRowAnnotation(item) : {};
+      annotation = annotation || {};
+      var isInput = selectedUids.has(uid) || !!annotation.input;
+      var isPreviousResult = !!(annotation.output || annotation.previous_result);
+      var isCandidate = !!(annotation.is_candidate || (item.candidate_id && item.candidate_id !== "--") || item.source_group === "candidate" || (item.structure_facts && item.structure_facts.source_kind === "manual_frame"));
+      var rowClass = "sp-row" + (uid === previewUid ? " sp-row-previewing" : "") +
+        (isInput ? " sp-row-current-input" : "") +
+        (isPreviousResult ? " sp-row-previous-result sp-row-previous-output" : "");
+      var html = '<div class="' + rowClass + '" data-uid="' + _esc(uid) + '"><div class="sp-row-main">';
       if (mode === "multi") {
         html += '<input type="checkbox" class="sp-row-cb" data-uid="' + _esc(uid) + '"' +
           (selectedUids.has(uid) ? " checked" : "") + (isSelectable ? "" : " disabled") +
@@ -1057,7 +1068,28 @@
       }
       html += '<span class="sp-row-copy"><span class="sp-row-name" tabindex="0" title="' + _esc(name) + '">' + _esc(name) + "</span>";
       html += '<span class="sp-row-source" title="' + _esc(item.formula || "") + '">' + _esc(item.formula || "") + "</span></span>";
-      html += '<span class="sp-row-role"><span class="sp-badge' + roleClass + '">' + _esc(role) + "</span></span>";
+
+      // Clean single TS / INT badge with rich tooltip
+      var roleText = item.role === "TS" ? "TS" : item.role === "INT" ? "INT" : "";
+      var roleClass = item.role === "TS" ? " sp-badge-ts" : item.role === "INT" ? " sp-badge-int" : "";
+      var tipParts = [];
+      if (item.role) tipParts.push(item.role === "TS" ? "TS (过渡态)" : item.role === "INT" ? "INT (中间体)" : item.role);
+      if (isInput) tipParts.push("本次起点");
+      if (isPreviousResult) tipParts.push(isCandidate ? "上次选点" : "上次结果");
+      var facts = item.structure_facts || {};
+      var origin = {optimization:"优化结果", irc_endpoint:"IRC 端点", conformer:"正式构象", manual_frame:"人工选帧"}[facts.source_kind] || "";
+      if (facts.direction) origin += facts.direction === "forward" ? " · 正向" : " · 反向";
+      if (origin) tipParts.push("来源: " + origin);
+      if (facts.optimization_status === "converged") tipParts.push("OPT 已收敛");
+      if (facts.frequency_status === "failed") tipParts.push("FREQ 失败");
+      if (facts.frequency && facts.frequency.ts_validation === "failed") tipParts.push("TS 验证未通过");
+      var roleTitle = tipParts.join(" · ");
+
+      html += '<span class="sp-row-role">';
+      if (roleText) {
+        html += '<span class="sp-badge' + roleClass + '"' + (roleTitle ? ' title="' + _esc(roleTitle) + '"' : '') + '>' + _esc(roleText) + '</span>';
+      }
+      html += "</span>";
       html += '<span class="sp-row-job" tabindex="0" title="' + _esc(jobName || "--") + '">' + _esc(jobName || "--") + "</span>";
       html += '<span class="sp-row-candidate" tabindex="0" title="' + _esc(candidateId) + '">' + _esc(candidateId) + "</span>";
       html += '<span class="sp-row-action">';

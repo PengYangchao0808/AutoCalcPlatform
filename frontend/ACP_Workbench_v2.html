@@ -118,26 +118,62 @@ a { color: var(--accent); }
 .project-slot,
 .topbar-actions { min-width: 0; }
 
-.project-slot { display: flex; align-items: center; gap: 8px; }
+.project-slot {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 2px 4px;
+  gap: 2px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.project-slot:focus-within {
+  border-color: rgba(78, 161, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(78, 161, 255, 0.12);
+}
+.project-slot .project-select {
+  border: none;
+  background-color: transparent;
+  padding: 4px 26px 4px 8px;
+  font-size: 12px;
+  height: 26px;
+  border-radius: 5px;
+  outline: none;
+  box-shadow: none;
+  color: var(--text);
+  width: auto;
+  min-width: 90px;
+}
+.project-slot .project-select:focus {
+  border: none;
+  box-shadow: none;
+}
+.project-slot-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border-subtle);
+  margin: 0 2px;
+}
 
 .project-new-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  background: rgba(255, 255, 255, 0.04);
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color var(--transition), background var(--transition), color var(--transition);
+  padding: 0;
+  transition: background var(--transition), color var(--transition);
 }
 .project-new-btn:hover {
-  border-color: rgba(78, 161, 255, 0.7);
-  background: rgba(78, 161, 255, 0.12);
-  color: var(--text);
+  background: rgba(78, 161, 255, 0.16);
+  color: var(--accent);
 }
 
 .project-delete-btn {
@@ -145,22 +181,22 @@ a { color: var(--accent); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid var(--border-default);
-  background: rgba(255, 255, 255, 0.04);
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color var(--transition), background var(--transition), color var(--transition);
+  padding: 0;
+  transition: background var(--transition), color var(--transition);
 }
 .project-delete-btn:hover {
-  border-color: rgba(248, 81, 73, 0.7);
-  background: rgba(248, 81, 73, 0.12);
+  background: rgba(248, 81, 73, 0.16);
   color: var(--red);
 }
 .project-delete-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.25;
   cursor: not-allowed;
 }
 
@@ -669,11 +705,25 @@ body.resizing-v canvas {
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   border-radius: 999px;
   border: 1px solid var(--border-default);
-  padding: 3px 9px;
+  padding: 2px 9px;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box;
+}
+.badge:not(.paused)::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex-shrink: 0;
 }
 
 .badge.queued,
@@ -1055,6 +1105,13 @@ body.resizing-v canvas {
   grid-template-columns: minmax(0, 1fr) auto;
   min-height: 48px;
   padding: 0 12px 0 16px;
+  align-items: center;
+}
+#job-modal .preview-right-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 #job-modal .preview-right-title {
   min-width: 0;
@@ -1062,7 +1119,23 @@ body.resizing-v canvas {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+#job-modal .edit-default-start-badge {
+  display: none;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 #job-modal .preview-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: max-content;
   justify-content: flex-end;
 }
@@ -1137,6 +1210,45 @@ body.resizing-v canvas {
   min-height: 0;
   flex-direction: column;
 }
+#job-modal .edit-path-panel {
+  display: none; flex: 0 0 auto; flex-direction: column; gap: 7px;
+  max-height: 220px; margin: 0 0 10px; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #63a8ff) 42%, var(--border-subtle));
+  border-radius: 10px; background: color-mix(in srgb, var(--accent, #63a8ff) 7%, var(--surface, #151a22));
+}
+#job-modal .edit-path-panel-head { display:flex; align-items:center; gap:8px; color:var(--text-primary); font-size:12px; font-weight:650; }
+#job-modal .edit-path-panel-list { display:flex; flex-direction:column; gap:5px; min-height:0; overflow:auto; }
+#job-modal .edit-path-source-title { padding:5px 2px 1px; color:var(--text-secondary); font-size:11px; font-weight:600; }
+#job-modal .edit-path-frame {
+  display:flex; width:100%; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 9px; border:1px solid var(--border-subtle); border-radius:8px;
+  background:var(--surface-raised, rgba(255,255,255,.025)); color:var(--text-primary);
+  text-align:left; cursor:pointer;
+}
+#job-modal .edit-path-frame:hover {
+  border-color:var(--accent, #63a8ff); background:color-mix(in srgb, var(--accent, #63a8ff) 12%, transparent);
+}
+#job-modal .edit-path-frame.is-last-selected {
+  border-color:var(--accent, #63a8ff); background:color-mix(in srgb, var(--accent, #63a8ff) 12%, transparent);
+  box-shadow:inset 3px 0 0 var(--accent, #63a8ff);
+}
+#job-modal .edit-path-frame.is-selected { outline:2px solid color-mix(in srgb, var(--accent, #63a8ff) 60%, transparent); }
+#job-modal .edit-path-frame-main { min-width:0; }
+#job-modal .edit-path-frame-name { display:flex; flex-wrap:wrap; align-items:center; gap:5px; font-size:11px; font-weight:600; }
+#job-modal .edit-path-frame-meta { display:block; margin-top:2px; color:var(--text-tertiary); font-size:10px; }
+#job-modal .edit-path-frame-badge { padding:2px 5px; border-radius:999px; background:rgba(91,156,255,.15); color:var(--accent, #63a8ff); font-size:9px; }
+#job-modal .edit-path-frame-badge.ts { background:rgba(255,111,111,.14); color:#ff8e8e; }
+#job-modal .edit-path-frame-badge.int { background:rgba(80,205,151,.13); color:#65d6a3; }
+#job-modal .sp-row-recalc-focus {
+  border: 1px solid color-mix(in srgb, var(--accent, #63a8ff) 48%, var(--border-subtle));
+  border-radius: 7px; background: color-mix(in srgb, var(--accent, #63a8ff) 8%, transparent);
+}
+#job-modal.edit-mode .sp-row-role { display: flex; align-items: center; justify-content: center; }
+#job-modal.edit-mode .sp-badge-recalc-focus {
+  padding: 2px 6px; border: 1px solid rgba(78,161,255,.28); border-radius: 999px;
+  background: rgba(78,161,255,.12); color: #8fc2ff; font-size: 9px; white-space: nowrap;
+}
+#job-modal.edit-mode .sp-row-recalc-focus { border-left: 3px solid var(--accent, #63a8ff); }
 #job-modal .results-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow: hidden; }
 #job-modal .results-list > .sp-root { width: 100%; height: 100%; }
 #job-modal .source-coordinate-disclosure { border-top: 1px solid var(--border-subtle); }
@@ -2403,10 +2515,89 @@ option, optgroup {
 }
 
 .queue-panel { min-height: 0; display: flex; flex-direction: column; }
-.task-view-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 14px; flex: 0 0 auto; flex-wrap: wrap; }
-.task-view-toolbar .modal-input { flex: 1; min-width: 80px; padding: 4px 8px; font-size: 12px; }
-.task-view-toolbar .modal-select { width: auto; padding: 4px 24px 4px 8px; font-size: 12px; }
-.task-view-toolbar .mini-btn { position: relative; }
+.task-view-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 14px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.01);
+}
+.task-view-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.task-view-toolbar-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-view-search-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.task-view-search-wrap .search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  line-height: 1;
+}
+.task-view-search-wrap .modal-input {
+  width: 100%;
+  padding: 5px 8px 5px 24px;
+  font-size: 12px;
+  height: 28px;
+  box-sizing: border-box;
+}
+.task-view-toolbar .task-view-btn {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+.task-view-toolbar-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-view-toolbar-secondary .toolbar-select-group {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.task-view-toolbar-secondary .modal-select {
+  width: 100%;
+  min-width: 0;
+  padding: 4px 20px 4px 6px;
+  font-size: 11px;
+  height: 26px;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.task-view-toolbar .export-menu-wrap,
+.task-view-toolbar .views-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
 .filter-badge { display: inline-block; background: var(--accent); color: #fff; border-radius: 999px; font-size: 10px; padding: 0 5px; margin-left: 2px; line-height: 16px; }
 .task-view-filter-panel { position: absolute; z-index: 200; right: 14px; margin-top: 4px; width: 280px; max-height: 320px; background: var(--bg-raised, #1e2a36); border: 1px solid var(--border-default); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); overflow: hidden; display: flex; flex-direction: column; }
 .filter-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); }
@@ -2485,7 +2676,17 @@ option, optgroup {
 .queue-summary { padding: 14px 14px 10px; flex: 0 0 auto; }
 .queue-summary-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .queue-toggle { border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); padding: 6px 10px; font-size: 12px; }
-.queue-counts { margin-top: 10px; color: var(--text-secondary); font-size: 12px; line-height: 1.8; }
+.queue-counts {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  letter-spacing: 0.2px;
+}
 /* Q4: queue-expanded holds ONLY the queue list now — the live log panel moved
    to the left column bottom (desktop) / files tab (mobile). */
 .queue-expanded { flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -2494,12 +2695,12 @@ option, optgroup {
 .queue-row { border: 1px solid var(--border-subtle); border-radius: 12px; padding: 10px; background: rgba(255, 255, 255, 0.02); }
 .queue-row.active { border-color: rgba(78, 161, 255, 0.42); background: rgba(78, 161, 255, 0.10); }
 .queue-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-.queue-name { min-width: 0; }
+.queue-name { min-width: 0; flex: 1 1 auto; }
 .queue-name strong,
 .queue-name span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .queue-name strong { font-size: 13px; }
 .queue-name span { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
-.queue-row-actions { display: flex; gap: 6px; align-items: center; }
+.queue-row-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0 !important; }
 .btn-rename-task { display: none; }
 .queue-row:hover .btn-rename-task,
 .queue-row:focus-within .btn-rename-task,
@@ -2799,6 +3000,11 @@ option, optgroup {
   border-radius: 2px;
   transition: width 0.3s ease;
   min-width: 0;
+}
+.v-progress-bar.indeterminate {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: progress-indeterminate 1.6s ease-in-out infinite;
 }
 .v-progress-label {
   font-size: 11px;
@@ -4363,8 +4569,8 @@ option, optgroup {
 }
 </style>
 <link rel="stylesheet" href="css/structure_viewer.css">
-<link rel="stylesheet" href="css/structure_source_picker.css">
-<link rel="stylesheet" href="css/task_input_workspace.css?v=20260927-submit-review">
+<link rel="stylesheet" href="css/structure_source_picker.css?v=20261001-two-color">
+<link rel="stylesheet" href="css/task_input_workspace.css?v=20261001-unified-recalc">
 <link rel="stylesheet" href="css/tsmode_editor.css">
 </head>
 <body>
@@ -4380,8 +4586,9 @@ option, optgroup {
     <div class="project-slot">
       <label class="sr-only" for="project-select" data-i18n="app.project">项目</label>
       <select id="project-select" class="project-select"></select>
-      <button id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title" title="新建项目">+</button>
-      <button id="btn-delete-project" class="project-delete-btn" data-i18n-title="project.delete_title" title="删除项目" disabled>×</button>
+      <div class="project-slot-divider"></div>
+      <button id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title" title="新建项目" aria-label="新建项目"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 01.75.75v4.5h4.5a.75.75 0 010 1.5h-4.5v4.5a.75.75 0 01-1.5 0v-4.5h-4.5a.75.75 0 010-1.5h4.5v-4.5A.75.75 0 018 2z"/></svg></button>
+      <button id="btn-delete-project" class="project-delete-btn" data-i18n-title="project.delete_title" title="删除项目" aria-label="删除项目" disabled><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 000 1.5h.3l.815 8.15A1.5 1.5 0 005.357 15h5.285a1.5 1.5 0 001.493-1.35l.815-8.15h.3a.75.75 0 000-1.5H11v-.75A1.25 1.25 0 009.75 2h-3.5A1.25 1.25 0 005 3.25zm1.5.75h3v-.75a.25.25 0 00-.25-.25h-2.5a.25.25 0 00-.25.25v.75zM6.5 6.75a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5a.75.75 0 01.75-.75zm3.75.75a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5z"/></svg></button>
     </div>
     <div class="topbar-actions">
       <div class="server-summary" id="server-summary">--</div>
@@ -4616,41 +4823,54 @@ option, optgroup {
           <button type="button" class="mini-btn" id="batch-set-molecule" data-i18n="queue.view.batch_set_molecule" style="display:none;">设置分子归属</button>
         </div>
         <div class="task-view-toolbar" id="task-view-toolbar">
-          <input type="text" id="task-view-search" class="modal-input" data-i18n-ph="queue.view.search_placeholder" placeholder="搜索任务、分子、备注…">
-          <select id="task-view-group" class="modal-select">
-            <option value="molecule" data-i18n-opt="queue.view.group_molecule">分子</option>
-            <option value="remark" data-i18n-opt="queue.view.group_remark">备注</option>
-            <option value="workflow" data-i18n-opt="queue.view.group_workflow">任务类型</option>
-            <option value="batch" data-i18n-opt="queue.view.group_batch">提交批次</option>
-            <option value="tag" data-i18n-opt="queue.view.group_tag">自定义标签</option>
-            <option value="none" data-i18n-opt="queue.view.group_none">不分组</option>
-          </select>
-          <select id="task-view-sort" class="modal-select">
-            <option value="created_desc" data-i18n-opt="queue.view.sort_created_desc">创建时间：新→旧</option>
-            <option value="created_asc" data-i18n-opt="queue.view.sort_created_asc">创建时间：旧→新</option>
-            <option value="completed_desc" data-i18n-opt="queue.view.sort_completed_desc">完成时间：新→旧</option>
-            <option value="name_asc" data-i18n-opt="queue.view.sort_name_asc">名称：A→Z</option>
-            <option value="name_desc" data-i18n-opt="queue.view.sort_name_desc">名称：Z→A</option>
-            <option value="activity_desc" data-i18n-opt="queue.view.sort_activity_desc">最近活动</option>
-          </select>
-          <button type="button" class="mini-btn" id="task-view-filter-btn"><span data-i18n="queue.view.filter_btn">筛选</span> <span class="filter-badge" id="task-view-filter-badge" style="display:none;"></span></button>
-          <select id="task-view-archived" class="modal-select toolbar-archived-select">
-            <option value="exclude" data-i18n-opt="queue.view.archived_exclude">排除归档</option>
-            <option value="include" data-i18n-opt="queue.view.archived_include">包含归档</option>
-            <option value="only" data-i18n-opt="queue.view.archived_only">仅归档</option>
-          </select>
-          <div class="export-menu-wrap">
-            <button type="button" class="mini-btn" id="task-view-export-btn"><span data-i18n="queue.view.export_btn">导出</span> ▾</button>
-            <div class="export-menu" id="task-view-export-menu">
-              <button type="button" class="export-menu-item" id="task-view-export-csv" data-i18n="queue.view.export_csv">CSV</button>
-              <button type="button" class="export-menu-item" id="task-view-export-json" data-i18n="queue.view.export_json">JSON</button>
+          <div class="task-view-toolbar-row task-view-toolbar-primary">
+            <div class="task-view-search-wrap">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="task-view-search" class="modal-input" data-i18n-ph="queue.view.search_placeholder" placeholder="搜索任务、分子、备注…">
+            </div>
+            <button type="button" class="mini-btn task-view-btn" id="task-view-filter-btn" title="筛选条件"><span data-i18n="queue.view.filter_btn">筛选</span> <span class="filter-badge" id="task-view-filter-badge" style="display:none;"></span></button>
+            <div class="views-menu-wrap">
+              <button type="button" class="mini-btn task-view-btn" id="task-view-views-btn"><span data-i18n="queue.view.views_btn">视图</span> ▾</button>
+              <div class="views-menu" id="task-view-views-menu">
+                <div id="task-view-views-list"></div>
+                <button type="button" class="views-menu-save" id="task-view-views-save" data-i18n="queue.view.views_save">保存当前视图</button>
+              </div>
+            </div>
+            <div class="export-menu-wrap">
+              <button type="button" class="mini-btn task-view-btn" id="task-view-export-btn"><span data-i18n="queue.view.export_btn">导出</span> ▾</button>
+              <div class="export-menu" id="task-view-export-menu">
+                <button type="button" class="export-menu-item" id="task-view-export-csv" data-i18n="queue.view.export_csv">CSV</button>
+                <button type="button" class="export-menu-item" id="task-view-export-json" data-i18n="queue.view.export_json">JSON</button>
+              </div>
             </div>
           </div>
-          <div class="views-menu-wrap">
-            <button type="button" class="mini-btn" id="task-view-views-btn"><span data-i18n="queue.view.views_btn">视图</span> ▾</button>
-            <div class="views-menu" id="task-view-views-menu">
-              <div id="task-view-views-list"></div>
-              <button type="button" class="views-menu-save" id="task-view-views-save" data-i18n="queue.view.views_save">保存当前视图</button>
+          <div class="task-view-toolbar-row task-view-toolbar-secondary">
+            <div class="toolbar-select-group">
+              <select id="task-view-group" class="modal-select toolbar-compact-select">
+                <option value="molecule" data-i18n-opt="queue.view.group_molecule">分子</option>
+                <option value="remark" data-i18n-opt="queue.view.group_remark">备注</option>
+                <option value="workflow" data-i18n-opt="queue.view.group_workflow">任务类型</option>
+                <option value="batch" data-i18n-opt="queue.view.group_batch">提交批次</option>
+                <option value="tag" data-i18n-opt="queue.view.group_tag">自定义标签</option>
+                <option value="none" data-i18n-opt="queue.view.group_none">不分组</option>
+              </select>
+            </div>
+            <div class="toolbar-select-group">
+              <select id="task-view-sort" class="modal-select toolbar-compact-select">
+                <option value="created_desc" data-i18n-opt="queue.view.sort_created_desc">创建时间：新→旧</option>
+                <option value="created_asc" data-i18n-opt="queue.view.sort_created_asc">创建时间：旧→新</option>
+                <option value="completed_desc" data-i18n-opt="queue.view.sort_completed_desc">完成时间：新→旧</option>
+                <option value="name_asc" data-i18n-opt="queue.view.sort_name_asc">名称：A→Z</option>
+                <option value="name_desc" data-i18n-opt="queue.view.sort_name_desc">名称：Z→A</option>
+                <option value="activity_desc" data-i18n-opt="queue.view.sort_activity_desc">最近活动</option>
+              </select>
+            </div>
+            <div class="toolbar-select-group">
+              <select id="task-view-archived" class="modal-select toolbar-compact-select toolbar-archived-select">
+                <option value="exclude" data-i18n-opt="queue.view.archived_exclude">排除归档</option>
+                <option value="include" data-i18n-opt="queue.view.archived_include">包含归档</option>
+                <option value="only" data-i18n-opt="queue.view.archived_only">仅归档</option>
+              </select>
             </div>
           </div>
         </div>
@@ -4958,6 +5178,10 @@ option, optgroup {
               <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
             </div>
           </div>
+          <section class="edit-path-panel" id="edit-path-structures" aria-label="反应路径结构">
+            <div class="edit-path-panel-head"><span data-i18n="edit.path_panel_title">本任务上游反应路径</span></div>
+            <div class="edit-path-panel-list" id="edit-path-structures-list"></div>
+          </section>
           <div class="input-panel structure-library-filters" id="input-panel-task">
             <span class="library-filter-label" data-i18n="wizard.library_filter">快速筛选</span>
             <div class="library-filter-tabs" role="group" aria-label="结构库筛选">
@@ -5130,7 +5354,10 @@ option, optgroup {
           <div class="tiw-right" id="tiw-right">
             <div class="preview-right" id="preview-right-pane">
               <div class="preview-right-toolbar">
-                <span class="preview-right-title" id="preview-structure-title" data-i18n="modal.preview_title">结构预览</span>
+                <div class="preview-right-title-group">
+                  <span class="preview-right-title" id="preview-structure-title" data-i18n="modal.preview_title">结构预览</span>
+                  <span id="edit-default-start-badge" class="edit-default-start-badge" data-i18n="edit.default_start_badge">上次起点 · 默认</span>
+                </div>
                 <div class="preview-right-actions" id="preview-viewer-tools">
                   <button type="button" class="btn ghost" id="preview-reset-view" data-i18n="edit.reset_view">重置视角</button>
                   <button type="button" class="btn ghost" id="preview-expand-view" data-i18n="edit.expand_preview">放大查看</button>
@@ -5189,7 +5416,7 @@ option, optgroup {
               <div class="tiw-info-panel-body">
                 <div id="wizard-input-form" class="wif-compact-card">
                   <div class="wif-paired-grid">
-                    <div class="wif-row wif-row-name"><label class="wif-label" for="wif-name" data-i18n="wizard.form_name">名称</label><div class="wif-value"><input class="wif-input" id="wif-name" type="text" autocomplete="off"></div></div>
+                    <div class="wif-row wif-row-name"><label class="wif-label" for="wif-name" >本次输入名称</label><div class="wif-value"><input class="wif-input" id="wif-name" type="text" autocomplete="off"></div></div>
                     <div class="wif-row wif-row-role"><label class="wif-label" for="wif-role" data-i18n="wizard.form_role">角色</label><div class="wif-value"><select class="wif-select" id="wif-role"><option value="">普通</option><option value="TS">TS</option><option value="INT">INT</option></select></div></div>
                     <div class="wif-row"><label class="wif-label" for="wif-charge" data-i18n="modal.col_charge">电荷</label><div class="wif-value"><input class="wif-input" id="wif-charge" type="number" value="0" step="1"></div></div>
                     <div class="wif-row"><label class="wif-label" for="wif-mult" data-i18n="modal.col_spin">多重度</label><div class="wif-value"><input class="wif-input" id="wif-mult" type="number" value="1" step="1" min="1"></div></div>
@@ -6270,7 +6497,24 @@ const I18N = {
     "edit.loading_draft": "正在恢复原任务配置…",
     "edit.load_failed": "配置恢复失败：{message}",
     "edit.banner_source": "来源：{name} · {status} · 第 {attempt} 次尝试",
-    "edit.saved_structure_hint": "可在“结构库”选择已保存结构作为新起点；更换结构后会创建独立新任务，原任务与结果保留。",
+    "edit.default_start_badge": "上次起点 · 默认",
+    "edit.focus_last_result": "上次计算结果",
+    "edit.focus_last_selected": "上次选点",
+    "edit.path_panel_title": "关联反应路径帧",
+    "edit.path_geometry_missing": "所选反应路径帧没有可用几何，请重新选择。",
+    "edit.path_frame": "帧 {number}",
+    "edit.path_coordinate": "反应坐标 {value} Å",
+    "edit.path_energy": "原能量 {value} Eh",
+    "edit.path_status_converged": "帧优化收敛",
+    "edit.path_status_partial": "帧未收敛 / 部分结果",
+    "edit.path_role_ts": "TS 候选",
+    "edit.path_role_int": "中间体候选",
+    "edit.path_role_endpoint": "路径端点",
+    "edit.path_role_last_selected": "上次选点",
+    "edit.path_selecting": "正在读取路径帧…",
+    "edit.path_selected_short": "已选为新起点",
+    "edit.path_load_failed": "路径帧读取失败：{message}",
+    "edit.path_not_supported": "当前工作流不支持直接用路径帧替换输入结构。",
     "edit.source_requires_new_job": "已更换结构来源，将创建独立新任务；不能原地覆盖原任务。",
     "edit.source_label": "结构来源",
     "edit.source_original": "原任务输入",
@@ -7789,7 +8033,24 @@ const I18N = {
     "edit.loading_draft": "Restoring the original configuration…",
     "edit.load_failed": "Failed to restore configuration: {message}",
     "edit.banner_source": "Source: {name} · {status} · attempt {attempt}",
-    "edit.saved_structure_hint": "Choose a saved structure from the library as the new starting geometry. Replacing the structure creates a separate task and keeps the original task and results.",
+    "edit.default_start_badge": "Previous starting structure · default",
+    "edit.focus_last_result": "Previous calculation result",
+    "edit.focus_last_selected": "Previously selected point",
+    "edit.path_panel_title": "Linked reaction-path frames",
+    "edit.path_geometry_missing": "The selected reaction-path frame has no usable geometry. Select another frame.",
+    "edit.path_frame": "Frame {number}",
+    "edit.path_coordinate": "Coordinate {value} Å",
+    "edit.path_energy": "Original energy {value} Eh",
+    "edit.path_status_converged": "Frame optimization converged",
+    "edit.path_status_partial": "Frame unconverged / partial",
+    "edit.path_role_ts": "TS candidate",
+    "edit.path_role_int": "Intermediate candidate",
+    "edit.path_role_endpoint": "Path endpoint",
+    "edit.path_role_last_selected": "Previously selected point",
+    "edit.path_selecting": "Loading path frame…",
+    "edit.path_selected_short": "Selected as starting geometry",
+    "edit.path_load_failed": "Could not load path frame: {message}",
+    "edit.path_not_supported": "This workflow cannot replace its input directly with a path frame.",
     "edit.source_requires_new_job": "The structure source changed. This will create a separate task; the original task cannot be overwritten.",
     "edit.source_label": "Structure source",
     "edit.source_original": "Original task input",
@@ -9895,13 +10156,13 @@ function normalizedProgress(job) {
 }
 
 function isProgressKnown(job) {
-  return job && typeof job.progress === "number";
+  return job && job.progress_state !== "indeterminate" && typeof job.progress === "number" && isFinite(job.progress);
 }
 
 function isProgressIndeterminate(job) {
   if (!job) return false;
   var status = String(job.status || "").toLowerCase();
-  var active = status === "running" || status === "starting" || status === "pending";
+  var active = status === "running" || status === "starting" || status === "pending" || status === "paused";
   return active && !isProgressKnown(job);
 }
 
@@ -12789,6 +13050,9 @@ function buildTaskStatusModel(data, job) {
   else kind = "";
   var statusLabel = kind ? t("energy.task.status." + kind) : translateStatus(rawStatus || "unknown");
   var notes = [];
+  if ((kind === "running" || kind === "paused") && job && job.current_stage && job.current_stage !== "optimize") {
+    notes.push(translateStageName(job.current_stage, job.stage_label));
+  }
   if ((kind === "running" || kind === "paused") && currentCycle != null) {
     notes.push(t("energy.task.current_cycle", { n: currentCycle }));
   }
@@ -18453,11 +18717,18 @@ function renderWorkflowTimeline(container, job) {
   var stageNames = [];
   var detail = getJobDetail(job.id || job.job_id || "");
   var detailStages = (detail && Array.isArray(detail.stages)) ? detail.stages : [];
+  var stageOrder = Array.isArray(job.stage_order) ? job.stage_order.slice() : [];
+  if (!stageOrder.length && detailStages.length !== stageTotal && job.spec && job.spec.workflow === "BatchOptimize") {
+    stageOrder = detailStages.filter(function(stage) { return stage.stage_name !== "prepare" && stage.stage_name !== "finalize"; }).map(function(stage) { return stage.stage_name; });
+  }
   for (var i = 0; i < stageTotal; i++) {
     var name = "";
-    if (detailStages[i]) {
-      name = detailStages[i].label || translateStageName(detailStages[i].stage_name || detailStages[i].name, "");
+    var stageId = stageOrder[i];
+    var detailStage = stageId ? detailStages.find(function(stage) { return (stage.stage_name || stage.name) === stageId; }) : detailStages[i];
+    if (detailStage) {
+      name = detailStage.label || translateStageName(detailStage.stage_name || detailStage.name, "");
     }
+    if (!name && stageId) name = translateStageName(stageId, "");
     if (!name && i === stageIndex - 1 && currentKey) {
       name = translateStageName(currentKey, (ls && ls.stage_label) || "");
     }
@@ -18746,14 +19017,14 @@ function renderInfoInto(container, job) {
     });
     sec2.appendChild(metricsRow);
 
-    // Progress bar (from stage_index / stage_total)
+    // Stage position and completion fraction have different meanings.
     if (liveStatus.stage_index && liveStatus.stage_total) {
-      var pct = Math.round((liveStatus.stage_index / liveStatus.stage_total) * 100);
+      var pct = normalizedProgress(job);
       var shell = document.createElement("div");
       shell.className = "v-progress-shell";
       var bar = document.createElement("div");
-      bar.className = "v-progress-bar";
-      bar.style.width = pct + "%";
+      bar.className = "v-progress-bar" + (isProgressIndeterminate(job) ? " indeterminate" : "");
+      bar.style.width = isProgressIndeterminate(job) ? "30%" : pct + "%";
       shell.appendChild(bar);
       sec2.appendChild(shell);
       var progLabel = document.createElement("div");
@@ -19210,6 +19481,22 @@ async function openDetailDrawer(job) {
 
   // ── P2c: effective config block for BatchOptimize ──
   if (detail) buildJobDetailEffectiveConfig(body, detail.effective_config);
+
+  if (detail && detail.structure_summary) {
+    var summary = detail.structure_summary;
+    var resultCard = buildDetailCard("可复用结构与人工选点");
+    var message = document.createElement("div"); message.textContent = summary.message || "";
+    resultCard.appendChild(message);
+    (summary.structures || []).forEach(function(structure) {
+      var row = document.createElement("div");
+      var state = structure.optimization_status === "converged" ? " · OPT 已收敛" : "";
+      if (structure.frequency_status === "failed") state += " · FREQ 失败";
+      if (structure.frequency && structure.frequency.ts_validation === "failed") state += " · TS 验证未通过";
+      row.textContent = structure.label + state;
+      resultCard.appendChild(row);
+    });
+    body.appendChild(resultCard);
+  }
 
   // ── Artifacts ──
   var artifacts = detail && Array.isArray(detail.artifacts_summary)
@@ -23359,6 +23646,14 @@ function openModal() {
     candidateDetailsPanel = ACPCandidateDetails.mount(cdHost, {
       t: t,
       candidateApi: candidateApi,
+      onSaved: function(source) {
+        wizardStructures.forEach(function(entry) {
+          if (entry.source_uid === source.source_uid && !entry.input_modified) entry.name = source.resolved_name || source.custom_name || entry.name;
+        });
+        if (resultsPicker) resultsPicker.refresh();
+        if (candidatePicker) candidatePicker.refresh();
+        renderLoadedStructuresList();
+      },
       onOpenJob: function(jobId) { if (!jobId) return; closeJobModalGuarded(); selectJob(jobId); }
     });
   }
@@ -23894,6 +24189,7 @@ function renderStructurePreview(structures, warnings) {
 }
 
 function selectPreviewStructure(index, notifyEditor) {
+  structureSourceLoadToken++;
   if (!Array.isArray(wizardStructures) || !wizardStructures.length) return;
   wizardSelectedStructureIndex = Math.max(0, Math.min(Number(index) || 0, wizardStructures.length - 1));
   var structure = wizardStructures[wizardSelectedStructureIndex];
@@ -23911,6 +24207,8 @@ function selectPreviewStructure(index, notifyEditor) {
 }
 
 function _refreshWizardInputForm(structure, previewOnly) {
+  if (structure && !structure.input_id) structure.input_id = "inp_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
+
   ["wif-name", "wif-role", "wif-charge", "wif-mult"].forEach(function(id) {
     var input = document.getElementById(id);
     if (input) input.disabled = !structure || !!previewOnly;
@@ -23951,7 +24249,9 @@ function _refreshWizardInputForm(structure, previewOnly) {
     if (sourceRow) sourceRow.hidden = true; if (candidateRow) candidateRow.hidden = true;
     return;
   }
-  nameInput.value = structure.name || structure.molecule_name || "";
+  nameInput.dataset.inputId = structure.input_id;
+  var desiredName = structure.name || structure.molecule_name || "";
+  if (nameInput.value !== desiredName) nameInput.value = desiredName;
   if (roleSelect) roleSelect.value = structure.tag || structure.role || "";
   if (chargeInput) chargeInput.value = structure.charge !== undefined ? structure.charge : 0;
   if (multInput) multInput.value = structure.multiplicity || 1;
@@ -24054,7 +24354,10 @@ function _toggleInputListOverlay() {
   var roleSelect = document.getElementById("wif-role");
   var chargeInput = document.getElementById("wif-charge");
   var multInput = document.getElementById("wif-mult");
-  function _current() { return wizardStructures[wizardSelectedStructureIndex] || null; }
+  function _current() {
+    var id = nameInput && nameInput.dataset.inputId;
+    return wizardStructures.find(function(entry) { return entry.input_id === id; }) || null;
+  }
   function _apply(fn) {
     var s = _current();
     if (!s) return;
@@ -24067,7 +24370,7 @@ function _toggleInputListOverlay() {
   }
   if (nameInput && !nameInput._acpWired) {
     nameInput._acpWired = true;
-    nameInput.addEventListener("change", function() { _apply(function(s) { s.name = nameInput.value.trim() || s.name || "mol_" + (wizardSelectedStructureIndex + 1); }); });
+    nameInput.addEventListener("input", function() { _apply(function(s) { s.name = nameInput.value.trim() || s.name || "mol_" + (wizardSelectedStructureIndex + 1); }); });
   }
   if (roleSelect && !roleSelect._acpWired) {
     roleSelect._acpWired = true;
@@ -24808,7 +25111,11 @@ function _openRowMenu(snapshot, anchorEl) {
   menu.className = "sp-row-popup-menu";
   menu.setAttribute("role", "menu");
   menu.style.cssText = "position:absolute;z-index:200;min-width:180px;padding:4px 0;background:var(--bg-elevated,#1e1e2e);border:1px solid var(--border-default,#333);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12px;";
-  var items = [];
+  var items = [
+    {key:"rename_source", label:"重命名结构库名称"},
+    {key:"rename_task", label:"重命名来源任务", disabled:!snapshot.job_id},
+    {key:"input_settings", label:"本次输入设置", disabled:!inInput}
+  ];
   if (inInput) items.push({key:"remove_input", label:t("trash.row_menu.remove_input")||"移出本次输入"});
   items.push({key:"move_trash", label:t("trash.row_menu.move_to_trash")||"移入垃圾箱"});
   items.push({key:"open_source", label:t("trash.row_menu.open_source")||"打开来源任务", disabled:!(snapshot.job_id || (snapshot.source_ref && snapshot.source_ref.job_id))});
@@ -24847,8 +25154,25 @@ function _openRowMenu(snapshot, anchorEl) {
 }
 
 function _handleRowMenuAction(action, snapshot) {
-  if (action === "remove_input") {
+  if (action === "rename_source") {
+    if (candidateDetailsPanel) candidateDetailsPanel.rename(snapshot);
+  } else if (action === "rename_task") {
+    var sourceJob = jobsCache.find(function(j) { return j.id === snapshot.job_id; });
+    if (sourceJob) openTaskRenameModal(sourceJob);
+    else api("/jobs/" + encodeURIComponent(snapshot.job_id)).then(function(job) { openTaskRenameModal(job); }).catch(function(e) { showToast(e.message, "error"); });
+  } else if (action === "input_settings") {
+    var selectedIndex = wizardStructures.findIndex(function(e) { return e.source_uid === snapshot.source_uid; });
+    if (selectedIndex >= 0) { selectPreviewStructure(selectedIndex); document.getElementById("wif-name").focus(); }
+  } else if (action === "remove_input") {
+    var focusedInputId = (wizardStructures[wizardSelectedStructureIndex] || {}).input_id;
+    wizardStructures.forEach(function(entry, index) {
+      if (entry && entry.source_uid === snapshot.source_uid && window.ACPJobEditor) ACPJobEditor.onTaskStructureRemoved(index, entry);
+    });
     wizardStructures = wizardStructures.filter(function(s) { return !(s && s.source_uid === snapshot.source_uid); });
+    var retainedFocus = wizardStructures.findIndex(function(entry) { return entry.input_id === focusedInputId; });
+    wizardSelectedStructureIndex = retainedFocus >= 0 ? retainedFocus : Math.max(0, Math.min(wizardSelectedStructureIndex, wizardStructures.length - 1));
+    structureSourceLoadToken++;
+    _refreshWizardInputForm(wizardStructures[wizardSelectedStructureIndex] || null);
     renderLoadedStructuresList(); _syncPickerSelection();
   } else if (action === "move_trash") {
     _wizardMoveToTrash([snapshot]);
@@ -25316,7 +25640,14 @@ async function loadCandidateSources(force) {
         _inputReconciling = true;
         try {
           var TIW = window.ACPTaskInputWorkspace;
+          structureSourceLoadToken++;
+          var focusedInput = wizardStructures[wizardSelectedStructureIndex];
+          var priorUids = TIW.derivedSelectedUids(wizardStructures);
           wizardStructures = TIW.reconcileSelection(wizardStructures, selection);
+          var added = wizardStructures.filter(function(e) { return e.source_uid && priorUids.indexOf(e.source_uid) < 0; });
+          var focus = added.length === 1 ? added[0] : focusedInput;
+          var focusIndex = wizardStructures.findIndex(function(e) { return focus && e.input_id === focus.input_id; });
+          wizardSelectedStructureIndex = focusIndex >= 0 ? focusIndex : 0;
           renderLoadedStructuresList();
           _refreshWizardInputForm(wizardStructures[wizardSelectedStructureIndex] || null);
           updateFooterSelectedCount();
@@ -25327,6 +25658,11 @@ async function loadCandidateSources(force) {
         }
       },
       onPreviewItem: function(item) {
+        if (item.pin_kind === "input") {
+          var index = wizardStructures.findIndex(function(e) { return e.input_id === item.input_id; });
+          if (index >= 0) selectPreviewStructure(index);
+          return true;
+        }
         if (candidateDetailsPanel && candidateDetailsPanel.setEntry(item) === false) return false;
         stagePESsearchSource(item);
         previewStructureSource(item.source_id || item.source_uid, item.source_uid);
@@ -25354,7 +25690,12 @@ async function loadCandidateSources(force) {
 }
 
 async function loadStructureSources(force) {
-  if (resultsLoaded && !force && resultsPicker) return;
+  if (resultsLoaded && !force && resultsPicker) {
+    if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+      resultsPicker.setSelection(wizardStructures, {silent:true});
+    }
+    return;
+  }
   var list = document.getElementById("results-list");
   if (!list) return;
 
@@ -25367,6 +25708,28 @@ async function loadStructureSources(force) {
       toolbarLabel: t("modal.mode_library") || "结构库",
       toolbarHost: document.getElementById("tiw-toolbar-host"),
       projectId: resultsProjectTargetId(),
+      getPinnedSources: function() { return window.ACPJobEditor ? ACPJobEditor.getPinnedSources() : []; },
+      onUsePinnedOutput: function(item) { ACPJobEditor.usePreviousOutput(item); },
+      getContextWorkflow: function() { return wizardState.workflow && wizardState.workflow.id || null; },
+      getRowAnnotation: function(item) {
+        if (window.ACPJobEditor && ACPJobEditor.isActive() && typeof ACPJobEditor.getRecalcSourceAnnotation === "function") {
+          return ACPJobEditor.getRecalcSourceAnnotation(item);
+        }
+        var isInput = Array.isArray(wizardStructures) && wizardStructures.some(function(s) {
+          return s && (s.source_uid === item.source_uid || (s.source_id && s.source_id === item.source_id));
+        });
+        var refJobId = (window._pendingNewTask && window._pendingNewTask.sourceJobId) ||
+                       (typeof lastSelectedJob !== "undefined" && lastSelectedJob && (lastSelectedJob.id || lastSelectedJob.job_id)) || "";
+        var isFromRefJob = !!(refJobId && (item.job_id === refJobId || item.job_name === refJobId));
+        var isCandidate = !!(item.candidate_id && item.candidate_id !== "--") || item.source_group === "candidate" ||
+          (item.structure_facts && item.structure_facts.source_kind === "manual_frame");
+        return {
+          input: isInput,
+          output: isFromRefJob,
+          previous_result: isFromRefJob,
+          is_candidate: isCandidate,
+        };
+      },
       onChanged: function(selection) {
         if (_inputReconciling) return;
         if (_wizardTrashView) {
@@ -25379,7 +25742,14 @@ async function loadStructureSources(force) {
         _inputReconciling = true;
         try {
           var TIW = window.ACPTaskInputWorkspace;
+          structureSourceLoadToken++;
+          var focusedInput = wizardStructures[wizardSelectedStructureIndex];
+          var priorUids = TIW.derivedSelectedUids(wizardStructures);
           wizardStructures = TIW.reconcileSelection(wizardStructures, selection);
+          var added = wizardStructures.filter(function(e) { return e.source_uid && priorUids.indexOf(e.source_uid) < 0; });
+          var focus = added.length === 1 ? added[0] : focusedInput;
+          var focusIndex = wizardStructures.findIndex(function(e) { return focus && e.input_id === focus.input_id; });
+          wizardSelectedStructureIndex = focusIndex >= 0 ? focusIndex : 0;
           renderLoadedStructuresList();
           _refreshWizardInputForm(wizardStructures[wizardSelectedStructureIndex] || null);
           updateFooterSelectedCount();
@@ -25390,8 +25760,16 @@ async function loadStructureSources(force) {
         }
       },
       onPreviewItem: function(item) {
+        if (item.pin_kind === "input") {
+          var index = wizardStructures.findIndex(function(e) { return e.input_id === item.input_id; });
+          if (index >= 0) selectPreviewStructure(index);
+          return true;
+        }
         if (candidateDetailsPanel && candidateDetailsPanel.setEntry(item) === false) return false;
         stagePESsearchSource(item);
+        if (window.ACPJobEditor && typeof ACPJobEditor.onExternalSourcePreview === "function") {
+          ACPJobEditor.onExternalSourcePreview(item);
+        }
         previewStructureSource(item.source_id || item.source_uid, item.source_uid);
         return true;
       },
@@ -25705,8 +26083,10 @@ function _mergeLoadedGeometry(entry, struct, sourceId) {
   entry.has_3d = struct.has_3d !== false;
   entry.atom_count = struct.atom_count || entry.atom_count;
   entry.formula = struct.formula || entry.formula;
-  entry.charge = struct.charge !== undefined ? struct.charge : entry.charge;
-  entry.multiplicity = struct.multiplicity || entry.multiplicity;
+  if (!entry.input_modified) {
+    entry.charge = struct.charge !== undefined ? struct.charge : entry.charge;
+    entry.multiplicity = struct.multiplicity || entry.multiplicity;
+  }
   entry.warnings = struct.warnings || [];
   entry.geometry_state = "ready";
   entry.geometry_error = null;
@@ -25737,7 +26117,7 @@ async function _loadPendingGeometry() {
       entry.geometry_error = e && e.message ? e.message : String(e);
     }
     renderLoadedStructuresList();
-    if (wizardSelectedStructureIndex === i) {
+    if (wizardStructures[wizardSelectedStructureIndex] === entry) {
       renderStructurePreview(wizardStructures, wizardParseWarnings);
     }
     _scheduleWizardDraftAutosave();
@@ -26312,6 +26692,8 @@ function applyPendingNewTask() {
 }
 
 function configureStageSourcePanel(workflowId) {
+  if (resultsPicker) resultsPicker.refresh();
+  if (candidatePicker) candidatePicker.refresh();
   var panel = document.getElementById("stage-source-panel");
   if (!panel) return;
   var wf = workflowCatalogCache.find(function(w) { return w.id === workflowId; });

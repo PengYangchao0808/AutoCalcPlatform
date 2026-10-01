@@ -47,6 +47,7 @@ __all__ = [
     "input_structure_changed",
     "normalize_for_compare",
     "resolve_last_structure",
+    "resolve_previous_outputs",
     "workflow_edit_status",
 ]
 
@@ -498,55 +499,95 @@ def project_original_structure_items(record: JobRecord) -> list[dict[str, Any]]:
     return projected
 
 
-def resolve_last_structure(
-    work_dir: Path | str,
-    *,
-    job_id: str = "",
-    project_id: str | None = None,
-) -> dict[str, Any] | None:
-    """Resolve the task's best ``kind=structure`` product for re-use as input.
+def resolve_previous_outputs(
+    work_dir: Path | str, *, job_id: str = "", project_id: str | None = None,
+    attempt: int = 0, strict: bool = False,
+) -> list[dict[str, Any]]:
+    """Project every reusable single geometry with stable provenance."""
+    from acp.results.manifest import load_result_manifest
+    from acp.results.structure_policy import reusable_product, single_geometry
+    from acp.scheduler.files import resolve_safe
+    from acp.scheduler.structure_source_store import source_uid_for
 
-    Returns ``{"available": True, "entry_id", "label", "path", "xyz_text"}``
-    or ``None`` when the task has no verifiable geometry product (plan §5:
-    workflows without structures simply disable this option).
-    """
-    from acp.results.manifest import find_products, load_result_manifest
-
-    task_dir = Path(work_dir)
-    manifest = load_result_manifest(task_dir)
+    root = Path(work_dir)
+    manifest = load_result_manifest(root)
+    from acp.confsearch.manifest import find_confsearch_manifest, read_manifest, resolve_manifest_geometry
+    from acp.storage.manifest import ResultManifest
+    conformer_manifest = find_confsearch_manifest(root)
+    if conformer_manifest is not None:
+        manifest = manifest or ResultManifest(workflow="Confsearch")
+        try:
+            payload = read_manifest(conformer_manifest)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            if strict:
+                raise ValueError("正式构象清单不可读取，已阻断重算") from exc
+            payload = {}
+        for conf in payload.get("conformers") or []:
+            try:
+                geometry = resolve_manifest_geometry(conformer_manifest, str(conf.get("geometry") or ""))
+                rel = geometry.resolve().relative_to((root / "RESULT").resolve()).as_posix()
+            except ValueError:
+                continue
+            cid = str(conf.get("conf_id") or "conformer")
+            manifest.add_product("confsearch_" + cid, "Conformer (" + cid + ")", rel, "structure",
+                metadata={"source_kind":"conformer", "rank":conf.get("rank")})
     if manifest is None:
-        return None
-    for product in find_products(manifest, "structure"):
-        path = task_dir / "RESULT" / product.path
+        if strict and (root / "RESULT" / "result_manifest.json").exists():
+            raise ValueError("旧结果清单不可读取，已阻断重算")
+        return []
+    outputs = []
+    for product in manifest.products:
+        if manifest.workflow in {"frequency", "singlepoint"}:
+            continue
+        if manifest.workflow in {"scan", "PESsearch"} and product.metadata.get("selection_source") not in {"manual", "manual_frame"}:
+            continue
+        if not reusable_product(product.to_dict()):
+            continue
+        relative = f"RESULT/{product.path}"
+        path = resolve_safe(root, relative)
+        if path is None or not path.is_file():
+            # Old executor products were rooted at the task directory.
+            relative = product.path
+            path = resolve_safe(root, relative)
+        if path is None or not path.is_file():
+            if strict:
+                raise ValueError(f"旧结构产物缺失，已阻断重算: {product.path}")
+            continue
         try:
-            xyz_text = path.read_text(encoding="utf-8")
-        except OSError:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            if strict:
+                raise ValueError(f"旧结构不可读取，已阻断重算: {product.path}") from exc
             continue
-        if not xyz_text.strip():
+        geometry = single_geometry(text)
+        if geometry is None:
+            if strict:
+                raise ValueError(f"旧结构不是有效单帧，已阻断重算: {product.path}")
             continue
-        try:
-            checksum = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-        except OSError:
-            continue
-        relative_path = f"RESULT/{product.path}"
-        result: dict[str, Any] = {
-            "available": True,
-            "entry_id": product.id,
-            "label": product.label,
-            "path": relative_path,
-            "xyz_text": xyz_text,
-        }
-        if job_id:
-            result["source_ref"] = {
-                "origin": "job_artifact",
-                "job_id": job_id,
-                "source_id": f"job_{job_id}:{relative_path}",
-                "path": relative_path,
-                "checksum": checksum,
-                "project_id": project_id or "",
-            }
-        return result
-    return None
+        checksum = geometry["content_checksum"]
+        uid = source_uid_for(job_id, relative)
+        direction = product.metadata.get("direction")
+        if product.kind.value == "irc_endpoint":
+            direction = "forward" if "forward" in product.id else "reverse"
+        outputs.append({
+            **product.metadata, **geometry,
+            "available": True, "availability": "available", "entry_id": product.id,
+            "product_id": product.id, "label": product.label, "path": relative,
+            "xyz_text": text, "source_uid": uid, "version_id": checksum,
+            "attempt": attempt, "direction": direction,
+            "source_ref": {"origin": "job_artifact", "job_id": job_id,
+                "source_uid": uid, "source_id": f"job_{job_id}:{relative}",
+                "path": relative, "checksum": checksum, "version_id": checksum,
+                "attempt": attempt, "project_id": project_id or ""},
+        })
+    return outputs
+
+
+def resolve_last_structure(work_dir: Path | str, *, job_id: str = "",
+                           project_id: str | None = None) -> dict[str, Any] | None:
+    """Compatibility projection of the complete output list."""
+    outputs = resolve_previous_outputs(work_dir, job_id=job_id, project_id=project_id)
+    return outputs[0] if outputs else None
 
 
 def effective_config_info(record: JobRecord) -> dict[str, Any]:
@@ -671,6 +712,10 @@ def build_edit_draft(
             else None
         ),
     }
+    input_refs["previous_outputs"] = resolve_previous_outputs(
+        record.work_dir, job_id=record.id, project_id=record.project_id or spec.project_id,
+        attempt=attempt_number(record),
+    ) if editable else []
     method = spec.method if isinstance(spec.method, dict) else {}
     notes: list[str] = []
     if not editable and edit_status.get("migration_hint"):

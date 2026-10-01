@@ -744,11 +744,11 @@ class TestPesResolver:
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
         group_ids = {g.id for g in payload.groups}
-        assert "pes_recommendations" in group_ids
+        assert "pes_recommendations" not in group_ids
         assert "pes_confirmed" in group_ids
         rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
         conf_entries = [e for e in payload.entries if e.group_id == "pes_confirmed"]
-        assert len(rec_entries) == 1
+        assert rec_entries == []
         assert len(conf_entries) == 1
 
     def test_pes_source_kind_recommendation(self, tmp_path: Path):
@@ -762,8 +762,8 @@ class TestPesResolver:
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
         rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
-        assert len(rec_entries) == 1
-        assert rec_entries[0].source.kind == "algorithm_recommendation"
+        assert rec_entries == []
+        assert not any(e.source.kind == "algorithm_recommendation" for e in payload.entries)
 
     def test_pes_source_kind_confirmed(self, tmp_path: Path):
         """Confirmed entries have source.kind = 'manual_review'."""
@@ -791,9 +791,7 @@ class TestPesResolver:
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
         rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
-        assert rec_entries[0].source.confirmed is False
-        d = rec_entries[0].source.to_dict()
-        assert d["confirmed"] is False
+        assert rec_entries == []
 
     def test_pes_recommendation_badge_unconfirmed(self, tmp_path: Path):
         """Recommendation entries carry badge '未确认'."""
@@ -806,7 +804,7 @@ class TestPesResolver:
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
         rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
-        assert "未确认" in rec_entries[0].badges
+        assert rec_entries == []
 
     def test_pes_default_highest_confidence_ts(self, tmp_path: Path):
         """Default = highest-confidence TS recommendation."""
@@ -822,7 +820,7 @@ class TestPesResolver:
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
-        assert payload.default_entry_id == "pes_ts_frame_005"
+        assert payload.default_entry_id is None
 
     def test_pes_default_highest_energy_peak_when_no_ts(self, tmp_path: Path):
         """No TS recs → default = highest-energy-peak (max score) intermediate."""
@@ -837,7 +835,7 @@ class TestPesResolver:
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
-        assert payload.default_entry_id == "pes_int_frame_008"
+        assert payload.default_entry_id is None
 
     def test_pes_default_first_confirmed_when_no_recs(self, tmp_path: Path):
         """No recommendations → default = first confirmed entry."""
@@ -868,7 +866,7 @@ class TestPesResolver:
         group_ids = {g.id for g in payload.groups}
         assert "pes_confirmed" not in group_ids
         rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
-        assert len(rec_entries) == 1
+        assert rec_entries == []
 
     def test_pes_no_merge_same_candidate_id(self, tmp_path: Path):
         """Same candidate_id in both groups → separate entries, collision on rec side."""
@@ -885,9 +883,9 @@ class TestPesResolver:
         )
         rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
         conf_entries = [e for e in payload.entries if e.group_id == "pes_confirmed"]
-        assert len(rec_entries) == 1
+        assert rec_entries == []
         assert len(conf_entries) == 1
-        assert rec_entries[0].id != conf_entries[0].id
+        assert rec_entries == []
         assert conf_entries[0].id == f"pes_{cid}"
 
     def test_pes_no_files_at_all(self, tmp_path: Path):
@@ -2422,20 +2420,10 @@ class TestAcceptanceMatrix:
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="PESsearch", job_status="completed"
         )
-        assert [g.id for g in payload.groups] == ["pes_confirmed", "pes_recommendations"]
-        assert [e.id for e in payload.entries] == [
-            "pes_ts_frame_005", "pes_int_frame_009",  # confirmed (review order)
-            "pes_ts_frame_005_d783f0",                # collision-resolved duplicate rec
-            "pes_int_frame_002",
-        ]
+        assert [g.id for g in payload.groups] == ["pes_confirmed"]
+        assert [e.id for e in payload.entries] == ["pes_ts_frame_005", "pes_int_frame_009"]
         assert payload.default_entry_id == "pes_ts_frame_005"
-        for entry in payload.entries:
-            if entry.group_id == "pes_recommendations":
-                assert entry.source.kind == "algorithm_recommendation"
-                assert entry.source.confirmed is False
-            else:
-                assert entry.source.kind == "manual_review"
-                assert entry.source.confirmed is True
+        assert all(e.source.kind == "manual_review" and e.source.confirmed for e in payload.entries)
 
     def test_batch_completed_manifest_order_then_failed_appended(self, tmp_path: Path):
         """Completed items keep MANIFEST (product-list) order; failed items
