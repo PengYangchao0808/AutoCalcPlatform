@@ -382,6 +382,44 @@ def test_orca_build_input_blocks_gfn_gbsa_rejected(
         interface._build_input_blocks("sp")
 
 
+# ── Dev-plan named GFN acceptance tests (GAP-6 closure, T19) ────────────────
+#
+# docs/ACP_Scan_OptTS_GFN_DevPlan.md §4/§9 names these exact test ids.
+# test_functional_options_map_gfn_basis_empty lives in test_acp_catalog.py
+# (added by T11); the two input-block tests live here.
+
+
+def test_orca_input_blocks_gfn_no_basis(
+    sample_config: dict[str, object],
+) -> None:
+    """GFN sp input carries no basis token and no %basis block.
+
+    An explicitly injected DFT basis must be stripped by the registry-driven
+    renderer (T6/T10), never emitted for the GFN family."""
+    interface = ORCAInterface(sample_config)
+    blocks, _ = interface._build_input_blocks("sp", method="GFN2-xTB", basis="def2-TZVPP")
+    route = blocks.splitlines()[0]
+    assert "GFN2-xTB" in route.split()
+    assert not any(token.lower().startswith("def2") for token in route.split())
+    assert "def2" not in blocks
+    assert "%basis" not in blocks
+    assert "auxJ" not in blocks and "auxC" not in blocks
+
+
+def test_orca_input_blocks_gfn_alpb_solvent(
+    sample_config: dict[str, object],
+) -> None:
+    """GFN + ALPB rides the ALPB(<solvent>) route token; the %cpcm block
+    (DFT-only solvation) must never appear for the GFN family."""
+    interface = ORCAInterface(sample_config)
+    blocks, _ = interface._build_input_blocks(
+        "opt", method="GFN2-xTB", solvent="water", solvent_model="alpb", recalc_hess=0
+    )
+    route = blocks.splitlines()[0]
+    assert "ALPB(Water)" in route.split()
+    assert "%cpcm" not in blocks
+
+
 def test_parse_frequencies_real_orca_format_takes_last_section(
     tmp_path: Path,
 ) -> None:
