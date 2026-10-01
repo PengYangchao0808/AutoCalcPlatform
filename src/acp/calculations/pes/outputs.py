@@ -105,6 +105,7 @@ def persist_pes_outputs(
         "protocol": scan_result.get("protocol") or {},
         "optimization_level": scan_result.get("optimization_level") or {},
         "optimization_level_fingerprint": scan_result.get("optimization_level_fingerprint"),
+        "level_warnings": list(scan_result.get("level_warnings") or []),
         "execution_mode": scan_result.get("execution_mode"),
         "scan_dir": scan_dir,
         "frames": frames,

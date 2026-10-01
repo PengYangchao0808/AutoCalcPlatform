@@ -157,6 +157,93 @@ def _is_constraint_kind(value: str) -> TypeGuard[ConstraintKind]:
     return value in ("distance", "angle", "dihedral")
 
 
+def resolve_scan_protocol_levels(
+    protocol: dict[str, Any] | None,
+    *,
+    context: Any,
+    baseline_protocol: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Run the Q7 layered level resolution over a bond-scan protocol dict.
+
+    This is the ONE shared protocol-level resolver (T14): the API submit /
+    edit entry (`v1_routes._resolve_bond_scan_protocol_levels`) and the
+    runner path (:func:`run_pes_scan`) both route through it, so an invalid
+    GFN combination cannot slip past the entry that skipped validation.
+    Validation logic itself is T13's (`resolve_level_for_entry` /
+    `validate_level_for_purpose`) — nothing is re-encoded here.
+
+    Args:
+        protocol: Raw protocol dict (``scan_optimizer`` / ``single_point``
+            sub-dicts); ``None``/empty yields catalog defaults.
+        context: Entry context — ``"strict"`` (new submissions), ``"edit"``
+            (+ *baseline_protocol*) for edit-recalculate, or ``"migration"``
+            for the runner/historical recompute lane.
+        baseline_protocol: Historical protocol for EDIT changed-field
+            detection (unchanged fields migrate, user-changed are strict).
+
+    Returns:
+        ``(protocol, warnings, errors)`` — *errors* are labeled per level
+        (``"invalid scan optimizer level: ..."`` / ``"invalid single_point
+        level: ..."``) and stop at the FIRST failing level, mirroring the
+        original v1_routes semantics.  Never raises for level errors; the
+        caller decides how to reject (HTTP 4xx / ValueError).
+    """
+    from acp.calculations.levels import (
+        LevelEntryContext,
+        changed_level_fields,
+        resolve_level_for_entry,
+    )
+    from acp.calculations.pes.contracts import (
+        ScanOptimizer,
+        SinglePointSpec,
+        optimizer_to_level,
+        single_point_to_level,
+    )
+
+    entry_context = LevelEntryContext(context)
+    out = dict(protocol or {})
+    warnings_out: list[str] = []
+
+    def _optimizer_level(sub: dict[str, Any]) -> Any:
+        return optimizer_to_level(ScanOptimizer.from_dict(sub))
+
+    def _sp_level(sub: dict[str, Any]) -> Any:
+        return single_point_to_level(SinglePointSpec.from_dict(sub))
+
+    level_specs = (
+        ("scan_optimizer", "scan_optimization", _optimizer_level),
+        ("single_point", "single_point", _sp_level),
+    )
+    for key, purpose, parse in level_specs:
+        sub = dict(out.get(key) or {})
+        if key == "single_point" and sub.get("enabled") is False:
+            # Disabled SP never executes; the strict final validator skips it too.
+            continue
+        raw = parse(sub)
+        changed: set[str] | None = None
+        if entry_context is LevelEntryContext.EDIT:
+            if baseline_protocol is None:
+                changed = None
+            else:
+                changed = changed_level_fields(raw, parse(dict(baseline_protocol.get(key) or {})))
+        resolution = resolve_level_for_entry(
+            raw, purpose=purpose, context=entry_context, changed_fields=changed
+        )
+        if resolution.errors:
+            label = "scan optimizer level" if key == "scan_optimizer" else "single_point level"
+            return out, warnings_out, [f"invalid {label}: " + "; ".join(resolution.errors)]
+        warnings_out.extend(resolution.warnings)
+        updates = {
+            field_name: getattr(resolution.level, field_name)
+            for field_name in changed_level_fields(raw, resolution.level)
+        }
+        if updates:
+            merged = dict(sub)
+            merged.update(updates)
+            out[key] = merged
+    return out, warnings_out, []
+
+
 # ── main pipeline ──────────────────────────────────────────────────────
 
 
@@ -182,7 +269,23 @@ def run_pes_scan(
         ValueError: On invalid requests or protocol values.
         RuntimeError: On QC execution failure.
     """
-    req = request if isinstance(request, PesScanRequest) else PesScanRequest.from_dict(request)
+    # Q7 runner lane: MIGRATION canonicalization must run BEFORE the strict
+    # final validation (validate_scan_protocol), so a historical scan_config
+    # (pre-T13 rerun) warns+normalizes while genuinely invalid combinations
+    # still fail fast here — the last line of defense before cccp.
+    level_warnings: list[str] = []
+    req_payload: dict[str, Any] | PesScanRequest = request
+    if isinstance(request, dict):
+        resolved_protocol, level_warnings, level_errors = resolve_scan_protocol_levels(
+            request.get("protocol"), context="migration"
+        )
+        if level_errors:
+            raise ValueError("; ".join(level_errors))
+        if level_warnings:
+            for message in level_warnings:
+                logger.warning("PES scan method-config migration: %s", message)
+            req_payload = {**request, "protocol": resolved_protocol}
+    req = request if isinstance(request, PesScanRequest) else PesScanRequest.from_dict(req_payload)
     if req.mode not in ("bond_length_scan", "coordinate_scan"):
         raise ValueError(
             f"request.mode must be 'bond_length_scan' or 'coordinate_scan', got {req.mode!r}"
@@ -423,6 +526,7 @@ def run_pes_scan(
         "protocol": protocol.to_dict(),
         "optimization_level": optimizer_level.to_dict(),
         "optimization_level_fingerprint": optimizer_level_fingerprint,
+        "level_warnings": list(level_warnings),
         "execution_mode": execution_mode,
         "scan_dir": str(scan_dir),
         "scan_dir_rel": PES_SCAN_RELATIVE_PATH,
@@ -1556,5 +1660,6 @@ __all__ = [
     "PES_SCAN_STAGES",
     "SCAN_DIR_NAME",
     "build_coordinate_plan",
+    "resolve_scan_protocol_levels",
     "run_pes_scan",
 ]

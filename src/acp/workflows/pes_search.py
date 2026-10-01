@@ -234,6 +234,7 @@ def run_bond_length_scan(
     ts_recs = list(scan_result.get("ts_recommendations", []))
     int_recs = list(scan_result.get("int_recommendations", []))
     frames = list(scan_result.get("frames", []))
+    level_warnings = list(scan_result.get("level_warnings", []))
     scan_dir = Path(scan_result.get("scan_dir") or "")
 
     if progress_reporter is not None:
@@ -260,6 +261,7 @@ def run_bond_length_scan(
             "manifest_path": str(pes_profile_path),
             "result_manifest_path": str(result_manifest_path),
             "scan_dir": str(scan_dir),
+            "level_warnings": level_warnings,
         },
     )
 

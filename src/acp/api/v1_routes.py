@@ -1225,68 +1225,20 @@ def _resolve_bond_scan_protocol_levels(
     entry: Any,
     baseline_protocol: dict[str, Any] | None,
 ) -> tuple[dict[str, Any], list[str]]:
-    """Run the Q7 layered level resolution over a bond-scan protocol dict.
+    """API entry of the shared Q7 protocol-level resolver (T14).
 
-    Each protocol level (``scan_optimizer`` / ``single_point``) resolves via
-    ``resolve_level_for_entry`` with the EXPLICIT entry context: strict
-    submission rejects user-EXPLICIT conflicts, the historical lane
-    normalizes them with collectable warnings, and the FINAL config is
-    validated uniformly.  Only rewritten fields are written back so a clean
-    payload stays byte-identical.
+    Delegates to :func:`acp.calculations.pes.scan.resolve_scan_protocol_levels`
+    (the same resolver the runner path uses) and rejects with 422 when the
+    layered resolution reports errors.  Migration warnings are collectable —
+    the caller persists them under ``scan_request["level_warnings"]``.
     """
-    from acp.calculations.levels import (
-        LevelEntryContext,
-        changed_level_fields,
-        resolve_level_for_entry,
+    from acp.calculations.pes.scan import resolve_scan_protocol_levels
+
+    out, warnings_out, errors = resolve_scan_protocol_levels(
+        protocol, context=entry, baseline_protocol=baseline_protocol
     )
-    from acp.calculations.pes.contracts import (
-        ScanOptimizer,
-        SinglePointSpec,
-        optimizer_to_level,
-        single_point_to_level,
-    )
-
-    entry_context = LevelEntryContext(entry)
-    out = dict(protocol or {})
-    warnings_out: list[str] = []
-
-    def _optimizer_level(sub: dict[str, Any]) -> Any:
-        return optimizer_to_level(ScanOptimizer.from_dict(sub))
-
-    def _sp_level(sub: dict[str, Any]) -> Any:
-        return single_point_to_level(SinglePointSpec.from_dict(sub))
-
-    level_specs = (
-        ("scan_optimizer", "scan_optimization", _optimizer_level),
-        ("single_point", "single_point", _sp_level),
-    )
-    for key, purpose, parse in level_specs:
-        sub = dict(out.get(key) or {})
-        raw = parse(sub)
-        changed: set[str] | None = None
-        if entry_context is LevelEntryContext.EDIT:
-            if baseline_protocol is None:
-                changed = None
-            else:
-                changed = changed_level_fields(raw, parse(dict(baseline_protocol.get(key) or {})))
-        resolution = resolve_level_for_entry(
-            raw, purpose=purpose, context=entry_context, changed_fields=changed
-        )
-        if resolution.errors:
-            label = "scan optimizer level" if key == "scan_optimizer" else "single_point level"
-            raise HTTPException(
-                status_code=422,
-                detail=f"invalid {label}: " + "; ".join(resolution.errors),
-            )
-        warnings_out.extend(resolution.warnings)
-        updates = {
-            field_name: getattr(resolution.level, field_name)
-            for field_name in changed_level_fields(raw, resolution.level)
-        }
-        if updates:
-            merged = dict(sub)
-            merged.update(updates)
-            out[key] = merged
+    if errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
     return out, warnings_out
 
 
@@ -1401,6 +1353,44 @@ def _prepare_bond_scan_input(
     if level_warnings:
         prepared["scan_request"]["level_warnings"] = level_warnings
     return prepared
+
+
+def _scan_request_level_warnings(inp: dict[str, Any] | None) -> list[str]:
+    """Collect the migration warnings ``_prepare_bond_scan_input`` stored."""
+    scan_request = (inp or {}).get("scan_request")
+    if not isinstance(scan_request, dict):
+        return []
+    return [str(message) for message in (scan_request.get("level_warnings") or [])]
+
+
+def _persist_method_warning_event(
+    manager: Any,
+    source_record: Any,
+    edit_result: dict[str, Any],
+    spec: JobSpec,
+) -> None:
+    """Persist one ``method_validation_warning`` event on the target job (T14).
+
+    The job RECORD already carries the warnings (``spec.input.scan_request
+    .level_warnings``, persisted with job.json); this adds the events.jsonl
+    entry so rerun/direct-CLI consumers that bypass this endpoint still see
+    the audit trail.  Best-effort: a failed append never fails the edit.
+    """
+    warnings = _scan_request_level_warnings(spec.input)
+    if not warnings:
+        return
+    try:
+        job_id = str(edit_result.get("job_id") or source_record.id)
+        target = manager.get(job_id) or source_record
+        events_path = runtime_file(Path(target.work_dir), "events.jsonl")
+        JobEventLog(events_path).append(
+            "method_validation_warning",
+            job_id=job_id,
+            source="edit_recalculate",
+            warnings=warnings,
+        )
+    except Exception:
+        logger.debug("method_validation_warning event append failed", exc_info=True)
 
 
 def _resolve_batch_structures_input(
@@ -4963,6 +4953,8 @@ def preview_job_edit_recalculate(
             warnings.append(f"输入已修改（{entry['path']}）；提交后将重新物化输入")
         if entry.get("kind") == "resource":
             warnings.append(f"资源已修改（{entry['path']}）")
+    # T14 warning channel (edit-recalculate preview) for migrated configs.
+    warnings.extend(_scan_request_level_warnings(spec.input))
     fingerprint = compute_preview_fingerprint(
         job_id, source_revision, spec.workflow, spec.input, spec.method, spec.resources
     )
@@ -5074,6 +5066,7 @@ def submit_job_edit_recalculate(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _persist_method_warning_event(manager, record, result, spec)
     return V1EditRecalculateResponse(
         **{key: value for key, value in result.items() if key != "diff"},
         diff_summary=[V1EditDiffEntry(**entry) for entry in diff],
