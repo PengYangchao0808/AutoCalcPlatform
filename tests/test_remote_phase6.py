@@ -195,17 +195,10 @@ def test_batchoptimize_local_remote_parity() -> None:
     from acp.storage.manifest import ProductKind
 
     profiles = {
-        "opt_only": ["prepare", "optimize", "finalize"],
-        "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
-        "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
-        "opt_freq_sp_thermo": [
-            "prepare",
-            "optimize",
-            "frequency",
-            "single_point",
-            "thermochemistry",
-            "finalize",
-        ],
+        "opt_only": ["optimize"],
+        "opt_freq": ["optimize", "frequency"],
+        "opt_freq_sp": ["optimize", "frequency", "single_point"],
+        "opt_freq_sp_thermo": ["optimize", "frequency", "single_point", "thermochemistry"],
     }
     for profile, expected in profiles.items():
         spec = _spec("BatchOptimize", {"from_artifact": "/tmp/m.json"}, {"profile": profile})

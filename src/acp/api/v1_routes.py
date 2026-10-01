@@ -11,8 +11,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import posixpath
 import re
+import sqlite3
 import threading
 import urllib.parse
 from collections import Counter, OrderedDict
@@ -215,6 +217,7 @@ from acp.scheduler.job_edit import (
     diff_editable_specs,
     editable_spec_from_parts,
     editable_spec_from_record,
+    input_structure_changed,
     workflow_edit_status,
 )
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -250,7 +253,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _ENRICHMENT_CACHE_LIMIT: Final = 256
-_ENRICHMENT_CACHE: OrderedDict[tuple[str, int | None, int | None, bool], V1JobRecordModel] = (
+_ENRICHMENT_CACHE: OrderedDict[tuple[str, int | None, int | None, bool], dict[str, Any]] = (
     OrderedDict()
 )
 _ENRICHMENT_CACHE_LOCK = threading.Lock()
@@ -455,17 +458,24 @@ def _enrich_job_snapshot(
         events_mtime_ns = None
     cache_key = (record.id, state_mtime_ns, events_mtime_ns, include_event)
     with _ENRICHMENT_CACHE_LOCK:
-        cached_model = _ENRICHMENT_CACHE.get(cache_key)
-        if cached_model is not None and cached_model.status == job_model.status:
+        cached = _ENRICHMENT_CACHE.get(cache_key)
+        if cached is not None:
             _ENRICHMENT_CACHE.move_to_end(cache_key)
-            return cached_model
-    try:
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return job_model
+    if cached is not None:
+        data = cached["state"]
+        latest = cached.get("latest_event")
+    else:
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return job_model
+        latest = _read_latest_event(record.work_dir) if include_event else None
     if not isinstance(data, dict):
         return job_model
     updates: dict[str, Any] = {}
+    stages = data.get("stages")
+    if isinstance(stages, dict):
+        updates["stage_order"] = list(stages)
     if not record.status.is_terminal:
         for key in (
             "stage_index",
@@ -489,7 +499,6 @@ def _enrich_job_snapshot(
     if state_stat is not None:
         updates["snapshot_version"] = int(state_stat.st_mtime)
     if include_event:
-        latest = _read_latest_event(record.work_dir)
         if latest is not None:
             updates["latest_event"] = latest
     if completed:
@@ -498,7 +507,7 @@ def _enrich_job_snapshot(
     if updates:
         job_model = job_model.model_copy(update=updates)
     with _ENRICHMENT_CACHE_LOCK:
-        _ENRICHMENT_CACHE[cache_key] = job_model
+        _ENRICHMENT_CACHE[cache_key] = {"state": data, "latest_event": latest}
         _ENRICHMENT_CACHE.move_to_end(cache_key)
         if len(_ENRICHMENT_CACHE) > _ENRICHMENT_CACHE_LIMIT:
             _ENRICHMENT_CACHE.popitem(last=False)
@@ -1420,13 +1429,31 @@ def _resolve_batch_structures_input(
             resolved_items.append(item)
             continue
         try:
-            asset, _ = service.get(source_id)
+            asset, source_checksum = service.get(source_id)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        source_ref = item.get("source_ref")
+        source_ref = source_ref if isinstance(source_ref, dict) else {}
+        declared_source_id = str(source_ref.get("source_id") or "").strip()
+        if declared_source_id and declared_source_id != source_id:
+            raise HTTPException(status_code=422, detail="批量结构来源 ID 不匹配")
+        declared_checksum = str(source_ref.get("checksum") or "").strip()
+        if declared_checksum and declared_checksum != source_checksum:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "structure_source_changed",
+                    "message": "所选批量结构自加载后已变化，请重新选择并确认几何。",
+                    "source_id": source_id,
+                    "expected_checksum": declared_checksum,
+                    "current_checksum": source_checksum,
+                },
+            )
         resolved = {
             key: value
             for key, value in item.items()
-            if key not in {"source_id", "allow_disabled_use", "disabled_use_reason"}
+            if key
+            not in {"source_id", "source_ref", "allow_disabled_use", "disabled_use_reason"}
         }
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
@@ -1443,6 +1470,16 @@ def _resolve_batch_structures_input(
             "role": asset.get("tag", ""),
             "role_evidence": "",
             "candidate_id": asset.get("candidate_id", ""),
+            "checksum": source_checksum,
+            "input_xyz_hash": hashlib.sha256(
+                resolved["xyz"].encode("utf-8")
+            ).hexdigest(),
+            "input_snapshot": {
+                "charge": resolved.get("charge", asset.get("charge")),
+                "multiplicity": resolved.get(
+                    "multiplicity", asset.get("multiplicity")
+                ),
+            },
             "metadata_revision": 0,
         }
         try:
@@ -1451,6 +1488,7 @@ def _resolve_batch_structures_input(
             parsed_id, parsed_path = StructureSourceService.parse_source_id(source_id)
             snapshot["job_id"] = parsed_id
             snapshot["relative_path"] = parsed_path
+            snapshot["source_ref"] = source_ref
         except (ValueError, ImportError):
             pass
         # Enrich from org store when available.
@@ -1461,6 +1499,25 @@ def _resolve_batch_structures_input(
             org_store = StructureSourceStore(manager.store.db_path)
             org_entry = org_store.get_by_legacy_source_id(source_id)
             if org_entry is not None:
+                declared_uid = str(source_ref.get("source_uid") or "").strip()
+                if declared_uid and declared_uid != str(org_entry.get("source_uid") or ""):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="批量结构候选来源已变化，请重新选择后重试。",
+                    )
+                for key in ("version_id", "geometry_hash"):
+                    declared_value = str(source_ref.get(key) or "").strip()
+                    current_value = str(org_entry.get(key) or "").strip()
+                    if declared_value and declared_value != current_value:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "error": "structure_source_changed",
+                                "message": "所选批量结构版本已变化，请重新选择后重试。",
+                                "source_id": source_id,
+                                "field": key,
+                            },
+                        )
                 from acp.scheduler.structure_source_store import CandidateUseConflictError
 
                 allow_disabled = bool(item.get("allow_disabled_use"))
@@ -1510,9 +1567,109 @@ def _resolve_batch_structures_input(
     return resolved_inp, snapshots
 
 
-def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list[dict[str, Any]]:
-    """Validate and snapshot a directly reused candidate without guessing legacy links."""
+def _xyz_atom_data(xyz_text: str) -> tuple[tuple[str, tuple[float, float, float]], ...]:
+    """Return the first XYZ frame's element order and coordinates."""
+    from acp.intake import parse_xyz_text
+
+    parsed = parse_xyz_text(xyz_text)
+    if not parsed.structures or parsed.errors:
+        raise HTTPException(status_code=422, detail="所选结构不是有效的 XYZ 几何")
+    lines = str(parsed.structures[0].xyz or "").strip().splitlines()
+    try:
+        atom_count = int(lines[0].strip())
+    except (IndexError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="所选结构缺少有效的 XYZ 原子数") from exc
+    atom_lines = lines[2 : 2 + atom_count]
+    if atom_count <= 0 or len(atom_lines) != atom_count:
+        raise HTTPException(status_code=422, detail="所选结构的 XYZ 原子行不完整")
+    atoms: list[tuple[str, tuple[float, float, float]]] = []
+    for line in atom_lines:
+        fields = line.split()
+        if len(fields) < 4:
+            raise HTTPException(status_code=422, detail="所选结构包含不完整的 XYZ 原子行")
+        try:
+            coordinates = [float(value) for value in fields[1:4]]
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="所选结构包含无效坐标") from exc
+        if not all(math.isfinite(value) for value in coordinates):
+            raise HTTPException(status_code=422, detail="所选结构包含非有限坐标")
+        atoms.append((fields[0], (coordinates[0], coordinates[1], coordinates[2])))
+    return tuple(atoms)
+
+
+def _same_xyz_geometry(left: str, right: str) -> bool:
+    """Compare two XYZ geometries independent of whitespace and formatting."""
+    left_atoms = _xyz_atom_data(left)
+    right_atoms = _xyz_atom_data(right)
+    if len(left_atoms) != len(right_atoms):
+        return False
+    for (left_symbol, left_xyz), (right_symbol, right_xyz) in zip(
+        left_atoms, right_atoms, strict=True
+    ):
+        if left_symbol != right_symbol or any(
+            not math.isclose(a, b, rel_tol=0.0, abs_tol=1e-7)
+            for a, b in zip(left_xyz, right_xyz, strict=True)
+        ):
+            return False
+    return True
+
+
+def _same_xyz_atom_order(left: str, right: str) -> bool:
+    """Compare element count and ordering while allowing different coordinates."""
+    try:
+        left_atoms = _xyz_atom_data(left)
+        right_atoms = _xyz_atom_data(right)
+    except HTTPException:
+        return False
+    return bool(left_atoms) and [atom[0] for atom in left_atoms] == [
+        atom[0] for atom in right_atoms
+    ]
+
+
+def _validate_structure_electronic_state(inp: dict[str, Any]) -> None:
+    """Reject invalid charge/multiplicity before reusing saved geometry."""
+    charge = inp.get("charge", 0)
+    multiplicity = inp.get("multiplicity", 1)
+    if isinstance(charge, bool) or isinstance(multiplicity, bool):
+        raise HTTPException(status_code=422, detail="电荷和自旋多重度必须为整数")
+    try:
+        charge_value = int(charge)
+        multiplicity_value = int(multiplicity)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="电荷和自旋多重度必须为整数") from exc
+    if isinstance(charge, float) and charge != charge_value:
+        raise HTTPException(status_code=422, detail="电荷必须为整数")
+    if isinstance(multiplicity, float) and multiplicity != multiplicity_value:
+        raise HTTPException(status_code=422, detail="自旋多重度必须为整数")
+    if multiplicity_value < 1:
+        raise HTTPException(status_code=422, detail="自旋多重度必须至少为 1")
+
+
+def _snapshot_direct_source_input(
+    inp: dict[str, Any],
+    request: Request,
+    *,
+    verify_geometry: bool = False,
+    include_unindexed: bool = False,
+) -> list[dict[str, Any]]:
+    """Validate and snapshot a directly reused structure source."""
     ref = inp.get("source_ref")
+    if not isinstance(ref, dict):
+        direct_source_id = str(inp.get("source_id") or "").strip()
+        if direct_source_id:
+            try:
+                parsed_job_id, parsed_path = StructureSourceService.parse_source_id(
+                    direct_source_id
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            ref = {
+                "source_id": direct_source_id,
+                "job_id": parsed_job_id,
+                "path": parsed_path,
+                "source_uid": str(inp.get("source_uid") or ""),
+                "checksum": str(inp.get("checksum") or ""),
+            }
     if not isinstance(ref, dict):
         return []
     job_id = str(ref.get("job_id") or "").strip()
@@ -1520,6 +1677,40 @@ def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list
     if not job_id or not rel_path:
         return []
     source_id = f"job_{job_id}:{rel_path}"
+    declared_source_id = str(ref.get("source_id") or "").strip()
+    if declared_source_id and declared_source_id != source_id:
+        raise HTTPException(status_code=422, detail="结构来源 ID 与来源任务/路径不匹配")
+
+    source_checksum = str(ref.get("checksum") or "").strip()
+    current_checksum = ""
+    if verify_geometry:
+        _validate_structure_electronic_state(inp)
+        try:
+            asset, current_checksum = _structure_source_service(request).get(source_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if source_checksum and source_checksum != current_checksum:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "structure_source_changed",
+                    "message": "所选保存结构自加载后已变化，请重新选择并确认几何。",
+                    "source_id": source_id,
+                    "expected_checksum": source_checksum,
+                    "current_checksum": current_checksum,
+                },
+            )
+        if str(inp.get("source_type") or "") == "xyz_text":
+            submitted_xyz = str(inp.get("source") or inp.get("xyz_text") or "")
+            source_xyz = str(asset.get("xyz") or "")
+            if not submitted_xyz or not source_xyz:
+                raise HTTPException(status_code=422, detail="保存结构缺少可用 XYZ 几何")
+            if not _same_xyz_geometry(submitted_xyz, source_xyz):
+                raise HTTPException(
+                    status_code=422,
+                    detail="提交几何与所选保存结构不一致；请重新选择来源结构后提交",
+                )
+
     from acp.scheduler.structure_source_store import (
         CandidateUseConflictError,
         StructureSourceStore,
@@ -1528,49 +1719,78 @@ def _snapshot_direct_source_input(inp: dict[str, Any], request: Request) -> list
     manager = _manager(request)
     store = StructureSourceStore(manager.store.db_path)
     projection = store.get_by_legacy_source_id(source_id)
-    if projection is None:
+    if projection is None and not include_unindexed:
         return []
     allow_disabled = bool(ref.get("allow_disabled_use"))
     exception_reason = str(ref.get("disabled_use_reason") or "")
-    try:
-        projection = store.validate_candidate_use(
-            projection["source_uid"],
-            allow_disabled=allow_disabled,
-            justification=exception_reason,
-        )
-    except CandidateUseConflictError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "candidate_not_active",
-                "source_uid": projection["source_uid"],
-                "current": exc.projection,
-            },
-        ) from exc
-    return [
-        {
-            "source_id": source_id,
-            "source_uid": projection["source_uid"],
-            "candidate_record_id": projection["candidate_record_id"],
-            "version_id": projection["version_id"],
-            "geometry_hash": projection["geometry_hash"],
-            "source_revision": projection["source_revision"],
-            "usage_status": projection["usage_status"],
-            "metadata_revision": projection.get("metadata_revision", 0),
-            "disabled_exception": bool(
-                projection.get("usage_status") == "disabled" and allow_disabled
-            ),
-            "exception_reason": exception_reason,
-            "input_snapshot": {
-                "source_type": inp.get("source_type"),
-                "source": inp.get("source"),
-                "charge": inp.get("charge"),
-                "multiplicity": inp.get("multiplicity"),
-                "source_ref": ref,
-            },
-            "captured_at": _utc_now_iso(),
-        }
-    ]
+    if projection is not None:
+        declared_uid = str(ref.get("source_uid") or "").strip()
+        if declared_uid and declared_uid != str(projection.get("source_uid") or ""):
+            raise HTTPException(
+                status_code=409,
+                detail="结构候选来源已变化，请重新选择保存结构后重试。",
+            )
+        for key in ("version_id", "geometry_hash"):
+            declared_value = str(ref.get(key) or "").strip()
+            current_value = str(projection.get(key) or "").strip()
+            if declared_value and declared_value != current_value:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "structure_source_changed",
+                        "message": "所选保存结构版本已变化，请重新选择后重试。",
+                        "source_id": source_id,
+                        "field": key,
+                    },
+                )
+        try:
+            projection = store.validate_candidate_use(
+                projection["source_uid"],
+                allow_disabled=allow_disabled,
+                justification=exception_reason,
+            )
+        except CandidateUseConflictError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "candidate_not_active",
+                    "source_uid": projection["source_uid"],
+                    "current": exc.projection,
+                },
+            ) from exc
+    source_uid = str((projection or {}).get("source_uid") or ref.get("source_uid") or "")
+    input_xyz = str(inp.get("source") or inp.get("xyz_text") or "")
+    snapshot = {
+        "source_id": source_id,
+        "source_uid": source_uid,
+        "job_id": job_id,
+        "relative_path": rel_path,
+        "checksum": source_checksum or current_checksum or None,
+        "input_xyz_hash": (
+            hashlib.sha256(input_xyz.encode("utf-8")).hexdigest() if input_xyz else None
+        ),
+        "candidate_record_id": (projection or {}).get("candidate_record_id", ""),
+        "version_id": (projection or {}).get("version_id", ""),
+        "geometry_hash": (projection or {}).get("geometry_hash", ""),
+        "source_revision": (projection or {}).get("source_revision", ""),
+        "usage_status": (projection or {}).get("usage_status", "active"),
+        "metadata_revision": (projection or {}).get("metadata_revision", 0),
+        "disabled_exception": bool(
+            projection
+            and projection.get("usage_status") == "disabled"
+            and allow_disabled
+        ),
+        "exception_reason": exception_reason,
+        "input_snapshot": {
+            "source_type": inp.get("source_type"),
+            "source": inp.get("source"),
+            "charge": inp.get("charge"),
+            "multiplicity": inp.get("multiplicity"),
+            "source_ref": ref,
+        },
+        "captured_at": _utc_now_iso(),
+    }
+    return [snapshot]
 
 
 def _tsmode_error_to_http(exc: Any) -> HTTPException:
@@ -2742,7 +2962,7 @@ def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
         mode=str(payload.get("mode") or ""),
         status=str(payload.get("status") or ""),
         stationary_point_claimed=bool(payload.get("stationary_point_claimed")),
-        recommendations=dict(payload.get("recommendations") or {}),
+        recommendations={},
         review=dict(payload.get("review") or {}),
     )
 
@@ -3400,7 +3620,7 @@ def get_structure_viewer_catalog(
         from acp.results.irc_remote_live import refresh_remote_irc
 
         try:
-            refresh_remote_irc(record, work_dir, manager.remote_fetcher)
+            refresh_remote_irc(record, task_root, manager.remote_fetcher)
         except (OSError, ValueError, RemoteFileError, json.JSONDecodeError):
             logger.debug("Remote IRC structure catalog refresh failed", exc_info=True)
 
@@ -4342,7 +4562,12 @@ def _detail_stages(job_id: str, record: JobRecord, request: Request) -> list[Job
             except (OSError, json.JSONDecodeError):
                 pass
     if tasks:
-        entries = _overlay_state_on_entries(tasks, state_stages)
+        if record.spec.workflow == "BatchOptimize" and state_stages:
+            by_name = {task.stage_name: task for task in tasks}
+            tasks = [by_name[name] for name in state_stages if name in by_name]
+        entries = _overlay_state_on_entries(
+            tasks, state_stages, prefer_state=record.spec.workflow == "BatchOptimize"
+        )
         if entries:
             _apply_terminal_projection(entries, record.status)
             return entries
@@ -4378,6 +4603,8 @@ def _apply_terminal_projection(entries: list[JobStageEntry], record_status: JobS
 def _overlay_state_on_entries(
     tasks: list[StageTask],
     state_stages: dict[str, dict[str, Any]],
+    *,
+    prefer_state: bool = False,
 ) -> list[JobStageEntry]:
     """Build stage entries from stage_tasks rows, overlaying state.json data."""
     entries: list[JobStageEntry] = []
@@ -4387,11 +4614,14 @@ def _overlay_state_on_entries(
         progress: float | None = None
         detail: str | None = task.status_detail
         state_info = state_stages.get(name)
+        started_at = task.started_at
+        completed_at = task.completed_at
+        error = task.stderr_summary
         if isinstance(state_info, dict):
             state_status = str(state_info.get("status") or "")
             state_order = _STAGE_ADVANCE_ORDER.get(state_status, 0)
             db_order = _STAGE_ADVANCE_ORDER.get(status, 0)
-            if state_order > db_order:
+            if state_order > db_order or (prefer_state and state_status in _STAGE_ADVANCE_ORDER):
                 status = state_status
             state_progress = state_info.get("progress")
             if isinstance(state_progress, (int, float)):
@@ -4399,13 +4629,16 @@ def _overlay_state_on_entries(
             state_detail = state_info.get("detail")
             if isinstance(state_detail, str) and state_detail:
                 detail = state_detail
+            started_at = state_info.get("started_at") if prefer_state else state_info.get("started_at") or started_at
+            completed_at = state_info.get("completed_at") if prefer_state else state_info.get("completed_at") or completed_at
+            error = state_info.get("error") if prefer_state else state_info.get("error") or error
         entries.append(
             JobStageEntry(
                 stage_name=name,
                 status=status,
-                started_at=task.started_at,
-                completed_at=task.completed_at,
-                error=task.stderr_summary,
+                started_at=started_at,
+                completed_at=completed_at,
+                error=error,
                 retry_count=task.retry_count,
                 status_detail=detail,
                 label=stage_label(name),
@@ -4596,7 +4829,37 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
         recovery=_compute_recovery(record, disk_state),
         metrics=_read_job_metrics(record),
         effective_config=_read_effective_config(record),
+        structure_summary=_structure_result_summary(request, record),
     )
+
+
+def _structure_result_summary(request: Request, record: JobRecord) -> dict[str, Any]:
+    """Keep execution, structure creation and chemical validation independent."""
+    from acp.scheduler.job_edit import resolve_previous_outputs
+    root = _job_read_root(request, record)
+    outputs = resolve_previous_outputs(root, job_id=record.id, project_id=record.project_id)
+    if _is_remote_job(record) and not (root / "RESULT" / "result_manifest.json").is_file():
+        return {"availability":"pending_sync", "message":"结果目录仍待同步", "structures":[]}
+    if _is_remote_job(record):
+        from acp.results.manifest import load_result_manifest
+        from acp.results.structure_policy import reusable_product
+        manifest = load_result_manifest(root)
+        expected = [p for p in manifest.products if reusable_product(p.to_dict())] if manifest else []
+        if len(outputs) < len(expected):
+            return {"availability":"pending_fetch", "message":"部分结果几何仍待下载；暂不能确定结构总数", "structures":[
+                {k:v for k,v in row.items() if k != "xyz_text"} for row in outputs]}
+    structures = [{k:v for k,v in row.items() if k != "xyz_text"} for row in outputs]
+    count = len(structures)
+    if count:
+        message = f"保留 {count} 个可复用结构；计算执行状态与结构验证结果分别显示"
+    elif record.spec.workflow in {"frequency", "singlepoint", "nmr"}:
+        message = "此任务计算属性；所用结构见原始输入来源"
+    elif record.spec.workflow in {"PESsearch", "scan"}:
+        message = "当前采用人工选点；可打开完整曲线和轨迹保存帧"
+    else:
+        message = "没有具备成功证据的自动结构；可从可读轨迹手动保存初猜"
+    return {"availability":"available", "count":count, "message":message,
+            "structures":structures, "input_sources":record.spec.input}
 
 
 def _read_job_metrics(record: JobRecord) -> JobMetrics | None:
@@ -4784,6 +5047,24 @@ def _build_edited_spec(
     method = _expand_method_electronic_state(dict(req.method))
     inp = dict(req.input)
     batch_snapshots: list[dict[str, Any]] = []
+    _validate_reaction_path_frame_input(inp, record, request, manager)
+    structure_changed = input_structure_changed(
+        record.spec.input if isinstance(record.spec.input, dict) else {},
+        inp,
+    )
+    if structure_changed and req.mode == "in_place":
+        raise EditValidationError(
+            "已更换计算输入结构；为保留原任务及结果，请选择“创建新任务”后再提交。"
+        )
+    if structure_changed or req.mode == "new_job":
+        batch_snapshots.extend(
+            _snapshot_direct_source_input(
+                inp,
+                request,
+                verify_geometry=True,
+                include_unindexed=True,
+            )
+        )
     if workflow == "irc":
         try:
             inp = _resolve_irc_source_reference(inp, manager)
@@ -4799,7 +5080,8 @@ def _build_edited_spec(
     elif workflow == "PESsearch":
         inp = _resolve_stage_artifact_ref(workflow, inp, manager)
     elif workflow == "BatchOptimize":
-        inp, batch_snapshots = _resolve_batch_structures_input(inp, request)
+        inp, resolved_snapshots = _resolve_batch_structures_input(inp, request)
+        batch_snapshots.extend(resolved_snapshots)
 
     original_execution_mode = (
         getattr(record.spec.execution_mode, "value", None) or record.spec.execution_mode
@@ -4841,6 +5123,88 @@ def _build_edited_spec(
         except ValueError as exc:
             raise EditValidationError(str(exc)) from exc
     return spec, batch_snapshots
+
+
+def _validate_reaction_path_frame_input(
+    inp: dict[str, Any], record: JobRecord, request: Request, manager: JobManager
+) -> None:
+    """Verify an edited XYZ still matches its selected upstream S2 frame."""
+    origin = inp.get("edit_input_origin")
+    if not isinstance(origin, dict) or origin.get("mode") != "reaction_path_frame":
+        return
+    parent_job_id = str(origin.get("parent_job_id") or "").strip()
+    try:
+        frame_index = int(origin.get("frame_index"))
+    except (TypeError, ValueError) as exc:
+        raise EditValidationError("反应路径帧缺少有效的帧编号，请重新选择结构。") from exc
+
+    allowed_sources = {
+        str(item.get("job_id") or "")
+        for item in _reaction_path_sources_for_edit(record, manager)
+        if isinstance(item, dict)
+    }
+    if not parent_job_id or parent_job_id not in allowed_sources:
+        raise EditValidationError("所选反应路径不属于当前任务的上游 PESsearch 来源。")
+
+    try:
+        frame = get_s2_frame(parent_job_id, frame_index, request)
+    except HTTPException as exc:
+        raise EditValidationError(
+            f"所选反应路径帧已不可读取，请重新选择结构：{exc.detail}"
+        ) from exc
+
+    items = inp.get("items")
+    if isinstance(items, list):
+        if len(items) != 1 or not isinstance(items[0], dict):
+            raise EditValidationError("从路径帧重算目前只支持提交一个起始结构。")
+        input_xyz = str(items[0].get("xyz") or items[0].get("xyz_text") or "")
+    else:
+        input_xyz = str(inp.get("source") or inp.get("xyz_text") or inp.get("xyz") or "")
+    if not input_xyz or not frame.xyz or not _same_xyz_geometry(input_xyz, frame.xyz):
+        raise EditValidationError(
+            "所选结构与上游路径帧当前几何不一致；请重新选择该路径帧后提交。"
+        )
+
+    original_input = record.spec.input if isinstance(record.spec.input, dict) else {}
+    original_xyzs: list[str] = []
+    for collection_key in ("items", "candidates"):
+        rows = original_input.get(collection_key)
+        if isinstance(rows, list):
+            original_xyzs.extend(
+                str(row.get("xyz") or row.get("xyz_text") or row.get("source") or "")
+                for row in rows
+                if isinstance(row, dict)
+            )
+    scan_request = original_input.get("scan_request")
+    source_input = (
+        scan_request.get("source") if isinstance(scan_request, dict) else original_input
+    )
+    if isinstance(source_input, dict):
+        original_xyzs.append(
+            str(
+                source_input.get("xyz_text")
+                or source_input.get("xyz")
+                or source_input.get("source")
+                or ""
+            )
+        )
+    if record.work_dir:
+        try:
+            original_xyzs.append((Path(record.work_dir) / "input.xyz").read_text(encoding="utf-8"))
+        except OSError:
+            pass
+    reference_xyzs = [value for value in original_xyzs if value.strip()]
+    if not reference_xyzs or not any(
+        _same_xyz_atom_order(value, frame.xyz) for value in reference_xyzs
+    ):
+        raise EditValidationError(
+            "无法确认路径帧与原任务输入的原子数量及顺序一致；请从匹配的上游结构重新发起。"
+        )
+
+    _validate_structure_electronic_state(inp)
+    origin["input_xyz_sha256"] = hashlib.sha256(input_xyz.encode("utf-8")).hexdigest()
+    origin["verified_parent_job_id"] = parent_job_id
+    origin["verified_frame_index"] = frame_index
 
 
 def _edited_spec_diff(record: JobRecord, spec: JobSpec) -> list[dict[str, Any]]:
@@ -4906,7 +5270,99 @@ def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     draft = build_edit_draft(record, run_root=manager.run_root)
+    if _is_remote_job(record):
+        from acp.scheduler.job_edit import resolve_previous_outputs
+        root = _job_read_root(request, record)
+        from acp.results.manifest import load_result_manifest
+        manifest = load_result_manifest(root)
+        cache = _remote_structure_cache(request)
+        availability = "available"
+        try:
+            cache.fetch_reusable_geometries(record, root)
+        except (OSError, RuntimeError, ValueError):
+            availability = "pending_fetch"
+        outputs = resolve_previous_outputs(root, job_id=record.id, project_id=record.project_id)
+        draft["input_refs"]["previous_outputs"] = outputs
+        draft["input_refs"]["last_structure"] = outputs[0] if outputs else None
+        draft["input_refs"]["outputs_availability"] = availability if manifest is not None or outputs else "pending_sync"
+    draft["input_refs"]["reaction_path_sources"] = _reaction_path_sources_for_edit(
+        record, manager
+    )
     return V1EditDraftResponse(**draft)
+
+
+def _reaction_path_sources_for_edit(
+    record: JobRecord, manager: JobManager
+) -> list[dict[str, Any]]:
+    """Return PESsearch jobs that are direct or recorded structure ancestors."""
+    input_spec = record.spec.input if isinstance(record.spec.input, dict) else {}
+    source_job_ids: list[str] = []
+
+    def add_source(value: Any) -> None:
+        if isinstance(value, dict):
+            job_id = str(value.get("job_id") or value.get("source_job_id") or "").strip()
+            source_id = str(value.get("source_id") or "").strip()
+            if not job_id and source_id.startswith("job_"):
+                job_id = source_id[4:].partition(":")[0]
+            if job_id and job_id not in source_job_ids:
+                source_job_ids.append(job_id)
+            for child in value.values():
+                if isinstance(child, (dict, list, tuple)):
+                    add_source(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                add_source(child)
+
+    if str(record.spec.workflow or "") == "PESsearch":
+        source_job_ids.append(record.id)
+    add_source(input_spec)
+
+    if record.work_dir:
+        events_path = runtime_file(record.work_dir, "events.jsonl")
+        if events_path.is_file():
+            try:
+                with events_path.open("r", encoding="utf-8") as handle:
+                    for line in handle:
+                        try:
+                            event = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if (
+                            isinstance(event, dict)
+                            and event.get("type") == "structure_source_snapshot"
+                        ):
+                            add_source(event.get("snapshots") or [])
+                            break
+            except (OSError, UnicodeDecodeError):
+                logger.debug(
+                    "Could not read edit source lineage for %s", record.id, exc_info=True
+                )
+
+    sources: list[dict[str, Any]] = []
+    for source_job_id in source_job_ids:
+        source_record = manager.get(source_job_id)
+        if source_record is None or str(source_record.spec.workflow or "") != "PESsearch":
+            continue
+        source_input = (
+            source_record.spec.input
+            if isinstance(source_record.spec.input, dict)
+            else {}
+        )
+        scan_source = source_input.get("scan_request")
+        scan_source = scan_source.get("source") if isinstance(scan_source, dict) else None
+        electronic_state = scan_source if isinstance(scan_source, dict) else source_input
+        sources.append(
+            {
+                "job_id": source_record.id,
+                "name": source_record.spec.task_name or source_record.spec.name or source_record.id,
+                "workflow": source_record.spec.workflow,
+                "charge": electronic_state.get("charge", source_input.get("charge", 0)),
+                "multiplicity": electronic_state.get(
+                    "multiplicity", source_input.get("multiplicity", 1)
+                ),
+            }
+        )
+    return sources
 
 
 @router.post("/jobs/{job_id}/edit-recalculate/preview", response_model=V1EditPreviewResponse)
@@ -5029,7 +5485,7 @@ def submit_job_edit_recalculate(
             },
         )
     try:
-        spec, _batch_snapshots = _build_edited_spec(record, body, request, manager)
+        spec, source_snapshots = _build_edited_spec(record, body, request, manager)
     except EditValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     _validate_edited_execution(spec, manager)
@@ -5067,6 +5523,35 @@ def submit_job_edit_recalculate(
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     _persist_method_warning_event(manager, record, result, spec)
+    if result.get("operation") == "new_job" and not result.get("replayed"):
+        created = manager.get(str(result.get("job_id") or ""))
+        if created is not None and created.work_dir and source_snapshots:
+            try:
+                JobEventLog(runtime_file(created.work_dir, "events.jsonl")).append(
+                    "structure_source_snapshot",
+                    job_id=created.id,
+                    parent_job_id=record.id,
+                    snapshots=source_snapshots,
+                )
+                from acp.scheduler.structure_source_store import StructureSourceStore
+
+                usage_store = StructureSourceStore(manager.store.db_path)
+                for snapshot in source_snapshots:
+                    source_uid = str(snapshot.get("source_uid") or "")
+                    if source_uid and snapshot.get("candidate_record_id"):
+                        usage_store.record_usage(
+                            source_uid,
+                            created.id,
+                            snapshot,
+                            disabled_exception=bool(snapshot.get("disabled_exception")),
+                            exception_reason=str(snapshot.get("exception_reason") or ""),
+                        )
+            except (OSError, ValueError, sqlite3.Error):
+                logger.warning(
+                    "Could not persist recalculation structure provenance for job %s",
+                    created.id,
+                    exc_info=True,
+                )
     return V1EditRecalculateResponse(
         **{key: value for key, value in result.items() if key != "diff"},
         diff_summary=[V1EditDiffEntry(**entry) for entry in diff],
@@ -5664,9 +6149,24 @@ def get_remote_log_tail(
 @router.get("/jobs/{job_id}/tasks", response_model=StageTaskListResponse)
 def list_stage_tasks(job_id: str, request: Request) -> StageTaskListResponse:
     manager = _manager(request)
-    if manager.get(job_id) is None:
+    record = manager.get(job_id)
+    if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     tasks = _stage_task_store(request).list_by_job(job_id)
+    if record.spec.workflow == "BatchOptimize":
+        by_name = {task.stage_name: task for task in tasks}
+        models = []
+        for entry in _detail_stages(job_id, record, request):
+            task = by_name.get(entry.stage_name)
+            if task is not None:
+                models.append(_stage_task_to_model(task).model_copy(update={
+                    "state": entry.status,
+                    "started_at": entry.started_at,
+                    "completed_at": entry.completed_at,
+                    "stderr_summary": entry.error,
+                }))
+        if models:
+            return StageTaskListResponse(tasks=models)
     return StageTaskListResponse(tasks=[_stage_task_to_model(task) for task in tasks])
 
 

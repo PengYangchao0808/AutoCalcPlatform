@@ -20,10 +20,12 @@ logger = logging.getLogger(__name__)
 
 def mem_to_mb(mem_str: str) -> int:
     """
-    Convert memory string to megabytes.
+    Convert a memory specification to megabytes.
 
     Args:
-        mem_str: Memory string like "16GB", "4096MB", "32G"
+        mem_str: Memory string like "16GB", "4096MB", or "1TB". Bare
+            numeric values are interpreted as GB to match the Workbench's
+            default unit.
 
     Returns:
         Memory in MB
@@ -32,6 +34,10 @@ def mem_to_mb(mem_str: str) -> int:
         return 4000
 
     mem_str = str(mem_str).strip().upper()
+
+    tb_match = re.match(r'^(\d+(?:\.\d+)?)\s*TB?$', mem_str)
+    if tb_match:
+        return int(float(tb_match.group(1)) * 1024 * 1024)
 
     gb_match = re.match(r'^(\d+(?:\.\d+)?)\s*GB?$', mem_str)
     if gb_match:
@@ -43,7 +49,7 @@ def mem_to_mb(mem_str: str) -> int:
 
     num_match = re.match(r'^(\d+(?:\.\d+)?)$', mem_str)
     if num_match:
-        return int(float(num_match.group(1)))
+        return int(float(num_match.group(1)) * 1024)
 
     raise ValueError(f"Cannot parse memory string: {mem_str}")
 

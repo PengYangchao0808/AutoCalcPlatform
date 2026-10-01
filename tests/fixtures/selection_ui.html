@@ -1,0 +1,128 @@
+<!doctype html><meta charset="utf-8"><title>ACP 编辑延迟响应验收</title>
+<h1>ACP 编辑延迟响应验收</h1>
+<button id="a">编辑 A</button><button id="b">编辑 B</button><button id="release">返回延迟详情</button>
+<div id="details"></div><p id="status">准备就绪</p>
+<script src="../../frontend/js/candidate_details.js"></script>
+<script>
+const queue=[]; const entries={A:{source_uid:"A",version_id:"v1",resolved_name:"结构 A",metadata_revision:0,tags:[]},B:{source_uid:"B",version_id:"v1",resolved_name:"结构 B",metadata_revision:0,tags:[]}};
+const panel=ACPCandidateDetails.mount(document.getElementById("details"),{candidateApi:(path,opts)=>new Promise(resolve=>queue.push(()=>resolve({candidate:{},assessments:[],metadata_revision:0}))) });
+document.getElementById("a").onclick=()=>panel.rename(entries.A);
+document.getElementById("b").onclick=()=>panel.rename(entries.B);
+document.getElementById("release").onclick=()=>{queue.splice(0).forEach(f=>f());document.getElementById("status").textContent="延迟详情已返回";};
+</script><hr><h2>实际输入对象绑定验收</h2><label><input id="select-a" type="checkbox">勾选 A</label><label><input id="select-b" type="checkbox">勾选 B</label><label for="wif-name">本次输入名称</label><input id="wif-name"><p id="input-status"></p><button id="shift-index">模拟前项移除</button>
+<script src="../../frontend/js/task_input_workspace.js"></script><script>
+var wizardStructures=[], wizardSelectedStructureIndex=0, structureSourceLoadToken=0;
+function t(k){return k;} function renderLoadedStructuresList(){document.getElementById("input-status").textContent=wizardStructures.map(e=>e.source_uid+":"+e.name).join(" / ");}
+function _refreshWizardInputForm(structure, previewOnly) {
+  if (structure && !structure.input_id) structure.input_id = "inp_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
+
+  ["wif-name", "wif-role", "wif-charge", "wif-mult"].forEach(function(id) {
+    var input = document.getElementById(id);
+    if (input) input.disabled = !structure || !!previewOnly;
+  });
+  var infoPanel = document.getElementById("tiw-info-panel");
+  if (infoPanel) infoPanel.hidden = !structure;
+  var sourceAction = document.getElementById("wif-open-source");
+  if (sourceAction) {
+    var sourceJobId = structure && structure.source_ref && structure.source_ref.job_id;
+    sourceAction.hidden = !sourceJobId;
+    sourceAction.onclick = sourceJobId ? function() {
+      closeJobModalGuarded();
+      selectJob(sourceJobId);
+    } : null;
+  }
+  var copyAction = document.getElementById("wif-copy-candidate");
+  if (copyAction) copyAction.onclick = async function() {
+    var value = structure && structure.candidate_id;
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); _showSimpleToast(t("wizard.id_copied"), false); }
+    catch (error) { _showSimpleToast(error.message || "Copy failed", true); }
+  };
+
+  var nameInput = document.getElementById("wif-name");
+  var roleSelect = document.getElementById("wif-role");
+  var chargeInput = document.getElementById("wif-charge");
+  var multInput = document.getElementById("wif-mult");
+  var sourceSpan = document.getElementById("wif-source");
+  var candIdSpan = document.getElementById("wif-candidate-id");
+  var sourceRow = document.getElementById("wif-source-row");
+  var candidateRow = document.getElementById("wif-candidate-row");
+  if (!nameInput) return;
+  if (!structure) {
+    nameInput.value = ""; if (roleSelect) roleSelect.value = "";
+    if (chargeInput) chargeInput.value = "0"; if (multInput) multInput.value = "1";
+    if (sourceSpan) { sourceSpan.textContent = ""; sourceSpan.removeAttribute("title"); }
+    if (candIdSpan) { candIdSpan.textContent = ""; candIdSpan.removeAttribute("title"); }
+    if (sourceRow) sourceRow.hidden = true; if (candidateRow) candidateRow.hidden = true;
+    return;
+  }
+  nameInput.dataset.inputId = structure.input_id;
+  var desiredName = structure.name || structure.molecule_name || "";
+  if (nameInput.value !== desiredName) nameInput.value = desiredName;
+  if (roleSelect) roleSelect.value = structure.tag || structure.role || "";
+  if (chargeInput) chargeInput.value = structure.charge !== undefined ? structure.charge : 0;
+  if (multInput) multInput.value = structure.multiplicity || 1;
+  var src = structure.source_ref || {};
+  var sourceText = src.job_id ? ((structure.job_resolved_name || structure.source_job_name || src.job_id) + (src.path ? " · " + src.path : "")) : (t("wizard.source_manual") || "手动输入");
+  var candidateText = structure.candidate_id || "";
+  if (sourceSpan) { sourceSpan.textContent = sourceText; sourceSpan.title = sourceText; }
+  if (candIdSpan) { candIdSpan.textContent = candidateText; candIdSpan.title = candidateText; }
+  if (sourceRow) sourceRow.hidden = !sourceText;
+  if (candidateRow) candidateRow.hidden = !candidateText;
+}
+
+// Wire wizard-input-form fields
+(function() {
+  var nameInput = document.getElementById("wif-name");
+  var roleSelect = document.getElementById("wif-role");
+  var chargeInput = document.getElementById("wif-charge");
+  var multInput = document.getElementById("wif-mult");
+  function _current() {
+    var id = nameInput && nameInput.dataset.inputId;
+    return wizardStructures.find(function(entry) { return entry.input_id === id; }) || null;
+  }
+  function _apply(fn) {
+    var s = _current();
+    if (!s) return;
+    fn(s);
+    s.input_modified = true;
+    renderLoadedStructuresList();
+    if (window.ACPJobEditor && ACPJobEditor.isActive()) {
+      ACPJobEditor.onTaskStructureChanged(wizardSelectedStructureIndex, s);
+    }
+  }
+  if (nameInput && !nameInput._acpWired) {
+    nameInput._acpWired = true;
+    nameInput.addEventListener("input", function() { _apply(function(s) { s.name = nameInput.value.trim() || s.name || "mol_" + (wizardSelectedStructureIndex + 1); }); });
+  }
+  if (roleSelect && !roleSelect._acpWired) {
+    roleSelect._acpWired = true;
+    roleSelect.addEventListener("change", function() { _apply(function(s) { s.tag = roleSelect.value; }); });
+  }
+  if (chargeInput && !chargeInput._acpWired) {
+    chargeInput._acpWired = true;
+    chargeInput.addEventListener("change", function() { _apply(function(s) { s.charge = Number(chargeInput.value) || 0; }); });
+  }
+  if (multInput && !multInput._acpWired) {
+    multInput._acpWired = true;
+    multInput.addEventListener("change", function() { _apply(function(s) { s.multiplicity = Math.max(1, Number(multInput.value) || 1); }); });
+  }
+})();
+
+
+function reconcileInputs(){const selection=["A","B"].filter(uid=>document.getElementById("select-"+uid.toLowerCase()).checked).map(uid=>entries[uid]);
+          var TIW = window.ACPTaskInputWorkspace;
+          structureSourceLoadToken++;
+          var focusedInput = wizardStructures[wizardSelectedStructureIndex];
+          var priorUids = TIW.derivedSelectedUids(wizardStructures);
+          wizardStructures = TIW.reconcileSelection(wizardStructures, selection);
+          var added = wizardStructures.filter(function(e) { return e.source_uid && priorUids.indexOf(e.source_uid) < 0; });
+          var focus = added.length === 1 ? added[0] : focusedInput;
+          var focusIndex = wizardStructures.findIndex(function(e) { return focus && e.input_id === focus.input_id; });
+          wizardSelectedStructureIndex = focusIndex >= 0 ? focusIndex : 0;
+          renderLoadedStructuresList();
+          _refreshWizardInputForm(wizardStructures[wizardSelectedStructureIndex] || null);
+}
+document.getElementById("select-a").onchange=reconcileInputs;document.getElementById("select-b").onchange=reconcileInputs;
+document.getElementById("shift-index").onclick=()=>{wizardStructures=wizardStructures.filter(e=>e.source_uid!=="A");wizardSelectedStructureIndex=99;renderLoadedStructuresList();};
+</script>

@@ -1,0 +1,4 @@
+Environment: ACP runtime, WSL /root/miniforge3/bin/python3.12
+Command: PYTHONPATH=src python -m pytest tests/test_acp_progress_reporter.py tests/test_batch_progress_reporter.py tests/test_optimization_trajectory.py tests/test_acp_job_status_view.py tests/test_acp_stage_tasks.py -q --basetemp /tmp/acp_progress_audit_20261001_c34172
+Observed result: 129 passed in 11.18s
+The tests mock QC execution and do not restart the service or modify production tasks.

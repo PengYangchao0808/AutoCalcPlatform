@@ -325,8 +325,8 @@ def test_e2e_remote_parity() -> None:
 
     # BatchOptimize stage parity
     profiles = {
-        "opt_only": ["prepare", "optimize", "finalize"],
-        "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
+        "opt_only": ["optimize"],
+        "opt_freq": ["optimize", "frequency"],
     }
     for profile, expected_stages in profiles.items():
         assert _stages("BatchOptimize", {"profile": profile}) == expected_stages

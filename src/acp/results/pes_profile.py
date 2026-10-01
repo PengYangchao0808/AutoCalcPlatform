@@ -79,6 +79,12 @@ def normalize_pes_profile(
             "recommendations": recommendations,
             "review": payload.get("review") if isinstance(payload.get("review"), dict) else {},
         }
+    normalized["selection_mode"] = "manual_only"
+    normalized["recommendations"] = {"ts": [], "intermediates": []}
+    normalized["ts_candidates"] = []
+    normalized["int_candidates"] = []
+    normalized["selected_ts_id"] = None
+    normalized["selected_int_id"] = None
     if source_path:
         normalized["_source_path"] = source_path
     return normalized

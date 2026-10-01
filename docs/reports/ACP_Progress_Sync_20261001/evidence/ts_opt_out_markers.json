@@ -1,0 +1,132 @@
+{
+  "bytes": 3827633,
+  "sha256": "bbc0568b1c90b6648b266196d3a1ffd22c64f1e0a9809d4e491fa1333e2d4721",
+  "line_count": 72954,
+  "matches": [
+    {
+      "line": 54,
+      "text": "                         Program Version 6.1.1  -  RELEASE   -"
+    },
+    {
+      "line": 203,
+      "text": "  ===> : All Displacements for the Numerical Hessian or Gradient calculation"
+    },
+    {
+      "line": 272,
+      "text": "Max. Displacement        TolMAXD  ....  1.0000e-03 bohr"
+    },
+    {
+      "line": 273,
+      "text": "RMS Displacement         TolRMSD  ....  6.0000e-04 bohr"
+    },
+    {
+      "line": 2137,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 2235,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 9781,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 9879,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 17069,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 17167,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 24356,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 24454,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 32005,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 32103,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 39296,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 39394,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 46936,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 47034,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 54582,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 54680,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 61520,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 61618,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 68259,
+      "text": "VIBRATIONAL FREQUENCIES"
+    },
+    {
+      "line": 68357,
+      "text": "These modes are the Cartesian displacements weighted by the diagonal matrix"
+    },
+    {
+      "line": 71176,
+      "text": "                    ***        THE OPTIMIZATION HAS CONVERGED     ***"
+    },
+    {
+      "line": 72774,
+      "text": "                           ORCA NUMERICAL FREQUENCIES"
+    },
+    {
+      "line": 72781,
+      "text": "Number of displacements        ... 174 - 6"
+    }
+  ],
+  "last_lines": [
+    "\t<< Calculating gradient on displaced geometry 146 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 147 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 148 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 149 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 150 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 151 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 152 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 153 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 154 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 155 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 156 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 157 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 158 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 159 (of 168) >>",
+    "\t<< Calculating gradient on displaced geometry 160 (of 168) >>"
+  ]
+}

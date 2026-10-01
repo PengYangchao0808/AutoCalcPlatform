@@ -240,6 +240,12 @@ class TsmodeEngine:
         for symbol, row in zip(bundle.elements, optimized_coords):
             geometry_lines.append(f"{symbol:2s} {row[0]:15.10f} {row[1]:15.10f} {row[2]:15.10f}")
 
+        pending_report = self._report(request, bundle, resolution, attempts,
+            execution_status="running", optimization_status="completed", frequency_status="pending",
+            frequencies=None, warnings=warnings)
+        self._publish(root, result_dir, pending_report,
+            optimized_xyz="\n".join(geometry_lines) + "\n", normal_modes=None)
+
         # 4. frequency_final — same level, on the final structure.
         frequency_status = "pending"
         frequencies: list[float] = []
@@ -659,7 +665,10 @@ class TsmodeEngine:
                 label="TS Mode optimized structure (saddle-point candidate)",
                 path="tsmode/optimized.xyz",
                 kind=ProductKind.STRUCTURE,
-                metadata={"role": "transition_state", "candidate": "tsmode"},
+                metadata={"role": "transition_state", "candidate": "tsmode",
+                          "optimization_status": "converged", "source_kind": "optimization",
+                          "frequency_status": report.frequency_status,
+                          "validation": report.validation, "policy_version": 1},
             )
         if normal_modes is not None:
             manifest.add_product(

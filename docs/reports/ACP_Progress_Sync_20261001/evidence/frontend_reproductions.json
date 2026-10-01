@@ -1,0 +1,14 @@
+{
+  "queue_progress_state": "indeterminate",
+  "queue_helper_reports_indeterminate": false,
+  "queue_display_percent": 0,
+  "right_panel_stage_position_percent": 25,
+  "timeline_labels": [
+    "准备",
+    "结构优化",
+    "频率计算",
+    "单点能"
+  ],
+  "stage_index": 1,
+  "current_stage": "optimize"
+}

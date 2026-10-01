@@ -233,6 +233,7 @@ _DISCOVERY_COLUMNS: tuple[str, ...] = (
     "availability",
     "produced_at",
     "content_checksum",
+    "policy_json",
     "discovered_at",
     "discovery_version",
 )
@@ -378,6 +379,9 @@ class StructureSourceStore:
         with self._lock, self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.executescript(_ALL_SCHEMA)
+            columns = {r["name"] for r in conn.execute("PRAGMA table_info(structure_source_index)")}
+            if "policy_json" not in columns:
+                conn.execute("ALTER TABLE structure_source_index ADD COLUMN policy_json TEXT NOT NULL DEFAULT '{}'")
             for idx_sql in _INDEXES:
                 conn.execute(idx_sql)
             # The old UI exposed disabled and archived as separate states.  They
@@ -400,6 +404,7 @@ class StructureSourceStore:
         entries: list[dict[str, Any]],
         *,
         discovery_version: int = 1,
+        replace_job_id: str | None = None,
     ) -> int:
         """Insert/update discovery fields only.
 
@@ -407,12 +412,15 @@ class StructureSourceStore:
         Entries keyed by ``source_uid_for(job_id, path)``.
         Returns count of affected rows.
         """
-        if not entries:
+        if not entries and replace_job_id is None:
             return 0
         now = _utc_now_iso()
         count = 0
         with self._lock, self._connect() as conn:
             try:
+                if replace_job_id is not None:
+                    # Invalidate only discovery facts, retaining all user records.
+                    conn.execute("UPDATE structure_source_index SET availability='missing' WHERE job_id=?", (replace_job_id,))
                 for entry in entries:
                     job_id = str(entry.get("job_id") or "")
                     rel_path = str(entry.get("path") or entry.get("relative_path") or "")
@@ -443,6 +451,7 @@ class StructureSourceStore:
                         "availability": str(entry.get("availability") or "available"),
                         "produced_at": entry.get("produced_at"),
                         "content_checksum": entry.get("content_checksum"),
+                        "policy_json": json.dumps(entry.get("structure_facts") or {}, ensure_ascii=False),
                         "discovered_at": now,
                         "discovery_version": discovery_version,
                     }
@@ -566,6 +575,7 @@ class StructureSourceStore:
         results: list[dict[str, Any]] = []
         for row in rows:
             d = dict(row)
+            d["structure_facts"] = json.loads(d.pop("policy_json", "{}") or "{}")
             uid = d["source_uid"]
             d["tags"] = tags_map.get(uid, [])
             d["source_id"] = d.pop("legacy_source_id", "")
@@ -1698,6 +1708,7 @@ class StructureSourceStore:
         group_by: str = "none",
         limit: int = 50,
         cursor: str | None = None,
+        context_workflow: str | None = None,
     ) -> dict[str, Any]:
         """Query structure sources with filtering, sorting, grouping, and pagination.
 
@@ -1722,7 +1733,7 @@ class StructureSourceStore:
                 raise ValueError("invalid cursor")
 
         # Build WHERE
-        clauses: list[str] = []
+        clauses: list[str] = [] if availability else ["i.availability != 'missing'"]
         params: list[Any] = []
 
         if not all_projects and project_id is not None:
@@ -1841,6 +1852,8 @@ class StructureSourceStore:
                 "include_inactive": include_inactive,
                 "sort": sort,
                 "group_by": group_by,
+                "context_workflow": context_workflow,
+                "sort_policy_version": 1,
             },
             sort_keys=True,
         )
@@ -1864,7 +1877,24 @@ class StructureSourceStore:
             total = total_row["total"] if total_row else 0
 
         # Sort
-        order = self._sort_clause(sort)
+        from acp.results.structure_policy import WORKFLOW_SOURCE_ROLES
+        if context_workflow and context_workflow not in WORKFLOW_SOURCE_ROLES:
+            raise ValueError("unknown source display workflow")
+        order = self._sort_clause("produced_desc" if sort == "context" else sort)
+        if sort == "context" and context_workflow:
+            roles = WORKFLOW_SOURCE_ROLES[context_workflow]
+            role_order = "CASE i.role " + " ".join(
+                f"WHEN '{role}' THEN {n}" for n, role in enumerate(roles)) + " ELSE 3 END"
+            frequency_order = ("CASE WHEN json_extract(i.policy_json, '$.optimization_status')='converged' "
+                               "AND coalesce(json_extract(i.policy_json, '$.frequency_status'),'pending') != 'completed' "
+                               "THEN 0 ELSE 1 END, ") if context_workflow == "frequency" else ""
+            output_order = ("i.produced_at DESC, i.job_id ASC, "
+                            "coalesce(CAST(json_extract(i.policy_json, '$.rank') AS INTEGER),2147483647) ASC, "
+                            "i.source_uid ASC")
+            validation_order = ("CASE WHEN json_extract(i.policy_json, '$.ts_validation')='passed' "
+                                "THEN 0 ELSE 1 END, ") if context_workflow in {"irc", "tsmode"} else ""
+            order = role_order + ", " + frequency_order + validation_order + output_order
+
 
         # Fetch page + 1 to detect next page
         page_sql = f"""
@@ -2068,7 +2098,7 @@ class StructureSourceStore:
 
         # Build base WHERE clauses (excluding the specific facet we're counting)
         def build_clauses(exclude: str = "") -> tuple[list[str], list[Any]]:
-            clauses: list[str] = []
+            clauses: list[str] = [] if availability else ["i.availability != 'missing'"]
             params: list[Any] = []
             if not all_projects and project_id is not None:
                 clauses.append("i.project_id = ?")

@@ -236,7 +236,7 @@ def build_s2_energy_graph(
         )
 
     node_by_frame = {node["frame_index"]: node for node in nodes}
-    recommendations = payload.get("recommendations") or {}
+    recommendations = {}  # PES selection is manual-only, including historical runs.
     recommendation_by_id: dict[str, dict[str, Any]] = {}
     for group_key in ("ts", "intermediates"):
         for candidate in recommendations.get(group_key) or []:

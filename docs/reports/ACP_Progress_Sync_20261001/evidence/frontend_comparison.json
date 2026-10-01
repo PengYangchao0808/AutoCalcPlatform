@@ -1,0 +1,6 @@
+{
+  "served_sha256": "de15674282719bef947387cf226a758e72e20e2f457402422a1e088c359f4b19",
+  "workspace_sha256": "c4ceb845e99f1862ccc1f58b5cf784a0e3430047904ba8c14e4c8de5991ddfc5",
+  "same_after_newline_normalization": true,
+  "served_progress_helper": "function isProgressIndeterminate(job) {\n  if (!job) return false;\n  var status = String(job.status || \"\").toLowerCase();\n  var active = status === \"running\" || status === \"starting\" || status === \"pending\";\n  return active && !isProgressKnown(job);\n}"
+}

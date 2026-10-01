@@ -568,6 +568,9 @@ class CalculationPlanExecutor:
                 handoff_coords = [[float(v) for v in row] for row in result.coords]
                 handoff_symbols = list(item.elements)
 
+            # Durable structures survive a later exception or cancellation.
+            self._write_result_manifest(result_dir, plan, step_states, "running")
+
             # ⑤ write checkpoint after each step
             self._persist_checkpoint(
                 runtime_dir,
@@ -753,17 +756,30 @@ class CalculationPlanExecutor:
             product_id = f"step_{state.index}_{state.kind.value}"
             label = f"{state.kind.value} (step {state.index})"
 
-            # Record the OPTIMIZE step's structure product for geometry binding.
-            if state.kind is StepKind.OPTIMIZE and optimize_product_id is None:
-                optimize_product_id = product_id
-                for artifact in state.result.artifacts:
-                    try:
-                        optimize_geometry_ref = str(
-                            artifact.path.relative_to(result_dir.parent)
-                        )
-                    except ValueError:
-                        optimize_geometry_ref = str(artifact.path)
-                    break
+            if state.kind is StepKind.OPTIMIZE and state.result.metadata.get("optimization_status") == "converged":
+                from acp.results.structure_policy import single_geometry
+                from acp.results.frame_candidate_store import atomic_write_text
+                source_item = plan.items[0] if plan.items else None
+                symbols = (source_item.elements if isinstance(source_item, StructureArtifact)
+                           else list((source_item or {}).get("elements") or (source_item or {}).get("symbols") or []))
+                coords = state.result.coords
+                if coords is not None and len(symbols) == len(coords):
+                    text = str(len(symbols)) + "\n" + label + "\n" + "\n".join(
+                        f"{symbol} {float(row[0]):.10f} {float(row[1]):.10f} {float(row[2]):.10f}"
+                        for symbol, row in zip(symbols, coords)) + "\n"
+                    geometry = single_geometry(text)
+                    if geometry:
+                        rel = f"structures/{product_id}.xyz"
+                        atomic_write_text(result_dir / rel, text)
+                        downstream = [s for s in step_states if s.index > state.index]
+                        freq = next((s.status for s in downstream if s.kind is StepKind.FREQUENCY), "pending")
+                        manifest.add_product(product_id, label, rel, ProductKind.STRUCTURE,
+                            metadata={**geometry, "source_kind":"optimization", "optimization_status":"converged",
+                                      "frequency_status":freq, "stage_id":product_id,
+                                      "downstream_status":[{"kind":s.kind.value,"status":s.status} for s in downstream],
+                                      "auto_reusable":True, "policy_version":1})
+                        optimize_product_id = product_id
+                        optimize_geometry_ref = "RESULT/" + rel
 
             # FREQUENCY steps: register normal_modes product with geometry binding.
             if state.kind is StepKind.FREQUENCY:
@@ -821,6 +837,8 @@ class CalculationPlanExecutor:
                         kind=ProductKind.FILE,
                     )
             else:
+                # Only converged, valid single-geometry artifacts are reusable.
+                from acp.results.structure_policy import single_geometry
                 # Non-frequency steps: register artifacts with step-mapped kind.
                 for artifact in state.result.artifacts:
                     try:
@@ -833,7 +851,10 @@ class CalculationPlanExecutor:
                         id=f"{product_id}_{artifact.type}",
                         label=f"{label} — {artifact.type}",
                         path=rel_path,
-                        kind=product_kind,
+                        kind=(ProductKind.FILE if state.kind is StepKind.OPTIMIZE else product_kind),
+                        metadata={"stage_status": state.status, "stage_id": product_id,
+                                  "optimization_status": state.result.metadata.get("optimization_status", "unknown"),
+                                  "policy_version": 1},
                     )
 
             # register energy as a file product if available

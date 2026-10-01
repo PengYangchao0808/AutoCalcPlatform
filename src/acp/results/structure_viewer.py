@@ -873,77 +873,6 @@ def _resolve_pessearch(task_root: Path, workflow: str, job_id: str, warnings: li
             if default_id is None:
                 default_id = entry_id
 
-    if recs_payload is not None:
-        groups.append(StructureViewerGroup(
-            id="pes_recommendations", label="自动推荐", kind="recommendations"
-        ))
-        ts_list = recs_payload.get("ts") or []
-        int_list = recs_payload.get("intermediates") or []
-        all_recs = list(ts_list) + list(int_list)
-
-        best_ts: dict[str, Any] | None = None
-        best_peak: dict[str, Any] | None = None
-
-        for rec in all_recs:
-            if not isinstance(rec, dict):
-                continue
-            candidate_id = str(rec.get("candidate_id") or "")
-            if not candidate_id:
-                continue
-
-            entry_id = pes_entry_id(candidate_id)
-            if entry_id in seen_ids:
-                entry_id = resolve_collision(entry_id, candidate_id)
-            seen_ids.add(entry_id)
-
-            kind = str(rec.get("kind") or "")
-            confidence = str(rec.get("confidence") or "low")
-            score = _number(rec.get("score"))
-            frame_index_raw = rec.get("frame_index")
-            frame_index = int(frame_index_raw) if frame_index_raw is not None else None
-            geometry_path = str(rec.get("geometry_path") or "")
-
-            role = "ts" if kind == "ts" else "endpoint"
-            geometry_ref = f"{scan_dir}/{geometry_path}" if geometry_path else None
-
-            badges: list[str] = ["未确认"]
-
-            entries.append(StructureViewerEntry(
-                id=entry_id,
-                group_id="pes_recommendations",
-                label=candidate_id,
-                role=role,
-                status="completed",
-                geometry=StructureViewerGeometry(
-                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
-                    format="xyz",
-                ),
-                energy=StructureViewerEnergy(value=score, unit="score", kind="score"),
-                source=StructureViewerSource(
-                    kind="algorithm_recommendation",
-                    frame_index=frame_index,
-                    geometry_ref=geometry_ref,
-                    confirmed=False,
-                ),
-                badges=tuple(badges),
-                vibrations=StructureViewerVibrations(available=False),
-            ))
-
-            if kind == "ts":
-                if best_ts is None or _CONFIDENCE_ORDER.get(confidence, 9) < _CONFIDENCE_ORDER.get(str(best_ts.get("confidence") or "low"), 9):
-                    best_ts = rec
-                    best_ts["_entry_id"] = entry_id
-            else:
-                if best_peak is None or (score or 0) > (_number(best_peak.get("score")) or 0):
-                    best_peak = rec
-                    best_peak["_entry_id"] = entry_id
-
-        if default_id is None:
-            if best_ts is not None:
-                default_id = best_ts.get("_entry_id")
-            elif best_peak is not None:
-                default_id = best_peak.get("_entry_id")
-
     if not entries:
         warnings.append("No PES entries found in recommendations or review")
 
@@ -962,7 +891,8 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
         return [], [], None
 
     structure_products = find_products(manifest, "structure")
-    batch_products = [p for p in structure_products if p.id.startswith("batch_")]
+    from acp.results.structure_policy import reusable_product
+    batch_products = [p for p in structure_products if p.id.startswith("batch_") and reusable_product(p.to_dict())]
 
     if item_id is not None:
         target_id = f"batch_{item_id}"
@@ -1025,7 +955,12 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
             ),
             energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
             source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
-            badges=(tag,),
+            badges=(tag,) + tuple(text for key, value, text in (
+                ("optimization_status", "converged", "OPT 已收敛"),
+                ("frequency_status", "failed", "FREQ 失败"),
+                ("ts_validation", "failed", "TS 验证未通过"),
+                ("ts_validation", "passed", "TS 验证通过"),
+            ) if product.metadata.get(key) == value),
             vibrations=vibrations,
         )
         entries.append(entry)

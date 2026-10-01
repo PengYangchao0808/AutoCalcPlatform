@@ -464,33 +464,13 @@ def run_pes_scan(
             if frame.max_constraint_residual is not None:
                 if max_residual is None or frame.max_constraint_residual > max_residual:
                     max_residual = frame.max_constraint_residual
-        # Candidate gating: only converged, on-constraint frames enter the
-        # candidate screen (previously only a global constraints_satisfied
-        # flag suppressed everything).  The candidate-scoped profile keeps
-        # the recommendation path internally aligned after filtering.
-        candidate_frames = [
-            f
-            for f in frames
-            if f.optimization_converged and f.constraint_residual_ok is not False
-        ]
-        dropped = len(frames) - len(candidate_frames)
-        if dropped:
-            logger.warning(
-                "PES scan candidate gate: %d/%d frames excluded (not converged or "
-                "off-constraint)",
-                dropped,
-                len(frames),
-            )
-        candidate_profile = (
-            _build_energy_profile(candidate_frames, sp_spec) if candidate_frames else profile
-        )
-        ts_recs, int_recs, quality = _recommend_candidates(
-            candidate_frames,
-            coordinate,
-            candidate_profile,
-            cfg,
-            scan_dir,
-            coordinates=scan_coordinates,
+        # Preserve the complete curve; selection is exclusively manual.
+        ts_recs, int_recs = [], []
+        quality = ScanQuality(
+            scan_complete=len(frames) == req.coordinate.n_points,
+            sp_incomplete=profile.sp_incomplete,
+            needs_review=True,
+            notes=("manual_only: save exact frames explicitly",),
             constraints_satisfied=constraints_satisfied,
             constraint_tolerance=tolerances.get(coordinate.kind),
             max_constraint_residual=max_residual,
@@ -517,6 +497,7 @@ def run_pes_scan(
         raise
 
     return {
+        "selection_mode": "manual_only",
         "mode": req.mode,
         "frames": [f.to_dict() for f in frames],
         "profile": profile.to_dict(),

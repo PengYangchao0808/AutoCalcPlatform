@@ -83,6 +83,7 @@ class TsOptResult:
     log_file: Path | None = None
     error_message: str | None = None
     mode_vector: NDArray[np.float64] | None = None
+    metadata: dict = field(default_factory=dict)
 
     def has_single_imaginary(self) -> bool:
         return len(self.imaginary_frequencies) == 1
@@ -323,6 +324,7 @@ def ts_opt_route(
     aux_j: str | None = None,
     ri_approximation: str | None = None,
     opt_level: str | None = None,
+    calculate_frequencies: bool = True,
 ) -> str:
     """Build the ORCA ``!`` route line for an OptTS run.
 
@@ -331,9 +333,10 @@ def ts_opt_route(
     any ``ri``/``aux`` pair) is stripped with a warning by the renderer's
     applicability gate (T6: ``ts_opt_route`` bypasses
     ``_build_input_blocks``, so the renderer is the single stripping point).
-    ``OptTS`` is always emitted, and
-    ``NumFreq`` is appended last so every TS run ends with the independent
-    numerical frequency verification. All enumerated parameters resolve
+    ``OptTS`` is always emitted; ``calculate_frequencies`` (default ``True``)
+    controls the final ``NumFreq`` keyword so every full TS run ends with the
+    independent numerical frequency verification (staged-Hessian callers may
+    opt out). All enumerated parameters resolve
     through the keyword registry via
     :func:`cccp.qc.interfaces.route_render.render_route_line`:
 
@@ -370,7 +373,8 @@ def ts_opt_route(
         segments.append(f"{sm}({solvent})")
     segments.append("OptTS")
     segments.append(RouteKeyword("opt_level", opt_level))
-    segments.append("NumFreq")
+    if calculate_frequencies:
+        segments.append("NumFreq")
     if aux_j and ri_approximation:
         segments.append(RouteKeyword("ri", ri_approximation))
         segments.append(RouteKeyword("aux", aux_j, prefix="aux"))

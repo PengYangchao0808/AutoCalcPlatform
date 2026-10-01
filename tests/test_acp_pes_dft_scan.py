@@ -1041,8 +1041,9 @@ class TestCandidateGating:
             ),
         )
         result = run_pes_scan(request=_dft_request({"method": "GFN2-xTB"}), output_dir=tmp_path)
-        for rec in result["ts_recommendations"] + result["int_recommendations"]:
-            assert rec["frame_index"] != 2
+        assert result["selection_mode"] == "manual_only"
+        assert result["ts_recommendations"] == []
+        assert result["int_recommendations"] == []
         assert result["frames"][2]["optimization_converged"] is False
 
 

@@ -352,6 +352,7 @@ def test_enrichment_cache_reuses_same_mtime_without_parsing_again(
         first = v1_routes._enrich_job_snapshot(record, base_model)
         second = v1_routes._enrich_job_snapshot(record, base_model)
 
-    assert first is second
+    assert first is not second
+    assert first == second
     assert loads.call_count == 1
     assert first.live_status is None

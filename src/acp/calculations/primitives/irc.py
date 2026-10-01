@@ -194,6 +194,8 @@ def run_irc(
         qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
         success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
         endpoints = _discover_endpoints(raw_result, target_dir, inputs)
+        completed_directions = _completed_directions(raw_result, endpoints, success)
+        endpoints = {direction: info for direction, info in endpoints.items() if direction in completed_directions}
         errors: list[str] = []
         if not success:
             raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
@@ -241,6 +243,7 @@ def run_irc(
             endpoints,
             inputs,
             success,
+            directions,
         )
         trajectory = recorder.finish(
             status="completed" if success else "failed",
@@ -326,6 +329,36 @@ def _result_dir(request: Any, target_dir: Path) -> Path:
     return target_dir / "RESULT"
 
 
+def _completed_directions(raw_result: object, endpoints: dict[str, Any], success: bool) -> set[str]:
+    """Require directional completion; reject ORCA iteration-limit endpoints."""
+    import re
+    metadata = getattr(raw_result, "metadata", None) or {}
+    statuses = metadata.get("direction_status") or {}
+    if statuses:
+        return {d for d, status in statuses.items() if status in {"completed", "converged"}}
+    log_path = getattr(raw_result, "log_file", None)
+    if log_path and Path(log_path).is_file():
+        log = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        headers = list(re.finditer(r"(?:FORWARD|BACKWARD|REVERSE) IRC", log, re.I))
+        if headers:
+            completed = set()
+            for i, header in enumerate(headers):
+                section = log[header.end():headers[i + 1].start() if i + 1 < len(headers) else len(log)]
+                direction = "forward" if "FORWARD" in header.group().upper() else "reverse"
+                if "MAXIMUM NUMBER OF ITERATIONS REACHED" in section.upper():
+                    continue
+                if re.search(r"IRC.*CONVERGED|IRC.*CONVERGENCE REACHED|IRC.*CONVERGENCE ACHIEVED", section, re.I):
+                    completed.add(direction)
+                    continue
+                threshold = re.search(r"Convergence thresholds\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)", section)
+                rows = re.findall(r"^\s*\d+\s+[-0-9.Ee+]+\s+[-0-9.Ee+]+\s+([-0-9.Ee+]+)\s+([-0-9.Ee+]+)\s*$", section, re.M)
+                if threshold and rows and all(float(v) <= float(t) for v, t in zip(rows[-1], threshold.groups())):
+                    completed.add(direction)
+            return completed
+    # Typed backend success with explicit endpoints remains supported.
+    return set(endpoints) if success else set()
+
+
 def _discover_endpoints(
     raw_result: object,
     target_dir: Path,
@@ -396,6 +429,9 @@ def _discover_endpoints(
 def _read_xyz(path: Path) -> tuple[NDArray[np.float64] | None, list[str]]:
     """Read an XYZ file and return (coordinates, symbols)."""
     try:
+        from acp.results.structure_policy import single_geometry
+        if single_geometry(path.read_text(encoding="utf-8")) is None:
+            return None, []
         coordinates, symbols = file_io.read_xyz(path)
         return np.asarray(coordinates, dtype=float), [str(s) for s in symbols]
     except (FileNotFoundError, ValueError, OSError):
@@ -409,6 +445,7 @@ def _write_endpoint_products(
     endpoints: dict[str, dict[str, Any]],
     inputs: CalculationInputs,
     success: bool,
+    directions: tuple[str, ...] = ("forward", "reverse"),
 ) -> list[ArtifactRef]:
     """Materialise endpoint XYZ files under ``RESULT/irc/`` and register products."""
     irc_dir = result_dir / "irc"
@@ -443,6 +480,9 @@ def _write_endpoint_products(
             label=f"IRC {direction} endpoint",
             path=relative_path,
             kind=ProductKind.IRC_ENDPOINT,
+            metadata={"source_kind":"irc_endpoint", "direction":direction,
+                      "direction_status":"completed", "requested_directions":list(directions),
+                      "optimization_status":"not_performed", "policy_version":1},
         )
 
     _ = manifest.write(result_dir)
@@ -485,12 +525,12 @@ def _register_trajectory_products(
                 continue
             path = result_dir / str(relative_path)
             if path.is_file():
-                artifacts.append(ArtifactRef(path=path, type="structure", source=backend))
+                artifacts.append(ArtifactRef(path=path, type="trajectory", source=backend))
             _ = manifest.add_product(
                 id=f"irc_{direction}_path",
                 label=f"IRC {direction} path",
                 path=str(relative_path),
-                kind=ProductKind.STRUCTURE,
+                kind=ProductKind.TRAJECTORY,
             )
     _ = manifest.write(result_dir)
     return artifacts

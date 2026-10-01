@@ -44,8 +44,10 @@ __all__ = [
     "editable_spec_from_parts",
     "editable_spec_from_record",
     "effective_config_info",
+    "input_structure_changed",
     "normalize_for_compare",
     "resolve_last_structure",
+    "resolve_previous_outputs",
     "workflow_edit_status",
 ]
 
@@ -186,6 +188,61 @@ def compute_payload_hash(payload: dict[str, Any]) -> str:
     """Hash a submit request payload for request_id idempotency comparison."""
     canonical = normalize_for_compare(payload)
     return "ph_" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
+
+
+def _structure_input_identity(value: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return stable geometry and source identities embedded in an input."""
+    geometries: list[str] = []
+    sources: list[str] = []
+
+    def visit(item: Any) -> None:
+        if isinstance(item, dict):
+            source_ref = item.get("source_ref")
+            if isinstance(source_ref, dict):
+                source_id = str(source_ref.get("source_id") or "").strip()
+                if not source_id:
+                    job_id = str(source_ref.get("job_id") or "").strip()
+                    rel_path = str(source_ref.get("path") or "").strip()
+                    source_id = f"job_{job_id}:{rel_path}" if job_id and rel_path else ""
+                source_identity = (
+                    source_id,
+                    str(source_ref.get("source_uid") or "").strip(),
+                    str(source_ref.get("version_id") or "").strip(),
+                    str(source_ref.get("geometry_hash") or "").strip(),
+                    str(source_ref.get("checksum") or "").strip(),
+                )
+                if any(source_identity):
+                    sources.append("|".join(source_identity))
+            source_id = str(item.get("source_id") or "").strip()
+            if source_id:
+                sources.append(source_id)
+
+            source_type = str(item.get("source_type") or "").lower()
+            source = item.get("source")
+            if source_type in {"xyz_text", "smiles"} and isinstance(source, str) and source.strip():
+                geometries.append(
+                    hashlib.sha256(source.strip().encode("utf-8")).hexdigest()
+                )
+            for key in ("xyz", "xyz_text"):
+                geometry = item.get(key)
+                if isinstance(geometry, str) and geometry.strip():
+                    geometries.append(
+                        hashlib.sha256(geometry.strip().encode("utf-8")).hexdigest()
+                    )
+            for child in item.values():
+                if isinstance(child, (dict, list, tuple)):
+                    visit(child)
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    return tuple(geometries), tuple(sources)
+
+
+def input_structure_changed(original: dict[str, Any], updated: dict[str, Any]) -> bool:
+    """Whether an edit changes the supplied geometry or its saved source."""
+    return _structure_input_identity(original) != _structure_input_identity(updated)
 
 
 def compute_preview_fingerprint(
@@ -442,35 +499,95 @@ def project_original_structure_items(record: JobRecord) -> list[dict[str, Any]]:
     return projected
 
 
-def resolve_last_structure(work_dir: Path | str) -> dict[str, Any] | None:
-    """Resolve the task's best ``kind=structure`` product for re-use as input.
+def resolve_previous_outputs(
+    work_dir: Path | str, *, job_id: str = "", project_id: str | None = None,
+    attempt: int = 0, strict: bool = False,
+) -> list[dict[str, Any]]:
+    """Project every reusable single geometry with stable provenance."""
+    from acp.results.manifest import load_result_manifest
+    from acp.results.structure_policy import reusable_product, single_geometry
+    from acp.scheduler.files import resolve_safe
+    from acp.scheduler.structure_source_store import source_uid_for
 
-    Returns ``{"available": True, "entry_id", "label", "path", "xyz_text"}``
-    or ``None`` when the task has no verifiable geometry product (plan §5:
-    workflows without structures simply disable this option).
-    """
-    from acp.results.manifest import find_products, load_result_manifest
-
-    task_dir = Path(work_dir)
-    manifest = load_result_manifest(task_dir)
-    if manifest is None:
-        return None
-    for product in find_products(manifest, "structure"):
-        path = task_dir / "RESULT" / product.path
+    root = Path(work_dir)
+    manifest = load_result_manifest(root)
+    from acp.confsearch.manifest import find_confsearch_manifest, read_manifest, resolve_manifest_geometry
+    from acp.storage.manifest import ResultManifest
+    conformer_manifest = find_confsearch_manifest(root)
+    if conformer_manifest is not None:
+        manifest = manifest or ResultManifest(workflow="Confsearch")
         try:
-            xyz_text = path.read_text(encoding="utf-8")
-        except OSError:
+            payload = read_manifest(conformer_manifest)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            if strict:
+                raise ValueError("正式构象清单不可读取，已阻断重算") from exc
+            payload = {}
+        for conf in payload.get("conformers") or []:
+            try:
+                geometry = resolve_manifest_geometry(conformer_manifest, str(conf.get("geometry") or ""))
+                rel = geometry.resolve().relative_to((root / "RESULT").resolve()).as_posix()
+            except ValueError:
+                continue
+            cid = str(conf.get("conf_id") or "conformer")
+            manifest.add_product("confsearch_" + cid, "Conformer (" + cid + ")", rel, "structure",
+                metadata={"source_kind":"conformer", "rank":conf.get("rank")})
+    if manifest is None:
+        if strict and (root / "RESULT" / "result_manifest.json").exists():
+            raise ValueError("旧结果清单不可读取，已阻断重算")
+        return []
+    outputs = []
+    for product in manifest.products:
+        if manifest.workflow in {"frequency", "singlepoint"}:
             continue
-        if not xyz_text.strip():
+        if manifest.workflow in {"scan", "PESsearch"} and product.metadata.get("selection_source") not in {"manual", "manual_frame"}:
             continue
-        return {
-            "available": True,
-            "entry_id": product.id,
-            "label": product.label,
-            "path": f"RESULT/{product.path}",
-            "xyz_text": xyz_text,
-        }
-    return None
+        if not reusable_product(product.to_dict()):
+            continue
+        relative = f"RESULT/{product.path}"
+        path = resolve_safe(root, relative)
+        if path is None or not path.is_file():
+            # Old executor products were rooted at the task directory.
+            relative = product.path
+            path = resolve_safe(root, relative)
+        if path is None or not path.is_file():
+            if strict:
+                raise ValueError(f"旧结构产物缺失，已阻断重算: {product.path}")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            if strict:
+                raise ValueError(f"旧结构不可读取，已阻断重算: {product.path}") from exc
+            continue
+        geometry = single_geometry(text)
+        if geometry is None:
+            if strict:
+                raise ValueError(f"旧结构不是有效单帧，已阻断重算: {product.path}")
+            continue
+        checksum = geometry["content_checksum"]
+        uid = source_uid_for(job_id, relative)
+        direction = product.metadata.get("direction")
+        if product.kind.value == "irc_endpoint":
+            direction = "forward" if "forward" in product.id else "reverse"
+        outputs.append({
+            **product.metadata, **geometry,
+            "available": True, "availability": "available", "entry_id": product.id,
+            "product_id": product.id, "label": product.label, "path": relative,
+            "xyz_text": text, "source_uid": uid, "version_id": checksum,
+            "attempt": attempt, "direction": direction,
+            "source_ref": {"origin": "job_artifact", "job_id": job_id,
+                "source_uid": uid, "source_id": f"job_{job_id}:{relative}",
+                "path": relative, "checksum": checksum, "version_id": checksum,
+                "attempt": attempt, "project_id": project_id or ""},
+        })
+    return outputs
+
+
+def resolve_last_structure(work_dir: Path | str, *, job_id: str = "",
+                           project_id: str | None = None) -> dict[str, Any] | None:
+    """Compatibility projection of the complete output list."""
+    outputs = resolve_previous_outputs(work_dir, job_id=job_id, project_id=project_id)
+    return outputs[0] if outputs else None
 
 
 def effective_config_info(record: JobRecord) -> dict[str, Any]:
@@ -585,8 +702,20 @@ def build_edit_draft(
         "mode": "original",
         "original": _describe_original_input(record, run_root=run_root),
         "structure_items": project_original_structure_items(record),
-        "last_structure": resolve_last_structure(record.work_dir) if editable else None,
+        "last_structure": (
+            resolve_last_structure(
+                record.work_dir,
+                job_id=record.id,
+                project_id=record.project_id or spec.project_id,
+            )
+            if editable
+            else None
+        ),
     }
+    input_refs["previous_outputs"] = resolve_previous_outputs(
+        record.work_dir, job_id=record.id, project_id=record.project_id or spec.project_id,
+        attempt=attempt_number(record),
+    ) if editable else []
     method = spec.method if isinstance(spec.method, dict) else {}
     notes: list[str] = []
     if not editable and edit_status.get("migration_hint"):

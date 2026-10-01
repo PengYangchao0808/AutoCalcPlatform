@@ -83,8 +83,10 @@
     var declaredAtoms = parseInt((xyz.split(/\r?\n/, 1)[0] || "0").trim(), 10) || 0;
     return {
       source_id: item.source_id || "",
+      source_uid: item.source_uid || (item.source_ref && item.source_ref.source_uid) || "",
       source_kind: item.source_kind || "original_input",
       item_id: item.item_id || "",
+      candidate_id: item.candidate_id || "",
       name: item.name || item.item_id || "structure",
       molecule_name: item.name || item.item_id || "structure",
       tag: item.tag || "",
@@ -98,33 +100,227 @@
       warnings: [],
       errors: available ? [] : [item.geometry_error || "该来源没有可用几何"],
       geometry_ref: deepCopy(item.geometry_ref || {}),
+      source_ref: deepCopy(item.source_ref || {}),
+      geometry_hash: item.geometry_hash || "",
+      version_id: item.version_id || "",
+      is_default_start: !!item.is_default_start,
     };
+  }
+
+  function sourceRequiresIndependentJob(ctx) {
+    if (!ctx) return false;
+    if (ctx.mode === "new_from_job") return true;
+    var selection = ctx.sourceSelection || {};
+    var ref = (selection.payload || {}).source_ref || {};
+    if (["task_result", "last_structure", "job_result"].indexOf(selection.kind) >= 0 &&
+        ref.job_id === ctx.sourceJobId && (selection.payload || {}).xyz) return false;
+    return ["last_structure", "job_result", "task_result", "saved_candidate", "path_frame", "manual_input", "upload"].indexOf(
+      ctx.sourceSelection && ctx.sourceSelection.kind
+    ) >= 0;
+  }
+
+  function syncSourceExecutionMode(ctx) {
+    if (!ctx) return;
+    ctx.sourceRequiresNewJob = sourceRequiresIndependentJob(ctx);
+    if (ctx.sourceRequiresNewJob) ctx.executionMode = "new_job";
+    renderFooter();
+    updateEditorUiState();
+  }
+
+  function selectedSourceSummary(ctx) {
+    var selection = ctx && ctx.sourceSelection;
+    var item = selection && selection.payload;
+    if (!item) return t("edit.source_original");
+    var ref = item.source_ref || {};
+    var jobId = String(ref.job_id || item.job_id || "");
+    var path = String(ref.path || "");
+    var name = String(item.name || item.label || item.item_id || "");
+    if (selection.kind === "path_frame") {
+      var origin = item.edit_input_origin || {};
+      var frameLabel = t("edit.path_frame", {
+        number: String(Number(origin.frame_index) + 1),
+      });
+      var coordinate = origin.reaction_coordinate;
+      return [name, jobId, frameLabel,
+        coordinate === null || coordinate === undefined ? "" : Number(coordinate).toFixed(3) + " Å"]
+        .filter(Boolean).join(" · ");
+    }
+    if (jobId) return [name, jobId, path].filter(Boolean).join(" · ");
+    if (selection.kind === "last_structure") {
+      return name || t("edit.source_last_structure");
+    }
+    if (selection.kind === "manual_input") return t("edit.source_manual");
+    if (selection.kind === "upload") return t("edit.source_upload");
+    return name || t("edit.source_original");
+  }
+
+  function addSourceIdentityKeys(target, value) {
+    if (!value || typeof value !== "object") return;
+    var checksum = String(value.content_checksum || value.checksum || value.geometry_hash || "");
+    if (checksum.indexOf("unknown:") === 0) checksum = "";
+    var sourceId = String(value.source_id || "").trim();
+    var jobId = String(value.job_id || value.parent_job_id || "").trim();
+    var path = String(value.path || "").trim();
+    if (!sourceId && jobId && path) sourceId = "job_" + jobId + ":" + path;
+    if (checksum && sourceId) target.add("geometry-source:" + sourceId + ":" + checksum);
+    if (checksum && value.source_uid) target.add("geometry:" + value.source_uid + ":" + checksum);
+    if (value.source_uid && value.version_id) target.add("version:" + value.source_uid + ":" + value.version_id);
+    if (sourceId && !checksum && !value.version_id) target.add("source_id:" + sourceId);
+    var frameIndex = value.frame_index;
+    if (jobId && frameIndex !== undefined && frameIndex !== null && Number.isFinite(Number(frameIndex))) {
+      target.add("source_id:job_" + jobId + ":s2/frame/" + Number(frameIndex));
+      target.add("frame:" + jobId + ":" + Number(frameIndex));
+    }
+  }
+
+  function sourceIdentityKeys(item) {
+    var keys = new Set();
+    if (!item || typeof item !== "object") return keys;
+    addSourceIdentityKeys(keys, item);
+    addSourceIdentityKeys(keys, item.source_ref);
+    return keys;
+  }
+
+  function identityMatches(keys, target) {
+    if (!keys || !target) return false;
+    var found = false;
+    keys.forEach(function (key) { if (target.has(key)) found = true; });
+    return found;
+  }
+
+  function inputSourceKeys(input) {
+    var keys = new Set();
+    if (!input || typeof input !== "object") return keys;
+    addSourceIdentityKeys(keys, input);
+    addSourceIdentityKeys(keys, input.source_ref);
+    ["items", "candidates"].forEach(function (field) {
+      (Array.isArray(input[field]) ? input[field] : []).forEach(function (item) {
+        addSourceIdentityKeys(keys, item);
+        addSourceIdentityKeys(keys, item && item.source_ref);
+      });
+    });
+    var scanSource = input.scan_request && input.scan_request.source;
+    if (scanSource && typeof scanSource === "object") {
+      addSourceIdentityKeys(keys, scanSource);
+      addSourceIdentityKeys(keys, scanSource.source_ref);
+    }
+    return keys;
+  }
+
+  function buildRecalcFocus(ctx) {
+    var input = (ctx.originalSpec && ctx.originalSpec.input) || {};
+    var refs = (ctx.draft && ctx.draft.input_refs) || {};
+    var lastResult = new Set();
+    var previousSelection = new Set();
+    var origin = input.edit_input_origin || {};
+    addSourceIdentityKeys(previousSelection, origin);
+    addSourceIdentityKeys(previousSelection, origin.source_ref);
+    addSourceIdentityKeys(previousSelection, input.source_ref);
+    (refs.previous_outputs || []).forEach(function(result) {
+      addSourceIdentityKeys(lastResult, result);
+      addSourceIdentityKeys(lastResult, result.source_ref);
+    });
+    ctx.recalcFocus = {
+      defaultStart: inputSourceKeys(input),
+      lastResult: lastResult,
+      previousSelection: previousSelection,
+    };
+  }
+
+  function getPinnedSources() {
+    var ctx = editorContext;
+    var inputs = (typeof wizardStructures !== "undefined" ? wizardStructures : []).map(function(e) {
+      return Object.assign({}, e, {pin_kind:"input", label:e.name || "本次输入"});
+    });
+    var outputs = (((ctx && ctx.mode === "edit_recalculate" ? ctx.draft : {}) || {}).input_refs || {}).previous_outputs || [];
+    outputs = outputs.map(function(e) {
+      return Object.assign({}, e, e.source_ref || {}, {pin_kind:"output", resolved_name:e.label});
+    });
+    return inputs.concat(outputs);
+  }
+
+  function usePreviousOutput(output) {
+    var ctx = editorContext;
+    if (!ctx || !output.xyz_text || !wizardStructures.length) return;
+    var index = wizardSelectedStructureIndex;
+    if (output.item_id) {
+      var matched = wizardStructures.findIndex(function(e) { return e.item_id === output.item_id; });
+      if (matched >= 0) index = matched;
+    }
+    var current = wizardStructures[index];
+    if (!current || !window.confirm("将「" + (current.name || "当前输入") + "」替换为「" + output.label + "」？")) return;
+    var replacement = Object.assign({}, current, {
+      xyz:output.xyz_text, source_ref:deepCopy(output.source_ref), source_uid:output.source_uid,
+      source_id:output.source_ref.source_id, version_id:output.version_id,
+      name:output.label, geometry_state:"ready", source_kind:"task_result", input_modified:false
+    });
+    wizardStructures[index] = replacement;
+    ctx.sourceSelection = {kind:"task_result", payload:replacement};
+    onTaskStructureChanged(index, replacement);
+    selectPreviewStructure(index, true);
+    if (typeof _syncPickerSelection === "function") _syncPickerSelection();
+  }
+
+  function updateDefaultStartBadge(ctx, structure) {
+    var badge = document.getElementById("edit-default-start-badge");
+    if (!badge) return;
+    var isDefaultStart = !!(structure && structure.is_default_start);
+    if (!isDefaultStart && ctx && ctx.recalcFocus && structure) {
+      isDefaultStart = identityMatches(sourceIdentityKeys(structure), ctx.recalcFocus.defaultStart);
+    }
+    var show = !!(ctx && ctx.mode === "edit_recalculate" && isDefaultStart);
+    badge.style.display = show ? "inline-flex" : "none";
+  }
+
+  function getRecalcSourceAnnotation(item) {
+    var ctx = editorContext;
+    if (!ctx || ctx.mode !== "edit_recalculate" || !ctx.recalcFocus) return null;
+    var keys = sourceIdentityKeys(item);
+    var current = typeof wizardStructures !== "undefined" ? wizardStructures : [];
+    var isInput = current.some(function(e) { return identityMatches(keys, sourceIdentityKeys(e)); });
+    var isFromSourceJob = !!(ctx.sourceJobId && (item.job_id === ctx.sourceJobId || item.job_name === ctx.sourceJobId));
+    var isOutput = identityMatches(keys, ctx.recalcFocus.lastResult) || isFromSourceJob;
+    var isCandidate = !!(item.candidate_id && item.candidate_id !== "--") || item.source_group === "candidate" ||
+      (item.structure_facts && item.structure_facts.source_kind === "manual_frame");
+    return {
+      input: isInput,
+      output: isOutput,
+      previous_result: isOutput,
+      is_candidate: isCandidate,
+      previous: identityMatches(keys, ctx.recalcFocus.defaultStart)
+    };
+  }
+
+  function onExternalSourcePreview(item) {
+    var ctx = editorContext;
+    if (!ctx || ctx.mode !== "edit_recalculate") return;
+    updateDefaultStartBadge(ctx, item || null);
   }
 
   function hydrateTaskStructures(ctx, draft) {
     var refs = draft.input_refs || {};
     var items = Array.isArray(refs.structure_items) ? refs.structure_items.slice() : [];
-    var last = refs.last_structure;
-    var isBatchWorkflow = ctx.originalSpec.workflow === "BatchOptimize";
-    // BatchOptimize inputs can be stored either as an item array or as a
-    // single source XYZ (legacy/single-structure submission). In both cases,
-    // the last optimized product is not another submitted input; users can
-    // explicitly select it from the structure library if they want it.
-    if (!isBatchWorkflow && last && last.available && last.xyz_text) {
-      items.push({
-        source_id: "edit-last:" + ctx.sourceJobId + ":" + (last.entry_id || "last"),
-        source_kind: "last_structure",
-        item_id: last.entry_id || "last_structure",
-        name: last.label || "上次有效结构",
-        tag: "",
-        atom_count: 0,
-        charge: ((ctx.originalSpec || {}).input || {}).charge,
-        multiplicity: ((ctx.originalSpec || {}).input || {}).multiplicity,
-        geometry_status: "available",
-        geometry_ref: { kind: "inline_xyz", item_id: last.entry_id || "last_structure" },
-        xyz_text: last.xyz_text,
-      });
-    }
+    var originalInput = (ctx.originalSpec && ctx.originalSpec.input) || {};
+    var rawRows = Array.isArray(originalInput.items) ? originalInput.items
+      : Array.isArray(originalInput.candidates) ? originalInput.candidates
+      : [originalInput.scan_request && originalInput.scan_request.source || originalInput];
+    items.forEach(function (item, index) {
+      if (!item) return;
+      item.is_default_start = true;
+      var raw = rawRows[index] || {};
+      if (!item.source_ref && raw.source_ref) item.source_ref = deepCopy(raw.source_ref);
+      item.source_id = item.source_id || raw.source_id ||
+        (item.source_ref && item.source_ref.source_id) || "";
+      item.source_uid = item.source_uid || raw.source_uid ||
+        (item.source_ref && item.source_ref.source_uid) || "";
+      item.geometry_hash = item.geometry_hash || raw.geometry_hash ||
+        (item.source_ref && item.source_ref.geometry_hash) || "";
+      item.version_id = item.version_id || raw.version_id ||
+        (item.source_ref && item.source_ref.version_id) || "";
+      if (!item.edit_input_origin && items.length === 1 && originalInput.edit_input_origin) {
+        item.edit_input_origin = deepCopy(originalInput.edit_input_origin);
+      }
+    });
     ctx.taskStructureItems = items;
     if (typeof wizardStructures !== "undefined") {
       wizardStructures = items.map(structureSourceToWizard);
@@ -139,6 +335,8 @@
       kind: first ? (first.source_kind || "original_input") : "original_input",
       payload: first,
     };
+    updateDefaultStartBadge(ctx, first);
+    syncSourceExecutionMode(ctx);
   }
 
   // 原地可复用的"简单结构"输入：表单重建等价于原输入。
@@ -490,6 +688,14 @@
               if (has(curItem, "tag")) copy.tag = curItem.tag;
               if (has(curItem, "charge")) copy.charge = curItem.charge;
               if (has(curItem, "multiplicity")) copy.multiplicity = curItem.multiplicity;
+              if (has(curItem, "xyz") && curItem.xyz !== baseItem.xyz) {
+                copy.xyz = curItem.xyz;
+                delete copy.xyz_path;
+                if (curItem.source_ref) {
+                  copy.source_ref = deepCopy(curItem.source_ref);
+                  copy.source_id = curItem.source_ref.source_id;
+                }
+              }
             }
           }
           kept.push(copy);
@@ -767,7 +973,7 @@
   function findOriginalBatchRow(structure, index) {
     var ctx = editorContext;
     if (!ctx || !structure || ctx.originalSpec.workflow !== "BatchOptimize" ||
-      ctx.activeSourceTab !== "task" || structure.source_kind !== "original_input") return null;
+      ctx.activeSourceTab !== "task") return null;
     var itemId = String(structure.item_id || structure.candidate_id || "");
     var source = (ctx.taskStructureItems || []).find(function (candidate) {
       return candidate && candidate.source_kind === "original_input" &&
@@ -793,6 +999,8 @@
     }
     var row = findOriginalBatchRow(structure, index);
     if (row) {
+      if (structure.xyz !== undefined) row.xyz = structure.xyz;
+      if (structure.source_ref) row.source_ref = deepCopy(structure.source_ref);
       if (structure.name !== undefined) row.name = structure.name;
       row.tag = structure.tag || "";
       row.tagAuto = false;
@@ -939,6 +1147,280 @@
     return Promise.all(tasks);
   }
 
+  function supportsReactionPathInput(workflow) {
+    return ["BatchOptimize", "Confsearch", "singlepoint", "optimize", "frequency", "xtb-optimize"]
+      .indexOf(String(workflow || "")) >= 0;
+  }
+
+  function reactionPathRoleMap(payload) {
+    var roles = {};
+    function mark(rows, role, selected) {
+      (Array.isArray(rows) ? rows : []).forEach(function (row, index) {
+        if (!row || row.frame_index === undefined || row.frame_index === null) return;
+        var frameIndex = parseInt(row.frame_index, 10);
+        if (!Number.isFinite(frameIndex)) return;
+        var entry = roles[frameIndex] || (roles[frameIndex] = {});
+        entry.role = role;
+        entry.selected = entry.selected || !!selected;
+        entry.label = row.display_label || row.name || row.candidate_id ||
+          (role === "ts" ? "TS-" : "INT-") + String(index + 1).padStart(2, "0");
+      });
+    }
+
+    var review = (payload && payload.review) || {};
+    var selectedRows = Array.isArray(review.selected) ? review.selected : [];
+    var selectedIds = new Set();
+    selectedRows.forEach(function (row) {
+      if (typeof row === "string") {
+        selectedIds.add(row);
+        return;
+      }
+      if (!row || typeof row !== "object") return;
+      if (row.candidate_id) selectedIds.add(String(row.candidate_id));
+      if (row.frame_index === undefined || row.frame_index === null) return;
+      var role = String(row.role || "").toLowerCase();
+      mark([row], role === "ts" ? "ts" : "intermediate", true);
+    });
+    ["selected_ts", "selected_intermediates"].forEach(function (field) {
+      (Array.isArray(review[field]) ? review[field] : []).forEach(function (item) {
+        if (typeof item === "string") selectedIds.add(item);
+        else if (item && item.candidate_id) selectedIds.add(String(item.candidate_id));
+      });
+    });
+    (Array.isArray(review.candidates) ? review.candidates : []).forEach(function (row) {
+      if (!row || typeof row !== "object") return;
+      var id = String(row.candidate_id || row.id || "");
+      if (!id || !selectedIds.has(id) || row.frame_index === undefined || row.frame_index === null) return;
+      var role = String(row.role || "").toLowerCase();
+      mark([row], role === "ts" ? "ts" : "intermediate", true);
+    });
+    return roles;
+  }
+
+  function pathFrameText(ctx, frame, roles, source) {
+    var index = Number(frame.index);
+    var roleInfo = roles[index] || {};
+    var input = (ctx.originalSpec && ctx.originalSpec.input) || {};
+    var origin = input.edit_input_origin || {};
+    var originJobId = String(origin.parent_job_id || origin.job_id || "");
+    var samePreviousFrame = origin.mode === "reaction_path_frame" &&
+      originJobId === source.job_id && Number(origin.frame_index) === index;
+    var lastSelected = !!roleInfo.selected || samePreviousFrame;
+    var lastIndex = source.frameCount - 1;
+    var isEndpoint = index === 0 || index === lastIndex;
+    var role = roleInfo.role || (isEndpoint ? "endpoint" : "");
+    var roleKey = role === "ts" ? "edit.path_role_ts"
+      : role === "intermediate" ? "edit.path_role_int"
+      : role === "endpoint" ? "edit.path_role_endpoint" : "";
+    var badges = [];
+    if (roleKey) badges.push('<span class="edit-path-frame-badge ' +
+      (role === "ts" ? "ts" : role === "intermediate" ? "int" : "") + '">' +
+      escapeHtml(t(roleKey)) + "</span>");
+    if (lastSelected) {
+      badges.push('<span class="edit-path-frame-badge">' +
+        escapeHtml(t("edit.path_role_last_selected")) + "</span>");
+    }
+    var name = roleInfo.label || t("edit.path_frame", { number: String(index + 1) });
+    var coordinate = frame.target_coordinate;
+    var energy = frame.single_point_energy_hartree;
+    if (energy === null || energy === undefined) energy = frame.scan_energy_hartree;
+    var meta = [];
+    if (coordinate !== null && coordinate !== undefined) {
+      meta.push(t("edit.path_coordinate", { value: Number(coordinate).toFixed(3) }));
+    }
+    if (energy !== null && energy !== undefined) {
+      meta.push(t("edit.path_energy", { value: Number(energy).toFixed(6) }));
+    }
+    meta.push(frame.optimization_converged
+      ? t("edit.path_status_converged") : t("edit.path_status_partial"));
+    return '<button type="button" class="edit-path-frame' +
+      (lastSelected ? " is-last-selected" : "") + '"' +
+      ' data-edit-path-job="' + escapeHtml(source.job_id) + '"' +
+      ' data-edit-path-frame="' + escapeHtml(index) + '"' +
+      ' data-edit-path-role="' + escapeHtml(role) + '"' +
+      ' data-edit-path-meta="' + escapeHtml(meta.join(" · ")) + '">' +
+      '<span class="edit-path-frame-main"><span class="edit-path-frame-name">' +
+      escapeHtml(name) + badges.join("") + '</span><span class="edit-path-frame-meta">' +
+      escapeHtml(meta.join(" · ")) + '</span></span><span aria-hidden="true">›</span></button>';
+  }
+
+  function renderReactionPathSources(ctx, groups) {
+    var panel = document.getElementById("edit-path-structures");
+    var list = document.getElementById("edit-path-structures-list");
+    if (!panel || !list || !ctx) return;
+    if (!groups || !groups.length) {
+      panel.style.display = "none";
+      list.innerHTML = "";
+      return;
+    }
+    panel.style.display = ctx.activeSourceTab === "task" && ctx.mode === "edit_recalculate" &&
+      supportsReactionPathInput(ctx.originalSpec && ctx.originalSpec.workflow) ? "flex" : "none";
+    list.innerHTML = groups.map(function (group) {
+      var frames = Array.isArray(group.frames) ? group.frames.slice() : [];
+      var roles = reactionPathRoleMap(group.candidates || {});
+      group.frameCount = frames.length;
+      frames.sort(function (a, b) {
+        var ar = roles[Number(a.index)] || {};
+        var br = roles[Number(b.index)] || {};
+        var ap = ar.selected ? 0 : 1;
+        var bp = br.selected ? 0 : 1;
+        return ap - bp || Number(a.index) - Number(b.index);
+      });
+      var source = { job_id: group.job_id, frameCount: group.frameCount };
+      return '<div class="edit-path-source-title">' + escapeHtml(group.name || group.job_id) +
+        ' · ' + escapeHtml(group.job_id) + '</div>' +
+        frames.map(function (frame) {
+          return pathFrameText(ctx, frame, roles, source);
+        }).join("");
+    }).join("");
+    if (!list._acpWired) {
+      list._acpWired = true;
+      list.addEventListener("click", function (event) {
+        var button = event.target && event.target.closest
+          ? event.target.closest(".edit-path-frame") : null;
+        if (button) selectReactionPathFrame(button);
+      });
+    }
+  }
+
+  function loadEditReactionPaths(ctx) {
+    var panel = document.getElementById("edit-path-structures");
+    var list = document.getElementById("edit-path-structures-list");
+    if (!panel || !list || !ctx || ctx.mode !== "edit_recalculate" ||
+      !supportsReactionPathInput(ctx.originalSpec && ctx.originalSpec.workflow)) return;
+    panel.style.display = "none";
+    list.innerHTML = "";
+    var sources = (((ctx.draft || {}).input_refs || {}).reaction_path_sources) || [];
+    if (!sources.length) return;
+    var read = typeof apiRemote === "function" ? apiRemote : api;
+    Promise.all(sources.map(function (source) {
+      var jobId = String(source.job_id || "");
+      var base = "/jobs/" + encodeURIComponent(jobId);
+      return Promise.all([
+        read(base + "/s2/profile").catch(function () { return null; }),
+        read(base + "/s2/candidates").catch(function () { return null; }),
+      ]).then(function (responses) {
+        var profile = responses[0];
+        var frames = profile && Array.isArray(profile.frames) ? profile.frames : [];
+        var availableFrames = frames.filter(function (frame) {
+          return frame && frame.geometry_path;
+        });
+        return availableFrames.length ? {
+          job_id: jobId,
+          name: source.name || jobId,
+          charge: source.charge !== undefined ? source.charge : 0,
+          multiplicity: source.multiplicity || 1,
+          frames: availableFrames,
+          candidates: responses[1] || { review: profile && profile.selection },
+        } : null;
+      });
+    })).then(function (groups) {
+      if (!editorContext || editorContext.requestToken !== ctx.requestToken) return;
+      var available = groups.filter(Boolean);
+      available.forEach(function (group) {
+        group.frames.forEach(function (frame) { frame._source_job_id = group.job_id; });
+      });
+      ctx.pathFrameSources = available;
+      renderReactionPathSources(ctx, available);
+    }).catch(function (error) {
+      if (!editorContext || editorContext.requestToken !== ctx.requestToken) return;
+      ctx.pathFrameLoadError = (error && error.message) || String(error);
+      renderReactionPathSources(ctx, []);
+    });
+  }
+
+  function selectReactionPathFrame(button) {
+    var ctx = editorContext;
+    if (!ctx || !button || button.disabled) return;
+    var jobId = button.getAttribute("data-edit-path-job") || "";
+    var frameIndex = parseInt(button.getAttribute("data-edit-path-frame"), 10);
+    var role = button.getAttribute("data-edit-path-role") || "";
+    var source = (ctx.pathFrameSources || []).find(function (item) {
+      return item.job_id === jobId;
+    });
+    if (!source || !Number.isFinite(frameIndex)) return;
+    var token = ctx.requestToken;
+    var read = typeof apiRemote === "function" ? apiRemote : api;
+    var metaEl = button.querySelector(".edit-path-frame-meta");
+    button.disabled = true;
+    button.classList.add("is-selected");
+    if (metaEl) metaEl.textContent = t("edit.path_selecting");
+    read("/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex))
+      .then(function (frame) {
+        if (!editorContext || editorContext.requestToken !== token) return;
+        var xyz = String((frame && frame.xyz) || "");
+        var atomCount = parseInt((xyz.split(/\r?\n/, 1)[0] || "0").trim(), 10) || 0;
+        if (!atomCount || xyz.split(/\r?\n/).length < atomCount + 2) {
+          throw new Error("路径帧没有完整 XYZ 几何");
+        }
+        var roleTag = role === "ts" ? "TS" : "INT";
+        var label = button.querySelector(".edit-path-frame-name").childNodes[0].textContent.trim();
+        var origin = {
+          mode: "reaction_path_frame",
+          parent_job_id: jobId,
+          frame_index: frameIndex,
+          view_type: "s2",
+          label: label,
+          role: roleTag || role,
+          reaction_coordinate: frame.target_coordinate,
+          actual_coordinate: frame.actual_coordinate,
+          scan_energy_hartree: frame.scan_energy_hartree,
+          single_point_energy_hartree: frame.single_point_energy_hartree,
+        };
+        var sourceRef = {
+          origin: "reaction_path_frame",
+          job_id: jobId,
+          frame_index: frameIndex,
+          source_id: "job_" + jobId + ":s2/frame/" + frameIndex,
+        };
+        var item = {
+          source_id: sourceRef.source_id,
+          source_kind: "path_frame",
+          item_id: "s2_frame_" + String(frameIndex + 1).padStart(3, "0"),
+          candidate_id: "s2_frame_" + String(frameIndex + 1).padStart(3, "0"),
+          name: label,
+          molecule_name: label,
+          tag: roleTag,
+          role: roleTag,
+          xyz: xyz,
+          xyz_text: xyz,
+          charge: source.charge,
+          multiplicity: source.multiplicity,
+          atom_count: atomCount,
+          has_3d: true,
+          geometry_ref: { kind: "reaction_path_frame", job_id: jobId, frame_index: frameIndex },
+          source_ref: sourceRef,
+          edit_input_origin: origin,
+        };
+        wizardInputMode = "task";
+        wizardStructures = [item];
+        wizardSelectedStructureIndex = 0;
+        wizardParseWarnings = [];
+        document.getElementById("modal-charge").value = String(source.charge);
+        document.getElementById("modal-mult").value = String(source.multiplicity);
+        renderStructurePreview(wizardStructures, wizardParseWarnings);
+        ctx.sourceSelection = { kind: "path_frame", payload: item };
+        ctx.pathSourceDraft = deepCopy(item);
+        updateDefaultStartBadge(ctx, item);
+        syncSourceExecutionMode(ctx);
+        button.parentNode.querySelectorAll(".edit-path-frame").forEach(function (entry) {
+          entry.classList.toggle("is-selected", entry === button);
+          var entryMeta = entry.querySelector(".edit-path-frame-meta");
+          if (entryMeta) entryMeta.textContent = entry === button
+            ? t("edit.path_selected_short")
+            : entry.getAttribute("data-edit-path-meta") || entryMeta.textContent;
+        });
+      }).catch(function (error) {
+        if (!editorContext || editorContext.requestToken !== token) return;
+        button.classList.remove("is-selected");
+        if (metaEl) metaEl.textContent = t("edit.path_load_failed", {
+          message: (error && error.message) || String(error),
+        });
+      }).then(function () {
+        if (editorContext && editorContext.requestToken === token) button.disabled = false;
+      });
+  }
+
   function openJobEditor(job, mode) {
     var jobId = String(job.id || job.job_id || "");
     var token = ++tokenCounter;
@@ -968,6 +1450,7 @@
       collecting: false,
       collectedBodies: null,
       pendingPreviewBody: null,
+      pathSourceDraft: null,
     };
     // Apply edit-mode styling before openModal restores any saved create-wizard
     // state; the edit form must not inherit the last create step's visibility.
@@ -987,6 +1470,7 @@
       renderBanner("ready");
       renderFooter();
       updateEditorUiState();
+      loadEditReactionPaths(editorContext);
       startBadgeWatch();
     }, function (err) {
       if (!editorContext || editorContext.requestToken !== token) return;
@@ -1005,6 +1489,11 @@
     renderBanner("hidden");
     hideFooter();
     hideOriginalPanelExtras();
+    var pathPanel = document.getElementById("edit-path-structures");
+    var pathList = document.getElementById("edit-path-structures-list");
+    if (pathPanel) pathPanel.style.display = "none";
+    if (pathList) pathList.innerHTML = "";
+    updateDefaultStartBadge(null, null);
     restoreBatchItems([]);  // 清空编辑态批量镜像（新建语义由下一次 openModal 重置）
     updateModalSubmitButton();
     closeModal();
@@ -1019,6 +1508,7 @@
     var spec = draft.editable_spec || {};
     ctx.originalSpec = spec;
     ctx.effectiveConfig = draft.effective_config || null;
+    buildRecalcFocus(ctx);
     ctx.adapter = adapterFor(spec.workflow);
     ctx.methodBackfilled = false;
     // 1) 工作流预选走现有 pendingNewTask 通道（含 catalog 自愈 + 默认档位）。
@@ -1032,7 +1522,9 @@
       spec.task_name && spec.task_name !== spec.workflow ? spec.task_name : "";
     var res = spec.resources || {};
     if (res.nproc) document.getElementById("modal-nproc").value = String(res.nproc);
-    if (res.mem) document.getElementById("modal-mem").value = String(res.mem);
+    if (res.mem !== undefined && res.mem !== null && res.mem !== "") {
+      ACPMemoryInput.set("modal-mem", "modal-mem-unit", res.mem);
+    }
     if (res.parallelism && document.getElementById("modal-parallelism")) {
       document.getElementById("modal-parallelism").value = String(res.parallelism);
     }
@@ -1144,12 +1636,55 @@
     if (kind === "last_structure") {
       var ls = ((ctx.draft && ctx.draft.input_refs) || {}).last_structure;
       if (!ls || !ls.xyz_text) throw new Error(t("edit.last_structure_missing"));
+      var selectedLast = ctx.sourceSelection.payload || {};
+      var sourceRef = deepCopy(selectedLast.source_ref || ls.source_ref || {});
       return {
         source_type: "xyz_text",
-        source: ls.xyz_text,
+        source: selectedLast.xyz || selectedLast.xyz_text || ls.xyz_text,
         charge: orig.charge,
         multiplicity: orig.multiplicity,
-        edit_input_origin: { mode: "last_structure", entry_id: ls.entry_id },
+        source_ref: sourceRef,
+        edit_input_origin: {
+          mode: "last_structure",
+          entry_id: ls.entry_id,
+          source_id: sourceRef.source_id || "",
+        },
+      };
+    }
+    if (kind === "path_frame") {
+      var selectedPath = ctx.sourceSelection.payload || {};
+      var xyz = String(selectedPath.xyz || selectedPath.xyz_text || "");
+      if (!xyz.trim()) throw new Error(t("edit.path_geometry_missing"));
+      var charge = has(selectedPath, "charge") ? selectedPath.charge : 0;
+      var multiplicity = has(selectedPath, "multiplicity") ? selectedPath.multiplicity : 1;
+      var pathOrigin = deepCopy(selectedPath.edit_input_origin || {});
+      var pathRef = deepCopy(selectedPath.source_ref || {});
+      if (spec.workflow === "BatchOptimize") {
+        return {
+          source_type: "batch_structures",
+          charge: charge,
+          multiplicity: multiplicity,
+          items: [{
+            item_id: selectedPath.item_id || "path_frame_001",
+            candidate_id: selectedPath.candidate_id || selectedPath.item_id || "path_frame_001",
+            name: selectedPath.name || "Reaction path frame",
+            tag: selectedPath.tag || "INT",
+            xyz: xyz,
+            charge: charge,
+            multiplicity: multiplicity,
+            include: true,
+            source_ref: pathRef,
+          }],
+          edit_input_origin: pathOrigin,
+        };
+      }
+      return {
+        source_type: "xyz_text",
+        source: xyz,
+        charge: charge,
+        multiplicity: multiplicity,
+        source_ref: pathRef,
+        edit_input_origin: pathOrigin,
       };
     }
     if (kind === "original_input") {
@@ -1307,8 +1842,9 @@
           "/m" + (item.multiplicity || 1);
       });
     var inputSummary = inputRows.length ? inputRows.join("；") : (zh ? "沿用原任务输入" : "Original task input");
+    var sourceSummary = selectedSourceSummary(ctx);
     var resources = fieldVal("modal-nproc") + " " + (zh ? "核" : "cores") +
-      " · " + fieldVal("modal-mem") + " · " + (zh ? "并行" : "parallel") + " " +
+      " · " + (ACPMemoryInput.format("modal-mem", "modal-mem-unit") || "—") + " · " + (zh ? "并行" : "parallel") + " " +
       (fieldVal("modal-parallelism") || "1");
     var changedCount = countLocalChanges();
     var taskName = fieldVal("modal-task-name").trim() || ctx.originalSpec.task_name || "—";
@@ -1323,6 +1859,7 @@
     target.innerHTML = '<div class="create-review-grid">' +
       '<span class="muted">' + (zh ? "目标项目" : "Target project") + '</span><strong>' + escapeHtml(projectName) + '</strong>' +
       '<span class="muted">' + (zh ? "输入结构" : "Input structures") + '</span><div>' + escapeHtml(inputSummary) + '</div>' +
+      '<span class="muted">' + t("edit.source_label") + '</span><div>' + escapeHtml(sourceSummary) + '</div>' +
       '<span class="muted">' + (zh ? "工作流" : "Workflow") + '</span><strong>' + escapeHtml(workflow) + '</strong>' +
       '<span class="muted">' + (zh ? "计算方案" : "Calculation method") + '</span><div><strong>' + escapeHtml(methodTitle) + '</strong>' +
       (methodDesc ? '<div class="muted">' + escapeHtml(methodDesc) + '</div>' : "") + '</div>' +
@@ -1357,7 +1894,7 @@
       input: {},
       resources: {
         nproc: parseInt(fieldVal("modal-nproc"), 10) || 4,
-        mem: fieldVal("modal-mem") || "8GB",
+        mem: ACPMemoryInput.read("modal-mem", "modal-mem-unit"),
       },
       tags: [],
     };
@@ -1389,12 +1926,14 @@
     var ctx = editorContext;
     if (!ctx || ctx.submitting || ctx.collecting) return;
     if (!ctx.draft) return;
+    if (!ACPMemoryInput.read("modal-mem", "modal-mem-unit")) return;
     if (ctx.editStep < 3) {
       setEditStep(ctx.editStep + 1);
       return;
     }
     var passiveKind = ctx.sourceSelection.kind === "original_input" ||
-      ctx.sourceSelection.kind === "last_structure";
+      ctx.sourceSelection.kind === "last_structure" ||
+      ctx.sourceSelection.kind === "path_frame";
     var collecting = passiveKind ? Promise.resolve(collectFormOnlyBody()) : null;
     if (passiveKind) {
       ctx.collecting = false;
@@ -1509,7 +2048,7 @@
       remark: fieldVal("modal-remark"),
       task_name: fieldVal("modal-task-name").trim(),
       nproc: fieldVal("modal-nproc"),
-      mem: fieldVal("modal-mem"),
+      mem: ACPMemoryInput.format("modal-mem", "modal-mem-unit"),
       parallelism: fieldVal("modal-parallelism"),
       charge: isBatch ? null : fieldVal("modal-charge"),
       mult: isBatch ? null : fieldVal("modal-mult"),
@@ -1550,6 +2089,12 @@
 
   function saveActiveSourceDraft(ctx) {
     var tab = ctx.activeSourceTab;
+    if (tab === "task") {
+      if (ctx.sourceSelection.kind === "path_frame" && ctx.sourceSelection.payload) {
+        ctx.pathSourceDraft = deepCopy(ctx.sourceSelection.payload);
+      }
+      return;
+    }
     if (tab !== "structure" && tab !== "upload") return;
     var draft = ctx.sourceDrafts[tab] || {};
     draft.text = tab === "structure" ? fieldVal("modal-structure-input") : "";
@@ -1578,15 +2123,26 @@
   function onSourceTabChange(kind) {
     var ctx = editorContext;
     if (!ctx || !SOURCE_TAB_KINDS[kind]) return;
+    var pathPanel = document.getElementById("edit-path-structures");
+    if (pathPanel && kind !== "task") pathPanel.style.display = "none";
     if (ctx.activeSourceTab === kind) return;
     var prev = ctx.sourceSelection.kind;
     saveActiveSourceDraft(ctx);
     ctx.activeSourceTab = kind;
     if (kind === "task") {
-      hydrateTaskStructures(ctx, ctx.draft);
+      if (ctx.pathSourceDraft) {
+        wizardStructures = [deepCopy(ctx.pathSourceDraft)];
+        wizardSelectedStructureIndex = 0;
+        wizardParseWarnings = [];
+        renderStructurePreview(wizardStructures, wizardParseWarnings);
+        ctx.sourceSelection = { kind: "path_frame", payload: wizardStructures[0] };
+      } else {
+        hydrateTaskStructures(ctx, ctx.draft);
+      }
     } else {
       restoreSourceDraft(ctx, kind);
     }
+    updateDefaultStartBadge(ctx, ctx.sourceSelection.payload);
     // BatchOptimize：仅在返回任务结构时恢复基线。单纯查看“结构输入/上传”
     // 不改变批量清单，避免页签切换被误判为一次结构修改。
     if (ctx.originalSpec.workflow === "BatchOptimize" &&
@@ -1595,6 +2151,7 @@
         restoreBatchItems(ctx.baselineBatchItems);
       }
     }
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1608,12 +2165,14 @@
       kind: semanticKind,
       payload: structures[wizardSelectedStructureIndex] || structures[0] || null,
     };
+    updateDefaultStartBadge(ctx, ctx.sourceSelection.payload);
     ctx.sourceDrafts[kind] = {
       applied: true,
       text: kind === "structure" ? fieldVal("modal-structure-input") : "",
       structures: deepCopy(structures),
       selectedIndex: wizardSelectedStructureIndex || 0,
     };
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1623,11 +2182,15 @@
     var kind = structure.source_kind || "";
     if (kind === "last_structure") {
       ctx.sourceSelection = { kind: "last_structure", payload: structure };
-    } else if (kind === "job_result") {
+    } else if (kind === "job_result" || kind === "task_result" || kind === "saved_candidate") {
       ctx.sourceSelection = { kind: "job_result", payload: structure };
+    } else if (kind === "path_frame") {
+      ctx.sourceSelection = { kind: "path_frame", payload: structure };
     } else if (wizardInputMode === "task") {
       ctx.sourceSelection = { kind: "original_input", payload: structure };
     }
+    updateDefaultStartBadge(ctx, structure);
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1637,6 +2200,8 @@
     if (structure) structure.source_kind = "job_result";
     ctx.activeSourceTab = "task";
     ctx.sourceSelection = { kind: "job_result", payload: structure || null };
+    updateDefaultStartBadge(ctx, structure);
+    syncSourceExecutionMode(ctx);
     updateEditorUiState();
   }
 
@@ -1665,6 +2230,14 @@
   function updateEditModeTabs() {
     var ctx = editorContext;
     var modal = document.getElementById("job-modal");
+    updateDefaultStartBadge(ctx, ctx && ctx.sourceSelection && ctx.sourceSelection.payload);
+    var pathPanel = document.getElementById("edit-path-structures");
+    if (pathPanel) {
+      pathPanel.style.display = ctx && Array.isArray(ctx.pathFrameSources) && ctx.pathFrameSources.length &&
+        ctx.activeSourceTab === "task" &&
+        ctx.mode === "edit_recalculate" &&
+        supportsReactionPathInput(ctx.originalSpec && ctx.originalSpec.workflow) ? "flex" : "none";
+    }
     if (modal) modal.classList.toggle("edit-mode", !!ctx);
     var stepper = document.getElementById("create-stepper");
     if (stepper) stepper.setAttribute("aria-label", ctx ? "修改参数后重算步骤" : "新建任务步骤");
@@ -1844,22 +2417,35 @@
     var el = footerEl();
     if (!el || !ctx || !ctx.draft) return;
     var caps = ctx.draft.capabilities || {};
+    var requiresNewJob = sourceRequiresIndependentJob(ctx);
     var htmlParts = ['<div class="edit-banner-row"><span class="edit-row-label">' +
       t("edit.execution_mode") + "</span>"];
-    htmlParts.push('<label class="edit-radio' + (caps.can_in_place ? "" : " disabled") + '">' +
+    htmlParts.push('<label class="edit-radio' + (caps.can_in_place && !requiresNewJob ? "" : " disabled") + '">' +
       '<input type="radio" name="edit-exec-mode" value="in_place"' +
       (ctx.executionMode === "in_place" ? " checked" : "") +
-      (caps.can_in_place ? "" : " disabled") + "> " + t("edit.exec_in_place") + "</label>");
+      (caps.can_in_place && !requiresNewJob ? "" : " disabled") + "> " + t("edit.exec_in_place") + "</label>");
     htmlParts.push('<label class="edit-radio"><input type="radio" name="edit-exec-mode" value="new_job"' +
       (ctx.executionMode === "new_job" ? " checked" : "") + "> " + t("edit.exec_new_job") + "</label>");
     htmlParts.push('<span class="flex-spacer"></span>');
     htmlParts.push('<span class="edit-changed-badge" id="edit-changed-badge"></span>');
     htmlParts.push("</div>");
+    if (requiresNewJob && ctx.mode !== "new_from_job") {
+      htmlParts.push('<div class="edit-banner-hint">' +
+        escapeHtml(t("edit.source_requires_new_job")) + "</div>");
+    }
     el.innerHTML = htmlParts.join("");
     el.style.display = "block";
     el.querySelectorAll('input[name="edit-exec-mode"]').forEach(function (radio) {
       radio.addEventListener("change", function () {
-        if (radio.checked) { ctx.executionMode = radio.value; updateEditorUiState(); }
+        if (!radio.checked) return;
+        if (radio.value === "in_place" && sourceRequiresIndependentJob(ctx)) {
+          ctx.executionMode = "new_job";
+          renderFooter();
+          updateEditorUiState();
+          return;
+        }
+        ctx.executionMode = radio.value;
+        updateEditorUiState();
       });
     });
   }
@@ -1898,7 +2484,8 @@
     var btn = modalSubmitBtn();
     if (btn && !ctx.collecting && !ctx.submitting) {
       var caps = ctx.draft.capabilities || {};
-      btn.disabled = ctx.executionMode === "in_place" && !caps.can_in_place;
+      btn.disabled = ctx.executionMode === "in_place" &&
+        (!caps.can_in_place || sourceRequiresIndependentJob(ctx));
       btn.title = btn.disabled ? t("edit.in_place_blocked") : "";
     }
   }
@@ -1963,6 +2550,7 @@
     }).join("");
     var isRemote = editorContext && editorContext.executionMode === "new_job";
     var batchRoleSummary = renderBatchRoleSummary(editorContext);
+    var sourceSummary = selectedSourceSummary(editorContext);
     overlay.innerHTML =
       '<div class="modal-dialog"><div class="modal-header"><h2>' + t("edit.summary_title") +
       '</h2><button class="modal-close" id="edit-summary-x">X</button></div><div class="modal-body">' +
@@ -1970,6 +2558,7 @@
       "<div><b>" + t("edit.summary_workflow") + ":</b> " + escapeHtml(preview.workflow) + "</div>" +
       "<div><b>" + t("edit.summary_mode") + ":</b> " +
       t(isRemote ? "edit.exec_new_job" : "edit.exec_in_place") + "</div>" +
+      "<div><b>" + t("edit.source_label") + ":</b> " + escapeHtml(sourceSummary) + "</div>" +
       (isRemote ? "" : '<div class="edit-warn">' + t("edit.summary_cleanup_warning") + "</div>") +
       "</div>" + warns + batchRoleSummary +
       (diffRows ? '<table class="edit-diff-table"><thead><tr><th>' + t("edit.diff_field") +
@@ -2050,6 +2639,7 @@
     checkAndSubmit: checkAndSubmit,
     onSourceTabChange: onSourceTabChange,
     onPreviewStructureSelected: onPreviewStructureSelected,
+    onExternalSourcePreview: onExternalSourcePreview,
     onJobResultLoaded: onJobResultLoaded,
     onParsedSourceApplied: onParsedSourceApplied,
     onTaskStructureChanged: onTaskStructureChanged,
@@ -2057,6 +2647,9 @@
     onBatchItemChanged: onBatchItemChanged,
     copyOriginalToStructureInput: copyOriginalToStructureInput,
     updateEditModeTabs: updateEditModeTabs,
+    getRecalcSourceAnnotation: getRecalcSourceAnnotation,
+    getPinnedSources: getPinnedSources,
+    usePreviousOutput: usePreviousOutput,
     refreshUi: refreshUi,
   };
 

@@ -1,0 +1,181 @@
+{
+  "work_dir": "/var/lib/acp/runs/f8022072-48bf-43c8-83e6-d4daac8106b0/TS2_STEPWISE_BatchOptimize_PUBLICATION",
+  "files": [
+    {
+      "path": "WORK/04_FREQ/freq.bas0",
+      "size": 644228,
+      "modified": 1790837844.6409695,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.bas1",
+      "size": 1623716,
+      "modified": 1790837844.6409695,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.bas2",
+      "size": 4,
+      "modified": 1790837844.6409695,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.bas3",
+      "size": 4,
+      "modified": 1790837844.6409695,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.bas4",
+      "size": 4,
+      "modified": 1790837844.6409695,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.bas5",
+      "size": 4,
+      "modified": 1790837844.6409695,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.0",
+      "size": 1912784,
+      "modified": 1790838054.9543884,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.1",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.10",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.11",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.12",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.13",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.14",
+      "size": 985316,
+      "modified": 1790837944.8909101,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.15",
+      "size": 18221708,
+      "modified": 1790838054.9543884,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.2",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.3",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.4",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.5",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.6",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.7",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.8",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.cpscfdata.tmp.9",
+      "size": 1912784,
+      "modified": 1790837944.900475,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.densities",
+      "size": 2672672,
+      "modified": 1790837873.1248472,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.densitiesinfo",
+      "size": 3160,
+      "modified": 1790837873.1248472,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.gbw",
+      "size": 2610612,
+      "modified": 1790837945.1969857,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.hostnames",
+      "size": 256,
+      "modified": 1790837849.169353,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.inp",
+      "size": 1750,
+      "modified": 1790837844.545232,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.property.txt",
+      "size": 35377,
+      "modified": 1790838056.830224,
+      "is_dir": false
+    },
+    {
+      "path": "WORK/04_FREQ/freq.propint.tmp.0",
+      "size": 4516720,
+      "modified": 1790837874.8829148,
+      "is_dir": false
+    }
+  ],
+  "truncated": false,
+  "pinned": []
+}

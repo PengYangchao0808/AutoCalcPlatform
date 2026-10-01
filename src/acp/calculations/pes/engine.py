@@ -298,8 +298,8 @@ class PesSearchEngine:
         frames = scan_result.get("frames", [])
         profile = scan_result.get("profile", {})
         quality = scan_result.get("quality", {})
-        ts_recs = scan_result.get("ts_recommendations", [])
-        int_recs = scan_result.get("int_recommendations", [])
+        ts_recs = []
+        int_recs = []
 
         # Single source of truth: the persisted scan recommendations are
         # mirrored as engine candidates (no second selection pass).
