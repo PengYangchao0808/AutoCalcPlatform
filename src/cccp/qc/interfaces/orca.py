@@ -42,7 +42,6 @@ from cccp.qc.interfaces.orca_ts import (
     parse_ts_frequency_map,
     parse_ts_mode_vectors,
     ts_geom_block,
-    ts_opt_route,
 )
 from cccp.qc.interfaces.route_render import (
     RouteKeyword,

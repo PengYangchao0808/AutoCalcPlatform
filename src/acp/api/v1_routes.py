@@ -5522,7 +5522,8 @@ def submit_job_edit_recalculate(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    _persist_method_warning_event(manager, record, result, spec)
+    if not result.get("replayed"):
+        _persist_method_warning_event(manager, record, result, spec)
     if result.get("operation") == "new_job" and not result.get("replayed"):
         created = manager.get(str(result.get("job_id") or ""))
         if created is not None and created.work_dir and source_snapshots:

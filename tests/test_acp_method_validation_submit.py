@@ -408,6 +408,33 @@ def test_edit_submit_persists_warning_event(client: TestClient) -> None:
     assert all("GFN method 'GFN2-xTB'" in message for message in event["warnings"])
 
 
+def test_edit_submit_replay_persists_warning_event_once(client: TestClient) -> None:
+    """E11/T14: an idempotent replay must not append a second warning event."""
+    from acp.scheduler.job_edit import compute_source_revision
+
+    record = _seed_pes_job(client, "t14replay", _HISTORICAL_PROTOCOL)
+    body = {
+        "mode": "in_place",
+        "input": record.spec.input,
+        "method": {"mode": "bond_length_scan"},
+        "resources": {"nproc": 8},
+        "expected_source_revision": compute_source_revision(record),
+        "request_id": "req-t14replay",
+    }
+    first = client.post("/api/v1/jobs/t14replay/edit-recalculate", json=body)
+    assert first.status_code == 200, first.text
+    assert first.json()["replayed"] is False
+
+    replay = client.post("/api/v1/jobs/t14replay/edit-recalculate", json=body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["replayed"] is True
+
+    events_path = runtime_file(Path(record.work_dir), "events.jsonl")
+    events = JobEventLog(events_path).read_all()
+    warning_events = [event for event in events if event.get("type") == "method_validation_warning"]
+    assert len(warning_events) == 1, warning_events
+
+
 # ---------------------------------------------------------------------------
 # Warning channel 2 + runner events: CLI path
 # ---------------------------------------------------------------------------
