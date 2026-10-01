@@ -11519,22 +11519,21 @@ def test_copy_scan_level_reconciles_against_copied_method_family() -> None:
 
     fn = src.split("function copyScanLevelFields(", 1)[1]
 
-    # The canonical copy field map is intact — the copy feature survives —
-    # and the method itself travels with the copy.
-    for mapping in (
-        'scan_optimizer_method: "functional"',
-        'scan_optimizer_basis: "basis"',
-        'scan_optimizer_dispersion: "dispersion"',
-        'scan_optimizer_solvent_model: "solvent_model"',
-        'scan_optimizer_solvent: "solvent"',
-        'scan_optimizer_grid: "grid"',
-        'scan_optimizer_scf_convergence: "scf_convergence"',
-    ):
-        assert mapping in fn, f"copy field map lost {mapping}"
+    # (T23g) The copy projection is DERIVED from the catalog level field
+    # lists — the inline copyMap literal is retired. The method travels as
+    # the destination's "functional"; the RI family is deliberately not
+    # copied (T16 contract). Behavior equivalence with the historical
+    # 7-pair map is locked by test_t23_derived_copy_projection_behavior_node.
+    assert "var copyMap" not in fn, "inline copy map literal must stay retired"
+    assert 'sk.indexOf("scan_optimizer_") !== 0' in fn
+    assert 'base === "method" ? "functional" : base' in fn
+    assert '"ri_approximation": true' in fn
+    assert '"aux_j_basis": true' in fn and '"aux_c_basis": true' in fn
+    assert "dstFieldSet" in fn
 
     # Reconciliation runs AFTER the copy loop and keys on the COPIED method
     # (the destination's post-copy functional) — not the pre-copy target.
-    loop_at = fn.index("for (var sk in copyMap)")
+    loop_at = fn.index("Object.keys(srcState).forEach")
     sweep_at = fn.index("applyMethodFamilyState(catalog, dstState,")
     assert loop_at < sweep_at, "family sweep must run after the copy loop"
     assert 'var copiedMethod = dstState.functional' in fn
@@ -11756,6 +11755,421 @@ def test_copy_scan_level_serialized_payload_node() -> None:
         Path(cu_path).unlink(missing_ok=True)
         Path(pes_path).unlink(missing_ok=True)
         Path(cat_path).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# T23 — serialization defense, data-driven banner, hydration hint, hardcode audit
+# ---------------------------------------------------------------------------
+
+
+_T23_NODE_PRELUDE = r"""
+const fs = require("fs");
+const cuSrc = fs.readFileSync(CU_PATH, "utf8");
+const catalog = JSON.parse(fs.readFileSync(CAT_PATH, "utf8"));
+const CatalogUtils = eval(
+  "(" + cuSrc.replace(/^var\s+CatalogUtils\s*=\s*/, "").replace(/;\s*$/, "") + ")"
+);
+function eq(name, actual, expected) {
+  const a = JSON.stringify(actual), e = JSON.stringify(expected);
+  if (a !== e) { console.error("FAIL " + name + ": got " + a + " want " + e); process.exit(1); }
+}
+function ok(name, cond, detail) {
+  if (!cond) { console.error("FAIL " + name + ": " + detail); process.exit(1); }
+}
+"""
+
+_T23_NODE_PES_STUBS = r"""
+const pesSrc = fs.readFileSync(PES_PATH, "utf8");
+var methodCatalogCache = catalog;
+var lookupCI = CatalogUtils.lookupCI;
+var wizardState = { method: { stages: {} } };
+const buildPESProtocolFromMethod = eval("(" + pesSrc + ")");
+"""
+
+
+def _t23_node(script: str, *, with_pes: bool = False) -> None:
+    """Run a node contract script against the real CatalogUtils IIFE + catalog.
+
+    CU_PATH / CAT_PATH (and PES_PATH when ``with_pes``) tokens in the script
+    are substituted with temp-file paths; the script must end in a PASS
+    sentinel (same harness pattern as the T15/T16 node contracts).
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    from acp.catalog import get_method_catalog
+
+    catalog = get_method_catalog()
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    paths: dict[str, str] = {}
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".js", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(_catalogutils_source(html))
+        paths["CU_PATH"] = f.name
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    ) as f:
+        f.write(json.dumps(catalog))
+        paths["CAT_PATH"] = f.name
+    if with_pes:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".js", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(_pes_protocol_builder_source(html))
+            paths["PES_PATH"] = f.name
+
+    for token, path in paths.items():
+        script = script.replace(token, json.dumps(path))
+    try:
+        result = subprocess.run(
+            ["node", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"T23 node contract failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+        )
+        assert "PASS" in result.stdout
+    finally:
+        for path in paths.values():
+            Path(path).unlink(missing_ok=True)
+
+
+def test_t23_serializer_family_lock_source_contract() -> None:
+    """(a,g) buildPESProtocolFromMethod carries the T23a serialization
+    defense (payload family gate, both levels) and no method literals."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    src = _pes_protocol_builder_source(html)
+
+    assert "serialization defense (T23a)" in src
+    for gate in (
+        'CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "basis", scanOptimizerMethod)',
+        'CatalogUtils.isFieldFamilyLocked(methodCatalogCache, "dispersion", scanOptimizerMethod)',
+        "CatalogUtils.isFieldFamilyLocked("
+        'methodCatalogCache, "ri_approximation", scanOptimizerMethod)',
+        "scanOptimizerFamilyLocked",
+        "singlePointFamilyLocked",
+        "singlePointRiLocked",
+    ):
+        assert gate in src, f"missing serialization gate: {gate}"
+    assert (
+        'CatalogUtils.getFieldDefault(methodCatalogCache, "scan_optimizer_method"'
+        in src
+    ), "scan_optimizer method default must resolve from the catalog"
+    assert '"GFN2-xTB"' not in src, "serializer must carry no method literal"
+
+
+def test_t23_gfn_serialization_defense_node() -> None:
+    """(a) leaked family-locked overrides never reach the serialized payload;
+    user-RI DFT values still serialize; composite behavior is preserved."""
+    script = (
+        textwrap.dedent(_T23_NODE_PRELUDE)
+        + textwrap.dedent(_T23_NODE_PES_STUBS)
+        + textwrap.dedent(
+            r"""
+        // (A) stale GFN state (bypassing the T15/T16 UI sweep) must not leak.
+        wizardState.method.stages = {
+          scan_driver: {},
+          scan_optimizer: {
+            scan_optimizer_method: "GFN2-xTB",
+            scan_optimizer_basis: "def2-TZVPP",
+            scan_optimizer_dispersion: "D4",
+            scan_optimizer_ri_approximation: "RIJCOSX",
+            scan_optimizer_solvent_model: "ALPB",
+            scan_optimizer_grid: "DefGrid2",
+          },
+          single_point: {
+            engine: "orca",
+            functional: "GFN2-xTB",
+            basis: "def2-TZVP",
+            dispersion: "D4",
+            ri_approximation: "RIJCOSX",
+            aux_j_basis: "def2/J",
+            aux_c_basis: "AutoAux",
+            solvent_model: "ALPB",
+            solvent: "water",
+            grid: "DefGrid2",
+            single_point_resume: true,
+          },
+        };
+        const gfn = buildPESProtocolFromMethod(0, 1);
+        const captured = JSON.stringify(gfn);
+        eq("gfn scan_optimizer basis null", gfn.scan_optimizer.basis, null);
+        eq("gfn scan_optimizer dispersion null", gfn.scan_optimizer.dispersion, null);
+        ok("gfn scan_optimizer ri cleared",
+           gfn.scan_optimizer.ri_approximation === "none"
+           || gfn.scan_optimizer.ri_approximation === null,
+           captured);
+        eq("gfn single_point basis null", gfn.single_point.basis, null);
+        eq("gfn single_point dispersion null", gfn.single_point.dispersion, null);
+        ok("gfn single_point ri cleared",
+           gfn.single_point.ri_approximation === "none"
+           || gfn.single_point.ri_approximation === null,
+           captured);
+        eq("gfn single_point aux_j null", gfn.single_point.aux_j_basis, null);
+        eq("gfn single_point aux_c null", gfn.single_point.aux_c_basis, null);
+        for (const stale of ["def2-TZVPP", "def2-TZVP", "RIJCOSX", "def2/J", "AutoAux", "D4"]) {
+          ok("payload free of stale '" + stale + "'", captured.indexOf(stale) < 0, captured);
+        }
+        eq("gfn solvent model survives", gfn.single_point.solvent_model, "ALPB");
+        eq("gfn solvent survives", gfn.single_point.solvent, "water");
+
+        // (B) user-RI DFT values must still serialize (no over-masking).
+        wizardState.method.stages = {
+          scan_driver: {},
+          scan_optimizer: {
+            scan_optimizer_method: "B3LYP",
+            scan_optimizer_basis: "def2-TZVP",
+            scan_optimizer_dispersion: "D4",
+            scan_optimizer_ri_approximation: "RIJCOSX",
+            scan_optimizer_solvent_model: "SMD",
+          },
+          single_point: {
+            engine: "orca",
+            functional: "B3LYP",
+            basis: "def2-TZVP",
+            dispersion: "D4",
+            ri_approximation: "RIJCOSX",
+            aux_j_basis: "def2/J",
+            single_point_resume: true,
+          },
+        };
+        const dft = buildPESProtocolFromMethod(0, 1);
+        eq("dft scan_optimizer basis kept", dft.scan_optimizer.basis, "def2-TZVP");
+        eq("dft scan_optimizer dispersion kept", dft.scan_optimizer.dispersion, "D4");
+        eq("dft scan_optimizer ri kept", dft.scan_optimizer.ri_approximation, "RIJCOSX");
+        eq("dft single_point basis kept", dft.single_point.basis, "def2-TZVP");
+        eq("dft single_point dispersion kept", dft.single_point.dispersion, "D4");
+        eq("dft single_point ri kept", dft.single_point.ri_approximation, "RIJCOSX");
+        eq("dft single_point aux_j kept", dft.single_point.aux_j_basis, "def2/J");
+
+        // (C) composite behavior preserved (T11 basis nulling) + catalog default.
+        wizardState.method.stages = {
+          scan_driver: {},
+          scan_optimizer: {
+            scan_optimizer_method: "B97-3c",
+            scan_optimizer_basis: "mTZVP",
+            scan_optimizer_dispersion: "D3BJ",
+          },
+          single_point: {},
+        };
+        const c3 = buildPESProtocolFromMethod(0, 1);
+        eq("composite scan_optimizer basis still null", c3.scan_optimizer.basis, null);
+        eq("composite dispersion unchanged", c3.scan_optimizer.dispersion, "D3BJ");
+        wizardState.method.stages = { scan_driver: {}, scan_optimizer: {}, single_point: {} };
+        eq("scan_optimizer default method is catalog-driven",
+           buildPESProtocolFromMethod(0, 1).scan_optimizer.method,
+           catalog.field_definitions.scan_optimizer_method.default["*"]);
+
+        console.log("PASS");
+        """
+        )
+    )
+    _t23_node(script, with_pes=True)
+
+
+def test_t23_banner_source_contract() -> None:
+    """(d) the ORCA-availability banner keys on the catalog family gate;
+    the hardcoded _xtbMethods list stays retired."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "var _xtbMethods" not in html
+    assert "_xtbMethods = [" not in html
+    assert "catalog family gate (T23d)" in html
+    banner = html.split("catalog family gate (T23d)", 1)[1].split(
+        "if (_isDftMethod)", 1
+    )[0]
+    assert 'isFieldFamilyLocked("basis", _soMethod)' in banner
+    assert "modal.orca_unavailable_dft_scan" in html
+
+
+def test_t23_banner_family_gate_behavior_node() -> None:
+    """(d) banner predicate from the payload: xTB-family suppresses the ORCA
+    warning, DFT/composite methods keep it (GFN0 delta documented — the old
+    hardcoded list wrongly warned for GFN0-xTB)."""
+    script = textwrap.dedent(_T23_NODE_PRELUDE) + textwrap.dedent(
+        r"""
+        for (const m of ["GFN2-xTB", "GFN1-xTB", "GFN-FF", "GFN0-xTB"]) {
+          eq("xTB-family suppresses ORCA banner: " + m,
+             CatalogUtils.isFieldFamilyLocked(catalog, "basis", m), true);
+        }
+        for (const m of ["B3LYP", "B97-3c", "r2SCAN-3c", "DLPNO-CCSD(T)"]) {
+          eq("DFT/composite keeps ORCA banner: " + m,
+             CatalogUtils.isFieldFamilyLocked(catalog, "basis", m), false);
+        }
+        console.log("PASS");
+        """
+    )
+    _t23_node(script)
+
+
+def test_t23_hydration_grid_migration_hint_source_contract() -> None:
+    """(f) draft hydration migrates legacy grid aliases and shows the hint;
+    (g) the alias mirror is a marked historical-compat branch."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "legacy grid migration hint (T23f)" in html
+    fn = html.split("function _restoreWizardDraft(draft) {", 1)[1].split(
+        "\nasync function _revalidateDraftSources()", 1
+    )[0]
+    assert "CatalogUtils.migrateLegacyGridInStates(" in fn
+    assert 't("draft.grid_migration_hint"' in fn
+    assert (
+        html.count('"draft.grid_migration_hint":') == 2
+    ), "hint key must exist in zh-CN and en-US locales"
+
+    cu = _catalogutils_source(html)
+    assert "HISTORICAL-COMPAT (T23g)" in cu
+    assert "HISTORICAL_COMPAT_GRID_ALIASES" in cu
+    assert "migrateLegacyGridInStates: migrateLegacyGridInStates" in cu
+    assert "migrateLegacyGridValue: migrateLegacyGridValue" in cu
+
+
+def test_t23_legacy_grid_alias_parity_and_behavior_node() -> None:
+    """(f,g) the frontend alias mirror is parity-locked to
+    cccp.qc.keyword_registry (single authority) and hydration migration maps
+    UltraFine→DefGrid3 with a per-field hint."""
+    from cccp.qc.keyword_registry import _ENUM_TABLES, _LEGACY_ALIAS_KEYS
+
+    expected = {
+        alias: _ENUM_TABLES["grid"][alias][0] for alias in _LEGACY_ALIAS_KEYS["grid"]
+    }
+    assert expected == {
+        "sg1": "DefGrid1",
+        "fine": "DefGrid2",
+        "ultrafine": "DefGrid3",
+        "superfine": "DefGrid3",
+    }, "registry legacy grid aliases changed — update the frontend mirror + this lock"
+
+    script = textwrap.dedent(_T23_NODE_PRELUDE) + textwrap.dedent(
+        r"""
+        const expectedAliases = __EXPECTED_GRID_ALIASES__;
+        const mirror = CatalogUtils.HISTORICAL_COMPAT_GRID_ALIASES;
+        eq("alias mirror keys",
+           Object.keys(mirror).sort().join(","), Object.keys(expectedAliases).sort().join(","));
+        for (const k of Object.keys(expectedAliases)) {
+          eq("alias mirror [" + k + "]", mirror[k], expectedAliases[k]);
+        }
+        eq("UltraFine -> DefGrid3", CatalogUtils.migrateLegacyGridValue(catalog, "UltraFine"),
+           {from: "UltraFine", to: "DefGrid3"});
+        eq("ULTRA FINE (registry-normalized) -> DefGrid3",
+           CatalogUtils.migrateLegacyGridValue(catalog, "ULTRA FINE"),
+           {from: "ULTRA FINE", to: "DefGrid3"});
+        eq("SG1 -> DefGrid1", CatalogUtils.migrateLegacyGridValue(catalog, "SG1"),
+           {from: "SG1", to: "DefGrid1"});
+        eq("Fine -> DefGrid2", CatalogUtils.migrateLegacyGridValue(catalog, "Fine"),
+           {from: "Fine", to: "DefGrid2"});
+        eq("SuperFine -> DefGrid3", CatalogUtils.migrateLegacyGridValue(catalog, "SuperFine"),
+           {from: "SuperFine", to: "DefGrid3"});
+        eq("canonical value untouched",
+           CatalogUtils.migrateLegacyGridValue(catalog, "DefGrid3"), null);
+        eq("blank untouched", CatalogUtils.migrateLegacyGridValue(catalog, ""), null);
+        eq("unknown value never invents a target",
+           CatalogUtils.migrateLegacyGridValue(catalog, "Grid5"), null);
+
+        const stages = {
+          scan_optimizer: { scan_optimizer_method: "GFN2-xTB", scan_optimizer_grid: "UltraFine" },
+          single_point: { grid: "DefGrid3", basis: "x" },
+          batch: { grid: "SG1", scf_convergence: "Tight" },
+        };
+        const hints = CatalogUtils.migrateLegacyGridInStates(catalog, stages);
+        eq("two migration hints", hints.length, 2);
+        eq("scan_optimizer hint", hints[0],
+           {level: "scan_optimizer", field: "scan_optimizer_grid",
+            from: "UltraFine", to: "DefGrid3"});
+        eq("batch hint", hints[1],
+           {level: "batch", field: "grid", from: "SG1", to: "DefGrid1"});
+        eq("state migrated in place", stages.scan_optimizer.scan_optimizer_grid, "DefGrid3");
+        eq("batch state migrated", stages.batch.grid, "DefGrid1");
+        eq("canonical state untouched", stages.single_point.grid, "DefGrid3");
+        console.log("PASS");
+        """
+    ).replace("__EXPECTED_GRID_ALIASES__", json.dumps(expected))
+    _t23_node(script)
+
+
+def test_t23_derived_copy_projection_behavior_node() -> None:
+    """(g) the catalog-derived copy projection equals the historical 7-pair
+    map: shared fields travel as their base names, method→functional, and
+    the RI family / non-shared fields never copy."""
+    script = textwrap.dedent(_T23_NODE_PRELUDE) + textwrap.dedent(
+        r"""
+        const spFields = catalog.method_schemas.pes_scan.method_levels.find(
+          (l) => l.level_id === "single_point").fields;
+        const src = {
+          scan_optimizer_method: "B3LYP",
+          scan_optimizer_basis: "def2-TZVP",
+          scan_optimizer_dispersion: "D4",
+          scan_optimizer_solvent_model: "SMD",
+          scan_optimizer_solvent: "toluene",
+          scan_optimizer_grid: "DefGrid2",
+          scan_optimizer_scf_convergence: "Tight",
+          scan_optimizer_max_iterations: 321,
+          scan_optimizer_convergence: "tight",
+          scan_optimizer_scf_max_iterations: 150,
+          scan_optimizer_ri_approximation: "RIJCOSX",
+          scan_optimizer_retries: 7,
+          scan_optimizer_retry_strategy: "previous_geometry",
+        };
+        const dst = {
+          engine: "orca", functional: "r2SCAN-3c", basis: "mTZVP", dispersion: "none",
+          ri_approximation: "none", aux_j_basis: "", aux_c_basis: "",
+          solvent_model: "none", solvent: "", grid: "", scf_convergence: "Tight",
+          single_point_resume: true,
+        };
+        CatalogUtils.copyScanLevelFields(catalog, src, dst, spFields, "orca");
+        eq("method travels as functional", dst.functional, "B3LYP");
+        eq("basis copied", dst.basis, "def2-TZVP");
+        eq("dispersion copied", dst.dispersion, "D4");
+        eq("solvent_model copied", dst.solvent_model, "SMD");
+        eq("solvent copied", dst.solvent, "toluene");
+        eq("grid copied", dst.grid, "DefGrid2");
+        eq("scf_convergence copied", dst.scf_convergence, "Tight");
+        ok("RI deliberately not copied", dst.ri_approximation !== "RIJCOSX", JSON.stringify(dst));
+        eq("RI stays at target spelling", dst.ri_approximation, "none");
+        eq("aux_j not copied", dst.aux_j_basis, "");
+        eq("aux_c not copied", dst.aux_c_basis, "");
+        ok("non-shared fields never appear",
+           dst.max_iterations === undefined && dst.convergence === undefined
+           && dst.scf_max_iterations === undefined && dst.retries === undefined
+           && dst.retry_strategy === undefined && dst.scan_optimizer_method === undefined,
+           JSON.stringify(dst));
+        console.log("PASS");
+        """
+    )
+    _t23_node(script)
+
+
+def test_t23_hardcode_audit_sentinels() -> None:
+    """(g) retired hardcode declarations stay retired and remaining method
+    literals live only in marked historical-compat branches."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    cu = _catalogutils_source(html)
+
+    assert "var _scopedFieldBase" not in html
+    assert "_xtbMethods = [" not in html
+    assert "var copyMap" not in cu
+    assert (
+        '"basis", "single_point_basis", "scan_optimizer_basis", "aux_j_basis", "aux_c_basis"'
+        not in html
+    ), "hardcoded supports_custom allowlist must stay retired"
+    assert (
+        "fieldFd.supports_custom && !isOptionalOverride && !isBasisSingleLocked" in html
+    )
+    assert "var filterFieldName = fieldBaseName(fieldName);" in html
+
+    lines = html.splitlines()
+    for i, line in enumerate(lines):
+        for literal in ('"GFN2-xTB"', '"B97-3c"'):
+            if literal in line and "FIELD_DEFINITIONS" not in line:
+                window = "\n".join(lines[max(0, i - 3) : i + 1])
+                assert "HISTORICAL-COMPAT" in window or "T23g" in window, (
+                    f"line {i + 1} carries {literal} outside a historical-compat "
+                    f"branch: {line.strip()}"
+                )
 
 
 # ---------------------------------------------------------------------------
