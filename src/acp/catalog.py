@@ -4601,30 +4601,33 @@ def _migrate_legacy_grid_value(
     value: Any,
     functional: str | None,
     engine: str,
-) -> str | None:
+) -> tuple[str | None, str | None]:
     """Canonicalize a legacy (Gaussian-era) grid alias.
 
     The catalog's ``grid``/``scan_optimizer_grid`` options are ORCA-native
     (DefGrid1/2/3); legacy spellings are still legal INPUTS and route
     through ``cccp.qc.keyword_registry.resolve`` (T2), which maps them to
-    the canonical token AND emits a migration warning. Returns the canonical
-    token when a legacy alias was migrated, else ``None`` (the value is
-    either already canonical or not a grid alias).
+    the canonical token AND emits a migration warning.  Returns
+    ``(canonical, warning)``: ``canonical`` is the canonical token when a
+    legacy alias was migrated, else ``None`` (the value is either already
+    canonical or not a grid alias); ``warning`` is the registry's
+    legacy-alias migration message (T24: surfaced to the user, never
+    logger-only).
     """
     if not isinstance(value, str) or not value.strip():
-        return None
+        return None, None
     if value in FIELD_DEFINITIONS["grid"]["options"]:
-        return None
+        return None, None
     if not functional:
-        return None
+        return None, None
     family = method_family(functional)
     if family == "unknown":
-        return None
+        return None, None
     try:
         implementation = resolve_implementation(functional, engine=engine)
         canonical, warning = resolve("grid", value, family=family, implementation=implementation)
     except KeywordValueError:
-        return None
+        return None, None
     if canonical and warning:
         logger.warning(
             "Legacy grid value %r migrated to %r for method %r (%s)",
@@ -4633,8 +4636,8 @@ def _migrate_legacy_grid_value(
             functional,
             warning,
         )
-        return canonical
-    return None
+        return canonical, warning
+    return None, None
 
 
 def _resolve_field_options(
@@ -5052,8 +5055,28 @@ def _validate_batch_roles(
     return {"batch_roles": validated_roles}, errors
 
 
-def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
-    """Return (normalized_levels, errors)."""
+def _canonicalization_warning(lid: str, field_name: str, raw: Any, canonical: Any) -> str:
+    """Human-readable migration/canonicalization message (T24)."""
+    return (
+        f"Level '{lid}', field '{field_name}': value '{raw}' "
+        f"canonicalized to '{canonical}'"
+    )
+
+
+def normalize_and_validate_method_config(
+    method: dict,
+    schema: dict,
+    warnings_out: list[str] | None = None,
+) -> tuple[dict, list[str]]:
+    """Return (normalized_levels, errors).
+
+    When *warnings_out* is a list, migration/canonicalization warnings are
+    appended to it (T24): legacy grid aliases routed through the keyword
+    registry (``UltraFine`` → ``DefGrid3``), method alias normalization
+    (``b973c`` → ``B97-3c``), and case-canonicalized enum values.  Callers
+    that omit the parameter keep the historical silent-normalization
+    behaviour.
+    """
     errors: list[str] = []
 
     if "batch_roles" in method:
@@ -5124,7 +5147,12 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     # resolving at call time keeps the dependency acyclic.
                     from acp.calculations.levels import normalize_method_alias
 
-                    user_val = normalize_method_alias(user_val)
+                    canonical_method = normalize_method_alias(user_val)
+                    if canonical_method != user_val and warnings_out is not None:
+                        warnings_out.append(
+                            _canonicalization_warning(lid, field_name, user_val, canonical_method)
+                        )
+                    user_val = canonical_method
                 # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
                 # or a list, validate every item against the allowed options,
                 # and normalise to a list so downstream CLI-flag emission
@@ -5180,9 +5208,15 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 if field_base.startswith(_SCAN_OPT_PREFIX):
                     field_base = field_base[len(_SCAN_OPT_PREFIX) :]
                 if field_base == "grid":
-                    migrated_grid = _migrate_legacy_grid_value(user_val, level_method, engine)
+                    migrated_grid, grid_warning = _migrate_legacy_grid_value(
+                        user_val, level_method, engine
+                    )
                     if migrated_grid is not None:
                         user_val = migrated_grid
+                        if warnings_out is not None and grid_warning:
+                            warnings_out.append(
+                                f"Level '{lid}', field '{field_name}': {grid_warning}"
+                            )
                 options = _resolve_field_options(
                     field_name,
                     engine,
@@ -5213,11 +5247,27 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             user_val = str(user_val).lower()
                         else:
                             user_val = canonical
+                        if warnings_out is not None and str(user_val) != str(
+                            user_lv.get(field_name)
+                        ):
+                            warnings_out.append(
+                                _canonicalization_warning(
+                                    lid, field_name, user_lv.get(field_name), user_val
+                                )
+                            )
                     elif str(user_val) not in [str(o) for o in options]:
                         match = _match_option_case_insensitive(options, user_val)
                         if match is not None:
                             _idx, canonical = match
                             user_val = canonical
+                            if warnings_out is not None and str(canonical) != str(
+                                user_lv.get(field_name)
+                            ):
+                                warnings_out.append(
+                                    _canonicalization_warning(
+                                        lid, field_name, user_lv.get(field_name), canonical
+                                    )
+                                )
                         elif not (
                             fd
                             and fd.get("supports_custom")

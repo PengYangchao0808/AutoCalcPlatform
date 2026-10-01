@@ -3298,6 +3298,7 @@ option, optgroup {
 .preview-warn { color: var(--amber); }
 
 .parse-errors { margin-top: 10px; padding: 10px 14px; border: 1px solid rgba(229,83,83,0.3); border-radius: 8px; background: rgba(229,83,83,0.06); color: var(--red); font-size: 12px; }
+.mc-validation-warnings { margin-top: 10px; padding: 10px 14px; border: 1px solid rgba(210,153,34,0.35); border-radius: 8px; background: rgba(210,153,34,0.08); color: var(--warn, #d29922); font-size: 12px; line-height: 1.6; }
 
 .wizard-input-section { padding: 16px; border: 1px solid var(--border-subtle); border-radius: 14px; background: rgba(255,255,255,0.02); }
 
@@ -5259,6 +5260,7 @@ option, optgroup {
         <div class="mc-left" id="mc-levels-container"></div>
       </div>
       <div id="mc-validation-errors" class="parse-errors" style="display:none;margin-top:10px;"></div>
+      <div id="mc-validation-warnings" class="mc-validation-warnings" style="display:none;margin-top:10px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="mt-config-cancel" data-i18n="modal.cancel">取消</button>
@@ -26272,6 +26274,17 @@ function renderMethodDetail(schema, stages, loadState) {
     fallback.textContent = isChinese ? "阶段参数按所选协议默认值执行。" : "Stage parameters use the selected protocol defaults.";
     list.appendChild(fallback);
   }
+  // T24: surface method-validation migration/canonicalization warnings
+  // (legacy grid aliases, method aliases, case folding) in the wizard
+  // summary — non-blocking, mirrors the modal's amber warning block.
+  var methodWarnings = (wizardState.method && wizardState.method.warnings) || [];
+  methodWarnings.forEach(function(w) {
+    var warnItem = document.createElement("li");
+    warnItem.className = "method-detail-warning";
+    warnItem.style.color = "var(--warn, #d29922)";
+    warnItem.textContent = "\u26a0 " + w;
+    list.appendChild(warnItem);
+  });
 }
 
 var ircSourcePreviewSequence = 0;
@@ -29374,6 +29387,7 @@ async function openMethodConfig() {
   function refreshMethodValidationState() {
     var vr = _lastValidationResult;
     var errEl = document.getElementById("mc-validation-errors");
+    var warnEl = document.getElementById("mc-validation-warnings");
 
     // Show validation errors
     if (vr && vr.errors && vr.errors.length) {
@@ -29384,6 +29398,23 @@ async function openMethodConfig() {
     } else {
       errEl.style.display = "none";
       errEl.innerHTML = "";
+    }
+
+    // T24: migration/canonicalization warnings are non-blocking — show them
+    // (amber block) and remember them so the wizard summary card can render
+    // the same list after the modal closes.
+    var methodWarnings = (vr && vr.warnings) || [];
+    if (wizardState.method) wizardState.method.warnings = methodWarnings;
+    if (warnEl) {
+      if (methodWarnings.length) {
+        warnEl.style.display = "block";
+        warnEl.innerHTML = methodWarnings.map(function(w) {
+          return "<div>\u26a0 " + escapeHtml(w) + "</div>";
+        }).join("");
+      } else {
+        warnEl.style.display = "none";
+        warnEl.innerHTML = "";
+      }
     }
 
     // Collect per-level errors for status dots

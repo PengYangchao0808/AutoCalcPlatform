@@ -13271,3 +13271,30 @@ def test_workbench_api_timeout_behavior() -> None:
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, f"node failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# T24 — method-validation warnings are rendered end to end
+# ---------------------------------------------------------------------------
+
+
+def test_validate_method_warnings_rendered_in_modal_and_summary() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Modal carries a dedicated (amber) warnings block beside the errors block.
+    assert 'id="mc-validation-warnings"' in html
+    assert "mc-validation-warnings" in html  # CSS class exists
+
+    # doValidate persists the server warnings on the wizard method state so
+    # the summary card can render them after the modal closes.
+    assert "wizardState.method.warnings = methodWarnings" in html
+
+    # refreshMethodValidationState renders the warnings list from the last
+    # /validate-method response (escapeHtml'd, ⚠-prefixed), hiding when empty.
+    assert 'document.getElementById("mc-validation-warnings")' in html
+    assert "(vr && vr.warnings) || []" in html
+    assert '"<div>\\u26a0 " + escapeHtml(w)' in html
+
+    # The wizard summary (renderMethodDetail) appends the same warnings.
+    assert "(wizardState.method && wizardState.method.warnings) || []" in html
+    assert 'warnItem.className = "method-detail-warning"' in html

@@ -6033,10 +6033,12 @@ def validate_method(req: ValidateMethodRequest) -> ValidateMethodResponse:
         return ValidateMethodResponse(valid=False, errors=[f"Unknown schema: {req.schema_id}"])
 
     method = {"levels": req.levels}
-    normalized, errors = normalize_and_validate_method_config(method, schema)
+    warnings: list[str] = []
+    normalized, errors = normalize_and_validate_method_config(method, schema, warnings)
     return ValidateMethodResponse(
         valid=not errors,
         errors=errors,
+        warnings=warnings,
         normalized_levels=normalized,
     )
 
