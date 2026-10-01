@@ -11238,6 +11238,260 @@ def test_pes_scan_profiles_catalog_driven() -> None:
 
 
 # ---------------------------------------------------------------------------
+# T15 — method-family-driven field gating in the wizard + single_point grid
+# ---------------------------------------------------------------------------
+
+
+def _catalogutils_source(html: str) -> str:
+    """Extract the standalone CatalogUtils IIFE from the workbench HTML."""
+    start = html.index("var CatalogUtils = (function() {")
+    end = html.index("})();", start) + len("})();")
+    return html[start:end]
+
+
+def test_catalogutils_family_gate_is_payload_driven_not_method_list() -> None:
+    """T15: family gating keys on catalog payload signals, never on a
+    hardcoded method list (AGENTS anti-pattern #27).
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    src = _catalogutils_source(html)
+
+    assert "function isFieldFamilyLocked(" in src
+    assert "isFieldFamilyLocked: isFieldFamilyLocked" in src
+    assert "function fieldBaseName(" in src
+    assert "fieldBaseName: fieldBaseName" in src
+    assert "function applyMethodFamilyState(" in src
+    assert "applyMethodFamilyState: applyMethodFamilyState" in src
+
+    assert "functional_options_map" in src, "gate must read functional_options_map"
+    assert "solvent_models" in src, "gate must read METHOD_META.solvent_models"
+    for literal in (
+        '"GFN2-xTB"',
+        '"GFN1-xTB"',
+        '"GFN0-xTB"',
+        '"GFN-FF"',
+        '"B97-3c"',
+        "'gfn'",
+        '"gfn"',
+    ):
+        assert literal not in src, f"hardcoded method literal {literal} in CatalogUtils"
+
+
+def test_buildfieldrow_family_locked_render_hidden_or_locked() -> None:
+    """T15: buildFieldRow renders family-unavailable fields hidden or locked.
+
+    basis -> locked read-only built-in display, dispersion -> built-in badge,
+    grid/SCF -> hidden with the stale value cleared.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "family-unavailable fields (T15)" in html
+    gate = html.index("if (isFieldFamilyLocked(fieldName, functional)) {")
+    assert gate < html.index("var funcOptsMap ="), (
+        "family gate must precede generic option resolution"
+    )
+
+    gate_block = html[gate : html.index("var funcOptsMap =", gate)]
+    assert 'famBase === "basis"' in gate_block
+    assert "mc-basis-readonly" in gate_block, "family-locked basis must render read-only"
+    assert 'famBase === "dispersion"' in gate_block
+    assert "mc-builtin-badge" in gate_block
+    assert "hidden entirely for this family" in gate_block
+    assert 'famState[fieldName] = "";' in gate_block, (
+        "hidden family fields must clear their stored value"
+    )
+    assert "dest.appendChild(fDiv)" not in gate_block.split("hidden entirely for this family", 1)[1], (
+        "hidden family fields must not append their row"
+    )
+
+
+def test_select_empty_default_option_wired() -> None:
+    """T15: selects whose catalog default is '' render an explicit empty
+    option (single_point grid: DefGrid1/2/3 with default '').
+    """
+    from acp.catalog import FIELD_DEFINITIONS, METHOD_SCHEMAS
+
+    grid_fd = FIELD_DEFINITIONS["grid"]
+    assert grid_fd["options"] == ["DefGrid1", "DefGrid2", "DefGrid3"]
+    assert grid_fd["default"] == {"*": ""}
+    assert set(grid_fd["option_labels_zh"]) == {"DefGrid1", "DefGrid2", "DefGrid3"}, (
+        "zh labels must stay keyed by option value (DefGrid*)"
+    )
+
+    sp_level = next(
+        lv for lv in METHOD_SCHEMAS["pes_scan"]["method_levels"]
+        if lv["level_id"] == "single_point"
+    )
+    assert "grid" in sp_level["fields"], "single_point level must expose the grid field"
+
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "explicit empty default (T15)" in html
+    assert 'defaultEmptyOpt.value = "";' in html
+    assert 'curVal === "" && opts.indexOf("") < 0' in html, (
+        "empty option must only render when the stored/default value is empty"
+    )
+
+
+def test_method_change_handlers_apply_family_state_sweep() -> None:
+    """T15: every method-change handler sweeps the level field list through
+    applyMethodFamilyState (clears family-locked fields, re-defaults values
+    the new family no longer admits).
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for handler in (
+        'if (fieldName === "functional") {',
+        'if (fieldName === "single_point_method") {',
+        'if (fieldName === "scan_optimizer_method") {',
+    ):
+        assert handler in html, f"missing change handler: {handler}"
+        span = html.split(handler, 1)[1].split("\n        if (fieldName ===", 1)[0]
+        assert "applyMethodFamilyState(st, lvDef.fields" in span, (
+            f"{handler} must run the family-state sweep"
+        )
+
+    assert html.count("applyMethodFamilyState(st, lvDef.fields") == 3
+
+
+def test_catalogutils_family_gating_behavior_node() -> None:
+    """T15 behavioral contract: evaluate the real CatalogUtils IIFE against the
+    real catalog payload and check GFN hides/locks vs B97-3c restores.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    from acp.catalog import get_method_catalog
+
+    catalog = get_method_catalog()
+    html = FRONTEND.read_text(encoding="utf-8")
+    cu_src = _catalogutils_source(html)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".js", delete=False, encoding="utf-8"
+    ) as f:
+        _ = f.write(cu_src)
+        cu_path = f.name
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    ) as f:
+        _ = f.write(json.dumps(catalog))
+        cat_path = f.name
+
+    script = textwrap.dedent(
+        r"""
+        const fs = require("fs");
+        const cuSrc = fs.readFileSync(CU_PATH, "utf8");
+        const catalog = JSON.parse(fs.readFileSync(CAT_PATH, "utf8"));
+        const CatalogUtils = eval(
+            "(" + cuSrc.replace(/^var\s+CatalogUtils\s*=\s*/, "").replace(/;\s*$/, "") + ")"
+        );
+
+        function eq(name, actual, expected) {
+            const a = JSON.stringify(actual), e = JSON.stringify(expected);
+            if (a !== e) {
+                console.error("FAIL " + name + ": got " + a + " want " + e);
+                process.exit(1);
+            }
+        }
+
+        // (1) family-scoped solvent models (T12/T15): GFN -> ["none","ALPB"].
+        eq("gfn solvent model options",
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_solvent_model", "orca", "GFN2-xTB"),
+            ["none", "ALPB"]);
+        eq("dft solvent model options unchanged",
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_solvent_model", "orca", "B97-3c"),
+            ["none", "CPCM", "SMD"]);
+
+        // (2) family-locked fields resolve to the empty offer (T11/T15).
+        eq("gfn basis locked",
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_basis", "orca", "GFN2-xTB"), []);
+        eq("gfn grid locked",
+            CatalogUtils.getFieldOptions(catalog, "grid", "orca", "GFN2-xTB"), []);
+        eq("gfn scf select locked",
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_scf_convergence", "orca", "GFN2-xTB"), []);
+        eq("gfn scf scalar passes through",
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_scf_max_iterations", "orca", "GFN2-xTB"), null);
+        eq("dft grid stays open",
+            CatalogUtils.getFieldOptions(catalog, "grid", "orca", "B3LYP"),
+            ["DefGrid1", "DefGrid2", "DefGrid3"]);
+        eq("3c basis scoped to the family offer",
+            CatalogUtils.getFieldOptions(catalog, "scan_optimizer_basis", "orca", "B97-3c"), ["mTZVP"]);
+
+        // (3) gate booleans.
+        eq("gfn basis locked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_basis", "GFN2-xTB"), true);
+        eq("gfn grid locked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "GFN2-xTB"), true);
+        eq("gfn solvent_model unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_solvent_model", "GFN2-xTB"), false);
+        eq("gfn scf scalar unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_scf_max_iterations", "GFN2-xTB"), false);
+        eq("3c basis unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_basis", "B97-3c"), false);
+        eq("3c grid unlocked?", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "B97-3c"), false);
+
+        // (4) single_point grid default ''.
+        eq("grid default", CatalogUtils.getFieldDefault(catalog, "grid", "orca", "B3LYP"), "");
+        eq("gfn basis default", CatalogUtils.getFieldDefault(catalog, "scan_optimizer_basis", "orca", "GFN2-xTB"), "");
+        eq("3c basis default from METHOD_META", CatalogUtils.getFieldDefault(catalog, "scan_optimizer_basis", "orca", "B97-3c"), "mTZVP");
+
+        // (5) method-change sweep: GFN clears/locks inapplicable fields.
+        const scanLevel = catalog.method_schemas.pes_scan.method_levels.find(
+            (l) => l.level_id === "scan_optimizer"
+        );
+        const st = {
+            scan_optimizer_method: "GFN2-xTB",
+            scan_optimizer_basis: "def2-TZVPP",
+            scan_optimizer_dispersion: "D4",
+            scan_optimizer_grid: "DefGrid2",
+            scan_optimizer_scf_convergence: "tight",
+            scan_optimizer_solvent_model: "CPCM",
+            scan_optimizer_scf_max_iterations: 200
+        };
+        CatalogUtils.applyMethodFamilyState(catalog, st, scanLevel.fields, "orca", "GFN2-xTB");
+        eq("sweep clears basis", st.scan_optimizer_basis, "");
+        eq("sweep clears dispersion to none", st.scan_optimizer_dispersion, "none");
+        eq("sweep hides grid value", st.scan_optimizer_grid, "");
+        eq("sweep hides scf value", st.scan_optimizer_scf_convergence, "");
+        eq("sweep resets out-of-family solvent model", st.scan_optimizer_solvent_model, "none");
+        eq("sweep keeps scalar caps", st.scan_optimizer_scf_max_iterations, 200);
+
+        // (6) switching back to B97-3c restores visibility and keeps values
+        // the family admits.
+        eq("restored grid unlocked", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_grid", "B97-3c"), false);
+        eq("restored scf unlocked", CatalogUtils.isFieldFamilyLocked(catalog, "scan_optimizer_scf_convergence", "B97-3c"), false);
+        const st2 = {
+            scan_optimizer_basis: "mTZVP",
+            scan_optimizer_grid: "DefGrid2",
+            scan_optimizer_scf_convergence: "tight",
+            scan_optimizer_solvent_model: "SMD"
+        };
+        CatalogUtils.applyMethodFamilyState(catalog, st2, scanLevel.fields, "orca", "B97-3c");
+        eq("restore keeps basis", st2.scan_optimizer_basis, "mTZVP");
+        eq("restore keeps grid", st2.scan_optimizer_grid, "DefGrid2");
+        eq("restore keeps scf", st2.scan_optimizer_scf_convergence, "tight");
+        eq("restore keeps solvent model", st2.scan_optimizer_solvent_model, "SMD");
+
+        console.log("PASS");
+        """
+    )
+    script = script.replace("CU_PATH", json.dumps(cu_path)).replace(
+        "CAT_PATH", json.dumps(cat_path)
+    )
+
+    try:
+        result = subprocess.run(
+            ["node", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, (
+            f"CatalogUtils family-gating node test failed:\n"
+            f"stdout={result.stdout}\nstderr={result.stderr}"
+        )
+        assert "PASS" in result.stdout
+    finally:
+        Path(cu_path).unlink(missing_ok=True)
+        Path(cat_path).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
 # TS Mode Editor — module integration + vibration viewer quick-create
 # ---------------------------------------------------------------------------
 

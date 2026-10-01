@@ -22866,9 +22866,107 @@ var CatalogUtils = (function() {
     return !!(fd && fd.advanced);
   }
 
+  // ── method-family field availability (T15) ──────────────────────────
+  // Mirrors acp.catalog._family_locked_options / _resolve_field_options
+  // over the catalog payload ONLY. The family signal is the empty option
+  // offer: a family that carries no DFT basis layer advertises
+  // functional_options_map[method].basis === [] (T11 locked/empty set).
+  // Never keyed on method names — the catalog/registry is the single
+  // source (AGENTS anti-pattern #27).
+
+  // Level-scoped field -> shared base field name, mirroring
+  // acp.catalog._LEVEL_SCOPED_FIELD_BASE + the scan_optimizer_ prefix
+  // strip (scan_optimizer_basis -> basis, scan_optimizer_grid -> grid).
+  function fieldBaseName(fieldName) {
+    var scoped = {
+      "scan_optimizer_basis": "basis",
+      "scan_optimizer_dispersion": "dispersion",
+      "scan_optimizer_ri_approximation": "ri_approximation"
+    };
+    if (scoped[fieldName]) return scoped[fieldName];
+    if (fieldName.indexOf("scan_optimizer_") === 0) return fieldName.slice("scan_optimizer_".length);
+    return fieldName;
+  }
+
+  // True when the selected method family offers no options for this field
+  // (the locked/empty set), mirroring acp.catalog._family_locked_options:
+  // a family without a DFT basis layer governs no basis/dispersion/grid and
+  // no SCF dropdowns (grid / scf_* selects only — scalar caps such as
+  // scf_max_iterations pass through untouched).
+  function isFieldFamilyLocked(catalog, fieldName, functional) {
+    if (!functional) return false;
+    var funcFilter = lookupCI((catalog && catalog.functional_options_map) || {}, functional);
+    if (!funcFilter) return false;
+    var base = fieldBaseName(fieldName);
+    // basis / dispersion: the family's own offer is the gate (empty = locked).
+    if (base === "basis" || base === "dispersion") {
+      var offer = funcFilter[base];
+      return Array.isArray(offer) && offer.length === 0;
+    }
+    // grid / scf_* selects: no DFT basis layer ⇒ no integration grid or
+    // SCF dropdowns (mirrors the backend's is_applicable("basis") rule).
+    var noBasisLayer = Array.isArray(funcFilter.basis) && funcFilter.basis.length === 0;
+    if (!noBasisLayer) return false;
+    if (base === "grid") return true;
+    if (base.indexOf("scf_") === 0) {
+      var fd = ((catalog && catalog.field_definitions) || {})[fieldName] || {};
+      return !!(fd.options || fd.per_backend);
+    }
+    return false;
+  }
+
+  // After a method change: clear/lock family-locked fields and reset any
+  // value the new family's scoped option set no longer admits back to the
+  // METHOD_META/FIELD_DEFINITIONS default. `fieldNames` is the level's
+  // catalog field list (lvDef.fields) — never a hardcoded field list.
+  function applyMethodFamilyState(catalog, levelState, fieldNames, engine, functional) {
+    if (!levelState) return;
+    (fieldNames || []).forEach(function(fn) {
+      if (isFieldFamilyLocked(catalog, fn, functional)) {
+        levelState[fn] = fieldBaseName(fn) === "dispersion" ? "none" : "";
+        return;
+      }
+      var fd = ((catalog && catalog.field_definitions) || {})[fn] || {};
+      if (fd.supports_custom || fd.multi) return;
+      var cur = levelState[fn];
+      if (cur == null || cur === "" || cur === "__custom__") return;
+      if (typeof cur !== "string") return;
+      var opts = getFieldOptions(catalog, fn, engine, functional,
+        levelState.basis || levelState.scan_optimizer_basis);
+      if (!opts || !opts.length) return;
+      for (var i = 0; i < opts.length; i++) {
+        if (String(opts[i]).toLowerCase() === cur.toLowerCase()) return;
+      }
+      levelState[fn] = getFieldDefault(catalog, fn, engine, functional,
+        levelState.basis || levelState.scan_optimizer_basis);
+    });
+  }
+
   function getFieldOptions(catalog, fieldName, engine, functional, basis) {
     var fd = ((catalog && catalog.field_definitions) || {})[fieldName];
     if (!fd) return null;
+
+    // Family gate first (mirrors acp.catalog._resolve_field_options, which
+    // consults _family_locked_options before any option lookup).
+    if (isFieldFamilyLocked(catalog, fieldName, functional)) return [];
+
+    // Method-family-scoped solvent models: scan_optimizer_solvent_model (and
+    // solvent_model) resolve to METHOD_META.solvent_models when the family
+    // restricts the offer (e.g. ["none","ALPB"] for GFN under ORCA).
+    if (functional && fieldBaseName(fieldName) === "solvent_model") {
+      var smMeta = lookupCI((catalog.method_meta || {}), functional);
+      if (smMeta && Array.isArray(smMeta.solvent_models)) return smMeta.solvent_models.slice();
+    }
+
+    // Method-scoped basis / dispersion offers (FUNCTIONAL_OPTIONS_MAP),
+    // mirroring acp.catalog._resolve_field_options so every consumer shares
+    // one resolution point. An empty set is the family-locked offer (T11).
+    var scopedBase = fieldBaseName(fieldName);
+    if (functional && (scopedBase === "basis" || scopedBase === "dispersion")) {
+      var famFilter = lookupCI((catalog.functional_options_map || {}), functional);
+      var scopedOffer = famFilter ? famFilter[scopedBase] : undefined;
+      if (Array.isArray(scopedOffer)) return scopedOffer.slice();
+    }
 
     if ((fieldName === "aux_j_basis" || fieldName === "aux_c_basis") && fd.options_source === "dynamic_aux_basis") {
       var auxKind = fd.aux_kind;
@@ -22909,6 +23007,9 @@ var CatalogUtils = (function() {
     var fieldDefs = (catalog && catalog.field_definitions) || {};
     var methodMeta = (catalog && catalog.method_meta) || {};
     var basisCatalog = (catalog && catalog.basis_catalog_v2) || {};
+    // Level-scoped fields (scan_optimizer_basis, ...) derive METHOD_META
+    // defaults through their base name, like the backend resolver.
+    var base = fieldBaseName(fieldName);
 
     // ── Priority 1: functional-level defaults (METHOD_META) ──
     if (functional) {
@@ -22917,7 +23018,7 @@ var CatalogUtils = (function() {
         var riSupport = funcMeta.ri_support || "user";
 
         if (riSupport !== "user") {
-          if (fieldName === "ri_approximation") return "none";
+          if (base === "ri_approximation") return "none";
           if (fieldName === "aux_j_basis") return "";
           if (fieldName === "aux_c_basis") return "";
         }
@@ -22933,8 +23034,8 @@ var CatalogUtils = (function() {
           }
         }
 
-        if (fieldName === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
-        if (fieldName === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
+        if (base === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
+        if (base === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
       }
     }
 
@@ -22952,6 +23053,9 @@ var CatalogUtils = (function() {
   return {
     lookupCI: lookupCI,
     isFieldAdvanced: isFieldAdvanced,
+    fieldBaseName: fieldBaseName,
+    isFieldFamilyLocked: isFieldFamilyLocked,
+    applyMethodFamilyState: applyMethodFamilyState,
     getFieldOptions: getFieldOptions,
     getFieldDefault: getFieldDefault
   };
@@ -27065,6 +27169,18 @@ async function openMethodConfig() {
     return CatalogUtils.isFieldAdvanced(methodCatalogCache, fieldName);
   }
 
+  function fieldBaseName(fieldName) {
+    return CatalogUtils.fieldBaseName(fieldName);
+  }
+
+  function isFieldFamilyLocked(fieldName, functional) {
+    return CatalogUtils.isFieldFamilyLocked(methodCatalogCache, fieldName, functional);
+  }
+
+  function applyMethodFamilyState(levelState, fieldNames, engine, functional) {
+    return CatalogUtils.applyMethodFamilyState(methodCatalogCache, levelState, fieldNames, engine, functional);
+  }
+
   function buildLevelCard(lvDef, stateData) {
     var engine = (stateData && stateData.engine) || lvDef.allowed_engines[0] || "";
     var expanded = true;
@@ -27349,6 +27465,45 @@ async function openMethodConfig() {
         }
       }
 
+      // ── family-unavailable fields (T15) ─────────────────────────────
+      // Driven entirely by the catalog payload: isFieldFamilyLocked mirrors
+      // acp.catalog._family_locked_options — the empty option offer
+      // (functional_options_map[method].basis === []) marks a method family
+      // with no DFT layer (T11). Basis locks to its built-in value,
+      // dispersion keeps its built-in badge (handled above), RI locks to
+      // "none" (handled above via ri_support), and grid/SCF selects are
+      // hidden with their values cleared so a stale selection can never
+      // reach the protocol payload. Never keyed on method names
+      // (AGENTS anti-pattern #27) — the catalog is the single source.
+      if (isFieldFamilyLocked(fieldName, functional)) {
+        var famBase = fieldBaseName(fieldName);
+        var famState = getLevelState(lvDef.level_id);
+        if (famBase === "basis") {
+          famState[fieldName] = "";
+          var famBasisSpan = document.createElement("span");
+          famBasisSpan.className = "mc-basis-readonly";
+          famBasisSpan.textContent = (currentLang === "zh-CN" ? "内置：" : "Built-in: ")
+            + ((funcMeta && funcMeta.default_basis) || (currentLang === "zh-CN" ? "无独立基组" : "none"));
+          famBasisSpan.title = (currentLang === "zh-CN" ? "由 " + functional + " 固定" : "Fixed by " + functional);
+          fDiv.appendChild(famBasisSpan);
+          dest.appendChild(fDiv);
+          return;
+        }
+        if (famBase === "dispersion") {
+          famState[fieldName] = "none";
+          var famDispSpan = document.createElement("span");
+          famDispSpan.className = "mc-builtin-badge";
+          famDispSpan.textContent = ((funcMeta && funcMeta.builtin_dispersion) || (currentLang === "zh-CN" ? "内置" : "built in"))
+            + " (" + (t("modal.builtin") || "内置") + ")";
+          fDiv.appendChild(famDispSpan);
+          dest.appendChild(fDiv);
+          return;
+        }
+        // grid / scf_* selects: hidden entirely for this family.
+        famState[fieldName] = "";
+        return;
+      }
+
       var funcOptsMap = (methodCatalogCache && methodCatalogCache.functional_options_map) || {};
       var funcFilter = lookupCI(funcOptsMap, functional);
 
@@ -27414,6 +27569,19 @@ async function openMethodConfig() {
           emptyOpt.selected = true;
           hasMatch = true;
           sel.appendChild(emptyOpt);
+        }
+        // ── explicit empty default (T15) ──
+        // Selects whose catalog default is "" (e.g. grid: DefGrid1/2/3 with
+        // default "" = keep the ORCA default) must be able to represent that
+        // default; otherwise the browser silently displays the first option
+        // while the stored value stays "".
+        if (!isOptionalOverride && !supportsCustom && curVal === "" && opts.indexOf("") < 0) {
+          var defaultEmptyOpt = document.createElement("option");
+          defaultEmptyOpt.value = "";
+          defaultEmptyOpt.textContent = currentLang === "zh-CN" ? "默认（留空）" : "Default (empty)";
+          defaultEmptyOpt.selected = true;
+          hasMatch = true;
+          sel.appendChild(defaultEmptyOpt);
         }
         // ── optgroup rendering (Item 1: catalog-driven option_groups) ──
         // When the field definition carries option_groups, render <optgroup>
@@ -27539,6 +27707,12 @@ async function openMethodConfig() {
               }
             }
 
+            // 4. Family sweep (T15): clear fields the new method family does
+            //    not offer and re-default any value its scoped option set no
+            //    longer admits. Field list comes from the level schema
+            //    (lvDef.fields) — never a hardcoded field list.
+            applyMethodFamilyState(st, lvDef.fields || [], engine, newFunctional);
+
             rebuildLevelCard(lvDef.level_id);
             scheduleValidate();
           });
@@ -27557,6 +27731,8 @@ async function openMethodConfig() {
                     : liveFilter.basis[0];
               }
             }
+            // Family sweep (T15): lock/clear fields the new family omits.
+            applyMethodFamilyState(st, lvDef.fields || [], engine, newMethod);
             rebuildLevelCard(lvDef.level_id);
             scheduleValidate();
           });
@@ -27600,6 +27776,11 @@ async function openMethodConfig() {
                 st.scan_optimizer_ri_approximation = getFieldDefault("scan_optimizer_ri_approximation", engine, newMethod);
               }
             }
+
+            // 4. Family sweep (T15): clear fields the new method family does
+            //    not offer (grid/SCF under a family with no DFT layer) and
+            //    re-default any value its scoped option set no longer admits.
+            applyMethodFamilyState(st, lvDef.fields || [], engine, newMethod);
 
             rebuildLevelCard(lvDef.level_id);
             scheduleValidate();
