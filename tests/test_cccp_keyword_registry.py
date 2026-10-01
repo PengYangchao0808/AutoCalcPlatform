@@ -482,7 +482,7 @@ def test_every_catalog_declared_enum_value_resolves() -> None:
     assert {"Loose", "Normal", "Tight", "VeryTight"} <= harvested["opt_level"]["global"]
     assert "crude" in harvested["opt_level"]["xtb"]
     assert "normal" in harvested["scf_strategy"]["global"]
-    assert {"SG1", "Fine", "UltraFine", "SuperFine"} <= harvested["grid"]["global"]
+    assert {"DefGrid1", "DefGrid2", "DefGrid3"} <= harvested["grid"]["global"]
     assert {"none", "D3", "D3BJ", "D4", "VV10"} <= harvested["dispersion"]["global"]
 
     for domain, scopes in harvested.items():

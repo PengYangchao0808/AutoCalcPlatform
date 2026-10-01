@@ -1166,3 +1166,99 @@ def test_gfn_locked_fields_accept_cleared_form_only() -> None:
     ):
         assert field in joined, (field, errors)
     assert "family-locked field" in joined
+
+
+# =====================================================================
+# T12: family-aware scan solvent options + ORCA-native grid
+# =====================================================================
+
+_LEGACY_GRID_NAMES = {"SG1", "Fine", "UltraFine", "SuperFine"}
+
+
+def _iter_grid_defaults(node: object):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in ("grid", "scan_optimizer_grid") and isinstance(value, str):
+                yield value
+            yield from _iter_grid_defaults(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _iter_grid_defaults(item)
+
+
+def test_grid_field_is_orca_native_with_no_legacy_names() -> None:
+    from acp.catalog import FIELD_DEFINITIONS
+
+    grid = FIELD_DEFINITIONS["grid"]
+    assert grid["options"] == ["DefGrid1", "DefGrid2", "DefGrid3"]
+    assert grid["default"]["*"] == ""
+    assert set(grid["option_labels_zh"]) == {"DefGrid1", "DefGrid2", "DefGrid3"}
+
+    catalog_grid_names = set(grid["options"]) | set(grid["option_labels_zh"])
+    catalog_grid_names.add(grid["default"]["*"])
+    assert not (catalog_grid_names & _LEGACY_GRID_NAMES), (
+        "catalog grid field still exposes a legacy alias in options/default/option_labels_zh"
+    )
+
+
+def test_no_legacy_grid_default_anywhere_in_catalog() -> None:
+    from acp.catalog import METHOD_SCHEMAS
+
+    residual = {
+        value for value in _iter_grid_defaults(METHOD_SCHEMAS) if value in _LEGACY_GRID_NAMES
+    }
+    assert residual == set(), residual
+
+
+def test_scan_optimizer_solvent_model_is_family_aware() -> None:
+    from acp.catalog import _resolve_field_options
+
+    for name in _GFN_METHOD_NAMES:
+        assert _resolve_field_options("scan_optimizer_solvent_model", "orca", name) == [
+            "none",
+            "ALPB",
+        ], name
+
+    for dft in ("r2SCAN-3c", "B97-3c", "B3LYP", "wB97M-V"):
+        assert _resolve_field_options("scan_optimizer_solvent_model", "orca", dft) == [
+            "none",
+            "CPCM",
+            "SMD",
+        ], dft
+
+
+def test_legacy_grid_value_migrates_to_defgrid_with_warning(caplog) -> None:
+    from acp.catalog import _resolve_field_default, get_method_schema
+
+    schema = get_method_schema("pes_scan")
+    assert schema is not None
+
+    config = {
+        "levels": {
+            "scan_optimizer": {
+                "engine": "orca",
+                "scan_optimizer_method": "r2SCAN-3c",
+                "scan_optimizer_grid": "UltraFine",
+            },
+            "single_point": {"engine": "orca", "_disabled": True},
+        }
+    }
+    with caplog.at_level("WARNING", logger="acp.catalog"):
+        levels, errors = normalize_and_validate_method_config(config, schema)
+
+    assert errors == [], errors
+    assert levels["scan_optimizer"]["scan_optimizer_grid"] == "DefGrid3"
+    assert any("UltraFine" in rec.message and "DefGrid3" in rec.message for rec in caplog.records)
+
+    assert _resolve_field_default("scan_optimizer_grid", "orca", "r2SCAN-3c") == ""
+    assert _resolve_field_default("grid", "orca", "B3LYP") == ""
+
+
+def test_legacy_grid_alias_registry_roundtrip() -> None:
+    from cccp.qc.keyword_registry import resolve
+
+    canonical, warning = resolve(
+        "grid", "SuperFine", family="conventional_dft", implementation="orca_dft"
+    )
+    assert canonical == "DefGrid3"
+    assert warning and "legacy alias" in warning

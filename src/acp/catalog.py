@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from acp.chem.composition import normalize_recalc_hess
@@ -20,6 +21,8 @@ from cccp.qc.keyword_registry import (
     resolve,
     resolve_implementation,
 )
+
+logger = logging.getLogger(__name__)
 
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
     {
@@ -878,14 +881,13 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "label": "Integration Grid",
         "label_zh": "积分网格",
-        "options": ["SG1", "Fine", "UltraFine", "SuperFine"],
+        "options": ["DefGrid1", "DefGrid2", "DefGrid3"],
         "option_labels_zh": {
-            "SG1": "SG1（粗）",
-            "Fine": "Fine（细）",
-            "UltraFine": "UltraFine（超细）",
-            "SuperFine": "SuperFine（特细）",
+            "DefGrid1": "DefGrid1（粗）",
+            "DefGrid2": "DefGrid2（默认精度档）",
+            "DefGrid3": "DefGrid3（细）",
         },
-        "default": {"*": "UltraFine"},
+        "default": {"*": ""},
     },
     "scf_convergence": {
         "type": "select",
@@ -2364,7 +2366,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2409,7 +2411,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2454,7 +2456,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2555,7 +2557,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                 },
@@ -2826,7 +2828,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
@@ -2839,7 +2841,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                     },
                     "thermo": {
@@ -3239,7 +3241,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "Tight",
                         "single_point_resume": True,
                     },
@@ -3787,7 +3789,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -3860,7 +3862,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -4042,7 +4044,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -4173,7 +4175,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
-                        "grid": "UltraFine",
+                        "grid": "",
                         "scf_convergence": "tight",
                         "opt_convergence": "normal",
                         "max_steps": 200,
@@ -4595,6 +4597,46 @@ def _family_locked_options(
     return None
 
 
+def _migrate_legacy_grid_value(
+    value: Any,
+    functional: str | None,
+    engine: str,
+) -> str | None:
+    """Canonicalize a legacy (Gaussian-era) grid alias.
+
+    The catalog's ``grid``/``scan_optimizer_grid`` options are ORCA-native
+    (DefGrid1/2/3); legacy spellings are still legal INPUTS and route
+    through ``cccp.qc.keyword_registry.resolve`` (T2), which maps them to
+    the canonical token AND emits a migration warning. Returns the canonical
+    token when a legacy alias was migrated, else ``None`` (the value is
+    either already canonical or not a grid alias).
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    if value in FIELD_DEFINITIONS["grid"]["options"]:
+        return None
+    if not functional:
+        return None
+    family = method_family(functional)
+    if family == "unknown":
+        return None
+    try:
+        implementation = resolve_implementation(functional, engine=engine)
+        canonical, warning = resolve("grid", value, family=family, implementation=implementation)
+    except KeywordValueError:
+        return None
+    if canonical and warning:
+        logger.warning(
+            "Legacy grid value %r migrated to %r for method %r (%s)",
+            value,
+            canonical,
+            functional,
+            warning,
+        )
+        return canonical
+    return None
+
+
 def _resolve_field_options(
     field_name: str,
     engine: str,
@@ -4620,6 +4662,13 @@ def _resolve_field_options(
     if locked is not None:
         return locked
     base_name = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+    if base_name.startswith(_SCAN_OPT_PREFIX):
+        base_name = base_name[len(_SCAN_OPT_PREFIX) :]
+    if functional and base_name == "solvent_model":
+        meta = _case_insensitive_get(METHOD_META, functional)
+        restricted = (meta or {}).get("solvent_models")
+        if restricted is not None:
+            return list(restricted)
     if functional and base_name in ("basis", "dispersion"):
         mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
         if mapping and base_name in mapping:
@@ -5127,6 +5176,13 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             f"'{level_method}' (family-locked field)"
                         )
                     continue
+                field_base = _LEVEL_SCOPED_FIELD_BASE.get(field_name, field_name)
+                if field_base.startswith(_SCAN_OPT_PREFIX):
+                    field_base = field_base[len(_SCAN_OPT_PREFIX) :]
+                if field_base == "grid":
+                    migrated_grid = _migrate_legacy_grid_value(user_val, level_method, engine)
+                    if migrated_grid is not None:
+                        user_val = migrated_grid
                 options = _resolve_field_options(
                     field_name,
                     engine,
