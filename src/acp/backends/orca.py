@@ -232,7 +232,7 @@ class ORCABackend(QCBackend):
         drive_coordinates = plan.drive_coordinates()
         if not drive_coordinates:
             raise ValueError("ORCA relaxed_scan requires at least one drive coordinate")
-        if len(drive_coordinates) > 1:
+        if len(drive_coordinates) > 1 or plan.fixed_endpoints or any(c.values for c in plan.coordinates):
             return self._interface.relaxed_scan(
                 coordinates,
                 symbols,

@@ -181,7 +181,8 @@ class PesScanSnapshotWriter:
                 rebuilt[index] = {
                     "frame_id": f"frame_{index:03d}",
                     "index": index,
-                    "status": "completed" if bool(frame.optimization_converged) else "failed",
+                    "status": "completed" if bool(frame.optimization_converged) or frame.frame_role == "fixed_boundary_single_point" and frame.scf_converged else "failed",
+                    "frame_role": frame.frame_role,
                     "converged": bool(frame.optimization_converged),
                     "target_coordinate": (
                         float(frame.target_coordinate)

@@ -1532,6 +1532,7 @@ class S2FrameModel(BaseModel):
     scan_energy_hartree: float | None = None
     single_point_energy_hartree: float | None = None
     optimization_converged: bool = True
+    frame_role: str = "constrained_optimization"
     single_point_status: str = "skipped"
     target_coordinates: dict[str, float] = Field(default_factory=dict)
     actual_coordinates: dict[str, float] = Field(default_factory=dict)

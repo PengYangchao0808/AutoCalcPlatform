@@ -147,6 +147,7 @@ def build_coordinate_plan(
         role="drive",
         start=coordinate.start,
         end=coordinate.end,
+        values=coordinate.values,
     )
 
 
@@ -219,7 +220,7 @@ def run_pes_scan(
         # Single drive coordinate → ORCA native relaxed scan (single
         # subprocess, no per-point retry); multiple coordinates → per-point
         # constrained optimizations with retry semantics.
-        execution_mode = "pointwise" if len(scan_coordinates) > 1 else "native_scan"
+        execution_mode = "pointwise" if len(scan_coordinates) > 1 or any(c.values for c in scan_coordinates) else "native_scan"
         protocol = replace(protocol, execution_mode=execution_mode)
         if progress_reporter is not None:
             progress_reporter.complete_stage("validate_coordinate")
@@ -266,6 +267,7 @@ def run_pes_scan(
             protocol=protocol,
             scan_dir=scan_dir,
             cfg=cfg,
+            path_plan=req.selection.get("path_plan"),
             point_callback=snapshot_writer.publish_point,
             optimizer_level=optimizer_level,
         )
@@ -517,6 +519,7 @@ def _run_relaxed_scan_backend(
     cfg: dict[str, Any],
     point_callback: Callable[[Any], None] | None = None,
     optimizer_level: CalculationLevel | None = None,
+    path_plan: dict[str, Any] | None = None,
 ) -> RelaxedScanResult:
     """Execute the relaxed scan via ``get_backend("orca").relaxed_scan``.
 
@@ -543,7 +546,12 @@ def _run_relaxed_scan_backend(
         )
         for index, item in enumerate(scan_coordinates)
     )
-    plan = ReactionCoordinatePlan(coordinates=specs, points=scan_coordinates[0].n_points)
+    path_data = path_plan or {}
+    plan = ReactionCoordinatePlan(coordinates=specs, points=scan_coordinates[0].n_points,
+        lambda_values=tuple(path_data.get("lambda_values", ())),
+        reference_geometries=tuple(path_data.get("reference_geometries", ())),
+        fixed_endpoints=bool(path_data.get("fixed_endpoints", False)),
+        xtb_scc_max_iterations=path_data.get("xtb_scc_max_iterations"))
     nproc = int((cfg.get("resources") or {}).get("nproc") or 1)
     level = optimizer_level or scan_optimizer_level(protocol.scan_optimizer)
     route_extras: list[str] = []
@@ -667,6 +675,8 @@ def _extract_frames(
                 invalid_reasons.append(f"{coordinate_id}:unmeasured")
                 continue
             residual = float(value - float(target_values[coordinate_id]))
+            if coordinate_item.kind == "dihedral":
+                residual = (residual + 180) % 360 - 180
             residuals[coordinate_id] = residual
             tolerance = float(resolved_tolerances.get(coordinate_item.kind, 0.01))
             if abs(residual) > tolerance:
@@ -683,7 +693,8 @@ def _extract_frames(
                 geometry_path=str(frame_path.relative_to(scan_dir)) if frame_path.exists() else "",
                 scan_energy_hartree=point.energy_hartree,
                 single_point_energy_hartree=None,
-                optimization_converged=bool(point.success),
+                optimization_converged=bool(point.success) and point_metadata.get("frame_role") != "fixed_boundary_single_point",
+                frame_role=point_metadata.get("frame_role", "constrained_optimization"),
                 single_point_status="pending",
                 source_log="scan.out",
                 target_coordinates=target_values,
@@ -720,6 +731,8 @@ def _interpolated_coordinate_target(
     total_points: int,
 ) -> float:
     """Rebuild a coordinate target when a backend omitted its target ledger."""
+    if coordinate.values:
+        return coordinate.values[index]
     if coordinate.start is None or coordinate.end is None:
         return float(index / max(total_points - 1, 1))
     progress = index / max(total_points - 1, 1)
@@ -734,6 +747,12 @@ def _validate_functional_selection(
 ) -> dict[str, Any]:
     """Validate the optional generic selector and return normalized metadata."""
     payload = dict(selection_payload or {})
+    if payload.get("path_plan"):
+        if any(any(atom < 0 or atom >= len(symbols) for atom in c.atoms) for c in coordinates):
+            raise ValueError("synchronized coordinate index outside structure")
+        if not all(c.values for c in coordinates):
+            raise ValueError("explicit path_plan requires values for ALL drivers")
+        return payload
     raw_kind = payload.get("kind")
     if raw_kind is None and len(coordinates) == 1:
         return payload
@@ -1106,7 +1125,7 @@ def _recommend_bond_candidates(
         notes.append("no_energies")
     if profile.sp_incomplete:
         notes.append("sp_incomplete_scan_energy_used")
-    if any(not frame.optimization_converged for frame in frames):
+    if any(not frame.optimization_converged and frame.frame_role != "fixed_boundary_single_point" for frame in frames):
         notes.append("non_converged_frames")
 
     policy = policy_from_config(_selection_config(cfg))
@@ -1462,7 +1481,7 @@ def _recommend_coordinate_candidates(
         notes.append("no_energies")
     if profile.sp_incomplete:
         notes.append("sp_incomplete_scan_energy_used")
-    if any(not frame.optimization_converged for frame in frames):
+    if any(not frame.optimization_converged and frame.frame_role != "fixed_boundary_single_point" for frame in frames):
         notes.append("non_converged_frames")
     complete = len(frames) >= 3 and all(value is not None for value in energies)
     needs_review = True
