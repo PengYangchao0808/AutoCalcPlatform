@@ -49,6 +49,10 @@ _ALL_FUNCTIONALS = frozenset(
         "PBEh-3c",
         "B97-3c",
         "DLPNO-CCSD(T)",
+        "GFN2-xTB",
+        "GFN1-xTB",
+        "GFN0-xTB",
+        "GFN-FF",
     }
 )
 
@@ -1018,3 +1022,277 @@ def test_convert_method_levels_passes_recalc_hess() -> None:
         {"dft_opt": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": 5}}
     )
     assert out["optimization"]["recalc_hess"] == 5
+
+
+# =====================================================================
+# T11: GFN entries in METHOD_META + method-family-aware field gating
+# =====================================================================
+
+_GFN_METHOD_NAMES = ("GFN2-xTB", "GFN1-xTB", "GFN0-xTB", "GFN-FF")
+
+
+def test_functional_options_map_gfn_basis_empty() -> None:
+    from acp.catalog import _derive_functional_options_map
+
+    derived = _derive_functional_options_map()
+    for name in _GFN_METHOD_NAMES:
+        assert derived[name]["basis"] == [], name
+        assert FUNCTIONAL_OPTIONS_MAP[name]["basis"] == [], name
+        assert derived[name]["dispersion"] == [], name
+
+
+def test_method_meta_consistent_with_cccp_registry() -> None:
+    from cccp.qc.keyword_registry import KeywordValueError, method_family, resolve_implementation
+
+    for name, meta in METHOD_META.items():
+        family = method_family(name)
+        assert family != "unknown", (
+            f"{name} classifies as 'unknown' in the cccp registry — extend "
+            "cccp.qc.keyword_registry._METHOD_FAMILY_TABLE (+ its tests)"
+        )
+        assert meta["family"] == family, f"{name} family drifted from the registry"
+        assert meta["implementation"] == resolve_implementation(name, engine="orca"), (
+            f"{name} implementation drifted from the registry"
+        )
+
+    for name in ("GFN2-xTB", "GFN1-xTB", "GFN0-xTB"):
+        assert METHOD_META[name]["family"] == "gfn"
+    assert METHOD_META["GFN-FF"]["family"] == "gfnff"
+    for name in _GFN_METHOD_NAMES:
+        meta = METHOD_META[name]
+        assert meta["solvent_models"] == ["none", "ALPB"], name
+        assert meta["ri_support"] == "composite", name
+        assert meta["basis"] == (), name
+        assert meta["default_basis"] == ""
+        assert meta["default_dispersion"] == "none"
+
+    assert METHOD_META["GFN2-xTB"]["builtin_dispersion"] == "D4"
+    assert METHOD_META["GFN1-xTB"]["builtin_dispersion"] == "D3"
+    assert METHOD_META["GFN-FF"]["builtin_dispersion"] == "builtin"
+
+    from cccp.qc.keyword_registry import resolve
+
+    for name in _GFN_METHOD_NAMES:
+        meta = METHOD_META[name]
+        for model in ("GBSA", "CPCM", "SMD"):
+            with pytest.raises(KeywordValueError):
+                resolve(
+                    "solvent_model",
+                    model,
+                    family=meta["family"],
+                    implementation=meta["implementation"],
+                )
+
+
+# T17 contract: registry↔METHOD_META consistency lock in BOTH directions —
+# catalog → registry is test_method_meta_consistent_with_cccp_registry above.
+def test_cccp_registry_method_table_fully_covered_by_method_meta() -> None:
+    """Every cccp-registry method is representable in METHOD_META.
+
+    Checks the registry → catalog direction: family and implementation must
+    agree, and every non-``unknown`` registry family must have at least one
+    METHOD_META entry.
+    """
+    from cccp.qc.keyword_registry import (
+        _METHOD_FAMILY_TABLE,
+        FAMILIES,
+        resolve_implementation,
+    )
+
+    meta_ci = {name.upper(): name for name in METHOD_META}
+    # Registry classification keys that are alternate spellings of a catalog
+    # display name — NOT case variants (deleting this map breaks the lock).
+    registry_aliases = {"MPW1PW": "mPW1PW91", "GFNFF": "GFN-FF"}
+
+    for method, family in sorted(_METHOD_FAMILY_TABLE.items()):
+        catalog_name = registry_aliases.get(method) or meta_ci.get(method.upper())
+        assert catalog_name is not None, (
+            f"cccp registry method {method!r} has no METHOD_META entry — "
+            "add it with family/implementation consistent with the registry"
+        )
+        meta = METHOD_META[catalog_name]
+        assert meta["family"] == family, (method, catalog_name, meta["family"], family)
+        assert meta["implementation"] == resolve_implementation(method, engine="orca"), method
+
+    represented = {meta["family"] for meta in METHOD_META.values()}
+    assert represented == FAMILIES - {"unknown"}
+
+
+def test_gfn_field_options_locked_for_family() -> None:
+    from acp.catalog import _resolve_field_default, _resolve_field_options
+
+    for name in _GFN_METHOD_NAMES:
+        assert _resolve_field_options("scan_optimizer_basis", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_dispersion", "orca", name) == [], name
+        assert _resolve_field_options("basis", "orca", name) == [], name
+        assert _resolve_field_options("dispersion", "orca", name) == [], name
+        assert _resolve_field_options("grid", "orca", name) == [], name
+        assert _resolve_field_options("scf_convergence", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_grid", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_scf_convergence", "orca", name) == [], name
+        assert _resolve_field_options("scan_optimizer_scf_max_iterations", "orca", name) is None, (
+            name
+        )
+        assert _resolve_field_default("basis", "orca", name) == ""
+        assert _resolve_field_default("dispersion", "orca", name) == "none"
+        assert _resolve_field_default("ri_approximation", "orca", name) == "none"
+        assert _resolve_field_default("scan_optimizer_basis", "orca", name) == ""
+        assert _resolve_field_default("scan_optimizer_dispersion", "orca", name) == "none"
+        assert _resolve_field_default("scan_optimizer_ri_approximation", "orca", name) == "none"
+
+    assert _resolve_field_options("grid", "orca", "B3LYP") == FIELD_DEFINITIONS["grid"]["options"]
+    assert (
+        _resolve_field_options("scf_convergence", "orca", "B3LYP")
+        == (FIELD_DEFINITIONS["scf_convergence"]["options"])
+    )
+    assert _resolve_field_options("scan_optimizer_basis", "orca", "r2SCAN-3c") == ["def2-mTZVPP"]
+    assert (
+        _resolve_field_options("scan_optimizer_grid", "orca", "B97-3c")
+        == (FIELD_DEFINITIONS["scan_optimizer_grid"]["options"])
+    )
+
+
+def test_gfn_locked_fields_accept_cleared_form_only() -> None:
+    from acp.catalog import get_method_schema, normalize_and_validate_method_config
+
+    schema = get_method_schema("pes_scan")
+    assert schema is not None
+
+    profile_shaped = {
+        "levels": {
+            "scan_optimizer": {
+                "engine": "orca",
+                "scan_optimizer_method": "GFN2-xTB",
+                "scan_optimizer_basis": "",
+                "scan_optimizer_dispersion": "none",
+                "scan_optimizer_grid": "",
+                "scan_optimizer_scf_convergence": "",
+                "scan_optimizer_scf_max_iterations": 200,
+            },
+            "single_point": {"engine": "orca", "_disabled": True},
+        }
+    }
+    levels, errors = normalize_and_validate_method_config(profile_shaped, schema)
+    assert errors == [], errors
+    assert levels["scan_optimizer"]["scan_optimizer_dispersion"] == "none"
+    assert levels["scan_optimizer"]["scan_optimizer_scf_max_iterations"] == 200
+
+    override = {
+        "levels": {
+            "scan_optimizer": {
+                "engine": "orca",
+                "scan_optimizer_method": "GFN2-xTB",
+                "scan_optimizer_basis": "def2-SVP",
+                "scan_optimizer_dispersion": "D4",
+                "scan_optimizer_grid": "DefGrid2",
+                "scan_optimizer_scf_convergence": "tight",
+            },
+            "single_point": {"engine": "orca", "_disabled": True},
+        }
+    }
+    _, errors = normalize_and_validate_method_config(override, schema)
+    joined = " | ".join(errors)
+    for field in (
+        "scan_optimizer_basis",
+        "scan_optimizer_dispersion",
+        "scan_optimizer_grid",
+        "scan_optimizer_scf_convergence",
+    ):
+        assert field in joined, (field, errors)
+    assert "family-locked field" in joined
+
+
+# =====================================================================
+# T12: family-aware scan solvent options + ORCA-native grid
+# =====================================================================
+
+_LEGACY_GRID_NAMES = {"SG1", "Fine", "UltraFine", "SuperFine"}
+
+
+def _iter_grid_defaults(node: object):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key in ("grid", "scan_optimizer_grid") and isinstance(value, str):
+                yield value
+            yield from _iter_grid_defaults(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _iter_grid_defaults(item)
+
+
+def test_grid_field_is_orca_native_with_no_legacy_names() -> None:
+    from acp.catalog import FIELD_DEFINITIONS
+
+    grid = FIELD_DEFINITIONS["grid"]
+    assert grid["options"] == ["DefGrid1", "DefGrid2", "DefGrid3"]
+    assert grid["default"]["*"] == ""
+    assert set(grid["option_labels_zh"]) == {"DefGrid1", "DefGrid2", "DefGrid3"}
+
+    catalog_grid_names = set(grid["options"]) | set(grid["option_labels_zh"])
+    catalog_grid_names.add(grid["default"]["*"])
+    assert not (catalog_grid_names & _LEGACY_GRID_NAMES), (
+        "catalog grid field still exposes a legacy alias in options/default/option_labels_zh"
+    )
+
+
+def test_no_legacy_grid_default_anywhere_in_catalog() -> None:
+    from acp.catalog import METHOD_SCHEMAS
+
+    residual = {
+        value for value in _iter_grid_defaults(METHOD_SCHEMAS) if value in _LEGACY_GRID_NAMES
+    }
+    assert residual == set(), residual
+
+
+def test_scan_optimizer_solvent_model_is_family_aware() -> None:
+    from acp.catalog import _resolve_field_options
+
+    for name in _GFN_METHOD_NAMES:
+        assert _resolve_field_options("scan_optimizer_solvent_model", "orca", name) == [
+            "none",
+            "ALPB",
+        ], name
+
+    for dft in ("r2SCAN-3c", "B97-3c", "B3LYP", "wB97M-V"):
+        assert _resolve_field_options("scan_optimizer_solvent_model", "orca", dft) == [
+            "none",
+            "CPCM",
+            "SMD",
+        ], dft
+
+
+def test_legacy_grid_value_migrates_to_defgrid_with_warning(caplog) -> None:
+    from acp.catalog import _resolve_field_default, get_method_schema
+
+    schema = get_method_schema("pes_scan")
+    assert schema is not None
+
+    config = {
+        "levels": {
+            "scan_optimizer": {
+                "engine": "orca",
+                "scan_optimizer_method": "r2SCAN-3c",
+                "scan_optimizer_grid": "UltraFine",
+            },
+            "single_point": {"engine": "orca", "_disabled": True},
+        }
+    }
+    with caplog.at_level("WARNING", logger="acp.catalog"):
+        levels, errors = normalize_and_validate_method_config(config, schema)
+
+    assert errors == [], errors
+    assert levels["scan_optimizer"]["scan_optimizer_grid"] == "DefGrid3"
+    assert any("UltraFine" in rec.message and "DefGrid3" in rec.message for rec in caplog.records)
+
+    assert _resolve_field_default("scan_optimizer_grid", "orca", "r2SCAN-3c") == ""
+    assert _resolve_field_default("grid", "orca", "B3LYP") == ""
+
+
+def test_legacy_grid_alias_registry_roundtrip() -> None:
+    from cccp.qc.keyword_registry import resolve
+
+    canonical, warning = resolve(
+        "grid", "SuperFine", family="conventional_dft", implementation="orca_dft"
+    )
+    assert canonical == "DefGrid3"
+    assert warning and "legacy alias" in warning

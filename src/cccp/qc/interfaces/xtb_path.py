@@ -21,7 +21,7 @@ from typing import Any
 from cccp.qc.interfaces.xtb import _thread_env
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
-from cccp.utils.solvent_map import xtb_solvent
+from cccp.utils.solvent_map import xtb_method_name, xtb_solvent_args
 
 logger = logging.getLogger(__name__)
 
@@ -101,13 +101,15 @@ class XTBPathInterface:
     def is_available(self) -> bool:
         return self.executable is not None
 
-    def _solvent_args(self, solvent: str | None = None) -> list[str]:
+    def _solvent_args(self, solvent: str | None = None, gfn_level: int | None = None) -> list[str]:
+        """Return xTB solvation flags for the EFFECTIVE solvent/method/model."""
         sol = solvent if solvent is not None else self.solvent
-        if not sol or self.solvent_model == "none":
-            return []
-        if self.solvent_model == "gbsa":
-            return ["--gbsa", xtb_solvent(sol)]
-        return ["--alpb", xtb_solvent(sol)]
+        level = self.gfn_level if gfn_level is None else gfn_level
+        return xtb_solvent_args(
+            sol,
+            method=xtb_method_name(level),
+            solvent_model=self.solvent_model,
+        )
 
     def path_search(
         self,
@@ -205,7 +207,7 @@ class XTBPathInterface:
                 cmd.extend(["--uhf", str(uhf)])
             if resolved_solvent:
                 cmd.extend(["--gfn", str(resolved_gfn_level)])
-                cmd.extend(self._solvent_args(resolved_solvent))
+                cmd.extend(self._solvent_args(resolved_solvent, gfn_level=resolved_gfn_level))
             elif resolved_gfn_level != 2:
                 cmd.extend(["--gfn", str(resolved_gfn_level)])
             if etemp is not None:

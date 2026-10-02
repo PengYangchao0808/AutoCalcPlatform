@@ -86,7 +86,7 @@ class GeometryUtils:
         Returns:
             Dihedral angle in degrees
         """
-        b1 = coords[atom_j] - coords[atom_i]
+        b1 = coords[atom_i] - coords[atom_j]
         b2 = coords[atom_k] - coords[atom_j]
         b3 = coords[atom_l] - coords[atom_k]
 

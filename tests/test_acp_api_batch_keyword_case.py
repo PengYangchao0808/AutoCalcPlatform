@@ -171,6 +171,114 @@ def test_canonicalize_batch_keywords_touches_only_flat_and_batch_levels() -> Non
 
 
 # ---------------------------------------------------------------------------
+# T24 — /validate-method surfaces migration/canonicalization warnings
+# ---------------------------------------------------------------------------
+
+
+def test_validate_method_migrated_grid_config_returns_non_empty_warnings(
+    client: TestClient,
+) -> None:
+    """Given a legacy Gaussian-era grid alias (UltraFine), When validated,
+    Then the response is valid AND carries a non-empty warnings list naming
+    the canonical token (DefGrid3) — the field previously existed but was
+    never populated."""
+    response = client.post(
+        "/api/v1/validate-method",
+        json={
+            "schema_id": "dft_optimize",
+            "levels": {
+                "optimize": {
+                    "engine": "orca",
+                    "functional": "wB97X-D4",
+                    "basis": "def2-TZVP",
+                    "grid": "UltraFine",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid"] is True
+    assert body["errors"] == []
+    assert body["warnings"], "migrated legacy config must produce warnings"
+    assert any("UltraFine" in w and "DefGrid3" in w for w in body["warnings"])
+    # The migrated value lands in normalized_levels so the wizard can adopt it.
+    assert body["normalized_levels"]["optimize"]["grid"] == "DefGrid3"
+
+
+def test_validate_method_clean_config_returns_empty_warnings(client: TestClient) -> None:
+    """Given an already-canonical config, When validated, Then warnings is
+    exactly [] (no false-positive migration noise)."""
+    response = client.post(
+        "/api/v1/validate-method",
+        json={
+            "schema_id": "dft_optimize",
+            "levels": {
+                "optimize": {
+                    "engine": "orca",
+                    "functional": "wB97X-D4",
+                    "basis": "def2-TZVP",
+                    "grid": "DefGrid3",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid"] is True
+    assert body["warnings"] == []
+
+
+def test_validate_method_method_alias_and_case_canonicalization_warn(
+    client: TestClient,
+) -> None:
+    """Given a method alias (b973c) on an alias-flagged field and a
+    case-folded enum value (tight), When validated, Then each
+    canonicalization is surfaced as its own warning."""
+    response = client.post(
+        "/api/v1/validate-method",
+        json={
+            "schema_id": "pes_scan",
+            "levels": {
+                "scan_optimizer": {
+                    "engine": "orca",
+                    "scan_optimizer_method": "b973c",
+                    "scan_optimizer_basis": "def2-mTZVP",
+                    "scan_optimizer_convergence": "Tight",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert any("b973c" in w and "B97-3c" in w for w in body["warnings"]), (
+        f"method alias warning missing: {body['warnings']}"
+    )
+    assert any("canonicalized to 'tight'" in w and "Tight" in w for w in body["warnings"]), (
+        f"case canonicalization warning missing: {body['warnings']}"
+    )
+
+
+def test_validate_method_unknown_schema_still_has_empty_warnings(
+    client: TestClient,
+) -> None:
+    """Given an unknown schema_id, When validated, Then the response stays
+    valid=False with empty warnings (no migration ran)."""
+    response = client.post(
+        "/api/v1/validate-method",
+        json={"schema_id": "nope", "levels": {}},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid"] is False
+    assert body["warnings"] == []
+
+
+# ---------------------------------------------------------------------------
 # Wiring tests — create_job applies the helper for BatchOptimize only
 # ---------------------------------------------------------------------------
 

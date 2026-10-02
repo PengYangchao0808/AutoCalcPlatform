@@ -14,6 +14,7 @@ from acp.backends.registry import register_backend
 from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
+from cccp.qc.keyword_registry import method_family
 from cccp.software import detect_version
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,15 @@ class ORCABackend(QCBackend):
 
         interface_kwargs = dict(kwargs)
         interface_kwargs.setdefault("method", defaults.get("method", "M062X"))
-        interface_kwargs.setdefault("basis", defaults.get("basis", "def2-TZVPP"))
+        # T10: GFN-family methods (GFN0/1/2-xTB, GFN-FF) carry their own
+        # built-in Hamiltonian and consume no DFT basis. Never inject the
+        # conventional-DFT default ``def2-TZVPP`` here — the cccp renderer
+        # also strips a leaked basis, but the backend must not emit a value
+        # that is misleading (and would be dropped) in the first place.
+        if method_family(interface_kwargs["method"]) in {"gfn", "gfnff"}:
+            interface_kwargs.setdefault("basis", "")
+        else:
+            interface_kwargs.setdefault("basis", defaults.get("basis", "def2-TZVPP"))
         interface_kwargs.setdefault("solvent", None)
         interface_kwargs.setdefault("solvent_model", "none")
 

@@ -12,7 +12,10 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from acp.calculations.levels import CalculationLevel
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,8 @@ __all__ = [
     "build_default_protocol",
     "coordinate_step",
     "normalize_candidate_role",
+    "optimizer_to_level",
+    "single_point_to_level",
     "validate_scan_coordinates",
     "validate_scan_coordinate",
     "validate_scan_protocol",
@@ -667,6 +672,43 @@ class ScanQuality:
 # ── helpers ────────────────────────────────────────────────────────────
 
 
+def optimizer_to_level(optimizer: ScanOptimizer) -> CalculationLevel:
+    """Return the raw (uncanonicalized) calculation level of *optimizer*."""
+    from acp.calculations.levels import CalculationLevel
+
+    return CalculationLevel(
+        method=optimizer.method,
+        basis=optimizer.basis,
+        dispersion=optimizer.dispersion,
+        solvent_model=optimizer.solvent_model,
+        solvent=optimizer.solvent,
+        grid=optimizer.grid,
+        scf_convergence=optimizer.scf_convergence,
+        scf_max_iterations=optimizer.scf_max_iterations,
+        ri_approximation=optimizer.ri_approximation,
+        aux_j_basis=optimizer.aux_j_basis,
+        aux_c_basis=optimizer.aux_c_basis,
+    )
+
+
+def single_point_to_level(sp: SinglePointSpec) -> CalculationLevel:
+    """Return the raw (uncanonicalized) calculation level of *sp*."""
+    from acp.calculations.levels import CalculationLevel
+
+    return CalculationLevel(
+        method=sp.method,
+        basis=sp.basis,
+        dispersion=sp.dispersion,
+        solvent_model=sp.solvent_model,
+        solvent=sp.solvent,
+        grid=sp.grid,
+        scf_convergence=sp.scf_convergence,
+        ri_approximation=sp.ri_approximation,
+        aux_j_basis=sp.aux_j_basis,
+        aux_c_basis=sp.aux_c_basis,
+    )
+
+
 def normalize_candidate_role(role: Any) -> str:
     """Normalise a candidate role to ``ts`` / ``intermediate``."""
     normalized = str(role or "").strip().lower()
@@ -834,6 +876,31 @@ def validate_scan_protocol(
                 raise ValueError("single_point charge and multiplicity are required")
             if not sp.method:
                 raise ValueError("single_point method is required when single_point is enabled")
+            # Single-point level validation (T13): the PES SP level passes
+            # through the same shared model as the scan optimizer — the
+            # ``single_point`` purpose enforces GFN family rules, composite
+            # locking, the GFN0-xTB ORCA-path policy gate, and solvent
+            # consistency (previously the SP level was never validated).
+            from acp.calculations.levels import CalculationLevel as _CalculationLevel
+            from acp.calculations.levels import validate_level_for_purpose as _validate_level
+
+            sp_errors = _validate_level(
+                _CalculationLevel(
+                    method=sp.method,
+                    basis=sp.basis,
+                    dispersion=sp.dispersion,
+                    solvent_model=sp.solvent_model,
+                    solvent=sp.solvent,
+                    grid=sp.grid,
+                    scf_convergence=sp.scf_convergence,
+                    ri_approximation=sp.ri_approximation,
+                    aux_j_basis=sp.aux_j_basis,
+                    aux_c_basis=sp.aux_c_basis,
+                ),
+                purpose="single_point",
+            )
+            if sp_errors:
+                raise ValueError("invalid single_point level: " + "; ".join(sp_errors))
 
 
 def validate_scan_coordinates(

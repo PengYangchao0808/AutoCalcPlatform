@@ -18,6 +18,8 @@ from typing import Optional, List
 
 import numpy as np
 
+from cccp.utils.solvent_map import xtb_method_name, xtb_solvent_args
+
 logger = logging.getLogger(__name__)
 
 
@@ -169,7 +171,11 @@ def run_xtb_enso(
     ]
 
     if solvent:
-        cmd.extend(["--alpb", solvent])
+        cmd.extend(
+            xtb_solvent_args(
+                solvent, method=xtb_method_name(gfn_level), solvent_model="alpb"
+            )
+        )
 
     # Thread environment
     xtb_env = os.environ.copy()

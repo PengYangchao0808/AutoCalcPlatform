@@ -43,9 +43,21 @@ from cccp.qc.interfaces.orca_ts import (
     parse_ts_frequency_map,
     parse_ts_mode_vectors,
     ts_geom_block,
-    ts_opt_route,
+)
+from cccp.qc.interfaces.route_render import (
+    RouteKeyword,
+    orca_gfn_solvent_token,
+    orca_keyword_context,
+    render_route_line,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
+from cccp.qc.keyword_registry import (
+    KeywordValueError,
+    calculation_policy,
+    method_family,
+    resolve,
+    resolve_implementation,
+)
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -423,48 +435,7 @@ def _parse_frequencies(output_file: Path) -> list[float]:
 def _is_orca_gfn_xtb_method(method: str | None) -> bool:
     if not method:
         return False
-    normalized = method.strip().upper().replace(" ", "")
-    return normalized.startswith("GFN") and normalized.endswith("-XTB")
-
-
-_OPT_LEVEL_MAP: dict[str, str] = {
-    "tight": "TightOpt",
-    "verytight": "VeryTightOpt",
-    # PES contracts spell the level "very_tight"; accept the alias here so
-    # the convergence setting actually reaches the route line (G3 fix).
-    "very_tight": "VeryTightOpt",
-    "loose": "LooseOpt",
-    # ``normal`` is ORCA's default for an optimization route.  The base
-    # ``calc_type="opt"`` already emits ``Opt``; adding it here duplicates
-    # the keyword (notably for ScanTS relaxed scans).
-}
-
-_SCF_CONVERGENCE_MAP: dict[str, str] = {
-    "tight": "TightSCF",
-    "verytight": "VeryTightSCF",
-    "loose": "LooseSCF",
-}
-
-_SCF_STRATEGY_MAP: dict[str, str] = {
-    "slowconv": "SlowConv",
-    "soscf": "SOSCF",
-}
-
-# ORCA-native integration-grid keywords (route line).  The PES scan
-# optimizer exposes the ORCA-native names (DefGrid1/2/3) rather than the
-# legacy SG1/Fine aliases to avoid a second mapping layer.
-_GRID_KEYWORD_MAP: dict[str, str] = {
-    "defgrid1": "DefGrid1",
-    "defgrid2": "DefGrid2",
-    "defgrid3": "DefGrid3",
-}
-
-_DISPERSION_KEYWORD_MAP: dict[str, str] = {
-    "d3": "D3",
-    "d3bj": "D3BJ",
-    "d4": "D4",
-    "vv10": "VV10",
-}
+    return method_family(method) in {"gfn", "gfnff"}
 
 
 def _looser_opt_level(opt_level: str | None) -> str | None:
@@ -868,11 +839,16 @@ def _orca_scan_route_settings(
         extras = [str(item) for item in route_extras if item]
     if use_scants:
         extras.append("ScanTS")
-    if _is_orca_gfn_xtb_method(method) and solvent:
-        normalized_model = str(solvent_model or "ALPB").strip().upper() or "ALPB"
-        if normalized_model not in {"ALPB", "GBSA"}:
-            normalized_model = "ALPB"
-        extras.append(f"{normalized_model}({orca_smd_solvent(solvent)})")
+    if _is_orca_gfn_xtb_method(method):
+        # GFN solvent rule (T7): ALPB-only under ORCA, keyed by
+        # resolve_implementation via orca_keyword_context — ALPB emits
+        # ALPB(<solvent>), none/unset emits nothing, GBSA/CPCM/SMD raise
+        # KeywordValueError (PLATFORM POLICY; see orca_gfn_solvent_token
+        # for the capability/dependency/policy split). The model is never
+        # rewritten and no %cpcm block is reachable for GFN.
+        token = orca_gfn_solvent_token(method, solvent, solvent_model)
+        if token:
+            extras.append(token)
         return extras, None, "none"
     return extras, solvent, solvent_model
 
@@ -1182,7 +1158,9 @@ class ORCAInterface(QCInterfaceBase):
             method: DFT method
             basis: Basis set
             solvent: Solvent model
-            solvent_model: Solvent model type - none, smd, cpcm (default none)
+            solvent_model: Solvent model type - none, smd, cpcm (default
+                none). GFN methods accept only none/ALPB (GBSA/CPCM/SMD
+                raise ``KeywordValueError`` — PLATFORM POLICY).
             **kwargs: Additional parameters
         """
         super().__init__(config, **kwargs)
@@ -1310,28 +1288,28 @@ class ORCAInterface(QCInterfaceBase):
 
         _extras_upper = {str(x).upper() for x in _route_extras}
 
-        if opt_level is not None:
-            _opt_kw = _OPT_LEVEL_MAP.get(opt_level.strip().lower())
-            if _opt_kw and _opt_kw.upper() not in _extras_upper:
-                _route_extras.append(_opt_kw)
-                _extras_upper.add(_opt_kw.upper())
+        _kw_family, _kw_implementation = orca_keyword_context(_method)
 
         _dlpno_tight_scf = (
             not basis_inline and _method.lower() == "dlpno-ccsd(t)"
         )
-        if scf_convergence is not None:
-            _scf_conv_kw = _SCF_CONVERGENCE_MAP.get(scf_convergence.strip().lower())
-            if _scf_conv_kw:
-                if _scf_conv_kw.upper() not in _extras_upper and not (
-                    _scf_conv_kw.upper() == "TIGHTSCF" and _dlpno_tight_scf
-                ):
-                    _route_extras.append(_scf_conv_kw)
-                    _extras_upper.add(_scf_conv_kw.upper())
 
-        if scf_strategy is not None:
-            _scf_strat_kw = _SCF_STRATEGY_MAP.get(scf_strategy.strip().lower())
-            if _scf_strat_kw and _scf_strat_kw.upper() not in _extras_upper:
-                _route_extras.append(_scf_strat_kw)
+        # Governed enumerated params go through the single route renderer;
+        # site quirks are declared as RouteKeyword flags, not inline token logic.
+        builtin = (meta or {}).get("builtin_dispersion")
+        _governed_keywords: list[RouteKeyword] = [
+            RouteKeyword("opt_level", opt_level),
+            RouteKeyword(
+                "scf_convergence",
+                scf_convergence,
+                suppress_tokens=(
+                    frozenset({"TightSCF"}) if _dlpno_tight_scf else frozenset()
+                ),
+            ),
+            # Historical quirk preserved: scf_strategy tokens never joined
+            # the dedup set.
+            RouteKeyword("scf_strategy", scf_strategy, register=False),
+        ]
 
         if scf_maxiter is not None and scf_maxiter > 0:
             if scf_options is None:
@@ -1342,26 +1320,30 @@ class ORCAInterface(QCInterfaceBase):
         # used to be reachable only through raw route_extras.  Composite 3c
         # and GFN methods are immune — the former strip the token via the
         # builtin-dispersion filter below, the latter have no basis/dispersion
-        # layer at all.
+        # layer at all. The `not _gfn_method` guard keeps the lookup itself
+        # out of the registry for GFN methods (no warning, no emission).
         _gfn_method = _is_orca_gfn_xtb_method(_method)
         if not _gfn_method:
-            if grid:
-                _grid_kw = _GRID_KEYWORD_MAP.get(str(grid).strip().lower(), str(grid).strip())
-                if _grid_kw and _grid_kw.upper() not in _extras_upper:
-                    _route_extras.append(_grid_kw)
-                    _extras_upper.add(_grid_kw.upper())
+            _governed_keywords.append(RouteKeyword("grid", grid))
             _meta_ri = (meta or {}).get("ri_support", "user")
-            if (
-                dispersion
-                and str(dispersion).strip().lower() != "none"
-                and _meta_ri == "user"
-            ):
-                _disp_kw = _DISPERSION_KEYWORD_MAP.get(
-                    str(dispersion).strip().lower(), str(dispersion).strip()
+            _governed_keywords.append(
+                RouteKeyword(
+                    "dispersion",
+                    dispersion,
+                    emit=_meta_ri == "user",
+                    suppress_tokens=(
+                        frozenset({builtin}) if builtin else frozenset()
+                    ),
                 )
-                if _disp_kw and _disp_kw.upper() not in _extras_upper:
-                    _route_extras.append(_disp_kw)
-                    _extras_upper.add(_disp_kw.upper())
+            )
+
+        # GFN solvent rule (T7): one shared rule for the whole GFN family —
+        # ALPB emits ALPB(<solvent>) on the ! line, none/unset emits nothing,
+        # GBSA/CPCM/SMD raise KeywordValueError (PLATFORM POLICY; the %cpcm
+        # block below is DFT-only and unreachable for GFN).
+        _gfn_solvent_token = (
+            orca_gfn_solvent_token(_method, _solvent, _solvent_model) if _gfn_method else None
+        )
 
         calc_type_map = {
             "opt": "Opt",
@@ -1418,12 +1400,16 @@ class ORCAInterface(QCInterfaceBase):
             if ri_support == "composite":
                 _aux_c = None
 
-        builtin = (meta or {}).get("builtin_dispersion")
         if builtin:
             _filtered_extras = [x for x in _filtered_extras if str(x).upper() != builtin.upper()]
 
-        extras_str = (" " + " ".join(_filtered_extras)) if _filtered_extras else ""
+        if _gfn_solvent_token:
+            _filtered_extras.append(_gfn_solvent_token)
 
+        _route_segments: list[str | RouteKeyword] = [
+            *_filtered_extras,
+            *_governed_keywords,
+        ]
         if not basis_inline:
             method_name = _method
             if _method.lower() == "dlpno-ccsd(t)":
@@ -1432,9 +1418,25 @@ class ORCAInterface(QCInterfaceBase):
             route_prefix = ""
             if method_name == "DLPNO-CCSD(T)":
                 route_prefix = " TightSCF"
-            blocks.append(f"! {method_name}{route_prefix} {route}{extras_str}")
+            blocks.append(
+                render_route_line(
+                    [f"{method_name}{route_prefix}", route, *_route_segments],
+                    context=(_kw_family, _kw_implementation),
+                    seen=_extras_upper,
+                )
+            )
         else:
-            blocks.append(f"! {_method} {_basis} {route}{extras_str}")
+            # basis is a governed segment (T6): GFN-family values are
+            # stripped with a warning by the renderer; an EMPTY basis keeps
+            # its historical spacing slot (the `! B3LYP  Opt` double space).
+            _basis_segment: str | RouteKeyword = RouteKeyword("basis", _basis) if _basis else ""
+            blocks.append(
+                render_route_line(
+                    [_method, _basis_segment, route, *_route_segments],
+                    context=(_kw_family, _kw_implementation),
+                    seen=_extras_upper,
+                )
+            )
 
         needs_basis_block = (
             _aux_j
@@ -1445,6 +1447,22 @@ class ORCAInterface(QCInterfaceBase):
                 and (meta.get("default_aux_j") or meta.get("default_aux_c"))
             )
         )
+        if _gfn_method and needs_basis_block:
+            # T6: GFN family consumes no auxiliary basis — the whole %basis
+            # block is DFT-only and is suppressed; every dropped aux value
+            # (explicit params and route_extras-extracted /J //C alike) gets
+            # the registry strip warning.
+            for _aux_value in (_aux_j, _aux_c):
+                if _aux_value:
+                    _, _aux_warning = resolve(
+                        "aux",
+                        str(_aux_value),
+                        family=_kw_family,
+                        implementation=_kw_implementation,
+                    )
+                    if _aux_warning:
+                        logger.warning("%s", _aux_warning)
+            needs_basis_block = False
         if needs_basis_block:
             blocks.append("%basis")
             if not basis_inline:
@@ -1530,7 +1548,9 @@ class ORCAInterface(QCInterfaceBase):
                         raise ValueError(message)
                     blocks.append(str(blk))
 
-        if _solvent and _solvent_model.lower() != "none":
+        if not _gfn_method and _solvent and _solvent_model.lower() != "none":
+            # DFT-only solvent block; the GFN family never reaches here
+            # (ALPB route token emitted above; GBSA/CPCM/SMD raise earlier).
             blocks.append("%cpcm")
             if _solvent_model.lower() == "cpcm":
                 blocks.append(f'  SMDsolvent "{orca_smd_solvent(_solvent)}"')
@@ -2057,16 +2077,10 @@ class ORCAInterface(QCInterfaceBase):
         )
 
         eff_method = method or self.method or "GFN2-xTB"
-        eff_basis = (
-            basis
-            if basis is not None
-            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
-        )
+        eff_basis = basis if basis is not None else self.basis
         eff_solvent = solvent if solvent is not None else self.solvent
         eff_solvent_model = (
-            solvent_model
-            if solvent_model is not None
-            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+            solvent_model if solvent_model is not None else self.solvent_model
         )
         recalc_hess = kwargs.pop("recalc_hess", 0)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
@@ -2239,16 +2253,10 @@ class ORCAInterface(QCInterfaceBase):
         if not drive_coordinates:
             raise ValueError("synchronous relaxed scan requires a drive coordinate")
         eff_method = method or self.method or "GFN2-xTB"
-        eff_basis = (
-            basis
-            if basis is not None
-            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
-        )
+        eff_basis = basis if basis is not None else self.basis
         eff_solvent = solvent if solvent is not None else self.solvent
         eff_solvent_model = (
-            solvent_model
-            if solvent_model is not None
-            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+            solvent_model if solvent_model is not None else self.solvent_model
         )
         resolved_route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
             eff_method,
@@ -2814,8 +2822,12 @@ class ORCAInterface(QCInterfaceBase):
                 route_keywords.append("Moread")
 
         lines: list[str] = []
-        route = " ".join([_basis] + route_keywords) if _basis else " ".join(route_keywords)
-        lines.append(f"! {route}")
+        route_parts = (
+            [RouteKeyword("basis", _basis)] + route_keywords
+            if _basis
+            else list(route_keywords)
+        )
+        lines.append(render_route_line(route_parts))
 
         lines.append("%casscf")
         lines.append(f"  nel {int(active_electrons)}")
@@ -3381,29 +3393,72 @@ class ORCAInterface(QCInterfaceBase):
         Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
         when neither the override nor the instance default is set to an NMR
         level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
-        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention.
+        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
+        the GFN family follows the shared ALPB-only rule
+        (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
         """
         _method = method if method is not None else self.method
         if not _method:
             _method = "mPW1PW91"
+        _gfn_nmr = _is_orca_gfn_xtb_method(_method)
+
+        if _gfn_nmr:
+            # T8 [Q9]: GFN+NMR is REJECTED by default. The xTB path produces
+            # no artifact: ORCA terminates normally (rc=0) but the shielding
+            # parser finds ZERO tensors (T22 case 11), so "ORCA exited 0" is
+            # NOT acceptable evidence. The reserved switch
+            # ``keyword_registry.GFN_NMR_DEFAULT_ALLOWED`` opens the path only
+            # on artifact-level GIAO evidence (T17); opening it is a PLATFORM
+            # POLICY decision and a probe verdict never auto-flips it.
+            _family = method_family(_method)
+            _implementation = resolve_implementation(_method, engine="orca")
+            _nmr_decision = calculation_policy(
+                "nmr", family=_family, implementation=_implementation
+            )
+            if not _nmr_decision.allowed:
+                # Policy gate runs BEFORE any write — no half-written input.
+                raise KeywordValueError(
+                    "NMR 仅支持 DFT/复合方法 (NMR is supported for DFT/composite "
+                    f"methods only): GFN method {_method!r} has no artifact-level "
+                    f"GIAO shielding support. {_nmr_decision.reason}. "
+                    f"Policy: {_nmr_decision.policy}"
+                )
+
         _basis = basis if basis is not None else self.basis
-        if not _basis:
+        if not _basis and not _gfn_nmr:
+            # DFT/composite NMR default level (Goodman DP4/DP5 reference).
+            # The GFN family NEVER receives an implicit DFT basis (T8): it
+            # consumes no basis, and the renderer would only strip it with a
+            # warning. An EXPLICIT GFN basis is still stripped by the
+            # renderer (T6).
             _basis = "6-311G(d)"
         _solvent = solvent if solvent is not None else self.solvent
         _solvent_model = (
             solvent_model if solvent_model is not None else self.solvent_model
-        ) or "cpcm"
+        )
+        if not _gfn_nmr:
+            # "cpcm" is a DFT-only NMR default; for the GFN family an unset
+            # model stays unset (never gains solvation by default). When the
+            # reserved switch is open, GFN solvent routes through ALPB only
+            # (:func:`orca_gfn_solvent_token` — never CPCM/SMD).
+            _solvent_model = _solvent_model or "cpcm"
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
 
-        lines: list[str] = [f"! {_method} {_basis} TightSCF"]
-        if _solvent and _solvent_model.lower() != "none":
+        lines: list[str] = [
+            render_route_line([_method, RouteKeyword("basis", _basis), "TightSCF"], method=_method)
+        ]
+        if _gfn_nmr:
+            # GFN solvent rule (T7): ALPB-only under ORCA (PLATFORM POLICY),
+            # same shared rule as every other !-line site.
+            _gfn_token = orca_gfn_solvent_token(_method, _solvent, _solvent_model)
+            if _gfn_token:
+                lines.append(render_route_line([_gfn_token]))
+        elif _solvent and _solvent_model.lower() != "none":
             solv_name = orca_smd_solvent(_solvent)
             model = _solvent_model.lower()
-            if model == "smd":
-                lines.append(f"! SMD({solv_name})")
-            else:  # cpcm (default for NMR)
-                lines.append(f"! CPCM({solv_name})")
+            model_token = "SMD" if model == "smd" else "CPCM"
+            lines.append(render_route_line([f"{model_token}({solv_name})"]))
 
         if target_elements:
             lines.append("%eprnmr")

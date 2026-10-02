@@ -1,0 +1,416 @@
+{
+  "schema": "cccp_orca_keyword_probe_v1",
+  "generated_at": "2026-09-30T18:07:26Z",
+  "orca": {
+    "path": "/home/xieningke/orca611/orca",
+    "sha256": "d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
+    "version": "6.1.1 RELEASE (GIT: $487d211c$, 2025-11-21 10:33:24 +0100)",
+    "size_bytes": 43977904
+  },
+  "otool_xtb_version": "6.7.1 (edcfbbe) compiled 2024-07-22",
+  "otool_xtb": {
+    "path": "/home/xieningke/orca611/otool_xtb",
+    "sha256": "debf27a9e0fa4bfb5ca75aafe4b90d8211f08ec2f4a482f375a4987212eaa12a",
+    "version": "6.7.1 (edcfbbe) compiled 2024-07-22"
+  },
+  "parameter_files": [
+    {
+      "name": "param_gfn0-xtb.txt",
+      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn0-xtb.txt",
+      "sha256": "278461cabbf89b14379aedc78ef3e141c8cef1f911f3a3c72530aec7a52b6d34"
+    },
+    {
+      "name": "param_gfn1-xtb.txt",
+      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn1-xtb.txt",
+      "sha256": "81a9d7afdee31f5d8fd67a4d8ec966179317c7b100261c9c82d724bafb460399"
+    },
+    {
+      "name": "param_gfn1-si-xtb.txt",
+      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn1-si-xtb.txt",
+      "sha256": "f878fd7f8eea16f326aff283fbc7ca23800045992c0f86536e18ad91816cf7ca"
+    },
+    {
+      "name": "param_gfn2-xtb.txt",
+      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn2-xtb.txt",
+      "sha256": "f6f05c6c5264cb2f75c54f8ac6838044541c1e493b16f1a4d4ee4fa64de5f545"
+    },
+    {
+      "name": "param_ipea-xtb.txt",
+      "path": "/home/xieningke/xtb-dist/share/xtb/param_ipea-xtb.txt",
+      "sha256": "08a39b7854b915501d8ba87b7d3330f28932f293479a0dc52b502f039c19f122"
+    },
+    {
+      "name": ".param_gfnff.xtb",
+      "path": "/home/xieningke/xtb-dist/share/xtb/.param_gfnff.xtb",
+      "sha256": "5cf2d1259dd3c65aa9594ea32a0c9a21bb819b6e16b81521888c5a3a1ec513e8"
+    }
+  ],
+  "parameter_files_note": "Search locations for xTB parameter files: /home/xieningke/orca611 (ORCA install dir) -> NONE; XTBPATH=/home/xieningke/xtb-dist/bin -> NONE; run cwd -> NONE; the listed files live only under /home/xieningke/xtb-dist/share/xtb. GFN2-xTB and GFN-FF completed without an on-disk param file in the ORCA dir (internal/bundled); GFN0-xTB failed from the ORCA dir because otool_xtb could not find param_gfn0-xtb.txt -> path-resolution dependency gap, not a capability verdict. Remediation verified: with XTBPATH=/home/xieningke/xtb-dist/share/xtb the GFN0-xTB case terminates normally (energy -4.366773861540 Eh); see supplementary_findings.",
+  "input_xyz": "* xyz 0 1\nO   0.0000000000   0.0000000000   0.1173000000\nH   0.0000000000   0.7572000000  -0.4692000000\nH   0.0000000000  -0.7572000000  -0.4692000000\n*",
+  "probe_input_template": "! <keywords>\n\n* xyz 0 1\nO   0.0000000000   0.0000000000   0.1173000000\nH   0.0000000000   0.7572000000  -0.4692000000\nH   0.0000000000  -0.7572000000  -0.4692000000\n*\n",
+  "orca_invocation": "/home/xieningke/orca611/orca <case>.inp > <case>.out 2>&1",
+  "probe_runner": "cd /tmp/opencode/t22-probe && /opt/acp/venv/bin/python run_probe.py",
+  "policy_statements": [
+    "ORCA GFN solvent only {none,ALPB} (platform policy, not probe-derived)",
+    "GFN0-xTB is xTB-binary-only on the ORCA path (platform policy, not probe-derived)",
+    "GFN+NMR default reject unless artifact-level support (platform policy, not probe-derived)"
+  ],
+  "supplementary_findings": [
+    {
+      "finding_id": "gfn0-xtb-path-resolution-remediation",
+      "case_id": "gfn0-xtb",
+      "verified": true,
+      "evidence": "extra/gfn0_xtbpath.out",
+      "detail": "Re-running the GFN0-xTB case with XTBPATH=/home/xieningke/xtb-dist/share/xtb (instead of the default XTBPATH=/home/xieningke/xtb-dist/bin) yields rc=0, ORCA TERMINATED NORMALLY and FINAL SINGLE POINT ENERGY -4.366773861540 Eh with no 'param_gfn0-xtb.txt not found' error. Confirms the case-10 verdict is a path-resolution dependency gap with a known remediation, not an unsupported software capability. Platform policy (GFN0-xTB is xTB-binary-only on the ORCA path) is deliberately UNCHANGED by this probe."
+    },
+    {
+      "finding_id": "nmr-shielding-parser-orca6-format-gap",
+      "case_id": null,
+      "verified": true,
+      "evidence": "extra/dft_nmr.out",
+      "detail": "A valid ORCA 6.1.1 RHF/def2-SVP NMR single point (rc=0, normal termination, FINAL SINGLE POINT ENERGY -75.960983978583 Eh) DOES contain 'CHEMICAL SHIELDINGS (ppm)' with per-nucleus shielding tensors, yet NmrShieldingParser.parse() returns {} (0 atoms): the parser regexes target ORCA 5.x headers/rows, not ORCA 6.1 format. This does not change any of the 13 verdicts (the GFN2-xTB NMR output contains no shielding data at all), but it is a required input for T8/T17: on ORCA 6.1, even DFT NMR artifacts cannot be consumed by the current parser."
+    },
+    {
+      "finding_id": "defgrid3-default-method-confirmed",
+      "case_id": "defgrid3",
+      "verified": true,
+      "evidence": "extra/dft_nmr.out",
+      "detail": "The DEFGRID3-only case energy (-75.960983978583 Eh) is identical to an explicit RHF/def2-SVP single point, confirming ORCA 6.1.1's default method is Hartree-Fock/def2-SVP."
+    }
+  ],
+  "totals": {
+    "cases": 13,
+    "valid_completion": 9,
+    "syntax_error": 2,
+    "missing_dependency": 1,
+    "calculation_failure": 1
+  },
+  "cases": [
+    {
+      "order": 1,
+      "case_id": "gfn2-xtb",
+      "keywords": "GFN2-xTB",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.07037076185,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb.out",
+      "output_sha256": "6f36212cfaacaa48648f2d90cfed28ff812f8c9615f00b96207867863229d72e",
+      "wall_s": 0.16,
+      "failure_note": null,
+      "capability": "ORCA 6.1.1 external xTB interface supports GFN2-xTB single point; observed normal termination with FINAL SINGLE POINT ENERGY -5.070370761850 Eh (documented: ORCA 6.1 external-interface table).",
+      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 2,
+      "case_id": "native-gfn2-xtb",
+      "keywords": "Native-GFN2-xTB",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.070370763903,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/native-gfn2-xtb.out",
+      "output_sha256": "4aa0bd7cab282ed050b35e6bba19ff3e2401cce1189d68d3cf89d6d1f3b19ee1",
+      "wall_s": 0.37,
+      "failure_note": null,
+      "capability": "ORCA 6.1 native xTB implementation exists and completes ('XTB-Hamiltonian Method GFN2-xTB', energy -5.07037076390311 Eh). Distinct code path from external GFN2-xTB; energies agree to ~2e-9 Eh on water.",
+      "dependency": "No external binary dependency for the native implementation; completes with the ORCA binary only.",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 3,
+      "case_id": "gfn2-xtb-alpb-water",
+      "keywords": "GFN2-xTB ALPB(water)",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.08482827792,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb-alpb-water.out",
+      "output_sha256": "d5c7b7119aef8e86c198c21d9ab43e111f19086b41688d3578f5d1e2c55b1e45",
+      "wall_s": 0.16,
+      "failure_note": null,
+      "capability": "ORCA external xTB supports ALPB(water) solvation for GFN2-xTB; observed otool_xtb '--alpb WATER', Gsolv -0.019195621438 Eh, normal termination, energy -5.084828277920 Eh (documented: ALPB is an xTB model passed through by ORCA).",
+      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611. ALPB solvent parameter is internal.",
+      "policy_note": "ORCA GFN solvent only {none,ALPB} (platform policy, not probe-derived)"
+    },
+    {
+      "order": 4,
+      "case_id": "gfn2-xtb-gbsa-water",
+      "keywords": "GFN2-xTB GBSA(water)",
+      "outcome_class": "syntax_error",
+      "rc": 4,
+      "first_error_line": "UNRECOGNIZED OR DUPLICATED KEYWORD(S) IN SIMPLE INPUT LINE: GBSA(WATER)",
+      "error_raw_lines": [
+        "INPUT ERROR",
+        "UNRECOGNIZED OR DUPLICATED KEYWORD(S) IN SIMPLE INPUT LINE",
+        "GBSA(WATER)"
+      ],
+      "artifact": {
+        "energy_hartree": null,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": false,
+      "normal_termination": false,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb-gbsa-water.out",
+      "output_sha256": "e3bc9fa2ceb8dd3d9a9aed381df94ac901805e013a09b2de8f5c7a4516949820",
+      "wall_s": 0.11,
+      "failure_note": "rc=4 INPUT ERROR; ORCA never started the calculation (GBSA(WATER) is not a valid ORCA keyword).",
+      "capability": "GBSA is not an ORCA route keyword; ORCA 6.1.1 rejects GBSA(WATER) as UNRECOGNIZED in the simple input line. GBSA exists only on the standalone xTB-binary path, not the ORCA path.",
+      "dependency": "Not applicable (input rejected before deployment lookup).",
+      "policy_note": "ORCA GFN solvent only {none,ALPB} (platform policy, not probe-derived)"
+    },
+    {
+      "order": 5,
+      "case_id": "gfn2-xtb-def2-svp",
+      "keywords": "GFN2-xTB def2-SVP",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.07037076185,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb-def2-svp.out",
+      "output_sha256": "ebb8a12602ce2a7bbc6dc21e70247201fe2217a625bf260a65a58e56f05cf5e5",
+      "wall_s": 0.16,
+      "failure_note": null,
+      "capability": "A DFT basis keyword is syntactically accepted with GFN2-xTB but ignored by the external xTB interface: identical energy to plain GFN2-xTB (-5.070370761850 Eh), no basis argument in the otool_xtb call, and no warning emitted. Accepted != meaningful for GFN.",
+      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 6,
+      "case_id": "gfn2-xtb-d4",
+      "keywords": "GFN2-xTB D4",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.07037076185,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb-d4.out",
+      "output_sha256": "bf6bc309de340ca11f3e0635f333ec33d8cea61357793d2baf7534f2583efff3",
+      "wall_s": 0.21,
+      "failure_note": null,
+      "capability": "D4 is syntactically accepted (ORCA prints the atom-pairwise dispersion banner) but has no numerical effect on the external xTB result: energy identical to plain GFN2-xTB (-5.070370761850 Eh).",
+      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 7,
+      "case_id": "gfn2-xtb-defgrid3",
+      "keywords": "GFN2-xTB DefGrid3",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.07037076185,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb-defgrid3.out",
+      "output_sha256": "12866284a92e289befcfa34e2a4943f4aa788df5de4589342bcf7c80e9b503dd",
+      "wall_s": 0.16,
+      "failure_note": null,
+      "capability": "DefGrid3 is syntactically accepted with GFN2-xTB but has no effect on the external xTB path (identical energy); DFT integration grids do not apply to xTB.",
+      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 8,
+      "case_id": "gfn2-xtb-tightscf",
+      "keywords": "GFN2-xTB TightSCF",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.07037076185,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn2-xtb-tightscf.out",
+      "output_sha256": "86e8820a81f8e8369f8ebb030d68f219fae242c09dfec9b0e07ac5f421e9460e",
+      "wall_s": 0.17,
+      "failure_note": null,
+      "capability": "TightSCF is accepted with GFN2-xTB and IS forwarded to otool_xtb (accuracy 1.000000 -> 0.200000); normal termination, energy -5.070370761850 Eh.",
+      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 9,
+      "case_id": "gfn-ff",
+      "keywords": "GFN-FF",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -0.32728217138,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn-ff.out",
+      "output_sha256": "b7589a6aa00207bc73d7225c26c1369aabd6a7dc089b03dfd2673943373b03c8",
+      "wall_s": 0.16,
+      "failure_note": null,
+      "capability": "ORCA 6.1 external xTB interface supports GFN-FF; observed normal termination, energy -0.327282171380 Eh (documented: ORCA 6.1 external-interface table). Benign post-SCF warning 'Error while reading dipole moment' does not affect completion.",
+      "dependency": "otool_xtb 6.7.1 present; GFN-FF parameters resolve without an on-disk param file in the ORCA dir (.param_gfnff.xtb exists only under /home/xieningke/xtb-dist/share/xtb and was not required).",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 10,
+      "case_id": "gfn0-xtb",
+      "keywords": "GFN0-xTB",
+      "outcome_class": "missing_dependency",
+      "rc": 0,
+      "first_error_line": "Parameter file param_gfn0-xtb.txt not found!",
+      "error_raw_lines": [
+        "[ERROR] Program stopped due to fatal error",
+        "-3- Could not setup single-point calculator",
+        "-2- main_setup_newCalculator: Could not construct new calculator",
+        "-1- xtb_calculator_newXTBCalculator: Parameter file param_gfn0-xtb.txt not found!",
+        "[file orca_main/run.cpp, line 1557]: ORCA finished with error return - aborting the run"
+      ],
+      "artifact": {
+        "energy_hartree": null,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": false,
+      "normal_termination": false,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/gfn0-xtb.out",
+      "output_sha256": "a690b37c612e63aa3e396bf46cb6243b64f1121aa713500cf8f34243895e6fec",
+      "wall_s": 0.16,
+      "failure_note": "rc=0 is misleading: ORCA aborted before producing any energy because otool_xtb could not find param_gfn0-xtb.txt. No artifact -> not valid.",
+      "capability": "ORCA 6.1 external-interface table lists GFN0-xTB (software capability = supported) and ORCA dispatches otool_xtb with '--gfn 0'; the deployed otool_xtb cannot find param_gfn0-xtb.txt, so no result is produced. Local dependency gap, NOT an unsupported capability.",
+      "dependency": "param_gfn0-xtb.txt is absent from /home/xieningke/orca611 and otool_xtb invoked from the ORCA dir cannot resolve it (the file exists under /home/xieningke/xtb-dist/share/xtb, sha256 278461cab...). Missing local parameter file -> no result despite rc=0.",
+      "policy_note": "GFN0-xTB is xTB-binary-only on the ORCA path (platform policy, not probe-derived)"
+    },
+    {
+      "order": 11,
+      "case_id": "gfn2-xtb-nmr",
+      "keywords": "GFN2-xTB NMR",
+      "outcome_class": "calculation_failure",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -5.07037076185,
+        "shielding_atoms": 0
+      },
+      "required_artifact": "shielding_atoms",
+      "artifact_ok": false,
+      "normal_termination": true,
+      "shielding_parser_atoms": 0,
+      "output_file": "outputs/gfn2-xtb-nmr.out",
+      "output_sha256": "bd35ffc71ae68513c4728f64a40051091bf9d57eb58e92fb41d2bfe3f31a180f",
+      "wall_s": 0.16,
+      "failure_note": "rc=0 and ORCA TERMINATED NORMALLY, but no NMR shielding tensor section was emitted; NmrShieldingParser.parse() returned {} (0 atoms). The requested artifact is absent despite the accept-looking exit.",
+      "capability": "ORCA accepts the NMR flag with GFN2-xTB and sets the global shielding flag ('will calculate the shieldings for all atoms'), but the xTB path emits NO shielding tensor section (also with an explicit %eprnmr block: only 'requested shieldings will be calculated', then nothing). NmrShieldingParser returns {} -> artifact-level capability gap for GFN+NMR; rc=0 + normal termination are misleading.",
+      "dependency": "otool_xtb present (GFN2-xTB SP works), but the external xTB path has no shielding-tensor support; no dependency file can fix the missing artifact.",
+      "policy_note": "GFN+NMR default reject unless artifact-level support (platform policy, not probe-derived)"
+    },
+    {
+      "order": 12,
+      "case_id": "defgrid3",
+      "keywords": "DEFGRID3",
+      "outcome_class": "valid_completion",
+      "rc": 0,
+      "first_error_line": null,
+      "error_raw_lines": [],
+      "artifact": {
+        "energy_hartree": -75.960983978583,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": true,
+      "normal_termination": true,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/defgrid3.out",
+      "output_sha256": "2255e74a0ba9cbe166f58261cbce6424060ba03d2862e3fed00a09f0460b660d",
+      "wall_s": 0.82,
+      "failure_note": null,
+      "capability": "DEFGRID3 is a valid ORCA simple-input keyword; observed normal termination with the default method (Hartree-Fock(GTOs)/def2-SVP, IntAcc 4.959) and FINAL SINGLE POINT ENERGY -75.960983978583 Eh (identical to an explicit RHF/def2-SVP single point).",
+      "dependency": "Not applicable (no xTB parameter dependency; default HF path).",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    },
+    {
+      "order": 13,
+      "case_id": "ultrafine",
+      "keywords": "UltraFine",
+      "outcome_class": "syntax_error",
+      "rc": 4,
+      "first_error_line": "UNRECOGNIZED OR DUPLICATED KEYWORD(S) IN SIMPLE INPUT LINE: ULTRAFINE",
+      "error_raw_lines": [
+        "INPUT ERROR",
+        "UNRECOGNIZED OR DUPLICATED KEYWORD(S) IN SIMPLE INPUT LINE",
+        "ULTRAFINE"
+      ],
+      "artifact": {
+        "energy_hartree": null,
+        "shielding_atoms": null
+      },
+      "required_artifact": "energy_hartree",
+      "artifact_ok": false,
+      "normal_termination": false,
+      "shielding_parser_atoms": null,
+      "output_file": "outputs/ultrafine.out",
+      "output_sha256": "06e5a68ba524d650a1800e2081a97604ba24b0dbded4a75e5f033cb07d34357d",
+      "wall_s": 0.11,
+      "failure_note": "rc=4 INPUT ERROR; ORCA never started the calculation (UltraFine is not a valid ORCA keyword; use DEFGRID3).",
+      "capability": "UltraFine is NOT an ORCA 6.1.1 keyword; rejected as UNRECOGNIZED in the simple input line. The canonical ORCA spelling is DEFGRID3 (probe #12), confirming the legacy alias UltraFine->DefGrid3 must be mapped in the registry before route assembly.",
+      "dependency": "Not applicable (input rejected before deployment lookup).",
+      "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
+    }
+  ]
+}

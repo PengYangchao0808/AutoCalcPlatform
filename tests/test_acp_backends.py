@@ -112,6 +112,46 @@ def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:
     mock_sp.assert_called_once()
 
 
+def _make_gfn_config(method: str = "GFN2-xTB") -> dict[str, Any]:
+    config = _make_config()
+    config["theory"]["optimization"]["engine"] = "xtb"
+    config["theory"]["single_point"] = {"method": method, "basis": "def2-TZVPP"}
+    return config
+
+
+def test_orca_backend_gfn_single_point_emits_no_basis() -> None:
+    backend = ORCABackend(_make_gfn_config("GFN2-xTB"))
+
+    assert backend._interface.method == "GFN2-xTB"
+    assert backend._interface.basis == ""
+
+    route = backend._interface._build_input_blocks("sp", symbols=["C", "H"])[0].splitlines()[0]
+    assert route.split() == ["!", "GFN2-xTB", "SP"]
+    assert "def2" not in route
+
+    opt_route = backend._interface._build_input_blocks("opt", symbols=["C", "H"], recalc_hess=0)[
+        0
+    ].splitlines()[0]
+    assert "def2" not in opt_route
+    assert opt_route.split()[1] == "GFN2-xTB"
+
+
+def test_orca_backend_gfn_ff_single_point_emits_no_basis() -> None:
+    backend = ORCABackend(_make_gfn_config("GFN-FF"))
+
+    assert backend._interface.basis == ""
+    route = backend._interface._build_input_blocks("sp", symbols=["C", "H"])[0].splitlines()[0]
+    assert "def2" not in route
+
+
+def test_orca_backend_dft_single_point_keeps_basis() -> None:
+    backend = ORCABackend(_make_gfn_config("wB97X-D4"))
+
+    assert backend._interface.basis == "def2-TZVPP"
+    route = backend._interface._build_input_blocks("sp", symbols=["C", "H"])[0].splitlines()[0]
+    assert "def2-TZVPP" in route
+
+
 def test_xtb_backend_delegates_to_interface(tmp_path: Path) -> None:
     config = _make_config()
     backend = XTBBackend(config)
