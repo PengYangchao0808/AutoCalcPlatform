@@ -375,6 +375,16 @@ class StructureSourceStore:
         conn.row_factory = sqlite3.Row
         return conn
 
+    @staticmethod
+    def _has_tasks_table(conn: sqlite3.Connection) -> bool:
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tasks'"
+            ).fetchone()
+            return bool(row)
+        except sqlite3.OperationalError:
+            return False
+
     def _init_schema(self) -> None:
         with self._lock, self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
@@ -1732,6 +1742,13 @@ class StructureSourceStore:
             except (ValueError, json.JSONDecodeError, TypeError):
                 raise ValueError("invalid cursor")
 
+        conn_probe = self._connect()
+        try:
+            has_tasks = self._has_tasks_table(conn_probe)
+        finally:
+            conn_probe.close()
+        tasks_join = "LEFT JOIN tasks tk ON tk.task_id = i.job_id " if has_tasks else ""
+
         # Build WHERE
         clauses: list[str] = [] if availability else ["i.availability != 'missing'"]
         params: list[Any] = []
@@ -1741,17 +1758,31 @@ class StructureSourceStore:
             params.append(project_id)
 
         if q:
-            like = f"%{q}%"
-            clauses.append(
-                "(m.custom_name LIKE ? OR i.label LIKE ? "
-                "OR i.job_name LIKE ? "
-                "OR i.candidate_id LIKE ? OR i.formula LIKE ? "
-                "OR i.source_uid IN ("
-                "SELECT t2.source_uid "
-                "FROM structure_source_tags t2 "
-                "WHERE t2.tag LIKE ?))"
-            )
-            params.extend([like] * 6)
+            tokens = q.strip().split()
+            like = f"%{'%'.join(tokens)}%" if tokens else f"%{q}%"
+            if has_tasks:
+                clauses.append(
+                    "(m.custom_name LIKE ? OR i.label LIKE ? "
+                    "OR i.job_name LIKE ? "
+                    "OR tk.custom_name LIKE ? OR tk.display_name LIKE ? "
+                    "OR i.candidate_id LIKE ? OR i.formula LIKE ? "
+                    "OR i.source_uid IN ("
+                    "SELECT t2.source_uid "
+                    "FROM structure_source_tags t2 "
+                    "WHERE t2.tag LIKE ?))"
+                )
+                params.extend([like] * 8)
+            else:
+                clauses.append(
+                    "(m.custom_name LIKE ? OR i.label LIKE ? "
+                    "OR i.job_name LIKE ? "
+                    "OR i.candidate_id LIKE ? OR i.formula LIKE ? "
+                    "OR i.source_uid IN ("
+                    "SELECT t2.source_uid "
+                    "FROM structure_source_tags t2 "
+                    "WHERE t2.tag LIKE ?))"
+                )
+                params.extend([like] * 6)
 
         if role is not None:
             clauses.append("i.role = ?")
@@ -1870,6 +1901,7 @@ class StructureSourceStore:
             SELECT COUNT(DISTINCT i.source_uid) as total
             FROM structure_source_index i
             LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid
+            {tasks_join}
             {where}
         """
         with self._lock, self._connect() as conn:
@@ -1901,6 +1933,7 @@ class StructureSourceStore:
             SELECT i.source_uid
             FROM structure_source_index i
             LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid
+            {tasks_join}
             {where}
             ORDER BY {order}
             LIMIT ? OFFSET ?
@@ -1980,14 +2013,17 @@ class StructureSourceStore:
         groups: list[dict[str, Any]] = []
 
         with self._lock, self._connect() as conn:
+            has_tasks = self._has_tasks_table(conn)
+            tasks_join = "LEFT JOIN tasks tk ON tk.task_id = i.job_id " if has_tasks else ""
             if group_by == "job":
                 where = f"WHERE {' AND '.join(base_clauses)}" if base_clauses else ""
+                custom_cols = "tk.custom_name AS task_custom_name, tk.display_name AS task_display_name " if has_tasks else "NULL AS task_custom_name, NULL AS task_display_name "
                 rows = conn.execute(
                     f"SELECT i.job_id, i.job_name, COUNT(*) as count, "
-                    f"t.custom_name AS task_custom_name, t.display_name AS task_display_name "
+                    f"{custom_cols}"
                     f"FROM structure_source_index i "
                     f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
-                    f"LEFT JOIN tasks t ON t.task_id = i.job_id "
+                    f"{tasks_join}"
                     f"{where} "
                     f"GROUP BY i.job_id ORDER BY count DESC",
                     tuple(base_params),
@@ -2010,6 +2046,7 @@ class StructureSourceStore:
                     f"SELECT i.role, COUNT(*) as count "
                     f"FROM structure_source_index i "
                     f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                    f"{tasks_join}"
                     f"{where} "
                     f"GROUP BY i.role ORDER BY count DESC",
                     tuple(base_params),
@@ -2032,6 +2069,7 @@ class StructureSourceStore:
                     f"FROM structure_source_tags t "
                     f"JOIN structure_source_index i ON i.source_uid = t.source_uid "
                     f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                    f"{tasks_join}"
                     f"{where} "
                     f"GROUP BY t.tag_key ORDER BY count DESC",
                     tuple(base_params),
@@ -2051,6 +2089,7 @@ class StructureSourceStore:
                     "FROM structure_source_index i "
                     "LEFT JOIN structure_source_metadata m "
                     "ON m.source_uid = i.source_uid "
+                    f"{tasks_join}"
                     "WHERE "
                     + (" AND ".join(base_clauses) + " AND " if base_clauses else "")
                     + "NOT EXISTS ("
@@ -2096,6 +2135,13 @@ class StructureSourceStore:
         if source_group is not None and source_group not in _VALID_SOURCE_GROUPS:
             raise ValueError(f"invalid source group: {source_group}")
 
+        conn_probe = self._connect()
+        try:
+            has_tasks = self._has_tasks_table(conn_probe)
+        finally:
+            conn_probe.close()
+        tasks_join = "LEFT JOIN tasks tk ON tk.task_id = i.job_id " if has_tasks else ""
+
         # Build base WHERE clauses (excluding the specific facet we're counting)
         def build_clauses(exclude: str = "") -> tuple[list[str], list[Any]]:
             clauses: list[str] = [] if availability else ["i.availability != 'missing'"]
@@ -2104,17 +2150,31 @@ class StructureSourceStore:
                 clauses.append("i.project_id = ?")
                 params.append(project_id)
             if q and exclude != "q":
-                like = f"%{q}%"
-                clauses.append(
-                    "(m.custom_name LIKE ? OR i.label LIKE ? "
-                    "OR i.job_name LIKE ? "
-                    "OR i.candidate_id LIKE ? OR i.formula LIKE ? "
-                    "OR i.source_uid IN ("
-                    "SELECT t2.source_uid "
-                    "FROM structure_source_tags t2 "
-                    "WHERE t2.tag LIKE ?))"
-                )
-                params.extend([like] * 6)
+                tokens = q.strip().split()
+                like = f"%{'%'.join(tokens)}%" if tokens else f"%{q}%"
+                if has_tasks:
+                    clauses.append(
+                        "(m.custom_name LIKE ? OR i.label LIKE ? "
+                        "OR i.job_name LIKE ? "
+                        "OR tk.custom_name LIKE ? OR tk.display_name LIKE ? "
+                        "OR i.candidate_id LIKE ? OR i.formula LIKE ? "
+                        "OR i.source_uid IN ("
+                        "SELECT t2.source_uid "
+                        "FROM structure_source_tags t2 "
+                        "WHERE t2.tag LIKE ?))"
+                    )
+                    params.extend([like] * 8)
+                else:
+                    clauses.append(
+                        "(m.custom_name LIKE ? OR i.label LIKE ? "
+                        "OR i.job_name LIKE ? "
+                        "OR i.candidate_id LIKE ? OR i.formula LIKE ? "
+                        "OR i.source_uid IN ("
+                        "SELECT t2.source_uid "
+                        "FROM structure_source_tags t2 "
+                        "WHERE t2.tag LIKE ?))"
+                    )
+                    params.extend([like] * 6)
             if role is not None and exclude != "role":
                 clauses.append("i.role = ?")
                 params.append(role)
@@ -2192,6 +2252,7 @@ class StructureSourceStore:
                 f"SELECT i.role, COUNT(DISTINCT i.source_uid) as count "
                 f"FROM structure_source_index i "
                 f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                f"{tasks_join}"
                 f"{rw} GROUP BY i.role",
                 tuple(rp),
             ).fetchall()
@@ -2209,6 +2270,7 @@ class StructureSourceStore:
                 f"FROM structure_source_tags t "
                 f"JOIN structure_source_index i ON i.source_uid = t.source_uid "
                 f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                f"{tasks_join}"
                 f"{tw} GROUP BY t.tag_key ORDER BY count DESC",
                 tuple(tp),
             ).fetchall()
@@ -2221,6 +2283,7 @@ class StructureSourceStore:
                 f"SELECT i.workflow, COUNT(DISTINCT i.source_uid) as count "
                 f"FROM structure_source_index i "
                 f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                f"{tasks_join}"
                 f"{ww} GROUP BY i.workflow",
                 tuple(wp),
             ).fetchall()
@@ -2233,6 +2296,7 @@ class StructureSourceStore:
                 f"SELECT i.source_kind, COUNT(DISTINCT i.source_uid) as count "
                 f"FROM structure_source_index i "
                 f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                f"{tasks_join}"
                 f"{skw} GROUP BY i.source_kind",
                 tuple(skp),
             ).fetchall()
@@ -2241,12 +2305,13 @@ class StructureSourceStore:
             # Jobs
             jc, jp = build_clauses(exclude="")
             jw = f"WHERE {' AND '.join(jc)}" if jc else ""
+            custom_cols = "tk.custom_name AS task_custom_name, tk.display_name AS task_display_name " if has_tasks else "NULL AS task_custom_name, NULL AS task_display_name "
             job_rows = conn.execute(
                 f"SELECT i.job_id, i.job_name, COUNT(DISTINCT i.source_uid) as count, "
-                f"t.custom_name AS task_custom_name, t.display_name AS task_display_name "
+                f"{custom_cols}"
                 f"FROM structure_source_index i "
                 f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
-                f"LEFT JOIN tasks t ON t.task_id = i.job_id "
+                f"{tasks_join}"
                 f"{jw} GROUP BY i.job_id ORDER BY count DESC LIMIT 50",
                 tuple(jp),
             ).fetchall()
@@ -2269,6 +2334,7 @@ class StructureSourceStore:
                 f"SELECT COUNT(DISTINCT i.source_uid) as count "
                 f"FROM structure_source_index i "
                 f"LEFT JOIN structure_source_metadata m ON m.source_uid = i.source_uid "
+                f"{tasks_join}"
                 f"{full_w}",
                 tuple(full_p),
             ).fetchone()

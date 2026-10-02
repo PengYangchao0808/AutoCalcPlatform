@@ -803,6 +803,68 @@ class TestQuerySources:
         result = store.query_sources(project_id="proj_1", q="Custom B")
         assert result["total"] == 1
 
+    def test_q_search_task_custom_name_and_tokens(self, store: StructureSourceStore) -> None:
+        from acp.scheduler.tasks import TaskIndex
+        self._populate(store)
+        task_idx = TaskIndex(store._db_path)
+        task_idx.upsert(
+            {
+                "task_id": "j1",
+                "job_id": "j1",
+                "project_id": "proj_1",
+                "molecule_name": "BCB",
+                "task_name": "TS2_STEPWISE",
+                "display_name": "TS2_STEPWISE",
+                "status": "completed",
+                "workflow": "Confsearch",
+            }
+        )
+        task_idx.update_custom_name("j1", "TS2_STEPWISE_oscillation", 0)
+
+        # 1. Exact match with underscores
+        res1 = store.query_sources(project_id="proj_1", q="TS2_STEPWISE_oscillation")
+        assert res1["total"] == 2
+        assert {item["job_id"] for item in res1["items"]} == {"j1"}
+
+        # 2. Tokenized search with space
+        res2 = store.query_sources(project_id="proj_1", q="TS2_STEPWISE oscillation")
+        assert res2["total"] == 2
+        assert {item["job_id"] for item in res2["items"]} == {"j1"}
+
+        # 3. Facets query with space tokens
+        facets = store.facet_counts(project_id="proj_1", q="TS2_STEPWISE oscillation")
+        assert facets["workflows"].get("Confsearch") == 2
+        assert "PESsearch" not in facets["workflows"]
+
+    def test_q_search_task_custom_name_overwrite(self, store: StructureSourceStore) -> None:
+        from acp.scheduler.tasks import TaskIndex
+        self._populate(store)
+        task_idx = TaskIndex(store._db_path)
+        task_idx.upsert(
+            {
+                "task_id": "j1",
+                "job_id": "j1",
+                "project_id": "proj_1",
+                "molecule_name": "BCB",
+                "task_name": "TS2_STEPWISE",
+                "display_name": "TS2_STEPWISE",
+                "status": "completed",
+                "workflow": "Confsearch",
+            }
+        )
+        task_idx.update_custom_name("j1", "TS2_INITIAL_NAME", 0)
+        res_init = store.query_sources(project_id="proj_1", q="TS2_INITIAL_NAME")
+        assert res_init["total"] == 2
+
+        # Overwrite with new name
+        task_idx.update_custom_name("j1", "TS2_OVERWRITTEN_NAME", 1)
+        res_old = store.query_sources(project_id="proj_1", q="TS2_INITIAL_NAME")
+        assert res_old["total"] == 0
+
+        res_new = store.query_sources(project_id="proj_1", q="TS2_OVERWRITTEN_NAME")
+        assert res_new["total"] == 2
+
+
     def test_role_filter(self, store: StructureSourceStore) -> None:
         self._populate(store)
         result = store.query_sources(project_id="proj_1", role="TS")
