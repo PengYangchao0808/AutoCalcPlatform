@@ -3178,6 +3178,31 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
 
 
+def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
+    """Notify structure source indexer of updated candidates/manifest for job."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        manager = getattr(request.app.state, "job_manager", None)
+        if manager is not None and getattr(manager, "store", None) is not None:
+            with manager.store._connect() as conn:
+                conn.execute("UPDATE jobs SET updated_at = ? WHERE id = ?", (now, job_id))
+                try:
+                    conn.execute("UPDATE tasks SET updated_at = ? WHERE task_id = ?", (now, job_id))
+                except sqlite3.OperationalError:
+                    pass
+                conn.commit()
+    except Exception as exc:
+        logger.debug("Failed to touch updated_at for job %s: %s", job_id, exc)
+
+    try:
+        from acp.api.v2_structure_sources import _get_stores
+        _source_store, indexer = _get_stores(request)
+        indexer.refresh_job(job_id)
+    except Exception as exc:
+        logger.warning("Failed to refresh structure source index for job %s: %s", job_id, exc)
+
+
 @router.post("/jobs/{job_id}/pes/review/restore", response_model=PesReviewRestoreResponse)
 def restore_pes_review_endpoint(
     job_id: str,
@@ -3216,6 +3241,8 @@ def restore_pes_review_endpoint(
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
         _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+
+    _notify_structure_sources_updated(request, job_id)
 
     return PesReviewRestoreResponse(
         job_id=job_id,
@@ -3273,6 +3300,8 @@ def save_pes_review_endpoint(
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
         _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+
+    _notify_structure_sources_updated(request, job_id)
 
     return PesReviewResponse(
         job_id=job_id,
@@ -4161,6 +4190,7 @@ def save_frame_candidate_endpoint(
         for c in payload.get("candidates", [])
     ]
     saved = next((c for c in candidates if c.candidate_id == entry.get("candidate_id")), None)
+    _notify_structure_sources_updated(request, job_id)
     return V1FrameCandidateResponse(
         job_id=job_id,
         revision=int(payload.get("revision", 0)),
@@ -4250,6 +4280,7 @@ def delete_frame_candidate_endpoint(
         )
         for c in payload.get("candidates", [])
     ]
+    _notify_structure_sources_updated(request, job_id)
     return V1FrameCandidateListResponse(
         job_id=job_id,
         revision=int(payload.get("revision", 0)),

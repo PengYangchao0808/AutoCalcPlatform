@@ -419,6 +419,13 @@ def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict
         tags=tags_to_write,
     )
 
+    try:
+        from acp.api.v2_structure_sources import _get_stores
+        _source_store, indexer = _get_stores(request)
+        indexer.refresh_job(task_id)
+    except Exception as exc:
+        logger.debug("Failed to refresh structure sources on task patch: %s", exc)
+
     updated = manager.tasks.get(task_id)
     assert updated is not None
     result = dict(updated)
