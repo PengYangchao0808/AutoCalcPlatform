@@ -224,6 +224,9 @@ class V2TaskViewResponse(BaseModel):
     truncated: bool = False
     counts: dict[str, int] = Field(default_factory=dict)
     query: dict[str, Any] = Field(default_factory=dict)
+    offset: int = 0
+    limit: int = 5000
+    next_offset: int | None = None
 
 
 class V2TaskPatchRequest(BaseModel):

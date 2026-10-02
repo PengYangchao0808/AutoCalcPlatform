@@ -250,6 +250,16 @@ CREATE TABLE IF NOT EXISTS job_edit_operations (
 CREATE INDEX IF NOT EXISTS idx_job_edit_ops_job ON job_edit_operations(job_id, created_at);
 """,
     },
+    {
+        "id": "019",
+        "description": "indexes for bounded task-view pages",
+        "sql": """
+CREATE INDEX IF NOT EXISTS idx_tasks_archived_created
+    ON tasks(archived, created_at DESC, task_id ASC);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_archived_created
+    ON tasks(project_id, archived, created_at DESC, task_id ASC);
+""",
+    },
 ]
 
 

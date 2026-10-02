@@ -20,6 +20,7 @@ Covers:
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,73 @@ from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
 from acp.scheduler.store import JobStore
 from acp.scheduler.tasks import TaskIndex
+
+
+def test_pages_are_bounded_and_keep_full_scope_counts(tmp_path: Path, monkeypatch) -> None:
+    from acp.scheduler.task_views import GroupBy, TaskViewQuery, query_project_tasks
+
+    idx, proj = _setup_project_and_tasks(tmp_path)
+    statements = []
+    connect = idx._connect
+
+    def traced_connect():
+        conn = connect()
+        conn.set_trace_callback(statements.append)
+        return conn
+
+    monkeypatch.setattr(idx, "_connect", traced_connect)
+    query = TaskViewQuery(project_id=proj, group_by=GroupBy.none, running_first=True)
+    full = query_project_tasks(idx, query)
+    expected = [row["id"] for row in full["groups"][0]["jobs"]]
+    paged = []
+    for offset in range(0, full["total"], 2):
+        result = query_project_tasks(idx, replace(query, max_total=2, offset=offset))
+        assert result["counts"] == full["counts"]
+        assert result["total"] == full["total"]
+        page_rows = result["groups"][0]["jobs"]
+        assert len(page_rows) <= 2
+        paged.extend(row["id"] for row in page_rows)
+        assert result["next_offset"] == (offset + 2 if offset + 2 < full["total"] else None)
+    assert paged == expected
+    assert len(set(paged)) == len(paged)
+    assert any("LIMIT 3 OFFSET 2" in sql for sql in statements)
+
+
+def test_facets_can_be_skipped_without_losing_counts(tmp_path: Path, monkeypatch) -> None:
+    from acp.scheduler import task_views
+
+    idx, proj = _setup_project_and_tasks(tmp_path)
+
+    def unexpected_facets(*args, **kwargs):
+        raise AssertionError("poll must not rebuild facets")
+
+    monkeypatch.setattr(task_views, "_build_facets", unexpected_facets)
+    result = task_views.query_project_tasks(
+        idx, task_views.TaskViewQuery(project_id=proj, include_facets=False)
+    )
+    assert result["facets"] == {}
+    assert result["total"] > 0
+    assert sum(result["counts"].values()) == result["total"]
+
+
+def test_tag_fallback_paginates_after_filtering(tmp_path: Path, monkeypatch) -> None:
+    from acp.scheduler import task_views
+
+    idx, proj = _setup_project_and_tasks(tmp_path)
+    query = task_views.TaskViewQuery(
+        project_id=proj,
+        tags=("待检查",),
+        group_by=task_views.GroupBy.none,
+        max_total=1,
+        offset=1,
+        running_first=True,
+    )
+    expected = task_views.query_project_tasks(idx, query)
+    monkeypatch.setattr(task_views, "_JSON1_OK", False)
+    actual = task_views.query_project_tasks(idx, query)
+    for key in ("groups", "counts", "total", "next_offset"):
+        assert actual[key] == expected[key]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1378,9 +1446,7 @@ class TestExports:
 
 
 class TestGhostEntryGuard:
-    def test_orphan_task_row_hidden_from_view_counts_and_facets(
-        self, tmp_path: Path
-    ) -> None:
+    def test_orphan_task_row_hidden_from_view_counts_and_facets(self, tmp_path: Path) -> None:
         """Regression: bare jobs-row delete must not keep rendering/counting."""
         from acp.scheduler.task_views import TaskViewQuery, query_project_tasks
 
