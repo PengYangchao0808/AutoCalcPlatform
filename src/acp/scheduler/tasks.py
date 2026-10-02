@@ -386,6 +386,7 @@ class TaskIndex:
                 "completed_at": record.completed_at,
                 "group_id": record.group_id or record.id,
                 "progress": record.progress,
+                "custom_name": getattr(record, "custom_name", None) or getattr(record.spec, "custom_name", None),
             }
         )
 
@@ -639,7 +640,28 @@ class TaskIndex:
                         now,
                     ),
                 )
+                try:
+                    conn.execute("UPDATE jobs SET updated_at=? WHERE id=?", (now, task_id))
+                except sqlite3.OperationalError:
+                    pass
                 conn.commit()
+
+                # Persist custom name to on-disk task.json if available
+                node_path = current.get("node_path")
+                if node_path:
+                    try:
+                        task_json_file = Path(node_path) / "task.json"
+                        if task_json_file.is_file():
+                            raw_payload = json.loads(task_json_file.read_text(encoding="utf-8"))
+                            raw_payload["custom_name"] = validated
+                            raw_payload["name_revision"] = new_rev
+                            raw_payload["name_updated_at"] = now
+                            raw_payload["updated_at"] = now
+                            tmp_file = task_json_file.with_suffix(".tmp")
+                            tmp_file.write_text(json.dumps(raw_payload, indent=2), encoding="utf-8")
+                            tmp_file.replace(task_json_file)
+                    except Exception:
+                        pass
 
                 return {
                     "default_name": current["display_name"] or "",

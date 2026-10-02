@@ -598,6 +598,7 @@ class JobSpec:
     molecule_name: str = ""
     task_name: str = ""
     remark: str = ""
+    custom_name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -712,6 +713,7 @@ def build_task_record(record: JobRecord) -> TaskRecord:
         current_stage=record.current_stage,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        custom_name=getattr(record, "custom_name", None) or getattr(record.spec, "custom_name", None),
     )
 
 
