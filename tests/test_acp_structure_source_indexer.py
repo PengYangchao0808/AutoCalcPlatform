@@ -281,6 +281,64 @@ class TestIncrementalSweep:
         rows = source_store.list_by_job("job_r")
         assert len(rows) >= 1
 
+    def test_sweep_refreshes_when_candidate_saved_after_completion(
+        self, job_store: JobStore, source_store: StructureSourceStore, tmp_path: Path
+    ) -> None:
+        import os
+        import time
+        work_dir = _seed_completed_job(job_store, tmp_path, "job_cand")
+        indexer = StructureSourceIndexer(
+            store=job_store, source_store=source_store, run_root=tmp_path
+        )
+        indexer._full_backfill()
+        rows_initial = source_store.list_by_job("job_cand")
+        assert len(rows_initial) == 1
+
+        cand_xyz = work_dir / "RESULT" / "candidate_001.xyz"
+        _write(cand_xyz, _XYZ_PLAIN)
+        cand_file = work_dir / "RESULT" / "frame_candidates.json"
+        _write(
+            cand_file,
+            json.dumps(
+                {
+                    "job_id": "job_cand",
+                    "revision": 1,
+                    "candidates": [
+                        {
+                            "candidate_id": "fc_001",
+                            "name": "Frame 199",
+                            "role": "TS",
+                            "structure_path": "RESULT/candidate_001.xyz",
+                        }
+                    ],
+                }
+            ),
+        )
+        mf_path = work_dir / "RESULT" / "result_manifest.json"
+        mf_data = json.loads(mf_path.read_text())
+        mf_data["products"].append(
+            {
+                "path": "candidate_001.xyz",
+                "kind": "structure",
+                "id": "frame_candidate_fc_001",
+                "metadata": {
+                    "candidate_id": "fc_001",
+                    "role": "TS",
+                    "selection_source": "manual_frame",
+                },
+            }
+        )
+        _write(mf_path, json.dumps(mf_data))
+        future_mtime = time.time() + 100
+        os.utime(cand_file, (future_mtime, future_mtime))
+
+        indexer._incremental_sweep()
+        rows_after = source_store.list_by_job("job_cand")
+        assert len(rows_after) >= 2
+        roles = {r["role"] for r in rows_after}
+        assert "TS" in roles
+
+
 
 class TestRemotePlaceholder:
     """Remote jobs get pending_sync placeholder rows."""
