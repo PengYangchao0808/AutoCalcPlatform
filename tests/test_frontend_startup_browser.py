@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import socket
+import threading
+import time
 from collections.abc import Generator
 
 import pytest
@@ -10,9 +13,62 @@ import pytest
 pytest.importorskip("playwright")
 from playwright.sync_api import Page, expect, sync_playwright
 
-pytest_plugins = ["tests.test_frontend_viewer_framing_browser"]
-
 pytestmark = pytest.mark.slow
+
+
+def _find_free_port() -> int:
+    """Return an OS-assigned ephemeral port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@pytest.fixture(scope="session")
+def server_url() -> Generator[str, None, None]:
+    """Boot the real FastAPI app on an ephemeral port for the test session.
+
+    Mirrors the sibling browser suites: the server runs in a daemon thread
+    against a temporary ``run_root`` so no persistent state is written.
+    """
+    import os
+    import tempfile
+    from pathlib import Path
+
+    import uvicorn
+
+    tmp_root = Path(tempfile.mkdtemp(prefix="acp_browser_test_"))
+
+    # Set ACP_RUN_ROOT BEFORE importing the server module, because server.py
+    # has a module-level ``app = create_app()`` that reads this env var.
+    os.environ["ACP_RUN_ROOT"] = str(tmp_root)
+
+    from acp.api.server import create_app
+
+    app = create_app(run_root=tmp_root)
+    port = _find_free_port()
+    host = "127.0.0.1"
+    url = f"http://{host}:{port}"
+
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning", access_log=False)
+    server = uvicorn.Server(config)
+
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                break
+        except OSError:
+            time.sleep(0.1)
+    else:
+        pytest.fail(f"Server did not start within 15 s on {url}")
+
+    yield url
+
+    server.should_exit = True
+    thread.join(timeout=5)
 
 
 @pytest.fixture()
