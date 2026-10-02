@@ -29,6 +29,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up Node for frontend syntax and behavior checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Install package and dependencies
         run: |
           python -m pip install --upgrade pip
@@ -58,7 +63,7 @@ jobs:
       - name: Run browser tests
         if: matrix.python-version == '3.11'
         run: |
-          pytest tests/test_frontend_viewer_framing_browser.py tests/test_frontend_measure_edit_browser.py tests/test_frontend_multiframe_playback_browser.py --run-slow -q
+          pytest tests/test_frontend_viewer_framing_browser.py tests/test_frontend_measure_edit_browser.py tests/test_frontend_multiframe_playback_browser.py tests/test_frontend_startup_browser.py --run-slow -q
 
       # --- deferred lint/format gates (see header note) ---
       # - name: Lint with ruff
