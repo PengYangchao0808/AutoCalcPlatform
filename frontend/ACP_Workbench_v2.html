@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ACP Molecular Workbench</title>
-<script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+<script async id="viewer-library" src="js/vendor/3Dmol-2.5.5.min.js"></script>
 <style>
 :root {
   --bg-base: #0b0f14;
@@ -83,10 +83,10 @@ a { color: var(--accent); }
 
 .topbar {
   height: 64px;
-  display: grid;
-  grid-template-columns: minmax(280px, 1.3fr) minmax(180px, 240px) minmax(260px, 1fr);
-  gap: 14px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   padding: 0 18px;
   border-bottom: 1px solid var(--border-default);
   background: rgba(11, 15, 20, 0.92);
@@ -115,7 +115,6 @@ a { color: var(--accent); }
 .brand-copy { min-width: 0; }
 .brand-copy h1 { margin: 0; font-size: 16px; line-height: 1.1; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand-copy p { margin: 3px 0 0; color: var(--text-tertiary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.project-slot,
 .topbar-actions { min-width: 0; }
 
 .project-slot {
@@ -126,6 +125,9 @@ a { color: var(--accent); }
   border-radius: 8px;
   padding: 2px 4px;
   gap: 2px;
+  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 .project-slot:focus-within {
@@ -135,15 +137,20 @@ a { color: var(--accent); }
 .project-slot .project-select {
   border: none;
   background-color: transparent;
-  padding: 4px 26px 4px 8px;
+  padding: 4px 24px 4px 8px;
   font-size: 12px;
   height: 26px;
   border-radius: 5px;
   outline: none;
   box-shadow: none;
   color: var(--text);
-  width: auto;
-  min-width: 90px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
 }
 .project-slot .project-select:focus {
   border: none;
@@ -154,6 +161,7 @@ a { color: var(--accent); }
   height: 14px;
   background: var(--border-subtle);
   margin: 0 2px;
+  flex-shrink: 0;
 }
 
 .project-new-btn {
@@ -454,6 +462,7 @@ body.resizing-v canvas {
 .queue-panel.collapsed .task-view-filter-panel { display: none !important; }
 .panel-section.collapsed,
 .queue-panel.collapsed { flex: 0 0 auto !important; }
+.queue-panel.collapsed .project-slot,
 .queue-panel.collapsed .queue-counts,
 .queue-panel.collapsed #queue-batch-purge { display: none; }
 .panel-section.collapsed > .panel-head,
@@ -2185,10 +2194,9 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-inspector-action-btn.danger:hover { background: rgba(229,83,83,.10); }
 .energy-convergence-panel { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(10,16,24,.68); max-height: 180px; overflow-y: auto; }
 
-/* Transition zone: 1024–1279px — tighten topbar tracks, keep single-row */
+/* Transition zone: 1024–1279px — tighten topbar spacing, keep single-row */
 @media (min-width: 1024px) and (max-width: 1279px) {
   .topbar {
-    grid-template-columns: minmax(0, 1.3fr) minmax(120px, 200px) minmax(0, 1fr);
     gap: 10px;
     padding: 0 12px;
   }
@@ -4479,7 +4487,7 @@ option, optgroup {
 @media (max-width: 1023px) {
   body { overflow: auto; }
   .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
-  .topbar { height: auto; grid-template-columns: 1fr; gap: 10px; padding: 14px; flex: 0 0 auto; }
+  .topbar { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; flex: 0 0 auto; }
   .topbar-actions { justify-content: space-between; flex-wrap: wrap; }
   .server-summary { text-align: left; }
   .workbench { grid-template-columns: 1fr; grid-template-areas: "canvas" "mobile"; height: auto; min-height: 0; flex: 1 1 auto; overflow: visible; }
@@ -4583,13 +4591,6 @@ option, optgroup {
         <p data-i18n="app.subtitle">分子计算与机理研究平台</p>
       </div>
     </div>
-    <div class="project-slot">
-      <label class="sr-only" for="project-select" data-i18n="app.project">项目</label>
-      <select id="project-select" class="project-select"></select>
-      <div class="project-slot-divider"></div>
-      <button id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title" title="新建项目" aria-label="新建项目"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 01.75.75v4.5h4.5a.75.75 0 010 1.5h-4.5v4.5a.75.75 0 01-1.5 0v-4.5h-4.5a.75.75 0 010-1.5h4.5v-4.5A.75.75 0 018 2z"/></svg></button>
-      <button id="btn-delete-project" class="project-delete-btn" data-i18n-title="project.delete_title" title="删除项目" aria-label="删除项目" disabled><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 000 1.5h.3l.815 8.15A1.5 1.5 0 005.357 15h5.285a1.5 1.5 0 001.493-1.35l.815-8.15h.3a.75.75 0 000-1.5H11v-.75A1.25 1.25 0 009.75 2h-3.5A1.25 1.25 0 005 3.25zm1.5.75h3v-.75a.25.25 0 00-.25-.25h-2.5a.25.25 0 00-.25.25v.75zM6.5 6.75a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5a.75.75 0 01.75-.75zm3.75.75a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5z"/></svg></button>
-    </div>
     <div class="topbar-actions">
       <div class="server-summary" id="server-summary">--</div>
       <button class="sysres-trigger" id="btn-sysres" data-i18n="drawer.system_resources" title="系统与资源">⚙ 系统</button>
@@ -4598,7 +4599,7 @@ option, optgroup {
         <button class="sidebar-toggle" id="btn-toggle-right" data-i18n-title="layout.toggle_right" title="收起/展开右侧栏">▶</button>
         <button class="lang-toggle" id="lang-toggle" data-i18n="lang.toggle">中文 | EN</button>
         <div class="status-pill disk" id="disk-pill" title="本地磁盘使用率（Phase 5B）" style="display:none">DISK --</div>
-        <div class="status-pill ok" id="status-pill">ONLINE</div>
+        <div class="status-pill warn" id="status-pill" data-i18n="status.connecting">连接中</div>
       </div>
     </div>
   </header>
@@ -4811,7 +4812,16 @@ option, optgroup {
               <button class="panel-collapse-btn" data-panel-key="queue" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
             </div>
           </div>
+          <div class="project-slot">
+            <label class="sr-only" for="project-select" data-i18n="app.project">项目</label>
+            <select id="project-select" class="project-select"><option value="" data-i18n="common.loading">加载中…</option></select>
+            <div class="project-slot-divider"></div>
+            <button id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title" title="新建项目" aria-label="新建项目"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 01.75.75v4.5h4.5a.75.75 0 010 1.5h-4.5v4.5a.75.75 0 01-1.5 0v-4.5h-4.5a.75.75 0 010-1.5h4.5v-4.5A.75.75 0 018 2z"/></svg></button>
+            <button id="btn-delete-project" class="project-delete-btn" data-i18n-title="project.delete_title" title="删除项目" aria-label="删除项目" disabled><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 000 1.5h.3l.815 8.15A1.5 1.5 0 005.357 15h5.285a1.5 1.5 0 001.493-1.35l.815-8.15h.3a.75.75 0 000-1.5H11v-.75A1.25 1.25 0 009.75 2h-3.5A1.25 1.25 0 005 3.25zm1.5.75h3v-.75a.25.25 0 00-.25-.25h-2.5a.25.25 0 00-.25.25v.75zM6.5 6.75a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5a.75.75 0 01.75-.75zm3.75.75a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5z"/></svg></button>
+          </div>
           <div class="queue-counts" id="queue-counts">加载中…</div>
+          <div id="workbench-load-errors" role="status" aria-live="polite"></div>
+          <div id="queue-pagination" class="queue-actions"></div>
         </div>
         <div class="queue-batch-bar" id="queue-batch-bar" style="display:none;">
           <input type="text" class="batch-tag-input" id="batch-tag-input" placeholder="标签">
@@ -4931,6 +4941,7 @@ option, optgroup {
           <div class="panel-body">
             <button class="queue-toggle queue-purge-btn" id="mobile-queue-batch-purge" style="display:none;margin-bottom:10px;">清除所选</button>
             <div class="queue-counts" id="mobile-queue-counts">加载中…</div>
+            <div id="mobile-queue-pagination" class="queue-actions"></div>
             <div class="queue-list" id="mobile-queue-list" style="margin-top:12px;"></div>
           </div>
         </div>
@@ -6062,6 +6073,15 @@ let jobsPollGeneration = 0;
 let jobsPollInFlight = false;
 let jobsCache = [];
 let taskViewCache = null;
+var taskViewOffset = 0;
+var taskViewQueryKey = "";
+var taskViewRequestSerial = 0;
+var taskViewController = null;
+var taskFacetCache = {};
+var taskQueueRenderKey = "";
+var queueRowRenderContext = null;
+var workbenchLoadErrors = {};
+var projectsLoaded = false;
 let projectsCache = [];
 let viewer = null;
 var mainViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
@@ -6438,6 +6458,20 @@ const I18N = {
      "status.online": "在线",
      "status.degraded": "繁忙",
      "status.offline": "离线",
+     "load.status": "服务状态",
+     "load.projects": "项目",
+     "load.tasks": "任务列表",
+     "load.workflows": "工作流目录",
+     "load.methods": "计算方法目录",
+     "viewer.loading": "3D 组件加载中…",
+     "viewer.load_failed": "3D 组件加载失败，请刷新页面重试。",
+     "status.connecting": "连接中",
+     "common.retry": "重试",
+     "queue.load_failed": "任务列表加载失败",
+     "queue.page": "第 {page} 页 · 共 {total} 个任务",
+     "queue.previous": "上一页",
+     "queue.next": "下一页",
+     "load.failed": "{name}加载失败：{message}",
      "status.unknown": "未知",
      "status.running": "运行中",
      "status.queued": "排队中",
@@ -6847,7 +6881,7 @@ const I18N = {
   "results.cross_project": "来源：项目 {source} → 新任务：项目 {target}",
     "results.loading": "加载中…",
     "results.error": "加载失败",
-    "api.timeout": "请求超时（{seconds} 秒）——远程任务需要从计算节点拉取数据，可能较慢；请稍后重试。",
+    "api.timeout": "请求超时（{seconds} 秒），请稍后重试。",
     "results.load": "载入",
     "results.loading_structure": "载入中…",
     "results.reload": "刷新",
@@ -7974,6 +8008,20 @@ const I18N = {
      "status.online": "ONLINE",
      "status.degraded": "BUSY",
      "status.offline": "OFFLINE",
+     "load.status": "Service status",
+     "load.projects": "Projects",
+     "load.tasks": "Task list",
+     "load.workflows": "Workflows",
+     "load.methods": "Methods",
+     "viewer.loading": "Loading 3D viewer…",
+     "viewer.load_failed": "3D viewer failed to load. Reload to retry.",
+     "status.connecting": "CONNECTING",
+     "common.retry": "Retry",
+     "queue.load_failed": "Task list failed to load",
+     "queue.page": "Page {page} · {total} tasks",
+     "queue.previous": "Previous",
+     "queue.next": "Next",
+     "load.failed": "{name} failed: {message}",
      "status.unknown": "UNKNOWN",
      "status.running": "Running",
      "status.queued": "Queued",
@@ -8383,7 +8431,7 @@ const I18N = {
   "results.cross_project": "Source: project {source} → new job: project {target}",
     "results.loading": "Loading…",
     "results.error": "Failed to load",
-    "api.timeout": "Request timed out after {seconds}s — remote jobs fetch data from the compute node and can be slow; please retry.",
+    "api.timeout": "Request timed out after {seconds}s; please retry.",
     "results.load": "Load",
     "results.loading_structure": "Loading…",
     "results.reload": "Reload",
@@ -9890,16 +9938,31 @@ async function api(path, opts) {
     try { _intercepted = JSON.parse(opts.body || "{}"); } catch (e) {}
     return ACPJobEditor.interceptJobCreate(_intercepted);
   }
+  var result = await apiRequest(API_BASE + path, opts);
+  if (opts.method && opts.method !== "GET") invalidateTaskViewMetadata();
+  return result;
+}
+
+async function apiRequest(url, opts) {
+  opts = Object.assign({}, opts || {});
   var timeoutMs = (opts.timeoutMs != null) ? opts.timeoutMs : API_TIMEOUT_MS;
+  delete opts.timeoutMs;
   var timedOut = false;
   var _timer = null;
-  if (!opts.signal && typeof AbortController !== "undefined" && timeoutMs > 0) {
+  var callerSignal = opts.signal;
+  var forwardAbort = null;
+  if (typeof AbortController !== "undefined" && timeoutMs > 0) {
     var _ac = new AbortController();
     _timer = setTimeout(function() { timedOut = true; _ac.abort(); }, timeoutMs);
     opts.signal = _ac.signal;
+    if (callerSignal) {
+      forwardAbort = function() { _ac.abort(callerSignal.reason); };
+      if (callerSignal.aborted) forwardAbort();
+      else callerSignal.addEventListener("abort", forwardAbort, { once: true });
+    }
   }
   try {
-    const response = await fetch(API_BASE + path, opts);
+    const response = await fetch(url, opts);
     if (!response.ok) {
       let msg = "HTTP " + response.status;
       try {
@@ -9927,7 +9990,7 @@ async function api(path, opts) {
       throw new Error(msg);
     }
     const ct = response.headers.get("content-type") || "";
-    return ct.includes("application/json") ? response.json() : response.text();
+    return await (ct.includes("application/json") ? response.json() : response.text());
   } catch (e) {
     if (timedOut) {
       // Own timeout: never leak the raw "signal is aborted without reason".
@@ -9938,6 +10001,7 @@ async function api(path, opts) {
     throw e;
   } finally {
     if (_timer) clearTimeout(_timer);
+    if (callerSignal && forwardAbort) callerSignal.removeEventListener("abort", forwardAbort);
   }
 }
 
@@ -9950,39 +10014,9 @@ function apiRemote(path, opts) {
 // T4: v2 API helper — same error handling as api(), fetches "/api/v2" + path.
 // api() and API_BASE are NOT changed (40+ v1 call sites depend on them).
 async function apiV2(path, opts) {
-  opts = opts || {};
-  if (!opts.signal && typeof AbortController !== "undefined") {
-    var _ac = new AbortController();
-    var _timer = setTimeout(function() { _ac.abort(); }, 8000);
-    opts.signal = _ac.signal;
-  }
-  const response = await fetch("/api/v2" + path, opts);
-  if (_timer) clearTimeout(_timer);
-  if (!response.ok) {
-    let msg = "HTTP " + response.status;
-    try {
-      const body = await response.json();
-      if (body && body.detail) {
-        const d = body.detail;
-        if (typeof d === "string") {
-          msg = d;
-        } else if (Array.isArray(d)) {
-          msg = d.map(function(item) {
-            if (item && typeof item === "object") {
-              const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
-              return (loc ? loc + ": " : "") + (item.msg || JSON.stringify(item));
-            }
-            return String(item);
-          }).join("; ");
-        } else {
-          msg = JSON.stringify(d);
-        }
-      }
-    } catch (e) {}
-    throw new Error(msg);
-  }
-  const ct = response.headers.get("content-type") || "";
-  return ct.includes("application/json") ? response.json() : response.text();
+  var result = await apiRequest("/api/v2" + path, opts);
+  if (opts && opts.method && opts.method !== "GET") invalidateTaskViewMetadata();
+  return result;
 }
 
 function t(key, vars) {
@@ -10085,7 +10119,9 @@ function applyI18n() {
   });
   document.title = t("app.title");
   renderProjects();
-  renderQueue();
+  renderQueue(taskViewCache && taskViewCache.counts);
+  renderTaskPagination(taskViewCache);
+  setWorkbenchLoadError("__refresh__", null);
   renderChips();
   renderFileTree(lastFileListing || [], selectedJobId);
   updateInfoPanel(lastSelectedJob);
@@ -10745,6 +10781,21 @@ function activatePlotTool(mode) {
   }
 }
 
+function energyGraphNodeX(node, mode) {
+  if (!node) return null;
+  var meta = node.metadata || {};
+  if (mode === "path_length" && meta.cumulative_arclength_A != null) {
+    return energyGraphValue(meta.cumulative_arclength_A);
+  }
+  if (mode === "reaction_progress" && meta.reaction_progress != null) {
+    return energyGraphValue(meta.reaction_progress);
+  }
+  if (mode === "frame_index") {
+    return Number(node.frame_index != null ? node.frame_index : 0);
+  }
+  return energyGraphValue(node.x);
+}
+
 var energyViewFramePending = false;
 function energyGraphScheduleViewUpdate() {
   if (energyViewFramePending) return;
@@ -10789,27 +10840,30 @@ function energyGraphUpdateSelection(frameChanged, skipSvg) {
         if (layout) {
           var node = data.nodes.find(function(n) { return String(n.id) === String(energyGraphState.selectedNodeId); })
             || data.nodes.find(function(n) { return Number(n.frame_index) === frame; });
-          if (node && energyGraphValue(node.x) !== null) {
-            var series = energyGraphSeries(data);
-            var yVal = energyGraphSeriesValueAtFrame(data, series, frame);
-            if (yVal !== null) {
-              var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
-              var yDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.y : layout.baseY;
-              var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
-              var Lp = geom.pad.left, Tp = geom.pad.top, Bp = geom.pad.bottom;
-              var nodeX = energyGraphValue(node.x);
-              var inDomain = nodeX >= xDom[0] && nodeX <= xDom[1] && yVal >= yDom[0] && yVal <= yDom[1];
-              if (inDomain) {
-                var Pw = geom.W - Lp - geom.pad.right, Ph = geom.H - Tp - Bp;
-                var px = Lp + ((node.x - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw;
-                var plotGroup = svg.querySelector("[data-energy-plot]");
-                if (plotGroup) {
-                  var firstFrame = svg.querySelector("[data-energy-frame]");
-                  var clSvg = '<line class="energy-current-line energy-crosshair selected-crosshair" x1="' + px + '" y1="' + Tp + '" x2="' + px + '" y2="' + (geom.H - Bp) + '"></line>';
-                  var py = Tp + ((yDom[1] - yVal) / (yDom[1] - yDom[0] || 1)) * Ph;
-                  clSvg += '<line class="energy-crosshair selected-crosshair" x1="' + Lp + '" y1="' + py + '" x2="' + (geom.W - geom.pad.right) + '" y2="' + py + '" style="stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3;opacity:.25;vector-effect:non-scaling-stroke;pointer-events:none;"></line>';
-                  if (firstFrame) firstFrame.insertAdjacentHTML("beforebegin", clSvg);
-                  else plotGroup.insertAdjacentHTML("afterbegin", clSvg);
+          if (node) {
+            var currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
+            var nodeX = energyGraphNodeX(node, currentXMode);
+            if (nodeX !== null) {
+              var series = energyGraphSeries(data);
+              var yVal = energyGraphSeriesValueAtFrame(data, series, frame);
+              if (yVal !== null) {
+                var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
+                var yDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.y : layout.baseY;
+                var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
+                var Lp = geom.pad.left, Tp = geom.pad.top, Bp = geom.pad.bottom;
+                var inDomain = nodeX >= xDom[0] && nodeX <= xDom[1] && yVal >= yDom[0] && yVal <= yDom[1];
+                if (inDomain) {
+                  var Pw = geom.W - Lp - geom.pad.right, Ph = geom.H - Tp - Bp;
+                  var px = Lp + ((nodeX - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw;
+                  var plotGroup = svg.querySelector("[data-energy-plot]");
+                  if (plotGroup) {
+                    var firstFrame = svg.querySelector("[data-energy-frame]");
+                    var clSvg = '<line class="energy-current-line energy-crosshair selected-crosshair" x1="' + px + '" y1="' + Tp + '" x2="' + px + '" y2="' + (geom.H - Bp) + '"></line>';
+                    var py = Tp + ((yDom[1] - yVal) / (yDom[1] - yDom[0] || 1)) * Ph;
+                    clSvg += '<line class="energy-crosshair selected-crosshair" x1="' + Lp + '" y1="' + py + '" x2="' + (geom.W - geom.pad.right) + '" y2="' + py + '" style="stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3;opacity:.25;vector-effect:non-scaling-stroke;pointer-events:none;"></line>';
+                    if (firstFrame) firstFrame.insertAdjacentHTML("beforebegin", clSvg);
+                    else plotGroup.insertAdjacentHTML("afterbegin", clSvg);
+                  }
                 }
               }
             }
@@ -11449,7 +11503,8 @@ function renderTrajectoryAnnotations(opts) {
       return;
     }
     if (!annNode) return;
-    var dataX = energyGraphValue(annNode.x);
+    var currentXMode = (opts && opts.xAxisMode) || energyGraphState.xAxisMode || "scanned_coordinate";
+    var dataX = energyGraphNodeX(annNode, currentXMode);
     var dataY = null;
     if (annNode) {
       dataY = energyGraphValue(annNode.energy);
@@ -11796,8 +11851,8 @@ function energyChartBuildSvg(cfg) {
   if (!cfg.axesBeforePlot) {
     svg += '<g ' + axesAttr + '>';
     svg += energyGraphAxesMarkup(xDom, yDom, geom, cfg.xTickMode || "auto");
-    svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(cfg.xLabel) + ' (' + escapeHtml(cfg.xUnit) + ')</text>';
-    svg += '<text class="' + axisTextClass + '" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(cfg.yLabel) + ' (' + escapeHtml(cfg.yUnit) + ')</text>';
+    svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(cfg.xLabel) + (cfg.xUnit ? ' (' + escapeHtml(cfg.xUnit) + ')' : '') + '</text>';
+    svg += '<text class="' + axisTextClass + '" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(cfg.yLabel) + (cfg.yUnit ? ' (' + escapeHtml(cfg.yUnit) + ')' : '') + '</text>';
     svg += '</g>';
   }
   /* bottom label (optimization) */
@@ -11816,10 +11871,11 @@ function energyGraphBuildSvg(data) {
   var series = energyGraphSeries(data);
   var nodes = Array.isArray(data.nodes) ? data.nodes : [];
   if (!series || !nodes.length) return '<div class="energy-empty"><div><strong>暂无能量曲线</strong><span>当前任务还没有可用的曲线或结构帧。</span></div></div>';
+  var currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
   var values = Array.isArray(series.values) ? series.values : [];
   var xValues = Array.isArray(series.x_values) && series.x_values.length
     ? series.x_values
-    : nodes.map(function(node) { return energyGraphValue(node.x); });
+    : nodes.map(function(node) { return energyGraphNodeX(node, currentXMode); });
   var points = [];
   for (var pi = 0; pi < Math.min(values.length, xValues.length); pi += 1) {
     var pxv = energyGraphValue(xValues[pi]);
@@ -11841,7 +11897,7 @@ function energyGraphBuildSvg(data) {
   _preCandidates.forEach(function(a) {
     var fi = a.frame_index;
     var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
-    var dataX = annNode ? energyGraphValue(annNode.x) : null;
+    var dataX = annNode ? energyGraphNodeX(annNode, currentXMode) : null;
     if (dataX === null) return;
     var dataY = annNode ? (energyGraphValue(annNode.energy) || energyGraphValue(a.y) || 0) : 0;
     _preItems.push({ annotation: a, dataX: dataX, dataY: dataY, frameIndex: fi, type: String(a.type || "") });
@@ -11860,14 +11916,16 @@ function energyGraphBuildSvg(data) {
     H = geom.H;
   }
   var layout = energyGraphState.layout;
-  if (!layout || layout._seriesId !== energyGraphState.seriesId || layout._jobId !== energyGraphState.jobId) {
+  if (!layout || layout._seriesId !== energyGraphState.seriesId || layout._jobId !== energyGraphState.jobId || layout._xAxisMode !== currentXMode) {
     var xExtent = [Math.min.apply(null, points.map(function(p) { return p.x; })), Math.max.apply(null, points.map(function(p) { return p.x; }))];
-    var yExtent = [Math.min.apply(null, points.map(function(p) { return p.y; })), Math.max.apply(null, points.map(function(p) { return p.y; }))];
+    var validPoints = points.filter(function(p) { return !p.node || p.node.status !== "failed"; });
+    var yTargetPoints = validPoints.length ? validPoints : points;
+    var yExtent = [Math.min.apply(null, yTargetPoints.map(function(p) { return p.y; })), Math.max.apply(null, yTargetPoints.map(function(p) { return p.y; }))];
     var xSpread = Math.max(1e-9, xExtent[1] - xExtent[0]);
     var ySpread = Math.max(1e-9, yExtent[1] - yExtent[0]);
     var baseX = [xExtent[0] - xSpread * 0.06, xExtent[1] + xSpread * 0.06];
     var baseY = [yExtent[0] - ySpread * 0.12, yExtent[1] + ySpread * 0.12];
-    layout = { points: points, baseX: baseX, baseY: baseY, _seriesId: energyGraphState.seriesId, _jobId: energyGraphState.jobId, allAnnotations: null };
+    layout = { points: points, baseX: baseX, baseY: baseY, _seriesId: energyGraphState.seriesId, _jobId: energyGraphState.jobId, _xAxisMode: currentXMode, allAnnotations: null };
     energyGraphState.layout = layout;
   }
   var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
@@ -11921,11 +11979,13 @@ function energyGraphBuildSvg(data) {
   if (selectedFrame != null) {
     var selNode = nodes.find(function(node) { return String(node.id) === String(energyGraphState.selectedNodeId); })
       || nodes.find(function(node) { return Number(node.frame_index) === selectedFrame; });
-    if (selNode && energyGraphValue(selNode.x) !== null) {
-      var selX = energyGraphValue(selNode.x);
-      var selInDomain = selX >= xDom[0] && selX <= xDom[1];
-      if (selInDomain) {
-        selectedGuide = { x: xFor(selNode.x), y1: pad.top, y2: H - pad.bottom };
+    if (selNode) {
+      var selX = energyGraphNodeX(selNode, currentXMode);
+      if (selX !== null) {
+        var selInDomain = selX >= xDom[0] && selX <= xDom[1];
+        if (selInDomain) {
+          selectedGuide = { x: xFor(selX), y1: pad.top, y2: H - pad.bottom };
+        }
       }
     }
   }
@@ -11985,6 +12045,18 @@ function energyGraphBuildSvg(data) {
   });
   /* ── SVG open tag ── */
   var svgOpen = '<svg class="energy-chart-svg' + (energyGraphState.viewMode === "box" ? " mode-box" : "") + (energyGraphState.viewMode === "pan" ? " mode-pan" : "") + (energyGraphState.annotationMode === "hide" ? " labels-hidden" : "") + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(String(data.title || "能量与轨迹")) + '" data-energy-chart>';
+  var activeXLabel = String((data.x_axis || {}).label || "坐标");
+  var activeXUnit = String((data.x_axis || {}).unit || "");
+  if (currentXMode === "path_length") {
+    activeXLabel = "累积路径长度";
+    activeXUnit = "Å";
+  } else if (currentXMode === "reaction_progress") {
+    activeXLabel = "反应进度";
+    activeXUnit = "";
+  } else if (currentXMode === "frame_index") {
+    activeXLabel = "帧序号";
+    activeXUnit = "";
+  }
   /* ── Build SVG via unified core ── */
   return energyChartBuildSvg({
     svgOpen: svgOpen,
@@ -12006,11 +12078,12 @@ function energyGraphBuildSvg(data) {
       yDom: yDom,
       mode: "full",
       viewType: "energy",
+      xAxisMode: currentXMode,
       selectedNodeId: String(energyGraphState.selectedNodeId || ""),
       selectionLocked: !!s2scanState.selectionLocked,
     },
-    xLabel: String((data.x_axis || {}).label || "坐标"),
-    xUnit: String((data.x_axis || {}).unit || ""),
+    xLabel: activeXLabel,
+    xUnit: activeXUnit,
     yLabel: String(series.label || "能量"),
     yUnit: String(series.unit || ""),
   });
@@ -12513,7 +12586,21 @@ function energyGraphInspectorMarkup(data) {
   const nodeIndex = nodes.findIndex(function(item) { return String(item.id) === String(node.id); });
   const frameTotal = nodes.length;
   const frameDisplay = frameTotal > 0 ? ((nodeIndex >= 0 ? nodeIndex + 1 : 1) + ' / ' + frameTotal) : frame;
-  const xAxisLabel = data.view_type === "scan" ? "\u626b\u63cf\u5750\u6807" : "\u6a2a\u5750\u6807";
+  const currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
+  var activeXValue = energyGraphNodeX(node, currentXMode);
+  var activeXLabel = data.view_type === "scan" ? "扫描坐标" : "横坐标";
+  var activeXUnit = String((data.x_axis || {}).unit || "");
+  if (currentXMode === "path_length") {
+    activeXLabel = "累积路径长度";
+    activeXUnit = "Å";
+  } else if (currentXMode === "reaction_progress") {
+    activeXLabel = "反应进度";
+    activeXUnit = "";
+  } else if (currentXMode === "frame_index") {
+    activeXLabel = "帧序号";
+    activeXUnit = "";
+  }
+  const xAxisLabel = activeXLabel;
   var candidateAttrHtml = "";
   if (isScanFrame && workingEntry) {
     var autoName = energyGenCandidateName(frameIndexNum, workingEntry.role);
@@ -12534,7 +12621,7 @@ function energyGraphInspectorMarkup(data) {
         '<div class="energy-attr-row"><span class="energy-attr-label">结构名称</span>' + nameControl + '</div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">Candidate ID</span><span class="energy-attr-value">' + candidateIdText + '</span></div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">扫描帧</span><span class="energy-attr-value">' + escapeHtml(frameDisplay) + '</span></div>' +
-        '<div class="energy-attr-row"><span class="energy-attr-label">' + escapeHtml(xAxisLabel) + '</span><span class="energy-attr-value">' + escapeHtml(energyGraphFormatNumber(node.x, 3)) + ' ' + escapeHtml(String((data.x_axis || {}).unit || "")) + '</span></div>' +
+        '<div class="energy-attr-row"><span class="energy-attr-label">' + escapeHtml(activeXLabel) + '</span><span class="energy-attr-value">' + escapeHtml(energyGraphFormatNumber(activeXValue, 3)) + (activeXUnit ? ' ' + escapeHtml(activeXUnit) : '') + '</span></div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">能量</span><span class="energy-attr-value">' + escapeHtml(energyGraphFormatNumber(node.energy, 4)) + '</span></div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">算法推荐</span><span class="energy-attr-value">' + escapeHtml(recText) + '</span></div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">标记来源</span><span class="energy-attr-value">' + escapeHtml(selSourceText) + '</span></div>' +
@@ -12562,7 +12649,10 @@ function energyGraphInspectorMarkup(data) {
     tertiaryLine +
     '<dl class="energy-data-list">' +
       '<dt>\u72b6\u6001</dt><dd>' + escapeHtml(nodeStatusText) + '</dd>' +
-      (isScanFrame ? '<dt>' + escapeHtml(xAxisLabel) + '</dt><dd>' + escapeHtml(energyGraphFormatNumber(node.x, 3)) + ' ' + escapeHtml(String((data.x_axis || {}).unit || "")) + '</dd>' : '') +
+      (isScanFrame ? '<dt>' + escapeHtml(activeXLabel) + '</dt><dd>' + escapeHtml(energyGraphFormatNumber(activeXValue, 3)) + (activeXUnit ? ' ' + escapeHtml(activeXUnit) : '') + '</dd>' : '') +
+      (metadata.cumulative_arclength_A != null && currentXMode !== "path_length" ? '<dt>累积路径长度</dt><dd>' + escapeHtml(energyGraphFormatNumber(metadata.cumulative_arclength_A, 3)) + ' Å</dd>' : '') +
+      (metadata.reaction_progress != null && currentXMode !== "reaction_progress" ? '<dt>反应进度</dt><dd>' + escapeHtml((Number(metadata.reaction_progress) * 100).toFixed(1)) + '%</dd>' : '') +
+      (metadata.step_rmsd_A != null ? '<dt>步长位移 (RMSD)</dt><dd>' + escapeHtml(energyGraphFormatNumber(metadata.step_rmsd_A, 3)) + ' Å</dd>' : '') +
       '<dt>\u76f8\u5bf9\u80fd\u91cf</dt><dd>' + escapeHtml(energyGraphFormatNumber(node.energy, 4)) + ' kcal/mol</dd>' +
       (metadata.single_point_energy_hartree != null || metadata.scan_energy_hartree != null
         ? '<dt>\u7edd\u5bf9\u80fd\u91cf</dt><dd>' + escapeHtml(energyGraphFormatNumber(metadata.single_point_energy_hartree || metadata.scan_energy_hartree, 6)) + ' E<sub>h</sub></dd>'
@@ -13438,6 +13528,23 @@ function energyGraphWorkspaceMarkup(data) {
   const ircCounts = data.view_type === "irc" ? ((data.metadata || {}).directions || {}) : null;
   const ircProgressText = ircCounts ? '正向 ' + Number(ircCounts.forward || 0) + ' 点 · 反向 ' + Number(ircCounts.reverse || 0) + ' 点' : '';
   const ircUpdatedAt = data.view_type === "irc" ? String((data.metadata || {}).updated_at || "") : "";
+  const xModes = (data.metadata && data.metadata.x_axis_modes) || (data.x_axis && data.x_axis.modes) || [];
+  const currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
+  var xAxisToolbarHtml = "";
+  if (data.view_type === "scan" || xModes.length > 0) {
+    var availableModes = xModes.length > 0 ? xModes : [
+      { id: "path_length", label: "累积路径长度", unit: "Å" },
+      { id: "reaction_progress", label: "反应进度", unit: "" },
+      { id: "scanned_coordinate", label: String((data.x_axis || {}).label || "扫描坐标"), unit: String((data.x_axis || {}).unit || "") },
+      { id: "frame_index", label: "帧序号", unit: "" }
+    ];
+    var xOptions = availableModes.map(function(m) {
+      var u = m.unit ? ' (' + m.unit + ')' : '';
+      return '<option value="' + escapeHtml(m.id) + '"' + (m.id === currentXMode ? ' selected' : '') + '>' + escapeHtml(m.label + u) + '</option>';
+    }).join("");
+    xAxisToolbarHtml = '<span class="energy-tool-label" style="margin-left:8px;">横轴</span>' +
+      '<select class="tool-select" data-energy-x-axis aria-label="横轴类型">' + xOptions + '</select>';
+  }
   return '<div class="energy-workspace" data-energy-workspace data-energy-reviewable="' + (hasReview ? "1" : "0") + '">' +
     '<div class="energy-workspace-head">' +
       '<div style="min-width:0"><div class="energy-workspace-kicker">\u4efb\u52a1\u89c2\u5bdf \u00b7 Calculation Viewer</div><div class="energy-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "\u5f53\u524d\u4efb\u52a1")) + '</div></div>' +
@@ -13446,6 +13553,7 @@ function energyGraphWorkspaceMarkup(data) {
     '<div class="energy-workspace-toolbar">' +
       '<span class="energy-tool-label">\u5f53\u524d\u66f2\u7ebf</span>' +
       '<select class="tool-select" data-energy-series aria-label="\u66f2\u7ebf\u7c7b\u578b">' + options + '</select>' +
+      xAxisToolbarHtml +
       '<div class="tool-group">' +
         '<button class="plot-tool" data-energy-action="global" type="button" title="\u5168\u5c40\u89c6\u56fe" aria-label="\u5168\u5c40\u89c6\u56fe" data-tip="\u5168\u5c40\u89c6\u56fe"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5"/></svg></button>' +
         '<button class="plot-tool" data-energy-action="fit" type="button" title="\u9002\u914d\u6570\u636e" aria-label="\u9002\u914d\u6570\u636e" data-tip="\u9002\u914d\u6570\u636e" data-tip-keys="F"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h-4v4M14 2h4v4M6 18H2v-4M14 18h4v-4"/></svg></button>' +
@@ -13656,12 +13764,15 @@ function energyGraphSetDomains(mode) {
     var series = energyGraphSeries(data);
     var nodes = Array.isArray(data.nodes) ? data.nodes : [];
     var values = Array.isArray(series && series.values) ? series.values : [];
-    var xValues = Array.isArray(series && series.x_values) && series.x_values.length ? series.x_values : nodes.map(function(node) { return energyGraphValue(node.x); });
+    var currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
+    var xValues = (currentXMode !== "scanned_coordinate" || !(Array.isArray(series && series.x_values) && series.x_values.length))
+      ? nodes.map(function(node) { return energyGraphNodeX(node, currentXMode); })
+      : series.x_values;
     var points = [];
     for (var pi = 0; pi < Math.min(values.length, xValues.length); pi += 1) {
       var pxv = energyGraphValue(xValues[pi]);
       var pyv = energyGraphValue(values[pi]);
-      if (pxv !== null && pyv !== null) points.push({ x: pxv, y: pyv });
+      if (pxv !== null && pyv !== null) points.push({ x: pxv, y: pyv, node: nodes[pi] });
     }
     var annotations = Array.isArray(data.annotations) ? data.annotations : [];
     var annNodes = [];
@@ -13671,15 +13782,17 @@ function energyGraphSetDomains(mode) {
       if (energyGraphState.annotationMode !== "all" && energyGraphState.annotationMode !== "candidate" && energyGraphState.annotationMode !== "hide" && energyGraphState.annotationMode !== ann.type) return;
       var fi = ann.frame_index;
       var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
-      if (annNode && energyGraphValue(annNode.x) !== null) {
+      if (annNode && energyGraphNodeX(annNode, currentXMode) !== null) {
         var annVal = energyGraphSeriesValueAtFrame(data, series, fi);
-        if (annVal !== null) annNodes.push({ x: energyGraphValue(annNode.x), y: annVal });
+        if (annVal !== null) annNodes.push({ x: energyGraphNodeX(annNode, currentXMode), y: annVal, node: annNode });
       }
     });
     var allPts = points.concat(annNodes);
     if (!allPts.length) return;
     var xExt = [Math.min.apply(null, allPts.map(function(p) { return p.x; })), Math.max.apply(null, allPts.map(function(p) { return p.x; }))];
-    var yExt = [Math.min.apply(null, allPts.map(function(p) { return p.y; })), Math.max.apply(null, allPts.map(function(p) { return p.y; }))];
+    var validPts = allPts.filter(function(p) { return !p.node || p.node.status !== "failed"; });
+    var yTargetPts = validPts.length ? validPts : allPts;
+    var yExt = [Math.min.apply(null, yTargetPts.map(function(p) { return p.y; })), Math.max.apply(null, yTargetPts.map(function(p) { return p.y; }))];
     var xSpread = Math.max(1e-9, xExt[1] - xExt[0]);
     var ySpread = Math.max(1e-9, yExt[1] - yExt[0]);
     energyGraphState.xDomain = [xExt[0] - xSpread * 0.06, xExt[1] + xSpread * 0.06];
@@ -13750,8 +13863,9 @@ function energyGraphNearestFrame(clientX, svg) {
   var dataX = xDom[0] + ((pt.x - geom.pad.left) / (Pw || 1)) * (xDom[1] - xDom[0]);
   var best = null;
   var bestDist = Infinity;
+  var currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
   (data.nodes || []).forEach(function(node) {
-    var x = energyGraphValue(node.x);
+    var x = energyGraphNodeX(node, currentXMode);
     if (x === null) return;
     var dist = Math.abs(x - dataX);
     if (dist < bestDist) {
@@ -14092,8 +14206,12 @@ function energyGraphBindChartInteractions(root) {
     var annotation = annotationId ? (data.annotations || []).find(function(a) { return String(a.id) === annotationId; }) : null;
     var displayLabel = annotation ? String(annotation.display_label || annotation.label || annotation.id) : String(node.label || node.id);
     var frameNumber = annotation && annotation.frame_number != null ? Number(annotation.frame_number) : (node.frame_index != null ? Number(node.frame_index) + 1 : "?");
-    var xVal = node.x != null ? energyGraphFormatNumber(node.x, 3) : "?";
-    var xUnit = String(((data.x_axis || {}).unit) || "");
+    var currentXMode = energyGraphState.xAxisMode || (data.metadata && data.metadata.default_x_axis_mode) || (data.x_axis && data.x_axis.default_mode) || "scanned_coordinate";
+    var currentXVal = energyGraphNodeX(node, currentXMode);
+    var xVal = currentXVal != null ? energyGraphFormatNumber(currentXVal, 3) : "?";
+    var xModes = (data.metadata && data.metadata.x_axis_modes) || (data.x_axis && data.x_axis.modes) || [];
+    var modeObj = xModes.find(function(m) { return m.id === currentXMode; });
+    var xUnit = modeObj ? String(modeObj.unit || "") : String(((data.x_axis || {}).unit) || "");
     var energyVal = node.energy != null ? energyGraphFormatNumber(node.energy, 3) : "?";
     var tipHtml = '<div style="font-weight:600;">' + escapeHtml(displayLabel) + ' \u00b7 F' + frameNumber + '</div>';
     tipHtml += '<div>' + escapeHtml(xVal) + (xUnit ? ' ' + escapeHtml(xUnit) : '') + '</div>';
@@ -14171,6 +14289,14 @@ function energyGraphBind(root) {
   const seriesSelect = root.querySelector("[data-energy-series]");
   if (seriesSelect) seriesSelect.addEventListener("change", function() {
     energyGraphState.seriesId = seriesSelect.value;
+    energyGraphState.xDomain = null;
+    energyGraphState.yDomain = null;
+    energyGraphState.layout = null;
+    energyGraphRenderCurrent();
+  });
+  const xAxisSelect = root.querySelector("[data-energy-x-axis]");
+  if (xAxisSelect) xAxisSelect.addEventListener("change", function() {
+    energyGraphState.xAxisMode = xAxisSelect.value;
     energyGraphState.xDomain = null;
     energyGraphState.yDomain = null;
     energyGraphState.layout = null;
@@ -14799,6 +14925,9 @@ function energyGraphRenderCurrent() {
   // alive across ordinary updates.
   energyGraphUpdateChart();
   energyGraphUpdateSelection(false, true);
+  var currentXMode = energyGraphState.xAxisMode || (energyGraphState.data.metadata && energyGraphState.data.metadata.default_x_axis_mode) || (energyGraphState.data.x_axis && energyGraphState.data.x_axis.default_mode) || "scanned_coordinate";
+  var xSel = screen.querySelector("[data-energy-x-axis]");
+  if (xSel && xSel.value !== currentXMode) xSel.value = currentXMode;
   var countEl = screen.querySelector("[data-energy-selection-count]");
   if (countEl) countEl.textContent = "已选候选：" + s2scanState.candidates.length;
   energyGraphUpdateSelectionToolbar();
@@ -15426,7 +15555,8 @@ function initViewer() {
     const empty = document.getElementById("viewer-empty");
     if (empty) {
       empty.style.display = "grid";
-      empty.innerHTML = "<strong>3D 组件加载失败</strong><span>请检查网络或配置本地 3Dmol 资源</span>";
+      var library = document.getElementById("viewer-library");
+      empty.textContent = t(library && library.dataset.failed ? "viewer.load_failed" : "viewer.loading");
     }
     return false;
   }
@@ -15434,6 +15564,18 @@ function initViewer() {
   viewer = $3Dmol.createViewer(container, { backgroundColor: molDoc.bgColor, antialias: true });
   // Resize handled by the global rAF-throttled listener → applyLayout → viewer.resize
   return true;
+}
+
+// The optional viewer must never delay DOMContentLoaded or task management.
+var viewerLibraryScript = document.getElementById("viewer-library");
+if (viewerLibraryScript) {
+  viewerLibraryScript.addEventListener("load", function() {
+    if (molDoc.frames.length) renderMolDoc({ zoomTo: true });
+  });
+  viewerLibraryScript.addEventListener("error", function() {
+    viewerLibraryScript.dataset.failed = "true";
+    if (molDoc.frames.length) initViewer();
+  });
 }
 
 function showEmpty() {
@@ -15653,19 +15795,56 @@ function statusPillMode(body) {
   return { label: t("status.unknown"), className: "err" };
 }
 
-async function loadStatus() {
-  const body = await api("/status");
-  lastStatus = body;
-  const pill = document.getElementById("status-pill");
-  const mode = statusPillMode(body);
-  pill.className = "status-pill " + mode.className;
-  pill.textContent = mode.label;
-  document.getElementById("server-summary").textContent = t("server.summary", {
-    host: body.host || "127.0.0.1",
-    port: body.port || "8765",
-    queued: body.queue && typeof body.queue.queued === "number" ? body.queue.queued : 0,
-    running: body.queue && typeof body.queue.running === "number" ? body.queue.running : 0
+function invalidateTaskViewMetadata() {
+  taskFacetCache = {};
+  _mergeSuggestionLoadedAt = 0;
+}
+
+function setWorkbenchLoadError(key, error, retry) {
+  if (error) workbenchLoadErrors[key] = { message: error.message || String(error), retry: retry };
+  else delete workbenchLoadErrors[key];
+  var host = document.getElementById("workbench-load-errors");
+  if (!host) return;
+  host.replaceChildren();
+  Object.keys(workbenchLoadErrors).forEach(function(name) {
+    var entry = workbenchLoadErrors[name];
+    var row = document.createElement("div");
+    row.className = "node-error";
+    row.appendChild(document.createTextNode(t("load.failed", { name: t("load." + name.toLowerCase()), message: entry.message }) + " "));
+    var btn = document.createElement("button");
+    btn.className = "mini-btn";
+    btn.textContent = t("common.retry");
+    btn.addEventListener("click", function() { Promise.resolve().then(entry.retry).catch(function() {}); });
+    row.appendChild(btn);
+    host.appendChild(row);
   });
+}
+
+async function loadStatus() {
+  const pill = document.getElementById("status-pill");
+  try {
+    const body = await api("/status");
+    lastStatus = body;
+    const mode = statusPillMode(body);
+    pill.className = "status-pill " + mode.className;
+    pill.textContent = mode.label;
+    pill.removeAttribute("data-i18n");
+    pill.title = "";
+    setWorkbenchLoadError("Status", null);
+    document.getElementById("server-summary").textContent = t("server.summary", {
+      host: body.host || "127.0.0.1",
+      port: body.port || "8765",
+      queued: body.queue && typeof body.queue.queued === "number" ? body.queue.queued : 0,
+      running: body.queue && typeof body.queue.running === "number" ? body.queue.running : 0
+    });
+  } catch (e) {
+    pill.className = "status-pill err";
+    pill.textContent = t("status.offline");
+    pill.removeAttribute("data-i18n");
+    pill.title = e.message || String(e);
+    setWorkbenchLoadError("Status", e, loadStatus);
+    throw e;
+  }
 }
 
 function renderProjects() {
@@ -15683,6 +15862,9 @@ function renderProjects() {
     select.appendChild(option);
   });
   select.value = selectedProjectId;
+  if (select.selectedIndex >= 0 && select.options[select.selectedIndex]) {
+    select.title = select.options[select.selectedIndex].textContent || "";
+  }
   updateDeleteProjectButton();
   renderResultsProjectOptions();
 }
@@ -16435,12 +16617,18 @@ function _renderMergeSuggestions(groups) {
 }
 
 var _mergeSuggestionCache = [];
+var _mergeSuggestionProject = "";
+var _mergeSuggestionLoadedAt = 0;
 
 async function _loadMergeSuggestions() {
   var pid = _getSelectedProjectId();
-  if (!pid) return;
+  if (!pid) { _mergeSuggestionCache = []; return; }
+  if (pid === _mergeSuggestionProject && Date.now() - _mergeSuggestionLoadedAt < 30000) return;
   try {
     var resp = await apiV2("/projects/" + encodeURIComponent(pid) + "/molecule-groups/suggestions");
+    if (pid !== _getSelectedProjectId()) return;
+    _mergeSuggestionProject = pid;
+    _mergeSuggestionLoadedAt = Date.now();
     _mergeSuggestionCache = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.suggestions) ? resp.suggestions : []);
   } catch (e) {
     _mergeSuggestionCache = [];
@@ -17217,9 +17405,20 @@ async function submitProjectModal() {
 }
 
 async function loadProjects() {
-  const body = await api("/projects");
-  projectsCache = body.projects || [];
-  renderProjects();
+  try {
+    const body = await api("/projects");
+    projectsCache = body.projects || [];
+    projectsLoaded = true;
+    renderProjects();
+    setWorkbenchLoadError("Projects", null);
+  } catch (e) {
+    if (!projectsLoaded) {
+      var select = document.getElementById("project-select");
+      select.options[0].textContent = t("status.offline");
+    }
+    setWorkbenchLoadError("Projects", e, loadProjects);
+    throw e;
+  }
 }
 
 async function refreshJobs() {
@@ -17238,9 +17437,28 @@ async function refreshJobs() {
   if (prefs.q) params.set("q", prefs.q);
   if (prefs.archived && prefs.archived !== "exclude") params.set("archived", prefs.archived);
   if (prefs.runningFirst) params.set("running_first", "true");
+  var queryKey = params.toString();
+  if (taskViewQueryKey !== queryKey) { taskViewOffset = 0; taskViewQueryKey = queryKey; }
+  var facetKey = (selectedProjectId || "__all__") + ":" + (prefs.archived || "exclude");
+  var cachedFacets = taskFacetCache[facetKey];
+  var needFacets = !cachedFacets || Date.now() - cachedFacets.at > 30000;
+  params.set("max_total", "200");
+  params.set("offset", String(taskViewOffset));
+  params.set("include_facets", String(needFacets));
+  var serial = ++taskViewRequestSerial;
+  if (taskViewController) taskViewController.abort();
+  taskViewController = new AbortController();
   try {
-    var body = await apiV2("/task-view?" + params.toString());
+    var body = await apiV2("/task-view?" + params.toString(), { signal: taskViewController.signal });
+    if (serial !== taskViewRequestSerial) return;
+    if (needFacets) taskFacetCache[facetKey] = { at: Date.now(), value: body.facets || {} };
+    else body.facets = cachedFacets.value;
+    if (body.total > 0 && taskViewOffset >= body.total) {
+      taskViewOffset = Math.floor((body.total - 1) / 200) * 200;
+      return refreshJobs();
+    }
     taskViewCache = body;
+    setWorkbenchLoadError("Tasks", null);
     // T6: sort each group's rows + sort groups for name sorts + runningFirst.
     if (body && body.groups) {
       body.groups.forEach(function(g) {
@@ -17270,19 +17488,52 @@ async function refreshJobs() {
       });
     }
     jobsCache = flat;
-    renderQueue(body.counts || {});
+    var renderKey = JSON.stringify([queryKey, taskViewOffset, body.groups, body.counts, currentLang]);
+    if (renderKey !== taskQueueRenderKey) {
+      taskQueueRenderKey = renderKey;
+      renderQueue(body.counts || {});
+    }
+    renderTaskPagination(body);
     if (selectedJobId) highlightQueueRow(selectedJobId);
     updateMobileStatusBar();
     _applyTaskViewPrefsToControls();
     renderChips();
     if (prefs.groupBy === "molecule" && body && body.groups) {
       _loadMergeSuggestions().then(function() {
-        _renderMergeSuggestions(body.groups);
+        if (serial === taskViewRequestSerial) _renderMergeSuggestions(body.groups);
       });
     }
   } catch (e) {
+    if (serial !== taskViewRequestSerial || e.name === "AbortError") return;
     console.error("refreshJobs failed:", e);
+    setWorkbenchLoadError("Tasks", e, refreshJobs);
+    if (!taskViewCache) {
+      ["queue-counts", "mobile-queue-counts"].forEach(function(id) {
+        document.getElementById(id).textContent = t("queue.load_failed");
+      });
+    }
   }
+}
+
+function renderTaskPagination(body) {
+  ["queue-pagination", "mobile-queue-pagination"].forEach(function(id) {
+    var host = document.getElementById(id);
+    if (!host) return;
+    host.replaceChildren();
+    if (!body || body.total <= 200) return;
+    var label = document.createElement("span");
+    label.textContent = t("queue.page", { page: Math.floor(body.offset / 200) + 1, total: body.total });
+    host.appendChild(label);
+    [["queue.previous", body.offset > 0, Math.max(0, body.offset - 200)],
+     ["queue.next", body.next_offset != null, body.next_offset]].forEach(function(spec) {
+      var btn = document.createElement("button");
+      btn.className = "mini-btn";
+      btn.textContent = t(spec[0]);
+      btn.disabled = !spec[1];
+      btn.addEventListener("click", function() { taskViewOffset = spec[2]; refreshJobs(); });
+      host.appendChild(btn);
+    });
+  });
 }
 
 // --- T5: Task view toolbar, filter panel, chips ---
@@ -17676,6 +17927,21 @@ function buildQueueGroup(group) {
 }
 
 function buildQueueRow(job) {
+  var cacheKey, signature;
+  if (queueRowRenderContext) {
+    var id = String(job.id);
+    var occurrence = queueRowRenderContext.occurrences[id] || 0;
+    queueRowRenderContext.occurrences[id] = occurrence + 1;
+    cacheKey = id + ":" + occurrence;
+    signature = JSON.stringify([job, currentLang]);
+    var cached = queueRowRenderContext.previous.get(cacheKey);
+    if (cached && cached.signature === signature) {
+      cached.node.classList.toggle("active", id === String(selectedJobId));
+      cached.node.querySelector(".queue-check").checked = queueSelectedJobs.has(id);
+      queueRowRenderContext.next.set(cacheKey, cached);
+      return cached.node;
+    }
+  }
   var groupBy = job._groupBy || "";
   const row = document.createElement("div");
   row.className = "queue-row" + (String(job.id) === String(selectedJobId) ? " active" : "") + (job.archived ? " archived-row" : "");
@@ -17805,6 +18071,7 @@ function buildQueueRow(job) {
     row.appendChild(tagsEl);
   }
 
+  if (queueRowRenderContext) queueRowRenderContext.next.set(cacheKey, { signature: signature, node: row });
   return row;
 }
 
@@ -17887,6 +18154,19 @@ function _renderRetiredBadge() {
 }
 
 function renderQueueList(container) {
+  if (!container) return;
+  var parentContext = queueRowRenderContext;
+  var context = { previous: container._acpRows || new Map(), next: new Map(), occurrences: {} };
+  queueRowRenderContext = context;
+  try {
+    renderQueueListContents(container);
+  } finally {
+    container._acpRows = context.next;
+    queueRowRenderContext = parentContext;
+  }
+}
+
+function renderQueueListContents(container) {
   container.innerHTML = "";
   if (!jobsCache.length) {
     const empty = document.createElement("div");
@@ -22376,9 +22656,7 @@ async function loadBackends() {
   const list = document.getElementById("sysres-backend-list");
   if (!list) return;
   try {
-    const resp = await fetch("/api/backends");
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const data = await resp.json();
+    const data = await apiRequest("/api/backends");
     backendsCache = data.backends || [];
   } catch (e) {
     backendsCache = [];
@@ -22386,9 +22664,8 @@ async function loadBackends() {
     return;
   }
   try {
-    const dresp = await fetch(API_BASE + "/software/discovery");
-    if (dresp.ok) {
-      const ddata = await dresp.json();
+    const ddata = await api("/software/discovery");
+    if (ddata) {
       const map = {};
       (ddata.software || []).forEach(function(sw) {
         if (sw && sw.name) map[String(sw.name)] = sw;
@@ -26574,30 +26851,33 @@ function syncBatchOptimizeProfileSummary() {
 
 async function loadWorkflowCatalog() {
   try {
-    var resp = await fetch(API_BASE + "/workflow-catalog");
-    if (!resp.ok) throw new Error("HTTP " + resp.status + " " + resp.statusText);
-    workflowCatalogCache = (await resp.json()).workflows || [];
+    var data = await api("/workflow-catalog");
+    workflowCatalogCache = data.workflows || [];
     // Filter by the catalog's `visible` flag — single source of truth in
     // acp.catalog.WORKFLOW_CATALOG. Retired/hidden workflows
     // (e.g. conformer/nmr/benchmark) are dropped here automatically.
     workflowCatalogCache = workflowCatalogCache.filter(function(w) { return w.visible !== false; });
-  } catch(e) { console.error("Failed to load workflow catalog:", e); }
+    setWorkbenchLoadError("Workflows", null);
+  } catch(e) {
+    console.error("Failed to load workflow catalog:", e);
+    setWorkbenchLoadError("Workflows", e, initializeMethodDefaults);
+  }
 }
 
 async function loadMethodCatalog() {
   try {
-    var resp = await fetch(API_BASE + "/method-catalog?_t=" + Date.now());
+    var parsed = await api("/method-catalog");
     // fetch() only rejects on network errors; HTTP 5xx (e.g. catalog.py raising
     // at import time) resolves successfully with an error body that resp.json()
     // may either parse (non-catalog dict) or throw on. Guard explicitly so the
     // cache never gets silently populated with garbage (audit A15).
-    if (!resp.ok) throw new Error("HTTP " + resp.status + " " + resp.statusText);
-    var parsed = await resp.json();
+
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("Unexpected catalog response shape");
     }
     methodCatalogCache = parsed;
     methodCatalogCache._loadFailed = false;
+    setWorkbenchLoadError("Methods", null);
   } catch(e) {
     // Mark the cache so downstream consumers (updateConfigCards, openMethodConfig)
     // can surface a retry path instead of silently degrading to "--". (R5 / R16)
@@ -26605,6 +26885,7 @@ async function loadMethodCatalog() {
     // tear down a working UI — only first-load failures leave the cache empty.
     console.error("Failed to load method catalog:", e);
     methodCatalogCache._loadFailed = true;
+    setWorkbenchLoadError("Methods", e, initializeMethodDefaults);
   }
 }
 
@@ -30797,6 +31078,9 @@ function setupEventListeners() {
 
   document.getElementById("project-select").addEventListener("change", async function(event) {
     selectedProjectId = event.target.value;
+    if (event.target.selectedIndex >= 0 && event.target.options[event.target.selectedIndex]) {
+      event.target.title = event.target.options[event.target.selectedIndex].textContent || "";
+    }
     loadTaskViewPrefs(selectedProjectId);
     updateDeleteProjectButton();
     await refreshJobs();
@@ -31388,8 +31672,9 @@ function setupEventListeners() {
   setupMechanismSectionListeners();
 }
 
-function startPolling() {
+function startPolling(skipInitialJobs) {
   if (jobsPollTimer) { clearTimeout(jobsPollTimer); jobsPollTimer = null; }
+  if (window._jobsPollTimer) { clearTimeout(window._jobsPollTimer); window._jobsPollTimer = null; }
   if (window._slowPollTimer) { clearTimeout(window._slowPollTimer); window._slowPollTimer = null; }
   if (window._logPollTimer) { clearTimeout(window._logPollTimer); window._logPollTimer = null; }
   if (window._midPollTimer) { clearTimeout(window._midPollTimer); window._midPollTimer = null; }
@@ -31402,15 +31687,17 @@ function startPolling() {
     if (generation !== jobsPollGeneration || jobsPollInFlightLocal) return;
     jobsPollInFlightLocal = true;
     try {
-      await loadStatus();
-      await refreshJobs();
+      await Promise.allSettled([loadStatus(), refreshJobs()]);
     } catch (e) {
       console.error("Jobs poll error:", e);
     } finally {
       jobsPollInFlightLocal = false;
       if (generation !== jobsPollGeneration) return;
-      var hasActive = jobsCache.some(function(j) { return isActiveJobStatus(j.status); });
-      window._jobsPollTimer = setTimeout(jobsPoll, hasActive ? 4000 : 15000);
+      var scopeCounts = taskViewCache ? taskViewCache.counts : ((lastStatus && lastStatus.queue) || {});
+      var hasActive = Object.keys(scopeCounts || {}).some(function(status) {
+        return isActiveJobStatus(status) && scopeCounts[status] > 0;
+      });
+      window._jobsPollTimer = setTimeout(jobsPoll, document.hidden ? 60000 : (hasActive ? 4000 : 15000));
     }
   }
 
@@ -31421,6 +31708,7 @@ function startPolling() {
     if (generation !== jobsPollGeneration) return;
     var localGen = ++_summaryPollGen;
     try {
+      if (document.hidden) return;
       if (selectedJobId) {
         // Skip summary poll when the detail drawer is open (user is inspecting
         // full detail already); full detail fetch happens via openDetailDrawer.
@@ -31450,7 +31738,7 @@ function startPolling() {
       console.error("Summary poll error:", e);
     } finally {
       if (generation === jobsPollGeneration && localGen === _summaryPollGen) {
-        window._midPollTimer = setTimeout(summaryPoll, 2500);
+        window._midPollTimer = setTimeout(summaryPoll, document.hidden ? 30000 : 2500);
       }
     }
   }
@@ -31459,7 +31747,7 @@ function startPolling() {
   var logPollInFlight = false;
   async function logPoll() {
     if (generation !== jobsPollGeneration) return;
-    if (!selectedJobId || logPollInFlight) { if (generation === jobsPollGeneration) window._logPollTimer = setTimeout(logPoll, 5000); return; }
+    if (document.hidden || !selectedJobId || logPollInFlight) { if (generation === jobsPollGeneration) window._logPollTimer = setTimeout(logPoll, 5000); return; }
     logPollInFlight = true;
     try {
       await pollLogTail(selectedJobId);
@@ -31475,6 +31763,7 @@ function startPolling() {
   async function slowPoll() {
     if (generation !== jobsPollGeneration) return;
     try {
+      if (document.hidden) return;
       await loadDiskUsage();
       if (isSysresDrawerOpen()) {
         await loadNodes();
@@ -31489,7 +31778,8 @@ function startPolling() {
   }
 
   // Fire all lanes immediately on start
-  jobsPoll();
+  if (skipInitialJobs) window._jobsPollTimer = setTimeout(jobsPoll, 15000);
+  else jobsPoll();
   summaryPoll();
   logPoll();
   slowPoll();
@@ -31500,9 +31790,7 @@ async function loadDiskUsage() {
   var pill = document.getElementById("disk-pill");
   if (!pill) return;
   try {
-    var resp = await fetch(API_BASE + "/maintenance/disk-usage");
-    if (!resp.ok) { pill.style.display = "none"; return; }
-    var data = await resp.json();
+    var data = await api("/maintenance/disk-usage");
     var pct = Math.round(data.percent_used || 0);
     pill.style.display = "";
     pill.textContent = "DISK " + pct + "%";
@@ -32763,28 +33051,9 @@ function setupS2ScanListeners() {
   if (close5) close5.addEventListener("click", s2scanCloseReport);
 }
 
-window.addEventListener("DOMContentLoaded", async function() {
-  applyI18n();
-  applyAppSection(loadAppSection());
-  renderLogPlaceholder();
-  syncBgIndex();
-  clearViewer();
-  document.getElementById("style-preset-select").value = molDoc.style;
-  setMode("view");
-
-  async function safeLoad(name, fn) {
-    try {
-      await fn();
-    } catch (e) {
-      console.error(name + " failed:", e);
-    }
-  }
-
-  await safeLoad("loadStatus", loadStatus);
-  await safeLoad("loadProjects", loadProjects);
-  await safeLoad("loadWorkflowCatalog", loadWorkflowCatalog);
-  await safeLoad("loadMethodCatalog", loadMethodCatalog);
-
+async function initializeMethodDefaults() {
+  await Promise.all([loadWorkflowCatalog(), loadMethodCatalog()]);
+  if (wizardState.method.profile_id) { updateConfigCards(); return; }
   try {
     // Catalog-driven default: never trust a hardcoded/legacy workflow id.
     // resolveDefaultWorkflow() picks the current id when it is a visible
@@ -32824,20 +33093,41 @@ window.addEventListener("DOMContentLoaded", async function() {
     console.error("method catalog init failed:", e);
   }
 
-  await safeLoad("refreshJobs", refreshJobs);
-  if (jobsCache.length > 0) {
-    await safeLoad("selectJob", function() {
-      return selectJob(jobsCache[0].id || jobsCache[0].job_id);
-    });
+}
+
+window.addEventListener("DOMContentLoaded", async function() {
+  applyI18n();
+  applyAppSection(loadAppSection());
+  renderLogPlaceholder();
+  syncBgIndex();
+  clearViewer();
+  document.getElementById("style-preset-select").value = molDoc.style;
+  setMode("view");
+
+  async function safeLoad(name, fn) {
+    try {
+      await fn();
+    } catch (e) {
+      console.error(name + " failed:", e);
+    }
   }
-  await safeLoad("loadDiskUsage", loadDiskUsage);
-  await safeLoad("loadNodes", loadNodes);
-  await safeLoad("loadBackends", loadBackends);
-  startPolling();
+
+  // Bind interaction before any network request: the shell remains usable
+  // even when a catalog, software discovery or a selected remote job stalls.
   mountS2Panels();
   setupEventListeners();
   setupS2ScanListeners();
   setupStageBatchListeners();
+  document.addEventListener("visibilitychange", function() { if (!document.hidden) startPolling(); });
+  safeLoad("loadStatus", loadStatus);
+  safeLoad("loadProjects", loadProjects);
+  safeLoad("initializeMethodDefaults", initializeMethodDefaults);
+  safeLoad("refreshJobs", refreshJobs).then(function() {
+    if (jobsCache.length && !selectedJobId) {
+      safeLoad("selectJob", function() { return selectJob(jobsCache[0].id || jobsCache[0].job_id); });
+    }
+  });
+  startPolling(true);
 
   // --- panel layout: column resize handles + vertical splitters + collapse ---
   (function initLayout() {
