@@ -738,11 +738,13 @@ def test_partial_synchronous_failure_fails_fast(
 
 
 def test_validate_scan_coordinates_rejects_too_many() -> None:
+    from acp.calculations.pes.contracts import MAX_SYNC_COORDINATES
+
     coordinates = [
         ScanCoordinate(kind="distance", atoms=(0, 1), start=1.0, end=2.0, n_points=5)
-        for _ in range(5)
+        for _ in range(MAX_SYNC_COORDINATES + 1)
     ]
-    with pytest.raises(ValueError, match="at most 4"):
+    with pytest.raises(ValueError, match=f"at most {MAX_SYNC_COORDINATES}"):
         _ = validate_scan_coordinates(tuple(coordinates))
 
 

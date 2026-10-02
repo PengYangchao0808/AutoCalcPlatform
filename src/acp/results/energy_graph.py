@@ -171,6 +171,7 @@ def build_s2_energy_graph(
     *,
     s2_candidates: list[dict[str, Any]] | None = None,
     s2_review_state: dict[str, Any] | None = None,
+    work_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build the energy workspace projection for an S2 scan manifest.
 
@@ -184,9 +185,19 @@ def build_s2_energy_graph(
     if not (isinstance(payload.get("scan"), dict) and "energy_profile" in payload):
         from acp.results.pes_profile import normalize_pes_profile
 
-        payload = normalize_pes_profile(payload)
+        payload = normalize_pes_profile(payload, work_dir=work_dir)
     scan = payload.get("scan") or {}
     frames = [frame for frame in (scan.get("frames") or []) if isinstance(frame, dict)]
+    if frames and any(f.get("cumulative_arclength_A") is None for f in frames):
+        from acp.results.pes_profile import _backfill_path_coordinates
+
+        _backfill_path_coordinates(
+            frames,
+            source_path=str(payload.get("_source_path") or ""),
+            profile_path=payload.get("_profile_path"),
+            work_dir=work_dir or payload.get("_work_dir"),
+            scan_dir=str(scan.get("scan_dir") or payload.get("scan_dir") or ""),
+        )
     profile = payload.get("energy_profile") or {}
     series = _s2_series(frames, profile)
     by_id = {item["id"]: item for item in series}
@@ -210,6 +221,9 @@ def build_s2_energy_graph(
         if str(frame.get("single_point_status") or "").lower() == "failed":
             status = "failed"
         frame_index = int(frame.get("index", position))
+        arclength = _number(frame.get("cumulative_arclength_A"))
+        progress = _number(frame.get("reaction_progress"))
+        step_rmsd = _number(frame.get("step_rmsd_A"))
         nodes.append(
             TrajectoryFrame(
                 frame_id=f"frame_{frame_index}",
@@ -231,6 +245,9 @@ def build_s2_energy_graph(
                         frame.get("single_point_energy_hartree")
                     ),
                     "single_point_status": frame.get("single_point_status"),
+                    "cumulative_arclength_A": arclength,
+                    "reaction_progress": progress,
+                    "step_rmsd_A": step_rmsd,
                 },
             ).to_node(VIEW_REGISTRY["scan"].node_type)
         )
@@ -350,7 +367,9 @@ def build_s2_energy_graph(
 
     finite_nodes = [node for node in nodes if node.get("energy") is not None]
     if finite_nodes:
-        minimum = min(finite_nodes, key=lambda node: float(node["energy"]))
+        converged_nodes = [node for node in finite_nodes if node.get("status") != "failed"]
+        target_pool = converged_nodes if converged_nodes else finite_nodes
+        minimum = min(target_pool, key=lambda node: float(node["energy"]))
         annotations.append(
             TrajectoryAnnotation(
                 id=f"minimum_{minimum['frame_index']}",
@@ -378,6 +397,36 @@ def build_s2_energy_graph(
                 ).to_annotation()
             )
 
+    has_arclength = any(
+        node.get("metadata", {}).get("cumulative_arclength_A") is not None for node in nodes
+    )
+    coordinates_count = len(payload.get("coordinates") or [])
+    is_multi_coord = coordinates_count > 1
+
+    x_axis_modes: list[dict[str, str]] = []
+    if has_arclength:
+        x_axis_modes.append({"id": "path_length", "label": "累积路径长度", "unit": "Å"})
+        x_axis_modes.append({"id": "reaction_progress", "label": "反应进度", "unit": ""})
+    x_axis_modes.append(
+        {"id": "scanned_coordinate", "label": axis.get("label", "扫描坐标"), "unit": axis.get("unit", "")}
+    )
+    x_axis_modes.append({"id": "frame_index", "label": "帧序号", "unit": ""})
+
+    default_x_mode = "path_length" if (has_arclength and is_multi_coord) else "scanned_coordinate"
+
+    converged_energies = [
+        float(node["energy"])
+        for node in nodes
+        if node.get("energy") is not None and node.get("status") != "failed"
+    ]
+    robust_y_extent = (
+        [min(converged_energies), max(converged_energies)] if converged_energies else None
+    )
+
+    axis_with_modes = dict(axis)
+    axis_with_modes["default_mode"] = default_x_mode
+    axis_with_modes["modes"] = x_axis_modes
+
     quality = scan.get("quality") or {}
     complete = bool(
         quality.get("scan_complete", payload.get("status") in {"ready_for_review", "completed"})
@@ -401,7 +450,7 @@ def build_s2_energy_graph(
             "revision": _revision(payload),
             "default_series": default_series,
             "available_views": ["scan"],
-            "x_axis": axis,
+            "x_axis": axis_with_modes,
             "series": series,
             "nodes": nodes,
             "edges": [],
@@ -419,6 +468,11 @@ def build_s2_energy_graph(
                 "coordinate": (payload.get("protocol") or {}).get("coordinate") or {},
                 "coordinates": payload.get("coordinates") or [],
                 "selection": payload.get("selection") or {},
+                "x_axis_modes": x_axis_modes,
+                "default_x_axis_mode": default_x_mode,
+                "robust_y_extent": robust_y_extent,
+                "converged_frame_count": sum(1 for n in nodes if n.get("status") != "failed"),
+                "failed_frame_count": sum(1 for n in nodes if n.get("status") == "failed"),
                 "review": {
                     "status": str(review_state.get("status") or "pending"),
                     "decided_at": review_state.get("decided_at"),
@@ -442,6 +496,7 @@ def build_pes_energy_graph(
     *,
     s2_candidates: list[dict[str, Any]] | None = None,
     s2_review_state: dict[str, Any] | None = None,
+    work_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build the PESsearch scan projection.
 
@@ -453,6 +508,7 @@ def build_pes_energy_graph(
         payload,
         s2_candidates=s2_candidates,
         s2_review_state=s2_review_state,
+        work_dir=work_dir,
     )
 
 
@@ -706,8 +762,10 @@ def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str,
         )
         if any(value is not None for value in values)
     ]
+    converged_nodes = [node for node in nodes if node["energy"] is not None and node["status"] != "failed"]
+    minimum_pool = converged_nodes if converged_nodes else [node for node in nodes if node["energy"] is not None]
     minimum = min(
-        (node for node in nodes if node["energy"] is not None),
+        minimum_pool,
         key=lambda node: node["energy"],
         default=None,
     )
@@ -1461,6 +1519,7 @@ def _build_energy_graph_projection(
                 s2_payload,
                 s2_candidates=s2_candidates,
                 s2_review_state=s2_review_state,
+                work_dir=work_dir,
             )
         from acp.results.pes_scan_live import (
             build_pes_scan_live_graph,

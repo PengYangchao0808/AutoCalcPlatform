@@ -2321,7 +2321,7 @@ class ORCAInterface(QCInterfaceBase):
                     aux_j_basis=aux_j_basis,
                     aux_c_basis=aux_c_basis,
                 )
-                if result.success and result.coordinates is not None:
+                if result.success and result.coordinates is not None and result.energy is not None and np.isfinite(result.energy):
                     retry_history.append(
                         {
                             "attempt": attempt + 1,
@@ -2347,7 +2347,7 @@ class ORCAInterface(QCInterfaceBase):
                 if effective_strategy == "looser_convergence":
                     active_opt_level = _looser_opt_level(active_opt_level)
 
-            if result is None or not result.success or result.coordinates is None:
+            if result is None or not result.success or result.coordinates is None or result.energy is None or not np.isfinite(result.energy):
                 retry_history_dicts = [dict(entry) for entry in retry_history]
                 result_points.append(
                     RelaxedScanPoint(

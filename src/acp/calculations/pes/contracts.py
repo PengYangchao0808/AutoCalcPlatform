@@ -547,6 +547,10 @@ class ScanFrame:
     optimizer_engine: str = ""
     scf_converged: bool | None = None
     retry_history: tuple[dict[str, Any], ...] = ()
+    # Path coordinates (NEB-like reaction coordinate and path length):
+    cumulative_arclength_A: float | None = None
+    reaction_progress: float | None = None
+    step_rmsd_A: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -571,6 +575,9 @@ class ScanFrame:
             "optimizer_engine": self.optimizer_engine,
             "scf_converged": self.scf_converged,
             "retry_history": [dict(entry) for entry in self.retry_history],
+            "cumulative_arclength_A": self.cumulative_arclength_A,
+            "reaction_progress": self.reaction_progress,
+            "step_rmsd_A": self.step_rmsd_A,
         }
 
 

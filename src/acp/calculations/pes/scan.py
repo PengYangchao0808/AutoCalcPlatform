@@ -722,6 +722,30 @@ def _extract_frames(
                     )
                 ]
             )
+    frame_xyz_paths = [frames_dir / f"frame_{f.index:03d}.xyz" for f in frames]
+    if len(frames) > 1 and all(p.is_file() for p in frame_xyz_paths):
+        try:
+            import dataclasses
+            from acp.calculations.pes.path_analysis import (
+                _normalized_progress,
+                compute_neighbor_rmsds,
+                compute_path_arclength,
+            )
+
+            arclength = compute_path_arclength(frame_xyz_paths)
+            progress = _normalized_progress(arclength)
+            step_rmsds = compute_neighbor_rmsds(frame_xyz_paths)
+            frames = [
+                dataclasses.replace(
+                    f,
+                    cumulative_arclength_A=float(arclength[i]) if i < len(arclength) else None,
+                    reaction_progress=float(progress[i]) if i < len(progress) else None,
+                    step_rmsd_A=float(step_rmsds[i]) if i < len(step_rmsds) and step_rmsds[i] is not None else None,
+                )
+                for i, f in enumerate(frames)
+            ]
+        except (ValueError, TypeError, OSError, RuntimeError) as exc:
+            logger.warning("Could not compute path arclength for PES frames: %s", exc)
     return frames
 
 
