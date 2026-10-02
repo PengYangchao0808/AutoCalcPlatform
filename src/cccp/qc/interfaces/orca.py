@@ -12,6 +12,7 @@ Author: QCcalc Team (adapted from RPH)
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -1661,6 +1662,12 @@ class ORCAInterface(QCInterfaceBase):
                 orca_dir=self.executable.parent if self.executable else None,
             )
 
+            env = dict(os.environ if env is None else env)
+            # ORCA's external xTB helper uses OpenMP independently of %pal.
+            # Pin library threads so native scans respect the task allocation.
+            for thread_key in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+                env[thread_key] = str(max(1, self.nproc))
+            env["OMP_MAX_ACTIVE_LEVELS"] = "1"
             # Keep the established synchronous path for callers that do not
             # request live parsing (NMR, SP, scan, and older integrations).
             # Optimization primitives opt into the streaming path below by
@@ -2002,7 +2009,7 @@ class ORCAInterface(QCInterfaceBase):
         """
         if points is not None and points < 2:
             raise ValueError("ORCA relaxed_scan requires points >= 2")
-        if plan is not None and len(plan.drive_coordinates()) > 1:
+        if plan is not None and (len(plan.drive_coordinates()) > 1 or any(c.values for c in plan.coordinates) or plan.fixed_endpoints):
             return self._run_synchronous_relaxed_scan(
                 coordinates,
                 symbols,
@@ -2261,10 +2268,15 @@ class ORCAInterface(QCInterfaceBase):
         start_coordinates = np.asarray(coordinates, dtype=float)
         current_coordinates = start_coordinates
         result_points: list[RelaxedScanPoint] = []
+        extra_xtb_blocks = None
+        if plan.xtb_scc_max_iterations is not None:
+            if not _is_orca_gfn_xtb_method(eff_method) or not 1 <= int(plan.xtb_scc_max_iterations) <= 10000:
+                raise ValueError("invalid xTB SCC iteration limit")
+            extra_xtb_blocks = [f'%xtb\n XTBINPUTSTRING "--iterations {int(plan.xtb_scc_max_iterations)}"\nend']
         for index in range(plan.points):
             frame_dir = output_dir / f"frame_{index:03d}"
             targets = plan.coordinate_targets(index)
-            progress = index / max(plan.points - 1, 1)
+            progress = plan.lambda_values[index] if plan.lambda_values else index / max(plan.points - 1, 1)
             retry_history: list[dict[str, Any]] = []
             active_opt_level = opt_level
             result = None
@@ -2275,10 +2287,21 @@ class ORCAInterface(QCInterfaceBase):
                     seed = current_coordinates
                 else:
                     seed = start_coordinates
+                if plan.reference_geometries:
+                    seed = np.asarray(plan.reference_geometries[index], dtype=float)
+                if plan.fixed_endpoints and index in (0, plan.points - 1):
+                    result = self.single_point(seed, symbols, charge=charge, multiplicity=multiplicity,
+                        output_dir=frame_dir, output_name=f"{output_name}_boundary",
+                        method=eff_method, basis=eff_basis, solvent=input_solvent, solvent_model=input_solvent_model,
+                        extra_blocks=extra_xtb_blocks, route_extras=resolved_route_extras, scf_convergence=scf_convergence,
+                        scf_maxiter=scf_maxiter, grid=grid, dispersion=dispersion, aux_j_basis=aux_j_basis, aux_c_basis=aux_c_basis)
+                    result.coordinates = seed.copy()
+                    break
                 result = self.constrained_optimize(
                     seed,
                     symbols,
                     plan.frame_constraints(index),
+                    extra_blocks=extra_xtb_blocks,
                     charge=charge,
                     multiplicity=multiplicity,
                     output_dir=frame_dir,
@@ -2379,6 +2402,8 @@ class ORCAInterface(QCInterfaceBase):
                     metadata={
                         "retry_history": [dict(entry) for entry in retry_history],
                         "scf_converged": True,
+                        "frame_role": "fixed_boundary_single_point" if plan.fixed_endpoints and index in (0, plan.points-1) else "constrained_optimization",
+                        "reference_guided": bool(plan.reference_geometries),
                     },
                 )
             )
