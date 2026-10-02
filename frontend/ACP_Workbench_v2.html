@@ -23719,8 +23719,9 @@ function renderCreateReview() {
       : sourceKind === "upload" ? t("wizard.source_upload")
       : sourceKind === "last_structure" ? t("wizard.source_last_structure")
       : t("wizard.source_manual");
+    var sourceJobLabel = s.job_resolved_name || (source && (source.job_resolved_name || source.job_name)) || s.source_job_name || source.job_id;
     var sourceName = source.job_id
-      ? (s.job_resolved_name || s.source_job_name || source.job_id) + (source.path ? " · " + source.path : "")
+      ? (sourceJobLabel + (source.path ? " · " + source.path : ""))
       : sourceKindLabel;
     var rawRole = String(s.tag || s.role || "");
     var role = rawRole === "TS" ? "TS" : rawRole === "INT" ? "INT" : t("wizard.review_role_normal");
@@ -24256,7 +24257,8 @@ function _refreshWizardInputForm(structure, previewOnly) {
   if (chargeInput) chargeInput.value = structure.charge !== undefined ? structure.charge : 0;
   if (multInput) multInput.value = structure.multiplicity || 1;
   var src = structure.source_ref || {};
-  var sourceText = src.job_id ? ((structure.job_resolved_name || structure.source_job_name || src.job_id) + (src.path ? " · " + src.path : "")) : (t("wizard.source_manual") || "手动输入");
+  var sourceJobLabel = structure.job_resolved_name || (src && (src.job_resolved_name || src.job_name)) || structure.source_job_name || src.job_id;
+  var sourceText = src.job_id ? (sourceJobLabel + (src.path ? " · " + src.path : "")) : (t("wizard.source_manual") || "手动输入");
   var candidateText = structure.candidate_id || "";
   if (sourceSpan) { sourceSpan.textContent = sourceText; sourceSpan.title = sourceText; }
   if (candIdSpan) { candIdSpan.textContent = candidateText; candIdSpan.title = candidateText; }
