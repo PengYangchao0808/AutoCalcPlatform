@@ -369,7 +369,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 23
+ALLOWLIST_COUNT_PIN: Final[int] = 21
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
@@ -589,6 +589,38 @@ INJECTION_CASES: Final[tuple[InjectionCase, ...]] = (
         "src/acp/calculations/batch/engine.py",
         "\nimport acp.backends as backends\n_probe_batch = backends.batch_single_point(1, 2)\n",
     ),
+    InjectionCase(
+        "unique_run_scan_second_impl",
+        "unique_run_scan",
+        "src/acp/calculations/batch/engine.py",
+        "run_scan",
+        "src/acp/calculations/batch/engine.py",
+        "\ndef run_scan(items):\n    return items\n",
+    ),
+    InjectionCase(
+        "unique_run_irc_second_impl",
+        "unique_run_irc",
+        "src/acp/calculations/pes/scan.py",
+        "run_irc",
+        "src/acp/calculations/pes/scan.py",
+        "\ndef run_irc(items):\n    return items\n",
+    ),
+    InjectionCase(
+        "final_shermo_real_call",
+        "final_shermo",
+        "src/acp/scheduler/capabilities.py",
+        "run_shermo",
+        "src/acp/scheduler/capabilities.py",
+        "\n_probe_shermo = run_shermo(log_file, output_dir)\n",
+    ),
+    InjectionCase(
+        "wave2_shermo_external_cccp_position",
+        "wave2_shermo_external",
+        "src/cccp/backends/external_backend.py",
+        "run_shermo",
+        "src/cccp/backends/external_backend.py",
+        "\n_probe_shermo = run_shermo(log_file, output_dir)\n",
+    ),
 )
 
 
@@ -629,6 +661,19 @@ def test_suite_zero_control_on_temp_copy(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_suite_ignores_workflow_same_name_wrappers(tmp_path: Path) -> None:
+    root = _copy_src_tree(tmp_path)
+    _ = (root / "src/acp/workflows/_neg_wrapper.py").write_text(
+        "def run_scan(items, profile=None):\n    return items\n"
+        "\ndef run_irc(request):\n    return request\n",
+        encoding="utf-8",
+    )
+
+    result = _run_suite(root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 @pytest.mark.parametrize("case", INJECTION_CASES, ids=lambda case: case.name)
 def test_suite_fails_when_violation_injected(case: InjectionCase, tmp_path: Path) -> None:
     root = _copy_src_tree(tmp_path)
@@ -662,6 +707,127 @@ def test_allowlist_only_shrinks_from_wave0_baseline() -> None:
 def test_allowlist_count_is_pinned() -> None:
     assert len(ARCHITECTURE_ALLOWLIST) == ALLOWLIST_COUNT_PIN
     assert len(set(ARCHITECTURE_ALLOWLIST)) == len(ARCHITECTURE_ALLOWLIST)
+
+
+@pytest.mark.parametrize(
+    ("gate_name", "relative_path", "text", "expected"),
+    (
+        (
+            "unique_run_scan",
+            "src/acp/calculations/primitives/scan.py",
+            "def run_scan(req):\n    return req\n",
+            False,
+        ),
+        (
+            "unique_run_scan",
+            "src/cccp/calculation/tasks/scan.py",
+            "def run_scan(req):\n    return req\n",
+            False,
+        ),
+        (
+            "unique_run_scan",
+            "src/acp/calculations/batch/engine.py",
+            "def run_scan(req):\n    return req\n",
+            True,
+        ),
+        (
+            "unique_run_scan",
+            "src/cccp/calculation/batch.py",
+            "def run_scan(req):\n    return req\n",
+            True,
+        ),
+        (
+            "unique_run_irc",
+            "src/acp/calculations/primitives/irc.py",
+            "def run_irc(req):\n    return req\n",
+            False,
+        ),
+        (
+            "unique_run_irc",
+            "src/cccp/calculation/tasks/irc.py",
+            "def run_irc(req):\n    return req\n",
+            False,
+        ),
+        (
+            "unique_run_irc",
+            "src/acp/calculations/pes/scan.py",
+            "def run_irc(req):\n    return req\n",
+            True,
+        ),
+    ),
+)
+def test_unique_run_gates_dual_position_allow_but_flag_second_implementations(
+    gate_name: str, relative_path: str, text: str, expected: bool
+) -> None:
+    assert _has_blocking(gate_name, relative_path, text) is expected
+
+
+@pytest.mark.parametrize(
+    ("gate_name", "relative_path", "text"),
+    (
+        (
+            "unique_run_scan",
+            "src/acp/workflows/simple.py",
+            "def run_scan(items, profile=None):\n    return _run_scan(items)\n",
+        ),
+        (
+            "unique_run_irc",
+            "src/acp/workflows/irc.py",
+            "def run_irc(request):\n    return _run_irc(request)\n",
+        ),
+    ),
+)
+def test_unique_run_gates_do_not_flag_workflow_same_name_wrappers(
+    gate_name: str, relative_path: str, text: str
+) -> None:
+    assert _statuses(gate_name, relative_path, text) == ()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("#: energy_shared.py:489 ``run_shermo``).", False),
+        ("#: ``run_shermo``).", False),
+        ("# see run_shermo docs", False),
+        ("_probe_shermo = run_shermo(log_file, output_dir)", True),
+    ),
+)
+def test_final_shermo_ignores_comment_lines_but_blocks_real_calls(
+    text: str, expected: bool
+) -> None:
+    assert _has_blocking("final_shermo", "src/acp/scheduler/capabilities.py", text) is expected
+
+
+COMPAT_SHIM_MODULES: Final[tuple[str, ...]] = (
+    "src/acp/backends/__init__.py",
+    "src/acp/chem/composition.py",
+    "src/acp/core/registry.py",
+)
+
+
+def test_compat_shim_modules_pass_pure_forwarder_gate() -> None:
+    for module_path in COMPAT_SHIM_MODULES:
+        source = (SRC_ROOT.parent / module_path).read_text(encoding="utf-8", errors="replace")
+        assert not _has_blocking("compat_forwarders_are_pure", module_path, source), module_path
+
+
+def test_relocated_types_are_identity_reexports() -> None:
+    from acp import backends as acp_backends
+    from acp.calculations import contracts as acp_contracts
+    from acp.chem import composition as acp_composition
+    from acp.core import registry as acp_registry
+    from cccp import backends as cccp_backends
+    from cccp.calculation import contracts as cccp_contracts
+    from cccp.core import registry as cccp_registry
+    from cccp.qc import hessian_policy
+
+    assert acp_contracts.StructureRole is cccp_contracts.StructureRole
+    assert acp_contracts.ElectronicStateSpec is cccp_contracts.ElectronicStateSpec
+    assert acp_composition.LIGHT_ELEMENTS is hessian_policy.LIGHT_ELEMENTS
+    assert acp_composition.resolve_recalc_hess is hessian_policy.resolve_recalc_hess
+    assert acp_registry.Registry is cccp_registry.Registry
+    assert acp_backends.QCBackend is cccp_backends.QCBackend
+    assert acp_backends.get_backend is cccp_backends.get_backend
 
 
 @pytest.mark.parametrize(

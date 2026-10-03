@@ -126,8 +126,23 @@ SCOPE_ACP_FRONTEND: Final[tuple[str, ...]] = ("src/acp", "frontend/")
 SCOPE_FRONTEND: Final[tuple[str, ...]] = ("frontend/",)
 SCOPE_CCCP: Final[tuple[str, ...]] = ("src/cccp/",)
 SCOPE_README: Final[tuple[str, ...]] = ("README.md",)
-SCOPE_PRIMITIVE_SCAN: Final[tuple[str, ...]] = ("src/acp/calculations/primitives/scan.py",)
-SCOPE_PRIMITIVE_IRC: Final[tuple[str, ...]] = ("src/acp/calculations/primitives/irc.py",)
+SCOPE_RUN_PRIMITIVE: Final[tuple[str, ...]] = ("src/acp", "src/cccp/")
+# Dual-position primitive implementation files (acp legacy shim + cccp task):
+# the only places allowed to define the ``run_scan`` / ``run_irc`` primitives.
+# Hard switch to the single cccp root is deferred to todo 23 (the acp allows
+# must stay until the cccp task files exist — removing them early reddens the
+# gate).  Workflow-layer same-name wrappers (e.g. ``workflows/simple.py::
+# run_scan``) are entry-point wrappers, not primitive implementations, and are
+# excluded by scope via SCOPE_WORKFLOWS below (chosen mechanism: a narrow
+# workflow-layer exclusion — everything outside it still blocks).
+PRIMITIVE_SCAN_ALLOWED_PATHS: Final[tuple[str, ...]] = (
+    "src/acp/calculations/primitives/scan.py",
+    "src/cccp/calculation/tasks/scan.py",
+)
+PRIMITIVE_IRC_ALLOWED_PATHS: Final[tuple[str, ...]] = (
+    "src/acp/calculations/primitives/irc.py",
+    "src/cccp/calculation/tasks/irc.py",
+)
 SCOPE_MECHANISM: Final[tuple[str, ...]] = ("src/acp/mechanism/",)
 RETIRED_MAP_LINE_PATTERN: Final[str] = r"退役|retired|→"
 
@@ -177,7 +192,14 @@ BACKEND_CAPABILITY_SCOPES: Final[tuple[str, ...]] = (
     "src/acp/backends/external_backend.py",
     "src/acp/backends/external.py",
 )
-COMPAT_FORWARDER_SCOPES: Final[tuple[str, ...]] = ("src/acp/backends/__init__.py",)
+# ``acp.calculations.contracts`` is intentionally NOT in scope: it keeps the
+# ACP-side orchestration contracts (todo 11) and its relocated types are
+# verified as ``A is B`` identity re-exports by tests instead.
+COMPAT_FORWARDER_SCOPES: Final[tuple[str, ...]] = (
+    "src/acp/backends/__init__.py",
+    "src/acp/chem/composition.py",
+    "src/acp/core/registry.py",
+)
 LEGACY_BATCH_EXCLUDED_PATHS: Final[tuple[str, ...]] = (
     "src/acp/backends/batch.py",
     "src/acp/backends/__init__.py",
@@ -257,19 +279,21 @@ class GateInputError(Exception):
         self.message = message
 
 
-# ── Pending-redirect pin list (acp→cccp architecture remediation, Wave 0) ──
+# ── Pending-redirect pin list (acp→cccp architecture remediation) ──
 # Four frozen gates pin paths that move when calculation primitives migrate
 # from ``src/acp/calculations/primitives`` to ``src/cccp/calculation``:
 #
 #   gate                  pinned path / constant                        redirect owner
 #   --------------------  --------------------------------------------  --------------------
-#   unique_run_scan       SCOPE_PRIMITIVE_SCAN (primitives/scan.py)     gate-redirect todo
-#   unique_run_irc        SCOPE_PRIMITIVE_IRC (primitives/irc.py)       gate-redirect todo
+#   unique_run_scan       PRIMITIVE_SCAN_ALLOWED_PATHS (acp shim +      done (todo 15, dual
+#                         cccp task), workflows excluded from scope     position; switch: todo 23)
+#   unique_run_irc        PRIMITIVE_IRC_ALLOWED_PATHS (acp shim +       done (todo 15, dual
+#                         cccp task), workflows excluded from scope     position; switch: todo 23)
 #   wave2_shermo_external external_backend.py (acp shim + cccp impl)    done (todo 12, dual position)
-#   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (primitives/
-#                         thermochemistry.py, workflows/energy_shared)
+#   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (primitives/       comment allowance done
+#                         thermochemistry.py, workflows/energy_shared,  (todo 15); hard switch
+#                         src/cccp/) + COMMENT_LINE_PATTERN             todo 23
 #
-# Behavior is intentionally UNCHANGED here (Wave 0 only records the list).
 # When a pinned path moves, the gate spec must be redirected in the same todo
 # that moves the code — never disabled, never silently widened.  Evidence:
 # .omo/evidence/acp-cccp-remediation/task-1-guard-check.txt.
@@ -348,13 +372,18 @@ GATE_REGISTRY: Final[tuple[GateSpec, ...]] = (
         FINAL_FORBIDDEN_ALLOWED_PATHS,
         COMMENT_LINE_PATTERN,
     ),
-    GateSpec("final_shermo", r"run_shermo", SCOPE_SRC, FINAL_SHERMO_ALLOWED_PATHS),
     GateSpec(
-        "unique_run_scan", r"^def run_scan\(", SCOPE_ACP, SCOPE_PRIMITIVE_SCAN,
+        "final_shermo", r"run_shermo", SCOPE_SRC, FINAL_SHERMO_ALLOWED_PATHS,
+        COMMENT_LINE_PATTERN,
+    ),
+    GateSpec(
+        "unique_run_scan", r"^def run_scan\(", SCOPE_RUN_PRIMITIVE, PRIMITIVE_SCAN_ALLOWED_PATHS,
+        excluded_path_prefixes=SCOPE_WORKFLOWS,
         symbol_pattern=r"run_scan",
     ),
     GateSpec(
-        "unique_run_irc", r"^def run_irc\(", SCOPE_ACP, SCOPE_PRIMITIVE_IRC,
+        "unique_run_irc", r"^def run_irc\(", SCOPE_RUN_PRIMITIVE, PRIMITIVE_IRC_ALLOWED_PATHS,
+        excluded_path_prefixes=SCOPE_WORKFLOWS,
         symbol_pattern=r"run_irc",
     ),
     GateSpec(
@@ -726,7 +755,6 @@ HISTORICAL_GATE_NAMES: Final[tuple[str, ...]] = tuple(
 # ever shrinks (tests pin both the entry set and the count): a new violation
 # must be fixed, never allowlisted.
 ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
-    ("final_shermo", "src/acp/scheduler/capabilities.py", "run_shermo"),
     (
         "legacy_batch_quarantine",
         "src/acp/calculations/batch/_singlepoint_execution.py",
@@ -737,7 +765,6 @@ ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
         "src/acp/calculations/batch/_singlepoint_execution.py",
         LEGACY_BATCH_EXEC_SYMBOL,
     ),
-    ("unique_run_scan", "src/acp/workflows/simple.py", "run_scan"),
     ("workflow_executes_qc", "src/acp/calculations/batch/singlepoint.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/pes/scan.py", "get_backend"),
