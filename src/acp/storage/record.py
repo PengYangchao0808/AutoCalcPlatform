@@ -32,6 +32,8 @@ class TaskRecord:
     layout_version: int = 2
     created_at: str = ""
     updated_at: str = ""
+    custom_name: str | None = None
+    name_revision: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-safe dict."""

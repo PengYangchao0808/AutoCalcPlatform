@@ -71,7 +71,8 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert "/jobs/" in html and "/detail" in html
     assert html.count("function updateSrPickButtons()") == 1
     assert 'serviceStatus === "ok"' in html
-    assert 'if (!resp.ok) throw new Error("HTTP " + resp.status + " " + resp.statusText);' in html
+    assert 'if (!response.ok)' in html
+    assert 'await api("/method-catalog")' in html
     assert 'typeof $3Dmol === "undefined"' in html
     assert "</html>\n;\n</script>" not in html
     assert 'id="mc-profile-select"' in html
@@ -9671,7 +9672,7 @@ def test_task_view_group_render() -> None:
     assert "queue.view.retired" in html, "queue.view.retired i18n key must be referenced"
 
     # (7) renderQueueList reads taskViewCache.groups.
-    render_fn = html.split("function renderQueueList(container)", 1)[1].split("\nfunction ", 1)[0]
+    render_fn = html.split("function renderQueueListContents(container)", 1)[1].split("\nfunction ", 1)[0]
     assert "taskViewCache" in render_fn or "cache" in render_fn, (
         "renderQueueList must read taskViewCache.groups"
     )
@@ -13230,7 +13231,7 @@ def test_workbench_api_timeout_behavior() -> None:
 
     html = FRONTEND.read_text(encoding="utf-8")
     match = re.search(
-        r"(var API_TIMEOUT_MS = 8000;[\s\S]*?function apiRemote\(path, opts\) \{[\s\S]*?\n\})",
+        r"(var API_TIMEOUT_MS = 8000;[\s\S]*?async function apiV2\(path, opts\) \{[\s\S]*?\n\})",
         html,
     )
     assert match, "api()/apiRemote() block not found in workbench HTML"
@@ -13285,6 +13286,34 @@ def test_workbench_api_timeout_behavior() -> None:
               };
               var body = await api('/fast', { timeoutMs: 10000 });
               if (!body || body.ok !== 1) fail('happy path body mismatch');
+
+              // v2 shares readable timeouts, including the response body.
+              global.fetch = function (url, opts) {
+                return Promise.resolve({
+                  ok: true,
+                  headers: { get: function () { return 'application/json'; } },
+                  json: function () {
+                    return new Promise(function (_resolve, reject) {
+                      opts.signal.addEventListener('abort', function () { reject(new FakeAbortError()); });
+                    });
+                  }
+                });
+              };
+              var reusable = { timeoutMs: 30 };
+              try {
+                await apiV2('/slow-body', reusable);
+                fail('response body escaped the timeout');
+              } catch (e) {
+                if (e.name === 'AbortError' || !e.message.startsWith('api.timeout')) fail('v2 timeout not readable');
+              }
+              if (reusable.signal) fail('transport mutated caller options');
+              var caller = new AbortController();
+              try {
+                await apiV2('/slow-body', { timeoutMs: 30, signal: caller.signal });
+                fail('caller signal disabled the timeout');
+              } catch (e) {
+                if (e.name === 'AbortError' || !e.message.startsWith('api.timeout')) fail('caller signal timeout not readable');
+              }
               console.log('PASS');
             })().catch(function (e) { console.error('FAIL: unexpected', e); process.exit(1); });
             """

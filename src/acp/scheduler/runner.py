@@ -33,6 +33,8 @@ from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
+    GRADIENT_CONFIG_FILENAME,
+    PATH_CONFIG_FILENAME,
     SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
@@ -442,6 +444,12 @@ def materialize_job_input(
     materialized_roles: dict[str, Path] | None = None,
 ) -> Path | None:
     if isinstance(inp.get("scan_request"), dict):
+        return None
+
+    if isinstance(inp.get("path_request"), dict):
+        return None
+
+    if isinstance(inp.get("gradient_request"), dict):
         return None
 
     if str(inp.get("source_type") or "") == "batch_structures":
@@ -1207,6 +1215,8 @@ class JobRunner:
         if wf not in (
             "Confsearch",
             "PESsearch",
+            "XtbPathSearch",
+            "OrcaGradient",
             "BatchOptimize",
             "ensemble",
             "energy",
@@ -1232,6 +1242,10 @@ class JobRunner:
         source = input_path or _extract_input_source(inp)
         if wf == "PESsearch":
             return self._build_pessearch_cmd(spec, work_dir, source)
+        if wf == "XtbPathSearch":
+            return self._build_xtb_path_cmd(spec, work_dir)
+        if wf == "OrcaGradient":
+            return self._build_orca_gradient_cmd(spec, work_dir)
         if wf == "nmr":
             return self._build_nmr_cmd(spec, work_dir)
 
@@ -1631,6 +1645,90 @@ class JobRunner:
         if res.get("mem"):
             cmd += ["--mem", str(res["mem"])]
         cmd += input_chemistry_flags(inp)
+        return cmd
+
+    def _build_xtb_path_cmd(self, spec: JobSpec, work_dir: Path) -> list[str]:
+        """Build the XtbPathSearch argv (frozen ``pes2ts_xtb_path_request_v1``).
+
+        Mirrors :meth:`_build_pessearch_cmd` ``--scan-config`` form: the
+        request payload is persisted verbatim as ``path_config.json`` in the
+        task dir and forwarded via ``--path-config``; the recipe knobs are
+        never defaulted by ACP.
+        """
+        inp = spec.input
+        res = spec.resources
+        path_request = dict(inp.get("path_request") or spec.method.get("path_request") or {})
+        if not path_request:
+            raise ValueError(
+                "XtbPathSearch job requires input.path_request "
+                "(pes2ts_xtb_path_request_v1 payload)"
+            )
+        work_dir.mkdir(parents=True, exist_ok=True)
+        path_config_path = work_dir / PATH_CONFIG_FILENAME
+        path_config_path.write_text(
+            json.dumps(path_request, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        cmd: list[str] = [
+            self.python,
+            "-m",
+            "acp.cli",
+            "run",
+            "XtbPathSearch",
+            "--path-config",
+            path_config_path.as_posix(),
+            "--output",
+            work_dir.as_posix(),
+        ]
+        if spec.config_path:
+            cmd += ["--config", str(spec.config_path)]
+        if res.get("nproc") is not None:
+            cmd += ["--nproc", str(res["nproc"])]
+        if res.get("mem"):
+            cmd += ["--mem", str(res["mem"])]
+        return cmd
+
+    def _build_orca_gradient_cmd(self, spec: JobSpec, work_dir: Path) -> list[str]:
+        """Build the OrcaGradient argv (frozen ``pes2ts_orca_gradient_request_v1``).
+
+        Mirrors :meth:`_build_xtb_path_cmd` ``--path-config`` form: the
+        request payload is persisted verbatim as ``gradient_config.json`` in
+        the task dir and forwarded via ``--gradient-config``; the request
+        knobs are never defaulted by ACP.
+        """
+        inp = spec.input
+        res = spec.resources
+        gradient_request = dict(
+            inp.get("gradient_request") or spec.method.get("gradient_request") or {}
+        )
+        if not gradient_request:
+            raise ValueError(
+                "OrcaGradient job requires input.gradient_request "
+                "(pes2ts_orca_gradient_request_v1 payload)"
+            )
+        work_dir.mkdir(parents=True, exist_ok=True)
+        gradient_config_path = work_dir / GRADIENT_CONFIG_FILENAME
+        gradient_config_path.write_text(
+            json.dumps(gradient_request, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        cmd: list[str] = [
+            self.python,
+            "-m",
+            "acp.cli",
+            "run",
+            "OrcaGradient",
+            "--gradient-config",
+            gradient_config_path.as_posix(),
+            "--output",
+            work_dir.as_posix(),
+        ]
+        if spec.config_path:
+            cmd += ["--config", str(spec.config_path)]
+        if res.get("nproc") is not None:
+            cmd += ["--nproc", str(res["nproc"])]
+        if res.get("mem"):
+            cmd += ["--mem", str(res["mem"])]
         return cmd
 
     @staticmethod

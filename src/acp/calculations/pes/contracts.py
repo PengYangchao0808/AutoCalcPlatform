@@ -47,7 +47,7 @@ __all__ = [
 
 MIN_SCAN_POINTS = 3
 MAX_SCAN_POINTS = 101
-MAX_SYNC_COORDINATES = 4
+MAX_SYNC_COORDINATES = 64
 MIN_SCAN_STEP_ANGSTROM = 0.01
 MIN_SCAN_STEP_DEGREE = 0.1
 DEFAULT_SCAN_PROTOCOL_NAME = "orca_relaxed_scan_xtb_gfn2_sp_b973c_v1"
@@ -151,6 +151,7 @@ class ScanCoordinate:
     start: float | None = None
     end: float | None = None
     n_points: int = 16
+    values: tuple[float, ...] = ()
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> ScanCoordinate:
@@ -175,6 +176,7 @@ class ScanCoordinate:
             start=None if start_raw is None else float(start_raw),
             end=None if end_raw is None else float(end_raw),
             n_points=n_points,
+            values=tuple(float(v) for v in payload.get("values", ())),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -185,6 +187,7 @@ class ScanCoordinate:
             "start": self.start,
             "end": self.end,
             "n_points": self.n_points,
+            **({"values": list(self.values)} if self.values else {}),
         }
 
 
@@ -533,6 +536,7 @@ class ScanFrame:
     scan_energy_hartree: float | None = None
     single_point_energy_hartree: float | None = None
     optimization_converged: bool = True
+    frame_role: str = "constrained_optimization"
     single_point_status: str = "skipped"
     source_log: str = ""
     target_coordinates: dict[str, float] = field(default_factory=dict)
@@ -548,6 +552,10 @@ class ScanFrame:
     optimizer_engine: str = ""
     scf_converged: bool | None = None
     retry_history: tuple[dict[str, Any], ...] = ()
+    # Path coordinates (NEB-like reaction coordinate and path length):
+    cumulative_arclength_A: float | None = None
+    reaction_progress: float | None = None
+    step_rmsd_A: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -559,6 +567,7 @@ class ScanFrame:
             "scan_energy_hartree": self.scan_energy_hartree,
             "single_point_energy_hartree": self.single_point_energy_hartree,
             "optimization_converged": self.optimization_converged,
+            "frame_role": self.frame_role,
             "single_point_status": self.single_point_status,
             "source_log": self.source_log,
             "target_coordinates": dict(self.target_coordinates),
@@ -571,6 +580,9 @@ class ScanFrame:
             "optimizer_engine": self.optimizer_engine,
             "scf_converged": self.scf_converged,
             "retry_history": [dict(entry) for entry in self.retry_history],
+            "cumulative_arclength_A": self.cumulative_arclength_A,
+            "reaction_progress": self.reaction_progress,
+            "step_rmsd_A": self.step_rmsd_A,
         }
 
 
@@ -771,7 +783,7 @@ def validate_scan_coordinate(coordinate: ScanCoordinate) -> None:
         -360.0 <= coordinate.start <= 360.0 and -360.0 <= coordinate.end <= 360.0
     ):
         raise ValueError("dihedral scan start and end must be between -360 and 360 degrees")
-    if math.isclose(float(coordinate.start), float(coordinate.end), abs_tol=1.0e-9):
+    if not coordinate.values and math.isclose(float(coordinate.start), float(coordinate.end), abs_tol=1.0e-9):
         raise ValueError("start and end distances must differ")
     if coordinate.n_points < MIN_SCAN_POINTS:
         raise ValueError(f"n_points must be >= {MIN_SCAN_POINTS}")
@@ -780,6 +792,16 @@ def validate_scan_coordinate(coordinate: ScanCoordinate) -> None:
             f"n_points exceeds the {MAX_SCAN_POINTS}-point limit; "
             "an explicit double confirmation is required to exceed it"
         )
+    if coordinate.values:
+        if len(coordinate.values) != coordinate.n_points or any(not math.isfinite(v) for v in coordinate.values):
+            raise ValueError("explicit values require one finite value per scan point")
+        if abs(coordinate.values[0]-coordinate.start)>1e-7 or abs(coordinate.values[-1]-coordinate.end)>1e-7:
+            raise ValueError("explicit values must match coordinate endpoints")
+        if coordinate.kind == "distance" and any(v <= 0 for v in coordinate.values):
+            raise ValueError("distance targets must be positive")
+        if coordinate.kind == "angle" and any(v <= 0 or v >= 180 for v in coordinate.values):
+            raise ValueError("angle targets must lie inside zero to 180 degrees")
+        return
     step = coordinate_step(coordinate)
     minimum_step = MIN_SCAN_STEP_ANGSTROM if coordinate.kind == "distance" else MIN_SCAN_STEP_DEGREE
     step_unit = "\u00c5" if coordinate.kind == "distance" else "\u00b0"

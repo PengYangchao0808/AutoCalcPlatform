@@ -1248,3 +1248,177 @@ def test_optimization_minimum_annotation_wire_key_parity(tmp_path):
     assert graph is not None
     for ann in graph["annotations"]:
         assert frozenset(ann) == frozenset(ANNOTATION_WIRE_KEYS)
+
+
+def test_pes_unconverged_outlier_does_not_hijack_minimum_annotation() -> None:
+    """Unconverged / exploded frame (-292 kcal/mol) does not steal the minimum marker."""
+    payload = {
+        "schema_version": "pes_profile_v2",
+        "workflow": "PESsearch",
+        "status": "completed",
+        "protocol": {"coordinate": {"kind": "distance", "unit": "angstrom"}},
+        "frames": [
+            {
+                "index": 0,
+                "target_coordinate": 1.2,
+                "actual_coordinate": 1.2,
+                "scan_energy_hartree": -10.0,
+                "optimization_converged": True,
+            },
+            {
+                "index": 1,
+                "target_coordinate": 1.3,
+                "actual_coordinate": 1.3,
+                "scan_energy_hartree": -9.95,
+                "optimization_converged": True,
+            },
+            {
+                "index": 2,
+                "target_coordinate": 1.4,
+                "actual_coordinate": 1.4,
+                "scan_energy_hartree": -10.5,  # Unconverged outlier (huge drop)
+                "optimization_converged": False,
+            },
+        ],
+        "profile": {
+            "energy_source": "scan",
+            "relative_energies_kcal_mol": [0.0, 31.37, -313.75],
+            "raw_hartree": [-10.0, -9.95, -10.5],
+        },
+    }
+
+    graph = build_s2_energy_graph("job-unconverged-pes", payload)
+    assert graph is not None
+    min_ann = next(item for item in graph["annotations"] if item["type"] == "minimum")
+    # Minimum must be frame 0 (converged), not frame 2 (unconverged)
+    assert min_ann["frame_index"] == 0
+    assert min_ann["y"] == pytest.approx(0.0)
+
+    # Frame 2 must be annotated as failed
+    failed_ann = next(item for item in graph["annotations"] if item["type"] == "failed")
+    assert failed_ann["frame_index"] == 2
+
+    # Robust Y extent must reflect converged nodes only
+    assert graph["metadata"]["robust_y_extent"] == [0.0, 31.37]
+    assert graph["metadata"]["converged_frame_count"] == 2
+    assert graph["metadata"]["failed_frame_count"] == 1
+
+
+def test_pes_multi_coordinate_path_length_x_axis_mode() -> None:
+    """Multi-coordinate scans expose path length modes and default to path_length."""
+    payload = {
+        "schema_version": "pes_profile_v2",
+        "workflow": "PESsearch",
+        "status": "completed",
+        "protocol": {"coordinate": {"kind": "distance", "unit": "angstrom"}},
+        "coordinates": [
+            {"kind": "distance", "atoms": [0, 1]},
+            {"kind": "distance", "atoms": [2, 3]},
+        ],
+        "frames": [
+            {
+                "index": 0,
+                "target_coordinate": 1.2,
+                "actual_coordinate": 1.2,
+                "cumulative_arclength_A": 0.0,
+                "reaction_progress": 0.0,
+                "step_rmsd_A": 0.0,
+                "scan_energy_hartree": -10.0,
+                "optimization_converged": True,
+            },
+            {
+                "index": 1,
+                "target_coordinate": 1.3,
+                "actual_coordinate": 1.3,
+                "cumulative_arclength_A": 0.25,
+                "reaction_progress": 1.0,
+                "step_rmsd_A": 0.25,
+                "scan_energy_hartree": -9.95,
+                "optimization_converged": True,
+            },
+        ],
+        "profile": {
+            "energy_source": "scan",
+            "relative_energies_kcal_mol": [0.0, 31.37],
+            "raw_hartree": [-10.0, -9.95],
+        },
+    }
+
+    graph = build_s2_energy_graph("job-multicoord", payload)
+    assert graph is not None
+    assert graph["metadata"]["default_x_axis_mode"] == "path_length"
+    assert graph["x_axis"]["default_mode"] == "path_length"
+    mode_ids = [m["id"] for m in graph["metadata"]["x_axis_modes"]]
+    assert "path_length" in mode_ids
+    assert "reaction_progress" in mode_ids
+    assert "scanned_coordinate" in mode_ids
+    assert "frame_index" in mode_ids
+    assert graph["nodes"][0]["metadata"]["cumulative_arclength_A"] == 0.0
+    assert graph["nodes"][1]["metadata"]["reaction_progress"] == 1.0
+
+
+def test_load_pes_profile_backfills_path_coordinates_from_disk(tmp_path: Path) -> None:
+    from acp.results.pes_profile import load_pes_profile
+    from acp.results.energy_graph import build_energy_graph_from_job
+
+    scan_frames_dir = tmp_path / "WORK" / "07_PATH" / "pes_scan_001" / "scan_frames"
+    scan_frames_dir.mkdir(parents=True)
+    frame0_xyz = "2\nFrame 0\nC 0.0 0.0 0.0\nH 0.0 0.0 1.09\n"
+    frame1_xyz = "2\nFrame 1\nC 0.0 0.0 0.0\nH 0.0 0.0 1.35\n"
+    (scan_frames_dir / "frame_000.xyz").write_text(frame0_xyz)
+    (scan_frames_dir / "frame_001.xyz").write_text(frame1_xyz)
+
+    result_pes = tmp_path / "RESULT" / "pes_search"
+    result_pes.mkdir(parents=True)
+    profile_json = result_pes / "pes_profile.json"
+    profile_data = {
+        "schema_version": "pes_profile_v2",
+        "coordinates": [{"kind": "distance", "atoms": [1, 2]}, {"kind": "distance", "atoms": [2, 3]}],
+        "scan_dir": "WORK/07_PATH/pes_scan_001",
+        "frames": [
+            {
+                "index": 0,
+                "target_coordinate": 1.09,
+                "actual_coordinate": 1.09,
+                "geometry_path": "scan_frames/frame_000.xyz",
+                "scan_energy_hartree": -10.0,
+                "optimization_converged": True,
+            },
+            {
+                "index": 1,
+                "target_coordinate": 1.35,
+                "actual_coordinate": 1.35,
+                "geometry_path": "scan_frames/frame_001.xyz",
+                "scan_energy_hartree": -9.95,
+                "optimization_converged": True,
+            },
+        ],
+        "profile": {
+            "energy_source": "scan",
+            "relative_energies_kcal_mol": [0.0, 31.37],
+            "raw_hartree": [-10.0, -9.95],
+        },
+    }
+    profile_json.write_text(json.dumps(profile_data), encoding="utf-8")
+
+    # When: loaded with relative source_path
+    loaded = load_pes_profile(profile_json, source_path="RESULT/pes_search/pes_profile.json")
+    frames = loaded.get("scan", {}).get("frames") or []
+    assert len(frames) == 2
+    assert frames[0]["cumulative_arclength_A"] == 0.0
+    assert frames[1]["cumulative_arclength_A"] > 0.0
+    assert frames[1]["reaction_progress"] == 1.0
+
+    graph = build_energy_graph_from_job(
+        "job-test-backfill",
+        workflow="PESsearch",
+        method={"mode": "bond_length_scan"},
+        work_dir=tmp_path,
+        s2_payload=loaded,
+    )
+    assert graph["metadata"]["default_x_axis_mode"] == "path_length"
+    mode_ids = [m["id"] for m in graph["metadata"]["x_axis_modes"]]
+    assert "path_length" in mode_ids
+    assert "reaction_progress" in mode_ids
+
+

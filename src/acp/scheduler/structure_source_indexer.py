@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -170,14 +171,30 @@ class StructureSourceIndexer:
             offset += len(records)
 
     def _refresh_job_if_stale(self, record: Any) -> None:
-        """Re-discover a job only if its updated_at is newer than indexed_at."""
+        """Re-discover a job if its updated_at or result files are newer than indexed_at."""
         state = self._source_store.list_by_job(record.id)
         if not state:
             self._index_job(record)
             return
         indexed_at = self._get_indexed_at(record.id)
-        if self._is_remote(record) or (indexed_at and record.updated_at and record.updated_at > indexed_at):
+        if self._is_remote(record) or not indexed_at:
             self._index_job(record)
+            return
+        if record.updated_at and record.updated_at > indexed_at:
+            self._index_job(record)
+            return
+        if record.work_dir:
+            work_path = Path(record.work_dir)
+            for marker in ("RESULT/result_manifest.json", "RESULT/frame_candidates.json", "RESULT/pes_search/pes_review.json"):
+                mf = work_path / marker
+                if mf.is_file():
+                    try:
+                        mtime_iso = datetime.fromtimestamp(mf.stat().st_mtime, tz=timezone.utc).isoformat()
+                        if mtime_iso > indexed_at:
+                            self._index_job(record)
+                            return
+                    except OSError:
+                        pass
 
     def _get_indexed_at(self, job_id: str) -> str | None:
         """Read indexed_at from structure_source_index_state for a job."""

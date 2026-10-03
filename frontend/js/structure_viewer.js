@@ -53,7 +53,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.15.0";
+  var VERSION = "0.15.1";
 
   /* ---- performance thresholds (todo 41; the ONLY degradation knobs) ---- */
   var LIST_VIRTUALIZE_THRESHOLD = 100;   /* entry-list windowing above this */
@@ -718,18 +718,47 @@
           return;
         }
         _applyCatalogResponse(structureViewerState, structureViewerState.requestToken, data);
-        if (prevSelected && structureViewerState.payload) {
-          var entries = structureViewerState.payload.entries || [];
-          var found = false;
+        var entries = (structureViewerState.payload && structureViewerState.payload.entries) || [];
+        var defaultId = structureViewerState.payload && structureViewerState.payload.default_entry_id;
+
+        var prevWasInput = false;
+        if (prevSelected) {
           for (var i = 0; i < entries.length; i++) {
-            if (entries[i].id === prevSelected) { found = true; break; }
-          }
-          if (found) {
-            structureViewerState.selectedEntryId = prevSelected;
+            if (entries[i].id === prevSelected && entries[i].source && entries[i].source.kind === "calculation_input") {
+              prevWasInput = true;
+              break;
+            }
           }
         }
-        renderStructureViewer();
-        renderInspector();
+
+        var defaultIsResult = false;
+        if (defaultId) {
+          for (var j = 0; j < entries.length; j++) {
+            if (entries[j].id === defaultId && (!entries[j].source || entries[j].source.kind !== "calculation_input")) {
+              defaultIsResult = true;
+              break;
+            }
+          }
+        }
+
+        var shouldPromoteToResult = (prevWasInput || !prevSelected) && defaultIsResult;
+
+        if (shouldPromoteToResult) {
+          _setInputResultChoice(structureViewerState.jobId, "result");
+          selectEntry(defaultId, "auto");
+        } else {
+          if (prevSelected && structureViewerState.payload) {
+            var found = false;
+            for (var k = 0; k < entries.length; k++) {
+              if (entries[k].id === prevSelected) { found = true; break; }
+            }
+            if (found) {
+              structureViewerState.selectedEntryId = prevSelected;
+            }
+          }
+          renderStructureViewer();
+          renderInspector();
+        }
       })
       .catch(function (err) {
         if (err && err.name === "AbortError") { return; }
@@ -2362,7 +2391,8 @@
 
       var inputEntry = _findCalculationInputEntry(payload);
       if (inputEntry) {
-        var choice = _getInputResultChoice(structureViewerState.jobId);
+        var isViewingInput = (entry && entry.id === inputEntry.id);
+        var choice = isViewingInput ? "input" : "result";
         var toggle = document.createElement("div");
         toggle.className = "sv-input-result-toggle";
         toggle.setAttribute("role", "radiogroup");
@@ -2374,6 +2404,21 @@
         btnResult.textContent = _t("structure.toggle_result", STR.TOGGLE_RESULT);
         btnResult.addEventListener("click", function () {
           _setInputResultChoice(structureViewerState.jobId, "result");
+          if (structureViewerState.selectedEntryId === inputEntry.id) {
+            var targetResultId = payload.default_entry_id;
+            if (!targetResultId || targetResultId === inputEntry.id) {
+              for (var ri = 0; ri < entries.length; ri++) {
+                if (entries[ri].id !== inputEntry.id) {
+                  targetResultId = entries[ri].id;
+                  break;
+                }
+              }
+            }
+            if (targetResultId && targetResultId !== inputEntry.id) {
+              selectEntry(targetResultId, "input_toggle");
+              return;
+            }
+          }
           renderStructureViewer();
         });
         var btnInput = document.createElement("button");

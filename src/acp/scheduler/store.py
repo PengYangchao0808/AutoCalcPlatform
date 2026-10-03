@@ -122,6 +122,21 @@ class JobStore:
             row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return _row_to_record(row) if row else None
 
+    def get_many(self, job_ids: list[str]) -> dict[str, JobRecord]:
+        """Read a bounded batch of job records without per-row connections."""
+        if not job_ids:
+            return {}
+        records: dict[str, JobRecord] = {}
+        with self._lock, self._connect() as conn:
+            for start in range(0, len(job_ids), 500):
+                batch = job_ids[start : start + 500]
+                placeholders = ",".join("?" for _ in batch)
+                rows = conn.execute(
+                    f"SELECT * FROM jobs WHERE id IN ({placeholders})", batch
+                ).fetchall()
+                records.update((row["id"], _row_to_record(row)) for row in rows)
+        return records
+
     def list_terminal_jobs_paged(
         self,
         offset: int = 0,

@@ -11,6 +11,7 @@ scheduler/
 ├── manager.py            # JobManager — submit, cancel, list, work_dir_of, shutdown (1035 lines)
 ├── runner.py             # JobRunner — subprocess execution, stdin materialization, artifact capture (1251 lines — largest)
 ├── store.py              # JobStore — SQLite CRUD: create/update/get/list/delete/counts (267 lines)
+├── registration.py       # register_completed_cli_job — CLI --register: bind finished CLI run dirs as COMPLETED jobs (store-layer only; never constructs JobManager)
 ├── stage_tasks.py        # StageTask store + StagePlan providers + StageTaskObserver (polls work dir) (551 lines)
 ├── provenance.py         # Provenance dataclass, ParserRegistry, compute_input_hash, audit event building (221 lines)
 ├── events.py             # JobEventLog — append/read/tail on JSONL event file per job (79 lines)
@@ -32,6 +33,7 @@ scheduler/
 | `manager.py` | JobManager — entry point. `submit()` creates job → stores via JobStore → spawns thread. `cancel()` sets event. `_run_job()` callback invokes JobRunner. Re-queues orphaned active jobs on startup. Owns `structure_cache` (shared `RemoteStructureCache` singleton) + the `acp-catalog-prefetch` daemon worker: remote terminal transitions and a startup sweep enqueue jobs whose small catalog files are not cached yet, so `pending_fetch` resolves without any browser request. |
 | `runner.py` | JobRunner — biggest file. `run()` builds CLI cmd, spawns subprocess, monitors via `_monitor()`, observes stage state via `StageTaskObserver`, captures artifacts via `capture_stage_artifacts()`, stores provenance. `materialize_job_input()` writes SMILES/XYZ to disk. `_run_fake()` for testing. |
 | `store.py` | JobStore — SQLite persistence for JobRecord. Schema init, CRUD, project filtering, count aggregation. |
+| `registration.py` | `register_completed_cli_job()` — X1′-D CLI visibility: persists a finished CLI run dir (e.g. `acp run XtbPathSearch --register`) as a COMPLETED JobRecord via JobStore.create + TaskIndex.sync_from_job + ProjectManager.ensure_default_project. Binds `work_dir` to the existing `--output` dir (ANTI-PATTERN #15: job id never enters the path). Skips scheduler task dirs (already registered by submit). CLI-only path — never constructs JobManager (single-instance lock). |
 | `stage_tasks.py` | StageTask/StagePlan dataclasses, StagePlanProvider protocol, PlanCompiler (generic stage-plan compilation from METHOD_SCHEMAS), StageTaskStore (SQLite CRUD), StageTaskObserver (polls work dir for `.stage_*` files, mirrors to DB). |
 | `provenance.py` | Provenance dataclass (input_hash, command_line, wall_time, parser_results), ParserRegistry (type→callable), `compute_input_hash()`, `build_provenance_for_job()`. |
 | `artifacts.py` | Artifact (type/path/checksum/context), ArtifactRegistry (SQLite CRUD by job/task/type), `capture_stage_artifacts()` scans `.stage_*` directories, computes SHA-256 checksums. |

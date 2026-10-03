@@ -140,21 +140,20 @@ def _enrich_active_rows(
     from acp.api.v1_routes import _enrich_job_snapshot, _record_to_v1_model
 
     manager = _manager(request)
-    enriched_count = 0
-    for row in rows:
-        if row.get("status") not in _ACTIVE_STATUSES_FOR_ENRICHMENT:
-            continue
-        if enriched_count >= _ENRICHMENT_CAP:
-            logger.warning(
-                "task-view enrichment cap (%d) reached; skipping remaining active rows",
-                _ENRICHMENT_CAP,
-            )
-            break
-        record = manager.store.get(row["id"])
-        if record is None:
-            continue
+    active_ids = list(
+        dict.fromkeys(
+            row["id"] for row in rows if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
+        )
+    )[:_ENRICHMENT_CAP]
+    records = manager.store.get_many(active_ids)
+    snapshots = {}
+    for job_id, record in records.items():
         job_model = _record_to_v1_model(record)
-        enriched = _enrich_job_snapshot(record, job_model, include_event=False)
+        snapshots[job_id] = _enrich_job_snapshot(record, job_model, include_event=False)
+    for row in rows:
+        enriched = snapshots.get(row["id"])
+        if enriched is None:
+            continue
         for field in (
             "stage_index",
             "stage_total",
@@ -171,7 +170,6 @@ def _enrich_active_rows(
                 row["live_status"] = live.model_dump()
             elif isinstance(live, dict):
                 row["live_status"] = live
-        enriched_count += 1
     return rows
 
 
@@ -244,6 +242,9 @@ def get_task_view(
     archived: str = Query(default="exclude", pattern=r"^(exclude|include|only)$"),
     running_first: bool = False,
     group_limit: int = Query(default=200, ge=1, le=1000),
+    max_total: int = Query(default=5000, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+    include_facets: bool = True,
 ) -> V2TaskViewResponse:
     """Grouped task view with filters, facets, and counts (T3)."""
     from acp.scheduler.task_views import (
@@ -277,14 +278,16 @@ def get_task_view(
         archived=ArchivedFilter(archived),
         running_first=running_first,
         group_limit=group_limit,
+        max_total=max_total,
+        offset=offset,
+        include_facets=include_facets,
     )
     result = query_project_tasks(manager.tasks, q)
 
     # Enrich active rows with live stage/progress fields
-    for group in result.get("groups", []):
-        jobs = group.get("jobs", [])
-        if jobs:
-            _enrich_active_rows(request, jobs)
+    _enrich_active_rows(
+        request, [row for group in result.get("groups", []) for row in group.get("jobs", [])]
+    )
 
     facets_raw = result.get("facets", {})
     facets = V2TaskViewFacetsModel(
@@ -316,6 +319,9 @@ def get_task_view(
         truncated=result.get("truncated", False),
         counts=result.get("counts", {}),
         query=result.get("query", {}),
+        offset=result["offset"],
+        limit=result["limit"],
+        next_offset=result["next_offset"],
     )
 
 
@@ -418,6 +424,14 @@ def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict
         remark=body.remark,
         tags=tags_to_write,
     )
+
+    try:
+        from acp.api.v2_structure_sources import _get_stores
+
+        _source_store, indexer = _get_stores(request)
+        indexer.refresh_job(task_id)
+    except Exception as exc:
+        logger.debug("Failed to refresh structure sources on task patch: %s", exc)
 
     updated = manager.tasks.get(task_id)
     assert updated is not None

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import math
 from typing import Literal, TypeAlias, cast
 
 ConstraintKind = Literal["distance", "angle", "dihedral"]
@@ -79,6 +80,7 @@ class CoordinateSpec:
     start: float | None = None
     end: float | None = None
     force_constant: float | None = None
+    values: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
         expected = _ATOM_COUNTS[self.kind]
@@ -96,7 +98,7 @@ class CoordinateSpec:
                 f"CoordinateSpec {self.id!r}: freeze coordinates require a start value"
             )
 
-    def constraint_at(self, progress: float) -> CoordinateConstraint:
+    def constraint_at(self, progress: float, index: int | None = None) -> CoordinateConstraint:
         """Return the constraint at synchronous *progress* (0.0 → 1.0).
 
         ``drive`` → interpolated target; ``freeze`` → pinned at ``start``;
@@ -104,7 +106,11 @@ class CoordinateSpec:
         """
         if self.role == "monitor":
             raise ValueError(f"CoordinateSpec {self.id!r} is monitor-only; no constraint to build")
-        if self.role == "freeze":
+        if self.values:
+            if index is None:
+                raise ValueError("explicit coordinate values require a frame index")
+            target = self.values[index]
+        elif self.role == "freeze":
             target = self.start
             assert target is not None  # validated in __post_init__
         else:
@@ -155,6 +161,7 @@ class CoordinateSpec:
             start=_opt_float(data.get("start")),
             end=_opt_float(data.get("end")),
             force_constant=_opt_float(data.get("force_constant")),
+            values=tuple(float(v) for v in data.get("values", ())),
         )
 
 
@@ -177,7 +184,25 @@ class ReactionCoordinatePlan:
     coupling: Literal["synchronous"] = "synchronous"
     start_from: Literal["reactant", "product", "custom"] = "reactant"
 
+    lambda_values: tuple[float, ...] = ()
+    reference_geometries: tuple = ()
+    fixed_endpoints: bool = False
+    xtb_scc_max_iterations: int | None = None
+
     def __post_init__(self) -> None:
+        if self.lambda_values and (len(self.lambda_values)!=self.points or self.lambda_values[0]!=0 or self.lambda_values[-1]!=1 or any(not math.isfinite(x) for x in self.lambda_values) or any(b<=a for a,b in zip(self.lambda_values,self.lambda_values[1:]))):
+            raise ValueError("lambda_values must increase from zero to one with one value per point")
+        if any(c.values and (len(c.values)!=self.points or any(not math.isfinite(v) for v in c.values) or abs(c.values[0]-c.start)>1e-7 or abs(c.values[-1]-c.end)>1e-7) for c in self.coordinates):
+            raise ValueError("coordinate values must be finite, match points and endpoints")
+        if self.reference_geometries:
+            import numpy as np
+            geometry = np.asarray(self.reference_geometries, dtype=float)
+            if geometry.ndim != 3 or geometry.shape[2] != 3 or not np.isfinite(geometry).all():
+                raise ValueError("invalid full reference geometry table")
+        if self.reference_geometries and len(self.reference_geometries)!=self.points:
+            raise ValueError("one reference geometry is required per point")
+        if self.fixed_endpoints and not self.reference_geometries:
+            raise ValueError("fixed boundaries require reference geometries")
         if self.points < 2:
             raise ValueError("ReactionCoordinatePlan requires points >= 2")
         if not any(c.role == "drive" for c in self.coordinates):
@@ -201,7 +226,7 @@ class ReactionCoordinatePlan:
         for spec in self.coordinates:
             if spec.role == "monitor":
                 continue
-            constraints.append(spec.constraint_at(progress))
+            constraints.append(spec.constraint_at(progress, index))
         return tuple(constraints)
 
     def coordinate_targets(self, index: int) -> dict[str, float]:
@@ -213,7 +238,7 @@ class ReactionCoordinatePlan:
         for spec in self.coordinates:
             if spec.role == "monitor":
                 continue
-            constraint = spec.constraint_at(progress)
+            constraint = spec.constraint_at(progress, index)
             targets[spec.id] = float(constraint.target)
         return targets
 

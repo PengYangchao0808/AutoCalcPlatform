@@ -244,6 +244,64 @@ def _spec(workflow: str) -> JobSpec:
                 },
             },
         )
+    elif workflow == "XtbPathSearch":
+        base.update(
+            input={
+                "source_type": "xyz_text",
+                "source": XYZ_COOH,
+                "charge": 0,
+                "multiplicity": 1,
+                "path_request": {
+                    "schema_version": "pes2ts_xtb_path_request_v1",
+                    "source": {
+                        "source_type": "xyz_text_pair",
+                        "start_xyz": XYZ_COOH,
+                        "end_xyz": XYZ_COOH,
+                        "charge": 0,
+                        "multiplicity": 1,
+                    },
+                    "recipe": {
+                        "path_inp_text": "$path\n  20\n  1.0\n",
+                        "gfn_level": 2,
+                        "uhf": 0,
+                        "threads": 4,
+                        "timeout_seconds": 3600,
+                        "seed": 42,
+                        "extra_args": [],
+                    },
+                },
+            },
+            method={
+                "schema_id": "xtb_path_search",
+                "profile_id": "default",
+                "engine": "xtb",
+            },
+        )
+    elif workflow == "OrcaGradient":
+        base.update(
+            input={
+                "source_type": "xyz_text",
+                "source": XYZ_COOH,
+                "charge": 0,
+                "multiplicity": 1,
+                "gradient_request": {
+                    "schema_version": "pes2ts_orca_gradient_request_v1",
+                    "xyz": XYZ_COOH,
+                    "method": "GFN2-xTB",
+                    "basis": "",
+                    "charge": 0,
+                    "multiplicity": 1,
+                    "route_extras": [],
+                    "timeout_seconds": 3600,
+                    "nproc": 4,
+                },
+            },
+            method={
+                "schema_id": "orca_gradient",
+                "profile_id": "default",
+                "engine": "orca",
+            },
+        )
     elif workflow == "nmr":
         base.update(
             input={

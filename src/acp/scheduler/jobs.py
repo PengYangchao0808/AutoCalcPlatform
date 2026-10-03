@@ -93,6 +93,8 @@ def _derive_supported_workflows() -> tuple[str, ...]:
             "Confsearch",
             "PESsearch",
             "BatchOptimize",
+            "XtbPathSearch",
+            "OrcaGradient",
             "irc",
             "scan",
             "nmr",
@@ -114,6 +116,8 @@ SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
 SCAN_CONFIG_FILENAME = "scan_config.json"
 BATCH_CONFIG_FILENAME = "batch_config.json"
+PATH_CONFIG_FILENAME = "path_config.json"
+GRADIENT_CONFIG_FILENAME = "gradient_config.json"
 
 
 def censo_preset_from_method(method: dict[str, Any]) -> str | None:
@@ -598,6 +602,7 @@ class JobSpec:
     molecule_name: str = ""
     task_name: str = ""
     remark: str = ""
+    custom_name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -712,6 +717,7 @@ def build_task_record(record: JobRecord) -> TaskRecord:
         current_stage=record.current_stage,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        custom_name=getattr(record, "custom_name", None) or getattr(record.spec, "custom_name", None),
     )
 
 
@@ -732,4 +738,6 @@ __all__ = [
     "confsearch_method_flags",
     "SCAN_CONFIG_FILENAME",
     "BATCH_CONFIG_FILENAME",
+    "PATH_CONFIG_FILENAME",
+    "GRADIENT_CONFIG_FILENAME",
 ]

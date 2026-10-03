@@ -206,6 +206,8 @@ def test_workflows_and_protocols(client: TestClient) -> None:
         "Confsearch",
         "PESsearch",
         "BatchOptimize",
+        "XtbPathSearch",
+        "OrcaGradient",
     }
     assert names == active | {"fake"}
     pr = client.get("/api/protocols").json()

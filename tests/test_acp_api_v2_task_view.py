@@ -34,6 +34,31 @@ def _default_project_id(client: TestClient) -> str:
     raise AssertionError("default project missing")
 
 
+def test_task_view_page_metadata_and_facets_opt_out(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    _create_multi_tasks(client, pid)
+    first = client.get(f"/api/v2/task-view?project_id={pid}&group_by=none&max_total=2").json()
+    second = client.get(
+        f"/api/v2/task-view?project_id={pid}&group_by=none&max_total=2&offset=2&include_facets=false"
+    ).json()
+    assert first["total"] == second["total"] == 3
+    assert first["next_offset"] == 2
+    assert second["next_offset"] is None
+    assert second["offset"] == 2
+    assert len(first["groups"][0]["jobs"]) == 2
+    assert len(second["groups"][0]["jobs"]) == 1
+    assert second["facets"]["workflows"] == []
+    assert first["facets"]["workflows"]
+    assert {row["id"] for row in first["groups"][0]["jobs"]}.isdisjoint(
+        {row["id"] for row in second["groups"][0]["jobs"]}
+    )
+
+
+@pytest.mark.parametrize("query", ["offset=-1", "max_total=0", "max_total=5001"])
+def test_task_view_rejects_invalid_page_parameters(client: TestClient, query: str) -> None:
+    assert client.get("/api/v2/task-view?" + query).status_code == 422
+
+
 def _batch_create(
     client: TestClient,
     tasks: list[dict[str, Any]],

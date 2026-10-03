@@ -562,3 +562,46 @@ class TestFreshDBSchema:
         assert row["custom_name"] is None
         assert row["name_revision"] == 0
         assert row["name_updated_at"] is None
+
+
+class TestTaskJsonDiskPersistence:
+    def test_update_custom_name_writes_and_overwrites_task_json(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        JobStore(db)
+        idx = TaskIndex(db)
+
+        task_dir = tmp_path / "runs" / "mol_task_remark"
+        task_dir.mkdir(parents=True)
+        task_json = task_dir / "task.json"
+        initial_data = {
+            "task_id": "t1",
+            "job_id": "t1",
+            "molecule_name": "mol",
+            "task_name": "task",
+            "remark": "remark",
+        }
+        task_json.write_text(json.dumps(initial_data), encoding="utf-8")
+
+        idx.upsert(
+            {
+                "task_id": "t1",
+                "job_id": "t1",
+                "node_path": str(task_dir),
+                "display_name": "mol_task",
+                "status": "completed",
+            }
+        )
+
+        # 1. Update custom name -> persists to task.json
+        idx.update_custom_name("t1", "Custom_Name_V1", 0)
+        disk_data = json.loads(task_json.read_text(encoding="utf-8"))
+        assert disk_data["custom_name"] == "Custom_Name_V1"
+        assert disk_data["name_revision"] == 1
+        assert disk_data["name_updated_at"] is not None
+
+        # 2. Overwrite custom name -> updates task.json with new revision
+        idx.update_custom_name("t1", "Custom_Name_V2", 1)
+        disk_data2 = json.loads(task_json.read_text(encoding="utf-8"))
+        assert disk_data2["custom_name"] == "Custom_Name_V2"
+        assert disk_data2["name_revision"] == 2
+

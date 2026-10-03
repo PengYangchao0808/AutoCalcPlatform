@@ -30,6 +30,8 @@ __all__ = [
     "run_scan",
     "run_irc",
     "run_tsmode",
+    "run_xtb_path_search",
+    "run_orca_gradient",
 ]
 
 # Maps each public name to the submodule that defines it.  The submodule is
@@ -49,6 +51,8 @@ _LAZY_SOURCES: dict[str, str] = {
     "run_xtbmd_censo_energy": "acp.workflows.xtbmd_censo_energy",
     "run_batch_optimize": "acp.workflows.batch_optimize",
     "run_pes_search": "acp.workflows.pes_search",
+    "run_xtb_path_search": "acp.workflows.xtb_path",
+    "run_orca_gradient": "acp.workflows.orca_gradient",
     "WorkflowRegistryEntry": "acp.workflows.registry",
     "get_workflow_entry": "acp.workflows.registry",
     "list_workflow_entries": "acp.workflows.registry",

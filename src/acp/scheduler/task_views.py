@@ -23,6 +23,9 @@ Counting semantics contract
   ``count`` under ``max_total`` reflects the *returned* (truncated)
   rows, not the full scope.  Only ``total`` and ``counts`` are
   guaranteed whole-scope under ``max_total``.
+* ``offset`` selects a page of the sorted flat task set. ``next_offset``
+  is present only when more tasks remain; counts and facets keep full scope.
+  ``include_facets=False`` lets polling reuse recently fetched facets.
 
 Module-level probe
 ------------------
@@ -122,6 +125,8 @@ class TaskViewQuery:
     running_first: bool = False
     group_limit: int = 200
     max_total: int = 5000
+    offset: int = 0
+    include_facets: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +273,10 @@ def query_project_tasks(
             for row in counts_rows:
                 counts[row["status"]] = row["cnt"]
 
-            sort_sql = _SORT_SQL[q.sort]
+            sort_sql = _SORT_SQL[q.sort] + ", t.task_id ASC"
+            if q.running_first:
+                active_values = ", ".join(f"'{s}'" for s in sorted(_ACTIVE_STATUSES))
+                sort_sql = f"CASE WHEN t.status IN ({active_values}) THEN 0 ELSE 1 END, " + sort_sql
             fetch_sql = (
                 f"SELECT t.task_id, t.job_id, t.project_id, t.molecule_name, t.task_name, "
                 f"t.remark, t.display_name, t.workflow, t.task_dir_name, t.status, "
@@ -279,9 +287,18 @@ def query_project_tasks(
                 f"t.custom_name, t.name_revision, t.name_updated_at "
                 f"{base_sql} ORDER BY {sort_sql}"
             )
-            all_rows = conn.execute(fetch_sql, params).fetchall()
+            # Apply the cap in SQLite, before materialising rows. Without
+            # JSON1, tag filtering must run first to keep page boundaries valid.
+            if tag_python_fallback and q.tags:
+                all_rows = conn.execute(fetch_sql, params).fetchall()
+            else:
+                all_rows = conn.execute(
+                    fetch_sql + " LIMIT ? OFFSET ?", [*params, q.max_total + 1, q.offset]
+                ).fetchall()
 
-            facets = _build_facets(conn, q, require_job_row=require_job_row)
+            facets = (
+                _build_facets(conn, q, require_job_row=require_job_row) if q.include_facets else {}
+            )
         finally:
             if index._shared_conn is None:
                 conn.close()
@@ -308,6 +325,9 @@ def query_project_tasks(
         inactive = [r for r in all_rows if r["status"] not in _ACTIVE_STATUSES]
         all_rows = active + inactive
 
+    if tag_python_fallback and q.tags:
+        all_rows = all_rows[q.offset : q.offset + q.max_total + 1]
+
     truncated_total = len(all_rows) > q.max_total
     if truncated_total:
         all_rows = all_rows[: q.max_total]
@@ -321,6 +341,9 @@ def query_project_tasks(
         "total": total,
         "truncated": truncated_total or any(g["truncated"] for g in groups),
         "counts": counts,
+        "offset": q.offset,
+        "limit": q.max_total,
+        "next_offset": q.offset + q.max_total if truncated_total else None,
         "query": {
             "project_id": q.project_id,
             "group_by": q.group_by.value,
@@ -334,6 +357,7 @@ def query_project_tasks(
             "search": q.search,
             "archived": q.archived.value,
             "running_first": q.running_first,
+            "offset": q.offset,
         },
     }
 

@@ -378,6 +378,45 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "XtbPathSearch",
+        "label": "xTB PATH Search",
+        "label_zh": "xTB PATH 势能路径搜索",
+        "category": "preset",
+        "description": (
+            "GFN2-xTB PATH metadynamics from a frozen pes2ts_xtb_path_request_v1 "
+            "payload delivered via --path-config (PES2TS → ACP execution unification)"
+        ),
+        "description_zh": (
+            "基于冻结 pes2ts_xtb_path_request_v1 请求（--path-config）的 "
+            "GFN2-xTB PATH 势能路径搜索"
+        ),
+        "method_schema_id": "xtb_path_search",
+        "default_backend": "xtb",
+        "requires_binaries": ["xtb"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "OrcaGradient",
+        "label": "ORCA Single-Point Gradient",
+        "label_zh": "ORCA 单点梯度（EnGrad）",
+        "category": "preset",
+        "description": (
+            "ORCA single-point analytic gradient (EnGrad) from a frozen "
+            "pes2ts_orca_gradient_request_v1 payload delivered via "
+            "--gradient-config (PES2TS → ACP execution unification)"
+        ),
+        "description_zh": (
+            "基于冻结 pes2ts_orca_gradient_request_v1 请求（--gradient-config）的 "
+            "ORCA 单点解析梯度（EnGrad）"
+        ),
+        "method_schema_id": "orca_gradient",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "Lowconfirm",
         "label": "Low Confirmation",
         "label_zh": "粗优化",
@@ -4410,6 +4449,70 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
 # read-compatible alias while ``pes_scan`` becomes the canonical schema for
 # distance, angle, and dihedral PES tasks.
 METHOD_SCHEMAS["pes_bond_scan"] = METHOD_SCHEMAS["pes_scan"]
+
+# XtbPathSearch (PES2TS → ACP X1′-C): the path recipe knobs (gfn_level/uhf/
+# threads/path_inp_text/timeout/seed/extra_args) live in the frozen
+# ``pes2ts_xtb_path_request_v1`` payload delivered via ``--path-config`` and
+# are never defaulted by ACP. The schema therefore carries only the
+# workflow-level stage declaration (for plan compilation / wizard rendering)
+# — mirror of how ``PESsearch --scan-config`` keeps the full request in the
+# shipped config file.
+METHOD_SCHEMAS["xtb_path_search"] = {
+    "method_levels": [
+        {
+            "level_id": "xtb_path",
+            "label": "xTB PATH Metadynamics",
+            "label_zh": "xTB PATH 势能路径搜索",
+            "required": True,
+            "allowed_engines": ["xtb"],
+            "fields": [],
+        }
+    ],
+    "stages": {"mode": "static", "static": ["prepare", "run_path_search", "finalize"]},
+    "profiles": [
+        {
+            "profile_id": "default",
+            "label": "Default xTB PATH",
+            "summary": (
+                "GFN2-xTB PATH metadynamics from a pes2ts_xtb_path_request_v1 "
+                "payload (--path-config); recipe knobs are never defaulted"
+            ),
+            "levels": {"xtb_path": {"engine": "xtb"}},
+        }
+    ],
+}
+
+# OrcaGradient (PES2TS → ACP X4′-A): the gradient request knobs (xyz/method/
+# basis/charge/multiplicity/route extras) live in the frozen
+# ``pes2ts_orca_gradient_request_v1`` payload delivered via
+# ``--gradient-config`` and are never defaulted by ACP. The schema carries
+# only the workflow-level stage declaration for plan compilation — mirror of
+# ``METHOD_SCHEMAS["xtb_path_search"]``.
+METHOD_SCHEMAS["orca_gradient"] = {
+    "method_levels": [
+        {
+            "level_id": "orca_gradient",
+            "label": "ORCA Single-Point Gradient (EnGrad)",
+            "label_zh": "ORCA 单点梯度（EnGrad）",
+            "required": True,
+            "allowed_engines": ["orca"],
+            "fields": [],
+        }
+    ],
+    "stages": {"mode": "static", "static": ["prepare", "run_gradient", "finalize"]},
+    "profiles": [
+        {
+            "profile_id": "default",
+            "label": "Default ORCA Gradient",
+            "summary": (
+                "ORCA EnGrad single-point gradient from a "
+                "pes2ts_orca_gradient_request_v1 payload (--gradient-config); "
+                "request knobs are never defaulted"
+            ),
+            "levels": {"orca_gradient": {"engine": "orca"}},
+        }
+    ],
+}
 
 # ── Backend discovery (R22 / Phase 4.5) ────────────────────────────────
 # Dynamically resolves the availability and version of every external binary

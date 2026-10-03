@@ -60,6 +60,7 @@ from acp.scheduler.nodes import (
 )
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import ParserRegistry, Provenance, ResultSchema, compute_input_hash
+from acp.scheduler.registration import CliJobRegistrationError, register_completed_cli_job
 from acp.scheduler.runner import JobRunner
 from acp.scheduler.stage_tasks import StagePlan, StageTask, StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
@@ -116,6 +117,8 @@ __all__ = [
     "StageTaskStore",
     "StructureSourceService",
     "TaskIndex",
+    "CliJobRegistrationError",
+    "register_completed_cli_job",
     "audit_workflow_edit_coverage",
     "build_edit_draft",
     "compute_source_revision",

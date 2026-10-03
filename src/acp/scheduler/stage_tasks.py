@@ -242,7 +242,7 @@ class _ConfsearchStagePlanProvider:
 
 # ── PlanCompiler: generic stage-plan compilation from METHOD_SCHEMAS ────
 
-# Workflow → METHOD_SCHEMAS key mapping for the 8 calculation workflows.
+# Workflow → METHOD_SCHEMAS key mapping for the calculation workflows.
 # nmr and Confsearch are exempt (protocol-internal stage orchestration).
 _WORKFLOW_TO_SCHEMA_KEY: dict[str, str] = {
     "singlepoint": "dft_singlepoint",
@@ -254,6 +254,8 @@ _WORKFLOW_TO_SCHEMA_KEY: dict[str, str] = {
     "xtb_optimize": "xtb_optimize",
     "PESsearch": "pes_scan",
     "BatchOptimize": "batch_optimize",
+    "XtbPathSearch": "xtb_path_search",
+    "OrcaGradient": "orca_gradient",
 }
 
 
@@ -272,9 +274,10 @@ _RETIRED_WORKFLOWS: frozenset[str] = _derive_retired_workflows()
 class PlanCompiler:
     """Compile generic StagePlan sequences from METHOD_SCHEMAS stages declarations.
 
-    Covers 8 calculation workflows: singlepoint/optimize/frequency/scan/irc/
-    xtb_optimize/PESsearch/BatchOptimize. nmr and Confsearch are exempt
-    (protocol-internal stage orchestration, kept as frozen providers).
+    Covers the calculation workflows: singlepoint/optimize/frequency/scan/
+    irc/xtb_optimize/PESsearch/BatchOptimize/XtbPathSearch. nmr and
+    Confsearch are exempt (protocol-internal stage orchestration, kept as
+    frozen providers).
 
     Produces SCHEDULER StagePlan sequences (stage_tasks.py existing type),
     NOT CalculationPlan.steps.
@@ -691,7 +694,7 @@ register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
 
 
-# PlanCompiler-backed workflow registrations (8 calculation workflows).
+# PlanCompiler-backed workflow registrations (calculation workflows).
 # nmr and Confsearch exempt (protocol-internal stage orchestration).
 _PLAN_COMPILER_WORKFLOWS = (
     "singlepoint",
@@ -703,6 +706,8 @@ _PLAN_COMPILER_WORKFLOWS = (
     "xtb_optimize",
     "PESsearch",
     "BatchOptimize",
+    "XtbPathSearch",
+    "OrcaGradient",
 )
 
 
