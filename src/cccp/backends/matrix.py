@@ -20,7 +20,9 @@ from enum import Enum
 
 __all__ = [
     "CAPABILITY_ALIASES",
+    "CAPABILITY_BACKEND_PRIORITY",
     "CAPABILITY_MATRIX",
+    "TASK_CAPABILITY_MAP",
     "BackendCapabilityStatus",
     "normalize_capability_name",
 ]
@@ -60,9 +62,14 @@ CAPABILITY_ALIASES: dict[str, str] = {
     "relaxed_scan": "relaxed_scan",
     "path_search": "relaxed_scan",
     "scan": "relaxed_scan",
+    "constrained_scan": "constrained_relaxed_scan",
+    "constrained_relaxed_scan": "constrained_relaxed_scan",
+    "rigid_scan": "rigid_scan",
     "transition_state": "transition_state",
     "ts": "transition_state",
     "irc": "irc",
+    "casscf": "casscf",
+    "nevpt2": "nevpt2",
 }
 
 CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
@@ -79,6 +86,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "constrained_relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "orca": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -93,6 +104,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.AVAILABLE,
         "transition_state": BackendCapabilityStatus.AVAILABLE,
         "irc": BackendCapabilityStatus.AVAILABLE,
+        "constrained_relaxed_scan": BackendCapabilityStatus.AVAILABLE,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.AVAILABLE,
+        "nevpt2": BackendCapabilityStatus.AVAILABLE,
     },
     "crest": {
         # Declaration = implemented: optimize/single_point exist only as
@@ -109,6 +124,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "constrained_relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "xtb": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -123,6 +142,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.AVAILABLE,
         "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "constrained_relaxed_scan": BackendCapabilityStatus.AVAILABLE,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "external": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -139,6 +162,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "constrained_relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "molclus": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -153,6 +180,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "constrained_relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "isostat": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -167,7 +198,52 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "constrained_relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
+}
+
+
+#: Task kind (the seven core kinds, keyed by ``TaskKind`` value) → the full
+#: capability-name vocabulary that task may require.  The *concrete* required
+#: capability per request is derived from the scientific options (structure
+#: role, optimization mode, scan constraints, NEVPT2, …) by the two-step
+#: selection module of the calculation package; this table is the
+#: declaration-side mapping.  P2 tasks extend it in todo 24 (names and
+#: ambiguity priority for GIAO/EnGrad/CENSO are deliberately NOT declared
+#: here).
+TASK_CAPABILITY_MAP: dict[str, tuple[str, ...]] = {
+    "singlepoint": ("single_point",),
+    "optimize": ("geometry_optimization", "transition_state", "constrained_optimization"),
+    "frequency": ("frequency",),
+    "scan": ("relaxed_scan", "constrained_relaxed_scan", "rigid_scan"),
+    "irc": ("irc",),
+    "casscf": ("casscf", "nevpt2"),
+    "thermochemistry": ("thermochemistry",),
+}
+
+
+#: Deterministic backend priority per capability (first = preferred) used
+#: when several backends declare the capability AVAILABLE and the request
+#: names no explicit backend.  Only the orca/xtb ordering is pinned here;
+#: ambiguity priority for P2 capabilities is left to todo 24.  A capability
+#: without an entry falls back to the declaring backends in sorted name
+#: order (still deterministic).
+CAPABILITY_BACKEND_PRIORITY: dict[str, tuple[str, ...]] = {
+    "single_point": ("orca", "xtb"),
+    "geometry_optimization": ("orca", "xtb"),
+    "constrained_optimization": ("xtb",),
+    "transition_state": ("orca",),
+    "frequency": ("orca",),
+    "relaxed_scan": ("orca", "xtb"),
+    "constrained_relaxed_scan": ("orca", "xtb"),
+    "rigid_scan": (),
+    "irc": ("orca",),
+    "casscf": ("orca",),
+    "nevpt2": ("orca",),
+    "thermochemistry": ("external",),
 }
 
 

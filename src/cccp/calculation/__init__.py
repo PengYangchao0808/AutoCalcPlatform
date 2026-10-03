@@ -2,8 +2,9 @@
 
 Public surface (PEP 562 lazy): contracts (scientific types), the
 serializable ``TaskRequest`` envelope, the typed ``TaskResult`` envelope,
-scientific progress events, and the runtime ``TaskContext``.  The
-authoritative API specification is ``docs/ACP_CCCP_Task_API_DevDoc.md``.
+scientific progress events, the runtime ``TaskContext``, and the two-step
+backend selection records.  The authoritative API specification is
+``docs/ACP_CCCP_Task_API_DevDoc.md``.
 
 This initializer is deliberately lazy: importing ``cccp.calculation`` (or
 its pure-type modules ``errors``/``contracts``) must never pull in task
@@ -180,6 +181,30 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.results import (
         ThermochemistryPayload as ThermochemistryPayload,
     )
+    from cccp.calculation.selection import (
+        BackendSelection as BackendSelection,
+    )
+    from cccp.calculation.selection import (
+        CapabilityRequirement as CapabilityRequirement,
+    )
+    from cccp.calculation.selection import (
+        ProgramRequirement as ProgramRequirement,
+    )
+    from cccp.calculation.selection import (
+        capability_requirement as capability_requirement,
+    )
+    from cccp.calculation.selection import (
+        precheck_runtime as precheck_runtime,
+    )
+    from cccp.calculation.selection import (
+        select_backend as select_backend,
+    )
+    from cccp.calculation.selection import (
+        select_capability as select_capability,
+    )
+    from cccp.calculation.selection import (
+        select_semantic as select_semantic,
+    )
 
 _LAZY_EXPORTS: dict[str, str] = {
     "ArtifactRef": "contracts",
@@ -240,6 +265,14 @@ _LAZY_EXPORTS: dict[str, str] = {
     "ThermochemistryPayload": "results",
     "TaskContext": "context",
     "resolve_context": "context",
+    "BackendSelection": "selection",
+    "CapabilityRequirement": "selection",
+    "ProgramRequirement": "selection",
+    "capability_requirement": "selection",
+    "precheck_runtime": "selection",
+    "select_backend": "selection",
+    "select_capability": "selection",
+    "select_semantic": "selection",
     "CACHE_SCHEMA_VERSION": "batch",
     "ArtifactRecord": "batch",
     "BatchEntry": "batch",

@@ -23,6 +23,7 @@ here as signatures/rules but implemented by todos 12–23 (see §"Two tables").
 | `cccp.calculation.results` | `TaskResult`, `ErrorKind`, typed payload union, artifact ser/de | stdlib, `errors`, `contracts`, `requests` |
 | `cccp.calculation.progress` | `ProgressEvent`, `TaskProgressSink` (scientific events) | stdlib |
 | `cccp.calculation.context` | `TaskContext`, `resolve_context` | stdlib, `contracts`, `progress`, `requests` |
+| `cccp.calculation.selection` | two-step backend selection: `CapabilityRequirement`, `BackendSelection`, `ProgramRequirement`, `select_semantic`, `precheck_runtime`, `select_backend` | stdlib, `errors`, `contracts`, `requests`, `context`, `cccp.backends.matrix`, `cccp.backends.registry`, `cccp.software` |
 | `cccp.calculation.__init__` | PEP 562 lazy re-exports | lazy |
 
 Purity rules (asserted by tests):
@@ -422,3 +423,76 @@ against this table.
 
 This draft defines the contract shapes; it does **not** claim any task is
 executable.
+
+## 15. Two-step backend selection (todo 13)
+
+Entry shapes (both covered by `tests/test_cccp_calculation_selection.py`):
+
+```python
+def select_semantic(request: TaskRequest) -> BackendSelection: ...
+def precheck_runtime(selection: BackendSelection, context: TaskContext | None = None) -> BackendSelection: ...
+def select_backend(request: TaskRequest, *, context: TaskContext | None = None) -> BackendSelection: ...
+def select_capability(capability: str, *, backend: str | None = None,
+                      also_required: Sequence[str] = (), task: TaskKind | None = None) -> BackendSelection: ...
+```
+
+`select_backend(request, *, context)` ≡ `precheck_runtime(select_semantic(request), context)`.
+
+**Step ① — semantic selection.** Capability determination input = task kind
++ scientific options + method/electronic-state requirements → required
+capability + constraints → implementing backends → required software.  The
+derivation is option-driven, not a plain task→backend map:
+
+| request shape | required capability |
+|---|---|
+| `singlepoint` | `single_point` |
+| `optimize` (unconstrained) | `geometry_optimization` |
+| `optimize` (`mode=transition_state`, `ts.enabled`, or structure role `transition_state`) | `transition_state` |
+| `optimize` (`mode=constrained`) | `constrained_optimization` |
+| `frequency` | `frequency` |
+| `scan` (relaxed, single drive coordinate) | `relaxed_scan` |
+| `scan` (relaxed, multi-coordinate/constraint plan) | `constrained_relaxed_scan` |
+| `scan` (rigid — reserved in v1) | `rigid_scan` (declared, no implementer yet) |
+| `irc` | `irc` |
+| `casscf` | `casscf`; `+nevpt2` when `dynamic_correlation != none` |
+| `thermochemistry` | `thermochemistry` |
+
+The declarative task→capability vocabulary lives in
+`cccp.backends.matrix.TASK_CAPABILITY_MAP` (seven core kinds); the
+deterministic ambiguity order lives in
+`cccp.backends.matrix.CAPABILITY_BACKEND_PRIORITY` (orca/xtb pinned; P2
+names and ambiguity priority land in todo 24).  An explicit
+`request.backend` is honored strictly: if that backend does not declare the
+capability the call raises `UnsupportedCapabilityError` and never substitutes
+another declaring backend.
+
+**Step ② — runtime precheck.** Checks the selected backend's required
+programs against **the context passed to this call** only.  A pin
+(`executables.<name>.path` in `context.config`) is authoritative and checked
+strictly as an executable file — no PATH/env fallback for a pinned program;
+without a pin the environment chain of `cccp.software.resolve_executable`
+applies.  `context=None` (or `config=None`) is supported and means "no
+configured pins": availability is judged from the environment chain only.
+Selection **never** reads global/default configuration — there is no
+`load_config` fallback inside the selector, so the precheck and the executor
+can never diverge on which config they use.
+
+**Selection record** (`BackendSelection`): `task`, `capability`,
+`also_required`, `backend`, `reason`, `params` (final effective selection
+parameters: method/basis/charge/multiplicity/electronic state + derived
+option constraints), `required_programs` (`ProgramRequirement(name,
+configured_path, resolved_path, available, source)`), `explicit_backend`,
+`candidates`, `runtime_checked`; `to_dict()` is the provenance/debug form.
+Step-① records list program names with `available=None` (unchecked);
+`precheck_runtime` fills availability and sets `runtime_checked=True`.
+
+**Error taxonomy at selection time** (all pre-launch): `TaskInputError` for
+invalid envelopes (incl. `backend="auto"` and unknown backend names),
+`UnsupportedCapabilityError` for unknown capabilities or capabilities with no
+declaring/implementing backend, `BackendUnavailableError` when a required
+program is missing in the given context (an explicit ORCA request without
+ORCA surfaces here — never as a silent switch to xTB).
+
+**Not executable yet:** selection success means a backend method is
+implemented and its binary is present — it does **not** mean a public task
+entry (`run_*`) is callable; Table ② owns that transition.
