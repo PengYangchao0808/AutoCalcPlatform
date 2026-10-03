@@ -10,6 +10,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
 from acp.scheduler.store import JobStore
@@ -696,7 +698,9 @@ class TestMoveJobWiring:
         row = idx.get("j1")
         assert row["project_id"] == p2_id
 
-    def test_move_job_via_manager_wiring(self, tmp_path: Path) -> None:
+    def test_move_job_via_manager_wiring(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import MagicMock
 
         from acp.scheduler.manager import JobManager
@@ -704,6 +708,11 @@ class TestMoveJobWiring:
         runner = MagicMock()
         runner.poll.return_value = (False, None)
         mgr = JobManager(run_root=tmp_path, runner=runner, poll_interval=30)
+        # submit() fires a daemon thread whose stale record snapshot can
+        # overwrite cancel()'s CANCELLED write with STARTING/RUNNING (race
+        # reproduced in task-1b-hygiene evidence). Stub the dispatch thread
+        # so the QUEUED -> CANCELLED step is deterministic, not a thread race.
+        monkeypatch.setattr(mgr, "_start_submission_thread", lambda job_id, name: False)
         try:
             p1 = mgr.projects.create_project("Source", str(tmp_path / "src"))
             p2 = mgr.projects.create_project("Target", str(tmp_path / "tgt"))

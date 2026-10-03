@@ -18,6 +18,8 @@ plus: disabled-node refusal, broken-choice re-menu, q → 0, InitAbort → 1.
 from __future__ import annotations
 
 import builtins
+import os
+import site
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +45,31 @@ def _isolate_config_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     leaks into a flow test stays hermetic (mirrors the T4 fixture)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
+
+
+_SRC_ROOT = Path(__file__).resolve().parents[1] / "src"
+
+
+def _subprocess_env() -> dict[str, str]:
+    """Self-sufficient environment for child interpreters.
+
+    The autouse fixture redirects HOME to tmp_path, which makes CPython
+    recompute the user-site directory (``~/.local/lib/...``) under tmp_path —
+    hiding the editable install (.pth) and the user-site third-party deps
+    (rdkit/numpy/yaml) that the parent interpreter resolves.  Pin the repo
+    ``src`` onto PYTHONPATH and the interpreter's real user base onto
+    PYTHONUSERBASE so the child can always ``import acp`` and its deps,
+    independent of HOME.  Both are computed from the test process itself —
+    no hardcoded host paths — so the tests stay portable (CI included).
+    """
+    env = dict(os.environ)
+    extra = [str(_SRC_ROOT)]
+    if env.get("PYTHONPATH"):
+        extra.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(extra)
+    if site.USER_BASE:
+        env["PYTHONUSERBASE"] = site.USER_BASE
+    return env
 
 
 def _script_input(monkeypatch: pytest.MonkeyPatch, answers: list[str]) -> None:
@@ -142,6 +169,7 @@ def test_cli_smoke_quit_leaves_empty_file_untouched(tmp_path: Path) -> None:
         text=True,
         timeout=120,
         cwd=tmp_path,
+        env=_subprocess_env(),
     )
     assert proc.returncode == 0, proc.stderr
     assert target.read_bytes() == b""
@@ -170,6 +198,7 @@ def test_package_imports_without_paramiko() -> None:
         text=True,
         timeout=120,
         cwd="/tmp",
+        env=_subprocess_env(),
     )
     assert proc.returncode == 0, proc.stderr
     assert "OK" in proc.stdout

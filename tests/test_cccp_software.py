@@ -52,6 +52,20 @@ def _isolate_scan_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(software, "SCAN_PATTERNS", {})
 
 
+@pytest.fixture(autouse=True)
+def _isolate_search_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Restrict resolution to the PATH each test configures.
+
+    ``software._search_path()`` prepends ``Path(sys.executable).parent``
+    (e.g. ``/usr/bin``) to PATH, where a real ORCA install can shadow the
+    faked tmp binaries and leak system candidates into discovery.  Pin the
+    search path to the test-controlled PATH only — the resolution logic
+    under test (priority order, dedup, scan) is unchanged, and no test in
+    this file asserts on the sys.executable-directory inclusion.
+    """
+    monkeypatch.setattr(software, "_search_path", lambda: os.environ.get("PATH", ""))
+
+
 def test_detect_version_returns_none_without_executable() -> None:
     assert detect_version("censo", None) is None
 
