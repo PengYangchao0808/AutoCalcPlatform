@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from cccp.qc.hessian_policy import resolve_recalc_hess
 from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
 from cccp.qc.interfaces.constraints import (
     CoordinateConstraint,
@@ -141,11 +142,12 @@ def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
     return _case_insensitive_get(METHOD_META, method)
 
 
-# --- Hessian resolver (lazy import + module-level cache) -------------------
-# ``cccp`` must not import ``acp.chem`` at module load time
-# (reverse-dependency). The resolver is pulled in on first use and cached
-# so conformer-batch invocations do not re-import per frame. Mirrors the
-# existing ``_resolve_method_meta`` pattern.
+# --- Hessian resolver (module-level cache) ---------------------------------
+# The Hessian policy implementation lives in ``cccp.qc.hessian_policy``
+# (in-package, no reverse dependency). The resolver is cached at module
+# level so conformer-batch invocations do not re-resolve the import per
+# frame; ``_get_resolver`` remains the single access point (tests assert
+# cached-identity semantics).
 _RESOLVER = None
 
 
@@ -153,9 +155,7 @@ def _get_resolver():
     """Return the cached ``resolve_recalc_hess`` callable."""
     global _RESOLVER
     if _RESOLVER is None:
-        from acp.chem.composition import resolve_recalc_hess as _resolver
-
-        _RESOLVER = _resolver
+        _RESOLVER = resolve_recalc_hess
     return _RESOLVER
 
 
@@ -164,7 +164,7 @@ def _resolve_recalc_hess_lazy(
     configured: object,
     symbols: list[str] | None,
 ):
-    """Thin wrapper around the ACP resolver; preserves lazy semantics."""
+    """Thin wrapper around the cccp resolver; preserves cached access."""
     return _get_resolver()(
         explicit=explicit,
         configured=configured,

@@ -62,6 +62,15 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        pure ``.hess`` parser module.  Teeth: ``InHess Read`` + guard must
        render, ``transition_state_opt`` must stage ``hess_file``,
        ``parse_ts_mode_vectors`` must survive.
+    H. ``orca.py``: Hessian policy relocation (2026-10-04, plan todo 6) —
+       the ``Recalc_Hess`` graded-default policy moves verbatim to
+       ``cccp.qc.hessian_policy``; ``orca.py`` gains the direct
+       ``from cccp.qc.hessian_policy import resolve_recalc_hess`` import and
+       ``_get_resolver`` drops its lazy ``acp`` import while keeping the
+       module-level cache.  Sanctioned scopes: the import line plus the
+       ``# --- Hessian resolver`` comment block through
+       ``_resolve_recalc_hess_lazy``.  Teeth: no ``acp`` import inside
+       ``_get_resolver``, cached cccp assignment must remain.
 """
 
 from __future__ import annotations
@@ -600,6 +609,64 @@ def _amendment_g_orca_teeth(worktree: str) -> list[str]:
     return issues
 
 
+# ── Amendment H: Hessian policy relocation (2026-10-04, plan todo 6) ───────
+#
+# The ``Recalc_Hess`` graded-default policy moved verbatim to
+# ``cccp.qc.hessian_policy``; ``orca.py`` now imports it directly and
+# ``_get_resolver`` dropped the lazy ``acp`` import while keeping its
+# module-level cache.  Sanctioned scopes: the ``resolve_recalc_hess`` import
+# line plus the contiguous ``# --- Hessian resolver`` comment-block through
+# ``_resolve_recalc_hess_lazy`` in both baseline and worktree.
+
+
+def _amendment_h_block(src: str) -> tuple[int, int] | None:
+    """Contiguous H block: Hessian-resolver comment .. `_resolve_recalc_hess_lazy` end."""
+    lines = src.splitlines()
+    start = None
+    for idx, line in enumerate(lines, start=1):
+        if line.startswith("# --- Hessian resolver"):
+            start = idx
+            break
+    end_range = _func_ranges(src).get("_resolve_recalc_hess_lazy")
+    if start is None or end_range is None:
+        return None
+    return (start, end_range[1])
+
+
+def _is_amendment_h_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the Hessian-policy relocation."""
+    stripped = txt.strip()
+    if stripped == "from cccp.qc.hessian_policy import resolve_recalc_hess":
+        return True
+    block = _amendment_h_block(worktree_src)
+    return block is not None and block[0] <= ln <= block[1]
+
+
+def _is_amendment_h_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions stay inside the baseline H block."""
+    block = _amendment_h_block(baseline_src)
+    return block is not None and block[0] <= ln <= block[1]
+
+
+def _amendment_h_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: the resolver comes from cccp and the lazy acp import is gone."""
+    issues: list[str] = []
+    if "from cccp.qc.hessian_policy import resolve_recalc_hess" not in worktree:
+        issues.append("  Amendment H: direct cccp.qc.hessian_policy import missing")
+    resolver_range = _func_ranges(worktree).get("_get_resolver")
+    if resolver_range is None:
+        issues.append("  Amendment H scope missing _get_resolver")
+    else:
+        body = "\n".join(worktree.splitlines()[resolver_range[0] - 1 : resolver_range[1]])
+        if "from acp" in body or "import acp" in body:
+            issues.append("  Amendment H: _get_resolver still reaches for acp")
+        if "_RESOLVER = resolve_recalc_hess" not in body:
+            issues.append("  Amendment H: _get_resolver lost its cached cccp resolver assignment")
+    if "_resolve_recalc_hess_lazy" not in _func_ranges(worktree):
+        issues.append("  Amendment H must preserve _resolve_recalc_hess_lazy")
+    return issues
+
+
 def _target_backend(src: str) -> set[int]:
     """Target-region line numbers for baseline ``backends/orca.py``."""
     lines = src.splitlines()
@@ -739,6 +806,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_g_orca_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_h_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -778,6 +847,7 @@ def test_algorithm_body_untouched() -> None:
                 violations.append(f"  {fp}: Amendment E scope ORCAInterface.casscf missing")
             violations.extend(_amendment_f_orca_teeth(worktree))
             violations.extend(_amendment_g_orca_teeth(worktree))
+            violations.extend(_amendment_h_orca_teeth(worktree))
             continue
 
         # ── hess_file.py: Amendment G (new pure-parser module) ───────────
@@ -843,6 +913,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_g_orca_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_h_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             # Amendment C: relaxed_scan multi-coordinate rewrite lives in the

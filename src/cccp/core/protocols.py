@@ -278,7 +278,7 @@ def resolve_protocol_spec(
     opt_recalc_hess_raw = opt_level.get("recalc_hess")
     opt_recalc_hess: object = None
     if opt_recalc_hess_raw is not None:
-        from acp.chem.composition import normalize_recalc_hess as _normalize
+        from cccp.qc.hessian_policy import normalize_recalc_hess as _normalize
 
         opt_recalc_hess = _normalize(opt_recalc_hess_raw)
 

@@ -369,7 +369,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 26
+ALLOWLIST_COUNT_PIN: Final[int] = 25
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
@@ -795,12 +795,10 @@ def test_legacy_batch_quarantine_false_positive_guards(relative_path: str, text:
 
 WAVE0_DEPENDENCY_EXCEPTIONS: Final[frozenset[tuple[str, str]]] = frozenset(
     {
-        ("src/cccp/core/protocols.py", "acp.chem.composition"),
         ("src/cccp/qc/interfaces/orca.py", "acp.catalog"),
-        ("src/cccp/qc/interfaces/orca.py", "acp.chem.composition"),
     }
 )
-WAVE0_DEPENDENCY_COUNT_PIN: Final[int] = 3
+WAVE0_DEPENDENCY_COUNT_PIN: Final[int] = 1
 
 
 def test_module_allowed_dependency_table_on_current_tree() -> None:

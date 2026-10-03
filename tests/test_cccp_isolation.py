@@ -54,14 +54,10 @@ _VARIANTS = ("blocked", "cccp-only")
 
 # Expected exceptions were verified empirically (raw --runxfail evidence in
 # .omo/evidence/acp-cccp-remediation/task-3-isolation.txt):
-#   * optimize input / protocol-with-override: ModuleNotFoundError —
-#     orca.py::_get_resolver and protocols.py:281 lazily import acp.
-#   * DLPNO auxJ/auxC consistency + AST scan: AssertionError.
-_PENDING_TODO_10_MODULE_NOT_FOUND = pytest.mark.xfail(
-    strict=True,
-    raises=ModuleNotFoundError,
-    reason="pending todo 10",
-)
+#   * DLPNO auxJ/auxC consistency: AssertionError (pending todo 7).
+#   * AST scan: AssertionError (pending todo 9).
+# optimize input / protocol-with-override turned green in todo 6 (Hessian
+# policy moved to cccp.qc.hessian_policy; reverse imports removed).
 _PENDING_TODO_10_ASSERTION = pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
@@ -258,7 +254,6 @@ def _require_ok(payload: dict[str, Any]) -> Any:
     raise exc_cls(str(payload.get("msg")))
 
 
-@_PENDING_TODO_10_MODULE_NOT_FOUND
 def test_optimize_input_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
     """P0: ORCA optimize input generation succeeds with acp imports blocked.
 
@@ -267,7 +262,7 @@ def test_optimize_input_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
     ``recalc_hess`` values (None / "auto" / 0 / 10).  Emission shape follows
     the shared Hessian policy (H2 = light elements): no ``Recalc_Hess`` line
     for None/"auto"/0, ``Recalc_Hess 10`` for the explicit interval 10.
-    The 4-value success behaviour is the todo 10 closure item.
+    Green since todo 6 (Hessian policy relocated to cccp).
     """
     for variant in _VARIANTS:
         rows = _require_ok(_run_probe(cccp_only_tree, tmp_path, "optimize_input", variant))
@@ -300,15 +295,13 @@ def test_protocol_parse_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
         assert data["opt_recalc_hess"] == "None", variant
 
 
-@_PENDING_TODO_10_MODULE_NOT_FOUND
 def test_protocol_parse_recalc_hess_override_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
     """P0: protocol parsing with a ``recalc_hess`` override succeeds isolated.
 
     Touches ``cccp.core.protocols.resolve_protocol_spec`` lines 273-283 with
     ``levels={"optimization": {"recalc_hess": 0}}`` (normalises through the
-    shared Hessian policy; must not require acp).  Today the lazy
-    ``acp.chem.composition`` import at protocols.py:281 raises
-    ``ModuleNotFoundError`` in isolation.
+    shared Hessian policy; must not require acp).  Green since todo 6
+    (protocols.py imports ``cccp.qc.hessian_policy``).
     """
     for variant in _VARIANTS:
         data = _require_ok(_run_probe(cccp_only_tree, tmp_path, "protocol_override", variant))
@@ -385,7 +378,6 @@ def test_xfail_marks_are_strict_and_explicit() -> None:
     module_marks = [mark for mark in getattr(module, "pytestmark", []) if mark.name == "xfail"]
     assert not module_marks, "whole-file xfail is forbidden; track each test individually"
     allowed_kwargs = [
-        {"strict": True, "raises": ModuleNotFoundError, "reason": "pending todo 10"},
         {"strict": True, "raises": AssertionError, "reason": "pending todo 10"},
         {"strict": True, "raises": AssertionError, "reason": "pending todo 9"},
     ]
