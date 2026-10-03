@@ -22,6 +22,39 @@ from cccp.qc.keyword_registry import (
     resolve_implementation,
 )
 
+# Calculation semantics (basis catalog + METHOD_META + parameter-resolution
+# rules) live in cccp (plan todo 7 / F5): this module re-exports the tables
+# and keeps only UI composition — FIELD_DEFINITIONS / METHOD_SCHEMAS / the
+# FUNCTIONAL_OPTIONS_MAP projection / legacy field migration.
+from cccp.qc.method_meta import (
+    ALL_BASIS_SETS,
+    AUX_C_BASIS_DEFAULT,
+    AUX_C_BASIS_FALLBACK,
+    AUX_J_BASIS_DEFAULT,
+    AUX_J_BASIS_FALLBACK,
+    BASIS_CATALOG,
+    BASIS_CATALOG_REF,
+    COMPOSITE_BASIS_SETS,
+    METHOD_META,
+    aux_basis_options,
+    case_insensitive_get,
+    derive_functional_options_map,
+)
+from cccp.qc.resolved_spec import (
+    CLAMP_FIELDS as _RESOLVED_CLAMP_FIELDS,
+)
+from cccp.qc.resolved_spec import (
+    clamp_calculation_fields,
+    method_field_default,
+)
+
+# Legacy private aliases for the moved tables (drop-in compatibility).
+_ALL_BASIS_SETS = ALL_BASIS_SETS
+_AUX_C_BASIS_FALLBACK = AUX_C_BASIS_FALLBACK
+_AUX_J_BASIS_FALLBACK = AUX_J_BASIS_FALLBACK
+_BASIS_CATALOG_REF = BASIS_CATALOG_REF
+_COMPOSITE_BASIS_SETS = COMPOSITE_BASIS_SETS
+
 logger = logging.getLogger(__name__)
 
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
@@ -454,307 +487,18 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
     },
 ]
 
-# ── Functional → basis set + dispersion mapping ──────────────────────────
-# Each functional defines which basis sets and dispersion corrections are
-# chemically valid. The UI filters basis/dispersion dropdowns dynamically
-# based on the selected functional.
-# NOTE: _ALL_BASIS_SETS is defined *before* FIELD_DEFINITIONS so it can be
-# referenced by the "basis" field. It is a ``tuple`` (not ``list``) so that
-# the shared reference cannot be mutated in place by any consumer — R24
-# recommended this in its "或将其改为 tuple（不可变）" alternative. The
-# JSON encoder serialises tuples and lists identically, so the API surface
-# is unchanged.
-
-BASIS_CATALOG: dict[str, dict[str, str | None]] = {
-    "def2-SV(P)": {"aux_j": "def2/J", "aux_c": None},
-    "def2-SVP": {"aux_j": "def2/J", "aux_c": "def2-SVP/C"},
-    "def2-SVPD": {"aux_j": "def2/J", "aux_c": "def2-SVPD/C"},
-    "def2-TZVP": {"aux_j": "def2/J", "aux_c": "def2-TZVP/C"},
-    "def2-TZVPP": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
-    "def2-TZVPPD": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
-    "def2-QZVP": {"aux_j": "def2/J", "aux_c": None},
-    "def2-QZVPP": {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
-    "def2-QZVPPD": {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
-    "ma-def2-SVP": {"aux_j": "def2/J", "aux_c": None},
-    "ma-def2-TZVP": {"aux_j": "def2/J", "aux_c": None},
-    "ma-def2-TZVPP": {"aux_j": "def2/J", "aux_c": None},
-    "ma-def2-QZVPP": {"aux_j": "def2/J", "aux_c": None},
-    "cc-pVDZ": {"aux_j": None, "aux_c": "cc-pVDZ/C"},
-    "cc-pVTZ": {"aux_j": None, "aux_c": "cc-pVTZ/C"},
-    "cc-pVQZ": {"aux_j": None, "aux_c": "cc-pVQZ/C"},
-    "cc-pV5Z": {"aux_j": None, "aux_c": "cc-pV5Z/C"},
-    "aug-cc-pVDZ": {"aux_j": None, "aux_c": "aug-cc-pVDZ/C"},
-    "aug-cc-pVTZ": {"aux_j": None, "aux_c": "aug-cc-pVTZ/C"},
-    "aug-cc-pVQZ": {"aux_j": None, "aux_c": "aug-cc-pVQZ/C"},
-    "cc-pwCVDZ": {"aux_j": None, "aux_c": None},
-    "cc-pwCVTZ": {"aux_j": None, "aux_c": None},
-    "cc-pwCVQZ": {"aux_j": None, "aux_c": None},
-    "cc-pCVDZ": {"aux_j": None, "aux_c": None},
-    "cc-pCVTZ": {"aux_j": None, "aux_c": None},
-    "def2-mTZVPP": {"aux_j": None, "aux_c": None},
-    "def2-mSVP": {"aux_j": None, "aux_c": None},
-    "mTZVP": {"aux_j": None, "aux_c": None},
-}
-
-_ALL_BASIS_SETS: tuple[str, ...] = tuple(BASIS_CATALOG.keys())
-
-_AUX_J_BASIS_FALLBACK = ["AutoAux", "def2/J"]
-_AUX_C_BASIS_FALLBACK = ["AutoAux"]
-
-# v1.3: 3c composite-only basis sets — not shown in non-composite functional options
-_COMPOSITE_BASIS_SETS: tuple[str, ...] = ("def2-mTZVPP", "def2-mSVP", "mTZVP")
-
-# ── Phase 4.2: basis-catalog deduplication sentinel ────────────────────
-# Instead of storing the full 28-element basis list in every METHOD_META
-# entry, we use a module-level sentinel that _derive_functional_options_map
-# and get_method_catalog() understand. The API response puts the tuple
-# once as a top-level ``basis_catalog`` field; metadata entries that
-# reference it carry ``basis_ref: "basis_catalog"`` instead of a
-# duplicated array.
-_BASIS_CATALOG_REF = "<basis-catalog>"
-
-# ── Per-functional metadata (basis_inline, ri_support, defaults, etc.) ──
-# Single source of truth for frontend data-driven UI logic.
-# Key = functional name (standard casing).  Use _case_insensitive_get()
-# for lookups to tolerate user-input case variance.
-#
-# FUNCTIONAL_OPTIONS_MAP (below) is auto-derived from this dict to keep the
-# two structures permanently in sync — DevDoc §2.1 specifies that
-# ``functional_options_map`` values are "由 METHOD_META 自动生成".
-
-# Solvent-model spellings probed against the registry policy when deriving
-# the per-method ``solvent_models`` offer (union of the catalog's
-# per-backend solvent_model options).
-_SOLVENT_MODEL_PROBE: tuple[str, ...] = ("none", "CPCM", "SMD", "ALPB", "GBSA")
+# ── Calculation semantics moved to cccp (plan todo 7) ───────────────
+# BASIS_CATALOG / _ALL_BASIS_SETS / _COMPOSITE_BASIS_SETS / the
+# _BASIS_CATALOG_REF sentinel and METHOD_META now live in
+# cccp.qc.method_meta (single source); the names are re-exported above.
 
 
-def _derive_registry_fields(method: str) -> dict[str, Any]:
-    """Derive ``family`` / ``implementation`` / ``solvent_models`` for *method*.
-
-    Everything comes from ``cccp.qc.keyword_registry`` (the single
-    authority): family via :func:`method_family`, the ORCA implementation
-    via :func:`resolve_implementation`, and ``solvent_models`` only when the
-    registry POLICY restricts the set for the family (e.g. GFN under ORCA
-    is ``{none, ALPB}`` — GBSA/CPCM/SMD raise ``KeywordValueError``).
-    Unrestricted methods get no ``solvent_models`` key (the field-level
-    ``per_backend`` options remain their offer).
-
-    Raises:
-        ValueError: The method is unknown to the registry.  Fix by extending
-            ``cccp.qc.keyword_registry._METHOD_FAMILY_TABLE`` (+ its tests),
-            never by silently gating the method.
-    """
-    family = method_family(method)
-    if family == "unknown":
-        raise ValueError(
-            f"METHOD_META method {method!r} classifies as 'unknown' in "
-            "cccp.qc.keyword_registry; extend _METHOD_FAMILY_TABLE there "
-            "(and its tests) instead of gating it silently"
-        )
-    implementation = resolve_implementation(method, engine="orca")
-    derived: dict[str, Any] = {"family": family, "implementation": implementation}
-    allowed: list[str] = []
-    restricted = False
-    for model in _SOLVENT_MODEL_PROBE:
-        try:
-            resolve("solvent_model", model, family=family, implementation=implementation)
-        except KeywordValueError:
-            restricted = True
-            continue
-        allowed.append(model)
-    if restricted:
-        derived["solvent_models"] = allowed
-    return derived
 
 
-METHOD_META: dict[str, dict[str, Any]] = {
-    # ── 3c composite methods (built-in basis set, RI fully fixed) ──
-    "r2SCAN-3c": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
-        "basis_inline": False,
-        "ri_support": "composite",
-        "basis": ("def2-mTZVPP",),
-        "dispersion": ("D4", "none"),
-        "builtin_dispersion": "D4",
-        "default_basis": "def2-mTZVPP",
-        "default_dispersion": "none",
-    },
-    "PBEh-3c": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": False,
-        "ri_support": "composite",
-        "basis": ("def2-mSVP",),
-        "dispersion": ("D3BJ", "none"),
-        "builtin_dispersion": "D3BJ",
-        "default_basis": "def2-mSVP",
-        "default_dispersion": "none",
-    },
-    "B97-3c": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
-        "basis_inline": False,
-        "ri_support": "composite",
-        "basis": ("mTZVP",),
-        "dispersion": ("D3BJ", "none"),
-        "builtin_dispersion": "D3BJ",
-        "default_basis": "mTZVP",
-        "default_dispersion": "none",
-    },
-    # ── Ordinary hybrid functionals (user-selectable RI, no /C needed) ──
-    "B3LYP": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": False,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("none", "D3", "D3BJ", "D4"),
-        "builtin_dispersion": None,
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "D4",
-    },
-    "PBE0": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": True},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": False,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("none", "D3", "D3BJ", "D4"),
-        "builtin_dispersion": None,
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "D4",
-    },
-    "M062X": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": False,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("none", "D3", "D3BJ"),
-        "builtin_dispersion": None,
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "none",
-    },
-    # Goodman GIAO NMR level (DP4/DP5 error model) — Pople-style basis,
-    # no dispersion correction in the original parametrisation.
-    "mPW1PW91": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": False,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("none", "D3", "D3BJ", "D4"),
-        "builtin_dispersion": None,
-        "default_basis": "6-311G(d)",
-        "default_dispersion": "none",
-    },
-    # ── Range-separated single-hybrid functionals ──
-    "wB97X-D4": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": False,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("D4", "none"),
-        "builtin_dispersion": "D4",
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "none",
-    },
-    "wB97M-V": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": False,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("VV10", "none"),
-        "builtin_dispersion": "VV10",
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "none",
-    },
-    # ── Double-hybrid functionals (need /J + /C) ──
-    "PWPB95": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": True,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("D3BJ", "D4", "D3", "none"),
-        "builtin_dispersion": None,
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "D3BJ",
-    },
-    "revDSD-PBEP86": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": True,
-        "ri_support": "user",
-        "needs_aux_c": True,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("D4", "D3BJ", "none"),
-        "builtin_dispersion": None,
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "D4",
-    },
-    # ── Post-HF wavefunction methods ──
-    "DLPNO-CCSD(T)": {
-        "capabilities": {"gradient": True, "optimization": True, "scan_optimization": False},
-        "basis_inline": False,
-        "ri_support": "automatic",
-        "needs_aux_c": True,
-        "basis": ("def2-TZVPP",),
-        "dispersion": ("none",),
-        "builtin_dispersion": None,
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "none",
-        "default_aux_j": "def2/J",
-        "default_aux_c": "def2-TZVPP/C",
-    },
-    # ── GFN semi-empirical methods (no basis / dispersion / RI layer) ──
-    # ``basis: ()`` -> ``functional_options_map`` derives ``[]`` (NOT
-    # ``[""]``): GFN advertises no basis at all.  ``dispersion: ()`` is the
-    # same locked/empty set (the built-in correction can never be
-    # overridden).  ``ri_support: "composite"`` makes canonical_level /
-    # _resolve_field_default clear RI/aux to none/empty.  ``family``,
-    # ``implementation`` and ``solvent_models`` are DERIVED from the cccp
-    # keyword registry (see _derive_registry_fields) — never hand-encoded.
-    "GFN2-xTB": {
-        "basis_inline": True,
-        "ri_support": "composite",
-        "basis": (),
-        "dispersion": (),
-        "builtin_dispersion": "D4",
-        "default_basis": "",
-        "default_dispersion": "none",
-    },
-    "GFN1-xTB": {
-        "basis_inline": True,
-        "ri_support": "composite",
-        "basis": (),
-        "dispersion": (),
-        "builtin_dispersion": "D3",
-        "default_basis": "",
-        "default_dispersion": "none",
-    },
-    "GFN0-xTB": {
-        "basis_inline": True,
-        "ri_support": "composite",
-        "basis": (),
-        "dispersion": (),
-        "builtin_dispersion": "D4",
-        "default_basis": "",
-        "default_dispersion": "none",
-    },
-    "GFN-FF": {
-        "basis_inline": True,
-        "ri_support": "composite",
-        "basis": (),
-        "dispersion": (),
-        "builtin_dispersion": "builtin",
-        "default_basis": "",
-        "default_dispersion": "none",
-    },
-}
+# METHOD_META (calculation semantics + registry-derived fields) is
+# imported from cccp.qc.method_meta above — single source, byte-identical
+# values (tests/test_p0_characterization.py::TestMethodMetaSnapshot).
 
-
-for _method_name, _method_meta in METHOD_META.items():
-    _method_meta.update(_derive_registry_fields(_method_name))
 
 
 def _derive_functional_options_map() -> dict[str, dict[str, list[str]]]:
@@ -764,24 +508,11 @@ def _derive_functional_options_map() -> dict[str, dict[str, list[str]]]:
     Tuples are converted to lists so the JSON payload serialises as an
     array (the API contract is unchanged).  Phase 4.2: entries whose
     ``basis`` is the ``_BASIS_CATALOG_REF`` sentinel are expanded to the
-    full ``_ALL_BASIS_SETS`` list automatically.
+    full ``_ALL_BASIS_SETS`` list automatically.  The derivation itself is
+    single-sourced in ``cccp.qc.method_meta.options_for_meta`` — shared with
+    ``cccp.qc.resolved_spec`` (never re-implement the rule here).
     """
-    out: dict[str, dict[str, list[str]]] = {}
-    for func, meta in METHOD_META.items():
-        raw_basis = meta.get("basis", ())
-        if raw_basis is _BASIS_CATALOG_REF:
-            basis_list = list(_ALL_BASIS_SETS)
-            ri_support = meta.get("ri_support", "user")
-            if ri_support != "composite":
-                basis_list = [b for b in basis_list if b not in _COMPOSITE_BASIS_SETS]
-        else:
-            basis_list = list(raw_basis)
-        out[func] = {
-            "basis": basis_list,
-            "dispersion": list(meta.get("dispersion", ())),
-        }
-    return out
-
+    return derive_functional_options_map()
 
 FUNCTIONAL_OPTIONS_MAP: dict[str, dict[str, list[str]]] = _derive_functional_options_map()
 
@@ -1045,7 +776,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "label": "Auxiliary /J Basis",
         "label_zh": "辅助基组 /J",
         "per_backend": {"orca": _AUX_J_BASIS_FALLBACK},
-        "default": {"*": "AutoAux"},
+        "default": {"*": AUX_J_BASIS_DEFAULT},
         "supports_custom": True,
         "options_source": "dynamic_aux_basis",
         "aux_kind": "j",
@@ -1060,7 +791,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "label": "Auxiliary /C Basis",
         "label_zh": "辅助基组 /C",
         "per_backend": {"orca": _AUX_C_BASIS_FALLBACK},
-        "default": {"*": "AutoAux"},
+        "default": {"*": AUX_C_BASIS_DEFAULT},
         "supports_custom": True,
         "options_source": "dynamic_aux_basis",
         "aux_kind": "c",
@@ -4607,16 +4338,11 @@ METHOD_CATALOG: dict[str, Any] = {
 def _case_insensitive_get(mapping: dict[str, Any], key: str) -> Any | None:
     """Look up a key in *mapping* ignoring case.
 
-    Returns the value for the first key whose lowercased form matches
-    *key*.lower().  Falls back to ``None`` when no match is found.
+    Thin delegate for ``cccp.qc.method_meta.case_insensitive_get`` (single
+    lookup rule).  Returns the value for the first key whose lowercased form
+    matches *key*.lower().  Falls back to ``None`` when no match is found.
     """
-    if key in mapping:
-        return mapping[key]
-    kl = key.lower()
-    for k, v in mapping.items():
-        if k.lower() == kl:
-            return v
-    return None
+    return case_insensitive_get(mapping, key)
 
 
 # Level → field name carrying that level's electronic-structure method.
@@ -4785,21 +4511,9 @@ def _resolve_field_options(
         field_name in ("aux_j_basis", "aux_c_basis")
         and fd.get("options_source") == "dynamic_aux_basis"
     ):
-        aux_kind = fd.get("aux_kind")
-        fallback = fd.get("per_backend", {}).get(engine, [])
-        if not isinstance(fallback, list):
-            fallback = []
-
-        if functional:
-            meta = _case_insensitive_get(METHOD_META, functional)
-            if meta and field_name == "aux_c_basis" and not meta.get("needs_aux_c", False):
-                return []
-
-        if basis and basis in BASIS_CATALOG:
-            tailored = BASIS_CATALOG[basis].get(f"aux_{aux_kind}")
-            if tailored and tailored not in fallback:
-                return [tailored] + list(fallback)
-        return list(fallback)
+        # Single derivation: cccp.qc.method_meta.aux_basis_options (shared
+        # with resolved_spec — never re-implement; plan todo 7 single-source).
+        return aux_basis_options(field_name, functional, basis, engine=engine)
 
     if "options" in fd:
         return fd["options"]
@@ -4844,31 +4558,11 @@ def _resolve_field_default(
     if functional:
         meta = _case_insensitive_get(METHOD_META, functional)
         if meta:
-            if base_name == "basis" and meta.get("default_basis") is not None:
-                return meta["default_basis"]
-            if base_name == "dispersion" and meta.get("default_dispersion") is not None:
-                return meta["default_dispersion"]
-
-            ri_support = meta.get("ri_support", "user")
-            if ri_support in ("composite", "automatic"):
-                if base_name == "ri_approximation":
-                    return "none"
-                if field_name in ("aux_j_basis", "aux_c_basis"):
-                    return ""
-
-            if field_name == "aux_j_basis" and basis:
-                basis_meta = BASIS_CATALOG.get(basis)
-                if basis_meta and basis_meta.get("aux_j"):
-                    return basis_meta["aux_j"]
-                return global_default
-            if field_name == "aux_c_basis":
-                if not meta.get("needs_aux_c", False):
-                    return ""
-                if basis:
-                    basis_meta = BASIS_CATALOG.get(basis)
-                    if basis_meta and basis_meta.get("aux_c"):
-                        return basis_meta["aux_c"]
-                    return global_default
+            # Method-opinion defaults (basis/dispersion/RI/aux) are
+            # single-sourced in cccp.qc.resolved_spec.method_field_default.
+            opinion = method_field_default(base_name, functional, basis)
+            if opinion is not None:
+                return opinion
 
         if base_name in ("basis", "dispersion"):
             mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, functional)
@@ -4902,68 +4596,35 @@ def _migrate_legacy_aux_basis(level: dict[str, Any], method_key: str) -> None:
 
 
 def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
-    """Clamp basis/dispersion to the functional's allowed values.
+    """Clamp basis/dispersion/RI/aux to the functional's allowed values.
+
+    Compatibility adapter (plan todo 7): the actual modification semantics
+    live in ``cccp.qc.resolved_spec.clamp_calculation_fields`` — this wrapper
+    keeps only the historical legacy-field migration (``aux_basis`` →
+    ``aux_j_basis``/``aux_c_basis``) and adjustment warnings.
 
     Safety net: ensures execution-path converters never pass invalid
     basis/dispersion combinations to backends, even if validation was
-    bypassed.
-
-    Also migrates legacy ``aux_basis`` to ``aux_j_basis`` / ``aux_c_basis``
-    and enforces ``ri_support`` semantics (composite/automatic → clear RI/aux).
-
-    Comparison is case-insensitive (R20): a current value that matches an
-    allowed entry case-insensitively is normalised to the canonical casing
-    of that entry (``allowed[idx]``); a current value with no
-    case-insensitive match is replaced with ``allowed[0]``. This keeps the
-    downstream CLI emit (``.lower()`` for ``_CASE_INSENSITIVE_FIELDS``)
-    consistent with the catalog's canonical casing.
+    bypassed.  Comparison is case-insensitive (R20) and the exact rules /
+    resolution provenance are documented in ``cccp.qc.resolved_spec``.
     """
     _migrate_legacy_aux_basis(level, method_key)
 
     func_name = level.get(method_key)
     if not func_name:
         return
-    meta = _case_insensitive_get(METHOD_META, func_name)
-    mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, func_name)
-    ri_support = (meta or {}).get("ri_support", "user")
-
-    if ri_support in ("composite", "automatic"):
-        level["ri_approximation"] = "none"
-        level["aux_j_basis"] = ""
-        if ri_support == "composite":
-            level["aux_c_basis"] = ""
-
-    if not mapping:
-        return
-    for key in ("basis", "dispersion"):
-        if key not in mapping or key not in level:
-            continue
-        allowed = mapping[key]
-        if not allowed:
-            level[key] = ""
-            continue
-        current = level[key]
-        if not current or current == "__custom__":
-            continue
-        allowed_lower = [str(a).lower() for a in allowed]
-        try:
-            idx = allowed_lower.index(str(current).lower())
-        except ValueError:
-            level[key] = allowed[0]
-            continue
-        level[key] = allowed[idx]
-
-    # Only clamp aux fields for "user" ri_support methods. For "composite" and
-    # "automatic", the values are either blanked above or intentionally set by
-    # legacy migration (_migrate_legacy_aux_basis) — do not override.
-    if ri_support != "user":
-        return
-    basis = level.get("basis", "")
-    for aux_field in ("aux_j_basis", "aux_c_basis"):
-        if aux_field in level and level[aux_field]:
-            allowed = _resolve_field_options(aux_field, "orca", func_name, basis) or []
-            if level[aux_field] not in allowed:
-                level[aux_field] = _resolve_field_default(aux_field, "orca", func_name, basis)
+    subset = {k: level[k] for k in _RESOLVED_CLAMP_FIELDS if k in level}
+    for res in clamp_calculation_fields(func_name, subset):
+        if res.adjustment_reason and res.changed:
+            logger.warning(
+                "method %s: %s %r -> %r (%s)",
+                func_name,
+                res.field,
+                res.requested,
+                res.effective,
+                res.adjustment_reason,
+            )
+        level[res.field] = res.effective
 
 
 def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
@@ -4988,14 +4649,7 @@ def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
             # normalize_and_validate. New level fields are NOT injected —
             # missing keys fall back to schema defaults downstream.
             level["engine"] = "orca"
-        if "aux_basis" in level and "aux_j_basis" not in level and "aux_c_basis" not in level:
-            func = level.get("functional")
-            meta = _case_insensitive_get(METHOD_META, func) if func else None
-            ri_support = (meta or {}).get("ri_support", "user")
-            if ri_support == "automatic":
-                level["aux_c_basis"] = level.pop("aux_basis")
-            else:
-                level["aux_j_basis"] = level.pop("aux_basis")
+        _migrate_legacy_aux_basis(level, "functional")
     return method
 
 

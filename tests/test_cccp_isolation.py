@@ -52,22 +52,11 @@ _PROBE_MARKER = "::probe::"
 # Environment variants probed for every low-level expectation (plan todo 3(b)).
 _VARIANTS = ("blocked", "cccp-only")
 
-# Expected exceptions were verified empirically (raw --runxfail evidence in
-# .omo/evidence/acp-cccp-remediation/task-3-isolation.txt):
-#   * DLPNO auxJ/auxC consistency: AssertionError (pending todo 7).
-#   * AST scan: AssertionError (pending todo 9).
-# optimize input / protocol-with-override turned green in todo 6 (Hessian
-# policy moved to cccp.qc.hessian_policy; reverse imports removed).
-_PENDING_TODO_10_ASSERTION = pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="pending todo 10",
-)
-_PENDING_TODO_9_ASSERTION = pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="pending todo 9",
-)
+# Xfail lifecycle: raw --runxfail evidence lives in
+# .omo/evidence/acp-cccp-remediation/task-3-isolation.txt.  All expectations
+# in this file are green since the METHOD_META single-sourcing (plan todo 7);
+# any future mark must use the strict+raises convention enforced below and be
+# removed the moment its feature lands (plan Verification strategy, XPASS).
 
 # Probe executed inside a child interpreter.  Only stdlib is imported before
 # the BlockACP finder is installed — the probe must never import ``acp``
@@ -309,7 +298,6 @@ def test_protocol_parse_recalc_hess_override_isolated(cccp_only_tree: Path, tmp_
         assert data["opt_recalc_hess"] == "0", variant
 
 
-@_PENDING_TODO_10_ASSERTION
 def test_dlpno_aux_consistency_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
     """P0: DLPNO-CCSD(T) auxJ/auxC values identical isolated vs integrated.
 
@@ -319,6 +307,8 @@ def test_dlpno_aux_consistency_isolated(cccp_only_tree: Path, tmp_path: Path) ->
     appendix B) and once after unblocking (integrated, acp importable).  The
     two rendered aux values must match.  Also cross-checks that the isolated
     values do not depend on how the isolated environment was constructed.
+    Green since the METHOD_META single-sourcing removed the isolated
+    degradation (plan todo 7 / delta D5).
     """
     blocked = _require_ok(_run_probe(cccp_only_tree, tmp_path, "dlpno", "blocked"))
     cccp_only = _require_ok(_run_probe(cccp_only_tree, tmp_path, "dlpno", "cccp-only"))
@@ -332,7 +322,6 @@ def test_dlpno_aux_consistency_isolated(cccp_only_tree: Path, tmp_path: Path) ->
     )
 
 
-@_PENDING_TODO_9_ASSERTION
 def test_no_acp_imports_in_cccp() -> None:
     """Static AST scan: ``src/cccp/**`` contains no import of ``acp``.
 
@@ -362,9 +351,7 @@ def test_no_acp_imports_in_cccp() -> None:
                     violations.append(f"{rel}:{node.lineno}: from {module} import {names}")
     assert not violations, (
         "src/cccp must not import acp (reverse dependency); "
-        "fix pending todo 9 (reverse imports at "
-        "cccp/qc/interfaces/orca.py:138,156 and cccp/core/protocols.py:281):\n"
-        + "\n".join(violations)
+        "fix the listed imports (plan todo 9):\n" + "\n".join(violations)
     )
 
 
@@ -377,10 +364,7 @@ def test_xfail_marks_are_strict_and_explicit() -> None:
     module = sys.modules[__name__]
     module_marks = [mark for mark in getattr(module, "pytestmark", []) if mark.name == "xfail"]
     assert not module_marks, "whole-file xfail is forbidden; track each test individually"
-    allowed_kwargs = [
-        {"strict": True, "raises": AssertionError, "reason": "pending todo 10"},
-        {"strict": True, "raises": AssertionError, "reason": "pending todo 9"},
-    ]
+    allowed_kwargs: list[dict[str, object]] = []
     for name, obj in sorted(vars(module).items()):
         if not name.startswith("test_") or not callable(obj):
             continue

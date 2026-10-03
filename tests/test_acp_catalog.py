@@ -7,7 +7,8 @@ Phase 3: Test & Quality Assurance (tests 3.1-3.13 per DevDoc §1.4).
 
 from __future__ import annotations
 
-from typing import cast
+from collections import defaultdict
+from typing import Any, cast
 
 import pytest
 
@@ -15,6 +16,7 @@ from acp.catalog import (
     FIELD_DEFINITIONS,
     FUNCTIONAL_OPTIONS_MAP,
     METHOD_META,
+    METHOD_SCHEMAS,
     WORKFLOW_CATALOG,
     _case_insensitive_get,
     _match_option_case_insensitive,
@@ -1296,3 +1298,150 @@ def test_legacy_grid_alias_registry_roundtrip() -> None:
     )
     assert canonical == "DefGrid3"
     assert warning and "legacy alias" in warning
+
+
+# =====================================================================
+# Catalog-parity sweep (plan todo 7, moved from tests/test_cccp_keyword_registry.py)
+# =====================================================================
+
+# Every enum value declared in acp.catalog (METHOD_META, METHOD_SCHEMAS-
+# referenced fields, and the FIELD_DEFINITIONS option tables) must resolve
+# in the cccp keyword registry — including the ``normal``/``none`` no-ops.
+# This parity lives on the ACP side because it is the only side allowed to
+# import acp (tests/test_cccp_keyword_registry.py never imports acp).
+
+# Catalog field name -> registry enum domain.  Covers every enumerated
+# keyword field the catalog declares (METHOD_SCHEMAS references these by
+# name; FIELD_DEFINITIONS carries the option lists).
+_FIELD_TO_DOMAIN: dict[str, str] = {
+    "opt_level": "opt_level",
+    "opt_convergence": "opt_level",
+    "scf_convergence": "scf_convergence",
+    "scan_optimizer_scf_convergence": "scf_convergence",
+    "minimum_scf_convergence": "scf_convergence",
+    "scf_strategy": "scf_strategy",
+    "minimum_scf_strategy": "scf_strategy",
+    "transition_state_scf_strategy": "scf_strategy",
+    "grid": "grid",
+    "scan_optimizer_grid": "grid",
+    "dispersion": "dispersion",
+    "scan_optimizer_dispersion": "dispersion",
+}
+
+
+def _method_schema_referenced_fields() -> set[str]:
+    """Field names referenced by METHOD_SCHEMAS (``fields`` / ``inherits``)."""
+    found: set[str] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "fields" and isinstance(value, list):
+                    found.update(str(item) for item in value)
+                elif key == "inherits" and isinstance(value, str):
+                    found.add(value)
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(METHOD_SCHEMAS)
+    return found
+
+
+def _harvest_catalog_values() -> dict[str, dict[str, set[str]]]:
+    """Return ``domain -> scope -> values`` declared in acp.catalog.
+
+    Scopes: ``"global"`` values are declared without backend restriction and
+    must resolve under every (family, implementation) context; ``"xtb"`` /
+    ``"orca"`` values are declared for one backend and resolve under that
+    backend's implementations.
+    """
+    out: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+
+    # METHOD_META: per-method dispersion tuples (global declarations).
+    for meta in METHOD_META.values():
+        for value in meta.get("dispersion") or ():
+            out["dispersion"]["global"].add(str(value))
+
+    # METHOD_SCHEMAS-referenced fields + every catalog enum field.
+    field_names = (_method_schema_referenced_fields() | set(_FIELD_TO_DOMAIN)) & set(
+        _FIELD_TO_DOMAIN
+    )
+    for name in sorted(field_names):
+        domain = _FIELD_TO_DOMAIN[name]
+        field_def = FIELD_DEFINITIONS.get(name) or {}
+        for value in field_def.get("options") or ():
+            out[domain]["global"].add(str(value))
+        for backend, values in (field_def.get("per_backend") or {}).items():
+            if isinstance(values, list):
+                for value in values:
+                    out[domain][str(backend)].add(str(value))
+
+    # METHOD_SCHEMAS may also carry inline option lists (future-proof).
+    def walk_options(node: Any, key: str | None = None) -> None:
+        if isinstance(node, dict):
+            if key in _FIELD_TO_DOMAIN and isinstance(node.get("options"), list):
+                for value in node["options"]:
+                    out[_FIELD_TO_DOMAIN[key]]["global"].add(str(value))
+            for child_key, value in node.items():
+                walk_options(value, child_key)
+        elif isinstance(node, list):
+            for item in node:
+                walk_options(item, key)
+
+    walk_options(METHOD_SCHEMAS)
+    return out
+
+
+def test_every_catalog_declared_enum_value_resolves() -> None:
+    from cccp.qc.keyword_registry import (
+        ENUM_DOMAINS,
+        IMPL_ORCA_DFT,
+        IMPL_ORCA_EXTERNAL_XTB,
+        IMPL_ORCA_NATIVE,
+        IMPL_XTB_BINARY,
+        resolve,
+    )
+
+    all_contexts: list[tuple[str, str]] = [
+        ("conventional_dft", IMPL_ORCA_DFT),
+        ("composite_3c", IMPL_ORCA_DFT),
+        ("gfn", IMPL_ORCA_EXTERNAL_XTB),
+        ("gfn", IMPL_XTB_BINARY),
+        ("gfnff", IMPL_ORCA_NATIVE),
+    ]
+    harvested = _harvest_catalog_values()
+    # Guard against a silent harvest regression (values keep catalog spelling).
+    assert {"Loose", "Normal", "Tight", "VeryTight"} <= harvested["opt_level"]["global"]
+    assert "crude" in harvested["opt_level"]["xtb"]
+    assert "normal" in harvested["scf_strategy"]["global"]
+    assert {"DefGrid1", "DefGrid2", "DefGrid3"} <= harvested["grid"]["global"]
+    assert {"none", "D3", "D3BJ", "D4", "VV10"} <= harvested["dispersion"]["global"]
+
+    for domain, scopes in harvested.items():
+        assert domain in ENUM_DOMAINS, domain
+        for scope, values in scopes.items():
+            if scope == "global":
+                contexts = all_contexts
+            elif scope == "xtb":
+                contexts = [("gfn", IMPL_XTB_BINARY)]
+            else:
+                contexts = [("conventional_dft", IMPL_ORCA_DFT)]
+            for value in sorted(values):
+                for family, implementation in contexts:
+                    canonical, warning = resolve(
+                        domain, value, family=family, implementation=implementation
+                    )
+                    key = value.strip().lower()
+                    if canonical is None:
+                        # no-op where applicable: engine default (normal/none),
+                        # a stripped field, or a value with no token on this
+                        # implementation — all of which must warn unless they
+                        # are true no-ops.
+                        assert key in {"normal", "none"} or warning is not None, (
+                            domain,
+                            value,
+                            family,
+                            implementation,
+                        )

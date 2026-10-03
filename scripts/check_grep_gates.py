@@ -722,7 +722,6 @@ HISTORICAL_GATE_NAMES: Final[tuple[str, ...]] = tuple(
 # ever shrinks (tests pin both the entry set and the count): a new violation
 # must be fixed, never allowlisted.
 ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
-    ("cccp_imports_acp", "src/cccp/qc/interfaces/orca.py", "from acp"),
     ("final_shermo", "src/acp/scheduler/capabilities.py", "run_shermo"),
     (
         "legacy_batch_quarantine",

@@ -71,6 +71,13 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        ``# --- Hessian resolver`` comment block through
        ``_resolve_recalc_hess_lazy``.  Teeth: no ``acp`` import inside
        ``_get_resolver``, cached cccp assignment must remain.
+    I. ``orca.py``: METHOD_META query relocation (2026-10-04, plan todo 7) —
+       ``_resolve_method_meta`` drops its lazy ``acp.catalog`` import and
+       queries ``cccp.qc.method_meta.method_meta`` (single-source METHOD_META,
+       delta D5).  Sanctioned scopes: the ``from cccp.qc.method_meta import``
+       line plus the ``_resolve_method_meta`` function in baseline and
+       worktree.  Teeth: no ``acp`` import inside ``_resolve_method_meta``,
+       the body must call ``method_meta(``, and the lookup must survive.
 """
 
 from __future__ import annotations
@@ -667,6 +674,74 @@ def _amendment_h_orca_teeth(worktree: str) -> list[str]:
     return issues
 
 
+# ── Amendment I: METHOD_META query relocation (2026-10-04, plan todo 7) ──
+#
+# ``_resolve_method_meta`` dropped its lazy ``acp.catalog`` import and now
+# queries ``cccp.qc.method_meta.method_meta`` (single-source METHOD_META).
+# Sanctioned scopes: the ``from cccp.qc.method_meta import method_meta``
+# import line plus the whole ``_resolve_method_meta`` function (baseline and
+# worktree ranges).
+
+
+def _is_amendment_i_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the METHOD_META relocation."""
+    stripped = txt.strip()
+    if stripped == "from cccp.qc.method_meta import method_meta":
+        return True
+    meta_range = _func_ranges(worktree_src).get("_resolve_method_meta")
+    return meta_range is not None and meta_range[0] <= ln <= meta_range[1]
+
+
+def _is_amendment_i_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions stay inside baseline ``_resolve_method_meta``."""
+    meta_range = _func_ranges(baseline_src).get("_resolve_method_meta")
+    return meta_range is not None and meta_range[0] <= ln <= meta_range[1]
+
+
+def _amendment_i_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: the meta lookup comes from cccp and the acp import is gone."""
+    issues: list[str] = []
+    if "from cccp.qc.method_meta import method_meta" not in worktree:
+        issues.append("  Amendment I: direct cccp.qc.method_meta import missing")
+    meta_range = _func_ranges(worktree).get("_resolve_method_meta")
+    if meta_range is None:
+        issues.append("  Amendment I scope missing _resolve_method_meta")
+        return issues
+    body = "\n".join(worktree.splitlines()[meta_range[0] - 1 : meta_range[1]])
+    if "from acp" in body or "import acp" in body:
+        issues.append("  Amendment I: _resolve_method_meta still reaches for acp")
+    if "method_meta(" not in body:
+        issues.append("  Amendment I: _resolve_method_meta lost its cccp method_meta() call")
+    return issues
+
+
+
+def test_amendment_i_predicates_confined_and_negatives() -> None:
+    """Amendment I is confined to the meta lookup — negative injection."""
+    worktree = _worktree_content("src/cccp/qc/interfaces/orca.py")
+    baseline_src = _baseline_content("src/cccp/qc/interfaces/orca.py")
+    meta_range = _func_ranges(worktree).get("_resolve_method_meta")
+    assert meta_range is not None
+
+    assert not _is_amendment_i_addition(meta_range[0] - 1, "x = 1", worktree)
+    assert not _is_amendment_i_addition(meta_range[0] - 1, "from acp.catalog import x", worktree)
+    assert not _is_amendment_i_addition(meta_range[1] + 1, "    total += energy", worktree)
+    baseline_meta = _func_ranges(baseline_src).get("_resolve_method_meta")
+    assert baseline_meta is not None
+    assert not _is_amendment_i_deletion(baseline_meta[0] - 1, baseline_src)
+    assert not _is_amendment_i_deletion(baseline_meta[1] + 1, baseline_src)
+
+    injected = worktree.replace(
+        "    return method_meta(method)",
+        "    from acp.catalog import METHOD_META\n    return method_meta(method)",
+    )
+    issues = _amendment_i_orca_teeth(injected)
+    assert any("still reaches for acp" in issue for issue in issues)
+    stripped = worktree.replace("from cccp.qc.method_meta import method_meta\n", "")
+    issues = _amendment_i_orca_teeth(stripped)
+    assert any("direct cccp.qc.method_meta import missing" in issue for issue in issues)
+
+
 def _target_backend(src: str) -> set[int]:
     """Target-region line numbers for baseline ``backends/orca.py``."""
     lines = src.splitlines()
@@ -808,6 +883,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_h_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_i_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -848,6 +925,7 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_f_orca_teeth(worktree))
             violations.extend(_amendment_g_orca_teeth(worktree))
             violations.extend(_amendment_h_orca_teeth(worktree))
+            violations.extend(_amendment_i_orca_teeth(worktree))
             continue
 
         # ── hess_file.py: Amendment G (new pure-parser module) ───────────
@@ -918,6 +996,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_h_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_i_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             # Amendment C: relaxed_scan multi-coordinate rewrite lives in the

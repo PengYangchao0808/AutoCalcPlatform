@@ -59,6 +59,7 @@ from cccp.qc.keyword_registry import (
     resolve,
     resolve_implementation,
 )
+from cccp.qc.method_meta import method_meta
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -129,17 +130,14 @@ def classify_orca_failure(output_path: Path) -> str:
 def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
     """Look up ``METHOD_META`` for *method* (case-insensitive).
 
-    Returns ``None`` if ``acp.catalog`` is unavailable or *method* is not
-    declared. Imported lazily so that ``cccp`` has no
-    import-time dependency on the ``acp`` package.
+    The metadata lives in ``cccp.qc.method_meta`` (single source of truth
+    for calculation semantics; plan todo 7 / delta D5) — no ``acp``
+    dependency, so isolated and integrated environments resolve identical
+    defaults (DLPNO aux blocks included).
     """
     if not method:
         return None
-    try:
-        from acp.catalog import METHOD_META, _case_insensitive_get
-    except ImportError:
-        return None
-    return _case_insensitive_get(METHOD_META, method)
+    return method_meta(method)
 
 
 # --- Hessian resolver (module-level cache) ---------------------------------
