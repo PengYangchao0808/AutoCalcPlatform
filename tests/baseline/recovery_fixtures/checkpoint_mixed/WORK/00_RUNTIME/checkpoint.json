@@ -1,0 +1,62 @@
+{
+  "attempts": 1,
+  "items_state": {
+    "__handoff__": {
+      "coords": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.96,
+          0.0,
+          0.0
+        ],
+        [
+          -0.24,
+          0.93,
+          0.0
+        ]
+      ],
+      "symbols": [
+        "O",
+        "H",
+        "H"
+      ]
+    }
+  },
+  "plan_fingerprint": "4bab9c6efc810987",
+  "step_states": [
+    {
+      "energy": -100.5,
+      "error": "",
+      "index": 0,
+      "kind": "singlepoint",
+      "status": "completed"
+    },
+    {
+      "energy": -100.75,
+      "error": "",
+      "index": 1,
+      "kind": "optimize",
+      "status": "completed"
+    },
+    {
+      "energy": null,
+      "error": "fixture: synthetic frequency failure",
+      "index": 2,
+      "kind": "frequency",
+      "status": "failed"
+    },
+    {
+      "energy": null,
+      "error": "",
+      "index": 3,
+      "kind": "thermochemistry",
+      "status": "pending"
+    }
+  ],
+  "task_id": "fixture_recovery",
+  "workflow": "BatchOptimize"
+}

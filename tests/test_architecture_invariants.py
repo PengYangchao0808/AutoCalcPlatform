@@ -329,12 +329,21 @@ def test_capability_evidence_table() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Unique primitive definitions (todo 52 §e gate test)
+# Unique primitive definitions (todo 52 §e gate test; migration-period
+# dual-station semantics for the acp→cccp architecture remediation)
 # ---------------------------------------------------------------------------
 
-_PRIMITIVES_DIR = (
-    Path(__file__).resolve().parent.parent / "src" / "acp" / "calculations" / "primitives"
-)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Current station (Wave 0): real implementation bodies live here; after the
+# migration these modules become pure compat shims delegating to cccp.
+_PRIMITIVES_DIR = _REPO_ROOT / "src" / "acp" / "calculations" / "primitives"
+
+# New station: cccp task-layer implementation root.  Tolerated absent at
+# Wave 0 (non-existent root counts as empty).  Do NOT hard-point at a
+# specific module under it (e.g. ``tasks``) until todos 16/23 pin the
+# station — doing so would falsely red the guard before the migration.
+_CCCP_CALCULATION_DIR = _REPO_ROOT / "src" / "cccp" / "calculation"
 
 _PRIMITIVE_DEFS: dict[str, str] = {
     "run_singlepoint": "singlepoint.py",
@@ -346,22 +355,89 @@ _PRIMITIVE_DEFS: dict[str, str] = {
 }
 
 
+def _is_compat_shim(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) -> bool:
+    """Return ``True`` when *node* is a pure delegation/placeholder body.
+
+    Compat-shim shapes (migration-period acp side after the body moves to
+    ``cccp.calculation``):
+
+    * function: docstring + a single ``return <call | attribute | subscript>``
+      (pure forwarder), or an empty body;
+    * class: docstring + ``pass`` / ``...`` / empty body (alias shell).
+
+    Such bodies carry no implementation logic and must not count as the
+    unique implementation body.
+    """
+    body = list(node.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    if not body:
+        return True
+    if len(body) != 1:
+        return False
+    stmt = body[0]
+    if isinstance(node, ast.ClassDef):
+        return isinstance(stmt, ast.Pass) or (
+            isinstance(stmt, ast.Expr)
+            and isinstance(stmt.value, ast.Constant)
+            and stmt.value.value is ...
+        )
+    if isinstance(stmt, ast.Return):
+        return isinstance(stmt.value, (ast.Call, ast.Attribute, ast.Subscript))
+    return False
+
+
 def test_unique_primitive_definitions() -> None:
-    """Each calculation primitive must be defined in exactly one module under
-    ``calculations/primitives/``.  Import aliases in ``workflows/simple.py``
-    or elsewhere must NOT count as definitions."""
+    """Each calculation primitive must have exactly ONE implementation body
+    across BOTH migration-period stations (dual-station semantics):
+
+    * ``src/acp/calculations/primitives`` — current station (Wave 0: the
+      real bodies; after migration: compat shims that delegate);
+    * ``src/cccp/calculation`` — new station (may not exist yet at Wave 0;
+      a non-existent root counts as empty).
+
+    Definitions whose body is a pure compat shim (see :func:`_is_compat_shim`)
+    do not count as implementation bodies; import re-exports are not
+    definitions at all (aliases in ``workflows/simple.py`` or elsewhere must
+    NOT count).  While the single implementation body still lives in the acp
+    root it must stay in its expected module; once it moves under
+    ``src/cccp/calculation`` any module there is accepted (the exact module
+    is pinned by todos 16/23, not here).
+    """
+    roots = [path for path in (_PRIMITIVES_DIR, _CCCP_CALCULATION_DIR) if path.is_dir()]
     for name, expected_file in _PRIMITIVE_DEFS.items():
-        definition_sites: list[str] = []
-        for py_file in _PRIMITIVES_DIR.rglob("*.py"):
-            source = py_file.read_text(encoding="utf-8")
-            tree = ast.parse(source, filename=str(py_file))
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                    if node.name == name:
-                        definition_sites.append(py_file.name)
-        assert len(definition_sites) == 1, (
-            f"{name} defined in {definition_sites}; expected exactly 1 in {expected_file}"
+        implementation_sites: list[str] = []
+        shim_sites: list[str] = []
+        for root in roots:
+            for py_file in sorted(root.rglob("*.py")):
+                source = py_file.read_text(encoding="utf-8")
+                tree = ast.parse(source, filename=str(py_file))
+                for node in ast.walk(tree):
+                    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        continue
+                    if node.name != name:
+                        continue
+                    site = str(py_file.relative_to(_REPO_ROOT))
+                    if _is_compat_shim(node):
+                        shim_sites.append(site)
+                    else:
+                        implementation_sites.append(site)
+        assert len(implementation_sites) == 1, (
+            f"{name} has {len(implementation_sites)} implementation bodies "
+            f"{implementation_sites} (shims: {shim_sites}); expected exactly 1 across "
+            f"{[str(r.relative_to(_REPO_ROOT)) for r in roots]}"
         )
-        assert definition_sites[0] == expected_file, (
-            f"{name} defined in {definition_sites[0]}; expected {expected_file}"
-        )
+        impl_path = Path(implementation_sites[0])
+        if impl_path.parent.name == "primitives":
+            assert impl_path.name == expected_file, (
+                f"{name} implemented in {implementation_sites[0]}; expected {expected_file}"
+            )
+        else:
+            assert impl_path.parts[:3] == ("src", "cccp", "calculation"), (
+                f"{name} implemented outside both stations: {implementation_sites[0]}"
+            )

@@ -164,6 +164,22 @@ class GateInputError(Exception):
         self.message = message
 
 
+# ── Pending-redirect pin list (acp→cccp architecture remediation, Wave 0) ──
+# Four frozen gates pin paths that move when calculation primitives migrate
+# from ``src/acp/calculations/primitives`` to ``src/cccp/calculation``:
+#
+#   gate                  pinned path / constant                        redirect owner
+#   --------------------  --------------------------------------------  --------------------
+#   unique_run_scan       SCOPE_PRIMITIVE_SCAN (primitives/scan.py)     gate-redirect todo
+#   unique_run_irc        SCOPE_PRIMITIVE_IRC (primitives/irc.py)       gate-redirect todo
+#   wave2_shermo_external scope "src/acp/backends/external_backend.py"  shermo rewire todo
+#   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (primitives/
+#                         thermochemistry.py, workflows/energy_shared)
+#
+# Behavior is intentionally UNCHANGED here (Wave 0 only records the list).
+# When a pinned path moves, the gate spec must be redirected in the same todo
+# that moves the code — never disabled, never silently widened.  Evidence:
+# .omo/evidence/acp-cccp-remediation/task-1-guard-check.txt.
 GATE_REGISTRY: Final[tuple[GateSpec, ...]] = (
     GateSpec("compat_no_writers", r"def write_", ("src/acp/compat/",)),
     GateSpec("wave2_optfreq", r"opt_freq\(", SCOPE_SRC, WAVE2_OPTFREQ_ALLOWED_PATHS),

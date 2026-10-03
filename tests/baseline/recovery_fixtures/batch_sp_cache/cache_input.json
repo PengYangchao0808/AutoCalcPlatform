@@ -1,0 +1,31 @@
+{
+  "basis": null,
+  "cache_key": "aff64f9d434de7e96ad6ca978d73eae12a5e43150cf47b172b7d2ac3029c16d3",
+  "cache_key_algorithm": "acp.backends.batch._geometry_cache_key",
+  "charge": 0,
+  "coordinates": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.96,
+      0.0,
+      0.0
+    ],
+    [
+      -0.24,
+      0.93,
+      0.0
+    ]
+  ],
+  "method": "r2SCAN-3c",
+  "multiplicity": 1,
+  "solvent": null,
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ]
+}

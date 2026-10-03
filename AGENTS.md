@@ -85,6 +85,13 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **Structure-source org store**: `structure_source_store.py` — 4 tables；`source_uid_for()` = `ss_`+sha256(job_id+relpath)[:24]；upsert 只碰 discovery fields；`RevisionConflictError` + expected_revision 乐观锁
 - **Job-edit coverage registry**: `job_edit.py::EDIT_ACTIVE_WORKFLOWS` — 新 active 工作流必须登记，`audit_workflow_edit_coverage()` + `tests/test_acp_job_edit.py` 守护
 
+## MIGRATION PERIOD RULES（acp→cccp 架构整改迁移期规则；todo 32 收口并入 #17）
+> 仅迁移期有效（基线 `main@2a23b93`）；最终合并进 ANTI-PATTERNS #17 在 todo 32。台账行格式见 `tests/baseline/refactor-evidence/migration_ledger.md`：**能力/当前实现驻点/兼容入口/生产消费者/退出条件/验收测试**。
+- **新驻点（new station）**: QC 执行任务实现唯一落点 `src/cccp/calculation/`（cccp.calculation 任务层）；`src/cccp/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING）
+- **过渡期双驻点（transitional dual-station）**: `src/acp/calculations/primitives/` 迁移期为兼容 shim（纯转发/重导出），实现体在 `cccp.calculation` — 两根合并每基元**恰好一个实现体**；守护 `tests/test_architecture_invariants.py::test_unique_primitive_definitions`（cccp 根 Wave 0 不存在=空；todo 16/23 前勿硬指 `cccp/calculation/tasks`）
+- **唯一实现当前驻点台账（current-station ledger）**: 每能力一行记录实现体现驻点，实现体移动即改行，退出条件满足才删行；新能力（含 P2 任务）先入台账再落码
+- **迁移期护栏适配**: `tests/test_f4_scope_audit.py` 基线=2a23b93（QC 接口层新改动须登记 amendment）；`scripts/check_grep_gates.py` 四个冻结 pin（`unique_run_scan`/`unique_run_irc`/`wave2_shermo_external`/`final_shermo`）为待迁移重定向清单 — 代码移动的同一 todo 重定向门，禁禁用/静默放宽；跨版本恢复 fixtures 固定于 `tests/baseline/recovery_fixtures/`（可复现生成脚本同目录）
+
 ## ANTI-PATTERNS（硬性铁律）
 1. **NEVER `pymatgen`** — 已从 pyproject 移除（零引用）
 2. **NEVER 只更新一处 `__version__`** — 4 处同步：`cccp/__init__.py`、`cccp/version.py`、`acp/__init__.py`、`pyproject.toml`

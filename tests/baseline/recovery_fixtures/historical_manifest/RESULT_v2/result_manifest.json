@@ -1,0 +1,14 @@
+{
+  "products": [
+    {
+      "id": "sp_energy",
+      "kind": "energy_report",
+      "label": "Single-point energy",
+      "path": "reports/fixture_sp_energy.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "fixture_historical",
+  "version": 2,
+  "workflow": "singlepoint"
+}

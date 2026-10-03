@@ -1,0 +1,50 @@
+{
+  "cache_rel_paths": {
+    "BatchOptimize": [
+      "RESULT/result_manifest.json"
+    ],
+    "Confsearch": [
+      "RESULT/confsearch/confsearch_manifest.json"
+    ],
+    "PESsearch": [
+      "RESULT/pes_search/pes_recommendations.json",
+      "RESULT/pes_search/pes_review.json",
+      "RESULT/pes_search/pes_profile.json"
+    ],
+    "frequency": [
+      "RESULT/result_manifest.json",
+      "input.xyz"
+    ],
+    "irc": [
+      "RESULT/irc/irc_forward.xyz",
+      "RESULT/irc/irc_reverse.xyz"
+    ],
+    "legacy": [
+      "RESULT/result_manifest.json",
+      "RESULT/result_summary.json"
+    ],
+    "nmr": [
+      "RESULT/result_manifest.json"
+    ],
+    "optimize": [
+      "RESULT/result_manifest.json",
+      "input.xyz"
+    ],
+    "scan": [
+      "RESULT/trajectories/scan_trajectory.json"
+    ],
+    "singlepoint": [
+      "RESULT/result_manifest.json",
+      "input.xyz"
+    ],
+    "xtb_optimize": [
+      "RESULT/result_manifest.json",
+      "input.xyz"
+    ]
+  },
+  "job_id": "fixture_remote_job",
+  "node_id": "fixture-node",
+  "remote_job_id": "424242",
+  "remote_work_dir": "/remote/acp/runs/fixture_mol_fixture_task_remark",
+  "storage_mode": "sftp"
+}

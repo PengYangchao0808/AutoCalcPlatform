@@ -71,13 +71,21 @@ import inspect
 import re
 import sqlite3
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-BASELINE = "refactor-baseline"
+# Re-baselined for the acp→cccp architecture remediation (Wave 0, todo 1):
+# the audit now measures deltas from the remediation starting point
+# main@2a23b93 (original remediation baseline 88def44 archived in evidence).
+# The historical `refactor-baseline` ref belonged to the 2026-05 F4 wave and
+# is not present in this clone.  Scope redirect onto the migration files is
+# delivered by the wave-2 scope-audit todo; until then the sanctioned scope
+# remains the QC interface layer below.
+BASELINE = "2a23b93"
 ALLOWED_PY = frozenset(
     {
         "src/cccp/qc/interfaces/orca.py",
@@ -606,23 +614,21 @@ def _target_backend(src: str) -> set[int]:
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
-# files that wave was allowed to touch, so any later legitimate development
-# on the QC interface layer (e.g. the 2026-08 DFT scan extension touching
-# xtb/xtb_scan/censo) trips them. Kept for archaeology — skipped until the
-# audit is rebased onto a new baseline or retired (see PR #21 discussion).
-_F4_SCOPE_AUDIT_SKIPPED = pytest.mark.skip(
-    reason="F4 wave-scope whitelist fossilizes 2026-05 boundaries; trips on all later QC-interface work"
-)
+# files that wave was allowed to touch.  They were skipped because the
+# whitelist fossilized 2026-05 boundaries and tripped on later QC-interface
+# work.  Wave 0 of the acp→cccp architecture remediation (todo 1) re-based
+# the audit on main@2a23b93 — the skip's documented exit condition — so the
+# checks run again: any change to the QC interface layer from that point on
+# must register a new sanctioned amendment here.  Scope redirect onto the
+# migration files lands with the wave-2 scope-audit todo.
 
 
-@_F4_SCOPE_AUDIT_SKIPPED
 def test_diff_only_allowed_py_files() -> None:
     """① Only ``.py`` files in the allowed set appear in the diff."""
     py = {f for f in _changed_files() if f.endswith(".py")}
     assert not (py - ALLOWED_PY), f"Unexpected .py files changed: {py - ALLOWED_PY}"
 
 
-@_F4_SCOPE_AUDIT_SKIPPED
 def test_algorithm_body_untouched() -> None:
     """① Every added line must be pure comment/blank — no algorithm-body changes.
 
@@ -806,7 +812,6 @@ def test_orca_ts_no_changes() -> None:
     assert not violations, "orca_ts.py additions outside Amendments F/G:\n" + "\n".join(violations)
 
 
-@_F4_SCOPE_AUDIT_SKIPPED
 def test_deleted_lines_in_target_regions() -> None:
     """① Every deleted line falls inside a declared target region."""
     checks = [
@@ -1015,7 +1020,13 @@ def test_catalog_retired_ids() -> None:
 def test_grep_gate_final_forbidden_symbols() -> None:
     """⑤ ``check_grep_gates --gate final_forbidden_symbols src/acp`` exit 0."""
     r = subprocess.run(
-        ["python", "scripts/check_grep_gates.py", "--gate", "final_forbidden_symbols", "src/acp"],
+        [
+            sys.executable,
+            "scripts/check_grep_gates.py",
+            "--gate",
+            "final_forbidden_symbols",
+            "src/acp",
+        ],
         capture_output=True,
         text=True,
         cwd=ROOT,

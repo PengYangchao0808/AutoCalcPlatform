@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": "opt_geometry",
+      "kind": "structure",
+      "label": "Optimized geometry (step completed before failure)",
+      "path": "structures/fixture_opt.xyz"
+    },
+    {
+      "id": "energy_report",
+      "kind": "energy_report",
+      "label": "Energy report (step completed before failure)",
+      "path": "reports/fixture_energy.json"
+    }
+  ],
+  "status": "failed",
+  "task_id": "fixture_partial_failure",
+  "version": 2,
+  "workflow": "BatchOptimize"
+}
