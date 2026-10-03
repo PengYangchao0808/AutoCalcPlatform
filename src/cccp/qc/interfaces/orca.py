@@ -142,10 +142,10 @@ def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
 
 # --- Hessian resolver (module-level cache) ---------------------------------
 # The Hessian policy implementation lives in ``cccp.qc.hessian_policy``
-# (in-package, no reverse dependency). The resolver is cached at module
-# level so conformer-batch invocations do not re-resolve the import per
-# frame; ``_get_resolver`` remains the single access point (tests assert
-# cached-identity semantics).
+# (in-package, no reverse dependency) and is imported at module top; the
+# previous lazy ``acp`` import is gone.  The module-level cache keeps
+# ``_get_resolver`` the single access point with a stable callable identity
+# (tests assert cached-identity semantics).
 _RESOLVER = None
 
 
