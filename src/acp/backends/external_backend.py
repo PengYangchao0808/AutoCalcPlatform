@@ -12,6 +12,7 @@ from acp.calculations.primitives.thermochemistry import (
     ThermochemistryCalculator,
     ThermochemistryInputError,
 )
+from cccp.calculation.errors import BackendUnavailableError
 from cccp.qc.interfaces.isostat import IsostatInterface
 from cccp.software import resolve_executable
 
@@ -57,6 +58,10 @@ class ExternalBackend(QCBackend):
     ) -> Path:
         # Legacy run_isostat used the `threads` kwarg; map it to the
         # interface's nthreads for callers of the old external route.
+        if not self.is_isostat_available():
+            raise BackendUnavailableError(
+                "ISOSTAT clustering is declared but the isostat binary is not available"
+            )
         if "threads" in kwargs and "nthreads" not in kwargs:
             kwargs["nthreads"] = kwargs.pop("threads")
         interface = IsostatInterface(
@@ -80,6 +85,10 @@ class ExternalBackend(QCBackend):
         output_dir: Path | None = None,
         **kwargs: Any,
     ) -> QCResult:
+        if not self.is_shermo_available():
+            raise BackendUnavailableError(
+                "Shermo thermochemistry is declared but the Shermo binary is not available"
+            )
         target_dir = output_dir or log_file.parent
         output_file = Path(kwargs.pop("output_file", target_dir / f"{log_file.stem}.sum"))
         sp_energy = float(kwargs.pop("sp_energy", 0.0))

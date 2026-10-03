@@ -2,42 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from acp.backends.base import (
-    ClusteringTool,
-    ConformerSearcher,
-    FrequencyCalculator,
-    GeometryOptimizer,
-    QCBackend,
-    RelaxedScanCalculator,
-    SinglePointCalculator,
-    ThermoCalculator,
-    TSMechanismCalculator,
+from acp.backends.base import QCBackend
+from acp.backends.matrix import (
+    CAPABILITY_MATRIX,
+    BackendCapabilityStatus,
+    normalize_capability_name,
 )
 from acp.core.registry import Registry
-
-_CAPABILITY_PROTOCOLS: dict[str, type[Any]] = {
-    "optimization": GeometryOptimizer,
-    "optimizer": GeometryOptimizer,
-    "geometry_optimization": GeometryOptimizer,
-    "single_point": SinglePointCalculator,
-    "sp": SinglePointCalculator,
-    "frequency": FrequencyCalculator,
-    "freq": FrequencyCalculator,
-    "conformer_search": ConformerSearcher,
-    "search": ConformerSearcher,
-    "clustering": ClusteringTool,
-    "cluster": ClusteringTool,
-    "thermochemistry": ThermoCalculator,
-    "thermo": ThermoCalculator,
-    "ts": TSMechanismCalculator,
-    "transition_state": TSMechanismCalculator,
-    "irc": TSMechanismCalculator,
-    "relaxed_scan": RelaxedScanCalculator,
-    "path_search": RelaxedScanCalculator,
-    "scan": RelaxedScanCalculator,
-}
+from cccp.calculation.errors import UnsupportedCapabilityError
 
 
 class BackendRegistry:
@@ -60,16 +32,31 @@ class BackendRegistry:
         return self._registry.get(name)
 
     def require(self, capability: str) -> type[QCBackend]:
-        """Return a backend class supporting *capability* or raise."""
-        protocol = self._resolve_capability_protocol(capability)
+        """Return the first registered backend declaring *capability* AVAILABLE.
 
-        for _, backend_cls in self.list_all():
-            if issubclass(backend_cls, protocol):
+        Selection is declaration-driven (``acp.backends.matrix``) and always
+        completes before any backend instance is constructed: stubs and
+        unimplemented capabilities can never be selected (delta D1).  Binary
+        presence is not judged here — runtime probes surface
+        ``BackendUnavailableError`` when a declared capability lacks its tool.
+
+        Raises:
+            ValueError: If the capability name is unknown.
+            UnsupportedCapabilityError: If no registered backend declares the
+                capability implemented.
+        """
+        canonical_capability = normalize_capability_name(capability)
+
+        for name, backend_cls in self.list_all():
+            row = CAPABILITY_MATRIX.get(name)
+            if row is None:
+                continue
+            if row.get(canonical_capability) is BackendCapabilityStatus.AVAILABLE:
                 return backend_cls
 
         available = ", ".join(name for name, _ in self.list_all()) or "none"
-        raise LookupError(
-            f"No registered backend supports capability '{capability}'. "
+        raise UnsupportedCapabilityError(
+            f"No registered backend implements capability '{capability}'. "
             f"Available backends: {available}"
         )
 
@@ -88,14 +75,6 @@ class BackendRegistry:
         aliases = {canonical_name, backend_cls.__name__.lower()}
         return sorted(aliases)
 
-    @staticmethod
-    def _resolve_capability_protocol(capability: str) -> type[Any]:
-        key = capability.lower()
-        if key not in _CAPABILITY_PROTOCOLS:
-            known = ", ".join(sorted(_CAPABILITY_PROTOCOLS))
-            raise ValueError(f"Unknown capability: {capability}. Known: {known}")
-        return _CAPABILITY_PROTOCOLS[key]
-
 
 backend_registry = BackendRegistry()
 
@@ -111,7 +90,7 @@ def get_backend(name: str) -> type[QCBackend]:
 
 
 def require_backend(capability: str) -> type[QCBackend]:
-    """Return a registered backend class supporting *capability* or raise."""
+    """Return a registered backend class declaring *capability* AVAILABLE or raise."""
     return backend_registry.require(capability)
 
 

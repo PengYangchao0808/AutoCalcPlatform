@@ -16,6 +16,7 @@ from numpy.typing import NDArray
 
 import acp.backends
 from acp.backends.base import QCResult, to_qc_result
+from cccp.calculation.errors import UnsupportedCapabilityError
 from acp.calculations.contracts import (
     ArtifactRef,
     CalculationRequest,
@@ -345,8 +346,17 @@ def call_capability(
     Stability analysis is restricted to SP-like nodes (§3.4, §13.4): an
     OPT/FREQ request never receives ``STABPerform`` — the plan executor
     appends a dedicated SP diagnostic node instead.
+
+    A backend that does not implement *capability* (e.g. ``xtb`` has no
+    ``frequency`` method) is rejected here with a structured
+    ``UnsupportedCapabilityError`` before anything launches — an
+    ``AttributeError`` must never escape (delta D4).
     """
-    operation = getattr(backend, capability)
+    operation = getattr(backend, capability, None)
+    if not callable(operation):
+        raise UnsupportedCapabilityError(
+            f"backend {type(backend).__name__} does not implement capability {capability!r}"
+        )
     final_kwargs = dict(kwargs)
     if inputs.scf_options:
         options = dict(inputs.scf_options)

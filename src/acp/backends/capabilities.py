@@ -1,26 +1,25 @@
-"""Capability matrix helpers for ACP backends."""
+"""Capability matrix helpers for ACP backends.
+
+The declaration data lives in :mod:`acp.backends.matrix` (dependency-free);
+this module layers registry-aware name normalization and runtime status
+reporting on top of it.  Both this module and :mod:`acp.backends.registry`
+import from ``matrix`` — never the other way round — so no import cycle.
+"""
 
 from __future__ import annotations
-
-from enum import Enum
 
 from acp.backends.crest import CrestBackend
 from acp.backends.external_backend import ExternalBackend
 from acp.backends.isostat_backend import IsostatBackend
+from acp.backends.matrix import (
+    CAPABILITY_MATRIX,
+    BackendCapabilityStatus,
+    normalize_capability_name,
+)
 from acp.backends.molclus_backend import MolclusBackend
 from acp.backends.orca import ORCABackend
 from acp.backends.registry import get_backend
 from acp.backends.xtb import XTBBackend
-
-
-class BackendCapabilityStatus(str, Enum):
-    """Declared status for a backend capability."""
-
-    AVAILABLE = "available"
-    STUBBED = "stubbed"
-    NOT_IMPLEMENTED = "not_implemented"
-    MISSING_BINARY = "missing_binary"
-
 
 _ = (
     ORCABackend,
@@ -30,144 +29,6 @@ _ = (
     MolclusBackend,
     IsostatBackend,
 )
-
-_CAPABILITY_ALIASES = {
-    "optimization": "geometry_optimization",
-    "optimizer": "geometry_optimization",
-    "geometry_optimization": "geometry_optimization",
-    "constrained_optimize": "constrained_optimization",
-    "constrained_optimization": "constrained_optimization",
-    "single_point": "single_point",
-    "sp": "single_point",
-    "frequency": "frequency",
-    "freq": "frequency",
-    "conformer_search": "conformer_search",
-    "search": "conformer_search",
-    "clustering": "clustering",
-    "cluster": "clustering",
-    "thermochemistry": "thermochemistry",
-    "thermo": "thermochemistry",
-    "enso_thermo": "mrrho_thermochemistry",
-    "mrrho_thermo": "mrrho_thermochemistry",
-    "mrrho_thermochemistry": "mrrho_thermochemistry",
-    "nmr_shielding": "nmr_shielding",
-    "nmr": "nmr_shielding",
-    "relaxed_scan": "relaxed_scan",
-    "path_search": "relaxed_scan",
-    "scan": "relaxed_scan",
-    "transition_state": "transition_state",
-    "ts": "transition_state",
-    "irc": "irc",
-}
-
-CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
-    "censo": {
-        "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "constrained_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "single_point": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "conformer_search": BackendCapabilityStatus.AVAILABLE,
-        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
-    "orca": {
-        "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
-        "constrained_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "single_point": BackendCapabilityStatus.AVAILABLE,
-        "frequency": BackendCapabilityStatus.AVAILABLE,
-        "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "nmr_shielding": BackendCapabilityStatus.AVAILABLE,
-        "relaxed_scan": BackendCapabilityStatus.AVAILABLE,
-        "transition_state": BackendCapabilityStatus.AVAILABLE,
-        "irc": BackendCapabilityStatus.AVAILABLE,
-    },
-    "crest": {
-        "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
-        "constrained_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "single_point": BackendCapabilityStatus.AVAILABLE,
-        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "conformer_search": BackendCapabilityStatus.AVAILABLE,
-        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
-    "xtb": {
-        "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
-        "constrained_optimization": BackendCapabilityStatus.AVAILABLE,
-        "single_point": BackendCapabilityStatus.AVAILABLE,
-        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "mrrho_thermochemistry": BackendCapabilityStatus.AVAILABLE,
-        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "relaxed_scan": BackendCapabilityStatus.AVAILABLE,
-        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
-    "external": {
-        "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "constrained_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "single_point": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "clustering": BackendCapabilityStatus.MISSING_BINARY,
-        "thermochemistry": BackendCapabilityStatus.MISSING_BINARY,
-        "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
-    "molclus": {
-        "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "constrained_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "single_point": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "conformer_search": BackendCapabilityStatus.AVAILABLE,
-        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
-    "isostat": {
-        "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "constrained_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "single_point": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "clustering": BackendCapabilityStatus.AVAILABLE,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
-}
-
-
-def _normalize_capability_name(capability: str) -> str:
-    key = capability.lower()
-    if key not in _CAPABILITY_ALIASES:
-        known = ", ".join(sorted(_CAPABILITY_ALIASES))
-        raise ValueError(f"Unknown capability: {capability}. Known: {known}")
-    return _CAPABILITY_ALIASES[key]
 
 
 def _normalize_backend_name(backend_name: str) -> str:
@@ -195,7 +56,7 @@ def supports(backend_name: str, capability: str) -> bool:
     """Return True only when the declared matrix status is AVAILABLE."""
 
     canonical_backend = _normalize_backend_name(backend_name)
-    canonical_capability = _normalize_capability_name(capability)
+    canonical_capability = normalize_capability_name(capability)
     return (
         CAPABILITY_MATRIX[canonical_backend][canonical_capability]
         is BackendCapabilityStatus.AVAILABLE
@@ -215,7 +76,7 @@ def list_backends(capability: str | None = None) -> list[str]:
     if capability is None:
         return sorted(CAPABILITY_MATRIX)
 
-    canonical_capability = _normalize_capability_name(capability)
+    canonical_capability = normalize_capability_name(capability)
     return [
         backend_name
         for backend_name in sorted(CAPABILITY_MATRIX)
@@ -227,7 +88,13 @@ def list_backends(capability: str | None = None) -> list[str]:
 
 
 def backend_status(backend_name: str) -> dict[str, object]:
-    """Return declared and runtime capability status for *backend_name*."""
+    """Return declared and runtime capability status for *backend_name*.
+
+    Declarations answer "is it implemented?"; runtime probes answer "is the
+    binary actually present?".  ``external`` uses per-capability probes
+    (``is_isostat_available`` / ``is_shermo_available``); other backends fall
+    back to the backend-wide ``is_available()``.
+    """
 
     canonical_backend = _normalize_backend_name(backend_name)
     declared_capabilities = list_capabilities(canonical_backend)

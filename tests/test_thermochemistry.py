@@ -109,6 +109,9 @@ def test_external_backend_delegates_to_calculator(
     def fake_run_shermo(**_: str | int | float | Path | None) -> dict[str, float]:
         return {"h_sum": -9.9, "g_sum": -10.0, "s_total": 0.01}
 
+    # The fake runner below stands in for the Shermo binary; without it the
+    # pre-launch probe rejects the call (delta D3: BackendUnavailableError).
+    monkeypatch.setattr(ExternalBackend, "is_shermo_available", lambda self: True)
     monkeypatch.setattr(thermochemistry, "run_shermo", fake_run_shermo)
     result = ExternalBackend({}).thermochemistry(
         freq_log,

@@ -88,6 +88,14 @@ def test_registry_exposes_registered_backends() -> None:
     assert get_backend("crest") is CrestBackend
     assert get_backend("xtb") is XTBBackend
     assert get_backend("external") is ExternalBackend
+    assert require_backend("frequency") is ORCABackend
+    assert require_backend("single_point") is ORCABackend
+    assert require_backend("clustering") is ExternalBackend
+    assert require_backend("thermochemistry") is ExternalBackend
+    assert require_backend("irc") is ORCABackend
+
+
+def test_require_backend_selection_matches_declared_matrix() -> None:
     assert issubclass(require_backend("frequency"), FrequencyCalculator)
     assert issubclass(require_backend("single_point"), SinglePointCalculator)
     assert issubclass(require_backend("clustering"), ClusteringTool)
@@ -98,6 +106,48 @@ def test_registry_exposes_registered_backends() -> None:
 def test_require_backend_rejects_unknown_capability() -> None:
     with pytest.raises(ValueError, match="Unknown capability"):
         _ = require_backend("imaginary")
+
+
+def test_require_backend_never_selects_stubs() -> None:
+    from acp.backends.registry import BackendRegistry
+    from cccp.calculation.errors import UnsupportedCapabilityError
+
+    registry = BackendRegistry()
+    registry.register(CrestBackend)
+    with pytest.raises(UnsupportedCapabilityError):
+        registry.require("geometry_optimization")
+    with pytest.raises(UnsupportedCapabilityError):
+        registry.require("single_point")
+
+
+def test_call_capability_rejects_missing_capability_structured() -> None:
+    from acp.calculations.primitives._common import CalculationInputs, call_capability
+    from cccp.calculation.errors import UnsupportedCapabilityError
+
+    backend = XTBBackend(_make_config())
+    inputs = CalculationInputs(
+        coordinates=np.zeros((1, 3)),
+        symbols=("H",),
+        charge=0,
+        multiplicity=1,
+    )
+    with pytest.raises(UnsupportedCapabilityError, match="frequency"):
+        call_capability(backend, "frequency", inputs, None, {})
+
+
+def test_external_backend_rejects_before_launch_when_binary_missing() -> None:
+    from cccp.calculation.errors import BackendUnavailableError
+
+    backend = ExternalBackend(_make_config())
+
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return None
+
+    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+        with pytest.raises(BackendUnavailableError, match="isostat"):
+            backend.cluster(Path("ensemble.xyz"))
+        with pytest.raises(BackendUnavailableError, match="Shermo"):
+            backend.thermochemistry(Path("frequency.log"))
 
 
 def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:

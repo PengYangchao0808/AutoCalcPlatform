@@ -435,13 +435,10 @@ class TestMethodMetaSnapshot:
 
 
 # ---------------------------------------------------------------------------
-# Capability-selection status quo
+# Capability selection (declared semantics, delta D1–D4)
 # ---------------------------------------------------------------------------
-# NOTE: this pins the CURRENT selection semantics (structural protocol match in
-# registry-sorted order).  Wave-1 todo 8 replaces it with declared-status
-# filtering and stubs become pre-launch rejections — that change is an
-# APPROVED delta recorded in expected_behavior_delta.md; update these pins in
-# the same commit as the implementation.
+# Delta citations below reference tests/baseline/cccp_calculation_goldens/
+# expected_behavior_delta.md — the authorization for these pin values.
 
 
 class TestCapabilitySelectionStatusQuo:
@@ -449,9 +446,9 @@ class TestCapabilitySelectionStatusQuo:
         import acp.backends  # noqa: F401  — populates the registry
 
         expected = {
-            "optimization": "CrestBackend",
-            "single_point": "CrestBackend",
-            "frequency": "CrestBackend",
+            "optimization": "ORCABackend",
+            "single_point": "ORCABackend",
+            "frequency": "ORCABackend",
             "clustering": "ExternalBackend",
             "thermochemistry": "ExternalBackend",
             "irc": "ORCABackend",
@@ -463,27 +460,43 @@ class TestCapabilitySelectionStatusQuo:
             selected = require_backend(capability)
             assert selected.__name__ == class_name, capability
 
-    def test_selected_optimization_stub_currently_raises_at_call_time(self):
-        # Status quo: the selected class carries NotImplementedError stubs for
-        # the structurally-matched capability (see appendix B of
-        # docs/ACP_CCCP_Architecture_Report.md).  Post-P0 this becomes a
-        # pre-launch typed rejection instead — approved delta.
+    def test_selected_optimization_is_implemented_not_stub(self):
+        # D1: declared-status selection never lands on a stub; D2 declares
+        # CrestBackend.optimize STUBBED, so it is unreachable via require.
         import acp.backends  # noqa: F401
 
         selected = require_backend("optimization")
-        instance = selected.__new__(selected)
-        with pytest.raises(NotImplementedError):
-            instance.optimize(None, [])
+        assert selected.__name__ == "ORCABackend"
+
+    def test_stubbed_capabilities_are_rejected_before_construction(self):
+        # D1: a registry holding only stub-declaring backends must raise
+        # UnsupportedCapabilityError instead of selecting a stub.
+        from acp.backends.crest import CrestBackend
+        from acp.backends.registry import BackendRegistry
+        from cccp.calculation.errors import UnsupportedCapabilityError
+
+        registry = BackendRegistry()
+        registry.register(CrestBackend)
+        with pytest.raises(UnsupportedCapabilityError):
+            registry.require("geometry_optimization")
+        with pytest.raises(UnsupportedCapabilityError):
+            registry.require("single_point")
 
     def test_supports_matrix_statuses(self):
         assert supports("orca", "optimization") is True
         assert supports("orca", "single_point") is True
         assert supports("orca", "frequency") is True
-        # Status-quo quirks targeted by P0 fixes (approved deltas):
-        assert supports("crest", "optimization") is True  # declared, stubbed in practice
+        # D2 — declaration = implemented: stubs are not AVAILABLE.
+        assert supports("crest", "optimization") is False
+        assert supports("crest", "geometry_optimization") is False
+        assert supports("crest", "single_point") is False
         assert supports("crest", "frequency") is False
-        assert supports("external", "thermochemistry") is False  # MISSING_BINARY today
+        # D3 — declaration says implemented; runtime probes
+        # (is_shermo_available / is_isostat_available) judge the binary.
+        assert supports("external", "thermochemistry") is True
+        assert supports("external", "clustering") is True
         assert supports("xtb", "mrrho_thermo") is True
+        assert supports("xtb", "frequency") is False
         assert supports("censo", "conformer_search") is True
 
     def test_capability_matrix_is_complete_rectangle(self):
