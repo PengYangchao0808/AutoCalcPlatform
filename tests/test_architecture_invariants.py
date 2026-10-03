@@ -26,6 +26,8 @@ CURRENT_ACTIVE_IDS = (
     "Confsearch",
     "PESsearch",
     "BatchOptimize",
+    "XtbPathSearch",
+    "OrcaGradient",
 )
 TARGET_ACTIVE_IDS = (
     "singlepoint",
@@ -40,6 +42,8 @@ TARGET_ACTIVE_IDS = (
     "PESsearch",
     "BatchOptimize",
     "nmr",
+    "XtbPathSearch",
+    "OrcaGradient",
 )
 
 TARGET_STATE_ENABLED = True
@@ -85,7 +89,7 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
     assert active_ids == CURRENT_ACTIVE_IDS
-    assert len(active_ids) == 12
+    assert len(active_ids) == 14
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
@@ -99,6 +103,8 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
         "Confsearch",
         "PESsearch",
         "BatchOptimize",
+        "XtbPathSearch",
+        "OrcaGradient",
     }
 
 
@@ -187,7 +193,7 @@ def test_batch_engine_no_stage_symbols() -> None:
 def test_target_active_workflow_ids_are_exact() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
-    assert len(active_ids) == 12
+    assert len(active_ids) == 14
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
@@ -201,6 +207,8 @@ def test_target_active_workflow_ids_are_exact() -> None:
         "PESsearch",
         "BatchOptimize",
         "nmr",
+        "XtbPathSearch",
+        "OrcaGradient",
     }
 
 

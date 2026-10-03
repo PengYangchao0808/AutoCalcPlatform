@@ -230,6 +230,79 @@ def test_xtb_backend_enso_thermo_translates_interface_result(tmp_path: Path) -> 
     assert kwargs["sthr"] == 25.0
 
 
+def test_xtb_backend_path_search_delegates_to_path_interface(tmp_path: Path) -> None:
+    from cccp.qc.interfaces.xtb_path import PathSearchResult, XTBPathInterface
+
+    config = _make_config()
+    backend = XTBBackend(config)
+    expected = PathSearchResult(
+        frame_paths=[tmp_path / "frame0.xyz"],
+        energies_hartree=[-1.0],
+        success=True,
+    )
+
+    start_xyz = tmp_path / "start.xyz"
+    end_xyz = tmp_path / "end.xyz"
+    start_xyz.write_text("1\ns\nH 0 0 0\n", encoding="utf-8")
+    end_xyz.write_text("1\ne\nH 1 0 0\n", encoding="utf-8")
+
+    with patch.object(XTBPathInterface, "path_search", return_value=expected) as mock_ps:
+        result = backend.path_search(
+            start_xyz,
+            end_xyz,
+            tmp_path / "out",
+            charge=-1,
+            multiplicity=2,
+            uhf=1,
+            gfn_level=2,
+            path_inp_text="$path\n$end\n",
+            extra_args=["--norestart"],
+            seed=7,
+            timeout=600,
+        )
+
+    assert result is expected
+    mock_ps.assert_called_once()
+    call_args = mock_ps.call_args
+    assert call_args.args[0] == start_xyz
+    assert call_args.args[1] == end_xyz
+    assert call_args.args[2] == tmp_path / "out"
+    kwargs = call_args.kwargs
+    assert kwargs["charge"] == -1
+    assert kwargs["multiplicity"] == 2
+    assert kwargs["uhf"] == 1
+    assert kwargs["gfn_level"] == 2
+    assert kwargs["path_inp_text"] == "$path\n$end\n"
+    assert kwargs["extra_args"] == ["--norestart"]
+    assert kwargs["seed"] == 7
+    assert kwargs["timeout"] == 600
+
+
+def test_xtb_backend_path_search_defaults_are_recipe_faithful(
+    tmp_path: Path,
+) -> None:
+    from cccp.qc.interfaces.xtb_path import PathSearchResult, XTBPathInterface
+
+    config = _make_config()
+    backend = XTBBackend(config)
+    expected = PathSearchResult(frame_paths=[], energies_hartree=[], success=False)
+
+    start_xyz = tmp_path / "start.xyz"
+    end_xyz = tmp_path / "end.xyz"
+    start_xyz.write_text("1\ns\nH 0 0 0\n", encoding="utf-8")
+    end_xyz.write_text("1\ne\nH 1 0 0\n", encoding="utf-8")
+
+    with patch.object(XTBPathInterface, "path_search", return_value=expected) as mock_ps:
+        result = backend.path_search(start_xyz, end_xyz, tmp_path / "out")
+
+    assert result is expected
+    kwargs = mock_ps.call_args.kwargs
+    assert kwargs["uhf"] == 0
+    assert kwargs["path_inp_text"] is None
+    assert kwargs["extra_args"] == ()
+    assert kwargs["seed"] is None
+
+
 def test_crest_backend_search_returns_ensemble_path(tmp_path: Path) -> None:
     config = _make_config()
     backend = CrestBackend(config)

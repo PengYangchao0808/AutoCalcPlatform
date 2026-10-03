@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -126,16 +127,52 @@ class XTBPathInterface:
         alp: float = 1.2,
         charge: int = 0,
         multiplicity: int = 1,
+        uhf: int = 0,
         gfn_level: int | None = None,
         solvent: str | None = None,
         etemp: float | None = None,
         timeout: int | None = None,
+        path_inp_text: str | None = None,
+        extra_args: Sequence[str] = (),
+        seed: int | None = None,
     ) -> PathSearchResult:
         """Run ``xtb --path`` between *start_xyz* and *end_xyz*.
 
         Parameter semantics match the RPH ``run_path()`` contract: path bias
         settings are written to ``path.inp`` and the subprocess is launched as
         ``xtb <start> --path <end> --input path.inp``.
+
+        Args:
+            start_xyz: Reactant XYZ path.
+            end_xyz: Product XYZ path.
+            output_dir: Working directory for the path search.
+            nrun: Number of metadynamics runs (used when *path_inp_text* is None).
+            npoint: Number of path points (used when *path_inp_text* is None).
+            anopt: Optimization steps between points (used when *path_inp_text* is None).
+            kpush: Bias push force constant (used when *path_inp_text* is None).
+            kpull: Bias pull force constant (used when *path_inp_text* is None).
+            ppull: Pull offset (used when *path_inp_text* is None).
+            alp: Gaussian width (used when *path_inp_text* is None).
+            charge: Molecular charge passed to ``--chrg``.
+            multiplicity: Spin multiplicity; maps to xTB ``--uhf`` as
+                ``max(0, multiplicity - 1)`` when *uhf* is 0.
+            uhf: Explicit xTB ``--uhf`` value from the frozen recipe. When
+                greater than 0 it overrides the *multiplicity* mapping; when 0
+                the mapping is used. ``--uhf`` is always passed on the command
+                line (even 0).
+            gfn_level: GFN method level; ``--gfn <gfn_level>`` is always
+                passed (even 2).
+            solvent: Optional solvent name for ALPB/GBSA solvation flags.
+            etemp: Optional electronic temperature (``--etemp``).
+            timeout: Subprocess timeout in seconds.
+            path_inp_text: Externally authored ``path.inp`` body. When
+                provided it is written verbatim; when None the bias block is
+                generated from the keyword arguments above.
+            extra_args: Extra CLI flags appended after the standard flags.
+            seed: Optional random seed passed as ``--seed`` when not None.
+
+        Returns:
+            PathSearchResult with materialized frames and parsed energies.
         """
         output_dir = Path(output_dir)
         ensure_dir(output_dir)
@@ -165,23 +202,26 @@ class XTBPathInterface:
             end_copy.write_text(end_xyz.read_text(encoding="utf-8"), encoding="utf-8")
 
         input_file = output_dir / "path.inp"
-        input_file.write_text(
-            "\n".join(
-                [
-                    "$path",
-                    f"   nrun={int(nrun)}",
-                    f"   npoint={int(npoint)}",
-                    f"   anopt={int(anopt)}",
-                    f"   kpush={float(kpush)}",
-                    f"   kpull={float(kpull)}",
-                    f"   ppull={float(ppull)}",
-                    f"   alp={float(alp)}",
-                    "$end",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
+        if path_inp_text is not None:
+            input_file.write_text(path_inp_text, encoding="utf-8")
+        else:
+            input_file.write_text(
+                "\n".join(
+                    [
+                        "$path",
+                        f"   nrun={int(nrun)}",
+                        f"   npoint={int(npoint)}",
+                        f"   anopt={int(anopt)}",
+                        f"   kpush={float(kpush)}",
+                        f"   kpull={float(kpull)}",
+                        f"   ppull={float(ppull)}",
+                        f"   alp={float(alp)}",
+                        "$end",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
 
         stdout_file = output_dir / "xtb_path.stdout.log"
         stderr_file = output_dir / "xtb_path.stderr.log"
@@ -202,16 +242,17 @@ class XTBPathInterface:
                 "--chrg",
                 str(charge),
             ]
-            uhf = max(0, int(multiplicity) - 1)
-            if uhf > 0:
-                cmd.extend(["--uhf", str(uhf)])
+            resolved_uhf = int(uhf) if uhf else max(0, int(multiplicity) - 1)
+            cmd.extend(["--uhf", str(resolved_uhf)])
+            cmd.extend(["--gfn", str(resolved_gfn_level)])
             if resolved_solvent:
-                cmd.extend(["--gfn", str(resolved_gfn_level)])
                 cmd.extend(self._solvent_args(resolved_solvent, gfn_level=resolved_gfn_level))
-            elif resolved_gfn_level != 2:
-                cmd.extend(["--gfn", str(resolved_gfn_level)])
             if etemp is not None:
                 cmd.extend(["--etemp", str(float(etemp))])
+            if seed is not None:
+                cmd.extend(["--seed", str(int(seed))])
+            if extra_args:
+                cmd.extend(str(arg) for arg in extra_args)
 
             result = subprocess.run(
                 cmd,

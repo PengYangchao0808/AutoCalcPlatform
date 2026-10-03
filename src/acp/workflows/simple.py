@@ -114,6 +114,8 @@ _SCHEDULER_MARKERS: set[str] = {
     "stderr.log",
     "mechanism_config.json",
     "metrics.json",
+    "path_config.json",
+    "gradient_config.json",
     "WORK",
     "RESULT",
     "INPUT",

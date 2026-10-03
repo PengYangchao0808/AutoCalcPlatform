@@ -62,6 +62,25 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         ),
         requires_binaries=["orca", "shermo"],
     ),
+    "XtbPathSearch": WorkflowRegistryEntry(
+        name="XtbPathSearch",
+        label="xTB PATH Search",
+        description=(
+            "GFN2-xTB PATH metadynamics from a frozen pes2ts_xtb_path_request_v1 "
+            "payload delivered via --path-config."
+        ),
+        requires_binaries=["xtb"],
+    ),
+    "OrcaGradient": WorkflowRegistryEntry(
+        name="OrcaGradient",
+        label="ORCA Single-Point Gradient",
+        description=(
+            "ORCA single-point analytic gradient (EnGrad) from a frozen "
+            "pes2ts_orca_gradient_request_v1 payload delivered via "
+            "--gradient-config."
+        ),
+        requires_binaries=["orca"],
+    ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",
         label="NMR + DP4/DP5",

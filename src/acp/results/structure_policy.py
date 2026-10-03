@@ -54,7 +54,9 @@ __all__ = ["POLICY_VERSION", "STRUCTURE_KINDS", "single_geometry", "reusable_pro
 # Display priorities do not relax any workflow submission gate.
 WORKFLOW_SOURCE_ROLES = {
     "Confsearch": ("INT", "", "TS"), "PESsearch": ("INT", "", "TS"),
-    "BatchOptimize": ("TS", "INT", ""), "irc": ("TS", "", "INT"),
+    "BatchOptimize": ("TS", "INT", ""), "XtbPathSearch": ("INT", "", "TS"),
+    "OrcaGradient": ("INT", "", "TS"),
+    "irc": ("TS", "", "INT"),
     "scan": ("INT", "", "TS"), "tsmode": ("TS", "", "INT"),
     "nmr": ("INT", "", "TS"), "singlepoint": ("INT", "TS", ""),
     "optimize": ("INT", "", "TS"), "frequency": ("INT", "TS", ""),

@@ -6,12 +6,16 @@ Subcommands:
     run Confsearch  Conformer search and energy refinement
     run PESsearch   PES scan and candidate extraction
     run BatchOptimize  Multi-structure calculation plan
+    run XtbPathSearch  GFN2-xTB PATH metadynamics (--path-config)
+    run OrcaGradient   ORCA single-point gradient EnGrad (--gradient-config)
     run irc         Standalone IRC calculation
     run serve       Start the ACP web dashboard (FastAPI + uvicorn)
 
 Usage:
     acp run Confsearch --input "CCO" --output ./result
     acp run BatchOptimize --items-file structures.xyz --profile opt_freq
+    acp run XtbPathSearch --path-config request.json --output ./path_out
+    acp run OrcaGradient --gradient-config request.json --output ./grad_out
     acp run irc --input ts.xyz --output ./irc_result
     acp run serve --help
 """
@@ -712,6 +716,110 @@ Examples:
         help="Logging level (default: INFO)",
     )
 
+    xtb_path = run_sub.add_parser(
+        "XtbPathSearch",
+        help="GFN2-xTB PATH metadynamics (frozen pes2ts_xtb_path_request_v1 payload)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run XtbPathSearch --path-config request.json --output ./path_out
+  acp run XtbPathSearch --path-config request.json --output ./out --nproc 8 --mem 16
+  acp run XtbPathSearch --path-config request.json --output ./out --register
+
+--path-config ships the complete frozen request (source xyz pair, charge/
+multiplicity, path_inp_text, gfn_level, uhf, threads, timeout, seed, extra
+args) exactly like PESsearch --scan-config; recipe knobs are never defaulted.
+--register makes the finished CLI run visible in the Workbench (job list +
+/api/v1/jobs/{id}/s2/profile); the output dir is registered as-is.
+        """,
+    )
+    xtb_path.set_defaults(workflow="XtbPathSearch")
+    xtb_path.add_argument(
+        "--path-config",
+        required=True,
+        help=(
+            "Frozen pes2ts_xtb_path_request_v1 request as a JSON file path "
+            "(or an inline JSON string)"
+        ),
+    )
+    xtb_path.add_argument("--output", "-o", default="./xtb_path_out", help="Output directory")
+    xtb_path.add_argument("--nproc", type=int, help="Number of CPU cores")
+    xtb_path.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
+    xtb_path.add_argument("--config", type=str, help="Configuration YAML file")
+    xtb_path.add_argument(
+        "--register",
+        action="store_true",
+        help=(
+            "After a successful run, register the output directory as a "
+            "COMPLETED job in the ACP jobs store (acp_jobs.db under "
+            "ACP_RUN_ROOT) so the Workbench job list and "
+            "/api/v1/jobs/{id}/s2/profile can resolve it. Off by default."
+        ),
+    )
+    xtb_path.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    orca_gradient = run_sub.add_parser(
+        "OrcaGradient",
+        help="ORCA single-point gradient EnGrad (frozen pes2ts_orca_gradient_request_v1 payload)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run OrcaGradient --gradient-config request.json --output ./grad_out
+  acp run OrcaGradient --gradient-config request.json --output ./out --nproc 8 --mem 16
+  acp run OrcaGradient --gradient-config request.json --output ./out --register
+
+--gradient-config ships the complete frozen request (xyz or geometry+elements,
+method, basis, charge, multiplicity, optional route extras / timeout / nproc /
+extra blocks) exactly like XtbPathSearch --path-config; request knobs are
+never defaulted by ACP. Gradient values are the ORCA-printed energy gradient
+dE/dX in Hartree/bohr (not forces).
+--register makes the finished CLI run visible in the Workbench (job list +
+/api/v1/jobs/{id}/s2/profile); the output dir is registered as-is.
+        """,
+    )
+    orca_gradient.set_defaults(workflow="OrcaGradient")
+    orca_gradient.add_argument(
+        "--gradient-config",
+        required=True,
+        help=(
+            "Frozen pes2ts_orca_gradient_request_v1 request as a JSON file path "
+            "(or an inline JSON string)"
+        ),
+    )
+    orca_gradient.add_argument("--output", "-o", default="./orca_gradient_out", help="Output directory")
+    orca_gradient.add_argument("--nproc", type=int, help="Number of CPU cores")
+    orca_gradient.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
+    orca_gradient.add_argument("--config", type=str, help="Configuration YAML file")
+    orca_gradient.add_argument(
+        "--register",
+        action="store_true",
+        help=(
+            "After a successful run, register the output directory as a "
+            "COMPLETED job in the ACP jobs store (acp_jobs.db under "
+            "ACP_RUN_ROOT) so the Workbench job list and "
+            "/api/v1/jobs/{id}/s2/profile can resolve it. Off by default."
+        ),
+    )
+    orca_gradient.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
 
 def _add_batch_optimize_parser(run_sub: argparse._SubParsersAction) -> None:
     batch = run_sub.add_parser(
@@ -988,7 +1096,7 @@ Examples:
         "--batch-roles-json",
         type=str,
         default=None,
-        help="New-style per-role config as JSON string (e.g. '{\"int\":{...},\"ts\":{...}}')",
+        help='New-style per-role config as JSON string (e.g. \'{"int":{...},"ts":{...}}\')',
     )
     batch.add_argument(
         "--log-level",
@@ -1519,7 +1627,9 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
-def _strict_method_config_errors(scan_request: dict[str, Any], args: argparse.Namespace) -> list[str]:
+def _strict_method_config_errors(
+    scan_request: dict[str, Any], args: argparse.Namespace
+) -> list[str]:
     """Strict new-submission gate for direct CLI bond-scan sources (T14).
 
     A ``--scan-config`` document is the scheduler/recompute contract — its
@@ -1719,6 +1829,253 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     logger.info("BatchOptimize completed: profile=%s", args.profile)
     logger.info("  Manifest: %s", result.metadata.get("manifest_path"))
     reporter.complete()
+    return 0
+
+
+def _handle_xtb_path_search(args: argparse.Namespace) -> int:
+    """Execute the GFN2-xTB PATH metadynamics workflow from ``--path-config``.
+
+    Thin dispatch layer: load the frozen ``pes2ts_xtb_path_request_v1``
+    payload, call :func:`acp.workflows.xtb_path.run_xtb_path_search`, and
+    translate typed workflow errors into exit codes (input → 2, execution → 1).
+    """
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.xtb_path import (
+        XTB_PATH_STAGES,
+        XtbPathInputError,
+        XtbPathSearchError,
+        run_xtb_path_search,
+    )
+
+    setup_logging(args.log_level)
+    try:
+        path_request = _load_plan_argument(args.path_config)
+    except ValueError as exc:
+        logger.error("XtbPathSearch --path-config error: %s", exc)
+        return 2
+    if not isinstance(path_request, dict):
+        logger.error("XtbPathSearch --path-config must be a JSON object request payload")
+        return 2
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    reporter = ProgressReporter(output_dir, job_name="XtbPathSearch", stages=list(XTB_PATH_STAGES))
+    try:
+        result = run_xtb_path_search(
+            path_request,
+            output_dir=output_dir,
+            config=cfg,
+            progress_reporter=reporter,
+        )
+    except XtbPathInputError as exc:
+        logger.error("XtbPathSearch input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except XtbPathSearchError as exc:
+        logger.error("XtbPathSearch failed: %s", exc)
+        reporter.fail(str(exc))
+        return 1
+    except KeyboardInterrupt:
+        logger.warning("XtbPathSearch interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+    if result.status != "completed":
+        logger.error("XtbPathSearch failed: %s", result.error)
+        reporter.fail(result.error or "XtbPathSearch failed")
+        return 1
+    logger.info("XtbPathSearch completed")
+    logger.info("  Frames      : %s", result.metadata.get("frames_count", "N/A"))
+    logger.info("  Manifest    : %s", result.metadata.get("result_manifest_path", "N/A"))
+    logger.info("  PES profile : %s", result.metadata.get("pes_profile_path", "N/A"))
+    reporter.complete()
+    if getattr(args, "register", False):
+        return _register_xtb_path_cli_job(args, output_dir, path_request, result)
+    return 0
+
+
+def _register_xtb_path_cli_job(
+    args: argparse.Namespace,
+    output_dir: Path,
+    path_request: dict[str, Any],
+    result: Any,
+) -> int:
+    """Persist a finished ``XtbPathSearch`` CLI run as a completed job (X1′-D).
+
+    Opt-in via ``--register``: binds ``--output`` (as-is) as the job's
+    ``work_dir`` through the store-layer registration API so the Workbench
+    job list and ``GET /api/v1/jobs/{id}/s2/profile`` resolve.  Skipped
+    with a warning when the output dir is already a scheduler task dir —
+    those runs are registered by ``JobManager.submit`` and re-registering
+    would duplicate the row.
+
+    Returns:
+        ``0`` when registered (or intentionally skipped), ``1`` when
+        ``--register`` was requested but registration failed.
+    """
+    from acp.scheduler.registration import (
+        CliJobRegistrationError,
+        register_completed_cli_job,
+    )
+    from acp.workflows._helpers import is_scheduler_task_dir
+
+    if is_scheduler_task_dir(output_dir):
+        logger.warning(
+            "XtbPathSearch --register skipped: %s is a scheduler task dir "
+            "(already registered by the job manager)",
+            output_dir,
+        )
+        return 0
+    resources: dict[str, Any] = {}
+    if getattr(args, "nproc", None) is not None:
+        resources["nproc"] = args.nproc
+    if getattr(args, "mem", None) is not None:
+        resources["mem"] = args.mem
+    metadata = dict(getattr(result, "metadata", None) or {})
+    try:
+        record = register_completed_cli_job(
+            workflow="XtbPathSearch",
+            work_dir=output_dir,
+            input_payload={"path_request": path_request},
+            resources=resources,
+            config_path=getattr(args, "config", None),
+            result={
+                "registration": "cli",
+                "frames_count": metadata.get("frames_count"),
+                "pes_profile_path": metadata.get("pes_profile_path"),
+                "result_manifest_path": metadata.get("result_manifest_path"),
+            },
+            required_files=(
+                "RESULT/result_manifest.json",
+                "RESULT/pes_search/pes_profile.json",
+            ),
+        )
+    except CliJobRegistrationError as exc:
+        logger.error("XtbPathSearch --register failed: %s", exc)
+        return 1
+    logger.info("  Registered job: %s (status=%s)", record.id, record.status.value)
+    return 0
+
+
+def _handle_orca_gradient(args: argparse.Namespace) -> int:
+    """Execute the ORCA single-point gradient workflow from ``--gradient-config``.
+
+    Thin dispatch layer: load the frozen ``pes2ts_orca_gradient_request_v1``
+    payload, call :func:`acp.workflows.orca_gradient.run_orca_gradient`, and
+    translate typed workflow errors into exit codes (input → 2, execution → 1).
+    """
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.orca_gradient import (
+        ORCA_GRADIENT_STAGES,
+        OrcaGradientError,
+        OrcaGradientInputError,
+        run_orca_gradient,
+    )
+
+    setup_logging(args.log_level)
+    try:
+        gradient_request = _load_plan_argument(args.gradient_config)
+    except ValueError as exc:
+        logger.error("OrcaGradient --gradient-config error: %s", exc)
+        return 2
+    if not isinstance(gradient_request, dict):
+        logger.error("OrcaGradient --gradient-config must be a JSON object request payload")
+        return 2
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    reporter = ProgressReporter(
+        output_dir, job_name="OrcaGradient", stages=list(ORCA_GRADIENT_STAGES)
+    )
+    try:
+        result = run_orca_gradient(
+            request=gradient_request,
+            output_dir=output_dir,
+            config=cfg,
+            progress_reporter=reporter,
+        )
+    except OrcaGradientInputError as exc:
+        logger.error("OrcaGradient input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except OrcaGradientError as exc:
+        logger.error("OrcaGradient failed: %s", exc)
+        reporter.fail(str(exc))
+        return 1
+    except KeyboardInterrupt:
+        logger.warning("OrcaGradient interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+    if result.status != "completed":
+        logger.error("OrcaGradient failed: %s", result.error)
+        reporter.fail(result.error or "OrcaGradient failed")
+        return 1
+    logger.info("OrcaGradient completed")
+    logger.info("  Energy      : %s Eh", result.metadata.get("energy_hartree", "N/A"))
+    logger.info("  Gradient    : %s (%s)", result.metadata.get("gradient_source", "N/A"), result.metadata.get("gradient_unit", "N/A"))
+    logger.info("  Manifest    : %s", result.metadata.get("result_manifest_path", "N/A"))
+    reporter.complete()
+    if getattr(args, "register", False):
+        return _register_orca_gradient_cli_job(args, output_dir, gradient_request, result)
+    return 0
+
+
+def _register_orca_gradient_cli_job(
+    args: argparse.Namespace,
+    output_dir: Path,
+    gradient_request: dict[str, Any],
+    result: Any,
+) -> int:
+    """Persist a finished ``OrcaGradient`` CLI run as a completed job (X4′-A).
+
+    Opt-in via ``--register``: binds ``--output`` (as-is) as the job's
+    ``work_dir`` through the store-layer registration API. Skipped with a
+    warning when the output dir is already a scheduler task dir.
+
+    Returns:
+        ``0`` when registered (or intentionally skipped), ``1`` when
+        ``--register`` was requested but registration failed.
+    """
+    from acp.scheduler.registration import (
+        CliJobRegistrationError,
+        register_completed_cli_job,
+    )
+    from acp.workflows._helpers import is_scheduler_task_dir
+
+    if is_scheduler_task_dir(output_dir):
+        logger.warning(
+            "OrcaGradient --register skipped: %s is a scheduler task dir "
+            "(already registered by the job manager)",
+            output_dir,
+        )
+        return 0
+    resources: dict[str, Any] = {}
+    if getattr(args, "nproc", None) is not None:
+        resources["nproc"] = args.nproc
+    if getattr(args, "mem", None) is not None:
+        resources["mem"] = args.mem
+    metadata = dict(getattr(result, "metadata", None) or {})
+    try:
+        record = register_completed_cli_job(
+            workflow="OrcaGradient",
+            work_dir=output_dir,
+            input_payload={"gradient_request": gradient_request},
+            resources=resources,
+            config_path=getattr(args, "config", None),
+            result={
+                "registration": "cli",
+                "energy_hartree": metadata.get("energy_hartree"),
+                "gradient_source": metadata.get("gradient_source"),
+                "result_manifest_path": metadata.get("result_manifest_path"),
+            },
+            required_files=(
+                "RESULT/result_manifest.json",
+                "RESULT/gradient/gradient.json",
+            ),
+        )
+    except CliJobRegistrationError as exc:
+        logger.error("OrcaGradient --register failed: %s", exc)
+        return 1
+    logger.info("  Registered job: %s (status=%s)", record.id, record.status.value)
     return 0
 
 
@@ -2580,7 +2937,9 @@ def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     extras = getattr(args, "route_extras", None)
     if extras:
         kwargs["route_extras"] = [x.strip() for x in extras.split(",") if x.strip()]
-    electronic_state = _resolve_spin_flags(getattr(args, "spin_preset", None), getattr(args, "spin_config", None))
+    electronic_state = _resolve_spin_flags(
+        getattr(args, "spin_preset", None), getattr(args, "spin_config", None)
+    )
     if electronic_state is not None:
         kwargs["electronic_state"] = electronic_state
     return kwargs
@@ -2937,7 +3296,11 @@ def _handle_irc(args: argparse.Namespace) -> int:
         basis = str(proof.get("basis") or "")
         charge = int(proof["charge"])
         multiplicity = int(proof["multiplicity"])
-        if not method or (args.method and args.method != method) or (args.basis and args.basis != basis):
+        if (
+            not method
+            or (args.method and args.method != method)
+            or (args.basis and args.basis != basis)
+        ):
             raise ValueError("IRC method and basis must match the verified TS source")
         if args.charge is not None and args.charge != charge:
             raise ValueError("IRC charge must match the verified TS source")
@@ -3425,8 +3788,7 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     if args.node is not None:
         node = remote_cfg.get_node(args.node)
         if node is None:
-            print(f"Unknown node {args.node!r}. Configured: "
-                  f"{[n.name for n in remote_cfg.nodes]}")
+            print(f"Unknown node {args.node!r}. Configured: {[n.name for n in remote_cfg.nodes]}")
             return 1
         nodes = [node]
     else:
@@ -3443,20 +3805,22 @@ def _handle_doctor(args: argparse.Namespace) -> int:
                 failures += 1
                 continue
             if report.python is None:
-                print("  Python: NO usable Python 3.10+ interpreter "
-                      "(configure cluster.nodes[].python_executable)")
+                print(
+                    "  Python: NO usable Python 3.10+ interpreter "
+                    "(configure cluster.nodes[].python_executable)"
+                )
                 failures += 1
             else:
-                print(f"  Python: {report.python.python_executable} "
-                      f"(version {report.python.version})")
+                print(
+                    f"  Python: {report.python.python_executable} (version {report.python.version})"
+                )
             for name, info in sorted(report.software.items()):
                 resolved = info.get("resolved")
                 if resolved:
                     version = f" [version: {info.get('version')}]" if info.get("version") else ""
                     print(f"  {name:8s} -> {resolved}{version}")
                 else:
-                    print(f"  {name:8s} -> MISSING (configured: "
-                          f"{info.get('configured')!r})")
+                    print(f"  {name:8s} -> MISSING (configured: {info.get('configured')!r})")
                     failures += 1
             for name, state in sorted(report.symlinks.items()):
                 print(f"  ~/bin/{name}: {state}")
@@ -3464,8 +3828,10 @@ def _handle_doctor(args: argparse.Namespace) -> int:
                 print(f"  note: {report.error}")
     finally:
         pool.close()
-    print("\nDoctor finished: " + ("all checks passed" if failures == 0
-                                   else f"{failures} failure(s) found"))
+    print(
+        "\nDoctor finished: "
+        + ("all checks passed" if failures == 0 else f"{failures} failure(s) found")
+    )
     return 1 if failures else 0
 
 
@@ -3508,6 +3874,8 @@ def main(argv: list[str] | None = None) -> int:
             "Confsearch": _handle_confsearch,
             "PESsearch": _handle_pessearch,
             "BatchOptimize": _handle_batch_optimize,
+            "XtbPathSearch": _handle_xtb_path_search,
+            "OrcaGradient": _handle_orca_gradient,
             "ensemble": _handle_ensemble,
             "energy": _handle_energy,
             "nmr": _handle_nmr,

@@ -78,6 +78,8 @@ EDIT_ACTIVE_WORKFLOWS: frozenset[str] = frozenset(
         "Confsearch",
         "PESsearch",
         "BatchOptimize",
+        "XtbPathSearch",
+        "OrcaGradient",
     }
 )
 

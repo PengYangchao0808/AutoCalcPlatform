@@ -17,6 +17,7 @@ from cccp.qc.interfaces.constraints import (
     ReactionCoordinatePlan,
 )
 from cccp.qc.interfaces.xtb import XTBInterface
+from cccp.qc.interfaces.xtb_path import PathSearchResult, XTBPathInterface
 from cccp.qc.interfaces.xtb_thermo import XTBThermoResult
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,12 @@ class XTBBackend(QCBackend):
         interface_kwargs.setdefault("solvent_model", "none")
 
         self._interface: XTBInterface = XTBInterface(config=config, **interface_kwargs)
+        self._path_interface: XTBPathInterface = XTBPathInterface(
+            config=config,
+            gfn_level=interface_kwargs.get("gfn_level", 2),
+            solvent=interface_kwargs.get("solvent"),
+            solvent_model=interface_kwargs.get("solvent_model", "none"),
+        )
 
     def is_available(self) -> bool:
         return self._interface.is_available()
@@ -188,7 +195,63 @@ class XTBBackend(QCBackend):
             **kwargs,
         )
 
+    def path_search(
+        self,
+        start_xyz: Path,
+        end_xyz: Path,
+        output_dir: Path,
+        *,
+        nrun: int = 1,
+        npoint: int = 25,
+        anopt: int = 10,
+        kpush: float = 0.003,
+        kpull: float = -0.015,
+        ppull: float = 0.05,
+        alp: float = 1.2,
+        charge: int = 0,
+        multiplicity: int = 1,
+        uhf: int = 0,
+        gfn_level: int | None = None,
+        solvent: str | None = None,
+        etemp: float | None = None,
+        timeout: int | None = None,
+        path_inp_text: str | None = None,
+        extra_args: Sequence[str] = (),
+        seed: int | None = None,
+    ) -> PathSearchResult:
+        """Delegate an xTB ``--path`` metadynamics search to ``XTBPathInterface``.
+
+        When *path_inp_text* is provided it is written verbatim as ``path.inp``;
+        otherwise the bias block is generated from the keyword arguments.
+        ``--gfn`` and ``--uhf`` are always passed on the command line.
+
+        Returns:
+            PathSearchResult from the underlying interface.
+        """
+        return self._path_interface.path_search(
+            start_xyz,
+            end_xyz,
+            output_dir,
+            nrun=nrun,
+            npoint=npoint,
+            anopt=anopt,
+            kpush=kpush,
+            kpull=kpull,
+            ppull=ppull,
+            alp=alp,
+            charge=charge,
+            multiplicity=multiplicity,
+            uhf=uhf,
+            gfn_level=gfn_level,
+            solvent=solvent,
+            etemp=etemp,
+            timeout=timeout,
+            path_inp_text=path_inp_text,
+            extra_args=extra_args,
+            seed=seed,
+        )
+
 
 register_backend(XTBBackend)
 
-__all__ = ["XTBBackend", "XTBInterface"]
+__all__ = ["PathSearchResult", "XTBBackend", "XTBInterface"]
