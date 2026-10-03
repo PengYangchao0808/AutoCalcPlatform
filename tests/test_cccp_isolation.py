@@ -52,6 +52,10 @@ _PROBE_MARKER = "::probe::"
 # Environment variants probed for every low-level expectation (plan todo 3(b)).
 _VARIANTS = ("blocked", "cccp-only")
 
+# Frozen baseline: ideal-gas 1 atm -> 1 mol/L correction at 298.15 K in Hartree
+# (= standard_state_correction_kcal(298.15) kcal/mol / HARTREE_TO_KCAL).
+_BASELINE_DELTA_HARTREE_298K = 0.003018804534102794
+
 # Xfail lifecycle: raw --runxfail evidence lives in
 # .omo/evidence/acp-cccp-remediation/task-3-isolation.txt.  All expectations
 # in this file are green since the METHOD_META single-sourcing (plan todo 7);
@@ -185,6 +189,49 @@ try:
             result = {
                 "ok": True,
                 "data": {"isolated": _aux(isolated), "integrated": _aux(integrated)},
+            }
+        elif scenario == "shermo_path":
+            from cccp.qc import shermo_adapter, thermo_normalize
+
+            freq = Path("probe_freq.log")
+            freq.write_text("frequency output", encoding="utf-8")
+            calls = []
+
+            def fake_run_shermo(**kwargs):
+                calls.append(kwargs)
+                return {"u_sum": -99.9, "h_sum": -99.88, "g_sum": -99.95, "s_total": 0.0123}
+
+            with patch("cccp.qc.shermo_adapter.run_shermo", fake_run_shermo):
+                before = len(calls)
+                atm = shermo_adapter.execute_shermo(
+                    freq, -100.0, output_dir="thermo_atm", standard_state="1atm"
+                )
+                mid = len(calls)
+                molar = shermo_adapter.execute_shermo(
+                    freq, -100.0, output_dir="thermo_m", standard_state="1M"
+                )
+                after = len(calls)
+            if any(n == "acp" or n.startswith("acp.") for n in sys.modules):
+                raise RuntimeError("acp leaked into sys.modules during Shermo path")
+            result = {
+                "ok": True,
+                "data": {
+                    "launches": [mid - before, after - mid],
+                    "modules": [shermo_adapter.__name__, thermo_normalize.__name__],
+                    "one_atm": {
+                        "gibbs": atm.metadata["gibbs_hartree"],
+                        "source": atm.metadata["selected_gibbs_source"],
+                        "standard_state": atm.metadata["standard_state"],
+                        "conc": calls[0]["conc"],
+                    },
+                    "one_m": {
+                        "gibbs": molar.metadata["gibbs_hartree"],
+                        "source": molar.metadata["selected_gibbs_source"],
+                        "standard_state": molar.metadata["standard_state"],
+                        "delta_hartree": molar.metadata["standard_state_delta_g_hartree"],
+                        "conc": calls[1]["conc"],
+                    },
+                },
             }
         else:
             result = {"ok": False, "exc": "ValueError", "msg": "unknown scenario " + scenario}
@@ -320,6 +367,35 @@ def test_dlpno_aux_consistency_isolated(cccp_only_tree: Path, tmp_path: Path) ->
         f"DLPNO auxJ/auxC differ isolated vs integrated: "
         f"{blocked['isolated']} vs {blocked['integrated']}"
     )
+
+
+def test_shermo_path_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
+    """P0: shared Shermo adapter + normalization run with ``acp`` imports blocked.
+
+    Plan todo 14 isolation probe: ``cccp.qc.shermo_adapter.execute_shermo``
+    launches Shermo exactly once per request (spy on the shared runner seam,
+    no subprocess) and ``cccp.qc.thermo_normalize`` yields the frozen 1atm/1M
+    baselines — in both env variants, without the ``acp`` package.
+    """
+    for variant in _VARIANTS:
+        data = _require_ok(_run_probe(cccp_only_tree, tmp_path, "shermo_path", variant))
+        assert data["launches"] == [1, 1], f"{variant}: {data['launches']}"
+        assert data["modules"] == ["cccp.qc.shermo_adapter", "cccp.qc.thermo_normalize"], variant
+        atm = data["one_atm"]
+        molar = data["one_m"]
+        assert atm["gibbs"] == pytest.approx(-99.95, abs=1e-12), variant
+        assert atm["source"] == "g_sum", variant
+        assert atm["standard_state"] == "1atm", variant
+        assert atm["conc"] is None, variant
+        assert molar["gibbs"] == pytest.approx(-99.95 + _BASELINE_DELTA_HARTREE_298K, abs=1e-12), (
+            variant
+        )
+        assert molar["source"] == "g_sum_plus_standard_state", variant
+        assert molar["standard_state"] == "1M", variant
+        assert molar["delta_hartree"] == pytest.approx(_BASELINE_DELTA_HARTREE_298K, abs=1e-12), (
+            variant
+        )
+        assert molar["conc"] == 1.0, variant
 
 
 def test_no_acp_imports_in_cccp() -> None:

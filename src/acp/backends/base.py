@@ -10,6 +10,10 @@ from typing import Any, Protocol, runtime_checkable
 import numpy as np
 from numpy.typing import NDArray
 
+# Neutral calculation-layer error re-exported as the backend layer's error
+# surface (plan todo 14: capability modules stay free of task-layer imports).
+from cccp.calculation.errors import BackendUnavailableError as BackendUnavailableError
+
 
 @dataclass
 class QCResult:
@@ -316,6 +320,7 @@ class RelaxedScanCalculator(Protocol):
 
 
 __all__ = [
+    "BackendUnavailableError",
     "QCBackend",
     "QCResult",
     "to_qc_result",

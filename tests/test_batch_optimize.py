@@ -965,7 +965,7 @@ def test_mixed_ts_int_opt_freq_sp_thermo(
 
     engine = BatchOptimizeEngine(work_root=work_root, result_root=result_root)
 
-    with patch("acp.calculations.primitives.thermochemistry.run_shermo") as mock_shermo:
+    with patch("cccp.qc.shermo_adapter.run_shermo") as mock_shermo:
         mock_shermo.return_value = {"g_sum": -1.2, "h_sum": -1.1, "s_sum": 0.01}
 
         outcome = engine.run(
@@ -2143,7 +2143,7 @@ class TestEnginePerRoleSpThermo:
             xyz="2\nTAG: INT\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
             candidate_id="int_001",
         )
-        with patch("acp.calculations.primitives.thermochemistry.run_shermo") as mock_shermo:
+        with patch("cccp.qc.shermo_adapter.run_shermo") as mock_shermo:
             mock_shermo.return_value = {"g_sum": -1.0, "h_sum": -0.9, "s_sum": 0.01}
             engine.run([item], profile="opt_freq_sp_thermo", charge=0, methods=methods)
             assert mock_shermo.call_count == 1

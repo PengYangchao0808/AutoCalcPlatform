@@ -738,7 +738,6 @@ ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
     ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/pes/scan.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/primitives/_common.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/calculations/primitives/thermochemistry.py", "run_shermo"),
     ("workflow_executes_qc", "src/acp/confsearch/protocols/xtb_md.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/workflows/energy.py", "CensoBackend"),
     ("workflow_executes_qc", "src/acp/workflows/energy.py", "get_backend"),

@@ -5,19 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from acp.backends.base import QCBackend, QCResult
+from acp.backends.base import BackendUnavailableError, QCBackend, QCResult
 from acp.backends.registry import register_backend
-from acp.calculations.contracts import JsonValue
-from acp.calculations.primitives.thermochemistry import (
-    ThermochemistryCalculator,
-    ThermochemistryInputError,
-)
-from cccp.calculation.errors import BackendUnavailableError
 from cccp.qc.interfaces.isostat import IsostatInterface
+from cccp.qc.shermo_adapter import execute_shermo
+from cccp.qc.thermo_normalize import ThermochemistryInputError
 from cccp.software import resolve_executable
 
 
-def _metadata_float(value: JsonValue) -> float | None:
+def _metadata_float(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     return float(value)
@@ -101,17 +97,16 @@ class ExternalBackend(QCBackend):
                 runner_options[key] = kwargs.pop(key)
 
         try:
-            calculation = ThermochemistryCalculator(
-                self.config,
+            run = execute_shermo(
+                log_file,
+                sp_energy,
+                temperature_k=temperature,
+                pressure_atm=pressure,
+                standard_state=standard_state,
                 output_dir=target_dir,
                 output_file=output_file,
+                config=self.config,
                 runner_options=runner_options,
-            ).compute(
-                freq_log_path=log_file,
-                sp_energy_hartree=sp_energy,
-                temperature=temperature,
-                pressure=pressure,
-                standard_state=standard_state,
             )
         except ThermochemistryInputError as exc:
             return QCResult(
@@ -121,16 +116,17 @@ class ExternalBackend(QCBackend):
                 output_file=output_file,
                 error_message=str(exc),
             )
+        metadata = dict(run.metadata)
         return QCResult(
-            success=calculation.status == "completed",
+            success=run.success,
             energy=sp_energy,
             log_file=log_file,
             output_file=output_file,
-            enthalpy=_metadata_float(calculation.metadata.get("enthalpy_hartree")),
-            gibbs=_metadata_float(calculation.metadata.get("gibbs_hartree")),
-            entropy=_metadata_float(calculation.metadata.get("entropy_au")),
-            error_message=calculation.errors[0] if calculation.errors else None,
-            metadata=dict(calculation.metadata),
+            enthalpy=_metadata_float(metadata.get("enthalpy_hartree")),
+            gibbs=_metadata_float(metadata.get("gibbs_hartree")),
+            entropy=_metadata_float(metadata.get("entropy_au")),
+            error_message=run.error,
+            metadata=metadata,
         )
 
     def batch_thermochemistry(

@@ -1,4 +1,10 @@
-"""Unified Shermo thermochemistry primitive."""
+"""Unified Shermo thermochemistry primitive.
+
+Delegates execution and scientific normalization to the shared adapter
+``cccp.qc.shermo_adapter`` / ``cccp.qc.thermo_normalize`` (plan todo 14) and
+maps the outcome into ``CalculationResult``; no separate science path lives
+here anymore.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,7 @@ from pathlib import Path
 from typing import final
 
 from acp.calculations.contracts import ArtifactRef, CalculationResult, JsonValue
-from cccp.qc.runners import run_shermo
+from cccp.qc.shermo_adapter import execute_shermo
 
 from ._thermochemistry_input import (
     ThermochemistryInputError,
@@ -15,19 +21,11 @@ from ._thermochemistry_input import (
     standard_state_correction_kcal,
     validate_request,
 )
-from ._thermochemistry_support import (
-    ThermochemistryContext,
-    ThermochemistryOutcome,
-    build_metadata,
-    parse_shermo_result,
-    resolve_runner_settings,
-    select_gibbs,
-)
 
 
 @final
 class ThermochemistryCalculator:
-    """Run Shermo and normalize its thermochemistry into ``CalculationResult``."""
+    """Run Shermo via the shared adapter and normalize into ``CalculationResult``."""
 
     def __init__(
         self,
@@ -62,64 +60,34 @@ class ThermochemistryCalculator:
         )
         output_dir = self._output_dir or self._default_output_dir(request.freq_log_path)
         output_file = self._output_file or output_dir / "Shermo.sum"
-        context = ThermochemistryContext(
-            config=self._config,
-            output_dir=output_dir,
-            output_file=output_file,
-            runner_options=self._runner_options,
-            standard_state=request.standard_state,
-        )
-        settings = resolve_runner_settings(context)
-        raw_result = run_shermo(
-            freq_output=request.freq_log_path,
-            sp_energy=request.sp_energy_hartree,
-            output_dir=context.output_dir,
-            shermo_bin=settings.shermo_bin,
-            output_file=context.output_file,
+        run = execute_shermo(
+            request.freq_log_path,
+            request.sp_energy_hartree,
             temperature_k=request.temperature,
             pressure_atm=request.pressure,
-            scl_zpe=settings.scl_zpe,
-            ilowfreq=settings.ilowfreq,
-            imagreal=settings.imagreal,
-            conc=settings.concentration,
+            standard_state=request.standard_state,
+            output_dir=output_dir,
+            output_file=output_file,
+            config=self._config,
+            runner_options=self._runner_options,
         )
-        parsed = parse_shermo_result(raw_result)
-        if parsed is None:
-            outcome = ThermochemistryOutcome(
-                values={},
-                gibbs=None,
-                gibbs_source="unavailable",
-                standard_delta=None,
-            )
+        if not run.success:
             return CalculationResult(
                 energy=request.sp_energy_hartree,
                 status="failed",
-                errors=["Shermo returned no thermochemistry data"],
-                metadata=build_metadata(request, context, settings, outcome, success=False),
+                errors=[run.error or "Shermo returned no thermochemistry data"],
+                metadata=run.metadata,
             )
-
-        gibbs, gibbs_source, standard_delta = select_gibbs(
-            parsed.get("g_sum"),
-            parsed.get("g_conc"),
-            request.temperature,
-            request.standard_state,
-        )
-        outcome = ThermochemistryOutcome(
-            values=parsed,
-            gibbs=gibbs,
-            gibbs_source=gibbs_source,
-            standard_delta=standard_delta,
-        )
         artifacts = (
-            [ArtifactRef(path=context.output_file, type="thermochemistry", source="shermo")]
-            if context.output_file.is_file()
+            [ArtifactRef(path=run.context.output_file, type="thermochemistry", source="shermo")]
+            if run.context.output_file.is_file()
             else []
         )
         return CalculationResult(
             energy=request.sp_energy_hartree,
             artifacts=artifacts,
             status="completed",
-            metadata=build_metadata(request, context, settings, outcome, success=True),
+            metadata=run.metadata,
         )
 
     def _default_output_dir(self, freq_path: Path) -> Path:

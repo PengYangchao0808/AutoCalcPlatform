@@ -150,6 +150,33 @@ def test_external_backend_rejects_before_launch_when_binary_missing() -> None:
             backend.thermochemistry(Path("frequency.log"))
 
 
+def test_external_backend_stays_off_task_layer_and_raw_runner() -> None:
+    """Lock the todo-14 decoupling: no acp.calculations / cccp.calculation and
+    no direct runner call in the external backend; execution goes through the
+    shared adapter and normalization modules."""
+    import ast
+
+    import acp.backends.external_backend as module
+
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    assert "acp.calculations" not in source
+    assert "cccp.calculation" not in source
+    assert "run_shermo" not in source
+
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ImportFrom):
+            imported.add(node.module or "")
+        elif isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+    assert not any(
+        name.startswith("acp.calculations") or name.startswith("cccp.calculation")
+        for name in imported
+    )
+    assert "cccp.qc.shermo_adapter" in imported
+    assert "cccp.qc.thermo_normalize" in imported
+
+
 def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:
     config = _make_config()
     backend = ORCABackend(config)

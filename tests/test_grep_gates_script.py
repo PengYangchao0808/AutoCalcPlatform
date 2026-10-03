@@ -369,7 +369,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 24
+ALLOWLIST_COUNT_PIN: Final[int] = 23
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
