@@ -417,7 +417,13 @@ DEPENDENCY_RULES: Final[tuple[DependencyRule, ...]] = (
     ),
     DependencyRule(
         scope=("src/acp/backends/__init__.py",),
-        allowed_prefixes=("acp.backends", "typing", "collections.abc", "__future__"),
+        allowed_prefixes=(
+            "acp.backends",
+            "cccp.backends",
+            "typing",
+            "collections.abc",
+            "__future__",
+        ),
     ),
 )
 

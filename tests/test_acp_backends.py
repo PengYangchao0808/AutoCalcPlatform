@@ -143,7 +143,7 @@ def test_external_backend_rejects_before_launch_when_binary_missing() -> None:
     def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
         return None
 
-    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+    with patch("cccp.backends.external_backend.resolve_executable", side_effect=_resolve):
         with pytest.raises(BackendUnavailableError, match="isostat"):
             backend.cluster(Path("ensemble.xyz"))
         with pytest.raises(BackendUnavailableError, match="Shermo"):
@@ -153,10 +153,15 @@ def test_external_backend_rejects_before_launch_when_binary_missing() -> None:
 def test_external_backend_stays_off_task_layer_and_raw_runner() -> None:
     """Lock the todo-14 decoupling: no acp.calculations / cccp.calculation and
     no direct runner call in the external backend; execution goes through the
-    shared adapter and normalization modules."""
+    shared adapter and normalization modules.  The implementation lives in
+    ``cccp.backends.external_backend`` (plan todo 12); the ``acp.backends``
+    path is a pure re-export shim."""
     import ast
 
-    import acp.backends.external_backend as module
+    import acp.backends.external_backend as shim
+    import cccp.backends.external_backend as module
+
+    assert shim.ExternalBackend is module.ExternalBackend
 
     source = Path(module.__file__).read_text(encoding="utf-8")
     assert "acp.calculations" not in source
@@ -481,7 +486,7 @@ def test_orca_backend_get_version_uses_detect_version() -> None:
     backend = ORCABackend(config)
     backend._interface.executable = Path("/usr/bin/orca")
 
-    with patch("acp.backends.orca.detect_version", return_value="ORCA 6.1.1") as mock_detect:
+    with patch("cccp.backends.orca.detect_version", return_value="ORCA 6.1.1") as mock_detect:
         assert backend.get_version() == "ORCA 6.1.1"
         assert backend.get_version() == "ORCA 6.1.1"
 
@@ -493,7 +498,7 @@ def test_orca_backend_get_version_returns_none_when_missing() -> None:
     backend = ORCABackend(config)
     backend._interface.executable = None
 
-    with patch("acp.backends.orca.detect_version", return_value=None) as mock_detect:
+    with patch("cccp.backends.orca.detect_version", return_value=None) as mock_detect:
         assert backend.get_version() is None
 
     mock_detect.assert_called_once_with("orca", None)
@@ -544,7 +549,7 @@ def test_external_backend_is_available_when_binaries_on_path() -> None:
     def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
         return Path(f"/usr/bin/{name}")
 
-    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+    with patch("cccp.backends.external_backend.resolve_executable", side_effect=_resolve):
         assert backend.is_available() is True
 
 
@@ -554,7 +559,7 @@ def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
     def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
         return None if name == "shermo" else Path(f"/usr/bin/{name}")
 
-    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+    with patch("cccp.backends.external_backend.resolve_executable", side_effect=_resolve):
         assert backend.is_available() is False
 
 
@@ -621,3 +626,35 @@ def test_isostat_title_normalisation_keeps_coord_lines(tmp_path: Path) -> None:
         assert lines[5] == "H  1.0  0.0  0.0"
     finally:
         out.unlink(missing_ok=True)
+
+
+def test_compat_identity_after_backends_move() -> None:
+    """acp.backends compat shims re-export the cccp.backends objects (A is B)."""
+    import acp.backends as acp_backends
+    import acp.backends.base as acp_base
+    import acp.backends.registry as acp_registry
+    import acp.core.registry as acp_core_registry
+    import cccp.backends as cccp_backends
+    import cccp.backends.base as cccp_base
+    import cccp.backends.registry as cccp_registry
+    from cccp.core.registry import Registry as CccpRegistry
+    from cccp.qc.interfaces.base import QCResult as InterfaceQCResult
+
+    assert acp_backends.require_backend is cccp_backends.require_backend
+    assert acp_backends.get_backend is cccp_backends.get_backend
+    for name in (
+        "ORCABackend",
+        "CrestBackend",
+        "XTBBackend",
+        "CensoBackend",
+        "IsostatBackend",
+        "MolclusBackend",
+        "ExternalBackend",
+    ):
+        assert getattr(acp_backends, name) is getattr(cccp_backends, name), name
+    assert acp_base.QCResult is cccp_base.QCResult is InterfaceQCResult
+    assert acp_base.to_qc_result is cccp_base.to_qc_result
+    assert acp_base.QCBackend is cccp_base.QCBackend
+    assert acp_registry.backend_registry is cccp_registry.backend_registry
+    assert acp_core_registry.Registry is CccpRegistry
+    assert QCResult is InterfaceQCResult

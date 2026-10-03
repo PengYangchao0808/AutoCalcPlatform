@@ -36,6 +36,38 @@ class QCResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+def to_qc_result(result: object) -> QCResult:
+    """Normalize legacy QC result objects into :class:`QCResult`.
+
+    Single definition (plan todo 12 QCResult merge): the backend layer
+    re-exports this helper and :class:`QCResult` so every consumer sees one
+    identity.  Objects that already are :class:`QCResult` pass through
+    unchanged; anything else is field-copied into a new instance.
+    """
+    if isinstance(result, QCResult):
+        return result
+
+    metadata = getattr(result, "metadata", {}) or {}
+    return QCResult(
+        success=getattr(result, "success", False),
+        energy=getattr(result, "energy", None),
+        coordinates=getattr(result, "coordinates", None),
+        symbols=getattr(result, "symbols", None),
+        converged=getattr(result, "converged", False),
+        output_file=getattr(result, "output_file", None),
+        log_file=getattr(result, "log_file", None),
+        freq_log_file=getattr(result, "freq_log_file", None),
+        error_message=getattr(result, "error_message", None),
+        frequencies=getattr(result, "frequencies", None),
+        has_frequencies=getattr(result, "has_frequencies", False),
+        zpe=getattr(result, "zpe", None),
+        enthalpy=getattr(result, "enthalpy", None),
+        gibbs=getattr(result, "gibbs", None),
+        entropy=getattr(result, "entropy", None),
+        metadata=dict(metadata),
+    )
+
+
 class QCInterfaceBase(ABC):
     """
     Abstract base class for QC software interfaces.

@@ -78,6 +78,18 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        line plus the ``_resolve_method_meta`` function in baseline and
        worktree.  Teeth: no ``acp`` import inside ``_resolve_method_meta``,
        the body must call ``method_meta(``, and the lookup must survive.
+    J. ``interfaces/base.py`` + ``acp/backends/orca.py``: backends move
+       (2026-10-04, plan todo 12) — the QCResult merge adds ``to_qc_result``
+       to ``cccp/qc/interfaces/base.py`` (single definition; the backend
+       layer re-exports it), and ``src/acp/backends/orca.py`` becomes a pure
+       re-export shim for the implementation moved verbatim to
+       ``src/cccp/backends/orca.py``.  Sanctioned scopes: the ``to_qc_result``
+       function in ``interfaces/base.py`` and the shim body of
+       ``acp/backends/orca.py``.  Teeth: ``QCResult`` keeps its full field
+       set as the only definition, the shim must be a pure re-export, and
+       the moved ``ORCABackend`` must keep ``relaxed_scan`` thinness and the
+       ``casscf`` delegation (Amendment A/E teeth redirected to the new
+       station) plus ``A is B`` identity between the two module paths.
 """
 
 from __future__ import annotations
@@ -108,6 +120,7 @@ ALLOWED_PY = frozenset(
         "src/cccp/qc/interfaces/orca_ts.py",
         "src/cccp/qc/interfaces/constraints.py",
         "src/cccp/qc/interfaces/hess_file.py",
+        "src/cccp/qc/interfaces/base.py",
         "src/acp/backends/orca.py",
     }
 )
@@ -742,6 +755,143 @@ def test_amendment_i_predicates_confined_and_negatives() -> None:
     assert any("direct cccp.qc.method_meta import missing" in issue for issue in issues)
 
 
+# ── Amendment J: backends move (plan todo 12) ───────────────────────────────
+
+_QCRESULT_FIELDS = frozenset(
+    {
+        "success",
+        "energy",
+        "coordinates",
+        "symbols",
+        "converged",
+        "output_file",
+        "log_file",
+        "freq_log_file",
+        "error_message",
+        "frequencies",
+        "has_frequencies",
+        "zpe",
+        "enthalpy",
+        "gibbs",
+        "entropy",
+        "metadata",
+    }
+)
+
+
+def _is_pure_reexport_shim(src: str) -> bool:
+    """True when *src* is a pure re-export shim (docstring/imports/__all__)."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return False
+    for node in tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            if targets == ["__all__"] and isinstance(node.value, (ast.List, ast.Tuple)):
+                continue
+            return False
+        return False
+    return True
+
+
+def _amendment_j_base_teeth(worktree: str) -> list[str]:
+    """Teeth for the QCResult merge in ``cccp/qc/interfaces/base.py``."""
+    issues: list[str] = []
+    try:
+        tree = ast.parse(worktree)
+    except SyntaxError as exc:
+        return [f"  Amendment J: base.py does not parse: {exc}"]
+    qcresult_classes = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and node.name == "QCResult"
+    ]
+    if len(qcresult_classes) != 1:
+        issues.append(
+            f"  Amendment J: QCResult must have exactly one definition, found {len(qcresult_classes)}"
+        )
+    else:
+        fields = {
+            item.target.id
+            for item in qcresult_classes[0].body
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
+        }
+        missing = _QCRESULT_FIELDS - fields
+        if missing:
+            issues.append(f"  Amendment J: QCResult missing fields {sorted(missing)}")
+    if _func_ranges(worktree).get("to_qc_result") is None:
+        issues.append("  Amendment J: to_qc_result missing from interfaces/base.py")
+    if "from acp" in worktree or "import acp" in worktree:
+        issues.append("  Amendment J: interfaces/base.py must not import acp")
+    return issues
+
+
+def _amendment_j_backend_orca_teeth() -> list[str]:
+    """Teeth for the ``acp/backends/orca.py`` shim conversion.
+
+    The legacy body must have moved verbatim to ``cccp/backends/orca.py``
+    (same class, same capability methods), the shim must be a pure re-export,
+    and the moved ``ORCABackend`` must keep the Amendment A thinness and the
+    Amendment E ``casscf`` delegation at the new station.
+    """
+    issues: list[str] = []
+    shim = _worktree_content("src/acp/backends/orca.py")
+    if not _is_pure_reexport_shim(shim):
+        issues.append("  Amendment J: acp/backends/orca.py is not a pure re-export shim")
+    moved_path = ROOT / "src/cccp/backends/orca.py"
+    if not moved_path.is_file():
+        return issues + ["  Amendment J: moved implementation cccp/backends/orca.py missing"]
+    moved = moved_path.read_text(encoding="utf-8")
+    backend_range = None
+    for node in ast.walk(ast.parse(moved)):
+        if isinstance(node, ast.ClassDef) and node.name == "ORCABackend":
+            backend_range = (node.lineno, getattr(node, "end_lineno", node.lineno))
+            methods = {
+                item.name
+                for item in node.body
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            missing = {"relaxed_scan", "casscf", "single_point", "optimize", "frequency"} - methods
+            if missing:
+                issues.append(f"  Amendment J: moved ORCABackend missing methods {sorted(missing)}")
+            break
+    if backend_range is None:
+        issues.append("  Amendment J: moved ORCABackend class missing")
+    else:
+        issues.extend(_assert_relaxed_scan_thin(moved))
+        casscf_range = _func_range(moved, "casscf", "ORCABackend")
+        if casscf_range is None:
+            issues.append("  Amendment J: moved ORCABackend.casscf missing")
+        else:
+            body = "\n".join(moved.splitlines()[casscf_range[0] - 1 : casscf_range[1]])
+            if "_interface.casscf" not in body:
+                issues.append(
+                    "  Amendment J: moved ORCABackend.casscf lost its _interface delegation"
+                )
+    return issues
+
+
+def _amendment_j_identity_issues() -> list[str]:
+    """Runtime ``A is B`` identity between shim and moved implementation."""
+    probe = (
+        "import acp.backends.orca as shim\n"
+        "import cccp.backends.orca as moved\n"
+        "assert shim.ORCABackend is moved.ORCABackend\n"
+        "print('J_IDENTITY_OK')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=False, cwd=ROOT
+    )
+    if result.returncode != 0 or "J_IDENTITY_OK" not in result.stdout:
+        return [f"  Amendment J: shim/moved identity failed: {result.stderr.strip()[:200]}"]
+    return []
+
+
 def _target_backend(src: str) -> set[int]:
     """Target-region line numbers for baseline ``backends/orca.py``."""
     lines = src.splitlines()
@@ -809,9 +959,13 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_g_orca_ts_teeth(worktree))
             continue
 
-        # ── backends/orca.py: Amendment A + E ─────────────────────────────
+        # ── acp/backends/orca.py: Amendment J (shim) or A + E ────────────
         if fp == "src/acp/backends/orca.py":
             worktree = _worktree_content(fp)
+            if _is_pure_reexport_shim(worktree):
+                violations.extend(_amendment_j_backend_orca_teeth())
+                violations.extend(_amendment_j_identity_issues())
+                continue
             method_range = _func_range(worktree, "relaxed_scan", "ORCABackend")
             thin_checked = False
             for ln, txt in added:
@@ -928,6 +1082,20 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_i_orca_teeth(worktree))
             continue
 
+        # ── interfaces/base.py: Amendment J (QCResult merge) ─────────────
+        if fp == "src/cccp/qc/interfaces/base.py":
+            worktree = _worktree_content(fp)
+            func_range = _func_ranges(worktree).get("to_qc_result")
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if func_range is not None and func_range[0] <= ln <= func_range[1]:
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_j_base_teeth(worktree))
+            continue
+
         # ── hess_file.py: Amendment G (new pure-parser module) ───────────
         if fp == "src/cccp/qc/interfaces/hess_file.py":
             worktree = _worktree_content(fp)
@@ -1003,14 +1171,24 @@ def test_deleted_lines_in_target_regions() -> None:
                 if not _is_amendment_i_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
-            # Amendment C: relaxed_scan multi-coordinate rewrite lives in the
-            # method body (baseline range); Amendment A covers its additions.
-            baseline_src = _baseline_content(fp)
-            scan_range = _func_range(baseline_src, "relaxed_scan", "ORCABackend")
-            if scan_range is not None:
-                bad_entries = [
-                    (ln, t) for ln, t in bad_entries if not scan_range[0] <= ln <= scan_range[1]
-                ]
+            if _is_pure_reexport_shim(_worktree_content(fp)):
+                # Amendment J: the legacy body moved verbatim to
+                # cccp/backends/orca.py — deletions are sanctioned once the
+                # moved implementation and shim identity teeth pass.
+                teeth = _amendment_j_backend_orca_teeth() + _amendment_j_identity_issues()
+                assert not teeth, "Amendment J move teeth failed:\n" + "\n".join(teeth)
+                bad_entries = []
+            else:
+                # Amendment C: relaxed_scan multi-coordinate rewrite lives in the
+                # method body (baseline range); Amendment A covers its additions.
+                baseline_src = _baseline_content(fp)
+                scan_range = _func_range(baseline_src, "relaxed_scan", "ORCABackend")
+                if scan_range is not None:
+                    bad_entries = [
+                        (ln, t)
+                        for ln, t in bad_entries
+                        if not scan_range[0] <= ln <= scan_range[1]
+                    ]
         bad = [f"  {fp}:{ln}: {t!r}" for ln, t in bad_entries]
         assert not bad, "Deleted lines outside target regions:\n" + "\n".join(bad)
 

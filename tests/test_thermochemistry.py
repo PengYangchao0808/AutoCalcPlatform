@@ -8,7 +8,7 @@ import pytest
 import acp.calculations.primitives.thermochemistry as thermochemistry
 import cccp.qc.shermo_adapter as shermo_adapter
 from acp.backends import ExternalBackend
-from acp.backends import external_backend as external_backend_module
+from cccp.backends import external_backend as external_backend_module
 from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
 
 # Frozen baseline: ideal-gas 1 atm -> 1 mol/L correction at 298.15 K

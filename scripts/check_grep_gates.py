@@ -265,7 +265,7 @@ class GateInputError(Exception):
 #   --------------------  --------------------------------------------  --------------------
 #   unique_run_scan       SCOPE_PRIMITIVE_SCAN (primitives/scan.py)     gate-redirect todo
 #   unique_run_irc        SCOPE_PRIMITIVE_IRC (primitives/irc.py)       gate-redirect todo
-#   wave2_shermo_external scope "src/acp/backends/external_backend.py"  shermo rewire todo
+#   wave2_shermo_external external_backend.py (acp shim + cccp impl)    done (todo 12, dual position)
 #   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (primitives/
 #                         thermochemistry.py, workflows/energy_shared)
 #
@@ -276,7 +276,11 @@ class GateInputError(Exception):
 GATE_REGISTRY: Final[tuple[GateSpec, ...]] = (
     GateSpec("compat_no_writers", r"def write_", ("src/acp/compat/",)),
     GateSpec("wave2_optfreq", r"opt_freq\(", SCOPE_SRC, WAVE2_OPTFREQ_ALLOWED_PATHS),
-    GateSpec("wave2_shermo_external", r"run_shermo", ("src/acp/backends/external_backend.py",)),
+    GateSpec(
+        "wave2_shermo_external",
+        r"run_shermo",
+        ("src/acp/backends/external_backend.py", "src/cccp/backends/external_backend.py"),
+    ),
     GateSpec("wave2_no_result_summary", r"write_result_summary", ("src/acp/workflows/simple.py",)),
     GateSpec("wave3_confirmengine", r"ConfirmEngine", ("src/acp/calculations/",)),
     GateSpec("wave3_no_batchmanifest", r"batch_calculation_manifest", ("src/acp/calculations/",)),

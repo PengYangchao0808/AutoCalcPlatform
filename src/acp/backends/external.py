@@ -1,5 +1,9 @@
-"""External binary runners for clustering and thermochemistry."""
+"""External binary runners — compat shim for :mod:`cccp.backends.external`."""
 
-from cccp.qc.runners import batch_process_thermo
+from __future__ import annotations
 
-__all__ = ["batch_process_thermo"]
+from cccp.backends.external import (
+    batch_process_thermo,
+)
+
+__all__ = ['batch_process_thermo']
