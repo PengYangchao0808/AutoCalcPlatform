@@ -15,6 +15,8 @@ from __future__ import annotations
 __all__ = [
     "BackendUnavailableError",
     "CalculationError",
+    "ProgressCallbackError",
+    "TaskCancelledError",
     "TaskInputError",
     "UnsupportedCapabilityError",
 ]
@@ -42,4 +44,23 @@ class BackendUnavailableError(CalculationError, RuntimeError):
     Declaration no longer encodes binary presence; per-capability runtime
     probes (e.g. ``is_isostat_available`` / ``is_shermo_available``) judge
     absence and surface it through this error.
+    """
+
+
+class TaskCancelledError(CalculationError):
+    """Cooperative cancellation of a pending unit (batch entry, rescue step).
+
+    Task-level results surface cancellation as ``status="failed"`` with
+    ``error_kind="cancelled"``; this exception is for executor/batch code
+    that must abort a pending entry before it starts (R8).
+    """
+
+
+class ProgressCallbackError(CalculationError):
+    """A progress-callback failure, distinguished from scientific failure.
+
+    Progress-callback failures never turn a scientific success into a
+    failure: ``TaskContext.emit_progress`` isolates and records them (R6).
+    This type is the stable classification for callers that want to
+    re-raise or report them explicitly.
     """
