@@ -1,0 +1,97 @@
+{
+  "description": "XtbPathSearch/OrcaGradient converted inputs + artifact digests",
+  "orca_gradient": {
+    "artifact_digests": {
+      "energy/energy.json": "1d528fd32005b92d2bac4eb2e7ea942d0b132923288ed24818f6b017339116d9",
+      "geometry/geometry.xyz": "c136f369b66178e01be63c5b853b06bd44dd7779784ade503a3c391340536786",
+      "gradient/gradient.json": "1b4dac135216ba1b1d9643fd6f764e56084b9ef8cd4ecf781f8d2cf80a626abc",
+      "result_manifest.json": "ded5643fab7b95f819bfad12ff5cf22e2320aa8e710d6ab23d94bc072bc1ce3b"
+    },
+    "converted_request": {
+      "basis": "def2-SVP",
+      "charge": 0,
+      "extra_blocks": [],
+      "method": "B3LYP",
+      "multiplicity": 1,
+      "nproc": 2,
+      "output_name": "grad",
+      "request_sha256": "b794dcbcf92418fb53483a8fb29f8fa04bc235226712041310202ed002dfdb15",
+      "route_extras": [
+        "TightSCF"
+      ],
+      "scf_convergence": "TightSCF",
+      "schema_version": "pes2ts_orca_gradient_request_v1",
+      "timeout_seconds": 600,
+      "xyz_text": "2\nOrcaGradient input geometry\nH     0.0000000000    0.0000000000    0.0000000000\nH     0.7400000000    0.0000000000    0.0000000000\n",
+      "xyz_text_sha256": "c136f369b66178e01be63c5b853b06bd44dd7779784ade503a3c391340536786"
+    },
+    "payload": {
+      "basis": "def2-SVP",
+      "charge": 0,
+      "extra_blocks": [],
+      "method": "B3LYP",
+      "multiplicity": 1,
+      "nproc": 2,
+      "output_name": "grad",
+      "route_extras": [
+        "TightSCF"
+      ],
+      "scf_convergence": "TightSCF",
+      "schema_version": "pes2ts_orca_gradient_request_v1",
+      "timeout_seconds": 600,
+      "xyz": "2\nOrcaGradient golden geometry\nH 0.0000000000 0.0000000000 0.0000000000\nH 0.7400000000 0.0000000000 0.0000000000\n"
+    },
+    "product_schemas": {
+      "energy": "orca_energy_product_v1",
+      "gradient": "orca_gradient_product_v1"
+    }
+  },
+  "xtb_path": {
+    "converted_input_text_sha256": {
+      "end.xyz": "2793dfd7fc680237ca307615ab14014873567169d8841677de77000168eec6b1",
+      "path.inp": "e26d6039cf61b0de8ad497755eb120d950ebc6d69e16234b4c1faf94bc5950c1",
+      "start.xyz": "d3f148a674219b6b6609f49d4e9e146cd131052359babaeee05443fc29b2d2aa"
+    },
+    "converted_request": {
+      "adapter_version": "pes2ts_xtb_path_request_v1",
+      "charge": 0,
+      "config_digest": "cfgdigest_golden",
+      "extra_args": [],
+      "gfn_level": 2,
+      "multiplicity": 1,
+      "plan_sha256": null,
+      "reaction_id": "RXN_GOLDEN_0001",
+      "request_sha256": "reqsha_golden",
+      "seed": null,
+      "threads": 4,
+      "timeout_seconds": 1800,
+      "uhf": 0
+    },
+    "payload": {
+      "provenance": {
+        "adapter_version": "pes2ts_xtb_path_request_v1",
+        "config_digest": "cfgdigest_golden",
+        "plan_sha256": null,
+        "request_sha256": "reqsha_golden"
+      },
+      "reaction_id": "RXN_GOLDEN_0001",
+      "recipe": {
+        "extra_args": [],
+        "gfn_level": 2,
+        "path_inp_text": "$path\n   nrun=1\n   npoint=50\n   anopt=10\n   kpush=0.003\n   kpull=-0.015\n   ppull=0.05\n   alp=0.5\n$end\n",
+        "seed": null,
+        "threads": 4,
+        "timeout_seconds": 1800,
+        "uhf": 0
+      },
+      "schema_version": "pes2ts_xtb_path_request_v1",
+      "source": {
+        "charge": 0,
+        "end_xyz": "3\nH3 end\nH 0.000000 0.000000 0.000000\nH 1.500000 0.000000 0.000000\nH 0.000000 1.000000 0.000000\n",
+        "multiplicity": 1,
+        "source_type": "xyz_text_pair",
+        "start_xyz": "3\nH3 start\nH 0.000000 0.000000 0.000000\nH 1.000000 0.000000 0.000000\nH 0.000000 1.000000 0.000000\n"
+      }
+    }
+  }
+}

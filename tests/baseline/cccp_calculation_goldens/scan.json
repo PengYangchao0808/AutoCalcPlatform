@@ -1,0 +1,143 @@
+{
+  "complete_run": {
+    "artifacts": [
+      {
+        "name": "scan_frame_000.xyz",
+        "type": "structure"
+      },
+      {
+        "name": "scan_frame_001.xyz",
+        "type": "structure"
+      },
+      {
+        "name": "scan_frame_002.xyz",
+        "type": "structure"
+      },
+      {
+        "name": "scan_frame_003.xyz",
+        "type": "structure"
+      },
+      {
+        "name": "scan_trajectory.json",
+        "type": "trajectory"
+      }
+    ],
+    "energy": -100.2,
+    "errors": [],
+    "metadata": {
+      "frame_count": 4,
+      "scan_coordinates": [
+        {
+          "atoms": [
+            0,
+            1
+          ],
+          "end": 2.4,
+          "id": "rc1",
+          "kind": "distance",
+          "role": "drive",
+          "start": 1.2
+        },
+        {
+          "atoms": [
+            2,
+            3
+          ],
+          "end": 1.5,
+          "id": "rc2",
+          "kind": "distance",
+          "role": "drive",
+          "start": 0.5
+        }
+      ],
+      "scan_points": 4,
+      "successful_frame_count": 4
+    },
+    "status": "completed"
+  },
+  "description": "scan multi-coordinate plan + partial-failure result semantics",
+  "multi_coordinate_plan": {
+    "plan_metadata": {
+      "scan_coordinates": [
+        {
+          "atoms": [
+            0,
+            1
+          ],
+          "end": 2.4,
+          "id": "rc1",
+          "kind": "distance",
+          "role": "drive",
+          "start": 1.2
+        },
+        {
+          "atoms": [
+            2,
+            3
+          ],
+          "end": 1.5,
+          "id": "rc2",
+          "kind": "distance",
+          "role": "drive",
+          "start": 0.5
+        }
+      ],
+      "scan_points": 4
+    },
+    "scan_coordinates": [
+      "0,1,1.2,2.4",
+      "2,3,0.5,1.5"
+    ],
+    "scan_points": 4
+  },
+  "partial_failure_run": {
+    "artifacts": [
+      {
+        "name": "scan_frame_000.xyz",
+        "type": "structure"
+      },
+      {
+        "name": "scan_frame_002.xyz",
+        "type": "structure"
+      },
+      {
+        "name": "scan_trajectory.json",
+        "type": "trajectory"
+      }
+    ],
+    "energy": -100.2,
+    "errors": [
+      "relaxed scan aborted: 2 of 4 frames failed"
+    ],
+    "metadata": {
+      "frame_count": 4,
+      "scan_coordinates": [
+        {
+          "atoms": [
+            0,
+            1
+          ],
+          "end": 2.4,
+          "id": "rc1",
+          "kind": "distance",
+          "role": "drive",
+          "start": 1.2
+        },
+        {
+          "atoms": [
+            2,
+            3
+          ],
+          "end": 1.5,
+          "id": "rc2",
+          "kind": "distance",
+          "role": "drive",
+          "start": 0.5
+        }
+      ],
+      "scan_points": 4,
+      "successful_frame_count": 2
+    },
+    "status": "failed"
+  }
+}

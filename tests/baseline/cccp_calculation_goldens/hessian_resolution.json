@@ -1,0 +1,185 @@
+{
+  "boundary_rejections": [
+    {
+      "error": "recalc_hess interval must be between 0 and 1000",
+      "value": "1001"
+    },
+    {
+      "error": "recalc_hess interval must be between 0 and 1000",
+      "value": "-1"
+    },
+    {
+      "error": "recalc_hess must be 'auto', 0, or an integer interval",
+      "value": "True"
+    },
+    {
+      "error": "recalc_hess must be 'auto', 0, or an integer interval",
+      "value": "1.5"
+    },
+    {
+      "error": "recalc_hess must be 'auto', 0, or an integer interval",
+      "value": "'2.5'"
+    },
+    {
+      "error": "recalc_hess must be 'auto', 0, or an integer interval",
+      "value": "'abc'"
+    }
+  ],
+  "constants": {
+    "AUTO_RECALC_HESS": "auto",
+    "MAX_RECALC_HESS_INTERVAL": 1000,
+    "NON_LIGHT_DEFAULT_INTERVAL": 10
+  },
+  "description": "resolve_recalc_hess resolution matrix + boundary rejects",
+  "matrix": [
+    {
+      "configured": null,
+      "explicit": null,
+      "result": {
+        "enabled": false,
+        "heavy_elements": [],
+        "interval": 0,
+        "reason": "auto",
+        "source": "config",
+        "triggering_elements": []
+      },
+      "symbols": [
+        "C",
+        "H"
+      ]
+    },
+    {
+      "configured": null,
+      "explicit": null,
+      "result": {
+        "enabled": true,
+        "heavy_elements": [
+          "Fe"
+        ],
+        "interval": 10,
+        "reason": "auto",
+        "source": "config",
+        "triggering_elements": [
+          "Fe"
+        ]
+      },
+      "symbols": [
+        "Fe",
+        "C"
+      ]
+    },
+    {
+      "configured": null,
+      "explicit": null,
+      "result": {
+        "enabled": true,
+        "heavy_elements": [
+          "P",
+          "S"
+        ],
+        "interval": 10,
+        "reason": "auto",
+        "source": "config",
+        "triggering_elements": []
+      },
+      "symbols": [
+        "S",
+        "P"
+      ]
+    },
+    {
+      "configured": 10,
+      "explicit": 0,
+      "result": {
+        "enabled": false,
+        "heavy_elements": [
+          "Fe"
+        ],
+        "interval": 0,
+        "reason": "explicit_off",
+        "source": "explicit",
+        "triggering_elements": [
+          "Fe"
+        ]
+      },
+      "symbols": [
+        "Fe"
+      ]
+    },
+    {
+      "configured": 0,
+      "explicit": 5,
+      "result": {
+        "enabled": true,
+        "heavy_elements": [],
+        "interval": 5,
+        "reason": "explicit_interval",
+        "source": "explicit",
+        "triggering_elements": []
+      },
+      "symbols": [
+        "C"
+      ]
+    },
+    {
+      "configured": 7,
+      "explicit": "auto",
+      "result": {
+        "enabled": true,
+        "heavy_elements": [
+          "Fe"
+        ],
+        "interval": 10,
+        "reason": "auto",
+        "source": "explicit",
+        "triggering_elements": [
+          "Fe"
+        ]
+      },
+      "symbols": [
+        "Fe"
+      ]
+    },
+    {
+      "configured": "auto",
+      "explicit": null,
+      "result": {
+        "enabled": false,
+        "heavy_elements": [],
+        "interval": 0,
+        "reason": "auto",
+        "source": "config",
+        "triggering_elements": []
+      },
+      "symbols": [
+        "C"
+      ]
+    },
+    {
+      "configured": null,
+      "explicit": 1,
+      "result": {
+        "enabled": true,
+        "heavy_elements": [],
+        "interval": 1,
+        "reason": "explicit_interval",
+        "source": "explicit",
+        "triggering_elements": []
+      },
+      "symbols": null
+    },
+    {
+      "configured": null,
+      "explicit": 1000,
+      "result": {
+        "enabled": true,
+        "heavy_elements": [],
+        "interval": 1000,
+        "reason": "explicit_interval",
+        "source": "explicit",
+        "triggering_elements": []
+      },
+      "symbols": null
+    }
+  ]
+}

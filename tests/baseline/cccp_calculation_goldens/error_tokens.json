@@ -1,0 +1,57 @@
+{
+  "classify_orca_failure_missing_file": "unknown",
+  "classify_orca_failure_samples": {
+    "clean": "unknown",
+    "diis_failure": "scf_failure",
+    "memory": "memory_failure",
+    "opt_not_converged": "geometry_not_converged",
+    "scf_not_converged": "scf_failure"
+  },
+  "description": "failure-classification tokens, rescue strategies, typed error codes",
+  "failure_exit": [
+    "crash_timeout",
+    "memory_failure"
+  ],
+  "failure_types": [
+    "collapsed_to_product",
+    "crash_timeout",
+    "geometry_not_converged",
+    "higher_order_saddle",
+    "memory_failure",
+    "minimum_with_imaginary",
+    "scf_failure",
+    "ts_no_imaginary"
+  ],
+  "rescue_strategies": {
+    "calcall_opt": "re-run with RecalcHess=1 (CalcAll semantics)",
+    "fresh_hessian_mode_monitor": "restart with fresh Hessian while monitoring the target mode",
+    "fresh_hessian_restart": "restart with CalcHess + RecalcHess=5",
+    "irc_midpoint_recovery": "re-seed from the IRC midpoint (collapsed INT recovery)",
+    "mode_displacement": "displace ±0.30 Å along the imaginary mode",
+    "saddle_break": "displace along the second imaginary mode to break the saddle",
+    "scf_damp_shift": "SOSCF with damping and level shift",
+    "scf_increase_maxiter": "increase SCF MaxIter to 500",
+    "scf_slowconv": "increase SCF MaxIter to 500 with SlowConv strategy",
+    "scf_soscf": "increase SCF MaxIter to 500 with SOSCF strategy",
+    "tight_opt_calchess": "tight optimization with calculated Hessian",
+    "ts_mode_directed": "re-run with TS_Mode targeting the lowest imaginary mode"
+  },
+  "typed_error_codes": {
+    "orca_gradient": [
+      "ORCA_GRADIENT_E_BACKEND",
+      "ORCA_GRADIENT_E_ELECTRONIC_STATE",
+      "ORCA_GRADIENT_E_GEOMETRY",
+      "ORCA_GRADIENT_E_GRADIENT",
+      "ORCA_GRADIENT_E_OUTPUT",
+      "ORCA_GRADIENT_E_SCHEMA"
+    ],
+    "xtb_path": [
+      "XTB_PATH_E_CHARGE",
+      "XTB_PATH_E_OUTPUT",
+      "XTB_PATH_E_RECIPE",
+      "XTB_PATH_E_SCHEMA",
+      "XTB_PATH_E_SOURCE",
+      "XTB_PATH_E_XTB"
+    ]
+  }
+}

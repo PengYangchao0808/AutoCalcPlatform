@@ -1,0 +1,625 @@
+{
+  "cells": [
+    {
+      "actions": [
+        {
+          "description": "re-seed from the IRC midpoint (collapsed INT recovery)",
+          "index": 0,
+          "strategy": "irc_midpoint_recovery"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "collapsed_to_product",
+      "structure_kind": "intermediate",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "collapsed_to_product",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "crash_timeout",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "crash_timeout",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "crash_timeout",
+      "structure_kind": "minimum",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "crash_timeout",
+      "structure_kind": "minimum",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "crash_timeout",
+      "structure_kind": "precursor",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "crash_timeout",
+      "structure_kind": "precursor",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "crash_timeout",
+      "structure_kind": "product",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "crash_timeout",
+      "structure_kind": "product",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "crash_timeout",
+      "structure_kind": "ts",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "crash_timeout",
+      "structure_kind": "ts",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "restart with CalcHess + RecalcHess=5",
+          "index": 0,
+          "strategy": "fresh_hessian_restart"
+        },
+        {
+          "description": "re-run with RecalcHess=1 (CalcAll semantics)",
+          "index": 1,
+          "strategy": "calcall_opt"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "geometry_not_converged",
+      "structure_kind": "intermediate",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "geometry_not_converged",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "restart with CalcHess + RecalcHess=5",
+          "index": 0,
+          "strategy": "fresh_hessian_restart"
+        },
+        {
+          "description": "re-run with RecalcHess=1 (CalcAll semantics)",
+          "index": 1,
+          "strategy": "calcall_opt"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "geometry_not_converged",
+      "structure_kind": "minimum",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "geometry_not_converged",
+      "structure_kind": "minimum",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "restart with CalcHess + RecalcHess=5",
+          "index": 0,
+          "strategy": "fresh_hessian_restart"
+        },
+        {
+          "description": "re-run with TS_Mode targeting the lowest imaginary mode",
+          "index": 1,
+          "strategy": "ts_mode_directed"
+        },
+        {
+          "description": "re-run with RecalcHess=1 (CalcAll semantics)",
+          "index": 2,
+          "strategy": "calcall_opt"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "geometry_not_converged",
+      "structure_kind": "ts",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "geometry_not_converged",
+      "structure_kind": "ts",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "displace along the second imaginary mode to break the saddle",
+          "index": 0,
+          "strategy": "saddle_break"
+        },
+        {
+          "description": "re-run with TS_Mode targeting the lowest imaginary mode",
+          "index": 1,
+          "strategy": "ts_mode_directed"
+        },
+        {
+          "description": "re-run with RecalcHess=1 (CalcAll semantics)",
+          "index": 2,
+          "strategy": "calcall_opt"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "higher_order_saddle",
+      "structure_kind": "ts",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "higher_order_saddle",
+      "structure_kind": "ts",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "memory_failure",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "memory_failure",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "memory_failure",
+      "structure_kind": "minimum",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "memory_failure",
+      "structure_kind": "minimum",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "memory_failure",
+      "structure_kind": "precursor",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "memory_failure",
+      "structure_kind": "precursor",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "memory_failure",
+      "structure_kind": "product",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "memory_failure",
+      "structure_kind": "product",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": null,
+      "failure_type": "memory_failure",
+      "structure_kind": "ts",
+      "terminal": true
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "memory_failure",
+      "structure_kind": "ts",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "displace ±0.30 Å along the imaginary mode",
+          "index": 0,
+          "strategy": "mode_displacement"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "minimum_with_imaginary",
+      "structure_kind": "intermediate",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "minimum_with_imaginary",
+      "structure_kind": "intermediate",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "displace ±0.30 Å along the imaginary mode",
+          "index": 0,
+          "strategy": "mode_displacement"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "minimum_with_imaginary",
+      "structure_kind": "minimum",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "minimum_with_imaginary",
+      "structure_kind": "minimum",
+      "terminal": true
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "scf_failure",
+      "structure_kind": "intermediate",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": 3,
+      "failure_type": "scf_failure",
+      "structure_kind": "intermediate",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "scf_failure",
+      "structure_kind": "minimum",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": 3,
+      "failure_type": "scf_failure",
+      "structure_kind": "minimum",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "scf_failure",
+      "structure_kind": "precursor",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": 3,
+      "failure_type": "scf_failure",
+      "structure_kind": "precursor",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "scf_failure",
+      "structure_kind": "product",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": 3,
+      "failure_type": "scf_failure",
+      "structure_kind": "product",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "scf_failure",
+      "structure_kind": "ts",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "increase SCF MaxIter to 500",
+          "index": 0,
+          "strategy": "scf_increase_maxiter"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SlowConv strategy",
+          "index": 1,
+          "strategy": "scf_slowconv"
+        },
+        {
+          "description": "increase SCF MaxIter to 500 with SOSCF strategy",
+          "index": 2,
+          "strategy": "scf_soscf"
+        },
+        {
+          "description": "SOSCF with damping and level shift",
+          "index": 3,
+          "strategy": "scf_damp_shift"
+        }
+      ],
+      "explicit_ts_target": 3,
+      "failure_type": "scf_failure",
+      "structure_kind": "ts",
+      "terminal": false
+    },
+    {
+      "actions": [
+        {
+          "description": "restart with fresh Hessian while monitoring the target mode",
+          "index": 0,
+          "strategy": "fresh_hessian_mode_monitor"
+        },
+        {
+          "description": "re-run with TS_Mode targeting the lowest imaginary mode",
+          "index": 1,
+          "strategy": "ts_mode_directed"
+        },
+        {
+          "description": "re-run with RecalcHess=1 (CalcAll semantics)",
+          "index": 2,
+          "strategy": "calcall_opt"
+        }
+      ],
+      "explicit_ts_target": null,
+      "failure_type": "ts_no_imaginary",
+      "structure_kind": "ts",
+      "terminal": false
+    },
+    {
+      "actions": [],
+      "explicit_ts_target": 3,
+      "failure_type": "ts_no_imaginary",
+      "structure_kind": "ts",
+      "terminal": true
+    }
+  ],
+  "description": "build_rescue_plan matrix incl. explicit-TS-target filtering"
+}

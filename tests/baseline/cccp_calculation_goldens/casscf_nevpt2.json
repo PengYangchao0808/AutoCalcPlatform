@@ -1,0 +1,85 @@
+{
+  "description": "CASSCF/NEVPT2 input generation, output parse, spec validation",
+  "inputs": {
+    "fic_nevpt2_unfrozen": {
+      "input_text": "! def2-TZVPP CASSCF TightSCF FIC-NEVPT2 NoFrozenCore\n%casscf\n  nel 4\n  norb 4\n  mult 1\n  nroots 1\nend\n%maxcore 2000\n%pal nprocs 4 end\n\n* xyz 0 1\nH     0.0000000000    0.0000000000    0.0000000000\nH     0.0000000000    0.0000000000    0.0000000000\n*\n",
+      "kwargs": {
+        "active_electrons": 4,
+        "active_orbitals": 4,
+        "dynamic_correlation": "fic_nevpt2",
+        "frozen_core": false
+      }
+    },
+    "nevpt2_two_roots": {
+      "input_text": "! def2-TZVPP CASSCF TightSCF NEVPT2\n%casscf\n  nel 2\n  norb 2\n  mult 1\n  nroots 2\n  weights[0] = 0.5, 0.5\n  CI\n    MaxIter 50\n  end\nend\n%maxcore 2000\n%pal nprocs 4 end\n\n* xyz 0 1\nH     0.0000000000    0.0000000000    0.0000000000\nH     0.0000000000    0.0000000000    0.0000000000\n*\n",
+      "kwargs": {
+        "active_electrons": 2,
+        "active_orbitals": 2,
+        "dynamic_correlation": "sc_nevpt2",
+        "max_iterations": 50,
+        "nroots": 2,
+        "state_weights": [
+          0.5,
+          0.5
+        ]
+      }
+    }
+  },
+  "parsed_output": {
+    "casscf_energy": -108.987654321,
+    "casscf_roots": [
+      {
+        "casscf_energy_hartree": -108.9812345678,
+        "multiplicity": 1,
+        "root": 0
+      },
+      {
+        "casscf_energy_hartree": -108.8123456789,
+        "multiplicity": 1,
+        "root": 1
+      }
+    ],
+    "converged": true,
+    "natural_occupations": [
+      1.98123,
+      1.95211,
+      0.04789,
+      0.01877
+    ],
+    "nevpt2_roots": [
+      {
+        "casscf_energy_hartree": -108.9812345678,
+        "correlated_energy_hartree": -109.1046913568,
+        "multiplicity": 1,
+        "nevpt2_correction_hartree": -0.123456789,
+        "root": 0
+      },
+      {
+        "casscf_energy_hartree": -108.8123456789,
+        "correlated_energy_hartree": -108.92345679,
+        "multiplicity": 1,
+        "nevpt2_correction_hartree": -0.1111111111,
+        "root": 1
+      }
+    ]
+  },
+  "recorded_output": "ORCA TERMINATED NORMALLY\nORBITAL OPTIMIZATION HAS CONVERGED\nFINAL SINGLE POINT ENERGY       -108.9876543210\n\nNatural Orbital Occupation Numbers\n  N[   1] =    1.98123\n  N[   2] =    1.95211\n  N[   3] =    0.04789\n  N[   4] =    0.01877\n\nCAS-SCF RESULTS\n  MULT 1, ROOT 0   -108.9812345678\n  MULT 1, ROOT 1   -108.8123456789\n\nNEVPT2 Results\n  MULT 1, ROOT 0\n  Zero Order Energy      : E0 =   -108.9812345678\n  Total Energy Correction: dE =     -0.1234567890\n  Total Energy (E0+dE)   : E  =   -109.1046913568\n\nNEVPT2 Results\n  MULT 1, ROOT 1\n  Zero Order Energy      : E0 =   -108.8123456789\n  Total Energy Correction: dE =     -0.1111111111\n  Total Energy (E0+dE)   : E  =   -108.9234567900\n",
+  "spec_invalid_errors": [
+    "CASSCF active_electrons (6) cannot exceed 2 x active_orbitals (4)"
+  ],
+  "spec_roundtrip": {
+    "payload": {
+      "active_electrons": 2,
+      "active_orbitals": 2,
+      "dynamic_correlation": "sc_nevpt2",
+      "multiplicity": 1,
+      "nroots": 2,
+      "state_weights": [
+        0.5,
+        0.5
+      ]
+    },
+    "signature": "{\"dc\":\"sc_nevpt2\",\"frozen_core\":true,\"indices\":[],\"mult\":1,\"nel\":2,\"norb\":2}",
+    "validation_errors": []
+  }
+}

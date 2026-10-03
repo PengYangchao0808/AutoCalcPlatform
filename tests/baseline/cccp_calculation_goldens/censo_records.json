@@ -1,0 +1,61 @@
+{
+  "boltzmann_weights": {
+    "CONF1": 0.627401299,
+    "CONF2": 0.372598701
+  },
+  "description": "CENSO record identity (conf_id/frame_index) + free energies",
+  "inputs": {
+    "json": {
+      "data": {
+        "CONF1": {
+          "energy": -154.912345,
+          "grrho": 0.082341,
+          "gsolv": -0.004521,
+          "gtot": -154.834525
+        },
+        "CONF2": {
+          "energy": -154.911876,
+          "grrho": 0.082455,
+          "gsolv": -0.004612,
+          "gtot": -154.834033
+        }
+      },
+      "part_name": "screening"
+    },
+    "xyz": "3\nCONF1\nC    0.000000    0.000000    0.000000\nH    0.000000    0.000000    1.089000\nH    1.026719    0.000000   -0.362999\n3\nCONF2\nC    0.000000    0.000000    0.000000\nH    0.000000    0.000000    1.089000\nH   -1.026719    0.000000   -0.362999\n"
+  },
+  "records": [
+    {
+      "conf_id": "CONF1",
+      "energy": -154.912345,
+      "frame_index": 0,
+      "grrho": 0.082341,
+      "gsolv": -0.004521,
+      "gtot": -154.834525,
+      "n_atoms": 3,
+      "symbols": [
+        "C",
+        "H",
+        "H"
+      ]
+    },
+    {
+      "conf_id": "CONF2",
+      "energy": -154.911876,
+      "frame_index": 1,
+      "grrho": 0.082455,
+      "gsolv": -0.004612,
+      "gtot": -154.834033,
+      "n_atoms": 3,
+      "symbols": [
+        "C",
+        "H",
+        "H"
+      ]
+    }
+  ],
+  "sort_by_gtot_order": [
+    "CONF1",
+    "CONF2"
+  ]
+}

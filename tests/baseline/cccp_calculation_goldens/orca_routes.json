@@ -1,0 +1,279 @@
+{
+  "cases": [
+    {
+      "hessian_resolution": {
+        "enabled": true,
+        "heavy_elements": [],
+        "interval": 5,
+        "reason": "explicit_interval",
+        "source": "explicit",
+        "triggering_elements": []
+      },
+      "id": "b3lyp_opt_full_layer",
+      "input_params": {
+        "aux_c_basis": "def2-TZVPP/C",
+        "aux_j_basis": "def2/J",
+        "basis": "def2-TZVPP",
+        "calc_type": "opt",
+        "dispersion": "D4",
+        "grid": "DefGrid2",
+        "method": "B3LYP",
+        "opt_level": "Tight",
+        "recalc_hess": 5,
+        "scf_options": {
+          "maxiter": 200
+        },
+        "solvent": "Water",
+        "solvent_model": "SMD",
+        "symbols": [
+          "C",
+          "O",
+          "H",
+          "H"
+        ]
+      },
+      "parsed_fields": {
+        "aux_c": "def2-TZVPP/C",
+        "aux_j": "def2/J",
+        "basis_inline": null,
+        "casscf_block": [],
+        "recalc_hess_interval": 5,
+        "route_line": "! B3LYP def2-TZVPP Opt TightOpt DefGrid2 D4",
+        "route_tokens": [
+          "B3LYP",
+          "def2-TZVPP",
+          "Opt",
+          "TightOpt",
+          "DefGrid2",
+          "D4"
+        ],
+        "scf_block": [
+          "MaxIter 200"
+        ],
+        "solvent_block": [
+          "smd true",
+          "SMDsolvent \"Water\""
+        ]
+      },
+      "rendered_input": "! B3LYP def2-TZVPP Opt TightOpt DefGrid2 D4\n%basis\n  auxJ  \"def2/J\"\n  auxC  \"def2-TZVPP/C\"\nend\n%maxcore 2000\n%pal nprocs 4 end\n%geom\n  Recalc_Hess 5\nend\n%scf\n  MaxIter 200\nend\n%cpcm\n  smd true\n  SMDsolvent \"Water\"\nend"
+    },
+    {
+      "hessian_resolution": null,
+      "id": "dlpno_sp_default_aux",
+      "input_params": {
+        "basis": "def2-TZVPP",
+        "calc_type": "sp",
+        "method": "DLPNO-CCSD(T)",
+        "recalc_hess": null,
+        "symbols": [
+          "C",
+          "H"
+        ]
+      },
+      "parsed_fields": {
+        "aux_c": "def2-TZVPP/C",
+        "aux_j": "def2/J",
+        "basis_inline": "def2-TZVPP",
+        "casscf_block": [],
+        "recalc_hess_interval": null,
+        "route_line": "! DLPNO-CCSD(T) TightSCF SP",
+        "route_tokens": [
+          "DLPNO-CCSD(T)",
+          "TightSCF",
+          "SP"
+        ],
+        "scf_block": [],
+        "solvent_block": []
+      },
+      "rendered_input": "! DLPNO-CCSD(T) TightSCF SP\n%basis\n  basis \"def2-TZVPP\"\n  auxJ  \"def2/J\"\n  auxC  \"def2-TZVPP/C\"\nend\n%maxcore 2000\n%pal nprocs 4 end"
+    },
+    {
+      "hessian_resolution": {
+        "enabled": false,
+        "heavy_elements": [],
+        "interval": 0,
+        "reason": "auto",
+        "source": "explicit",
+        "triggering_elements": []
+      },
+      "id": "r2scan3c_opt_composite_auto_hess",
+      "input_params": {
+        "basis": null,
+        "calc_type": "opt",
+        "dispersion": "D4",
+        "method": "r2SCAN-3c",
+        "recalc_hess": "auto",
+        "route_extras": [
+          "RIJCOSX"
+        ],
+        "symbols": [
+          "C",
+          "H"
+        ]
+      },
+      "parsed_fields": {
+        "aux_c": null,
+        "aux_j": null,
+        "basis_inline": null,
+        "casscf_block": [],
+        "recalc_hess_interval": null,
+        "route_line": "! r2SCAN-3c Opt",
+        "route_tokens": [
+          "r2SCAN-3c",
+          "Opt"
+        ],
+        "scf_block": [],
+        "solvent_block": []
+      },
+      "rendered_input": "! r2SCAN-3c Opt\n%maxcore 2000\n%pal nprocs 4 end\n%geom\nend"
+    },
+    {
+      "hessian_resolution": null,
+      "id": "gfn2_alpb_solvent",
+      "input_params": {
+        "basis": null,
+        "calc_type": "sp",
+        "method": "GFN2-xTB",
+        "recalc_hess": null,
+        "solvent": "Toluene",
+        "solvent_model": "ALPB",
+        "symbols": [
+          "C",
+          "H"
+        ]
+      },
+      "parsed_fields": {
+        "aux_c": null,
+        "aux_j": null,
+        "basis_inline": null,
+        "casscf_block": [],
+        "recalc_hess_interval": null,
+        "route_line": "! GFN2-xTB  SP ALPB(Toluene)",
+        "route_tokens": [
+          "GFN2-xTB",
+          "SP",
+          "ALPB(Toluene)"
+        ],
+        "scf_block": [],
+        "solvent_block": []
+      },
+      "rendered_input": "! GFN2-xTB  SP ALPB(Toluene)\n%maxcore 2000\n%pal nprocs 4 end"
+    },
+    {
+      "hessian_resolution": {
+        "enabled": true,
+        "heavy_elements": [
+          "Fe"
+        ],
+        "interval": 10,
+        "reason": "auto",
+        "source": "explicit",
+        "triggering_elements": [
+          "Fe"
+        ]
+      },
+      "id": "wb97xd4_grid_and_dispersion",
+      "input_params": {
+        "basis": "def2-TZVPP",
+        "calc_type": "opt",
+        "dispersion": "D4",
+        "grid": "DefGrid3",
+        "method": "wB97X-D4",
+        "recalc_hess": "auto",
+        "symbols": [
+          "Fe",
+          "C"
+        ],
+        "trust_radius": 0.2
+      },
+      "parsed_fields": {
+        "aux_c": null,
+        "aux_j": null,
+        "basis_inline": null,
+        "casscf_block": [],
+        "recalc_hess_interval": 10,
+        "route_line": "! wB97X-D4 def2-TZVPP Opt DefGrid3",
+        "route_tokens": [
+          "wB97X-D4",
+          "def2-TZVPP",
+          "Opt",
+          "DefGrid3"
+        ],
+        "scf_block": [],
+        "solvent_block": []
+      },
+      "rendered_input": "! wB97X-D4 def2-TZVPP Opt DefGrid3\n%maxcore 2000\n%pal nprocs 4 end\n%geom\n  Recalc_Hess 10\n  Trust 0.2\nend"
+    },
+    {
+      "hessian_resolution": null,
+      "id": "b3lyp_freq_smd_is_numfreq",
+      "input_params": {
+        "basis": "def2-TZVPP",
+        "calc_type": "freq",
+        "method": "B3LYP",
+        "recalc_hess": null,
+        "solvent": "Water",
+        "solvent_model": "SMD",
+        "symbols": [
+          "C",
+          "H"
+        ]
+      },
+      "parsed_fields": {
+        "aux_c": null,
+        "aux_j": null,
+        "basis_inline": null,
+        "casscf_block": [],
+        "recalc_hess_interval": null,
+        "route_line": "! B3LYP def2-TZVPP NumFreq",
+        "route_tokens": [
+          "B3LYP",
+          "def2-TZVPP",
+          "NumFreq"
+        ],
+        "scf_block": [],
+        "solvent_block": [
+          "smd true",
+          "SMDsolvent \"Water\""
+        ]
+      },
+      "rendered_input": "! B3LYP def2-TZVPP NumFreq\n%maxcore 2000\n%pal nprocs 4 end\n%cpcm\n  smd true\n  SMDsolvent \"Water\"\nend"
+    },
+    {
+      "hessian_resolution": null,
+      "id": "pwpb95_double_hybrid_needs_aux_c",
+      "input_params": {
+        "aux_c_basis": "def2-TZVPP/C",
+        "aux_j_basis": "def2/J",
+        "basis": "def2-TZVPP",
+        "calc_type": "sp",
+        "method": "PWPB95",
+        "recalc_hess": null,
+        "symbols": [
+          "C"
+        ]
+      },
+      "parsed_fields": {
+        "aux_c": "def2-TZVPP/C",
+        "aux_j": "def2/J",
+        "basis_inline": null,
+        "casscf_block": [],
+        "recalc_hess_interval": null,
+        "route_line": "! PWPB95 def2-TZVPP SP",
+        "route_tokens": [
+          "PWPB95",
+          "def2-TZVPP",
+          "SP"
+        ],
+        "scf_block": [],
+        "solvent_block": []
+      },
+      "rendered_input": "! PWPB95 def2-TZVPP SP\n%basis\n  auxJ  \"def2/J\"\n  auxC  \"def2-TZVPP/C\"\nend\n%maxcore 2000\n%pal nprocs 4 end"
+    }
+  ],
+  "config_summary": {
+    "maxcore": 2000,
+    "nproc": 4
+  },
+  "description": "ORCA route lines + parsed method/basis/dispersion/auxJ/auxC/solvent/grid/SCF + Hessian interval emission (integration path)"
+}

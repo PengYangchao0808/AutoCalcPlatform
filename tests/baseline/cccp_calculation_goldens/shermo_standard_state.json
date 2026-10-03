@@ -1,0 +1,66 @@
+{
+  "correction_kcal_mol": {
+    "273.15K": 1.6879517559,
+    "298.15K": 1.8943284455,
+    "350.00K": 2.3352804976
+  },
+  "description": "Shermo standard-state correction + Gibbs selection semantics",
+  "gibbs_selection": [
+    {
+      "g_conc": -40.7,
+      "g_sum": -40.6,
+      "gibbs": -40.7,
+      "gibbs_source": "g_conc",
+      "standard_delta": null,
+      "standard_state": "1M"
+    },
+    {
+      "g_conc": null,
+      "g_sum": -40.6,
+      "gibbs": -40.5969811955,
+      "gibbs_source": "g_sum_plus_standard_state",
+      "standard_delta": 0.0030188045,
+      "standard_state": "1M"
+    },
+    {
+      "g_conc": null,
+      "g_sum": -40.6,
+      "gibbs": -40.6,
+      "gibbs_source": "g_sum",
+      "standard_delta": null,
+      "standard_state": "1atm"
+    },
+    {
+      "g_conc": -40.7,
+      "g_sum": null,
+      "gibbs": -40.7,
+      "gibbs_source": "g_conc",
+      "standard_delta": null,
+      "standard_state": "1M"
+    },
+    {
+      "g_conc": null,
+      "g_sum": null,
+      "gibbs": null,
+      "gibbs_source": "unavailable",
+      "standard_delta": null,
+      "standard_state": "1M"
+    }
+  ],
+  "parse_shermo_result_keys": [
+    "g_conc",
+    "g_sum",
+    "h_sum",
+    "s_total",
+    "u_sum"
+  ],
+  "standard_state_token_normalization": {
+    "1M": "1M",
+    "1M ": "1M",
+    "1atm": "1atm",
+    "1mol/L": "1M",
+    "SOLUTION1M": "1M",
+    "bogus": "1atm",
+    "solution": "1M"
+  }
+}
