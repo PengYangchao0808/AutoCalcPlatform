@@ -970,6 +970,109 @@ def test_amendment_k_predicates_confined_and_negatives() -> None:
     assert issues, "removing a serializer scope must fire the teeth"
 
 
+# ── Amendment L: translation single-source render extraction (2026-10-05,
+#    plan todo 25) ──────────────────────────────────────────────────────────
+#
+# The ``%geom`` body rendering delegates to
+# ``cccp.qc.translation.render_opt_geom_lines`` (shared with the batch
+# effective-config summary so display == execution) and ``_write_nmr_input``
+# splits its construction half into ``_build_nmr_input_lines`` (F7 boundary:
+# input construction vs file write).  Rendered output is byte-identical
+# (goldens/route tests decide).  Sanctioned scopes: the
+# ``from cccp.qc.translation import render_opt_geom_lines`` import line plus
+# the ``_build_input_blocks`` / ``_write_input`` / ``_write_nmr_input`` /
+# ``_build_nmr_input_lines`` bodies (worktree ranges for additions, baseline
+# ranges for deletions).  Teeth: both delegations must actually land.
+
+_AMENDMENT_L_FUNCS = (
+    "_build_input_blocks",
+    "_write_input",
+    "_write_nmr_input",
+    "_build_nmr_input_lines",
+)
+
+
+def _amendment_l_ranges(src: str) -> list[tuple[int, int]]:
+    ranges = _func_ranges(src)
+    return [ranges[name] for name in _AMENDMENT_L_FUNCS if name in ranges]
+
+
+def _is_amendment_l_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the render extraction."""
+    stripped = txt.strip()
+    if stripped == "from cccp.qc.translation import render_opt_geom_lines":
+        return True
+    return any(start <= ln <= end for start, end in _amendment_l_ranges(worktree_src))
+
+
+def _is_amendment_l_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions stay inside the baseline L scopes."""
+    return any(start <= ln <= end for start, end in _amendment_l_ranges(baseline_src))
+
+
+def _amendment_l_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: the %geom and NMR-construction delegations must land."""
+    issues: list[str] = []
+    if "from cccp.qc.translation import render_opt_geom_lines" not in worktree:
+        issues.append("  Amendment L: direct cccp.qc.translation import missing")
+    ranges = _func_ranges(worktree)
+    build_range = ranges.get("_build_input_blocks")
+    if build_range is None:
+        issues.append("  Amendment L scope missing _build_input_blocks")
+    else:
+        body = "\n".join(worktree.splitlines()[build_range[0] - 1 : build_range[1]])
+        if "render_opt_geom_lines(" not in body:
+            issues.append(
+                "  Amendment L: _build_input_blocks must delegate %geom to render_opt_geom_lines"
+            )
+    if "_build_nmr_input_lines" not in ranges:
+        issues.append("  Amendment L scope missing _build_nmr_input_lines")
+    write_range = ranges.get("_write_nmr_input")
+    if write_range is None:
+        issues.append("  Amendment L scope missing _write_nmr_input")
+    else:
+        body = "\n".join(worktree.splitlines()[write_range[0] - 1 : write_range[1]])
+        if "_build_nmr_input_lines(" not in body:
+            issues.append(
+                "  Amendment L: _write_nmr_input must delegate construction "
+                "to _build_nmr_input_lines"
+            )
+    return issues
+
+
+def test_amendment_l_predicates_confined_and_negatives() -> None:
+    """Amendment L is confined to the render-extraction scopes — negative injection."""
+    fp = "src/cccp/qc/interfaces/orca.py"
+    worktree = _worktree_content(fp)
+    baseline_src = _baseline_content(fp)
+    build_range = _func_range(worktree, "_build_input_blocks")
+    assert build_range is not None
+    other_range = _func_range(worktree, "_run_orca", "ORCAInterface")
+    assert other_range is not None
+
+    assert _is_amendment_l_addition(build_range[0], "x = 1", worktree)
+    assert _is_amendment_l_addition(
+        1, "from cccp.qc.translation import render_opt_geom_lines", worktree
+    )
+    assert not _is_amendment_l_addition(other_range[0], "x = 1", worktree)
+    assert not _is_amendment_l_addition(1, "from acp import x", worktree)
+
+    base_build = _func_range(baseline_src, "_build_input_blocks")
+    assert base_build is not None
+    base_other = _func_range(baseline_src, "_run_orca", "ORCAInterface")
+    assert base_other is not None
+    assert _is_amendment_l_deletion(base_build[0], baseline_src)
+    assert not _is_amendment_l_deletion(base_other[0], baseline_src)
+
+    assert not _amendment_l_orca_teeth(worktree)
+    stripped = worktree.replace("render_opt_geom_lines(", "_renamed_render(")
+    issues = _amendment_l_orca_teeth(stripped)
+    assert any("render_opt_geom_lines" in issue for issue in issues)
+    removed = worktree.replace("_build_nmr_input_lines(", "_renamed_nmr(")
+    issues = _amendment_l_orca_teeth(removed)
+    assert any("_build_nmr_input_lines" in issue for issue in issues)
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1109,6 +1212,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_i_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_l_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -1150,6 +1255,7 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_g_orca_teeth(worktree))
             violations.extend(_amendment_h_orca_teeth(worktree))
             violations.extend(_amendment_i_orca_teeth(worktree))
+            violations.extend(_amendment_l_orca_teeth(worktree))
             continue
 
         # ── interfaces/base.py: Amendment J (QCResult merge) ─────────────
@@ -1239,6 +1345,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_i_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_l_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             if _is_pure_reexport_shim(_worktree_content(fp)):
@@ -1466,6 +1577,9 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/catalog.py",
     # todo 19: the frequency-science delegation target (single parse in cccp).
     "src/acp/results/orca_parser.py",
+    # todo 25: CENSO template-line construction points (translation-layer consumers).
+    "src/acp/workflows/energy_shared.py",
+    "src/acp/confsearch/shared/helpers.py",
 )
 MIGRATION_SHIM_PY = frozenset(
     {

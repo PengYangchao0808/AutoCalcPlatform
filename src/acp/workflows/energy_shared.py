@@ -40,6 +40,7 @@ from acp.workflows.ensemble_thermo import (
     t_s_mix_kcal_per_mol,
 )
 from cccp.qc.runners import run_shermo
+from cccp.qc.translation import render_censo_template_lines
 from cccp.software import get_configured_path
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz
 
@@ -256,8 +257,8 @@ def resolve_levels(
         refinement_overrides["basis"] = str(refinement_sp["basis"]).lower()
 
     screening_extras = _base_route_extras(screening_sp)
-    screening_template_lines = ["! " + " ".join(screening_extras)] if screening_extras else []
-    refinement_template_lines = ["! " + " ".join(sp_route_extras)] if sp_route_extras else []
+    screening_template_lines = render_censo_template_lines(screening_extras)
+    refinement_template_lines = render_censo_template_lines(sp_route_extras)
 
     # Workflow-global solvent fallback derived from levels (UI wizard path):
     # refinement_sp takes precedence over dft_opt.

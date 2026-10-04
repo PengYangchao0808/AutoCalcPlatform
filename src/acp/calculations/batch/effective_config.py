@@ -18,30 +18,12 @@ from pathlib import Path
 from typing import Any
 
 from acp.calculations.batch.options import BatchMethodOptions
+from cccp.qc.translation import OrcaOptSpec, render_orca_opt
 
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION: str = "batch_optimize_effective_v1"
 CONFIG_FILENAME: str = "effective_config.json"
-
-# ── ORCA keyword maps (shared with batch_preview.py) ───────────────────
-_OPT_LEVEL_KEYWORDS: dict[str, str | None] = {
-    "loose": "LooseOpt",
-    "normal": "Opt",
-    "tight": "TightOpt",
-    "verytight": "VeryTightOpt",
-}
-
-_SCF_CONVERGENCE_KEYWORDS: dict[str, str] = {
-    "loose": "LooseSCF",
-    "tight": "TightSCF",
-    "verytight": "VeryTightSCF",
-}
-
-_SCF_STRATEGY_KEYWORDS: dict[str, str] = {
-    "slowconv": "SlowConv",
-    "soscf": "SOSCF",
-}
 
 # Engine constant — mirrors BatchOptimizeEngine._optimization_kwargs default.
 _ENGINE_MAX_CYCLES_DEFAULT: int = 200
@@ -95,34 +77,25 @@ def build_effective_role(
 
 
 def build_orca_summary(effective: dict[str, Any]) -> list[str]:
-    """Build a human-readable ORCA keyword list for one role."""
-    parts: list[str] = []
-    level = str(effective.get("opt_level", "tight")).lower()
-    kw = _OPT_LEVEL_KEYWORDS.get(level)
-    if kw:
-        parts.append(kw)
-    scf_conv = str(effective.get("scf_convergence", "tight")).lower()
-    scf_kw = _SCF_CONVERGENCE_KEYWORDS.get(scf_conv)
-    if scf_kw:
-        parts.append(scf_kw)
-    max_cycles = effective.get("max_cycles")
-    if max_cycles is not None:
-        parts.append(f"MaxIter {int(max_cycles)}")
-    trust = effective.get("opt_trust_radius")
-    if trust is not None:
-        parts.append(f"Trust {float(trust):g}")
-    hessian = effective.get("opt_initial_hessian")
-    if hessian == "calculate":
-        parts.append("Calc_Hess")
-    recalc = effective.get("opt_recalc_hess")
-    if isinstance(recalc, int) and recalc > 0:
-        parts.append(f"Recalc_Hess {recalc}")
-    strategy = str(effective.get("scf_strategy", "normal")).lower()
-    if strategy != "normal":
-        strat_kw = _SCF_STRATEGY_KEYWORDS.get(strategy)
-        if strat_kw:
-            parts.append(strat_kw)
-    return parts
+    """Build a human-readable ORCA keyword list for one role.
+
+    Display == execution: every token derives from the cccp translation
+    layer (:func:`cccp.qc.translation.render_orca_opt`) — the same
+    keyword-registry resolution the ORCA route/block assembly executes.
+    There is no private keyword table here on purpose (single source).
+    """
+    render = render_orca_opt(
+        OrcaOptSpec(
+            opt_level=effective.get("opt_level"),
+            scf_convergence=effective.get("scf_convergence"),
+            scf_strategy=effective.get("scf_strategy"),
+            max_cycles=effective.get("max_cycles"),
+            trust_radius=effective.get("opt_trust_radius"),
+            initial_hessian=effective.get("opt_initial_hessian"),
+            recalc_hess=effective.get("opt_recalc_hess"),
+        )
+    )
+    return list(render.summary_tokens)
 
 
 def build_batch_effective_config(opts: BatchMethodOptions) -> dict[str, Any]:

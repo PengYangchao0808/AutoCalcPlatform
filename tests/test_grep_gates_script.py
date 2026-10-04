@@ -369,7 +369,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 19
+ALLOWLIST_COUNT_PIN: Final[int] = 17
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
@@ -691,13 +691,13 @@ def test_suite_fails_when_violation_injected(case: InjectionCase, tmp_path: Path
 
 def test_suite_flags_stale_allowlist_entries_when_violation_disappears(tmp_path: Path) -> None:
     root = _copy_src_tree(tmp_path)
-    (root / "src/acp/confsearch/shared/helpers.py").unlink()
+    (root / "src/acp/calculations/executor.py").unlink()
 
     result = _run_suite(root)
 
     assert result.returncode == 1, result.stdout
     assert "stale allowlist entries: 1" in result.stdout
-    assert "workflow_route_assembly|src/acp/confsearch/shared/helpers.py" in result.stdout
+    assert "workflow_executes_qc|src/acp/calculations/executor.py" in result.stdout
 
 
 def test_allowlist_only_shrinks_from_wave0_baseline() -> None:

@@ -772,8 +772,6 @@ ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
     ("workflow_executes_qc", "src/acp/workflows/xtbmd_censo_energy.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/workflows/xtbmd_md.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/workflows/xtb_path.py", "get_backend"),
-    ("workflow_route_assembly", "src/acp/confsearch/shared/helpers.py", '"! "'),
-    ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
 )
 
 ALLOWLIST_TRIPLES: Final[frozenset[tuple[str, str, str]]] = frozenset(ARCHITECTURE_ALLOWLIST)

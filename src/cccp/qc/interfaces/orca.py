@@ -60,6 +60,7 @@ from cccp.qc.keyword_registry import (
     resolve_implementation,
 )
 from cccp.qc.method_meta import method_meta
+from cccp.qc.translation import render_opt_geom_lines
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -1236,6 +1237,12 @@ class ORCAInterface(QCInterfaceBase):
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
+        Input-construction half of the input boundary (F7): a PURE renderer
+        — no filesystem or process access.  ``_write_input`` persists the
+        rendered text and the xyz body; ``_run_orca`` owns the process call.
+        The ``%geom`` body is rendered by the shared translation-layer
+        function :func:`cccp.qc.translation.render_opt_geom_lines`.
+
         Args:
             calc_type: Calculation type
             method: Override method (uses self.method if None)
@@ -1500,16 +1507,15 @@ class ORCAInterface(QCInterfaceBase):
                 symbols=symbols,
             )
             blocks.append("%geom")
-            if initial_hessian == "calculate":
-                blocks.append("  Calc_Hess true")
-            if resolution.interval > 0:
-                blocks.append(f"  Recalc_Hess {resolution.interval}")
-            if trust_radius is not None:
-                blocks.append(f"  Trust {float(trust_radius):g}")
-            if geom_maxiter is not None and geom_maxiter > 0:
-                blocks.append(f"  MaxIter {int(geom_maxiter)}")
-            if geom_extra_lines:
-                blocks.extend(str(line) for line in geom_extra_lines if line)
+            blocks.extend(
+                render_opt_geom_lines(
+                    initial_hessian=initial_hessian,
+                    recalc_hess_interval=resolution.interval,
+                    trust_radius=trust_radius,
+                    max_cycles=geom_maxiter,
+                    extra_lines=geom_extra_lines,
+                )
+            )
             blocks.append("end")
 
             if resolution.reason == "auto" and resolution.enabled:
@@ -1589,7 +1595,12 @@ class ORCAInterface(QCInterfaceBase):
         grid: str | None = None,
         dispersion: str | None = None,
     ):
-        """Write ORCA input file."""
+        """Write ORCA input file.
+
+        Write half of the input boundary (F7): delegates rendering to
+        :meth:`_build_input_blocks` and only assembles the xyz body,
+        persists the file, and records the Hessian resolution.
+        """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
 
@@ -3373,27 +3384,21 @@ class ORCAInterface(QCInterfaceBase):
             trajectory_files=discover_irc_trajectory_files(output_dir, stem=output_name) or None,
         )
 
-    def _write_nmr_input(
+    def _build_nmr_input_lines(
         self,
-        input_file: Path,
-        coordinates: np.ndarray,
         symbols: list[str],
-        charge: int = 0,
-        multiplicity: int = 1,
         method: str = None,
         basis: str = None,
         solvent: str = None,
         solvent_model: str = None,
         nuclei: list[str] | None = None,
-    ) -> None:
-        """Write an ORCA GIAO NMR input with a ``%eprnmr`` block.
+    ) -> list[str]:
+        """Construct the NMR input line list — pure render, no I/O (F7).
 
-        Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
-        when neither the override nor the instance default is set to an NMR
-        level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
-        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
-        the GFN family follows the shared ALPB-only rule
-        (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
+        Input-construction half of the ``_write_nmr_input`` boundary: GFN+NMR
+        policy gate, level defaults, route line, solvent token, ``%eprnmr``
+        and resource blocks.  Persistence and the xyz body belong to
+        :meth:`_write_nmr_input`.
         """
         _method = method if method is not None else self.method
         if not _method:
@@ -3466,6 +3471,42 @@ class ORCAInterface(QCInterfaceBase):
 
         lines.append(f"%maxcore {self.maxcore}")
         lines.append(f"%pal nprocs {self.nproc} end")
+        return lines
+
+    def _write_nmr_input(
+        self,
+        input_file: Path,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        method: str = None,
+        basis: str = None,
+        solvent: str = None,
+        solvent_model: str = None,
+        nuclei: list[str] | None = None,
+    ) -> None:
+        """Write an ORCA GIAO NMR input with a ``%eprnmr`` block.
+
+        Write half of the NMR boundary (F7): construction is delegated to
+        :meth:`_build_nmr_input_lines`; this method only assembles the xyz
+        body and persists the file.
+
+        Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
+        when neither the override nor the instance default is set to an NMR
+        level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
+        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
+        the GFN family follows the shared ALPB-only rule
+        (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
+        """
+        lines = self._build_nmr_input_lines(
+            symbols,
+            method=method,
+            basis=basis,
+            solvent=solvent,
+            solvent_model=solvent_model,
+            nuclei=nuclei,
+        )
 
         body = "\n".join(lines) + "\n"
         body += f"\n* xyz {charge} {multiplicity}\n"
