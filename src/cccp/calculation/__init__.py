@@ -211,6 +211,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.tasks.frequency import (
         run_frequency as run_frequency,
     )
+    from cccp.calculation.tasks.irc import (
+        run_irc as run_irc,
+    )
     from cccp.calculation.tasks.optimize import (
         run_optimize as run_optimize,
     )
@@ -305,6 +308,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "run_batch": "batch",
     "version_matches": "batch",
     "run_frequency": "tasks.frequency",
+    "run_irc": "tasks.irc",
     "run_optimize": "tasks.optimize",
     "run_scan": "tasks.scan",
     "run_singlepoint": "tasks.singlepoint",

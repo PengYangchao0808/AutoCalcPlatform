@@ -506,3 +506,177 @@ def test_scan_payload_round_trips_with_frames() -> None:
     assert restored == payload
     assert restored.frames[1].index == 1
     assert restored.frames[1].success is False
+
+
+# ── irc (todo 21) ───────────────────────────────────────────────────────
+
+_IRC_COORDS = (
+    (0.0, 0.0, 0.0),
+    (1.5, 0.0, 0.0),
+    (-0.5, 0.9, 0.0),
+    (-0.5, -0.9, 0.0),
+    (2.0, 0.9, 0.0),
+    (2.0, -0.9, 0.0),
+)
+_IRC_SYMBOLS = ["C", "C", "H", "H", "H", "H"]
+
+
+class _IrcStubBackend:
+    """Frozen-golden IRC stub (mirrors ``generate_goldens._StubBackend``)."""
+
+    name = "orca"
+
+    def __init__(self, irc_result: Any) -> None:
+        self.irc_result = irc_result
+        self.calls: list[str] = []
+
+    def is_available(self) -> bool:
+        return True
+
+    def irc(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append("irc")
+        return self.irc_result
+
+
+def _normalize_irc(value: Any, tmp_root: Path) -> Any:
+    marker = str(tmp_root)
+    if isinstance(value, str):
+        return value.replace(marker, "<TMP>")
+    if isinstance(value, Path):
+        return str(value).replace(marker, "<TMP>")
+    if isinstance(value, dict):
+        return {str(k): _normalize_irc(v, tmp_root) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalize_irc(v, tmp_root) for v in value]
+    return value
+
+
+def _irc_artifact(tmp_root: Path) -> Any:
+    import numpy as np
+
+    from acp.calculations.contracts import StructureArtifact, StructureRole
+    from cccp.utils import file_io
+
+    work = tmp_root / "irc_work"
+    work.mkdir(parents=True, exist_ok=True)
+    xyz = work / "ts.xyz"
+    file_io.write_xyz(
+        xyz, np.asarray(_IRC_COORDS, dtype=float), list(_IRC_SYMBOLS), title="TS golden input"
+    )
+    return StructureArtifact(
+        path=xyz,
+        elements=list(_IRC_SYMBOLS),
+        role=StructureRole.TRANSITION_STATE,
+        source="golden",
+    )
+
+
+def _run_irc_case(
+    tmp_root: Path, case_id: str, irc_result: Any, directions: tuple[str, ...]
+) -> dict[str, Any]:
+    """Replay one frozen IRC golden through the switched pipeline."""
+    from unittest.mock import patch
+
+    from acp.calculations.primitives.irc import run_irc
+
+    artifact = _irc_artifact(tmp_root)
+    work = tmp_root / "irc_work"
+    stub = _IrcStubBackend(irc_result)
+    with patch("acp.backends.get_backend", lambda name: stub):
+        calc = run_irc(
+            artifact,
+            directions=directions,
+            resources={
+                "backend": "orca",
+                "output_dir": str(work / case_id),
+                "result_dir": str(work / case_id / "RESULT"),
+            },
+            workflow="irc",
+        )
+    return _normalize_irc(
+        {
+            "status": calc.status,
+            "errors": list(calc.errors),
+            "metadata": dict(calc.metadata),
+            "artifacts": [
+                {"type": artifact.type, "name": Path(artifact.path).name}
+                for artifact in calc.artifacts
+            ],
+        },
+        tmp_root,
+    )
+
+
+def test_irc_direction_resolution_matches_goldens() -> None:
+    """Group ①: direction keyword resolution equals the pre-migration record."""
+    from cccp.calculation.tasks.irc import resolve_direction
+
+    golden = _load("irc.json")
+    expected = golden["direction_resolution"]
+    assert resolve_direction(("forward", "reverse")) == expected["both"]
+    assert resolve_direction(("forward",)) == expected["forward_only"]
+    assert resolve_direction(("reverse",)) == expected["reverse_only"]
+    assert resolve_direction(()) == expected["empty_falls_back"]
+
+
+def test_irc_completed_direction_semantics_match_goldens() -> None:
+    """Group ①: one-way completion verdicts equal the pre-migration record."""
+    from cccp.backends.base import QCResult
+    from cccp.calculation.tasks.irc import completed_directions
+
+    golden = _load("irc.json")
+    expected = golden["completed_direction_semantics"]
+    raw = QCResult(
+        success=True,
+        metadata={"direction_status": {"forward": "completed", "reverse": "max_iterations"}},
+    )
+    assert (
+        sorted(completed_directions(raw, {"forward": 1, "reverse": 2}, True))
+        == expected["one_direction_maxiter"]
+    )
+    raw_fail = QCResult(success=False, metadata={"direction_status": {"forward": "completed"}})
+    assert (
+        sorted(completed_directions(raw_fail, {"forward": 1}, False)) == expected["backend_failure"]
+    )
+
+
+def test_irc_runs_match_goldens(tmp_path: Path) -> None:
+    """Group ③: one-way completion + one-way failure equal the frozen goldens.
+
+    Endpoint/direction semantics (iteration-limit endpoints rejected, the
+    valid direction kept, failure error text) must be byte-compatible with
+    the pre-migration record.
+    """
+    import numpy as np
+
+    from cccp.backends.base import QCResult
+    from cccp.utils import file_io
+
+    golden = _load("irc.json")
+    work = tmp_path / "irc_work"
+    work.mkdir(parents=True, exist_ok=True)
+    fwd = np.asarray(_IRC_COORDS, dtype=float) + 0.1
+    file_io.write_xyz(work / "end_f.xyz", fwd, list(_IRC_SYMBOLS), title="IRC forward endpoint")
+
+    one_way = QCResult(
+        success=True,
+        energy=-77.0,
+        coordinates=np.asarray(_IRC_COORDS, dtype=float),
+        symbols=list(_IRC_SYMBOLS),
+        converged=True,
+        metadata={
+            "direction_status": {"forward": "completed", "reverse": "max_iterations"},
+            "endpoints": {"forward": str(work / "end_f.xyz")},
+        },
+    )
+    one_way_failed = QCResult(
+        success=False,
+        error_message="IRC forward direction failed to converge",
+        metadata={"direction_status": {"forward": "failed"}},
+    )
+
+    complete = _run_irc_case(tmp_path, "one_way", one_way, ("forward", "reverse"))
+    assert complete == golden["both_requested_reverse_maxiter"]
+
+    forward_failed = _run_irc_case(tmp_path, "fwd_fail", one_way_failed, ("forward",))
+    assert forward_failed == golden["forward_only_failure"]
