@@ -1073,6 +1073,85 @@ def test_amendment_l_predicates_confined_and_negatives() -> None:
     assert any("_build_nmr_input_lines" in issue for issue in issues)
 
 
+# ── Amendment M: plan full-fidelity round-trip (2026-10-05, plan todo 28) ──
+#
+# ``build_scan_plan``'s raw ``scan_plan`` channel round-trips a
+# ``ReactionCoordinatePlan`` through ``from_dict``; the full-fidelity fields
+# (``lambda_values`` / ``reference_geometries`` / ``fixed_endpoints`` /
+# ``xtb_scc_max_iterations``) were silently dropped there, losing PES
+# path_plan semantics.  The additions parse those OPTIONAL keys with the
+# pre-extension defaults preserved (absent keys parse exactly as before);
+# ``to_dict`` (Amendment K scope) emits them only when non-default, so the
+# round-trip pair cannot drift.  Sanctioned scope: the
+# ``ReactionCoordinatePlan.from_dict`` body only.
+
+_AMENDMENT_M_ROUNDTRIP_KEYS = (
+    "lambda_values",
+    "reference_geometries",
+    "fixed_endpoints",
+    "xtb_scc_max_iterations",
+)
+
+
+def _is_amendment_m_constraints_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``constraints.py`` additions: the from_dict round-trip."""
+    span = _func_range(worktree_src, "from_dict", "ReactionCoordinatePlan")
+    return span is not None and span[0] <= ln <= span[1]
+
+
+def _amendment_m_constraints_teeth(worktree: str) -> list[str]:
+    """Teeth: from_dict parses the extended keys and feeds them to cls()."""
+    issues: list[str] = []
+    span = _func_range(worktree, "from_dict", "ReactionCoordinatePlan")
+    if span is None:
+        issues.append("  Amendment M scope missing ReactionCoordinatePlan.from_dict")
+        return issues
+    body = "\n".join(worktree.splitlines()[span[0] - 1 : span[1]])
+    for key in _AMENDMENT_M_ROUNDTRIP_KEYS:
+        if f'data.get("{key}")' not in body:
+            issues.append(f"  Amendment M: from_dict must parse {key}")
+        if f"{key}={key}" not in body:
+            issues.append(f"  Amendment M: from_dict must pass {key} to cls()")
+    to_dict_span = _func_range(worktree, "to_dict", "ReactionCoordinatePlan")
+    if to_dict_span is None:
+        issues.append("  Amendment M round-trip pair missing ReactionCoordinatePlan.to_dict")
+    else:
+        to_dict_body = "\n".join(worktree.splitlines()[to_dict_span[0] - 1 : to_dict_span[1]])
+        for key in _AMENDMENT_M_ROUNDTRIP_KEYS:
+            if f'"{key}"' not in to_dict_body:
+                issues.append(f"  Amendment M: to_dict must emit {key} for the round-trip")
+    return issues
+
+
+def test_amendment_m_predicates_confined_and_negatives() -> None:
+    """Amendment M is confined to the from_dict round-trip — negative injection."""
+    worktree = _worktree_content("src/cccp/qc/interfaces/constraints.py")
+    plan_range = _func_range(worktree, "from_dict", "ReactionCoordinatePlan")
+    assert plan_range is not None
+
+    assert not _is_amendment_m_constraints_addition(plan_range[0] - 1, "x = 1", worktree)
+    assert not _is_amendment_m_constraints_addition(plan_range[1] + 1, "    total += 1", worktree)
+
+    injected = worktree.replace(
+        '        raw_lambda = data.get("lambda_values") or ()',
+        '        raw_lambda = data.get("lambda_values") or ()\n        smuggled = algorithm_change()',
+    )
+    issues = _amendment_m_constraints_teeth(injected)
+    assert not issues, "in-body edits stay inside the sanctioned scope"
+    stripped = worktree.replace("            fixed_endpoints=fixed_endpoints,\n", "")
+    issues = _amendment_m_constraints_teeth(stripped)
+    assert any("fixed_endpoints" in issue for issue in issues)
+    unpaired = worktree.replace('        fixed_endpoints = bool(data.get("fixed_endpoints") or False)', "")
+    issues = _amendment_m_constraints_teeth(unpaired)
+    assert any("from_dict must parse fixed_endpoints" in issue for issue in issues)
+    removed = worktree.replace(
+        "    def from_dict(cls, data: dict[str, object]) -> ReactionCoordinatePlan:",
+        "    def _gone(cls, data: dict[str, object]) -> ReactionCoordinatePlan:",
+    )
+    issues = _amendment_m_constraints_teeth(removed)
+    assert issues, "removing the round-trip scope must fire the teeth"
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1177,8 +1256,11 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_k_constraints_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_m_constraints_addition(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
             violations.extend(_amendment_k_constraints_teeth(worktree))
+            violations.extend(_amendment_m_constraints_teeth(worktree))
             # Teeth: 0-based writer, target-before-C syntax.
             writer = wt_ranges.get("orca_constraint_block")
             if writer is None:
@@ -1580,6 +1662,15 @@ MIGRATION_STATION_PREFIXES = (
     # todo 25: CENSO template-line construction points (translation-layer consumers).
     "src/acp/workflows/energy_shared.py",
     "src/acp/confsearch/shared/helpers.py",
+    # todo 28: PES/路径工作流任务化改线（XtbPathSearch/OrcaGradient + PES 扫描接线）。
+    "src/acp/workflows/xtb_path.py",
+    "src/acp/workflows/orca_gradient.py",
+)
+MIGRATION_WORKFLOW_STATIONS = frozenset(
+    {
+        "src/acp/workflows/xtb_path.py",
+        "src/acp/workflows/orca_gradient.py",
+    }
 )
 MIGRATION_SHIM_PY = frozenset(
     {
@@ -1648,6 +1739,9 @@ def _migration_audit_issues(
     * R2 new-station isolation — changed ``src/cccp/**`` files must not import
       the acp package (AST scan: covers TYPE_CHECKING and lazy imports);
     * R3 shim purity — declared compat shims stay pure re-export shells.
+    * R4 workflow-station purity — the todo-28 workflow stations execute via
+      the cccp task cores only; a ``get_backend``/``require_backend`` token
+      re-opens the forbidden backend-direct path.
     """
     issues: list[str] = []
     for path in sorted(files):
@@ -1669,6 +1763,10 @@ def _migration_audit_issues(
                         issues.append(f"  {path}:{node.lineno}: from {module} import names")
         if path in MIGRATION_SHIM_PY and not _is_migration_shim(src):
             issues.append(f"  {path}: compat shim gained a non-re-export body")
+        if path in MIGRATION_WORKFLOW_STATIONS and re.search(
+            r"\b(?:get_backend|require_backend)\b", src
+        ):
+            issues.append(f"  {path}: workflow station acquires a backend directly")
     return issues
 
 
@@ -1709,6 +1807,18 @@ def test_migration_scope_catches_unaudited_change() -> None:
     issues = _migration_audit_issues(["src/acp/nmr/smuggled.py"])
     assert issues, "unaudited change outside migration stations was not detected"
     assert "unaudited" in issues[0]
+
+
+def test_migration_scope_catches_workflow_backend_direct() -> None:
+    """⑥ Negative: a todo-28 workflow station re-acquiring a backend is
+    flagged — the workflow stations execute via the cccp task cores only."""
+    target = "src/acp/workflows/xtb_path.py"
+    issues = _migration_audit_issues(
+        [target], {target: "from acp.backends.registry import get_backend\n"}
+    )
+    assert issues, "workflow station backend-direct acquisition was not detected"
+    assert "backend directly" in issues[0]
+    assert not _migration_audit_issues([target], {target: "value = 1\n"})
 
 
 def test_migration_scope_catches_acp_import_in_cccp() -> None:
