@@ -517,8 +517,8 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
 
     assert callable(getattr(ORCABackend, "transition_state_opt", None))
     assert callable(getattr(ORCABackend, "casscf", None))
+    assert callable(cccp.calculation.run_singlepoint), "singlepoint landed in todo 17"
     for name in (
-        "run_singlepoint",
         "run_optimize",
         "run_frequency",
         "run_scan",
@@ -528,11 +528,30 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
         "execute",
     ):
         assert not hasattr(cccp.calculation, name), name
-    assert importlib.util.find_spec("cccp.calculation.tasks") is None
+    import importlib.util
+
+    assert importlib.util.find_spec("cccp.calculation.tasks.singlepoint") is not None
+    assert importlib.util.find_spec("cccp.calculation.tasks.optimize") is None
     requirement = capability_requirement(_request())
     assert requirement.capability == "single_point"
 
 
 def test_selection_import_does_not_load_tasks_in_process() -> None:
-    select_semantic(_request())
-    assert not any(name.startswith("cccp.calculation.tasks") for name in sys.modules)
+    code = (
+        "import sys\n"
+        "import cccp.calculation.selection as selection\n"
+        "from cccp.calculation.contracts import StructureRole\n"
+        "from cccp.calculation.requests import StructureInput, TaskKind, TaskRequest\n"
+        "request = TaskRequest(\n"
+        "    task=TaskKind.SINGLEPOINT,\n"
+        "    structure=StructureInput(\n"
+        "        coordinates=((0.0, 0.0, 0.0),), symbols=('C',), role=StructureRole.MINIMUM\n"
+        "    ),\n"
+        ")\n"
+        "selection.select_semantic(request)\n"
+        "assert not any(n.startswith('cccp.calculation.tasks') for n in sys.modules)\n"
+        "print('ok')\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    assert "ok" in proc.stdout

@@ -316,6 +316,23 @@ quarantined.
   converts them to LiveMetric display metrics.  UI fields (`label_key`,
   `priority`, display ordering) never enter CCCP.
 * **R10 errors vs exceptions:** rule set §10.
+* **R11 `context.backend` (runtime seam, todo 17):** an already-resolved
+  backend *instance* supplied by a legacy caller (e.g.
+  `run_prepared_frames(backend, …)`).  Selection still runs semantically;
+  the runtime precheck is skipped (the caller vouches for the instance) and
+  the instance is what executes.  `None` = registry acquisition after
+  selection.
+* **R12 `context.capability_extras` (runtime seam, todo 17):** verbatim
+  legacy capability kwargs (`output_name`, `scf_maxiter`, `route_extras`, …)
+  handed to the translation entry unchanged until the full translation-layer
+  cleanup (todo 25).
+
+Translation-layer minimal public entry (todo 17): `resolve_spec`
+(`ResolvedCalculationSpec`, single resolution point) + `render_backend_input`
+(explicit request values pass through **verbatim**; absent values are never
+invented — method-inherent defaults are materialised by the backend input
+renderer from the same cccp method metadata; the pre-migration goldens
+freeze exactly these effective parameters).
 
 ## 12. Progress events
 

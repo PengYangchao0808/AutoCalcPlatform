@@ -207,7 +207,13 @@ class FakeBackend:
 
 @pytest.fixture()
 def fake_backend(monkeypatch: pytest.MonkeyPatch) -> FakeBackend:
-    """Patch ``acp.backends.get_backend`` with a fresh recording fake."""
+    """Patch the backend seams with a fresh recording fake.
+
+    Covers both acquisition paths: ``acp.backends.get_backend`` (legacy
+    primitives) and ``cccp.backends.registry.get_backend`` (cccp task cores),
+    plus a synthetic program-availability answer so the two-step selection
+    precheck passes without real QC binaries installed.
+    """
     backend = FakeBackend()
 
     def get_backend(name: str) -> FakeBackend:
@@ -216,6 +222,11 @@ def fake_backend(monkeypatch: pytest.MonkeyPatch) -> FakeBackend:
         return backend
 
     monkeypatch.setattr("acp.backends.get_backend", get_backend)
+    monkeypatch.setattr("cccp.backends.registry.get_backend", get_backend)
+    monkeypatch.setattr(
+        "cccp.calculation.selection.resolve_executable",
+        lambda name, configured_path=None: f"/synthetic/{name}",
+    )
     return backend
 
 

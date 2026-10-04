@@ -20,6 +20,7 @@ import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from cccp.calculation.contracts import JsonValue
 from cccp.calculation.progress import ProgressEvent, TaskProgressSink
@@ -38,6 +39,18 @@ class TaskContext:
     relative input paths (R2, defaults to the process CWD at execution
     start); ``timeout_s`` bounds the WHOLE task including rescue attempts
     (R7); ``cancelled`` is polled between pending units (R8).
+
+    Runtime seams (plan todo 17, ACP legacy integration):
+
+    * ``backend`` — an already-resolved backend *instance* supplied by a
+      legacy caller (e.g. ``run_prepared_frames(backend, …)``); when set, the
+      task executes on this instance and skips the runtime precheck (the
+      caller vouches for it).  ``None`` = registry acquisition after
+      selection.
+    * ``capability_extras`` — verbatim legacy capability kwargs
+      (``output_name``, ``scf_maxiter``, ``route_extras``, …) handed to
+      ``render_backend_input`` unchanged until the translation-layer cleanup
+      (plan todo 25).
     """
 
     config: Mapping[str, JsonValue] | None = None
@@ -46,6 +59,8 @@ class TaskContext:
     progress: TaskProgressSink | None = None
     timeout_s: float | None = None
     cancelled: Callable[[], bool] | None = None
+    backend: Any | None = None
+    capability_extras: Mapping[str, Any] | None = None
     _progress_errors: list[str] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 

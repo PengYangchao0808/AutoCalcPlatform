@@ -205,6 +205,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.selection import (
         select_semantic as select_semantic,
     )
+    from cccp.calculation.tasks.singlepoint import (
+        run_singlepoint as run_singlepoint,
+    )
 
 _LAZY_EXPORTS: dict[str, str] = {
     "ArtifactRef": "contracts",
@@ -291,6 +294,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "resolve_effective_params": "batch",
     "run_batch": "batch",
     "version_matches": "batch",
+    "run_singlepoint": "tasks.singlepoint",
 }
 
 __all__ = sorted(_LAZY_EXPORTS)

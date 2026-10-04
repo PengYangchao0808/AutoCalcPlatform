@@ -527,6 +527,7 @@ def run_batch(
     run_config: Mapping[str, Any] | None = None,
     precheck: RuntimePrecheck | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
+    on_item_start: Callable[[str], None] | None = None,
     on_item_done: Callable[[BatchItemResult], None] | None = None,
     version_policy: CacheVersionPolicy = CacheVersionPolicy.REQUIRE_RECORDED,
 ) -> BatchRunResult:
@@ -551,16 +552,18 @@ def run_batch(
         with progress_lock:
             done += 1
             current = done
-        if progress_callback is not None:
-            try:
-                progress_callback(current, total)
-            except (OSError, RuntimeError, TypeError, ValueError):
-                logger.exception("batch progress callback failed at %s/%s", current, total)
-        if on_item_done is not None:
-            try:
-                on_item_done(result)
-            except (OSError, RuntimeError, TypeError, ValueError):
-                logger.exception("batch on_item_done callback failed for %s", result.entry_id)
+            if progress_callback is not None:
+                try:
+                    progress_callback(current, total)
+                except (OSError, RuntimeError, TypeError, ValueError):
+                    logger.exception("batch progress callback failed at %s/%s", current, total)
+            if on_item_done is not None:
+                try:
+                    on_item_done(result)
+                except (OSError, RuntimeError, TypeError, ValueError):
+                    logger.exception(
+                        "batch on_item_done callback failed for %s", result.entry_id
+                    )
 
     prepared: list[tuple[BatchEntry, EffectiveTaskParams, CacheIdentity]] = []
     outcomes: dict[str, BatchItemResult] = {}
@@ -606,6 +609,18 @@ def run_batch(
     def _run_one(
         entry: BatchEntry, params: EffectiveTaskParams, identity: CacheIdentity
     ) -> BatchItemResult:
+        result = _resolve_one(entry, params, identity)
+        _notify(result)
+        return result
+
+    def _resolve_one(
+        entry: BatchEntry, params: EffectiveTaskParams, identity: CacheIdentity
+    ) -> BatchItemResult:
+        if on_item_start is not None:
+            try:
+                on_item_start(entry.entry_id)
+            except (OSError, RuntimeError, TypeError, ValueError):
+                logger.exception("batch on_item_start callback failed for %s", entry.entry_id)
         record, miss_reason = _cache_lookup(cache, identity, version_policy)
         if record is not None:
             return BatchItemResult(
@@ -679,9 +694,7 @@ def run_batch(
                 for entry, params, identity in prepared
             }
             for future, entry_id in future_map.items():
-                result = future.result()
-                outcomes[entry_id] = result
-                _notify(result)
+                outcomes[entry_id] = future.result()
 
     ordered = tuple(outcomes[entry_id] for entry_id in entry_ids)
     n_success = sum(1 for result in ordered if result.status == "success")

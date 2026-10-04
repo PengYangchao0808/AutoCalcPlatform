@@ -1,90 +1,151 @@
 # pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
-"""Single-point energy calculation primitive."""
+"""Single-point energy — ACP compat wrapper (plan todo 17).
+
+The task core lives in :mod:`cccp.calculation.tasks.singlepoint`.  This
+module is the ACP-side compat surface: legacy ``CalculationRequest`` → typed
+``TaskRequest`` conversion (``acp.calculations.legacy_adapters``), ACP-side
+product registration through the publication contract
+(:mod:`acp.calculations.result_publication`), and the legacy
+``CalculationResult`` envelope mapping.  ``run_singlepoint`` is a pure
+forwarder (the dual-root uniqueness guard classifies it as a shim).
+"""
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from acp.calculations.contracts import CalculationRequest, CalculationResult
-
-from ._common import (
-    artifacts_from_qc,
-    backend_for_request,
-    backend_name,
-    call_capability,
-    capability_kwargs,
-    electronic_state_result_metadata,
-    error_text,
-    load_inputs,
-    output_dir,
-    result_from_qc,
-    write_state_artifacts,
+from acp.calculations.legacy_adapters import to_legacy_result, to_task_request
+from acp.calculations.primitives._common import capability_kwargs
+from acp.calculations.result_publication import (
+    ArtifactReference,
+    PublicationOutcome,
+    ScientificResultRecord,
+    recover_publication,
+)
+from acp.storage.manifest import ProductKind, ResultManifest
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import TaskResult
+from cccp.calculation.tasks.singlepoint import (
+    run_singlepoint as _cccp_run_singlepoint,
 )
 
-_BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 logger = logging.getLogger(__name__)
 
 
 def run_singlepoint(req: CalculationRequest) -> CalculationResult:
-    """Run a single-point energy calculation through a backend capability."""
-    inputs = load_inputs(req)
-    selected_backend = backend_name(req)
-    backend = backend_for_request(req, selected_backend)
-    try:
-        qc_result = call_capability(
-            backend,
-            "single_point",
-            inputs,
-            output_dir(req),
-            capability_kwargs(req),
-        )
-    except _BACKEND_FAILURES as error:
-        return result_from_qc(
-            req,
-            selected_backend,
-            None,
-            [error_text(error)],
-            [],
-            status="failed",
-        )
+    """Run a single-point energy calculation through the cccp task core."""
+    return execute_singlepoint(req)
 
-    artifacts = artifacts_from_qc(qc_result, selected_backend)
-    state_metadata, state_errors, forced_status = electronic_state_result_metadata(
-        inputs, qc_result
+
+def execute_singlepoint(req: CalculationRequest) -> CalculationResult:
+    """ACP compat wrapper: cccp task core + legacy envelope mapping.
+
+    Verbatim legacy capability kwargs (``scf_maxiter``, ``output_name``, …)
+    ride along as ``capability_extras`` (translation cleanup: plan todo 25).
+    """
+    task_request, binding = to_task_request(req, TaskKind.SINGLEPOINT)
+    context = TaskContext(
+        config=binding.config,
+        workdir=binding.artifact_root,
+        capability_extras=capability_kwargs(req),
     )
-    artifacts.extend(write_state_artifacts(inputs, qc_result, output_dir(req), selected_backend))
-    if not qc_result.success:
-        message = qc_result.error_message or "single-point calculation failed"
-        return result_from_qc(req, selected_backend, qc_result, [message], artifacts)
-    if qc_result.energy is None:
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            ["single-point calculation returned no energy"],
-            artifacts,
-            status="failed",
-        )
-    if state_errors:
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            state_errors,
-            artifacts,
-            metadata={"electronic_state": state_metadata},
-            status=forced_status or "failed",
-        )
-    if state_metadata:
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            [],
-            artifacts,
-            metadata={"electronic_state": state_metadata},
-        )
-    return result_from_qc(req, selected_backend, qc_result, [], artifacts)
+    task_result = _cccp_run_singlepoint(task_request, context=context)
+    return legacy_result(task_result, binding)
 
 
-__all__ = ["run_singlepoint"]
+def legacy_result(task_result: TaskResult, binding: object) -> CalculationResult:
+    """Map one typed ``TaskResult`` back to the legacy envelope (lossless)."""
+    legacy = to_legacy_result(task_result, binding)  # type: ignore[arg-type]
+    if not task_result.metadata:
+        return legacy
+    metadata = dict(task_result.metadata)
+    metadata.update(legacy.metadata)
+    return CalculationResult(
+        energy=legacy.energy,
+        coords=legacy.coords,
+        frequencies=legacy.frequencies,
+        artifacts=legacy.artifacts,
+        status=legacy.status,
+        errors=legacy.errors,
+        provenance=legacy.provenance,
+        metadata=metadata,
+    )
+
+
+# ── ACP-side product registration (publication contract, todo 16) ────────
+
+
+def scientific_record(
+    result: CalculationResult,
+    *,
+    result_id: str,
+    result_dir: Path | str,
+    kind: str = "singlepoint",
+) -> ScientificResultRecord:
+    """Build the contract-① record for one legacy result (data transform)."""
+    root = Path(result_dir)
+    artifacts: list[ArtifactReference] = []
+    for artifact in result.artifacts:
+        path = Path(artifact.path)
+        try:
+            rel = path.resolve().relative_to(root.resolve())
+        except ValueError:
+            rel = path
+        artifacts.append(ArtifactReference(path=str(rel), type=artifact.type))
+    summary: dict[str, object] = {
+        "status": result.status,
+        "errors": list(result.errors),
+    }
+    if result.energy is not None:
+        summary["energy_hartree"] = result.energy
+    return ScientificResultRecord(
+        result_id=result_id,
+        kind=kind,
+        artifacts=tuple(artifacts),
+        summary=summary,
+    )
+
+
+def _default_manifest(record: ScientificResultRecord) -> ResultManifest:
+    manifest = ResultManifest(task_id=record.result_id, workflow=record.kind, status="completed")
+    for artifact in record.artifacts:
+        manifest.add_product(
+            artifact.path, artifact.path, artifact.path, ProductKind.FILE
+        )
+    return manifest
+
+
+def recover_singlepoint(
+    req: CalculationRequest,
+    *,
+    result_dir: Path | str,
+    result_id: str,
+    manifest: ResultManifest | None = None,
+) -> PublicationOutcome:
+    """ACP recovery entry: check the stored scientific result FIRST.
+
+    A valid contract-① record for *result_id* means only publication is
+    retried (the QC callable is never invoked — fault-injection contract:
+    "科学结果已存 + 发布失败 → 恢复只重试发布、QC 调用不增"); otherwise the
+    calculation runs once and the full sequence ①②③ publishes.
+    """
+
+    def _execute_qc() -> ScientificResultRecord:
+        result = execute_singlepoint(req)
+        return scientific_record(result, result_id=result_id, result_dir=result_dir)
+
+    def _build_manifest(record: ScientificResultRecord) -> ResultManifest:
+        return manifest if manifest is not None else _default_manifest(record)
+
+    return recover_publication(
+        result_dir,
+        result_id=result_id,
+        execute_qc=_execute_qc,
+        build_manifest=_build_manifest,
+    )
+
+
+__all__ = ["execute_singlepoint", "recover_singlepoint", "run_singlepoint"]

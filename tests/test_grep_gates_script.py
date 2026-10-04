@@ -369,7 +369,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 21
+ALLOWLIST_COUNT_PIN: Final[int] = 19
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
@@ -707,6 +707,9 @@ def test_allowlist_only_shrinks_from_wave0_baseline() -> None:
 def test_allowlist_count_is_pinned() -> None:
     assert len(ARCHITECTURE_ALLOWLIST) == ALLOWLIST_COUNT_PIN
     assert len(set(ARCHITECTURE_ALLOWLIST)) == len(ARCHITECTURE_ALLOWLIST)
+    assert not any(rule == "legacy_batch_quarantine" for rule, _m, _s in ARCHITECTURE_ALLOWLIST), (
+        "legacy_batch_quarantine allowlist must stay empty since todo 17"
+    )
 
 
 @pytest.mark.parametrize(

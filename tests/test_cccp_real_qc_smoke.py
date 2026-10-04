@@ -184,34 +184,53 @@ def _task_context(work_dir: Path):
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_orca
-@_PENDING_TODO_41
 def test_orca_singlepoint_real_smoke(tmp_path: Path) -> None:
-    """ORCA singlepoint via cccp.calculation.run_singlepoint (todo 17)."""
-    from cccp.calculation import TaskRequest, run_singlepoint
+    """ORCA singlepoint via the frozen cccp task API (todo 17 landed).
 
-    request = TaskRequest(
-        kind="singlepoint",
-        options={
-            "backend": "orca",
-            "method": "HF",
-            "basis": "def2-SVP",
-            "charge": 0,
-            "multiplicity": 1,
-        },
-        symbols=list(_WATER_SYMBOLS),
-        coordinates=_WATER_COORDINATES.tolist(),
+    The ImportError xfail placeholder is removed now that ``run_singlepoint``
+    is callable against the frozen ``TaskRequest`` envelope; golden pinning
+    of recorded real runs remains todo 41.
+    """
+    from cccp.calculation import (
+        MethodSpec,
+        StructureInput,
+        TaskContext,
+        TaskKind,
+        TaskRequest,
+        run_singlepoint,
     )
-    result = run_singlepoint(request, context=_task_context(tmp_path / "sp"))
 
-    _assert_converged(result)
-    _assert_energy_valid(result.payload.energy, band=_ENERGY_BAND_HARTREE["water_hf_def2svp"])
+    workdir = tmp_path / "sp"
+    workdir.mkdir()
+    request = TaskRequest(
+        task=TaskKind.SINGLEPOINT,
+        structure=StructureInput(
+            coordinates=tuple(tuple(float(c) for c in row) for row in _WATER_COORDINATES),
+            symbols=_WATER_SYMBOLS,
+        ),
+        charge=0,
+        multiplicity=1,
+        level=MethodSpec(method="HF", basis="def2-SVP"),
+        backend="orca",
+        output_dir=workdir,
+    )
+    result = run_singlepoint(request, context=TaskContext(workdir=workdir))
+
+    assert result.status == "completed"
+    assert result.complete is True
+    assert result.errors == ()
+    _assert_energy_valid(result.energy_hartree, band=_ENERGY_BAND_HARTREE["water_hf_def2svp"])
     # Singlepoint must return the input geometry unchanged (record identity).
     _assert_structure_correspondence(
-        result.payload.structure.symbols,
-        np.asarray(result.payload.structure.coordinates),
+        list(result.symbols or ()),
+        np.asarray(result.coordinates, dtype=float),
         expected_symbols=_WATER_SYMBOLS,
     )
-    _assert_run_recorded(result)
+    assert result.provenance is not None and result.provenance.backend == "orca"
+    artifact_types = {artifact.type for artifact in result.artifacts}
+    assert "log" in artifact_types or "output" in artifact_types, (
+        "the raw program output/log must be recorded as an artifact"
+    )
 
 
 @pytest.mark.slow

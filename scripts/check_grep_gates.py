@@ -755,16 +755,6 @@ HISTORICAL_GATE_NAMES: Final[tuple[str, ...]] = tuple(
 # ever shrinks (tests pin both the entry set and the count): a new violation
 # must be fixed, never allowlisted.
 ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
-    (
-        "legacy_batch_quarantine",
-        "src/acp/calculations/batch/_singlepoint_execution.py",
-        LEGACY_BATCH_SYMBOL,
-    ),
-    (
-        "legacy_batch_quarantine",
-        "src/acp/calculations/batch/_singlepoint_execution.py",
-        LEGACY_BATCH_EXEC_SYMBOL,
-    ),
     ("workflow_executes_qc", "src/acp/calculations/batch/singlepoint.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/pes/scan.py", "get_backend"),
