@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from acp.backends.batch import _read_cache
 from acp.calculations.batch._manifest import BatchCalculationManifest
 from acp.calculations.checkpoint import load_checkpoint
@@ -151,3 +153,56 @@ def test_checkpoint_mixed_frequency_step_recovers() -> None:
     statuses = [state.get("status") for state in checkpoint.step_states]
     assert statuses.count("completed") == 2
     assert FrequencyOptions().to_dict() == {}
+
+
+def test_checkpoint_casscf_thermochemistry_steps_recover(tmp_path: Path) -> None:
+    """Todo 22 switch: the CASSCF/thermochemistry recovery subset stays valid.
+
+    The shared checkpoint contract round-trips steps of both new kinds (a
+    completed CASSCF step and a failed-but-recoverable THERMOCHEMISTRY step);
+    the plan fingerprint over ``str(step.spec)`` validates after the typed
+    options switch.
+    """
+    from acp.calculations.checkpoint import write_checkpoint
+    from acp.calculations.contracts import (
+        CalculationPlan,
+        CalculationStep,
+        Checkpoint,
+        StepKind,
+    )
+    from acp.calculations.executor import _plan_fingerprint
+
+    plan = CalculationPlan(
+        workflow="casscf",
+        profile="default",
+        items=[{"path": "structures/input.xyz"}],
+        steps=[
+            CalculationStep(
+                kind=StepKind.CASSCF,
+                spec={"casscf": {"active_electrons": 2, "active_orbitals": 2}},
+            ),
+            CalculationStep(
+                kind=StepKind.THERMOCHEMISTRY,
+                spec={"freq_log_path": "WORK/03_OPT/freq.log"},
+            ),
+        ],
+    )
+    fingerprint = _plan_fingerprint(plan)
+    checkpoint = Checkpoint(
+        task_id="task-22-recovery",
+        workflow="casscf",
+        plan_fingerprint=fingerprint,
+        step_states=[
+            {"kind": "casscf", "status": "completed", "energy": -109.14691549},
+            {"kind": "thermochemistry", "status": "failed", "error": "synthetic shermo failure"},
+        ],
+    )
+    write_checkpoint(tmp_path, checkpoint)
+    loaded = load_checkpoint(tmp_path, fingerprint)
+    assert loaded is not None
+    assert [state.get("status") for state in loaded.step_states] == ["completed", "failed"]
+    assert loaded.step_states[0]["energy"] == -109.14691549
+    from acp.calculations.checkpoint import CheckpointMismatchError
+
+    with pytest.raises(CheckpointMismatchError):
+        load_checkpoint(tmp_path, "other-fingerprint")

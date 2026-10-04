@@ -208,6 +208,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.selection import (
         select_semantic as select_semantic,
     )
+    from cccp.calculation.tasks.casscf import (
+        run_casscf as run_casscf,
+    )
     from cccp.calculation.tasks.frequency import (
         run_frequency as run_frequency,
     )
@@ -219,6 +222,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     )
     from cccp.calculation.tasks.singlepoint import (
         run_singlepoint as run_singlepoint,
+    )
+    from cccp.calculation.tasks.thermochemistry import (
+        run_thermochemistry as run_thermochemistry,
     )
 
 _LAZY_EXPORTS: dict[str, str] = {
@@ -307,11 +313,16 @@ _LAZY_EXPORTS: dict[str, str] = {
     "resolve_effective_params": "batch",
     "run_batch": "batch",
     "version_matches": "batch",
+    "artifact_ref_from_dict": "results",
+    "artifact_ref_to_dict": "results",
+    "casscf_payload_from_multireference": "results",
+    "run_casscf": "tasks.casscf",
     "run_frequency": "tasks.frequency",
     "run_irc": "tasks.irc",
     "run_optimize": "tasks.optimize",
     "run_scan": "tasks.scan",
     "run_singlepoint": "tasks.singlepoint",
+    "run_thermochemistry": "tasks.thermochemistry",
 }
 
 __all__ = sorted(_LAZY_EXPORTS)

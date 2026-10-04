@@ -522,9 +522,9 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
     assert callable(cccp.calculation.run_frequency), "frequency landed in todo 19"
     assert callable(cccp.calculation.run_scan), "scan landed in todo 20"
     assert callable(cccp.calculation.run_irc), "irc landed in todo 21"
+    assert callable(cccp.calculation.run_casscf), "casscf landed in todo 22"
+    assert callable(cccp.calculation.run_thermochemistry), "thermochemistry landed in todo 22"
     for name in (
-        "run_casscf",
-        "run_thermochemistry",
         "execute",
     ):
         assert not hasattr(cccp.calculation, name), name
@@ -534,6 +534,8 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
     assert importlib.util.find_spec("cccp.calculation.tasks.frequency") is not None
     assert importlib.util.find_spec("cccp.calculation.tasks.scan") is not None
     assert importlib.util.find_spec("cccp.calculation.tasks.irc") is not None
+    assert importlib.util.find_spec("cccp.calculation.tasks.casscf") is not None
+    assert importlib.util.find_spec("cccp.calculation.tasks.thermochemistry") is not None
     requirement = capability_requirement(_request())
     assert requirement.capability == "single_point"
 

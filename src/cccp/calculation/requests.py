@@ -713,6 +713,16 @@ class CasscfOptions:
     task: ClassVar[TaskKind] = TaskKind.CASSCF
     spec: CASSCFSpec
 
+    @property
+    def orbital_selection(self) -> str:
+        """Orbital selection mode — read-only view of ``CASSCFSpec``.
+
+        No duplicated storage (T11 D5): ``CASSCFSpec`` owns the field and the
+        serialised form (``to_dict``/``from_dict`` round-trip through
+        ``spec``); this property is a pure convenience view.
+        """
+        return self.spec.orbital_selection
+
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict."""
         return {"spec": casscf_spec_to_dict(self.spec)}

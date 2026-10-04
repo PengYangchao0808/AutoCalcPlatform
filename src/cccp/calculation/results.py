@@ -641,6 +641,91 @@ class CasscfPayload:
         )
 
 
+def _payload_float_tuple(value: object) -> tuple[float, ...]:
+    """Coerce a sequence of numbers to floats; anything else yields ``()``."""
+    if not isinstance(value, (list, tuple)):
+        return ()
+    numbers: list[float] = []
+    for entry in value:
+        if isinstance(entry, (int, float)) and not isinstance(entry, bool):
+            numbers.append(float(entry))
+    return tuple(numbers)
+
+
+def _payload_per_root(multiref: Mapping[str, object], key: str) -> tuple[float, ...]:
+    """Per-root ``key`` values from ``nevpt2_roots`` entries, in order."""
+    roots = multiref.get("nevpt2_roots")
+    if not isinstance(roots, (list, tuple)):
+        return ()
+    values: list[float] = []
+    for entry in roots:
+        if isinstance(entry, Mapping):
+            raw = entry.get(key)
+            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                values.append(float(raw))
+    return tuple(values)
+
+
+def _payload_scalar_fallback(multiref: Mapping[str, object], key: str) -> tuple[float, ...]:
+    raw = multiref.get(key)
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return (float(raw),)
+    return ()
+
+
+def casscf_payload_from_multireference(multiref: Mapping[str, object]) -> CasscfPayload:
+    """Project legacy ``metadata["multireference"]`` onto :class:`CasscfPayload`.
+
+    The single explicit mapping (plan todo 22) shared by the CASSCF task core
+    and the legacy adapter.  Both recorded shapes of the legacy multireference
+    dict are accepted:
+
+    * ``natural_occupations`` is always read directly from
+      ``multiref["natural_occupations"]`` (any shape).
+    * The **adapter-rebuild shape wins when present**: a mapping carrying
+      ``root_energies`` / ``nevpt2_energies`` / ``active_space`` keys (the
+      shape ``legacy_adapters.to_legacy_result`` re-emits) uses those values
+      directly, keeping the legacy round-trip symmetric.
+    * Otherwise the **current production shape** (the dict produced by the
+      CASSCF task / ``_multireference_metadata``) is projected:
+
+      - ``root_energies`` ← per-root ``casscf_energy_hartree`` from
+        ``nevpt2_roots`` entries in order when non-empty; else the scalar
+        ``casscf_energy_hartree`` when set; else ``()``.
+      - ``nevpt2_energies`` ← per-root ``correlated_energy_hartree`` from
+        ``nevpt2_roots`` entries in order when non-empty; else the scalar
+        ``correlated_energy_hartree`` when set; else ``()``.
+      - ``active_space`` ← ``active_space_signature`` (``""`` when absent).
+
+    Pure data mapping: no I/O and no heavy imports.
+    """
+    natural_occupations = _payload_float_tuple(multiref.get("natural_occupations"))
+    rebuild_shape = any(
+        key in multiref for key in ("root_energies", "nevpt2_energies", "active_space")
+    )
+    if rebuild_shape:
+        active = multiref.get("active_space")
+        return CasscfPayload(
+            root_energies=_payload_float_tuple(multiref.get("root_energies")),
+            natural_occupations=natural_occupations,
+            nevpt2_energies=_payload_float_tuple(multiref.get("nevpt2_energies")),
+            active_space=active if isinstance(active, str) else "",
+        )
+    root_energies = _payload_per_root(multiref, "casscf_energy_hartree")
+    if not root_energies:
+        root_energies = _payload_scalar_fallback(multiref, "casscf_energy_hartree")
+    nevpt2_energies = _payload_per_root(multiref, "correlated_energy_hartree")
+    if not nevpt2_energies:
+        nevpt2_energies = _payload_scalar_fallback(multiref, "correlated_energy_hartree")
+    active_space = multiref.get("active_space_signature")
+    return CasscfPayload(
+        root_energies=root_energies,
+        natural_occupations=natural_occupations,
+        nevpt2_energies=nevpt2_energies,
+        active_space=active_space if isinstance(active_space, str) else "",
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ThermochemistryPayload:
     """Typed payload for ``thermochemistry`` results (units: Hartree / au)."""
@@ -954,5 +1039,6 @@ __all__ = [
     "ThermochemistryPayload",
     "artifact_ref_from_dict",
     "artifact_ref_to_dict",
+    "casscf_payload_from_multireference",
     "payload_from_dict",
 ]

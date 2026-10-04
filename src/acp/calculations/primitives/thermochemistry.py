@@ -1,18 +1,39 @@
-"""Unified Shermo thermochemistry primitive.
+"""Unified Shermo thermochemistry primitive + ACP compat wrapper (plan todo 22).
 
 Delegates execution and scientific normalization to the shared adapter
 ``cccp.qc.shermo_adapter`` / ``cccp.qc.thermo_normalize`` (plan todo 14) and
 maps the outcome into ``CalculationResult``; no separate science path lives
-here anymore.
+here anymore.  All entries — ``ThermochemistryCalculator``, the cccp task
+``run_thermochemistry`` and ``ExternalBackend.thermochemistry`` — share that
+single implementation with exactly one Shermo launch per calculation.
+
+``run_thermochemistry``/``execute_thermochemistry`` are the T17–T21-style
+compat wrapper around :mod:`cccp.calculation.tasks.thermochemistry`; the
+six-parameter ``compute`` entry and its output-path semantics are unchanged
+(``ThermochemistryCalculator`` stays public API until plan todo 23).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import final
 
-from acp.calculations.contracts import ArtifactRef, CalculationResult, JsonValue
+from acp.calculations.contracts import (
+    ArtifactRef,
+    CalculationRequest,
+    CalculationResult,
+    JsonValue,
+)
+from acp.calculations.legacy_adapters import LegacyBinding, to_legacy_result, to_task_request
+from acp.calculations.primitives._common import capability_kwargs
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import TaskResult
+from cccp.calculation.tasks.thermochemistry import (
+    run_thermochemistry as _cccp_run_thermochemistry,
+)
 from cccp.qc.shermo_adapter import execute_shermo
 
 from ._thermochemistry_input import (
@@ -94,8 +115,53 @@ class ThermochemistryCalculator:
         return freq_path.parent if freq_path.parent != Path(".") else Path.cwd()
 
 
+def run_thermochemistry(req: CalculationRequest) -> CalculationResult:
+    """Run one Shermo thermochemistry calculation through the cccp task core."""
+    return execute_thermochemistry(req)
+
+
+def execute_thermochemistry(req: CalculationRequest) -> CalculationResult:
+    """ACP compat wrapper: cccp task core + legacy envelope mapping.
+
+    ``freq_log_path`` is the input shape (the envelope placeholder structure
+    is dropped before the typed validation).  Task metadata is the shared
+    ``build_metadata`` projection and wins over any payload re-emission so
+    both entries keep one metadata shape.
+    """
+    task_request, binding = to_task_request(req, TaskKind.THERMOCHEMISTRY)
+    task_request = replace(task_request, structure=None)
+    context = TaskContext(
+        config=binding.config,
+        workdir=binding.artifact_root,
+        capability_extras=capability_kwargs(req),
+    )
+    task_result = _cccp_run_thermochemistry(task_request, context=context)
+    return legacy_result(task_result, binding)
+
+
+def legacy_result(task_result: TaskResult, binding: LegacyBinding) -> CalculationResult:
+    """Map one typed ``TaskResult`` back to the legacy envelope."""
+    legacy = to_legacy_result(task_result, binding)
+    if not task_result.metadata:
+        return legacy
+    metadata: dict[str, JsonValue] = dict(legacy.metadata)  # type: ignore[assignment]
+    metadata.update(task_result.metadata)  # type: ignore[arg-type]
+    return CalculationResult(
+        energy=legacy.energy,
+        coords=legacy.coords,
+        frequencies=legacy.frequencies,
+        artifacts=legacy.artifacts,
+        status=legacy.status,
+        errors=legacy.errors,
+        provenance=legacy.provenance,
+        metadata=metadata,
+    )
+
+
 __all__ = [
     "ThermochemistryCalculator",
     "ThermochemistryInputError",
+    "execute_thermochemistry",
+    "run_thermochemistry",
     "standard_state_correction_kcal",
 ]

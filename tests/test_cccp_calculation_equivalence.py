@@ -13,6 +13,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+import cccp.qc.shermo_adapter as shermo_module
 from cccp.calculation._common import level_explicit_fields, render_backend_input, resolve_spec
 from cccp.calculation.context import TaskContext
 from cccp.calculation.requests import MethodSpec, StructureInput, TaskKind, TaskRequest
@@ -680,3 +683,225 @@ def test_irc_runs_match_goldens(tmp_path: Path) -> None:
 
     forward_failed = _run_irc_case(tmp_path, "fwd_fail", one_way_failed, ("forward",))
     assert forward_failed == golden["forward_only_failure"]
+
+
+# ── CASSCF / NEVPT2 goldens (todo 22) ────────────────────────────────────
+
+
+def _round_floats(value: Any, ndigits: int = 10) -> Any:
+    if isinstance(value, float):
+        return round(value, ndigits)
+    if isinstance(value, dict):
+        return {key: _round_floats(entry, ndigits) for key, entry in value.items()}
+    if isinstance(value, list):
+        return [_round_floats(entry, ndigits) for entry in value]
+    return value
+
+
+class _CasscfStubBackend:
+    """Golden CASSCF stub: answers one ``casscf`` capability call."""
+
+    name = "orca"
+
+    def __init__(self, response: Any) -> None:
+        self.response = response
+        self.calls: list[str] = []
+
+    def casscf(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append("casscf")
+        return self.response
+
+
+def test_casscf_input_generation_matches_goldens(tmp_path: Path) -> None:
+    """Group ①: ORCAInterface.casscf input text equals the frozen record."""
+    from unittest.mock import patch
+
+    import numpy as np
+
+    from cccp.qc.interfaces.orca import ORCAInterface
+    from cccp.software import SoftwareNotFoundError
+
+    golden = _load("casscf_nevpt2.json")
+    interface = ORCAInterface(
+        {"executables": {"orca": {"path": "orca", "nproc": 4, "maxcore": 2000}}},
+        method="B3LYP",
+        basis="def2-TZVPP",
+    )
+    for label, case in golden["inputs"].items():
+        case_dir = tmp_path / label
+        case_dir.mkdir(parents=True, exist_ok=True)
+        with patch.object(
+            ORCAInterface, "_run_orca", side_effect=SoftwareNotFoundError("golden stub")
+        ):
+            interface.casscf(np.zeros((2, 3)), ["H", "H"], output_dir=case_dir, **case["kwargs"])
+        text = (case_dir / "casscf.inp").read_text(encoding="utf-8")
+        assert text == case["input_text"], label
+
+
+def test_casscf_output_parse_matches_goldens(tmp_path: Path) -> None:
+    """Group ②: the recorded ORCA CASSCF/NEVPT2 output parses to the record."""
+    from cccp.qc.interfaces.orca import parse_casscf_output
+
+    golden = _load("casscf_nevpt2.json")
+    log = tmp_path / "casscf_recorded.out"
+    log.write_text(golden["recorded_output"], encoding="utf-8")
+    parsed = _round_floats(parse_casscf_output(log))
+    assert parsed == golden["parsed_output"]
+
+
+def test_casscf_spec_contract_matches_goldens() -> None:
+    """Group ①: spec signature + validation errors equal the frozen record."""
+    from acp.calculations.contracts import casscf_spec_from_dict, validate_casscf_spec
+
+    golden = _load("casscf_nevpt2.json")
+    expected = golden["spec_roundtrip"]
+    spec = casscf_spec_from_dict(dict(expected["payload"]))
+    assert spec.active_space_signature() == expected["signature"]
+    assert validate_casscf_spec(spec, n_electrons=2) == expected["validation_errors"]
+    invalid = casscf_spec_from_dict({"active_electrons": 6, "active_orbitals": 2})
+    assert validate_casscf_spec(invalid, n_electrons=None) == golden["spec_invalid_errors"]
+
+
+def test_casscf_payload_projection_matches_goldens(tmp_path: Path) -> None:
+    """Group ③: the typed payload projects the golden parsed output exactly."""
+    from cccp.backends.base import QCResult
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.contracts import casscf_spec_from_dict
+    from cccp.calculation.requests import (
+        CasscfOptions,
+        MethodSpec,
+        StructureInput,
+        TaskKind,
+        TaskRequest,
+    )
+    from cccp.calculation.tasks.casscf import run_casscf
+
+    golden = _load("casscf_nevpt2.json")
+    parsed = golden["parsed_output"]
+    stub = _CasscfStubBackend(
+        QCResult(
+            success=True,
+            energy=-108.987654321,
+            symbols=["H", "H"],
+            converged=True,
+            metadata={"casscf": dict(parsed)},
+        )
+    )
+    spec = casscf_spec_from_dict(dict(golden["spec_roundtrip"]["payload"]))
+    request = TaskRequest(
+        task=TaskKind.CASSCF,
+        structure=StructureInput(
+            coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 1.4)), symbols=("H", "H")
+        ),
+        charge=0,
+        multiplicity=1,
+        level=MethodSpec(method="casscf"),
+        backend="orca",
+        options=CasscfOptions(spec=spec),
+        output_dir=tmp_path,
+    )
+    result = run_casscf(request, context=TaskContext(backend=stub))
+    assert result.status == "completed"
+    assert stub.calls == ["casscf"]
+    payload = result.payload
+    assert payload is not None
+    roots = parsed["nevpt2_roots"]
+    assert list(payload.root_energies) == _round_floats(
+        [entry["casscf_energy_hartree"] for entry in roots]
+    )
+    assert list(payload.nevpt2_energies) == _round_floats(
+        [entry["correlated_energy_hartree"] for entry in roots]
+    )
+    assert list(payload.natural_occupations) == parsed["natural_occupations"]
+    assert payload.active_space == spec.active_space_signature()
+
+
+# ── Shermo standard state goldens (todo 22) ──────────────────────────────
+
+
+def test_shermo_standard_state_semantics_match_goldens() -> None:
+    """Group ①: token normalization + correction + Gibbs selection == record."""
+    from cccp.qc.thermo_normalize import (
+        normalize_standard_state,
+        parse_shermo_result,
+        select_gibbs,
+        standard_state_correction_kcal,
+    )
+
+    golden = _load("shermo_standard_state.json")
+    for raw, expected in golden["standard_state_token_normalization"].items():
+        assert normalize_standard_state(raw) == expected, raw
+    for key, expected in golden["correction_kcal_mol"].items():
+        assert standard_state_correction_kcal(float(key.rstrip("K"))) == pytest.approx(
+            expected, abs=1e-9
+        )
+    for case in golden["gibbs_selection"]:
+        gibbs, source, delta = select_gibbs(
+            case["g_sum"], case["g_conc"], 298.15, case["standard_state"]
+        )
+        if case["gibbs"] is None:
+            assert gibbs is None
+        else:
+            assert gibbs == pytest.approx(case["gibbs"])
+        assert source == case["gibbs_source"]
+        assert (delta is None and case["standard_delta"] is None) or delta == pytest.approx(
+            case["standard_delta"], abs=1e-9
+        )
+    parsed_keys = parse_shermo_result(
+        {"u_sum": 1.0, "h_sum": 2.0, "g_sum": 3.0, "g_conc": 4.0, "s_total": 5.0}
+    )
+    assert sorted(parsed_keys) == golden["parse_shermo_result_keys"]
+
+
+def test_shermo_units_payload_matches_goldens(tmp_path: Path) -> None:
+    """Group ③: the typed payload carries Hartree/au values un-scaled."""
+    from unittest.mock import patch
+
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.requests import (
+        MethodSpec,
+        TaskKind,
+        TaskRequest,
+        ThermochemistryOptions,
+    )
+    from cccp.calculation.tasks.thermochemistry import run_thermochemistry
+
+    freq_log = tmp_path / "frequency.log"
+    freq_log.write_text("frequency output", encoding="utf-8")
+    captured: dict[str, Any] = {}
+
+    def fake_run_shermo(**kwargs: Any) -> dict[str, float]:
+        captured.update(kwargs)
+        Path(kwargs["output_file"]).write_text("Shermo summary", encoding="utf-8")
+        return {"u_sum": -40.2, "h_sum": -40.25, "g_sum": -40.6, "s_total": 0.01}
+
+    with patch.object(shermo_module, "run_shermo", fake_run_shermo):
+        result = run_thermochemistry(
+            TaskRequest(
+                task=TaskKind.THERMOCHEMISTRY,
+                level=MethodSpec(),
+                options=ThermochemistryOptions(
+                    freq_log_path=freq_log,
+                    sp_energy_hartree=-40.5,
+                    temperature_k=298.15,
+                    pressure_atm=1.0,
+                    standard_state="1M",
+                ),
+            ),
+            context=TaskContext(),
+        )
+    assert result.status == "completed"
+    payload = result.payload
+    assert payload is not None
+    assert payload.enthalpy_hartree == -40.25
+    assert payload.entropy_au == 0.01
+    assert payload.standard_state == "1M"
+    golden = _load("shermo_standard_state.json")
+    expected_case = next(
+        case
+        for case in golden["gibbs_selection"]
+        if case["g_sum"] == -40.6 and case["g_conc"] is None and case["standard_state"] == "1M"
+    )
+    assert payload.gibbs_hartree == pytest.approx(expected_case["gibbs"], abs=1e-9)
+    assert payload.gibbs_source == expected_case["gibbs_source"]
+    assert captured["temperature_k"] == 298.15

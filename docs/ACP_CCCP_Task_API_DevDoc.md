@@ -57,7 +57,7 @@ def run_thermochemistry(request: TaskRequest, *, context: TaskContext | None = N
 
 `TaskRequest` is serializable intent; `TaskContext` is runtime state and is
 never serialized.  Implementations live in `cccp.calculation.tasks` (todos
-17–22).  This draft claims **no executability**.
+17–22): all seven core tasks are executable.
 
 ## 3. TaskRequest (serializable envelope)
 
@@ -120,7 +120,7 @@ mismatched class with `TaskInputError`.
 | `frequency` | `FrequencyOptions` | *(empty in v1 — numerical differentiation is not promised)* |
 | `scan` | `ScanOptions` | `coordinates: tuple[ScanCoordinateSpec, ...]`, `points: int \| None`, `values: tuple[float, ...]` (explicit grid), `mode: ScanMode` (only `relaxed`; `rigid` is reserved and rejected) |
 | `irc` | `IrcOptions` | `directions: tuple[IrcDirection, ...]` (`forward`/`reverse`, unique, non-empty; default both), `maxpoints: int \| None`, `step: float \| None`, `initial_hessian: str \| None` (no `ts_mode` — v3.2 §6) |
-| `casscf` | `CasscfOptions` | `spec: CASSCFSpec` (required; active space + NEVPT2 selection) |
+| `casscf` | `CasscfOptions` | `spec: CASSCFSpec` (required; active space + NEVPT2 selection); read-only `orbital_selection` property = `spec.orbital_selection` (no duplicated storage — `CASSCFSpec` owns the field) |
 | `thermochemistry` | `ThermochemistryOptions` | `freq_log_path: Path \| None` (**required** — this is the input shape), `sp_energy_hartree: float \| None`, `temperature_k: float \| None`, `pressure_atm: float \| None`, `standard_state: str \| None` (`"1atm"`/`"1M"`; `None` = contract default `"1atm"` at execution), `scl_zpe: float \| None`, `ilowfreq: int \| None`, `imagreal: int \| None`, `conc: float \| None` |
 
 Supporting types:
@@ -430,7 +430,7 @@ LegacyBinding)`, `to_legacy_request(task_request, binding) -> CalculationRequest
 | `tsmode_explicit_target` / `tsmode_target_preserved` | `OptimizePayload.*` | explicit mapped TS target diagnostics |
 | `electronic_state` | `*.electronic_state` (sp/opt/freq payloads) | verbatim JsonObject |
 | `n_imaginary` | `FrequencyPayload.n_imaginary` | |
-| `multireference` / `casscf` | `CasscfPayload.*` (projection) | raw-preserved (raw wins on rebuild) |
+| `multireference` / `casscf` | `CasscfPayload.*` via `results.casscf_payload_from_multireference` (single mapping: rebuild shape wins when present; else production shape) | raw-preserved (raw wins on rebuild) |
 | `enthalpy_hartree`, `gibbs_hartree`, `entropy_au`, `standard_state` | `ThermochemistryPayload.*` | |
 | `selected_gibbs_source` | `ThermochemistryPayload.gibbs_source` | alias preserved |
 | *(anything else)* | `binding.metadata_extra` | verbatim residue |
@@ -470,7 +470,7 @@ against this table.
 | `scan` | `run_scan` | 20 |
 | `irc` | `run_irc` | 21 |
 | `thermochemistry` | `run_thermochemistry` | 22 |
-| `casscf` | `run_casscf` | 23 |
+| `casscf` | `run_casscf` | 22 |
 | batch/cache | `cccp.calculation.batch` | 12 |
 | P2 five (+2) | `run_*` | 42–43 / 24 |
 

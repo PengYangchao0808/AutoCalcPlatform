@@ -73,6 +73,7 @@ from cccp.calculation.results import (
     TaskPayload,
     TaskResult,
     ThermochemistryPayload,
+    casscf_payload_from_multireference,
 )
 
 # ── committed legacy keys: canonical name -> accepted legacy names ──────
@@ -858,18 +859,8 @@ def _payload_from_values(
     if task_kind is TaskKind.CASSCF:
         multiref = raw.get("multireference")
         if isinstance(multiref, Mapping):
-            roots = multiref.get("root_energies")
-            occupations = multiref.get("natural_occupations")
-            nevpt2 = multiref.get("nevpt2_energies")
-            active_space = multiref.get("active_space")
-            return CasscfPayload(
-                root_energies=tuple(float(v) for v in roots) if isinstance(roots, list) else (),
-                natural_occupations=(
-                    tuple(float(v) for v in occupations) if isinstance(occupations, list) else ()
-                ),
-                nevpt2_energies=tuple(float(v) for v in nevpt2) if isinstance(nevpt2, list) else (),
-                active_space=active_space if isinstance(active_space, str) else "",
-            )
+            # todo 22: single shared projection (rebuild + production shapes).
+            return casscf_payload_from_multireference(multiref)
         return None
     if task_kind is TaskKind.THERMOCHEMISTRY:
         return ThermochemistryPayload(
