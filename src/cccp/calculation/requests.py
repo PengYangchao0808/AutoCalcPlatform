@@ -13,6 +13,8 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
@@ -50,7 +52,7 @@ TASK_REQUEST_SCHEMA_VERSION = 1
 
 
 class TaskKind(str, Enum):
-    """The seven core calculation tasks (P2 tasks extend this later)."""
+    """The seven core calculation tasks plus the seven P2 capability tasks."""
 
     SINGLEPOINT = "singlepoint"
     OPTIMIZE = "optimize"
@@ -59,6 +61,14 @@ class TaskKind(str, Enum):
     IRC = "irc"
     CASSCF = "casscf"
     THERMOCHEMISTRY = "thermochemistry"
+    # P2 capability tasks (contracts only in todo 24; execution wires in 42/43)
+    CONFORMER_SEARCH = "conformer_search"
+    MD_SAMPLING = "md_sampling"
+    CLUSTERING = "clustering"
+    CENSO_REFINE = "censo_refine"
+    NMR_SHIELDING = "nmr_shielding"
+    XTB_PATH_SEARCH = "xtb_path_search"
+    ORCA_GRADIENT = "orca_gradient"
 
 
 # ── request building blocks ─────────────────────────────────────────────
@@ -810,6 +820,717 @@ class ThermochemistryOptions:
             raise TaskInputError(str(exc)) from exc
 
 
+# ── scoped backend-input fragments (P2 raw knobs, explicit + digest) ────
+
+
+class BackendInputKind(str, Enum):
+    """Closed vocabulary of raw backend-input fragment channels (P2 only).
+
+    Scope-limited by design: only these five legacy knob families may be
+    carried verbatim into a request; everything else must map to a typed
+    field.  Fragments are never a renamed unconstrained passthrough.
+    """
+
+    PATH_INP_TEXT = "path_inp_text"
+    EXTRA_ARGS = "extra_args"
+    ROUTE_EXTRAS = "route_extras"
+    EXTRA_BLOCKS = "extra_blocks"
+    OUTPUT_NAME = "output_name"
+
+
+class FragmentConflictRule(str, Enum):
+    """Deterministic behavior when a fragment re-specifies a structured knob."""
+
+    STRUCTURED_FIELDS_WIN = "structured_fields_win"
+    REJECT_ON_CONFLICT = "reject_on_conflict"
+
+
+#: Per-kind deterministic conflict rule (translation layer enforces the same
+#: table; a fragment may not choose its own rule).
+FRAGMENT_CONFLICT_RULES: dict[BackendInputKind, FragmentConflictRule] = {
+    BackendInputKind.PATH_INP_TEXT: FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    BackendInputKind.EXTRA_ARGS: FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    BackendInputKind.ROUTE_EXTRAS: FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    BackendInputKind.EXTRA_BLOCKS: FragmentConflictRule.REJECT_ON_CONFLICT,
+    BackendInputKind.OUTPUT_NAME: FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+}
+
+#: Structured-owned knobs per fragment kind (token → structured field name).
+#: Only these tokens are conflict-checked; the fragment never owns them.
+FRAGMENT_KNOB_TOKENS: dict[BackendInputKind, dict[str, str]] = {
+    BackendInputKind.PATH_INP_TEXT: {
+        "gfn": "gfn_level",
+        "uhf": "uhf",
+        "chrg": "charge",
+        "spin": "multiplicity",
+    },
+    BackendInputKind.EXTRA_ARGS: {
+        "--gfn": "gfn_level",
+        "--uhf": "uhf",
+        "--chrg": "charge",
+        "--seed": "seed",
+    },
+    BackendInputKind.ROUTE_EXTRAS: {},
+    BackendInputKind.EXTRA_BLOCKS: {
+        "nprocs": "nproc",
+        "maxcore": "maxcore",
+    },
+    BackendInputKind.OUTPUT_NAME: {},
+}
+
+
+@dataclass(frozen=True, slots=True)
+class BackendInputFragment:
+    """Scope-limited, explicitly-marked raw backend input (P2 tasks only).
+
+    Records the verbatim content plus its content digest, the conflict rule
+    that governs overlap with structured fields, and its source field name
+    in the legacy request.  ``content_digest`` participates in every cache
+    signature derived from the serialized request.
+    """
+
+    kind: BackendInputKind
+    source: str
+    content: str | tuple[str, ...]
+    conflict_rule: FragmentConflictRule
+    content_digest: str = ""
+
+    def __post_init__(self) -> None:
+        try:
+            kind = BackendInputKind(self.kind)
+        except ValueError as exc:
+            allowed = ", ".join(k.value for k in BackendInputKind)
+            message = f"fragment kind must be one of: {allowed}"
+            raise TaskInputError(message) from exc
+        object.__setattr__(self, "kind", kind)
+        try:
+            rule = FragmentConflictRule(self.conflict_rule)
+        except ValueError as exc:
+            allowed = ", ".join(r.value for r in FragmentConflictRule)
+            message = f"fragment conflict_rule must be one of: {allowed}"
+            raise TaskInputError(message) from exc
+        expected = FRAGMENT_CONFLICT_RULES[kind]
+        if rule is not expected:
+            message = (
+                f"fragment kind {kind.value!r} must use conflict_rule "
+                f"{expected.value!r}, got {rule.value!r}"
+            )
+            raise TaskInputError(message)
+        object.__setattr__(self, "conflict_rule", rule)
+        if not self.source or not str(self.source).strip():
+            message = "fragment source must be a non-empty legacy field name"
+            raise TaskInputError(message)
+        object.__setattr__(self, "source", str(self.source))
+        if isinstance(self.content, str):
+            normalized: str | tuple[str, ...] = self.content
+        elif isinstance(self.content, (list, tuple)):
+            items = tuple(str(item) for item in self.content)
+            for item in items:
+                if not item:
+                    message = "fragment arg-list content entries must be non-empty"
+                    raise TaskInputError(message)
+            normalized = items
+        else:
+            message = "fragment content must be a string or a list of strings"
+            raise TaskInputError(message)
+        object.__setattr__(self, "content", normalized)
+        object.__setattr__(self, "content_digest", self.compute_digest())
+
+    def compute_digest(self) -> str:
+        """sha256 over the canonical JSON of the fragment content."""
+        return hashlib.sha256(
+            json.dumps(self.content, sort_keys=True, ensure_ascii=True).encode("utf-8")
+        ).hexdigest()
+
+    def cache_signature(self) -> JsonObject:
+        """Cache-identity contribution: kind + content digest (content itself
+        is covered by the digest)."""
+        return {"kind": self.kind.value, "content_digest": self.content_digest}
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        content: str | list[str] = (
+            self.content if isinstance(self.content, str) else list(self.content)
+        )
+        return {
+            "kind": self.kind.value,
+            "source": self.source,
+            "content": content,
+            "conflict_rule": self.conflict_rule.value,
+            "content_digest": self.content_digest,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> BackendInputFragment:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not isinstance(payload, Mapping):
+            message = "backend input fragment must be a mapping"
+            raise TaskInputError(message)
+        kind = parse_enum_strict(BackendInputKind, payload.get("kind"), "fragment.kind")
+        rule = parse_enum_strict(
+            FragmentConflictRule, payload.get("conflict_rule"), "fragment.conflict_rule"
+        )
+        raw_content = payload.get("content")
+        content: str | tuple[str, ...]
+        if isinstance(raw_content, str):
+            content = raw_content
+        elif isinstance(raw_content, list):
+            content = tuple(str(item) for item in raw_content)
+        else:
+            message = "fragment.content must be a string or a list of strings"
+            raise TaskInputError(message)
+        return cls(
+            kind=kind,  # type: ignore[arg-type]
+            source=parse_str_strict(payload, "source") or "",
+            content=content,
+            conflict_rule=rule,  # type: ignore[arg-type]
+        )
+
+
+def _fragment_knob_value(fragment: BackendInputFragment, token: str) -> str | None:
+    """Value a fragment assigns to a knob token, or None when absent.
+
+    Accepts ``token=value`` and ``token value`` forms; returns ``""`` for a
+    bare flag (re-specification without a value is unresolvable overlap).
+    """
+    haystack = (
+        fragment.content
+        if isinstance(fragment.content, str)
+        else " ".join(fragment.content)
+    )
+    parts = haystack.replace("\n", " ").split()
+    for index, part in enumerate(parts):
+        if part == token:
+            if index + 1 < len(parts):
+                return parts[index + 1]
+            return ""
+        if part.startswith(f"{token}="):
+            return part[len(token) + 1 :]
+    return None
+
+
+def fragment_structured_conflicts(
+    fragment: BackendInputFragment, structured: Mapping[str, object]
+) -> tuple[str, ...]:
+    """Structured knobs contradicted by ``fragment`` (deterministic scan).
+
+    A conflict exists when a declared knob token in the fragment assigns a
+    value that **disagrees** with the structured field (string comparison of
+    the token value vs ``str(structured value)``).  Matching values are
+    consistent duplicates and keep the effective input identical before and
+    after conversion.  Bare flags without a value count as disagreement.
+    """
+    tokens = FRAGMENT_KNOB_TOKENS.get(fragment.kind, {})
+    if not tokens:
+        return ()
+    found: list[str] = []
+    for token, field_name in tokens.items():
+        structured_value = structured.get(field_name)
+        if structured_value is None:
+            continue
+        assigned = _fragment_knob_value(fragment, token)
+        if assigned is None:
+            continue
+        if assigned != str(structured_value):
+            found.append(field_name)
+    return tuple(sorted(set(found)))
+
+
+def resolve_fragment_conflicts(
+    fragment: BackendInputFragment, structured: Mapping[str, object]
+) -> tuple[str, ...]:
+    """Apply ``fragment.conflict_rule`` to detected conflicts.
+
+    Returns the conflicting structured field names when the rule keeps the
+    structured fields authoritative (the fragment's conflicting directive is
+    ignored downstream, the fragment stays recorded verbatim).  Raises
+    :class:`TaskInputError` under ``reject_on_conflict``.
+
+    Raises:
+        TaskInputError: When the fragment's rule is ``reject_on_conflict``
+            and any structured-owned knob is re-specified.
+    """
+    conflicts = fragment_structured_conflicts(fragment, structured)
+    if not conflicts:
+        return ()
+    if fragment.conflict_rule is FragmentConflictRule.REJECT_ON_CONFLICT:
+        message = (
+            f"fragment {fragment.kind.value!r} contradicts structured knob(s) "
+            f"{', '.join(conflicts)} under rule 'reject_on_conflict'"
+        )
+        raise TaskInputError(message)
+    return conflicts
+
+
+# ── P2 per-task typed options (contracts only; execution in todos 42/43) ─
+
+
+@dataclass(frozen=True, slots=True)
+class ConformerSearchOptions:
+    """Task-specific options for ``conformer_search`` (CREST)."""
+
+    task: ClassVar[TaskKind] = TaskKind.CONFORMER_SEARCH
+    energy_window: float | None = None
+    gfn_level: int | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {}
+        if self.energy_window is not None:
+            payload["energy_window"] = self.energy_window
+        if self.gfn_level is not None:
+            payload["gfn_level"] = self.gfn_level
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> ConformerSearchOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        return cls(
+            energy_window=parse_float_strict(payload, "energy_window"),
+            gfn_level=parse_int_strict(payload, "gfn_level"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MdSamplingOptions:
+    """Task-specific options for ``md_sampling`` (Molclus/xTB-MD)."""
+
+    task: ClassVar[TaskKind] = TaskKind.MD_SAMPLING
+    md_method: str | None = None
+    gfn_level: int | None = None
+    temperature_k: float | None = None
+    time_ps: float | None = None
+    dump_fs: float | None = None
+    step_fs: float | None = None
+    hmass: float | None = None
+    shake: bool | None = None
+    nvt: bool | None = None
+    seed: int | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {}
+        for key, value in (
+            ("md_method", self.md_method),
+            ("gfn_level", self.gfn_level),
+            ("temperature_k", self.temperature_k),
+            ("time_ps", self.time_ps),
+            ("dump_fs", self.dump_fs),
+            ("step_fs", self.step_fs),
+            ("hmass", self.hmass),
+            ("shake", self.shake),
+            ("nvt", self.nvt),
+            ("seed", self.seed),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> MdSamplingOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        return cls(
+            md_method=parse_str_strict(payload, "md_method"),
+            gfn_level=parse_int_strict(payload, "gfn_level"),
+            temperature_k=parse_float_strict(payload, "temperature_k"),
+            time_ps=parse_float_strict(payload, "time_ps"),
+            dump_fs=parse_float_strict(payload, "dump_fs"),
+            step_fs=parse_float_strict(payload, "step_fs"),
+            hmass=parse_float_strict(payload, "hmass"),
+            shake=parse_bool_strict(payload, "shake"),
+            nvt=parse_bool_strict(payload, "nvt"),
+            seed=parse_int_strict(payload, "seed"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClusteringOptions:
+    """Task-specific options for ``clustering`` (ISOSTAT/Molclus)."""
+
+    task: ClassVar[TaskKind] = TaskKind.CLUSTERING
+    edis: float | None = None
+    gdis: float | None = None
+    temperature_k: float | None = None
+    nout: int | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {}
+        for key, value in (
+            ("edis", self.edis),
+            ("gdis", self.gdis),
+            ("temperature_k", self.temperature_k),
+            ("nout", self.nout),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> ClusteringOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        return cls(
+            edis=parse_float_strict(payload, "edis"),
+            gdis=parse_float_strict(payload, "gdis"),
+            temperature_k=parse_float_strict(payload, "temperature_k"),
+            nout=parse_int_strict(payload, "nout"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CensoLevelOverride:
+    """One CENSO part-level theory override (preset refinement seam)."""
+
+    part: str
+    func: str | None = None
+    basis: str | None = None
+    threshold: float | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"part": self.part}
+        if self.func is not None:
+            payload["func"] = self.func
+        if self.basis is not None:
+            payload["basis"] = self.basis
+        if self.threshold is not None:
+            payload["threshold"] = self.threshold
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> CensoLevelOverride:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        return cls(
+            part=parse_str_strict(payload, "part") or "",
+            func=parse_str_strict(payload, "func"),
+            basis=parse_str_strict(payload, "basis"),
+            threshold=parse_float_strict(payload, "threshold"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CensoRefineOptions:
+    """Task-specific options for ``censo_refine``.
+
+    Structured preset/level overrides only — the CENSO template/rcfile text
+    is generated by the translation layer and is deliberately NOT a request
+    field (workflows must never assemble template text).
+    """
+
+    task: ClassVar[TaskKind] = TaskKind.CENSO_REFINE
+    preset: str | None = None
+    level_overrides: tuple[CensoLevelOverride, ...] = ()
+    temperature_k: float | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "level_overrides", tuple(self.level_overrides))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {}
+        if self.preset is not None:
+            payload["preset"] = self.preset
+        if self.level_overrides:
+            payload["level_overrides"] = [entry.to_dict() for entry in self.level_overrides]
+        if self.temperature_k is not None:
+            payload["temperature_k"] = self.temperature_k
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> CensoRefineOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_overrides = payload.get("level_overrides", [])
+        if not isinstance(raw_overrides, list):
+            message = "options.level_overrides must be a list"
+            raise TaskInputError(message)
+        overrides: list[CensoLevelOverride] = []
+        for index, entry in enumerate(raw_overrides):
+            if not isinstance(entry, Mapping):
+                message = f"options.level_overrides[{index}] must be a mapping"
+                raise TaskInputError(message)
+            overrides.append(CensoLevelOverride.from_dict(entry))
+        return cls(
+            preset=parse_str_strict(payload, "preset"),
+            level_overrides=tuple(overrides),
+            temperature_k=parse_float_strict(payload, "temperature_k"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NmrShieldingOptions:
+    """Task-specific options for ``nmr_shielding`` (GIAO).
+
+    ``atom_indices`` carries an explicit base (record identity); the result
+    keeps the atom → ``{symbol, isotropic}`` key shape verbatim.
+    """
+
+    task: ClassVar[TaskKind] = TaskKind.NMR_SHIELDING
+    atom_indices: tuple[int, ...] = ()
+    atom_index_base: Literal[0, 1] = 0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "atom_indices", tuple(int(i) for i in self.atom_indices))
+        if self.atom_index_base not in (0, 1):
+            message = "atom_index_base must be 0 or 1"
+            raise TaskInputError(message)
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"atom_index_base": self.atom_index_base}
+        if self.atom_indices:
+            payload["atom_indices"] = list(self.atom_indices)
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> NmrShieldingOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        base_raw = payload.get("atom_index_base", 0)
+        if isinstance(base_raw, bool) or not isinstance(base_raw, int) or base_raw not in (0, 1):
+            message = "atom_index_base must be 0 or 1"
+            raise TaskInputError(message)
+        return cls(
+            atom_indices=parse_int_tuple_strict(payload, "atom_indices"),
+            atom_index_base=base_raw,  # type: ignore[arg-type]
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class XtbPathSearchOptions:
+    """Task-specific options for ``xtb_path_search`` (GFN2-xTB PATH).
+
+    The start geometry is the request-level ``structure``; ``end_structure``
+    completes the structure pair.  Raw recipe knobs travel only as scoped
+    :class:`BackendInputFragment` entries.
+    """
+
+    task: ClassVar[TaskKind] = TaskKind.XTB_PATH_SEARCH
+    end_structure: StructureInput | None = None
+    gfn_level: int | None = None
+    uhf: int | None = None
+    seed: int | None = None
+    backend_inputs: tuple[BackendInputFragment, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "backend_inputs", tuple(self.backend_inputs))
+        for fragment in self.backend_inputs:
+            if fragment.kind not in (
+                BackendInputKind.PATH_INP_TEXT,
+                BackendInputKind.EXTRA_ARGS,
+            ):
+                message = (
+                    f"xtb_path_search accepts fragments of kind "
+                    f"path_inp_text/extra_args, got {fragment.kind.value!r}"
+                )
+                raise TaskInputError(message)
+
+    def cache_signature(self) -> JsonObject:
+        """Cache-identity payload: structured knobs + fragment digests."""
+        return {
+            "gfn_level": self.gfn_level,
+            "uhf": self.uhf,
+            "seed": self.seed,
+            "backend_inputs": [f.cache_signature() for f in self.backend_inputs],
+        }
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "backend_inputs": [f.to_dict() for f in self.backend_inputs],
+        }
+        if self.end_structure is not None:
+            payload["end_structure"] = self.end_structure.to_dict()
+        for key, value in (
+            ("gfn_level", self.gfn_level),
+            ("uhf", self.uhf),
+            ("seed", self.seed),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> XtbPathSearchOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_end = payload.get("end_structure")
+        if raw_end is not None and not isinstance(raw_end, Mapping):
+            message = "options.end_structure must be a mapping"
+            raise TaskInputError(message)
+        raw_inputs = payload.get("backend_inputs", [])
+        if not isinstance(raw_inputs, list):
+            message = "options.backend_inputs must be a list"
+            raise TaskInputError(message)
+        fragments: list[BackendInputFragment] = []
+        for index, entry in enumerate(raw_inputs):
+            if not isinstance(entry, Mapping):
+                message = f"options.backend_inputs[{index}] must be a mapping"
+                raise TaskInputError(message)
+            fragments.append(BackendInputFragment.from_dict(entry))
+        return cls(
+            end_structure=StructureInput.from_dict(raw_end),
+            gfn_level=parse_int_strict(payload, "gfn_level"),
+            uhf=parse_int_strict(payload, "uhf"),
+            seed=parse_int_strict(payload, "seed"),
+            backend_inputs=tuple(fragments),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OrcaGradientOptions:
+    """Task-specific options for ``orca_gradient`` (ORCA EnGrad).
+
+    ``scf_convergence`` lives on ``level`` (``MethodSpec.scf``) and the
+    geometry on the request-level ``structure``; only the raw ORCA input
+    fragments travel here.
+    """
+
+    task: ClassVar[TaskKind] = TaskKind.ORCA_GRADIENT
+    backend_inputs: tuple[BackendInputFragment, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "backend_inputs", tuple(self.backend_inputs))
+        for fragment in self.backend_inputs:
+            if fragment.kind not in (
+                BackendInputKind.ROUTE_EXTRAS,
+                BackendInputKind.EXTRA_BLOCKS,
+                BackendInputKind.OUTPUT_NAME,
+            ):
+                message = (
+                    f"orca_gradient accepts fragments of kind "
+                    f"route_extras/extra_blocks/output_name, got {fragment.kind.value!r}"
+                )
+                raise TaskInputError(message)
+
+    def cache_signature(self) -> JsonObject:
+        """Cache-identity payload: fragment digests (structured knobs live
+        on ``level``/``resources`` and are covered there)."""
+        return {"backend_inputs": [f.cache_signature() for f in self.backend_inputs]}
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        return {"backend_inputs": [f.to_dict() for f in self.backend_inputs]}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> OrcaGradientOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_inputs = payload.get("backend_inputs", [])
+        if not isinstance(raw_inputs, list):
+            message = "options.backend_inputs must be a list"
+            raise TaskInputError(message)
+        fragments: list[BackendInputFragment] = []
+        for index, entry in enumerate(raw_inputs):
+            if not isinstance(entry, Mapping):
+                message = f"options.backend_inputs[{index}] must be a mapping"
+                raise TaskInputError(message)
+            fragments.append(BackendInputFragment.from_dict(entry))
+        return cls(backend_inputs=tuple(fragments))
+
+
+# ── P2 contract mapping table (input/backend/semantics/identity) ───────
+
+
+@dataclass(frozen=True, slots=True)
+class TaskContractMapping:
+    """Per-task contract mapping: input shape, backend/capability names,
+    success/partial/empty semantics, artifact + record identity."""
+
+    input_shape: str
+    capability: str
+    backends: tuple[str, ...]
+    success: str
+    partial: str
+    empty: str
+    artifact_identity: str
+    record_identity: str
+
+
+P2_TASK_CONTRACTS: dict[TaskKind, TaskContractMapping] = {
+    TaskKind.CONFORMER_SEARCH: TaskContractMapping(
+        input_shape="single_structure",
+        capability="conformer_search",
+        backends=("crest", "censo", "molclus"),
+        success="completed with ensemble_ref and n_conformers >= 1",
+        partial="complete=False keeps valid conformers at original indices",
+        empty="n_conformers == 0 is failed(error_kind=backend_failure), not an empty success",
+        artifact_identity="ensemble_ref = ensemble artifact, root-relative",
+        record_identity="conformer table rows keep original conformer indices",
+    ),
+    TaskKind.MD_SAMPLING: TaskContractMapping(
+        input_shape="single_structure",
+        capability="md_sampling",
+        backends=("molclus",),
+        success="completed with trajectory_ref and n_frames >= 1",
+        partial="complete=False keeps the valid frame prefix at original indices",
+        empty="n_frames == 0 is failed(error_kind=backend_failure)",
+        artifact_identity="trajectory_ref = trajectory artifact, root-relative",
+        record_identity="frame indices follow trajectory order, never renumbered",
+    ),
+    TaskKind.CLUSTERING: TaskContractMapping(
+        input_shape="ensemble",
+        capability="clustering",
+        backends=("isostat", "external"),
+        success="completed with every input frame assigned to a cluster",
+        partial="complete=False keeps assigned clusters and their representatives",
+        empty="zero clusters for a non-empty ensemble is failed(error_kind=backend_failure)",
+        artifact_identity="clustered_ref = clustered-ensemble artifact, root-relative",
+        record_identity="assignments reference original ensemble frame indices",
+    ),
+    TaskKind.CENSO_REFINE: TaskContractMapping(
+        input_shape="ensemble",
+        capability="censo_refine",
+        backends=("censo",),
+        success="completed with per-conformer energy/free-energy/weight rows + refined ensemble",
+        partial="complete=False keeps valid rows keyed by original frame_index",
+        empty="zero surviving records is failed(error_kind=backend_failure)",
+        artifact_identity="refined_ensemble_ref = refined ensemble artifact, root-relative",
+        record_identity="records carry conf_id + original frame_index (CENSO ordering maps back)",
+    ),
+    TaskKind.NMR_SHIELDING: TaskContractMapping(
+        input_shape="single_structure",
+        capability="nmr_shielding",
+        backends=("orca",),
+        success="completed with shieldings keyed atom → {symbol, isotropic}",
+        partial="complete=False keeps the shielded-atom subset at original keys",
+        empty="zero shieldings parsed is failed(error_kind=parse_failure)",
+        artifact_identity="shielding log referenced as artifact; payload keeps the table",
+        record_identity="atom keys keep their integer identity and declared atom_index_base",
+    ),
+    TaskKind.XTB_PATH_SEARCH: TaskContractMapping(
+        input_shape="structure_pair",
+        capability="xtb_path_search",
+        backends=("xtb",),
+        success="completed with trajectory_ref, frames and endpoint frame indices",
+        partial="complete=False keeps valid frames at original indices",
+        empty="zero frames is failed(error_kind=backend_failure)",
+        artifact_identity="trajectory_ref = path trajectory artifact, root-relative",
+        record_identity="frame indices follow path order; endpoints reference those indices",
+    ),
+    TaskKind.ORCA_GRADIENT: TaskContractMapping(
+        input_shape="single_structure",
+        capability="orca_gradient",
+        backends=("orca",),
+        success="completed with one gradient row per atom (unit + convention recorded)",
+        partial="n/a — a gradient is all-or-nothing per atom order",
+        empty="missing gradient rows is failed(error_kind=parse_failure)",
+        artifact_identity="engrad/log referenced as artifact; payload keeps gradients",
+        record_identity="gradient rows carry unit + shape + input atom order",
+    ),
+}
+
+
 TaskOptions: TypeAlias = (
     SinglePointOptions
     | OptimizeOptions
@@ -818,9 +1539,16 @@ TaskOptions: TypeAlias = (
     | IrcOptions
     | CasscfOptions
     | ThermochemistryOptions
+    | ConformerSearchOptions
+    | MdSamplingOptions
+    | ClusteringOptions
+    | CensoRefineOptions
+    | NmrShieldingOptions
+    | XtbPathSearchOptions
+    | OrcaGradientOptions
 )
 
-# Table ① (todo 11): task → options/payload types.  The task → execution
+# Table ① (todo 11/24): task → options/payload types.  The task → execution
 # function table is completed by todos 17–22 / 42–43 and is intentionally
 # absent here (this todo claims no executability).
 TASK_OPTIONS_TYPES: dict[TaskKind, type] = {
@@ -831,6 +1559,13 @@ TASK_OPTIONS_TYPES: dict[TaskKind, type] = {
     TaskKind.IRC: IrcOptions,
     TaskKind.CASSCF: CasscfOptions,
     TaskKind.THERMOCHEMISTRY: ThermochemistryOptions,
+    TaskKind.CONFORMER_SEARCH: ConformerSearchOptions,
+    TaskKind.MD_SAMPLING: MdSamplingOptions,
+    TaskKind.CLUSTERING: ClusteringOptions,
+    TaskKind.CENSO_REFINE: CensoRefineOptions,
+    TaskKind.NMR_SHIELDING: NmrShieldingOptions,
+    TaskKind.XTB_PATH_SEARCH: XtbPathSearchOptions,
+    TaskKind.ORCA_GRADIENT: OrcaGradientOptions,
 }
 
 
@@ -980,6 +1715,28 @@ class TaskRequest:
         return request
 
 
+def _validate_fragment_conflicts(request: TaskRequest) -> None:
+    """Deterministic fragment/structured-field conflict resolution (doc §10)."""
+    options = request.options
+    fragments: tuple[BackendInputFragment, ...] = ()
+    if isinstance(options, (XtbPathSearchOptions, OrcaGradientOptions)):
+        fragments = options.backend_inputs
+    if not fragments:
+        return
+    structured: dict[str, object] = {
+        "charge": request.charge,
+        "multiplicity": request.multiplicity,
+        "nproc": request.resources.nproc,
+        "maxcore": request.resources.maxcore,
+    }
+    if isinstance(options, XtbPathSearchOptions):
+        structured["gfn_level"] = options.gfn_level
+        structured["uhf"] = options.uhf
+        structured["seed"] = options.seed
+    for fragment in fragments:
+        resolve_fragment_conflicts(fragment, structured)
+
+
 def validate_request(request: TaskRequest) -> None:
     """Validate envelope-level invariants of a task request.
 
@@ -1035,6 +1792,21 @@ def validate_request(request: TaskRequest) -> None:
             message = "structure input requires a path or inline coordinates+symbols"
             raise TaskInputError(message)
 
+    if request.task is TaskKind.XTB_PATH_SEARCH:
+        if not isinstance(request.options, XtbPathSearchOptions):
+            message = "xtb_path_search requires XtbPathSearchOptions"
+            raise TaskInputError(message)
+        end = request.options.end_structure
+        if end is None:
+            message = "xtb_path_search requires options.end_structure (structure pair)"
+            raise TaskInputError(message)
+        end_inline = end.coordinates is not None and end.symbols is not None
+        if end.path is None and not end_inline:
+            message = "options.end_structure requires a path or inline coordinates+symbols"
+            raise TaskInputError(message)
+
+    _validate_fragment_conflicts(request)
+
     # resource quota sanity (doc §"Resource semantics")
     for name, value in (
         ("nproc", request.resources.nproc),
@@ -1059,29 +1831,46 @@ def validate_request(request: TaskRequest) -> None:
 
 
 __all__ = [
+    "FRAGMENT_CONFLICT_RULES",
+    "FRAGMENT_KNOB_TOKENS",
+    "P2_TASK_CONTRACTS",
     "TASK_OPTIONS_TYPES",
     "TASK_REQUEST_SCHEMA_VERSION",
+    "BackendInputFragment",
+    "BackendInputKind",
     "CasscfOptions",
+    "CensoLevelOverride",
+    "CensoRefineOptions",
+    "ClusteringOptions",
+    "ConformerSearchOptions",
     "FailureType",
+    "FragmentConflictRule",
     "FrequencyOptions",
     "IrcDirection",
     "IrcOptions",
+    "MdSamplingOptions",
     "MethodSpec",
+    "NmrShieldingOptions",
     "OptimizeOptions",
+    "OrcaGradientOptions",
     "RescueSpec",
     "ScanCoordinateSpec",
     "ScanMode",
     "ScanOptions",
     "SinglePointOptions",
     "StructureInput",
+    "TaskContractMapping",
     "TaskKind",
     "TaskOptions",
     "TaskRequest",
     "TaskResources",
     "ThermochemistryOptions",
     "TsSpec",
+    "XtbPathSearchOptions",
+    "fragment_structured_conflicts",
     "options_from_dict",
     "options_to_dict",
     "parse_memory_mb",
+    "resolve_fragment_conflicts",
     "validate_request",
 ]

@@ -251,6 +251,13 @@ def capability_requirement(request: TaskRequest) -> CapabilityRequirement:
             TaskKind.FREQUENCY: "frequency",
             TaskKind.IRC: "irc",
             TaskKind.THERMOCHEMISTRY: "thermochemistry",
+            TaskKind.CONFORMER_SEARCH: "conformer_search",
+            TaskKind.MD_SAMPLING: "md_sampling",
+            TaskKind.CLUSTERING: "clustering",
+            TaskKind.CENSO_REFINE: "censo_refine",
+            TaskKind.NMR_SHIELDING: "nmr_shielding",
+            TaskKind.XTB_PATH_SEARCH: "xtb_path_search",
+            TaskKind.ORCA_GRADIENT: "orca_gradient",
         }.get(request.task)
         if base is None:
             message = f"no capability mapping for task {request.task.value!r}"
@@ -414,7 +421,7 @@ def select_capability(
     also_required: Sequence[str] = (),
     task: TaskKind | None = None,
 ) -> BackendSelection:
-    """Step ① for a raw capability name (P2 extension seam, todo 24).
+    """Step ① for a raw capability name (P2 seam; used by P2 selection tests).
 
     Raises:
         UnsupportedCapabilityError: Unknown capability name, or no backend

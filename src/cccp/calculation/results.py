@@ -20,12 +20,14 @@ from cccp.calculation.contracts import (
     ArtifactRef,
     JsonObject,
     Provenance,
+    ensure_finite_json_number,
     ensure_finite_payload,
     parse_bool_strict,
     parse_enum_strict,
     parse_float_strict,
     parse_float_tuple_strict,
     parse_int_strict,
+    parse_int_tuple_strict,
     parse_path_strict,
     parse_str_strict,
     parse_str_tuple_strict,
@@ -764,6 +766,476 @@ class ThermochemistryPayload:
         )
 
 
+# ── P2 typed payloads (contracts only; execution in todos 42/43) ────────
+
+
+@dataclass(frozen=True, slots=True)
+class ConformerEnergy:
+    """One conformer energy-table row (original conformer index preserved)."""
+
+    conf_id: str
+    frame_index: int
+    energy_hartree: float | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"conf_id": self.conf_id, "frame_index": self.frame_index}
+        if self.energy_hartree is not None:
+            payload["energy_hartree"] = self.energy_hartree
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ConformerEnergy:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        frame_index = parse_int_strict(payload, "frame_index")
+        if frame_index is None:
+            message = "conformer energy row requires 'frame_index'"
+            raise TaskInputError(message)
+        return cls(
+            conf_id=parse_str_strict(payload, "conf_id") or "",
+            frame_index=frame_index,
+            energy_hartree=parse_float_strict(payload, "energy_hartree"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ConformerSearchPayload:
+    """Typed payload for ``conformer_search`` results (CREST ensemble)."""
+
+    ensemble_ref: ArtifactRef | None = None
+    conformer_count: int = 0
+    energy_table: tuple[ConformerEnergy, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "energy_table", tuple(self.energy_table))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "conformer_count": self.conformer_count,
+            "energy_table": [row.to_dict() for row in self.energy_table],
+        }
+        if self.ensemble_ref is not None:
+            payload["ensemble_ref"] = _artifact_to_dict(self.ensemble_ref)
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> ConformerSearchPayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ref = payload.get("ensemble_ref")
+        if raw_ref is not None and not isinstance(raw_ref, Mapping):
+            message = "payload.ensemble_ref must be a mapping"
+            raise TaskInputError(message)
+        raw_table = payload.get("energy_table", [])
+        if not isinstance(raw_table, list):
+            message = "payload.energy_table must be a list"
+            raise TaskInputError(message)
+        rows: list[ConformerEnergy] = []
+        for index, entry in enumerate(raw_table):
+            if not isinstance(entry, Mapping):
+                message = f"payload.energy_table[{index}] must be a mapping"
+                raise TaskInputError(message)
+            rows.append(ConformerEnergy.from_dict(entry))
+        return cls(
+            ensemble_ref=_artifact_from_dict(raw_ref),
+            conformer_count=parse_int_strict(payload, "conformer_count") or 0,
+            energy_table=tuple(rows),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MdSamplingPayload:
+    """Typed payload for ``md_sampling`` results (trajectory + frame count)."""
+
+    trajectory_ref: ArtifactRef | None = None
+    n_frames: int = 0
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"n_frames": self.n_frames}
+        if self.trajectory_ref is not None:
+            payload["trajectory_ref"] = _artifact_to_dict(self.trajectory_ref)
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> MdSamplingPayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ref = payload.get("trajectory_ref")
+        if raw_ref is not None and not isinstance(raw_ref, Mapping):
+            message = "payload.trajectory_ref must be a mapping"
+            raise TaskInputError(message)
+        return cls(
+            trajectory_ref=_artifact_from_dict(raw_ref),
+            n_frames=parse_int_strict(payload, "n_frames") or 0,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterAssignment:
+    """One cluster assignment (indices reference the input ensemble order)."""
+
+    cluster_id: int
+    representative_index: int
+    member_indices: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "member_indices", tuple(int(i) for i in self.member_indices))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        return {
+            "cluster_id": self.cluster_id,
+            "representative_index": self.representative_index,
+            "member_indices": list(self.member_indices),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ClusterAssignment:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        cluster_id = parse_int_strict(payload, "cluster_id")
+        representative_index = parse_int_strict(payload, "representative_index")
+        if cluster_id is None or representative_index is None:
+            message = "cluster assignment requires 'cluster_id' and 'representative_index'"
+            raise TaskInputError(message)
+        return cls(
+            cluster_id=cluster_id,
+            representative_index=representative_index,
+            member_indices=parse_int_tuple_strict(payload, "member_indices"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClusteringPayload:
+    """Typed payload for ``clustering`` results (assignments + representatives)."""
+
+    assignments: tuple[ClusterAssignment, ...] = ()
+    clustered_ref: ArtifactRef | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "assignments", tuple(self.assignments))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"assignments": [a.to_dict() for a in self.assignments]}
+        if self.clustered_ref is not None:
+            payload["clustered_ref"] = _artifact_to_dict(self.clustered_ref)
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> ClusteringPayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ref = payload.get("clustered_ref")
+        if raw_ref is not None and not isinstance(raw_ref, Mapping):
+            message = "payload.clustered_ref must be a mapping"
+            raise TaskInputError(message)
+        raw_assignments = payload.get("assignments", [])
+        if not isinstance(raw_assignments, list):
+            message = "payload.assignments must be a list"
+            raise TaskInputError(message)
+        assignments: list[ClusterAssignment] = []
+        for index, entry in enumerate(raw_assignments):
+            if not isinstance(entry, Mapping):
+                message = f"payload.assignments[{index}] must be a mapping"
+                raise TaskInputError(message)
+            assignments.append(ClusterAssignment.from_dict(entry))
+        return cls(assignments=tuple(assignments), clustered_ref=_artifact_from_dict(raw_ref))
+
+
+@dataclass(frozen=True, slots=True)
+class CensoRefineRecord:
+    """One CENSO refinement row keyed back to the original conformer."""
+
+    conf_id: str
+    frame_index: int
+    energy_hartree: float | None = None
+    free_energy_hartree: float | None = None
+    weight: float | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"conf_id": self.conf_id, "frame_index": self.frame_index}
+        for key, value in (
+            ("energy_hartree", self.energy_hartree),
+            ("free_energy_hartree", self.free_energy_hartree),
+            ("weight", self.weight),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> CensoRefineRecord:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        frame_index = parse_int_strict(payload, "frame_index")
+        if frame_index is None:
+            message = "CENSO refine record requires 'frame_index'"
+            raise TaskInputError(message)
+        return cls(
+            conf_id=parse_str_strict(payload, "conf_id") or "",
+            frame_index=frame_index,
+            energy_hartree=parse_float_strict(payload, "energy_hartree"),
+            free_energy_hartree=parse_float_strict(payload, "free_energy_hartree"),
+            weight=parse_float_strict(payload, "weight"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CensoRefinePayload:
+    """Typed payload for ``censo_refine`` results.
+
+    Energy / free-energy / weight table + refined ensemble.  The CENSO
+    template text is a translation-layer product and is never a result
+    field.
+    """
+
+    records: tuple[CensoRefineRecord, ...] = ()
+    refined_ensemble_ref: ArtifactRef | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "records", tuple(self.records))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"records": [r.to_dict() for r in self.records]}
+        if self.refined_ensemble_ref is not None:
+            payload["refined_ensemble_ref"] = _artifact_to_dict(self.refined_ensemble_ref)
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> CensoRefinePayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ref = payload.get("refined_ensemble_ref")
+        if raw_ref is not None and not isinstance(raw_ref, Mapping):
+            message = "payload.refined_ensemble_ref must be a mapping"
+            raise TaskInputError(message)
+        raw_records = payload.get("records", [])
+        if not isinstance(raw_records, list):
+            message = "payload.records must be a list"
+            raise TaskInputError(message)
+        records: list[CensoRefineRecord] = []
+        for index, entry in enumerate(raw_records):
+            if not isinstance(entry, Mapping):
+                message = f"payload.records[{index}] must be a mapping"
+                raise TaskInputError(message)
+            records.append(CensoRefineRecord.from_dict(entry))
+        return cls(
+            records=tuple(records),
+            refined_ensemble_ref=_artifact_from_dict(raw_ref),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NmrShielding:
+    """One shielding entry: the atom → ``{symbol, isotropic}`` key shape."""
+
+    symbol: str
+    isotropic: float
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        return {"symbol": self.symbol, "isotropic": self.isotropic}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> NmrShielding:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        isotropic = parse_float_strict(payload, "isotropic")
+        if isotropic is None:
+            message = "shielding entry requires 'isotropic'"
+            raise TaskInputError(message)
+        return cls(
+            symbol=parse_str_strict(payload, "symbol") or "",
+            isotropic=isotropic,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NmrShieldingPayload:
+    """Typed payload for ``nmr_shielding`` results (GIAO).
+
+    ``shieldings`` keeps the atom-index key shape; JSON object keys become
+    strings on the wire and are restored to integers here (record identity).
+    """
+
+    shieldings: dict[int, NmrShielding] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "shieldings", dict(self.shieldings))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict (int keys become JSON strings)."""
+        return {
+            "shieldings": {
+                str(index): entry.to_dict() for index, entry in sorted(self.shieldings.items())
+            }
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> NmrShieldingPayload:
+        """Parse strictly; restores integer atom keys (rule S2 otherwise)."""
+        if not payload:
+            return cls()
+        raw = payload.get("shieldings", {})
+        if not isinstance(raw, Mapping):
+            message = "payload.shieldings must be a mapping"
+            raise TaskInputError(message)
+        shieldings: dict[int, NmrShielding] = {}
+        for key, value in raw.items():
+            try:
+                index = int(key)
+            except (TypeError, ValueError) as exc:
+                message = f"payload.shieldings keys must be atom indices, got {key!r}"
+                raise TaskInputError(message) from exc
+            if not isinstance(value, Mapping):
+                message = f"payload.shieldings[{key!r}] must be a mapping"
+                raise TaskInputError(message)
+            shieldings[index] = NmrShielding.from_dict(value)
+        return cls(shieldings=shieldings)
+
+
+@dataclass(frozen=True, slots=True)
+class XtbPathFrame:
+    """One xTB PATH frame (original trajectory index preserved)."""
+
+    index: int
+    energy_hartree: float | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"index": self.index}
+        if self.energy_hartree is not None:
+            payload["energy_hartree"] = self.energy_hartree
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> XtbPathFrame:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        index = parse_int_strict(payload, "index")
+        if index is None:
+            message = "path frame requires 'index'"
+            raise TaskInputError(message)
+        return cls(index=index, energy_hartree=parse_float_strict(payload, "energy_hartree"))
+
+
+@dataclass(frozen=True, slots=True)
+class XtbPathSearchPayload:
+    """Typed payload for ``xtb_path_search`` results (trajectory/frames/endpoints)."""
+
+    trajectory_ref: ArtifactRef | None = None
+    frames: tuple[XtbPathFrame, ...] = ()
+    start_frame_index: int | None = None
+    end_frame_index: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "frames", tuple(self.frames))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"frames": [f.to_dict() for f in self.frames]}
+        if self.trajectory_ref is not None:
+            payload["trajectory_ref"] = _artifact_to_dict(self.trajectory_ref)
+        if self.start_frame_index is not None:
+            payload["start_frame_index"] = self.start_frame_index
+        if self.end_frame_index is not None:
+            payload["end_frame_index"] = self.end_frame_index
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> XtbPathSearchPayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ref = payload.get("trajectory_ref")
+        if raw_ref is not None and not isinstance(raw_ref, Mapping):
+            message = "payload.trajectory_ref must be a mapping"
+            raise TaskInputError(message)
+        raw_frames = payload.get("frames", [])
+        if not isinstance(raw_frames, list):
+            message = "payload.frames must be a list"
+            raise TaskInputError(message)
+        frames: list[XtbPathFrame] = []
+        for index, entry in enumerate(raw_frames):
+            if not isinstance(entry, Mapping):
+                message = f"payload.frames[{index}] must be a mapping"
+                raise TaskInputError(message)
+            frames.append(XtbPathFrame.from_dict(entry))
+        return cls(
+            trajectory_ref=_artifact_from_dict(raw_ref),
+            frames=tuple(frames),
+            start_frame_index=parse_int_strict(payload, "start_frame_index"),
+            end_frame_index=parse_int_strict(payload, "end_frame_index"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OrcaGradientPayload:
+    """Typed payload for ``orca_gradient`` results (atomic gradients + energy).
+
+    ``gradients`` carries unit + convention + input atom order (record
+    identity): row ``i`` is the gradient of input atom ``i``, in
+    ``gradient_unit`` (native Eh/bohr, energy gradient dE/dX — not force).
+    """
+
+    gradients: tuple[tuple[float, float, float], ...] = ()
+    energy_hartree: float | None = None
+    gradient_unit: str = "Eh/bohr"
+    gradient_convention: str = "energy_gradient_dE_dX"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "gradients",
+            tuple(tuple(float(c) for c in row) for row in self.gradients),
+        )
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "gradients": [[float(c) for c in row] for row in self.gradients],
+            "gradient_unit": self.gradient_unit,
+            "gradient_convention": self.gradient_convention,
+        }
+        if self.energy_hartree is not None:
+            payload["energy_hartree"] = self.energy_hartree
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> OrcaGradientPayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_gradients = payload.get("gradients", [])
+        if not isinstance(raw_gradients, list):
+            message = "payload.gradients must be a list"
+            raise TaskInputError(message)
+        rows: list[tuple[float, float, float]] = []
+        for index, row in enumerate(raw_gradients):
+            if not isinstance(row, list) or len(row) != 3:
+                message = f"payload.gradients[{index}] must be a 3-vector"
+                raise TaskInputError(message)
+            rows.append(
+                (
+                    ensure_finite_json_number(row[0], f"gradients[{index}][0]"),
+                    ensure_finite_json_number(row[1], f"gradients[{index}][1]"),
+                    ensure_finite_json_number(row[2], f"gradients[{index}][2]"),
+                )
+            )
+        return cls(
+            gradients=tuple(rows),
+            energy_hartree=parse_float_strict(payload, "energy_hartree"),
+            gradient_unit=parse_str_strict(payload, "gradient_unit") or "Eh/bohr",
+            gradient_convention=parse_str_strict(payload, "gradient_convention")
+            or "energy_gradient_dE_dX",
+        )
+
+
 TaskPayload: TypeAlias = (
     SinglePointPayload
     | OptimizePayload
@@ -772,9 +1244,16 @@ TaskPayload: TypeAlias = (
     | IrcPayload
     | CasscfPayload
     | ThermochemistryPayload
+    | ConformerSearchPayload
+    | MdSamplingPayload
+    | ClusteringPayload
+    | CensoRefinePayload
+    | NmrShieldingPayload
+    | XtbPathSearchPayload
+    | OrcaGradientPayload
 )
 
-# Table ① (todo 11): task → payload types (paired with TASK_OPTIONS_TYPES).
+# Table ① (todo 11/24): task → payload types (paired with TASK_OPTIONS_TYPES).
 TASK_PAYLOAD_TYPES: dict[TaskKind, type] = {
     TaskKind.SINGLEPOINT: SinglePointPayload,
     TaskKind.OPTIMIZE: OptimizePayload,
@@ -783,6 +1262,13 @@ TASK_PAYLOAD_TYPES: dict[TaskKind, type] = {
     TaskKind.IRC: IrcPayload,
     TaskKind.CASSCF: CasscfPayload,
     TaskKind.THERMOCHEMISTRY: ThermochemistryPayload,
+    TaskKind.CONFORMER_SEARCH: ConformerSearchPayload,
+    TaskKind.MD_SAMPLING: MdSamplingPayload,
+    TaskKind.CLUSTERING: ClusteringPayload,
+    TaskKind.CENSO_REFINE: CensoRefinePayload,
+    TaskKind.NMR_SHIELDING: NmrShieldingPayload,
+    TaskKind.XTB_PATH_SEARCH: XtbPathSearchPayload,
+    TaskKind.ORCA_GRADIENT: OrcaGradientPayload,
 }
 
 
@@ -1025,18 +1511,30 @@ __all__ = [
     "TASK_PAYLOAD_TYPES",
     "TASK_RESULT_SCHEMA_VERSION",
     "CasscfPayload",
+    "CensoRefinePayload",
+    "CensoRefineRecord",
+    "ClusterAssignment",
+    "ClusteringPayload",
+    "ConformerEnergy",
+    "ConformerSearchPayload",
     "ErrorKind",
     "FrequencyAnalysis",
     "FrequencyPayload",
     "IrcDirectionResult",
     "IrcPayload",
+    "MdSamplingPayload",
+    "NmrShielding",
+    "NmrShieldingPayload",
     "OptimizePayload",
+    "OrcaGradientPayload",
     "ScanFrame",
     "ScanPayload",
     "SinglePointPayload",
     "TaskPayload",
     "TaskResult",
     "ThermochemistryPayload",
+    "XtbPathFrame",
+    "XtbPathSearchPayload",
     "artifact_ref_from_dict",
     "artifact_ref_to_dict",
     "casscf_payload_from_multireference",

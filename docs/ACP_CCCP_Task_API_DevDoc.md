@@ -123,6 +123,45 @@ mismatched class with `TaskInputError`.
 | `casscf` | `CasscfOptions` | `spec: CASSCFSpec` (required; active space + NEVPT2 selection); read-only `orbital_selection` property = `spec.orbital_selection` (no duplicated storage — `CASSCFSpec` owns the field) |
 | `thermochemistry` | `ThermochemistryOptions` | `freq_log_path: Path \| None` (**required** — this is the input shape), `sp_energy_hartree: float \| None`, `temperature_k: float \| None`, `pressure_atm: float \| None`, `standard_state: str \| None` (`"1atm"`/`"1M"`; `None` = contract default `"1atm"` at execution), `scl_zpe: float \| None`, `ilowfreq: int \| None`, `imagreal: int \| None`, `conc: float \| None` |
 
+### 4.1 P2 typed options (todo 24; execution wires in 42/43)
+
+| task | options type | fields |
+|---|---|---|
+| `conformer_search` | `ConformerSearchOptions` | `energy_window: float \| None`, `gfn_level: int \| None` |
+| `md_sampling` | `MdSamplingOptions` | `md_method: str \| None`, `gfn_level: int \| None`, `temperature_k`, `time_ps`, `dump_fs`, `step_fs`, `hmass: float \| None`, `shake: bool \| None`, `nvt: bool \| None`, `seed: int \| None` |
+| `clustering` | `ClusteringOptions` | `edis`, `gdis`, `temperature_k: float \| None`, `nout: int \| None` |
+| `censo_refine` | `CensoRefineOptions` | `preset: str \| None`, `level_overrides: tuple[CensoLevelOverride, ...]` (`part`/`func`/`basis`/`threshold`), `temperature_k: float \| None`.  **No template/rcfile text field** — template text is a translation-layer product (workflows must never assemble it) |
+| `nmr_shielding` | `NmrShieldingOptions` | `atom_indices: tuple[int, ...]`, `atom_index_base: 0\|1 = 0` (explicit base, record identity) |
+| `xtb_path_search` | `XtbPathSearchOptions` | `end_structure: StructureInput \| None` (**required** — the request `structure` is the start of the pair), `gfn_level: int \| None`, `uhf: int \| None`, `seed: int \| None`, `backend_inputs: tuple[BackendInputFragment, ...]` (kinds `path_inp_text`/`extra_args` only) |
+| `orca_gradient` | `OrcaGradientOptions` | `backend_inputs: tuple[BackendInputFragment, ...]` (kinds `route_extras`/`extra_blocks`/`output_name` only).  `scf_convergence` lives on `level.scf`; geometry on the request `structure` |
+
+**Scoped backend-input fragments** (`BackendInputFragment`): the only channel
+for raw backend knobs (`path_inp_text`, `extra_args`, `route_extras`,
+`extra_blocks`, `output_name` — closed `BackendInputKind` vocabulary).  Each
+fragment records `kind`, `source` (legacy field name), verbatim `content`,
+`content_digest` (sha256 over canonical JSON of the content), and
+`conflict_rule` from `FRAGMENT_CONFLICT_RULES` (fixed per kind: `path_inp_text`
+/`extra_args`/`route_extras`/`output_name` = `structured_fields_win`,
+`extra_blocks` = `reject_on_conflict`).  A fragment is **never** a renamed
+unconstrained passthrough: unknown kinds are rejected, each task accepts only
+its own fragment kinds, and the rule cannot be chosen by the caller.
+
+**Deterministic conflict behavior** (`fragment_structured_conflicts` /
+`resolve_fragment_conflicts`): a fragment token listed in
+`FRAGMENT_KNOB_TOKENS` that assigns a value **disagreeing** with the
+structured field is a conflict (matching values are consistent duplicates and
+keep the effective input identical before/after conversion).  Under
+`structured_fields_win` the structured value is authoritative and the
+conflicting fragment directive is ignored downstream (the fragment stays
+recorded verbatim); under `reject_on_conflict` `validate_request` raises
+`TaskInputError`.  Bare flags without a value count as disagreement.
+
+**Cache signature**: `XtbPathSearchOptions.cache_signature()` /
+`OrcaGradientOptions.cache_signature()` include every fragment's
+`{kind, content_digest}` — the raw fragments that actually affect the
+computation are part of any cache identity derived from the serialized
+request.
+
 Supporting types:
 
 * `TsSpec(enabled: bool = False, mode_index: int | None = None)` — replaces
@@ -214,6 +253,18 @@ require re-parsing the QC output.
 Payload fields use `None`/empty as "absent" — converters only write fields
 that are set (never invent keys or defaults).
 
+### 5.2 P2 typed payloads (todo 24)
+
+| task | payload type | fields |
+|---|---|---|
+| `conformer_search` | `ConformerSearchPayload` | `ensemble_ref: ArtifactRef \| None`, `conformer_count: int`, `energy_table: tuple[ConformerEnergy, ...]` (`conf_id`, `frame_index`, `energy_hartree`) |
+| `md_sampling` | `MdSamplingPayload` | `trajectory_ref: ArtifactRef \| None`, `n_frames: int` |
+| `clustering` | `ClusteringPayload` | `assignments: tuple[ClusterAssignment, ...]` (`cluster_id`, `representative_index`, `member_indices`), `clustered_ref: ArtifactRef \| None` |
+| `censo_refine` | `CensoRefinePayload` | `records: tuple[CensoRefineRecord, ...]` (`conf_id`, `frame_index`, `energy_hartree`, `free_energy_hartree`, `weight`), `refined_ensemble_ref: ArtifactRef \| None` |
+| `nmr_shielding` | `NmrShieldingPayload` | `shieldings: dict[int, NmrShielding]` — atom → `{symbol, isotropic}` key shape kept verbatim; JSON string keys restored to integer atom indices on `from_dict` |
+| `xtb_path_search` | `XtbPathSearchPayload` | `trajectory_ref: ArtifactRef \| None`, `frames: tuple[XtbPathFrame, ...]` (`index`, `energy_hartree`), `start_frame_index: int \| None`, `end_frame_index: int \| None` |
+| `orca_gradient` | `OrcaGradientPayload` | `gradients: tuple[tuple[float, float, float], ...]`, `energy_hartree: float \| None`, `gradient_unit` (default `"Eh/bohr"`), `gradient_convention` (default `"energy_gradient_dE_dX"` — not the force) |
+
 ## 6. Serialization rules
 
 Rules S1–S7 apply to `TaskRequest`/`TaskResult` `to_dict()`/`from_dict()`
@@ -244,10 +295,14 @@ their legacy coercion semantics unchanged.
 | `singlepoint`, `optimize`, `frequency`, `casscf` | single structure | `structure` | `ThermochemistryOptions.freq_log_path` |
 | `scan`, `irc` | single structure | `structure` (+ coordinate/direction options) | — |
 | `thermochemistry` | frequency log | `options.freq_log_path` | `structure` (rejected), inline geometry |
+| `conformer_search`, `md_sampling`, `nmr_shielding`, `orca_gradient` | single structure | `structure` | `options.end_structure` |
+| `clustering`, `censo_refine` | ensemble (multi-frame structure input) | `structure` (path or inline multiframe geometry) | `options.end_structure` |
+| `xtb_path_search` | structure pair | `structure` (start) **and** `options.end_structure` (end) | — |
 
-Ensemble and trajectory input shapes belong to P2 tasks
-(`conformer_search`, `md_sampling`, …, todo 24) and are not part of this
-draft's union.
+Per-task input shape / backend capability / success-partial-empty semantics /
+artifact-record identity live in the code mapping table
+`cccp.calculation.requests.P2_TASK_CONTRACTS` (tested against
+`tests/test_cccp_calculation_contracts.py`).
 
 ## 8. Path rules
 
@@ -280,6 +335,7 @@ draft's union.
 | `state_sweep` / state-set `ElectronicStateConfig` | **ACP** (batch pre-expansion) | platform orchestration |
 | `StepKind`/`CalculationStep`/`CalculationPlan`/`validate_plan` | **ACP** | workflow planning |
 | `TaskManifest`/`Checkpoint` | **ACP** | platform persistence |
+| `reaction_id`/`plan_sha256`/`request_sha256`/`config_digest`/`adapter_version`/`schema_version` (pes2ts) | **ACP** (`LegacyBinding.platform_identity`) | platform identity — never a cccp request field |
 
 CCCP may own **local scientific record numbers** (scan frame indices, IRC
 direction entries, attempt counters); only ACP platform identity is
@@ -315,8 +371,18 @@ quarantined.
    * gradient/vibration data carries unit + shape + atom order
      (`FrequencyPayload.analysis` carries the vectors; `normal_modes`
      products built from it bind symbols/atom order);
-   * NMR JSON integer-key restoration and CENSO ordering/filtering ↔ original
-     conformer mapping are declared here and land with the P2 tasks (todo 24);
+   * NMR JSON integer-key restoration: `NmrShieldingPayload.shieldings` keeps
+     the atom → `{symbol, isotropic}` key shape; JSON string keys restore to
+     integer atom indices (`from_dict`), and `NmrShieldingOptions.atom_index_base`
+     declares the index base (todo 24);
+   * CENSO ordering/filtering ↔ original conformer mapping: every
+     `CensoRefineRecord` carries `conf_id` + original `frame_index`; the
+     `ConformerSearchPayload.energy_table` rows keep original conformer
+     indices likewise (todo 24);
+   * P2 trajectory/frame payloads (`MdSamplingPayload`, `XtbPathSearchPayload`)
+     keep original frame indices (never renumbered);
+   * `OrcaGradientPayload.gradients` carry unit + convention + input atom
+     order (row *i* = input atom *i*, Eh/bohr, energy gradient dE/dX);
    * CCCP local scientific record numbers are legitimate; ACP platform
      identity is not.
 
@@ -454,11 +520,34 @@ absent (no invented defaults), alias key names are restored, candidate/profile
 come back through the binding.  Documented coercions: numeric strings →
 numbers for typed scalar homes; `Path` normalisation for path homes.
 
+### 13.4 pes2ts → CCCP field-level conversion (todo 24)
+
+`acp.calculations.legacy_adapters.pes2ts_xtb_path_to_task_request` /
+`pes2ts_orca_gradient_to_task_request` convert the frozen `pes2ts_*_v1`
+requests (old CLI schema stays ACP-side; the cccp task schema never
+references `pes2ts_*` names).  Field-level tables:
+`PES2TS_XTB_PATH_CONVERSION` / `PES2TS_ORCA_GRADIENT_CONVERSION`
+(`Pes2tsConversionRow(source, category, target, notes)`).
+
+| category | fields (xtb path / orca gradient) | target |
+|---|---|---|
+| `platform_identity` | `schema_version`, `reaction_id`, `request_sha256`, `config_digest`, `adapter_version`, `plan_sha256` / `schema_version`, `request_sha256` | `LegacyBinding.platform_identity` (ACP only — never a cccp request field) |
+| `scientific` | `start_xyz_text`, `end_xyz_text`, `charge`, `multiplicity`, `gfn_level`, `uhf`, `seed`, `threads`, `timeout_seconds` / `coordinates`, `symbols`, `charge`, `multiplicity`, `method`, `basis`, `scf_convergence`, `nproc`, `timeout_seconds` | `structure` / `options.end_structure`, `charge`, `multiplicity`, `options.*`, `level.*` (`method`/`basis`/`scf`), `resources.nproc`, `resources.timeout_s` |
+| `raw_fragment` | `path_inp_text`, `extra_args` / `route_extras`, `extra_blocks`, `output_name` | scoped `BackendInputFragment` entries (verbatim content + `content_digest` + `source` + `conflict_rule`) |
+
+**Equivalence guarantee:** the effective input is identical before and after
+conversion — no defaults filled, no fragment rewritten, `threads`→`nproc` /
+`timeout_seconds`→`timeout_s` renames are 1:1 value carries.  Conflicts
+between fragments and structured fields follow the deterministic rules of
+§4.1 (agreeing duplicates stay valid; disagreements resolve per the
+fragment's fixed `conflict_rule`).  Cache signatures include fragment content
+digests (§4.1).
+
 ## 14. Two tables (explicitly separated)
 
-**Table ① — task → options/payload types (complete in todo 11; P2 in todo 24):**
-see §4 and §5.1.  Serialization and adapter conversion are fully testable
-against this table.
+**Table ① — task → options/payload types (complete in todo 11; P2 rows in
+todo 24, §4.1 + §5.2):** see §4 and §5.  Serialization and adapter
+conversion are fully testable against this table.
 
 **Table ② — task → execution function (NOT part of todo 11):**
 
@@ -472,7 +561,7 @@ against this table.
 | `thermochemistry` | `run_thermochemistry` | 22 |
 | `casscf` | `run_casscf` | 22 |
 | batch/cache | `cccp.calculation.batch` | 12 |
-| P2 five (+2) | `run_*` | 42–43 / 24 |
+| P2 seven (contracts only in 24) | `run_*` | 42–43 |
 
 This draft defines the contract shapes; it does **not** claim any task is
 executable.
@@ -509,12 +598,21 @@ derivation is option-driven, not a plain task→backend map:
 | `irc` | `irc` |
 | `casscf` | `casscf`; `+nevpt2` when `dynamic_correlation != none` |
 | `thermochemistry` | `thermochemistry` |
+| `conformer_search` | `conformer_search` |
+| `md_sampling` | `md_sampling` |
+| `clustering` | `clustering` |
+| `censo_refine` | `censo_refine` |
+| `nmr_shielding` (GIAO) | `nmr_shielding` |
+| `xtb_path_search` | `xtb_path_search` |
+| `orca_gradient` (EnGrad) | `orca_gradient` |
 
 The declarative task→capability vocabulary lives in
-`cccp.backends.matrix.TASK_CAPABILITY_MAP` (seven core kinds); the
+`cccp.backends.matrix.TASK_CAPABILITY_MAP` (seven core + P2 kinds); the
 deterministic ambiguity order lives in
-`cccp.backends.matrix.CAPABILITY_BACKEND_PRIORITY` (orca/xtb pinned; P2
-names and ambiguity priority land in todo 24).  An explicit
+`cccp.backends.matrix.CAPABILITY_BACKEND_PRIORITY` (orca/xtb pinned for the
+core; P2 pins: `conformer_search` = crest > censo > molclus, resolving the
+CensoBackend/CREST/Molclus ambiguity; `clustering` = isostat > external;
+single-implementer rows for the rest).  An explicit
 `request.backend` is honored strictly: if that backend does not declare the
 capability the call raises `UnsupportedCapabilityError` and never substitutes
 another declaring backend.

@@ -52,6 +52,13 @@ CAPABILITY_ALIASES: dict[str, str] = {
     "search": "conformer_search",
     "clustering": "clustering",
     "cluster": "clustering",
+    "md_sampling": "md_sampling",
+    "md": "md_sampling",
+    "censo_refine": "censo_refine",
+    "xtb_path_search": "xtb_path_search",
+    "xtb_path": "xtb_path_search",
+    "orca_gradient": "orca_gradient",
+    "engrad": "orca_gradient",
     "thermochemistry": "thermochemistry",
     "thermo": "thermochemistry",
     "enso_thermo": "mrrho_thermochemistry",
@@ -90,6 +97,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "md_sampling": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "censo_refine": BackendCapabilityStatus.AVAILABLE,
+        "xtb_path_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "orca_gradient": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "orca": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -108,6 +119,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.AVAILABLE,
         "nevpt2": BackendCapabilityStatus.AVAILABLE,
+        "md_sampling": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "censo_refine": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "xtb_path_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "orca_gradient": BackendCapabilityStatus.AVAILABLE,
     },
     "crest": {
         # Declaration = implemented: optimize/single_point exist only as
@@ -128,6 +143,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "md_sampling": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "censo_refine": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "xtb_path_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "orca_gradient": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "xtb": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -146,6 +165,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "md_sampling": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "censo_refine": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "xtb_path_search": BackendCapabilityStatus.AVAILABLE,
+        "orca_gradient": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "external": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -166,6 +189,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "md_sampling": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "censo_refine": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "xtb_path_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "orca_gradient": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "molclus": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -184,6 +211,10 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "md_sampling": BackendCapabilityStatus.AVAILABLE,
+        "censo_refine": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "xtb_path_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "orca_gradient": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "isostat": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -202,18 +233,20 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "rigid_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "casscf": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nevpt2": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "md_sampling": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "censo_refine": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "xtb_path_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "orca_gradient": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
 }
 
 
-#: Task kind (the seven core kinds, keyed by ``TaskKind`` value) → the full
-#: capability-name vocabulary that task may require.  The *concrete* required
-#: capability per request is derived from the scientific options (structure
-#: role, optimization mode, scan constraints, NEVPT2, …) by the two-step
-#: selection module of the calculation package; this table is the
-#: declaration-side mapping.  P2 tasks extend it in todo 24 (names and
-#: ambiguity priority for GIAO/EnGrad/CENSO are deliberately NOT declared
-#: here).
+#: Task kind → the full capability-name vocabulary that task may require.
+#: The *concrete* required capability per request is derived from the
+#: scientific options (structure role, optimization mode, scan constraints,
+#: NEVPT2, …) by the two-step selection module of the calculation package;
+#: this table is the declaration-side mapping.  Seven-core rows landed in
+#: todo 13; P2 rows landed in todo 24.
 TASK_CAPABILITY_MAP: dict[str, tuple[str, ...]] = {
     "singlepoint": ("single_point",),
     "optimize": ("geometry_optimization", "transition_state", "constrained_optimization"),
@@ -222,15 +255,24 @@ TASK_CAPABILITY_MAP: dict[str, tuple[str, ...]] = {
     "irc": ("irc",),
     "casscf": ("casscf", "nevpt2"),
     "thermochemistry": ("thermochemistry",),
+    "conformer_search": ("conformer_search",),
+    "md_sampling": ("md_sampling",),
+    "clustering": ("clustering",),
+    "censo_refine": ("censo_refine",),
+    "nmr_shielding": ("nmr_shielding",),
+    "xtb_path_search": ("xtb_path_search",),
+    "orca_gradient": ("orca_gradient",),
 }
 
 
 #: Deterministic backend priority per capability (first = preferred) used
 #: when several backends declare the capability AVAILABLE and the request
-#: names no explicit backend.  Only the orca/xtb ordering is pinned here;
-#: ambiguity priority for P2 capabilities is left to todo 24.  A capability
-#: without an entry falls back to the declaring backends in sorted name
-#: order (still deterministic).
+#: names no explicit backend.  Only the orca/xtb ordering is pinned for the
+#: seven core; the P2 rows pin the CensoBackend/CREST/Molclus ambiguity for
+#: ``conformer_search`` (crest first: the dedicated conformer-search engine)
+#: and single-implementer rows for the rest.  A capability without an entry
+#: falls back to the declaring backends in sorted name order (still
+#: deterministic).
 CAPABILITY_BACKEND_PRIORITY: dict[str, tuple[str, ...]] = {
     "single_point": ("orca", "xtb"),
     "geometry_optimization": ("orca", "xtb"),
@@ -244,6 +286,13 @@ CAPABILITY_BACKEND_PRIORITY: dict[str, tuple[str, ...]] = {
     "casscf": ("orca",),
     "nevpt2": ("orca",),
     "thermochemistry": ("external",),
+    "conformer_search": ("crest", "censo", "molclus"),
+    "md_sampling": ("molclus",),
+    "clustering": ("isostat", "external"),
+    "censo_refine": ("censo",),
+    "nmr_shielding": ("orca",),
+    "xtb_path_search": ("xtb",),
+    "orca_gradient": ("orca",),
 }
 
 

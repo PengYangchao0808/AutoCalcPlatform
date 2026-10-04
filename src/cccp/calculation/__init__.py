@@ -83,7 +83,28 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
         TASK_REQUEST_SCHEMA_VERSION as TASK_REQUEST_SCHEMA_VERSION,
     )
     from cccp.calculation.requests import (
+        BackendInputFragment as BackendInputFragment,
+    )
+    from cccp.calculation.requests import (
+        BackendInputKind as BackendInputKind,
+    )
+    from cccp.calculation.requests import (
         CasscfOptions as CasscfOptions,
+    )
+    from cccp.calculation.requests import (
+        CensoLevelOverride as CensoLevelOverride,
+    )
+    from cccp.calculation.requests import (
+        CensoRefineOptions as CensoRefineOptions,
+    )
+    from cccp.calculation.requests import (
+        ClusteringOptions as ClusteringOptions,
+    )
+    from cccp.calculation.requests import (
+        ConformerSearchOptions as ConformerSearchOptions,
+    )
+    from cccp.calculation.requests import (
+        FragmentConflictRule as FragmentConflictRule,
     )
     from cccp.calculation.requests import (
         FrequencyOptions as FrequencyOptions,
@@ -95,10 +116,19 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
         IrcOptions as IrcOptions,
     )
     from cccp.calculation.requests import (
+        MdSamplingOptions as MdSamplingOptions,
+    )
+    from cccp.calculation.requests import (
         MethodSpec as MethodSpec,
     )
     from cccp.calculation.requests import (
+        NmrShieldingOptions as NmrShieldingOptions,
+    )
+    from cccp.calculation.requests import (
         OptimizeOptions as OptimizeOptions,
+    )
+    from cccp.calculation.requests import (
+        OrcaGradientOptions as OrcaGradientOptions,
     )
     from cccp.calculation.requests import (
         RescueSpec as RescueSpec,
@@ -119,6 +149,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
         StructureInput as StructureInput,
     )
     from cccp.calculation.requests import (
+        TaskContractMapping as TaskContractMapping,
+    )
+    from cccp.calculation.requests import (
         TaskKind as TaskKind,
     )
     from cccp.calculation.requests import (
@@ -137,6 +170,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
         TsSpec as TsSpec,
     )
     from cccp.calculation.requests import (
+        XtbPathSearchOptions as XtbPathSearchOptions,
+    )
+    from cccp.calculation.requests import (
         validate_request as validate_request,
     )
     from cccp.calculation.results import (
@@ -147,6 +183,24 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     )
     from cccp.calculation.results import (
         CasscfPayload as CasscfPayload,
+    )
+    from cccp.calculation.results import (
+        CensoRefinePayload as CensoRefinePayload,
+    )
+    from cccp.calculation.results import (
+        CensoRefineRecord as CensoRefineRecord,
+    )
+    from cccp.calculation.results import (
+        ClusterAssignment as ClusterAssignment,
+    )
+    from cccp.calculation.results import (
+        ClusteringPayload as ClusteringPayload,
+    )
+    from cccp.calculation.results import (
+        ConformerEnergy as ConformerEnergy,
+    )
+    from cccp.calculation.results import (
+        ConformerSearchPayload as ConformerSearchPayload,
     )
     from cccp.calculation.results import (
         ErrorKind as ErrorKind,
@@ -164,7 +218,19 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
         IrcPayload as IrcPayload,
     )
     from cccp.calculation.results import (
+        MdSamplingPayload as MdSamplingPayload,
+    )
+    from cccp.calculation.results import (
+        NmrShielding as NmrShielding,
+    )
+    from cccp.calculation.results import (
+        NmrShieldingPayload as NmrShieldingPayload,
+    )
+    from cccp.calculation.results import (
         OptimizePayload as OptimizePayload,
+    )
+    from cccp.calculation.results import (
+        OrcaGradientPayload as OrcaGradientPayload,
     )
     from cccp.calculation.results import (
         ScanFrame as ScanFrame,
@@ -183,6 +249,12 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     )
     from cccp.calculation.results import (
         ThermochemistryPayload as ThermochemistryPayload,
+    )
+    from cccp.calculation.results import (
+        XtbPathFrame as XtbPathFrame,
+    )
+    from cccp.calculation.results import (
+        XtbPathSearchPayload as XtbPathSearchPayload,
     )
     from cccp.calculation.selection import (
         BackendSelection as BackendSelection,
@@ -270,6 +342,33 @@ _LAZY_EXPORTS: dict[str, str] = {
     "ThermochemistryOptions": "requests",
     "TsSpec": "requests",
     "validate_request": "requests",
+    "BackendInputFragment": "requests",
+    "BackendInputKind": "requests",
+    "CensoLevelOverride": "requests",
+    "CensoRefineOptions": "requests",
+    "ClusteringOptions": "requests",
+    "ConformerSearchOptions": "requests",
+    "FragmentConflictRule": "requests",
+    "MdSamplingOptions": "requests",
+    "NmrShieldingOptions": "requests",
+    "OrcaGradientOptions": "requests",
+    "TaskContractMapping": "requests",
+    "XtbPathSearchOptions": "requests",
+    "P2_TASK_CONTRACTS": "requests",
+    "fragment_structured_conflicts": "requests",
+    "resolve_fragment_conflicts": "requests",
+    "CensoRefinePayload": "results",
+    "CensoRefineRecord": "results",
+    "ClusterAssignment": "results",
+    "ClusteringPayload": "results",
+    "ConformerEnergy": "results",
+    "ConformerSearchPayload": "results",
+    "MdSamplingPayload": "results",
+    "NmrShielding": "results",
+    "NmrShieldingPayload": "results",
+    "OrcaGradientPayload": "results",
+    "XtbPathFrame": "results",
+    "XtbPathSearchPayload": "results",
     "TASK_PAYLOAD_TYPES": "results",
     "TASK_RESULT_SCHEMA_VERSION": "results",
     "CasscfPayload": "results",

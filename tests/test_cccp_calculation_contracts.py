@@ -20,18 +20,29 @@ import pytest
 
 import cccp.calculation.contracts as contracts
 from cccp.calculation import (
+    P2_TASK_CONTRACTS,
     TASK_OPTIONS_TYPES,
     TASK_PAYLOAD_TYPES,
     TASK_REQUEST_SCHEMA_VERSION,
     TASK_RESULT_SCHEMA_VERSION,
     ArtifactRef,
+    BackendInputFragment,
+    BackendInputKind,
     CasscfOptions,
+    CensoLevelOverride,
+    CensoRefineOptions,
+    ClusteringOptions,
+    ConformerSearchOptions,
     ErrorKind,
+    FragmentConflictRule,
     FrequencyOptions,
     IrcDirection,
     IrcOptions,
+    MdSamplingOptions,
     MethodSpec,
+    NmrShieldingOptions,
     OptimizeOptions,
+    OrcaGradientOptions,
     ProgressCallbackError,
     ProgressEvent,
     ProgressEventKind,
@@ -51,7 +62,10 @@ from cccp.calculation import (
     TaskResult,
     ThermochemistryOptions,
     TsSpec,
+    XtbPathSearchOptions,
+    fragment_structured_conflicts,
     resolve_context,
+    resolve_fragment_conflicts,
     validate_request,
 )
 from cccp.calculation.contracts import (
@@ -66,14 +80,26 @@ from cccp.calculation.contracts import (
 )
 from cccp.calculation.results import (
     CasscfPayload,
+    CensoRefinePayload,
+    CensoRefineRecord,
+    ClusterAssignment,
+    ClusteringPayload,
+    ConformerEnergy,
+    ConformerSearchPayload,
     FrequencyAnalysis,
     FrequencyPayload,
     IrcDirectionResult,
     IrcPayload,
+    MdSamplingPayload,
+    NmrShielding,
+    NmrShieldingPayload,
     OptimizePayload,
+    OrcaGradientPayload,
     ScanPayload,
     SinglePointPayload,
     ThermochemistryPayload,
+    XtbPathFrame,
+    XtbPathSearchPayload,
 )
 
 SEVEN_CORE = {
@@ -86,12 +112,30 @@ SEVEN_CORE = {
     "thermochemistry",
 }
 
+P2_TASKS = {
+    "conformer_search",
+    "md_sampling",
+    "clustering",
+    "censo_refine",
+    "nmr_shielding",
+    "xtb_path_search",
+    "orca_gradient",
+}
+
 BANNED_IDENTITY_NAMES = {
     "workflow",
     "profile",
     "candidate_id",
     "trajectory_item_id",
     "state_sweep",
+}
+
+BANNED_PES2TS_IDENTITY_NAMES = {
+    "reaction_id",
+    "plan_sha256",
+    "request_sha256",
+    "config_digest",
+    "adapter_version",
 }
 
 
@@ -108,7 +152,7 @@ def _request(task: TaskKind, options=None) -> TaskRequest:
 
 def test_seven_core_options_registry_complete() -> None:
     assert set(TASK_OPTIONS_TYPES) == set(TaskKind)
-    assert {kind.value for kind in TaskKind} == SEVEN_CORE
+    assert {kind.value for kind in TaskKind} == SEVEN_CORE | P2_TASKS
     assert TASK_OPTIONS_TYPES[TaskKind.SINGLEPOINT] is SinglePointOptions
     assert TASK_OPTIONS_TYPES[TaskKind.OPTIMIZE] is OptimizeOptions
     assert TASK_OPTIONS_TYPES[TaskKind.FREQUENCY] is FrequencyOptions
@@ -138,6 +182,365 @@ def test_options_type_mismatch_raises_task_input_error() -> None:
 def test_options_type_match_accepted() -> None:
     validate_request(_request(TaskKind.OPTIMIZE, OptimizeOptions()))
     validate_request(_request(TaskKind.SCAN, ScanOptions(points=11)))
+
+
+# ── P2 task contracts (todo 24) ─────────────────────────────────────────
+
+
+def test_p2_registries_cover_all_tasks() -> None:
+    assert set(TASK_OPTIONS_TYPES) == set(TaskKind)
+    assert set(TASK_PAYLOAD_TYPES) == set(TaskKind)
+    assert P2_TASKS <= {kind.value for kind in TaskKind}
+    assert set(P2_TASK_CONTRACTS) == {TaskKind(name) for name in P2_TASKS}
+
+
+def _p2_options_cases():
+    return [
+        (TaskKind.CONFORMER_SEARCH, ConformerSearchOptions(energy_window=6.0, gfn_level=2)),
+        (
+            TaskKind.MD_SAMPLING,
+            MdSamplingOptions(
+                md_method="gfnff",
+                gfn_level=0,
+                temperature_k=400.0,
+                time_ps=100.0,
+                dump_fs=100.0,
+                step_fs=1.0,
+                hmass=1.0,
+                shake=True,
+                nvt=True,
+                seed=42,
+            ),
+        ),
+        (
+            TaskKind.CLUSTERING,
+            ClusteringOptions(edis=0.5, gdis=0.25, temperature_k=298.15, nout=10),
+        ),
+        (
+            TaskKind.CENSO_REFINE,
+            CensoRefineOptions(
+                preset="censo-light",
+                level_overrides=(CensoLevelOverride("refinement", "wb97m-v", "def2-tzvpp", 0.99),),
+                temperature_k=298.15,
+            ),
+        ),
+        (TaskKind.NMR_SHIELDING, NmrShieldingOptions(atom_indices=(0, 3), atom_index_base=0)),
+        (
+            TaskKind.XTB_PATH_SEARCH,
+            XtbPathSearchOptions(
+                end_structure=StructureInput(path=Path("end.xyz")),
+                gfn_level=2,
+                uhf=0,
+                seed=7,
+                backend_inputs=(
+                    BackendInputFragment(
+                        kind=BackendInputKind.PATH_INP_TEXT,
+                        source="recipe.path_inp_text",
+                        content="$path\n$end\n",
+                        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+                    ),
+                    BackendInputFragment(
+                        kind=BackendInputKind.EXTRA_ARGS,
+                        source="recipe.extra_args",
+                        content=("--input", "path.inp"),
+                        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+                    ),
+                ),
+            ),
+        ),
+        (
+            TaskKind.ORCA_GRADIENT,
+            OrcaGradientOptions(
+                backend_inputs=(
+                    BackendInputFragment(
+                        kind=BackendInputKind.ROUTE_EXTRAS,
+                        source="route_extras",
+                        content=("TightSCF",),
+                        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+                    ),
+                    BackendInputFragment(
+                        kind=BackendInputKind.EXTRA_BLOCKS,
+                        source="extra_blocks",
+                        content=("%pal nprocs 2 end",),
+                        conflict_rule=FragmentConflictRule.REJECT_ON_CONFLICT,
+                    ),
+                    BackendInputFragment(
+                        kind=BackendInputKind.OUTPUT_NAME,
+                        source="output_name",
+                        content="grad",
+                        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+                    ),
+                )
+            ),
+        ),
+    ]
+
+
+def test_p2_options_round_trip_all_seven() -> None:
+    for task, options in _p2_options_cases():
+        request = TaskRequest(task=task, structure=_structure(), options=options)
+        validate_request(request)
+        payload = request.to_dict()
+        assert TaskRequest.from_dict(payload) == request, task
+
+
+def _p2_payload_cases():
+    return [
+        (
+            TaskKind.CONFORMER_SEARCH,
+            ConformerSearchPayload(
+                ensemble_ref=ArtifactRef(path=Path("crest_conformers.xyz"), type="ensemble"),
+                conformer_count=2,
+                energy_table=(
+                    ConformerEnergy("c1", 0, -1.0),
+                    ConformerEnergy("c2", 1, -0.9),
+                ),
+            ),
+        ),
+        (
+            TaskKind.MD_SAMPLING,
+            MdSamplingPayload(
+                trajectory_ref=ArtifactRef(path=Path("traj.xyz"), type="trajectory"),
+                n_frames=120,
+            ),
+        ),
+        (
+            TaskKind.CLUSTERING,
+            ClusteringPayload(
+                assignments=(
+                    ClusterAssignment(0, 3, (0, 3, 5)),
+                    ClusterAssignment(1, 4, (4,)),
+                ),
+                clustered_ref=ArtifactRef(path=Path("cluster.xyz"), type="clustered_ensemble"),
+            ),
+        ),
+        (
+            TaskKind.CENSO_REFINE,
+            CensoRefinePayload(
+                records=(
+                    CensoRefineRecord("c1", 0, -1.0, -1.1, 0.7),
+                    CensoRefineRecord("c2", 1, -0.9, -1.0, 0.3),
+                ),
+                refined_ensemble_ref=ArtifactRef(path=Path("refined.xyz"), type="ensemble"),
+            ),
+        ),
+        (
+            TaskKind.NMR_SHIELDING,
+            NmrShieldingPayload(
+                shieldings={
+                    0: NmrShielding("H", 31.2),
+                    3: NmrShielding("C", 120.5),
+                }
+            ),
+        ),
+        (
+            TaskKind.XTB_PATH_SEARCH,
+            XtbPathSearchPayload(
+                trajectory_ref=ArtifactRef(path=Path("xtbpath.xyz"), type="trajectory"),
+                frames=(XtbPathFrame(0, -1.0), XtbPathFrame(1, -1.05), XtbPathFrame(2, -0.9)),
+                start_frame_index=0,
+                end_frame_index=2,
+            ),
+        ),
+        (
+            TaskKind.ORCA_GRADIENT,
+            OrcaGradientPayload(
+                gradients=((0.0, 0.0, 0.01), (0.0, 0.0, -0.01)),
+                energy_hartree=-1.0,
+            ),
+        ),
+    ]
+
+
+def test_p2_result_round_trip_all_seven() -> None:
+    for task, payload in _p2_payload_cases():
+        result = TaskResult(
+            task=task,
+            status="failed",
+            complete=False,
+            error_kind=ErrorKind.NOT_CONVERGED,
+            errors=("partial",),
+            symbols=("H", "H"),
+            artifacts=(ArtifactRef(path=Path("WORK/a.out"), type="out"),),
+            payload=payload,
+        )
+        encoded = result.to_dict()
+        assert TaskResult.from_dict(encoded) == result, task
+
+
+def test_p2_mapping_table_covers_all_axes() -> None:
+    for task, mapping in P2_TASK_CONTRACTS.items():
+        assert mapping.input_shape in {
+            "single_structure",
+            "ensemble",
+            "structure_pair",
+        }, task
+        assert mapping.capability, task
+        assert mapping.backends, task
+        assert mapping.success and mapping.partial and mapping.empty, task
+        assert mapping.artifact_identity and mapping.record_identity, task
+
+
+def test_backend_input_fragment_is_scoped_and_digests() -> None:
+    fragment = BackendInputFragment(
+        kind=BackendInputKind.PATH_INP_TEXT,
+        source="recipe.path_inp_text",
+        content="$path\n   nrun=100\n$end\n",
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    assert fragment.content_digest == fragment.compute_digest()
+    same = BackendInputFragment(
+        kind=BackendInputKind.PATH_INP_TEXT,
+        source="other.field",
+        content="$path\n   nrun=100\n$end\n",
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    assert same.content_digest == fragment.content_digest
+    other = BackendInputFragment(
+        kind=BackendInputKind.PATH_INP_TEXT,
+        source="recipe.path_inp_text",
+        content="$path\n   nrun=200\n$end\n",
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    assert other.content_digest != fragment.content_digest
+    assert BackendInputFragment.from_dict(fragment.to_dict()) == fragment
+    assert fragment.cache_signature() == {
+        "kind": "path_inp_text",
+        "content_digest": fragment.content_digest,
+    }
+
+
+def test_backend_input_fragment_rejects_unknown_kind_and_wrong_rule() -> None:
+    with pytest.raises(TaskInputError, match="fragment kind must be one of"):
+        BackendInputFragment(
+            kind="renamed_passthrough",  # type: ignore[arg-type]
+            source="x",
+            content="y",
+            conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+        )
+    with pytest.raises(TaskInputError, match="must use conflict_rule"):
+        BackendInputFragment(
+            kind=BackendInputKind.EXTRA_BLOCKS,
+            source="extra_blocks",
+            content=("%pal end",),
+            conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+        )
+
+
+def test_fragment_conflicts_are_deterministic() -> None:
+    agreeing = BackendInputFragment(
+        kind=BackendInputKind.EXTRA_ARGS,
+        source="recipe.extra_args",
+        content=("--gfn", "2"),
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    contradicting = BackendInputFragment(
+        kind=BackendInputKind.EXTRA_ARGS,
+        source="recipe.extra_args",
+        content=("--gfn", "3"),
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    structured = {"gfn_level": 2}
+    assert fragment_structured_conflicts(agreeing, structured) == ()
+    assert fragment_structured_conflicts(contradicting, structured) == ("gfn_level",)
+    assert resolve_fragment_conflicts(agreeing, structured) == ()
+    assert resolve_fragment_conflicts(contradicting, structured) == ("gfn_level",)
+
+
+def test_fragment_reject_on_conflict_raises() -> None:
+    fragment = BackendInputFragment(
+        kind=BackendInputKind.EXTRA_BLOCKS,
+        source="extra_blocks",
+        content=("%pal nprocs 8 end",),
+        conflict_rule=FragmentConflictRule.REJECT_ON_CONFLICT,
+    )
+    with pytest.raises(TaskInputError, match="contradicts structured knob"):
+        resolve_fragment_conflicts(fragment, {"nproc": 2})
+    assert resolve_fragment_conflicts(fragment, {"nproc": 8}) == ()
+
+
+def test_fragment_scope_per_task_is_closed() -> None:
+    wrong = BackendInputFragment(
+        kind=BackendInputKind.OUTPUT_NAME,
+        source="output_name",
+        content="grad",
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    with pytest.raises(TaskInputError, match="xtb_path_search accepts fragments"):
+        XtbPathSearchOptions(backend_inputs=(wrong,))
+    orca_only = BackendInputFragment(
+        kind=BackendInputKind.PATH_INP_TEXT,
+        source="recipe.path_inp_text",
+        content="x",
+        conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+    )
+    with pytest.raises(TaskInputError, match="orca_gradient accepts fragments"):
+        OrcaGradientOptions(backend_inputs=(orca_only,))
+
+
+def test_p2_request_cache_signature_covers_fragments() -> None:
+    def signature(options: XtbPathSearchOptions) -> dict:
+        return dict(options.cache_signature())
+
+    base = XtbPathSearchOptions(
+        gfn_level=2,
+        backend_inputs=(
+            BackendInputFragment(
+                kind=BackendInputKind.PATH_INP_TEXT,
+                source="recipe.path_inp_text",
+                content="$path\n$end\n",
+                conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+            ),
+        ),
+    )
+    changed = XtbPathSearchOptions(
+        gfn_level=2,
+        backend_inputs=(
+            BackendInputFragment(
+                kind=BackendInputKind.PATH_INP_TEXT,
+                source="recipe.path_inp_text",
+                content="$path\n   nrun=5\n$end\n",
+                conflict_rule=FragmentConflictRule.STRUCTURED_FIELDS_WIN,
+            ),
+        ),
+    )
+    assert signature(base) != signature(changed)
+    assert (
+        signature(base)["backend_inputs"][0]["content_digest"]
+        == base.backend_inputs[0].content_digest
+    )
+    request = TaskRequest(task=TaskKind.XTB_PATH_SEARCH, structure=_structure(), options=base)
+    request_changed = TaskRequest(
+        task=TaskKind.XTB_PATH_SEARCH, structure=_structure(), options=changed
+    )
+    assert request.to_dict()["options"] != request_changed.to_dict()["options"]
+
+
+def test_xtb_path_search_requires_structure_pair() -> None:
+    with pytest.raises(TaskInputError, match="end_structure"):
+        validate_request(
+            TaskRequest(
+                task=TaskKind.XTB_PATH_SEARCH,
+                structure=_structure(),
+                options=XtbPathSearchOptions(),
+            )
+        )
+
+
+def test_nmr_shielding_key_shape_atom_to_symbol_isotropic() -> None:
+    payload = NmrShieldingPayload(shieldings={0: NmrShielding("H", 31.2)})
+    encoded = payload.to_dict()
+    assert encoded["shieldings"] == {"0": {"symbol": "H", "isotropic": 31.2}}
+    restored = NmrShieldingPayload.from_dict(encoded)
+    assert restored == payload
+    assert set(restored.shieldings[0].to_dict()) == {"symbol", "isotropic"}
+
+
+def test_censo_refine_carries_no_template_text() -> None:
+    names = {f.name for f in dataclasses.fields(CensoRefineOptions)}
+    assert not any("template" in name or "rcfile" in name or "text" in name for name in names)
+    payload = CensoRefineOptions(preset="censo-light").to_dict()
+    assert "template" not in payload and "rcfile" not in payload
 
 
 # ── serialization rules S1–S7 ───────────────────────────────────────────
@@ -420,10 +823,22 @@ def test_platform_identity_absent_from_cccp_contracts() -> None:
         CASSCFSpec,
         TaskContext,
         ProgressEvent,
+        ConformerSearchOptions,
+        MdSamplingOptions,
+        ClusteringOptions,
+        CensoRefineOptions,
+        NmrShieldingOptions,
+        XtbPathSearchOptions,
+        OrcaGradientOptions,
+        BackendInputFragment,
     )
     for cls in checked:
         names = {f.name for f in dataclasses.fields(cls)}
         assert not names & BANNED_IDENTITY_NAMES, (cls.__name__, names & BANNED_IDENTITY_NAMES)
+        assert not names & BANNED_PES2TS_IDENTITY_NAMES, (
+            cls.__name__,
+            names & BANNED_PES2TS_IDENTITY_NAMES,
+        )
 
 
 def test_state_sweep_absent_from_cccp_surface() -> None:
@@ -716,6 +1131,24 @@ def test_current_spec_document_exists_and_is_complete() -> None:
         "IrcPayload",
         "CasscfPayload",
         "ThermochemistryPayload",
+        "ConformerSearchOptions",
+        "MdSamplingOptions",
+        "ClusteringOptions",
+        "CensoRefineOptions",
+        "NmrShieldingOptions",
+        "XtbPathSearchOptions",
+        "OrcaGradientOptions",
+        "BackendInputFragment",
+        "ConformerSearchPayload",
+        "MdSamplingPayload",
+        "ClusteringPayload",
+        "CensoRefinePayload",
+        "NmrShieldingPayload",
+        "XtbPathSearchPayload",
+        "OrcaGradientPayload",
+        "P2_TASK_CONTRACTS",
+        "PES2TS_XTB_PATH_CONVERSION",
+        "PES2TS_ORCA_GRADIENT_CONVERSION",
         "field-level mapping table",
         "TaskContext runtime rules",
         "Record identity",

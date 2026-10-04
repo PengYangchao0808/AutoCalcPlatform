@@ -23,6 +23,11 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - typing only (no runtime workflow import)
+    from acp.workflows.orca_gradient import OrcaGradientRequest
+    from acp.workflows.xtb_path import XtbPathRequest
 
 from acp.calculations.contracts import (
     CalculationRequest,
@@ -47,12 +52,16 @@ from cccp.calculation.contracts import (
 )
 from cccp.calculation.errors import TaskInputError
 from cccp.calculation.requests import (
+    FRAGMENT_CONFLICT_RULES,
+    BackendInputFragment,
+    BackendInputKind,
     CasscfOptions,
     FrequencyOptions,
     IrcDirection,
     IrcOptions,
     MethodSpec,
     OptimizeOptions,
+    OrcaGradientOptions,
     RescueSpec,
     ScanCoordinateSpec,
     ScanOptions,
@@ -64,6 +73,7 @@ from cccp.calculation.requests import (
     TaskResources,
     ThermochemistryOptions,
     TsSpec,
+    XtbPathSearchOptions,
 )
 from cccp.calculation.results import (
     CasscfPayload,
@@ -139,6 +149,7 @@ class LegacyBinding:
     artifact_root: Path | None = None
     config: Mapping[str, JsonValue] | None = None
     legacy_method: str = ""
+    platform_identity: dict[str, str] = field(default_factory=dict)
     resources_extra: dict[str, JsonValue] = field(default_factory=dict)
     resources_raw: dict[str, JsonValue] = field(default_factory=dict)
     resources_key_names: dict[str, str] = field(default_factory=dict)
@@ -1004,8 +1015,235 @@ def _reroot(path: Path, root: Path | None) -> Path:
     return candidate
 
 
+# ── pes2ts → CCCP field-level conversion (todo 24) ──────────────────────
+#
+# XtbPathSearch / OrcaGradient keep their old CLI schema (`pes2ts_*_v1`)
+# in ACP; these tables define the field-level conversion into the cccp task
+# schema.  Platform identity stays in ACP binding info, scientific fields
+# map to CCCP standard fields, and raw backend fragments map to the scoped,
+# explicitly-marked ``BackendInputFragment`` (digest + conflict rule +
+# source recorded; never a renamed unconstrained passthrough).  The cccp
+# task schema never references the `pes2ts_*` protocol names.
+
+
+@dataclass(frozen=True, slots=True)
+class Pes2tsConversionRow:
+    """One field-level conversion row (legacy field → CCCP home)."""
+
+    source: str
+    category: str
+    target: str
+    notes: str = ""
+
+
+PES2TS_XTB_PATH_CONVERSION: tuple[Pes2tsConversionRow, ...] = (
+    Pes2tsConversionRow("schema_version", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("reaction_id", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("request_sha256", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("config_digest", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("adapter_version", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("plan_sha256", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("start_xyz_text", "scientific", "structure", "parsed xyz → inline coords"),
+    Pes2tsConversionRow("end_xyz_text", "scientific", "options.end_structure", "parsed xyz pair"),
+    Pes2tsConversionRow("charge", "scientific", "charge"),
+    Pes2tsConversionRow("multiplicity", "scientific", "multiplicity"),
+    Pes2tsConversionRow("gfn_level", "scientific", "options.gfn_level"),
+    Pes2tsConversionRow("uhf", "scientific", "options.uhf"),
+    Pes2tsConversionRow("seed", "scientific", "options.seed"),
+    Pes2tsConversionRow("threads", "scientific", "resources.nproc"),
+    Pes2tsConversionRow("timeout_seconds", "scientific", "resources.timeout_s"),
+    Pes2tsConversionRow(
+        "path_inp_text",
+        "raw_fragment",
+        "options.backend_inputs[path_inp_text]",
+        "verbatim; content digest recorded",
+    ),
+    Pes2tsConversionRow(
+        "extra_args",
+        "raw_fragment",
+        "options.backend_inputs[extra_args]",
+        "verbatim arg list; content digest recorded",
+    ),
+)
+
+PES2TS_ORCA_GRADIENT_CONVERSION: tuple[Pes2tsConversionRow, ...] = (
+    Pes2tsConversionRow("schema_version", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("request_sha256", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("coordinates", "scientific", "structure.coordinates"),
+    Pes2tsConversionRow("symbols", "scientific", "structure.symbols"),
+    Pes2tsConversionRow("charge", "scientific", "charge"),
+    Pes2tsConversionRow("multiplicity", "scientific", "multiplicity"),
+    Pes2tsConversionRow("method", "scientific", "level.method"),
+    Pes2tsConversionRow("basis", "scientific", "level.basis"),
+    Pes2tsConversionRow("scf_convergence", "scientific", "level.scf"),
+    Pes2tsConversionRow("nproc", "scientific", "resources.nproc"),
+    Pes2tsConversionRow("timeout_seconds", "scientific", "resources.timeout_s"),
+    Pes2tsConversionRow(
+        "route_extras",
+        "raw_fragment",
+        "options.backend_inputs[route_extras]",
+        "verbatim; content digest recorded",
+    ),
+    Pes2tsConversionRow(
+        "extra_blocks",
+        "raw_fragment",
+        "options.backend_inputs[extra_blocks]",
+        "verbatim; reject_on_conflict vs nproc/maxcore",
+    ),
+    Pes2tsConversionRow(
+        "output_name",
+        "raw_fragment",
+        "options.backend_inputs[output_name]",
+        "verbatim naming fragment",
+    ),
+)
+
+_RAW_FRAGMENT_KINDS = {
+    "path_inp_text": BackendInputKind.PATH_INP_TEXT,
+    "extra_args": BackendInputKind.EXTRA_ARGS,
+    "route_extras": BackendInputKind.ROUTE_EXTRAS,
+    "extra_blocks": BackendInputKind.EXTRA_BLOCKS,
+    "output_name": BackendInputKind.OUTPUT_NAME,
+}
+
+
+def _parse_xyz_text(text: str) -> tuple[tuple[tuple[float, float, float], ...], tuple[str, ...]]:
+    lines = text.splitlines()
+    if len(lines) < 3:
+        raise TaskInputError("xyz text too short")
+    try:
+        n_atoms = int(lines[0].strip())
+    except ValueError as exc:
+        raise TaskInputError("xyz text first line must be an atom count") from exc
+    if n_atoms <= 0 or len(lines) < n_atoms + 2:
+        raise TaskInputError("xyz text atom count does not match its coordinate lines")
+    coords: list[tuple[float, float, float]] = []
+    symbols: list[str] = []
+    for line in lines[2 : 2 + n_atoms]:
+        fields = line.split()
+        if len(fields) != 4:
+            raise TaskInputError(f"invalid xyz atom line: {line!r}")
+        try:
+            coords.append((float(fields[1]), float(fields[2]), float(fields[3])))
+        except ValueError as exc:
+            raise TaskInputError(f"non-numeric xyz coordinate: {line!r}") from exc
+        symbols.append(fields[0])
+    return tuple(coords), tuple(symbols)
+
+
+def _fragment(name: str, source: str, content: str | tuple[str, ...]) -> BackendInputFragment:
+    return BackendInputFragment(
+        kind=_RAW_FRAGMENT_KINDS[name],
+        source=source,
+        content=content,
+        conflict_rule=FRAGMENT_CONFLICT_RULES[_RAW_FRAGMENT_KINDS[name]],
+    )
+
+
+def pes2ts_xtb_path_to_task_request(request: XtbPathRequest) -> tuple[TaskRequest, LegacyBinding]:
+    """Convert a validated ``XtbPathRequest`` into a typed TaskRequest.
+
+    Field-level mapping per :data:`PES2TS_XTB_PATH_CONVERSION`: platform
+    identity (reaction_id / request_sha256 / config_digest / adapter_version
+    / plan_sha256 / schema_version) stays in the binding; scientific fields
+    land on standard homes; ``path_inp_text`` / ``extra_args`` become scoped
+    ``BackendInputFragment`` entries.  Effective inputs are identical before
+    and after conversion (no defaults filled, no fragment rewritten).
+    """
+    platform = {
+        "schema_version": "pes2ts_xtb_path_request_v1",
+        "reaction_id": str(getattr(request, "reaction_id", "") or ""),
+    }
+    for name in ("request_sha256", "config_digest", "adapter_version", "plan_sha256"):
+        value = getattr(request, name, None)
+        if value:
+            platform[name] = str(value)
+
+    start_coords, start_symbols = _parse_xyz_text(request.start_xyz_text)
+    end_coords, end_symbols = _parse_xyz_text(request.end_xyz_text)
+
+    binding = LegacyBinding(
+        workflow="XtbPathSearch",
+        platform_identity=platform,
+        resources_raw={
+            "start_xyz_text": request.start_xyz_text,
+            "end_xyz_text": request.end_xyz_text,
+        },
+        resources_extra={
+            "path_inp_text": request.path_inp_text,
+            "extra_args": list(request.extra_args),
+        },
+    )
+    task_request = TaskRequest(
+        task=TaskKind.XTB_PATH_SEARCH,
+        structure=StructureInput(coordinates=start_coords, symbols=start_symbols),
+        charge=request.charge,
+        multiplicity=request.multiplicity,
+        options=XtbPathSearchOptions(
+            end_structure=StructureInput(coordinates=end_coords, symbols=end_symbols),
+            gfn_level=request.gfn_level,
+            uhf=request.uhf,
+            seed=request.seed,
+            backend_inputs=(
+                _fragment("path_inp_text", "recipe.path_inp_text", request.path_inp_text),
+                _fragment("extra_args", "recipe.extra_args", tuple(request.extra_args)),
+            ),
+        ),
+        resources=TaskResources(nproc=request.threads, timeout_s=request.timeout_seconds),
+    )
+    return task_request, binding
+
+
+def pes2ts_orca_gradient_to_task_request(
+    request: OrcaGradientRequest,
+) -> tuple[TaskRequest, LegacyBinding]:
+    """Convert a validated ``OrcaGradientRequest`` into a typed TaskRequest.
+
+    Field-level mapping per :data:`PES2TS_ORCA_GRADIENT_CONVERSION`:
+    platform identity (schema_version / request_sha256) stays in the binding;
+    geometry/method/basis/scf/nproc/timeout land on standard homes;
+    ``route_extras`` / ``extra_blocks`` / ``output_name`` become scoped
+    ``BackendInputFragment`` entries.
+    """
+    platform: dict[str, str] = {"schema_version": str(request.schema_version)}
+    if getattr(request, "request_sha256", ""):
+        platform["request_sha256"] = str(request.request_sha256)
+
+    coordinates = tuple(tuple(float(c) for c in row) for row in request.coordinates)
+    binding = LegacyBinding(
+        workflow="OrcaGradient",
+        platform_identity=platform,
+        resources_extra={
+            "route_extras": list(request.route_extras),
+            "extra_blocks": list(request.extra_blocks),
+            "output_name": request.output_name,
+        },
+    )
+    task_request = TaskRequest(
+        task=TaskKind.ORCA_GRADIENT,
+        structure=StructureInput(coordinates=coordinates, symbols=tuple(request.symbols)),
+        charge=request.charge,
+        multiplicity=request.multiplicity,
+        level=MethodSpec(method=request.method, basis=request.basis, scf=request.scf_convergence),
+        options=OrcaGradientOptions(
+            backend_inputs=(
+                _fragment("route_extras", "route_extras", tuple(request.route_extras)),
+                _fragment("extra_blocks", "extra_blocks", tuple(request.extra_blocks)),
+                _fragment("output_name", "output_name", request.output_name),
+            ),
+        ),
+        resources=TaskResources(nproc=request.nproc, timeout_s=request.timeout_seconds),
+    )
+    return task_request, binding
+
+
 __all__ = [
     "LegacyBinding",
+    "PES2TS_ORCA_GRADIENT_CONVERSION",
+    "PES2TS_XTB_PATH_CONVERSION",
+    "Pes2tsConversionRow",
+    "pes2ts_orca_gradient_to_task_request",
+    "pes2ts_xtb_path_to_task_request",
     "to_legacy_request",
     "to_legacy_result",
     "to_task_request",

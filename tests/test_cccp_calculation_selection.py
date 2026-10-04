@@ -44,6 +44,7 @@ from cccp.calculation.requests import (
     TaskRequest,
     ThermochemistryOptions,
     TsSpec,
+    XtbPathSearchOptions,
 )
 from cccp.calculation.selection import (
     BackendSelection,
@@ -126,7 +127,7 @@ def test_thermochemistry_requires_shermo_program() -> None:
     assert [program.name for program in selection.required_programs] == ["shermo"]
 
 
-# ── acceptance matrix (seven core only; P2 rows land in todo 24) ────────
+# ── acceptance matrix (seven core; P2 rows below) ─────────────────────
 
 
 def _matrix_cases() -> list[tuple[str, TaskRequest, str, tuple[str, ...]]]:
@@ -252,6 +253,136 @@ def test_semantic_acceptance_matrix(
     assert selection.reason
     assert selection.params["capability"] == capability
     assert selection.runtime_checked is False
+
+
+# ── P2 acceptance matrix (todo 24): GIAO / EnGrad / CENSO + all P2 rows ──
+
+P2_TASKS = {
+    "conformer_search",
+    "md_sampling",
+    "clustering",
+    "censo_refine",
+    "nmr_shielding",
+    "xtb_path_search",
+    "orca_gradient",
+}
+
+
+def _p2_request(task: TaskKind, **overrides: object) -> TaskRequest:
+    payload: dict[str, object] = {
+        "task": task,
+        "structure": _structure(),
+        "level": MethodSpec(method="wB97X-D4", basis="def2-SVP"),
+        "charge": 0,
+        "multiplicity": 1,
+    }
+    payload.update(overrides)
+    return TaskRequest(**payload)  # type: ignore[arg-type]
+
+
+def _p2_matrix_cases() -> list[tuple[str, TaskRequest, str, str]]:
+    return [
+        (
+            "p2_conformer_search",
+            _p2_request(TaskKind.CONFORMER_SEARCH),
+            "conformer_search",
+            "crest",
+        ),
+        (
+            "p2_md_sampling",
+            _p2_request(TaskKind.MD_SAMPLING),
+            "md_sampling",
+            "molclus",
+        ),
+        (
+            "p2_clustering",
+            _p2_request(TaskKind.CLUSTERING),
+            "clustering",
+            "isostat",
+        ),
+        (
+            "p2_censo_refine",
+            _p2_request(TaskKind.CENSO_REFINE),
+            "censo_refine",
+            "censo",
+        ),
+        (
+            "p2_nmr_giao",
+            _p2_request(TaskKind.NMR_SHIELDING),
+            "nmr_shielding",
+            "orca",
+        ),
+        (
+            "p2_xtb_path_search",
+            _p2_request(
+                TaskKind.XTB_PATH_SEARCH,
+                options=XtbPathSearchOptions(end_structure=_structure()),
+            ),
+            "xtb_path_search",
+            "xtb",
+        ),
+        (
+            "p2_orca_engrad",
+            _p2_request(TaskKind.ORCA_GRADIENT),
+            "orca_gradient",
+            "orca",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("case_name", "task_request", "capability", "expected_backend"),
+    _p2_matrix_cases(),
+    ids=[case[0] for case in _p2_matrix_cases()],
+)
+def test_p2_acceptance_matrix(
+    case_name: str,
+    task_request: TaskRequest,
+    capability: str,
+    expected_backend: str,
+) -> None:
+    selection = select_semantic(task_request)
+    assert selection.capability == capability, case_name
+    assert selection.backend == expected_backend, case_name
+    assert selection.backend in CAPABILITY_MATRIX
+    assert selection.reason
+    assert selection.params["capability"] == capability
+    assert selection.runtime_checked is False
+    assert capability in CAPABILITY_MATRIX[expected_backend]
+
+
+def test_p2_capability_names_declared_in_matrix() -> None:
+    for name in P2_TASKS:
+        assert name in TASK_CAPABILITY_MAP, name
+        assert TASK_CAPABILITY_MAP[name], name
+        for capability in TASK_CAPABILITY_MAP[name]:
+            assert capability in CAPABILITY_MATRIX["orca"], (name, capability)
+
+
+def test_p2_conformer_search_priority_resolves_censo_crest_molclus_ambiguity() -> None:
+    selection = select_semantic(_p2_request(TaskKind.CONFORMER_SEARCH))
+    assert selection.backend == "crest"
+    assert set(selection.candidates) == {"censo", "crest", "molclus"}
+    assert "by capability priority" in selection.reason
+    assert selection.explicit_backend is False
+
+
+def test_p2_explicit_backend_is_honored_strictly() -> None:
+    request = _p2_request(TaskKind.CONFORMER_SEARCH, backend="molclus")
+    selection = select_semantic(request)
+    assert selection.backend == "molclus"
+    assert selection.explicit_backend is True
+    assert "explicitly requested" in selection.reason
+
+
+def test_p2_selection_record_carries_task_and_capability() -> None:
+    for case_name, task_request, capability, expected_backend in _p2_matrix_cases():
+        record = select_semantic(task_request).to_dict()
+        assert record["task"] == task_request.task.value, case_name
+        assert record["capability"] == capability, case_name
+        assert record["backend"] == expected_backend, case_name
+        assert record["runtime_checked"] is False, case_name
+        assert record["candidates"], case_name
 
 
 # ── selection record fields ─────────────────────────────────────────────
