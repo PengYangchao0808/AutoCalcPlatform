@@ -116,7 +116,7 @@ mismatched class with `TaskInputError`.
 | task | options type | fields |
 |---|---|---|
 | `singlepoint` | `SinglePointOptions` | `stability_check: bool \| None` |
-| `optimize` | `OptimizeOptions` | `mode: OptimizationMode` (`unconstrained`/`transition_state`/`constrained`), `initial_hessian: str \| None` (`model`/`calculate`/`auto`/path), `recalc_hess: int \| None`, `trust_radius: float \| None`, `max_cycles: int \| None`, `geom_maxiter: int \| None`, `ts: TsSpec \| None`, `rescue: RescueSpec \| None` |
+| `optimize` | `OptimizeOptions` | `mode: OptimizationMode` (`unconstrained`/`transition_state`/`constrained`), `level: MethodSpec \| None` (single theory carrier — solvent/grid/SCF/basis/dispersion/RI/aux live ONLY here), `initial_hessian: str \| None` (`model`/`calculate`/`auto`/path), `recalc_hess: int \| None`, `trust_radius: float \| None`, `max_cycles: int \| None`, `constraints: ReactionCoordinatePlan \| None`, `ts: TsSpec \| None`, `rescue: RescueSpec`, `geom_maxiter: int \| None` |
 | `frequency` | `FrequencyOptions` | *(empty in v1 — numerical differentiation is not promised)* |
 | `scan` | `ScanOptions` | `coordinates: tuple[ScanCoordinateSpec, ...]`, `points: int \| None`, `values: tuple[float, ...]` (explicit grid), `mode: ScanMode` (only `relaxed`; `rigid` is reserved and rejected) |
 | `irc` | `IrcOptions` | `directions: tuple[IrcDirection, ...]` (`forward`/`reverse`, unique, non-empty; default both), `maxpoints: int \| None`, `step: float \| None`, `initial_hessian: str \| None` (no `ts_mode` — v3.2 §6) |
@@ -126,15 +126,30 @@ mismatched class with `TaskInputError`.
 Supporting types:
 
 * `TsSpec(enabled: bool = False, mode_index: int | None = None)` — replaces
-  legacy `ts_mode: bool|int` (v3.1 §4).
+  legacy `ts_mode: bool|int` (v3.1 §4).  `mode_index=None` follows the lowest
+  imaginary mode; an explicit index is the mapped target; `mode_index` is only
+  legal with `enabled=True` (`TaskInputError` otherwise).
 * `RescueSpec(policy: str = "adaptive", max_rescue: int | None = None,
-  failure_type: str | None = None)` — `policy` values `"adaptive"`/`"off"`
+  failure_type: FailureType | None = None)` — `policy` values `"adaptive"`/`"off"`
   (other legacy strings preserved verbatim); `failure_type` is the
-  **caller-supplied restore input**; derived diagnostics land in
-  `OptimizePayload.rescue_failure_type`.
+  **caller-supplied restore input** (`None` = derive from the task's error
+  classification); derived diagnostics land in
+  `OptimizePayload.rescue_failure_type`/`rescue_structure_kind` — input and
+  output never share one writable field.  Rescue is internal task policy
+  (never cross-task orchestration).
 * `ScanCoordinateSpec(atoms: tuple[int, ...], start, end, kind="distance",
   atom_index_base: 0|1 = 1)` — atom indices carry an explicit base
   (record-identity rule).
+
+**Optimize role consistency (todo 18):** the structure role derives from
+`mode`/`ts` (TS-ness = `mode=transition_state` or `ts.enabled`) and the
+caller-passed `StructureInput.role` must agree — a mismatch raises
+`TaskInputError`; there is no second independently-settable `structure_kind`
+field.  TS-ness dispatches `transition_state_opt`, otherwise `optimize`
+(`constrained_optimization` → `constrained_optimize`).  Theory fields resolve
+through the single `ResolvedCalculationSpec` priority
+(explicit / options / config default / method default) — `OptimizeOptions`
+never keeps a second solvent/grid/SCF copy.
 
 ## 5. TaskResult (typed result envelope)
 
@@ -161,7 +176,7 @@ Supporting types:
 | task | payload type | fields |
 |---|---|---|
 | `singlepoint` | `SinglePointPayload` | `electronic_state: JsonObject \| None` (state diagnostics summary) |
-| `optimize` | `OptimizePayload` | `optimization_status`, `rescue_failure_type`, `rescue_actions: tuple[str,...]`, `rescue_attempts: int \| None`, `electronic_state`, `trajectory_ref: ArtifactRef \| None` |
+| `optimize` | `OptimizePayload` | `optimization_status`, derived diagnostics `rescue_failure_type`/`rescue_structure_kind`, `rescue_actions: tuple[str,...]`, `rescue_attempts: int \| None`, `rescue_terminal: bool \| None`, `tsmode_explicit_target: int \| None`, `tsmode_target_preserved: bool \| None`, `electronic_state`, `trajectory_ref: ArtifactRef \| None` |
 | `frequency` | `FrequencyPayload` | `n_imaginary: int \| None`, `freq_log_ref`, `normal_modes_ref`, `electronic_state` |
 | `scan` | `ScanPayload` | `frames: tuple[ScanFrame, ...]`, `profile_ref: ArtifactRef \| None` |
 | `irc` | `IrcPayload` | `directions: tuple[IrcDirectionResult, ...]` |
@@ -371,7 +386,7 @@ LegacyBinding)`, `to_legacy_request(task_request, binding) -> CalculationRequest
 | `result_dir` | `binding.artifact_root` fallback | raw-preserved |
 | `config` | `binding.config` (context-side) | raw-preserved |
 | `electronic_state` | `TaskRequest.electronic_state` (single state) | raw-preserved; `state_sweep` → `TaskInputError` (must be pre-expanded) |
-| `structure_kind` | `OptimizeOptions.mode` derivation (`"ts"` → `transition_state`) | raw-preserved; role derives mode when absent |
+| `structure_kind` | `OptimizeOptions.mode` derivation (`"ts"` → `transition_state`) | raw-preserved; role derives mode when absent; no independent `structure_kind` field remains |
 | `ts_mode` | `OptimizeOptions.ts` (`TsSpec`) | raw-preserved |
 | `opt_rescue_policy` / `opt_max_rescue` / `failure_type` | `OptimizeOptions.rescue` | |
 | `initial_hessian`/`opt_initial_hessian`, `trust_radius`/`opt_trust_radius`, `recalc_hess`/`opt_recalc_hess`, `geom_maxiter`, `max_cycles` | `OptimizeOptions.*` | alias preserved |
@@ -390,8 +405,9 @@ LegacyBinding)`, `to_legacy_request(task_request, binding) -> CalculationRequest
 | legacy key | typed home | notes |
 |---|---|---|
 | `optimization_status` | `OptimizePayload.optimization_status` | |
-| `failure_type` | `OptimizePayload.rescue_failure_type` | derived diagnostic |
-| `rescue_actions` / `rescue_attempts` | `OptimizePayload.*` | |
+| `rescue_failure_type` (alias `failure_type`) | `OptimizePayload.rescue_failure_type` | derived diagnostic |
+| `rescue_structure_kind` / `rescue_actions` / `rescue_attempts` / `rescue_terminal` | `OptimizePayload.*` | derived diagnostics; emitted only when the rescue plan was built |
+| `tsmode_explicit_target` / `tsmode_target_preserved` | `OptimizePayload.*` | explicit mapped TS target diagnostics |
 | `electronic_state` | `*.electronic_state` (sp/opt/freq payloads) | verbatim JsonObject |
 | `n_imaginary` | `FrequencyPayload.n_imaginary` | |
 | `multireference` / `casscf` | `CasscfPayload.*` (projection) | raw-preserved (raw wins on rebuild) |

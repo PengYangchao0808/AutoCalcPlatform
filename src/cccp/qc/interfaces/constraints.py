@@ -164,6 +164,24 @@ class CoordinateSpec:
             values=tuple(float(v) for v in data.get("values", ())),
         )
 
+    def to_dict(self) -> dict[str, object]:
+        """Serialise to the plain JSON-style dict accepted by :meth:`from_dict`."""
+        payload: dict[str, object] = {
+            "id": self.id,
+            "kind": self.kind,
+            "atoms": list(self.atoms),
+            "role": self.role,
+        }
+        if self.start is not None:
+            payload["start"] = self.start
+        if self.end is not None:
+            payload["end"] = self.end
+        if self.force_constant is not None:
+            payload["force_constant"] = self.force_constant
+        if self.values:
+            payload["values"] = list(self.values)
+        return payload
+
 
 @dataclass(frozen=True)
 class ReactionCoordinatePlan:
@@ -264,6 +282,15 @@ class ReactionCoordinatePlan:
             coupling=cast(Literal["synchronous"], coupling),
             start_from=cast(Literal["reactant", "product", "custom"], start_from),
         )
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialise to the plain JSON-style dict accepted by :meth:`from_dict`."""
+        return {
+            "coordinates": [coordinate.to_dict() for coordinate in self.coordinates],
+            "points": self.points,
+            "coupling": self.coupling,
+            "start_from": self.start_from,
+        }
 
 
 def _opt_float(value: object) -> float | None:

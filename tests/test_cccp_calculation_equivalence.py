@@ -164,3 +164,61 @@ def test_singlepoint_task_request_round_trips_through_serialisation() -> None:
     )
     restored = TaskRequest.from_dict(request.to_dict())
     assert restored == request
+
+
+# ── optimize rescue matrix (todo 18) ────────────────────────────────────
+
+
+def test_optimize_rescue_metadata_matches_goldens() -> None:
+    """build_rescue_plan cells + rescue metadata fields == pre-migration goldens."""
+    import dataclasses
+
+    from cccp.calculation.tasks.optimize import (
+        FAILURE_EXIT,
+        _FAILURE_TYPES,
+        _RESCUE_DESCRIPTIONS,
+        _RESCUE_MATRIX,
+        build_rescue_plan,
+    )
+
+    golden = _load("optimize_rescue.json")
+    cells = golden["cells"]
+    assert cells, "optimize_rescue goldens must be non-empty"
+    golden_keys = {(cell["failure_type"], cell["structure_kind"]) for cell in cells}
+    assert golden_keys == set(_RESCUE_MATRIX)
+    for cell in cells:
+        plan = build_rescue_plan(
+            cell["failure_type"],
+            cell["structure_kind"],
+            explicit_ts_target=cell["explicit_ts_target"],
+        )
+        assert plan.failure_type == cell["failure_type"]
+        assert plan.rescue_structure_kind == cell["structure_kind"]
+        assert plan.terminal == cell["terminal"], cell
+        assert [dataclasses.asdict(action) for action in plan.actions] == cell["actions"], cell
+
+    tokens = _load("error_tokens.json")
+    assert sorted(_FAILURE_TYPES) == tokens["failure_types"]
+    assert sorted(FAILURE_EXIT) == tokens["failure_exit"]
+    assert _RESCUE_DESCRIPTIONS == tokens["rescue_strategies"]
+
+
+def test_optimize_payload_carries_derived_rescue_diagnostics() -> None:
+    """Derived diagnostics are typed payload output, never a writable input."""
+    from cccp.calculation.requests import OptimizeOptions, RescueSpec
+    from cccp.calculation.results import OptimizePayload
+
+    options = OptimizeOptions(rescue=RescueSpec(failure_type="memory_failure"))
+    assert options.rescue.failure_type == "memory_failure"
+    payload = OptimizePayload(
+        optimization_status="converged",
+        rescue_failure_type="scf_failure",
+        rescue_structure_kind="minimum",
+        rescue_actions=("scf_increase_maxiter",),
+        rescue_attempts=1,
+        rescue_terminal=False,
+    )
+    assert payload.to_dict()["rescue_failure_type"] == "scf_failure"
+    assert payload.to_dict()["rescue_structure_kind"] == "minimum"
+    restored = OptimizePayload.from_dict(payload.to_dict())
+    assert restored == payload

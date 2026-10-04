@@ -105,7 +105,11 @@ _METADATA_ALIASES: dict[str, tuple[str, ...]] = {
     "optimization_status": ("optimization_status",),
     "rescue_attempts": ("rescue_attempts",),
     "rescue_actions": ("rescue_actions",),
-    "failure_type": ("failure_type",),
+    "rescue_failure_type": ("rescue_failure_type", "failure_type"),
+    "rescue_structure_kind": ("rescue_structure_kind",),
+    "rescue_terminal": ("rescue_terminal",),
+    "tsmode_explicit_target": ("tsmode_explicit_target",),
+    "tsmode_target_preserved": ("tsmode_target_preserved",),
     "electronic_state": ("electronic_state",),
     "n_imaginary": ("n_imaginary",),
     "enthalpy_hartree": ("enthalpy_hartree",),
@@ -362,7 +366,7 @@ def to_task_request(
         raw["symbols"] = symbols_value
 
     options = _options_from_resources(
-        task_kind, resources, raw, key_names, structure_kind, directions
+        task_kind, resources, raw, key_names, structure_kind, artifact.role, directions
     )
 
     # leftover envelope keys without a consumed value stay verbatim
@@ -442,6 +446,7 @@ def _options_from_resources(
     raw: dict[str, JsonValue],
     key_names: dict[str, str],
     structure_kind: object,
+    role: StructureRole,
     directions: Sequence[str] | None,
 ) -> TaskOptions | None:
     """Project legacy resources into the typed options for ``task_kind``.
@@ -462,18 +467,10 @@ def _options_from_resources(
         failure_type = _as_str(_pop_named(resources, "failure_type", key_names))
         policy = _as_str(_pop_named(resources, "opt_rescue_policy", key_names))
         max_rescue = _pop_named(resources, "opt_max_rescue", key_names)
-        rescue: RescueSpec | None = None
-        if policy is not None or max_rescue is not None or failure_type is not None:
-            rescue = RescueSpec(
-                policy=policy or "adaptive",
-                max_rescue=_as_int(max_rescue),
-                failure_type=failure_type,
-            )
+        is_ts = _as_str(structure_kind) == "ts" or role is StructureRole.TRANSITION_STATE
         return OptimizeOptions(
             mode=(
-                OptimizationMode.TRANSITION_STATE
-                if _as_str(structure_kind) == "ts"
-                else OptimizationMode.UNCONSTRAINED
+                OptimizationMode.TRANSITION_STATE if is_ts else OptimizationMode.UNCONSTRAINED
             ),
             initial_hessian=_as_str(
                 _pop_alias(
@@ -491,7 +488,11 @@ def _options_from_resources(
             max_cycles=_as_int(_pop_named(resources, "max_cycles", key_names)),
             geom_maxiter=_as_int(_pop_named(resources, "geom_maxiter", key_names)),
             ts=_ts_spec_from_legacy(ts_raw),
-            rescue=rescue,
+            rescue=RescueSpec(
+                policy=policy or "adaptive",
+                max_rescue=_as_int(max_rescue),
+                failure_type=failure_type,
+            ),
         )
 
     if task_kind is TaskKind.FREQUENCY:
@@ -822,9 +823,13 @@ def _payload_from_values(
         actions = values.get("rescue_actions")
         return OptimizePayload(
             optimization_status=_as_str(values.get("optimization_status")),
-            rescue_failure_type=_as_str(values.get("failure_type")),
+            rescue_failure_type=_as_str(values.get("rescue_failure_type")),
+            rescue_structure_kind=_as_str(values.get("rescue_structure_kind")),
             rescue_actions=tuple(str(a) for a in actions) if isinstance(actions, list) else (),
             rescue_attempts=_as_int(values.get("rescue_attempts")),
+            rescue_terminal=_as_bool(values.get("rescue_terminal")),
+            tsmode_explicit_target=_as_int(values.get("tsmode_explicit_target")),
+            tsmode_target_preserved=_as_bool(values.get("tsmode_target_preserved")),
             electronic_state=dict(state) if isinstance(state, Mapping) else None,
         )
     if task_kind is TaskKind.FREQUENCY:
@@ -893,9 +898,16 @@ def to_legacy_result(
         _emit("electronic_state", payload.electronic_state)
     elif isinstance(payload, OptimizePayload):
         _emit("optimization_status", payload.optimization_status)
-        _emit("failure_type", payload.rescue_failure_type)
-        _emit("rescue_actions", list(payload.rescue_actions) or None)
+        if payload.rescue_failure_type is not None:
+            _emit("rescue_failure_type", payload.rescue_failure_type)
+            _emit("rescue_structure_kind", payload.rescue_structure_kind)
+            _emit("rescue_actions", list(payload.rescue_actions))
+        else:
+            _emit("rescue_actions", list(payload.rescue_actions) or None)
         _emit("rescue_attempts", payload.rescue_attempts)
+        _emit("rescue_terminal", payload.rescue_terminal)
+        _emit("tsmode_explicit_target", payload.tsmode_explicit_target)
+        _emit("tsmode_target_preserved", payload.tsmode_target_preserved)
         _emit("electronic_state", payload.electronic_state)
     elif isinstance(payload, FrequencyPayload):
         _emit("n_imaginary", payload.n_imaginary)

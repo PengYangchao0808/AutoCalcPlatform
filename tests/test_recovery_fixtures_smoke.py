@@ -82,3 +82,48 @@ def test_remote_path_reference_loadable(tmp_path: Path) -> None:
         for rel_path in rel_paths:
             resolved = cache.cache_path(payload["job_id"], rel_path)
             assert str(resolved).startswith(str(cache.job_root(payload["job_id"])))
+
+
+def test_checkpoint_mixed_optimize_step_fingerprint_compatible() -> None:
+    """Todo 18 switch: the optimize-capability recovery subset stays valid.
+
+    The plan fingerprint consumes ``str(step.spec)`` over the legacy plan
+    contract; the typed OptimizeOptions rewrite must not change it, the
+    stored fingerprint must still validate, and the completed optimize step
+    must stay completed (continue never recomputes completed steps).
+    """
+    from acp.calculations.contracts import (
+        CalculationPlan,
+        CalculationStep,
+        OptimizationMode,
+        StepKind,
+    )
+    from acp.calculations.executor import _plan_fingerprint
+
+    root = FIXTURES / "checkpoint_mixed"
+    meta = json.loads((root / "plan_fingerprint.json").read_text(encoding="utf-8"))
+    plan = CalculationPlan(
+        workflow="BatchOptimize",
+        profile="opt_freq",
+        items=[{"path": "structures/input.xyz"}],
+        steps=[
+            CalculationStep(
+                kind=StepKind.OPTIMIZE,
+                mode=OptimizationMode.UNCONSTRAINED,
+                spec={"max_cycles": 5},
+            ),
+            CalculationStep(
+                kind=StepKind.FREQUENCY,
+                mode=OptimizationMode.UNCONSTRAINED,
+                spec=None,
+            ),
+        ],
+    )
+    assert _plan_fingerprint(plan) == meta["plan_fingerprint"]
+    checkpoint = load_checkpoint(root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"])
+    assert checkpoint is not None
+    optimize_state = next(
+        state for state in checkpoint.step_states if state.get("kind") == "optimize"
+    )
+    assert optimize_state["status"] == "completed"
+    assert optimize_state["energy"] == -100.75

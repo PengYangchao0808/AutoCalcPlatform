@@ -600,7 +600,7 @@ def test_recorder_omits_geometry_ref_when_xyz_write_fails(monkeypatch, tmp_path:
         raise OSError("synthetic geometry write failure")
 
     monkeypatch.setattr(
-        "acp.calculations.primitives.optimization_trajectory._atomic_text_write",
+        "cccp.calculation.optimization_trajectory._atomic_text_write",
         fail_write,
     )
     recorder = OptimizationTrajectoryRecorder(tmp_path, item_id="X1")

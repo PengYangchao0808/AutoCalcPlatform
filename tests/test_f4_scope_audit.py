@@ -903,6 +903,73 @@ def _target_backend(src: str) -> set[int]:
     return tgt
 
 
+# ── Amendment K: constraint plan serialization (2026-10-04, plan todo 18) ──
+#
+# ``OptimizeOptions.constraints`` carries a ``ReactionCoordinatePlan``; the
+# JSON-style ``to_dict()`` counterparts of the existing ``from_dict()``
+# parsers are added on ``CoordinateSpec`` / ``ReactionCoordinatePlan``.
+# Pure data projection (no algorithm change); sanctioned scope = the two
+# ``to_dict`` method bodies only.
+
+
+def _is_amendment_k_constraints_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``constraints.py`` additions: the ``to_dict`` serializers."""
+    for class_name in ("CoordinateSpec", "ReactionCoordinatePlan"):
+        span = _func_range(worktree_src, "to_dict", class_name)
+        if span is not None and span[0] <= ln <= span[1]:
+            return True
+    return False
+
+
+def _amendment_k_constraints_teeth(worktree: str) -> list[str]:
+    """Teeth: both serializers exist and project the from_dict input keys."""
+    issues: list[str] = []
+    coord = _func_range(worktree, "to_dict", "CoordinateSpec")
+    if coord is None:
+        issues.append("  Amendment K scope missing CoordinateSpec.to_dict")
+    else:
+        body = "\n".join(worktree.splitlines()[coord[0] - 1 : coord[1]])
+        for key in ('"atoms"', '"kind"', '"role"'):
+            if key not in body:
+                issues.append(f"  Amendment K: CoordinateSpec.to_dict must emit {key}")
+    plan = _func_range(worktree, "to_dict", "ReactionCoordinatePlan")
+    if plan is None:
+        issues.append("  Amendment K scope missing ReactionCoordinatePlan.to_dict")
+    else:
+        body = "\n".join(worktree.splitlines()[plan[0] - 1 : plan[1]])
+        if "coordinate.to_dict()" not in body:
+            issues.append(
+                "  Amendment K: ReactionCoordinatePlan.to_dict must delegate to coordinates"
+            )
+    return issues
+
+
+def test_amendment_k_predicates_confined_and_negatives() -> None:
+    """Amendment K is confined to the two serializers — negative injection."""
+    worktree = _worktree_content("src/cccp/qc/interfaces/constraints.py")
+    plan_range = _func_range(worktree, "to_dict", "ReactionCoordinatePlan")
+    assert plan_range is not None
+
+    assert not _is_amendment_k_constraints_addition(plan_range[0] - 1, "x = 1", worktree)
+    assert not _is_amendment_k_constraints_addition(plan_range[1] + 1, "    total += 1", worktree)
+
+    injected = worktree.replace(
+        '            "points": self.points,',
+        '            "points": self.points + 1,\n            "smuggled": algorithm_change(),',
+    )
+    issues = _amendment_k_constraints_teeth(injected)
+    assert not issues, "in-body edits stay inside the sanctioned scope"
+    delegation = "[coordinate.to_dict() for coordinate in self.coordinates]"
+    stripped = worktree.replace(delegation, "[]")
+    issues = _amendment_k_constraints_teeth(stripped)
+    assert any("must delegate to coordinates" in issue for issue in issues)
+    removed = worktree.replace(
+        "    def to_dict(self) -> dict[str, object]:", "    def _gone(self):", 1
+    )
+    issues = _amendment_k_constraints_teeth(removed)
+    assert issues, "removing a serializer scope must fire the teeth"
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1005,7 +1072,10 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if any(start <= ln <= end for start, end in allowed_ranges):
                     continue
+                if _is_amendment_k_constraints_addition(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_k_constraints_teeth(worktree))
             # Teeth: 0-based writer, target-before-C syntax.
             writer = wt_ranges.get("orca_constraint_block")
             if writer is None:

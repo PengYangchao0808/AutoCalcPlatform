@@ -36,6 +36,7 @@ from cccp.calculation._common import (
     resolve_multiplicity,
     resolve_spec,
     state_result_metadata,
+    theory_run_config,
     write_state_artifacts,
 )
 from cccp.calculation.context import TaskContext, resolve_context
@@ -126,7 +127,7 @@ def run_singlepoint(
     spec = resolve_spec(
         request.level.method or None,
         explicit=level_explicit_fields(request.level),
-        run_config=_theory_config(ctx),
+        run_config=theory_run_config(ctx.config),
     )
     kwargs = render_backend_input(
         spec,
@@ -250,22 +251,6 @@ def _symbols(qc_result: object) -> tuple[str, ...] | None:
     if not raw:
         return None
     return tuple(str(s) for s in raw)
-
-
-def _theory_config(ctx: TaskContext) -> dict[str, object] | None:
-    """Flat ``theory.*`` run-config layer for ``resolve_spec`` (config default)."""
-    config = ctx.config
-    if not isinstance(config, dict):
-        return None
-    theory = config.get("theory")
-    if not isinstance(theory, dict):
-        return None
-    flat: dict[str, object] = {}
-    for section in theory.values():
-        if isinstance(section, dict):
-            for key, value in section.items():
-                flat.setdefault(str(key), value)
-    return flat or None
 
 
 def _state_diagnostics(qc_result: object) -> dict[str, object]:

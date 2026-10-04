@@ -594,6 +594,21 @@ _SPEC_BACKEND_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 
+def theory_run_config(config: Mapping[str, Any] | None) -> dict[str, object] | None:
+    """Flat ``theory.*`` run-config layer for ``resolve_spec`` (config default)."""
+    if not isinstance(config, Mapping):
+        return None
+    theory = config.get("theory")
+    if not isinstance(theory, Mapping):
+        return None
+    flat: dict[str, object] = {}
+    for section in theory.values():
+        if isinstance(section, Mapping):
+            for key, value in section.items():
+                flat.setdefault(str(key), value)
+    return flat or None
+
+
 def level_explicit_fields(level: Any) -> dict[str, Any]:
     """Project a ``MethodSpec`` onto ``resolve_calculation_spec`` explicit keys."""
     explicit: dict[str, Any] = {}
@@ -764,5 +779,6 @@ __all__ = [
     "resolve_multiplicity",
     "resolve_spec",
     "state_result_metadata",
+    "theory_run_config",
     "write_state_artifacts",
 ]

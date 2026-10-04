@@ -87,16 +87,27 @@ class SinglePointPayload:
 class OptimizePayload:
     """Typed payload for ``optimize`` results.
 
-    ``rescue_failure_type`` is the derived diagnostic (the caller-supplied
-    restore input lives in ``OptimizeOptions.rescue.failure_type``).
+    ``rescue_failure_type`` / ``rescue_structure_kind`` are the derived
+    diagnostics (the caller-supplied restore input lives in
+    ``OptimizeOptions.rescue.failure_type``).  ``rescue_*`` fields are set
+    whenever the rescue plan was built (first attempt failed); they stay
+    ``None``/empty on a first-attempt success so converters never invent
+    legacy keys.
     """
 
     optimization_status: str | None = None
     rescue_failure_type: str | None = None
+    rescue_structure_kind: str | None = None
     rescue_actions: tuple[str, ...] = ()
     rescue_attempts: int | None = None
+    rescue_terminal: bool | None = None
+    tsmode_explicit_target: int | None = None
+    tsmode_target_preserved: bool | None = None
     electronic_state: JsonObject | None = None
     trajectory_ref: ArtifactRef | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rescue_actions", tuple(str(a) for a in self.rescue_actions))
 
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict."""
@@ -105,10 +116,18 @@ class OptimizePayload:
             payload["optimization_status"] = self.optimization_status
         if self.rescue_failure_type is not None:
             payload["rescue_failure_type"] = self.rescue_failure_type
-        if self.rescue_actions:
+        if self.rescue_structure_kind is not None:
+            payload["rescue_structure_kind"] = self.rescue_structure_kind
+        if self.rescue_failure_type is not None or self.rescue_actions:
             payload["rescue_actions"] = list(self.rescue_actions)
         if self.rescue_attempts is not None:
             payload["rescue_attempts"] = self.rescue_attempts
+        if self.rescue_terminal is not None:
+            payload["rescue_terminal"] = self.rescue_terminal
+        if self.tsmode_explicit_target is not None:
+            payload["tsmode_explicit_target"] = self.tsmode_explicit_target
+        if self.tsmode_target_preserved is not None:
+            payload["tsmode_target_preserved"] = self.tsmode_target_preserved
         if self.electronic_state is not None:
             payload["electronic_state"] = self.electronic_state
         if self.trajectory_ref is not None:
@@ -128,11 +147,18 @@ class OptimizePayload:
         if raw_ref is not None and not isinstance(raw_ref, Mapping):
             message = "payload.trajectory_ref must be a mapping"
             raise TaskInputError(message)
+        rescue_actions: tuple[str, ...] = ()
+        if "rescue_actions" in payload:
+            rescue_actions = parse_str_tuple_strict(payload, "rescue_actions")
         return cls(
             optimization_status=parse_str_strict(payload, "optimization_status"),
             rescue_failure_type=parse_str_strict(payload, "rescue_failure_type"),
-            rescue_actions=parse_str_tuple_strict(payload, "rescue_actions"),
+            rescue_structure_kind=parse_str_strict(payload, "rescue_structure_kind"),
+            rescue_actions=rescue_actions,
             rescue_attempts=parse_int_strict(payload, "rescue_attempts"),
+            rescue_terminal=parse_bool_strict(payload, "rescue_terminal"),
+            tsmode_explicit_target=parse_int_strict(payload, "tsmode_explicit_target"),
+            tsmode_target_preserved=parse_bool_strict(payload, "tsmode_target_preserved"),
             electronic_state=dict(raw_state) if raw_state is not None else None,
             trajectory_ref=_artifact_from_dict(raw_ref),
         )

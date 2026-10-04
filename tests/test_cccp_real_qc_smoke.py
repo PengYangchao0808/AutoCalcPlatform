@@ -236,34 +236,56 @@ def test_orca_singlepoint_real_smoke(tmp_path: Path) -> None:
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_orca
-@_PENDING_TODO_41
 def test_orca_optimize_real_smoke(tmp_path: Path) -> None:
-    """ORCA geometry optimization via cccp.calculation.run_optimize (todo 18)."""
-    from cccp.calculation import TaskRequest, run_optimize
+    """ORCA geometry optimization via the frozen cccp task API (todo 18 landed).
 
-    request = TaskRequest(
-        kind="optimize",
-        options={
-            "backend": "orca",
-            "method": "HF",
-            "basis": "def2-SVP",
-            "charge": 0,
-            "multiplicity": 1,
-        },
-        symbols=list(_WATER_SYMBOLS),
-        coordinates=_WATER_COORDINATES.tolist(),
+    The ImportError xfail placeholder is removed now that ``run_optimize``
+    is callable against the frozen ``TaskRequest`` envelope; golden pinning
+    of recorded real runs remains todo 41.
+    """
+    from cccp.calculation import (
+        MethodSpec,
+        StructureInput,
+        TaskContext,
+        TaskKind,
+        TaskRequest,
+        run_optimize,
     )
-    result = run_optimize(request, context=_task_context(tmp_path / "opt"))
+    from cccp.calculation.results import OptimizePayload
 
-    _assert_converged(result)
-    _assert_energy_valid(result.payload.energy, band=_ENERGY_BAND_HARTREE["water_hf_def2svp"])
+    workdir = tmp_path / "opt"
+    workdir.mkdir()
+    request = TaskRequest(
+        task=TaskKind.OPTIMIZE,
+        structure=StructureInput(
+            coordinates=tuple(tuple(float(c) for c in row) for row in _WATER_COORDINATES),
+            symbols=_WATER_SYMBOLS,
+        ),
+        charge=0,
+        multiplicity=1,
+        level=MethodSpec(method="HF", basis="def2-SVP"),
+        backend="orca",
+        output_dir=workdir,
+    )
+    result = run_optimize(request, context=TaskContext(workdir=workdir))
+
+    assert result.status == "completed"
+    assert result.complete is True
+    assert result.errors == ()
+    assert isinstance(result.payload, OptimizePayload)
+    assert result.payload.optimization_status == "converged"
+    _assert_energy_valid(result.energy_hartree, band=_ENERGY_BAND_HARTREE["water_hf_def2svp"])
     # Optimized geometry keeps atom order/record identity of the input.
     _assert_structure_correspondence(
-        result.payload.structure.symbols,
-        np.asarray(result.payload.structure.coordinates),
+        list(result.symbols or ()),
+        np.asarray(result.coordinates, dtype=float),
         expected_symbols=_WATER_SYMBOLS,
     )
-    _assert_run_recorded(result)
+    assert result.provenance is not None and result.provenance.backend == "orca"
+    artifact_types = {artifact.type for artifact in result.artifacts}
+    assert "log" in artifact_types or "output" in artifact_types, (
+        "the raw program output/log must be recorded as an artifact"
+    )
 
 
 @pytest.mark.slow
@@ -299,32 +321,55 @@ def test_orca_frequency_real_smoke(tmp_path: Path) -> None:
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_xtb
-@_PENDING_TODO_41
 def test_xtb_optimize_real_smoke(tmp_path: Path) -> None:
-    """xTB (GFN2-xTB) optimization via cccp.calculation.run_optimize (todo 18)."""
-    from cccp.calculation import TaskRequest, run_optimize
+    """xTB (GFN2-xTB) optimization via the frozen cccp task API (todo 18 landed).
 
-    request = TaskRequest(
-        kind="optimize",
-        options={
-            "backend": "xtb",
-            "method": "GFN2-xTB",
-            "charge": 0,
-            "multiplicity": 1,
-        },
-        symbols=list(_WATER_SYMBOLS),
-        coordinates=_WATER_COORDINATES.tolist(),
+    The ImportError xfail placeholder is removed now that ``run_optimize``
+    is callable against the frozen ``TaskRequest`` envelope; golden pinning
+    of recorded real runs remains todo 41.
+    """
+    from cccp.calculation import (
+        MethodSpec,
+        StructureInput,
+        TaskContext,
+        TaskKind,
+        TaskRequest,
+        run_optimize,
     )
-    result = run_optimize(request, context=_task_context(tmp_path / "xtb_opt"))
+    from cccp.calculation.results import OptimizePayload
 
-    _assert_converged(result)
-    _assert_energy_valid(result.payload.energy, band=_ENERGY_BAND_HARTREE["water_gfn2xtb"])
+    workdir = tmp_path / "xtb_opt"
+    workdir.mkdir()
+    request = TaskRequest(
+        task=TaskKind.OPTIMIZE,
+        structure=StructureInput(
+            coordinates=tuple(tuple(float(c) for c in row) for row in _WATER_COORDINATES),
+            symbols=_WATER_SYMBOLS,
+        ),
+        charge=0,
+        multiplicity=1,
+        level=MethodSpec(method="GFN2-xTB"),
+        backend="xtb",
+        output_dir=workdir,
+    )
+    result = run_optimize(request, context=TaskContext(workdir=workdir))
+
+    assert result.status == "completed"
+    assert result.complete is True
+    assert result.errors == ()
+    assert isinstance(result.payload, OptimizePayload)
+    assert result.payload.optimization_status == "converged"
+    _assert_energy_valid(result.energy_hartree, band=_ENERGY_BAND_HARTREE["water_gfn2xtb"])
     _assert_structure_correspondence(
-        result.payload.structure.symbols,
-        np.asarray(result.payload.structure.coordinates),
+        list(result.symbols or ()),
+        np.asarray(result.coordinates, dtype=float),
         expected_symbols=_WATER_SYMBOLS,
     )
-    _assert_run_recorded(result)
+    assert result.provenance is not None and result.provenance.backend == "xtb"
+    artifact_types = {artifact.type for artifact in result.artifacts}
+    assert "log" in artifact_types or "output" in artifact_types, (
+        "the raw program output/log must be recorded as an artifact"
+    )
 
 
 @pytest.mark.slow

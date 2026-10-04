@@ -17,7 +17,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import ClassVar, Literal, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeAlias
+
+if TYPE_CHECKING:  # pragma: no cover - typing only (keeps this module qc-free)
+    from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 
 from cccp.calculation.contracts import (
     CASSCFSpec,
@@ -341,10 +344,29 @@ class SinglePointOptions:
 
 @dataclass(frozen=True, slots=True)
 class TsSpec:
-    """Transition-state mode-following control (replaces legacy ``ts_mode``)."""
+    """Transition-state mode-following control (replaces legacy ``ts_mode``).
+
+    ``mode_index=None`` follows the lowest imaginary mode; an explicit index
+    is the mapped target.  ``mode_index`` is only legal when ``enabled`` —
+    the legacy ``ts_mode: bool|int`` dual semantics (one field carrying both
+    the switch and the index) are gone.
+    """
 
     enabled: bool = False
     mode_index: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "enabled", bool(self.enabled))
+        if self.mode_index is not None:
+            if isinstance(self.mode_index, bool) or not isinstance(self.mode_index, int):
+                message = "ts.mode_index must be an int"
+                raise TaskInputError(message)
+            if self.mode_index < 0:
+                message = "ts.mode_index must be >= 0"
+                raise TaskInputError(message)
+            if not self.enabled:
+                message = "ts.mode_index requires ts.enabled=True"
+                raise TaskInputError(message)
 
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict."""
@@ -364,17 +386,27 @@ class TsSpec:
         )
 
 
+#: Failure-type token for rescue restore input / derived diagnostics (the
+#: closed vocabulary used by the rescue matrix rows).  Typed as ``str`` so
+#: unknown caller tokens round-trip verbatim and simply do not override the
+#: task-derived classification (legacy ``_failure_type`` override/derive).
+FailureType: TypeAlias = str
+
+
 @dataclass(frozen=True, slots=True)
 class RescueSpec:
     """Rescue-retry policy for geometry optimization.
 
-    ``failure_type`` is the caller-supplied restore input (v3.1 §4);
-    derived failure diagnostics land in the result payload instead.
+    ``failure_type`` is the optional caller-supplied restore input (v3.1 §4);
+    ``None`` (or an unknown token) means the task derives the failure class
+    from its own error classification.  Derived failure diagnostics land in
+    the result payload (``OptimizePayload.rescue_failure_type``) — input and
+    output never share one writable field.
     """
 
     policy: str = "adaptive"
     max_rescue: int | None = None
-    failure_type: str | None = None
+    failure_type: FailureType | None = None
 
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict."""
@@ -399,21 +431,32 @@ class RescueSpec:
 
 @dataclass(frozen=True, slots=True)
 class OptimizeOptions:
-    """Task-specific options for ``optimize``."""
+    """Task-specific options for ``optimize``.
+
+    Field contract (plan todo 18): theory carriers (solvent/grid/SCF/basis/
+    dispersion/RI/aux) live ONLY on ``level`` (``MethodSpec``) — the options
+    carry no second copy; the structure role derives from ``mode``/``ts``
+    and is cross-checked against ``StructureInput.role``; ``ts`` replaces the
+    dual-semantics ``ts_mode``; ``rescue`` carries the caller restore input.
+    """
 
     task: ClassVar[TaskKind] = TaskKind.OPTIMIZE
     mode: OptimizationMode = OptimizationMode.UNCONSTRAINED
+    level: MethodSpec | None = None
     initial_hessian: str | None = None
     recalc_hess: int | None = None
     trust_radius: float | None = None
     max_cycles: int | None = None
-    geom_maxiter: int | None = None
+    constraints: ReactionCoordinatePlan | None = None
     ts: TsSpec | None = None
-    rescue: RescueSpec | None = None
+    rescue: RescueSpec = field(default_factory=RescueSpec)
+    geom_maxiter: int | None = None
 
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict."""
-        payload: JsonObject = {"mode": self.mode.value}
+        payload: JsonObject = {"mode": self.mode.value, "rescue": self.rescue.to_dict()}
+        if self.level is not None:
+            payload["level"] = self.level.to_dict()
         for key, value in (
             ("initial_hessian", self.initial_hessian),
             ("recalc_hess", self.recalc_hess),
@@ -423,10 +466,10 @@ class OptimizeOptions:
         ):
             if value is not None:
                 payload[key] = value
+        if self.constraints is not None:
+            payload["constraints"] = self.constraints.to_dict()  # type: ignore[attr-defined]
         if self.ts is not None:
             payload["ts"] = self.ts.to_dict()
-        if self.rescue is not None:
-            payload["rescue"] = self.rescue.to_dict()
         return payload
 
     @classmethod
@@ -440,21 +483,40 @@ class OptimizeOptions:
         )
         raw_ts = payload.get("ts")
         raw_rescue = payload.get("rescue")
+        raw_level = payload.get("level")
+        raw_constraints = payload.get("constraints")
         if raw_ts is not None and not isinstance(raw_ts, Mapping):
             message = "options.ts must be a mapping"
             raise TaskInputError(message)
         if raw_rescue is not None and not isinstance(raw_rescue, Mapping):
             message = "options.rescue must be a mapping"
             raise TaskInputError(message)
+        if raw_level is not None and not isinstance(raw_level, Mapping):
+            message = "options.level must be a mapping"
+            raise TaskInputError(message)
+        if raw_constraints is not None and not isinstance(raw_constraints, Mapping):
+            message = "options.constraints must be a mapping"
+            raise TaskInputError(message)
+        constraints: ReactionCoordinatePlan | None = None
+        if raw_constraints is not None:
+            from cccp.qc.interfaces.constraints import ReactionCoordinatePlan as _Plan
+
+            try:
+                constraints = _Plan.from_dict(dict(raw_constraints))
+            except ValueError as exc:
+                raise TaskInputError(str(exc)) from exc
+        rescue = RescueSpec.from_dict(raw_rescue)
         return cls(
             mode=mode,  # type: ignore[arg-type]
+            level=MethodSpec.from_dict(raw_level) if raw_level is not None else None,
             initial_hessian=parse_str_strict(payload, "initial_hessian"),
             recalc_hess=parse_int_strict(payload, "recalc_hess"),
             trust_radius=parse_float_strict(payload, "trust_radius"),
             max_cycles=parse_int_strict(payload, "max_cycles"),
             geom_maxiter=parse_int_strict(payload, "geom_maxiter"),
+            constraints=constraints,
             ts=TsSpec.from_dict(raw_ts),
-            rescue=RescueSpec.from_dict(raw_rescue),
+            rescue=rescue if rescue is not None else RescueSpec(),
         )
 
 
@@ -990,6 +1052,7 @@ __all__ = [
     "TASK_OPTIONS_TYPES",
     "TASK_REQUEST_SCHEMA_VERSION",
     "CasscfOptions",
+    "FailureType",
     "FrequencyOptions",
     "IrcDirection",
     "IrcOptions",

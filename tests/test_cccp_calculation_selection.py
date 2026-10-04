@@ -518,8 +518,8 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
     assert callable(getattr(ORCABackend, "transition_state_opt", None))
     assert callable(getattr(ORCABackend, "casscf", None))
     assert callable(cccp.calculation.run_singlepoint), "singlepoint landed in todo 17"
+    assert callable(cccp.calculation.run_optimize), "optimize landed in todo 18"
     for name in (
-        "run_optimize",
         "run_frequency",
         "run_scan",
         "run_irc",
@@ -531,7 +531,8 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
     import importlib.util
 
     assert importlib.util.find_spec("cccp.calculation.tasks.singlepoint") is not None
-    assert importlib.util.find_spec("cccp.calculation.tasks.optimize") is None
+    assert importlib.util.find_spec("cccp.calculation.tasks.optimize") is not None
+    assert importlib.util.find_spec("cccp.calculation.tasks.frequency") is None
     requirement = capability_requirement(_request())
     assert requirement.capability == "single_point"
 

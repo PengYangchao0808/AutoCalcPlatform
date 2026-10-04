@@ -233,6 +233,92 @@ try:
                     },
                 },
             }
+        elif scenario == "optimize_task":
+            from cccp.calculation.context import TaskContext
+            from cccp.calculation.contracts import OptimizationMode, StructureRole
+            from cccp.calculation.requests import (
+                MethodSpec,
+                OptimizeOptions,
+                StructureInput,
+                TaskKind,
+                TaskRequest,
+                TsSpec,
+            )
+            from cccp.calculation.tasks.optimize import run_optimize
+
+            class _StubBackend:
+                name = "orca"
+
+                def __init__(self):
+                    self.methods = []
+
+                def _ok(self, symbols):
+                    from cccp.qc.interfaces.base import QCResult
+
+                    return QCResult(
+                        success=True,
+                        energy=-1.0,
+                        coordinates=[[0.0, 0.0, 0.0] for _ in symbols],
+                        symbols=list(symbols),
+                        converged=True,
+                    )
+
+                def optimize(
+                    self, coordinates, symbols, charge=0, multiplicity=1,
+                    output_dir=None, **kwargs,
+                ):
+                    self.methods.append("optimize")
+                    return self._ok(symbols)
+
+                def transition_state_opt(
+                    self, coordinates, symbols, charge=0, multiplicity=1,
+                    output_dir=None, **kwargs,
+                ):
+                    self.methods.append("transition_state_opt")
+                    return self._ok(symbols)
+
+            def _request(role, options):
+                return TaskRequest(
+                    task=TaskKind.OPTIMIZE,
+                    structure=StructureInput(
+                        coordinates=((0.0, 0.0, 0.0),), symbols=("C",), role=role
+                    ),
+                    level=MethodSpec(method="r2SCAN-3c"),
+                    options=options,
+                )
+
+            normal_backend = _StubBackend()
+            normal = run_optimize(
+                _request(StructureRole.MINIMUM, OptimizeOptions()),
+                context=TaskContext(backend=normal_backend),
+            )
+            ts_backend = _StubBackend()
+            ts = run_optimize(
+                _request(
+                    StructureRole.TRANSITION_STATE,
+                    OptimizeOptions(
+                        mode=OptimizationMode.TRANSITION_STATE, ts=TsSpec(enabled=True)
+                    ),
+                ),
+                context=TaskContext(backend=ts_backend),
+            )
+            if any(n == "acp" or n.startswith("acp.") for n in sys.modules):
+                raise RuntimeError("acp leaked into sys.modules during optimize task")
+            result = {
+                "ok": True,
+                "data": {
+                    "normal": {
+                        "status": normal.status,
+                        "methods": normal_backend.methods,
+                        "optimization_status": normal.payload.optimization_status,
+                    },
+                    "ts": {
+                        "status": ts.status,
+                        "methods": ts_backend.methods,
+                        "optimization_status": ts.payload.optimization_status,
+                    },
+                },
+            }
         else:
             result = {"ok": False, "exc": "ValueError", "msg": "unknown scenario " + scenario}
 except BaseException as exc:
@@ -316,6 +402,23 @@ def test_optimize_input_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
         assert row["recalc_lines"] == ["Recalc_Hess 10"], (
             f"{variant} recalc_hess=10: expected explicit Recalc_Hess 10, got {row['recalc_lines']}"
         )
+
+
+def test_optimize_task_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
+    """P1 task isolation: ``run_optimize`` executes with acp imports blocked.
+
+    Plan todo 18: the optimize task core runs end-to-end on the stub backend
+    seam in both isolation variants and dispatches normal vs TS capability
+    (``optimize`` / ``transition_state_opt``) from ``mode``/``TsSpec``.
+    """
+    for variant in _VARIANTS:
+        data = _require_ok(_run_probe(cccp_only_tree, tmp_path, "optimize_task", variant))
+        assert data["normal"]["status"] == "completed", variant
+        assert data["normal"]["methods"] == ["optimize"], variant
+        assert data["normal"]["optimization_status"] == "converged", variant
+        assert data["ts"]["status"] == "completed", variant
+        assert data["ts"]["methods"] == ["transition_state_opt"], variant
+        assert data["ts"]["optimization_status"] == "converged", variant
 
 
 def test_protocol_parse_isolated(cccp_only_tree: Path, tmp_path: Path) -> None:
