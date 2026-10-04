@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 import textwrap
 from pathlib import Path
 
@@ -262,15 +263,36 @@ def test_legacy_api_mechanism_returns_410(tmp_path, monkeypatch) -> None:
 
 
 def test_all_new_results_register_result_manifest() -> None:
-    """CalculationPlanExecutor, BatchOptimizeEngine, and scan/IRC primitives all
-    write result_manifest.json via ResultManifest."""
+    """All product registration routes through the NAMED ACP manifest-write
+    module ``acp.calculations.result_publication`` (todo 16).
+
+    The named module is the single ACP persistence entry for
+    ``RESULT/result_manifest.json``; the executor / scan / IRC registration
+    sites must call its seam (``register_result_manifest``) and must not write
+    the manifest themselves.
+    """
     import acp.calculations.executor as executor_mod
     import acp.calculations.primitives.irc as irc_mod
     import acp.calculations.primitives.scan as scan_mod
+    import acp.calculations.result_publication as publication_mod
+
+    publication_source = inspect.getsource(publication_mod)
+    assert "ResultManifest" in publication_source, (
+        "acp.calculations.result_publication no longer persists ResultManifest"
+    )
+    assert "def register_result_manifest" in publication_source, (
+        "named module lost its registration seam register_result_manifest()"
+    )
 
     for module in (executor_mod, scan_mod, irc_mod):
         source = inspect.getsource(module)
-        assert "ResultManifest" in source, f"{module.__name__} does not use ResultManifest"
+        assert "register_result_manifest" in source, (
+            f"{module.__name__} does not register via acp.calculations.result_publication"
+        )
+        assert "manifest.write(" not in source, (
+            f"{module.__name__} writes the manifest directly; route through "
+            "acp.calculations.result_publication.register_result_manifest"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -330,20 +352,33 @@ def test_capability_evidence_table() -> None:
 
 # ---------------------------------------------------------------------------
 # Unique primitive definitions (todo 52 §e gate test; migration-period
-# dual-station semantics for the acp→cccp architecture remediation)
+# dual-station semantics — dual root pinned by todo 16)
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Current station (Wave 0): real implementation bodies live here; after the
-# migration these modules become pure compat shims delegating to cccp.
-_PRIMITIVES_DIR = _REPO_ROOT / "src" / "acp" / "calculations" / "primitives"
-
-# New station: cccp task-layer implementation root.  Tolerated absent at
-# Wave 0 (non-existent root counts as empty).  Do NOT hard-point at a
-# specific module under it (e.g. ``tasks``) until todos 16/23 pin the
-# station — doing so would falsely red the guard before the migration.
+# Dual root (todo 16) — one shim station + one implementation station:
+# * ``src/acp/calculations/primitives`` — ACP shim station (Wave 2 still
+#   carries the unique implementation bodies; per-task they flip to pure
+#   forwarders in todos 17-22);
+# * ``src/cccp/calculation`` — cccp implementation station, preferring the
+#   pinned ``tasks`` substation once it exists (Wave 3).  An absent root
+#   counts as empty: never hard-point at a non-existent directory (0 hits
+#   would falsely red the guard).
+_ACP_PRIMITIVES_DIR = _REPO_ROOT / "src" / "acp" / "calculations" / "primitives"
 _CCCP_CALCULATION_DIR = _REPO_ROOT / "src" / "cccp" / "calculation"
+_CCCP_CALCULATION_TASKS_DIR = _CCCP_CALCULATION_DIR / "tasks"
+
+
+def _cccp_station_root() -> Path:
+    """Pinned cccp station root: ``tasks`` once it exists, else ``calculation``."""
+    if _CCCP_CALCULATION_TASKS_DIR.is_dir():
+        return _CCCP_CALCULATION_TASKS_DIR
+    return _CCCP_CALCULATION_DIR
+
+
+# The dual root itself (todo 16): acp shim station + cccp task station.
+_PRIMITIVES_DIR: tuple[Path, ...] = (_ACP_PRIMITIVES_DIR, _cccp_station_root())
 
 _PRIMITIVE_DEFS: dict[str, str] = {
     "run_singlepoint": "singlepoint.py",
@@ -392,52 +427,231 @@ def _is_compat_shim(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
     return False
 
 
-def test_unique_primitive_definitions() -> None:
-    """Each calculation primitive must have exactly ONE implementation body
-    across BOTH migration-period stations (dual-station semantics):
+def _scan_def_sites(root: Path, names: set[str]) -> dict[str, tuple[list[str], list[str]]]:
+    """Map each *name* to ``(implementation_sites, shim_sites)`` under *root*.
 
-    * ``src/acp/calculations/primitives`` — current station (Wave 0: the
-      real bodies; after migration: compat shims that delegate);
-    * ``src/cccp/calculation`` — new station (may not exist yet at Wave 0;
-      a non-existent root counts as empty).
-
-    Definitions whose body is a pure compat shim (see :func:`_is_compat_shim`)
-    do not count as implementation bodies; import re-exports are not
-    definitions at all (aliases in ``workflows/simple.py`` or elsewhere must
-    NOT count).  While the single implementation body still lives in the acp
-    root it must stay in its expected module; once it moves under
-    ``src/cccp/calculation`` any module there is accepted (the exact module
-    is pinned by todos 16/23, not here).
+    Sites are repo-relative when possible; a missing root counts as empty.
     """
-    roots = [path for path in (_PRIMITIVES_DIR, _CCCP_CALCULATION_DIR) if path.is_dir()]
-    for name, expected_file in _PRIMITIVE_DEFS.items():
-        implementation_sites: list[str] = []
-        shim_sites: list[str] = []
-        for root in roots:
-            for py_file in sorted(root.rglob("*.py")):
-                source = py_file.read_text(encoding="utf-8")
-                tree = ast.parse(source, filename=str(py_file))
-                for node in ast.walk(tree):
-                    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                        continue
-                    if node.name != name:
-                        continue
-                    site = str(py_file.relative_to(_REPO_ROOT))
-                    if _is_compat_shim(node):
-                        shim_sites.append(site)
-                    else:
-                        implementation_sites.append(site)
-        assert len(implementation_sites) == 1, (
-            f"{name} has {len(implementation_sites)} implementation bodies "
-            f"{implementation_sites} (shims: {shim_sites}); expected exactly 1 across "
-            f"{[str(r.relative_to(_REPO_ROOT)) for r in roots]}"
+    found: dict[str, tuple[list[str], list[str]]] = {name: ([], []) for name in names}
+    if not root.is_dir():
+        return found
+    for py_file in sorted(root.rglob("*.py")):
+        source = py_file.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(py_file))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            if node.name not in names:
+                continue
+            try:
+                site = str(py_file.relative_to(_REPO_ROOT))
+            except ValueError:
+                site = str(py_file)
+            impl_sites, shim_sites = found[node.name]
+            (shim_sites if _is_compat_shim(node) else impl_sites).append(site)
+    return found
+
+
+def _dual_root_impl_sites() -> dict[str, str]:
+    """Return ``{name: site}`` — the single implementation site per primitive.
+
+    Raises AssertionError unless exactly one implementation body exists per
+    primitive definition across the dual root (pure compat shims excluded).
+    """
+    names = set(_PRIMITIVE_DEFS)
+    impl_by_name: dict[str, list[str]] = {name: [] for name in names}
+    shim_by_name: dict[str, list[str]] = {name: [] for name in names}
+    for root in _PRIMITIVES_DIR:
+        for name, (impl_sites, shim_sites) in _scan_def_sites(root, names).items():
+            impl_by_name[name].extend(impl_sites)
+            shim_by_name[name].extend(shim_sites)
+    for name, sites in impl_by_name.items():
+        assert len(sites) == 1, (
+            f"{name} has {len(sites)} implementation bodies {sites} "
+            f"(shims: {shim_by_name[name]}); expected exactly 1 across "
+            f"{[str(r.relative_to(_REPO_ROOT)) for r in _PRIMITIVES_DIR]}"
         )
-        impl_path = Path(implementation_sites[0])
+    return {name: sites[0] for name, sites in impl_by_name.items()}
+
+
+def test_unique_primitive_definitions() -> None:
+    """Each calculation primitive has exactly ONE implementation body across
+    the migration-period dual root (todo 16 dual-root semantics):
+
+    * ``src/acp/calculations/primitives`` — ACP shim station;
+    * ``src/cccp/calculation`` — cccp implementation station (``tasks`` is the
+      pinned substation once it exists; an absent root counts as empty).
+
+    Pure compat shims never count as implementation bodies; import re-exports
+    are not definitions at all.  Per-capability station wording is accepted
+    against the current-station ledger (see
+    test_current_station_ledger_matches_implementation_sites) — not a vague
+    "ACP holds no body / is a shim" claim.
+    """
+    unique = _dual_root_impl_sites()
+    for name, expected_file in _PRIMITIVE_DEFS.items():
+        impl_path = Path(unique[name])
         if impl_path.parent.name == "primitives":
             assert impl_path.name == expected_file, (
-                f"{name} implemented in {implementation_sites[0]}; expected {expected_file}"
+                f"{name} implemented in {unique[name]}; expected {expected_file}"
             )
         else:
             assert impl_path.parts[:3] == ("src", "cccp", "calculation"), (
-                f"{name} implemented outside both stations: {implementation_sites[0]}"
+                f"{name} implemented outside both stations: {unique[name]}"
             )
+    # cccp-side stray bodies: nothing outside the pinned station root.
+    station_rel = str(_cccp_station_root().relative_to(_REPO_ROOT))
+    for name, (impl_sites, _shim_sites) in _scan_def_sites(
+        _CCCP_CALCULATION_DIR, set(_PRIMITIVE_DEFS)
+    ).items():
+        for site in impl_sites:
+            assert site == station_rel or site.startswith(station_rel + "/"), (
+                f"{name}: implementation body at {site} outside the pinned "
+                f"station root {station_rel}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# No second implementation body anywhere else in ACP (todo 16 — prevents
+# compat shims from making the uniqueness guard vacuous)
+# ---------------------------------------------------------------------------
+
+# Workflow-layer entry wrappers (plan: wrappers are entry points, NOT
+# primitive implementations — the same narrow exclusion the ``unique_run_scan``
+# / ``unique_run_irc`` gates use).  Anywhere else in ``src/acp`` a non-shim
+# body under a primitive name is a second implementation and must fail.
+_ACP_ENTRY_WRAPPER_SITES: dict[str, frozenset[str]] = {
+    "run_singlepoint": frozenset({"src/acp/workflows/simple.py"}),
+    "run_optimize": frozenset({"src/acp/workflows/simple.py"}),
+    "run_frequency": frozenset({"src/acp/workflows/simple.py"}),
+    "run_scan": frozenset({"src/acp/workflows/simple.py"}),
+}
+
+
+def _acp_second_implementation_issues(
+    acp_root: Path, unique_impl: dict[str, str | None]
+) -> list[str]:
+    """Violations of "no second primitive implementation body in any ACP module".
+
+    A non-shim definition of a primitive name may only sit at the unique
+    implementation site (dual root) or at a sanctioned workflow entry wrapper.
+    """
+    issues: list[str] = []
+    for name, (impl_sites, _shim_sites) in sorted(
+        _scan_def_sites(acp_root, set(_PRIMITIVE_DEFS)).items()
+    ):
+        allowed = set(_ACP_ENTRY_WRAPPER_SITES.get(name, frozenset()))
+        unique_site = unique_impl.get(name)
+        if unique_site is not None:
+            allowed.add(unique_site)
+        for site in impl_sites:
+            if site not in allowed:
+                issues.append(
+                    f"{name}: second implementation body at {site} (unique station: {unique_site})"
+                )
+    return issues
+
+
+def test_no_second_primitive_implementation_in_acp() -> None:
+    """No ACP module outside the dual-root station may carry a second
+    ``run_*`` / ``ThermochemistryCalculator`` implementation body (todo 16)."""
+    unique = _dual_root_impl_sites()
+    issues = _acp_second_implementation_issues(_REPO_ROOT / "src" / "acp", unique)
+    assert not issues, "ACP side carries second implementation bodies:\n" + "\n".join(issues)
+    wrapper_src = (_REPO_ROOT / "src" / "acp" / "workflows" / "simple.py").read_text(
+        encoding="utf-8"
+    )
+    assert "get_backend(" not in wrapper_src and "require_backend(" not in wrapper_src, (
+        "workflow entry wrappers must not execute QC themselves"
+    )
+    for node in ast.walk(ast.parse(wrapper_src)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+            node.name in _ACP_ENTRY_WRAPPER_SITES
+        ):
+            assert any(isinstance(child, ast.Call) for child in ast.walk(node)), (
+                f"entry wrapper {node.name} does not delegate"
+            )
+
+
+def test_acp_second_implementation_guard_has_teeth(tmp_path: Path) -> None:
+    """Negative injection: a disguised second body must be reported while a
+    pure forwarder shim is not counted (proves the guard cannot go vacuous)."""
+    (tmp_path / "sneaky.py").write_text(
+        "def run_scan(request):\n    prepared = _prepare(request)\n    return _execute(prepared)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "compat.py").write_text(
+        '"""Compat forwarder."""\n\n\ndef run_scan(request):\n    return _delegate(request)\n',
+        encoding="utf-8",
+    )
+    issues = _acp_second_implementation_issues(
+        tmp_path, {"run_scan": "src/acp/calculations/primitives/scan.py"}
+    )
+    assert any("sneaky.py" in issue for issue in issues), (
+        "guard failed to detect a disguised second implementation body"
+    )
+    assert not any("compat.py" in issue for issue in issues), (
+        "pure forwarder shim must not count as an implementation body"
+    )
+    disguised = ast.parse("def run_scan(x):\n    return _f(x)\n    y = 1\n").body[0]
+    assert not _is_compat_shim(disguised), "shim detection must reject bodies carrying extra logic"
+
+
+# ---------------------------------------------------------------------------
+# Current-station ledger cross-check (todo 16): dual-station wording is
+# accepted per capability against
+# tests/baseline/refactor-evidence/migration_ledger.md
+# ---------------------------------------------------------------------------
+
+_LEDGER_PATH = Path(__file__).parent / "baseline" / "refactor-evidence" / "migration_ledger.md"
+_LEDGER_COLUMNS = ("能力", "当前实现驻点", "兼容入口", "生产消费者", "退出条件", "验收测试")
+_LEDGER_PATH_RE = re.compile(r"src/[A-Za-z0-9_./-]+\.py")
+
+
+def _ledger_rows() -> list[tuple[str, ...]]:
+    """Parse the six-column current-station ledger table."""
+    rows: list[tuple[str, ...]] = []
+    in_table = False
+    for line in _LEDGER_PATH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            if in_table:
+                break
+            continue
+        cells = tuple(cell.strip() for cell in stripped.strip("|").split("|"))
+        if not in_table:
+            if len(cells) >= 2 and cells[0] == _LEDGER_COLUMNS[0]:
+                in_table = True
+            continue
+        if all(cell and set(cell) <= set("-: ") for cell in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def test_migration_ledger_rows_have_six_columns() -> None:
+    """Every current-station ledger row carries exactly the six columns
+    能力/当前实现驻点/兼容入口/生产消费者/退出条件/验收测试 (todo 16)."""
+    rows = _ledger_rows()
+    assert rows, f"no ledger rows parsed from {_LEDGER_PATH}"
+    for cells in rows:
+        assert len(cells) == len(_LEDGER_COLUMNS), (
+            f"ledger row has {len(cells)} columns (expected 6): {cells}"
+        )
+
+
+def test_current_station_ledger_matches_implementation_sites() -> None:
+    """Dual-station acceptance per capability (todo 16): the ledger's
+    当前实现驻点 column must equal the unique implementation body discovered
+    by the dual-root scan — update the ledger row when a body moves."""
+    unique = _dual_root_impl_sites()
+    stations: dict[str, str] = {}
+    for cells in _ledger_rows():
+        match = _LEDGER_PATH_RE.search(cells[1])
+        if match:
+            stations[cells[0].strip().strip("`")] = match.group(0)
+    for name, site in unique.items():
+        assert name in stations, f"{name} missing from the current-station ledger"
+        assert stations[name] == site, (
+            f"{name}: ledger station {stations[name]} != implementation site {site}"
+        )

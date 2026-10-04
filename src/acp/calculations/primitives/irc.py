@@ -25,6 +25,7 @@ from acp.calculations.contracts import (
     StructureRole,
 )
 from acp.calculations.progress import ProgressReporter
+from acp.calculations.result_publication import register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
 from cccp.qc.interfaces.orca_ts import parse_irc_endpoints
 from cccp.utils import file_io
@@ -485,7 +486,7 @@ def _write_endpoint_products(
                       "optimization_status":"not_performed", "policy_version":1},
         )
 
-    _ = manifest.write(result_dir)
+    _ = register_result_manifest(result_dir, manifest)
     return artifacts
 
 
@@ -532,7 +533,7 @@ def _register_trajectory_products(
                 path=str(relative_path),
                 kind=ProductKind.TRAJECTORY,
             )
-    _ = manifest.write(result_dir)
+    _ = register_result_manifest(result_dir, manifest)
     return artifacts
 
 

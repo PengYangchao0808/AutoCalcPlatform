@@ -18,6 +18,7 @@ from acp.calculations.contracts import (
     CalculationResult,
     JsonValue,
 )
+from acp.calculations.result_publication import register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
 from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePlan
 from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
@@ -398,7 +399,7 @@ def _write_scan_products(
         path=trajectory_relative_path,
         kind=ProductKind.TRAJECTORY,
     )
-    _ = manifest.write(result_dir)
+    _ = register_result_manifest(result_dir, manifest)
     return artifacts
 
 

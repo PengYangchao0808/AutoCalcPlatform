@@ -426,7 +426,7 @@ def test_no_acp_imports_in_cccp() -> None:
                     names = ", ".join(alias.name for alias in node.names)
                     violations.append(f"{rel}:{node.lineno}: from {module} import {names}")
     assert not violations, (
-        "src/cccp must not import acp (reverse dependency); "
+        "src/cccp must not import the acp package (reverse dependency); "
         "fix the listed imports (plan todo 9):\n" + "\n".join(violations)
     )
 

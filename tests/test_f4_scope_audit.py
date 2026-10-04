@@ -101,6 +101,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import pytest
@@ -110,9 +111,8 @@ ROOT = Path(__file__).resolve().parent.parent
 # the audit now measures deltas from the remediation starting point
 # main@2a23b93 (original remediation baseline 88def44 archived in evidence).
 # The historical `refactor-baseline` ref belonged to the 2026-05 F4 wave and
-# is not present in this clone.  Scope redirect onto the migration files is
-# delivered by the wave-2 scope-audit todo; until then the sanctioned scope
-# remains the QC interface layer below.
+# is not present in this clone.  The scope redirect onto the migration files
+# is delivered by tier ⑥ (todo 16); tier ① keeps the QC interface layer.
 BASELINE = "2a23b93"
 ALLOWED_PY = frozenset(
     {
@@ -911,8 +911,8 @@ def _target_backend(src: str) -> set[int]:
 # work.  Wave 0 of the acp→cccp architecture remediation (todo 1) re-based
 # the audit on main@2a23b93 — the skip's documented exit condition — so the
 # checks run again: any change to the QC interface layer from that point on
-# must register a new sanctioned amendment here.  Scope redirect onto the
-# migration files lands with the wave-2 scope-audit todo.
+# must register a new sanctioned amendment here.  The scope redirect onto the
+# migration files is tier ⑥ (todo 16).
 
 
 def test_diff_only_allowed_py_files() -> None:
@@ -1376,3 +1376,181 @@ def test_batch_no_irc_invariants() -> None:
 
     src = inspect.getsource(batch_engine).casefold()
     assert "irc" not in src, "BatchOptimize engine contains IRC references"
+
+
+# ── ⑥ Migration station audit (todo 16) ─────────────────────────────────────
+
+# The wave-2 scope redirect onto the migration files.  Checks here are
+# worktree-structural and deliberately never read *BASELINE* content: files
+# created after the baseline (the new cccp stations) are audited in full — a
+# new path must not skip any key check.  ``_baseline_content``'s skip applies
+# only to the ① deletion-region checks on baseline-present files.
+
+MIGRATION_SCOPE = ("src/cccp/", "src/acp/")
+MIGRATION_STATION_PREFIXES = (
+    "src/cccp/",
+    "src/acp/calculations/",
+    "src/acp/backends/",
+    "src/acp/chem/composition.py",
+    "src/acp/core/registry.py",
+    "src/acp/catalog.py",
+)
+MIGRATION_SHIM_PY = frozenset(
+    {
+        "src/acp/backends/__init__.py",
+        "src/acp/backends/base.py",
+        "src/acp/backends/capabilities.py",
+        "src/acp/backends/censo_backend.py",
+        "src/acp/backends/crest.py",
+        "src/acp/backends/external.py",
+        "src/acp/backends/external_backend.py",
+        "src/acp/backends/isostat_backend.py",
+        "src/acp/backends/matrix.py",
+        "src/acp/backends/molclus_backend.py",
+        "src/acp/backends/orca.py",
+        "src/acp/backends/registry.py",
+        "src/acp/backends/xtb.py",
+        "src/acp/calculations/primitives/_thermochemistry_input.py",
+        "src/acp/calculations/primitives/_thermochemistry_support.py",
+        "src/acp/chem/composition.py",
+        "src/acp/core/registry.py",
+    }
+)
+
+
+def _is_migration_shim(src: str) -> bool:
+    """True when *src* is a compat re-export shell: docstring / imports /
+    ``__all__`` and optional provenance aliases ``NAME = module.ATTR`` only."""
+    if _is_pure_reexport_shim(src):
+        return True
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return False
+    for node in tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            if targets == ["__all__"] and isinstance(node.value, (ast.List, ast.Tuple)):
+                continue
+            if isinstance(node.value, ast.Attribute):
+                continue
+            return False
+        return False
+    return True
+
+
+def _changed_migration_files() -> set[str]:
+    """``.py`` files changed (or newly added, tracked or not) since *BASELINE*
+    in the migration scope — untracked smuggled modules must not escape."""
+    out = _git("diff", "--name-only", BASELINE, "--", *MIGRATION_SCOPE)
+    untracked = _git("ls-files", "--others", "--exclude-standard", "--", *MIGRATION_SCOPE)
+    combined = "\n".join(part for part in (out, untracked) if part.strip())
+    return {line for line in combined.splitlines() if line.endswith(".py")}
+
+
+def _migration_audit_issues(
+    files: Iterable[str], contents: Mapping[str, str] | None = None
+) -> list[str]:
+    """Structural teeth over changed migration files (worktree only).
+
+    * R1 station boundary — a change outside a registered migration station is
+      an unaudited change and FAILS;
+    * R2 new-station isolation — changed ``src/cccp/**`` files must not import
+      the acp package (AST scan: covers TYPE_CHECKING and lazy imports);
+    * R3 shim purity — declared compat shims stay pure re-export shells.
+    """
+    issues: list[str] = []
+    for path in sorted(files):
+        if not path.startswith(MIGRATION_STATION_PREFIXES):
+            issues.append(f"  {path}: changed outside registered migration stations (unaudited)")
+            continue
+        src = (contents or {}).get(path)
+        if src is None:
+            src = (ROOT / path).read_text(encoding="utf-8")
+        if path.startswith("src/cccp/"):
+            for node in ast.walk(ast.parse(src)):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name == "acp" or alias.name.startswith("acp."):
+                            issues.append(f"  {path}:{node.lineno}: imports {alias.name}")
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if module == "acp" or module.startswith("acp."):
+                        issues.append(f"  {path}:{node.lineno}: from {module} import names")
+        if path in MIGRATION_SHIM_PY and not _is_migration_shim(src):
+            issues.append(f"  {path}: compat shim gained a non-re-export body")
+    return issues
+
+
+def _in_baseline(path: str) -> bool:
+    return (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{BASELINE}:{path}"],
+            capture_output=True,
+            cwd=ROOT,
+        ).returncode
+        == 0
+    )
+
+
+def test_migration_scope_audit_reaches_migration_files() -> None:
+    """⑥ The audit actually processes the migration files — no vacuous skip.
+
+    Key migration files changed since *BASELINE* and several of them do NOT
+    exist at the baseline at all (created by the migration); the checks must
+    still run for them.
+    """
+    changed = _changed_migration_files()
+    expected = {
+        "src/cccp/calculation/errors.py",
+        "src/cccp/backends/orca.py",
+        "src/acp/calculations/contracts.py",
+        "src/acp/calculations/result_publication.py",
+    }
+    assert expected <= changed, f"migration audit scope lost files: {sorted(expected - changed)}"
+    post_baseline = {path for path in expected if not _in_baseline(path)}
+    assert post_baseline, "expected post-baseline files in the audited set (coverage proof)"
+    assert _migration_audit_issues(changed) == [], "migration stations must be clean"
+
+
+def test_migration_scope_catches_unaudited_change() -> None:
+    """⑥ Negative ('deliberately missed audit'): a change outside the
+    registered migration stations is flagged, not silently ignored."""
+    issues = _migration_audit_issues(["src/acp/nmr/smuggled.py"])
+    assert issues, "unaudited change outside migration stations was not detected"
+    assert "unaudited" in issues[0]
+
+
+def test_migration_scope_catches_acp_import_in_cccp() -> None:
+    """⑥ Negative: a cccp file acquiring an acp import is flagged — and the
+    file used here is absent from *BASELINE*, proving new paths never skip."""
+    target = "src/cccp/calculation/errors.py"
+    assert not _in_baseline(target), f"{target} unexpectedly present at {BASELINE}"
+    issues = _migration_audit_issues(
+        [target], {target: "from acp.calculations import contracts\n"}
+    )
+    assert issues and ("imports" in issues[0] or "from acp" in issues[0]), (
+        f"acp import in a new-station file not detected: {issues}"
+    )
+
+
+def test_migration_scope_catches_smuggled_shim_body() -> None:
+    """⑥ Negative: a declared compat shim gaining a real body is flagged."""
+    target = "src/acp/core/registry.py"
+    issues = _migration_audit_issues(
+        [target],
+        {
+            target: (
+                '"""Shim."""\n'
+                "from cccp.core.registry import Registry\n"
+                "\n"
+                "def helper():\n"
+                "    return 1\n"
+            )
+        },
+    )
+    assert issues and "shim" in issues[0], f"shim body not detected: {issues}"

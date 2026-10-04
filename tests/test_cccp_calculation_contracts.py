@@ -675,20 +675,8 @@ def test_contracts_pure_type_isolation() -> None:
     assert "ok" in proc.stdout
 
 
-def test_relocated_types_keep_identity() -> None:
-    import acp.calculations.contracts as acp_contracts
-
-    assert acp_contracts.ArtifactRef is contracts.ArtifactRef
-    assert acp_contracts.OptimizationSpec is contracts.OptimizationSpec
-    assert acp_contracts.OptimizationMode is contracts.OptimizationMode
-    assert acp_contracts.StructureRole is contracts.StructureRole
-    assert acp_contracts.ElectronicStateSpec is contracts.ElectronicStateSpec
-    assert acp_contracts.CASSCFSpec is contracts.CASSCFSpec
-    assert acp_contracts.GuessSpec is contracts.GuessSpec
-    assert acp_contracts.validate_casscf_spec is contracts.validate_casscf_spec
-    # changed shapes are distinct types converted via the adapter
-    assert acp_contracts.StructureArtifact is not contracts.StructureArtifact
-    assert acp_contracts.Provenance is not contracts.Provenance
+# ``test_relocated_types_keep_identity`` moved to tests/test_calculations_contracts.py
+# (todo 16: cccp-side tests must not import the acp package).
 
 
 # ── the current spec document (single source) ───────────────────────────

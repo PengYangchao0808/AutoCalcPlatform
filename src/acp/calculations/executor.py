@@ -50,6 +50,7 @@ from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.scan import run_scan
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
+from acp.calculations.result_publication import register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
 
 logger = logging.getLogger(__name__)
@@ -866,7 +867,7 @@ class CalculationPlanExecutor:
                     kind=ProductKind.ENERGY_REPORT,
                 )
 
-        manifest.write(result_dir)
+        register_result_manifest(result_dir, manifest)
 
 
 __all__ = [

@@ -2,9 +2,10 @@
 """P0 closure: capability selection rejects unsupported combinations pre-launch.
 
 Integrated-path companion to ``tests/test_cccp_isolation.py`` (plan todo 10).
-Capability selection lives in ``acp.backends`` and is deliberately exercised
-here on the integrated path — the isolation probes block ``acp`` imports on
-purpose and must not be forced to cover selection.
+Capability selection lives in ``cccp.backends`` (moved there in plan todo 12;
+the ``acp.backends`` surface is a pure re-export shim) and is exercised here
+without importing the acp package — cccp-side tests must not depend on acp
+(plan todo 16).
 
 Locked expectations (plan todo 8, deltas D1/D4):
 
@@ -21,11 +22,11 @@ from __future__ import annotations
 
 import pytest
 
-from acp.backends.capabilities import supports
-from acp.backends.crest import CrestBackend
-from acp.backends.orca import ORCABackend
-from acp.backends.registry import BackendRegistry, require_backend
-from acp.backends.xtb import XTBBackend
+from cccp.backends.capabilities import supports
+from cccp.backends.crest import CrestBackend
+from cccp.backends.orca import ORCABackend
+from cccp.backends.registry import BackendRegistry, require_backend
+from cccp.backends.xtb import XTBBackend
 from cccp.calculation.errors import CalculationError, UnsupportedCapabilityError
 
 
