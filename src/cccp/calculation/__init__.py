@@ -283,11 +283,20 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.tasks.casscf import (
         run_casscf as run_casscf,
     )
+    from cccp.calculation.tasks.clustering import (
+        run_clustering as run_clustering,
+    )
+    from cccp.calculation.tasks.conformer_search import (
+        run_conformer_search as run_conformer_search,
+    )
     from cccp.calculation.tasks.frequency import (
         run_frequency as run_frequency,
     )
     from cccp.calculation.tasks.irc import (
         run_irc as run_irc,
+    )
+    from cccp.calculation.tasks.md_sampling import (
+        run_md_sampling as run_md_sampling,
     )
     from cccp.calculation.tasks.optimize import (
         run_optimize as run_optimize,
@@ -297,6 +306,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     )
     from cccp.calculation.tasks.thermochemistry import (
         run_thermochemistry as run_thermochemistry,
+    )
+    from cccp.calculation.tasks.xtb_path_search import (
+        run_xtb_path_search as run_xtb_path_search,
     )
 
 _LAZY_EXPORTS: dict[str, str] = {
@@ -416,12 +428,16 @@ _LAZY_EXPORTS: dict[str, str] = {
     "artifact_ref_to_dict": "results",
     "casscf_payload_from_multireference": "results",
     "run_casscf": "tasks.casscf",
+    "run_conformer_search": "tasks.conformer_search",
+    "run_clustering": "tasks.clustering",
     "run_frequency": "tasks.frequency",
     "run_irc": "tasks.irc",
+    "run_md_sampling": "tasks.md_sampling",
     "run_optimize": "tasks.optimize",
     "run_scan": "tasks.scan",
     "run_singlepoint": "tasks.singlepoint",
     "run_thermochemistry": "tasks.thermochemistry",
+    "run_xtb_path_search": "tasks.xtb_path_search",
 }
 
 __all__ = sorted(_LAZY_EXPORTS)
