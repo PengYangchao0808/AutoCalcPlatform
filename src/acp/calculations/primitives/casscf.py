@@ -25,13 +25,11 @@ from acp.calculations.contracts import (
 )
 from acp.calculations.legacy_adapters import LegacyBinding, to_legacy_result, to_task_request
 from acp.calculations.primitives._common import capability_kwargs, error_text
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.errors import TaskInputError
 from cccp.calculation.requests import TaskKind
 from cccp.calculation.results import TaskResult
-from cccp.calculation.tasks.casscf import (
-    run_casscf as _cccp_run_casscf,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +56,7 @@ def execute_casscf(req: CalculationRequest) -> CalculationResult:
             workdir=binding.artifact_root,
             capability_extras=capability_kwargs(req),
         )
-        task_result = _cccp_run_casscf(task_request, context=context)
+        task_result = _cccp_calculation.run_casscf(task_request, context=context)
     except (TaskInputError, ValueError) as error:
         return _failed_result(req, error_text(error))
     return legacy_result(task_result, binding)

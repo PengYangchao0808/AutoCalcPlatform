@@ -10,8 +10,8 @@ registry seam, and the **publication half** — ``RESULT/irc`` endpoint
 products (``IRC_ENDPOINT``), ``RESULT/trajectories`` trajectory products and
 ``result_manifest.json`` registration through the named publication entry
 (:func:`acp.calculations.result_publication.register_result_manifest`).
-``run_irc`` is a pure forwarder (the dual-root uniqueness guard classifies it
-as a shim).
+``run_irc`` is a pure re-export alias of ``execute_irc`` (todo 23 hard
+switch: no ``def run_irc`` may exist outside ``cccp.calculation.tasks.irc``).
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ from acp.calculations.primitives._common import (
 from acp.calculations.progress import ProgressReporter
 from acp.calculations.result_publication import register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.progress import ProgressEvent, ProgressEventKind
 from cccp.calculation.requests import TaskKind
@@ -47,9 +48,6 @@ from cccp.calculation.results import IrcPayload, TaskResult
 from cccp.calculation.tasks import irc as _irc_task
 from cccp.calculation.tasks.irc import (
     resolve_result_dir,
-)
-from cccp.calculation.tasks.irc import (
-    run_irc as _cccp_run_irc,
 )
 from cccp.utils import file_io
 
@@ -62,28 +60,6 @@ IRC_PROGRESS_STAGES = ("preparing", "irc_forward", "irc_backward", "validating")
 #: Compat aliases for the frozen golden generator (pre-migration helper names).
 _resolve_direction = _irc_task.resolve_direction
 _completed_directions = _irc_task.completed_directions
-
-
-def run_irc(
-    ts_artifact: StructureArtifact,
-    *,
-    directions: tuple[str, ...] = ("forward", "reverse"),
-    method: str = "",
-    resources: dict[str, Any] | None = None,
-    workflow: str = "irc",
-    profile: str | None = None,
-    progress_reporter: ProgressReporter | None = None,
-) -> CalculationResult:
-    """Run an IRC calculation from a converged transition state."""
-    return execute_irc(
-        ts_artifact,
-        directions=directions,
-        method=method,
-        resources=resources,
-        workflow=workflow,
-        profile=profile,
-        progress_reporter=progress_reporter,
-    )
 
 
 def execute_irc(
@@ -138,7 +114,7 @@ def execute_irc(
         capability_extras=capability_kwargs(request),
         progress=sink,
     )
-    task_result = _cccp_run_irc(task_request, context=context)
+    task_result = _cccp_calculation.run_irc(task_request, context=context)
 
     legacy = to_legacy_result(task_result, binding)
     metadata = dict(task_result.metadata)
@@ -162,6 +138,10 @@ def execute_irc(
         provenance=legacy.provenance,
         metadata=metadata,
     )
+
+
+#: Pure re-export alias (no ``def run_irc`` outside the cccp task core).
+run_irc = execute_irc
 
 
 # ── ACP-side product publication (endpoint/trajectory science comes from cccp)

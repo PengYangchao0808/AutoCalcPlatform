@@ -25,12 +25,10 @@ from acp.calculations.result_publication import (
     recover_publication,
 )
 from acp.storage.manifest import ProductKind, ResultManifest
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.requests import TaskKind
 from cccp.calculation.results import TaskResult
-from cccp.calculation.tasks.singlepoint import (
-    run_singlepoint as _cccp_run_singlepoint,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +50,7 @@ def execute_singlepoint(req: CalculationRequest) -> CalculationResult:
         workdir=binding.artifact_root,
         capability_extras=capability_kwargs(req),
     )
-    task_result = _cccp_run_singlepoint(task_request, context=context)
+    task_result = _cccp_calculation.run_singlepoint(task_request, context=context)
     return legacy_result(task_result, binding)
 
 

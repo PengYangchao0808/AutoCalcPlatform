@@ -30,6 +30,7 @@ from acp.calculations.primitives._common import (
     output_dir,
 )
 from acp.calculations.progress import LiveMetric, ProgressReporter
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.optimization_trajectory import finalize_optimization_trajectory
 from cccp.calculation.progress import ProgressEvent, ProgressEventKind
@@ -66,9 +67,6 @@ from cccp.calculation.tasks.optimize import (
 )
 from cccp.calculation.tasks.optimize import (
     _inject_gbw_continuation as _inject_gbw_continuation,
-)
-from cccp.calculation.tasks.optimize import (
-    run_optimize as _cccp_run_optimize,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,7 +160,7 @@ def execute_optimize(
         capability_extras=capability_kwargs(req),
         progress=sink,
     )
-    task_result = _cccp_run_optimize(task_request, context=context)
+    task_result = _cccp_calculation.run_optimize(task_request, context=context)
     target_dir = output_dir(req)
     if target_dir is not None:
         _finalize_trajectory(target_dir, selected_backend, binding.trajectory_item_id or "")

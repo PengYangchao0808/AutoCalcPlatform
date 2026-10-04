@@ -7,8 +7,10 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from acp.backends.base import QCResult
+from acp.calculations import result_publication
 from acp.calculations.contracts import (
     CalculationPlan,
     CalculationRequest,
@@ -18,11 +20,12 @@ from acp.calculations.contracts import (
     StructureArtifact,
     StructureRole,
 )
-from acp.calculations.executor import CalculationPlanExecutor
+from acp.calculations.executor import CalculationPlanExecutor, _run_thermochemistry
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.storage.manifest import ResultManifest
+from cccp import calculation as cccp_calculation
 from tests.conftest import FakeBackend
 
 
@@ -370,3 +373,134 @@ def test_resume_after_interrupt_skips_completed(fake_backend: FakeBackend, tmp_p
     for state in result2.step_states:
         assert state.status == "skipped"
     assert len(fake_backend.calls) == calls_after_first  # no new calls
+
+
+# ── T23 dispatch probe + publication-recovery fault injection ────────────
+
+
+def _singlepoint_plan(task_root: Path) -> CalculationPlan:
+    return CalculationPlan(
+        workflow="test",
+        profile="r2SCAN-3c",
+        items=[
+            StructureArtifact(
+                path=_make_input_xyz(task_root),
+                elements=["C"],
+                source="test",
+            )
+        ],
+        steps=[CalculationStep(kind=StepKind.SINGLEPOINT)],
+    )
+
+
+def test_executor_dispatch_reaches_cccp_task(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a single-step plan and a spy on the cccp task function.
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    calls: list[object] = []
+    real_run_singlepoint = cccp_calculation.run_singlepoint
+
+    def spy(task_request: object, **kwargs: object) -> object:
+        calls.append(task_request)
+        return real_run_singlepoint(task_request, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cccp_calculation, "run_singlepoint", spy)
+
+    # When: the executor runs the plan step.
+    result = CalculationPlanExecutor().execute(_singlepoint_plan(tmp_path), task_root=tmp_path)
+
+    # Then: the call path reached cccp.calculation.run_singlepoint exactly once.
+    assert result.is_completed
+    assert len(calls) == 1, "executor dispatch must reach cccp.calculation.run_singlepoint"
+
+
+def test_thermochemistry_dispatch_reaches_cccp_task_with_legacy_output_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a spy on the cccp thermochemistry task and a fake Shermo runner.
+    freq_log = tmp_path / "frequency.log"
+    freq_log.write_text("frequency output", encoding="utf-8")
+    calls: list[object] = []
+    shermo_kwargs: dict[str, object] = {}
+    real_run_thermochemistry = cccp_calculation.run_thermochemistry
+
+    def spy(task_request: object, **kwargs: object) -> object:
+        calls.append(task_request)
+        return real_run_thermochemistry(task_request, **kwargs)  # type: ignore[arg-type]
+
+    def fake_run_shermo(**kwargs: object) -> dict[str, float]:
+        shermo_kwargs.update(kwargs)
+        return {"g_sum": -1.2, "h_sum": -1.1, "s_sum": 0.01}
+
+    monkeypatch.setattr(cccp_calculation, "run_thermochemistry", spy)
+    monkeypatch.setattr("cccp.qc.shermo_adapter.run_shermo", fake_run_shermo)
+    request = CalculationRequest(
+        input_artifact=StructureArtifact(
+            path=tmp_path / "input.xyz",
+            elements=["C"],
+            source="test",
+        ),
+        method="",
+        resources={
+            "output_dir": str(tmp_path),
+            "freq_log_path": str(freq_log),
+            "sp_energy_hartree": -10.2,
+            "temperature": 298.15,
+            "pressure": 1.0,
+        },
+    )
+
+    # When: the executor thermochemistry dispatch runs.
+    result = _run_thermochemistry(request)
+
+    # Then: the call path reached cccp.calculation.run_thermochemistry and the
+    # legacy Shermo.sum output filename survived the rewire.
+    assert result.status == "completed"
+    assert len(calls) == 1, "dispatch must reach cccp.calculation.run_thermochemistry"
+    assert shermo_kwargs.get("output_file") == tmp_path / "Shermo.sum"
+
+
+def test_executor_recovery_retries_publish_only(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a single-step plan whose publication fails once after the
+    # scientific result is already persisted.
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    real_register = result_publication.register_result_manifest
+    state = {"failures": 1}
+
+    def flaky_register(result_dir, manifest):  # type: ignore[no-untyped-def]
+        if state["failures"]:
+            state["failures"] -= 1
+            raise OSError("injected manifest write failure")
+        return real_register(result_dir, manifest)
+
+    monkeypatch.setattr(result_publication, "register_result_manifest", flaky_register)
+    plan = _singlepoint_plan(tmp_path)
+
+    # When: the first run hits the injected publish failure.
+    result1 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    # Then: the step failed but the scientific result survived (contract ①).
+    assert result1.is_failed
+    step_dir = tmp_path / "WORK" / "05_SP"
+    assert result_publication.load_scientific_result(step_dir) is not None
+    qc_calls_after_first = len(fake_backend.calls)
+    assert qc_calls_after_first == 1
+
+    # When: the executor runs again (recovery).
+    result2 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    # Then: only publication is retried — QC is not re-invoked (contract:
+    # stored scientific result + publish failure → recovery retries publish
+    # only, QC count unchanged) and publication completes.
+    assert result2.is_completed
+    assert len(fake_backend.calls) == qc_calls_after_first
+    state_loaded = result_publication.load_publication_state(step_dir)
+    assert state_loaded is not None and state_loaded.complete is True

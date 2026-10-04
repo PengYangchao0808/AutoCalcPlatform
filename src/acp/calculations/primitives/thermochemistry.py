@@ -28,12 +28,10 @@ from acp.calculations.contracts import (
 )
 from acp.calculations.legacy_adapters import LegacyBinding, to_legacy_result, to_task_request
 from acp.calculations.primitives._common import capability_kwargs
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.requests import TaskKind
 from cccp.calculation.results import TaskResult
-from cccp.calculation.tasks.thermochemistry import (
-    run_thermochemistry as _cccp_run_thermochemistry,
-)
 from cccp.qc.shermo_adapter import execute_shermo
 
 from ._thermochemistry_input import (
@@ -135,7 +133,7 @@ def execute_thermochemistry(req: CalculationRequest) -> CalculationResult:
         workdir=binding.artifact_root,
         capability_extras=capability_kwargs(req),
     )
-    task_result = _cccp_run_thermochemistry(task_request, context=context)
+    task_result = _cccp_calculation.run_thermochemistry(task_request, context=context)
     return legacy_result(task_result, binding)
 
 

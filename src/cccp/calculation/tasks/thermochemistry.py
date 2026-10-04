@@ -24,6 +24,7 @@ Author: QCcalc Team
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from cccp.calculation._common import classify_failure, error_text
 from cccp.calculation.context import TaskContext, resolve_context
@@ -85,6 +86,15 @@ def run_thermochemistry(
         if options.sp_energy_hartree is not None
         else _DEFAULT_SP_ENERGY_HARTREE
     )
+    extras = dict(ctx.capability_extras or {})
+    legacy_output_file = extras.get("output_file")
+    output_file = (
+        Path(legacy_output_file) if isinstance(legacy_output_file, (str, Path)) else None
+    )
+    if output_file is not None and not str(output_file):
+        output_file = None
+    if extras.get("shermo_bin"):
+        runner_options = {**runner_options, "shermo_bin": extras["shermo_bin"]}
     try:
         run = execute_shermo(
             options.freq_log_path,
@@ -101,6 +111,7 @@ def run_thermochemistry(
             ),
             standard_state=options.standard_state or _DEFAULT_STANDARD_STATE,
             output_dir=request.output_dir,
+            output_file=output_file,
             config=ctx.config,
             runner_options=runner_options,
         )

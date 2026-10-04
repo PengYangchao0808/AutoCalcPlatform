@@ -127,20 +127,18 @@ SCOPE_FRONTEND: Final[tuple[str, ...]] = ("frontend/",)
 SCOPE_CCCP: Final[tuple[str, ...]] = ("src/cccp/",)
 SCOPE_README: Final[tuple[str, ...]] = ("README.md",)
 SCOPE_RUN_PRIMITIVE: Final[tuple[str, ...]] = ("src/acp", "src/cccp/")
-# Dual-position primitive implementation files (acp legacy shim + cccp task):
-# the only places allowed to define the ``run_scan`` / ``run_irc`` primitives.
-# Hard switch to the single cccp root is deferred to todo 23 (the acp allows
-# must stay until the cccp task files exist — removing them early reddens the
-# gate).  Workflow-layer same-name wrappers (e.g. ``workflows/simple.py::
-# run_scan``) are entry-point wrappers, not primitive implementations, and are
-# excluded by scope via SCOPE_WORKFLOWS below (chosen mechanism: a narrow
-# workflow-layer exclusion — everything outside it still blocks).
+# Single-position primitive implementation files (todo 23 hard switch): the
+# only places allowed to define the ``run_scan`` / ``run_irc`` primitives.
+# The acp shim allows were REMOVED in todo 23 — ``src/acp/calculations/
+# primitives/{scan,irc}.py`` expose pure re-export aliases (no ``def``).
+# Workflow-layer same-name wrappers (e.g. ``workflows/simple.py::run_scan``)
+# are entry-point wrappers, not primitive implementations, and are excluded
+# by scope via SCOPE_WORKFLOWS below (chosen mechanism: a narrow workflow-layer
+# exclusion — everything outside it still blocks).
 PRIMITIVE_SCAN_ALLOWED_PATHS: Final[tuple[str, ...]] = (
-    "src/acp/calculations/primitives/scan.py",
     "src/cccp/calculation/tasks/scan.py",
 )
 PRIMITIVE_IRC_ALLOWED_PATHS: Final[tuple[str, ...]] = (
-    "src/acp/calculations/primitives/irc.py",
     "src/cccp/calculation/tasks/irc.py",
 )
 SCOPE_MECHANISM: Final[tuple[str, ...]] = ("src/acp/mechanism/",)
@@ -280,15 +278,17 @@ class GateInputError(Exception):
 
 
 # ── Pending-redirect pin list (acp→cccp architecture remediation) ──
-# Four frozen gates pin paths that move when calculation primitives migrate
+# Frozen gates pin paths that move when calculation primitives migrate
 # from ``src/acp/calculations/primitives`` to ``src/cccp/calculation``:
 #
 #   gate                  pinned path / constant                        redirect owner
 #   --------------------  --------------------------------------------  --------------------
-#   unique_run_scan       PRIMITIVE_SCAN_ALLOWED_PATHS (acp shim +      done (todo 15, dual
-#                         cccp task), workflows excluded from scope     position; switch: todo 23)
-#   unique_run_irc        PRIMITIVE_IRC_ALLOWED_PATHS (acp shim +       done (todo 15, dual
-#                         cccp task), workflows excluded from scope     position; switch: todo 23)
+#   unique_run_scan       PRIMITIVE_SCAN_ALLOWED_PATHS (cccp task       done (todo 15 dual
+#                         only — acp allow REMOVED in todo 23;          position → todo 23
+#                         workflows excluded from scope)                hard switch)
+#   unique_run_irc        PRIMITIVE_IRC_ALLOWED_PATHS (cccp task        done (todo 15 dual
+#                         only — acp allow REMOVED in todo 23;          position → todo 23
+#                         workflows excluded from scope)                hard switch)
 #   wave2_shermo_external external_backend.py (acp shim + cccp impl)    done (todo 12, dual position)
 #   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (primitives/       comment allowance done
 #                         thermochemistry.py, workflows/energy_shared,  (todo 15); hard switch

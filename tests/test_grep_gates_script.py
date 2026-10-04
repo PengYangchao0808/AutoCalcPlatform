@@ -719,7 +719,7 @@ def test_allowlist_count_is_pinned() -> None:
             "unique_run_scan",
             "src/acp/calculations/primitives/scan.py",
             "def run_scan(req):\n    return req\n",
-            False,
+            True,
         ),
         (
             "unique_run_scan",
@@ -743,7 +743,7 @@ def test_allowlist_count_is_pinned() -> None:
             "unique_run_irc",
             "src/acp/calculations/primitives/irc.py",
             "def run_irc(req):\n    return req\n",
-            False,
+            True,
         ),
         (
             "unique_run_irc",
@@ -759,7 +759,7 @@ def test_allowlist_count_is_pinned() -> None:
         ),
     ),
 )
-def test_unique_run_gates_dual_position_allow_but_flag_second_implementations(
+def test_unique_run_gates_allow_only_cccp_task_and_flag_second_implementations(
     gate_name: str, relative_path: str, text: str, expected: bool
 ) -> None:
     assert _has_blocking(gate_name, relative_path, text) is expected

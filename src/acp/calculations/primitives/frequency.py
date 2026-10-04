@@ -29,12 +29,10 @@ from acp.calculations.primitives._common import (
     capability_kwargs,
     output_dir,
 )
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.requests import TaskKind
 from cccp.calculation.results import FrequencyPayload, TaskResult
-from cccp.calculation.tasks.frequency import (
-    run_frequency as _cccp_run_frequency,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +59,7 @@ def execute_frequency(req: CalculationRequest) -> CalculationResult:
         backend=backend,
         capability_extras=capability_kwargs(req),
     )
-    task_result = _cccp_run_frequency(task_request, context=context)
+    task_result = _cccp_calculation.run_frequency(task_request, context=context)
     legacy = _legacy_result(task_result, binding)
     published = _publish_normal_modes(
         task_request,

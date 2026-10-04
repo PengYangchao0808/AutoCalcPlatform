@@ -2,7 +2,7 @@
 
 **Layering decision**: the engine calls calculation primitives directly
 (``run_optimize``, ``run_frequency``, ``run_singlepoint``,
-``ThermochemistryCalculator``) rather than delegating per-item plans to
+``execute_thermochemistry``) rather than delegating per-item plans to
 :class:`~acp.calculations.executor.CalculationPlanExecutor`.  Rationale:
 
 1. The executor is designed for single-item plan execution with step-level
@@ -62,7 +62,7 @@ from acp.calculations.contracts import (
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
-from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
+from acp.calculations.primitives.thermochemistry import execute_thermochemistry
 from acp.calculations.progress import LiveMetric, ProgressReporter
 from acp.core.stage_labels import stage_label
 from acp.storage.manifest import ProductKind, ResultManifest
@@ -1085,16 +1085,16 @@ class BatchOptimizeEngine:
                 thermo_press = float(
                     thermo_resolved.get("pressure", resolved_methods.pressure)
                 )
-                current_result = ThermochemistryCalculator(
-                    config=self._config,
-                    output_dir=step_dir,
-                    runner_options={"scl_zpe": resolved_methods.scale_factor},
-                ).compute(
-                    freq_log_path=frequency_log_path,
-                    sp_energy_hartree=sp_energy,
-                    temperature=thermo_temp,
-                    pressure=thermo_press,
-                    standard_state="1atm",
+                current_result = execute_thermochemistry(
+                    self._build_thermo_request(
+                        item,
+                        step_dir,
+                        frequency_log_path,
+                        sp_energy,
+                        thermo_temp,
+                        thermo_press,
+                        resolved_methods.scale_factor,
+                    )
                 )
                 thermochemistry: dict[str, BatchJsonValue] = {
                     "status": current_result.status,
@@ -1336,6 +1336,35 @@ class BatchOptimizeEngine:
                 role=StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM,
             ),
             method=resolved.get("method", ""),
+            resources=resources,
+            workflow="BatchOptimize",
+        )
+
+    def _build_thermo_request(
+        self,
+        item: BatchStructureItem,
+        output_dir: Path,
+        frequency_log_path: Path,
+        sp_energy: float,
+        temperature: float,
+        pressure: float,
+        scale_factor: float | None,
+    ) -> CalculationRequest:
+        resources: dict[str, JsonValue] = {
+            "output_dir": str(output_dir),
+            "freq_log_path": str(frequency_log_path),
+            "sp_energy_hartree": float(sp_energy),
+            "temperature": float(temperature),
+            "pressure": float(pressure),
+            "standard_state": "1atm",
+            "output_file": str(output_dir / "Shermo.sum"),
+            **self._resource_config(),
+        }
+        if scale_factor is not None:
+            resources["scl_zpe"] = float(scale_factor)
+        return CalculationRequest(
+            input_artifact=StructureArtifact(path=self._item_input_path(item)),
+            method="",
             resources=resources,
             workflow="BatchOptimize",
         )

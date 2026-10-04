@@ -351,34 +351,19 @@ def test_capability_evidence_table() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Unique primitive definitions (todo 52 §e gate test; migration-period
-# dual-station semantics — dual root pinned by todo 16)
+# Unique primitive definitions (todo 52 §e gate test; single-root station
+# hard-switched by todo 23)
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Dual root (todo 16) — one shim station + one implementation station:
-# * ``src/acp/calculations/primitives`` — ACP shim station (Wave 2 still
-#   carries the unique implementation bodies; per-task they flip to pure
-#   forwarders in todos 17-22);
-# * ``src/cccp/calculation`` — cccp implementation station, preferring the
-#   pinned ``tasks`` substation once it exists (Wave 3).  An absent root
-#   counts as empty: never hard-point at a non-existent directory (0 hits
-#   would falsely red the guard).
-_ACP_PRIMITIVES_DIR = _REPO_ROOT / "src" / "acp" / "calculations" / "primitives"
-_CCCP_CALCULATION_DIR = _REPO_ROOT / "src" / "cccp" / "calculation"
-_CCCP_CALCULATION_TASKS_DIR = _CCCP_CALCULATION_DIR / "tasks"
-
-
-def _cccp_station_root() -> Path:
-    """Pinned cccp station root: ``tasks`` once it exists, else ``calculation``."""
-    if _CCCP_CALCULATION_TASKS_DIR.is_dir():
-        return _CCCP_CALCULATION_TASKS_DIR
-    return _CCCP_CALCULATION_DIR
-
-
-# The dual root itself (todo 16): acp shim station + cccp task station.
-_PRIMITIVES_DIR: tuple[Path, ...] = (_ACP_PRIMITIVES_DIR, _cccp_station_root())
+# Single root (todo 23 hard switch) — the ONLY implementation station:
+# ``src/cccp/calculation/tasks``.  ``src/acp/calculations/primitives`` is a
+# pure compat-shim station (forwarders / re-export aliases); any
+# non-shim body of a primitive name there is a second implementation and
+# fails.  The dual-root tolerance of todo 16 is gone.
+_PRIMITIVES_DIR: Path = _REPO_ROOT / "src" / "cccp" / "calculation" / "tasks"
+_CCCP_CALCULATION_DIR: Path = _PRIMITIVES_DIR.parent
 
 _PRIMITIVE_DEFS: dict[str, str] = {
     "run_singlepoint": "singlepoint.py",
@@ -386,7 +371,8 @@ _PRIMITIVE_DEFS: dict[str, str] = {
     "run_frequency": "frequency.py",
     "run_scan": "scan.py",
     "run_irc": "irc.py",
-    "ThermochemistryCalculator": "thermochemistry.py",
+    "run_casscf": "casscf.py",
+    "run_thermochemistry": "thermochemistry.py",
 }
 
 
@@ -452,55 +438,41 @@ def _scan_def_sites(root: Path, names: set[str]) -> dict[str, tuple[list[str], l
     return found
 
 
-def _dual_root_impl_sites() -> dict[str, str]:
+def _unique_impl_sites() -> dict[str, str]:
     """Return ``{name: site}`` — the single implementation site per primitive.
 
     Raises AssertionError unless exactly one implementation body exists per
-    primitive definition across the dual root (pure compat shims excluded).
+    primitive definition within the single root ``src/cccp/calculation/tasks``
+    (pure compat shims excluded).
     """
     names = set(_PRIMITIVE_DEFS)
-    impl_by_name: dict[str, list[str]] = {name: [] for name in names}
-    shim_by_name: dict[str, list[str]] = {name: [] for name in names}
-    for root in _PRIMITIVES_DIR:
-        for name, (impl_sites, shim_sites) in _scan_def_sites(root, names).items():
-            impl_by_name[name].extend(impl_sites)
-            shim_by_name[name].extend(shim_sites)
-    for name, sites in impl_by_name.items():
-        assert len(sites) == 1, (
-            f"{name} has {len(sites)} implementation bodies {sites} "
-            f"(shims: {shim_by_name[name]}); expected exactly 1 across "
-            f"{[str(r.relative_to(_REPO_ROOT)) for r in _PRIMITIVES_DIR]}"
+    found = _scan_def_sites(_PRIMITIVES_DIR, names)
+    unique: dict[str, str] = {}
+    for name, (impl_sites, shim_sites) in found.items():
+        assert len(impl_sites) == 1, (
+            f"{name} has {len(impl_sites)} implementation bodies {impl_sites} "
+            f"(shims: {shim_sites}); expected exactly 1 in "
+            f"{_PRIMITIVES_DIR.relative_to(_REPO_ROOT)}"
         )
-    return {name: sites[0] for name, sites in impl_by_name.items()}
+        unique[name] = impl_sites[0]
+    return unique
 
 
 def test_unique_primitive_definitions() -> None:
-    """Each calculation primitive has exactly ONE implementation body across
-    the migration-period dual root (todo 16 dual-root semantics):
-
-    * ``src/acp/calculations/primitives`` — ACP shim station;
-    * ``src/cccp/calculation`` — cccp implementation station (``tasks`` is the
-      pinned substation once it exists; an absent root counts as empty).
+    """Each calculation primitive has exactly ONE implementation body in the
+    single root ``src/cccp/calculation/tasks`` (todo 23 hard switch).
 
     Pure compat shims never count as implementation bodies; import re-exports
-    are not definitions at all.  Per-capability station wording is accepted
-    against the current-station ledger (see
-    test_current_station_ledger_matches_implementation_sites) — not a vague
-    "ACP holds no body / is a shim" claim.
+    and module-level alias assignments are not definitions at all.
     """
-    unique = _dual_root_impl_sites()
+    unique = _unique_impl_sites()
     for name, expected_file in _PRIMITIVE_DEFS.items():
-        impl_path = Path(unique[name])
-        if impl_path.parent.name == "primitives":
-            assert impl_path.name == expected_file, (
-                f"{name} implemented in {unique[name]}; expected {expected_file}"
-            )
-        else:
-            assert impl_path.parts[:3] == ("src", "cccp", "calculation"), (
-                f"{name} implemented outside both stations: {unique[name]}"
-            )
+        expected = Path("src/cccp/calculation/tasks") / expected_file
+        assert unique[name] == str(expected), (
+            f"{name} implemented in {unique[name]}; expected {expected}"
+        )
     # cccp-side stray bodies: nothing outside the pinned station root.
-    station_rel = str(_cccp_station_root().relative_to(_REPO_ROOT))
+    station_rel = str(_PRIMITIVES_DIR.relative_to(_REPO_ROOT))
     for name, (impl_sites, _shim_sites) in _scan_def_sites(
         _CCCP_CALCULATION_DIR, set(_PRIMITIVE_DEFS)
     ).items():
@@ -525,6 +497,7 @@ _ACP_ENTRY_WRAPPER_SITES: dict[str, frozenset[str]] = {
     "run_optimize": frozenset({"src/acp/workflows/simple.py"}),
     "run_frequency": frozenset({"src/acp/workflows/simple.py"}),
     "run_scan": frozenset({"src/acp/workflows/simple.py"}),
+    "run_casscf": frozenset({"src/acp/workflows/simple.py"}),
 }
 
 
@@ -534,7 +507,7 @@ def _acp_second_implementation_issues(
     """Violations of "no second primitive implementation body in any ACP module".
 
     A non-shim definition of a primitive name may only sit at the unique
-    implementation site (dual root) or at a sanctioned workflow entry wrapper.
+    implementation site (single root) or at a sanctioned workflow entry wrapper.
     """
     issues: list[str] = []
     for name, (impl_sites, _shim_sites) in sorted(
@@ -553,9 +526,9 @@ def _acp_second_implementation_issues(
 
 
 def test_no_second_primitive_implementation_in_acp() -> None:
-    """No ACP module outside the dual-root station may carry a second
-    ``run_*`` / ``ThermochemistryCalculator`` implementation body (todo 16)."""
-    unique = _dual_root_impl_sites()
+    """No ACP module outside the single-root station may carry a second
+    ``run_*`` implementation body (todo 16 guard, todo 23 single root)."""
+    unique = _unique_impl_sites()
     issues = _acp_second_implementation_issues(_REPO_ROOT / "src" / "acp", unique)
     assert not issues, "ACP side carries second implementation bodies:\n" + "\n".join(issues)
     wrapper_src = (_REPO_ROOT / "src" / "acp" / "workflows" / "simple.py").read_text(
@@ -641,10 +614,10 @@ def test_migration_ledger_rows_have_six_columns() -> None:
 
 
 def test_current_station_ledger_matches_implementation_sites() -> None:
-    """Dual-station acceptance per capability (todo 16): the ledger's
+    """Per-capability ledger acceptance (todo 16/23): the ledger's
     当前实现驻点 column must equal the unique implementation body discovered
-    by the dual-root scan — update the ledger row when a body moves."""
-    unique = _dual_root_impl_sites()
+    by the single-root scan — update the ledger row when a body moves."""
+    unique = _unique_impl_sites()
     stations: dict[str, str] = {}
     for cells in _ledger_rows():
         match = _LEDGER_PATH_RE.search(cells[1])

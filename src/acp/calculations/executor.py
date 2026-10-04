@@ -22,7 +22,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from acp.calculations.checkpoint import (
@@ -30,6 +30,7 @@ from acp.calculations.checkpoint import (
     write_checkpoint,
 )
 from acp.calculations.contracts import (
+    ArtifactRef,
     CalculationPlan,
     CalculationRequest,
     CalculationResult,
@@ -49,8 +50,14 @@ from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.scan import run_scan
 from acp.calculations.primitives.singlepoint import run_singlepoint
-from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
-from acp.calculations.result_publication import register_result_manifest
+from acp.calculations.primitives.thermochemistry import execute_thermochemistry
+from acp.calculations.result_publication import (
+    ArtifactReference,
+    ScientificResultRecord,
+    load_scientific_result,
+    publish_result,
+    register_result_manifest,
+)
 from acp.storage.manifest import ProductKind, ResultManifest
 
 logger = logging.getLogger(__name__)
@@ -80,17 +87,6 @@ def _resource_float(resources: Mapping[str, JsonValue], key: str) -> float | Non
     return None
 
 
-def _thermochemistry_options(resources: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
-    options: dict[str, JsonValue] = {}
-    for key in ("scl_zpe", "ilowfreq", "imagreal", "conc", "shermo_bin"):
-        value = resources.get(key)
-        if value is not None:
-            options[key] = value
-    if "scl_zpe" not in options and resources.get("scale_factor") is not None:
-        options["scl_zpe"] = resources["scale_factor"]
-    return options
-
-
 def _run_thermochemistry(request: CalculationRequest) -> CalculationResult:
     freq_log = request.resources.get("freq_log_path")
     sp_energy = _resource_float(request.resources, "sp_energy_hartree")
@@ -106,23 +102,19 @@ def _run_thermochemistry(request: CalculationRequest) -> CalculationResult:
             status="failed",
             errors=["thermochemistry requires a single-point energy"],
         )
-
-    raw_config = request.resources.get("config")
-    config = raw_config if isinstance(raw_config, Mapping) else None
-    raw_output_dir = request.resources.get("output_dir")
-    output_dir = Path(raw_output_dir) if isinstance(raw_output_dir, str) else None
-    standard_state = request.resources.get("standard_state", "1atm")
-    return ThermochemistryCalculator(
-        config=config,
-        output_dir=output_dir,
-        runner_options=_thermochemistry_options(request.resources),
-    ).compute(
-        freq_log_path=freq_log,
-        sp_energy_hartree=sp_energy,
-        temperature=temperature,
-        pressure=pressure,
-        standard_state=str(standard_state),
-    )
+    resources = dict(request.resources)
+    resources["temperature"] = temperature
+    resources["pressure"] = pressure
+    resources.setdefault("standard_state", "1atm")
+    if "output_file" not in resources:
+        raw_output_dir = resources.get("output_dir")
+        if isinstance(raw_output_dir, str) and raw_output_dir:
+            legacy_dir = Path(raw_output_dir)
+        else:
+            freq_parent = Path(freq_log).parent
+            legacy_dir = freq_parent if freq_parent != Path(".") else Path.cwd()
+        resources["output_file"] = str(legacy_dir / "Shermo.sum")
+    return execute_thermochemistry(replace(request, resources=resources))
 
 
 def _step_resources(step: CalculationStep) -> dict[str, JsonValue]:
@@ -138,6 +130,73 @@ def _frequency_log_path(result: CalculationResult) -> Path | None:
         if artifact.type in {"frequency_log", "log"}:
             return artifact.path
     return None
+
+
+# ── T16 publication contract helpers (scientific result → publish → done) ──
+
+
+def _step_result_id(fingerprint: str, idx: int, kind: StepKind) -> str:
+    return f"{fingerprint}-step{idx}-{kind.value}"
+
+
+def _step_scientific_record(
+    result: CalculationResult,
+    *,
+    result_id: str,
+    kind: StepKind,
+    result_dir: Path,
+) -> ScientificResultRecord:
+    root = result_dir.resolve()
+    artifacts: list[ArtifactReference] = []
+    for artifact in result.artifacts:
+        path = Path(artifact.path)
+        try:
+            rel: Path | str = path.resolve().relative_to(root)
+        except ValueError:
+            rel = path
+        artifacts.append(ArtifactReference(path=str(rel), type=artifact.type))
+    summary: dict[str, object] = {"status": result.status, "errors": list(result.errors)}
+    if result.energy is not None:
+        summary["energy_hartree"] = result.energy
+    if result.coords is not None:
+        summary["coords"] = [[float(v) for v in row] for row in result.coords]
+    if result.frequencies:
+        summary["frequencies"] = [float(f) for f in result.frequencies]
+    return ScientificResultRecord(
+        result_id=result_id,
+        kind=kind.value,
+        artifacts=tuple(artifacts),
+        summary=summary,
+    )
+
+
+def _step_publication_manifest(record: ScientificResultRecord) -> ResultManifest:
+    manifest = ResultManifest(task_id=record.result_id, workflow=record.kind, status="completed")
+    for artifact in record.artifacts:
+        manifest.add_product(artifact.path, artifact.path, artifact.path, ProductKind.FILE)
+    return manifest
+
+
+def _step_result_from_record(record: ScientificResultRecord, result_dir: Path) -> CalculationResult:
+    summary = record.summary
+    energy_raw = summary.get("energy_hartree")
+    coords_raw = summary.get("coords")
+    freq_raw = summary.get("frequencies")
+    return CalculationResult(
+        energy=float(energy_raw) if isinstance(energy_raw, (int, float)) else None,
+        coords=(
+            [[float(v) for v in row] for row in coords_raw]
+            if isinstance(coords_raw, list)
+            else None
+        ),
+        frequencies=[float(f) for f in freq_raw] if isinstance(freq_raw, list) else [],
+        artifacts=[
+            ArtifactRef(path=result_dir / artifact.path, type=artifact.type)
+            for artifact in record.artifacts
+        ],
+        status=str(summary.get("status", "completed")),
+        errors=[str(e) for e in summary.get("errors") or []],
+    )
 
 
 # ── step-kind → primitive callable ──────────────────────────────────────
@@ -528,22 +587,54 @@ class CalculationPlanExecutor:
                 )
                 continue
 
-            try:
-                logger.info("step %d: running %s", idx, step.kind.value)
-                result = primitive(request)
-            except Exception as exc:
-                state.status = "failed"
-                state.error = str(exc) or type(exc).__name__
-                logger.exception("step %d (%s) failed", idx, step.kind.value)
-                self._persist_checkpoint(
-                    runtime_dir,
-                    fingerprint,
-                    plan,
-                    step_states,
-                    handoff_coords,
-                    handoff_symbols,
+            result_id = _step_result_id(fingerprint, idx, step.kind)
+            prior_record = load_scientific_result(step_work_dir)
+            recovered = prior_record is not None and prior_record.result_id == result_id
+            if recovered and prior_record is not None:
+                logger.info(
+                    "step %d (%s): stored scientific result found — publication retry only",
+                    idx,
+                    step.kind.value,
                 )
-                continue
+                try:
+                    result = _step_result_from_record(prior_record, step_work_dir)
+                    publish_result(
+                        step_work_dir,
+                        record=prior_record,
+                        manifest=_step_publication_manifest(prior_record),
+                    )
+                except Exception as exc:
+                    state.status = "failed"
+                    state.error = f"publication retry failed: {exc or type(exc).__name__}"
+                    logger.exception(
+                        "step %d (%s) publication retry failed", idx, step.kind.value
+                    )
+                    self._persist_checkpoint(
+                        runtime_dir,
+                        fingerprint,
+                        plan,
+                        step_states,
+                        handoff_coords,
+                        handoff_symbols,
+                    )
+                    continue
+            else:
+                try:
+                    logger.info("step %d: running %s", idx, step.kind.value)
+                    result = primitive(request)
+                except Exception as exc:
+                    state.status = "failed"
+                    state.error = str(exc) or type(exc).__name__
+                    logger.exception("step %d (%s) failed", idx, step.kind.value)
+                    self._persist_checkpoint(
+                        runtime_dir,
+                        fingerprint,
+                        plan,
+                        step_states,
+                        handoff_coords,
+                        handoff_symbols,
+                    )
+                    continue
 
             state.result = result
             if result.status == "failed":
@@ -555,9 +646,31 @@ class CalculationPlanExecutor:
                     step.kind.value,
                     state.error,
                 )
-            else:
+            elif recovered:
                 state.status = "completed"
-                logger.info("step %d (%s) completed", idx, step.kind.value)
+                logger.info(
+                    "step %d (%s) completed (publication recovered)", idx, step.kind.value
+                )
+            else:
+                record = _step_scientific_record(
+                    result,
+                    result_id=result_id,
+                    kind=step.kind,
+                    result_dir=step_work_dir,
+                )
+                try:
+                    publish_result(
+                        step_work_dir,
+                        record=record,
+                        manifest=_step_publication_manifest(record),
+                    )
+                except Exception as exc:
+                    state.status = "failed"
+                    state.error = f"publication failed: {exc or type(exc).__name__}"
+                    logger.exception("step %d (%s) publication failed", idx, step.kind.value)
+                else:
+                    state.status = "completed"
+                    logger.info("step %d (%s) completed", idx, step.kind.value)
 
             if step.kind is StepKind.FREQUENCY:
                 frequency_log_path = _frequency_log_path(result)

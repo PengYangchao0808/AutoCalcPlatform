@@ -11,8 +11,9 @@ typed ``TaskRequest`` (``acp.calculations.legacy_adapters``), the legacy
 backend registry seam, and the **publication half** — ``RESULT/structures``
 frame products, the ``RESULT/trajectories/scan_trajectory.json`` view
 product and ``result_manifest.json`` registration (``structures`` /
-``trajectories`` products) stay ACP-side.  ``run_scan`` is a pure forwarder
-(the dual-root uniqueness guard classifies it as a shim).
+``trajectories`` products) stay ACP-side.  ``run_scan`` is a pure re-export
+alias of ``execute_scan`` (todo 23 hard switch: no ``def run_scan`` may exist
+outside ``cccp.calculation.tasks.scan``).
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ from acp.calculations.primitives._common import (
 )
 from acp.calculations.result_publication import register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
+from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
 from cccp.calculation.errors import TaskInputError
 from cccp.calculation.requests import ScanOptions, TaskKind
@@ -45,9 +47,6 @@ from cccp.calculation.results import ScanPayload, TaskResult
 from cccp.calculation.tasks.scan import (
     build_scan_plan,
     plan_metadata,
-)
-from cccp.calculation.tasks.scan import (
-    run_scan as _cccp_run_scan,
 )
 from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 
@@ -61,11 +60,6 @@ _plan_metadata = plan_metadata
 
 class ScanCoordinateError(ValueError):
     """Raised when a scan coordinate cannot be compiled for the input geometry."""
-
-
-def run_scan(req: CalculationRequest) -> CalculationResult:
-    """Run a relaxed scan through the cccp task core."""
-    return execute_scan(req)
 
 
 def execute_scan(req: CalculationRequest) -> CalculationResult:
@@ -93,7 +87,7 @@ def execute_scan(req: CalculationRequest) -> CalculationResult:
         capability_extras=capability_kwargs(req),
     )
     try:
-        task_result = _cccp_run_scan(task_request, context=context)
+        task_result = _cccp_calculation.run_scan(task_request, context=context)
     except TaskInputError as error:
         raise ScanCoordinateError(str(error)) from error
 
@@ -117,6 +111,10 @@ def execute_scan(req: CalculationRequest) -> CalculationResult:
         provenance=legacy.provenance,
         metadata=metadata,
     )
+
+
+#: Pure re-export alias (no ``def run_scan`` outside the cccp task core).
+run_scan = execute_scan
 
 
 def _build_scan_plan(request: CalculationRequest) -> ReactionCoordinatePlan:
