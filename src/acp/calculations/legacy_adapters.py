@@ -230,7 +230,13 @@ def _is_geometry_matrix(value: object) -> bool:
 
 
 def _parse_legacy_coordinate(value: object, index: int) -> ScanCoordinateSpec:
-    """Parse one legacy coordinate entry (``atom1,atom2,start,end`` form)."""
+    """Parse one legacy coordinate entry (``atom1,atom2,start,end`` form).
+
+    Legacy raw forms use 0-based atom indices (CLI/scheduler resources); the
+    projection therefore carries ``atom_index_base=0`` unless the mapping
+    form states an explicit base.  Typed conversion to the 0-based QC
+    ``CoordinateSpec`` happens at plan compilation (plan todo 20).
+    """
     if isinstance(value, Mapping):
         atoms_raw = value.get("atoms")
         atoms: list[int] = []
@@ -240,11 +246,16 @@ def _parse_legacy_coordinate(value: object, index: int) -> ScanCoordinateSpec:
                     message = f"scan coordinate {index + 1} atoms must be integers"
                     raise TaskInputError(message)
                 atoms.append(atom)
+        base_raw = value.get("atom_index_base", 0)
+        if isinstance(base_raw, bool) or not isinstance(base_raw, int) or base_raw not in (0, 1):
+            message = "atom_index_base must be 0 or 1"
+            raise TaskInputError(message)
         return ScanCoordinateSpec(
             atoms=tuple(atoms),
             start=_as_float(value.get("start")),
             end=_as_float(value.get("end")),
             kind=_as_str(value.get("kind")) or "distance",
+            atom_index_base=base_raw,  # type: ignore[arg-type]
         )
     if isinstance(value, str):
         parts = [text.strip() for text in value.split(",")]
@@ -266,7 +277,13 @@ def _parse_legacy_coordinate(value: object, index: int) -> ScanCoordinateSpec:
             message = f"scan coordinate {index + 1} start/end must be numbers"
             raise TaskInputError(message) from exc
         kind = {2: "distance", 3: "angle", 4: "dihedral"}.get(len(atoms), "distance")
-        return ScanCoordinateSpec(atoms=tuple(atoms), start=start, end=end, kind=kind)
+        return ScanCoordinateSpec(
+            atoms=tuple(atoms),
+            start=start,
+            end=end,
+            kind=kind,
+            atom_index_base=0,
+        )
     message = f"scan coordinate {index + 1} must be a string or mapping"
     raise TaskInputError(message)
 

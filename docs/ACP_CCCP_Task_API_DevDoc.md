@@ -186,7 +186,16 @@ never keeps a second solvent/grid/SCF copy.
 `ScanFrame(index, values, energy_hartree, geometry_ref, converged, success)`:
 `index` is the **original** frame index (failed frames keep it and are never
 renumbered); `geometry_ref` is an `ArtifactRef` (type `frame_geometry`) to the
-per-frame geometry, root-relative.
+per-frame geometry, root-relative; `values` carries the id-keyed coordinate
+targets of the frame in plan order.  `ScanPayload.profile_ref` (type
+`scan_profile`) references the task-written `scan_profile.json` energy
+profile (`scan_profile_v1`: per-frame `index`/`progress`/`values`/
+`coordinate_values`/`energy_hartree`/`converged`/`success`).  The scan task
+(landed todo 20) implements the relaxed mode only — `rigid` is rejected and
+`optimizer_level`/`single_point_level` are NOT in the v1 options contract;
+platform products (`RESULT/structures` frame copies, the
+`scan_trajectory.json` view product and `result_manifest.json` registration)
+are materialised by the ACP wrapper, never by the task core.
 
 `IrcDirectionResult(direction, energy_hartree, coordinates, symbols, converged,
 steps, success, trajectory_ref)`: one entry per requested direction; one-way

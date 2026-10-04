@@ -334,3 +334,175 @@ def test_frequency_payload_round_trips_with_analysis() -> None:
     assert restored == payload
     assert restored.analysis is not None
     assert restored.analysis.mode_vectors[6] == analysis.mode_vectors[6]
+
+
+# ── scan (todo 20) ──────────────────────────────────────────────────────
+
+_SCAN_ATOMS = ("C", "C", "O", "H")
+_SCAN_COORDS = ((0.0, 0.0, 0.0), (1.2, 0.0, 0.0), (0.0, 1.1, 0.0), (1.2, 1.1, 0.0))
+_SCAN_COORDINATES = ["0,1,1.2,2.4", "2,3,0.5,1.5"]
+
+
+class _ScanStubBackend:
+    """Frozen-golden scan stub (mirrors ``generate_goldens._StubBackend``)."""
+
+    name = "orca"
+
+    def __init__(self, scan_result: Any) -> None:
+        self.scan_result = scan_result
+        self.calls: list[str] = []
+
+    def is_available(self) -> bool:
+        return True
+
+    def relaxed_scan(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append("relaxed_scan")
+        return self.scan_result
+
+
+def _scan_point(index: int, ok: bool, energy: float | None) -> Any:
+    import numpy as np
+
+    from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint
+
+    coords = np.asarray(_SCAN_COORDS, dtype=float) + index * 0.05
+    return RelaxedScanPoint(
+        frame_index=index,
+        progress=index / 3,
+        coordinates=coords if ok else None,
+        symbols=list(_SCAN_ATOMS) if ok else None,
+        energy_hartree=energy,
+        success=ok,
+        coordinate_values={"rc1": 1.2 + index * 0.1, "rc2": 0.5 + index * 0.1},
+    )
+
+
+def _scan_stub_result(points: list[tuple[int, bool, float | None]], message: str = "") -> Any:
+    from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
+
+    return RelaxedScanResult(
+        points=[_scan_point(index, ok, energy) for index, ok, energy in points],
+        input_xyz=Path("input.xyz"),
+        scan_dir=Path("."),
+        success=all(ok for _index, ok, _energy in points),
+        message=message,
+    )
+
+
+def _scan_request(tmp_root: Path, case_id: str) -> Any:
+    import numpy as np
+
+    from acp.calculations.contracts import CalculationRequest, StructureArtifact
+    from cccp.utils import file_io
+
+    work = tmp_root / "scan_work"
+    work.mkdir(parents=True, exist_ok=True)
+    xyz = work / "input.xyz"
+    if not xyz.is_file():
+        file_io.write_xyz(xyz, np.asarray(_SCAN_COORDS, dtype=float), list(_SCAN_ATOMS))
+    case_dir = work / case_id
+    return CalculationRequest(
+        input_artifact=StructureArtifact(path=xyz, elements=list(_SCAN_ATOMS)),
+        method="B3LYP",
+        resources={
+            "backend": "orca",
+            "output_dir": str(case_dir),
+            "result_dir": str(case_dir / "RESULT"),
+            "scan_coordinates": list(_SCAN_COORDINATES),
+            "scan_points": 4,
+        },
+        workflow="scan",
+    )
+
+
+def _run_scan_case(tmp_root: Path, case_id: str, scan_result: Any) -> dict[str, Any]:
+    """Replay one frozen scan golden through the switched pipeline."""
+    from unittest.mock import patch
+
+    from acp.calculations.primitives.scan import run_scan
+
+    stub = _ScanStubBackend(scan_result)
+    request = _scan_request(tmp_root, case_id)
+    with patch("acp.backends.get_backend", lambda name: stub):
+        calc = run_scan(request)
+    return {
+        "status": calc.status,
+        "errors": list(calc.errors),
+        "energy": calc.energy,
+        "metadata": dict(calc.metadata),
+        "artifacts": [
+            {"type": artifact.type, "name": Path(artifact.path).name} for artifact in calc.artifacts
+        ],
+    }
+
+
+def test_scan_plan_metadata_matches_goldens() -> None:
+    """Group ①: plan compilation reproduces the pre-migration plan metadata."""
+    from acp.calculations.primitives.scan import _build_scan_plan, _plan_metadata
+
+    golden = _load("scan.json")
+    expected = golden["multi_coordinate_plan"]
+    request = _scan_request(Path("/tmp"), "plan_case")
+    plan = _build_scan_plan(request)
+    assert plan.points == expected["scan_points"]
+    assert _plan_metadata(plan) == expected["plan_metadata"]
+
+
+def test_scan_runs_match_goldens(tmp_path: Path) -> None:
+    """Group ③: complete + partial-failure scans equal the frozen goldens.
+
+    Frame/energy-curve semantics (per-frame geometry products, trajectory
+    registration, best-point energy, partial-failure status rule) must be
+    byte-compatible with the pre-migration record.
+    """
+    golden = _load("scan.json")
+
+    complete = _run_scan_case(
+        tmp_path,
+        "complete_run",
+        _scan_stub_result(
+            [
+                (0, True, -100.0),
+                (1, True, -100.1),
+                (2, True, -100.2),
+                (3, True, -100.05),
+            ]
+        ),
+    )
+    assert complete == golden["complete_run"]
+
+    partial = _run_scan_case(
+        tmp_path,
+        "partial_failure_run",
+        _scan_stub_result(
+            [
+                (0, True, -100.0),
+                (1, False, None),
+                (2, True, -100.2),
+                (3, False, None),
+            ],
+            message="relaxed scan aborted: 2 of 4 frames failed",
+        ),
+    )
+    assert partial == golden["partial_failure_run"]
+
+
+def test_scan_payload_round_trips_with_frames() -> None:
+    """ScanPayload frames keep original indices through serialisation."""
+    from cccp.calculation.contracts import ArtifactRef
+    from cccp.calculation.results import ScanFrame, ScanPayload
+
+    payload = ScanPayload(
+        frames=(
+            ScanFrame(index=0, values=(1.2,), energy_hartree=-1.0, converged=True),
+            ScanFrame(index=1, values=(1.3,), success=False, converged=False),
+            ScanFrame(index=2, values=(1.4,), energy_hartree=-1.1, converged=True),
+        ),
+        profile_ref=ArtifactRef(path=Path("scan_profile.json"), type="scan_profile"),
+    )
+    serialised = payload.to_dict()
+    assert [frame["index"] for frame in serialised["frames"]] == [0, 1, 2]  # type: ignore[index]
+    restored = ScanPayload.from_dict(serialised)
+    assert restored == payload
+    assert restored.frames[1].index == 1
+    assert restored.frames[1].success is False

@@ -306,6 +306,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "version_matches": "batch",
     "run_frequency": "tasks.frequency",
     "run_optimize": "tasks.optimize",
+    "run_scan": "tasks.scan",
     "run_singlepoint": "tasks.singlepoint",
 }
 

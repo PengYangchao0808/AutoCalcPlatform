@@ -520,8 +520,8 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
     assert callable(cccp.calculation.run_singlepoint), "singlepoint landed in todo 17"
     assert callable(cccp.calculation.run_optimize), "optimize landed in todo 18"
     assert callable(cccp.calculation.run_frequency), "frequency landed in todo 19"
+    assert callable(cccp.calculation.run_scan), "scan landed in todo 20"
     for name in (
-        "run_scan",
         "run_irc",
         "run_casscf",
         "run_thermochemistry",
@@ -532,6 +532,7 @@ def test_backend_method_implemented_is_not_task_callable() -> None:
     assert importlib.util.find_spec("cccp.calculation.tasks.singlepoint") is not None
     assert importlib.util.find_spec("cccp.calculation.tasks.optimize") is not None
     assert importlib.util.find_spec("cccp.calculation.tasks.frequency") is not None
+    assert importlib.util.find_spec("cccp.calculation.tasks.scan") is not None
     requirement = capability_requirement(_request())
     assert requirement.capability == "single_point"
 
