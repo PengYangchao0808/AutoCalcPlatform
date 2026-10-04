@@ -467,18 +467,30 @@ def _geometry_text(frame: PreparedFrame) -> str:
 
 
 def _level_from_params(params: Any) -> MethodSpec:
-    effective = dict(params.resolved.effective_values())
+    """Rebuild the single-task level from the resolved spec.
+
+    Only ``explicit``-source fields are projected, at their REQUESTED
+    values: the single-task core renders explicit values verbatim (the
+    golden-frozen translation semantics), so a batch item and a direct
+    ``run_singlepoint`` call render identical backend kwargs.  Non-explicit
+    fields (method defaults / run config) stay unset and are materialised
+    downstream from the same method metadata, exactly like the direct path.
+    """
+    requested: dict[str, Any] = {}
+    for resolution in getattr(params.resolved, "resolutions", ()) or ():
+        if getattr(resolution, "source", None) == "explicit":
+            requested[resolution.field] = resolution.requested
     return MethodSpec(
         method=params.method or "",
-        basis=str(effective.get("basis") or ""),
-        dispersion=effective.get("dispersion") or None,
-        solvent=effective.get("solvent") or None,
-        solvent_model=effective.get("solvent_model") or None,
-        integration_grid=effective.get("grid") or None,
-        scf=effective.get("scf_convergence") or None,
-        ri_approximation=effective.get("ri_approximation") or None,
-        auxiliary_basis_j=effective.get("aux_j_basis") or None,
-        auxiliary_basis_c=effective.get("aux_c_basis") or None,
+        basis=str(requested.get("basis") or ""),
+        dispersion=requested.get("dispersion") or None,
+        solvent=requested.get("solvent") or None,
+        solvent_model=requested.get("solvent_model") or None,
+        integration_grid=requested.get("grid") or None,
+        scf=requested.get("scf_convergence") or None,
+        ri_approximation=requested.get("ri_approximation") or None,
+        auxiliary_basis_j=requested.get("aux_j_basis") or None,
+        auxiliary_basis_c=requested.get("aux_c_basis") or None,
     )
 
 

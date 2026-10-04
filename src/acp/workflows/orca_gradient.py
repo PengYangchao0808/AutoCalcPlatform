@@ -16,7 +16,7 @@ import math
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +24,18 @@ import numpy as np
 from numpy.typing import NDArray
 
 from acp.backends.orca import BOHR_ANGSTROM
+from acp.calculations.legacy_adapters import pes2ts_orca_gradient_to_task_request
 from acp.core.workflow import WorkflowResult
 from acp.storage.manifest import ProductKind, ResultManifest
 from acp.workflows._helpers import write_result_summary
+from cccp.calculation.context import TaskContext
+from cccp.calculation.errors import (
+    BackendUnavailableError,
+    TaskInputError,
+    UnsupportedCapabilityError,
+)
+from cccp.calculation.tasks.orca_gradient import run_orca_gradient as run_orca_gradient_task
+from cccp.software import SoftwareNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -321,13 +330,15 @@ def _sha256_file(path: Path | None) -> str | None:
     return digest.hexdigest()
 
 
-def _orca_executable_provenance(backend: Any) -> dict[str, Any]:
-    interface = getattr(backend, "_interface", None)
-    executable = getattr(interface, "executable", None)
-    if executable is None:
-        from cccp.software import resolve_executable
+def _orca_executable_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
+    from cccp.software import detect_version, resolve_executable
 
-        executable = resolve_executable("orca")
+    executables = config.get("executables") if isinstance(config, Mapping) else None
+    entry = executables.get("orca") if isinstance(executables, Mapping) else None
+    configured = entry.get("path") if isinstance(entry, Mapping) else None
+    executable = resolve_executable(
+        "orca", configured if isinstance(configured, str) and configured else None
+    )
     provenance: dict[str, Any] = {"orca_executable": str(executable) if executable else None}
     try:
         provenance["orca_executable_sha256"] = _sha256_file(
@@ -336,8 +347,8 @@ def _orca_executable_provenance(backend: Any) -> dict[str, Any]:
     except OSError:
         provenance["orca_executable_sha256"] = None
     try:
-        provenance["orca_version"] = backend.get_version()
-    except Exception:
+        provenance["orca_version"] = detect_version("orca", executable)
+    except (OSError, RuntimeError, ValueError):
         provenance["orca_version"] = None
     return provenance
 
@@ -506,36 +517,41 @@ def run_orca_gradient(
 
     if progress_reporter is not None:
         progress_reporter.start_stage("run_gradient")
-    from acp.backends.registry import get_backend
-
-    backend = get_backend("orca")(cfg)
-    if not backend.is_available():
+    task_request, _binding = pes2ts_orca_gradient_to_task_request(validated)
+    task_request = replace(task_request, output_dir=run_dir)
+    try:
+        task_result = run_orca_gradient_task(
+            task_request,
+            context=TaskContext(config=cfg, workdir=run_dir),
+        )
+    except (BackendUnavailableError, UnsupportedCapabilityError, SoftwareNotFoundError) as error:
         raise OrcaGradientError(
             code=ORCA_GRADIENT_E_BACKEND,
-            message=(
-                "ORCA backend unavailable: executable not found. Add 'orca' "
-                "to PATH or configure executables.orca.path"
-            ),
-        )
+            message=f"ORCA backend unavailable: {error}",
+        ) from error
+    except TaskInputError as error:
+        raise OrcaGradientInputError(
+            f"[{ORCA_GRADIENT_E_ELECTRONIC_STATE}] {error}"
+        ) from error
 
-    result = backend.single_point_gradient(
-        validated.coordinates,
-        list(validated.symbols),
-        charge=validated.charge,
-        multiplicity=validated.multiplicity,
-        output_dir=run_dir,
-        output_name=validated.output_name,
-        method=validated.method,
-        basis=validated.basis,
-        route_extras=list(validated.route_extras),
-        extra_blocks=list(validated.extra_blocks) or None,
-        scf_convergence=validated.scf_convergence,
-    )
-    if not result.success or result.gradient is None or result.energy is None:
+    payload = getattr(task_result, "payload", None)
+    rows = list(getattr(payload, "gradients", ()) or ())
+    energy = getattr(task_result, "energy_hartree", None)
+    if energy is None:
+        energy = getattr(payload, "energy_hartree", None)
+    if task_result.status != "completed" or not rows or energy is None:
+        message = "; ".join(task_result.errors) or "ORCA gradient failed"
+        if _is_unavailable_failure(message):
+            raise OrcaGradientError(
+                code=ORCA_GRADIENT_E_BACKEND,
+                message=f"ORCA backend unavailable: {message}",
+            )
         raise OrcaGradientError(
             code=ORCA_GRADIENT_E_GRADIENT,
-            message=result.error_message or "ORCA gradient failed",
+            message=message,
         )
+    gradient = np.asarray(rows, dtype=np.float64)
+    gradient_source = _gradient_source_from_task(task_result)
     if progress_reporter is not None:
         progress_reporter.complete_stage("run_gradient")
 
@@ -543,19 +559,19 @@ def run_orca_gradient(
         progress_reporter.start_stage("finalize")
     provenance = {
         "request_sha256": validated.request_sha256,
-        "gradient_source": result.gradient_source,
+        "gradient_source": gradient_source,
         "run_dir": str(run_dir),
-        "input_file": str(result.output_file) if result.output_file else None,
-        "log_file": str(result.log_file) if result.log_file else None,
-        **_orca_executable_provenance(backend),
+        "input_file": _artifact_path(task_result, "output"),
+        "log_file": _artifact_path(task_result, "log"),
+        **_orca_executable_provenance(cfg),
     }
     try:
         gradient_path, manifest_path = _persist_orca_gradient_outputs(
             output_root=output_root,
             request=validated,
-            energy=float(result.energy),
-            gradient=result.gradient,
-            gradient_source=result.gradient_source or "unknown",
+            energy=float(energy),
+            gradient=gradient,
+            gradient_source=gradient_source or "unknown",
             provenance=provenance,
         )
     except OSError as exc:
@@ -573,10 +589,12 @@ def run_orca_gradient(
             "output_dir": str(output_root),
             "workflow": ORCA_GRADIENT_WORKFLOW,
             "request_sha256": validated.request_sha256,
-            "energy_hartree": float(result.energy),
-            "gradient_unit": result.gradient_unit,
-            "gradient_convention": result.gradient_convention,
-            "gradient_source": result.gradient_source,
+            "energy_hartree": float(energy),
+            "gradient_unit": getattr(payload, "gradient_unit", "hartree/bohr"),
+            "gradient_convention": getattr(
+                payload, "gradient_convention", "energy_gradient_dE_dX"
+            ),
+            "gradient_source": gradient_source,
             "run_dir": str(run_dir),
             "gradient_product_path": str(gradient_path),
             "result_manifest_path": str(manifest_path),
@@ -585,6 +603,30 @@ def run_orca_gradient(
             "orca_version": provenance.get("orca_version"),
         },
     )
+
+
+def _artifact_path(task_result: Any, artifact_type: str) -> str | None:
+    for artifact in getattr(task_result, "artifacts", ()) or ():
+        if getattr(artifact, "type", None) == artifact_type:
+            return str(artifact.path)
+    return None
+
+
+def _gradient_source_from_task(task_result: Any) -> str | None:
+    for artifact in getattr(task_result, "artifacts", ()) or ():
+        if getattr(artifact, "type", None) == "engrad":
+            return f"engrad_file:{Path(str(artifact.path)).name}"
+    payload = getattr(task_result, "payload", None)
+    if getattr(payload, "gradients", None):
+        return "output_block:CARTESIAN GRADIENT"
+    return None
+
+
+def _is_unavailable_failure(message: str) -> bool:
+    lowered = message.lower()
+    if "gradient" in lowered:
+        return False
+    return "executable" in lowered or "unavailable" in lowered or "not found" in lowered
 
 
 __all__ = [

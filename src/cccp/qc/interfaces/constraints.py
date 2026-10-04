@@ -276,21 +276,52 @@ class ReactionCoordinatePlan:
         start_from = data.get("start_from") or "reactant"
         if start_from not in {"reactant", "product", "custom"}:
             raise ValueError(f"ReactionCoordinatePlan: invalid start_from {start_from!r}")
+        # Optional full-fidelity fields (path_plan extras).  Absent keys keep
+        # the pre-extension defaults so legacy payloads parse unchanged.
+        raw_lambda = data.get("lambda_values") or ()
+        lambda_values = tuple(float(value) for value in cast("list[object]", raw_lambda))
+        raw_refs = data.get("reference_geometries") or ()
+        reference_geometries = tuple(cast("list[object]", raw_refs))
+        fixed_endpoints = bool(data.get("fixed_endpoints") or False)
+        raw_xtb_iters = data.get("xtb_scc_max_iterations")
+        xtb_scc_max_iterations = (
+            None if raw_xtb_iters is None else int(raw_xtb_iters)  # type: ignore[arg-type]
+        )
         return cls(
             coordinates=tuple(CoordinateSpec.from_dict(coord) for coord in typed_coords),
             points=_opt_int(data.get("points"), default=21),
             coupling=cast(Literal["synchronous"], coupling),
             start_from=cast(Literal["reactant", "product", "custom"], start_from),
+            lambda_values=lambda_values,
+            reference_geometries=reference_geometries,
+            fixed_endpoints=fixed_endpoints,
+            xtb_scc_max_iterations=xtb_scc_max_iterations,
         )
 
     def to_dict(self) -> dict[str, object]:
-        """Serialise to the plain JSON-style dict accepted by :meth:`from_dict`."""
-        return {
+        """Serialise to the plain JSON-style dict accepted by :meth:`from_dict`.
+
+        The full-fidelity fields are emitted only when non-default so
+        legacy round-trip payloads keep their exact shape.
+        """
+        payload: dict[str, object] = {
             "coordinates": [coordinate.to_dict() for coordinate in self.coordinates],
             "points": self.points,
             "coupling": self.coupling,
             "start_from": self.start_from,
         }
+        if self.lambda_values:
+            payload["lambda_values"] = [float(value) for value in self.lambda_values]
+        if self.reference_geometries:
+            payload["reference_geometries"] = [
+                [[float(c) for c in row] for row in geometry]
+                for geometry in self.reference_geometries
+            ]
+        if self.fixed_endpoints:
+            payload["fixed_endpoints"] = True
+        if self.xtb_scc_max_iterations is not None:
+            payload["xtb_scc_max_iterations"] = int(self.xtb_scc_max_iterations)
+        return payload
 
 
 def _opt_float(value: object) -> float | None:
