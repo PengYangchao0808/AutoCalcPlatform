@@ -127,3 +127,27 @@ def test_checkpoint_mixed_optimize_step_fingerprint_compatible() -> None:
     )
     assert optimize_state["status"] == "completed"
     assert optimize_state["energy"] == -100.75
+
+
+def test_checkpoint_mixed_frequency_step_recovers() -> None:
+    """Todo 19 switch: the frequency-capability recovery subset stays valid.
+
+    The frozen checkpoint's frequency step is failed-but-recoverable
+    (``continue`` re-runs it while completed steps stay completed), and the
+    stored plan fingerprint — whose plan carries a FREQUENCY step — still
+    validates after the frequency task/contract switch (the empty
+    ``FrequencyOptions`` keeps ``str(step.spec)`` stable).
+    """
+    from acp.calculations.checkpoint import load_checkpoint
+    from cccp.calculation.requests import FrequencyOptions
+
+    root = FIXTURES / "checkpoint_mixed"
+    meta = json.loads((root / "plan_fingerprint.json").read_text(encoding="utf-8"))
+    checkpoint = load_checkpoint(root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"])
+    assert checkpoint is not None
+    freq_state = next(state for state in checkpoint.step_states if state.get("kind") == "frequency")
+    assert freq_state["status"] == "failed"
+    assert "synthetic frequency failure" in freq_state.get("error", "")
+    statuses = [state.get("status") for state in checkpoint.step_states]
+    assert statuses.count("completed") == 2
+    assert FrequencyOptions().to_dict() == {}

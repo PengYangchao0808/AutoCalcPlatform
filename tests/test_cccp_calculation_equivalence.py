@@ -44,6 +44,27 @@ class _CaptureBackend:
         self.calls.append({"symbols": list(symbols), "kwargs": dict(kwargs)})
         return QCResult(success=True, energy=-1.0, symbols=list(symbols), converged=True)
 
+    def frequency(
+        self,
+        coordinates: Any,
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        from cccp.qc.interfaces.base import QCResult
+
+        self.calls.append({"symbols": list(symbols), "kwargs": dict(kwargs)})
+        return QCResult(
+            success=True,
+            energy=-1.0,
+            symbols=list(symbols),
+            converged=True,
+            frequencies=[100.0],
+            has_frequencies=True,
+        )
+
 
 def _load(name: str) -> dict[str, Any]:
     return json.loads((GOLDENS_DIR / name).read_text(encoding="utf-8"))
@@ -222,3 +243,94 @@ def test_optimize_payload_carries_derived_rescue_diagnostics() -> None:
     assert payload.to_dict()["rescue_structure_kind"] == "minimum"
     restored = OptimizePayload.from_dict(payload.to_dict())
     assert restored == payload
+
+
+# ── frequency (todo 19) ────────────────────────────────────────────────
+
+
+def test_frequency_effective_params_match_goldens() -> None:
+    """Group ①: an independent frequency call renders the pre-migration input."""
+    from cccp.calculation.tasks.frequency import run_frequency
+    from cccp.qc.interfaces.orca import ORCAInterface
+
+    routes = _load("orca_routes.json")
+    config: dict[str, Any] = {
+        "executables": {"orca": {"path": "orca", "nproc": 4, "maxcore": 2000}},
+        "resources": {"mem": "8GB", "nproc": 4},
+    }
+    matched = 0
+    for case in routes["cases"]:
+        params = case["input_params"]
+        if params["calc_type"] != "freq":
+            continue
+        matched += 1
+        level = MethodSpec(
+            method=params["method"],
+            basis=params.get("basis") or "",
+            dispersion=params.get("dispersion"),
+            solvent=params.get("solvent"),
+            solvent_model=params.get("solvent_model"),
+            integration_grid=params.get("grid"),
+            auxiliary_basis_j=params.get("aux_j_basis"),
+            auxiliary_basis_c=params.get("aux_c_basis"),
+        )
+        symbols = list(params["symbols"])
+        request = TaskRequest(
+            task=TaskKind.FREQUENCY,
+            structure=StructureInput(
+                coordinates=tuple((0.0, float(i), 0.0) for i in range(len(symbols))),
+                symbols=tuple(symbols),
+            ),
+            level=level,
+        )
+        backend = _CaptureBackend()
+        result = run_frequency(request, context=TaskContext(backend=backend))
+        assert result.status == "completed", case["id"]
+        assert result.frequencies == (100.0,), case["id"]
+        assert backend.calls, case["id"]
+
+        spec = resolve_spec(level.method or None, explicit=level_explicit_fields(level))
+        rendered = render_backend_input(spec, method=level.method or None)
+        call_kwargs = dict(rendered)
+        interface = ORCAInterface(
+            dict(config),
+            method=str(call_kwargs.pop("method") or params["method"]),
+            basis=str(call_kwargs.pop("basis", None) or "") or params.get("basis") or "",
+        )
+        text, _resolution = interface._build_input_blocks(
+            calc_type="freq",
+            symbols=symbols,
+            recalc_hess=None,
+            **call_kwargs,
+        )
+        assert text == case["rendered_input"], f"rendered input drifted for {case['id']}"
+        extracted = _extract_fields(text)
+        for key in ("route_line", "route_tokens", "basis_inline", "aux_j", "aux_c"):
+            assert extracted[key] == case["parsed_fields"][key], f"{case['id']}.{key}"
+        assert extracted["solvent_block"] == case["parsed_fields"]["solvent_block"]
+        assert extracted["scf_block"] == case["parsed_fields"]["scf_block"]
+
+        captured = backend.calls[0]["kwargs"]
+        assert captured.get("method") == params["method"], case["id"]
+    assert matched, "frequency goldens must be non-empty"
+
+
+def test_frequency_payload_round_trips_with_analysis() -> None:
+    """FrequencyPayload.analysis round-trips losslessly through serialisation."""
+    from cccp.calculation.results import FrequencyAnalysis, FrequencyPayload
+
+    analysis = FrequencyAnalysis(
+        frequencies=(-797.72, 1411.55),
+        imaginary_frequencies=(-797.72,),
+        ir_intensities=(66.542, 81.914),
+        mode_frequencies={0: 0.0, 6: -797.72, 8: 1411.55},
+        mode_vectors={6: ((0.01, 0.02, 0.03), (0.04, 0.05, 0.06), (0.07, 0.08, 0.09))},
+        mode_ir_intensities={6: 66.542},
+    )
+    payload = FrequencyPayload(n_imaginary=1, analysis=analysis)
+    serialised = payload.to_dict()
+    assert serialised["analysis"]["mode_frequencies"]["6"] == -797.72  # type: ignore[index]
+    restored = FrequencyPayload.from_dict(serialised)
+    assert restored == payload
+    assert restored.analysis is not None
+    assert restored.analysis.mode_vectors[6] == analysis.mode_vectors[6]

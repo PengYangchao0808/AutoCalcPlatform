@@ -165,17 +165,190 @@ class OptimizePayload:
 
 
 @dataclass(frozen=True, slots=True)
+class FrequencyAnalysis:
+    """Parsed vibrational-frequency scientific data (plan todo 19).
+
+    The single scientific parse of ORCA vibrational output (the reusable
+    capability lives in :mod:`cccp.calculation.frequency_parse`): the
+    frequency list, IR intensities and the indexed normal-mode maps (ORCA
+    native mode indices, zero modes kept in the maps).  Attribute names
+    match the ``normal_modes`` product builder's duck-type contract so the
+    ACP publication half consumes this data without re-parsing the log.
+    """
+
+    frequencies: tuple[float, ...] = ()
+    imaginary_frequencies: tuple[float, ...] = ()
+    ir_intensities: tuple[float, ...] | None = None
+    mode_frequencies: dict[int, float] = field(default_factory=dict)
+    mode_vectors: dict[int, tuple[tuple[float, float, float], ...]] = field(default_factory=dict)
+    mode_ir_intensities: dict[int, float] | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "frequencies", tuple(float(f) for f in self.frequencies))
+        object.__setattr__(
+            self, "imaginary_frequencies", tuple(float(f) for f in self.imaginary_frequencies)
+        )
+        if self.ir_intensities is not None:
+            object.__setattr__(self, "ir_intensities", tuple(float(v) for v in self.ir_intensities))
+        object.__setattr__(
+            self,
+            "mode_frequencies",
+            {int(index): float(freq) for index, freq in self.mode_frequencies.items()},
+        )
+        object.__setattr__(
+            self,
+            "mode_vectors",
+            {
+                int(index): tuple((float(row[0]), float(row[1]), float(row[2])) for row in rows)
+                for index, rows in self.mode_vectors.items()
+            },
+        )
+        if self.mode_ir_intensities is not None:
+            object.__setattr__(
+                self,
+                "mode_ir_intensities",
+                {int(index): float(value) for index, value in self.mode_ir_intensities.items()},
+            )
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict (mode-map keys become strings)."""
+        payload: JsonObject = {}
+        if self.frequencies:
+            payload["frequencies"] = [float(f) for f in self.frequencies]
+        if self.imaginary_frequencies:
+            payload["imaginary_frequencies"] = [float(f) for f in self.imaginary_frequencies]
+        if self.ir_intensities is not None:
+            payload["ir_intensities"] = [float(v) for v in self.ir_intensities]
+        if self.mode_frequencies:
+            payload["mode_frequencies"] = {
+                str(index): float(freq) for index, freq in sorted(self.mode_frequencies.items())
+            }
+        if self.mode_vectors:
+            payload["mode_vectors"] = {
+                str(index): [[float(c) for c in row] for row in rows]
+                for index, rows in sorted(self.mode_vectors.items())
+            }
+        if self.mode_ir_intensities is not None:
+            payload["mode_ir_intensities"] = {
+                str(index): float(value)
+                for index, value in sorted(self.mode_ir_intensities.items())
+            }
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> FrequencyAnalysis:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ir = payload.get("ir_intensities")
+        ir_intensities: tuple[float, ...] | None = None
+        if raw_ir is not None:
+            ir_intensities = _strict_float_tuple(raw_ir, "ir_intensities")
+        raw_mode_ir = payload.get("mode_ir_intensities")
+        mode_ir: dict[int, float] | None = None
+        if raw_mode_ir is not None:
+            if not isinstance(raw_mode_ir, Mapping):
+                message = "analysis.mode_ir_intensities must be a mapping"
+                raise TaskInputError(message)
+            mode_ir = {
+                _strict_int_key(key, "mode_ir_intensities"): _strict_float(
+                    value, "mode_ir_intensities"
+                )
+                for key, value in raw_mode_ir.items()
+            }
+        return cls(
+            frequencies=_strict_float_tuple(payload.get("frequencies"), "frequencies")
+            if payload.get("frequencies") is not None
+            else (),
+            imaginary_frequencies=(
+                _strict_float_tuple(payload.get("imaginary_frequencies"), "imaginary_frequencies")
+                if payload.get("imaginary_frequencies") is not None
+                else ()
+            ),
+            ir_intensities=ir_intensities,
+            mode_frequencies=_strict_mode_frequencies(payload.get("mode_frequencies")),
+            mode_vectors=_strict_mode_vectors(payload.get("mode_vectors")),
+            mode_ir_intensities=mode_ir,
+        )
+
+
+def _strict_float(value: object, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        message = f"analysis.{label} values must be numbers"
+        raise TaskInputError(message)
+    return float(value)
+
+
+def _strict_float_tuple(value: object, label: str) -> tuple[float, ...]:
+    if not isinstance(value, (list, tuple)):
+        message = f"analysis.{label} must be a list"
+        raise TaskInputError(message)
+    return tuple(_strict_float(entry, label) for entry in value)
+
+
+def _strict_int_key(key: object, label: str) -> int:
+    try:
+        return int(key)
+    except (TypeError, ValueError) as exc:
+        message = f"analysis.{label} keys must be mode indices"
+        raise TaskInputError(message) from exc
+
+
+def _strict_mode_frequencies(value: object) -> dict[int, float]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        message = "analysis.mode_frequencies must be a mapping"
+        raise TaskInputError(message)
+    return {
+        _strict_int_key(key, "mode_frequencies"): _strict_float(freq, "mode_frequencies")
+        for key, freq in value.items()
+    }
+
+
+def _strict_mode_vectors(value: object) -> dict[int, tuple[tuple[float, float, float], ...]]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        message = "analysis.mode_vectors must be a mapping"
+        raise TaskInputError(message)
+    vectors: dict[int, tuple[tuple[float, float, float], ...]] = {}
+    for key, rows in value.items():
+        index = _strict_int_key(key, "mode_vectors")
+        if not isinstance(rows, (list, tuple)):
+            message = "analysis.mode_vectors values must be lists of rows"
+            raise TaskInputError(message)
+        parsed_rows: list[tuple[float, float, float]] = []
+        for row in rows:
+            if not isinstance(row, (list, tuple)) or len(row) != 3:
+                message = "analysis.mode_vectors rows must have exactly 3 components"
+                raise TaskInputError(message)
+            parsed_rows.append(
+                (
+                    _strict_float(row[0], "mode_vectors"),
+                    _strict_float(row[1], "mode_vectors"),
+                    _strict_float(row[2], "mode_vectors"),
+                )
+            )
+        vectors[index] = tuple(parsed_rows)
+    return vectors
+
+
+@dataclass(frozen=True, slots=True)
 class FrequencyPayload:
     """Typed payload for ``frequency`` results.
 
     The authoritative frequency list is ``TaskResult.frequencies``
-    (cm⁻¹); normal-mode frame products are built by the ACP layer from
-    ``normal_modes_ref``.
+    (cm⁻¹); ``analysis`` carries the parsed vibration vectors / IR
+    intensities so an independent cccp call gets the full scientific data
+    without ACP interpretation.  The ``normal_modes.json`` product format,
+    geometry binding and manifest registration stay ACP-side — the task
+    writes no platform product.
     """
 
     n_imaginary: int | None = None
     freq_log_ref: ArtifactRef | None = None
-    normal_modes_ref: ArtifactRef | None = None
+    analysis: FrequencyAnalysis | None = None
     electronic_state: JsonObject | None = None
 
     def to_dict(self) -> JsonObject:
@@ -185,8 +358,8 @@ class FrequencyPayload:
             payload["n_imaginary"] = self.n_imaginary
         if self.freq_log_ref is not None:
             payload["freq_log_ref"] = _artifact_to_dict(self.freq_log_ref)
-        if self.normal_modes_ref is not None:
-            payload["normal_modes_ref"] = _artifact_to_dict(self.normal_modes_ref)
+        if self.analysis is not None:
+            payload["analysis"] = self.analysis.to_dict()
         if self.electronic_state is not None:
             payload["electronic_state"] = self.electronic_state
         return payload
@@ -201,15 +374,21 @@ class FrequencyPayload:
             message = "payload.electronic_state must be a mapping"
             raise TaskInputError(message)
         raw_freq = payload.get("freq_log_ref")
-        raw_modes = payload.get("normal_modes_ref")
-        for label, raw in (("freq_log_ref", raw_freq), ("normal_modes_ref", raw_modes)):
-            if raw is not None and not isinstance(raw, Mapping):
-                message = f"payload.{label} must be a mapping"
-                raise TaskInputError(message)
+        if raw_freq is not None and not isinstance(raw_freq, Mapping):
+            message = "payload.freq_log_ref must be a mapping"
+            raise TaskInputError(message)
+        raw_analysis = payload.get("analysis")
+        if raw_analysis is not None and not isinstance(raw_analysis, Mapping):
+            message = "payload.analysis must be a mapping"
+            raise TaskInputError(message)
         return cls(
             n_imaginary=parse_int_strict(payload, "n_imaginary"),
             freq_log_ref=_artifact_from_dict(raw_freq),
-            normal_modes_ref=_artifact_from_dict(raw_modes),
+            analysis=(
+                FrequencyAnalysis.from_dict(dict(raw_analysis))
+                if raw_analysis is not None
+                else None
+            ),
             electronic_state=dict(raw_state) if raw_state is not None else None,
         )
 
@@ -762,6 +941,7 @@ __all__ = [
     "TASK_RESULT_SCHEMA_VERSION",
     "CasscfPayload",
     "ErrorKind",
+    "FrequencyAnalysis",
     "FrequencyPayload",
     "IrcDirectionResult",
     "IrcPayload",

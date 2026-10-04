@@ -1464,6 +1464,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/chem/composition.py",
     "src/acp/core/registry.py",
     "src/acp/catalog.py",
+    # todo 19: the frequency-science delegation target (single parse in cccp).
+    "src/acp/results/orca_parser.py",
 )
 MIGRATION_SHIM_PY = frozenset(
     {

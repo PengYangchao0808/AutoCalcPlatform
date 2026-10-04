@@ -152,6 +152,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
         ErrorKind as ErrorKind,
     )
     from cccp.calculation.results import (
+        FrequencyAnalysis as FrequencyAnalysis,
+    )
+    from cccp.calculation.results import (
         FrequencyPayload as FrequencyPayload,
     )
     from cccp.calculation.results import (
@@ -204,6 +207,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     )
     from cccp.calculation.selection import (
         select_semantic as select_semantic,
+    )
+    from cccp.calculation.tasks.frequency import (
+        run_frequency as run_frequency,
     )
     from cccp.calculation.tasks.optimize import (
         run_optimize as run_optimize,
@@ -259,6 +265,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "TASK_RESULT_SCHEMA_VERSION": "results",
     "CasscfPayload": "results",
     "ErrorKind": "results",
+    "FrequencyAnalysis": "results",
     "FrequencyPayload": "results",
     "IrcDirectionResult": "results",
     "IrcPayload": "results",
@@ -297,6 +304,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "resolve_effective_params": "batch",
     "run_batch": "batch",
     "version_matches": "batch",
+    "run_frequency": "tasks.frequency",
     "run_optimize": "tasks.optimize",
     "run_singlepoint": "tasks.singlepoint",
 }

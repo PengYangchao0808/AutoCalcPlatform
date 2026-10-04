@@ -66,6 +66,7 @@ from cccp.calculation.contracts import (
 )
 from cccp.calculation.results import (
     CasscfPayload,
+    FrequencyAnalysis,
     FrequencyPayload,
     IrcDirectionResult,
     IrcPayload,
@@ -234,7 +235,14 @@ def test_task_request_round_trip_all_seven(task: TaskKind, options) -> None:
             FrequencyPayload(
                 n_imaginary=1,
                 freq_log_ref=ArtifactRef(path=Path("freq.log"), type="frequency_log"),
-                normal_modes_ref=ArtifactRef(path=Path("modes.json"), type="normal_modes"),
+                analysis=FrequencyAnalysis(
+                    frequencies=(-797.72, 1411.55),
+                    imaginary_frequencies=(-797.72,),
+                    ir_intensities=(66.542, 81.914),
+                    mode_frequencies={0: 0.0, 6: -797.72},
+                    mode_vectors={6: ((0.01, 0.02, 0.03),)},
+                    mode_ir_intensities={6: 66.542},
+                ),
             ),
         ),
         (
@@ -703,6 +711,7 @@ def test_current_spec_document_exists_and_is_complete() -> None:
         "SinglePointPayload",
         "OptimizePayload",
         "FrequencyPayload",
+        "FrequencyAnalysis",
         "ScanPayload",
         "IrcPayload",
         "CasscfPayload",

@@ -177,7 +177,7 @@ never keeps a second solvent/grid/SCF copy.
 |---|---|---|
 | `singlepoint` | `SinglePointPayload` | `electronic_state: JsonObject \| None` (state diagnostics summary) |
 | `optimize` | `OptimizePayload` | `optimization_status`, derived diagnostics `rescue_failure_type`/`rescue_structure_kind`, `rescue_actions: tuple[str,...]`, `rescue_attempts: int \| None`, `rescue_terminal: bool \| None`, `tsmode_explicit_target: int \| None`, `tsmode_target_preserved: bool \| None`, `electronic_state`, `trajectory_ref: ArtifactRef \| None` |
-| `frequency` | `FrequencyPayload` | `n_imaginary: int \| None`, `freq_log_ref`, `normal_modes_ref`, `electronic_state` |
+| `frequency` | `FrequencyPayload` | `n_imaginary: int \| None`, `freq_log_ref`, `analysis: FrequencyAnalysis \| None`, `electronic_state` |
 | `scan` | `ScanPayload` | `frames: tuple[ScanFrame, ...]`, `profile_ref: ArtifactRef \| None` |
 | `irc` | `IrcPayload` | `directions: tuple[IrcDirectionResult, ...]` |
 | `casscf` | `CasscfPayload` | `root_energies`, `natural_occupations`, `nevpt2_energies`, `active_space: str` (projection of legacy `metadata["multireference"]`) |
@@ -191,6 +191,16 @@ per-frame geometry, root-relative.
 `IrcDirectionResult(direction, energy_hartree, coordinates, symbols, converged,
 steps, success, trajectory_ref)`: one entry per requested direction; one-way
 runs keep the valid direction as a sub-result.
+
+`FrequencyAnalysis(frequencies, imaginary_frequencies, ir_intensities,
+mode_frequencies, mode_vectors, mode_ir_intensities)`: the parsed vibration
+science returned by the frequency task (plan todo 19) — the frequency list
+(cm⁻¹) and IR intensities (km/mol, `ir_intensities` aligned with
+`frequencies`) plus the indexed mode maps (ORCA native mode indices, zero
+modes kept in the maps).  It is produced by the single scientific parse
+(`cccp.calculation.frequency_parse`); the `normal_modes.json` product
+format, geometry binding and manifest registration stay ACP-side and never
+require re-parsing the QC output.
 
 Payload fields use `None`/empty as "absent" — converters only write fields
 that are set (never invent keys or defaults).
@@ -294,7 +304,8 @@ quarantined.
      ORCA 0-based at render time);
    * scan/IRC failed frames keep their **original** index (never renumbered);
    * gradient/vibration data carries unit + shape + atom order
-     (`FrequencyPayload.normal_modes_ref` frames bind symbols/atom order);
+     (`FrequencyPayload.analysis` carries the vectors; `normal_modes`
+     products built from it bind symbols/atom order);
    * NMR JSON integer-key restoration and CENSO ordering/filtering ↔ original
      conformer mapping are declared here and land with the P2 tasks (todo 24);
    * CCCP local scientific record numbers are legitimate; ACP platform
@@ -425,7 +436,7 @@ LegacyBinding)`, `to_legacy_request(task_request, binding) -> CalculationRequest
 exclusions from the round-trip):** `symbols`, `complete`, `converged`,
 `error_kind`, and typed payload detail without legacy homes
 (`ScanFrame` lists, `IrcDirectionResult`, `trajectory_ref`/`freq_log_ref`/
-`normal_modes_ref`/`profile_ref`).
+`FrequencyPayload.analysis`/`profile_ref`).
 
 **Round-trip guarantee:** for committed legacy fields with canonical values,
 `to_legacy_request(*to_task_request(req)) == req` and
