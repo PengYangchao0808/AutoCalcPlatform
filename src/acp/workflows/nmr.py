@@ -3,17 +3,17 @@
 
 Orchestrates the full pipeline for each candidate:
 
-1. conformer generation (reuse ``run_ensemble_generation`` with
-   ``censo-light``);
-2. per-conformer GIAO NMR shielding via the ORCA backend
-   (:class:`NmrShieldingCalculator`);
+1. conformer generation — ACP-side CREST→CENSO orchestration over the
+   cccp calculation task cores (``run_conformer_search`` + ``censo_refine``;
+   ``censo-zero`` skips CENSO and passes the CREST/xTB ensemble through);
+2. per-conformer GIAO NMR shielding via the ``run_nmr_shielding`` task core;
 3. Boltzmann + equivalence averaging;
 4. assignment (assigned passthrough / unassigned Hungarian matching);
 5. per-nucleus linear-regression scaling;
 6. DP4 (set-normalized) and DP5 (independent) probability.
 
 The analysis stages 3–6 are pure-Python and run on the head node; the
-heavy compute (CREST/CENSO/ORCA GIAO) goes through the backend layer.
+heavy compute (CREST/CENSO/ORCA GIAO) goes through the cccp task cores.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from typing import Any, Final
 import numpy as np
 from numpy.typing import NDArray
 
-from acp.backends.registry import get_backend
 from acp.calculations.progress import ProgressReporter
 from acp.core.models import Structure, StructureEnsemble
 from acp.core.workflow import WorkflowResult
@@ -67,8 +66,30 @@ from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
 from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ResultManifest
-from acp.workflows._helpers import sanitize_job_name, write_result_summary
+from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name, write_result_summary
+from cccp.backends.crest import CrestBackend
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import (
+    CensoRefineOptions,
+    ConformerSearchOptions,
+    MethodSpec,
+    NmrShieldingOptions,
+    StructureInput,
+    TaskKind,
+    TaskRequest,
+    TaskResources,
+)
+from cccp.calculation.results import ConformerSearchPayload, NmrShieldingPayload, TaskResult
+from cccp.calculation.tasks.censo_refine import run_censo_refine
+from cccp.calculation.tasks.conformer_search import run_conformer_search
+from cccp.calculation.tasks.nmr_shielding import run_nmr_shielding
 from cccp.config import load_config
+from cccp.qc.interfaces.censo import (
+    CensoConformerRecord,
+    CensoInterface,
+    CensoRunResult,
+    part_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -331,30 +352,243 @@ def _run_conformer_generation(
     nproc: int | None,
     ewin: float | None,
 ) -> StructureEnsemble | None:
-    """Reuse ``run_ensemble_generation`` (censo-light) for one candidate."""
-    from acp.workflows.ensemble import run_ensemble_generation
+    """CREST→CENSO conformer generation for one candidate (task cores).
+
+    Keeps the ACP orchestration on top of the cccp single-item task cores:
+    CREST via ``run_conformer_search`` (configured ``CrestBackend`` instance
+    passed through the ``TaskContext.backend`` runtime seam), then CENSO via
+    ``run_censo_refine`` for every preset except ``censo-zero``, which skips
+    CENSO and passes the CREST ensemble through on its xTB title energies
+    (§7).  The legacy ``CensoRunResult`` data contract is reconstructed so
+    ensemble building (free energies + Boltzmann weights) is unchanged.
+    """
+    from acp.workflows.energy_shared import (
+        resolve_crest_ewin as _resolve_crest_ewin,
+    )
+    from acp.workflows.energy_shared import (
+        resolve_solvent_config as _resolve_solvent_config,
+    )
 
     work_dir = output_dir / f"{structure.id}" / "conformers"
-    result = run_ensemble_generation(
-        input_source=_structure_to_xyz(structure, work_dir),
-        output_dir=str(work_dir),
-        preset=nmr_config.conformer_preset,
+    work_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = sanitize_job_name(structure.id) or structure.id
+    mol_dir = resolve_task_output_root(work_dir, safe_name)
+    stage_storage = TaskStorage(mol_dir)
+    crest_dir = stage_storage.stage_dir("02_SEARCH", "CREST")
+    crest_dir.mkdir(parents=True, exist_ok=True)
+
+    # Solvent/ewin resolution mirrors the old ensemble-generation rules
+    # (including the smd default when a solvent has no model).
+    censo_solvent, solvent_model = _resolve_solvent_config(cfg, solvent)
+    if censo_solvent and solvent_model == "none":
+        solvent_model = "smd"
+    safe_nproc: int | None = nproc if (nproc is not None and nproc > 0) else None
+    crest_ewin = _resolve_crest_ewin(cfg, ewin)
+
+    input_xyz = _structure_to_xyz(structure, work_dir)
+
+    try:
+        crest_result_ensemble = _run_conformer_tasks(
+            structure,
+            nmr_config,
+            cfg,
+            input_xyz,
+            safe_name,
+            crest_dir,
+            stage_storage,
+            censo_solvent,
+            solvent_model,
+            safe_nproc,
+            crest_ewin,
+        )
+    except Exception as exc:
+        logger.exception("Conformer generation failed for %s: %s", structure.id, exc)
+        return None
+    if crest_result_ensemble is None or not crest_result_ensemble.records:
+        logger.error("Conformer generation failed for %s: no conformers produced", structure.id)
+        return None
+    return crest_result_ensemble
+
+
+def _run_conformer_tasks(
+    structure: Structure,
+    nmr_config: NmrConfig,
+    cfg: dict[str, Any],
+    input_xyz: str,
+    safe_name: str,
+    crest_dir: Path,
+    stage_storage: TaskStorage,
+    censo_solvent: str | None,
+    solvent_model: str,
+    safe_nproc: int | None,
+    crest_ewin: float,
+) -> StructureEnsemble | None:
+    """CREST task + CENSO/xtb-passthrough task → ensemble (see _run_conformer_generation)."""
+    from acp.workflows.ensemble import _build_ensemble_from_censo
+
+    # CREST: configured instance via the sanctioned runtime seam (the task
+    # core builds its backend without constructor kwargs).
+    crest_cfg = cfg.get("executables", {}).get("crest", {})
+    crest = CrestBackend(
         config=cfg,
-        name=structure.id,
-        charge=structure.charge,
-        multiplicity=structure.multiplicity,
-        solvent=solvent,
-        nproc=nproc,
-        ewin=ewin,
+        gfn_level=crest_cfg.get("gfn_level", 2),
+        solvent=censo_solvent,
+        solvent_model=solvent_model,
     )
-    if result.status != "completed" or result.ensemble is None or not result.ensemble.records:
+    search_result = run_conformer_search(
+        TaskRequest(
+            task=TaskKind.CONFORMER_SEARCH,
+            structure=StructureInput(path=Path(input_xyz)),
+            charge=structure.charge,
+            multiplicity=structure.multiplicity,
+            options=ConformerSearchOptions(energy_window=crest_ewin),
+            output_dir=crest_dir,
+        ),
+        context=TaskContext(
+            backend=crest,
+            config=cfg,
+            capability_extras={"output_name": safe_name},
+        ),
+    )
+    search_payload = search_result.payload
+    if (
+        not isinstance(search_payload, ConformerSearchPayload)
+        or search_payload.ensemble_ref is None
+    ):
         logger.error(
             "Conformer generation failed for %s: %s",
             structure.id,
-            result.error or "no conformers produced",
+            "; ".join(search_result.errors) or "no CREST ensemble produced",
         )
         return None
-    return result.ensemble
+    if search_result.status != "completed":
+        logger.warning(
+            "CREST conformer search partial for %s: %s",
+            structure.id,
+            "; ".join(search_result.errors) or search_result.status,
+        )
+    ensemble_xyz = Path(search_payload.ensemble_ref.path)
+
+    preset = nmr_config.conformer_preset or ""
+    if preset.lower() == "censo-zero":
+        # §7: no CENSO call — CREST ensemble sorted by xTB title energies.
+        logger.info("censo-zero: CREST xTB passthrough (no CENSO call)")
+        censo_result = _xtb_passthrough_from_search(search_payload, ensemble_xyz, cfg)
+    else:
+        censo_dir = stage_storage.stage_dir("02_SEARCH", "CENSO")
+        censo_dir.mkdir(parents=True, exist_ok=True)
+        refine_result = run_censo_refine(
+            TaskRequest(
+                task=TaskKind.CENSO_REFINE,
+                structure=StructureInput(path=ensemble_xyz),
+                charge=structure.charge,
+                multiplicity=structure.multiplicity,
+                options=CensoRefineOptions(preset=preset or None),
+                resources=TaskResources(nproc=safe_nproc),
+                output_dir=censo_dir,
+            ),
+            context=TaskContext(
+                config=cfg,
+                capability_extras={"solvent": censo_solvent, "solvent_model": solvent_model},
+            ),
+        )
+        censo_result = _censo_result_from_refine(refine_result, censo_dir, preset, cfg)
+        if censo_result is None:
+            logger.error(
+                "Conformer generation failed for %s: %s",
+                structure.id,
+                "; ".join(refine_result.errors) or "CENSO refine produced no records",
+            )
+            return None
+
+    return _build_ensemble_from_censo(censo_result, structure)
+
+
+def _xtb_passthrough_from_search(
+    payload: ConformerSearchPayload,
+    ensemble_xyz: Path,
+    cfg: dict[str, Any],
+) -> CensoRunResult:
+    """censo-zero rule: CREST ensemble on its xTB title energies (§7).
+
+    Replicates the legacy ``xtb_passthrough_result`` record semantics from
+    the ``run_conformer_search`` result (ensemble artifact + energy table):
+    ``gtot`` equals the xTB electronic energy, ``gsolv``/``grrho`` are zero,
+    and missing title energies fall back to 0.0.
+    """
+    from cccp.utils.file_io import read_xyz_multiframe
+
+    all_coords, symbols = read_xyz_multiframe(ensemble_xyz)
+    n_atoms = len(symbols)
+    if n_atoms == 0:
+        raise ValueError(f"No atoms found in ensemble: {ensemble_xyz}")
+    n_frames = len(all_coords) // n_atoms
+    energy_by_index = {int(row.frame_index): row.energy_hartree for row in payload.energy_table}
+
+    records: list[CensoConformerRecord] = []
+    for index in range(n_frames):
+        raw_energy = energy_by_index.get(index)
+        energy = float(raw_energy) if raw_energy is not None else 0.0
+        start = index * n_atoms
+        records.append(
+            CensoConformerRecord(
+                conf_id=f"CONF{index + 1}",
+                frame_index=index,
+                energy=energy,
+                gsolv=0.0,
+                grrho=0.0,
+                gtot=energy,
+                coordinates=np.array(all_coords[start : start + n_atoms], dtype=float),
+                symbols=list(symbols),
+            )
+        )
+
+    temperature = float(cfg.get("censo", {}).get("temperature", 298.15))
+    result = CensoRunResult(
+        preset="censo-zero",
+        records=records,
+        final_part="crest_passthrough",
+        work_dir=ensemble_xyz.parent,
+        temperature=temperature,
+    )
+    result.sort_by_gtot()
+    return result
+
+
+def _censo_result_from_refine(
+    refine_result: TaskResult,
+    run_dir: Path,
+    preset: str,
+    cfg: dict[str, Any],
+) -> CensoRunResult | None:
+    """Reconstruct the legacy ``CensoRunResult`` from a ``censo_refine`` result.
+
+    The task payload carries only the summary rows; the full record data
+    contract (gsolv/grrho/coordinates) is recovered from the CENSO
+    final-part JSON/XYZ under the run dir (``<idx>_<FINAL_PART>`` naming).
+    """
+    metadata = refine_result.metadata or {}
+    final_part = str(metadata.get("final_part") or "")
+    if not final_part:
+        return None
+    part_idx = part_index(final_part)
+    json_path = run_dir / f"{part_idx}_{final_part.upper()}.json"
+    xyz_path = run_dir / f"{part_idx}_{final_part.upper()}.xyz"
+    records = CensoInterface({}).parse_censo_json(json_path, xyz_path)
+    if not records:
+        return None
+    temperature = float(metadata.get("temperature_k") or 0.0) or float(
+        cfg.get("censo", {}).get("temperature", 298.15)
+    )
+    result = CensoRunResult(
+        preset=str(metadata.get("preset") or preset or "censo-light"),
+        records=records,
+        final_part=final_part,
+        work_dir=run_dir,
+        temperature=temperature,
+    )
+    result.sort_by_gtot()
+    return result
 
 
 def _structure_to_xyz(structure: Structure, work_dir: Path) -> str:
@@ -434,15 +668,6 @@ def _run_giao_for_conformers(
     ``WORK/05_SP/ORCA/<candidate_id>``); per-conformer outputs land in
     ``conf_<idx>`` subdirectories beneath it.
     """
-    orca_backend_cls = get_backend("orca")
-    orca = orca_backend_cls(
-        cfg,
-        method=nmr_config.nmr_method,
-        basis=nmr_config.nmr_basis,
-        solvent=nmr_config.solvent,
-        solvent_model=nmr_config.solvent_model,
-    )
-    nmr_shielding = getattr(orca, "nmr_shielding")
     nmr_nuclei = [n.split(maxsplit=1)[-1] if n[0].isdigit() else n for n in nmr_config.nuclei]
     # deduplicate elements
     seen: set[str] = set()
@@ -464,39 +689,65 @@ def _run_giao_for_conformers(
         out_dir = giao_dir / f"conf_{idx:03d}"
         out_dir.mkdir(parents=True, exist_ok=True)
         try:
-            qc_result = nmr_shielding(
-                coords,
-                structure.symbols,
-                charge=structure.charge,
-                multiplicity=structure.multiplicity,
-                output_dir=out_dir,
-                nuclei=target_elements,
-                solvent=nmr_config.solvent,
-                solvent_model=nmr_config.solvent_model,
+            task_result = run_nmr_shielding(
+                TaskRequest(
+                    task=TaskKind.NMR_SHIELDING,
+                    structure=StructureInput(
+                        coordinates=tuple(tuple(float(c) for c in row) for row in coords),
+                        symbols=tuple(str(s) for s in structure.symbols),
+                    ),
+                    charge=structure.charge,
+                    multiplicity=structure.multiplicity,
+                    level=MethodSpec(
+                        method=nmr_config.nmr_method,
+                        basis=nmr_config.nmr_basis,
+                        solvent=nmr_config.solvent,
+                        solvent_model=nmr_config.solvent_model,
+                    ),
+                    options=NmrShieldingOptions(),
+                    output_dir=out_dir,
+                ),
+                context=TaskContext(
+                    config=cfg,
+                    capability_extras={"nuclei": list(target_elements)},
+                ),
             )
         except Exception as exc:
             logger.exception("GIAO NMR failed for conformer %d of %s: %s", idx, structure.id, exc)
             continue
-        if not getattr(qc_result, "success", False):
+        payload = task_result.payload
+        shieldings_raw = (
+            dict(payload.shieldings) if isinstance(payload, NmrShieldingPayload) else {}
+        )
+        if task_result.status != "completed":
             logger.error(
                 "GIAO NMR did not converge for conformer %d of %s: %s",
                 idx,
                 structure.id,
-                getattr(qc_result, "error_message", "unknown"),
+                "; ".join(task_result.errors) or "unknown",
             )
             continue
-        metadata = getattr(qc_result, "metadata", {})
-        shieldings = dict(metadata.get("shieldings") or {})
-        if not shieldings:
+        if not shieldings_raw:
             logger.warning("No shieldings parsed for conformer %d of %s", idx, structure.id)
             continue
-        log_file = getattr(qc_result, "log_file", None)
+        shieldings: dict[int, dict[str, object]] = {
+            int(atom_index): {"symbol": entry.symbol, "isotropic": float(entry.isotropic)}
+            for atom_index, entry in shieldings_raw.items()
+        }
+        log_file = next(
+            (
+                Path(artifact.path)
+                for artifact in task_result.artifacts
+                if artifact.type == "log" and artifact.path
+            ),
+            None,
+        )
         results.append(
             ConformerShielding(
                 conformer_id=f"conf_{idx:03d}",
                 boltzmann_weight=float(weight),
                 shieldings=shieldings,
-                log_file=Path(log_file) if log_file else None,
+                log_file=log_file,
                 coordinates=structure.coordinates,
                 symbols=list(structure.symbols),
             )
