@@ -530,6 +530,10 @@ class CandidateResult:
     regressions: dict[str, RegressionResult] = field(default_factory=dict)
     dp4_probability: float | None = None
     dp5_probability: float | None = None
+    # Placeholder-path output under its own name (todo 13): never serialized
+    # as a probability and never used for ranking — ``dp5_probability`` stays
+    # None whenever the real Goodman DP5 model did not produce a value.
+    dp5_diagnostic_score: float | None = None
     conformer_shieldings: list[ConformerShielding] = field(default_factory=list)
     evidence: CandidateEvidence | None = None
     probability: CandidateProbability | None = None
@@ -546,6 +550,11 @@ class CandidateResult:
             ),
             "dp5_probability": (
                 round(self.dp5_probability, 6) if self.dp5_probability is not None else None
+            ),
+            "dp5_diagnostic_score": (
+                round(self.dp5_diagnostic_score, 6)
+                if self.dp5_diagnostic_score is not None
+                else None
             ),
             "evidence": self.evidence.as_dict() if self.evidence is not None else None,
             "probability": self.probability.as_dict() if self.probability is not None else None,
@@ -614,6 +623,18 @@ class NmrReport:
         """``"normal"`` when ≥2 candidates are ranked, else ``"not_applicable"``."""
         return "normal" if len(self.ranked_candidates) >= 2 else "not_applicable"
 
+    def _placeholder_note_active(self) -> bool:
+        """Whether the placeholder warning applies (typed state wins).
+
+        Reads each candidate's ``probability.dp5.status``; only when no
+        candidate carries typed state (legacy callers) does it fall back to
+        the ``error_model`` prefix check.
+        """
+        typed = [c.probability for c in self.candidates if c.probability is not None]
+        if typed:
+            return any(p.dp5.status == "placeholder" for p in typed)
+        return self.error_model.startswith("placeholder")
+
     def as_dict(self) -> dict[str, object]:
         winner = self.winner
         return {
@@ -653,7 +674,7 @@ class NmrReport:
                 "DP4/DP5 use placeholder error-model parameters (P1a); "
                 "values are relative only — do not use for publication."
             )
-            if self.error_model.startswith("placeholder")
+            if self._placeholder_note_active()
             else "",
         }
 

@@ -1724,15 +1724,25 @@ def run_nmr_analysis(
     ]
     dp4_probs = normalize_dp4_gated(log_likelihoods, statuses)
 
-    # DP5: prefer the real Goodman KDE model when its assets are present;
-    # fall back to the placeholder sigmoid otherwise.
+    # DP5 (G05/G07): the real Goodman KDE model only when its assets load.
+    # Missing assets → status "unavailable" + probability None (never a
+    # fabricated placeholder value). The placeholder path is explicit-only
+    # (error_model=placeholder-*) and writes the separately-named
+    # ``dp5_diagnostic_score``; DP5 needs ¹³C evidence, otherwise
+    # "not_applicable" without invoking the model.
+    dp5_placeholder_requested = nmr_config.error_model.startswith("placeholder")
     dp5_model = None
-    if not nmr_config.error_model.startswith("placeholder") and dp5_model_available():
-        try:
-            dp5_model = load_dp5_model()
-        except Exception as exc:  # pragma: no cover - asset-load robustness
-            logger.warning("Goodman DP5 model load failed (%s); using placeholder", exc)
-    dp5_model_id = "goodman-dp5" if dp5_model is not None else "placeholder-dp5"
+    dp5_unavailable_reason: str | None = None
+    if not dp5_placeholder_requested:
+        if not dp5_model_available():
+            dp5_unavailable_reason = "dp5_model_unavailable"
+        else:
+            try:
+                dp5_model = load_dp5_model()
+            except Exception as exc:  # pragma: no cover - asset-load robustness
+                logger.warning("Goodman DP5 model load failed (%s); DP5 unavailable", exc)
+                dp5_unavailable_reason = "dp5_model_load_failed"
+    dp5_model_id = "placeholder-dp5" if dp5_placeholder_requested else "goodman-dp5"
     dp5_model_version = (
         str(getattr(dp5_model, "model_id", "goodman-dp5"))
         if dp5_model is not None
@@ -1741,13 +1751,12 @@ def run_nmr_analysis(
 
     for cr, p4 in zip(candidate_results, dp4_probs):
         evidence_status = cr.evidence.status if cr.evidence is not None else "valid"
-        exclusion_reasons = (
-            tuple(cr.evidence.exclusion_reasons) if cr.evidence is not None else ()
-        )
+        exclusion_reasons = tuple(cr.evidence.exclusion_reasons) if cr.evidence is not None else ()
         if p4 is None:
             # excluded by the evidence gate — a probability is never fabricated
             cr.dp4_probability = None
             cr.dp5_probability = None
+            cr.dp5_diagnostic_score = None
             cr.probability = CandidateProbability(
                 dp4=ProbabilityResult(
                     model_id="goodman-dp4",
@@ -1774,23 +1783,45 @@ def run_nmr_analysis(
             for nuc in nmr_config.nuclei
         }
         cr.dp4_probability = float(p4)
-        if dp5_model is not None:
-            cr.dp5_probability = _compute_candidate_dp5(
-                cr, candidates[cr.index], nmr_config, dp5_model
-            )
-            candidate_dp5_mode = str(getattr(dp5_model, "dp5_mode", "fallback"))
-            dp5_calibration = "goodman_kde"
-        else:
-            cr.dp5_probability = float(dp5_log_to_probability(compute_dp5(residual_by_nuc, em)))
-            candidate_dp5_mode = "fallback"
-            dp5_calibration = "placeholder_parameters"
-        dp5_status = "valid" if dp5_model is not None else "placeholder"
+        cr.dp5_probability = None
+        cr.dp5_diagnostic_score = None
         dp5_reasons: tuple[str, ...] = ()
-        if cr.dp5_probability is None:
+        if dp5_model is not None:
+            if not residual_by_nuc.get("13C"):
+                # no ¹³C residuals for this candidate — DP5 does not apply
+                dp5_status = "not_applicable"
+                dp5_calibration = "not_evaluated"
+                candidate_dp5_mode = None
+                dp5_reasons = ("no_carbon_evidence",)
+            else:
+                cr.dp5_probability = _compute_candidate_dp5(
+                    cr, candidates[cr.index], nmr_config, dp5_model
+                )
+                candidate_dp5_mode = str(getattr(dp5_model, "dp5_mode", "fallback"))
+                if cr.dp5_probability is None:
+                    dp5_status = "unavailable"
+                    dp5_calibration = "not_evaluated"
+                    candidate_dp5_mode = None
+                    dp5_reasons = ("dp5_probability_unavailable",)
+                else:
+                    dp5_status = "valid"
+                    dp5_calibration = "goodman_kde"
+        elif dp5_placeholder_requested:
+            # explicit placeholder mode only — renamed to a diagnostic so it
+            # can never masquerade as a probability in reports or ranking
+            cr.dp5_diagnostic_score = float(
+                dp5_log_to_probability(compute_dp5(residual_by_nuc, em))
+            )
+            dp5_status = "placeholder"
+            dp5_calibration = "placeholder_parameters"
+            candidate_dp5_mode = "fallback"
+            dp5_reasons = ("placeholder_error_model",)
+        else:
+            # assets missing / load failed — report honestly, compute nothing
             dp5_status = "unavailable"
             dp5_calibration = "not_evaluated"
             candidate_dp5_mode = None
-            dp5_reasons = ("dp5_probability_unavailable",)
+            dp5_reasons = (dp5_unavailable_reason or "dp5_model_unavailable",)
         cr.probability = CandidateProbability(
             dp4=ProbabilityResult(
                 model_id="goodman-dp4",
