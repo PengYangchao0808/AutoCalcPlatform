@@ -207,6 +207,7 @@ def _load_ensemble(structure: Any, ctx: TaskContext) -> list[EnsembleFrame]:
     if structure.coordinates is not None and structure.symbols is not None:
         stacked = np.asarray(structure.coordinates, dtype=np.float64)
         symbols = tuple(str(s) for s in structure.symbols)
+        titles = []
     else:
         path = structure.path
         if path is None:
@@ -219,6 +220,7 @@ def _load_ensemble(structure: Any, ctx: TaskContext) -> list[EnsembleFrame]:
         stacked_raw, symbols_raw = read_xyz_multiframe(path)
         stacked = np.asarray(stacked_raw, dtype=np.float64)
         symbols = tuple(str(s) for s in symbols_raw)
+        titles = _frame_titles(path)
     if not symbols or stacked.size == 0:
         return []
     n_atoms = len(symbols)
@@ -233,16 +235,50 @@ def _load_ensemble(structure: Any, ctx: TaskContext) -> list[EnsembleFrame]:
             index=index,
             symbols=symbols,
             coordinates=stacked[index * n_atoms : (index + 1) * n_atoms],
+            title=titles[index] if index < len(titles) else "",
         )
         for index in range(n_frames)
     ]
+
+
+def _frame_titles(path: Path) -> list[str]:
+    """Frame title lines of a multi-frame XYZ (stripped, parse best-effort).
+
+    Mirrors the frame counting of :func:`read_xyz_multiframe` so ``titles[i]``
+    lines up with frame *i* on well-formed files; malformed headers are
+    skipped the same way.
+    """
+    lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    titles: list[str] = []
+    cursor = 0
+    while cursor < len(lines):
+        header = lines[cursor].strip()
+        if not header:
+            cursor += 1
+            continue
+        try:
+            atom_count = int(header)
+        except ValueError:
+            cursor += 1
+            continue
+        if atom_count <= 0:
+            break
+        title = lines[cursor + 1].strip() if cursor + 1 < len(lines) else ""
+        titles.append(title)
+        cursor += 2 + atom_count
+    return titles
 
 
 def _write_ensemble(target_dir: Path, frames: list[EnsembleFrame]) -> Path:
     stacked = np.vstack([frame.coordinates for frame in frames])
     symbols = list(frames[0].symbols)
     path = target_dir / "ensemble_input.xyz"
-    write_xyz_multiframe(path, stacked, symbols)
+    # Preserve the parsed frame titles verbatim: ISOSTAT (via its adapter)
+    # normalises each title to its first float — the per-frame energy — and
+    # fails on titleless frames (exit 24 "Unable to load energy from comment
+    # line").  A frame whose title carries no float behaves exactly like the
+    # legacy titleless input.
+    write_xyz_multiframe(path, stacked, symbols, titles=[frame.title for frame in frames])
     return path
 
 

@@ -344,12 +344,8 @@ def test_xtb_md_carries_xtb_provenance(tmp_path: Path, monkeypatch: pytest.Monke
     ensemble_xyz = tmp_path / "cluster.xyz"
     ensemble_xyz.write_text("1\n-0.5\nHe 0.0 0.0 0.0\n1\n-0.4\nHe 0.0 0.0 0.0\n", encoding="utf-8")
 
-    class _FakeIsostat:
-        def __init__(self, cfg: dict[str, Any] | None = None) -> None:
-            pass
-
-        def cluster(self, *args: Any, **kwargs: Any) -> SimpleNamespace:
-            return SimpleNamespace(success=True, output_file=str(ensemble_xyz), error_message=None)
+    def fake_isostat(*args: Any, **kwargs: Any) -> SimpleNamespace:
+        return SimpleNamespace(success=True, output_file=ensemble_xyz, error_message=None)
 
     def fake_filter(*args: Any, **kwargs: Any) -> SimpleNamespace:
         return SimpleNamespace(ensemble_xyz=ensemble_xyz, n_after_filter=2)
@@ -372,7 +368,9 @@ def test_xtb_md_carries_xtb_provenance(tmp_path: Path, monkeypatch: pytest.Monke
         "acp.workflows.xtbmd_censo_energy._batch_opt_frames",
         lambda *a, **k: SimpleNamespace(n_ok=2),
     )
-    monkeypatch.setattr("acp.backends.registry.get_backend", lambda name: _FakeIsostat)
+    monkeypatch.setattr(
+        "acp.workflows.xtbmd_censo_energy._isostat_cluster_via_task", fake_isostat
+    )
     monkeypatch.setattr("acp.workflows.xtbmd_censo_energy._filter_energy_window", fake_filter)
 
     outcome = run_xtb_md(

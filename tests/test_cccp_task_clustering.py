@@ -132,6 +132,23 @@ def test_path_ensemble_input_shape_supported(tmp_path: Path) -> None:
     assert sorted(i for a in payload.assignments for i in a.member_indices) == [0, 1, 2, 3]
 
 
+def test_written_ensemble_preserves_frame_titles(tmp_path: Path) -> None:
+    """The rewritten ensemble_input.xyz keeps the parsed title lines (ISOSTAT
+    normalises each title to its first float = the per-frame energy)."""
+    ensemble = _write_frames(tmp_path / "ensemble.xyz", [_GEOM_A, _GEOM_B])
+    expected_titles = ["Frame 0 | Energy: -10.0000000000", "Frame 1 | Energy: -11.0000000000"]
+    backend = _FakeIsostatBackend(_reps_result([_GEOM_A]))
+    request = _request(tmp_path, structure=StructureInput(path=ensemble))
+    result = run_clustering(request, context=TaskContext(backend=backend))
+
+    assert result.status == "completed"
+    written = Path(backend.calls[0]["ensemble_xyz"])
+    lines = written.read_text(encoding="utf-8").splitlines()
+    titles = [lines[1], lines[5]]
+    assert titles == expected_titles
+    assert all("Energy:" in title for title in titles)
+
+
 # ── independent cccp call: partial-failure state ───────────────────────
 
 

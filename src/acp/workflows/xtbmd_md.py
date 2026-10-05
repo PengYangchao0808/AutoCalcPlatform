@@ -15,10 +15,93 @@ from pathlib import Path
 from typing import Any
 
 from acp.backends.base import QCResult
-from acp.backends.registry import get_backend
 from acp.chem.embedding import enumerate_embeddings
+from cccp.backends.molclus_backend import MolclusBackend
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import (
+    MdSamplingOptions,
+    StructureInput,
+    TaskKind,
+    TaskRequest,
+)
+from cccp.calculation.results import MdSamplingPayload
+from cccp.calculation.tasks.md_sampling import run_md_sampling
 
 logger = logging.getLogger(__name__)
+
+
+def _run_md_via_task(
+    md_backend: MolclusBackend,
+    cfg: dict[str, Any],
+    start_xyz: Path,
+    output_dir: Path,
+    *,
+    charge: int,
+    multiplicity: int,
+    md_method: str,
+    temperature: float,
+    time_ps: float,
+    dump_fs: float,
+    step_fs: float,
+    hmass: float,
+    shake: bool,
+    nvt: bool,
+    seed: int,
+    solvent: str | None,
+    solvent_model: str,
+) -> QCResult:
+    """Run one xTB-MD trajectory through ``run_md_sampling`` (D4).
+
+    The legacy ``MolclusBackend.run_md`` result shape is reconstructed from
+    the typed ``TaskResult`` so the replica loop keeps its QCResult contract.
+    """
+    result = run_md_sampling(
+        TaskRequest(
+            task=TaskKind.MD_SAMPLING,
+            structure=StructureInput(path=Path(start_xyz)),
+            charge=charge,
+            multiplicity=multiplicity,
+            options=MdSamplingOptions(
+                md_method=md_method,
+                temperature_k=temperature,
+                time_ps=time_ps,
+                dump_fs=dump_fs,
+                step_fs=step_fs,
+                hmass=hmass,
+                shake=shake,
+                nvt=nvt,
+                seed=seed,
+            ),
+            output_dir=Path(output_dir),
+        ),
+        context=TaskContext(
+            config=cfg,
+            workdir=Path(output_dir),
+            backend=md_backend,
+            capability_extras={"solvent": solvent, "solvent_model": solvent_model},
+        ),
+    )
+    metadata = dict(result.metadata or {})
+    payload = result.payload
+    trajectory_ref = payload.trajectory_ref if isinstance(payload, MdSamplingPayload) else None
+    trajectory_file = Path(trajectory_ref.path) if trajectory_ref is not None else None
+    log_file = next(
+        (Path(a.path) for a in result.artifacts if a.type in ("log", "frequency_log")),
+        None,
+    )
+    if result.status == "completed":
+        return QCResult(
+            success=True,
+            converged=True,
+            output_file=trajectory_file,
+            metadata=metadata,
+        )
+    return QCResult(
+        success=False,
+        error_message="; ".join(result.errors) or "MD sampling failed",
+        log_file=log_file,
+        metadata=metadata,
+    )
 
 
 def run_md_replicas(
@@ -84,7 +167,7 @@ def run_md_replicas(
             ``output_dir/replica_%02d/``).  Callers pass the v2 WORK stage
             dir (``WORK/02_SEARCH/xTB``) so MD outputs stay in the task
             workspace.
-        config: Backend config dict passed to ``get_backend("molclus")``.
+        config: Backend config dict for the ``MolclusBackend`` constructor.
         timeout: Per-trajectory subprocess timeout in seconds.  ``None`` or
             ``0`` falls back to the backend default (300 s) — too short for
             production MD runs (10s–100s of ps can take minutes to hours),
@@ -124,7 +207,7 @@ def run_md_replicas(
     backend_kwargs: dict[str, Any] = {}
     if timeout is not None and int(timeout) > 0:
         backend_kwargs["timeout"] = int(timeout)
-    backend = get_backend("molclus")(config or {}, **backend_kwargs)
+    md_backend = MolclusBackend(config or {}, **backend_kwargs)
 
     replica_frames: list[int] = []
     replica_dirs: list[str] = []
@@ -139,8 +222,13 @@ def run_md_replicas(
             start_index,
             md_method,
         )
-        result = backend.run_md(
+        result = _run_md_via_task(
+            md_backend,
+            config or {},
             start_xyz,
+            replica_dir,
+            charge=charge,
+            multiplicity=multiplicity,
             md_method=md_method,
             temperature=temperature,
             time_ps=time_ps,
@@ -152,9 +240,6 @@ def run_md_replicas(
             seed=md_seed + i,
             solvent=solvent,
             solvent_model=solvent_model,
-            charge=charge,
-            multiplicity=multiplicity,
-            output_dir=replica_dir,
         )
         if not result.success:
             return QCResult(
