@@ -373,6 +373,9 @@ _PRIMITIVE_DEFS: dict[str, str] = {
     "run_irc": "irc.py",
     "run_casscf": "casscf.py",
     "run_thermochemistry": "thermochemistry.py",
+    # todo 26 (nmr-gap): P2 execution landed (migration todo 43) — register the
+    # task core so the unique-impl + ledger cross-checks cover it.
+    "run_nmr_shielding": "nmr_shielding.py",
 }
 
 

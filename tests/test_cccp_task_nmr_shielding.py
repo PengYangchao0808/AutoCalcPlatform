@@ -224,6 +224,77 @@ def test_wrong_options_type_is_rejected(tmp_path: Path) -> None:
         run_nmr_shielding(request, context=_context(FakeOrcaBackend(), tmp_path))
 
 
+# ── contract round-trips + provenance/identity record ─────────────────
+
+
+def test_options_round_trip_preserves_record_identity() -> None:
+    options = NmrShieldingOptions(atom_indices=(1, 2), atom_index_base=1)
+    wire = options.to_dict()
+    assert wire == {"atom_index_base": 1, "atom_indices": [1, 2]}
+    assert NmrShieldingOptions.from_dict(wire) == options
+    assert NmrShieldingOptions.from_dict(None) == NmrShieldingOptions()
+    with pytest.raises(TaskInputError):
+        NmrShieldingOptions.from_dict({"atom_index_base": 2})
+
+
+def test_backend_receives_resolved_request(
+    tmp_path: Path, golden: dict[str, Any]
+) -> None:
+    parsed = _parsed(tmp_path, golden, "tensor_log", "nmr_tensor.out")
+    backend = FakeOrcaBackend(
+        QCResult(
+            success=True,
+            energy=-40.5,
+            coordinates=_GEOMETRY,
+            symbols=_SYMBOLS,
+            metadata={"shieldings": parsed},
+        )
+    )
+    out = tmp_path / "out"
+    request = _request()
+    object.__setattr__(request, "output_dir", out)
+    result = run_nmr_shielding(request, context=_context(backend, tmp_path))
+
+    assert result.status == "completed"
+    call = backend.calls[0]
+    assert call["symbols"] == ["C", "H"]
+    assert len(call["coordinates"]) == 2
+    assert call["charge"] == 0
+    assert call["multiplicity"] == 1
+    assert call["output_dir"] == out
+
+
+def test_provenance_identity_success_and_failure(tmp_path: Path, golden: dict[str, Any]) -> None:
+    parsed = _parsed(tmp_path, golden, "tensor_log", "nmr_tensor.out")
+    backend = FakeOrcaBackend(
+        QCResult(
+            success=True,
+            energy=-40.5,
+            coordinates=_GEOMETRY,
+            symbols=_SYMBOLS,
+            metadata={"shieldings": parsed},
+        )
+    )
+    request = _request(method="wB97X-D4")
+    result = run_nmr_shielding(request, context=_context(backend, tmp_path))
+
+    assert result.status == "completed"
+    provenance = result.provenance
+    assert provenance is not None
+    assert provenance.backend == "orca"
+    assert provenance.method == "wB97X-D4"
+    assert provenance.version == "unknown"
+    assert result.metadata["atom_index_base"] == 0
+    assert result.metadata["shielding_count"] == 2
+
+    failing = FakeOrcaBackend(error=RuntimeError("orca missing"))
+    failed = run_nmr_shielding(request, context=_context(failing, tmp_path))
+    assert failed.status == "failed"
+    assert failed.provenance is not None
+    assert failed.provenance.backend == "orca"
+    assert failed.provenance.method == "wB97X-D4"
+
+
 # ── task module independence (no ACP) ─────────────────────────────────
 
 
