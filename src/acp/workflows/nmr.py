@@ -22,7 +22,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -1291,6 +1291,10 @@ def _looks_like_smiles(source: str) -> bool:
 # never computation modes, so they are intentionally absent here.
 DP5_OUTCOME_MODES: Final[tuple[str, ...]] = ("fchl", "fallback", "averaged")
 
+# Closed vocabulary of per-candidate DP5 outcome validity (G07/t15):
+# "invalid" = no complete conformer geometry existed, so no probability.
+DP5_OUTCOME_STATUSES: Final[tuple[str, ...]] = ("valid", "invalid")
+
 
 @dataclass(frozen=True)
 class Dp5Outcome:
@@ -1310,16 +1314,27 @@ class Dp5Outcome:
             time, never from model state.
         diagnostics: JSON-safe per-call diagnostics dicts, e.g.
             ``n_conformers_used``, ``fchl_attempted``, ``fallback_reason``.
+        status: One of :data:`DP5_OUTCOME_STATUSES`. ``"invalid"`` carries
+            ``probability=None`` (validated) — stage 7 maps it to the typed
+            ``ProbabilityStatus "invalid"``; ``mode`` is informational there.
     """
 
     probability: float | None
     mode: str
     kernel: str = ""
     diagnostics: tuple[dict[str, object], ...] = ()
+    status: Literal["valid", "invalid"] = "valid"
 
     def __post_init__(self) -> None:
         if self.mode not in DP5_OUTCOME_MODES:
             raise ValueError(f"unknown DP5 mode {self.mode!r}; expected one of {DP5_OUTCOME_MODES}")
+        if self.status not in DP5_OUTCOME_STATUSES:
+            raise ValueError(
+                f"unknown DP5 outcome status {self.status!r}; "
+                f"expected one of {DP5_OUTCOME_STATUSES}"
+            )
+        if self.status == "invalid" and self.probability is not None:
+            raise ValueError("invalid DP5 outcome must carry probability=None")
 
 
 def _compute_candidate_dp5(
@@ -1342,9 +1357,11 @@ def _compute_candidate_dp5(
     conformer geometries threaded through :class:`ConformerShielding`.
     Otherwise the unweighted-KDE fallback is used.
 
-    Falls back to the averaged-residual path when per-conformer shieldings
-    are unavailable (e.g. the test-only ``skip_conformers`` fast path that
-    injects a single pre-averaged shielding set).
+    Zero complete conformers return ``status="invalid"`` (probability
+    ``None``) — never a silently averaged value; exactly one conformer runs
+    the same geometry-weighted pipeline with weight ``[1.0]``, so FCHL
+    stays reachable. The averaged-residual path remains only for the
+    no-¹³C/label-mismatch branches.
 
     Every path returns a frozen :class:`Dp5Outcome` — which path ran, its
     kernel and diagnostics are per-call facts, never shared model state.
@@ -1453,29 +1470,33 @@ def _compute_candidate_dp5(
                     else:
                         conformer_reps.append(reps)
 
-    if len(conformer_shifts) <= 1:
-        # single conformer or unavailable — averaged path
-        # (todo 15 extension point: single conformers will route through the
-        # geometry-weighted path here; mode vocabulary already supports it)
-        residual_by_nuc = {"13C": [a.residual for a in c_assignments]}
+    if len(conformer_shifts) == 0:
+        # zero complete conformers — no geometry-weighted input exists, so
+        # there is nothing to rank on: typed invalid, never a silent average
         return Dp5Outcome(
-            probability=compute_dp5_goodman(residual_by_nuc, dp5_model),
+            status="invalid",
+            probability=None,
             mode="averaged",
             diagnostics=(
                 {
-                    "n_conformers_used": len(conformer_shifts),
+                    "n_conformers_used": 0,
                     "fchl_attempted": fchl_requested,
-                    "fallback_reason": "insufficient_conformers",
+                    "fallback_reason": "no_complete_conformers",
                 },
             ),
         )
 
-    # normalize weights (guard against drift)
-    total_w = sum(weights)
-    if total_w <= 0:
-        weights = [1.0 / len(weights)] * len(weights)
+    # normalize weights (guard against drift); a single conformer gets the
+    # unit weight so it runs the same geometry-weighted pipeline as the
+    # multi-conformer case — FCHL stays reachable, no averaged shortcut
+    if len(conformer_shifts) == 1:
+        weights = [1.0]
     else:
-        weights = [w / total_w for w in weights]
+        total_w = sum(weights)
+        if total_w <= 0:
+            weights = [1.0 / len(weights)] * len(weights)
+        else:
+            weights = [w / total_w for w in weights]
 
     base_diag: dict[str, object] = {
         "n_conformers_used": len(conformer_shifts),
@@ -1900,17 +1921,34 @@ def run_nmr_analysis(
                 dp5_reasons = ("no_carbon_evidence",)
             else:
                 outcome = _compute_candidate_dp5(cr, candidates[cr.index], nmr_config, dp5_model)
-                cr.dp5_probability = outcome.probability
-                if cr.dp5_probability is None:
-                    dp5_status = "unavailable"
+                if outcome.status == "invalid":
+                    # zero complete conformers — typed invalid, never a
+                    # silently averaged value; mode/kernel stay unset and a
+                    # None probability already excludes the candidate
+                    cr.dp5_probability = None
+                    dp5_status = "invalid"
                     dp5_calibration = "not_evaluated"
                     candidate_dp5_mode = None
-                    dp5_reasons = ("dp5_probability_unavailable",)
+                    fallback_reason = (
+                        outcome.diagnostics[0].get("fallback_reason")
+                        if outcome.diagnostics
+                        else None
+                    )
+                    dp5_reasons = (
+                        str(fallback_reason) if fallback_reason else "no_complete_conformers",
+                    )
                 else:
-                    dp5_status = "valid"
-                    dp5_calibration = "goodman_kde"
-                    candidate_dp5_mode = outcome.mode
-                    cr.dp5_kernel = outcome.kernel or None
+                    cr.dp5_probability = outcome.probability
+                    if cr.dp5_probability is None:
+                        dp5_status = "unavailable"
+                        dp5_calibration = "not_evaluated"
+                        candidate_dp5_mode = None
+                        dp5_reasons = ("dp5_probability_unavailable",)
+                    else:
+                        dp5_status = "valid"
+                        dp5_calibration = "goodman_kde"
+                        candidate_dp5_mode = outcome.mode
+                        cr.dp5_kernel = outcome.kernel or None
         elif dp5_placeholder_requested:
             # explicit placeholder mode only — renamed to a diagnostic so it
             # can never masquerade as a probability in reports or ranking

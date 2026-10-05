@@ -479,9 +479,15 @@ class _FakeDP5Model:
     def __init__(self, value: float = 0.7) -> None:
         self._value = value
         self.calls: list[list[float]] = []
+        self.weight_calls: list[list[float]] = []  # todo 15: spy on weights
 
     def probability(self, carbon_errors: list[float]) -> float:
         self.calls.append(list(carbon_errors))
+        return self._value
+
+    def probability_per_conformer(self, shifts, exp, weights) -> float:
+        """Geometry-weighted fallback path (todo 15: single conformers route here)."""
+        self.weight_calls.append(list(weights))
         return self._value
 
 
@@ -664,10 +670,14 @@ def test_workflow_real_dp5_model_reports_valid_float(tmp_path: Path) -> None:
     assert block["dp5"]["probability"] == pytest.approx(0.7)
     assert cand["dp5_probability"] == pytest.approx(0.7)
     assert cand["dp5_diagnostic_score"] is None  # diagnostic is placeholder-only
-    # todo 14: single prebuilt conformer → averaged-residual path, no kernel
-    assert block["dp5"]["mode"] == "averaged"
+    # why-changed (todo 15): the single prebuilt conformer no longer takes
+    # the averaged-residual shortcut — it runs the geometry-weighted
+    # fallback with weight [1.0] (FCHL unreachable here: fchl_available is
+    # False on the stand-in and the prebuilt conformer carries no geometry)
+    assert block["dp5"]["mode"] == "fallback"
     assert cand["dp5_kernel"] is None
-    assert model.calls  # the model ran
+    assert model.weight_calls == [[1.0]]
+    assert model.calls == []  # compute_dp5_goodman never ran for this path
 
 
 def test_winner_ignores_placeholder_dp5_diagnostic() -> None:
@@ -769,6 +779,7 @@ class _PathDP5Model:
     def __init__(self, *, fchl_available: bool = True) -> None:
         self.fchl_available = fchl_available
         self.calls: list[str] = []
+        self.weight_calls: list[list[float]] = []  # todo 15: spy on weights
 
     def probability(self, carbon_errors: list[float]) -> float:
         self.calls.append("averaged")
@@ -776,10 +787,12 @@ class _PathDP5Model:
 
     def probability_per_conformer(self, shifts, exp, weights) -> float:
         self.calls.append("fallback")
+        self.weight_calls.append(list(weights))
         return 0.55
 
     def probability_per_conformer_fchl(self, shifts, exp, weights, reps) -> float:
         self.calls.append("fchl")
+        self.weight_calls.append(list(weights))
         return 0.65
 
 
@@ -840,7 +853,11 @@ def test_compute_candidate_dp5_mode_is_order_invariant() -> None:
 
     fchl = _dp5_candidate("fchl-cand", geometry=True)
     fallback = _dp5_candidate("fallback-cand", geometry=False)
-    averaged = _dp5_candidate("averaged-cand", geometry=True, n_conformers=1)
+    # why-changed (todo 15): n_conformers=1 no longer takes the averaged
+    # shortcut — it runs the geometry-weighted path. The averaged mode in
+    # this order-invariance check now comes from the label-mismatch branch,
+    # which is the only averaged producer left besides no-carbon.
+    averaged = _dp5_candidate("averaged-cand", geometry=True, atom_label="C9")
 
     def run(order: list[tuple[CandidateResult, Structure]]) -> dict[str, object]:
         model = _PathDP5Model()
@@ -1070,3 +1087,143 @@ def test_workflow_single_dp5_mode_summary_stays_that_mode(tmp_path: Path) -> Non
         {"index": 0, "mode": "fchl", "kernel": "numpy"},
         {"index": 1, "mode": "fchl", "kernel": "numpy"},
     ]
+
+
+# ---------------------------------------------------------------------------
+# todo 15: single/zero conformers on the geometry-weighted DP5 path (G07).
+#
+# BEFORE (raw capture: .omo/evidence/.../task-15-red-before.txt):
+# the ``len(conformer_shifts) <= 1`` branch bundled two distinct situations
+# into the averaged-residual shortcut — a SINGLE conformer called
+# ``compute_dp5_goodman`` (mode "averaged", FCHL unreachable), and ZERO
+# complete conformers returned a valid-looking averaged outcome that stage 7
+# reported as ``valid``.
+#
+# AFTER: 0 complete conformers → ``status="invalid"`` + probability None
+# (stage 7 maps it to the typed "invalid" ProbabilityStatus); exactly 1
+# conformer runs the same geometry-weighted pipeline as the multi-conformer
+# case with weight [1.0] — FCHL stays reachable.
+# ---------------------------------------------------------------------------
+
+
+def test_single_conformer_runs_geometry_weighted_fchl_with_unit_weight() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    single = _dp5_candidate("single-fchl", geometry=True, n_conformers=1)
+    model = _PathDP5Model()
+    with patch("acp.nmr.fchl.kernel_backend", return_value="numpy"):
+        out = _compute_candidate_dp5(single[0], single[1], NmrConfig(), model)
+
+    # BEFORE: model.calls == ["averaged"] — compute_dp5_goodman shortcut,
+    # FCHL unreachable for a single conformer.
+    assert model.calls == ["fchl"]
+    assert model.weight_calls == [[1.0]]
+    assert out.mode == "fchl"
+    assert out.kernel == "numpy"
+    assert out.status == "valid"
+    assert out.probability == pytest.approx(0.65)
+    assert out.diagnostics[0]["n_conformers_used"] == 1
+    assert out.diagnostics[0]["fallback_reason"] is None
+
+
+def test_single_conformer_without_geometry_runs_fallback_with_unit_weight() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    single = _dp5_candidate("single-fallback", geometry=False, n_conformers=1)
+    model = _PathDP5Model()
+    out = _compute_candidate_dp5(single[0], single[1], NmrConfig(), model)
+
+    # BEFORE: model.calls == ["averaged"] (compute_dp5_goodman shortcut)
+    assert model.calls == ["fallback"]
+    assert model.weight_calls == [[1.0]]
+    assert out.mode == "fallback"
+    assert out.status == "valid"
+    assert out.probability == pytest.approx(0.55)
+    assert out.diagnostics[0]["n_conformers_used"] == 1
+
+
+def test_zero_conformer_candidate_is_invalid_not_averaged() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    zero = _dp5_candidate("zero-cand", geometry=True, n_conformers=0)
+    model = _PathDP5Model()
+    out = _compute_candidate_dp5(zero[0], zero[1], NmrConfig(), model)
+
+    # BEFORE: a valid-looking averaged outcome (probability 0.6) — zero
+    # conformers were silently treated as a legal DP5 input.
+    assert out.probability is None
+    assert out.status == "invalid"
+    assert model.calls == []  # compute_dp5_goodman never ran
+    assert out.diagnostics[0]["fallback_reason"] == "no_complete_conformers"
+    assert out.diagnostics[0]["n_conformers_used"] == 0
+
+
+def test_dp5_outcome_status_is_closed_and_invalid_carries_no_probability() -> None:
+    from acp.workflows.nmr import DP5_OUTCOME_STATUSES, Dp5Outcome
+
+    assert Dp5Outcome(probability=0.5, mode="fallback").status == "valid"
+    assert DP5_OUTCOME_STATUSES == ("valid", "invalid")
+    invalid = Dp5Outcome(status="invalid", probability=None, mode="averaged")
+    assert invalid.probability is None
+    with pytest.raises(ValueError, match="status"):
+        Dp5Outcome(probability=0.5, mode="fallback", status="bogus")
+    # no ambiguity: an invalid outcome may never carry a probability
+    with pytest.raises(ValueError, match="invalid"):
+        Dp5Outcome(probability=0.5, mode="averaged", status="invalid")
+
+
+def test_stage7_maps_invalid_dp5_outcome_to_typed_invalid(tmp_path: Path) -> None:
+    """Stage 7 propagates the outcome's invalid status — typed, null, unranked."""
+    from acp.workflows.nmr import Dp5Outcome, run_nmr_analysis
+
+    struct = _structure("candA", ["C", "H", "H", "H", "H"])
+    spectrum = "C: 40.0(C1)\nH: 4.0(H1), 3.0(H2), 1.0(H3), 0.0(H4)"
+    model = _FakeDP5Model(0.7)
+    invalid_outcome = Dp5Outcome(
+        status="invalid",
+        probability=None,
+        mode="averaged",
+        diagnostics=(
+            {
+                "n_conformers_used": 0,
+                "fchl_attempted": False,
+                "fallback_reason": "no_complete_conformers",
+            },
+        ),
+    )
+    ensembles = [_ensemble(struct, _shieldings(list(struct.symbols), 40.0))]
+    shielding_results = [_shielding_result(_shieldings(list(struct.symbols), 40.0))]
+    with (
+        patch("acp.workflows.nmr.StructureReader") as reader_cls,
+        patch("acp.workflows.nmr.run_nmr_shielding", side_effect=shielding_results),
+        patch("acp.workflows.nmr.dp5_model_available", return_value=True),
+        patch("acp.workflows.nmr.load_dp5_model", return_value=model),
+        # seam: stage 7 is the consumer under test; the producer (0
+        # conformers → invalid) is covered by the direct test above.
+        patch("acp.workflows.nmr._compute_candidate_dp5", return_value=invalid_outcome),
+    ):
+        reader = MagicMock()
+        reader.read.side_effect = [struct]
+        reader_cls.return_value = reader
+        result = run_nmr_analysis(
+            input_sources=[struct.id],
+            spectrum=spectrum,
+            output_dir=str(tmp_path),
+            skip_conformers=True,
+            prebuilt_ensembles=ensembles,  # type: ignore[arg-type]
+            error_model="goodman-legacy",
+        )
+    assert result.status == "completed", result.error
+
+    cand = _load_report(result)["candidates"][0]
+    block = cand["probability"]["dp5"]
+    assert block["status"] == "invalid"  # typed ProbabilityStatus, not "valid"
+    assert block["probability"] is None
+    assert cand["dp5_probability"] is None  # JSON null — never ranked on DP5
+    assert block["mode"] is None
+    assert cand["dp5_kernel"] is None
+    assert block["calibration_status"] == "not_evaluated"
+    assert "no_complete_conformers" in block["reasons"]
+    # invalid candidates never surface in the stage-8 mode aggregation
+    summary = _load_summary(result)
+    assert summary["dp5_modes"] == []
