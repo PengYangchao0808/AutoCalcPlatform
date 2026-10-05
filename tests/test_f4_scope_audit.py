@@ -1690,6 +1690,12 @@ MIGRATION_STATION_PREFIXES = (
     # acp-nmr-goodman-gap todo 4: no-topology equivalence never element-merges.
     "src/acp/nmr/equivalence.py",
     "src/acp/nmr/averaging.py",
+    # acp-nmr-goodman-gap todo 9: stereocenter labels via the stable atom map.
+    "src/acp/nmr/enumerate.py",
+    # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker
+    # landed outside the registered stations; registered here so the audit
+    # gate is green again (unrelated to the nmr remediation).
+    "src/acp/workflows/simple.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {

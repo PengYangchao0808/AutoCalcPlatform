@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -43,6 +44,7 @@ from acp.nmr.assignment import (
 from acp.nmr.averaging import boltzmann_average_shieldings
 from acp.nmr.enumerate import enumerate_candidates
 from acp.nmr.equivalence import (
+    EquivalenceError,
     detect_equivalence_groups,
     merge_explicit_and_detected,
 )
@@ -54,6 +56,7 @@ from acp.nmr.error_model import (
 )
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
+    AtomShift,
     CandidateResult,
     ConformerShielding,
     ExperimentalNmr,
@@ -69,7 +72,7 @@ from acp.nmr.probability import (
 )
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
-from acp.nmr.structure_map import NmrStructureMap
+from acp.nmr.structure_map import NmrStructureMap, StructureMapError
 from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name, write_result_summary
@@ -307,13 +310,15 @@ def _enumerate_input(
     stereocenters: str | list[str] | None,
     charge: int | None,
     multiplicity: int | None,
-) -> str | tuple[list[str], list[Structure], int]:
+) -> str | tuple[list[str], list[Structure], int | None]:
     """Expand a single candidate into its diastereomers (DevDoc §5 stage 1).
 
     Returns either an error string (caller surfaces it) or a tuple
-    ``(new_sources, new_candidates, charge)``. Enantiomer pairs collapse to
-    one representative — DP4 cannot distinguish them, so keeping both would
-    waste compute and return degenerate probabilities.
+    ``(new_sources, new_candidates, charge)``. ``charge`` passes through
+    unchanged (``None`` means auto-detect downstream — never zeroed).
+    Enantiomer pairs collapse to one representative — DP4 cannot
+    distinguish them, so keeping both would waste compute and return
+    degenerate probabilities.
     """
     if len(input_sources) != 1:
         return (
@@ -329,7 +334,7 @@ def _enumerate_input(
         return f"diastereomer enumeration: {exc}"
     if len(isomers) <= 1:
         logger.info("Enumeration produced no extra isomers; using input as-is")
-        return input_sources, _parse_candidates(input_sources, charge, multiplicity), charge or 0
+        return input_sources, _parse_candidates(input_sources, charge, multiplicity), charge
 
     new_sources = [c.smiles for c in isomers]
     reader = StructureReader()
@@ -342,6 +347,14 @@ def _enumerate_input(
             name=iso.label,
         )
         safe = sanitize_job_name(structure.id) or iso.label
+        metadata: dict[str, object] = {
+            "source": source,
+            "smiles": iso.smiles,
+            "stereocenters": iso.stereocenters,
+            "enumerated": True,
+            **(structure.metadata or {}),
+        }
+        metadata.update(_capture_candidate_topology(structure, iso.smiles, charge, multiplicity))
         new_candidates.append(
             Structure(
                 id=safe,
@@ -349,13 +362,7 @@ def _enumerate_input(
                 multiplicity=structure.multiplicity,
                 symbols=structure.symbols,
                 coordinates=structure.coordinates,
-                metadata={
-                    "source": source,
-                    "smiles": iso.smiles,
-                    "stereocenters": iso.stereocenters,
-                    "enumerated": True,
-                    **(structure.metadata or {}),
-                },
+                metadata=metadata,
             )
         )
     logger.info(
@@ -363,8 +370,7 @@ def _enumerate_input(
         len(new_candidates),
         source,
     )
-    # charge may be None → normalize to 0 for downstream consistency
-    return new_sources, new_candidates, charge if charge is not None else 0
+    return new_sources, new_candidates, charge
 
 
 def _resolve_config(
@@ -881,14 +887,16 @@ def _analyze_candidate(
 ) -> CandidateResult:
     """Stages 4–7: average, match, scale, collect residuals for probability."""
     symbols = list(structure.symbols)
-    omit_indices = _omit_atom_indices(experiment, symbols)
+    omit_indices = _omit_atom_indices(experiment, structure, strict=nmr_config.strict_equivalence)
 
     # DevDoc §5 stage 5: assigned spectra use ONLY explicit EQ groups (the
     # user has already labeled every atom of interest); auto-detection
     # would wrongly collapse distinct assigned atoms. Unassigned spectra
     # rely on detection (no labels to disambiguate).
     if experiment.assigned:
-        equivalence_groups = _explicit_eq_to_indices(experiment, symbols)
+        equivalence_groups = _explicit_eq_to_indices(
+            experiment, structure, strict=nmr_config.strict_equivalence
+        )
     else:
         # G01: prefer the captured bonded graph (any input format), then
         # the SMILES rebuild. Without any graph the detector returns
@@ -911,6 +919,7 @@ def _analyze_candidate(
         equivalence_groups=equivalence_groups,
         omit_atom_indices=omit_indices,
     )
+    atom_shifts = _relabel_shifts_with_map(atom_shifts, structure)
 
     assign_result = match_assigned(atom_shifts, experiment)
     pairs = assign_result.pairs
@@ -967,37 +976,113 @@ def _analyze_candidate(
     )
 
 
-def _omit_atom_indices(experiment: ExperimentalNmr, symbols: list[str]) -> list[int]:
-    """Resolve OMIT labels to 0-based atom indices."""
+def _omit_atom_indices(
+    experiment: ExperimentalNmr,
+    structure: Structure,
+    strict: bool = False,
+) -> list[int]:
+    """Resolve OMIT labels to 0-based candidate (mol) indices.
+
+    Resolution goes through :func:`nmr_structure_map_for`; without a
+    molecular graph the labels cannot be resolved and are ignored
+    (warning) — there is no per-element ordinal fallback.
+    """
     if not experiment.omit_atoms:
         return []
-    from acp.nmr.equivalence import _build_label_index
-
-    label_to_idx = _build_label_index(symbols)
-    return [label_to_idx[label] for label in experiment.omit_atoms if label in label_to_idx]
+    m = nmr_structure_map_for(structure)
+    if m is None:
+        logger.warning("no molecular graph; OMIT/EQ labels cannot be resolved — ignored")
+        return []
+    resolved: list[int] = []
+    for label in experiment.omit_atoms:
+        try:
+            resolved.append(m.mol_index_for_source(m.source_index_for_label(label)))
+        except StructureMapError as exc:
+            if strict:
+                raise EquivalenceError(
+                    f"unresolvable label {label!r} for candidate {structure.id!r}: {exc}"
+                ) from exc
+            logger.warning(
+                "label %r not resolvable for candidate %s (skipped): %s",
+                label,
+                structure.id,
+                exc,
+            )
+    return resolved
 
 
 def _explicit_eq_to_indices(
     experiment: ExperimentalNmr,
-    symbols: list[str],
+    structure: Structure,
+    strict: bool = False,
 ) -> list[list[int]]:
-    """Convert explicit ``EQ:`` labels to 0-based index groups.
+    """Convert explicit ``EQ:`` labels to 0-based candidate (mol) index groups.
 
-    Returns an empty list when no explicit groups are present (each atom
-    is then its own singleton — the desired behavior for fully-assigned
-    spectra where every atom is distinct).
+    Labels resolve through the stable :class:`NmrStructureMap` (see
+    :func:`_omit_atom_indices` for the no-graph behavior). Groups keeping
+    fewer than two resolvable indices are dropped — a singleton is the
+    default behavior anyway. Returns an empty list when no explicit groups
+    are present (each atom is then its own singleton — the desired behavior
+    for fully-assigned spectra where every atom is distinct).
     """
     if not experiment.equivalence_groups:
         return []
-    from acp.nmr.equivalence import _build_label_index
-
-    label_to_idx = _build_label_index(symbols)
+    m = nmr_structure_map_for(structure)
+    if m is None:
+        logger.warning("no molecular graph; OMIT/EQ labels cannot be resolved — ignored")
+        return []
     groups: list[list[int]] = []
     for group in experiment.equivalence_groups:
-        idxs = [label_to_idx[label] for label in group if label in label_to_idx]
+        idxs: list[int] = []
+        for label in group:
+            try:
+                idxs.append(m.mol_index_for_source(m.source_index_for_label(label)))
+            except StructureMapError as exc:
+                if strict:
+                    raise EquivalenceError(
+                        f"unresolvable label {label!r} for candidate {structure.id!r}: {exc}"
+                    ) from exc
+                logger.warning(
+                    "label %r not resolvable for candidate %s (skipped): %s",
+                    label,
+                    structure.id,
+                    exc,
+                )
         if len(idxs) > 1:
             groups.append(idxs)
     return groups
+
+
+def _relabel_shifts_with_map(
+    atom_shifts: list[AtomShift],
+    structure: Structure,
+) -> list[AtomShift]:
+    """Rewrite peak labels into source space under non-identity provenance.
+
+    :func:`boltzmann_average_shieldings` emits labels from the candidate's
+    (mol/QC) atom order. When the structure map records a different source
+    order, experimental peaks — which are authored against the *source*
+    labels — must match the source-space spelling; ``match_assigned`` locks
+    labels verbatim, so this runs before it.
+    """
+    m = nmr_structure_map_for(structure)
+    if m is None:
+        return list(atom_shifts)
+    relabeled: list[AtomShift] = []
+    for shift in atom_shifts:
+        try:
+            new = m.label_for_source(m.source_index_for_mol(shift.atom_index))
+        except StructureMapError as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "atom %d of candidate %s not relabeled: %s",
+                shift.atom_index,
+                structure.id,
+                exc,
+            )
+            relabeled.append(shift)
+            continue
+        relabeled.append(shift if new == shift.atom_label else replace(shift, atom_label=new))
+    return relabeled
 
 
 def _try_build_rdkit_mol(structure: Structure):
