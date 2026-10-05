@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -117,21 +118,82 @@ def element_of_nucleus(nucleus: str) -> str:
 # --- input data ----------------------------------------------------------
 
 
+ParseIssueCode = Literal[
+    "unknown_token",
+    "duplicate_label",
+    "missing_label",
+    "unmatched_peak",
+    "unmatched_atom",
+    "ambiguous_label",
+]
+
+PARSE_ISSUE_CODES: tuple[str, ...] = (
+    "unknown_token",
+    "duplicate_label",
+    "missing_label",
+    "unmatched_peak",
+    "unmatched_atom",
+    "ambiguous_label",
+)
+
+
+@dataclass(frozen=True)
+class ParseIssue:
+    """One parse-time problem in experimental NMR input (G02/G03).
+
+    Readable via ``str()`` (``[code] detail (token: ...)``) and
+    serializable via :meth:`to_dict`.
+    """
+
+    code: ParseIssueCode
+    detail: str
+    token: str = ""
+
+    def __str__(self) -> str:
+        base = f"[{self.code}] {self.detail}"
+        return f"{base} (token: {self.token!r})" if self.token else base
+
+    def to_dict(self) -> dict[str, str]:
+        return {"code": self.code, "detail": self.detail, "token": self.token}
+
+
 @dataclass(frozen=True)
 class ExperimentalPeak:
     """One experimental resonance.
 
     Attributes:
         shift_ppm: Chemical shift in ppm.
-        atom_label: Atom assignment (e.g. ``"C1"``). ``None`` for unassigned.
+        atom_label: Resolved single assignment (e.g. ``"C1"``). ``None``
+            when unassigned or ambiguous — never one pick of a set.
         multiplicity: Integral multiplicity (e.g. 3 for CH3). Defaults to 1.
         element: Element this peak belongs to (``"H"``/``"C"``/...).
+        label_candidates: ``None`` when the peak carries no label; a tuple
+            of candidate atom labels otherwise (length 1 = explicit, >1 =
+            ambiguous input kept as a set).
+        index: Position within its element's peak list (parser-assigned
+            stable identity for downstream matching).
     """
 
     shift_ppm: float
     element: str
     atom_label: str | None = None
     multiplicity: int = 1
+    label_candidates: tuple[str, ...] | None = None
+    index: int | None = None
+
+    @property
+    def assigned(self) -> bool:
+        """True only when this peak resolves to exactly one atom label."""
+        if self.atom_label is None:
+            return False
+        if self.label_candidates is None:
+            return True
+        return len(self.label_candidates) == 1 and self.label_candidates[0] == self.atom_label
+
+    @property
+    def ambiguous(self) -> bool:
+        """True for unassigned-with-candidates (several labels, no resolution)."""
+        return self.atom_label is None and bool(self.label_candidates)
 
 
 @dataclass
@@ -143,13 +205,19 @@ class ExperimentalNmr:
         equivalence_groups: Equivalence groups (lists of atom labels); each
             group is averaged to a single computed signal before matching.
         omit_atoms: Atom labels excluded from comparison.
-        assigned: ``True`` when peaks carry explicit atom assignments.
+        assigned: Legacy whole-spectrum flag — ``True`` only when EVERY
+            peak is assigned. Mixed input must not flip it (per-peak
+            :attr:`ExperimentalPeak.assigned` and :meth:`assignment_counts`
+            are authoritative).
+        parse_errors: Issues found while parsing (unknown tokens, missing/
+            duplicate labels, unmatched peaks/atoms, ambiguous labels).
     """
 
     peaks: dict[str, list[ExperimentalPeak]] = field(default_factory=dict)
     equivalence_groups: list[list[str]] = field(default_factory=list)
     omit_atoms: list[str] = field(default_factory=list)
     assigned: bool = False
+    parse_errors: list[ParseIssue] = field(default_factory=list)
 
     def nuclei(self) -> list[str]:
         """Return the sorted element symbols actually present."""
@@ -158,6 +226,20 @@ class ExperimentalNmr:
     def peaks_for(self, element: str) -> list[ExperimentalPeak]:
         """Return the peaks for one element (normalized)."""
         return self.peaks.get(normalize_symbol(element), [])
+
+    def assignment_counts(self) -> dict[str, tuple[int, int]]:
+        """Per-element ``(assigned, total)`` peak counts."""
+        return {
+            element: (sum(1 for p in group if p.assigned), len(group))
+            for element, group in self.peaks.items()
+        }
+
+    @property
+    def assigned_nuclei(self) -> list[str]:
+        """Elements with at least one explicitly assigned peak."""
+        return sorted(
+            element for element, group in self.peaks.items() if any(p.assigned for p in group)
+        )
 
 
 @dataclass(frozen=True)
@@ -372,6 +454,9 @@ class NmrReport:
 __all__ = [
     "ExperimentalPeak",
     "ExperimentalNmr",
+    "ParseIssue",
+    "ParseIssueCode",
+    "PARSE_ISSUE_CODES",
     "NmrConfig",
     "ConformerShielding",
     "AtomShift",
