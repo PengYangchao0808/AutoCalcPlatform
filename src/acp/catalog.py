@@ -543,6 +543,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
         "default": {"*": "r2SCAN-3c"},
+        "help": "Electronic structure method; for NMR this is the GIAO functional (nmr_method)",
+        "help_zh": "电子结构方法；NMR 任务中即 GIAO 屏蔽计算所用泛函（nmr_method）",
     },
     "basis": {
         "type": "select",
@@ -553,6 +555,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         },
         "default": {"*": ""},
         "supports_custom": True,
+        "help": "Basis set; for NMR this is the GIAO basis (nmr_basis) — 3c composites carry a built-in basis",
+        "help_zh": "基组；NMR 任务中即 GIAO 基组（nmr_basis）；3c 复合方法使用内置基组",
     },
     "single_point_method": {
         "type": "select",
@@ -608,6 +612,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
             "GBSA": "GBSA",
         },
         "default": {"*": "none"},
+        "help": "Implicit solvation model; 'none' explicitly disables solvation (CPCM/SMD on ORCA, ALPB/GBSA on xTB)",
+        "help_zh": "隐式溶剂模型；'none' 显式表示不使用溶剂（ORCA 用 CPCM/SMD，xTB 用 ALPB/GBSA）",
     },
     "solvent": {
         "type": "select",
@@ -740,6 +746,17 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "min": 0,
         "default": {"*": 6.0},
         "unit": "kcal/mol",
+        "help": "Conformer energy window (kcal/mol) above the lowest conformer kept for the ensemble",
+        "help_zh": "构象能量窗口（kcal/mol）：相对最低构象保留的构象集合范围",
+    },
+    "max_conformers": {
+        "type": "int",
+        "label": "Max Conformers",
+        "label_zh": "构象数上限",
+        "min": 1,
+        "default": {"*": 10},
+        "help": "Cap on conformers carried into the downstream averaging/GIAO stage (nmr resolver field)",
+        "help_zh": "进入后续平均/GIAO 阶段的构象数量上限（nmr resolver 字段）",
     },
     "refinement_threshold": {
         "type": "float",

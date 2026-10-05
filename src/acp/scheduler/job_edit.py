@@ -611,9 +611,10 @@ def effective_config_info(record: JobRecord) -> dict[str, Any]:
 
     * ``snapshot``   — effective_config.json exists in the work dir.
     * ``recomputed`` — no snapshot; the effective config was recomputed from
-      the submitted method dict (BatchOptimize only).
-    * ``unavailable``— neither is available (non-batch workflows without a
-      snapshot; the draft hydrates from the spec alone).
+      the submitted method dict (BatchOptimize, and nmr via the T17 resolver
+      — todo 25 syncs functional/basis/solvent_model/ewin/max_conformers).
+    * ``unavailable``— neither is available (other non-batch workflows
+      without a snapshot; the draft hydrates from the spec alone).
     """
     work_dir = Path(record.work_dir) if record.work_dir else None
     if work_dir is not None:
@@ -641,7 +642,33 @@ def effective_config_info(record: JobRecord) -> dict[str, Any]:
             return {"status": "recomputed", "source": "spec.method", "config": recomputed}
         except Exception:  # noqa: BLE001 - degrade to unavailable, never block the draft
             logger.debug("effective-config recompute failed", exc_info=True)
+    if record.spec.workflow == "nmr":
+        config, _problem = _resolve_nmr_effective_config(record)
+        if config is not None:
+            return {"status": "recomputed", "source": "spec.method", "config": config}
     return {"status": "unavailable", "source": None, "config": None}
+
+
+def _resolve_nmr_effective_config(record: JobRecord) -> tuple[dict[str, Any] | None, str | None]:
+    """Resolve the nmr method payload through the T17 resolver (todo 25).
+
+    Returns ``(config_dict, None)`` on success or ``(None, problem)`` when
+    the payload is rejected (e.g. a method outside the NMR/GIAO metadata).
+    Rejection degrades the draft's effective-config block to ``unavailable``
+    and is surfaced as a note by :func:`build_edit_draft` — the review/view
+    semantics of the draft itself never change.
+    """
+    from acp.nmr.method_config import resolve_nmr_method
+    from acp.scheduler.jobs import nmr_flag_config
+
+    method = record.spec.method if isinstance(record.spec.method, dict) else {}
+    try:
+        # NmrMethodConfigError is a ValueError; OSError covers config reads.
+        resolved = resolve_nmr_method(dict(method), nmr_flag_config(record.spec.config_path))
+    except (ValueError, OSError) as exc:
+        logger.debug("nmr effective-config resolve failed", exc_info=True)
+        return None, str(exc)
+    return resolved.to_dict(), None
 
 
 def _missing_fields(record: JobRecord) -> list[str]:
@@ -731,6 +758,13 @@ def build_edit_draft(
     notes: list[str] = []
     if not editable and edit_status.get("migration_hint"):
         notes.append(f"迁移建议：{edit_status['migration_hint']}")
+    if editable and spec.workflow == "nmr":
+        # todo 25: unregistered/invalid method fields are rejected by the
+        # resolver — surface the reason at draft time (hint only; the
+        # review/view and submission semantics are unchanged).
+        _config, problem = _resolve_nmr_effective_config(record)
+        if problem:
+            notes.append(f"NMR 方法参数未通过编辑校验（提交前请修正）：{problem}")
     return {
         "job_id": record.id,
         "workflow": spec.workflow,

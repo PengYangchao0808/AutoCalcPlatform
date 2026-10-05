@@ -1702,6 +1702,9 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/method_config.py",
     # acp-nmr-goodman-gap todo 18: CLI parameter forwarding + --name emission fix.
     "src/acp/cli.py",
+    # acp-nmr-goodman-gap todo 25: Goodman R² split (fit_scaling_goodman
+    # numerator/denominator + regression/prediction helpers).
+    "src/acp/nmr/scaling.py",
     # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
     "src/acp/workflows/irc.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker

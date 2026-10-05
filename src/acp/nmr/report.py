@@ -4,9 +4,11 @@
 Emits:
 
 * ``nmr_report.json`` — the full machine-readable report (candidates,
-  DP4/DP5, assignment tables, regression, per-conformer weights);
+  DP4/DP5, assignment tables, regression + split R², per-conformer weights);
 * ``nmr_assignment.xlsx`` — per-candidate shift-comparison sheet;
-* ``scatter_<nucleus>.png`` / ``error_hist.png`` — diagnostic plots.
+* ``scatter_<nucleus>.png`` / ``error_hist.png`` — diagnostic plots; the
+  error histogram carries one signed ``scaled - exp`` residual panel per
+  nucleus (Goodman convention, todo 25).
 """
 
 from __future__ import annotations
@@ -17,13 +19,30 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TypedDict
 
-from acp.nmr.models import REPORT_SCHEMA_VERSION, NmrReport
+from acp.nmr.models import REPORT_SCHEMA_VERSION, Assignment, CandidateResult, NmrReport
+from acp.nmr.scaling import prediction_r_squared
 
 logger = logging.getLogger(__name__)
 
 #: Rendered for payloads written before schema v2 (no ``schema_version``):
 #: historical reports carry no validation state and are never upgraded.
 LEGACY_REPORT_NOTE = "历史报告：验证状态未知"
+
+#: Residual axis label — Goodman convention (todo 25): the stored residual
+#: is ``scaled - exp``; the pre-25 label claimed the opposite sign.
+GOODMAN_RESIDUAL_LABEL = "residual (scaled - exp) / ppm"
+
+#: Provenance descriptions of the two R² definitions (todo 25).
+R2_DEFINITIONS: dict[str, str] = {
+    "r2_regression": (
+        "regression-correlation squared of the calc-on-exp OLS fit "
+        "(coefficient of determination; equals the historical r_squared)"
+    ),
+    "r2_prediction": (
+        "prediction-space goodness of fit: 1 - sum((scaled - exp)^2) / sum((exp - mean(exp))^2)"
+    ),
+    "residual_convention": "scaled - exp",
+}
 
 
 class ReportPaths(TypedDict):
@@ -49,11 +68,67 @@ def report_validation_note(payload: Mapping[str, object]) -> str | None:
     return LEGACY_REPORT_NOTE
 
 
+def _prediction_r2_by_nucleus(candidate: CandidateResult) -> dict[str, float | None]:
+    """Prediction-space r² per nucleus from one candidate's assignments.
+
+    Nuclei with fewer than two matched rows get ``None`` (undefined — never
+    reported as ``0``; the T23 null-display rule applies to report values).
+    """
+    rows_by_nucleus: dict[str, list[Assignment]] = {}
+    for assignment in candidate.assignments:
+        rows_by_nucleus.setdefault(_nucleus_of_element(assignment.element), []).append(assignment)
+    out: dict[str, float | None] = {}
+    for nucleus, rows in rows_by_nucleus.items():
+        if len(rows) < 2:
+            out[nucleus] = None
+            continue
+        out[nucleus] = round(
+            prediction_r_squared(
+                [row.exp_ppm for row in rows],
+                [row.scaled_ppm for row in rows],
+            ),
+            6,
+        )
+    return out
+
+
+def _augment_split_r2(report: NmrReport, payload: object) -> object:
+    """Add the split R² keys to each fitted nucleus + provenance (todo 25).
+
+    ``r2_regression`` is the documented alias of the historical
+    ``r_squared`` key: :class:`RegressionResult.r_squared` already IS the
+    regression-correlation squared after the scaling.py numerator/
+    denominator correction; ``r2_prediction`` is computed from the
+    assignment rows (missing rows → ``None``).
+    """
+    candidates = payload.get("candidates") if isinstance(payload, dict) else None
+    if isinstance(candidates, list) and len(candidates) == len(report.candidates):
+        for candidate, cand_dict in zip(report.candidates, candidates):
+            regression = cand_dict.get("regression") if isinstance(cand_dict, dict) else None
+            if not isinstance(regression, dict):
+                continue
+            pred_by_nucleus = _prediction_r2_by_nucleus(candidate)
+            for nucleus, reg in regression.items():
+                if not isinstance(reg, dict):
+                    continue
+                reg["r2_regression"] = reg.get("r_squared")
+                reg["r2_prediction"] = pred_by_nucleus.get(nucleus)
+    provenance = payload.get("provenance") if isinstance(payload, dict) else None
+    if isinstance(provenance, dict):
+        provenance["r2_definitions"] = dict(R2_DEFINITIONS)
+    return payload
+
+
 def write_json_report(report: NmrReport, output_path: Path) -> Path:
-    """Write ``nmr_report.json`` (schema v2 payload from ``NmrReport.as_dict``)."""
+    """Write ``nmr_report.json`` (schema v2 payload from ``NmrReport.as_dict``).
+
+    The payload additionally carries the split R² keys
+    (``r2_regression``/``r2_prediction`` per fitted nucleus) and the
+    ``provenance.r2_definitions`` block (todo 25).
+    """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = report.as_dict()
+    payload = _augment_split_r2(report, report.as_dict())
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return output_path
 
@@ -99,12 +174,16 @@ def write_xlsx_report(report: NmrReport, output_path: Path) -> Path | None:
         dp5 = candidate.dp5_probability
         ws.append(["DP4", round(dp4, 6) if dp4 is not None else None])
         ws.append(["DP5", round(dp5, 6) if dp5 is not None else None])
+        pred_by_nucleus = _prediction_r2_by_nucleus(candidate)
         for nucleus, regression in candidate.regressions.items():
             ws.append([])
             ws.append([f"regression[{nucleus}]", "slope", round(regression.slope, 6)])
             ws.append(["", "intercept", round(regression.intercept, 6)])
             ws.append(["", "r_squared", round(regression.r_squared, 6)])
             ws.append(["", "mae", round(regression.mae, 6)])
+            # split R² (todo 25) — same numbers as the JSON record
+            ws.append(["", "r2_regression", round(regression.r_squared, 6)])
+            ws.append(["", "r2_prediction", pred_by_nucleus.get(nucleus)])
 
     if default_ws is not None and len(wb.sheetnames) > 1:
         wb.remove(default_ws)
@@ -160,19 +239,26 @@ def write_plots(report: NmrReport, output_dir: Path) -> list[Path]:
         plt.close(fig)
         written.append(path)
 
-    # residual histogram (all nuclei combined, absolute residual)
-    all_residuals = [
-        assignment.residual
-        for candidate in report.candidates
-        for assignment in candidate.assignments
-    ]
-    if all_residuals:
-        fig, ax = plt.subplots(figsize=(5, 4))
-        ax.hist(all_residuals, bins=20, alpha=0.75, edgecolor="black")
-        ax.set_xlabel("residual (δ_exp − δ_scaled) / ppm")
-        ax.set_ylabel("count")
-        ax.set_title("Residual distribution")
-        fig.tight_layout()
+    # Residual histogram — one panel PER NUCLEUS with SIGNED residuals in
+    # the Goodman convention (scaled - exp, never absolute). The pre-25
+    # version combined all nuclei under a δ_exp − δ_scaled label — the
+    # opposite sign of the stored values. The file name stays
+    # ``error_hist.png`` (T22/T23 manifest consumers pin the path).
+    by_nucleus_residuals: dict[str, list[float]] = {}
+    for candidate in report.candidates:
+        for assignment in candidate.assignments:
+            nucleus = _nucleus_of_element(assignment.element)
+            by_nucleus_residuals.setdefault(nucleus, []).append(assignment.residual)
+    if by_nucleus_residuals:
+        nuclei = sorted(by_nucleus_residuals)
+        fig, axes = plt.subplots(1, len(nuclei), figsize=(4.5 * len(nuclei), 3.6), squeeze=False)
+        for ax, nucleus in zip(axes[0], nuclei):
+            ax.hist(by_nucleus_residuals[nucleus], bins=20, alpha=0.75, edgecolor="black")
+            ax.set_xlabel(GOODMAN_RESIDUAL_LABEL)
+            ax.set_ylabel("count")
+            ax.set_title(f"{nucleus}: scaled - exp")
+        fig.suptitle("Residual distribution (Goodman: scaled - exp)", fontsize=10)
+        fig.tight_layout(rect=(0, 0, 1, 0.94))
         path = output_dir / "error_hist.png"
         fig.savefig(path, dpi=120)
         plt.close(fig)
@@ -208,6 +294,8 @@ __all__ = [
     "write_plots",
     "write_all_reports",
     "report_validation_note",
+    "GOODMAN_RESIDUAL_LABEL",
     "LEGACY_REPORT_NOTE",
+    "R2_DEFINITIONS",
     "ReportPaths",
 ]

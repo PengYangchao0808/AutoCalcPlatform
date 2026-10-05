@@ -2,9 +2,15 @@
 """Linear-regression scaling (DevDoc §5 stage 6 / §8.4).
 
 Per-nucleus ordinary-least-squares fit ``δ_exp = slope · δ_calc + intercept``
-with residuals ``r = δ_exp − δ_scaled``. The regression absorbs the
-constant TMS / solvent offset so the downstream DP4/DP5 likelihood is
-insensitive to systematic shielding offsets (Goodman InternalScaling).
+with residuals ``r = δ_exp − δ_scaled`` (:func:`fit_regression`) or the
+Goodman internal-scaling fit ``δ_calc = slope · δ_exp + intercept`` with
+residuals ``r = δ_scaled − δ_exp`` (:func:`fit_scaling_goodman`). The
+Goodman regression absorbs the constant TMS / solvent offset so the
+downstream DP4/DP5 likelihood is insensitive to systematic shielding
+offsets (Goodman InternalScaling).
+
+Two goodness-of-fit numbers exist and must never be conflated
+(:func:`regression_r_squared` / :func:`prediction_r_squared`).
 """
 
 from __future__ import annotations
@@ -106,6 +112,82 @@ def build_assignments(
     ]
 
 
+def regression_r_squared(
+    exp_ppm: list[float],
+    calc_ppm: list[float],
+) -> float:
+    """Regression-correlation squared of the Goodman calc-on-exp OLS fit.
+
+    Numerator and denominator both live in calc space (todo-25 correction —
+    the historical code divided a *scaled-space* numerator
+    ``Σ(scaled − exp)²`` by this calc-space denominator, matching neither
+    definition):
+
+    ``1 − Σ(calc − (slope·exp + intercept))² / Σ(calc − mean(calc))²``
+
+    Equal to the squared Pearson correlation of (exp, calc) for an OLS fit
+    with intercept. Degenerate input (fewer than 2 pairs or zero calc
+    variance) returns ``0.0`` — the same fallback as
+    :class:`RegressionResult` on degenerate fits.
+
+    Args:
+        exp_ppm: Experimental shifts.
+        calc_ppm: Computed shifts (same length as *exp_ppm*).
+
+    Returns:
+        The coefficient of determination in ``[0, 1]`` up to float noise,
+        or ``0.0`` when undefined.
+    """
+    if len(exp_ppm) != len(calc_ppm):
+        raise ValueError(f"calc/exp length mismatch: {len(calc_ppm)} != {len(exp_ppm)}")
+    if len(exp_ppm) < 2:
+        return 0.0
+    x = np.asarray(exp_ppm, dtype=np.float64)
+    y = np.asarray(calc_ppm, dtype=np.float64)
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    if not np.isfinite(ss_tot) or ss_tot <= 0:
+        return 0.0
+    slope, intercept = np.polyfit(x, y, 1)
+    if not np.isfinite(slope) or not np.isfinite(intercept):
+        return 0.0
+    ss_res = float(np.sum((y - (slope * x + intercept)) ** 2))
+    return float(1.0 - ss_res / ss_tot)
+
+
+def prediction_r_squared(
+    exp_ppm: list[float],
+    scaled_ppm: list[float],
+) -> float:
+    """Prediction-space goodness of fit in Goodman residual coordinates.
+
+    ``1 − Σ(scaled − exp)² / Σ(exp − mean(exp))²`` — numerator and
+    denominator both live in the scaled/exp (prediction) space, using the
+    signed Goodman residual ``r = scaled − exp``. This is generally NOT
+    equal to :func:`regression_r_squared` (they coincide only for slope ≈ 1
+    perfect fits).
+
+    Args:
+        exp_ppm: Experimental shifts.
+        scaled_ppm: Back-transformed shifts (same length as *exp_ppm*).
+
+    Returns:
+        The coefficient of determination (can be negative for fits worse
+        than the exp mean), or ``0.0`` when undefined (fewer than 2 pairs
+        or zero exp variance).
+    """
+    if len(exp_ppm) != len(scaled_ppm):
+        raise ValueError(f"exp/scaled length mismatch: {len(scaled_ppm)} != {len(exp_ppm)}")
+    if len(exp_ppm) < 2:
+        return 0.0
+    x = np.asarray(exp_ppm, dtype=np.float64)
+    s = np.asarray(scaled_ppm, dtype=np.float64)
+    ss_tot = float(np.sum((x - np.mean(x)) ** 2))
+    if not np.isfinite(ss_tot) or ss_tot <= 0:
+        return 0.0
+    ss_res = float(np.sum((s - x) ** 2))
+    return float(1.0 - ss_res / ss_tot)
+
+
 def fit_scaling_goodman(
     calc_ppm: list[float],
     exp_ppm: list[float],
@@ -118,6 +200,11 @@ def fit_scaling_goodman(
     and residuals ``r = scaled - exp``. The DP4/DP5 error models are trained
     on this convention; using the reverse regression (exp-on-calc) would
     produce different residuals and invalidate the trained σ values.
+
+    ``RegressionResult.r_squared`` is the regression-correlation squared of
+    this calc-on-exp fit (:func:`regression_r_squared`); the prediction-space
+    goodness of fit over the returned residuals is available separately as
+    :func:`prediction_r_squared` (todo 25 — the two must not be conflated).
 
     Args:
         calc_ppm: Computed shifts (post TMS conversion).
@@ -161,9 +248,14 @@ def fit_scaling_goodman(
     scaled = (y - intercept) / slope  # scaled ≈ exp
     residuals = scaled - x  # Goodman: scaled - exp
 
-    ss_res = float(np.sum(residuals**2))
-    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-    r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    # todo 25 numerator/denominator correction: the reported r² is the
+    # regression-correlation squared — numerator AND denominator in calc
+    # space (Σ(calc − fit)² / Σ(calc − mean)²). The previous code mixed a
+    # scaled-space numerator Σ(scaled − exp)² with that calc-space
+    # denominator, matching neither the regression nor the prediction
+    # definition; the prediction-space value is prediction_r_squared().
+    r2_regression = regression_r_squared(exp_ppm, calc_ppm)
+    r_squared = r2_regression
     mae = float(np.mean(np.abs(residuals)))
 
     return (
@@ -179,4 +271,10 @@ def fit_scaling_goodman(
     )
 
 
-__all__ = ["fit_regression", "fit_scaling_goodman", "build_assignments"]
+__all__ = [
+    "build_assignments",
+    "fit_regression",
+    "fit_scaling_goodman",
+    "prediction_r_squared",
+    "regression_r_squared",
+]

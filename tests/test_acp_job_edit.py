@@ -317,6 +317,12 @@ def _spec(workflow: str) -> JobSpec:
                 "boltzmann_temp": 298.15,
                 "error_model": "goodman",
                 "enumerate": False,
+                # todo 25: resolver parameters synced into the nmr edit draft
+                "functional": "mPW1PW91",
+                "basis": "6-311G(d)",
+                "solvent_model": "cpcm",
+                "ewin": 6.0,
+                "max_conformers": 10,
             },
         )
     else:  # pragma: no cover - guard for typos in the parametrisation
@@ -911,6 +917,74 @@ def test_draft_effective_config_unavailable(tmp_path: Path) -> None:
     assert draft["effective_config"]["status"] == "unavailable"
     assert draft["effective_config"]["source"] is None
     assert draft["effective_config"]["config"] is None
+
+
+# ---------------------------------------------------------------------------
+# todo 25: nmr editable-field coverage (functional/basis/solvent_model/
+# ewin/max_conformers) + resolver-backed effective config + rejection hint
+# ---------------------------------------------------------------------------
+
+_NMR_NEW_FIELDS = ("functional", "basis", "solvent_model", "ewin", "max_conformers")
+
+
+def test_nmr_editable_fields_flow_into_draft() -> None:
+    """The five resolver parameters are editable and preserved in the draft."""
+    record = _record("nmr", status=JobStatus.COMPLETED)
+    draft = build_edit_draft(record)
+    assert draft["workflow_status"] == "active"
+    assert draft["capabilities"]["can_edit"] is True
+    method = draft["editable_spec"]["method"]
+    for field in _NMR_NEW_FIELDS:
+        assert field in method, field
+        assert field in draft["preserved_fields"], field
+    assert method["functional"] == "mPW1PW91"
+    assert method["basis"] == "6-311G(d)"
+    assert method["solvent_model"] == "cpcm"
+    assert method["ewin"] == 6.0
+    assert method["max_conformers"] == 10
+
+
+def test_nmr_effective_config_recomputed_from_resolver(tmp_path: Path) -> None:
+    """Draft effective config resolves the nmr method through the T17 resolver."""
+    work_dir = tmp_path / "nmr_recompute"
+    work_dir.mkdir()  # exists but carries no effective_config.json snapshot
+    record = JobRecord(
+        id="effnmr",
+        spec=_spec("nmr"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+    )
+    draft = build_edit_draft(record)
+    eff = draft["effective_config"]
+    assert eff["status"] == "recomputed"
+    assert eff["source"] == "spec.method"
+    config = eff["config"]
+    assert config["nmr_method"] == "mPW1PW91"
+    assert config["nmr_basis"] == "6-311G(d)"
+    assert config["solvent_model"] == "cpcm"
+    assert config["ewin"] == 6.0
+    assert config["max_conformers"] == 10
+
+
+def test_nmr_unregistered_field_rejected_with_draft_hint(tmp_path: Path) -> None:
+    """Resolver rejection surfaces as a draft note; the draft still opens."""
+    bad = replace(
+        _spec("nmr"),
+        method={**_spec("nmr").method, "functional": "NotARealFunctional"},
+    )
+    record = JobRecord(
+        id="effnmr_bad",
+        spec=bad,
+        status=JobStatus.COMPLETED,
+        work_dir=str(tmp_path / "nmr_bad"),
+    )
+    draft = build_edit_draft(record)
+    assert draft["effective_config"]["status"] == "unavailable"
+    assert draft["capabilities"]["can_edit"] is True
+    assert draft["capabilities"]["disabled_reasons"] == []
+    hints = [note for note in draft["notes"] if "NMR" in note]
+    assert hints, f"expected an nmr validation hint, got {draft['notes']!r}"
+    assert "NotARealFunctional" in hints[0]
 
 
 # ---------------------------------------------------------------------------

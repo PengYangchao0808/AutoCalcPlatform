@@ -35,11 +35,14 @@ from acp.nmr.models import (
     RegressionResult,
 )
 from acp.nmr.report import (
+    GOODMAN_RESIDUAL_LABEL,
     LEGACY_REPORT_NOTE,
     report_validation_note,
     write_json_report,
+    write_plots,
     write_xlsx_report,
 )
+from acp.nmr.scaling import fit_scaling_goodman, prediction_r_squared, regression_r_squared
 
 # raw scaled value — serialized unchanged (never a display rounding)
 _RAW_SCALED = 4.100000012345
@@ -561,3 +564,141 @@ def test_json_and_xlsx_carry_same_numbers(tmp_path: Path) -> None:
             assert values[start + 1][2] == reg["intercept"]
             assert values[start + 2][2] == reg["r_squared"]
             assert values[start + 3][2] == reg["mae"]
+
+
+# ---------------------------------------------------------------------------
+# todo 25: split R² in the report + Goodman `scaled - exp` plot labels
+# ---------------------------------------------------------------------------
+
+# Same pinned fixture as tests/test_acp_nmr_scaling.py (BEFORE repro:
+# task-25-before-r2-and-label.txt — old mixed-space r² 0.724220 vs
+# regression 0.907228 / prediction 0.897741).
+_R2_EXP = [10.0, 20.0, 30.0, 40.0, 50.0]
+_R2_CALC = [3.0, 12.0, 11.0, 24.0, 26.0]
+_R2_H_EXP = [1.0, 2.0, 3.0, 4.0]
+_R2_H_CALC = [2.1, 1.9, 3.2, 3.8]
+
+
+def _assignments(
+    element: str, exp: list[float], calc: list[float], scaled: list[float], residuals: list[float]
+) -> list[Assignment]:
+    prefix = element
+    return [
+        Assignment(
+            atom_label=f"{prefix}{i}",
+            element=element,
+            exp_ppm=e,
+            calc_ppm=c,
+            scaled_ppm=s,
+            residual=r,
+        )
+        for i, (e, c, s, r) in enumerate(zip(exp, calc, scaled, residuals), start=1)
+    ]
+
+
+def _split_r2_report() -> NmrReport:
+    """Real Goodman fits for 13C and 1H so both R² definitions are computable."""
+    reg_c, scaled_c, res_c = fit_scaling_goodman(_R2_CALC, _R2_EXP, "13C")
+    reg_h, scaled_h, res_h = fit_scaling_goodman(_R2_H_CALC, _R2_H_EXP, "1H")
+    cand = CandidateResult(
+        index=0,
+        label="cand_0",
+        assignments=(
+            _assignments("C", _R2_EXP, _R2_CALC, scaled_c, res_c)
+            + _assignments("H", _R2_H_EXP, _R2_H_CALC, scaled_h, res_h)
+        ),
+        regressions={"13C": reg_c, "1H": reg_h},
+    )
+    return NmrReport(
+        candidates=[cand],
+        config=NmrConfig(),
+        error_model="goodman-legacy",
+        dp5_mode="fchl",
+    )
+
+
+def test_json_report_exposes_split_r2_and_definitions(tmp_path: Path) -> None:
+    """JSON carries r2_regression (= r2, documented map) + r2_prediction."""
+    path = write_json_report(_split_r2_report(), tmp_path / "nmr_report.json")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    reg = data["candidates"][0]["regression"]["13C"]
+
+    # regression-correlation squared keeps the historical ``r2`` key/value
+    assert reg["r2_regression"] == reg["r_squared"]
+    assert reg["r2_regression"] == round(regression_r_squared(_R2_EXP, _R2_CALC), 6)
+    # prediction-space goodness of fit is exposed under its own name
+    _reg, scaled, _res = fit_scaling_goodman(_R2_CALC, _R2_EXP, "13C")
+    assert reg["r2_prediction"] == round(prediction_r_squared(_R2_EXP, scaled), 6)
+    # the two definitions are distinguishable on this fixture
+    assert reg["r2_regression"] != reg["r2_prediction"]
+
+    # provenance names both definitions and the residual convention
+    defs = data["provenance"]["r2_definitions"]
+    assert set(defs) >= {"r2_regression", "r2_prediction", "residual_convention"}
+    assert defs["residual_convention"] == "scaled - exp"
+
+
+def test_json_report_prediction_r2_is_null_without_rows(tmp_path: Path) -> None:
+    """No assignment rows for the fitted nucleus → null (never 0, T23 rule)."""
+    path = write_json_report(_report(), tmp_path / "nmr_report.json")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    reg = data["candidates"][0]["regression"]["13C"]
+    assert reg["r2_regression"] == reg["r_squared"]
+    assert reg["r2_prediction"] is None
+
+
+def test_xlsx_split_r2_rows_mirror_json(tmp_path: Path) -> None:
+    pytest.importorskip("openpyxl")
+    from openpyxl import load_workbook
+
+    report = _split_r2_report()
+    json_path = write_json_report(report, tmp_path / "nmr_report.json")
+    xlsx_path = write_xlsx_report(report, tmp_path / "nmr_assignment.xlsx")
+    assert xlsx_path is not None
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    values = [row for row in load_workbook(xlsx_path)["cand_0"].iter_rows(values_only=True)]
+    for nucleus, reg in data["candidates"][0]["regression"].items():
+        start = next(i for i, r in enumerate(values) if r and r[0] == f"regression[{nucleus}]")
+        assert values[start + 4][1:3] == ("r2_regression", reg["r2_regression"])
+        assert values[start + 5][1:3] == ("r2_prediction", reg["r2_prediction"])
+
+
+def test_write_plots_residual_labels_state_scaled_minus_exp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Residual panels split per nucleus, signed, labelled Goodman scaled-exp."""
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    from matplotlib.axes import Axes
+
+    xlabels: list[str] = []
+    titles: list[str] = []
+    orig_xlabel = Axes.set_xlabel
+    orig_title = Axes.set_title
+
+    def spy_xlabel(self, label, *args, **kwargs):
+        xlabels.append(str(label))
+        return orig_xlabel(self, label, *args, **kwargs)
+
+    def spy_title(self, label, *args, **kwargs):
+        titles.append(str(label))
+        return orig_title(self, label, *args, **kwargs)
+
+    monkeypatch.setattr(Axes, "set_xlabel", spy_xlabel)
+    monkeypatch.setattr(Axes, "set_title", spy_title)
+
+    paths = write_plots(_split_r2_report(), tmp_path / "plots")
+    names = sorted(p.name for p in paths)
+    # plot filenames/paths unchanged (T22/T23 depend on reports/plots/)
+    assert "error_hist.png" in names
+    assert "scatter_13C.png" in names
+    assert "scatter_1H.png" in names
+
+    # residual axis label uses the Goodman convention, never the old sign
+    assert GOODMAN_RESIDUAL_LABEL == "residual (scaled - exp) / ppm"
+    assert GOODMAN_RESIDUAL_LABEL in xlabels
+    assert not any("δ_exp − δ_scaled" in lbl for lbl in xlabels)
+    # one residual panel per nucleus, each title states the definition
+    panel_titles = [t for t in titles if "scaled - exp" in t]
+    assert any("13C" in t for t in panel_titles)
+    assert any("1H" in t for t in panel_titles)

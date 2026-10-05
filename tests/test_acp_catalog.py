@@ -1445,3 +1445,34 @@ def test_every_catalog_declared_enum_value_resolves() -> None:
                             family,
                             implementation,
                         )
+
+
+# --- todo 25: nmr resolver-parameter field help (no schema changes) --------
+def test_nmr_resolver_parameter_field_help_present() -> None:
+    """functional/basis/solvent_model/ewin/max_conformers carry help text."""
+    field_defs = get_method_catalog()["field_definitions"]
+    for name in ("functional", "basis", "solvent_model", "ewin", "max_conformers"):
+        assert field_defs[name].get("help"), name
+        assert field_defs[name].get("help_zh"), name
+    assert field_defs["max_conformers"]["default"]["*"] == 10
+
+
+def test_nmr_schema_levels_unchanged_by_todo25() -> None:
+    """Help is FIELD_DEFINITIONS-only: nmr method-schema levels untouched."""
+    schema = METHOD_SCHEMAS["nmr"]
+    fields_by_level = {
+        level["level_id"]: list(level["fields"]) for level in schema["method_levels"]
+    }
+    assert fields_by_level["conformer"] == ["ewin", "refinement_threshold"]
+    assert fields_by_level["giaoa"] == [
+        "functional",
+        "basis",
+        "solvent_model",
+        "solvent",
+        "nuclei",
+        "boltzmann_temp",
+        "tms_shielding_h",
+        "tms_shielding_c",
+    ]
+    assert "max_conformers" not in fields_by_level["conformer"]
+    assert [p["profile_id"] for p in schema["profiles"]] == ["nmr-goodman"]
