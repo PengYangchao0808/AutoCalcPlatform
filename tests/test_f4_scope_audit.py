@@ -1687,6 +1687,9 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/intake/parsers.py",
     # acp-nmr-goodman-gap todo 7: two-phase assignment (AssignmentResult).
     "src/acp/nmr/assignment.py",
+    # acp-nmr-goodman-gap todo 4: no-topology equivalence never element-merges.
+    "src/acp/nmr/equivalence.py",
+    "src/acp/nmr/averaging.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {

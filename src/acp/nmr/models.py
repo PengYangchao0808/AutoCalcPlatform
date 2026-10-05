@@ -268,6 +268,7 @@ class NmrConfig:
     max_conformers: int = 10
     error_model: str = "goodman-legacy"
     conformer_preset: str = "censo-light"
+    strict_equivalence: bool = False
 
     def tms_for(self, nucleus: str) -> float | None:
         """Return the TMS reference shielding for a nucleus label."""

@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from acp.nmr.equivalence import build_all_labels, build_label_for_atom
+from acp.nmr.equivalence import EquivalenceResult, build_all_labels, build_label_for_atom
 from acp.nmr.models import (
     AtomShift,
     ConformerShielding,
@@ -25,7 +26,7 @@ def boltzmann_average_shieldings(
     conformers: list[ConformerShielding],
     symbols: list[str],
     config: NmrConfig,
-    equivalence_groups: list[list[int]] | None = None,
+    equivalence_groups: Sequence[Sequence[int]] | EquivalenceResult | None = None,
     omit_atom_indices: list[int] | None = None,
 ) -> list[AtomShift]:
     """Average per-conformer shieldings into per-atom shifts.

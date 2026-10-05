@@ -399,6 +399,7 @@ def _build_nmr_config(
     tms_13c: float | None,
     error_model: str | None,
     conformer_preset: str | None,
+    strict_equivalence: bool = False,
 ) -> NmrConfig:
     """Assemble :class:`NmrConfig` from cfg + explicit overrides."""
     theory_nmr = (cfg.get("theory") or {}).get("nmr") or {}
@@ -449,6 +450,7 @@ def _build_nmr_config(
         max_conformers=int(nmr_section.get("max_conformers") or 10),
         error_model=error_model or "goodman-legacy",
         conformer_preset=conformer_preset or "censo-light",
+        strict_equivalence=strict_equivalence or bool(nmr_section.get("strict_equivalence")),
     )
 
 
@@ -888,12 +890,16 @@ def _analyze_candidate(
     if experiment.assigned:
         equivalence_groups = _explicit_eq_to_indices(experiment, symbols)
     else:
-        # Pass a bonded RDKit Mol (from the candidate's SMILES source) so
-        # equivalence detection uses true topology, not the element-only
-        # fallback. Parity audit 2026-08-07: without connectivity, all C
-        # atoms collapse into one group — wrong for any multi-carbon mol.
-        mol = _try_build_rdkit_mol(structure)
-        detected_groups = detect_equivalence_groups(symbols, mol=mol)
+        # G01: prefer the captured bonded graph (any input format), then
+        # the SMILES rebuild. Without any graph the detector returns
+        # single-atom groups flagged equivalence_unknown and strict mode
+        # rejects (EquivalenceError) — same-element atoms never merge.
+        mol = nmr_topology_mol_for(structure)
+        if mol is None:
+            mol = _try_build_rdkit_mol(structure)
+        detected_groups = detect_equivalence_groups(
+            symbols, mol=mol, strict=nmr_config.strict_equivalence
+        )
         equivalence_groups = merge_explicit_and_detected(
             experiment.equivalence_groups, detected_groups, symbols
         )
@@ -1199,8 +1205,11 @@ def run_nmr_analysis(
         strict_topology: When ``True``, stage-0 parsing raises
             :class:`TopologyUnavailableError` (surfaced as a failed result)
             if any candidate has no bonded molecular graph — e.g. an XYZ
-            input without an explicit charge. Defaults to ``False``;
-            ``NmrConfig.strict_equivalence`` wires here later (todo 4).
+            input without an explicit charge. Defaults to ``False``. The
+            same flag wires ``NmrConfig.strict_equivalence`` so equivalence
+            detection also rejects (:class:`EquivalenceError`) if no graph
+            is usable at analysis time (todo 4); config key
+            ``nmr.strict_equivalence`` sets it independently.
         nproc: CPU core override.
         boltzmann_temp: Boltzmann-weight temperature (K).
         tms_1h / tms_13c: Override TMS reference shieldings.
@@ -1305,6 +1314,7 @@ def run_nmr_analysis(
         tms_13c=tms_13c,
         error_model=error_model,
         conformer_preset=conformer_preset,
+        strict_equivalence=strict_topology,
     )
 
     # validate error-model ↔ NMR-level binding (DevDoc §10.2)
