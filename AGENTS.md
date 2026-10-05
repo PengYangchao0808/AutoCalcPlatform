@@ -4,9 +4,11 @@
 **Branch:** main
 
 ## OVERVIEW
-Automated computational chemistry platform. Two packages under `src/`: `cccp`（Computational Chemistry Connection Package — QC 接口库，≈35 .py ≈14k 行）与 `acp`（统一模块，≈238 .py ≈103k 行，calculation-plan-driven 工作流 + 统一 CLI + API/scheduler/nmr）。Python 3.10+，setuptools，YAML config。
+Automated computational chemistry platform. Two packages under `src/`: `cccp`（Computational Chemistry Connection Package — QC 底座，≈86 .py：qc 子进程层 + 共享科学适配 + backends 能力层 + calculation 任务层）与 `acp`（工作流/规划/持久层，≈247 .py：calculation-plan-driven 工作流 + 统一 CLI + API/scheduler/nmr）。Python 3.10+，setuptools，YAML config。
 
-**可运行工作流（12，registry 驱动）**: `acp run Confsearch | PESsearch | BatchOptimize | irc | scan | tsmode | casscf | nmr | singlepoint | optimize | frequency | xtb_optimize`；simple 系列 + scan/irc 由 `workflows/simple.py` + `registry.py` 组装。另有 `acp run serve`（Web 服务）与 `acp doctor`（诊断）。
+**四层架构（迁移已收口，见 ANTI #17）**: ① `cccp/qc` 子进程接口与共享科学适配（含 `hessian_policy/method_meta/resolved_spec/shermo_adapter/thermo_normalize/translation/keyword_registry`）→ ② `cccp/backends` 能力 Protocol 适配层（无 subprocess）→ ③ `cccp/calculation` 任务层（**唯一执行驻点**，`tasks/` 14 个任务核心）→ ④ `acp` 工作流/规划/发布层（`acp.calculations.primitives` 为纯兼容转发，`acp.backends` 为纯 re-export shim）。全部 14 个工作流经 `cccp.calculation` 任务核心执行。
+
+**可运行工作流（14，registry 驱动）**: `acp run Confsearch | PESsearch | BatchOptimize | XtbPathSearch | OrcaGradient | irc | scan | tsmode | casscf | nmr | singlepoint | optimize | frequency | xtb_optimize`；simple 系列 + scan/irc 由 `workflows/simple.py` + `registry.py` 组装；XtbPathSearch/OrcaGradient 消费冻结 `pes2ts_*_request_v1` payload（PES2TS → ACP 执行统一，本地专用）。另有 `acp run serve`（Web 服务）与 `acp doctor`（诊断）。
 
 **Retired**（catalog `status:"retired"`，仅历史作业展示，**勿重建/勿扩展 CLI**）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
@@ -14,23 +16,23 @@ Automated computational chemistry platform. Two packages under `src/`: `cccp`（
 
 ## STRUCTURE（地图 — 叶级明细一律看嵌套 AGENTS.md）
 ```
-src/cccp/                 # QC 接口库：config/software/version + core + qc/{interfaces,runners,cluster} + io + utils
+src/cccp/                 # QC 底座：config/software/version + core + qc/{interfaces,runners,cluster} + qc/{hessian_policy,method_meta,resolved_spec,shermo_adapter,thermo_normalize,translation,keyword_registry}.py + backends/（能力适配） + calculation/（任务层，tasks/ 14 核心） + io + utils
 src/acp/
 ├── cli.py                # argparse 统一入口：run/doctor/serve；retired 子命令拦截报错
 ├── catalog.py            # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS（≈4.3k 行；electronic-state/CASSCF 路由块）
 ├── confsearch/           # 4 协议构象搜索（xtb-crest/xtb-md/censo-crest/xtbmd-censo）+ sampling 帧/盆/饱和度
-├── calculations/         # 计算基元唯一驻点：contracts/checkpoint/executor/plans + primitives/（sp/opt/freq/scan/irc/casscf/thermochemistry）+ pes/ + batch/ + irc/ + tsmode/
+├── calculations/         # 规划/发布层：contracts/checkpoint/executor/plans + primitives/（纯兼容转发 → cccp.calculation 任务核心 + ACP 发布契约）+ pes/ + batch/ + irc/ + tsmode/
 ├── compat/legacy/        # 只读：历史 manifest 读取器 + 布局双探针
 ├── results/              # result_manifest 读取 + frames（TrajectoryFrame/VIEW_REGISTRY）+ sampling_graph + frame_candidates + structure_viewer + irc_projection + remote_structure_cache + orca_parser + frequencies
 ├── storage/              # result_manifest v2 写入（含 electronic-state product kinds）
-├── core/  backends/  chem/  intake/  io/      # 通用机制 / 能力 Protocol 适配层 / 化学 / 摄入 / 结构 I/O
-├── workflows/            # pes_search/batch_optimize/irc/simple/tsmode + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
+├── core/  backends/  chem/  intake/  io/      # 通用机制 / 纯 re-export shim（→ cccp.backends）/ 化学 / 摄入 / 结构 I/O
+├── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
 ├── nmr/                  # DP4/DP5、平均、缩放/归属、FCHL、谱图、报告
 ├── api/                  # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
 └── scheduler/            # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
 frontend/                 # ACP_Workbench_v2.html（v1 遗留）；js/ 含 structure_viewer/structure_editor/vibration_viewer/structure_source_picker/task_input_workspace/candidate_details/job_editor
 config/defaults.yaml      # 仅供参考 — Python built-in `_get_default_config()` 权威
-tests/                    # ≈200 文件；conftest/fixtures/baseline（审计痕迹，勿提交 e2e-task-root.txt）
+tests/                    # ≈247 文件；conftest/fixtures/baseline（审计痕迹，勿提交 e2e-task-root.txt）
 docs/                     # 权威设计文档（CENSO、Job File Layout、Simple、EVT Viewer、Electronic State CASSCF…）
 requirements-node.txt     # 远端计算节点运行时依赖（numpy/rdkit/pyyaml）— 新增 `acp run` 运行时 import 需同步 HERE + pyproject.toml
 pyproject.toml            # api/remote/nmr/dev extras；console script `acp = acp.cli:main`
@@ -41,15 +43,16 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 |---|---|
 | `src/acp/AGENTS.md` | acp 全模块叶级 WHERE TO LOOK（confsearch/pes/batch/irc/results/storage/core/backends/…） |
 | `src/acp/api/AGENTS.md` | FastAPI 端点、SSE、schema |
-| `src/acp/backends/AGENTS.md` | Protocol 适配层（ORCA/CREST/xTB/CENSO/Isostat/Molclus） |
+| `src/acp/backends/AGENTS.md` | 纯 re-export shim 层（→ cccp.backends）+ 隔离的 legacy batch 面 |
 | `src/acp/chem/AGENTS.md` | RDKit embedding + composition |
 | `src/acp/core/AGENTS.md` | Structure/WorkflowRunner/Registry/State/Config |
 | `src/acp/intake/AGENTS.md` | 文件解析器（6 格式） |
 | `src/acp/nmr/AGENTS.md` | DP4/DP5 + FCHL + 谱图 + 报告 |
 | `src/acp/scheduler/AGENTS.md` | Job 生命周期、持久化、stage_tasks |
 | `src/acp/scheduler/remote/AGENTS.md` | LSF 远程执行：SSH/SFTP/bsub/bjobs/结果拉取 |
-| `src/acp/workflows/AGENTS.md` | 工作流实现 + registry |
-| `src/cccp/AGENTS.md` | cccp 包根：config/version + 5 子包 |
+| `src/acp/workflows/AGENTS.md` | 工作流实现 + registry（14 active） |
+| `src/cccp/AGENTS.md` | cccp 包根：config/version + 7 子包（core/io/pipeline/qc/utils/backends/calculation） |
+| `src/cccp/backends/AGENTS.md` | 能力 Protocol 适配层实现体（ORCA/CREST/xTB/CENSO/Isostat/Molclus；无 subprocess） |
 | `src/cccp/core/AGENTS.md` | ConformerEngine（dormant）+ ProtocolSpec + CandidateSet |
 | `src/cccp/io/AGENTS.md` | MolecularInputHandler（格式检测 + RDKit embedding） |
 | `src/cccp/pipeline/AGENTS.md` | PipelineExecutor（thin） |
@@ -64,7 +67,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **CLI/工作流注册**: `src/acp/cli.py` + `workflows/registry.py`；退役拦截 `_CLI_REMOVED_WORKFLOWS`
 - **新增 QC 协议**: `src/cccp/core/protocols.py::_get_default_protocol_config()`（YAML protocols 节不可达）
 - **配置**: `src/cccp/config.py`（6 源合并）；ACP 侧 `src/acp/core/config.py`；**数据目录唯一权威 `src/acp/core/paths.py::resolve_run_root`**
-- **计算基元**: `calculations/primitives/`（electronic-state 门控在 `_common.py`；`casscf.py` CASSCF/NEVPT2）；单步 `executor.py::CalculationPlanExecutor`；多步 `batch/engine.py`
+- **计算基元（任务核心）**: 实现体在 `src/cccp/calculation/tasks/`（electronic-state 门控在 `cccp/calculation/_common.py`；`casscf.py` CASSCF/NEVPT2；批量执行器 `cccp/calculation/batch.py`）；ACP 侧 `acp.calculations.primitives` 为纯兼容转发 + ACP 发布契约；单步 plan 经 `acp/calculations/executor.py::CalculationPlanExecutor` dispatch 到 `cccp.calculation.run_*`；多步走 `acp/calculations/batch/engine.py`
 - **结果契约**: 写 `storage/manifest.py`（v2）→ 读 `results/manifest.py`；帧契约 `results/frames.py::VIEW_REGISTRY` + `to_node()/to_annotation()`；帧候选权威 `frame_candidates.json`
 - **调度**: `scheduler/manager.py`（pause/unpause/continue/rerun/purge/resume）；`structure_sources.py`（COMPLETED 任务结构来源）；`job_edit.py`（修改参数后重算 + edit-coverage registry）
 - **API**: `api/v1_routes.py`（任务/文件/detail/recovery 矩阵/edit-recalculate）+ `api/v2_routes.py` + `api/v2_structure_sources.py`（结构来源组织端点）
@@ -85,12 +88,12 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **Structure-source org store**: `structure_source_store.py` — 4 tables；`source_uid_for()` = `ss_`+sha256(job_id+relpath)[:24]；upsert 只碰 discovery fields；`RevisionConflictError` + expected_revision 乐观锁
 - **Job-edit coverage registry**: `job_edit.py::EDIT_ACTIVE_WORKFLOWS` — 新 active 工作流必须登记，`audit_workflow_edit_coverage()` + `tests/test_acp_job_edit.py` 守护
 
-## MIGRATION PERIOD RULES（acp→cccp 架构整改迁移期规则；todo 32 收口并入 #17）
-> 仅迁移期有效（基线 `main@2a23b93`）；最终合并进 ANTI-PATTERNS #17 在 todo 32。台账行格式见 `tests/baseline/refactor-evidence/migration_ledger.md`：**能力/当前实现驻点/兼容入口/生产消费者/退出条件/验收测试**。
-- **新驻点（new station）**: QC 执行任务实现唯一落点 `src/cccp/calculation/`（cccp.calculation 任务层）；`src/cccp/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING）
-- **过渡期双驻点（transitional dual-station）**: `src/acp/calculations/primitives/` 迁移期为兼容 shim（纯转发/重导出），实现体在 `cccp.calculation` — 两根合并每基元**恰好一个实现体**；守护 `tests/test_architecture_invariants.py::test_unique_primitive_definitions`（cccp 根 Wave 0 不存在=空；todo 16/23 前勿硬指 `cccp/calculation/tasks`）
-- **唯一实现当前驻点台账（current-station ledger）**: 每能力一行记录实现体现驻点，实现体移动即改行，退出条件满足才删行；新能力（含 P2 任务）先入台账再落码
-- **迁移期护栏适配**: `tests/test_f4_scope_audit.py` 基线=2a23b93（QC 接口层新改动须登记 amendment）；`scripts/check_grep_gates.py` 四个冻结 pin（`unique_run_scan`/`unique_run_irc`/`wave2_shermo_external`/`final_shermo`）为待迁移重定向清单 — 代码移动的同一 todo 重定向门，禁禁用/静默放宽；跨版本恢复 fixtures 固定于 `tests/baseline/recovery_fixtures/`（可复现生成脚本同目录）
+## MIGRATION PERIOD RULES — 已收口（CLOSED at todo 32, 2026-10-05）
+> acp→cccp 架构整改迁移期**已结束**（基线 `main@2a23b93` → 收口 HEAD `66222f7`）。以下为生效的**最终规则**；历史台账（`tests/baseline/refactor-evidence/migration_ledger.md`）保留为审计记录，不再作为流程要求维护。
+> - **唯一实现根**: 计算任务核心唯一驻点 = `src/cccp/calculation/tasks/`（todo 23 硬切换）；`src/acp/calculations/primitives/` 永久定位为纯兼容转发/重导出 + ACP 发布契约 — 两根每基元**恰好一个实现体**，由 `tests/test_architecture_invariants.py::test_unique_primitive_definitions` 守护（非 shim 实现体出现在 acp 侧即 FAIL）。
+> - **依赖方向**: `src/cccp/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING）；backends 层禁导任务模块（`backend_imports_task_module` 门）。
+> - **护栏仍生效**: `tests/test_f4_scope_audit.py`（QC 接口层改动登记 amendment）；`scripts/check_grep_gates.py` 四个 pin（`unique_run_scan`/`unique_run_irc`/`wave2_shermo_external`/`final_shermo`）已重定向到新驻点 — 禁禁用/静默放宽；跨版本恢复 fixtures 固定于 `tests/baseline/recovery_fixtures/`。
+> - **新计算能力**: 一律先落 `src/cccp/calculation/tasks/`（options/payload 契约经 `cccp/calculation/{requests,results}.py`），ACP 侧只加转发与发布契约。
 
 ## ANTI-PATTERNS（硬性铁律）
 1. **NEVER `pymatgen`** — 已从 pyproject 移除（零引用）
@@ -109,7 +112,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 14. **`resume()` 仅 WAITING_REVIEW review-only** — pause/unpause/continue 是独立方法；非 requeue resume 有 RUNNING-bounce footgun
 15. **NEVER 把 `job_id`/时间戳放进磁盘路径** — 任务目录 `<molecule>_<task>_<remark>`（`JobSpec.task_dir_name()`），job_id 仅 DB PK/job.json/task.json/WORK/00_RUNTIME/events.jsonl；调度上下文扁平写（`is_scheduler_task_dir`），非调度 CLI 保留 `{output}/{safe_name}/`
 16. **mechanism 布局归一化（v1.2）** — 新任务产物落 `WORK/{02_SEARCH,03_OPT/TS,07_PATH,08_ANALYSIS}` + `RESULT/mechanism`；**禁直接拼 `mechanism_study/<id>/` 路径**
-17. **calculations/ 是计算基元唯一驻点** — 新计算能力进 `calculations/primitives/`；single-item 单步走 `CalculationsPlanExecutor`，多步走 BatchOptimizeEngine
+17. **四层架构与唯一执行驻点（2026-10-05 收口）** — ① `cccp/qc`（子进程接口 + 共享科学适配）→ ② `cccp/backends`（能力 Protocol 适配，无 subprocess）→ ③ `cccp/calculation`（**任务层唯一执行驻点**）→ ④ `acp`（工作流/规划/发布）。新计算能力一律先落 `src/cccp/calculation/tasks/`（契约经 `cccp/calculation/{requests,results}.py`）；`src/acp/calculations/primitives/` 仅纯兼容转发 + ACP 发布契约（非 shim 实现体出现即 FAIL `test_unique_primitive_definitions`）；`src/acp/backends/` 仅纯 re-export shim（实现体在 `cccp/backends/`）；backends 层禁导任务模块；`src/cccp/**` 禁导入 `acp`。ACP 单步 plan 经 `CalculationPlanExecutor` dispatch 到 `cccp.calculation.run_*`，多步走 BatchOptimizeEngine（底层 `cccp.calculation.batch`）
 18. **compat/ 只读禁止写入** — 新代码消费数据走 `results/manifest`（v2），仅历史任务经 compat 转接
 19. **两层目录: 安装目录 ≠ 数据目录** — run_root 须原生文件系统（9p/nfs/cifs 慢 ~1000×）；禁 `./ACP_runs` 相对默认、禁默认 `/tmp` work_root；迁移 `python scripts/migrate_run_root.py <old> <new>`
 20. **前端禁硬编码退役 id 作默认值** — 向导默认经 `resolveDefaultWorkflow()`/`pickDefaultProfile()` 目录驱动，消费点先 `ensureWizardWorkflowValid()`；退役字面量仅许历史兼容分支
@@ -128,19 +131,21 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 pip install -e .                 # 运行全部 pytest 需 -e '.[dev,api,remote]'（CI 同）
 pip install -e '.[api]' / '.[remote]' / '.[dev]'
 
-# Run — 12 个可运行工作流（retired 子命令会被 CLI 拦截并提示替代）
+# Run — 14 个可运行工作流（retired 子命令会被 CLI 拦截并提示替代）
 acp run Confsearch --input "CCO" --protocol xtb-crest --refinement-policy screen --output ./out
 acp run Confsearch --input "CCO" --protocol censo-crest --profile light
 acp run PESsearch --from-job 20260823_001_Confsearch --output ./pes_out
 acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
 acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo
+acp run XtbPathSearch --path-config request.json --output ./path_out
+acp run OrcaGradient --gradient-config request.json --output ./grad_out
 acp run irc --input ts_structure.xyz --output ./irc_out
 acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c" --charge 0 --multiplicity 1
 acp run frequency --input molecule.xyz
-acp run xtb-optimize --input molecule.xyz
+acp run xtb_optimize --input molecule.xyz
 acp run tsmode --source-bundle bundle.json --source-mode-index 0
 acp run casscf --input molecule.xyz
 acp run serve --port 8765

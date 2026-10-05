@@ -15,7 +15,7 @@
 | 章节 | 内容 | 适用读者 |
 |------|------|----------|
 | §1 | 环境与前置条件（安装、QC 可执行文件、run_root、启动服务） | 首次搭建测试环境 |
-| §2 | 功能总览矩阵（12 个 active 工作流 + 提交渠道 + 依赖） | 快速索引 |
+| §2 | 功能总览矩阵（14 个 active 工作流 + 提交渠道 + 依赖） | 快速索引 |
 | §3 | **手工测试用例（真实提交计算任务，逐工作流）** | 手工测试执行者 |
 | §4 | 调度器 / API / Web 提交与任务生命周期 | 集成 / 端到端测试 |
 | §5 | 结果产物与验证方法 | 判定测试通过与否 |
@@ -150,7 +150,7 @@ systemd 部署：`sudo systemctl restart acp`（**代码改动后必须重启**�
 | 层级 | 覆盖内容 | 是否需要真实 QC 二进制 |
 |------|----------|------------------------|
 | 单元 / 契约测试 | 数据模型、解析器、清单读写、状态机 | 否（mock） |
-| 工作流管线测试 | 11 个 active 工作流的**编排逻辑** | 否（`FakeBackend` / `subprocess` patch） |
+| 工作流管线测试 | 14 个 active 工作流的**编排逻辑** | 否（`FakeBackend` / `subprocess` patch） |
 | 真实二进制冒烟 | 二进制存在 + `--version` | 是（仅 5 个 marker 门控用例，见 §6.4） |
 | **真实计算任务端到端** | 真实 CREST/xTB/CENSO/ORCA 全链路 | **是 — 目前仅手工覆盖，自动化为缺口** |
 
@@ -160,7 +160,7 @@ systemd 部署：`sudo systemctl restart acp`（**代码改动后必须重启**�
 
 ## 2. 功能总览矩阵
 
-### 2.1 Active 工作流（12 个，可提交）
+### 2.1 Active 工作流（14 个，可提交）
 
 | # | workflow id | CLI 子命令 | 类别 | 依赖二进制 | 调度器支持 | 远程支持 |
 |---|-------------|-----------|------|-----------|-----------|---------|
@@ -176,15 +176,17 @@ systemd 部署：`sudo systemctl restart acp`（**代码改动后必须重启**�
 | 10 | `Confsearch` | `acp run Confsearch` | preset | crest, xtb, isostat, censo, orca | ✅ | ✅ |
 | 11 | `PESsearch` | `acp run PESsearch` | preset | orca, xtb | ✅ | ✅ |
 | 12 | `BatchOptimize` | `acp run BatchOptimize` | preset | orca, shermo（shermo 仅 `opt_freq_sp_thermo` 使用） | ✅ | ✅ |
+| 13 | `XtbPathSearch` | `acp run XtbPathSearch --path-config <json>` | preset（pes2ts 冻结 payload） | xtb | ✅ | ❌ **本地专用**（不在 `_ALLOWED_REMOTE_WORKFLOWS`） |
+| 14 | `OrcaGradient` | `acp run OrcaGradient --gradient-config <json>` | preset（pes2ts 冻结 payload） | orca | ✅ | ❌ **本地专用**（不在 `_ALLOWED_REMOTE_WORKFLOWS`） |
 
-> **CLI 拼写注意**：xTB 优化的真实子命令是 **`xtb_optimize`（下划线）**，`README` 中的 `xtb-optimize` 是错的。
-> **新增但 AGENTS.md 未列**：`casscf` 与 `acp doctor` 均为真实可用入口。
+> **CLI 拼写注意**：xTB 优化的真实子命令是 **`xtb_optimize`（下划线）**，`xtb-optimize` 写法不可用。
+> **XtbPathSearch / OrcaGradient**（2026-10 起 active）：消费冻结 `pes2ts_xtb_path_request_v1` / `pes2ts_orca_gradient_request_v1` payload（PES2TS → ACP 执行统一）；调度器可提交（stage_tasks 已登记），远程不可提交。执行核心在 `cccp/calculation/tasks/{xtb_path_search,orca_gradient}.py`。
 
 ### 2.2 CLI 顶级语法
 
 ```
 acp {run, doctor, init} ...
-acp run {Confsearch|PESsearch|BatchOptimize|irc|scan|tsmode|nmr|
+acp run {Confsearch|PESsearch|BatchOptimize|XtbPathSearch|OrcaGradient|irc|scan|tsmode|nmr|
          singlepoint|optimize|frequency|xtb_optimize|casscf|serve|fake}
 ```
 
@@ -196,7 +198,7 @@ acp run {Confsearch|PESsearch|BatchOptimize|irc|scan|tsmode|nmr|
 `optfreq`, `optfreqsp`, `conformer`, `benchmark`, `ensemble`, `energy`, `xtbmd_censo_energy`, `mechanism`, `mech-conf`, `mech-step`, `mech-confirm`, `mech-chain`, `Lowconfirm`, `Highconfirm`。
 
 - **API 提交** → HTTP **400** `Unsupported workflow '<id>'. Supported: [...]`。
-- **CLI**（12 个有解析器）→ **exit 2**，双语退役提示（见 §7 NT-01）；`conformer`/`benchmark` 无 CLI 入口。
+- **CLI**（12 个有解析器，`_CLI_REMOVED_WORKFLOWS`）→ **exit 2**，双语退役提示（见 §7 NT-01）；`conformer`/`benchmark` 无 CLI 入口。
 - 退役映射：`ensemble`→`Confsearch --protocol censo-crest --refinement-policy screen`；`energy`→`Confsearch --protocol censo-crest --refinement-policy rank1|cumulative-99`；`xtbmd_censo_energy`→`Confsearch --protocol xtbmd-censo`；`mechanism/mech-*`→`PESsearch`+`BatchOptimize`+`irc`；`Lowconfirm`→`BatchOptimize --profile opt_freq`+`irc`；`Highconfirm`→`BatchOptimize --profile opt_freq_sp_thermo`+`irc`；`optfreq`/`optfreqsp`→ simple/BatchOptimize。
 
 ### 2.4 Confsearch 协议 × 精修策略矩阵
@@ -499,6 +501,23 @@ acp run nmr --input "CC(O)C" --spectrum exp_spectrum.txt --enumerate \
 
 ---
 
+### 3.12a MT-P2T — XtbPathSearch / OrcaGradient（pes2ts 冻结 payload，本地专用）
+
+- **前置**：`XtbPathSearch` 需 xtb；`OrcaGradient` 需 orca。两者均消费 PES2TS 侧冻结的 request JSON（`--path-config` / `--gradient-config`），**本地专用**（不在 `_ALLOWED_REMOTE_WORKFLOWS`，远程提交被 script_gen 拒绝）。
+- **payload 形状（以代码为准）**：`XtbPathSearch` = `pes2ts_xtb_path_request_v1`（`source_type:"xyz_text_pair"` + `start_xyz`/`end_xyz` + `gfn_level` 等）；`OrcaGradient` = `pes2ts_orca_gradient_request_v1`（`xyz` + `method` + theory 摘要）。
+
+```bash
+acp run XtbPathSearch --path-config pes2ts_xtb_path_request.json \
+    --output /tmp/acp_mt/xtbpath --nproc 4
+acp run OrcaGradient --gradient-config pes2ts_orca_gradient_request.json \
+    --output /tmp/acp_mt/grad --nproc 4
+```
+
+- **预期产物**：`XtbPathSearch` → `RESULT/pes_search/xtbpath.xyz` + `RESULT/pes_search/path_frames/path_frame_*.xyz` + manifest 注册（`pes_search` 视图）；`OrcaGradient` → 梯度/能量载荷 + manifest 注册。
+- **判定**：exit 0；帧 XYZ 原子数一致；manifest 产品路径与实际文件相符。
+- **负向**：缺 `--path-config`/`--gradient-config` 或 payload 缺必填键（如 `xyz`/`method`）→ 结构化错误退出。
+- **自动化**：`tests/test_acp_workflows_xtb_path.py`、`tests/test_acp_workflows_orca_gradient.py`、`tests/test_cccp_task_xtb_path_search.py`、`tests/test_cccp_task_orca_gradient.py`（mock xtb/orca；执行核心在 `cccp/calculation/tasks/`）。
+
 ### 3.13 组合工作流端到端（真实链路）
 
 推荐的真实全链路顺序测试（每条命令完成后再执行下一条，用 `--from-job` 串联）：
@@ -787,7 +806,7 @@ PYTHONPATH=src python3.11 -m pytest tests/test_pes_orca_simulscan_integration.py
 PYTHONPATH=src ACP_REMOTE_PASSWORD_COMPUTE_01='<pw>' python3 tests/test_remote_phase1_integration.py
 ```
 
-> **所有 11 个 active 工作流的真实 QC 全链路均无自动化覆盖**（Confsearch×4、PESsearch、BatchOptimize、irc、scan、tsmode OptTS、NMR GIAO 均为 mock）。这是本手册 §3 手工用例存在的原因。
+> **所有 14 个 active 工作流的真实 QC 全链路均无自动化覆盖**（Confsearch×4、PESsearch、BatchOptimize、irc、scan、tsmode OptTS、NMR GIAO、XtbPathSearch/OrcaGradient 均为 mock）。这是本手册 §3 手工用例存在的原因。
 
 ### 6.5 建议补充的真实端到端自动化（后续工作）
 
@@ -864,8 +883,8 @@ PYTHONPATH=src ACP_REMOTE_PASSWORD_COMPUTE_01='<pw>' python3 tests/test_remote_p
 
 ### 8.3 已知文档漂移 / 坑（测试时以代码为准）
 
-1. `README.md` 的 `xtb-optimize` → 实际 `xtb_optimize`；`--backend`/`--reference`（nmr）已过时。
-2. `tests/AGENTS.md` 计数过时（写 60 文件/1047 测试；实际约 197 文件/4580 用例）。
+1. ~~`README.md` 的 `xtb-optimize`~~ 已修复（2026-10-05 文档同步后 README 使用 `xtb_optimize`）；`--backend`/`--reference`（nmr）已过时，勿用。
+2. ~~`tests/AGENTS.md` 计数过时~~ 已修复（2026-10-05 同步为 247 文件/≈5.7k 用例）。
 3. `docs/ACP_Job_File_Layout_Spec.md` 列出的 `RESULT/batch_items.json` 无写入者；batch 提交输入在任务根 `batch_items.json`，断点态在 `checkpoint.json::items_state`。
 4. scan 帧名 `scan_frame_NNN.xyz`（非 `frame_*.xyz`）。
 5. `_SCHEDULER_MARKERS` 含 `INPUT`（spec 列表遗漏）。

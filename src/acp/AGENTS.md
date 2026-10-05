@@ -1,9 +1,9 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ≈238 files, ≈103k lines (incl. API + scheduler + nmr). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library).
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ≈247 files (incl. API + scheduler + nmr). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17).
 
-**可运行工作流（12，registry 驱动）**: Confsearch, PESsearch, BatchOptimize, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize。Retired（catalog `status:"retired"`，仅历史作业展示）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
+**可运行工作流（14，registry 驱动）**: Confsearch, PESsearch, BatchOptimize, XtbPathSearch, OrcaGradient, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize（XtbPathSearch/OrcaGradient 消费冻结 `pes2ts_*_request_v1` payload，本地专用）。Retired（catalog `status:"retired"`，仅历史作业展示）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
 ## STRUCTURE
 ```
@@ -13,16 +13,16 @@ acp/
 ├── __main__.py          # `python -m acp` works
 ├── catalog.py           # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS（≈4.3k 行；electronic-state/CASSCF 路由块）
 ├── confsearch/          # 4 协议构象搜索：engine, contracts, manifest, profiles, selection, protocols/（xtb-crest/xtb-md/censo-crest/xtbmd-censo）, shared/, sampling.py + sampling_models.py
-├── calculations/        # 计算基元唯一驻点：contracts/checkpoint/executor/plans + primitives/（sp/opt/freq/scan/irc/casscf/thermochemistry）+ pes/ + batch/ + irc/ + tsmode/
+├── calculations/        # 规划/发布层：contracts/checkpoint/executor/plans + primitives/（纯兼容转发 → cccp.calculation 任务核心 + ACP 发布契约）+ pes/ + batch/ + irc/ + tsmode/
 ├── compat/              # 只读：legacy/ 历史 manifest 读取器 + 布局双探针
 ├── results/             # result_manifest 读取 + frames（TrajectoryFrame/VIEW_REGISTRY）+ sampling_graph + frame_candidates + frame_candidate_geometry + frame_candidate_store + structure_viewer + irc_projection + remote_structure_cache + orca_parser + frequencies
 ├── storage/             # result_manifest v2 写入（含 electronic-state product kinds）
 ├── core/                # 通用机制：Structure, WorkflowRunner, Registry, State, Config
-├── backends/            # 能力 Protocol 适配层（ORCA/CREST/xTB/CENSO/Isostat/Molclus/external）
+├── backends/            # 纯 re-export shim（→ cccp.backends）+ 隔离的 legacy batch 面
 ├── chem/                # RDKit embedding + composition
 ├── intake/              # 数据摄入：models, parsers（6 格式）, storage
 ├── io/                  # StructureReader / StructureWriter（thin cccp wrapper）
-├── workflows/           # pes_search/batch_optimize/irc/simple/tsmode + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
+├── workflows/           # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
 ├── nmr/                 # DP4/DP5、平均、缩放/归属、FCHL、谱图、报告（13 模块；见 nmr/AGENTS.md）
 ├── api/                 # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
 └── scheduler/           # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
@@ -37,8 +37,8 @@ acp/
 | Core models | `core/models.py` | Structure, StructureRecord, StructureEnsemble, JobSpec |
 | Core workflow | `core/workflow.py` | WorkflowSpec, WorkflowRunner, Stage, WorkflowResult |
 | State persistence | `core/state.py` | WorkflowState, EventLog (JSONL) |
-| Backend protocols | `backends/base.py` | GeometryOptimizer / SinglePointCalculator / ConformerSearcher / ... (PEP 544) |
-| Backend registry | `backends/registry.py` | `get_backend(name)`, `require_backend(capability)` |
+| Backend protocols | `cccp/backends/base.py`（shim: `backends/base.py`） | GeometryOptimizer / SinglePointCalculator / ConformerSearcher / ... (PEP 544)；实现体在 cccp |
+| Backend registry | `cccp/backends/registry.py`（shim: `backends/registry.py`） | `get_backend(name)`, `require_backend(capability)` |
 | Confsearch engine | `confsearch/engine.py` | 4 protocols: xtb-crest/xtb-md/censo-crest/xtbmd-censo |
 | Confsearch manifest | `confsearch/manifest.py` | `confsearch_manifest.json` handoff artifact (S1) |
 | Confsearch profiles | `confsearch/profiles.py` | light / default / high resource profiles |
@@ -46,7 +46,7 @@ acp/
 | Confsearch sampling | `confsearch/sampling.py` + `sampling_models.py` | parse_traj_frames / assign_basins / SamplingSaturation frozen dataclasses |
 | Calculation contracts | `calculations/contracts.py` | CalculationPlan, CalculationRequest, Checkpoint frozen dataclasses |
 | Plan executor | `calculations/executor.py` | CalculationPlanExecutor — step dispatch + checkpoint resume |
-| Primitives | `calculations/primitives/` | run_singlepoint/optimize/frequency/scan/irc + casscf.py CASSCF/NEVPT2 |
+| Primitives | `cccp/calculation/tasks/`（compat: `calculations/primitives/`） | 实现体在 cccp 任务层；acp 侧为纯转发 + ACP 发布契约（run_singlepoint/optimize/frequency/scan/irc + casscf CASSCF/NEVPT2） |
 | PES engine | `calculations/pes/engine.py` | PesSearchEngine: confsearch manifest → scan → candidates |
 | PES contracts | `calculations/pes/contracts.py` | PesScanRequest, ScanCoordinate, EnergyProfile, CandidateRecommendation |
 | PES validation | `calculations/pes/validation.py` | Topology guards, bond graphs, risky contacts, scan trajectory validation |
@@ -98,10 +98,11 @@ acp/
 ## CONVENTIONS
 - **Type annotations**: PEP 604 (`X | None`) with `from __future__ import annotations` — **新代码一律 PEP 604**
 - **Docstrings**: compact single-line/短块，随所在包；cccp 侧 Google 风格
-- **Backend design**: Capability Protocols (PEP 544)；backend 声明能力，不包含 subprocess 调用
+- **Backend design**: Capability Protocols (PEP 544)；实现体在 `cccp/backends/`（无 subprocess，委托 `cccp.qc.interfaces`）；`acp/backends/*` 仅纯 re-export shim
 - **No chem logic in core/**: core/ only generic mechanism（Structure, WorkflowRunner, Registry）
 - **Stage pipeline**: WorkflowSpec 组装 Stage 函数；WorkflowRunner 顺序执行
-- **Backend layering**: workflows 调 `get_backend(...)(...)`，不直接用 `cccp.qc.interfaces`
+- **Backend layering**: workflows 调 `get_backend(...)(...)`（经 cccp.backends 兼容面或直连），不直接用 `cccp.qc.interfaces`
+- **Task execution**: 单步 plan 经 `CalculationPlanExecutor` dispatch 到 `cccp.calculation.run_*`；多步走 BatchOptimizeEngine（底层 `cccp.calculation.batch`）— 禁在 acp 侧新增任务实现体
 - **`__all__`**: 每个 `__init__.py` re-export public symbols
 - **Job PAUSED 语义**: active 非终态（计入队列、禁删），poller 跳过；本地 killpg SIGSTOP/SIGCONT，远端 bstop/bresume；restart 本地 → FAILED `[RESTART_FAILED]`，远端保持 PAUSED
 - **Task custom names**: `tasks.py` custom_name/name_revision；NOT in `_SYNC_COLUMNS`；`update_custom_name()` 事务性 revision check；PATCH `/api/v2/tasks/{id}` + expected_name_revision（409）

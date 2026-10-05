@@ -11,7 +11,8 @@
 | **Phase 0** | ✅ 完成 | 底层 `cccp`（Computational Chemistry Connection Package）QC 接口库 |
 | **Phase 1** | ✅ 完成 | 模块化重构 + `acp` 统一模块 + Confsearch/PESsearch/BatchOptimize/irc/scan 计算工作流 + nmr/simple 工作流 + CENSO 集成 |
 | **Phase 2** | ✅ 完成 | FastAPI Web 后端 + 任务调度器 + 远程 LSF 执行 |
-| **Phase 4** | ✅ 完成 | 极简化重构：mechanism/ 删除，计算基元上浮至 calculations/，BatchOptimize/irc/scan 独立工作流 |
+| **Phase 4** | ✅ 完成 | 极简化重构：mechanism/ 删除，BatchOptimize/irc/scan 独立工作流 |
+| **架构整改** | ✅ 完成（2026-10-05 收口） | 四层架构：`cccp/qc`（子进程+科学适配）→ `cccp/backends`（能力适配）→ `cccp/calculation`（任务层唯一执行驻点）→ `acp`（工作流/规划/发布；primitives/backends 为纯兼容转发）|
 
 > 注：conformer / benchmark / ensemble / energy / xtbmd_censo_energy / mechanism / mech-conf / mech-step / mech-confirm / mech-chain / optfreq / optfreqsp / Lowconfirm / Highconfirm 工作流已于 2026-08-28 退役（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力统一由 `acp run Confsearch --protocol <4种协议>` 提供；低精度确认由 `acp run BatchOptimize --profile opt_freq` 提供；高精度确认由 `acp run BatchOptimize --profile opt_freq_sp_thermo` 提供。
 
@@ -80,11 +81,16 @@ Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中�
 - 输出：`RESULT/trajectories/scan_trajectory.json` + 能量曲线
 - 坐标格式：`--coordinate atom1,atom2,start,end`
 
-### 6. 简单 ORCA 工作流 — `acp run singlepoint|opt|freq|...`
+### 6. 简单 ORCA 工作流 — `acp run singlepoint|optimize|frequency|...`
 - 单点能计算（singlepoint）
 - 几何优化（optimize）
 - 频率计算（frequency）
-- xTB 优化（xtb-optimize）
+- xTB 优化（xtb_optimize）
+
+### 6a. PES2TS 执行统一 — `acp run XtbPathSearch | OrcaGradient`
+- `XtbPathSearch`：GFN2-xTB PATH metadynamics（消费冻结 `pes2ts_xtb_path_request_v1` payload，`--path-config`）
+- `OrcaGradient`：ORCA 单点解析梯度 EnGrad（消费冻结 `pes2ts_orca_gradient_request_v1` payload，`--gradient-config`）
+- 两者均为本地专用（不在远程允许集）
 
 ### 7. NMR 化学位移预测 — `acp run nmr` ✅
 - GIAO + Boltzmann 平均 + DP4/DP5 立体归属
@@ -135,9 +141,9 @@ Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中�
 
 ```
 src/
-├── acp/                          # 统一模块 (~130 .py, ~65k 行)
-│   ├── cli.py                    # 统一命令行入口 (2,608 行)
-│   ├── catalog.py                # 计算方法元数据 (2,915 行)
+├── acp/                          # 工作流/规划/发布层 (~247 .py)
+│   ├── cli.py                    # 统一命令行入口：run/doctor/serve；retired 子命令拦截
+│   ├── catalog.py                # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS（≈4.3k 行）
 │   │
 │   ├── confsearch/               # 统一构象搜索 + 能量
 │   │   ├── engine.py             # ConfsearchEngine：协议调度、质量门控
@@ -145,119 +151,87 @@ src/
 │   │   ├── manifest.py           # confsearch_manifest.json 产物
 │   │   ├── profiles.py           # light / default / high 资源档位
 │   │   ├── selection.py          # 候选筛选与排序
-│   │   ├── protocols/            # 四种协议实现
-│   │   │   ├── xtb_crest.py      #   xtb-crest（CREST搜索 + DFT精修）
-│   │   │   ├── xtb_md.py         #   xtb-md（xTB-MD采样 + DFT）
-│   │   │   ├── censo_crest.py    #   censo-crest（CREST + CENSO排序）
-│   │   │   └── xtbmd_censo.py    #   xtbmd-censo（xTB-MD + ISOSTAT + CENSO）
+│   │   ├── protocols/            # 四种协议实现（xtb_crest / xtb_md / censo_crest / xtbmd_censo）
 │   │   └── shared/               # 协议共享工具
 │   │
-│   ├── calculations/             # 计算基元和引擎
+│   ├── calculations/             # 规划/发布层（执行在 cccp.calculation 任务核心）
 │   │   ├── contracts.py          # CalculationPlan / CalculationRequest / Checkpoint 等冻结数据类
 │   │   ├── checkpoint.py         # 原子 JSON checkpoint 写入/加载（plan fingerprint 校验）
-│   │   ├── executor.py           # CalculationPlanExecutor：步骤调度 + 坐标交接 + checkpoint resume
+│   │   ├── executor.py           # CalculationPlanExecutor：dispatch 到 cccp.calculation.run_* + checkpoint resume
 │   │   ├── plans.py              # build_simple_plan / build_batch_plan / build_irc_request
-│   │   ├── primitives/           # run_singlepoint / run_optimize / run_frequency / run_scan / run_irc / ThermochemistryCalculator
-│   │   ├── pes/                  # PESscan 核心：scan + engine + contracts + validation + path_analysis + path_selection + atom_mapping + bond_changes
-│   │   ├── batch/                # BatchOptimizeEngine + models + loaders + singlepoint
-│   │   └── irc/                  # IRC endpoint discovery + validation
+│   │   ├── primitives/           # 纯兼容转发 → cccp/calculation/tasks/* + ACP 发布契约
+│   │   ├── result_publication.py # RESULT/result_manifest.json 统一注册入口
+│   │   ├── pes/                  # PESsearch 核心：scan + engine + contracts + validation + path_analysis + atom_mapping
+│   │   ├── batch/                # BatchOptimizeEngine + models + loaders（底层 cccp.calculation.batch）
+│   │   ├── irc/                  # IRC endpoint discovery + validation（转发 cccp/calculation/irc_endpoints）
+│   │   └── tsmode/               # 选虚频 → 定向 OptTS 引擎
 │   │
-│   ├── compat/                   # 遗留布局只读兼容层
-│   │   └── legacy/               # manifests.py（历史 manifest 读取器）+ layouts.py（布局探测）
-│   │
-│   ├── results/                  # 统一结果清单读取 (result_manifest.json)
+│   ├── compat/                   # 遗留布局只读兼容层（legacy/ manifests + layouts）
+│   ├── results/                  # 统一结果清单读取 + TrajectoryFrame 帧契约 + 结构查看器
 │   ├── storage/                  # 统一 v2 结果清单写入 (result_manifest.json)
 │   │
 │   ├── core/                     # 共享核心机制（无化学逻辑）
 │   │   ├── models.py             # Structure, StructureRecord, StructureEnsemble
 │   │   ├── workflow.py           # Stage, WorkflowSpec, WorkflowRunner
 │   │   ├── state.py              # WorkflowState, EventLog (JSONL)
-│   │   ├── registry.py           # 通用注册表模式
+│   │   ├── registry.py           # 兼容 shim（→ cccp/core/registry）
 │   │   ├── config.py             # 配置加载/合并
-│   │   └── utils.py              # 工具函数
+│   │   └── paths.py              # run_root 解析 + 慢文件系统哨兵
 │   │
-│   ├── backends/                 # QC 后端适配层
-│   │   ├── base.py               # 能力 Protocol 定义（GeometryOptimizer / SinglePointCalculator / ConformerSearcher / ...）
-│   │   ├── capabilities.py       # 后端能力矩阵
-│   │   ├── registry.py           # 后端注册表（register_backend / get_backend / require_backend）
-│   │   ├── orca.py               # ORCABackend (optimize, sp, freq)
-│   │   ├── crest.py              # CrestBackend (conformer search via search())
-│   │   ├── xtb.py                # XTBBackend (optimize, sp)
-│   │   ├── censo_backend.py      # CENSOBackend (P+S 排序筛选)
-│   │   ├── isostat_backend.py    # IsostatBackend (构象聚类)
-│   │   ├── molclus_backend.py    # MolclusBackend (构象搜索)
-│   │   ├── external.py           # 外部工具 re-export
-│   │   └── external_backend.py   # ExternalBackend (ISOSTAT + Shermo)
+│   ├── backends/                 # 纯 re-export shim（→ cccp/backends）+ 隔离的 legacy batch 面
 │   │
-│   ├── workflows/                # 工作流模块（legacy：ensemble/energy/xtbmd_censo_energy 已退役 + nmr/simple + registry）
+│   ├── workflows/                # 工作流编排（14 active）
 │   │   ├── nmr.py                # NMR 化学位移预测（GIAO + DP4/DP5）
-│   │   ├── simple.py             # 简单 ORCA 工作流 (sp/opt/freq/scan/xtb-opt)
+│   │   ├── simple.py             # 简单工作流 (singlepoint/optimize/frequency/scan/irc/xtb_optimize)
+│   │   ├── pes_search.py         # PESsearch · batch_optimize.py · irc.py · tsmode.py
+│   │   ├── xtb_path.py           # XtbPathSearch（pes2ts 冻结 payload）
+│   │   ├── orca_gradient.py      # OrcaGradient（pes2ts 冻结 payload）
 │   │   ├── registry.py           # 工作流注册表（CLI 子命令 → WorkflowSpec）
-│   │   └── __init__.py           # PEP 562 懒加载 re-export
+│   │   └── ensemble/energy/xtbmd 退役引擎 — 仍作 Confsearch 协议引擎复用
 │   │
-│   ├── chem/                     # 化学逻辑
-│   │   ├── embedding.py          # SMILES→RDKit 3D, XYZ 工具
-│   │   └── composition.py        # 组成分析 / recalc_hess 规范化
+│   ├── chem/                     # 化学逻辑（RDKit embedding + composition）
+│   ├── intake/                   # 数据摄入（models / parsers 6 格式 / storage）
+│   ├── io/                       # 分子结构 I/O（StructureReader/Writer，thin cccp wrapper）
 │   │
-│   ├── intake/                   # 数据摄入
-│   │   ├── models.py             # StructureAsset, StructureParseResult
-│   │   ├── parsers.py            # XYZ/SDF/MOL/GJF/INP/SMILES 解析
-│   │   └── storage.py            # 上传文件存储
-│   │
-│   ├── io/                       # 分子结构 I/O
-│   │   └── structures.py         # StructureReader, StructureWriter
-│   │
-│   ├── api/                      # FastAPI 服务 (~5,000 行)
+│   ├── api/                      # FastAPI 服务
 │   │   ├── server.py             # FastAPI app 工厂 + static 托管
 │   │   ├── routes.py             # /api/status, /api/backends
 │   │   ├── v1_routes.py          # v1 任务/分子/文件 API
-│   │   ├── v2_routes.py          # v2 API
+│   │   ├── v2_routes.py + v2_structure_sources.py   # v2 API + 结构来源组织
 │   │   └── schemas.py            # Pydantic 模型
 │   │
-│   └── scheduler/                # 任务调度器 (~7,800 行)
-│       ├── jobs.py               # JobSpec, JobState
-│       ├── manager.py            # 生命周期管理
-│       ├── runner.py             # 后台进程执行
-│       ├── store.py              # SQLite 持久化
-│       ├── provenance.py         # 事件溯源 + 审计日志
-│       ├── artifacts.py          # 制品管理
-│       ├── stage_tasks.py        # 阶段任务分解
-│       ├── tasks.py              # 阶段工作流任务调度
-│       ├── projects.py           # 项目管理
-│       ├── files.py              # 文件操作
-│       ├── logs.py               # 日志管理
-│       ├── local_cleanup.py      # 本地磁盘清理
-│       ├── migrations.py         # 数据库迁移
-│       ├── events.py             # 事件模型
-│       └── remote/               # 远程 LSF 执行 (11 文件)
-│           ├── runner.py         # 远程作业提交/轮询
-│           ├── ssh.py            # SSH 连接池
-│           ├── sftp.py           # SFTP 文件传输
-│           ├── sync.py           # 增量代码同步
-│           ├── node_manager.py   # 节点状态管理
-│           ├── monitor.py        # LSF 作业监控
-│           ├── fetcher.py        # 结果拉取
-│           ├── cleanup.py        # 远程磁盘清理
-│           ├── script_gen.py     # LSF 脚本生成
-│           └── config.py         # 远程执行配置
+│   └── scheduler/                # 任务调度器（jobs/manager/runner/store/stage_tasks/tasks + remote/ LSF 远程执行）
 │
-└── cccp/             # Computational Chemistry Connection Package (底层 QC 接口库)
+└── cccp/             # Computational Chemistry Connection Package（QC 底座，≈86 .py）
     ├── config.py                 # 6 源 YAML 配置（读 ~/.cccp.yaml，回退 ~/.conformer_search.yaml）
-    ├── version.py                # __version__（与 __init__.py / pyproject.toml 三处同步）
-    ├── core/                     # ConformerEngine (1,764 行) + ProtocolSpec + state_manager
-    ├── qc/interfaces/            # ORCA / CREST / xTB 子进程封装（crest.py / orca.py / xtb.py 独立文件）
-    ├── qc/runners/               # ISOSTAT/Shermo 运行器
-    ├── qc/cluster/               # Local + LSF 适配器
+    ├── software.py               # 可执行解析单点（resolve_executable / discover_all）
+    ├── version.py                # __version__（4 处同步：__init__ ×2 + acp/__init__ + pyproject）
+    ├── core/                     # ProtocolSpec + CandidateSet + registry（ConformerEngine dormant）
+    ├── qc/                       # ① QC 子进程层
+    │   ├── interfaces/           # ORCA / CREST / xTB / CENSO / ISOSTAT / Molclus 子进程封装
+    │   ├── runners/ + cluster/   # Shermo/ISOSTAT 运行器；Local + LSF 适配器
+    │   └── hessian_policy / method_meta / resolved_spec / shermo_adapter /
+    │       thermo_normalize / translation / keyword_registry   # 共享科学适配（ qc/ 顶层）
+    ├── backends/                 # ② 能力 Protocol 适配层（ORCA/CREST/xTB/CENSO/Isostat/Molclus；无 subprocess）
+    ├── calculation/              # ③ 任务层 — 唯一执行驻点
+    │   ├── tasks/                # 14 个任务核心（singlepoint/optimize/frequency/scan/irc/casscf/
+    │   │                         #   thermochemistry/conformer_search/md_sampling/clustering/
+    │   │                         #   censo_refine/nmr_shielding/xtb_path_search/orca_gradient）
+    │   ├── requests.py + results.py   # typed options / payload 契约
+    │   ├── _common.py + context.py + errors.py + selection.py + progress.py
+    │   └── batch.py              # 通用批量执行器（并发/缓存/进度）
     ├── io/                       # MolecularInputHandler
-    └── utils/                    # 文件 I/O, 常量, 几何工具
+    ├── pipeline/                 # PipelineExecutor（thin）
+    └── utils/                    # 文件 I/O, 常量, 几何工具, 溶剂映射
 ```
 
 ### 设计原则
 
+- **四层架构（2026-10-05 收口）**: ① `cccp/qc` 子进程接口 + 共享科学适配 → ② `cccp/backends` 能力 Protocol 适配（无 subprocess）→ ③ `cccp/calculation` 任务层（**唯一执行驻点**，14 个任务核心）→ ④ `acp` 工作流/规划/发布。`acp.calculations.primitives` 与 `acp.backends` 为纯兼容转发/shim；`cccp` 禁止导入 `acp`
 - **core/ 只放通用机制**：数据模型、工作流引擎、状态管理、注册表——不含任何化学特定逻辑
-- **能力协议**：QC 后端通过 Protocol 声明能力（GeometryOptimizer, FrequencyCalculator 等），而非巨型 ABC
+- **能力协议**：QC 后端通过 Protocol 声明能力（GeometryOptimizer, FrequencyCalculator 等），实现体在 `cccp/backends/`；子进程封装在 `cccp/qc/interfaces/`
 - **函数式 Stage 管道**：工作流由 Stage 函数组装，支持灵活组合
-- **底层 QC 库**：`cccp`（Computational Chemistry Connection Package）提供 ORCA/CREST/xTB/ISOSTAT/Shermo 子进程封装与配置加载，`acp` 工作流层在其之上构建；统一通过 `acp` CLI 入口使用
+- **统一入口**：所有计算经 `acp run <workflow>` 触发（`python -m cccp` 不可用）；14 个工作流的执行全部经 `cccp.calculation` 任务核心
 
 ---
 
@@ -334,6 +308,11 @@ acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c"
 acp run frequency --input molecule.xyz
+acp run xtb_optimize --input molecule.xyz
+
+# === PES2TS 执行统一（本地专用） ===
+acp run XtbPathSearch --path-config request.json --output ./path_out
+acp run OrcaGradient --gradient-config request.json --output ./grad_out
 
 # === NMR 化学位移预测 ===
 acp run nmr --input "CCO" --output ./nmr_results
@@ -385,10 +364,14 @@ acp run scan --input <SMILES或文件路径>
              --output <输出目录>
              --nproc --mem --config ...
 
-acp run singlepoint|optimize|frequency|xtb-optimize --input <SMILES或文件路径>
+acp run singlepoint|optimize|frequency|xtb_optimize --input <SMILES或文件路径>
                   --output <输出目录>
                   --method <method> --basis <basis>
                   --nproc --mem --config ...
+
+acp run XtbPathSearch --path-config <pes2ts_xtb_path_request_v1 JSON> --output <输出目录>
+acp run OrcaGradient --gradient-config <pes2ts_orca_gradient_request_v1 JSON> --output <输出目录>
+                      --nproc --mem --config ...
 
 acp run nmr --input <SMILES或文件路径> --output <输出目录>
             --backend <orca> --reference "13C=185.0" "1H=31.5"
@@ -465,14 +448,14 @@ pytest tests/test_remote_phase*.py -v
 pytest -m "not slow" -v
 ```
 
-当前测试状态：**96 测试文件，涵盖 ACP 核心 + 工作流 + API + 调度器 + 远程执行**
+当前测试状态：**247 测试文件，≈5.7k 收集用例**，涵盖 cccp 任务层 + ACP 核心 + 工作流 + API + 调度器 + 远程执行 + 架构守护（`test_architecture_invariants.py`：唯一基元定义/依赖方向/能力证据表）
 
 ### 代码质量
 
 - core/ 不含任何化学特定逻辑 ✅
 - 所有 `__init__.py` 仅含 re-exports ✅
 - 配置源已统一（3→1）✅
-- 死代码已清除（FunnelRunner, PipelineExecutor）✅
+- FunnelRunner 已清除；`cccp/pipeline/` PipelineExecutor 保留为 thin 编排（dormant）✅
 - 原子化文件写入（os.replace 防崩溃）✅
 - 预提交：ruff lint + ruff-format + mypy (strict)
 
@@ -482,10 +465,10 @@ pytest -m "not slow" -v
 
 | 项目 | 文件数 | 代码行数 |
 |------|--------|----------|
-| `src/acp/` | ~130 | ~65,000 |
-| `src/cccp/` | 17 | ~5,200 |
-| `tests/` | 96 | ~10,000+ |
-| 合计 | ~229+ | ~80,000+ |
+| `src/acp/` | ~247 | ~105,000 |
+| `src/cccp/` | 86 | ~35,000 |
+| `tests/` | 247 | ~130,000 |
+| 合计 | ~580 | ~270,000 |
 
 ---
 
@@ -494,38 +477,32 @@ pytest -m "not slow" -v
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │  CLI                                                               │
-│  acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|simple|serve │
+│  acp run Confsearch|PESsearch|BatchOptimize|XtbPathSearch|         │
+│         OrcaGradient|irc|scan|nmr|simple|tsmode|casscf|serve       │
 └────────────────────────────┬──────────────────────────────────────┘
                              │
                              ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│  WorkflowRunner (acp/core/workflow.py)                            │
-│  计算计划驱动管道                                                    │
+│  WorkflowRunner (acp/core/workflow.py) + 工作流编排 (acp/workflows) │
+│  计算计划驱动管道；单步经 CalculationPlanExecutor，多步走 batch engine │
 └────────────────────────────┬──────────────────────────────────────┘
                              │
-        ┌────────────────────┼────────────────────┬────────────────┐
-        ▼                    ▼                    ▼                ▼
-  ┌───────────┐        ┌──────────┐        ┌──────────┐    ┌──────────┐
-  │Confsearch │        │PESsearch │        │BatchOptimize│  │irc/scan  │
-  │  (统一构象 │        │ (路径搜索│        │(批量优化 │    │(IRC验证/ │
-  │   搜索+能量)│       │  PES)    │        │ 确认)    │    │ 坐标扫描)│
-  └─────┬─────┘        └────┬─────┘        └────┬─────┘    └────┬─────┘
-        │                   │                   │               │
-        │    confsearch_manifest.json           │               │
-        │              pes_profile.json          │               │
-        │                   result_manifest.json│               │
-        └───────────────────┴───────────────────┴───────────────┘
-                                │
-                                ▼
+                             ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│  QC Backends (acp/backends/)                                      │
-│  ORCA / CREST / xTB / CENSO / ISOSTAT / Molclus                   │
+│  cccp/calculation — 任务层（唯一执行驻点，tasks/ 14 任务核心）        │
+│  typed options/payload 契约 + 通用批量执行器 batch.py               │
+└────────────────────────────┬──────────────────────────────────────┘
+                             │
+                             ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  cccp/backends — QC 能力适配层（acp/backends 为纯 re-export shim）  │
+│  ORCA / CREST / xTB / CENSO / ISOSTAT / Molclus                    │
 │  能力协议：GeometryOptimizer / SinglePointCalculator / ConformerSearcher│
 └────────────────────────────┬──────────────────────────────────────┘
                              │
                              ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│  cccp — QC 接口库（子进程封装 + 配置加载）                          │
+│  cccp/qc — QC 子进程层（interfaces/runners/cluster + 科学适配）      │
 └────────────────────────────┬──────────────────────────────────────┘
                              │
                              ▼
@@ -550,7 +527,7 @@ pytest -m "not slow" -v
 | 资源 | 位置 |
 |------|------|
 | Web 服务 | http://127.0.0.1:8765（启动 `acp run serve` 后；WSL 用户优先使用 127.0.0.1 避免 IPv6 问题）|
-| 前端仪表盘 | `frontend/ACP_Workbench.html` / `ACP_Workbench_v2.html` |
+| 前端仪表盘 | `frontend/ACP_Workbench_v2.html`（v1 `ACP_Workbench.html` 为遗留只读）|
 | 开发文档 | `docs/`（CENSO 集成、MethodMeta、Simple Workflows） |
 
 ---
