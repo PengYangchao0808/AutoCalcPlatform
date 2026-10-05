@@ -33,6 +33,7 @@ scheduler/
 | `manager.py` | JobManager — entry point. `submit()` creates job → stores via JobStore → spawns thread. `cancel()` sets event. `_run_job()` callback invokes JobRunner. Re-queues orphaned active jobs on startup. Owns `structure_cache` (shared `RemoteStructureCache` singleton) + the `acp-catalog-prefetch` daemon worker: remote terminal transitions and a startup sweep enqueue jobs whose small catalog files are not cached yet, so `pending_fetch` resolves without any browser request. |
 | `runner.py` | JobRunner — biggest file. `run()` builds CLI cmd, spawns subprocess, monitors via `_monitor()`, observes stage state via `StageTaskObserver`, captures artifacts via `capture_stage_artifacts()`, stores provenance. `materialize_job_input()` writes SMILES/XYZ to disk. `_run_fake()` for testing. |
 | `store.py` | JobStore — SQLite persistence for JobRecord. Schema init, CRUD, project filtering, count aggregation. |
+| `store.py` CAS APIs (execution-integrity) | `transition()` — CAS single-row state UPDATE guarded by `revision` + `status` + `attempt` (stale write → `JobStateConflictError`, never a blind overwrite); `update_progress()` (progress writes cannot clobber status/spec/result); `update_execution_identity()`; `requeue_with_spec()` — one-transaction in-place rerun (new spec + `attempt=attempt+1` + QUEUED). `attempt` is 1-based and **the scheduler is its single source** — remote/state.json observations never bump it. |
 | `registration.py` | `register_completed_cli_job()` — X1′-D CLI visibility: persists a finished CLI run dir (e.g. `acp run XtbPathSearch --register`) as a COMPLETED JobRecord via JobStore.create + TaskIndex.sync_from_job + ProjectManager.ensure_default_project. Binds `work_dir` to the existing `--output` dir (ANTI-PATTERN #15: job id never enters the path). Skips scheduler task dirs (already registered by submit). CLI-only path — never constructs JobManager (single-instance lock). |
 | `stage_tasks.py` | StageTask/StagePlan dataclasses, StagePlanProvider protocol, PlanCompiler (generic stage-plan compilation from METHOD_SCHEMAS), StageTaskStore (SQLite CRUD), StageTaskObserver (polls work dir for `.stage_*` files, mirrors to DB). |
 | `provenance.py` | Provenance dataclass (input_hash, command_line, wall_time, parser_results), ParserRegistry (type→callable), `compute_input_hash()`, `build_provenance_for_job()`. |
@@ -51,6 +52,14 @@ scheduler/
 - **Event files**: Per-job JSONL event log at `<work_dir>/events.jsonl`. Read via JobEventLog, not the SQLite DB
 - **`.stage_*` convention**: Stage task state → JSON files in work dir. StageTaskObserver polls these files
 - **CLI-flag parity (E7)**: shared resolution in `jobs.py` (`censo_preset_from_method` / `censo_solvent_from_method` / `censo_ewin_from_method` / `xtbmd_method_flags` + `_as_bool`) used by BOTH `runner.py` and `remote/script_gen.py` — add new workflow flags here, not in either file
+
+## STATE TRANSITIONS（execution-integrity 四不变量，2026-10-06）
+> 详见 root `AGENTS.md` § EXECUTION PROTOCOL 与 `docs/ACP_Execution_Integrity_Rebaseline_Notes.md`。
+
+- **CAS-only state writes**: 一切 job 状态写入走 `store.py` 的 CAS API（`transition`/`update_progress`/`update_execution_identity`/`requeue_with_spec`，`revision`/`status`/`attempt` 守卫，冲突 → `JobStateConflictError`）。用户 pause/cancel 意图永不被过期 poll 观测覆盖；`PENDING/PAUSED→RUNNING` 合法转换不丢失；终态不可被旧写入复活；进度/工件写不得覆盖 status/spec/result；终态副作用在终态持久化**之后**且幂等可重试。
+- **submit/cancel states**: `result["remote"]["submit_state"]`（`intent`（先于 bsub 持久化，含 `submission_id`/owner token/lease）/`submitted`/…）与 `cancel_state`（CANCELLING 只有**确认远端已停止**后才置 CANCELLED）是 job-detail/v1 recovery 矩阵的投影字段（`v1_schemas.py::JobRecovery.submit_state/cancel_state`）。
+- **poll/reconcile ownership**: poll 观测只允许"低态→高态"前进式更新且必须持锁重读 revision；提交权租约有效期间 reconcile 永不判 `not_accepted`（`remote/submission.py`）；manager 拥有控制意图（pause/cancel/rerun），runner/observer 只提案观测值。
+- **in-place rerun（契约 B）**: rerun/edit-recalculate 复用同一任务目录与远端目录，`attempt+1`（CAS 单事务），旧 attempt 回执归档至 `WORK/00_RUNTIME/attempts/<N>/`（`_archive_attempt_receipts` + `_archive_previous_resume_source`）；`_RERUN_STABLE_FILES`（`input.xyz`/`input_source.json`/`task.json`/`job.json`）跨 attempt 保留，其余清空。
 
 ## ANTI-PATTERNS
 - **`_utc_now_iso()` copy-pasted**: Same 3-line helper defined in ~9 modules (`events.py`, `jobs.py`, `manager.py`, `migrations.py`, `projects.py`, `provenance.py`, `runner.py`, `stage_tasks.py`, `store.py`, `local_cleanup.py`). Candidate for `acp.core.utils`

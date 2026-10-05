@@ -12,7 +12,7 @@ Automated computational chemistry platform. Two packages under `src/`: `cccp`（
 
 **Retired**（catalog `status:"retired"`，仅历史作业展示，**勿重建/勿扩展 CLI**）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
-**Job 生命周期**: QUEUED/RUNNING/PAUSED/WAITING_REVIEW/FAILED/CANCELLED/COMPLETED — PAUSED 见 CONVENTIONS；checkpoint continue / rerun（`{name}__rerun`）/ cascade purge。
+**Job 生命周期**: QUEUED/RUNNING/PAUSED/WAITING_REVIEW/FAILED/CANCELLED/COMPLETED — PAUSED 见 CONVENTIONS；checkpoint continue / rerun（**原地重跑**：同任务目录、attempt+1、旧 attempt 回执归档至 `WORK/00_RUNTIME/attempts/<N>/`，不再生成 `{name}__rerun` 新任务）/ cascade purge。
 
 ## STRUCTURE（地图 — 叶级明细一律看嵌套 AGENTS.md）
 ```
@@ -87,6 +87,14 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **Task custom names**: `tasks.py` custom_name/name_revision/name_updated_at（NOT in `_SYNC_COLUMNS` — sync never overwrites）；`update_custom_name()` 事务性 revision check + organization_events 审计；PATCH `/api/v2/tasks/{id}` + expected_name_revision（409 carries current projection）
 - **Structure-source org store**: `structure_source_store.py` — 4 tables；`source_uid_for()` = `ss_`+sha256(job_id+relpath)[:24]；upsert 只碰 discovery fields；`RevisionConflictError` + expected_revision 乐观锁
 - **Job-edit coverage registry**: `job_edit.py::EDIT_ACTIVE_WORKFLOWS` — 新 active 工作流必须登记，`audit_workflow_edit_coverage()` + `tests/test_acp_job_edit.py` 守护
+
+## EXECUTION PROTOCOL（执行完整性四不变量，2026-10-06）
+> 迁移期由本计划（`.omo/plans/acp-execution-integrity-remediation.md`）引入，todo 32 文档收口口径下**保留**（不随迁移期结束删除）。实现驻点：`scheduler/store.py`（CAS）、`scheduler/manager.py`、`scheduler/remote/{paths,release,submission,runner}.py`、`calculations/{executor,step_requirements}.py`、`calculations/batch/engine.py`。
+
+1. **一次 attempt ↔ 一个已确认的存储位置 / 执行版本 / 提交记录**：每个任务 attempt 恰好对应一个已确认存储位置（本地分配映射 = 远端目录 `<remote_work_dir>/<项目叶子>/<任务叶子[__NN]>`）、一个已验证执行版本（`release_id`；生产 `auto_sync` 模式，dev 逃生门 `ACP_REMOTE_ALLOW_UNVERSIONED=1` 显式标注 `unversioned-shared`）与一条先于 bsub 持久化的提交记录（含 `submission_id`）。同项目同名 / 跨项目同名 / rerun / continue 复用同一存储目录且互不冲突，attempt 回执隔离。
+2. **控制意图不被旧观测覆盖**：用户 pause/cancel 意图永不被过期 poll 观测改写；合法转换（`PENDING/PAUSED→RUNNING`）不丢失；CANCELLING 只有**确认远端已停止**后才置 CANCELLED；终态不可被旧写入复活；进度写不覆盖 status/spec/result；终态副作用在终态持久化之后且幂等可重试。状态写入一律走 `store.py` 的 CAS API（revision/status/attempt 守卫）。
+3. **恢复只复用身份与工件有效的结果**：仅复用身份（有效参数/内容/角色/依赖工件摘要，两层 `plan_identity`/`step_identity` + 任务专属参数入身份）有效且完成事实完整的科学结果；`step_result.json` 自证属于当前计算；旧 v1 checkpoint 默认保守重算；发布失败只重试发布；batch 与 executor 同源 `resume_source.json`；不兼容 → 全量重算。
+4. **下游只消费满足前置条件的结果**：失败/缺失上游的步骤记 `blocked`/`upstream_failed` 并阻断其依赖者；**必需步骤 blocked 时整体不判 completed**；诊断性继续必须显式声明（`diagnostic_only=True`）且恢复时重判、不得当正常结果收养。
 
 ## MIGRATION PERIOD RULES — 已收口（CLOSED at todo 32, 2026-10-05）
 > acp→cccp 架构整改迁移期**已结束**（基线 `main@2a23b93` → 收口 HEAD `66222f7`）。以下为生效的**最终规则**；历史台账（`tests/baseline/refactor-evidence/migration_ledger.md`）保留为审计记录，不再作为流程要求维护。

@@ -56,3 +56,14 @@ P2 任务（`conformer_search`/`md_sampling`/`clustering`/`xtb_path_search`/`cen
 ## 跨版本恢复 fixtures
 
 `tests/baseline/recovery_fixtures/`（生成脚本同目录）：checkpoint（已完成+未完成并存）、部分失败结果、历史 manifest、批量 SP 缓存、远程路径引用。迁移后 A8 验收用：`continue` 不重算已完成步骤、不丢工件、不复用不兼容缓存。
+
+## Addendum — execution-integrity 机制归属（2026-10-06，本计划 todo 19 注记）
+
+`acp-execution-integrity-remediation` 计划（todos 1–18，HEAD `a9dff49`）引入的机制全部落 **ACP 侧**，不新增任何 cccp 驻点，本台账无需新行：
+
+- 存储身份/远端目录映射：`acp/scheduler/remote/paths.py`（D01）
+- 提交协议/租约：`acp/scheduler/remote/submission.py`（D02）；CAS 状态机：`acp/scheduler/store.py` + `manager.py`
+- 内容寻址 release：`acp/scheduler/remote/release.py`（D03，安装区 `<remote_code_dir>/releases/`）
+- 两层身份/`step_result.json`/`resume_source.json`/前置条件阻断：`acp/calculations/{executor,step_requirements,step_result,checkpoint}.py` + `acp/calculations/batch/engine.py`
+
+契约口径与兄弟计划 todo 40/41 再基线注记：`docs/ACP_Execution_Integrity_Rebaseline_Notes.md`；远端目录布局：`docs/ACP_Job_File_Layout_Spec.md` §2b；四不变量：root `AGENTS.md` § EXECUTION PROTOCOL。
