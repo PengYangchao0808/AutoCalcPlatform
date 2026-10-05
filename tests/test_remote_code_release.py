@@ -1508,3 +1508,119 @@ def test_release_gc_reachable_through_background_retention_tick():
             assert spy.call_count >= 1
             assert spy.call_args.kwargs.get("job_store") is mgr.store
             mgr.shutdown()
+
+
+# ====================================================================== #
+# E2E matrix (todo 9): cross-package move + ref-protected retention
+# ====================================================================== #
+
+
+def test_cross_package_move_temp_tree_new_file_set_old_release_untouched(tmp_path):
+    """E2E ④: moving a ``src/acp`` file to a ``src/cccp`` path inside a
+    TEMPORARY copy tree mints a new release with the correct file set;
+    the old release stays byte-identical.  The live ``src/cccp/**`` tree
+    is never touched — everything happens under tmp_path."""
+    make_tree(tmp_path)
+    env = make_env()
+    state_dir = tmp_path / "state"
+    m1 = build_release_manifest(tmp_path)
+    assert "src/acp/engine.py" in m1.files
+    assert "src/cccp/engine.py" not in m1.files
+
+    with patch_client(env):
+        b1 = ensure_node_release(
+            env.node,
+            m1,
+            stager=env.stager,
+            ssh=env.pool,
+            state_dir=state_dir,
+            project_root=tmp_path,
+        )
+        release_release_ref(env.node, b1.release_id, b1.ref_id, stager=env.stager, ssh=env.pool)
+        snapshot = {
+            p: blob for p, blob in env.sftp.files.items() if p.startswith(b1.release_dir + "/")
+        }
+
+        # Cross-package move inside the TEMP copy only.
+        src = tmp_path / "src" / "acp" / "engine.py"
+        dst = tmp_path / "src" / "cccp" / "engine.py"
+        src.rename(dst)
+        assert not (Path("src/cccp/engine.py")).exists(), "live tree must never gain this file"
+
+        m2 = build_release_manifest(tmp_path)
+        assert m2.release_id != m1.release_id
+        assert "src/acp/engine.py" not in m2.files
+        assert "src/cccp/engine.py" in m2.files
+        assert (
+            m2.files["src/cccp/engine.py"]["sha256"] == hashlib.sha256(b"VALUE = 1\n").hexdigest()
+        )
+        assert set(m2.files) == {
+            p.relative_to(tmp_path).as_posix() for p in build_sync_file_list(tmp_path)
+        }
+
+        b2 = ensure_node_release(
+            env.node,
+            m2,
+            stager=env.stager,
+            ssh=env.pool,
+            state_dir=state_dir,
+            project_root=tmp_path,
+        )
+        # Old release unchanged (byte-for-byte) after the new publish.
+        assert {
+            p: blob for p, blob in env.sftp.files.items() if p.startswith(b1.release_dir + "/")
+        } == snapshot
+        assert posixpath.join(b1.release_dir, "src/acp/engine.py") in env.sftp.files
+        assert posixpath.join(b2.release_dir, "src/cccp/engine.py") in env.sftp.files
+        assert posixpath.join(b2.release_dir, "src/acp/engine.py") not in env.sftp.files
+        assert posixpath.join(b2.release_dir, ".complete") in env.sftp.files
+    env.pool.close()
+
+
+def test_prune_keeps_queued_referenced_release_and_never_touches_shared_dir(tmp_path):
+    """E2E ⑤: a QUEUED job's release (bound pre-bsub) survives prune; an
+    unreferenced aged release is reclaimed; the dev-hatch shared dir
+    (``unversioned-shared`` provenance) is outside retention entirely."""
+    env = make_env()
+    store = JobStore(tmp_path / "jobs.db")
+    aged = time.time() - 48 * 3600
+    rid_queued = "5152535455565758"
+    rid_free = "6162636465666768"
+    seed_release(env.sftp, env.node, rid_queued, {"src/x.py": b"q"}, mtime=aged)
+    seed_release(env.sftp, env.node, rid_free, {"src/x.py": b"f"}, mtime=aged)
+    bind_release(store, rid_queued, status=JobStatus.QUEUED)
+
+    # Dev-escape-hatch job: provenance pinned to unversioned-shared.
+    store.create(
+        JobRecord(
+            id="devhatch",
+            spec=JobSpec(workflow="singlepoint", input={"source": "CCO"}),
+            status=JobStatus.COMPLETED,
+            work_dir="/tmp/dev",
+            result={"remote": {"code_release": "unversioned-shared"}},
+        )
+    )
+    # Shared dir (mutable, dev mode) with equally-aged content.
+    shared_root = posixpath.join(env.node.remote_code_dir, "src", "acp")
+    shared_file = posixpath.join(shared_root, "__init__.py")
+    _mkdirs(env.sftp, shared_root)
+    env.sftp.files[shared_file] = b'"""shared"""\n'
+    env.sftp.dir_mtimes[env.node.remote_code_dir] = aged
+    env.sftp.dir_mtimes[shared_root] = aged
+
+    with patch_client(env):
+        report = prune_releases(
+            env.node,
+            stager=env.stager,
+            ssh=env.pool,
+            job_store=store,
+            retention_days=1,
+            min_age_hours=24,
+        )
+    assert rid_queued in report.kept_referenced, "QUEUED-referenced release must survive"
+    assert rid_free in report.pruned
+    # Shared dir + contents never enter the retention deletion scope.
+    assert shared_file in env.sftp.files
+    assert shared_root in env.sftp.dirs
+    assert env.node.remote_code_dir in env.sftp.dirs
+    env.pool.close()

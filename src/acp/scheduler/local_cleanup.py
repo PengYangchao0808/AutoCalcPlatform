@@ -19,8 +19,9 @@ local filesystem operation.
 * :meth:`LocalCleanup.pre_submit_housekeeping` is invoked by the local
   :class:`~acp.scheduler.runner.JobRunner` before every local
   submission: when disk usage crosses the *cleanup* threshold (default
-  90 %) it triggers a retention sweep; when it still exceeds the *skip*
-  threshold (default 95 %) after the sweep the submission is rejected.
+  90 %) it runs a **deletion-free** retention survey (the submission
+  path must never delete task dirs); when usage still exceeds the *skip*
+  threshold (default 95 %) after the survey the submission is rejected.
 
 Safety:
     * Only ``run_root/<project>/<job_id>`` three-level structures are
@@ -42,6 +43,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from acp.scheduler.jobs import is_deletion_eligible
 from acp.scheduler.store import JobStore
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,7 @@ __all__ = [
     "RetentionPolicy",
     "_format_bytes",
     "_is_safe_run_root",
+    "ORPHAN_DAYS_MULTIPLIER",
 ]
 
 # Disk-usage thresholds (percent of the filesystem holding run_root).
@@ -75,6 +78,16 @@ DEFAULT_MAX_DIRS_PER_SWEEP = 200
 # writes — but the legacy prefix is ``interrupted by server restart``;
 # we match either to be safe (risk 5 mitigation).
 _RESTART_FAILED_MARKERS = ("[RESTART_FAILED]", "interrupted by server restart")
+
+# Orphan dirs (no DB row) get an explicit LONGER independent window:
+# ``orphan_days = ORPHAN_DAYS_MULTIPLIER * completed_days``.  An orphan
+# has no lifecycle evidence, so it must outlive any recorded job window
+# before reclamation — and only when it carries ownership evidence
+# (``task.json`` present); otherwise it is kept (plan todo 9, r17).
+ORPHAN_DAYS_MULTIPLIER = 3
+
+#: Ownership evidence: a scheduler task dir always carries ``task.json``.
+_ORPHAN_OWNERSHIP_MARKER = "task.json"
 
 
 def _utc_now_iso() -> str:
@@ -183,6 +196,29 @@ class LocalHousekeepingDecision:
         }
 
 
+@dataclass(frozen=True)
+class StatusEntry:
+    """DB lifecycle snapshot used by the work-dir retention gate.
+
+    Attributes:
+        job_id: ``JobRecord.id`` (for the pre-delete requeue re-check).
+        status: ``JobRecord.status`` value (``None`` when unknown).
+        completed_at: ISO-8601 completion timestamp (age anchor).
+        error: ``JobRecord.error`` (restart-marker detection).
+        submit_state: ``result["remote"]["submit_state"]``.
+        cancel_state: ``result["remote"]["cancel_state"]``.
+        attempt: ``JobRecord.attempt`` at snapshot time (requeue check).
+    """
+
+    job_id: str | None = None
+    status: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    submit_state: str | None = None
+    cancel_state: str | None = None
+    attempt: int | None = None
+
+
 class LocalCleanup:
     """Local run_root lifecycle manager (work_dir + DB retention).
 
@@ -269,24 +305,35 @@ class LocalCleanup:
         self,
         dry_run: bool = False,
         max_dirs_per_sweep: int | None = None,
+        allow_task_dir_deletion: bool = True,
     ) -> LocalCleanupReport:
         """Remove expired job directories under ``run_root/<project>/<job>``.
 
-        The retention window is selected per job based on its DB status:
+        Deletion eligibility is decided by the DB lifecycle FIRST
+        (:func:`acp.scheduler.jobs.is_deletion_eligible`: terminal status
+        AND ``submit_state`` settled AND cancellation confirmed); age is
+        only consulted afterwards (mtime is auxiliary — never a deletion
+        qualifier on its own, r16 P1).  The retention window for an
+        eligible dir:
 
         * ``failed``            → :attr:`RetentionPolicy.failed_days`
         * ``cancelled``         → :attr:`RetentionPolicy.cancelled_days`
-        * ``completed`` / orphan → :attr:`RetentionPolicy.completed_days`
-        * restart-marked FAILED → :data:`_RESTART_DAYS` (shorter).
+        * ``completed``         → :attr:`RetentionPolicy.completed_days`
+        * restart-marked FAILED → :data:`_RESTART_DAYS` (shorter)
+        * orphan (no DB row)    → ``ORPHAN_DAYS_MULTIPLIER × completed_days``
+          AND ``task.json`` ownership evidence; otherwise kept.
 
-        Expiry is judged by the **newer** of the job's ``completed_at``
-        timestamp and the directory mtime, so a dir touched after job
-        completion is not removed prematurely.
+        Right before an actual deletion the row is re-read so an in-place
+        requeue/continue (attempt bump or non-terminal transition) that
+        landed during the sweep cancels the deletion.
 
         Args:
             dry_run: Populate the report without deleting.
             max_dirs_per_sweep: Override the instance cap. ``<= 0`` means
                 unlimited.  ``None`` uses the instance default.
+            allow_task_dir_deletion: When ``False`` the sweep never calls
+                ``shutil.rmtree`` (pre-submission path: space check only —
+                the submission path must not delete task dirs).
 
         Returns:
             A :class:`LocalCleanupReport`.  Errors are recorded per-dir
@@ -304,7 +351,7 @@ class LocalCleanup:
             logger.debug("run_root %s does not exist — nothing to clean", self.run_root)
             return report
 
-        # 1. Build {job_id: (status, completed_at, error)} map (one read).
+        # 1. Build {job_dir_name: StatusEntry} map (one read).
         status_map = self._build_status_map()
 
         now = time.time()
@@ -352,23 +399,55 @@ class LocalCleanup:
                     # This is run_root itself or a project dir — leave it.
                     continue
 
-                # Status lookup.
-                status, completed_at, error_text = status_map.get(job_dir.name, (None, None, None))
+                entry = status_map.get(job_dir.name)
+                if entry is None:
+                    candidate = self._orphan_candidate(job_dir, now)
+                else:
+                    # Gate 1: DB lifecycle (terminal + submit settled +
+                    # cancel confirmed).  Non-terminal / pending-submission
+                    # / unconfirmed-cancel dirs are NEVER deleted.
+                    if not is_deletion_eligible(
+                        entry.status, entry.submit_state, entry.cancel_state
+                    ):
+                        logger.debug(
+                            "Local cleanup: keeping %s (gate: status=%s "
+                            "submit_state=%s cancel_state=%s)",
+                            target,
+                            entry.status,
+                            entry.submit_state,
+                            entry.cancel_state,
+                        )
+                        continue
+                    retention = self._retention_for(entry.status, entry.error)
+                    age_ref = self._age_reference(entry.completed_at, job_dir)
+                    if age_ref is None:
+                        report.errors.append(f"{job_dir}: no mtime/timestamp to judge age")
+                        continue
+                    if now - age_ref <= retention * 86400:
+                        continue  # fresh enough
+                    candidate = (retention, entry.status)
 
-                retention = self._retention_for(status, error_text)
-                age_ref = self._age_reference(completed_at, job_dir)
-                if age_ref is None:
-                    # Unknown mtime AND no completed_at — leave alone.
-                    report.errors.append(f"{job_dir}: no mtime/timestamp to judge age")
+                if candidate is None:
                     continue
+                retention, status_label = candidate
 
-                if now - age_ref <= retention * 86400:
-                    continue  # fresh enough
+                if not allow_task_dir_deletion:
+                    # Pre-submission path: space check only, task dirs are
+                    # protected here (rmtree spy must stay 0).
+                    continue
 
                 freed = self._dir_size_bytes(job_dir)
                 if dry_run:
                     report.work_dirs_removed.append(target)
                     report.freed_bytes_est += freed
+                    continue
+
+                if entry is not None and not self._requeue_recheck(entry):
+                    logger.info(
+                        "Local cleanup: cancelled deletion of %s — job moved "
+                        "to a new attempt or became non-terminal during the sweep",
+                        target,
+                    )
                     continue
 
                 try:
@@ -383,7 +462,7 @@ class LocalCleanup:
                 logger.info(
                     "Local cleanup: removed %s (status=%s, age>=%dd)",
                     target,
-                    status or "orphan",
+                    status_label or "orphan",
                     retention,
                 )
 
@@ -398,6 +477,51 @@ class LocalCleanup:
                 len(report.errors),
             )
         return report
+
+    def _orphan_candidate(self, job_dir: Path, now: float) -> tuple[int, str] | None:
+        """Age/ownership check for a dir with no DB row.
+
+        Returns ``(retention_days, "orphan")`` when the dir is eligible
+        for reclamation, ``None`` when it must be kept.  An orphan needs
+        BOTH the longer independent window
+        (``ORPHAN_DAYS_MULTIPLIER × completed_days``) AND ownership
+        evidence (``task.json``) — otherwise keep + event.
+        """
+        if not (job_dir / _ORPHAN_OWNERSHIP_MARKER).exists():
+            logger.info(
+                "Local cleanup: kept orphan %s (no %s ownership evidence)",
+                job_dir,
+                _ORPHAN_OWNERSHIP_MARKER,
+            )
+            return None
+        retention = self.policy.completed_days * ORPHAN_DAYS_MULTIPLIER
+        age_ref = self._age_reference(None, job_dir)
+        if age_ref is None or now - age_ref <= retention * 86400:
+            return None
+        return retention, "orphan"
+
+    def _requeue_recheck(self, entry: StatusEntry) -> bool:
+        """Re-read the row right before deletion (requeue coordination).
+
+        Returns ``False`` when the job vanished, moved to a new attempt
+        (in-place continue/rerun), or became non-terminal after the
+        eligibility snapshot — the caller must cancel the deletion.
+        """
+        if not entry.job_id:
+            return True
+        try:
+            fresh = self.store.get(entry.job_id)
+        except Exception:
+            logger.debug("requeue re-check failed for %s", entry.job_id, exc_info=True)
+            return False
+        if fresh is None:
+            return False
+        if fresh.attempt != entry.attempt:
+            return False
+        status = fresh.status.value if fresh.status else None
+        remote = (fresh.result or {}).get("remote")
+        remote = remote if isinstance(remote, dict) else {}
+        return is_deletion_eligible(status, remote.get("submit_state"), remote.get("cancel_state"))
 
     # ------------------------------------------------------------------ #
     # DB record cleanup
@@ -491,12 +615,21 @@ class LocalCleanup:
         Policy (mirrors :meth:`RemoteCleanup.pre_submit_housekeeping`):
 
         * usage <= cleanup_threshold → proceed (no action).
-        * usage > cleanup_threshold → run work_dir sweep, re-check.
-        * usage > skip_threshold (after sweep, or if sweep failed) →
+        * usage > cleanup_threshold → run a DELETION-FREE retention
+          survey (``cleanup_old_work_dirs(allow_task_dir_deletion=False)``),
+          re-check.
+        * usage > skip_threshold (after survey, or if it failed) →
           ``should_skip=True``.
 
+        D03 decoupling (plan todo 9 option **(B)**): the submission path
+        must not delete task dirs, so this entry never removes anything
+        (``shutil.rmtree`` spy stays 0 here) — it only measures whether
+        existing retention headroom would relieve the pressure.  The
+        reason is submission-path safety, NOT a missing DB handle
+        (:class:`LocalCleanup` holds ``store``).
+
         Failures while querying disk usage fail-open (return 0 %) so a
-        transient ``OSError`` does not block submission.  Sweep failures
+        transient ``OSError`` does not block submission.  Survey failures
         are recorded in the report but do not abort housekeeping.
 
         Returns:
@@ -513,7 +646,7 @@ class LocalCleanup:
                 self._cleanup_threshold,
             )
             try:
-                cleanup = self.cleanup_old_work_dirs()
+                cleanup = self.cleanup_old_work_dirs(allow_task_dir_deletion=False)
             except Exception as exc:
                 logger.warning("Local retention cleanup raised: %s", exc)
                 cleanup = LocalCleanupReport(errors=[f"cleanup raised: {exc}"])
@@ -572,13 +705,16 @@ class LocalCleanup:
     # Internals
     # ------------------------------------------------------------------ #
 
-    def _build_status_map(self) -> dict[str, tuple[str | None, str | None, str | None]]:
-        """One-shot read of DB: {job_id: (status, completed_at, error)}.
+    def _build_status_map(self) -> dict[str, StatusEntry]:
+        """One-shot read of DB: {job_dir_name: StatusEntry}.
 
-        job_id is keyed by the last path component of ``record.work_dir``
-        so it matches ``job_dir.name`` during the filesystem walk.
+        job_dir_name is the last path component of ``record.work_dir``
+        (falling back to ``record.id``) so it matches ``job_dir.name``
+        during the filesystem walk.  ``submit_state``/``cancel_state``
+        come from ``record.result["remote"]`` (D02/D05 protocols) — the
+        retention gate needs them alongside the status.
         """
-        out: dict[str, tuple[str | None, str | None, str | None]] = {}
+        out: dict[str, StatusEntry] = {}
         try:
             records = self.store.list(limit=500000)
         except Exception as exc:
@@ -586,18 +722,26 @@ class LocalCleanup:
             return out
         for record in records:
             key = Path(record.work_dir).name if record.work_dir else record.id
-            out[key] = (
-                record.status.value if record.status else None,
-                record.completed_at,
-                record.error,
+            remote = (record.result or {}).get("remote")
+            remote = remote if isinstance(remote, dict) else {}
+            out[key] = StatusEntry(
+                job_id=record.id,
+                status=record.status.value if record.status else None,
+                completed_at=record.completed_at,
+                error=record.error,
+                submit_state=remote.get("submit_state"),
+                cancel_state=remote.get("cancel_state"),
+                attempt=record.attempt,
             )
         return out
 
     def _retention_for(self, status: str | None, error_text: str | None) -> int:
         """Pick the retention window (days) for a job of given status.
 
-        Restart-marked FAILED jobs use a shorter window
-        (:data:`_RESTART_DAYS`) since they hold no useful partial work.
+        Only ever called AFTER :func:`is_deletion_eligible` passed (so
+        ``status`` is terminal); the completed-window fallback below is
+        defensive only and no longer reachable for RUNNING/PAUSED/QUEUED
+        rows (r16 P1 — non-terminal dirs are gated out first).
         """
         if error_text and any(m in error_text for m in _RESTART_FAILED_MARKERS):
             return _RESTART_DAYS
@@ -605,7 +749,7 @@ class LocalCleanup:
             return self.policy.failed_days
         if status == "cancelled":
             return self.policy.cancelled_days
-        # completed, queued/running (orphan unlikely), or unknown → completed window.
+        # terminal completed (or defensive unknown) → completed window.
         return self.policy.completed_days
 
     @staticmethod

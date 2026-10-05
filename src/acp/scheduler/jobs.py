@@ -65,6 +65,54 @@ class JobStatus(str, Enum):
         return self in active
 
 
+#: Retention gate (D03 plan todo 9): only these terminal statuses may ever
+#: have their work/task directories reclaimed by a cleanup sweep.
+TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
+
+#: Submission states that mean "bsub outcome not settled yet" — the job may
+#: still be adopted/launched, so its directory must never be reclaimed.
+PENDING_SUBMIT_STATES: frozenset[str] = frozenset({"intent", "unconfirmed"})
+
+#: Cancel states that allow reclamation: no cancellation requested at all
+#: (``None``) or a cancellation CONFIRMED by the poll/reconcile chain.
+#: Anything else (``requested``/``sent``/``unconfirmed``) keeps the dir.
+CONFIRMED_CANCEL_STATES: frozenset[str | None] = frozenset({None, "confirmed"})
+
+
+def is_deletion_eligible(
+    status: str | None,
+    submit_state: str | None,
+    cancel_state: str | None,
+) -> bool:
+    """Exact DB-lifecycle predicate gating any work-dir retention deletion.
+
+    ``deletable = is_terminal(status) ∧ submit_state ∉ {intent, unconfirmed}
+    ∧ cancel_state ∈ {None, "confirmed"}``.
+
+    Shared by ``LocalCleanup.cleanup_old_work_dirs`` and
+    ``RemoteCleanup.cleanup_old_jobs`` so local and remote retention can
+    never diverge (r16/r17 P1).  Age (mtime/completed_at) is evaluated
+    ONLY after this gate passes — mtime alone is never a deletion
+    qualifier.
+
+    Args:
+        status: ``JobRecord.status`` value (``None`` = unknown → keep).
+        submit_state: ``result["remote"]["submit_state"]`` (``None`` ok).
+        cancel_state: ``result["remote"]["cancel_state"]`` (``None`` ok).
+
+    Returns:
+        ``True`` when the directory of this job may be considered for
+        reclamation (age check still applies afterwards).
+    """
+    if status is None or status not in TERMINAL_STATUSES:
+        return False
+    if submit_state in PENDING_SUBMIT_STATES:
+        return False
+    if cancel_state not in CONFIRMED_CANCEL_STATES:
+        return False
+    return True
+
+
 #: Exit code a mechanism-study subprocess returns when it pauses at a manual
 #: review gate (a StudyOrchestrator decision point). The poller translates
 #: this into :attr:`JobStatus.WAITING_REVIEW` instead of marking the job
@@ -729,6 +777,10 @@ __all__ = [
     "JobStatus",
     "JobSpec",
     "JobRecord",
+    "TERMINAL_STATUSES",
+    "PENDING_SUBMIT_STATES",
+    "CONFIRMED_CANCEL_STATES",
+    "is_deletion_eligible",
     "build_task_record",
     "SUPPORTED_WORKFLOWS",
     "censo_preset_from_method",

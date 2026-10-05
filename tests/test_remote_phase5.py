@@ -151,6 +151,24 @@ class FakeSFTP:
     def mkdir(self, path):
         self._add_dir(path)
 
+    def rename(self, src, dst):
+        if dst in self.entries:
+            raise OSError(f"[Errno 17] File exists: {dst}")
+        if src not in self.entries:
+            raise FileNotFoundError(src)
+        _size, _mtime, is_dir = self.entries.pop(src)
+        self.entries[dst] = (_size, _mtime, is_dir)
+        if src in self.files:
+            self.files[dst] = self.files.pop(src)
+        if is_dir:
+            prefix = src.rstrip("/") + "/"
+            for path in list(self.entries):
+                if path.startswith(prefix):
+                    self.entries[dst + "/" + path[len(prefix) :]] = self.entries.pop(path)
+            for path in list(self.files):
+                if path.startswith(prefix):
+                    self.files[dst + "/" + path[len(prefix) :]] = self.files.pop(path)
+
     def remove(self, path):
         self.entries.pop(path, None)
         self.files.pop(path, None)
@@ -274,6 +292,7 @@ def make_cleanup(
     cleanup_threshold=DISK_CLEANUP_THRESHOLD,
     skip_threshold=DISK_SKIP_THRESHOLD,
     retention_days=180,
+    job_store=None,
 ) -> tuple[RemoteCleanup, SSHConnectionPool, FakeSSHClient]:
     """Build a RemoteCleanup backed by fakes. Returns (cleanup, pool, client)."""
     pool = SSHConnectionPool()
@@ -292,8 +311,51 @@ def make_cleanup(
         monitor=monitor,
         cleanup_threshold=cleanup_threshold,
         skip_threshold=skip_threshold,
+        job_store=job_store,
     )
     return cleanup, pool, client
+
+
+def make_store(*records: JobRecord):
+    """Fresh JobStore in a temp dir with *records* inserted."""
+    from acp.scheduler.store import JobStore
+
+    store = JobStore(Path(tempfile.mkdtemp()) / "jobs.db")
+    for rec in records:
+        store.create(rec)
+    return store
+
+
+def retention_record(
+    job_id: str,
+    *,
+    status: JobStatus = JobStatus.COMPLETED,
+    age_days: float = 200.0,
+    relative: str | None = None,
+    submit_state: str | None = None,
+    cancel_state: str | None = None,
+    work_dir: str | None = None,
+) -> JobRecord:
+    """Job row whose completion timestamp is *age_days* in the past."""
+    from datetime import datetime, timezone
+
+    completed = datetime.fromtimestamp(time.time() - age_days * 86400, tz=timezone.utc).isoformat()
+    remote: dict = {}
+    if relative is not None:
+        remote["relative"] = relative
+    if submit_state is not None:
+        remote["submit_state"] = submit_state
+    if cancel_state is not None:
+        remote["cancel_state"] = cancel_state
+    result: dict = {"remote": remote} if remote else {}
+    return JobRecord(
+        id=job_id,
+        spec=JobSpec(workflow="fake", name=job_id, molecule_name=job_id),
+        status=status,
+        work_dir=work_dir or f"/tmp/runs/uncategorized/{job_id}",
+        completed_at=completed,
+        result=result,
+    )
 
 
 def patch_client(factory):
@@ -361,15 +423,26 @@ def _setup_workdir(sftp: FakeSFTP, base: str):
     sftp._add_file(posixpath.join(base, "README.txt"), size=42, mtime=cutoff_old)
 
 
+def _workdir_records(base: str):
+    """DB rows backing ``_setup_workdir``'s three job dirs (legacy flat)."""
+    return (
+        retention_record("old_job_1", age_days=200, work_dir="/runs/p/old_job_1"),
+        retention_record("old_job_2", age_days=200, work_dir="/runs/p/old_job_2"),
+        retention_record(
+            "fresh_job", age_days=10, status=JobStatus.COMPLETED, work_dir="/runs/p/fresh_job"
+        ),
+    )
+
+
 def test_cleanup_removes_old_keeps_fresh():
     sftp = FakeSFTP()
     node = make_node()
     base = node.remote_work_dir
     _setup_workdir(sftp, base)
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store(*_workdir_records(base)))
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=180)
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
 
     assert report.ok
     assert len(report.removed_dirs) == 2
@@ -393,9 +466,11 @@ def test_cleanup_dry_run_no_mutation():
     base = node.remote_work_dir
     _setup_workdir(sftp, base)
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store(*_workdir_records(base)))
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=180, dry_run=True)
+        report = cleanup.cleanup_old_jobs(
+            node, retention_days=180, dry_run=True, with_release_gc=False
+        )
 
     assert report.dry_run is True
     assert len(report.removed_dirs) == 2
@@ -414,9 +489,11 @@ def test_cleanup_uses_config_retention_default():
     _setup_workdir(sftp, base)
 
     # retention_days=None should fall back to config (180).
-    cleanup, pool, client = make_cleanup(sftp, node, retention_days=180)
+    cleanup, pool, client = make_cleanup(
+        sftp, node, retention_days=180, job_store=make_store(*_workdir_records(base))
+    )
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node)
+        report = cleanup.cleanup_old_jobs(node, with_release_gc=False)
     assert report.retention_days == 180
     assert len(report.removed_dirs) == 2
     pool.close()
@@ -431,9 +508,15 @@ def test_cleanup_retention_override_keeps_recently_old():
     sftp._add_dir(base, mtime=time.time())
     sftp._add_dir(posixpath.join(base, "fifty_days"), mtime=time.time() - 50 * 86400)
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(
+        sftp,
+        node,
+        job_store=make_store(
+            retention_record("fifty_days", age_days=50, work_dir="/runs/p/fifty_days")
+        ),
+    )
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=30)
+        report = cleanup.cleanup_old_jobs(node, retention_days=30, with_release_gc=False)
     assert len(report.removed_dirs) == 1
     pool.close()
     print("  [OK] cleanup_old_jobs: retention_days override honoured")
@@ -444,12 +527,12 @@ def test_cleanup_skips_unknown_mtime():
     node = make_node()
     base = node.remote_work_dir
     sftp._add_dir(base, mtime=time.time())
-    # mtime=0 → unknown, must be skipped.
+    # mtime=0 → unknown, must be skipped (no DB row either — kept).
     sftp._add_dir(posixpath.join(base, "unknown_age"), mtime=0.0)
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store())
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=10)
+        report = cleanup.cleanup_old_jobs(node, retention_days=10, with_release_gc=False)
     assert report.skipped == 1
     assert len(report.removed_dirs) == 0
     assert posixpath.join(base, "unknown_age") in sftp.entries
@@ -511,9 +594,13 @@ def test_cleanup_never_removes_base_dir():
     sftp._add_dir(base, mtime=time.time() - 400 * 86400)
     sftp._add_dir(posixpath.join(base, "old_job"), mtime=time.time() - 400 * 86400)
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(
+        sftp,
+        node,
+        job_store=make_store(retention_record("old_job", age_days=400, work_dir="/runs/p/old_job")),
+    )
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=180)
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
     # Base must survive even though it's old.
     assert base in sftp.entries
     assert len(report.removed_dirs) == 1  # only old_job
@@ -549,14 +636,18 @@ def test_cleanup_respects_max_dirs_cap():
     sftp._add_dir(base, mtime=time.time())
     old = time.time() - 400 * 86400
     # Create 10 old dirs; cap at 3.
+    records = []
     for i in range(10):
         d = posixpath.join(base, f"old_{i}")
         sftp._add_dir(d, mtime=old)
         sftp._add_file(posixpath.join(d, "f.bin"), size=100, mtime=old)
+        records.append(retention_record(f"old_{i}", age_days=400, work_dir=f"/runs/p/old_{i}"))
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store(*records))
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=180, max_dirs_per_sweep=3)
+        report = cleanup.cleanup_old_jobs(
+            node, retention_days=180, max_dirs_per_sweep=3, with_release_gc=False
+        )
 
     assert report.capped is True
     assert len(report.removed_dirs) == 3
@@ -583,18 +674,248 @@ def test_cleanup_unlimited_when_zero():
     base = node.remote_work_dir
     sftp._add_dir(base, mtime=time.time())
     old = time.time() - 400 * 86400
+    records = []
     for i in range(5):
         d = posixpath.join(base, f"old_{i}")
         sftp._add_dir(d, mtime=old)
+        records.append(retention_record(f"old_{i}", age_days=400, work_dir=f"/runs/p/old_{i}"))
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store(*records))
     with patch_client(lambda n, timeout=30: client):
-        report = cleanup.cleanup_old_jobs(node, retention_days=180, max_dirs_per_sweep=0)
+        report = cleanup.cleanup_old_jobs(
+            node, retention_days=180, max_dirs_per_sweep=0, with_release_gc=False
+        )
 
     assert report.capped is False
     assert len(report.removed_dirs) == 5
     pool.close()
     print("  [OK] cleanup_old_jobs: max_dirs_per_sweep=0 → unlimited")
+
+
+# ====================================================================== #
+# D01 nested layout + DB-lifecycle gate (todo 9, Oracle N2 / r16 P1)
+# ====================================================================== #
+
+
+def test_cleanup_nested_layout_descends_to_task_leaves():
+    """Only the eligible task leaf is reclaimed; project leaf and the
+    RUNNING sibling survive — project leaves are never deletion units."""
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    old = time.time() - 400 * 86400
+    sftp._add_dir(base, mtime=time.time())
+    sftp._add_dir(posixpath.join(base, "projA"), mtime=old)
+    sftp._add_dir(posixpath.join(base, "projA", "task_old"), mtime=old)
+    sftp._add_file(posixpath.join(base, "projA", "task_old", "out.xyz"), size=100, mtime=old)
+    sftp._add_dir(posixpath.join(base, "projA", "task_running"), mtime=old)
+    sftp._add_file(
+        posixpath.join(base, "projA", "task_running", "orca.out"), size=10, mtime=time.time()
+    )
+
+    store = make_store(
+        retention_record("j_old", age_days=400, relative="projA/task_old"),
+        retention_record(
+            "j_run", status=JobStatus.RUNNING, age_days=400, relative="projA/task_running"
+        ),
+    )
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=store)
+    with patch_client(lambda n, timeout=30: client):
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+
+    assert report.removed_dirs == [posixpath.join(base, "projA", "task_old")]
+    assert posixpath.join(base, "projA") in sftp.entries  # project leaf alive
+    assert posixpath.join(base, "projA", "task_running") in sftp.entries
+    assert posixpath.join(base, "projA", "task_old") not in sftp.entries
+    # Isolated via .trash before deletion (never a bare rm of the leaf).
+    assert not [p for p in sftp.entries if "/.trash/" in p]
+    pool.close()
+
+
+def test_cleanup_never_deletes_project_leaf_referenced_as_target():
+    """A row whose relative points at the PROJECT leaf is dropped by the
+    prefix guard — the sibling task under it still gets reclaimed."""
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    old = time.time() - 400 * 86400
+    sftp._add_dir(base, mtime=time.time())
+    sftp._add_dir(posixpath.join(base, "projB"), mtime=old)
+    sftp._add_dir(posixpath.join(base, "projB", "task_x"), mtime=old)
+
+    store = make_store(
+        retention_record("j_leaf", age_days=400, relative="projB"),
+        retention_record("j_task", age_days=400, relative="projB/task_x"),
+    )
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=store)
+    with patch_client(lambda n, timeout=30: client):
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+
+    assert posixpath.join(base, "projB") in sftp.entries  # whole project kept
+    assert posixpath.join(base, "projB", "task_x") not in sftp.entries
+    assert report.removed_dirs == [posixpath.join(base, "projB", "task_x")]
+    pool.close()
+
+
+def test_cleanup_gate_keeps_nonterminal_pending_and_unconfirmed_cancel():
+    """DB lifecycle gate: non-terminal, pending-submission and
+    unconfirmed-cancel task leaves are kept; only terminal + settled +
+    confirmed + over-aged is reclaimed (incl. submit_state=not_accepted)."""
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    old = time.time() - 400 * 86400
+    sftp._add_dir(base, mtime=time.time())
+    sftp._add_dir(posixpath.join(base, "projG"), mtime=old)
+
+    cases = [
+        ("t_queued", JobStatus.QUEUED, None, None),
+        ("t_running", JobStatus.RUNNING, None, None),
+        ("t_paused", JobStatus.PAUSED, None, None),
+        ("t_waiting", JobStatus.WAITING_REVIEW, None, None),
+        ("t_intent", JobStatus.COMPLETED, "intent", None),
+        ("t_unconf_submit", JobStatus.FAILED, "unconfirmed", None),
+        ("t_cancel_unconf", JobStatus.CANCELLED, None, "unconfirmed"),
+    ]
+    records = []
+    for name, status, submit, cancel in cases:
+        sftp._add_dir(posixpath.join(base, "projG", name), mtime=old)
+        records.append(
+            retention_record(
+                f"j_{name}",
+                status=status,
+                age_days=400,
+                relative=f"projG/{name}",
+                submit_state=submit,
+                cancel_state=cancel,
+            )
+        )
+    # Reclaimable: terminal + settled + confirmed + over-aged, and a
+    # not_accepted (node-rejected) submission dir.
+    sftp._add_dir(posixpath.join(base, "projG", "t_done"), mtime=old)
+    records.append(
+        retention_record("j_done", age_days=400, relative="projG/t_done", cancel_state="confirmed")
+    )
+    sftp._add_dir(posixpath.join(base, "projG", "t_rejected"), mtime=old)
+    records.append(
+        retention_record(
+            "j_rejected",
+            status=JobStatus.FAILED,
+            age_days=400,
+            relative="projG/t_rejected",
+            submit_state="not_accepted",
+        )
+    )
+
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store(*records))
+    with patch_client(lambda n, timeout=30: client):
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+
+    assert sorted(report.removed_dirs) == [
+        posixpath.join(base, "projG", "t_done"),
+        posixpath.join(base, "projG", "t_rejected"),
+    ]
+    for name, *_ in cases:
+        assert posixpath.join(base, "projG", name) in sftp.entries, name
+    assert posixpath.join(base, "projG") in sftp.entries  # project leaf alive
+    pool.close()
+
+
+def test_cleanup_r16_over_aged_running_dir_with_fresh_log_kept():
+    """r16 probe: stale dir mtime + actively-updated logs + RUNNING job →
+    the dir must survive cleanup_old_jobs (mtime is auxiliary only)."""
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    old = time.time() - 400 * 86400
+    sftp._add_dir(base, mtime=time.time())
+    sftp._add_dir(posixpath.join(base, "projR", "task_live"), mtime=old)
+    sftp._add_file(
+        posixpath.join(base, "projR", "task_live", "WORK", "ORCA", "orca.out"),
+        size=64,
+        mtime=time.time(),  # log keeps being appended right now
+    )
+    store = make_store(
+        retention_record(
+            "j_live", status=JobStatus.RUNNING, age_days=400, relative="projR/task_live"
+        )
+    )
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=store)
+    with patch_client(lambda n, timeout=30: client):
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+    assert report.removed_dirs == []
+    assert posixpath.join(base, "projR", "task_live") in sftp.entries
+    pool.close()
+
+
+def test_cleanup_requeue_attempt_bump_cancels_deletion():
+    """Eligibility check and isolation share one attempt check: the row
+    reports a bumped attempt at re-check time → deletion cancelled."""
+    import dataclasses
+
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    old = time.time() - 400 * 86400
+    sftp._add_dir(base, mtime=time.time())
+    sftp._add_dir(posixpath.join(base, "projQ", "task_requeue"), mtime=old)
+    store = make_store(
+        retention_record(
+            "j_requeue", status=JobStatus.FAILED, age_days=400, relative="projQ/task_requeue"
+        )
+    )
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=store)
+
+    real_get = store.get
+
+    def bumped_get(job_id):
+        fresh = real_get(job_id)
+        return dataclasses.replace(fresh, attempt=fresh.attempt + 1) if fresh else None
+
+    store.get = bumped_get  # type: ignore[method-assign]
+    try:
+        with patch_client(lambda n, timeout=30: client):
+            report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+    finally:
+        store.get = real_get  # type: ignore[method-assign]
+    assert report.removed_dirs == []
+    assert posixpath.join(base, "projQ", "task_requeue") in sftp.entries
+    pool.close()
+
+
+def test_cleanup_refuses_relative_escaping_work_dir():
+    """The joined target is containment-checked + _is_safe_work_dir
+    validated — a poisoned relative can never escape remote_work_dir."""
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    old = time.time() - 400 * 86400
+    sftp._add_dir(base, mtime=time.time())
+    outside = posixpath.normpath(posixpath.join(base, "..", "victim"))
+    sftp._add_dir(outside, mtime=old)
+    store = make_store(retention_record("j_evil", age_days=400, relative="../victim"))
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=store)
+    with patch_client(lambda n, timeout=30: client):
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+    assert report.removed_dirs == []
+    assert any("outside work dir" in e for e in report.errors)
+    assert outside in sftp.entries
+    pool.close()
+
+
+def test_cleanup_without_job_store_keeps_everything():
+    """No DB handle → no lifecycle evidence → nothing is ever deleted
+    (mtime alone is never a deletion qualifier)."""
+    sftp = FakeSFTP()
+    node = make_node()
+    base = node.remote_work_dir
+    _setup_workdir(sftp, base)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=None)
+    with patch_client(lambda n, timeout=30: client):
+        report = cleanup.cleanup_old_jobs(node, retention_days=180, with_release_gc=False)
+    assert report.removed_dirs == []
+    assert posixpath.join(base, "old_job_1") in sftp.entries
+    pool.close()
 
 
 # ====================================================================== #
@@ -635,7 +956,7 @@ def test_housekeeping_high_disk_triggers_cleanup_proceeds():
     base = node.remote_work_dir
     _setup_workdir(sftp, base)  # 2 old dirs
 
-    cleanup, pool, client = make_cleanup(sftp, node)
+    cleanup, pool, client = make_cleanup(sftp, node, job_store=make_store(*_workdir_records(base)))
     # Before: 92% (> cleanup threshold 90). After cleanup the test's
     # df handler still returns 92 (we don't model df reflecting deletions),
     # but 92 < skip(95) so we proceed.

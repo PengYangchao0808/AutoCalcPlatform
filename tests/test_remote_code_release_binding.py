@@ -23,9 +23,13 @@ Run with: PYTHONPATH=src python3.11 -m pytest tests/test_remote_code_release_bin
 
 from __future__ import annotations
 
+import ast
 import hashlib
+import importlib
 import json
+import os
 import posixpath
+import re
 import shlex
 from pathlib import Path
 from unittest.mock import patch
@@ -46,6 +50,7 @@ from acp.scheduler.remote.runner import RemoteJobRunner, RemoteSubmissionRejecte
 from acp.scheduler.remote.script_gen import build_lsf_script_spec, generate_lsf_script
 from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
+from acp.scheduler.remote.sync import build_sync_file_list
 from acp.scheduler.store import JobStore
 from tests.test_remote_phase2 import FakeSFTP, FakeSSHClient, make_node
 
@@ -831,3 +836,337 @@ def test_build_lsf_script_spec_code_release_only_changes_pythonpath():
     assert len(diff) == 1
     assert diff[0][0].startswith("export PYTHONPATH=")
     print("  [OK] code_release parameter changes only the PYTHONPATH line")
+
+
+# --------------------------------------------------------------------- #
+# D03 E2E matrix (todo 9): deletion / partial failure / mtime-preserved
+# --------------------------------------------------------------------- #
+
+
+@requires_remote
+def test_module_deletion_new_job_pythonpath_directory_enumeration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """E2E ①: a locally deleted module leaves the NEW release (and hence
+    the NEW job's PYTHONPATH tree) without it — asserted by enumerating
+    the remote release's ``src`` directory — while job A's release still
+    carries the file (immutable old release)."""
+    tree = tmp_path / "tree"
+    _make_project_tree(tree, "v1")
+    (tree / "src" / "acp" / "gone.py").write_text("GONE = 1\n", encoding="utf-8")
+    rel1 = build_release_manifest(tree).release_id
+    _patch_project_root(monkeypatch, tree)
+
+    harness = _Harness(tmp_path, monkeypatch, auto_sync=True)
+    try:
+        record_a, log_a, dir_a = harness.make_record("joba_del")
+        harness.submit(record_a, log_a)
+        script_a = harness.script_of(dir_a)
+        assert f"releases/{rel1}/src" in script_a
+        assert "src/acp/gone.py" in harness.release_files(harness.node, rel1)
+
+        # Local module deletion → new content hash.
+        (tree / "src" / "acp" / "gone.py").unlink()
+        m2 = build_release_manifest(tree)
+        rel2 = m2.release_id
+        assert rel2 != rel1
+        assert "src/acp/gone.py" not in m2.files
+
+        record_b, log_b, dir_b = harness.make_record("jobb_del")
+        harness.submit(record_b, log_b)
+        script_b = harness.script_of(dir_b)
+        assert f"releases/{rel2}/src" in script_b
+        assert f"releases/{rel1}/src" not in script_b
+        assert record_b.result["remote"]["code_release"] == rel2
+        assert record_a.result["remote"]["code_release"] == rel1
+
+        # Remote PYTHONPATH directory enumeration: job B's release tree
+        # contains no gone.py → the new job cannot load it.
+        b_prefix = posixpath.join(releases_root(harness.node), rel2, "src") + "/"
+        enumerated_b = [p for p in harness.sftp.files if p.startswith(b_prefix)]
+        assert enumerated_b, "new release src tree must be populated"
+        assert not any(p.endswith("/acp/gone.py") for p in enumerated_b)
+        assert any(p.endswith("/acp/core.py") for p in enumerated_b)
+        # Job A's immutable release still carries the deleted module.
+        a_prefix = posixpath.join(releases_root(harness.node), rel1, "src") + "/"
+        assert any(p.endswith("/acp/gone.py") for p in harness.sftp.files if p.startswith(a_prefix))
+        print(f"  [OK] module deletion: A={rel1} (has gone.py), B={rel2} (enumerated clean)")
+    finally:
+        harness.close()
+
+
+@requires_remote
+def test_partial_upload_at_submission_then_retry_uploads_only_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """E2E ②: a partial upload during SUBMISSION rejects the job (no bsub,
+    no binding); the retry uploads ONLY the still-missing files and the
+    final ``.complete`` + per-file checksums are correct."""
+    tree = tmp_path / "tree"
+    _make_project_tree(tree)
+    manifest = build_release_manifest(tree)
+    rel = manifest.release_id
+    total = len(manifest.files)
+    assert total >= 3
+    _patch_project_root(monkeypatch, tree)
+
+    harness = _Harness(tmp_path, monkeypatch, auto_sync=True)
+    try:
+        record, log, remote_dir = harness.make_record("partialjob")
+        real_put = harness.sftp.put
+        puts: list[str] = []
+
+        def flaky_put(localpath, remotepath):
+            puts.append(remotepath)
+            if len(puts) == 2:
+                raise OSError("simulated network failure on file 2")
+            return real_put(localpath, remotepath)
+
+        harness.sftp.put = flaky_put  # type: ignore[method-assign]
+        with pytest.raises(RemoteSubmissionRejected):
+            harness.submit(record, log)
+
+        # No .complete anywhere, no binding, bsub never called.
+        assert not [p for p in harness.sftp.files if p.endswith("/.complete")]
+        assert harness.bsub_calls == 0
+        assert not (record.result or {}).get("remote", {}).get("code_release")
+        failed = [e for e in log.read_all() if e.get("type") == "remote.code_release_failed"]
+        assert failed, "partial upload must emit remote.code_release_failed"
+
+        # Heal → retry uploads ONLY the missing file(s) (staging reuse).
+        harness.sftp.put = (  # type: ignore[method-assign]
+            lambda lp, rp: (puts.append(rp), real_put(lp, rp))[1]
+        )
+        puts.clear()
+        record_b, log_b, remote_dir_b = harness.make_record("partialjob2")
+        harness.submit(record_b, log_b)
+
+        staging_puts = [p for p in puts if "/.staging/" in p]
+        assert len(staging_puts) == total - 1, (
+            f"retry must upload only the missing file(s), got {staging_puts}"
+        )
+        assert record_b.result["remote"]["code_release"] == rel
+        assert harness.bsub_calls == 1
+
+        # Final .complete + checksums correct for every manifest file.
+        rel_root = posixpath.join(releases_root(harness.node), rel)
+        assert posixpath.join(rel_root, ".complete") in harness.sftp.files
+        for rel_path, meta in manifest.files.items():
+            blob = harness.sftp.files[posixpath.join(rel_root, rel_path)]
+            assert hashlib.sha256(blob).hexdigest() == meta["sha256"]
+        print(f"  [OK] partial upload → reject; retry uploaded {len(puts)}/{total}; complete ok")
+    finally:
+        harness.close()
+
+
+@requires_remote
+def test_content_change_preserved_mtime_publishes_new_release_for_new_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """E2E ③: content change with a PRESERVED mtime yields a new release
+    id — release identity never consults mtime anywhere."""
+    tree = tmp_path / "tree"
+    _make_project_tree(tree, "v1")
+    rel1 = build_release_manifest(tree).release_id
+    _patch_project_root(monkeypatch, tree)
+
+    harness = _Harness(tmp_path, monkeypatch, auto_sync=True)
+    try:
+        record_a, log_a, dir_a = harness.make_record("joba_mtime")
+        harness.submit(record_a, log_a)
+        assert record_a.result["remote"]["code_release"] == rel1
+
+        target = tree / "src" / "acp" / "core.py"
+        st = target.stat()
+        target.write_text("# v2 content, same mtime\n", encoding="utf-8")
+        os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns))
+        assert target.stat().st_mtime_ns == st.st_mtime_ns
+
+        m2 = build_release_manifest(tree)
+        assert m2.release_id != rel1, "content change with preserved mtime must mint a new id"
+
+        record_b, log_b, dir_b = harness.make_record("jobb_mtime")
+        harness.submit(record_b, log_b)
+        assert record_b.result["remote"]["code_release"] == m2.release_id
+        script_b = harness.script_of(dir_b)
+        assert f"releases/{m2.release_id}/src" in script_b
+        # Old job/release untouched.
+        assert f"releases/{rel1}/src" in harness.script_of(dir_a)
+        assert "src/acp/core.py" in harness.release_files(harness.node, rel1)
+        print(f"  [OK] mtime-preserved content change: {rel1} → {m2.release_id}")
+    finally:
+        harness.close()
+
+
+# --------------------------------------------------------------------- #
+# ⑦ node-side CLI-reachable module importability enumeration (todo 9)
+# --------------------------------------------------------------------- #
+
+# Known node-side importability gaps (Todo 19 risk, NOT fixed here — the
+# sync/release exclusion set must NOT be expanded to hide them):
+#   src/acp/calculations/irc/source.py:16-17      (acp.scheduler.files/jobs)
+#   src/acp/results/irc_remote_live.py:12-13      (acp.scheduler.jobs + remote.fetcher)
+#   src/acp/results/structure_migration.py:12     (acp.scheduler.files)
+# These modules are present on the node (in the sync file set) but their
+# MODULE-LEVEL imports reach acp.scheduler/acp.api, which are excluded
+# from the release file set — importing them node-side would fail.
+_NODE_GAP_MODULES = {
+    "acp.calculations.irc.source",
+    "acp.results.irc_remote_live",
+    "acp.results.structure_migration",
+}
+_NODE_GAP_FILES = {
+    "src/acp/calculations/irc/source.py",
+    "src/acp/results/irc_remote_live.py",
+    "src/acp/results/structure_migration.py",
+}
+_EXCLUDED_FROM_SYNC = ("acp.api", "acp.scheduler")
+
+
+def _module_file(root: Path, mod: str) -> Path | None:
+    pkg = root / Path(*mod.split("."))
+    if pkg.is_dir() and (pkg / "__init__.py").exists():
+        return pkg / "__init__.py"
+    if pkg.with_suffix(".py").exists():
+        return pkg.with_suffix(".py")
+    return None
+
+
+def _static_acp_refs(file: Path, mod: str) -> set[str]:
+    """All ``acp.*`` references in *file*: imports (any scope) plus
+    uvicorn-style ``"acp.x.y:attr"`` string targets."""
+    tree = ast.parse(file.read_text(encoding="utf-8"))
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("acp"):
+                    out.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                parts = mod.split(".")
+                if file.name != "__init__.py":
+                    parts = parts[:-1]
+                parts = parts[: len(parts) - (node.level - 1)]
+                if node.module:
+                    parts += node.module.split(".")
+                ref = ".".join(parts)
+            else:
+                ref = node.module or ""
+            if ref.startswith("acp"):
+                out.add(ref)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            # Only "acp.x.y:attr" targets (uvicorn app strings) — bare
+            # "acp.*" strings are product kinds / labels, not imports.
+            m = re.match(r"^(acp(?:\.\w+)+):\w+$", node.value.strip())
+            if m:
+                out.add(m.group(1))
+    return out
+
+
+def _module_level_refs(file: Path, mod: str) -> set[str]:
+    """Imports executed at module level only (what a node-side import runs)."""
+    tree = ast.parse(file.read_text(encoding="utf-8"))
+    out: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("acp"):
+                    out.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                parts = mod.split(".")
+                if file.name != "__init__.py":
+                    parts = parts[:-1]
+                parts = parts[: len(parts) - (node.level - 1)]
+                if node.module:
+                    parts += node.module.split(".")
+                ref = ".".join(parts)
+            else:
+                ref = node.module or ""
+            if ref.startswith("acp"):
+                out.add(ref)
+    return out
+
+
+def _is_sync_excluded(mod: str) -> bool:
+    return any(mod == p or mod.startswith(p + ".") for p in _EXCLUDED_FROM_SYNC)
+
+
+def test_node_side_cli_reachable_modules_importable_enumeration():
+    """⑦: statically derive every module reachable from ``acp.cli`` and
+    assert importability; the node-side gaps are pinned to the known trio
+    (recorded as a Todo 19 risk — no sync-exclusion expansion)."""
+    src_root = Path(__file__).resolve().parents[1] / "src"
+
+    # Reachability seed: acp.cli itself, then its static references.
+    seen: dict[str, Path | None] = {}
+    stack = ["acp.cli"]
+    while stack:
+        mod = stack.pop()
+        if mod in seen:
+            continue
+        file = _module_file(src_root, mod)
+        seen[mod] = file
+        if file is None:
+            continue
+        for ref in _static_acp_refs(file, mod):
+            if ref not in seen:
+                stack.append(ref)
+
+    missing = sorted(m for m, f in seen.items() if f is None)
+    assert not missing, f"reachable modules without a file on disk: {missing}"
+
+    # Importability in this environment: every reachable module imports.
+    import_failures = []
+    for mod in sorted(seen):
+        try:
+            importlib.import_module(mod)
+        except Exception as exc:  # noqa: BLE001 - reported as assertion detail
+            import_failures.append(f"{mod}: {type(exc).__name__}: {exc}")
+    known = [f for f in import_failures if f.split(":", 1)[0] in _NODE_GAP_MODULES]
+    unexpected = [f for f in import_failures if f.split(":", 1)[0] not in _NODE_GAP_MODULES]
+    assert not unexpected, f"CLI-reachable modules must import: {unexpected}"
+    assert not known, f"known Todo-19 gaps unexpectedly unimportable: {known}"
+
+    # Node-side analysis: a node-present module (not under the sync
+    # exclusion set) must not MODULE-LEVEL-import excluded packages.
+    def node_gaps() -> set[str]:
+        gaps: set[str] = set()
+        for mod, file in sorted(seen.items()):
+            if file is None or _is_sync_excluded(mod):
+                continue
+            reachable: set[str] = set()
+            stack2 = list(_module_level_refs(file, mod))
+            while stack2:
+                dep = stack2.pop()
+                if dep in reachable:
+                    continue
+                reachable.add(dep)
+                if _is_sync_excluded(dep):
+                    gaps.add(mod)
+                    break
+                dep_file = _module_file(src_root, dep)
+                if dep_file is None:
+                    continue
+                stack2.extend(_module_level_refs(dep_file, dep))
+        return gaps
+
+    gaps = node_gaps()
+    assert gaps == _NODE_GAP_MODULES, (
+        f"node-side import gaps changed (Todo 19 risk set): {sorted(gaps)}; "
+        f"expected exactly {sorted(_NODE_GAP_MODULES)}"
+    )
+
+    # The gap FILES stay in the sync/release file set — the exclusion set
+    # must NOT be expanded to paper over them.
+    project_root = Path(__file__).resolve().parents[1]
+    sync_files = {
+        p.relative_to(project_root).as_posix() for p in build_sync_file_list(project_root)
+    }
+    not_synced = sorted(_NODE_GAP_FILES - sync_files)
+    assert not not_synced, f"gap files must remain in the sync file set: {not_synced}"
+    print(
+        f"  [OK] ⑦ enumeration: {len(seen)} CLI-reachable modules import; "
+        f"node gaps pinned to {sorted(_NODE_GAP_MODULES)} (Todo 19 risk)"
+    )
