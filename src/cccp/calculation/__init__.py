@@ -283,6 +283,9 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.tasks.casscf import (
         run_casscf as run_casscf,
     )
+    from cccp.calculation.tasks.censo_refine import (
+        run_censo_refine as run_censo_refine,
+    )
     from cccp.calculation.tasks.clustering import (
         run_clustering as run_clustering,
     )
@@ -298,8 +301,14 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from cccp.calculation.tasks.md_sampling import (
         run_md_sampling as run_md_sampling,
     )
+    from cccp.calculation.tasks.nmr_shielding import (
+        run_nmr_shielding as run_nmr_shielding,
+    )
     from cccp.calculation.tasks.optimize import (
         run_optimize as run_optimize,
+    )
+    from cccp.calculation.tasks.orca_gradient import (
+        run_orca_gradient as run_orca_gradient,
     )
     from cccp.calculation.tasks.singlepoint import (
         run_singlepoint as run_singlepoint,
@@ -428,12 +437,15 @@ _LAZY_EXPORTS: dict[str, str] = {
     "artifact_ref_to_dict": "results",
     "casscf_payload_from_multireference": "results",
     "run_casscf": "tasks.casscf",
+    "run_censo_refine": "tasks.censo_refine",
     "run_conformer_search": "tasks.conformer_search",
     "run_clustering": "tasks.clustering",
     "run_frequency": "tasks.frequency",
     "run_irc": "tasks.irc",
     "run_md_sampling": "tasks.md_sampling",
+    "run_nmr_shielding": "tasks.nmr_shielding",
     "run_optimize": "tasks.optimize",
+    "run_orca_gradient": "tasks.orca_gradient",
     "run_scan": "tasks.scan",
     "run_singlepoint": "tasks.singlepoint",
     "run_thermochemistry": "tasks.thermochemistry",
