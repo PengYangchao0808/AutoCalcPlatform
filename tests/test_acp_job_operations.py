@@ -2353,23 +2353,25 @@ def _poll_remote_runner(
     return runner, record, log
 
 
-def test_poll_remote_transitions_running_to_paused(tmp_path: Path) -> None:
+def test_poll_remote_observes_running_to_paused(tmp_path: Path) -> None:
     runner, record, log = _poll_remote_runner(STATUS_PAUSED, tmp_path)
-    is_terminal, exit_code = runner.poll_remote(record, log, threading.Event())
+    observation = runner.poll_remote(record, log, threading.Event())
 
-    assert is_terminal is False
-    assert exit_code is None
-    assert record.status == JobStatus.PAUSED
+    assert observation.terminal is False
+    assert observation.exit_code is None
+    assert observation.observed_status == JobStatus.PAUSED
+    assert record.status == JobStatus.RUNNING, "poll must not mutate the record"
     assert record.completed_at is None
 
 
-def test_poll_remote_transitions_paused_back_to_running(tmp_path: Path) -> None:
+def test_poll_remote_observes_paused_back_to_running(tmp_path: Path) -> None:
     runner, record, log = _poll_remote_runner("running", tmp_path)
     record.status = JobStatus.PAUSED
-    is_terminal, _exit = runner.poll_remote(record, log, threading.Event())
+    observation = runner.poll_remote(record, log, threading.Event())
 
-    assert is_terminal is False
-    assert record.status == JobStatus.RUNNING
+    assert observation.terminal is False
+    assert observation.observed_status == JobStatus.RUNNING
+    assert record.status == JobStatus.PAUSED, "poll must not mutate the record"
 
 
 # ====================================================================== #

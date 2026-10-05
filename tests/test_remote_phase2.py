@@ -1197,15 +1197,25 @@ def test_poll_remote_terminal_without_exit_code_finalizes_failed():
             "seen_stages": set(),
         }
 
-        is_terminal, exit_code = runner.poll_remote(record, event_log, cancel)
+        observation = runner.poll_remote(record, event_log, cancel)
 
-        assert is_terminal is True
-        assert exit_code != 0
+        assert observation.terminal is True
+        assert observation.exit_code is not None and observation.exit_code != 0
+        exit_code = observation.exit_code
         assert record.exit_code == exit_code
         assert record.error is not None and "without writing .exit_code" in record.error
+        assert observation.final_state is not None
+        events = [e["type"] for e in event_log.read_all()]
+        # Terminal events and poll-state teardown are deferred until the
+        # manager's terminal CAS succeeds.
+        assert "job.failed" not in events
+        assert "remote.no_exit_code" in events
+        assert "tojob" in runner._job_states
+
+        runner.apply_terminal_side_effects(record, event_log)
+
         events = [e["type"] for e in event_log.read_all()]
         assert "job.failed" in events
-        assert "remote.no_exit_code" in events
         # Poll state must be torn down so the manager stops polling.
         assert "tojob" not in runner._job_states
 
@@ -1244,11 +1254,17 @@ def test_poll_remote_done_without_exit_code_finalizes_completed():
             "seen_stages": set(),
         }
 
-        is_terminal, exit_code = runner.poll_remote(record, event_log, cancel)
+        observation = runner.poll_remote(record, event_log, cancel)
 
-        assert is_terminal is True
-        assert exit_code == 0
+        assert observation.terminal is True
+        assert observation.exit_code == 0
         assert record.error is None
+        assert "donejob" in runner._job_states
+
+        runner.apply_terminal_side_effects(record, event_log)
+
+        events = [e["type"] for e in event_log.read_all()]
+        assert "job.completed" in events
         assert "donejob" not in runner._job_states
 
     print("  [OK] done-without-exit-code: finalised COMPLETED (exit=0)")

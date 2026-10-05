@@ -68,7 +68,7 @@ from acp.scheduler.runner import (
     find_workflow_state,
 )
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
-from acp.scheduler.store import JobStore
+from acp.scheduler.store import JobStateConflictError, JobStore
 from acp.scheduler.tasks import TaskIndex
 from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
 
@@ -93,6 +93,40 @@ _STARTUP_RESUMABLE_WORKFLOWS: Final[frozenset[str]] = frozenset({"mechanism", "x
 # ``JobManager._acquire_instance_lock``).
 _MANAGER_LOCK_NAME: Final = ".manager.lock"
 
+# The poll scan set — single owner of these statuses: ``_poll_loop`` iterates
+# them and ``_poll_job`` refuses anything outside them.  STARTING and PAUSED
+# are intentionally absent (submission reconciliation and pause/unpause own
+# them); CANCELLING stays here because cancel confirmation is part of the
+# regular poll pass.
+_POLL_SCAN_STATUSES: Final[tuple[JobStatus, ...]] = (
+    JobStatus.RUNNING,
+    JobStatus.PENDING,
+    JobStatus.CANCELLING,
+)
+
+_SUBMIT_RECONCILE_STATES: Final[frozenset[str]] = frozenset({"intent", "unconfirmed"})
+
+
+def _needs_submission_reconcile(record: JobRecord) -> bool:
+    """Category ① of the reconcile loop: STARTING with a pending submission."""
+    if record.status != JobStatus.STARTING:
+        return False
+    remote_meta = (record.result or {}).get("remote")
+    submit_state = remote_meta.get("submit_state") if isinstance(remote_meta, dict) else None
+    return submit_state in _SUBMIT_RECONCILE_STATES
+
+
+def _needs_side_effect_retry(record: JobRecord) -> bool:
+    """Category ② of the reconcile loop: terminal but side effects unfinished.
+
+    Only records whose terminal transition went through the new poll path
+    carry an explicit ``False`` marker; legacy terminal jobs never carry the
+    key and are skipped.
+    """
+    if not record.status.is_terminal:
+        return False
+    return (record.result or {}).get("terminal_side_effects_done") is False
+
 
 def _derive_retired_workflows() -> frozenset[str]:
     """Derive retired workflow IDs from the catalog."""
@@ -114,6 +148,7 @@ if TYPE_CHECKING:
     from acp.scheduler.remote.fetcher import RemoteResultFetcher
     from acp.scheduler.remote.monitor import RemoteJobMonitor
     from acp.scheduler.remote.node_manager import NodeManager
+    from acp.scheduler.remote.runner import RemotePollObservation
     from acp.scheduler.remote.ssh import SSHConnectionPool
 
 
@@ -256,6 +291,12 @@ class JobManager:
         # Background poller thread.
         self._poll_stop = threading.Event()
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True, name="acp-poller")
+        # Background reconcile thread (categories outside the poll scan set:
+        # STARTING+pending submission, terminal side-effect retries).
+        self._reconcile_thread = threading.Thread(
+            target=self._reconcile_loop, daemon=True, name="acp-reconciler"
+        )
+        self._side_effect_lock = threading.Lock()
 
         # Background remote-catalog prefetch (terminal remote jobs).  Worker
         # is started lazily on first enqueue; see _queue_catalog_prefetch.
@@ -275,6 +316,7 @@ class JobManager:
         self._dispatch_queued_jobs()
         self._queue_startup_catalog_prefetch()
         self._poll_thread.start()
+        self._reconcile_thread.start()
 
     # ------------------------------------------------------------------ #
     # Single-instance guard (run_root ownership)
@@ -2124,6 +2166,8 @@ class JobManager:
         self._poll_stop.set()
         if self._poll_thread.is_alive():
             self._poll_thread.join(timeout=10)
+        if self._reconcile_thread.is_alive():
+            self._reconcile_thread.join(timeout=10)
         prefetch_thread = self._catalog_prefetch_thread
         if prefetch_thread is not None:
             self._catalog_prefetch_queue.put(None)
@@ -2791,29 +2835,37 @@ class JobManager:
             logger.info("Queued %d remote catalog prefetch(es) on startup", queued)
 
     def _poll_job(self, job_id: str) -> None:
-        """Single non-blocking check of one job's status."""
+        """Single non-blocking check of one job's status.
+
+        Single owner of the poll scan set (see ``_POLL_SCAN_STATUSES``):
+        state transitions and terminal persistence go through conditional
+        CAS writes (``store.transition`` / ``store.update_progress``) so a
+        stale observation can never override a concurrent pause or resurrect
+        a terminal state; terminal side effects run only after the terminal
+        CAS succeeds.
+        """
         record = self.store.get(job_id)
-        if record is None or record.status.is_terminal:
+        if (
+            record is None
+            or record.status.is_terminal
+            or record.status not in _POLL_SCAN_STATUSES
+        ):
             return
 
+        loaded_revision = record.revision
+        loaded_attempt = record.attempt
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
         is_remote = self._is_remote_job(record) and self.remote_runner is not None
 
+        observation: RemotePollObservation | None = None
+        observed_status: JobStatus | None = None
         if is_remote:
             try:
-                is_terminal, exit_code = self.remote_runner.poll_remote(  # type: ignore[union-attr]
+                observation = self.remote_runner.poll_remote(  # type: ignore[union-attr]
                     record, event_log, cancel_event
                 )
                 self._poll_failures.pop(job_id, None)
-                # Release the select→submit reservation only once LSF has
-                # actually started the job: PEND/PSUSP jobs do not count
-                # toward the node's running-jobs probe, so an earlier
-                # release would under-count in-flight work.  poll_remote
-                # flips the record to RUNNING exactly when it observes
-                # the LSF RUN state; terminal transitions release below.
-                if record.status == JobStatus.RUNNING:
-                    self._release_reservation(job_id)
             except Exception as exc:
                 # Transport-layer failure (SSH/bjobs unreachable).  This is
                 # NOT a job failure: keep the status, do not cancel, do not
@@ -2833,86 +2885,358 @@ class JobManager:
                     error=str(exc),
                 )
                 return
+            is_terminal = observation.terminal
+            exit_code = observation.exit_code
+            observed_status = observation.observed_status
         else:
             try:
                 is_terminal, exit_code = self.runner.poll(record)
             except Exception as exc:
-                logger.exception("Local poll failed for job %s", job_id)
-                record.status = JobStatus.FAILED
-                record.error = f"Local poll error: {exc}"
-                record.completed_at = _utc_now_iso()
-                record.touch()
-                self.store.update(record)
-                self._sync_task_status(record)
-                self._write_job_json(record)
-                event_log.append("job.failed", job_id=job_id, error=str(exc))
-                self._stage_task_observer.finalize_job(job_id, "failed")
-                self._release_reservation(job_id)
-                self._dispatch_queued_jobs()
+                self._fail_local_poll(
+                    record, job_id, event_log, loaded_revision, loaded_attempt, exc
+                )
                 return
             self._metrics_extractor.extract(record.id, Path(record.work_dir))
 
         if not is_terminal:
-            record.touch()
-            self.store.update(record)
-            self._sync_task_status(record)
-            return
-
-        # Terminal transition — any lingering reservation goes back
-        # (fail/cancel/complete before the first successful poll).
-        self._release_reservation(job_id)
-
-        # A mechanism study paused at a review gate: translate the dedicated
-        # exit code into WAITING_REVIEW instead of COMPLETED/FAILED.
-        if exit_code == EXIT_WAITING_REVIEW:
-            record.exit_code = exit_code
-            record.status = JobStatus.WAITING_REVIEW
-            payload = _load_review_payload(Path(record.work_dir))
-            result = dict(record.result or {})
-            if payload is not None:
-                result["review_payload"] = payload
-            record.result = result
-            record.touch()
-            self.store.update(record)
-            self._sync_task_status(record)
-            self._write_job_json(record)
-            event_log.append(
-                "job.waiting_review",
-                job_id=job_id,
-                payload=payload,
+            self._persist_poll_observation(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                observed_status,
+                event_log,
+                is_remote,
             )
-            with self._lock:
-                self._cancel_events.pop(job_id, None)
             return
 
-        record.exit_code = exit_code
-        record.completed_at = _utc_now_iso()
+        self._persist_terminal(
+            record,
+            job_id,
+            loaded_revision,
+            loaded_attempt,
+            exit_code,
+            cancel_event,
+            event_log,
+            is_remote,
+            observation,
+        )
 
-        if cancel_event.is_set() and exit_code and exit_code != 0:
-            record.status = JobStatus.CANCELLED
-        elif exit_code == 0:
-            record.status = JobStatus.COMPLETED
-            record.progress = 1.0
-            record.result = self._collect_result(record)
-            if not is_remote:
-                self.runner._capture_artifacts(record, Path(record.work_dir))
-                self.runner._store_provenance(
-                    record,
-                    command_line=record.result.get("command_line", ""),
+    def _drop_stale_poll(
+        self,
+        job_id: str,
+        exc: JobStateConflictError | None,
+        event_log: JobEventLog,
+        *,
+        context: str,
+        actual: dict[str, Any] | None = None,
+    ) -> None:
+        """Discard an observation whose target row moved — never a job failure."""
+        actual_state = actual if actual is not None else (exc.actual if exc is not None else None)
+        logger.info(
+            "Dropping stale poll observation for job %s (%s): expected %s, actual %s",
+            job_id,
+            context,
+            exc.expected if exc is not None else None,
+            actual_state,
+        )
+        try:
+            event_log.append(
+                "job.poll_dropped_stale",
+                job_id=job_id,
+                context=context,
+                expected=exc.expected if exc is not None else None,
+                actual=actual_state,
+            )
+        except OSError:
+            logger.debug("stale-poll event append failed for %s", job_id, exc_info=True)
+
+    def _fail_local_poll(
+        self,
+        record: JobRecord,
+        job_id: str,
+        event_log: JobEventLog,
+        loaded_revision: int,
+        loaded_attempt: int,
+        exc: Exception,
+    ) -> None:
+        logger.exception("Local poll failed for job %s", job_id)
+        try:
+            stored = self.store.transition(
+                job_id,
+                expected_status=_POLL_SCAN_STATUSES,
+                expected_revision=loaded_revision,
+                expected_attempt=loaded_attempt,
+                status=JobStatus.FAILED,
+                error=f"Local poll error: {exc}",
+                completed_at=_utc_now_iso(),
+            )
+        except JobStateConflictError as conflict:
+            self._drop_stale_poll(job_id, conflict, event_log, context="local-poll-error")
+            return
+        self._sync_task_status(stored)
+        self._write_job_json(stored)
+        event_log.append("job.failed", job_id=job_id, error=str(exc))
+        self._stage_task_observer.finalize_job(job_id, "failed")
+        self._release_reservation(job_id)
+        self._dispatch_queued_jobs()
+
+    def _persist_poll_observation(
+        self,
+        record: JobRecord,
+        job_id: str,
+        loaded_revision: int,
+        loaded_attempt: int,
+        observed_status: JobStatus | None,
+        event_log: JobEventLog,
+        is_remote: bool,
+    ) -> None:
+        """Persist a non-terminal poll: state transition or narrow progress write."""
+        fresh = self.store.get(job_id)
+        if fresh is None or fresh.status != record.status or fresh.attempt != loaded_attempt:
+            actual: dict[str, Any] | None = None
+            if fresh is not None:
+                actual = {
+                    "status": fresh.status.value,
+                    "revision": fresh.revision,
+                    "attempt": fresh.attempt,
+                }
+            self._drop_stale_poll(
+                job_id,
+                None,
+                event_log,
+                context="poll-progress",
+                actual=actual,
+            )
+            return
+        try:
+            if observed_status is not None and observed_status != record.status:
+                stored = self.store.transition(
+                    job_id,
+                    expected_status=(JobStatus.PENDING, JobStatus.PAUSED, JobStatus.RUNNING),
+                    expected_revision=loaded_revision,
+                    expected_attempt=loaded_attempt,
+                    status=observed_status,
+                    progress=record.progress,
+                    current_stage=record.current_stage,
                 )
-        else:
-            record.status = JobStatus.FAILED
-            record.error = record.error or f"workflow exited with code {exit_code}"
+            else:
+                stored = self.store.update_progress(
+                    job_id,
+                    expected_revision=loaded_revision,
+                    progress=record.progress,
+                    current_stage=record.current_stage,
+                    pid=record.pid,
+                )
+        except JobStateConflictError as exc:
+            self._drop_stale_poll(job_id, exc, event_log, context="poll-progress")
+            return
+        self._sync_task_status(stored)
+        if is_remote and stored.status == JobStatus.RUNNING:
+            # Release the select→submit reservation only once LSF has actually
+            # started the job (PEND/PSUSP jobs do not count toward the node's
+            # running-jobs probe); terminal transitions release below.
+            self._release_reservation(job_id)
 
-        record.touch()
-        self.store.update(record)
-        self._sync_task_status(record)
-        self._write_job_json(record)
-        with self._lock:
-            self._cancel_events.pop(job_id, None)
+    def _persist_terminal(
+        self,
+        record: JobRecord,
+        job_id: str,
+        loaded_revision: int,
+        loaded_attempt: int,
+        exit_code: int | None,
+        cancel_event: threading.Event,
+        event_log: JobEventLog,
+        is_remote: bool,
+        observation: RemotePollObservation | None,
+    ) -> None:
+        """Persist the terminal transition first, then run retryable side effects."""
+        progress = record.progress
+        current_stage = record.current_stage
+        error = record.error
+        result_payload = dict(record.result or {})
+        if is_remote and observation is not None and observation.final_state is not None:
+            final = observation.final_state
+            if isinstance(final.get("result"), dict):
+                result_payload = dict(final["result"])
+            if final.get("error") is not None:
+                error = final["error"]
+            if observation.progress is not None:
+                progress = observation.progress
+            current_stage = observation.current_stage
+
+        review_payload: Any = None
+        if exit_code == EXIT_WAITING_REVIEW:
+            # A mechanism study paused at a review gate: translate the
+            # dedicated exit code into WAITING_REVIEW instead of a terminal
+            # state — no side-effect marker (not terminal).
+            review_payload = _load_review_payload(Path(record.work_dir))
+            if review_payload is not None:
+                result_payload["review_payload"] = review_payload
+            fields: dict[str, Any] = {
+                "status": JobStatus.WAITING_REVIEW,
+                "exit_code": exit_code,
+                "result": result_payload,
+                "progress": progress,
+                "current_stage": current_stage,
+                "error": error,
+            }
+        else:
+            if cancel_event.is_set() and exit_code and exit_code != 0:
+                status = JobStatus.CANCELLED
+            elif exit_code == 0:
+                status = JobStatus.COMPLETED
+                progress = 1.0
+                record.result = result_payload
+                record.result = self._collect_result(record)
+                if not is_remote:
+                    self.runner._capture_artifacts(record, Path(record.work_dir))
+                    self.runner._store_provenance(
+                        record,
+                        command_line=record.result.get("command_line", ""),
+                    )
+                result_payload = dict(record.result or {})
+            else:
+                status = JobStatus.FAILED
+                error = error or f"workflow exited with code {exit_code}"
+            if status.is_terminal:
+                # Explicit False scopes the reconcile side-effect retry to
+                # jobs whose terminal transition went through this path —
+                # legacy terminal rows never carry the key.
+                result_payload["terminal_side_effects_done"] = False
+            fields = {
+                "status": status,
+                "exit_code": exit_code,
+                "completed_at": _utc_now_iso(),
+                "progress": progress,
+                "current_stage": current_stage,
+                "error": error,
+                "result": result_payload,
+                "pid": record.pid,
+            }
+
+        try:
+            stored = self.store.transition(
+                job_id,
+                expected_status=_POLL_SCAN_STATUSES,
+                expected_revision=loaded_revision,
+                expected_attempt=loaded_attempt,
+                **fields,
+            )
+        except JobStateConflictError as exc:
+            self._drop_stale_poll(job_id, exc, event_log, context="terminal")
+            return
+
+        side_effects_ok = True
+        with self._side_effect_lock:
+            try:
+                self._release_reservation(job_id)
+                self._sync_task_status(stored)
+                if is_remote and self.remote_runner is not None:
+                    stage_events = observation.stage_events if observation is not None else ()
+                    self.remote_runner.apply_terminal_side_effects(stored, event_log, stage_events)
+                self._write_job_json(stored)
+                with self._lock:
+                    self._cancel_events.pop(job_id, None)
+            except Exception:
+                side_effects_ok = False
+                logger.warning(
+                    "Terminal side effects incomplete for job %s; reconcile will retry",
+                    job_id,
+                    exc_info=True,
+                )
+
+        if stored.status == JobStatus.WAITING_REVIEW:
+            event_log.append("job.waiting_review", job_id=job_id, payload=review_payload)
+            return
+
         self._dispatch_queued_jobs()
         if is_remote:
             self._queue_catalog_prefetch(job_id)
+        if side_effects_ok:
+            with self._side_effect_lock:
+                self._mark_terminal_side_effects_done(stored)
+
+    def _mark_terminal_side_effects_done(self, record: JobRecord) -> None:
+        result = dict(record.result or {})
+        if result.get("terminal_side_effects_done") is True:
+            return
+        result["terminal_side_effects_done"] = True
+        try:
+            self.store.update_progress(
+                record.id, expected_revision=record.revision, result=result
+            )
+        except JobStateConflictError:
+            logger.debug(
+                "Side-effect marker write raced for job %s; reconcile retries", record.id
+            )
+
+    def _retry_terminal_side_effects(self, record: JobRecord) -> None:
+        """Category ②: re-run terminal side effects until the marker persists."""
+        event_log = self._event_log(record)
+        with self._side_effect_lock:
+            try:
+                if self._is_remote_job(record) and self.remote_runner is not None:
+                    self.remote_runner.apply_terminal_side_effects(record, event_log)
+                self._sync_task_status(record)
+                self._write_job_json(record)
+                self._mark_terminal_side_effects_done(record)
+            except Exception:
+                logger.warning(
+                    "Terminal side-effect retry failed for job %s (will retry)",
+                    record.id,
+                    exc_info=True,
+                )
+
+    def _reconcile_starting_submission(self, record: JobRecord) -> None:
+        """Category ①: converge a recoverable STARTING submission to PENDING.
+
+        Records without an LSF id stay STARTING — adoption of indeterminate
+        submissions is owned by the submission-reconcile protocol (todo 5).
+        """
+        if self.remote_runner is None:
+            return
+        if not record.remote_job_id and not (record.result or {}).get("lsf_job_id"):
+            logger.info(
+                "Job %s: unconfirmed submission without an LSF id — waiting for reconcile",
+                record.id,
+            )
+            return
+        if not self.remote_runner.recover_job_state(record):
+            return
+        try:
+            stored = self.store.transition(
+                record.id,
+                expected_status=JobStatus.STARTING,
+                expected_revision=record.revision,
+                expected_attempt=record.attempt,
+                status=JobStatus.PENDING,
+            )
+        except JobStateConflictError:
+            return
+        try:
+            self._event_log(stored).append(
+                "remote.submit_reconciled",
+                job_id=record.id,
+                attempt=record.attempt,
+            )
+        except OSError:
+            logger.debug("reconcile event append failed for job %s", record.id, exc_info=True)
+        self._sync_task_status(stored)
+
+    def _reconcile_once(self) -> None:
+        """One pass over the categories outside the regular poll scan.
+
+        Category ① STARTING + pending submission intent; category ②
+        terminal jobs whose side effects have not been marked done.
+        """
+        for record in self.store.list(status=JobStatus.STARTING.value, limit=10000):
+            if _needs_submission_reconcile(record):
+                self._reconcile_starting_submission(record)
+        for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            for record in self.store.list(status=status.value, limit=10000):
+                if _needs_side_effect_retry(record):
+                    self._retry_terminal_side_effects(record)
 
     def _poll_loop(self) -> None:
         """Background daemon: periodically poll all RUNNING jobs."""
@@ -2923,18 +3247,13 @@ class JobManager:
         )
         while not self._poll_stop.wait(self.poll_interval):
             try:
-                # WAITING_REVIEW and PAUSED jobs are intentionally excluded
-                # here: WAITING_REVIEW is held for manual review, and a
+                # WAITING_REVIEW, PAUSED and STARTING jobs are intentionally
+                # excluded here: WAITING_REVIEW is held for manual review, a
                 # PAUSED job is frozen (SIGSTOP / bstop) with nothing for
-                # polling to observe — unpause flips it back to RUNNING and
-                # polling resumes (the retained _processes entry means no
-                # bounce).
-                for status_val in (
-                    JobStatus.RUNNING.value,
-                    JobStatus.PENDING.value,
-                    JobStatus.CANCELLING.value,
-                ):
-                    records = self.store.list(status=status_val, limit=10000)
+                # polling to observe, and STARTING submissions are owned by
+                # the reconcile loop (_reconcile_loop).
+                for status in _POLL_SCAN_STATUSES:
+                    records = self.store.list(status=status.value, limit=10000)
                     for record in records:
                         if self._poll_stop.is_set():
                             break
@@ -2950,6 +3269,23 @@ class JobManager:
             except Exception:
                 logger.exception("Poll loop iteration failed")
         logger.info("Poll loop stopped")
+
+    def _reconcile_loop(self) -> None:
+        """Background daemon: converge categories outside the regular scan.
+
+        Runs in parallel with ``_poll_loop`` and owns only: ① STARTING jobs
+        with a pending submission intent/unconfirmation, ② terminal jobs
+        whose ``terminal_side_effects_done`` marker is still False (side
+        effects crashed before the marker persisted).  CANCELLING stays with
+        the regular poll scan.
+        """
+        logger.info("Reconcile loop started (interval=%ds)", self.poll_interval)
+        while not self._poll_stop.wait(self.poll_interval):
+            try:
+                self._reconcile_once()
+            except Exception:
+                logger.exception("Reconcile loop iteration failed")
+        logger.info("Reconcile loop stopped")
 
     def _collect_result(self, record: JobRecord) -> dict[str, Any]:
         state_path = find_workflow_state(Path(record.work_dir))
@@ -3103,6 +3439,12 @@ class JobManager:
         # must preserve their paused review state rather than marking them failed.
         for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING):
             for record in self.store.list(status=status.value):
+                if _needs_submission_reconcile(record):
+                    logger.info(
+                        "Deferring unconfirmed submission for job %s to the reconcile loop",
+                        record.id,
+                    )
+                    continue
                 if self._try_recover_remote_job(record):
                     logger.info(
                         "Recovered remote job %s (lsf=%s) on restart, poller will resume",

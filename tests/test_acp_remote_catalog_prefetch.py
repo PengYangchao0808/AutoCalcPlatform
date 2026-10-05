@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.remote.runner import RemotePollObservation
 
 MANIFEST = {
     "schema_version": "confsearch_v1",
@@ -57,8 +58,13 @@ class FakeFetcher:
 
 
 class TerminalRemoteRunner:
-    def poll_remote(self, record: Any, event_log: Any, cancel_event: Any) -> tuple[bool, int]:
-        return True, 0
+    def poll_remote(self, record: Any, event_log: Any, cancel_event: Any) -> RemotePollObservation:
+        return RemotePollObservation(terminal=True, exit_code=0)
+
+    def apply_terminal_side_effects(
+        self, record: Any, event_log: Any, stage_events: Any = ()
+    ) -> None:
+        pass
 
 
 def _seed_remote_job(

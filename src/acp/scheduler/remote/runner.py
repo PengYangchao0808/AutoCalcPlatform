@@ -35,10 +35,10 @@ import re
 import threading
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
@@ -71,6 +71,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "RemoteJobRunner",
     "RemoteNodeUnavailableError",
+    "RemotePollObservation",
     "RemoteSubmissionError",
 ]
 
@@ -135,6 +136,29 @@ def _missing_exit_code_error(lsf_status: str, lsf_job_id: str) -> str:
 
 class RemoteNodeUnavailableError(RuntimeError):
     """No suitable remote node is available for job dispatch."""
+
+
+@dataclass(frozen=True)
+class RemotePollObservation:
+    """Structured result of one remote poll — the poll never mutates the record.
+
+    ``observed_status`` carries a legal *state* observation (RUNNING/PAUSED)
+    for the manager to persist through ``store.transition``; ``progress`` and
+    ``current_stage`` are *progress* observations persisted through the
+    narrow ``store.update_progress`` API.  On terminal polls ``final_state``
+    carries ``{"result": ..., "error": ...}`` for the terminal transition and
+    ``stage_events`` are stage events the manager emits only AFTER the
+    terminal CAS succeeds (see :meth:`RemoteJobRunner.apply_terminal_side_effects`).
+    """
+
+    terminal: bool
+    exit_code: int | None = None
+    lsf_status: str | None = None
+    observed_status: JobStatus | None = None
+    progress: float | None = None
+    current_stage: str | None = None
+    final_state: dict[str, Any] | None = None
+    stage_events: tuple[tuple[str, dict[str, Any]], ...] = ()
 
 
 class RemoteSubmissionError(RuntimeError):
@@ -272,18 +296,25 @@ class RemoteJobRunner:
         record: JobRecord,
         event_log: JobEventLog,
         cancel_event: threading.Event,
-    ) -> tuple[bool, int | None]:
+    ) -> RemotePollObservation:
         """Single non-blocking check of remote job status.
 
         Checks ``.exit_code`` first (authoritative), then ``bjobs``
         (LSF state).  Tails logs and periodically reads ``state.json``
         for fine-grained stage progress.
 
-        Returns ``(is_terminal, exit_code)``.
+        The observation is *returned* without mutating ``record``: state
+        transitions (PENDING/PAUSED→RUNNING, →PAUSED) and progress are
+        persisted by the caller through conditional store APIs, and terminal
+        side effects run only after the terminal CAS succeeds (see
+        :meth:`collect_final_state` / :meth:`apply_terminal_side_effects`).
         """
         state = self._job_states.get(record.id)
         if state is None:
-            return (True, record.exit_code if record.exit_code is not None else 1)
+            return RemotePollObservation(
+                terminal=True,
+                exit_code=record.exit_code if record.exit_code is not None else 1,
+            )
 
         node = state["node"]
         remote_job_dir = state["remote_job_dir"]
@@ -304,12 +335,16 @@ class RemoteJobRunner:
                 )
                 state["cancel_sent"] = True
             exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
-            self._cleanup_job_state(record.id)
-            return (True, exit_code if exit_code is not None else 130)
+            # Poll-state teardown happens in apply_terminal_side_effects,
+            # only after the manager persists the terminal transition.
+            return RemotePollObservation(
+                terminal=True,
+                exit_code=exit_code if exit_code is not None else 130,
+            )
 
         exit_code = self._monitor.get_exit_code(node, remote_job_dir)
         if exit_code is not None:
-            return self._finalize_remote(
+            return self.collect_final_state(
                 record,
                 event_log,
                 state,
@@ -336,6 +371,7 @@ class RemoteJobRunner:
             logger.warning("bjobs poll failed for %s: %s", record.id, exc)
             status = ""
 
+        observed_status: JobStatus | None = None
         if status:
             event_log.append(
                 "remote.lsf_status",
@@ -345,24 +381,25 @@ class RemoteJobRunner:
             )
             self._mirror_lsf_stage(record.id, status)
 
+            # State observations (legal transitions only — the manager CASes
+            # them against the persisted status; a no-op change stays a
+            # progress-only observation).
             if status == "running" and record.status in (
                 JobStatus.PENDING,
                 JobStatus.PAUSED,
             ):
-                record.status = JobStatus.RUNNING
-
-            if status == STATUS_PAUSED and record.status in (
+                observed_status = JobStatus.RUNNING
+            elif status == STATUS_PAUSED and record.status in (
                 JobStatus.PENDING,
                 JobStatus.RUNNING,
-                JobStatus.PAUSED,
             ):
-                record.status = JobStatus.PAUSED
+                observed_status = JobStatus.PAUSED
 
             if RemoteJobMonitor.is_terminal(status):
                 exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
                 if exit_code is None:
                     # LSF reports a terminal state but the wrapper script
-                    # never wrote ``.exit_code`` \u2014 this happens when LSF
+                    # never wrote ``.exit_code`` — this happens when LSF
                     # kills the whole process group (e.g. the walltime /
                     # RUNLIMIT limit) before the trailing
                     # ``echo $? > .exit_code`` can run.  Synthesise an exit
@@ -384,7 +421,7 @@ class RemoteJobRunner:
                             record.id,
                             status,
                         )
-                return self._finalize_remote(
+                return self.collect_final_state(
                     record,
                     event_log,
                     state,
@@ -404,7 +441,13 @@ class RemoteJobRunner:
         state["stdout_offset"] = stdout_offset
         state["stderr_offset"] = stderr_offset
 
-        return (False, None)
+        return RemotePollObservation(
+            terminal=False,
+            lsf_status=status or None,
+            observed_status=observed_status,
+            progress=record.progress,
+            current_stage=record.current_stage,
+        )
 
     def cancel_remote(
         self,
@@ -474,7 +517,7 @@ class RemoteJobRunner:
         }
         return True
 
-    def _finalize_remote(
+    def collect_final_state(
         self,
         record: JobRecord,
         event_log: JobEventLog,
@@ -484,14 +527,16 @@ class RemoteJobRunner:
         lsf_job_id: str,
         exit_code: int,
         seen_stages: set[str],
-    ) -> tuple[bool, int]:
-        """Apply the terminal *exit_code* to *record* and tear down poll state.
+    ) -> RemotePollObservation:
+        """Collect the terminal-state payload without applying side effects.
 
         Shared by the ``.exit_code`` and LSF-terminal branches of
-        :meth:`poll_remote` so both follow one finalisation path: flush the
-        remote logs, read the final ``state.json``, persist result metadata +
-        provenance, mark stage tasks, emit a terminal event, and drop the
-        in-memory poll state.  Returns ``(True, exit_code)``.
+        :meth:`poll_remote`: flushes the remote logs, reads the final
+        ``state.json`` (stage events are collected, not emitted), and fills
+        the in-memory result metadata + provenance.  The returned
+        observation is what the manager persists through the terminal CAS;
+        events, stage teardown and poll-state cleanup follow in
+        :meth:`apply_terminal_side_effects` — only after that CAS succeeds.
         """
         stdout_offset = state["stdout_offset"]
         stderr_offset = state["stderr_offset"]
@@ -502,13 +547,19 @@ class RemoteJobRunner:
         state["stderr_offset"] = self._tail_and_emit(
             node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
         )
+        stage_events: tuple[tuple[str, dict[str, Any]], ...] = ()
         try:
-            self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+            collected = self._observe_remote_state(
+                record, event_log, node, remote_job_dir, seen_stages, emit=False
+            )
+            stage_events = tuple((etype, dict(payload)) for _ts, etype, _name, payload in collected)
+            state["seen_stages"] = seen_stages
         except Exception:
             logger.debug("Final state.json read failed for %s", record.id, exc_info=True)
 
         record.exit_code = exit_code
-        record.progress = 1.0 if exit_code == 0 else record.progress
+        if exit_code == 0:
+            record.progress = 1.0
         result = dict(record.result or {})
         result["lsf_job_id"] = lsf_job_id
         result["node"] = node.name
@@ -519,16 +570,53 @@ class RemoteJobRunner:
         result["command_line"] = " ".join(cli_cmd)
         record.result = result
         self._build_provenance(record, cli_cmd)
-        final_status = "completed" if exit_code == 0 else "failed"
-        self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
-        self._finalize_stages(record.id, final_status)
+        return RemotePollObservation(
+            terminal=True,
+            exit_code=exit_code,
+            progress=record.progress,
+            current_stage=record.current_stage,
+            final_state={"result": dict(record.result or {}), "error": record.error},
+            stage_events=stage_events,
+        )
+
+    def apply_terminal_side_effects(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        stage_events: tuple[tuple[str, dict[str, Any]], ...] = (),
+    ) -> None:
+        """Emit terminal events and tear down stage/poll state — idempotent.
+
+        Called by the manager only AFTER the terminal CAS succeeds, and safe
+        to retry: every event carries a stable
+        ``terminal:<job>:<attempt>:<event>`` idempotency key, so a crash
+        between the event and the ``terminal_side_effects_done`` marker can
+        never duplicate the event on the reconcile retry.
+        """
+        exit_code = record.exit_code
+        key_base = f"terminal:{record.id}:{record.attempt}"
+        for event_type, payload in stage_events:
+            event_log.append(
+                event_type,
+                job_id=record.id,
+                idempotency_key=f"{key_base}:{event_type}:{payload.get('stage', '')}",
+                **payload,
+            )
+        if record.status == JobStatus.CANCELLED:
+            self._cleanup_job_state(record.id)
+            return
+        success = exit_code == 0
+        event_type = "job.completed" if success else "job.failed"
         event_log.append(
-            "job.completed" if exit_code == 0 else "job.failed",
+            event_type,
             job_id=record.id,
             exit_code=exit_code,
+            idempotency_key=f"{key_base}:{event_type}",
         )
+        final_status = "completed" if success else "failed"
+        self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
+        self._finalize_stages(record.id, final_status)
         self._cleanup_job_state(record.id)
-        return (True, exit_code)
 
     # ------------------------------------------------------------------ #
     # Remote state observation (state.json + .stage_* files)
@@ -541,18 +629,22 @@ class RemoteJobRunner:
         node: RemoteNode,
         remote_job_dir: str,
         seen: set[str],
-    ) -> None:
+        *,
+        emit: bool = True,
+    ) -> list[tuple[float, str, str, dict[str, object]]]:
         """Read remote ``state.json`` and mirror progress/stages to *record*.
 
         Mirrors the logic in :meth:`JobRunner._observe_state` but reads
-        the state file over SFTP instead of the local filesystem.
+        the state file over SFTP instead of the local filesystem.  With
+        ``emit=False`` the stage events are only returned (terminal polls
+        defer emission until after the manager's terminal CAS).
         """
         data = cast(
             dict[str, object] | None,
             self._monitor.find_remote_state_json(node, remote_job_dir),
         )
         if data is None:
-            return
+            return []
 
         # Mirror the observed payload into the local work dir: the API's
         # state.json enrichment reads only local files, so without this the
@@ -560,7 +652,7 @@ class RemoteJobRunner:
         self._mirror_state_json(record, data)
 
         if data.get("status") == "failed":
-            return
+            return []
 
         current_stage = data.get("current_stage")
         record.current_stage = str(current_stage) if isinstance(current_stage, str) else None
@@ -598,8 +690,10 @@ class RemoteJobRunner:
                     (ts, "stage.failed", name, {"stage": name, "error": str(info.get("error", ""))})
                 )
 
-        for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
-            event_log.append(event_type, job_id=record.id, **payload)
+        if emit:
+            for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
+                event_log.append(event_type, job_id=record.id, **payload)
+        return pending_events
 
     def _mirror_state_json(self, record: JobRecord, data: dict[str, object]) -> None:
         """Write the observed remote state payload to the local work dir."""

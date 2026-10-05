@@ -26,7 +26,10 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from acp.scheduler.remote.runner import RemotePollObservation
 
 from acp.chem.embedding import smiles_to_xyz, xyz_to_multiframe_demo
 from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
@@ -110,7 +113,14 @@ class JobRunnerRemoteProtocol(Protocol):
         record: JobRecord,
         event_log: JobEventLog,
         cancel_event: threading.Event,
-    ) -> tuple[bool, int | None]: ...
+    ) -> RemotePollObservation: ...
+
+    def apply_terminal_side_effects(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        stage_events: tuple[tuple[str, dict[str, Any]], ...] = (),
+    ) -> None: ...
 
     def cancel_remote(self, job_id: str) -> None: ...
 

@@ -11,6 +11,7 @@ import pytest
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.remote.runner import RemotePollObservation
 from acp.scheduler.store import JobStore
 from acp.scheduler.tasks import TaskIndex
 
@@ -334,7 +335,7 @@ class _NodeAwareRemoteRunner:
         return "424242"
 
     def poll_remote(self, record, event_log, cancel_event):
-        return (False, None)
+        return RemotePollObservation(terminal=False)
 
 
 @_requires_remote_config

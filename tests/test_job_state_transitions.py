@@ -7,14 +7,16 @@ import json
 import sqlite3
 import threading
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from acp.scheduler import migrations as migrations_module
 from acp.scheduler.job_edit import attempt_number, compute_source_revision
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+from acp.scheduler.manager import JobManager
 from acp.scheduler.migrations import migrate
+from acp.scheduler.remote.runner import RemoteJobRunner
 from acp.scheduler.store import JobStateConflictError, JobStore
 
 
@@ -352,3 +354,290 @@ def test_attempt_number_column_authoritative() -> None:
     rec2 = _record("an-2")
     rec2.result = {"attempts": 0}
     assert attempt_number(rec2) == 1
+
+
+# ====================================================================== #
+# Todo 2: poll split — CAS state transitions, narrow progress writes,
+# terminal-persist-first + idempotent side effects, reconcile loop.
+# ====================================================================== #
+
+
+def _make_manager(tmp_path: Path) -> JobManager:
+    return JobManager(run_root=tmp_path, poll_interval=30)
+
+
+def _seed_running_job(
+    mgr: JobManager, tmp_path: Path, job_id: str, **overrides: object
+) -> JobRecord:
+    work_dir = tmp_path / "runs" / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    kwargs: dict[str, object] = {
+        "spec": _spec(),
+        "status": JobStatus.RUNNING,
+        "work_dir": str(work_dir),
+    }
+    kwargs.update(overrides)
+    record = JobRecord(id=job_id, **kwargs)  # pyright: ignore[reportArgumentType]
+    mgr.store.create(record)
+    return record
+
+
+def _remote_runner(lsf_status: str) -> RemoteJobRunner:
+    """Real RemoteJobRunner with a mocked monitor (see _poll_remote_runner)."""
+    monitor = MagicMock()
+    monitor.get_exit_code.return_value = None
+    monitor.get_lsf_status.return_value = lsf_status
+    monitor.find_remote_state_json.return_value = None
+    monitor.tail_stdout.return_value = ("", 0)
+    monitor.tail_stderr.return_value = ("", 0)
+    runner = RemoteJobRunner(
+        ssh_pool=MagicMock(),
+        remote_config=MagicMock(),
+        stager=MagicMock(),
+        monitor=monitor,
+        code_syncer=MagicMock(),
+        poll_interval=0,
+    )
+    return runner
+
+
+def _seed_job_state(runner: RemoteJobRunner, job_id: str) -> None:
+    runner._job_states[job_id] = {
+        "node": MagicMock(),
+        "remote_job_dir": f"/scratch/acp/{job_id}",
+        "lsf_job_id": "777",
+        "stdout_offset": 0,
+        "stderr_offset": 0,
+        "poll_cycle": 0,
+        "seen_stages": set(),
+    }
+
+
+def _event_types(mgr: JobManager, job_id: str) -> list[str]:
+    log = mgr.event_log(job_id)
+    return [] if log is None else [e["type"] for e in log.read_all()]
+
+
+def test_stale_poll_cannot_override_pause(tmp_path: Path) -> None:
+    """Probe lifecycle (fixed): a poll that reads RUNNING but pauses
+    mid-flight must drop its stale observation — DB stays PAUSED and the
+    drop is audited with ``job.poll_dropped_stale``."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "race")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        seen: list[str] = []
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.pause_job(record.id)
+            seen.append(mgr.store.get(record.id).status.value)  # type: ignore[union-attr]
+            stale_record.progress = 0.55
+            stale_record.current_stage = "sampling"
+            return (False, None)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert seen == [JobStatus.PAUSED.value], "pause must win during the poll"
+        assert final.status == JobStatus.PAUSED, "stale poll must not resurrect RUNNING"
+        assert final.progress != 0.55, "stale progress observation must be dropped"
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+        assert "job.paused" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_not_resurrected(tmp_path: Path) -> None:
+    """Concurrent terminal poll vs pause: the first writer wins — a terminal
+    observation loaded before a pause must not persist COMPLETED nor run
+    terminal side effects."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "term-race")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.pause_job(record.id)
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.PAUSED, "terminal observation must lose to pause"
+        assert final.completed_at is None, "no terminal timestamps on the losing writer"
+        assert not (final.result or {}).get("terminal_side_effects_done"), (
+            "side effects must not run for a dropped terminal observation"
+        )
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_progress_update_preserves_status_spec_result(tmp_path: Path) -> None:
+    """A non-terminal poll persists through the narrow progress API: status,
+    spec_json and result_json stay byte-identical, revision bumps."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr, tmp_path, "prog-keep", progress=0.1, result={"state": {"stage": 1}}
+        )
+        before = _raw_row(tmp_path / "acp_jobs.db", record.id)
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            stale_record.progress = 0.42
+            stale_record.current_stage = "opt"
+            return (False, None)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        after = _raw_row(tmp_path / "acp_jobs.db", record.id)
+        assert after["status"] == before["status"] == JobStatus.RUNNING.value
+        assert after["spec_json"] == before["spec_json"], "progress writes never touch spec"
+        assert after["result_json"] == before["result_json"], "result must stay byte-identical"
+        assert after["progress"] == 0.42
+        assert after["current_stage"] == "opt"
+        assert after["revision"] != before["revision"], "narrow write must bump revision"
+    finally:
+        mgr.shutdown()
+
+
+def test_pending_transitions_to_running(tmp_path: Path) -> None:
+    """LSF ``status=running`` observed by a real poll_remote drives the legal
+    PENDING→RUNNING state transition through store.transition."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "pend-run",
+            status=JobStatus.PENDING,
+            remote_job_id="777",
+            result={"node": "n1", "remote_dir": "/scratch/acp/pend-run"},
+        )
+        runner = _remote_runner("running")
+        _seed_job_state(runner, record.id)
+        mgr.remote_runner = runner  # type: ignore[assignment]
+
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.RUNNING, "PENDING→RUNNING must persist"
+        assert final.revision >= 1
+        assert record.status == JobStatus.PENDING, "poll must not mutate the loaded record"
+        assert "remote.lsf_status" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_side_effects_retry(tmp_path: Path) -> None:
+    """Terminal side effects are retried by the reconcile pass until the
+    ``terminal_side_effects_done`` marker persists; the terminal event's
+    stable idempotency key prevents duplicates across retries."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "term-retry",
+            status=JobStatus.COMPLETED,
+            exit_code=0,
+            progress=1.0,
+            completed_at="2026-01-01T00:00:00+00:00",
+            remote_job_id="555",
+            result={"node": "n1", "terminal_side_effects_done": False},
+        )
+        runner = _remote_runner("done")
+        mgr.remote_runner = runner  # type: ignore[assignment]
+
+        real_sync = mgr._sync_task_status
+        calls = {"n": 0}
+
+        def flaky_sync(rec: JobRecord) -> None:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("sync backend down")
+            real_sync(rec)
+
+        mgr._sync_task_status = flaky_sync  # type: ignore[method-assign]
+
+        # First reconcile: side effects start, terminal event emitted, then a
+        # side effect fails — marker must NOT be set (retryable).
+        mgr._reconcile_once()
+        marker = (mgr.store.get(record.id).result or {}).get("terminal_side_effects_done")  # type: ignore[union-attr]
+        assert marker is False, "failed side effects must leave the job retryable"
+        terminal_events = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
+        assert len(terminal_events) == 1
+
+        # Second reconcile: side effects complete, marker persists.
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert (final.result or {}).get("terminal_side_effects_done") is True
+
+        # Third reconcile: marker set → category no longer matches.
+        mgr._reconcile_once()
+        terminal_events = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
+        assert len(terminal_events) == 1, "idempotency key must prevent duplicate events"
+    finally:
+        mgr.shutdown()
+
+
+def test_starting_unconfirmed_picked_by_reconcile(tmp_path: Path) -> None:
+    """STARTING + submit_state=unconfirmed is owned by the reconcile loop —
+    the regular poll scan never touches (misjudges) it, and reconcile
+    converges it to PENDING once the submission is recoverable."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "start-unconf",
+            status=JobStatus.STARTING,
+            remote_job_id="999",
+            result={
+                "execution_kind": "remote",
+                "node": "n1",
+                "remote_dir": "/scratch/acp/start-unconf",
+                "remote": {"submit_state": "unconfirmed", "node": "n1"},
+            },
+        )
+
+        # Regular poll must not touch a STARTING job (not in the scan set).
+        mgr._poll_job(record.id)
+        assert mgr.store.get(record.id).status == JobStatus.STARTING  # type: ignore[union-attr]
+
+        class _Recoverable:
+            def __init__(self) -> None:
+                self.recover_calls = 0
+
+            def recover_job_state(self, rec: JobRecord) -> bool:
+                self.recover_calls += 1
+                return True
+
+            def apply_terminal_side_effects(
+                self, rec: JobRecord, event_log, stage_events=()
+            ) -> None:
+                raise AssertionError("not used")
+
+        fake = _Recoverable()
+        mgr.remote_runner = fake  # type: ignore[assignment]
+
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.PENDING, "reconcile must converge STARTING→PENDING"
+        assert fake.recover_calls == 1
+
+        # Category no longer matches — reconcile does not pick it again.
+        mgr._reconcile_once()
+        assert fake.recover_calls == 1
+        assert mgr.store.get(record.id).status == JobStatus.PENDING  # type: ignore[union-attr]
+    finally:
+        mgr.shutdown()
