@@ -832,16 +832,19 @@ class NmrReport:
             },
             "tms_references": dict(self.config.tms_shieldings),
             "tms_source": _tms_source(self.config),
+            # todo 29: six-segment protocol record + verdict (workflow-populated;
+            # None only for hand-built reports that carry no run context).
+            "protocol": self.metadata.get("protocol"),
         }
 
     def as_dict(self) -> dict[str, object]:
         winner = self.winner
         return {
             "schema_version": REPORT_SCHEMA_VERSION,
-            # D-phase (todo 29) protocol identity — placeholder until then;
-            # NmrConfig.protocol_fingerprint (also under config) is the
-            # reserved source T29 will populate.
-            "protocol_id": None,
+            # todo 29: protocol identity = aggregated per-candidate spec
+            # fingerprints (workflow-populated via NmrReport.metadata;
+            # None only for hand-built reports without run context).
+            "protocol_id": self.metadata.get("protocol_id"),
             "summary": {
                 "n_candidates": len(self.candidates),
                 "winner": (

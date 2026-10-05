@@ -81,6 +81,18 @@ from acp.nmr.probability import (
     dp5_log_to_probability,
     normalize_dp4_gated,
 )
+from acp.nmr.protocol import (
+    GeometrySegment,
+    NmrProtocolSpec,
+    PopulationEnergySegment,
+    ReferenceSegment,
+    SamplingSegment,
+    ShieldingSegment,
+    StatisticalModelSegment,
+    aggregate_protocol_block,
+    build_protocol_spec,
+    classify_tms_source,
+)
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
 from acp.nmr.structure_map import NmrStructureMap, StructureMapError
@@ -106,6 +118,7 @@ from cccp.calculation.tasks.conformer_search import run_conformer_search
 from cccp.calculation.tasks.nmr_shielding import run_nmr_shielding
 from cccp.config import load_config
 from cccp.qc.interfaces.censo import (
+    CENSO_PRESETS,
     CensoConformerRecord,
     CensoInterface,
     CensoRunResult,
@@ -492,6 +505,100 @@ def _build_nmr_config(
         error_model=error_model or "goodman-legacy",
         conformer_preset=conformer_preset or "censo-light",
         strict_equivalence=strict_equivalence or bool(nmr_section.get("strict_equivalence")),
+    )
+
+
+def _missing_reference_nuclei(nmr_config: NmrConfig, candidates: list[Structure]) -> set[str]:
+    """Required nuclei (element present in a candidate) lacking a TMS reference."""
+    missing = {n for n in nmr_config.nuclei if nmr_config.tms_for(n) is None}
+    if not missing:
+        return set()
+    present: set[str] = set()
+    for structure in candidates:
+        present.update(nmr_config.element_nuclei(list(structure.symbols)))
+    return missing & present
+
+
+def _protocol_spec_for_candidate(
+    nmr_config: NmrConfig,
+    structure: Structure,
+    *,
+    generation_executed: bool,
+    error_model: str,
+    dp5_model_id: str | None,
+    dp5_mode: str | None,
+    dp5_model_present: bool,
+) -> NmrProtocolSpec:
+    """Build one candidate's six-segment protocol record from what ran.
+
+    Sampling/geometry facts mirror the runtime dispatch: censo-zero never
+    calls CENSO (empty parts), a prebuilt/foreign ensemble records ``None``
+    (unknown — never upgraded), and an optimization level is only recorded
+    when the preset's optimization part actually executed.
+    """
+    preset = nmr_config.conformer_preset or ""
+    if not generation_executed:
+        parts: tuple[str, ...] | None = None
+    elif preset.lower() == "censo-zero":
+        parts = ()
+    else:
+        preset_parts = CENSO_PRESETS.get(preset, {}).get("parts")
+        parts = (
+            tuple(str(part) for part in preset_parts) if isinstance(preset_parts, list) else None
+        )
+    if parts is None:
+        optimization_executed: bool | None = None
+        optimization_level: str | None = None
+    else:
+        optimization_executed = "optimization" in parts
+        optimization_level = None
+        if optimization_executed:
+            opt_cfg = CENSO_PRESETS.get(preset, {}).get("optimization") or {}
+            func = opt_cfg.get("func") if isinstance(opt_cfg, dict) else None
+            optimization_level = str(func) if func else None
+
+    missing_all = {n for n in nmr_config.nuclei if nmr_config.tms_for(n) is None}
+    missing_here = tuple(
+        sorted(missing_all & set(nmr_config.element_nuclei(list(structure.symbols))))
+    )
+    return build_protocol_spec(
+        SamplingSegment(
+            conformer_preset=preset,
+            crest_executed=generation_executed,
+            censo_executed=generation_executed and preset.lower() != "censo-zero",
+            parts=parts,
+        ),
+        GeometrySegment(
+            optimization_executed=optimization_executed,
+            optimization_level=optimization_level,
+        ),
+        PopulationEnergySegment(
+            energy_window_kcal=nmr_config.energy_window_kcal,
+            boltzmann_temp=nmr_config.boltzmann_temp,
+        ),
+        ShieldingSegment(
+            nmr_method=nmr_config.nmr_method,
+            nmr_basis=nmr_config.nmr_basis,
+            solvent_model=nmr_config.solvent_model,
+        ),
+        ReferenceSegment(
+            tms_source=classify_tms_source(
+                nmr_config.nmr_method,
+                nmr_config.nmr_basis,
+                nmr_config.solvent or "",
+                nmr_config.tms_shieldings,
+            ),
+            effective_solvent=nmr_config.solvent or "",
+            tms_shieldings=dict(nmr_config.tms_shieldings),
+            missing_nuclei=missing_here,
+            reference_data_present=False,
+        ),
+        StatisticalModelSegment(
+            error_model=error_model,
+            dp5_model_id=dp5_model_id,
+            dp5_mode=dp5_mode,
+            dp5_model_present=dp5_model_present,
+        ),
     )
 
 
@@ -2071,6 +2178,23 @@ def run_nmr_analysis(
         )
     actual_error_model = em.model_id
 
+    # todo 29: missing-reference gate — a required nucleus without a TMS
+    # reference must fail here, before any averaging: a shielding must never
+    # stand in for a missing shift reference.
+    missing_reference = _missing_reference_nuclei(nmr_config, candidates)
+    if missing_reference:
+        error = (
+            "missing TMS reference for nucleus "
+            + ", ".join(sorted(missing_reference))
+            + " — refusing to derive shifts without a reference"
+        )
+        _fail_progress(progress_reporter, error)
+        return WorkflowResult(
+            status="failed",
+            stages_completed=stages_completed,
+            error=error,
+        )
+
     # Stages 2–3: conformer generation + GIAO NMR per candidate
     candidate_results: list[CandidateResult] = []
     ensembles: list[StructureEnsemble | None]
@@ -2380,12 +2504,42 @@ def run_nmr_analysis(
     dp5_modes = [
         {"index": index, "mode": mode, "kernel": kernel} for index, mode, kernel in real_dp5
     ]
+
+    # Stage 7/8 boundary (todo 29): record what actually ran per candidate
+    # and surface the protocol verdict (mode + calibration_status).
+    protocol_specs = [
+        _protocol_spec_for_candidate(
+            nmr_config,
+            structure,
+            generation_executed=generated_ensembles[idx],
+            error_model=actual_error_model,
+            dp5_model_id=(cr.probability.dp5.model_id if cr.probability is not None else None),
+            dp5_mode=cr.probability.dp5.mode if cr.probability is not None else None,
+            dp5_model_present=dp5_model is not None,
+        )
+        for idx, (structure, cr) in enumerate(zip(candidates, candidate_results, strict=True))
+    ]
+    protocol_block = aggregate_protocol_block(protocol_specs)
+    logger.info(
+        "NMR protocol verdict: mode=%s calibration_status=%s issues=%s fingerprint=%s",
+        protocol_block["mode"],
+        protocol_block["calibration_status"],
+        protocol_block["issues"],
+        protocol_block["fingerprint"],
+    )
+    report_config = replace(nmr_config, protocol_fingerprint=str(protocol_block["fingerprint"]))
+
     report = NmrReport(
         candidates=candidate_results,
-        config=nmr_config,
+        config=report_config,
         error_model=actual_error_model,
         dp5_mode=dp5_mode,
-        metadata={"n_candidates": len(candidate_results), "fchl_kernel": fchl_kernel},
+        metadata={
+            "n_candidates": len(candidate_results),
+            "fchl_kernel": fchl_kernel,
+            "protocol_id": str(protocol_block["fingerprint"]),
+            "protocol": protocol_block,
+        },
     )
     reports_dir = storage.result_category_dir("reports")
     paths = write_all_reports(report, reports_dir)
@@ -2428,6 +2582,7 @@ def run_nmr_analysis(
         "fchl_kernel": fchl_kernel,
         "stages": stages_completed,
         "giao_resource_budget": giao_budget,
+        "protocol": protocol_block,
         "outputs": {
             "json": str(paths["json"]),
             "xlsx": str(paths["xlsx"]) if paths["xlsx"] else None,

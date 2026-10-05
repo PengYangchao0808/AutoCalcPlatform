@@ -24,11 +24,15 @@ import math
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.special import log_ndtr
 
 from acp.nmr.models import NmrConfig
+
+if TYPE_CHECKING:
+    from acp.nmr.protocol import NmrProtocolSpec
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +46,10 @@ _MODELS_DIR = Path(__file__).resolve().parent / "models"
 
 _GOODMAN_LEVEL = ("mPW1PW91", "6-311G(d)", "goodman-legacy")
 
+#: Error-model id → trained (method, basis) level — single source for both
+#: the name-level check below and the protocol-level check (todo 29).
+_TRAINED_ERROR_MODEL_LEVELS = {_GOODMAN_LEVEL[2]: (_GOODMAN_LEVEL[0], _GOODMAN_LEVEL[1])}
+
 
 def validate_error_model_binding(config: NmrConfig) -> None:
     """Raise ``ValueError`` when the error model and NMR level diverge.
@@ -49,6 +57,11 @@ def validate_error_model_binding(config: NmrConfig) -> None:
     DevDoc §10.2: the Goodman distributions are trained on
     ``mPW1PW91/6-311G(d)``. Using them with a different level produces
     meaningless probabilities.
+
+    This is the NAME-level check only. The protocol-level check — what
+    actually ran (geometry/reference/model presence) — lives in
+    :func:`validate_protocol_binding`, whose mismatch verdict is
+    ``unvalidated_protocol`` instead of an exception.
     """
     method_ok = config.nmr_method.strip().lower() == _GOODMAN_LEVEL[0].lower()
     basis_ok = _basis_equal(config.nmr_basis, _GOODMAN_LEVEL[1])
@@ -69,6 +82,52 @@ def validate_error_model_binding(config: NmrConfig) -> None:
             f"mPW1PW91/6-311G(d) but got {config.nmr_method}/{config.nmr_basis}. "
             "Switch the error model (and its trained parameters) to match."
         )
+
+
+def validate_protocol_binding(spec: NmrProtocolSpec) -> list[str]:
+    """Protocol-level binding check (todo 29 / gap G04) — returns issue codes.
+
+    Name-only matching (method/basis/model strings) is insufficient: the
+    statistical model must be bound to the RECORDING — every segment it
+    depends on has to be present and consistent with what actually ran.
+
+    Issue codes (empty list = fully bound, calibration claims allowed):
+
+    * ``statistical_model_not_bound`` — placeholder model, unknown model id,
+      or the recorded level diverges from the model's trained level;
+    * ``missing_reference`` — a required nucleus has no TMS reference (a
+      shielding must never stand in for a missing shift reference);
+    * ``reference_not_for_level`` — the table has no row for the recorded
+      level, so the in-force references are unverifiable defaults;
+    * ``geometry_not_optimized`` — no optimization level executed (or
+      provenance is unknown): calling CENSO is not DFT-optimized geometry.
+
+    Args:
+        spec: The six-segment protocol record to validate.
+
+    Returns:
+        Issue codes; ``[]`` when the protocol is fully bound.
+    """
+    issues: list[str] = []
+
+    model_id = spec.statistical_model.error_model.strip().lower()
+    trained = _TRAINED_ERROR_MODEL_LEVELS.get(model_id)
+    if model_id.startswith("placeholder") or trained is None:
+        issues.append("statistical_model_not_bound")
+    else:
+        method_ok = spec.shielding.nmr_method.strip().lower() == trained[0].lower()
+        basis_ok = _basis_equal(spec.shielding.nmr_basis, trained[1])
+        if not (method_ok and basis_ok):
+            issues.append("statistical_model_not_bound")
+
+    if spec.reference.missing_nuclei:
+        issues.append("missing_reference")
+    if spec.reference.tms_source == "unknown":
+        issues.append("reference_not_for_level")
+    if spec.geometry.optimization_executed is not True:
+        issues.append("geometry_not_optimized")
+
+    return issues
 
 
 def _basis_equal(actual: str, expected: str) -> bool:
@@ -541,4 +600,5 @@ __all__ = [
     "dp5_model_available",
     "dp5_fchl_available",
     "validate_error_model_binding",
+    "validate_protocol_binding",
 ]
