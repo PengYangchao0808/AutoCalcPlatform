@@ -39,7 +39,6 @@ from acp.io.structures import (
 from acp.nmr.assignment import (
     collect_residual_inputs,
     match_assigned,
-    match_unassigned,
 )
 from acp.nmr.averaging import boltzmann_average_shieldings
 from acp.nmr.enumerate import enumerate_candidates
@@ -907,10 +906,25 @@ def _analyze_candidate(
         omit_atom_indices=omit_indices,
     )
 
-    if experiment.assigned:
-        pairs = match_assigned(atom_shifts, experiment)
-    else:
-        pairs = match_unassigned(atom_shifts, experiment)
+    assign_result = match_assigned(atom_shifts, experiment)
+    pairs = assign_result.pairs
+    for entry in assign_result.unmatched:
+        logger.warning(
+            "Unmatched experimental peak %s[%s] %.4f ppm (%s)%s",
+            entry.element,
+            entry.index,
+            entry.shift_ppm,
+            entry.reason,
+            f" label={entry.atom_label}" if entry.atom_label else "",
+        )
+    logger.debug(
+        "candidate %s assignment: %d locked, %d matched, %d unmatched, near-optimal deltas=%s",
+        index,
+        sum(len(g) for g in assign_result.locked.values()),
+        sum(len(g) for g in pairs.values()),
+        len(assign_result.unmatched),
+        [round(alt.delta, 6) for alt in assign_result.near_optimal],
+    )
     residual_inputs = collect_residual_inputs(pairs)
 
     regressions: dict[str, Any] = {}
