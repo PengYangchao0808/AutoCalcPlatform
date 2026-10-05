@@ -1,15 +1,78 @@
-# ACP / CCCP Task API — Current Specification (Draft v1)
+# ACP / CCCP Task API — Current Specification (finalized)
 
-**Status:** draft, authoritative as of todo 11 (contract split + request/result
-envelope + in-memory adapters).  This file is the **single current spec** for
-the `cccp.calculation` task API; todos 17–24 implement against it and todo 33
-finalizes it.  The historical design drafts (Task API proposal v1–v3.2 in
+**Status:** final (todo 33).  This file is the **single current spec** for the
+`cccp.calculation` task API.  It was drafted in todo 11 (contract split +
+request/result envelope + in-memory adapters) and has since been implemented
+and extended: two-step selection and the capability matrix landed (todo 13),
+the seven P2 task contracts landed (todo 24), the translation single-source
+layer landed (todo 25), all fourteen `run_*` task cores landed (todos 17–22,
+42–43), and the executor/confsearch/PES/NMR rewiring landed (todos 23,
+26–28).  The historical design drafts (Task API proposal v1–v3.2 in
 `.omo/drafts/acp-cccp-architecture-remediation.md`) are **archive-only** —
 implementation and tests reference only this document.
 
-**Scope of this draft:** contract shapes and conversion rules only.  Task
-*execution* (`run_*` behavior, backend selection, translation) is specified
-here as signatures/rules but implemented by todos 12–23 (see §"Two tables").
+**Scope:** the full contract surface of the task layer — envelopes, typed
+options/payloads, selection, errors, serialization — plus the architectural
+boundaries it enforces: the four-layer responsibility split (§2), the
+translation-layer boundary (§16), the capability trichotomy (§15.1), the
+dependency-direction rules (§17), the relation to ACP plan/executor (§18),
+the migration phases P0–P3 with the A1–A9 acceptance matrix (§19), the
+legacy-API deprecation scope (§20), and the Shermo single-implementation
+note (§21).  §0 is a standalone runnable example that works without `acp`.
+
+## 0. Standalone example (no `acp`, no QC binaries launched)
+
+Copy-paste runnable with `python3.11 -c` against an installed checkout; it
+exercises the pre-launch validation path only (request build → validation →
+two-step selection → serialization round-trip) and never launches a QC
+binary:
+
+```python
+from cccp.calculation import StructureInput, TaskContext, TaskKind, TaskRequest
+from cccp.calculation.requests import validate_request
+from cccp.calculation.selection import precheck_runtime, select_semantic
+
+# 1) serializable intent: single point of an inline water geometry
+req = TaskRequest(
+    task=TaskKind.SINGLEPOINT,
+    structure=StructureInput(
+        symbols=("O", "H", "H"),
+        coordinates=((0.0, 0.0, 0.0), (0.757, 0.586, 0.0), (-0.757, 0.586, 0.0)),
+    ),
+)
+validate_request(req)
+
+# 2) step ① — semantic selection (deterministic, context-free)
+sel = select_semantic(req)
+print("capability:", sel.capability, "| backend:", sel.backend,
+      "| runtime_checked:", sel.runtime_checked)
+
+# 3) step ② — runtime precheck against THIS context only (no global config)
+ctx = TaskContext(workdir=None, input_base=None, config={})
+sel2 = precheck_runtime(sel, ctx)
+print("after precheck runtime_checked:", sel2.runtime_checked)
+print("required programs:", [(p.name, p.available) for p in sel2.required_programs])
+
+# 4) serialization round-trip (strict envelope, schema_version 1)
+req2 = TaskRequest.from_dict(req.to_dict())
+assert req2 == req
+print("round-trip ok, schema_version:", req.to_dict()["schema_version"])
+```
+
+Real output on the development checkout (ORCA resolvable in the
+environment; `available` is environment-dependent by design):
+
+```
+capability: single_point | backend: orca | runtime_checked: False
+after precheck runtime_checked: True
+required programs: [('orca', True)]
+round-trip ok, schema_version: 1
+```
+
+Executing the calculation itself is the same entry family:
+`run_singlepoint(req, context=ctx)` from `cccp.calculation` (requires the
+selected backend's binary; raises `BackendUnavailableError` pre-launch when
+missing).
 
 ---
 
@@ -24,6 +87,8 @@ here as signatures/rules but implemented by todos 12–23 (see §"Two tables").
 | `cccp.calculation.progress` | `ProgressEvent`, `TaskProgressSink` (scientific events) | stdlib |
 | `cccp.calculation.context` | `TaskContext`, `resolve_context` | stdlib, `contracts`, `progress`, `requests` |
 | `cccp.calculation.selection` | two-step backend selection: `CapabilityRequirement`, `BackendSelection`, `ProgramRequirement`, `select_semantic`, `precheck_runtime`, `select_backend` | stdlib, `errors`, `contracts`, `requests`, `context`, `cccp.backends.matrix`, `cccp.backends.registry`, `cccp.software` |
+| `cccp.calculation.tasks/*` | the fourteen `run_*` task cores (single execution core per capability) + `cccp.calculation.batch` (generic concurrency/cache executor; cache miss ⇒ calls the single-task core) | task-layer modules + `cccp.qc` interfaces via `_common` |
+| `cccp.calculation._common` | shared task plumbing incl. translation entries `resolve_spec` / `render_backend_input` (§16) | stdlib, `cccp.qc.resolved_spec`, interfaces |
 | `cccp.calculation.__init__` | PEP 562 lazy re-exports | lazy |
 
 Purity rules (asserted by tests):
@@ -43,7 +108,43 @@ re-exported there with identity (`A is B`); semantically changed shapes
 (`StructureArtifact`, `Provenance`) are distinct types converted explicitly by
 `acp.calculations.legacy_adapters`.
 
-## 2. Entry signatures
+## 2. Four-layer architecture and entry signatures
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ L1  ACP workflows (acp/workflows, acp/confsearch, acp/nmr, pes)     │
+│     orchestration: plans, profiles, candidate/state identity,       │
+│     products/manifests.  No subprocess, no route assembly here.     │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ typed TaskRequest (+ LegacyBinding via adapters)
+┌──────────────────────────▼──────────────────────────────────────────┐
+│ L2  ACP wrappers/adapters (acp/calculations: legacy_adapters,       │
+│     primitives/* compat shims, executor, result_publication)       │
+│     legacy CalculationRequest ⇄ task envelope conversion, ACP-side  │
+│     product publication.  Data transform only — no science.         │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ cccp.calculation run_*(request, context=…)
+┌──────────────────────────▼──────────────────────────────────────────┐
+│ L3  cccp.calculation task layer                                     │
+│     envelopes/options/payloads, validate, select_backend,           │
+│     resolve_spec + render_backend_input, per-capability run_* cores │
+│     (single execution core per capability), batch executor.         │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ resolved spec → rendered capability kwargs
+┌──────────────────────────▼──────────────────────────────────────────┐
+│ L4  cccp.qc interfaces + cccp.backends                              │
+│     ORCA/CREST/xTB/CENSO/ISOSTAT/Molclus/Shermo subprocess          │
+│     wrappers and the Protocol backend layer.  The only subprocess   │
+│     layer in the repo.                                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Layer rules: L1→L2→L3→L4 calls flow downward only; nothing in `cccp/**`
+(L3/L4) imports `acp` (§18); backends (L4) never import task-execution
+modules (L3) — `cccp.calculation.errors`/`contracts` are the only allowed
+pure-type dependencies.
+
+All fourteen entry points share one signature shape:
 
 ```python
 def run_singlepoint(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
@@ -53,11 +154,19 @@ def run_scan(request: TaskRequest, *, context: TaskContext | None = None) -> Tas
 def run_irc(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
 def run_casscf(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
 def run_thermochemistry(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+# P2 seven (todos 24/42/43) — same shape:
+def run_conformer_search(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+def run_md_sampling(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+def run_clustering(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+def run_censo_refine(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+def run_nmr_shielding(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+def run_xtb_path_search(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
+def run_orca_gradient(request: TaskRequest, *, context: TaskContext | None = None) -> TaskResult: ...
 ```
 
 `TaskRequest` is serializable intent; `TaskContext` is runtime state and is
-never serialized.  Implementations live in `cccp.calculation.tasks` (todos
-17–22): all seven core tasks are executable.
+never serialized.  Implementations live in `cccp.calculation.tasks`: all
+seven core and all seven P2 tasks are executable (Table ② in §14).
 
 ## 3. TaskRequest (serializable envelope)
 
@@ -123,7 +232,7 @@ mismatched class with `TaskInputError`.
 | `casscf` | `CasscfOptions` | `spec: CASSCFSpec` (required; active space + NEVPT2 selection); read-only `orbital_selection` property = `spec.orbital_selection` (no duplicated storage — `CASSCFSpec` owns the field) |
 | `thermochemistry` | `ThermochemistryOptions` | `freq_log_path: Path \| None` (**required** — this is the input shape), `sp_energy_hartree: float \| None`, `temperature_k: float \| None`, `pressure_atm: float \| None`, `standard_state: str \| None` (`"1atm"`/`"1M"`; `None` = contract default `"1atm"` at execution), `scl_zpe: float \| None`, `ilowfreq: int \| None`, `imagreal: int \| None`, `conc: float \| None` |
 
-### 4.1 P2 typed options (todo 24; execution wires in 42/43)
+### 4.1 P2 typed options (todo 24; execution landed in todos 42/43)
 
 | task | options type | fields |
 |---|---|---|
@@ -425,10 +534,11 @@ quarantined.
   selection.
 * **R12 `context.capability_extras` (runtime seam, todo 17):** verbatim
   legacy capability kwargs (`output_name`, `scf_maxiter`, `route_extras`, …)
-  handed to the translation entry unchanged until the full translation-layer
-  cleanup (todo 25).
+  handed to the translation entry unchanged (scoped fragment channel of
+  §4.1 is the typed long-term home; §16 defines the render boundary).
 
-Translation-layer minimal public entry (todo 17): `resolve_spec`
+Translation-layer minimal public entry (todo 17, extended by todo 25 —
+full boundary in §16): `resolve_spec`
 (`ResolvedCalculationSpec`, single resolution point) + `render_backend_input`
 (explicit request values pass through **verbatim**; absent values are never
 invented — method-inherent defaults are materialised by the backend input
@@ -549,22 +659,25 @@ digests (§4.1).
 todo 24, §4.1 + §5.2):** see §4 and §5.  Serialization and adapter
 conversion are fully testable against this table.
 
-**Table ② — task → execution function (NOT part of todo 11):**
+**Table ② — task → execution function (complete):**
 
-| task | execution | todo |
+| task | execution | landed |
 |---|---|---|
-| `singlepoint` | `run_singlepoint` | 17 |
-| `optimize` | `run_optimize` | 18 |
-| `frequency` | `run_frequency` | 19 |
-| `scan` | `run_scan` | 20 |
-| `irc` | `run_irc` | 21 |
-| `thermochemistry` | `run_thermochemistry` | 22 |
-| `casscf` | `run_casscf` | 22 |
-| batch/cache | `cccp.calculation.batch` | 12 |
-| P2 seven (contracts only in 24) | `run_*` | 42–43 |
+| `singlepoint` | `run_singlepoint` | todo 17 |
+| `optimize` | `run_optimize` | todo 18 |
+| `frequency` | `run_frequency` | todo 19 |
+| `scan` | `run_scan` | todo 20 |
+| `irc` | `run_irc` | todo 21 |
+| `thermochemistry` | `run_thermochemistry` | todo 22 |
+| `casscf` | `run_casscf` | todo 22 |
+| `conformer_search`/`md_sampling`/`clustering`/`xtb_path_search` | `run_*` | todo 42 |
+| `censo_refine`/`nmr_shielding`/`orca_gradient` | `run_*` | todo 43 |
+| batch/cache | `cccp.calculation.batch` (`run_batch`) | todo 12 |
 
-This draft defines the contract shapes; it does **not** claim any task is
-executable.
+All fourteen task cores are executable and are the **single execution core**
+per capability; every one of the 14 ACP workflows routes through them (no
+execution bypass — zero-exemption dependency gates, todo 29).  Selection
+success (§15) plus a positive runtime precheck is the executable precondition.
 
 ## 15. Two-step backend selection (todo 13)
 
@@ -644,6 +757,166 @@ declaring/implementing backend, `BackendUnavailableError` when a required
 program is missing in the given context (an explicit ORCA request without
 ORCA surfaces here — never as a silent switch to xTB).
 
-**Not executable yet:** selection success means a backend method is
-implemented and its binary is present — it does **not** mean a public task
-entry (`run_*`) is callable; Table ② owns that transition.
+### 15.1 Capability declaration trichotomy
+
+A capability's usability is the conjunction of three **independent** facts:
+
+1. **Declared** — the backend lists the capability `AVAILABLE` in
+   `cccp.backends.matrix.CAPABILITY_MATRIX`.  Matrix semantics are
+   "declared = implemented": `AVAILABLE` certifies the backend method
+   exists; `STUBBED`/`NOT_IMPLEMENTED` rows are **never selectable**
+   (selecting them raises `UnsupportedCapabilityError` before construction).
+2. **Implements** — the backend class actually carries the implementing
+   method used by the task core (selection happens **before** backend
+   construction; no `issubclass` structural matching).
+3. **Runtime-available** — the required programs resolve in **the context
+   passed to this call** (§15 step ②): a pinned `executables.<name>.path`
+   is checked strictly as an executable file, otherwise the
+   `cccp.software.resolve_executable` environment chain applies.
+
+`select_semantic` filters on ①+②; `precheck_runtime` adds ③ and fills
+`ProgramRequirement.available`.  A capability may be declared+implemented
+yet runtime-unavailable (missing binary ⇒ `BackendUnavailableError`,
+never a silent model switch); matrix rows are never degraded to
+`MISSING_BINARY` for a missing binary — that is fact ③, not fact ①.
+
+## 16. Translation-layer boundary (single source; display == execution)
+
+Two modules, one rule: **every effective execution parameter is generated in
+exactly one place, and the human-readable summary is produced by the same
+pass as the executed tokens.**
+
+* `cccp.calculation._common.resolve_spec(method, *, explicit, task_options,
+  run_config)` — the single parameter-resolution point (thin alias of
+  `cccp.qc.resolved_spec.resolve_calculation_spec`; priority: explicit >
+  task options > run config > method defaults).  ACP never re-implements
+  default filling; the legacy `_clamp_to_functional` UI/catalog semantics
+  never alter execution values.
+* `cccp.calculation._common.render_backend_input(spec, ...)` — resolved
+  spec → backend capability kwargs.  Explicit request values pass through
+  **verbatim**; absent values are never invented here (method-inherent
+  defaults come from the same cccp method metadata; pre-migration goldens
+  freeze these effective parameters).
+* `cccp.qc.translation` (todo 25) — the single-source render API for ORCA
+  route tokens, `%geom` block lines and CENSO advanced-field template
+  lines: `OrcaOptSpec` → `render_orca_opt` → `OrcaOptRender(route_tokens,
+  geom_lines, summary_tokens)` in **one resolution pass**, so the display
+  summary and the executed route/block can never drift;
+  `render_opt_geom_lines` is the reusable `%geom` body renderer that
+  `ORCAInterface` itself delegates to; `render_censo_template_lines`
+  generates CENSO template lines (workflows never assemble template text).
+  Built entirely on `cccp.qc.interfaces.route_render` +
+  `cccp.qc.keyword_registry` — keyword tables live in the registry only.
+
+Boundary contract: the translation layer is **pure input construction** —
+no I/O, no subprocess; file writing and process calls stay in the interface
+layer.  ACP batch effective-config summaries consume the same render API
+(display summary == execution params, A5).
+
+## 17. Dependency direction (enforced, zero exemptions)
+
+* `src/cccp/**` must not import `acp` (any form: direct, lazy,
+  `TYPE_CHECKING`) — AST static scan + subprocess import-blocker probes
+  (`tests/test_cccp_isolation.py`), zero-exemption gates (todo 29).
+* Backends (`cccp/backends/*`, `acp/backends/*` capability modules) must
+  not import task-execution modules or symbols (`run_*`,
+  `cccp.calculation.<execution>`).  The only allowed dependency is the
+  pure-type whitelist `cccp.calculation.errors` +
+  `cccp.calculation.contracts` (which themselves must not import task
+  execution or trigger backend registration).
+* Workflows/confsearch/NMR/PES/calculations must not execute QC directly
+  (`get_backend`/`require_backend`/`run_shermo`/`CensoBackend` direct
+  construction or route-string assembly) — everything routes through the
+  task cores.
+* `acp.backends.batch` is retained as an isolated legacy backend-direct
+  compatibility surface (`legacy_batch_quarantine` gate): production
+  modules must not import or execute it; the root-package re-export may
+  stay; removal requires an explicit compatibility-change declaration.
+* Import-order probes: fresh processes importing `cccp.backends` then
+  `cccp.calculation` (and the reverse) complete without cycles, and
+  importing `cccp.calculation` never silently loads
+  `cccp.calculation.tasks`.
+
+## 18. Relation to ACP `CalculationPlan` / executor
+
+Plan types stay ACP-side: `StepKind`, `StepSpec`, `CalculationStep`,
+`CalculationPlan`, `validate_plan`, `TaskManifest`, `Checkpoint`, workflow/
+profile/candidate identity and `ElectronicStateConfig` state-sweep
+orchestration all remain in `acp.calculations.contracts`.  CCCP owns the
+scientific single-run types (§1, §9).  `CalculationPlanExecutor`
+(`acp/calculations/executor.py`) keeps plan scheduling, coordinate
+hand-off, checkpoint resume and ACP product publication, but **every step's
+execution routes through the cccp task cores** via the L2 wrappers
+(`acp/calculations/primitives/*` are pure forwarders; todo 23) — the
+executor never calls a backend directly.  Multi-item batching goes through
+`cccp.calculation.batch`, whose cache misses must call the single-task
+core.  Publication failure stays an ACP concern (§10.5) and never mutates
+the scientific result.
+
+## 19. Migration phases (P0–P3)
+
+| phase | waves | content | exit criterion |
+|---|---|---|---|
+| **P0 deterministic fixes** | Wave 1 (todos 6–10) | reverse imports eliminated; capability matrix/registry semantics fixed ("declared = implemented", stubs unselectable); neutral error types; low-level isolation probes green | low-level capabilities have no ACP reverse dependency |
+| **P1 `cccp.calculation` task API** | Waves 2–3 (todos 11–23) | envelope/typed options/payloads; two-step selection; ACP adapter split; backend migration; seven core task cores + shared Shermo path; executor rewiring | every core capability has exactly one task execution core |
+| **P2 rewiring + translation closure** | Wave 4 (todos 24–29, 42–43) | seven P2 task contracts + implementations; Confsearch/NMR/PES/new-workflow rewiring; translation single-source; zero-exemption dependency gates | all 14 workflows callable with no execution bypass |
+| **P3 cleanup + documentation** | Wave 5 (todos 30–34) | legacy API deprecation annotations (§20); Shermo single-implementation note (§21); AGENTS/README sync; this document; supersession labels on the old refactor plan | current-spec docs consistent with code |
+| (acceptance) | Wave 6 (todos 35–41) | A1–A9 acceptance matrix (§19.1) | A1–A9 verdicts per the three-state rule |
+
+### 19.1 A1–A9 acceptance matrix
+
+| id | verdict | scope (owning todo) |
+|---|---|---|
+| A1/A2 | pass required | isolation: cccp layers importable/executable with no `acp`, both import orders, no silent task-module loads (35) |
+| A3/A4 | pass required | 14-workflow invocation matrix; single execution core per capability, no bypass (36) |
+| A5 | pass required | translation single source; display summary == execution params (37) |
+| A6 | pass required | capability declaration/selection/implementation consistency matrix (38) |
+| A7 | pass required | three-group equivalence: historical ⇄ migrated ACP ⇄ standalone cccp, against pre-migration goldens (39) |
+| A8 | pass required | ACP platform-contract regression incl. cross-version recovery fixtures (40) |
+| A9 | three-state | real-QC small samples + remote LSF lifecycle: **PASS / FAIL / NOT_VERIFIED**; required-live items FAIL ⇒ overall fail; required-live NOT_VERIFIED ⇒ no "all pass" claim (41) |
+
+## 20. Legacy API deprecation scope (cccp; annotate, do not delete)
+
+Per todo 30, the following legacy cccp surfaces are **deprecated but
+retained** (external users cannot be confirmed; nothing is deleted, no
+retired CLI is revived).  Usage evidence recorded at annotation time —
+"no ACP production callers / re-export only / test-only legacy bridge":
+
+| surface | status in this repo |
+|---|---|
+| `cccp.pipeline` (`PipelineExecutor`) | no ACP production callers; thin legacy orchestration kept for compatibility |
+| `cccp.core.state_manager`, `cccp.core.protocols` (engine knobs), `cccp.core.candidates` | no ACP production callers; protocol config remains the single protocol source (root AGENTS #4); `acp/core/models.py` keeps a test-only legacy bridge |
+| `cccp.qc.cluster` (LSF/Local adapters) | LSF adapter remains a placeholder; production remote execution lives in `acp/scheduler/remote` (LSF via bsub scripts, not this adapter) |
+
+New code must not grow dependencies on these surfaces; active development
+happens in `cccp.calculation` + `cccp.backends` + `cccp.qc` interfaces.
+
+## 21. Shermo single implementation (one implementation, two entry families)
+
+Thermochemistry has **one scientific implementation and two entry
+families** — entry count ≠ implementation count:
+
+* **Single scientific implementation:** `cccp/qc/shermo_adapter.py` (shared
+  low-level execution adapter: full legacy parameter set, settings
+  resolution, exactly one Shermo launch per request) +
+  `cccp/qc/thermo_normalize.py` (pure normalization: standard-state
+  correction, unit conversion, Gibbs selection, metadata assembly — no
+  I/O).
+* **Entry families:** the task entry `cccp.calculation.run_thermochemistry`
+  and the compatibility backend entry `ExternalBackend.thermochemistry`
+  both delegate to the shared adapter; `cccp/qc/runners/__init__.py::
+  run_shermo` is the single subprocess runner below the adapter, and
+  `batch_process_thermo` is a low-level compatibility wrapper calling that
+  same runner (not a second implementation).
+* The frozen grep gate `wave2_shermo_external` guarantees the old backend
+  never calls the runner directly; API equivalence is judged behaviorally
+  (single launch, six-parameter passthrough, `1atm`/`1M` baselines), and
+  `final_shermo` allows only `src/cccp/**` paths.  "The task entry is the
+  only production consumer" is never a reason to delete the compatibility
+  backend entry.
+
+## 22. Change policy
+
+This document is the single current spec.  Contract changes land here in
+the same change as the code, with the owning todo referenced; the archived
+v1–v3.2 proposals in `.omo/drafts/` are never updated retroactively.
