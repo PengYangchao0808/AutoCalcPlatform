@@ -1665,11 +1665,24 @@ MIGRATION_STATION_PREFIXES = (
     # todo 28: PES/路径工作流任务化改线（XtbPathSearch/OrcaGradient + PES 扫描接线）。
     "src/acp/workflows/xtb_path.py",
     "src/acp/workflows/orca_gradient.py",
+    # todos 26/27: Confsearch 能量/ensemble/xtbmd 协议与 NMR 任务化改线站点。
+    "src/acp/workflows/energy.py",
+    "src/acp/workflows/ensemble.py",
+    "src/acp/workflows/nmr.py",
+    "src/acp/workflows/xtbmd_censo_energy.py",
+    "src/acp/workflows/xtbmd_md.py",
+    "src/acp/confsearch/protocols/xtb_md.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
         "src/acp/workflows/xtb_path.py",
         "src/acp/workflows/orca_gradient.py",
+        "src/acp/workflows/energy.py",
+        "src/acp/workflows/ensemble.py",
+        "src/acp/workflows/nmr.py",
+        "src/acp/workflows/xtbmd_censo_energy.py",
+        "src/acp/workflows/xtbmd_md.py",
+        "src/acp/confsearch/protocols/xtb_md.py",
     }
 )
 MIGRATION_SHIM_PY = frozenset(

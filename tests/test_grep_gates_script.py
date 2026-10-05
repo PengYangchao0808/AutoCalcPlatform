@@ -21,18 +21,6 @@ from scripts.check_grep_gates import (
 SCRIPT: Final[Path] = Path(__file__).parents[1] / "scripts" / "check_grep_gates.py"
 SRC_ROOT: Final[Path] = Path(__file__).parents[1] / "src"
 
-#: Allowlist entries whose violations are already gone on the current tree but
-#: whose removal is reserved for todo 29's allowlist sweep (the gate script and
-#: its allowlist are todo-29-owned; see check_grep_gates.py's "the entry must
-#: be removed in the same todo" policy note).  Stale-detection expectations
-#: tolerate exactly this set — any NEW stale entry still fails the guards.
-KNOWN_STALE_ALLOWLIST: Final[frozenset[tuple[str, str, str]]] = frozenset(
-    {
-        ("workflow_executes_qc", "src/acp/calculations/pes/scan.py", "get_backend"),
-        ("workflow_executes_qc", "src/acp/workflows/orca_gradient.py", "get_backend"),
-        ("workflow_executes_qc", "src/acp/workflows/xtb_path.py", "get_backend"),
-    }
-)
 EXPECTED_GATE_NAMES: Final[tuple[str, ...]] = (
     "compat_no_writers",
     "wave2_optfreq",
@@ -382,7 +370,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 17
+ALLOWLIST_COUNT_PIN: Final[int] = 3
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
@@ -680,18 +668,17 @@ def test_suite_gate_membership_is_disjoint_from_historical() -> None:
 
 def test_suite_exits_zero_on_current_tree() -> None:
     result = _run_suite()
-    stale = _stale_entries(result.stdout)
-    assert stale <= KNOWN_STALE_ALLOWLIST, f"unexpected stale allowlist entries: {sorted(stale)}"
+    assert _stale_entries(result.stdout) == frozenset(), result.stdout
     assert "blocking findings: 0" in result.stdout
+    assert "stale allowlist entries: 0" in result.stdout
     assert "HISTORICAL GATES" in result.stdout
-    assert result.returncode == (1 if stale else 0), result.stdout + result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_suite_zero_control_on_temp_copy(tmp_path: Path) -> None:
     result = _run_suite(_copy_src_tree(tmp_path))
-    stale = _stale_entries(result.stdout)
     assert "blocking findings: 0" in result.stdout, result.stdout + result.stderr
-    assert stale <= KNOWN_STALE_ALLOWLIST, f"unexpected stale allowlist entries: {sorted(stale)}"
+    assert _stale_entries(result.stdout) == frozenset(), result.stdout
 
 
 def test_suite_ignores_workflow_same_name_wrappers(tmp_path: Path) -> None:
@@ -704,9 +691,8 @@ def test_suite_ignores_workflow_same_name_wrappers(tmp_path: Path) -> None:
 
     result = _run_suite(root)
 
-    stale = _stale_entries(result.stdout)
     assert "blocking findings: 0" in result.stdout, result.stdout + result.stderr
-    assert stale <= KNOWN_STALE_ALLOWLIST, f"unexpected stale allowlist entries: {sorted(stale)}"
+    assert _stale_entries(result.stdout) == frozenset(), result.stdout
 
 
 @pytest.mark.parametrize("case", INJECTION_CASES, ids=lambda case: case.name)
@@ -733,8 +719,8 @@ def test_suite_flags_stale_allowlist_entries_when_violation_disappears(tmp_path:
     assert result.returncode == 1, result.stdout
     stale = _stale_entries(result.stdout)
     executor_key = ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend")
-    assert stale == KNOWN_STALE_ALLOWLIST | {executor_key}
-    assert f"stale allowlist entries: {len(KNOWN_STALE_ALLOWLIST) + 1}" in result.stdout
+    assert stale == {executor_key}
+    assert "stale allowlist entries: 1" in result.stdout
     assert "workflow_executes_qc|src/acp/calculations/executor.py" in result.stdout
 
 

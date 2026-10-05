@@ -104,11 +104,7 @@ FINAL_STAGE_ALLOWED_PATHS: Final[tuple[str, ...]] = (
 FINAL_OPTFREQ_ALLOWED_PATHS: Final[tuple[str, ...]] = (
     "src/acp/results/energy_graph.py",
 )
-FINAL_SHERMO_ALLOWED_PATHS: Final[tuple[str, ...]] = (
-    "src/cccp/",
-    "src/acp/calculations/primitives/thermochemistry.py",
-    "src/acp/workflows/energy_shared.py",
-)
+FINAL_SHERMO_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/cccp/",)
 SCOPE_SRC: Final[tuple[str, ...]] = ("src/",)
 SCOPE_ACP: Final[tuple[str, ...]] = ("src/acp",)
 SCOPE_CALCULATIONS: Final[tuple[str, ...]] = ("src/acp/calculations/",)
@@ -290,9 +286,10 @@ class GateInputError(Exception):
 #                         only — acp allow REMOVED in todo 23;          position → todo 23
 #                         workflows excluded from scope)                hard switch)
 #   wave2_shermo_external external_backend.py (acp shim + cccp impl)    done (todo 12, dual position)
-#   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (primitives/       comment allowance done
-#                         thermochemistry.py, workflows/energy_shared,  (todo 15); hard switch
-#                         src/cccp/) + COMMENT_LINE_PATTERN             todo 23
+#   final_shermo          FINAL_SHERMO_ALLOWED_PATHS (src/cccp/ only —    comment allowance done
+#                         acp allowances removed in todo 29 after the      (todo 15); hard switch
+#                         energy_shared direct call was rewired) +         done (todos 23/26/29)
+#                         COMMENT_LINE_PATTERN
 #
 # When a pinned path moves, the gate spec must be redirected in the same todo
 # that moves the code — never disabled, never silently widened.  Evidence:
@@ -757,21 +754,7 @@ HISTORICAL_GATE_NAMES: Final[tuple[str, ...]] = tuple(
 ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
     ("workflow_executes_qc", "src/acp/calculations/batch/singlepoint.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/calculations/pes/scan.py", "get_backend"),
     ("workflow_executes_qc", "src/acp/calculations/primitives/_common.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/confsearch/protocols/xtb_md.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/energy.py", "CensoBackend"),
-    ("workflow_executes_qc", "src/acp/workflows/energy.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/energy_shared.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/energy_shared.py", "run_shermo"),
-    ("workflow_executes_qc", "src/acp/workflows/ensemble.py", "CensoBackend"),
-    ("workflow_executes_qc", "src/acp/workflows/ensemble.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/nmr.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/orca_gradient.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/xtbmd_censo_energy.py", "CensoBackend"),
-    ("workflow_executes_qc", "src/acp/workflows/xtbmd_censo_energy.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/xtbmd_md.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/workflows/xtb_path.py", "get_backend"),
 )
 
 ALLOWLIST_TRIPLES: Final[frozenset[tuple[str, str, str]]] = frozenset(ARCHITECTURE_ALLOWLIST)
