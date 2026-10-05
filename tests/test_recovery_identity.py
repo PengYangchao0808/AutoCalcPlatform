@@ -339,7 +339,7 @@ def _legacy_checkpoint(fp: str = "legacy-fp") -> Checkpoint:
         plan_fingerprint=fp,
         step_states=[{"kind": "singlepoint", "status": "completed", "energy": -1.0}],
         items_state={},
-        attempts=1,
+        resume_count=1,
     )
 
 
@@ -407,7 +407,7 @@ def test_v2_checkpoint_roundtrip_and_mismatch_does_not_raise(
         plan_fingerprint="v2:abc",
         step_states=[],
         items_state={},
-        attempts=0,
+        resume_count=0,
         identity_schema=IDENTITY_SCHEMA,
     )
     write_checkpoint(checkpoint_dir, v2)

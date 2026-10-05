@@ -69,7 +69,7 @@ def _checkpoint_bytes(tmp_path: Path, fingerprint: str, workflow: str = "singlep
                 }
             ],
             items_state={},
-            attempts=0,
+            resume_count=0,
         ),
     )
     return (checkpoint_dir / "checkpoint.json").read_bytes()
@@ -223,7 +223,7 @@ def test_irc_continue_requeues_from_generic_checkpoint(
                 }
             ],
             items_state={},
-            attempts=0,
+            resume_count=0,
         ),
     )
     submissions: list[str] = []
@@ -269,7 +269,7 @@ def test_batchoptimize_continue_rejected_despite_generic_checkpoint(
             plan_fingerprint="batch-fingerprint",
             step_states=[],
             items_state={"candidate_001": {"status": "completed"}},
-            attempts=0,
+            resume_count=0,
         ),
     )
     submissions: list[str] = []
@@ -440,7 +440,7 @@ def test_pessearch_continue_requeues_from_generic_checkpoint(
                 }
             ],
             items_state={},
-            attempts=0,
+            resume_count=0,
         ),
     )
     submissions: list[str] = []

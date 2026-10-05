@@ -507,7 +507,7 @@ class BatchOptimizeEngine:
         checkpoint_items_state: dict[str, JsonValue] = (
             dict(checkpoint.items_state) if checkpoint is not None else {}
         )
-        attempts = checkpoint.attempts + 1 if checkpoint is not None else 0
+        resume_count = checkpoint.resume_count + 1 if checkpoint is not None else 0
 
         records: list[BatchCalculationItem] = []
         carried: list[BatchCalculationItem] = []
@@ -605,7 +605,7 @@ class BatchOptimizeEngine:
                     plan_fingerprint=fingerprint,
                     step_states=[],
                     items_state=checkpoint_items_state,
-                    attempts=attempts,
+                    resume_count=resume_count,
                     identity_schema=1,
                 ),
             )

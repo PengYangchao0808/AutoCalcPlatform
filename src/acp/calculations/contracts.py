@@ -315,6 +315,11 @@ class Checkpoint:
     (content of ``plan_fingerprint`` unverifiable against the v2 science
     identity), ``2`` = v2 identity (``acp.calculations.identity``).  Missing
     on disk → reads as ``1`` for legacy files.
+
+    ``resume_count`` is the checkpoint-internal resume counter — explicitly
+    separate from ``jobs.attempt`` (no second attempt counter).  The v1
+    serialisation key stays ``attempts`` (frozen fixtures); v2 writes
+    ``resume_count``.
     """
 
     task_id: str
@@ -322,7 +327,7 @@ class Checkpoint:
     plan_fingerprint: str
     step_states: list[JsonValue] = field(default_factory=list)
     items_state: dict[str, JsonValue] = field(default_factory=dict)
-    attempts: int = 0
+    resume_count: int = 0
     identity_schema: int = 1
 
     def __post_init__(self) -> None:

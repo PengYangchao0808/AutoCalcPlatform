@@ -393,13 +393,22 @@ def _product_kind_for_step(kind: StepKind) -> ProductKind:
 
 @dataclass
 class StepState:
-    """Mutable per-step execution record."""
+    """Mutable per-step execution record.
+
+    ``executed_this_run`` separates "executed during this run" from the
+    durable ``status`` fact: a step recovered from the checkpoint keeps
+    ``status="completed"`` while ``executed_this_run=False`` (V01).  The
+    legacy ``skipped`` status remains available for strategic skipping; a
+    resume never writes it.
+    """
 
     index: int
     kind: StepKind
     status: str = "pending"  # pending | completed | failed | skipped
     result: CalculationResult | None = None
     error: str = ""
+    executed_this_run: bool = True
+    last_executed_attempt: int | None = None
 
     def to_dict(self) -> dict[str, JsonValue]:
         """Serialise for checkpoint persistence."""
@@ -409,7 +418,61 @@ class StepState:
             "status": self.status,
             "error": self.error,
             "energy": self.result.energy if self.result else None,
+            "executed_this_run": self.executed_this_run,
+            "last_executed_attempt": self.last_executed_attempt,
         }
+
+
+def _jobs_attempt(task_root: Path) -> int | None:
+    """Read ``jobs.attempt`` from the scheduler ``job.json`` marker (V01).
+
+    Returns ``None`` for CLI runs without a scheduler job — there is no
+    ``jobs.attempt`` to record and no second attempt counter is invented.
+    """
+    try:
+        payload: object = json.loads((task_root / "job.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("attempt")
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    return None
+
+
+def _merge_completed_facts(
+    fresh: list[dict[str, JsonValue]],
+    loaded: Mapping[int, dict[str, JsonValue]],
+) -> list[dict[str, JsonValue]]:
+    """Persisted step dicts merged with checkpoint-completed facts (V01).
+
+    A fresh ``pending`` state never overwrites a loaded ``completed`` fact;
+    for steps still reported ``completed`` but not executed this run, prior
+    recorded facts (``energy``/``error``/``last_executed_attempt``) fill
+    fields this run never re-populated.  Fresh ``failed``/``completed``
+    (executed) states win over the loaded record.
+    """
+    if not loaded:
+        return fresh
+    merged: list[dict[str, JsonValue]] = []
+    for idx, state in enumerate(fresh):
+        prior = loaded.get(idx)
+        if prior is None or prior.get("status") != "completed":
+            merged.append(state)
+            continue
+        if state.get("status") == "pending":
+            merged.append(dict(prior))
+            continue
+        combined = dict(state)
+        if combined.get("energy") is None:
+            combined["energy"] = prior.get("energy")
+        if not combined.get("error"):
+            combined["error"] = prior.get("error")
+        if combined.get("last_executed_attempt") is None:
+            combined["last_executed_attempt"] = prior.get("last_executed_attempt")
+        merged.append(combined)
+    return merged
 
 
 @dataclass
@@ -451,8 +514,10 @@ class CalculationPlanExecutor:
     steps.  The overall status is ``"failed"`` if any step failed.
 
     Resume: on restart the executor loads the checkpoint from
-    ``WORK/00_RUNTIME``.  Steps already marked ``"completed"`` are
-    skipped.  A fingerprint mismatch never raises — the checkpoint is
+    ``WORK/00_RUNTIME``.  Steps already marked ``"completed"`` keep that
+    status for this run and are not re-executed — ``executed_this_run=False``
+    records the separate "not executed here" observation.  A fingerprint
+    mismatch never raises — the checkpoint is
     ignored (conservative recompute) and per-step adoption continues from
     ``resume_source`` when available.
     """
@@ -466,6 +531,9 @@ class CalculationPlanExecutor:
         # primitives resolve backends internally via the cccp registry.
         self._backend_factory = backend_factory
         self._execution_record: dict[str, JsonValue] = {}
+        self._jobs_attempt: int | None = None
+        self._resume_count: int = 0
+        self._loaded_completed_facts: dict[int, dict[str, JsonValue]] = {}
 
     # ── public entry point ──────────────────────────────────────────────
 
@@ -522,30 +590,51 @@ class CalculationPlanExecutor:
             d.mkdir(parents=True, exist_ok=True)
 
         # ⑤ resume from checkpoint (v2 identity compare; never raises)
+        self._jobs_attempt = _jobs_attempt(task_root)
         checkpoint = load_checkpoint(runtime_dir, fingerprint)
         config_changed = False
         if checkpoint is not None:
             checkpoint, config_changed = self._drop_on_config_digest_change(checkpoint)
         if checkpoint is not None and identity is not None:
             self._log_path_remaps(checkpoint, plan)
+        self._resume_count = checkpoint.resume_count + 1 if checkpoint is not None else 0
         completed_indices: set[int] = set()
+        self._loaded_completed_facts: dict[int, dict[str, JsonValue]] = {}
         if checkpoint is not None:
             for idx, state_data in enumerate(checkpoint.step_states):
                 if isinstance(state_data, dict) and state_data.get("status") == "completed":
                     completed_indices.add(idx)
+                    self._loaded_completed_facts[idx] = state_data
             logger.info(
                 "resuming from checkpoint: %d of %d steps completed",
                 len(completed_indices),
                 len(steps),
             )
 
-        self._execution_record = self._build_execution_record(checkpoint)
+        self._execution_record = self._build_execution_record(checkpoint, self._jobs_attempt)
 
-        # initialise step states
+        # initialise step states — V01: loaded completed facts keep their
+        # status; "not executed in this run" is the separate
+        # ``executed_this_run`` observation (the loop skips those steps
+        # without rewriting ``status``).
         step_states: list[StepState] = []
         for idx, step in enumerate(steps):
             if idx in completed_indices:
-                step_states.append(StepState(index=idx, kind=step.kind, status="skipped"))
+                prior = self._loaded_completed_facts[idx]
+                last_attempt = prior.get("last_executed_attempt")
+                step_states.append(
+                    StepState(
+                        index=idx,
+                        kind=step.kind,
+                        status="completed",
+                        executed_this_run=False,
+                        last_executed_attempt=(
+                            last_attempt
+                            if isinstance(last_attempt, int) and not isinstance(last_attempt, bool)
+                            else None
+                        ),
+                    )
+                )
             else:
                 step_states.append(StepState(index=idx, kind=step.kind))
 
@@ -575,8 +664,12 @@ class CalculationPlanExecutor:
         for idx, step in enumerate(steps):
             state = step_states[idx]
 
-            # skip already-completed steps (resume)
-            if state.status == "skipped":
+            # V01 resume: completed facts loaded from the checkpoint are not
+            # re-executed and their status is NOT rewritten; "skipped" stays
+            # reserved for strategic skipping.
+            if state.status == "skipped" or (
+                state.status == "completed" and not state.executed_this_run
+            ):
                 continue
 
             step_work_dir = work_dir / (_step_dir_name(step.kind) or f"step_{idx}")
@@ -653,6 +746,8 @@ class CalculationPlanExecutor:
             else:
                 try:
                     logger.info("step %d: running %s", idx, step.kind.value)
+                    if self._jobs_attempt is not None:
+                        state.last_executed_attempt = self._jobs_attempt
                     result = primitive(request)
                 except Exception as exc:
                     state.status = "failed"
@@ -818,16 +913,22 @@ class CalculationPlanExecutor:
                 )
 
     @staticmethod
-    def _build_execution_record(checkpoint: Checkpoint | None) -> dict[str, JsonValue]:
-        """Attempt metadata bound to the checkpoint — never part of the science hash."""
+    def _build_execution_record(
+        checkpoint: Checkpoint | None, jobs_attempt: int | None
+    ) -> dict[str, JsonValue]:
+        """Attempt metadata bound to the checkpoint — never part of the science hash.
+
+        ``attempt`` mirrors ``jobs.attempt`` (1 for CLI runs without a
+        scheduler job); the checkpoint's own resume counter lives in
+        ``Checkpoint.resume_count`` — no second attempt counter.
+        """
         from cccp.version import __version__ as platform_version
 
-        attempts = checkpoint.attempts + 1 if checkpoint is not None else 1
         return {
             "code_release": str(platform_version),
             "config_digest": current_config_digest(),
             "software_version": None,
-            "attempt": attempts,
+            "attempt": jobs_attempt if jobs_attempt is not None else 1,
         }
 
     def _run_post_stability_node(
@@ -883,6 +984,7 @@ class CalculationPlanExecutor:
 
         state_record = StepState(index=len(steps), kind=StepKind.SINGLEPOINT, status="pending")
         logger.info("post-stability: running SCF stability diagnostic on the final geometry")
+        state_record.last_executed_attempt = self._jobs_attempt
         try:
             result = run_singlepoint(request)
         except Exception as exc:
@@ -929,13 +1031,16 @@ class CalculationPlanExecutor:
         }
         if self._execution_record:
             items_state["execution_record"] = dict(self._execution_record)
+        step_dicts = _merge_completed_facts(
+            [s.to_dict() for s in step_states], self._loaded_completed_facts
+        )
         cp = Checkpoint(
             task_id="executor",
             workflow=plan.workflow,
             plan_fingerprint=fingerprint,
-            step_states=[s.to_dict() for s in step_states],
+            step_states=step_dicts,
             items_state=items_state,
-            attempts=0,
+            resume_count=self._resume_count,
             identity_schema=IDENTITY_SCHEMA,
         )
         write_checkpoint(runtime_dir, cp)

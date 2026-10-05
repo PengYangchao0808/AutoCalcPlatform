@@ -264,7 +264,7 @@ def _write_irc_checkpoint(
                 }
             ],
             items_state={},
-            attempts=0,
+            resume_count=0,
             identity_schema=IDENTITY_SCHEMA,
         ),
     )

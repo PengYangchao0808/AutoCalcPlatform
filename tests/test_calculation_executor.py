@@ -326,19 +326,24 @@ def test_step2_failure_isolated(fake_backend: FakeBackend, tmp_path: Path) -> No
     # And: the optimize step artifacts are preserved.
     assert (tmp_path / "WORK" / "03_OPT").is_dir()
 
-    # And: resume is possible — re-running skips the completed steps.
-    # Re-queue the failure so step 1 fails again on resume.
+    # And: resume is possible — completed steps keep their status and are
+    # not re-executed. Re-queue the failure so step 1 fails again on resume.
     fake_backend.fail_next("frequency", RuntimeError("frequency exploded"))
     executor2 = CalculationPlanExecutor()
     result2 = executor2.execute(plan, task_root=tmp_path)
-    # Steps 0 and 2 were completed; step 1 still fails.
-    assert result2.step_states[0].status == "skipped"
+    # Steps 0 and 2 stay completed (not executed this run); step 1 fails.
+    assert result2.step_states[0].status == "completed"
+    assert result2.step_states[0].executed_this_run is False
     assert result2.step_states[1].status == "failed"
-    assert result2.step_states[2].status == "skipped"
+    assert result2.step_states[2].status == "completed"
+    assert result2.step_states[2].executed_this_run is False
+    cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
+    assert cp_data["step_states"][0]["status"] == "completed"
+    assert cp_data["step_states"][0]["executed_this_run"] is False
 
 
 def test_resume_after_interrupt_skips_completed(fake_backend: FakeBackend, tmp_path: Path) -> None:
-    """Resume from checkpoint skips steps already marked completed."""
+    """Resume from checkpoint skips execution of steps already completed."""
     # Given: all steps succeed.
     coordinates = np.array([[0.5, 0.5, 0.5]], dtype=float)
     fake_backend.set_result(
@@ -368,10 +373,11 @@ def test_resume_after_interrupt_skips_completed(fake_backend: FakeBackend, tmp_p
     # When: the executor runs again (simulating restart).
     result2 = executor.execute(plan, task_root=tmp_path)
 
-    # Then: all steps are skipped (no new backend calls).
+    # Then: all steps keep completed status without re-execution.
     assert result2.is_completed
     for state in result2.step_states:
-        assert state.status == "skipped"
+        assert state.status == "completed"
+        assert state.executed_this_run is False
     assert len(fake_backend.calls) == calls_after_first  # no new calls
 
 

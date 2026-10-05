@@ -70,15 +70,23 @@ def _checkpoint_path(directory: Path | str) -> Path:
 
 
 def _checkpoint_payload(checkpoint: Checkpoint) -> dict[str, JsonValue]:
-    return {
+    # v1 (identity_schema=1) keeps the legacy ``attempts`` serialisation key
+    # so frozen fixtures and batch checkpoints stay byte-identical; v2 writes
+    # ``resume_count``.  The Python attribute is ``resume_count`` everywhere
+    # (checkpoint-internal resume counter, separate from ``jobs.attempt``).
+    counter_key = (
+        "attempts" if checkpoint.identity_schema == _LEGACY_IDENTITY_SCHEMA else "resume_count"
+    )
+    payload: dict[str, JsonValue] = {
         "task_id": checkpoint.task_id,
         "workflow": checkpoint.workflow,
         "plan_fingerprint": checkpoint.plan_fingerprint,
         "step_states": checkpoint.step_states,
         "items_state": checkpoint.items_state,
-        "attempts": checkpoint.attempts,
         "identity_schema": checkpoint.identity_schema,
     }
+    payload[counter_key] = checkpoint.resume_count
+    return payload
 
 
 def _checkpoint_from_payload(payload: JsonValue) -> Checkpoint | None:
@@ -90,7 +98,8 @@ def _checkpoint_from_payload(payload: JsonValue) -> Checkpoint | None:
     plan_fingerprint = payload.get("plan_fingerprint")
     step_states = payload.get("step_states")
     items_state = payload.get("items_state")
-    attempts = payload.get("attempts")
+    # v2 key preferred; legacy v1 files carry ``attempts``.
+    resume_count = payload.get("resume_count", payload.get("attempts"))
     # Missing identity_schema reads as 1 (legacy checkpoint files).
     raw_schema = payload.get("identity_schema", _LEGACY_IDENTITY_SCHEMA)
 
@@ -100,7 +109,7 @@ def _checkpoint_from_payload(payload: JsonValue) -> Checkpoint | None:
         return None
     if not isinstance(step_states, list) or not isinstance(items_state, dict):
         return None
-    if not isinstance(attempts, int) or isinstance(attempts, bool):
+    if not isinstance(resume_count, int) or isinstance(resume_count, bool):
         return None
     if not isinstance(raw_schema, int) or isinstance(raw_schema, bool):
         return None
@@ -111,7 +120,7 @@ def _checkpoint_from_payload(payload: JsonValue) -> Checkpoint | None:
         plan_fingerprint=plan_fingerprint,
         step_states=step_states,
         items_state=items_state,
-        attempts=attempts,
+        resume_count=resume_count,
         identity_schema=raw_schema,
     )
 

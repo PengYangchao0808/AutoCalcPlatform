@@ -216,14 +216,16 @@ def _checkpoint_identity(payload_bytes: bytes) -> tuple[str, str] | None:
     fingerprint = payload.get("plan_fingerprint")
     step_states = payload.get("step_states")
     items_state = payload.get("items_state")
-    attempts = payload.get("attempts")
+    # resume counter: v2 checkpoints serialise ``resume_count``; legacy v1
+    # files keep the frozen ``attempts`` key (same counter, old name).
+    resume_count = payload.get("resume_count", payload.get("attempts"))
     if not isinstance(task_id, str) or not isinstance(workflow, str):
         return None
     if not isinstance(fingerprint, str) or not fingerprint:
         return None
     if not isinstance(step_states, list) or not isinstance(items_state, dict):
         return None
-    if not isinstance(attempts, int) or isinstance(attempts, bool):
+    if not isinstance(resume_count, int) or isinstance(resume_count, bool):
         return None
     return workflow, fingerprint
 

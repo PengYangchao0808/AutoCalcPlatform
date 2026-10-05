@@ -17,7 +17,7 @@ def _checkpoint(identity_schema: int | None = None) -> Checkpoint:
         plan_fingerprint="fingerprint-001",
         step_states=[{"kind": "optimize", "status": "completed"}, "pending"],
         items_state={"item-001": {"status": "completed", "cache_key": "cache-001"}},
-        attempts=2,
+        resume_count=2,
         **kwargs,
     )
 
