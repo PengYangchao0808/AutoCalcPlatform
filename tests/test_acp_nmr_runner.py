@@ -1,8 +1,11 @@
-"""Tests for the NMR Bruker job-materialisation in the scheduler runner.
+"""Tests for the NMR job materialisation in the scheduler runner.
 
 Covers ``JobRunner._materialize_bruker_asset`` (asset resolution + zip
-extraction) and ``_build_nmr_cmd`` with a ``mode: "bruker"`` experiment
-payload.
+extraction), ``_build_nmr_cmd`` with a ``mode: "bruker"`` experiment
+payload, the G06 emitted-argv regressions (local runner + remote
+script_gen builders must produce argv that ``build_parser()`` accepts —
+no ``--name``), and the ``run_nmr_analysis`` → ``NmrConfig`` forwarding
+of ``solvent_model`` / ``max_conformers``.
 """
 
 from __future__ import annotations
@@ -158,3 +161,89 @@ def test_build_nmr_cmd_bruer_mode(tmp_path: Path) -> None:
     assert "bruker" in cmd[bruker_idx + 1]
     # --spectrum must NOT be present in bruker mode
     assert "--spectrum" not in cmd
+
+
+def _nmr_spec(name: str) -> JobSpec:
+    """Scheduler-shaped nmr spec — manager.py always sets a non-empty name."""
+    return JobSpec(
+        workflow="nmr",
+        name=name,
+        input={
+            "source_type": "candidates",
+            "candidates": [{"source_type": "smiles", "source": "CCO"}],
+            "experiment": {"mode": "assigned", "content": "C: 40.0(C1)"},
+        },
+        method={},
+        resources={},
+    )
+
+
+def test_build_nmr_cmd_parses_via_cli_parser(tmp_path: Path) -> None:
+    """G06 regression: the local runner's nmr argv parses — no ``--name``."""
+    from acp.cli import build_parser
+
+    runner = _make_runner()
+    work_dir = tmp_path / "20261005_001_nmr_task"
+    spec = _nmr_spec(work_dir.name)  # manager sets spec.name = work_dir.name
+
+    cmd = runner._build_nmr_cmd(spec, work_dir)
+
+    assert "--name" not in cmd
+    assert cmd[3:5] == ["run", "nmr"]
+    parsed = build_parser().parse_args(cmd[3:])  # drop '<python> -m acp.cli'
+    assert parsed.workflow == "nmr"
+
+
+def test_remote_nmr_cmd_parses_via_cli_parser() -> None:
+    """G06 regression: the remote script_gen nmr argv parses — no ``--name``."""
+    from acp.cli import build_parser
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    spec = _nmr_spec("20261005_001_nmr_task")
+    cmd = build_remote_cli_command(spec, input_path="inputs/input_0.xyz")
+
+    assert "--name" not in cmd
+    assert cmd[3:5] == ["run", "nmr"]
+    parsed = build_parser().parse_args(cmd[3:])  # drop '<python> -m acp.cli'
+    assert parsed.workflow == "nmr"
+
+
+def test_run_nmr_analysis_forwards_solvent_model_and_max_conformers(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """CLI values reach NmrConfig through _build_nmr_config (T21 extends)."""
+    import pytest
+
+    from acp.workflows import nmr as nmr_mod
+
+    class _ConfigCapturedError(Exception):
+        pass
+
+    built: list = []
+    real_build = nmr_mod._build_nmr_config
+
+    def _spy(cfg, **kwargs):
+        built.append(real_build(cfg, **kwargs))
+        raise _ConfigCapturedError
+
+    monkeypatch.setattr(nmr_mod, "_build_nmr_config", _spy)
+
+    with pytest.raises(_ConfigCapturedError):
+        nmr_mod.run_nmr_analysis(
+            input_sources=["CCO"],
+            spectrum="C: 40.0(C1)",
+            output_dir=str(tmp_path / "gas"),
+            solvent_model="none",
+            max_conformers=5,
+        )
+    assert built[-1].solvent_model == "none"
+    assert built[-1].max_conformers == 5
+
+    with pytest.raises(_ConfigCapturedError):
+        nmr_mod.run_nmr_analysis(
+            input_sources=["CCO"],
+            spectrum="C: 40.0(C1)",
+            output_dir=str(tmp_path / "defaults"),
+        )
+    assert built[-1].solvent_model == "cpcm"
+    assert built[-1].max_conformers == 10

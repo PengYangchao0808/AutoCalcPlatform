@@ -522,8 +522,8 @@ def build_remote_nmr_cmd_tail(
         elif isinstance(stereocenters, list) and stereocenters:
             cmd += ["--stereocenters", ",".join(str(s) for s in stereocenters)]
 
-    if spec.name:
-        cmd += ["--name", spec.name]
+    # --name intentionally not emitted: the nmr parser never accepted it
+    # (G06) — task naming is manager-owned (spec.name → work_dir name).
     preset = censo_preset_from_method(method)
     if preset:
         cmd += ["--preset", preset]

@@ -2471,9 +2471,23 @@ Spectrum file format (DevDoc §6.2):
         help="Solvent name (applied to both conformer generation and GIAO NMR)",
     )
     nmr.add_argument(
+        "--solvent-model",
+        type=str.lower,
+        help=(
+            "ORCA solvation model for the GIAO level: none | cpcm | smd "
+            "(none = gas phase; default: cpcm). Validated by "
+            "acp.nmr.method_config.resolve_nmr_method."
+        ),
+    )
+    nmr.add_argument(
         "--ewin",
         type=float,
         help="CREST energy window in kcal/mol (default: 6.0)",
+    )
+    nmr.add_argument(
+        "--max-conformers",
+        type=int,
+        help="Maximum conformers retained per candidate (default: 10)",
     )
     nmr.add_argument(
         "--boltzmann-temp",
@@ -3653,6 +3667,7 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         logger.info("Configuration saved to: %s", args.save_config)
 
     from acp.calculations.progress import ProgressReporter
+    from acp.nmr.method_config import NmrMethodConfigError, resolve_nmr_method
     from acp.workflows.nmr import NMR_STAGES, run_nmr_analysis
 
     reporter = ProgressReporter(
@@ -3661,25 +3676,49 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         stages=list(NMR_STAGES),
     )
 
+    # G06: CLI flags → typed method payload → resolve_nmr_method so catalog
+    # functional/basis/solvent_model/nuclei all flow to the analysis call.
+    method: dict[str, Any] = {
+        "nmr_method": args.nmr_method,
+        "nmr_basis": args.nmr_basis,
+        "solvent": args.solvent,
+        "solvent_model": args.solvent_model,
+        "nuclei": nuclei,
+        "boltzmann_temp": args.boltzmann_temp,
+        "tms_shielding_h": args.tms_1h,
+        "tms_shielding_c": args.tms_13c,
+        "ewin": args.ewin,
+        "max_conformers": args.max_conformers,
+        "error_model": args.error_model,
+        "conformer_preset": args.preset,
+    }
+    try:
+        resolved = resolve_nmr_method(method, cfg)
+    except NmrMethodConfigError as exc:
+        logger.error("NMR method resolution failed: %s", exc)
+        return 1
+
     try:
         result = run_nmr_analysis(
             input_sources=args.input,
             spectrum=args.spectrum,
             output_dir=str(output_dir),
             config=cfg,
-            nuclei=nuclei,
-            nmr_method=args.nmr_method,
-            nmr_basis=args.nmr_basis,
-            solvent=args.solvent,
+            nuclei=list(resolved.nuclei),
+            nmr_method=resolved.nmr_method,
+            nmr_basis=resolved.nmr_basis,
+            solvent=resolved.solvent,
+            solvent_model=resolved.solvent_model,
             charge=args.charge,
             multiplicity=args.multiplicity,
             nproc=args.nproc,
-            boltzmann_temp=args.boltzmann_temp,
-            tms_1h=args.tms_1h,
-            tms_13c=args.tms_13c,
-            error_model=args.error_model,
-            conformer_preset=args.preset,
-            ewin=args.ewin,
+            boltzmann_temp=resolved.boltzmann_temp,
+            tms_1h=resolved.tms_1h,
+            tms_13c=resolved.tms_13c,
+            error_model=resolved.error_model,
+            conformer_preset=resolved.conformer_preset,
+            ewin=resolved.ewin,
+            max_conformers=resolved.max_conformers,
             enumerate_stereoisomers=bool(args.enumerate),
             stereocenters=args.stereocenters,
             bruker=args.bruker,

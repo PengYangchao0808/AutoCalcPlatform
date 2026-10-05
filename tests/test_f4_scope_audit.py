@@ -1700,6 +1700,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/error_model.py",
     # acp-nmr-goodman-gap todo 17: single typed NMR method resolver.
     "src/acp/nmr/method_config.py",
+    # acp-nmr-goodman-gap todo 18: CLI parameter forwarding + --name emission fix.
+    "src/acp/cli.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker
     # landed outside the registered stations; registered here so the audit
     # gate is green again (unrelated to the nmr remediation).

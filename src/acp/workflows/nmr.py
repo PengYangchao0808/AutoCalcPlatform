@@ -414,6 +414,8 @@ def _build_nmr_config(
     error_model: str | None,
     conformer_preset: str | None,
     strict_equivalence: bool = False,
+    solvent_model: str | None = None,
+    max_conformers: int | None = None,
 ) -> NmrConfig:
     """Assemble :class:`NmrConfig` from cfg + explicit overrides."""
     theory_nmr = (cfg.get("theory") or {}).get("nmr") or {}
@@ -453,7 +455,10 @@ def _build_nmr_config(
         nmr_method=resolved_method,
         nmr_basis=resolved_basis,
         solvent=effective_solvent,
-        solvent_model=theory_nmr.get("solvent_model") or "cpcm",
+        solvent_model=(
+            solvent_model if solvent_model is not None else theory_nmr.get("solvent_model")
+        )
+        or "cpcm",
         tms_shieldings=tms_shieldings
         or {
             "1H": 32.1243166667,  # Goodman TMSdata mPW1PW91/6-311G(d)/chloroform
@@ -461,7 +466,11 @@ def _build_nmr_config(
         },
         boltzmann_temp=float(boltzmann_temp or nmr_section.get("temperature_k") or 298.15),
         energy_window_kcal=float(nmr_section.get("energy_window_kcal") or 3.0),
-        max_conformers=int(nmr_section.get("max_conformers") or 10),
+        max_conformers=int(
+            max_conformers
+            if max_conformers is not None and max_conformers > 0
+            else nmr_section.get("max_conformers") or 10
+        ),
         error_model=error_model or "goodman-legacy",
         conformer_preset=conformer_preset or "censo-light",
         strict_equivalence=strict_equivalence or bool(nmr_section.get("strict_equivalence")),
@@ -1540,6 +1549,7 @@ def run_nmr_analysis(
     nmr_method: str | None = None,
     nmr_basis: str | None = None,
     solvent: str | None = None,
+    solvent_model: str | None = None,
     charge: int | None = None,
     multiplicity: int | None = None,
     strict_topology: bool = False,
@@ -1550,6 +1560,7 @@ def run_nmr_analysis(
     error_model: str | None = None,
     conformer_preset: str | None = None,
     ewin: float | None = None,
+    max_conformers: int | None = None,
     enumerate_stereoisomers: bool = False,
     stereocenters: str | list[str] | None = None,
     skip_conformers: bool = False,
@@ -1575,6 +1586,9 @@ def run_nmr_analysis(
         nmr_method / nmr_basis: Override the GIAO DFT level (default
             ``mPW1PW91/6-311G(d)`` — must match the error model).
         solvent: Solvent name (applied to both conformer gen and GIAO NMR).
+        solvent_model: ORCA solvation model for the GIAO level (``none`` =
+            gas phase; falls back to config ``theory.nmr.solvent_model`` or
+            ``cpcm``).
         charge / multiplicity: Per-candidate overrides.
         strict_topology: When ``True``, stage-0 parsing raises
             :class:`TopologyUnavailableError` (surfaced as a failed result)
@@ -1590,6 +1604,8 @@ def run_nmr_analysis(
         error_model: Error-model id (default ``goodman-legacy``).
         conformer_preset: CENSO preset (default ``censo-light``).
         ewin: CREST energy window (kcal/mol).
+        max_conformers: Maximum conformers retained per candidate (falls
+            back to config ``nmr.max_conformers`` or 10).
         enumerate_stereoisomers: When ``True`` and exactly one candidate is
             supplied, expand it into all distinct diastereomers (enantiomer
             pairs collapse to one representative — DP4 cannot distinguish
@@ -1689,6 +1705,8 @@ def run_nmr_analysis(
         error_model=error_model,
         conformer_preset=conformer_preset,
         strict_equivalence=strict_topology,
+        solvent_model=solvent_model,
+        max_conformers=max_conformers,
     )
 
     # validate error-model ↔ NMR-level binding (DevDoc §10.2)
