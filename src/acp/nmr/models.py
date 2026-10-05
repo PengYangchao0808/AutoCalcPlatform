@@ -427,13 +427,100 @@ class CandidateEvidence:
         }
 
 
+# --- typed probability state (todo 10 / G07 / gap §8.2) ---------------------
+
+
+ProbabilityStatus = Literal[
+    "valid",
+    "invalid",
+    "evidence_insufficient",
+    "unavailable",
+    "not_applicable",
+    "placeholder",
+]
+
+PROBABILITY_STATUSES: tuple[str, ...] = (
+    "valid",
+    "invalid",
+    "evidence_insufficient",
+    "unavailable",
+    "not_applicable",
+    "placeholder",
+)
+
+
+@dataclass(frozen=True)
+class ProbabilityResult:
+    """Immutable per-model probability state for one candidate (gap §8.2).
+
+    Attributes:
+        model_id: Model identity (``goodman-dp4`` / ``goodman-dp5`` /
+            ``placeholder-dp5``); must be non-blank.
+        model_version: Actual error-model identifier backing this result.
+        status: Closed ``ProbabilityStatus`` vocabulary — ``valid``,
+            ``invalid``, ``evidence_insufficient``, ``unavailable``,
+            ``not_applicable`` or ``placeholder``.
+        probability: The probability value, or ``None`` when no probability
+            exists — serialization must keep ``None`` (JSON ``null``),
+            never coerce it to ``0``.
+        mode: Model execution mode (e.g. DP5 ``fchl``/``fallback``) or
+            ``None`` when the model never ran.
+        calibration_status: Calibration/applicability state, independent
+            of ``status`` (a valid result is not automatically calibrated).
+        reasons: Closed-vocabulary reasons for non-valid states; empty
+            otherwise.
+        atom_diagnostics: Optional per-atom diagnostic records (T16).
+    """
+
+    model_id: str
+    model_version: str
+    status: ProbabilityStatus
+    probability: float | None
+    mode: str | None
+    calibration_status: str
+    reasons: tuple[str, ...] = ()
+    atom_diagnostics: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.model_id.strip():
+            raise ValueError("probability model_id must be a non-blank string")
+        if self.status not in PROBABILITY_STATUSES:
+            raise ValueError(f"unknown probability status: {self.status!r}")
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "model_id": self.model_id,
+            "model_version": self.model_version,
+            "status": self.status,
+            # None is preserved as-is — JSON null, never 0
+            "probability": self.probability,
+            "mode": self.mode,
+            "calibration_status": self.calibration_status,
+            "reasons": list(self.reasons),
+            "atom_diagnostics": [dict(d) for d in self.atom_diagnostics],
+        }
+
+
+@dataclass(frozen=True)
+class CandidateProbability:
+    """DP4 + DP5 typed probability state for one candidate (gap §8.2)."""
+
+    dp4: ProbabilityResult
+    dp5: ProbabilityResult
+
+    def as_dict(self) -> dict[str, object]:
+        return {"dp4": self.dp4.as_dict(), "dp5": self.dp5.as_dict()}
+
+
 @dataclass
 class CandidateResult:
     """Full per-candidate analysis (stages 4–7 product).
 
     ``dp4_probability``/``dp5_probability`` default to ``None`` — a missing
     probability is never fabricated as ``0.0``; candidates excluded by the
-    evidence gate keep ``None``.
+    evidence gate keep ``None``. ``probability`` layers the typed state
+    (status/mode/calibration/reasons) on top of the flat fields; it stays
+    ``None`` only for legacy callers that never attach it.
     """
 
     index: int
@@ -445,6 +532,7 @@ class CandidateResult:
     dp5_probability: float | None = None
     conformer_shieldings: list[ConformerShielding] = field(default_factory=list)
     evidence: CandidateEvidence | None = None
+    probability: CandidateProbability | None = None
 
     def as_dict(self) -> dict[str, object]:
         regression_obj: dict[str, object] = {}
@@ -460,6 +548,7 @@ class CandidateResult:
                 round(self.dp5_probability, 6) if self.dp5_probability is not None else None
             ),
             "evidence": self.evidence.as_dict() if self.evidence is not None else None,
+            "probability": self.probability.as_dict() if self.probability is not None else None,
             "n_conformers": len(self.conformer_shieldings),
             "regression": regression_obj,
             "assignment": [a.as_dict() for a in self.assignments],
@@ -580,6 +669,10 @@ __all__ = [
     "AtomShift",
     "Assignment",
     "RegressionResult",
+    "ProbabilityStatus",
+    "PROBABILITY_STATUSES",
+    "ProbabilityResult",
+    "CandidateProbability",
     "CandidateResult",
     "NmrReport",
     "normalize_symbol",

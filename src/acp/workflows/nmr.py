@@ -58,6 +58,7 @@ from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
     AtomShift,
     CandidateEvidence,
+    CandidateProbability,
     CandidateResult,
     ConformerShielding,
     EvidenceStatus,
@@ -66,6 +67,7 @@ from acp.nmr.models import (
     NmrConfig,
     NmrReport,
     NucleusEvidence,
+    ProbabilityResult,
     element_of_nucleus,
     normalize_symbol,
 )
@@ -1730,12 +1732,42 @@ def run_nmr_analysis(
             dp5_model = load_dp5_model()
         except Exception as exc:  # pragma: no cover - asset-load robustness
             logger.warning("Goodman DP5 model load failed (%s); using placeholder", exc)
+    dp5_model_id = "goodman-dp5" if dp5_model is not None else "placeholder-dp5"
+    dp5_model_version = (
+        str(getattr(dp5_model, "model_id", "goodman-dp5"))
+        if dp5_model is not None
+        else actual_error_model
+    )
 
     for cr, p4 in zip(candidate_results, dp4_probs):
+        evidence_status = cr.evidence.status if cr.evidence is not None else "valid"
+        exclusion_reasons = (
+            tuple(cr.evidence.exclusion_reasons) if cr.evidence is not None else ()
+        )
         if p4 is None:
             # excluded by the evidence gate — a probability is never fabricated
             cr.dp4_probability = None
             cr.dp5_probability = None
+            cr.probability = CandidateProbability(
+                dp4=ProbabilityResult(
+                    model_id="goodman-dp4",
+                    model_version=actual_error_model,
+                    status=evidence_status,
+                    probability=None,
+                    mode=None,
+                    calibration_status=evidence_status,
+                    reasons=exclusion_reasons,
+                ),
+                dp5=ProbabilityResult(
+                    model_id=dp5_model_id,
+                    model_version=dp5_model_version,
+                    status="unavailable",
+                    probability=None,
+                    mode=None,
+                    calibration_status="not_evaluated",
+                    reasons=exclusion_reasons or ("dp5_probability_unavailable",),
+                ),
+            )
             continue
         residual_by_nuc = {
             nuc: [a.residual for a in cr.assignments if _nucleus_of_element(a.element) == nuc]
@@ -1746,8 +1778,39 @@ def run_nmr_analysis(
             cr.dp5_probability = _compute_candidate_dp5(
                 cr, candidates[cr.index], nmr_config, dp5_model
             )
+            candidate_dp5_mode = str(getattr(dp5_model, "dp5_mode", "fallback"))
+            dp5_calibration = "goodman_kde"
         else:
             cr.dp5_probability = float(dp5_log_to_probability(compute_dp5(residual_by_nuc, em)))
+            candidate_dp5_mode = "fallback"
+            dp5_calibration = "placeholder_parameters"
+        dp5_status = "valid" if dp5_model is not None else "placeholder"
+        dp5_reasons: tuple[str, ...] = ()
+        if cr.dp5_probability is None:
+            dp5_status = "unavailable"
+            dp5_calibration = "not_evaluated"
+            candidate_dp5_mode = None
+            dp5_reasons = ("dp5_probability_unavailable",)
+        cr.probability = CandidateProbability(
+            dp4=ProbabilityResult(
+                model_id="goodman-dp4",
+                model_version=actual_error_model,
+                status=evidence_status,
+                probability=cr.dp4_probability,
+                mode=None,
+                calibration_status=evidence_status,
+                reasons=exclusion_reasons,
+            ),
+            dp5=ProbabilityResult(
+                model_id=dp5_model_id,
+                model_version=dp5_model_version,
+                status=dp5_status,
+                probability=cr.dp5_probability,
+                mode=candidate_dp5_mode,
+                calibration_status=dp5_calibration,
+                reasons=dp5_reasons,
+            ),
+        )
     stages_completed.append("probability")
     if progress_reporter is not None:
         progress_reporter.complete_stage("dp4_dp5_probability")

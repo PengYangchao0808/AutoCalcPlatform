@@ -52,9 +52,11 @@ from acp.nmr.fchl import (
 )
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
+    PROBABILITY_STATUSES,
     Assignment,
     AtomShift,
     CandidateEvidence,
+    CandidateProbability,
     CandidateResult,
     ConformerShielding,
     EvidenceStatus,
@@ -63,6 +65,8 @@ from acp.nmr.models import (
     NmrConfig,
     NmrReport,
     NucleusEvidence,
+    ProbabilityResult,
+    ProbabilityStatus,
     RegressionResult,
     lookup_tms_shieldings,
 )
@@ -100,6 +104,7 @@ __all__ = [
     "Assignment",
     "AtomShift",
     "CandidateEvidence",
+    "CandidateProbability",
     "CandidateResult",
     "ConformerShielding",
     "EvidenceStatus",
@@ -108,6 +113,9 @@ __all__ = [
     "NmrConfig",
     "NmrReport",
     "NucleusEvidence",
+    "ProbabilityResult",
+    "ProbabilityStatus",
+    "PROBABILITY_STATUSES",
     "RegressionResult",
     "lookup_tms_shieldings",
     # io
