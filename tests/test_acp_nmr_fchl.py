@@ -8,8 +8,9 @@ Covers:
 * the FCHL-weighted atom probability and the ``sum(K_sim)==0`` fallback —
   exercised with a stubbed ``qml.fchl.get_atomic_kernels`` since the real
   ``qml`` package is a Fortran build unavailable on the head node;
-* the runtime switch: ``dp5_mode`` is ``"fallback"`` when qml is absent
-  and flips to ``"fchl"`` only when the FCHL path actually runs.
+* the runtime switch: which DP5 path ran is reported per call by the
+  workflow (todo 14 / G07 — the model carries no shared ``dp5_mode``
+  attribute to flip).
 """
 
 from __future__ import annotations
@@ -237,8 +238,14 @@ def test_probability_per_conformer_fchl_requires_assets(
         dp5_model.probability_per_conformer_fchl([[1.0]], [1.0], [1.0], [])
 
 
-def test_probability_per_conformer_fchl_sets_mode(dp5_model: GoodmanDP5Model) -> None:
-    """The FCHL path flips dp5_mode to 'fchl'; the fallback path resets it."""
+def test_probability_per_conformer_keeps_no_shared_mode_state(
+    dp5_model: GoodmanDP5Model,
+) -> None:
+    """G07: both paths return probabilities without shared dp5_mode state.
+
+    The former ``dp5_model.dp5_mode`` flip was last-writer-wins across
+    candidates; the workflow now gets the mode from each call's outcome.
+    """
     _stub_qml_module()
     _fake_get_atomic_kernels.n_sim = 100
     reps = build_atom_representations(
@@ -249,10 +256,11 @@ def test_probability_per_conformer_fchl_sets_mode(dp5_model: GoodmanDP5Model) ->
     w = [0.5, 0.5]
     p = dp5_model.probability_per_conformer_fchl(shifts, exp, w, [[reps[0]], [reps[0]]])
     assert 0.0 <= p <= 1.0
-    assert dp5_model.dp5_mode == "fchl"
-    # fallback resets to "fallback"
+    assert not hasattr(dp5_model, "dp5_mode")
+    assert not hasattr(dp5_model, "fchl_kernel")
     _ = dp5_model.probability_per_conformer(shifts, exp, w)
-    assert dp5_model.dp5_mode == "fallback"
+    assert not hasattr(dp5_model, "dp5_mode")
+    assert not hasattr(dp5_model, "fchl_kernel")
 
 
 def test_fchl_and_fallback_differ_with_similar_neighbours(dp5_model: GoodmanDP5Model) -> None:

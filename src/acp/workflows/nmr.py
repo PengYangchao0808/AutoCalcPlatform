@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -1286,12 +1286,48 @@ def _looks_like_smiles(source: str) -> bool:
     return any(c in s for c in "CcNnOoPpSsFf=[#]()-/\\123456789")
 
 
+# Closed vocabulary of per-candidate DP5 computation modes (G07).
+# "unavailable"/"not_applicable"/placeholder are stage-7 *status* branches,
+# never computation modes, so they are intentionally absent here.
+DP5_OUTCOME_MODES: Final[tuple[str, ...]] = ("fchl", "fallback", "averaged")
+
+
+@dataclass(frozen=True)
+class Dp5Outcome:
+    """Immutable per-candidate DP5 result (G07).
+
+    Replaces the former shared ``dp5_model.dp5_mode``/``fchl_kernel``
+    mutable attributes, where the last candidate overwrote every earlier
+    candidate's mode. Each ``_compute_candidate_dp5`` call returns its own
+    outcome instead of mutating the model.
+
+    Attributes:
+        probability: DP5 probability in ``[0, 1]``, or ``None`` when the
+            path produced no value.
+        mode: One of :data:`DP5_OUTCOME_MODES` — the path that ran.
+        kernel: FCHL kernel backend (``"qml"``/``"numpy"``) when the FCHL
+            path ran, else ``""``; read from ``kernel_backend()`` at call
+            time, never from model state.
+        diagnostics: JSON-safe per-call diagnostics dicts, e.g.
+            ``n_conformers_used``, ``fchl_attempted``, ``fallback_reason``.
+    """
+
+    probability: float | None
+    mode: str
+    kernel: str = ""
+    diagnostics: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.mode not in DP5_OUTCOME_MODES:
+            raise ValueError(f"unknown DP5 mode {self.mode!r}; expected one of {DP5_OUTCOME_MODES}")
+
+
 def _compute_candidate_dp5(
     candidate: CandidateResult,
     structure: Structure,
     nmr_config: NmrConfig,
     dp5_model: Any,
-) -> float:
+) -> Dp5Outcome:
     """DP5 for one candidate via the Goodman-faithful per-conformer path.
 
     Goodman evaluates the KDE per conformer then averages probabilities
@@ -1304,15 +1340,31 @@ def _compute_candidate_dp5(
     the per-atom probabilities use the FCHL-similarity weighted KDE
     (:meth:`GoodmanDP5Model.probability_per_conformer_fchl`) built from the
     conformer geometries threaded through :class:`ConformerShielding`.
-    Otherwise the unweighted-KDE fallback is used and ``dp5_mode`` stays
-    ``"fallback"``.
+    Otherwise the unweighted-KDE fallback is used.
 
     Falls back to the averaged-residual path when per-conformer shieldings
     are unavailable (e.g. the test-only ``skip_conformers`` fast path that
     injects a single pre-averaged shielding set).
+
+    Every path returns a frozen :class:`Dp5Outcome` — which path ran, its
+    kernel and diagnostics are per-call facts, never shared model state.
+
+    Args:
+        candidate: Candidate carrying ¹³C assignments + conformer shieldings.
+        structure: Candidate structure (symbols for label alignment).
+        nmr_config: NMR config (TMS references).
+        dp5_model: Loaded :class:`GoodmanDP5Model` (or test stand-in).
+
+    Returns:
+        Immutable outcome with ``probability``, ``mode``, ``kernel`` and
+        JSON-safe ``diagnostics``.
     """
     from acp.nmr.equivalence import _build_label_index
-    from acp.nmr.fchl import FRAG_ATOM_THRESHOLD, build_atom_representations
+    from acp.nmr.fchl import (
+        FRAG_ATOM_THRESHOLD,
+        build_atom_representations,
+        kernel_backend,
+    )
 
     symbols = list(structure.symbols)
     label_to_idx = _build_label_index(symbols)
@@ -1321,14 +1373,34 @@ def _compute_candidate_dp5(
     # 13C assignments give us the matched (atom_label, exp_ppm) pairs
     c_assignments = [a for a in candidate.assignments if a.element.upper() == "C"]
     if not c_assignments:
-        return 0.0
+        return Dp5Outcome(
+            probability=0.0,
+            mode="averaged",
+            diagnostics=(
+                {
+                    "n_conformers_used": 0,
+                    "fchl_attempted": False,
+                    "fallback_reason": "no_carbon",
+                },
+            ),
+        )
 
     exp_c = [a.exp_ppm for a in c_assignments]
     maybe_indices = [label_to_idx.get(a.atom_label) for a in c_assignments]
     if any(idx is None for idx in maybe_indices):
         # label mismatch — fall back to averaged-residual path
         residual_by_nuc = {"13C": [a.residual for a in c_assignments]}
-        return compute_dp5_goodman(residual_by_nuc, dp5_model)
+        return Dp5Outcome(
+            probability=compute_dp5_goodman(residual_by_nuc, dp5_model),
+            mode="averaged",
+            diagnostics=(
+                {
+                    "n_conformers_used": 0,
+                    "fchl_attempted": False,
+                    "fallback_reason": "label_mismatch",
+                },
+            ),
+        )
     c_indices = [idx for idx in maybe_indices if idx is not None]
 
     # per-conformer ¹³C calc shifts (TMS-converted)
@@ -1338,8 +1410,9 @@ def _compute_candidate_dp5(
     # FCHL atomic path is only valid for molecules < 86 atoms (DP5.py:57);
     # larger molecules need the openbabel fragmentation + frag_reps path
     # (not yet wired → degrade to fallback for those rare cases).
-    fchl_ok = bool(getattr(dp5_model, "fchl_available", False))
-    fchl_ok = fchl_ok and len(symbols) < FRAG_ATOM_THRESHOLD
+    fchl_requested = bool(getattr(dp5_model, "fchl_available", False))
+    fchl_requested = fchl_requested and len(symbols) < FRAG_ATOM_THRESHOLD
+    fchl_ok = fchl_requested
     for conf in candidate.conformer_shieldings:
         shifts: list[float] = []
         ok = True
@@ -1382,8 +1455,20 @@ def _compute_candidate_dp5(
 
     if len(conformer_shifts) <= 1:
         # single conformer or unavailable — averaged path
+        # (todo 15 extension point: single conformers will route through the
+        # geometry-weighted path here; mode vocabulary already supports it)
         residual_by_nuc = {"13C": [a.residual for a in c_assignments]}
-        return compute_dp5_goodman(residual_by_nuc, dp5_model)
+        return Dp5Outcome(
+            probability=compute_dp5_goodman(residual_by_nuc, dp5_model),
+            mode="averaged",
+            diagnostics=(
+                {
+                    "n_conformers_used": len(conformer_shifts),
+                    "fchl_attempted": fchl_requested,
+                    "fallback_reason": "insufficient_conformers",
+                },
+            ),
+        )
 
     # normalize weights (guard against drift)
     total_w = sum(weights)
@@ -1392,14 +1477,32 @@ def _compute_candidate_dp5(
     else:
         weights = [w / total_w for w in weights]
 
+    base_diag: dict[str, object] = {
+        "n_conformers_used": len(conformer_shifts),
+        "fchl_attempted": fchl_requested,
+    }
     if fchl_ok and len(conformer_reps) == len(conformer_shifts):
-        dp5_model.dp5_mode = "fchl"
-        return dp5_model.probability_per_conformer_fchl(
-            conformer_shifts, exp_c, weights, conformer_reps
+        return Dp5Outcome(
+            probability=dp5_model.probability_per_conformer_fchl(
+                conformer_shifts, exp_c, weights, conformer_reps
+            ),
+            mode="fchl",
+            kernel=kernel_backend(),
+            diagnostics=({**base_diag, "fallback_reason": None},),
         )
 
-    dp5_model.dp5_mode = "fallback"
-    return dp5_model.probability_per_conformer(conformer_shifts, exp_c, weights)
+    return Dp5Outcome(
+        probability=dp5_model.probability_per_conformer(conformer_shifts, exp_c, weights),
+        mode="fallback",
+        diagnostics=(
+            {
+                **base_diag,
+                "fallback_reason": (
+                    "fchl_unavailable" if not fchl_requested else "fchl_representations_incomplete"
+                ),
+            },
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1757,6 +1860,7 @@ def run_nmr_analysis(
             cr.dp4_probability = None
             cr.dp5_probability = None
             cr.dp5_diagnostic_score = None
+            cr.dp5_kernel = None
             cr.probability = CandidateProbability(
                 dp4=ProbabilityResult(
                     model_id="goodman-dp4",
@@ -1785,6 +1889,7 @@ def run_nmr_analysis(
         cr.dp4_probability = float(p4)
         cr.dp5_probability = None
         cr.dp5_diagnostic_score = None
+        cr.dp5_kernel = None
         dp5_reasons: tuple[str, ...] = ()
         if dp5_model is not None:
             if not residual_by_nuc.get("13C"):
@@ -1794,10 +1899,8 @@ def run_nmr_analysis(
                 candidate_dp5_mode = None
                 dp5_reasons = ("no_carbon_evidence",)
             else:
-                cr.dp5_probability = _compute_candidate_dp5(
-                    cr, candidates[cr.index], nmr_config, dp5_model
-                )
-                candidate_dp5_mode = str(getattr(dp5_model, "dp5_mode", "fallback"))
+                outcome = _compute_candidate_dp5(cr, candidates[cr.index], nmr_config, dp5_model)
+                cr.dp5_probability = outcome.probability
                 if cr.dp5_probability is None:
                     dp5_status = "unavailable"
                     dp5_calibration = "not_evaluated"
@@ -1806,6 +1909,8 @@ def run_nmr_analysis(
                 else:
                     dp5_status = "valid"
                     dp5_calibration = "goodman_kde"
+                    candidate_dp5_mode = outcome.mode
+                    cr.dp5_kernel = outcome.kernel or None
         elif dp5_placeholder_requested:
             # explicit placeholder mode only — renamed to a diagnostic so it
             # can never masquerade as a probability in reports or ranking
@@ -1847,9 +1952,27 @@ def run_nmr_analysis(
         progress_reporter.complete_stage("dp4_dp5_probability")
         progress_reporter.start_stage("nmr_report")
 
-    # Stage 8: report
-    dp5_mode = getattr(dp5_model, "dp5_mode", "fallback") if dp5_model is not None else "fallback"
-    fchl_kernel = getattr(dp5_model, "fchl_kernel", "") if dp5_model is not None else ""
+    # Stage 8: report — per-candidate DP5 modes come from each candidate's
+    # own immutable outcome (G07), never from shared model-object state.
+    real_dp5: list[tuple[int, str, str | None]] = []
+    for cr in candidate_results:
+        prob = cr.probability
+        if prob is not None and prob.dp5.status == "valid" and prob.dp5.mode is not None:
+            real_dp5.append((cr.index, prob.dp5.mode, cr.dp5_kernel))
+    dp5_mode_set = {mode for _, mode, _ in real_dp5}
+    if not dp5_mode_set:
+        dp5_mode = "fallback"
+        fchl_kernel = ""
+    elif len(dp5_mode_set) == 1:
+        dp5_mode = next(iter(dp5_mode_set))
+        kernel_set = {kernel or "" for _, _, kernel in real_dp5}
+        fchl_kernel = next(iter(kernel_set)) if len(kernel_set) == 1 else ""
+    else:
+        dp5_mode = "mixed"
+        fchl_kernel = ""
+    dp5_modes = [
+        {"index": index, "mode": mode, "kernel": kernel} for index, mode, kernel in real_dp5
+    ]
     report = NmrReport(
         candidates=candidate_results,
         config=nmr_config,
@@ -1891,6 +2014,7 @@ def run_nmr_analysis(
         ],
         "error_model": actual_error_model,
         "dp5_mode": report.dp5_mode,
+        "dp5_modes": dp5_modes,
         "fchl_kernel": fchl_kernel,
         "stages": stages_completed,
         "outputs": {

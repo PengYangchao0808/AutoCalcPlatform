@@ -222,7 +222,14 @@ class GoodmanDP5Model:
       when an atom has no similar training neighbours (``sum(K_sim)==0``).
 
     Both share the same downstream ``Rescale_DP5`` (DP5.py:367-383) via the
-    correct/incorrect KDEs. :attr:`dp5_mode` reports which path ran.
+    correct/incorrect KDEs.
+
+    Deprecated (G07): the former ``dp5_mode``/``fchl_kernel`` mutable
+    attributes were removed — they were shared state where the last
+    candidate's path overwrote every earlier candidate's mode. Which path
+    ran is a per-call fact: callers report it themselves (the workflow's
+    ``_compute_candidate_dp5`` returns an immutable outcome carrying mode +
+    kernel), and callers needing the kernel call ``kernel_backend()``.
     """
 
     model_id = "goodman-dp5"
@@ -246,8 +253,6 @@ class GoodmanDP5Model:
         self._atom_kde = None  # lazy — built on first use
         self._atomic_reps = None  # lazy — loaded when FCHL first used
         self.models_dir = models_dir
-        self.dp5_mode = "fallback"
-        self.fchl_kernel = ""  # set when the FCHL path runs: "qml" | "numpy"
 
     @property
     def atom_kde(self):
@@ -350,7 +355,6 @@ class GoodmanDP5Model:
         :meth:`probability_per_conformer` for the Goodman-faithful path
         where KDE is evaluated per conformer before probability averaging.
         """
-        self.dp5_mode = "fallback"
         atom_probs = [self.atom_probability(abs(se)) for se in scaled_errors]
         raw = self.candidate_probability(atom_probs)
         return self.rescale(raw)
@@ -385,7 +389,6 @@ class GoodmanDP5Model:
         Returns:
             DP5 probability in ``[0, 1]``.
         """
-        self.dp5_mode = "fallback"
         return self._probability_per_conformer(conformer_calc_shifts, exp_shifts, boltzmann_weights)
 
     def probability_per_conformer_fchl(
@@ -424,10 +427,6 @@ class GoodmanDP5Model:
             )
         if len(conformer_reps) != len(conformer_calc_shifts):
             raise ValueError("conformer_reps and conformer_calc_shifts lengths differ")
-        from acp.nmr.fchl import kernel_backend
-
-        self.dp5_mode = "fchl"
-        self.fchl_kernel = kernel_backend()
         return self._probability_per_conformer(
             conformer_calc_shifts,
             exp_shifts,

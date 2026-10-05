@@ -534,6 +534,10 @@ class CandidateResult:
     # as a probability and never used for ranking — ``dp5_probability`` stays
     # None whenever the real Goodman DP5 model did not produce a value.
     dp5_diagnostic_score: float | None = None
+    # FCHL kernel backend that produced this candidate's DP5 value ("qml" |
+    # "numpy"), or None when no FCHL kernel ran (G07 — per candidate, never
+    # shared model state).
+    dp5_kernel: str | None = None
     conformer_shieldings: list[ConformerShielding] = field(default_factory=list)
     evidence: CandidateEvidence | None = None
     probability: CandidateProbability | None = None
@@ -556,6 +560,7 @@ class CandidateResult:
                 if self.dp5_diagnostic_score is not None
                 else None
             ),
+            "dp5_kernel": self.dp5_kernel,
             "evidence": self.evidence.as_dict() if self.evidence is not None else None,
             "probability": self.probability.as_dict() if self.probability is not None else None,
             "n_conformers": len(self.conformer_shieldings),

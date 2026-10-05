@@ -26,10 +26,12 @@ from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.nmr.error_model import GoodmanErrorModel
 from acp.nmr.models import (
     PROBABILITY_STATUSES,
+    Assignment,
     CandidateEvidence,
     CandidateProbability,
     CandidateResult,
     ConformerShielding,
+    NmrConfig,
     NmrReport,
     NucleusEvidence,
     ProbabilityResult,
@@ -465,10 +467,13 @@ def test_workflow_stage7_attaches_probability_block(tmp_path: Path) -> None:
 
 
 class _FakeDP5Model:
-    """Minimal Goodman-DP5 stand-in for the workflow's ``load_dp5_model`` seam."""
+    """Minimal Goodman-DP5 stand-in for the workflow's ``load_dp5_model`` seam.
+
+    Deliberately carries NO ``dp5_mode``/``fchl_kernel`` attributes (G07:
+    mode is reported per call, never as shared model state).
+    """
 
     model_id = "goodman-dp5"
-    dp5_mode = "fallback"
     fchl_available = False
 
     def __init__(self, value: float = 0.7) -> None:
@@ -659,6 +664,9 @@ def test_workflow_real_dp5_model_reports_valid_float(tmp_path: Path) -> None:
     assert block["dp5"]["probability"] == pytest.approx(0.7)
     assert cand["dp5_probability"] == pytest.approx(0.7)
     assert cand["dp5_diagnostic_score"] is None  # diagnostic is placeholder-only
+    # todo 14: single prebuilt conformer → averaged-residual path, no kernel
+    assert block["dp5"]["mode"] == "averaged"
+    assert cand["dp5_kernel"] is None
     assert model.calls  # the model ran
 
 
@@ -735,3 +743,330 @@ def test_report_note_reads_typed_dp5_state_with_prefix_fallback() -> None:
         error_model="goodman-legacy",
     )
     assert legacy_real.as_dict()["note"] == ""
+
+
+# ---------------------------------------------------------------------------
+# todo 14: per-candidate immutable DP5 mode (G07) — no shared model state.
+#
+# BEFORE (raw capture: .omo/evidence/.../task-14-before-shared-mode-leak.txt):
+# ``_compute_candidate_dp5`` returned a bare float and stage 7 read
+# ``dp5_model.dp5_mode`` after each call. Shared mutable state leaked across
+# candidates: the averaged-residual candidate recorded mode ``"fchl"`` or
+# ``"fallback"`` purely depending on whether an FCHL candidate ran before it,
+# and stage 8 reported only the last candidate's mode.
+#
+# AFTER: every call returns a frozen ``Dp5Outcome`` — swapping the call order
+# never changes any candidate's mode; mixed FCHL/fallback runs summarise as
+# ``"mixed"`` with an expanded per-candidate ``dp5_modes`` list.
+# ---------------------------------------------------------------------------
+
+
+class _PathDP5Model:
+    """Goodman-DP5 stand-in recording which per-conformer path ran."""
+
+    model_id = "goodman-dp5"
+
+    def __init__(self, *, fchl_available: bool = True) -> None:
+        self.fchl_available = fchl_available
+        self.calls: list[str] = []
+
+    def probability(self, carbon_errors: list[float]) -> float:
+        self.calls.append("averaged")
+        return 0.6
+
+    def probability_per_conformer(self, shifts, exp, weights) -> float:
+        self.calls.append("fallback")
+        return 0.55
+
+    def probability_per_conformer_fchl(self, shifts, exp, weights, reps) -> float:
+        self.calls.append("fchl")
+        return 0.65
+
+
+def _dp5_candidate(
+    name: str,
+    *,
+    geometry: bool,
+    n_conformers: int = 2,
+    atom_label: str = "C1",
+    carbon: bool = True,
+) -> tuple[CandidateResult, Structure]:
+    st = _structure(name, ["C", "H", "H", "H", "H"])
+    assignments = []
+    if carbon:
+        assignments.append(
+            Assignment(
+                atom_label=atom_label,
+                element="C",
+                exp_ppm=40.0,
+                calc_ppm=40.0,
+                scaled_ppm=40.0,
+                residual=0.1,
+            )
+        )
+    conformers = []
+    for i in range(n_conformers):
+        kwargs: dict[str, object] = {}
+        if geometry:
+            kwargs = {
+                "coordinates": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [0.0, 0.0, 1.0],
+                        [-1.0, 0.0, 0.0],
+                    ]
+                ),
+                "symbols": ["C", "H", "H", "H", "H"],
+            }
+        conformers.append(
+            ConformerShielding(
+                conformer_id=f"{name}_conf_{i:03d}",
+                boltzmann_weight=1.0 / n_conformers,
+                shieldings={0: {"symbol": "C", "isotropic": 148.0}},
+                **kwargs,  # type: ignore[arg-type]
+            )
+        )
+    cand = CandidateResult(
+        index=0, label=name, assignments=assignments, conformer_shieldings=conformers
+    )
+    return cand, st
+
+
+def test_compute_candidate_dp5_mode_is_order_invariant() -> None:
+    """G07 acceptance: swapping the candidate call order changes no mode."""
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    fchl = _dp5_candidate("fchl-cand", geometry=True)
+    fallback = _dp5_candidate("fallback-cand", geometry=False)
+    averaged = _dp5_candidate("averaged-cand", geometry=True, n_conformers=1)
+
+    def run(order: list[tuple[CandidateResult, Structure]]) -> dict[str, object]:
+        model = _PathDP5Model()
+        return {
+            cand.label: _compute_candidate_dp5(cand, st, NmrConfig(), model) for cand, st in order
+        }
+
+    forward = run([fchl, fallback, averaged])
+    reverse = run([averaged, fallback, fchl])
+
+    assert {label: out.mode for label, out in forward.items()} == {  # type: ignore[attr-defined]
+        "fchl-cand": "fchl",
+        "fallback-cand": "fallback",
+        "averaged-cand": "averaged",
+    }
+    for label, out in forward.items():
+        assert out.mode == reverse[label].mode  # type: ignore[attr-defined]
+    # each outcome carries the probability of the path that actually ran
+    assert forward["fchl-cand"].probability == pytest.approx(0.65)  # type: ignore[attr-defined]
+    assert forward["fallback-cand"].probability == pytest.approx(0.55)  # type: ignore[attr-defined]
+    assert forward["averaged-cand"].probability == pytest.approx(0.6)  # type: ignore[attr-defined]
+
+
+def test_dp5_outcome_frozen_with_closed_mode_vocabulary() -> None:
+    from acp.workflows.nmr import DP5_OUTCOME_MODES, Dp5Outcome
+
+    outcome = Dp5Outcome(probability=0.5, mode="fchl", kernel="numpy")
+    with pytest.raises(AttributeError):
+        outcome.mode = "fallback"  # type: ignore[misc]
+    assert DP5_OUTCOME_MODES == ("fchl", "fallback", "averaged")
+    with pytest.raises(ValueError, match="mode"):
+        Dp5Outcome(probability=0.5, mode="bogus")
+
+
+def test_dp5_outcome_kernel_read_at_call_time_and_diagnostics_json_safe() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    fchl = _dp5_candidate("fchl-cand", geometry=True)
+    fallback = _dp5_candidate("fallback-cand", geometry=False)
+    model = _PathDP5Model()
+    with patch("acp.nmr.fchl.kernel_backend", return_value="numpy"):
+        out_fchl = _compute_candidate_dp5(fchl[0], fchl[1], NmrConfig(), model)
+    out_fb = _compute_candidate_dp5(fallback[0], fallback[1], NmrConfig(), model)
+
+    assert out_fchl.kernel == "numpy"
+    assert out_fb.kernel == ""
+    assert model.calls == ["fchl", "fallback"]
+
+    for outcome in (out_fchl, out_fb):
+        assert isinstance(outcome.diagnostics, tuple)
+        payload = json.loads(json.dumps(list(outcome.diagnostics)))
+        assert payload and all(isinstance(d, dict) for d in payload)
+        assert set(payload[0]) >= {"n_conformers_used", "fchl_attempted", "fallback_reason"}
+    assert out_fchl.diagnostics[0]["n_conformers_used"] == 2
+    assert out_fchl.diagnostics[0]["fchl_attempted"] is True
+    assert out_fchl.diagnostics[0]["fallback_reason"] is None
+    assert out_fb.diagnostics[0]["fallback_reason"]
+
+
+def test_compute_candidate_dp5_averaged_fallback_reasons() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    mismatch = _dp5_candidate("mismatch", geometry=True, atom_label="C9")
+    no_carbon = _dp5_candidate("no-carbon", geometry=True, carbon=False)
+    model = _PathDP5Model()
+
+    out_mismatch = _compute_candidate_dp5(*mismatch, NmrConfig(), model)
+    assert out_mismatch.mode == "averaged"
+    assert out_mismatch.diagnostics[0]["fallback_reason"] == "label_mismatch"
+
+    out_no_carbon = _compute_candidate_dp5(*no_carbon, NmrConfig(), model)
+    assert out_no_carbon.mode == "averaged"
+    assert out_no_carbon.probability == 0.0
+    assert out_no_carbon.diagnostics[0]["fallback_reason"] == "no_carbon"
+    # only the label-mismatch path invoked the model (averaged DP5);
+    # the no-carbon shortcut returns 0.0 without calling it
+    assert model.calls == ["averaged"]
+
+
+def test_dp5_model_has_no_shared_mode_state() -> None:
+    """G07: the model object carries no dp5_mode/fchl_kernel last-state attrs."""
+    from acp.nmr.error_model import GoodmanDP5Model, dp5_model_available
+
+    if not dp5_model_available():
+        pytest.skip("Goodman DP5 model files not present")
+    model = GoodmanDP5Model()
+    assert not hasattr(model, "dp5_mode")
+    assert not hasattr(model, "fchl_kernel")
+
+
+def _multi_conformer_ensemble(
+    structure: Structure,
+    shieldings: dict[int, dict[str, str | float]],
+    *,
+    geometry: bool,
+    n_conformers: int = 2,
+) -> object:
+    ens = StructureEnsemble(
+        records=[
+            StructureRecord(
+                structure=structure, energy_hartree=-1.0, free_energy_hartree=-1.0, weight=1.0
+            )
+        ]
+    )
+    data = []
+    for i in range(n_conformers):
+        kwargs: dict[str, object] = {}
+        if geometry:
+            kwargs = {
+                "coordinates": np.array(
+                    [
+                        [0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0],
+                        [0.0, 0.0, 1.0],
+                        [-1.0, 0.0, 0.0],
+                    ]
+                ),
+                "symbols": list(structure.symbols),
+            }
+        data.append(
+            ConformerShielding(
+                conformer_id=f"{structure.id}_conf_{i:03d}",
+                boltzmann_weight=1.0 / n_conformers,
+                shieldings={int(k): dict(v) for k, v in shieldings.items()},
+                **kwargs,  # type: ignore[arg-type]
+            )
+        )
+    ens.data = data
+    return ens
+
+
+def _run_two_candidate_workflow(
+    tmp_path: Path,
+    *,
+    geometry_a: bool,
+    geometry_b: bool,
+    delta_a: float = 40.0,
+    delta_b: float = 40.0,
+):
+    from acp.workflows.nmr import run_nmr_analysis
+
+    struct_a = _structure("candA", ["C", "H", "H", "H", "H"])
+    struct_b = _structure("candB", ["C", "H", "H", "H", "H"])
+    spectrum = "C: 40.0(C1)\nH: 4.0(H1), 3.0(H2), 1.0(H3), 0.0(H4)"
+    ensembles = [
+        _multi_conformer_ensemble(
+            struct_a, _shieldings(list(struct_a.symbols), delta_a), geometry=geometry_a
+        ),
+        _multi_conformer_ensemble(
+            struct_b, _shieldings(list(struct_b.symbols), delta_b), geometry=geometry_b
+        ),
+    ]
+    shielding_results = [
+        _shielding_result(_shieldings(list(st.symbols), delta))
+        for st, delta in ((struct_a, delta_a), (struct_b, delta_b))
+    ]
+    model = _PathDP5Model()
+    with (
+        patch("acp.workflows.nmr.StructureReader") as reader_cls,
+        patch("acp.workflows.nmr.run_nmr_shielding", side_effect=shielding_results),
+        patch("acp.workflows.nmr.dp5_model_available", return_value=True),
+        patch("acp.workflows.nmr.load_dp5_model", return_value=model),
+        patch("acp.nmr.fchl.kernel_backend", return_value="numpy"),
+    ):
+        reader = MagicMock()
+        reader.read.side_effect = [struct_a, struct_b]
+        reader_cls.return_value = reader
+        result = run_nmr_analysis(
+            input_sources=[struct_a.id, struct_b.id],
+            spectrum=spectrum,
+            output_dir=str(tmp_path),
+            skip_conformers=True,
+            prebuilt_ensembles=ensembles,  # type: ignore[arg-type]
+            error_model="goodman-legacy",
+        )
+    return result, model
+
+
+def _load_summary(result) -> dict:
+    return json.loads(
+        (Path(result.metadata["report_json"]).parent / "nmr_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def test_workflow_mixed_dp5_modes_summary_reports_mixed(tmp_path: Path) -> None:
+    """FCHL candidate + fallback candidate → summary mode "mixed" + dp5_modes."""
+    result, model = _run_two_candidate_workflow(tmp_path, geometry_a=True, geometry_b=False)
+    assert result.status == "completed", result.error
+    assert model.calls == ["fchl", "fallback"]
+
+    report = _load_report(result)
+    cand_a, cand_b = report["candidates"]
+    assert cand_a["probability"]["dp5"]["status"] == "valid"
+    assert cand_b["probability"]["dp5"]["status"] == "valid"
+    assert cand_a["probability"]["dp5"]["mode"] == "fchl"
+    assert cand_b["probability"]["dp5"]["mode"] == "fallback"
+    assert cand_a["dp5_kernel"] == "numpy"
+    assert cand_b["dp5_kernel"] is None
+
+    summary = _load_summary(result)
+    assert summary["dp5_mode"] == "mixed"
+    assert summary["fchl_kernel"] == ""
+    assert summary["dp5_modes"] == [
+        {"index": 0, "mode": "fchl", "kernel": "numpy"},
+        {"index": 1, "mode": "fallback", "kernel": None},
+    ]
+
+
+def test_workflow_single_dp5_mode_summary_stays_that_mode(tmp_path: Path) -> None:
+    """All candidates on one path → summary keeps that mode (no "mixed")."""
+    result, model = _run_two_candidate_workflow(tmp_path, geometry_a=True, geometry_b=True)
+    assert result.status == "completed", result.error
+    assert model.calls == ["fchl", "fchl"]
+
+    report = _load_report(result)
+    for cand in report["candidates"]:
+        assert cand["probability"]["dp5"]["mode"] == "fchl"
+        assert cand["dp5_kernel"] == "numpy"
+
+    summary = _load_summary(result)
+    assert summary["dp5_mode"] == "fchl"
+    assert summary["fchl_kernel"] == "numpy"
+    assert summary["dp5_modes"] == [
+        {"index": 0, "mode": "fchl", "kernel": "numpy"},
+        {"index": 1, "mode": "fchl", "kernel": "numpy"},
+    ]
