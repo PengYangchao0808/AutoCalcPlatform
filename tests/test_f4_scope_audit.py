@@ -1690,12 +1690,16 @@ MIGRATION_STATION_PREFIXES = (
     # acp-nmr-goodman-gap todo 4: no-topology equivalence never element-merges.
     "src/acp/nmr/equivalence.py",
     "src/acp/nmr/averaging.py",
+    # acp-nmr-goodman-gap todo 22: report/manifest path derivation + existence.
+    "src/acp/nmr/report.py",
     # acp-nmr-goodman-gap todo 9: stereocenter labels via the stable atom map.
     "src/acp/nmr/enumerate.py",
     # acp-nmr-goodman-gap todo 8: evidence gate — evidence record + DP4 gating.
     "src/acp/nmr/probability.py",
     # acp-nmr-goodman-gap todo 11: stable log-CDF DP4 Gaussian.
     "src/acp/nmr/error_model.py",
+    # acp-nmr-goodman-gap todo 17: single typed NMR method resolver.
+    "src/acp/nmr/method_config.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker
     # landed outside the registered stations; registered here so the audit
     # gate is green again (unrelated to the nmr remediation).
