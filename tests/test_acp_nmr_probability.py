@@ -7,6 +7,8 @@ import math
 import pytest
 
 from acp.nmr.error_model import (
+    GoodmanErrorModel,
+    NonFiniteResidualError,
     PlaceholderStudentTErrorModel,
     load_error_model,
     validate_error_model_binding,
@@ -151,3 +153,63 @@ def test_normalize_dp4_handles_underflow() -> None:
     assert sum(probs) == 1.0
     assert probs[0] > probs[1]
     assert math.isfinite(probs[0])
+
+
+# todo 11: stable log-CDF — log(2) + log_ndtr(-|z|) ≡ log(erfc(z/√2)) (golden branch).
+
+
+def test_goodman_log_cdf_matches_erfc_branch() -> None:
+    """log(2)+log_ndtr(-z) ≡ log(erfc(z/√2)) on the official fixed branch."""
+    from scipy.special import log_ndtr
+
+    for z in (0.0, 0.1, 0.5, 1.0, 2.0, 3.0, 5.0):
+        stable = math.log(2.0) + float(log_ndtr(-z))
+        legacy = math.log(math.erfc(z / math.sqrt(2.0)))
+        assert stable == pytest.approx(legacy, rel=0.0, abs=1e-10)
+
+
+def test_goodman_regular_residuals_match_legacy_formula() -> None:
+    """Regular residuals stay numerically identical to the official branch."""
+    em = GoodmanErrorModel()
+    for r in (0.0, 0.1, 0.5, 1.0, 2.0):
+        for nucleus in ("13C", "1H"):
+            z = abs(r / em.SIGMA[nucleus])
+            legacy = math.log(math.erfc(z / math.sqrt(2.0)))
+            got = em.log_likelihood([r], nucleus)
+            assert got == pytest.approx(legacy, rel=0.0, abs=1e-10)
+
+
+def test_goodman_100ppm_carbon_residual_is_finite() -> None:
+    """A 100 ppm carbon residual must return finite, not raise math domain error."""
+    from scipy.special import log_ndtr
+
+    em = GoodmanErrorModel()
+    ll = em.log_likelihood([100.0], "13C")
+    assert math.isfinite(ll)
+    assert ll < 0.0
+    z = abs(100.0 / em.SIGMA["13C"])
+    expected = math.log(2.0) + float(log_ndtr(-z))  # ≈ log(2·Φ(-44))
+    assert ll == pytest.approx(expected, rel=0.0, abs=1e-10)
+
+
+def test_goodman_nonfinite_residuals_raise_typed_error() -> None:
+    """NaN/Inf residuals are typed failures — never silent NaN totals."""
+    em = GoodmanErrorModel()
+    assert issubclass(NonFiniteResidualError, ValueError)
+    with pytest.raises(NonFiniteResidualError) as excinfo:
+        em.log_likelihood([float("nan")], "13C")
+    assert "13C" in str(excinfo.value)
+    assert "nan" in str(excinfo.value)
+    with pytest.raises(NonFiniteResidualError) as excinfo:
+        em.log_likelihood([float("inf")], "1H")
+    assert "1H" in str(excinfo.value)
+    assert "inf" in str(excinfo.value)
+    with pytest.raises(NonFiniteResidualError):
+        em.log_likelihood([1.0, float("nan")], "13C")
+
+
+def test_goodman_empty_and_unknown_nucleus_semantics_unchanged() -> None:
+    """σ lookup semantics: empty list → 0.0, unknown nucleus → 0.0."""
+    em = GoodmanErrorModel()
+    assert em.log_likelihood([], "13C") == 0.0
+    assert em.log_likelihood([1.0], "31P") == 0.0

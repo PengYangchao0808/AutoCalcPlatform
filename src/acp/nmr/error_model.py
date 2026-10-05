@@ -26,6 +26,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 import numpy as np
+from scipy.special import log_ndtr
 
 from acp.nmr.models import NmrConfig
 
@@ -133,6 +134,10 @@ class PlaceholderStudentTErrorModel(ErrorModel):
         return total
 
 
+class NonFiniteResidualError(ValueError):
+    """Raised when a DP4 residual is NaN/±Inf instead of silently poisoning the total."""
+
+
 class GoodmanErrorModel(ErrorModel):
     """Goodman DP4 Gaussian error model (verified DP4.py:17-21, 190-194).
 
@@ -156,12 +161,18 @@ class GoodmanErrorModel(ErrorModel):
             logger.debug("No σ for nucleus %s in Goodman model; skipping", nucleus)
             return 0.0
         # P(r) = 2 * Φ(-|r/σ|); log P = log(2) + log Φ(-|z|)
-        # Φ(-|z|) = 0.5 * erfc(|z| / sqrt(2)); log(2·0.5·erfc) = log(erfc(...))
+        # Φ(-|z|) = 0.5 * erfc(|z| / sqrt(2)) → log P = log(erfc(|z|/sqrt(2))),
+        # evaluated as log(2) + log_ndtr(-|z|) because math.erfc underflows to
+        # 0.0 for |z| ≳ 37 (e.g. a 100 ppm carbon residual) and log(0) raises.
         total = 0.0
         for r in residuals:
-            z = abs(float(r) / sigma)
-            # erfc via math (stable for moderate z; for large z, log-erfc → -inf)
-            log_p = math.log(math.erfc(z / math.sqrt(2.0)))
+            r_val = float(r)
+            if not math.isfinite(r_val):
+                raise NonFiniteResidualError(
+                    f"non-finite {nucleus} residual {r_val!r} in Goodman DP4 likelihood"
+                )
+            z = abs(r_val / sigma)
+            log_p = math.log(2.0) + float(log_ndtr(-z))
             total += log_p
         return total
 
@@ -522,6 +533,7 @@ def dp5_fchl_available(models_dir: Path | None = None) -> bool:
 
 __all__ = [
     "ErrorModel",
+    "NonFiniteResidualError",
     "PlaceholderStudentTErrorModel",
     "GoodmanErrorModel",
     "GoodmanDP5Model",
