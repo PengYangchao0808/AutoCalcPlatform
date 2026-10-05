@@ -250,12 +250,18 @@ def item_cache_key(
     profile_key: str,
     method_signature: str = "",
     electronic_signature: str = "",
+    *,
+    default_charge: int,
+    default_multiplicity: int,
 ) -> str:
     """Return a stable cache key covering profile, methods, identity, TAG,
-    geometry, and electronic state.
+    geometry, resolved charge/multiplicity, and electronic state.
 
-    The electronic signature keeps RKS / UKS / BS branches with different
-    FlipSpin atom sets from sharing cache entries (design doc §8.3).
+    The resolved values come from the caller's job-level defaults (item-pinned
+    charge/multiplicity win) so two jobs differing only in charge or
+    multiplicity never share cache entries (r12 P1).  The electronic
+    signature keeps RKS / UKS / BS branches with different FlipSpin atom
+    sets from sharing cache entries (design doc §8.3).
     """
     values = (
         str(profile_key),
@@ -263,8 +269,8 @@ def item_cache_key(
         electronic_signature,
         item.candidate_id,
         item.tag,
-        str(item.resolved_charge(0)),
-        str(item.resolved_multiplicity(1)),
+        str(item.resolved_charge(default_charge)),
+        str(item.resolved_multiplicity(default_multiplicity)),
         item.xyz.strip(),
     )
     return "sha256:" + hashlib.sha256("\x00".join(values).encode("utf-8")).hexdigest()

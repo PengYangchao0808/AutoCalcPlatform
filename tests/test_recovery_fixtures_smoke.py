@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from acp.backends.batch import _read_cache
 from acp.calculations.batch._manifest import BatchCalculationManifest
 from acp.calculations.checkpoint import load_checkpoint
@@ -25,7 +23,12 @@ FIXTURES = Path(__file__).resolve().parent / "baseline" / "recovery_fixtures"
 def test_checkpoint_mixed_steps_loadable() -> None:
     root = FIXTURES / "checkpoint_mixed"
     meta = json.loads((root / "plan_fingerprint.json").read_text(encoding="utf-8"))
-    checkpoint = load_checkpoint(root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"])
+    # v1 fixture (no identity_schema) → default conservative recompute …
+    assert load_checkpoint(root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"]) is None
+    # … readable only through the explicit legacy-compat switch (batch path).
+    checkpoint = load_checkpoint(
+        root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"], allow_legacy_fingerprint=True
+    )
     assert checkpoint is not None
     statuses = [state.get("status") for state in checkpoint.step_states]
     assert statuses.count("completed") == 2
@@ -122,7 +125,9 @@ def test_checkpoint_mixed_optimize_step_fingerprint_compatible() -> None:
         ],
     )
     assert _plan_fingerprint(plan) == meta["plan_fingerprint"]
-    checkpoint = load_checkpoint(root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"])
+    checkpoint = load_checkpoint(
+        root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"], allow_legacy_fingerprint=True
+    )
     assert checkpoint is not None
     optimize_state = next(
         state for state in checkpoint.step_states if state.get("kind") == "optimize"
@@ -145,7 +150,9 @@ def test_checkpoint_mixed_frequency_step_recovers() -> None:
 
     root = FIXTURES / "checkpoint_mixed"
     meta = json.loads((root / "plan_fingerprint.json").read_text(encoding="utf-8"))
-    checkpoint = load_checkpoint(root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"])
+    checkpoint = load_checkpoint(
+        root / "WORK" / "00_RUNTIME", meta["plan_fingerprint"], allow_legacy_fingerprint=True
+    )
     assert checkpoint is not None
     freq_state = next(state for state in checkpoint.step_states if state.get("kind") == "frequency")
     assert freq_state["status"] == "failed"
@@ -196,13 +203,15 @@ def test_checkpoint_casscf_thermochemistry_steps_recover(tmp_path: Path) -> None
             {"kind": "casscf", "status": "completed", "energy": -109.14691549},
             {"kind": "thermochemistry", "status": "failed", "error": "synthetic shermo failure"},
         ],
+        identity_schema=2,
     )
     write_checkpoint(tmp_path, checkpoint)
     loaded = load_checkpoint(tmp_path, fingerprint)
     assert loaded is not None
     assert [state.get("status") for state in loaded.step_states] == ["completed", "failed"]
     assert loaded.step_states[0]["energy"] == -109.14691549
-    from acp.calculations.checkpoint import CheckpointMismatchError
 
-    with pytest.raises(CheckpointMismatchError):
-        load_checkpoint(tmp_path, "other-fingerprint")
+    # D06: fingerprint mismatch never raises — v2 mismatch and the legacy
+    # compat switch both fall back to conservative recompute (None).
+    assert load_checkpoint(tmp_path, "other-fingerprint") is None
+    assert load_checkpoint(tmp_path, "other-fingerprint", allow_legacy_fingerprint=True) is None

@@ -28,7 +28,6 @@ from acp.calculations.batch.models import (
     parse_tag_comment,
 )
 from acp.calculations.batch.options import BatchMethodOptions
-from acp.calculations.checkpoint import CheckpointMismatchError
 from acp.calculations.contracts import CalculationResult, StepKind, StructureRole
 from tests.conftest import FakeBackend, FakeBackendCall
 
@@ -1136,6 +1135,7 @@ def test_fingerprint_change_rejects_old_checkpoint(
     fake_backend: object,
     batch_items_ts_int: list[BatchStructureItem],
 ) -> None:
+    """D06: a fingerprint change causes full batch re-execution (no raise)."""
     from tests.conftest import FakeBackend
 
     assert isinstance(fake_backend, FakeBackend)
@@ -1146,10 +1146,14 @@ def test_fingerprint_change_rejects_old_checkpoint(
     engine.run(batch_items_ts_int, profile="opt_only", charge=0)
     calls_after_first = len(fake_backend.calls)
 
-    with pytest.raises(CheckpointMismatchError):
-        engine.run(batch_items_ts_int, profile="opt_freq", charge=0)
+    fake_backend.set_result(
+        "frequency",
+        QCResult(success=True, frequencies=[-120.0, 350.0], has_frequencies=True),
+    )
+    outcome = engine.run(batch_items_ts_int, profile="opt_freq", charge=0)
 
-    assert len(fake_backend.calls) == calls_after_first
+    assert all(record.status == "completed" for record in outcome.items)
+    assert len(fake_backend.calls) > calls_after_first
 
 
 # ── profile mismatch triggers full re-run ────────────────────────────────

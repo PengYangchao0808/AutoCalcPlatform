@@ -182,7 +182,17 @@ def prepare_frames(
                     symbols=tuple(frame_symbols),
                     charge=frame_charge,
                     multiplicity=frame_multiplicity,
-                    cache_key=item_cache_key(item, settings.profile, signature),
+                    cache_key=item_cache_key(
+                        item,
+                        settings.profile,
+                        signature,
+                        default_charge=(
+                            settings.charge if settings.charge is not None else 0
+                        ),
+                        default_multiplicity=(
+                            settings.multiplicity if settings.multiplicity is not None else 1
+                        ),
+                    ),
                 )
             )
         except (OSError, TypeError, ValueError) as exc:

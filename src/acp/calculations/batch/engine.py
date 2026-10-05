@@ -141,24 +141,39 @@ def _batch_plan_fingerprint(
     profile: str,
     methods: BatchMethodOptions | None = None,
     layout_mode: BatchLayoutMode = "batch",
+    *,
+    job_charge: int,
+    job_multiplicity: int,
 ) -> str:
-    """Return a stable fingerprint for the batch profile and ordered inputs."""
+    """Return a stable fingerprint for the batch profile and ordered inputs.
+
+    Includes the ACTUAL resolved job-level charge/multiplicity and the
+    per-item resolved values (r12 P1) — pre-change checkpoints whose
+    fingerprint bytes lack them can no longer authorize reuse (the batch
+    load path recomputes conservatively).
+    """
     resolved_methods = methods or BatchMethodOptions()
     item_signature = [
         {
             "item_id": item.item_id,
-            "cache_key": item_cache_key(item, profile, resolved_methods.cache_key),
+            "cache_key": item_cache_key(
+                item,
+                profile,
+                resolved_methods.cache_key,
+                "",
+                default_charge=job_charge,
+                default_multiplicity=job_multiplicity,
+            ),
         }
         for item in items
     ]
     payload_data: dict[str, object] = {
         "profile": profile,
         "methods": resolved_methods.cache_key,
+        "charge": job_charge,
+        "multiplicity": job_multiplicity,
         "items": item_signature,
     }
-    # Keep the historical fingerprint byte-for-byte stable for the default
-    # multi-item layout.  Only the new flat mode needs a distinct checkpoint
-    # namespace so it cannot accidentally reuse nested-path records.
     if layout_mode != "batch":
         payload_data["layout_mode"] = layout_mode
     payload = json.dumps(payload_data, sort_keys=True, separators=(",", ":"))
@@ -479,10 +494,15 @@ class BatchOptimizeEngine:
             active_progress_reporter.configure_batch(len(expanded_items), batch_stage_names(profile))
 
         fingerprint = _batch_plan_fingerprint(
-            expanded_items, profile, resolved_methods, resolved_layout
+            expanded_items,
+            profile,
+            resolved_methods,
+            resolved_layout,
+            job_charge=charge,
+            job_multiplicity=multiplicity,
         )
         runtime_dir = self._work_root / "00_RUNTIME"
-        checkpoint = load_checkpoint(runtime_dir, fingerprint)
+        checkpoint = load_checkpoint(runtime_dir, fingerprint, allow_legacy_fingerprint=True)
         previous_by_id = self._checkpoint_items(checkpoint)
         checkpoint_items_state: dict[str, JsonValue] = (
             dict(checkpoint.items_state) if checkpoint is not None else {}
@@ -506,6 +526,8 @@ class BatchOptimizeEngine:
                 profile,
                 resolved_methods.cache_key,
                 _electronic_signature(item.electronic_state),
+                default_charge=charge,
+                default_multiplicity=multiplicity,
             )
 
             item_dir = self._item_work_dir(item)
@@ -584,6 +606,7 @@ class BatchOptimizeEngine:
                     step_states=[],
                     items_state=checkpoint_items_state,
                     attempts=attempts,
+                    identity_schema=1,
                 ),
             )
 

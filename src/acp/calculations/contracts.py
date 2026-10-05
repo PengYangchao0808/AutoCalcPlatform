@@ -309,7 +309,13 @@ class TaskManifest:
 
 @dataclass(frozen=True, slots=True)
 class Checkpoint:
-    """Internal resumable state, separate from the display manifest."""
+    """Internal resumable state, separate from the display manifest.
+
+    ``identity_schema`` binds the fingerprint scheme: ``1`` = legacy
+    (content of ``plan_fingerprint`` unverifiable against the v2 science
+    identity), ``2`` = v2 identity (``acp.calculations.identity``).  Missing
+    on disk → reads as ``1`` for legacy files.
+    """
 
     task_id: str
     workflow: str
@@ -317,6 +323,7 @@ class Checkpoint:
     step_states: list[JsonValue] = field(default_factory=list)
     items_state: dict[str, JsonValue] = field(default_factory=dict)
     attempts: int = 0
+    identity_schema: int = 1
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "step_states", list(self.step_states))

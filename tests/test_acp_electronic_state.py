@@ -614,7 +614,7 @@ def test_item_cache_key_separates_electronic_states(tmp_path: Path) -> None:
         {"states": [{"state_id": "bs", "guess": {"flip_atoms": [2]}}]}, sort_keys=True
     )
     keys = {
-        item_cache_key(item, "opt_freq", "sig", signature)
+        item_cache_key(item, "opt_freq", "sig", signature, default_charge=0, default_multiplicity=1)
         for signature in ("", rks, uks, bs_a, bs_b)
     }
     assert len(keys) == 5

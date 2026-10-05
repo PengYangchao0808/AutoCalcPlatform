@@ -45,6 +45,11 @@ from acp.calculations.contracts import (
     electronic_state_config_from_dict,
     validate_plan,
 )
+from acp.calculations.identity import (
+    IDENTITY_SCHEMA,
+    compute_identity,
+    current_config_digest,
+)
 from acp.calculations.primitives.casscf import run_casscf
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
@@ -271,8 +276,14 @@ def _normalise_step(step: CalculationStep | Mapping[str, JsonValue]) -> Calculat
     return CalculationStep(kind=StepKind(raw_kind), mode=OptimizationMode(mode), spec=spec)
 
 
-def _plan_fingerprint(plan: CalculationPlan) -> str:
-    """Deterministic hash of the plan content for checkpoint identity."""
+def legacy_plan_fingerprint(plan: CalculationPlan) -> str:
+    """Legacy (pre-v2) deterministic hash of the plan content.
+
+    Kept for old-checkpoint compatibility and fixture generation only —
+    ``execute`` binds checkpoints with the v2 identity from
+    :mod:`acp.calculations.identity` (``legacy fingerprints alone never
+    authorize reuse``).
+    """
     step_values: list[JsonValue] = [
         {
             "kind": step.kind.value,
@@ -295,6 +306,10 @@ def _plan_fingerprint(plan: CalculationPlan) -> str:
         default=str,
     )
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+#: Back-compat alias (fixtures + cross-version tests import ``_plan_fingerprint``).
+_plan_fingerprint = legacy_plan_fingerprint
 
 
 def _step_dir_name(step_kind: StepKind) -> str | None:
@@ -437,8 +452,9 @@ class CalculationPlanExecutor:
 
     Resume: on restart the executor loads the checkpoint from
     ``WORK/00_RUNTIME``.  Steps already marked ``"completed"`` are
-    skipped.  A ``CheckpointMismatchError`` is raised if the plan
-    fingerprint changed (stale checkpoint).
+    skipped.  A fingerprint mismatch never raises — the checkpoint is
+    ignored (conservative recompute) and per-step adoption continues from
+    ``resume_source`` when available.
     """
 
     def __init__(
@@ -449,6 +465,7 @@ class CalculationPlanExecutor:
         # backend_factory is accepted for API compatibility but the
         # primitives resolve backends internally via the cccp registry.
         self._backend_factory = backend_factory
+        self._execution_record: dict[str, JsonValue] = {}
 
     # ── public entry point ──────────────────────────────────────────────
 
@@ -466,16 +483,19 @@ class CalculationPlanExecutor:
             task_root: Root directory; ``WORK/`` and ``RESULT/`` are
                 created here.
             plan_fingerprint: Optional override for the checkpoint
-                fingerprint.  When ``None`` a deterministic hash of the
-                plan is used.
+                fingerprint.  When ``None`` the v2 science identity of the
+                plan is used (content-bound effective parameters).
 
         Returns:
             An ``ExecutionResult`` with per-step states and errors.
 
         Raises:
-            ValueError: If the plan fails ``validate_plan``.
-            CheckpointMismatchError: If an existing checkpoint belongs to
-                a different plan fingerprint.
+            ValueError: If the plan fails ``validate_plan`` or has no items.
+            IdentityInputMissing: If a plan item's structure file is
+                unreadable (identity cannot be computed).
+
+        A fingerprint mismatch does NOT raise ``CheckpointMismatchError``:
+        the stale checkpoint is ignored and steps recompute conservatively.
         """
         # ① validate plan
         validation_errors = validate_plan(plan)
@@ -484,7 +504,8 @@ class CalculationPlanExecutor:
             raise ValueError(message)
         steps = [_normalise_step(raw_step) for raw_step in plan.steps]
 
-        fingerprint = plan_fingerprint or _plan_fingerprint(plan)
+        identity = None if plan_fingerprint is not None else compute_identity(plan)
+        fingerprint = plan_fingerprint if plan_fingerprint is not None else identity.plan_identity
         task_root = Path(task_root)
 
         # ② create step directories (§10.3 layout)
@@ -500,8 +521,13 @@ class CalculationPlanExecutor:
         for d in dirs_to_create:
             d.mkdir(parents=True, exist_ok=True)
 
-        # ⑤ resume from checkpoint
+        # ⑤ resume from checkpoint (v2 identity compare; never raises)
         checkpoint = load_checkpoint(runtime_dir, fingerprint)
+        config_changed = False
+        if checkpoint is not None:
+            checkpoint, config_changed = self._drop_on_config_digest_change(checkpoint)
+        if checkpoint is not None and identity is not None:
+            self._log_path_remaps(checkpoint, plan)
         completed_indices: set[int] = set()
         if checkpoint is not None:
             for idx, state_data in enumerate(checkpoint.step_states):
@@ -512,6 +538,8 @@ class CalculationPlanExecutor:
                 len(completed_indices),
                 len(steps),
             )
+
+        self._execution_record = self._build_execution_record(checkpoint)
 
         # initialise step states
         step_states: list[StepState] = []
@@ -589,7 +617,11 @@ class CalculationPlanExecutor:
 
             result_id = _step_result_id(fingerprint, idx, step.kind)
             prior_record = load_scientific_result(step_work_dir)
-            recovered = prior_record is not None and prior_record.result_id == result_id
+            recovered = (
+                not config_changed
+                and prior_record is not None
+                and prior_record.result_id == result_id
+            )
             if recovered and prior_record is not None:
                 logger.info(
                     "step %d (%s): stored scientific result found — publication retry only",
@@ -742,6 +774,62 @@ class CalculationPlanExecutor:
 
     # ── private helpers ─────────────────────────────────────────────────
 
+    def _drop_on_config_digest_change(
+        self, checkpoint: Checkpoint
+    ) -> tuple[Checkpoint | None, bool]:
+        """Conservative recompute when the resolved config moved since first execution.
+
+        Returns ``(checkpoint, config_changed)`` — a mismatch drops the
+        checkpoint AND suppresses stored-result adoption (attempt metadata
+        is not science, but it gates reuse).
+        """
+        stored_record = checkpoint.items_state.get("execution_record")
+        stored_digest: object = None
+        if isinstance(stored_record, dict):
+            stored_digest = stored_record.get("config_digest")
+        if not isinstance(stored_digest, str) or not stored_digest:
+            return checkpoint, False
+        current_digest = current_config_digest()
+        if stored_digest == current_digest:
+            return checkpoint, False
+        logger.info(
+            "identity.config_digest_changed: stored %s != current %s — "
+            "conservative recompute (attempt metadata, not science hash)",
+            stored_digest,
+            current_digest,
+        )
+        return None, True
+
+    @staticmethod
+    def _log_path_remaps(checkpoint: Checkpoint, plan: CalculationPlan) -> None:
+        """Record ``identity.path_remapped`` when an item moved (content-bound)."""
+        stored_paths = checkpoint.items_state.get("paths")
+        if not isinstance(stored_paths, dict):
+            return
+        for index, raw_item in enumerate(plan.items):
+            current = str(_ensure_artifact(raw_item).path)
+            previous = stored_paths.get(str(index))
+            if isinstance(previous, str) and previous and previous != current:
+                logger.info(
+                    "identity.path_remapped: item %s %s -> %s (content-bound identity unchanged)",
+                    index,
+                    previous,
+                    current,
+                )
+
+    @staticmethod
+    def _build_execution_record(checkpoint: Checkpoint | None) -> dict[str, JsonValue]:
+        """Attempt metadata bound to the checkpoint — never part of the science hash."""
+        from cccp.version import __version__ as platform_version
+
+        attempts = checkpoint.attempts + 1 if checkpoint is not None else 1
+        return {
+            "code_release": str(platform_version),
+            "config_digest": current_config_digest(),
+            "software_version": None,
+            "attempt": attempts,
+        }
+
     def _run_post_stability_node(
         self,
         *,
@@ -819,8 +907,8 @@ class CalculationPlanExecutor:
                 return resources
         return None
 
-    @staticmethod
     def _persist_checkpoint(
+        self,
         runtime_dir: Path,
         fingerprint: str,
         plan: CalculationPlan,
@@ -828,13 +916,19 @@ class CalculationPlanExecutor:
         handoff_coords: list[list[float]] | None,
         handoff_symbols: list[str] | None,
     ) -> None:
-        """Persist checkpoint including coordinate handoff state."""
+        """Persist checkpoint including coordinate handoff state (v2 writer)."""
         items_state: dict[str, JsonValue] = {}
         if handoff_coords is not None:
             items_state[_HANDOFF_KEY] = {
                 "coords": _json_geometry_value(handoff_coords),
                 "symbols": _json_text_list_value(handoff_symbols or []),
             }
+        items_state["paths"] = {
+            str(index): str(_ensure_artifact(raw_item).path)
+            for index, raw_item in enumerate(plan.items)
+        }
+        if self._execution_record:
+            items_state["execution_record"] = dict(self._execution_record)
         cp = Checkpoint(
             task_id="executor",
             workflow=plan.workflow,
@@ -842,6 +936,7 @@ class CalculationPlanExecutor:
             step_states=[s.to_dict() for s in step_states],
             items_state=items_state,
             attempts=0,
+            identity_schema=IDENTITY_SCHEMA,
         )
         write_checkpoint(runtime_dir, cp)
 
@@ -871,8 +966,8 @@ class CalculationPlanExecutor:
             label = f"{state.kind.value} (step {state.index})"
 
             if state.kind is StepKind.OPTIMIZE and state.result.metadata.get("optimization_status") == "converged":
-                from acp.results.structure_policy import single_geometry
                 from acp.results.frame_candidate_store import atomic_write_text
+                from acp.results.structure_policy import single_geometry
                 source_item = plan.items[0] if plan.items else None
                 symbols = (source_item.elements if isinstance(source_item, StructureArtifact)
                            else list((source_item or {}).get("elements") or (source_item or {}).get("symbols") or []))
