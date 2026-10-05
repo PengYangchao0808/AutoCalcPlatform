@@ -54,12 +54,15 @@ from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
     Assignment,
     AtomShift,
+    CandidateEvidence,
     CandidateResult,
     ConformerShielding,
+    EvidenceStatus,
     ExperimentalNmr,
     ExperimentalPeak,
     NmrConfig,
     NmrReport,
+    NucleusEvidence,
     RegressionResult,
     lookup_tms_shieldings,
 )
@@ -69,6 +72,7 @@ from acp.nmr.probability import (
     compute_dp5_goodman,
     dp5_log_to_probability,
     normalize_dp4,
+    normalize_dp4_gated,
 )
 from acp.nmr.scaling import build_assignments, fit_regression, fit_scaling_goodman
 from acp.nmr.spectra import (
@@ -95,12 +99,15 @@ __all__ = [
     # models
     "Assignment",
     "AtomShift",
+    "CandidateEvidence",
     "CandidateResult",
     "ConformerShielding",
+    "EvidenceStatus",
     "ExperimentalNmr",
     "ExperimentalPeak",
     "NmrConfig",
     "NmrReport",
+    "NucleusEvidence",
     "RegressionResult",
     "lookup_tms_shieldings",
     # io
@@ -128,6 +135,7 @@ __all__ = [
     # probability
     "compute_dp4",
     "normalize_dp4",
+    "normalize_dp4_gated",
     "compute_dp5",
     "compute_dp5_goodman",
     "dp5_log_to_probability",

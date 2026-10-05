@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Sequence
 from typing import Any
 
 from acp.nmr.error_model import ErrorModel
@@ -54,6 +55,42 @@ def normalize_dp4(log_likelihoods: list[float]) -> list[float]:
     if total <= 0:
         return [0.0 for _ in log_likelihoods]
     return [e / total for e in exps]
+
+
+def normalize_dp4_gated(
+    log_likelihoods: Sequence[float],
+    statuses: Sequence[str],
+) -> list[float | None]:
+    """Evidence gate (G05): normalize only the ``valid`` candidates.
+
+    Excluded candidates (``invalid`` / ``evidence_insufficient``) receive
+    ``None`` instead of a probability — critically, the empty-evidence
+    candidate whose raw log-likelihood of ``0.0`` would otherwise beat every
+    real (negative) log-likelihood in the softmax. The DP4 math itself is
+    untouched: the valid subset runs through :func:`normalize_dp4`, so a
+    lone valid candidate gets ``1.0`` and no valid candidate at all yields
+    all ``None``.
+
+    Args:
+        log_likelihoods: Per-candidate DP4 log-likelihoods (parallel to
+            *statuses*).
+        statuses: Per-candidate evidence statuses; only ``"valid"`` entries
+            are normalized.
+
+    Returns:
+        One entry per candidate: the normalized probability for valid
+        candidates, ``None`` where the gate excludes the candidate.
+
+    Raises:
+        ValueError: Length mismatch between the two sequences.
+    """
+    if len(log_likelihoods) != len(statuses):
+        raise ValueError(
+            f"length mismatch: {len(log_likelihoods)} log-likelihoods vs {len(statuses)} statuses"
+        )
+    valid_ll = [ll for ll, status in zip(log_likelihoods, statuses) if status == "valid"]
+    normalized = iter(normalize_dp4(valid_ll))
+    return [next(normalized) if status == "valid" else None for status in statuses]
 
 
 def compute_dp5(
@@ -133,6 +170,7 @@ def dp5_log_to_probability(log_prob: float) -> float:
 __all__ = [
     "compute_dp4",
     "normalize_dp4",
+    "normalize_dp4_gated",
     "compute_dp5",
     "compute_dp5_goodman",
     "dp5_log_to_probability",

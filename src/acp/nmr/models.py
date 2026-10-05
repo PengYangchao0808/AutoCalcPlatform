@@ -365,18 +365,86 @@ class RegressionResult:
         }
 
 
+# --- evidence gate (todo 8 / G05) ------------------------------------------
+
+
+EvidenceStatus = Literal["valid", "invalid", "evidence_insufficient"]
+
+EVIDENCE_STATUSES: tuple[str, ...] = ("valid", "invalid", "evidence_insufficient")
+
+
+@dataclass(frozen=True)
+class NucleusEvidence:
+    """Expected vs actually matched signal counts for one nucleus (G05).
+
+    Attributes:
+        expected: Number of experimental observations (peaks) requested
+            for this nucleus in the configured nuclei list.
+        matched: Number of residuals actually produced for this nucleus.
+    """
+
+    expected: int
+    matched: int
+
+    def as_dict(self) -> dict[str, int]:
+        return {"expected": self.expected, "matched": self.matched}
+
+
+@dataclass(frozen=True)
+class CandidateEvidence:
+    """Evidence record that gates one candidate into/out of DP4 ranking (G05).
+
+    Attributes:
+        status: ``valid`` (rankable), ``invalid`` (no matched signals at all
+            or a nucleus set incomparable with the other candidates) or
+            ``evidence_insufficient`` (1–2 matched signals — a two-point
+            calibration cannot support ranking).
+        per_nucleus: Expected/matched counts keyed by configured nucleus.
+        observation_ids: Stable ids of the matched experimental peaks
+            (T6 peak identity, ``"element:index"``).
+        exclusion_reasons: Closed-vocabulary reasons for a non-valid
+            status; empty for valid candidates.
+        total_matched: Sum of matched residuals over the configured nuclei.
+    """
+
+    status: EvidenceStatus
+    per_nucleus: dict[str, NucleusEvidence]
+    observation_ids: tuple[str, ...]
+    exclusion_reasons: tuple[str, ...]
+    total_matched: int
+
+    def __post_init__(self) -> None:
+        if self.status not in EVIDENCE_STATUSES:
+            raise ValueError(f"unknown evidence status: {self.status!r}")
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "total_matched": self.total_matched,
+            "observation_ids": list(self.observation_ids),
+            "exclusion_reasons": list(self.exclusion_reasons),
+            "per_nucleus": {nuc: ev.as_dict() for nuc, ev in self.per_nucleus.items()},
+        }
+
+
 @dataclass
 class CandidateResult:
-    """Full per-candidate analysis (stages 4–7 product)."""
+    """Full per-candidate analysis (stages 4–7 product).
+
+    ``dp4_probability``/``dp5_probability`` default to ``None`` — a missing
+    probability is never fabricated as ``0.0``; candidates excluded by the
+    evidence gate keep ``None``.
+    """
 
     index: int
     label: str
     atom_shifts: list[AtomShift] = field(default_factory=list)
     assignments: list[Assignment] = field(default_factory=list)
     regressions: dict[str, RegressionResult] = field(default_factory=dict)
-    dp4_probability: float = 0.0
-    dp5_probability: float = 0.0
+    dp4_probability: float | None = None
+    dp5_probability: float | None = None
     conformer_shieldings: list[ConformerShielding] = field(default_factory=list)
+    evidence: CandidateEvidence | None = None
 
     def as_dict(self) -> dict[str, object]:
         regression_obj: dict[str, object] = {}
@@ -385,8 +453,13 @@ class CandidateResult:
         return {
             "index": self.index,
             "label": self.label,
-            "dp4_probability": round(self.dp4_probability, 6),
-            "dp5_probability": round(self.dp5_probability, 6),
+            "dp4_probability": (
+                round(self.dp4_probability, 6) if self.dp4_probability is not None else None
+            ),
+            "dp5_probability": (
+                round(self.dp5_probability, 6) if self.dp5_probability is not None else None
+            ),
+            "evidence": self.evidence.as_dict() if self.evidence is not None else None,
             "n_conformers": len(self.conformer_shieldings),
             "regression": regression_obj,
             "assignment": [a.as_dict() for a in self.assignments],
@@ -400,6 +473,16 @@ class CandidateResult:
         }
 
 
+def _dp4_rank_key(candidate: CandidateResult) -> tuple[float, float]:
+    """Sort key for DP4 ranking; missing probabilities sort last (never win)."""
+    dp4 = candidate.dp4_probability
+    dp5 = candidate.dp5_probability
+    return (
+        dp4 if dp4 is not None else float("-inf"),
+        dp5 if dp5 is not None else float("-inf"),
+    )
+
+
 @dataclass
 class NmrReport:
     """Top-level report across all candidates (stage 8 input)."""
@@ -411,11 +494,36 @@ class NmrReport:
     metadata: dict[str, object] = field(default_factory=dict)
 
     @property
+    def ranked_candidates(self) -> list[CandidateResult]:
+        """Candidates eligible for DP4 ranking (G05).
+
+        A candidate ranks only when its evidence is valid (or unset for
+        legacy callers) AND it carries a DP4 probability — invalid /
+        evidence-insufficient candidates never compete.
+        """
+        return [
+            candidate
+            for candidate in self.candidates
+            if (candidate.evidence is None or candidate.evidence.status == "valid")
+            and candidate.dp4_probability is not None
+        ]
+
+    @property
     def winner(self) -> CandidateResult | None:
-        """Return the highest-DP4 candidate (ties broken by DP5)."""
-        if not self.candidates:
+        """Return the highest-DP4 rankable candidate (ties broken by DP5).
+
+        Candidates excluded by the evidence gate (or without a probability)
+        are never eligible; ``None`` when nobody qualifies.
+        """
+        ranked = self.ranked_candidates
+        if not ranked:
             return None
-        return max(self.candidates, key=lambda c: (c.dp4_probability, c.dp5_probability))
+        return max(ranked, key=_dp4_rank_key)
+
+    @property
+    def dp4_ranking(self) -> str:
+        """``"normal"`` when ≥2 candidates are ranked, else ``"not_applicable"``."""
+        return "normal" if len(self.ranked_candidates) >= 2 else "not_applicable"
 
     def as_dict(self) -> dict[str, object]:
         winner = self.winner
@@ -426,12 +534,21 @@ class NmrReport:
                     {
                         "index": winner.index,
                         "label": winner.label,
-                        "dp4": round(winner.dp4_probability, 6),
-                        "dp5": round(winner.dp5_probability, 6),
+                        "dp4": (
+                            round(winner.dp4_probability, 6)
+                            if winner.dp4_probability is not None
+                            else None
+                        ),
+                        "dp5": (
+                            round(winner.dp5_probability, 6)
+                            if winner.dp5_probability is not None
+                            else None
+                        ),
                     }
                     if winner is not None
                     else None
                 ),
+                "dp4_ranking": self.dp4_ranking,
                 "nuclei": list(self.config.nuclei),
             },
             "candidates": [c.as_dict() for c in self.candidates],

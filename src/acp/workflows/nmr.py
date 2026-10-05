@@ -57,11 +57,16 @@ from acp.nmr.error_model import (
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
     AtomShift,
+    CandidateEvidence,
     CandidateResult,
     ConformerShielding,
+    EvidenceStatus,
     ExperimentalNmr,
+    ExperimentalPeak,
     NmrConfig,
     NmrReport,
+    NucleusEvidence,
+    element_of_nucleus,
     normalize_symbol,
 )
 from acp.nmr.probability import (
@@ -69,7 +74,7 @@ from acp.nmr.probability import (
     compute_dp5,
     compute_dp5_goodman,
     dp5_log_to_probability,
-    normalize_dp4,
+    normalize_dp4_gated,
 )
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
@@ -964,6 +969,7 @@ def _analyze_candidate(
             )
         )
 
+    evidence = _build_candidate_evidence(experiment, nmr_config, residual_by_nucleus, pairs)
     return CandidateResult(
         index=index,
         label=structure.id,
@@ -971,10 +977,90 @@ def _analyze_candidate(
         assignments=assignments,
         regressions=regressions,
         conformer_shieldings=conformer_shieldings,
+        evidence=evidence,
         # probabilities set by the orchestrator (need all candidates first)
-        dp4_probability=0.0,
-        dp5_probability=0.0,
     )
+
+
+def _build_candidate_evidence(
+    experiment: ExperimentalNmr,
+    nmr_config: NmrConfig,
+    residual_by_nucleus: dict[str, list[float]],
+    pairs: dict[str, list[tuple[AtomShift, ExperimentalPeak]]],
+) -> CandidateEvidence:
+    """Assemble the evidence record gating this candidate into DP4 (G05).
+
+    Counts the experimental observations requested for the configured
+    nuclei (``expected``), the residuals actually produced (``matched``)
+    and the stable ids of the matched peaks (``"element:index"``). The
+    base status is decided here — no matched signals at all is
+    ``invalid``/``no_matched_signals``, 1–2 matched signals cannot support
+    a calibrated ranking and is ``evidence_insufficient``/
+    ``two_point_calibration``; cross-candidate comparability is applied
+    later in stage 7 (see :func:`_apply_evidence_comparability_gate`).
+    """
+    per_nucleus: dict[str, NucleusEvidence] = {}
+    observation_ids: list[str] = []
+    total_matched = 0
+    for nucleus in nmr_config.nuclei:
+        expected = len(experiment.peaks_for(element_of_nucleus(nucleus)))
+        matched = len(residual_by_nucleus.get(nucleus, []))
+        per_nucleus[nucleus] = NucleusEvidence(expected=expected, matched=matched)
+        total_matched += matched
+        for _shift, peak in pairs.get(nucleus, []):
+            observation_ids.append(f"{peak.element}:{peak.index}")
+
+    status: EvidenceStatus
+    reasons: list[str]
+    if total_matched == 0:
+        status = "invalid"
+        reasons = ["no_matched_signals"]
+    elif total_matched <= 2:
+        status = "evidence_insufficient"
+        reasons = ["two_point_calibration"]
+    else:
+        status = "valid"
+        reasons = []
+    return CandidateEvidence(
+        status=status,
+        per_nucleus=per_nucleus,
+        observation_ids=tuple(observation_ids),
+        exclusion_reasons=tuple(reasons),
+        total_matched=total_matched,
+    )
+
+
+def _apply_evidence_comparability_gate(candidate_results: list[CandidateResult]) -> None:
+    """Stage-7 cross-candidate check (G05): rank on one shared nucleus set.
+
+    DP4 log-likelihoods sum only over nuclei with matched residuals, so two
+    candidates scoring over different nucleus sets are not comparable: a
+    candidate missing a nucleus that every other evidence-bearing candidate
+    matched would silently skip that term and get an unfairly high
+    likelihood. Such a candidate is marked ``invalid`` with reason
+    ``incomparable_nuclei``. Candidates with no evidence never contribute to
+    the reference set — they are already excluded by their own gate.
+    """
+    evidence_sets: list[set[str]] = [
+        (
+            {nuc for nuc, ev in cr.evidence.per_nucleus.items() if ev.matched > 0}
+            if cr.evidence is not None
+            else set()
+        )
+        for cr in candidate_results
+    ]
+    for position, cr in enumerate(candidate_results):
+        if cr.evidence is None:
+            continue
+        others = [s for i, s in enumerate(evidence_sets) if i != position and s]
+        if not others:
+            continue  # single candidate / no other evidence to compare against
+        if set.intersection(*others) - evidence_sets[position]:
+            cr.evidence = replace(
+                cr.evidence,
+                status="invalid",
+                exclusion_reasons=cr.evidence.exclusion_reasons + ("incomparable_nuclei",),
+            )
 
 
 def _omit_atom_indices(
@@ -1618,7 +1704,8 @@ def run_nmr_analysis(
         progress_reporter.complete_stage("boltzmann_average")
         progress_reporter.start_stage("dp4_dp5_probability")
 
-    # Stage 7: DP4 / DP5
+    # Stage 7: DP4 / DP5 — evidence gate first (G05): candidates without
+    # comparable valid evidence never enter the normalization.
     log_likelihoods = [
         compute_dp4(
             {
@@ -1629,7 +1716,11 @@ def run_nmr_analysis(
         )
         for cr in candidate_results
     ]
-    dp4_probs = normalize_dp4(log_likelihoods)
+    _apply_evidence_comparability_gate(candidate_results)
+    statuses = [
+        cr.evidence.status if cr.evidence is not None else "valid" for cr in candidate_results
+    ]
+    dp4_probs = normalize_dp4_gated(log_likelihoods, statuses)
 
     # DP5: prefer the real Goodman KDE model when its assets are present;
     # fall back to the placeholder sigmoid otherwise.
@@ -1641,6 +1732,11 @@ def run_nmr_analysis(
             logger.warning("Goodman DP5 model load failed (%s); using placeholder", exc)
 
     for cr, p4 in zip(candidate_results, dp4_probs):
+        if p4 is None:
+            # excluded by the evidence gate — a probability is never fabricated
+            cr.dp4_probability = None
+            cr.dp5_probability = None
+            continue
         residual_by_nuc = {
             nuc: [a.residual for a in cr.assignments if _nucleus_of_element(a.element) == nuc]
             for nuc in nmr_config.nuclei
@@ -1685,6 +1781,20 @@ def run_nmr_analysis(
             if report.winner is not None
             else None
         ),
+        "dp4_ranking": report.dp4_ranking,
+        "candidates": [
+            {
+                "index": cr.index,
+                "label": cr.label,
+                "dp4_probability": cr.dp4_probability,
+                "dp5_probability": cr.dp5_probability,
+                "evidence_status": cr.evidence.status if cr.evidence is not None else None,
+                "exclusion_reasons": list(cr.evidence.exclusion_reasons)
+                if cr.evidence is not None
+                else [],
+            }
+            for cr in candidate_results
+        ],
         "error_model": actual_error_model,
         "dp5_mode": report.dp5_mode,
         "fchl_kernel": fchl_kernel,
