@@ -397,14 +397,17 @@ def xtbmd_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
-# ── nmr flag emission (T19: single resolver source; E7 parity) ──────────
+# ── nmr flag emission (T19/T20: single resolver source; E7 parity) ──────
 # NMR CLI flags are rendered from acp.nmr.method_config.resolve_nmr_method
 # (G06 single source of truth) — the resolver owns key precedence, so this
 # module never reads flat nmr_method/nmr_basis keys. Flag spellings match
-# the ``acp run nmr`` parser in cli.py. Solvent/ewin/preset ALSO still go
-# through the caller-side censo_* helpers (runner.py / script_gen.py) until
-# T20 rewires those call sites; where both fire they agree because the
-# resolver reads the same method-level keys first.
+# the ``acp run nmr`` parser in cli.py. INVARIANT: both nmr builders
+# (runner._build_nmr_cmd, script_gen.build_remote_nmr_cmd_tail) emit ONLY
+# nmr_method_flags — caller-side censo_preset/solvent/ewin emission for
+# nmr would duplicate --preset/--solvent/--ewin (same values, emitted
+# twice) and read levels.censo instead of the nmr wizard's
+# levels.conformer.ewin. The censo_* helpers below apply to
+# Confsearch/ensemble/energy/xtbmd only.
 _NMR_FLAG_FIELDS: tuple[tuple[str, str], ...] = (
     ("nmr_method", "--nmr-method"),
     ("nmr_basis", "--nmr-basis"),
@@ -459,6 +462,20 @@ def nmr_method_flags(method: dict[str, Any], config: Mapping[str, Any] | None = 
             continue
         flags += [flag, str(value)]
     return flags
+
+
+def nmr_flag_config(config_path: str | None = None) -> dict[str, Any]:
+    """Merged config backing NMR flag emission (T20 local ⇄ remote parity).
+
+    Mirrors the CLI's ``_build_config`` full 6-source merge
+    (``cccp.config.load_config``) so the emitted argv carries every
+    nmr-relevant value that differs from the resolver's built-in
+    defaults — the flags then determine the effective config on hosts
+    that do not receive the ``--config`` file (remote nodes).
+    """
+    from cccp.config import load_config
+
+    return load_config(Path(config_path) if config_path else None)
 
 
 # ── Confsearch / stage-workflow flag emission (E7: runner ⇄ script_gen) ───
@@ -819,6 +836,7 @@ __all__ = [
     "scan_method_flags",
     "xtbmd_method_flags",
     "nmr_method_flags",
+    "nmr_flag_config",
     "batchoptimize_method_flags",
     "confsearch_method_flags",
     "SCAN_CONFIG_FILENAME",

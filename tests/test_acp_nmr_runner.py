@@ -4,8 +4,9 @@ Covers ``JobRunner._materialize_bruker_asset`` (asset resolution + zip
 extraction), ``_build_nmr_cmd`` with a ``mode: "bruker"`` experiment
 payload, the G06 emitted-argv regressions (local runner + remote
 script_gen builders must produce argv that ``build_parser()`` accepts —
-no ``--name``), and the ``run_nmr_analysis`` → ``NmrConfig`` forwarding
-of ``solvent_model`` / ``max_conformers``.
+no ``--name``), the ``run_nmr_analysis`` → ``NmrConfig`` forwarding
+of ``solvent_model`` / ``max_conformers``, and the T20 local ⇄ remote
+parity + GUI closed loop (payload → argv → effective config → ORCA input).
 """
 
 from __future__ import annotations
@@ -14,7 +15,9 @@ import zipfile
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from acp.scheduler import jobs as scheduler_jobs
 from acp.scheduler.jobs import JobSpec
 from acp.scheduler.runner import JobRunner
 
@@ -298,3 +301,243 @@ def test_nmr_method_flags_legacy_flat_keys_still_win() -> None:
     flags = nmr_method_flags({"nmr_method": "B3LYP", "nmr_basis": "def2-TZVP"})
     assert flags[flags.index("--nmr-method") + 1] == "B3LYP"
     assert flags[flags.index("--nmr-basis") + 1] == "def2-TZVP"
+
+
+# ── T20: local ⇄ remote nmr argv parity + GUI closed loop (G06) ──────────
+# Both nmr builders must emit exactly the resolver-backed flag group
+# (``jobs.nmr_method_flags``) — no caller-side censo_* duplication — and
+# one GUI payload must yield the same parsed namespace, the same effective
+# config, and the same ORCA input on the local and remote paths.
+
+_NMR_FLAG_VOCAB: frozenset[str] = frozenset(
+    {"--nuclei"} | {flag for _field, flag in scheduler_jobs._NMR_FLAG_FIELDS}
+)
+# Host-specific by construction: local materialises absolute paths under
+# the task work dir, remote stages ``inputs/...`` + ``--output .``.
+_ENV_SPECIFIC_ARGV_KEYS = ("output", "input", "spectrum")
+# Kwargs ``_handle_nmr`` forwards into ``run_nmr_analysis`` that
+# ``_build_nmr_config`` accepts (→ NmrConfig) — plus ``ewin`` for parity.
+_NMR_CONFIG_KWARGS = (
+    "nuclei",
+    "nmr_method",
+    "nmr_basis",
+    "solvent",
+    "boltzmann_temp",
+    "tms_1h",
+    "tms_13c",
+    "error_model",
+    "conformer_preset",
+    "solvent_model",
+    "max_conformers",
+)
+_PARITY_KEYS = _NMR_CONFIG_KWARGS + ("ewin",)
+
+# Wizard-shaped payload: hoisted preset/solvent + nested levels — BEFORE
+# T20 the caller-side censo_* trio duplicated --preset/--solvent/--ewin
+# after the resolver group.
+_CUSTOM_PAYLOAD: dict = {
+    "schema_id": "nmr",
+    "profile_id": "nmr-goodman",
+    "preset": "censo-default",
+    "solvent": "water",
+    "ewin": 3.5,
+    "levels": {
+        "giaoa": {"functional": "B3LYP", "basis": "def2-TZVP", "solvent_model": "smd"},
+        "conformer": {"ewin": 3.5},
+    },
+}
+
+
+class _AnalysisCapturedError(BaseException):
+    """Sentinel escaping ``_handle_nmr``'s broad ``except Exception``."""
+
+
+def _nmr_gui_spec(method: dict, name: str = "20261006_001_nmr_parity") -> JobSpec:
+    """GUI-shaped nmr spec: hoisted charge/multiplicity + wizard payload."""
+    return JobSpec(
+        workflow="nmr",
+        name=name,
+        input={
+            "source_type": "candidates",
+            "candidates": [{"source_type": "smiles", "source": "CCO"}],
+            "experiment": {"mode": "assigned", "content": "C: 40.0(C1)"},
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        method=method,
+        resources={},
+    )
+
+
+def _nmr_argv_pair(method: dict, tmp_path: Path) -> tuple[list[str], list[str]]:
+    """Build ``(local_argv, remote_argv)`` from ONE payload via both builders."""
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    runner = _make_runner()
+    spec = _nmr_gui_spec(method)
+    local = runner._build_nmr_cmd(spec, tmp_path / spec.name)
+    remote = build_remote_cli_command(spec, input_path="inputs/input_0.xyz")
+    return local, remote
+
+
+def _nmr_flag_fragment(argv: list[str]) -> list[str]:
+    """Extract the resolver-owned flag pairs from a full argv (order kept)."""
+    fragment: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token in _NMR_FLAG_VOCAB:
+            fragment += [token, argv[index + 1]]
+            index += 2
+        else:
+            index += 1
+    return fragment
+
+
+def _parsed_namespaces(local: list[str], remote: list[str]) -> tuple[dict, dict]:
+    """Parse BOTH full argvs with ``build_parser``; drop host-specific keys."""
+    from acp.cli import build_parser
+
+    ns_local = vars(build_parser().parse_args(local[3:]))
+    ns_remote = vars(build_parser().parse_args(remote[3:]))
+    for key in _ENV_SPECIFIC_ARGV_KEYS:
+        ns_local.pop(key, None)
+        ns_remote.pop(key, None)
+    return ns_local, ns_remote
+
+
+def test_nmr_local_remote_argv_parity_default_payload(tmp_path: Path) -> None:
+    """Default payload: parsed namespaces and resolver fragments are equal."""
+    from acp.scheduler.jobs import nmr_method_flags
+
+    local, remote = _nmr_argv_pair({}, tmp_path)
+    ns_local, ns_remote = _parsed_namespaces(local, remote)
+    assert ns_local == ns_remote
+    expected = nmr_method_flags({})
+    assert _nmr_flag_fragment(local[3:]) == expected
+    assert _nmr_flag_fragment(remote[3:]) == expected
+
+
+def test_nmr_local_remote_argv_parity_custom_payload(tmp_path: Path) -> None:
+    """Custom payload: argv carries EXACTLY the resolver group (no dupes)."""
+    from collections import Counter
+
+    from acp.scheduler.jobs import nmr_method_flags
+
+    local, remote = _nmr_argv_pair(dict(_CUSTOM_PAYLOAD), tmp_path)
+    ns_local, ns_remote = _parsed_namespaces(local, remote)
+    assert ns_local == ns_remote
+
+    expected = nmr_method_flags(dict(_CUSTOM_PAYLOAD))
+    assert expected  # wizard payload must emit a non-empty resolver group
+    # RED before T20: the caller-side censo_* trio appended a second
+    # --preset/--solvent/--ewin after the resolver group.
+    assert _nmr_flag_fragment(local[3:]) == expected
+    assert _nmr_flag_fragment(remote[3:]) == expected
+    for argv in (local[3:], remote[3:]):
+        counts = Counter(token for token in argv if token in _NMR_FLAG_VOCAB)
+        assert all(count == 1 for count in counts.values()), counts
+
+
+def _effective_config_from_argv(argv_tail: list[str], monkeypatch, workdir: Path) -> dict:
+    """Run the real ``_handle_nmr`` on a parsed argv and capture the kwargs.
+
+    The captured kwargs are exactly what T18's handler forwards into
+    ``run_nmr_analysis`` — i.e. the resolved effective config the CLI
+    would execute with.
+    """
+    from acp.cli import _handle_nmr, build_parser
+    from acp.workflows import nmr as nmr_workflow
+
+    parsed = build_parser().parse_args(argv_tail)
+    captured: dict = {}
+
+    def _capture(**kwargs):
+        captured.update(kwargs)
+        raise _AnalysisCapturedError
+
+    workdir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(workdir)  # the remote argv uses ``--output .``
+    monkeypatch.setattr(nmr_workflow, "run_nmr_analysis", _capture)
+    with pytest.raises(_AnalysisCapturedError):
+        _handle_nmr(parsed)
+    assert captured, "run_nmr_analysis was never reached"
+    return captured
+
+
+def _nmr_config_from_captured(captured: dict):
+    """Reconstruct the workflow ``NmrConfig`` from captured handler kwargs."""
+    from acp.workflows.nmr import _build_nmr_config
+
+    return _build_nmr_config(
+        captured["config"], **{key: captured[key] for key in _NMR_CONFIG_KWARGS}
+    )
+
+
+def _closed_loop(method: dict, tmp_path: Path, monkeypatch) -> tuple[dict, str]:
+    """GUI payload → local+remote argv → effective config → ORCA input.
+
+    Returns the captured local effective config and the ORCA input text
+    (asserted identical for the local and remote argv — same payload, one
+    effective config, one ORCA input).
+    """
+    from tests.test_acp_workflows_nmr import _run_giao_capture  # T21 harness
+
+    local, remote = _nmr_argv_pair(method, tmp_path / "argv")
+    cap_local = _effective_config_from_argv(local[3:], monkeypatch, tmp_path / "eff_local")
+    cap_remote = _effective_config_from_argv(remote[3:], monkeypatch, tmp_path / "eff_remote")
+    assert {k: cap_local[k] for k in _PARITY_KEYS} == {k: cap_remote[k] for k in _PARITY_KEYS}
+    _, local_input = _run_giao_capture(
+        _nmr_config_from_captured(cap_local), tmp_path / "giao_local"
+    )
+    _, remote_input = _run_giao_capture(
+        _nmr_config_from_captured(cap_remote), tmp_path / "giao_remote"
+    )
+    assert local_input == remote_input  # identical ORCA input on both paths
+    return cap_local, local_input
+
+
+def test_nmr_closed_loop_default_payload(tmp_path: Path, monkeypatch) -> None:
+    """Default payload → builtin effective config → default ORCA input."""
+    cap, orca_input = _closed_loop({}, tmp_path, monkeypatch)
+    assert cap["nmr_method"] == "mPW1PW91"
+    assert cap["nmr_basis"] == "6-311G(d)"
+    assert cap["solvent_model"] == "cpcm"
+    assert cap["solvent"] == "chloroform"
+    assert cap["ewin"] == 6.0
+    assert "! mPW1PW91 6-311G(d)" in orca_input
+    assert "! CPCM(chloroform)" in orca_input
+
+
+def test_nmr_closed_loop_custom_payload(tmp_path: Path, monkeypatch) -> None:
+    """Wizard payload → custom method/basis/solvent in the ORCA input."""
+    cap, orca_input = _closed_loop(dict(_CUSTOM_PAYLOAD), tmp_path, monkeypatch)
+    assert cap["nmr_method"] == "B3LYP"
+    assert cap["nmr_basis"] == "def2-TZVP"
+    assert cap["solvent_model"] == "smd"
+    assert cap["solvent"] == "water"
+    assert cap["ewin"] == 3.5
+    assert cap["conformer_preset"] == "censo-default"
+    assert "! B3LYP def2-TZVP" in orca_input
+    assert "! SMD(Water)" in orca_input
+
+
+def test_nmr_closed_loop_gas_phase_payload(tmp_path: Path, monkeypatch) -> None:
+    """solvent_model=none flows through argv → config → no cpcm in input."""
+    method = {
+        "schema_id": "nmr",
+        "levels": {
+            "giaoa": {
+                "functional": "B3LYP",
+                "basis": "def2-TZVP",
+                "solvent_model": "none",
+            }
+        },
+    }
+    cap, orca_input = _closed_loop(method, tmp_path, monkeypatch)
+    assert cap["solvent_model"] == "none"
+    assert cap["solvent"] == ""
+    assert "! B3LYP def2-TZVP" in orca_input
+    lowered = orca_input.lower()
+    assert "cpcm" not in lowered
+    assert "smd" not in lowered

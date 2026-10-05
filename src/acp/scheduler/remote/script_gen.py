@@ -32,6 +32,7 @@ from acp.scheduler.jobs import (
     censo_solvent_from_method,
     confsearch_method_flags,
     input_chemistry_flags,
+    nmr_flag_config,
     nmr_method_flags,
     scan_method_flags,
     xtbmd_method_flags,
@@ -524,16 +525,12 @@ def build_remote_nmr_cmd_tail(
 
     # --name intentionally not emitted: the nmr parser never accepted it
     # (G06) — task naming is manager-owned (spec.name → work_dir name).
-    preset = censo_preset_from_method(method)
-    if preset:
-        cmd += ["--preset", preset]
-    cmd += nmr_method_flags(method)
-    solvent = censo_solvent_from_method(method)
-    if solvent:
-        cmd += ["--solvent", solvent]
-    ewin = censo_ewin_from_method(method)
-    if ewin is not None:
-        cmd += ["--ewin", str(ewin)]
+    # INVARIANT (E7): all nmr flags come from the single resolver-backed
+    # group — byte-identical call to JobRunner._build_nmr_cmd; no
+    # caller-side censo_preset/solvent/ewin here (duplicate emission; and
+    # the nmr wizard nests ewin under levels.conformer, which
+    # censo_ewin_from_method never reads).
+    cmd += nmr_method_flags(method, nmr_flag_config(spec.config_path))
     return cmd
 
 

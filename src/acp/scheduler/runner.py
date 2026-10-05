@@ -48,6 +48,7 @@ from acp.scheduler.jobs import (
     censo_solvent_from_method,
     confsearch_method_flags,
     input_chemistry_flags,
+    nmr_flag_config,
     nmr_method_flags,
     scan_method_flags,
     xtbmd_method_flags,
@@ -1592,16 +1593,11 @@ class JobRunner:
 
         # --name intentionally not emitted: the nmr parser never accepted it
         # (G06) — task naming is manager-owned (spec.name → work_dir name).
-        preset = censo_preset_from_method(method)
-        if preset:
-            cmd += ["--preset", preset]
-        cmd += nmr_method_flags(method)
-        solvent = censo_solvent_from_method(method)
-        if solvent:
-            cmd += ["--solvent", solvent]
-        ewin = censo_ewin_from_method(method)
-        if ewin is not None:
-            cmd += ["--ewin", str(ewin)]
+        # INVARIANT (E7): all nmr flags come from the single resolver-backed
+        # group — no caller-side censo_preset/solvent/ewin here (duplicate
+        # emission; and the nmr wizard nests ewin under levels.conformer,
+        # which censo_ewin_from_method never reads).
+        cmd += nmr_method_flags(method, nmr_flag_config(spec.config_path))
 
         if spec.config_path:
             cmd += ["--config", str(spec.config_path)]
@@ -1609,6 +1605,7 @@ class JobRunner:
             cmd += ["--nproc", str(res["nproc"])]
         if res.get("mem"):
             cmd += ["--mem", str(res["mem"])]
+        cmd += input_chemistry_flags(inp)
         return cmd
 
     def _build_pessearch_cmd(self, spec: JobSpec, work_dir: Path, source: str) -> list[str]:
