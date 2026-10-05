@@ -23,6 +23,7 @@ _ALL_CONFSEARCH_ENV_VARS = [
     "CONFSEARCH_CREST_PATH",
     "CONFSEARCH_ISOSTAT_PATH",
     "CONFSEARCH_SHERMO_PATH",
+    "CONFSEARCH_CENSO_PATH",
     "CONFSEARCH_PROTOCOL",
 ]
 
@@ -32,6 +33,7 @@ _DEFAULT_EXECUTABLES = {
     "xtb": "xtb",
     "isostat": "isostat",
     "shermo": "Shermo",
+    "censo": "censo",
 }
 
 
@@ -46,6 +48,41 @@ def _resolve_executable_path(name: str, configured_path: str | os.PathLike[str] 
 
 def _has_executable(name: str, configured_path: str | os.PathLike[str] | None = None) -> bool:
     return shutil.which(_resolve_executable_path(name, configured_path)) is not None
+
+
+# --- three-state real-QC evidence rule (plan todo 49) ------------------------
+# Real-QC tests have exactly three outcomes: PASS, FAIL, NOT_VERIFIED.  A
+# skipped real-QC test is NOT_VERIFIED and must never be counted as a green
+# pass.  Every binary-gate skip reason carries the literal token so
+# ``pytest -rs`` output and evidence logs can enforce that rule mechanically.
+NOT_VERIFIED = "NOT_VERIFIED"
+
+_REAL_QC_DISPLAY_NAMES = {
+    "orca": "ORCA",
+    "crest": "CREST",
+    "xtb": "xTB",
+    "isostat": "ISOSTAT",
+    "shermo": "Shermo",
+    "censo": "CENSO",
+}
+
+
+def real_qc_skip_reason(name: str) -> str:
+    """Skip reason for a real-QC test whose binary is unavailable.
+
+    ``name`` is the executable key resolved by :func:`_resolve_executable_path`
+    (``orca``/``crest``/``xtb``/``isostat``/``shermo``/``censo``), so the
+    matching override is ``CONFSEARCH_<NAME>_PATH``.  Binaries configured only
+    through ``~/.cccp.yaml`` are NOT on ``PATH`` and do not open this gate —
+    export the path before a real-QC run
+    (``export CONFSEARCH_ORCA_PATH=...`` etc.).
+    """
+    display = _REAL_QC_DISPLAY_NAMES.get(name, name)
+    return (
+        f"{NOT_VERIFIED}: {display} not available for real-QC execution "
+        f"(export CONFSEARCH_{name.upper()}_PATH=<path>; binaries configured only in "
+        f"~/.cccp.yaml are not on PATH); skipped, never counted as a pass"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,12 +272,14 @@ HAS_CREST = _has_executable("crest")
 HAS_XTB = _has_executable("xtb")
 HAS_ISOSTAT = _has_executable("isostat")
 HAS_SHERMO = _has_executable("shermo")
+HAS_CENSO = _has_executable("censo")
 
-requires_orca = pytest.mark.skipif(not HAS_ORCA, reason="ORCA not available")
-requires_crest = pytest.mark.skipif(not HAS_CREST, reason="CREST not available")
-requires_xtb = pytest.mark.skipif(not HAS_XTB, reason="xTB not available")
-requires_isostat = pytest.mark.skipif(not HAS_ISOSTAT, reason="ISOSTAT not available")
-requires_shermo = pytest.mark.skipif(not HAS_SHERMO, reason="Shermo not available")
+requires_orca = pytest.mark.skipif(not HAS_ORCA, reason=real_qc_skip_reason("orca"))
+requires_crest = pytest.mark.skipif(not HAS_CREST, reason=real_qc_skip_reason("crest"))
+requires_xtb = pytest.mark.skipif(not HAS_XTB, reason=real_qc_skip_reason("xtb"))
+requires_isostat = pytest.mark.skipif(not HAS_ISOSTAT, reason=real_qc_skip_reason("isostat"))
+requires_shermo = pytest.mark.skipif(not HAS_SHERMO, reason=real_qc_skip_reason("shermo"))
+requires_censo = pytest.mark.skipif(not HAS_CENSO, reason=real_qc_skip_reason("censo"))
 
 
 @pytest.fixture(autouse=True)
@@ -310,11 +349,23 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     run_slow = config.getoption("--run-slow") or config.getoption("--run-integration")
+    if run_slow:
+        return
     skip_slow = pytest.mark.skip(reason="Pass --run-slow or --run-integration to run")
+    skip_real_qc = pytest.mark.skip(
+        reason=(
+            f"{NOT_VERIFIED}: real-QC run not requested (pass --run-slow "
+            "--run-integration); skipped, never counted as a pass"
+        )
+    )
     for item in items:
-        if any(item.get_closest_marker(mark) for mark in ("slow", "integration")):
-            if not run_slow:
-                item.add_marker(skip_slow)
+        if not any(item.get_closest_marker(mark) for mark in ("slow", "integration")):
+            continue
+        is_real_qc = any(
+            str(mark.kwargs.get("reason", "")).startswith(NOT_VERIFIED)
+            for mark in item.iter_markers(name="skipif")
+        )
+        item.add_marker(skip_real_qc if is_real_qc else skip_slow)
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -326,6 +377,7 @@ def pytest_configure(config: pytest.Config) -> None:
         "requires_xtb: marks tests that need xTB installed",
         "requires_isostat: marks tests that need ISOSTAT installed",
         "requires_shermo: marks tests that need Shermo installed",
+        "requires_censo: marks tests that need CENSO installed",
     ]
     for marker in markers:
         config.addinivalue_line("markers", marker)

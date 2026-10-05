@@ -13,9 +13,10 @@ cleanly, never error):
 
 - ``@pytest.mark.slow`` + ``@pytest.mark.integration``: the default run (no
   ``--run-integration``) skips every smoke case.
-- ``@requires_orca/crest/xtb/isostat/shermo`` (``tests.conftest``,
+- ``@requires_orca/crest/xtb/isostat/shermo/censo`` (``tests.conftest``,
   ``shutil.which`` over ``CONFSEARCH_<NAME>_PATH`` at conftest import):
-  missing binaries skip.
+  missing binaries skip with a ``NOT_VERIFIED`` reason — a skipped real-QC
+  case is never a green pass (three-state rule, plan todo 49).
 
 The smoke file's Wave-0 expected-failure placeholders (``pending todo 41``)
 are all removed — the literal token for the pytest expected-failure mark no
@@ -33,8 +34,6 @@ from __future__ import annotations
 import functools
 import inspect
 import math
-import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -42,17 +41,13 @@ import numpy as np
 import pytest
 
 from tests.conftest import (
+    requires_censo,
     requires_crest,
     requires_isostat,
     requires_orca,
     requires_shermo,
     requires_xtb,
 )
-
-# CENSO has no tests.conftest marker; gate with the same shutil.which semantics
-# (CONFSEARCH_CENSO_PATH override mirrors conftest._resolve_executable_path).
-_HAS_CENSO = shutil.which(os.environ.get("CONFSEARCH_CENSO_PATH") or "censo") is not None
-requires_censo = pytest.mark.skipif(not _HAS_CENSO, reason="CENSO not available")
 
 # --- small stable samples ---------------------------------------------------
 # Water at a near-equilibrium geometry (C2v): stable sample for sp/opt/freq.

@@ -99,6 +99,7 @@ markers = [
     "requires_xtb: marks tests that need xTB installed",
     "requires_isostat: marks tests that need ISOSTAT installed",
     "requires_shermo: marks tests that need Shermo installed",
+    "requires_censo: marks tests that need CENSO installed",
 ]
 
 [tool.ruff]
