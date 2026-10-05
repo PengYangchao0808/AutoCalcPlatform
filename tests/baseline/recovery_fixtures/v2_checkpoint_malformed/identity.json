@@ -1,0 +1,33 @@
+{
+  "plan_identity": "v2:1f42183904c1d932834e8c2c8a6404c4",
+  "plan_repr": {
+    "items": [
+      {
+        "elements": [
+          "O",
+          "H",
+          "H"
+        ],
+        "path": "structures/input.xyz"
+      }
+    ],
+    "profile": "r2SCAN-3c",
+    "steps": [
+      {
+        "kind": "singlepoint",
+        "mode": "unconstrained",
+        "spec": null
+      },
+      {
+        "kind": "frequency",
+        "mode": "unconstrained",
+        "spec": null
+      }
+    ],
+    "workflow": "optimize"
+  },
+  "step_identities": [
+    "v2:24935007c2f712aab6ef8d694cfd40c0",
+    "v2:0a98fb4463a02cba5c183ee3ee1f1aea"
+  ]
+}

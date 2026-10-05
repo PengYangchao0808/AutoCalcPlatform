@@ -1,0 +1,14 @@
+{
+  "products": [
+    {
+      "id": "sp_output.log",
+      "kind": "file",
+      "label": "sp_output.log",
+      "path": "sp_output.log"
+    }
+  ],
+  "status": "completed",
+  "task_id": "v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint",
+  "version": 2,
+  "workflow": "singlepoint"
+}

@@ -8,12 +8,38 @@ from pre-migration state (A8: `continue` 不错误重算已完成步骤、不丢
 Regenerate: `python3.11 tests/baseline/recovery_fixtures/generate_fixtures.py`
 Byte-stable: no timestamps (batch manifest keeps `created_at`/`updated_at` empty),
 no machine paths (`remote_work_dir` is a synthetic remote-style placeholder;
-`plan_fingerprint.json` items are repo-relative).  Regeneration must leave
+`plan_fingerprint.json` items are repo-relative; the v2 identity is
+content-bound and never hashes item paths).  Regeneration must leave
 `git diff` empty.  The batch SP cache filename is the sha256 geometry key —
 its name is content-derived and deterministic.
 
+**Two write paths, deliberately separated (acp-execution-integrity todo 14):**
+
+* **Legacy v1 path (a–e) — byte-frozen.**  The five original fixtures
+  reproduce the generation-time bytes exactly and must never change:
+  `checkpoint_mixed`, `partial_failure`, `historical_manifest`,
+  `batch_sp_cache`, `remote_path_reference`.  The v1 `checkpoint.json`
+  predates `identity_schema` (todo 10), the `attempts`→`resume_count` rename
+  (todo 11) and `StepState.result_ref` (todo 12), so it is written as the raw
+  legacy payload — never through `write_checkpoint` / `StepState.to_dict()`,
+  whose current output carries those newer keys.  `_plan_fingerprint` (the
+  back-compat alias of `legacy_plan_fingerprint`) stays importable from the
+  generator for this purpose.  `tests/test_recovery_fixtures_smoke.py`
+  pins the sha256 of every frozen file (`test_v1_fixtures_byte_frozen`) and
+  asserts the legacy `attempts` key (never `resume_count`/`identity_schema`).
+* **v2 path (f–h) — controlled regeneration.**  `identity_schema=2`
+  checkpoints, durable `step_result.json` and publication-sequence states,
+  written with the CURRENT production writers (`write_checkpoint`,
+  `write_step_result`, `publish_result`/`save_scientific_result`).
+  Regenerating these is allowed and must stay byte-reproducible: fixed input
+  content, no wall-clock time, no machine paths; `config_digest` is pinned to
+  `null` (attempt metadata, never science) so executor runs in the smoke
+  suite pin `current_config_digest` to `None` while adopting.
+
 Loadability is smoke-checked by `tests/test_recovery_fixtures_smoke.py`
-(must stay green; it exercises the CURRENT readers only).
+(must stay green; it exercises the CURRENT readers only; it never reads
+`.omo/evidence` and depends on no wall-clock time or machine path —
+executor scenarios run on tmp copies of the fixtures).
 
 ## Fixtures
 
@@ -89,3 +115,69 @@ Loadability is smoke-checked by `tests/test_recovery_fixtures_smoke.py`
 - **Future tests must verify**: remote result reads still resolve through
   `_job_read_root` / `RemoteStructureCache` (`cache_path` must stay inside the
   cache root for every listed rel_path), and pending-fetch prefetch keys survive.
+
+## v2 fixtures（acp-execution-integrity todo 14 — controlled regeneration）
+
+Shared shape: the same content-bound SP→FREQ plan (`workflow=optimize`,
+`profile=r2SCAN-3c`, one water item).  Each fixture carries
+`structures/input.xyz` (fixed bytes) + `identity.json`
+(`plan_identity` / `step_identities` / `plan_repr`); the identity is
+computed from item **content** + effective science parameters only — paths,
+`job_id`/`attempt`/`code_release` and execution-domain keys
+(`output_dir`/`nproc`/…) never enter the hash.  The completed SP step is
+recorded exactly as production contract C dictates: ① `WORK/05_SP/step_result.json`
+(schema 1, `step_identity`, stable `step_id=step_0_singlepoint`, artifact
+sha256 over `sp_output.log`) → ② checkpoint `result_ref` → ③ publication
+files → ④ `publication_state.json` marker.
+
+### (f) `v2_checkpoint_mixed/` — completed + incomplete mix, partial failure, publish complete
+- `WORK/00_RUNTIME/checkpoint.json` — `identity_schema=2`,
+  `plan_fingerprint = plan_identity`, `resume_count` key (v2 serialisation),
+  SP `completed` (with `result_ref`) + FREQ `failed`; `items_state.__handoff__`
+  carries `single_point_energy` + `energy_unit="hartree"` (V03).
+- `RESULT/result_manifest.json` — task manifest with `status="failed"` and the
+  surviving SP products (`step_0_singlepoint_output`,
+  `step_0_singlepoint_energy`) — the v2 partial-failure shape.
+- **Verified by** `test_v2_mixed_fixture_resumes_without_recompute` —
+  executor resume adopts SP (QC count 0) and recomputes only the failed FREQ;
+  product ids stay stable and duplicate-free.  Also the baseline for the
+  crash-window scenarios (a–c below).
+
+### (g) `v2_publish_interrupted/` — publish interruption (marker absent)
+- Same checkpoint/step_result as (f) but FREQ `pending`; `WORK/05_SP/` holds
+  `scientific_result.json` + `result_manifest.json` **without**
+  `publication_state.json` (contract ③ never flipped) and the task-level
+  `RESULT/result_manifest.json` is absent.
+- **Verified by** `test_crash_window_published_not_marked_complete` — resume
+  performs a publish-only retry (SP QC 0): the marker flips, the RESULT
+  manifest is published exactly once, product ids are duplicate-free.
+
+### (h) `v2_checkpoint_malformed/` — malformed `step_states` for stable-id validation
+- Valid SP state (position 0, with `result_ref`), a **position-conflicting
+  duplicate** (claims `step_0` while sitting at position 1), a **non-mapping
+  corruption** (`"not-a-step-state"`) and an **extra §9.5 stability node**
+  (`step_2_singlepoint`, index 2 beyond the 2-step plan) — 4 states for a
+  2-step plan, so a pure-length check is meaningless.
+- **Verified by** `test_malformed_checkpoint_validated_by_stable_step_id` —
+  validation by stable `step_{index}_{kind}` ids accepts the SP state and the
+  stability node, rejects the corrupt entries for rebuild, and a full executor
+  run never raises `IndexError` nor reuses the mis-bound completed fact
+  (FREQ recomputes; adopted SP QC stays 0).
+
+## v1 recovery semantics frozen by the smoke suite
+
+- **Default = conservative recompute + event.**  A schema-less (schema 1)
+  checkpoint loads as `None` under the default
+  `load_checkpoint(..., allow_legacy_fingerprint=False)` with the logger
+  event `identity_unverifiable_legacy` — never a silent or raising reuse.
+  The explicit batch-path switch (`allow_legacy_fingerprint=True`) is covered
+  separately.  Mismatch/unknown-schema coverage is per-schema logger events
+  (`identity_fingerprint_mismatch`, `identity_unknown_schema`) — the old
+  `pytest.raises(CheckpointMismatchError)` semantics are gone (the exception
+  class remains API-compat only, no load path raises it).
+- **Fingerprint stability across todo-11-style field moves (Metis Q7)**:
+  `test_fingerprint_stable_across_contract_field_moves` pins that the frozen
+  v1 fingerprint still matches `legacy_plan_fingerprint` after the
+  `attempts`→`resume_count` rename, the `StepState.result_ref` addition and
+  the V03 handoff extension, and that the v2 identity ignores spec key order
+  and execution-domain keys (machine paths) while changing on science order.
