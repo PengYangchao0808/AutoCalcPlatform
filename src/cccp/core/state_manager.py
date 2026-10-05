@@ -5,6 +5,16 @@ State Manager
 Manages conformer search state and checkpointing.
 
 Author: QCcalc Team (adapted from RPH)
+
+DEPRECATED — legacy cccp API (marked 2026-10-05, plan todo 30; no removal scheduled).
+
+Usage evidence (verified by grep at repo HEAD 66222f7):
+    - No ACP production callers and no test callers.
+    - Sole in-repo consumer is the re-export in ``cccp/core/__init__.py``.
+
+Support scope: all exports stay (external users cannot be confirmed). Fully
+dormant — ACP job checkpointing lives in ``acp/calculations/checkpoint.py``
+and ``acp/scheduler``; do not build new state persistence here.
 """
 
 import json

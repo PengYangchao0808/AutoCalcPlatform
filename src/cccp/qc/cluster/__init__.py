@@ -5,6 +5,21 @@ Cluster Adapters
 Adapters for different execution environments (local, LSF, Slurm, etc.).
 
 Author: QCcalc Team
+
+DEPRECATED — legacy cccp API (marked 2026-10-05, plan todo 30; no removal scheduled).
+
+Usage evidence (verified by grep at repo HEAD 66222f7):
+    - No ACP production callers: ``src/acp`` imports none of this package's
+      symbols; ``acp/scheduler/remote/{monitor,script_gen}.py`` reference
+      ``LSFClusterAdapter`` in docstrings only. ACP remote LSF execution goes
+      through ``acp/scheduler/remote/`` directly, NOT this layer.
+    - In-repo consumer is the re-export in ``cccp/qc/__init__.py``.
+    - Direct callers are tests only (``tests/test_acp_init_config_model.py``
+      exercises ``create_cluster_adapter`` type mapping).
+
+Support scope: all exports stay (external users cannot be confirmed).
+``LSFClusterAdapter`` is a placeholder stub (hardcoded paths, no retry); do
+not build new remote-execution features here — use ``acp/scheduler/remote``.
 """
 
 from abc import ABC, abstractmethod
