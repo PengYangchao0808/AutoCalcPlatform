@@ -18,9 +18,58 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-from acp.nmr.error_model import ErrorModel
+from acp.nmr.error_model import ErrorModel, NonFiniteResidualError
 
 logger = logging.getLogger(__name__)
+
+
+class ProbabilityInputError(ValueError):
+    """Invalid statistical input reaching the DP4/DP5 probability functions.
+
+    Distinct from :class:`acp.nmr.error_model.NonFiniteResidualError`
+    (raised for non-finite *residuals*): this error flags bad parameters
+    or bad log-likelihood arrays handed to the normalization stage.
+    """
+
+
+def _require_finite_residuals(
+    per_nucleus_residuals: dict[str, list[float]],
+    where: str,
+) -> None:
+    """Reject non-finite residuals before any likelihood math runs.
+
+    Args:
+        per_nucleus_residuals: Scaled residuals grouped by nucleus.
+        where: Calling function name, embedded in the error message.
+
+    Raises:
+        NonFiniteResidualError: Any residual is NaN or ±Inf.
+    """
+    for nucleus, residuals in per_nucleus_residuals.items():
+        for r in residuals:
+            r_val = float(r)
+            if not math.isfinite(r_val):
+                raise NonFiniteResidualError(f"non-finite {nucleus} residual {r_val!r} in {where}")
+
+
+def _require_finite_log_likelihoods(
+    log_likelihoods: Sequence[float],
+    where: str,
+) -> None:
+    """Reject non-finite log-likelihoods before the softmax runs.
+
+    Args:
+        log_likelihoods: Per-candidate DP4 log-likelihoods.
+        where: Calling function name, embedded in the error message.
+
+    Raises:
+        ProbabilityInputError: Any entry is NaN or ±Inf.
+    """
+    for i, ll in enumerate(log_likelihoods):
+        if not math.isfinite(ll):
+            raise ProbabilityInputError(
+                f"non-finite log-likelihood at index {i} ({where}): {float(ll)!r}"
+            )
 
 
 def compute_dp4(
@@ -32,7 +81,13 @@ def compute_dp4(
     The caller normalizes across candidates via :func:`normalize_dp4`.
     Returning the log keeps the product numerically stable for many
     residuals.
+
+    Raises:
+        NonFiniteResidualError: Any residual is NaN or ±Inf (validated
+            here so the guarantee does not depend on the error model —
+            the placeholder Student-t previously let NaN through).
     """
+    _require_finite_residuals(per_nucleus_residuals, "compute_dp4")
     return sum(
         error_model.log_likelihood(residuals, nucleus)
         for nucleus, residuals in per_nucleus_residuals.items()
@@ -44,9 +99,14 @@ def normalize_dp4(log_likelihoods: list[float]) -> list[float]:
     """Normalize log-likelihoods across candidates → DP4 probabilities.
 
     Uses the softmax / log-sum-exp trick to avoid underflow.
+
+    Raises:
+        ProbabilityInputError: Any log-likelihood is NaN or ±Inf —
+            rejected up front instead of softmax-ing NaN into the result.
     """
     if not log_likelihoods:
         return []
+    _require_finite_log_likelihoods(log_likelihoods, "normalize_dp4")
     max_ll = max(log_likelihoods)
     if math.isinf(max_ll) and max_ll < 0:
         return [0.0 for _ in log_likelihoods]
@@ -82,12 +142,14 @@ def normalize_dp4_gated(
         candidates, ``None`` where the gate excludes the candidate.
 
     Raises:
-        ValueError: Length mismatch between the two sequences.
+        ProbabilityInputError: Length mismatch between the two sequences,
+            or any log-likelihood (valid or excluded) is NaN/±Inf.
     """
     if len(log_likelihoods) != len(statuses):
-        raise ValueError(
+        raise ProbabilityInputError(
             f"length mismatch: {len(log_likelihoods)} log-likelihoods vs {len(statuses)} statuses"
         )
+    _require_finite_log_likelihoods(log_likelihoods, "normalize_dp4_gated")
     valid_ll = [ll for ll, status in zip(log_likelihoods, statuses) if status == "valid"]
     normalized = iter(normalize_dp4(valid_ll))
     return [next(normalized) if status == "valid" else None for status in statuses]
@@ -109,7 +171,14 @@ def compute_dp5(
         per_nucleus_residuals: Scaled residuals per nucleus.
         error_model: Trained (or placeholder) error distribution.
         kde_bandwidth: Reference bandwidth (provenance only).
+
+    Raises:
+        NonFiniteResidualError: Any residual is NaN or ±Inf.
+        ProbabilityInputError: ``kde_bandwidth`` is not finite and > 0.
     """
+    if not math.isfinite(kde_bandwidth) or kde_bandwidth <= 0:
+        raise ProbabilityInputError(f"kde_bandwidth must be finite and > 0, got {kde_bandwidth!r}")
+    _require_finite_residuals(per_nucleus_residuals, "compute_dp5")
     folded: dict[str, list[float]] = {
         nucleus: [abs(r) for r in residuals]
         for nucleus, residuals in per_nucleus_residuals.items()
@@ -147,10 +216,16 @@ def compute_dp5_goodman(
 
     Returns:
         DP5 probability in ``[0, 1]``, or ``0.0`` when no ¹³C residuals.
+
+    Raises:
+        NonFiniteResidualError: Any residual (in any nucleus) is NaN/±Inf —
+            rejected even for nuclei the carbon-only path does not consume,
+            so broken upstream input never passes silently.
     """
     # Goodman DP5 is 13C-only (DP5.py proton code commented out). The KDE
     # training data is carbon-specific; mixing in 1H residuals would be
     # scientifically invalid.
+    _require_finite_residuals(per_nucleus_residuals, "compute_dp5_goodman")
     carbon_residuals = per_nucleus_residuals.get("13C", [])
     carbon_errors = [float(r) for r in carbon_residuals]
     if not carbon_errors:
@@ -163,11 +238,30 @@ def dp5_log_to_probability(log_prob: float) -> float:
 
     Only used by the placeholder path. The real Goodman DP5 (via
     :func:`compute_dp5_goodman`) already returns a probability in ``[0, 1]``.
+
+    Numerically stable sign branch: for ``log_prob >= 0`` the exponential
+    of the non-positive value ``-log_prob`` can only underflow (→ ``1.0``);
+    for ``log_prob < 0`` ``exp(log_prob)`` underflows to ``0.0``. Neither
+    branch overflows, so ``dp5_log_to_probability(-1000)`` is ``0.0`` instead
+    of raising ``OverflowError`` (gap §12.1 / G14).
+
+    Returns:
+        Finite probability in ``[0, 1]``; ``±inf`` maps to ``0.0``/``1.0``.
+
+    Raises:
+        ProbabilityInputError: ``log_prob`` is NaN — no implicit NaN success.
     """
-    return 1.0 / (1.0 + math.exp(-log_prob))
+    x = float(log_prob)
+    if math.isnan(x):
+        raise ProbabilityInputError(f"log_prob must not be NaN, got {x!r}")
+    if x >= 0:
+        return 1.0 / (1.0 + math.exp(-x))
+    exp_x = math.exp(x)
+    return exp_x / (1.0 + exp_x)
 
 
 __all__ = [
+    "ProbabilityInputError",
     "compute_dp4",
     "normalize_dp4",
     "normalize_dp4_gated",
