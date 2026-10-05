@@ -1,14 +1,18 @@
-"""Translation single-source tests (plan todo 25).
+"""Translation single-source tests (plan todos 25 + 37/A5).
 
 Covers the cccp render API (``cccp.qc.translation``): route-line + CENSO
 template unit cases, summary-vs-actual-route consistency (display ==
-execution), and a no-duplicate-defaults guard over the batch effective
-config.
+execution), a no-duplicate-defaults guard over the batch effective config,
+and the A5 acceptance rows — xTB argv/control normalization single-sourced
+through ``cccp.utils.solvent_map`` / ``cccp.qc.interfaces.xtb_scan``, and
+explicit consistency assertions across the three upstream ACP callers that
+previously hand-built ``"! "`` route lines.
 """
 
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 
 import pytest
@@ -326,3 +330,123 @@ class TestNoDuplicateDefaults:
         from acp.calculations.batch import effective_config
 
         assert "render_orca_opt" in inspect.getsource(effective_config.build_orca_summary)
+
+
+# ── xTB argv/control single source (plan todo 37, A5) ─────────────────────
+
+_XTB_ENTRY_SOURCES = (
+    "src/cccp/qc/interfaces/xtb.py",
+    "src/cccp/qc/interfaces/xtb_path.py",
+    "src/cccp/qc/interfaces/xtb_thermo.py",
+    "src/cccp/qc/interfaces/molclus.py",
+    "src/cccp/qc/interfaces/crest.py",
+)
+
+
+class TestXtbSingleSource:
+    @pytest.mark.parametrize("relpath", _XTB_ENTRY_SOURCES)
+    def test_entry_points_share_solvent_normalization(self, relpath: str) -> None:
+        src = (ROOT / relpath).read_text(encoding="utf-8")
+        assert "xtb_solvent_args" in src, f"{relpath} must use the shared solvent args"
+        assert "xtb_method_name" in src, f"{relpath} must use the shared method normalizer"
+
+    def test_xtb_interface_uses_shared_constraint_block(self) -> None:
+        src = (ROOT / "src" / "cccp" / "qc" / "interfaces" / "xtb.py").read_text(encoding="utf-8")
+        assert "xcontrol_constraint_block" in src
+        assert "from cccp.qc.interfaces.xtb_scan import" in src
+
+    def test_solvent_args_delegate_to_shared_helper_at_runtime(self) -> None:
+        from cccp.qc.interfaces.xtb import XTBInterface
+        from cccp.utils.solvent_map import xtb_method_name, xtb_solvent_args
+
+        xtb = XTBInterface.__new__(XTBInterface)
+        xtb.solvent = "water"
+        xtb.solvent_model = "alpb"
+        xtb.gfn_level = 2
+        assert xtb._solvent_args() == xtb_solvent_args(
+            "water", method=xtb_method_name(2), solvent_model="alpb"
+        )
+
+
+class TestNoWorkflowBackendSyntax:
+    """ACP workflows must not assemble backend input syntax (A5)."""
+
+    def test_workflows_do_not_build_xtb_argv(self) -> None:
+        offenders: list[str] = []
+        roots = [ROOT / "src" / "acp" / "workflows", ROOT / "src" / "acp" / "confsearch"]
+        for base in roots:
+            for path in base.rglob("*.py"):
+                text = path.read_text(encoding="utf-8")
+                for flag in ('"--gfn"', '"--opt"', '"--uhf"', '"--chrg"', '"--input"'):
+                    if flag in text:
+                        offenders.append(f"{path.relative_to(ROOT)}:{flag}")
+        assert offenders == [], f"workflow assembled xTB argv: {offenders}"
+
+    def test_acceptance_grep_route_line_concatenation_empty(self) -> None:
+        # grep -rn '"! "\s*+' src/acp must be empty (route lines never concatenated).
+        pattern = re.compile(r'"! "\s*\+')
+        offenders = [
+            f"{path.relative_to(ROOT)}:{match.start()}"
+            for path in (ROOT / "src" / "acp").rglob("*.py")
+            for match in pattern.finditer(path.read_text(encoding="utf-8"))
+        ]
+        assert offenders == [], f"hand-built route line(s): {offenders}"
+
+
+# ── three upstream ACP callers route through the translation layer (A5) ────
+
+_UPSTREAM_CALLERS = (
+    ("src/acp/calculations/batch/effective_config.py", "render_orca_opt"),
+    ("src/acp/workflows/energy_shared.py", "render_censo_template_lines"),
+    ("src/acp/confsearch/shared/helpers.py", "render_censo_template_lines"),
+)
+
+
+class TestUpstreamCallerConsistency:
+    @pytest.mark.parametrize(
+        "relpath,expected_symbol",
+        _UPSTREAM_CALLERS,
+        ids=[path.rsplit("/", 1)[-1] for path, _ in _UPSTREAM_CALLERS],
+    )
+    def test_caller_imports_translation_layer(self, relpath: str, expected_symbol: str) -> None:
+        src = (ROOT / relpath).read_text(encoding="utf-8")
+        assert "from cccp.qc.translation import" in src, f"{relpath} bypasses translation"
+        assert expected_symbol in src, f"{relpath} must use {expected_symbol}"
+        assert re.search(r'"! "\s*\+', src) is None, f"{relpath} hand-builds a route line"
+
+    def test_censo_template_round_trips_through_renderer(self) -> None:
+        from acp.workflows.energy_shared import _part_template_tokens
+
+        lines = render_censo_template_lines(["RI", "def2/J", "NoFrozenCore"])
+        recovered = _part_template_tokens({"part_a": lines})
+        assert recovered == {"part_a": ["RI", "def2/J", "NoFrozenCore"]}
+        assert render_censo_template_lines(recovered["part_a"]) == lines
+
+    def test_summary_matches_rendered_route_tokens_for_role_matrix(self) -> None:
+        from acp.calculations.batch.effective_config import build_orca_summary
+
+        cases = [
+            {"opt_level": "loose", "max_cycles": 30},
+            {"opt_level": "tight", "scf_convergence": "tight", "scf_strategy": "slowconv"},
+            {
+                "opt_level": "VeryTight",
+                "scf_convergence": "VeryTight",
+                "opt_initial_hessian": "calculate",
+                "opt_recalc_hess": 4,
+            },
+        ]
+        for effective in cases:
+            render = render_orca_opt(
+                OrcaOptSpec(
+                    opt_level=effective.get("opt_level"),
+                    scf_convergence=effective.get("scf_convergence"),
+                    scf_strategy=effective.get("scf_strategy"),
+                    max_cycles=effective.get("max_cycles"),
+                    trust_radius=effective.get("opt_trust_radius"),
+                    initial_hessian=effective.get("opt_initial_hessian"),
+                    recalc_hess=effective.get("opt_recalc_hess"),
+                )
+            )
+            assert build_orca_summary(dict(effective)) == list(render.summary_tokens)
+            for token in render.route_tokens:
+                assert token in render.route_line(), token
