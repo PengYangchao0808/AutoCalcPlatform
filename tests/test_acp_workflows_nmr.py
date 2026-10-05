@@ -768,6 +768,127 @@ def test_run_giao_task_core_skips_failed_conformer(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Task-core consumption + backend-direct guard (todo 27)
+# ---------------------------------------------------------------------------
+
+
+def test_run_giao_consumes_cccp_task_core_with_mocked_backend(tmp_path: Path) -> None:
+    """Integration (todo 27): ACP drives the REAL cccp ``run_nmr_shielding``
+    task core with the backend mocked at the registry seam (ACP never
+    resolves one); a failed conformer is skipped and the shielding key
+    shape ``{atom: {symbol, isotropic}}`` flows into ``ConformerShielding``.
+    """
+    import sys
+
+    from acp.workflows.nmr import _run_giao_for_conformers
+    from cccp.backends import registry as backend_registry
+    from cccp.backends.base import QCResult
+    from cccp.calculation.requests import TaskKind
+    from cccp.calculation.tasks.nmr_shielding import run_nmr_shielding as real_shielding
+
+    structure = _make_structure(["C", "H", "H", "H", "H"], [(0.0, 0.0, 0.0)] * 5)
+    sh = {
+        0: {"symbol": "C", "isotropic": 188.452125 - 40.0},
+        1: {"symbol": "H", "isotropic": 32.1243166667 - 4.0},
+        2: {"symbol": "H", "isotropic": 32.1243166667 - 3.0},
+        3: {"symbol": "H", "isotropic": 32.1243166667 - 1.0},
+        4: {"symbol": "H", "isotropic": 32.1243166667 - 0.0},
+    }
+
+    class _FakeGiaoBackend:
+        name = "orca"
+
+        def __init__(self) -> None:
+            self.calls: list[dict[str, Any]] = []
+
+        def nmr_shielding(self, *args: Any, **kwargs: Any) -> QCResult:
+            self.calls.append({"kwargs": dict(kwargs)})
+            if len(self.calls) == 1:
+                return QCResult(success=False, error_message="simulated GIAO failure")
+            shieldings = {i: dict(v) for i, v in sh.items()}
+            return QCResult(success=True, metadata={"shieldings": shieldings})
+
+    fake_backend = _FakeGiaoBackend()
+    real_get_backend = backend_registry.get_backend
+
+    def _fake_acquire(name: str) -> Any:
+        return fake_backend if name == "orca" else real_get_backend(name)
+
+    # hermetic runtime pin for the task core's orca precheck
+    cfg = {"executables": {"orca": {"path": sys.executable}}}
+    with (
+        patch("cccp.backends.registry.get_backend", side_effect=_fake_acquire),
+        patch("acp.workflows.nmr.run_nmr_shielding", wraps=real_shielding) as spy,
+    ):
+        results = _run_giao_for_conformers(
+            [(structure, 0.6, 0.1), (structure, 0.4, 0.0)],
+            NmrConfig(),
+            tmp_path / "giao",
+            cfg,
+            None,
+        )
+
+    assert spy.call_count == 2
+    assert all(call.args[0].task is TaskKind.NMR_SHIELDING for call in spy.call_args_list)
+    for call in spy.call_args_list:
+        context = call.kwargs["context"]
+        assert context.backend is None
+        assert context.capability_extras["nuclei"] == ["1H", "13C"]
+    assert len(fake_backend.calls) == 2
+    assert fake_backend.calls[0]["kwargs"]["nuclei"] == ["1H", "13C"]
+
+    assert [item.conformer_id for item in results] == ["conf_001"]
+    assert results[0].boltzmann_weight == pytest.approx(0.4)
+    assert results[0].shieldings == {
+        0: {"symbol": "C", "isotropic": pytest.approx(148.452125)},
+        1: {"symbol": "H", "isotropic": pytest.approx(28.1243166667)},
+        2: {"symbol": "H", "isotropic": pytest.approx(29.1243166667)},
+        3: {"symbol": "H", "isotropic": pytest.approx(31.1243166667)},
+        4: {"symbol": "H", "isotropic": pytest.approx(32.1243166667)},
+    }
+    assert all(set(entry) == {"symbol", "isotropic"} for entry in results[0].shieldings.values())
+
+
+def test_nmr_execution_path_has_no_backend_direct_call() -> None:
+    """Guard (todo 27): nmr reaches QC only via the cccp task core — no
+    ``get_backend``/``require_backend``/``run_shermo``/``CensoBackend``
+    call or import; ``_run_giao_for_conformers`` calls ``run_nmr_shielding``.
+    """
+    import ast
+
+    import acp.workflows.nmr as nmr_mod
+
+    banned = {"get_backend", "require_backend", "run_shermo", "CensoBackend"}
+    tree = ast.parse(Path(nmr_mod.__file__).read_text(encoding="utf-8"))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+            if name in banned:
+                offenders.append(f"line {node.lineno}: {name}(...)")
+        elif isinstance(node, ast.Attribute) and node.attr in banned:
+            offenders.append(f"line {node.lineno}: .{node.attr}")
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                if alias.name.rsplit(".", 1)[-1] in banned or (alias.asname or "") in banned:
+                    offenders.append(f"line {node.lineno}: import {alias.name}")
+    assert not offenders, f"backend-direct call in nmr execution path: {offenders}"
+
+    giao_fn = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_giao_for_conformers"
+    )
+    called = {
+        child.func.id
+        for child in ast.walk(giao_fn)
+        if isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+    }
+    assert "run_nmr_shielding" in called
+
+
+# ---------------------------------------------------------------------------
 # Effective config + solvent_model end-to-end (todo 21 / gap G04)
 # ---------------------------------------------------------------------------
 
