@@ -21,12 +21,16 @@ from acp.io.structures import (
     NMR_TOPOLOGY_SMILES,
     NMR_TOPOLOGY_XYZ_INFERRED,
     NMR_TOPOLOGY_XYZ_UNAVAILABLE,
+    StructureReader,
     TopologyUnavailableError,
     capture_nmr_topology,
 )
-from acp.nmr.structure_map import NmrStructureMap
+from acp.nmr.structure_map import NmrStructureMap, StructureMapError
 from acp.workflows.nmr import (
+    _analyze_candidate,
     _parse_candidates,
+    _try_build_rdkit_mol,
+    _validate_mol_for_structure,
     nmr_structure_map_for,
     nmr_topology_mol_for,
     nmr_topology_source_for,
@@ -223,3 +227,136 @@ def test_accessors_on_uncaptured_structure_default_to_unavailable() -> None:
     assert nmr_topology_source_for(bare) == NMR_TOPOLOGY_XYZ_UNAVAILABLE
     assert nmr_structure_map_for(bare) is None
     assert nmr_topology_mol_for(bare) is None
+
+
+# ---------------------------------------------------------------------------
+# _try_build_rdkit_mol resolution order (G01: candidate graph first)
+# ---------------------------------------------------------------------------
+
+ACETATE_SMILES = "CC(=O)[O-]"
+
+
+def _enumerated_like_candidate(tmp_path: Path, smiles: str = ACETATE_SMILES) -> Structure:
+    """Candidate shaped like a --enumerate result: XYZ-path source, isomer SMILES,
+    and no captured ``nmr_topology_*`` keys (legacy/foreign candidate)."""
+    reader = StructureReader()
+    base = reader.read(smiles, charge=None, multiplicity=None, name="ace")
+    return Structure(
+        id="enum_1",
+        charge=base.charge,
+        multiplicity=base.multiplicity,
+        symbols=base.symbols,
+        coordinates=base.coordinates,
+        metadata={
+            "source": str(tmp_path / "parent_molecule.xyz"),
+            "smiles": smiles,
+            "enumerated": True,
+        },
+    )
+
+
+def test_enumerated_from_xyz_candidate_builds_mol_from_metadata_smiles(tmp_path: Path) -> None:
+    candidate = _enumerated_like_candidate(tmp_path)
+    assert nmr_topology_mol_for(candidate) is None
+
+    mol = _try_build_rdkit_mol(candidate)
+
+    assert mol is not None, "enumerated candidate must resolve via metadata['smiles']"
+    assert mol.GetNumAtoms() == len(candidate.symbols)
+
+
+def test_captured_graph_preferred_over_source(tmp_path: Path) -> None:
+    parsed = _parse_candidates([ETHANOL_SMILES], None, None)[0]
+    captured = nmr_topology_mol_for(parsed)
+    assert captured is not None
+
+    # source demoted to an unavailable XYZ path — the captured graph must win
+    structure = Structure(
+        id=parsed.id,
+        charge=parsed.charge,
+        multiplicity=parsed.multiplicity,
+        symbols=parsed.symbols,
+        coordinates=parsed.coordinates,
+        metadata={**parsed.metadata, "source": str(tmp_path / "missing.xyz")},
+    )
+    mol = _try_build_rdkit_mol(structure)
+    assert mol is not None
+    assert mol is captured
+
+
+def test_validate_mol_rejects_atom_count_mismatch() -> None:
+    reader = StructureReader()
+    acetate = reader.read(ACETATE_SMILES, charge=None, multiplicity=None, name="ace")
+    ethanol_mol = Chem.AddHs(Chem.MolFromSmiles(ETHANOL_SMILES))  # 9 atoms vs 7
+
+    with pytest.raises(StructureMapError, match="atoms"):
+        _validate_mol_for_structure(ethanol_mol, acetate)
+
+
+def test_validate_mol_rejects_element_order_mismatch() -> None:
+    reader = StructureReader()
+    occ = reader.read("OCC", charge=None, multiplicity=None, name="occ")  # O,C,C,...
+    cco_mol = Chem.AddHs(Chem.MolFromSmiles(ETHANOL_SMILES))  # C,C,O,... (same count)
+
+    assert len(occ.symbols) == cco_mol.GetNumAtoms()
+    with pytest.raises(StructureMapError, match="element order"):
+        _validate_mol_for_structure(cco_mol, occ)
+
+
+def test_try_build_returns_none_on_mismatched_source(tmp_path: Path) -> None:
+    # same atom count but different element order: the old builder silently
+    # returned the wrong graph; it must now be rejected without IndexError
+    reader = StructureReader()
+    occ = reader.read("OCC", charge=None, multiplicity=None, name="occ")
+    structure = Structure(
+        id=occ.id,
+        charge=occ.charge,
+        multiplicity=occ.multiplicity,
+        symbols=occ.symbols,
+        coordinates=occ.coordinates,
+        metadata={"source": ETHANOL_SMILES},  # C,C,O vs structure O,C,C
+    )
+    assert _try_build_rdkit_mol(structure) is None
+
+    # count mismatch (smiles of a different molecule) also fails typed → None
+    mismatched = Structure(
+        id="mismatch",
+        charge=0,
+        multiplicity=1,
+        symbols=occ.symbols,
+        coordinates=occ.coordinates,
+        metadata={"source": "c1ccccc1"},
+    )
+    assert _try_build_rdkit_mol(mismatched) is None
+
+
+def test_analyze_candidate_enumerated_like_falls_back_to_smiles_graph(tmp_path: Path) -> None:
+    """No captured topology + XYZ-path source: equivalence must still get a
+    bonded graph from ``metadata['smiles']`` (not degrade to element merge)."""
+    from unittest.mock import patch
+
+    from acp.nmr.equivalence import detect_equivalence_groups
+    from acp.nmr.io import parse_experimental_nmr
+    from acp.nmr.models import ConformerShielding, NmrConfig
+
+    candidate = _enumerated_like_candidate(tmp_path)
+    shieldings = {
+        i: {"symbol": s, "isotropic": 100.0 - 10.0 * i} for i, s in enumerate(candidate.symbols)
+    }
+    conformers = [ConformerShielding("conf_000", 1.0, shieldings)]
+    experiment = parse_experimental_nmr("C: 40.0, 100.0\nH: 2.0")
+
+    captured: dict[str, object] = {}
+    real_detect = detect_equivalence_groups
+
+    def spy(symbols, mol=None, **kw):
+        captured["mol"] = mol
+        return real_detect(symbols, mol=mol, **kw)
+
+    with patch("acp.workflows.nmr.detect_equivalence_groups", side_effect=spy):
+        result = _analyze_candidate(0, candidate, conformers, experiment, NmrConfig())
+
+    assert captured["mol"] is not None, "equivalence must receive a bonded graph"
+    # graph-based equivalence merges the 3 methyl H → C,C,H = 3 shifts;
+    # without a graph every H stays its own signal (5 C/H shifts)
+    assert len(result.atom_shifts) == 3

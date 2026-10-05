@@ -62,6 +62,7 @@ from acp.nmr.models import (
     ExperimentalNmr,
     NmrConfig,
     NmrReport,
+    normalize_symbol,
 )
 from acp.nmr.probability import (
     compute_dp4,
@@ -1085,31 +1086,107 @@ def _relabel_shifts_with_map(
     return relabeled
 
 
-def _try_build_rdkit_mol(structure: Structure):
+def _validate_mol_for_structure(mol: Chem.Mol, structure: Structure) -> None:
+    """Check that *mol* corresponds to *structure* atom-for-atom (G01).
+
+    Verifies the atom count and the element sequence order, then runs
+    ``Chem.CanonicalRankAtoms(breakTies=True, includeChirality=True)`` as
+    a rank sanity check (the ranks must form a unique 0..n-1 permutation).
+
+    Args:
+        mol: Candidate bonded graph under consideration.
+        structure: Candidate structure the graph must match.
+
+    Raises:
+        StructureMapError: Atom count mismatch, element order mismatch, or
+            ranking failure — never an out-of-range index.
+    """
+    from rdkit import Chem
+
+    symbols = list(structure.symbols)
+    n_atoms = len(symbols)
+    if mol.GetNumAtoms() != n_atoms:
+        raise StructureMapError(
+            f"mol has {mol.GetNumAtoms()} atoms but structure {structure.id!r} has {n_atoms}"
+        )
+    mol_symbols = [normalize_symbol(atom.GetSymbol()) for atom in mol.GetAtoms()]
+    struct_symbols = [normalize_symbol(s) for s in symbols]
+    if mol_symbols != struct_symbols:
+        mismatch = next(i for i, (a, b) in enumerate(zip(mol_symbols, struct_symbols)) if a != b)
+        raise StructureMapError(
+            f"mol element order does not match structure {structure.id!r}: "
+            f"first mismatch at atom {mismatch} (mol {mol_symbols[mismatch]} "
+            f"vs structure {struct_symbols[mismatch]})"
+        )
+    try:
+        # same preparation as detect_equivalence_groups (ring info for ranking)
+        mol.UpdatePropertyCache(strict=False)
+        Chem.GetSymmSSSR(mol)
+        ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=True, includeChirality=True))
+    except (ValueError, RuntimeError) as exc:
+        raise StructureMapError(
+            f"canonical ranking failed for structure {structure.id!r}: {exc}"
+        ) from exc
+    if sorted(ranks) != list(range(n_atoms)):
+        raise StructureMapError(
+            f"canonical ranks are not a unique permutation for structure "
+            f"{structure.id!r}: {sorted(ranks)[:10]}"
+        )
+
+
+def _try_build_rdkit_mol(structure: Structure) -> Chem.Mol | None:
     """Build a bonded RDKit Mol for symmetry equivalence detection.
 
-    Prefers the candidate's SMILES source (stored in metadata by
-    :func:`_parse_candidates`); falls back to ``None`` when only XYZ is
-    available (the element-only equivalence fallback then applies).
-    """
-    source = structure.metadata.get("source", "")
-    if not isinstance(source, str):
-        return None
-    if not source or _looks_like_smiles(source):
-        try:
-            from rdkit import Chem
+    Resolution order (gap G01 — enumerated candidates store the original
+    XYZ path in ``source`` and the isomer SMILES in ``smiles``):
 
-            mol = Chem.MolFromSmiles(source) if source else None
-            if mol is not None:
-                mol = Chem.AddHs(mol)
-                Chem.SanitizeMol(mol)
-                # Only use the Mol when its atom count matches the structure —
-                # otherwise the symmetry ranks would index out of range. This
-                # guards against test mocks and SMILES↔XYZ mismatches.
-                if mol.GetNumAtoms() == len(structure.symbols):
-                    return mol
-        except Exception as exc:  # pragma: no cover - rdkit edge cases
-            logger.debug("RDKit Mol build failed for '%s': %s", source, exc)
+    1. the candidate's captured graph (``nmr_topology_mol``) — any input
+       format; a no-op when the caller already passed it;
+    2. ``metadata["smiles"]`` — enumerated/canonical isomer SMILES;
+    3. ``metadata["source"]`` when it is SMILES-like.
+
+    Every candidate graph is checked by :func:`_validate_mol_for_structure`
+    and rejected with a typed :class:`StructureMapError` (logged, next
+    source tried) — never an out-of-range index. Returns ``None`` when all
+    sources fail (the element-free equivalence fallback then applies).
+    """
+    from rdkit import Chem
+
+    captured = nmr_topology_mol_for(structure)
+    if captured is not None:
+        try:
+            _validate_mol_for_structure(captured, structure)
+            return captured
+        except StructureMapError as exc:
+            logger.debug("captured graph rejected for candidate %s: %s", structure.id, exc)
+
+    smiles = structure.metadata.get("smiles")
+    source = structure.metadata.get("source", "")
+    sources: list[str] = []
+    if isinstance(smiles, str) and smiles.strip():
+        sources.append(smiles)
+    if isinstance(source, str) and source and _looks_like_smiles(source):
+        if source not in sources:
+            sources.append(source)
+
+    for text in sources:
+        try:
+            mol = Chem.MolFromSmiles(text)
+            if mol is None:
+                continue
+            mol = Chem.AddHs(mol)
+            Chem.SanitizeMol(mol)
+            _validate_mol_for_structure(mol, structure)
+            return mol
+        except StructureMapError as exc:
+            logger.debug(
+                "RDKit Mol from %r rejected for candidate %s: %s",
+                text,
+                structure.id,
+                exc,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.debug("RDKit Mol build failed for '%s': %s", text, exc)
     return None
 
 
