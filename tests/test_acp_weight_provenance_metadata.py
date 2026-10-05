@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -265,17 +265,19 @@ def test_run_ensemble_generation_metadata_censo_provenance(
     )
 
     mock_result = _mock_censo_result(temperature=318.0)
-    with patch("acp.workflows.ensemble.CensoBackend") as mock_backend_cls:
-        mock_backend = MagicMock()
-        mock_backend.refine_ensemble.return_value = mock_result
-        mock_backend_cls.return_value = mock_backend
-
+    # todo 26b rewire: the CENSO seam is now the task-core helper imported
+    # into ``ensemble``; a fake returns the typed CensoRunResult directly.
+    with patch(
+        "acp.workflows.ensemble._censo_refine_via_task", return_value=mock_result
+    ) as mock_censo:
         result = run_ensemble_generation(
             input_source=str(input_xyz),
             output_dir=str(tmp_path / "out"),
             preset="censo-light",
             config=sample_config,
         )
+
+    mock_censo.assert_called_once()
 
     assert result.status == "completed"
     metadata = result.metadata

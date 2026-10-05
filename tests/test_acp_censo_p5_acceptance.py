@@ -16,18 +16,19 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
-from acp.backends.censo_backend import CensoBackend
+from acp.confsearch.shared.helpers import resolve_levels as _resolve_levels
 from acp.scheduler.jobs import (
     JobSpec,
     censo_preset_from_method,
     censo_solvent_from_method,
 )
-from acp.confsearch.shared.helpers import resolve_levels as _resolve_levels
-from cccp.qc.interfaces.censo import CensoInterface
+from cccp.calculation.contracts import ArtifactRef
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import TaskResult
+from cccp.qc.interfaces.censo import CensoInterface, part_index
 from cccp.qc.interfaces.orca import ORCAInterface
 
 
@@ -56,11 +57,123 @@ def _make_config(**overrides: Any) -> dict[str, Any]:
     return config
 
 
-def _mock_orca_backend_cls(orca: MagicMock) -> MagicMock:
-    """Return a fake ``get_backend("orca")`` class that yields *orca*."""
-    backend_cls = MagicMock()
-    backend_cls.return_value = orca
-    return backend_cls
+def _task_result(
+    task: TaskKind,
+    *,
+    energy: float | None = None,
+    coordinates: Any = None,
+    symbols: Any = None,
+    log: str | None = None,
+    log_type: str = "log",
+    status: str = "completed",
+    errors: tuple[str, ...] = (),
+    metadata: dict[str, Any] | None = None,
+) -> TaskResult:
+    artifacts = (ArtifactRef(path=Path(log), type=log_type),) if log else ()
+    return TaskResult(
+        task=task,
+        status=status,
+        complete=status == "completed",
+        errors=errors,
+        energy_hartree=energy,
+        coordinates=(
+            tuple(tuple(float(c) for c in row) for row in coordinates)
+            if coordinates is not None
+            else None
+        ),
+        symbols=tuple(symbols) if symbols is not None else None,
+        artifacts=artifacts,
+        metadata=dict(metadata or {}),
+    )
+
+
+def _mock_opt_result(
+    *,
+    energy: float = -154.9,
+    coordinates: Any = None,
+    symbols: Any = None,
+    log: str = "/tmp/opt.out",
+) -> TaskResult:
+    return _task_result(
+        TaskKind.OPTIMIZE,
+        energy=energy,
+        coordinates=coordinates
+        if coordinates is not None
+        else [[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]],
+        symbols=symbols if symbols is not None else ["C", "H", "H"],
+        log=log,
+    )
+
+
+def _mock_opt_failed_result(message: str = "SCF blew up") -> TaskResult:
+    return _task_result(TaskKind.OPTIMIZE, status="failed", errors=(message,))
+
+
+def _mock_freq_result(log: str = "/tmp/freq.out") -> TaskResult:
+    return _task_result(TaskKind.FREQUENCY, log=log, log_type="frequency_log")
+
+
+def _mock_sp_result(*, energy: float = -155.0, log: str = "/tmp/sp.out") -> TaskResult:
+    return _task_result(TaskKind.SINGLEPOINT, energy=energy, log=log)
+
+
+def _mock_shermo_result(values: dict[str, Any] | None) -> TaskResult:
+    if values is None:
+        return _task_result(
+            TaskKind.THERMOCHEMISTRY,
+            status="failed",
+            errors=("Shermo returned no thermochemistry data",),
+        )
+    return _task_result(TaskKind.THERMOCHEMISTRY, metadata=dict(values))
+
+
+def _fake_censo_refine(result: Any) -> Any:
+    """Patch side effect for ``energy_shared.run_censo_refine``.
+
+    Writes the final-part CENSO JSON/XYZ artifacts (the
+    ``<idx>_<FINAL_PART>`` convention of the censo_refine task) and returns
+    the typed task result so ``censo_refine_via_task`` reconstructs the real
+    ``CensoRunResult`` end to end.
+    """
+
+    def _run(request: Any, *, context: Any = None) -> TaskResult:
+        run_dir = Path(request.output_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        part = result.final_part
+        json_path = run_dir / f"{part_index(part)}_{part.upper()}.json"
+        xyz_path = run_dir / f"{part_index(part)}_{part.upper()}.xyz"
+        payload = {
+            rec.conf_id: {
+                "energy": rec.energy,
+                "gsolv": rec.gsolv,
+                "grrho": rec.grrho,
+                "gtot": rec.gtot,
+            }
+            for rec in result.records
+        }
+        json_path.write_text(json.dumps({"data": payload}), encoding="utf-8")
+        lines: list[str] = []
+        for rec in result.records:
+            lines.append(str(len(rec.symbols)))
+            lines.append(rec.conf_id)
+            lines.extend(
+                f"{sym} {x:.6f} {y:.6f} {z:.6f}"
+                for sym, (x, y, z) in zip(rec.symbols, rec.coordinates)
+            )
+        xyz_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return TaskResult(
+            task=TaskKind.CENSO_REFINE,
+            status="completed",
+            complete=True,
+            metadata={
+                "preset": result.preset,
+                "final_part": part,
+                "temperature_k": result.temperature,
+                "record_count": len(result.records),
+            },
+        )
+
+    return _run
 
 
 # ---------------------------------------------------------------------------
@@ -698,7 +811,7 @@ def test_xtb_passthrough_sorts_by_title_energy(tmp_path: Path) -> None:
 
 
 def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     pytest.importorskip("acp.workflows.ensemble")
     from acp.workflows.ensemble import run_ensemble_generation
@@ -706,8 +819,7 @@ def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -
     xyz = tmp_path / "ext_ensemble.xyz"
     xyz.write_text("1\n-1.0\nH  0.0 0.0 0.0\n1\n-1.5\nH  0.0 0.0 1.0\n")
 
-    with patch("acp.workflows.ensemble.CensoBackend") as mock_backend_cls:
-        mock_backend_cls.return_value = MagicMock()
+    with patch("acp.workflows.ensemble._censo_refine_via_task") as mock_censo:
         result = run_ensemble_generation(
             input_source=str(xyz),
             output_dir=str(tmp_path / "out"),
@@ -717,7 +829,7 @@ def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -
         )
 
     assert result.status == "completed"
-    mock_backend_cls.assert_not_called()
+    mock_censo.assert_not_called()
     ensemble_xyz = tmp_path / "out" / "passthrough" / "RESULT" / "ensembles" / "ensemble.xyz"
     assert ensemble_xyz.exists()
 
@@ -797,9 +909,7 @@ def test_resolve_levels_refinement_threshold() -> None:
 
 def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
     """censo-zero opt-on with near-degenerate xTB energies → 2 handoffs."""
-    from unittest.mock import MagicMock, patch
-
-    import numpy as np
+    from unittest.mock import patch
 
     pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
@@ -810,27 +920,6 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
         "3\n-154.79950000\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
     )
 
-    orca = MagicMock()
-    opt_result = MagicMock(
-        success=True,
-        coordinates=np.zeros((3, 3)),
-        symbols=["C", "H", "H"],
-        energy=-154.9,
-        log_file=Path("/tmp/opt.out"),
-        error_message=None,
-    )
-    orca.optimize.return_value = opt_result
-    orca.frequency.return_value = MagicMock(
-        success=True,
-        log_file=Path("/tmp/freq.out"),
-        error_message=None,
-    )
-    orca.single_point.return_value = MagicMock(
-        success=True,
-        energy=-155.0,
-        log_file=Path("/tmp/sp.out"),
-        error_message=None,
-    )
     shermo_ok = {
         "g_sum": -154.95,
         "g_conc": None,
@@ -840,9 +929,16 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
     }
 
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
+        patch("acp.workflows.energy_shared.run_censo_refine") as mock_censo,
+        patch(
+            "acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()
+        ) as mock_opt,
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(shermo_ok)),
+        ),
     ):
         result = run_conformer_energy(
             input_source=str(xyz),
@@ -853,18 +949,16 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
         )
 
     assert result.status == "completed"
-    mock_backend_cls.assert_not_called()
+    mock_censo.assert_not_called()
     assert result.metadata["n_conformers"] == 2
-    assert orca.optimize.call_count == 2
+    assert mock_opt.call_count == 2
     # auxiliary xTB ranking table written for the passthrough path
     assert (tmp_path / "out" / "close" / "RESULT" / "reports" / "screening_ranking.csv").exists()
 
 
 def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> None:
     """A failing non-rank1 conformer is dropped; rank1 failure still raises."""
-    from unittest.mock import MagicMock, patch
-
-    import numpy as np
+    from unittest.mock import patch
 
     from acp.backends.censo_backend import CensoRunResult
 
@@ -884,28 +978,6 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
     )
     screening.sort_by_gtot()
 
-    orca = MagicMock()
-    ok_opt = MagicMock(
-        success=True,
-        coordinates=np.zeros((1, 3)),
-        symbols=["H"],
-        energy=-154.9,
-        log_file=Path("/tmp/opt.out"),
-        error_message=None,
-    )
-    bad_opt = MagicMock(success=False, error_message="SCF blew up")
-    orca.optimize.side_effect = [ok_opt, bad_opt]
-    orca.frequency.return_value = MagicMock(
-        success=True,
-        log_file=Path("/tmp/freq.out"),
-        error_message=None,
-    )
-    orca.single_point.return_value = MagicMock(
-        success=True,
-        energy=-155.0,
-        log_file=Path("/tmp/sp.out"),
-        error_message=None,
-    )
     shermo_ok = {
         "g_sum": -154.95,
         "g_conc": None,
@@ -915,14 +987,24 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
     }
 
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(screening),
+        ),
+        patch(
+            "acp.workflows.energy_shared.run_optimize",
+            side_effect=[
+                _mock_opt_result(energy=-154.9, coordinates=[[0.0, 0.0, 0.0]], symbols=["H"]),
+                _mock_opt_failed_result("SCF blew up"),
+            ],
+        ) as mock_opt,
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(shermo_ok)),
+        ),
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = screening
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(xyz),
             output_dir=str(tmp_path / "out"),
@@ -934,11 +1016,12 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
     assert result.status == "completed"
     assert result.metadata["n_conformers"] == 1
     assert result.ensemble.records[0].structure.metadata["source"] == "CONF1"
+    assert mock_opt.call_count == 2
 
 
 def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
     """--levels refinement_threshold reaches the CENSO rcfile overrides."""
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from acp.backends.censo_backend import CensoRunResult
 
@@ -958,11 +1041,10 @@ def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
     )
     refinement.sort_by_gtot()
 
-    with patch("acp.workflows.energy.CensoBackend") as mock_backend_cls:
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = refinement
-        mock_backend_cls.return_value = backend
-
+    with patch(
+        "acp.workflows.energy_shared.run_censo_refine",
+        side_effect=_fake_censo_refine(refinement),
+    ) as mock_censo:
         result = run_conformer_energy(
             input_source=str(xyz),
             output_dir=str(tmp_path / "out"),
@@ -974,8 +1056,8 @@ def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
         )
 
     assert result.status == "completed"
-    _, kwargs = backend.refine_ensemble.call_args
-    assert kwargs["part_overrides"]["refinement"]["threshold"] == pytest.approx(0.5)
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["part_overrides"]["refinement"]["threshold"] == pytest.approx(0.5)
     # ΔG ≈ 0.31 kcal/mol → rank1 weight ≈ 0.63 ≥ 0.5 → only rank1 kept
     assert result.metadata["n_conformers"] == 1
     assert result.metadata["refinement_threshold"] == pytest.approx(0.5)
@@ -1083,7 +1165,7 @@ def test_cli_energy_accepts_ewin() -> None:
 
 
 def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     pytest.importorskip("acp.workflows.ensemble")
     from acp.workflows.ensemble import run_ensemble_generation
@@ -1091,17 +1173,14 @@ def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
     single_xyz = tmp_path / "mol.xyz"
     single_xyz.write_text("1\n-1.0\nH 0 0 0\n")
 
-    def fake_search(**kwargs: Any):
-        out_dir = Path(kwargs["output_dir"])
-        ensemble = out_dir / "crest_conformers.xyz"
+    def fake_search(cfg: Any, input_xyz: Path, output_dir: Path, **kwargs: Any) -> Path:
+        ensemble = Path(output_dir) / "crest_conformers.xyz"
         ensemble.write_text("1\n-1.00000000\nH 0 0 0\n1\n-1.00010000\nH 0 0 1\n")
         return ensemble
 
-    with patch("acp.workflows.ensemble.get_backend") as mock_get_backend:
-        backend = MagicMock()
-        backend.search.side_effect = fake_search
-        mock_get_backend.return_value = MagicMock(return_value=backend)
-
+    with patch(
+        "acp.workflows.ensemble._crest_search_via_task", side_effect=fake_search
+    ) as mock_crest:
         result = run_ensemble_generation(
             input_source=str(single_xyz),
             output_dir=str(tmp_path / "out"),
@@ -1112,15 +1191,12 @@ def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
         )
 
     assert result.status == "completed"
-    mock_get_backend.assert_called_with("crest")
-    assert backend.search.call_args.kwargs["energy_window"] == pytest.approx(4.5)
+    assert mock_crest.call_args.kwargs["energy_window"] == pytest.approx(4.5)
     assert result.metadata["crest_ewin"] == pytest.approx(4.5)
 
 
 def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock, patch
-
-    import numpy as np
+    from unittest.mock import patch
 
     pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
@@ -1128,43 +1204,31 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
     single_xyz = tmp_path / "mol.xyz"
     single_xyz.write_text("1\n-1.0\nH 0 0 0\n")
 
-    def fake_search(**kwargs: Any):
-        out_dir = Path(kwargs["output_dir"])
-        ensemble = out_dir / "crest_conformers.xyz"
+    def fake_search(cfg: Any, input_xyz: Path, output_dir: Path, **kwargs: Any) -> Path:
+        ensemble = Path(output_dir) / "crest_conformers.xyz"
         ensemble.write_text("1\n-1.00000000\nH 0 0 0\n")
         return ensemble
 
-    orca = MagicMock()
-    orca.optimize.return_value = MagicMock(
-        success=True,
-        coordinates=np.zeros((1, 3)),
-        symbols=["H"],
-        energy=-1.0,
-        log_file=Path("/tmp/opt.out"),
-        error_message=None,
-    )
-    orca.frequency.return_value = MagicMock(
-        success=True,
-        log_file=Path("/tmp/freq.out"),
-        error_message=None,
-    )
-    orca.single_point.return_value = MagicMock(
-        success=True,
-        energy=-1.1,
-        log_file=Path("/tmp/sp.out"),
-        error_message=None,
-    )
     shermo_ok = {"g_sum": -1.05, "g_conc": None, "h_sum": -1.0, "u_sum": -1.01, "s_total": 0.03}
 
     with (
-        patch("acp.workflows.energy.get_backend") as mock_get_backend,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
+        patch("acp.workflows.energy._crest_search_via_task", side_effect=fake_search) as mock_crest,
+        patch(
+            "acp.workflows.energy_shared.run_optimize",
+            return_value=_mock_opt_result(
+                energy=-1.0, coordinates=[[0.0, 0.0, 0.0]], symbols=["H"]
+            ),
+        ),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch(
+            "acp.workflows.energy_shared.run_singlepoint",
+            return_value=_mock_sp_result(energy=-1.1),
+        ),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(shermo_ok)),
+        ),
     ):
-        backend = MagicMock()
-        backend.search.side_effect = fake_search
-        mock_get_backend.return_value = MagicMock(return_value=backend)
-
         result = run_conformer_energy(
             input_source=str(single_xyz),
             output_dir=str(tmp_path / "out"),
@@ -1175,8 +1239,7 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
         )
 
     assert result.status == "completed"
-    mock_get_backend.assert_called_with("crest")
-    assert backend.search.call_args.kwargs["energy_window"] == pytest.approx(4.0)
+    assert mock_crest.call_args.kwargs["energy_window"] == pytest.approx(4.0)
     assert result.metadata["crest_ewin"] == pytest.approx(4.0)
 
 
