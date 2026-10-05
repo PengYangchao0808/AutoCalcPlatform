@@ -1,5 +1,16 @@
 # ACP 计算工作流极简化重构与残留代码清理方案
 
+> ## ⚠️ SUPERSEDED / REVISED — 已被取代/修订（2026-10-05）
+>
+> **本文档已被 acp→cccp 架构整改（`acp-cccp-architecture-remediation`）取代/修订。** 本文保留为历史方案记录，**不再是现行重构依据**；现行唯一规范见 `docs/ACP_CCCP_Task_API_DevDoc.md` 与 `docs/ACP_CCCP_Architecture_Report.md`。
+>
+> 被修订的核心前提（尤其）：
+> - **"计算基元驻留 `acp/calculations`" 前提已失效**：计算基元的唯一实现驻点现为 **`src/cccp/calculation/tasks/`**（`cccp.calculation` 任务层）；`src/acp/calculations/primitives/*` 仅为纯转发 compat forwarder（过渡期双驻点，每基元恰好一个实现体，由 `tests/test_architecture_invariants.py::test_unique_primitive_definitions` 守护）。凡本文中"计算基元统一位于 `calculations/`"、"能力应迁移到 `src/acp/calculations/pes/`"等表述，一律以整改后的驻点为准。
+> - **迁移期规则**：见根 `AGENTS.md`「MIGRATION PERIOD RULES」与 `tests/baseline/refactor-evidence/migration_ledger.md`（唯一实现驻点台账）；护栏不因本文档放宽。
+> - 本文其余历史结论（退役工作流、删除矩阵、布局约定）仅在其与现行代码/规范不冲突时作参考。
+>
+> 本文档**不删除**，仅供追溯。
+
 > **第一版可测试基线 2026-08-29, branch refactor/calc-cleanup** — 极简计算架构已收口：计算基元统一位于 `calculations/`，BatchOptimize 与 IRC 分界固定，默认工作台已切换为通用任务界面。历史任务仍通过只读兼容层访问。
 
 状态：方案冻结版 + 第一版可测试基线（Refactor Baseline v1）
