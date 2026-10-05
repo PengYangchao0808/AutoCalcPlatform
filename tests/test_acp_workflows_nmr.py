@@ -765,3 +765,204 @@ def test_run_giao_task_core_skips_failed_conformer(tmp_path: Path) -> None:
         )
 
     assert [item.conformer_id for item in results] == ["conf_001"]
+
+
+# ---------------------------------------------------------------------------
+# Effective config + solvent_model end-to-end (todo 21 / gap G04)
+# ---------------------------------------------------------------------------
+
+
+def _build_test_nmr_config(**overrides: Any) -> NmrConfig:
+    """``_build_nmr_config`` with explicit ``None`` overrides (no CLI layer)."""
+    from acp.workflows.nmr import _build_nmr_config
+    from cccp.config import load_config
+
+    kwargs: dict[str, Any] = dict(
+        nuclei=None,
+        nmr_method=None,
+        nmr_basis=None,
+        solvent=None,
+        boltzmann_temp=None,
+        tms_1h=None,
+        tms_13c=None,
+        error_model=None,
+        conformer_preset=None,
+        solvent_model=None,
+        max_conformers=None,
+    )
+    kwargs.update(overrides)
+    return _build_nmr_config(load_config(), **kwargs)
+
+
+def _run_giao_capture(nmr_config: NmrConfig, tmp_path: Path) -> tuple[Any, str]:
+    """Run the GIAO seam with the REAL task core; return (MethodSpec, input).
+
+    ``ORCAInterface._run_orca`` (the subprocess boundary) is mocked to store
+    the generated ``.inp`` text and never execute ORCA, so the full chain
+    ``MethodSpec → resolve_spec → render_backend_input → ORCABackend →
+    ORCAInterface input writer`` runs unmodified — the returned text is the
+    actual ORCA input the workflow would submit.
+    """
+    from acp.workflows.nmr import _run_giao_for_conformers
+    from cccp.backends.orca import ORCABackend
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.tasks.nmr_shielding import run_nmr_shielding as real_shielding
+    from cccp.config import load_config
+    from cccp.qc.interfaces.orca import ORCAInterface
+
+    cfg = load_config()
+    backend = ORCABackend(config=cfg)
+    structure = _make_structure(["C", "H", "H", "H", "H"], [(0.0, 0.0, 0.0)] * 5)
+    inputs: list[str] = []
+    levels: list[Any] = []
+
+    def _fake_run_orca(self, input_file, output_file, *args, **kwargs):
+        inputs.append(Path(input_file).read_text(encoding="utf-8"))
+        return False  # never execute ORCA
+
+    def _fake_shielding(request, *, context=None):
+        levels.append(request.level)
+        extras = dict((context.capability_extras if context else None) or {})
+        return real_shielding(
+            request, context=TaskContext(backend=backend, config=cfg, capability_extras=extras)
+        )
+
+    with (
+        patch.object(ORCAInterface, "_run_orca", _fake_run_orca),
+        patch("acp.workflows.nmr.run_nmr_shielding", side_effect=_fake_shielding),
+    ):
+        _run_giao_for_conformers(
+            [(structure, 1.0, 0.0)], nmr_config, tmp_path / "giao", cfg, nmr_config.solvent
+        )
+    assert levels, "GIAO task core was never invoked"
+    assert inputs, "no ORCA input was generated"
+    return levels[0], inputs[0]
+
+
+def test_build_nmr_config_gas_phase_forces_empty_solvent() -> None:
+    """T17 contract: ``solvent_model=none`` never falls back to chloroform.
+
+    The recorded effective config must equal what the GIAO level executes,
+    and the TMS lookup must key on the gas-phase row (Goodman TMSdata
+    ``solvent=none``: 13C 188.029225 / 1H 32.1352666667) instead of the
+    chloroform row (188.452125 / 32.1243166667) the old solvent-keyed
+    lookup returned.
+    """
+    conf = _build_test_nmr_config(solvent="", solvent_model="none")
+    assert conf.solvent_model == "none"
+    assert conf.solvent == ""  # RED (before T21): 'chloroform'
+    assert conf.tms_for("13C") == pytest.approx(188.029225)
+    assert conf.tms_for("1H") == pytest.approx(32.1352666667)
+
+
+def test_build_nmr_config_gas_phase_beats_theory_solvent() -> None:
+    """An explicit ``solvent_model=none`` beats ``theory.nmr.solvent``."""
+    from acp.workflows.nmr import _build_nmr_config
+    from cccp.config import load_config
+
+    cfg = load_config(overrides={"theory": {"nmr": {"solvent": "water"}}})
+    conf = _build_nmr_config(
+        cfg,
+        nuclei=None,
+        nmr_method=None,
+        nmr_basis=None,
+        solvent=None,
+        boltzmann_temp=None,
+        tms_1h=None,
+        tms_13c=None,
+        error_model=None,
+        conformer_preset=None,
+        solvent_model="none",
+        max_conformers=None,
+    )
+    assert conf.solvent_model == "none"
+    assert conf.solvent == ""  # RED (before T21): 'water'
+
+
+def test_build_nmr_config_explicit_values_beat_theory_nmr_defaults() -> None:
+    """MUST NOT drop the explicit method overrides (regression guard)."""
+    from acp.workflows.nmr import _build_nmr_config
+    from cccp.config import load_config
+
+    cfg = load_config(
+        overrides={
+            "theory": {
+                "nmr": {
+                    "method": "B3LYP",
+                    "basis": "def2-SVP",
+                    "solvent": "water",
+                    "solvent_model": "smd",
+                }
+            }
+        }
+    )
+    conf = _build_nmr_config(
+        cfg,
+        nuclei=["13C"],
+        nmr_method="mPW1PW91",
+        nmr_basis="6-311G(d)",
+        solvent="chloroform",
+        boltzmann_temp=310.0,
+        tms_1h=30.0,
+        tms_13c=180.0,
+        error_model="goodman-legacy",
+        conformer_preset="censo-zero",
+        solvent_model="cpcm",
+        max_conformers=7,
+    )
+    assert conf.nmr_method == "mPW1PW91"
+    assert conf.nmr_basis == "6-311G(d)"
+    assert conf.nuclei == ("13C",)
+    assert conf.solvent == "chloroform"
+    assert conf.solvent_model == "cpcm"
+    assert conf.boltzmann_temp == 310.0
+    assert conf.tms_for("1H") == 30.0
+    assert conf.tms_for("13C") == 180.0
+    assert conf.max_conformers == 7
+    assert conf.conformer_preset == "censo-zero"
+
+
+def test_giao_method_spec_gas_phase_carries_no_solvent(tmp_path: Path) -> None:
+    """The task-level MethodSpec never carries a solvent for gas phase —
+    even for a directly-built contradictory ``NmrConfig``."""
+    conf = NmrConfig(solvent="chloroform", solvent_model="none")
+    level, _input_text = _run_giao_capture(conf, tmp_path)
+    assert level.solvent_model == "none"
+    assert level.solvent in (None, "")  # RED (before T21): 'chloroform'
+
+
+def test_giao_orca_input_gas_phase_has_no_cpcm(tmp_path: Path) -> None:
+    """Acceptance: ``solvent_model=none`` → generated ORCA input has no
+    cpcm/SMD token; ``cpcm`` → cpcm present with the right solvent."""
+    gas = _build_test_nmr_config(solvent="", solvent_model="none")
+    level, gas_input = _run_giao_capture(gas, tmp_path)
+    assert level.solvent_model == "none"
+    assert "cpcm" not in gas_input.lower()
+    assert "smd(" not in gas_input.lower()
+    assert "smdsolvent" not in gas_input.lower()
+
+    solvated = _build_test_nmr_config(solvent="chloroform", solvent_model="cpcm")
+    level2, solvated_input = _run_giao_capture(solvated, tmp_path)
+    assert level2.solvent_model == "cpcm"
+    assert "! CPCM(chloroform)" in solvated_input
+
+
+def test_nmr_config_effective_config_to_dict_round_trip() -> None:
+    """The effective-config record is complete + JSON-safe (T24 provenance)."""
+    conf = _build_test_nmr_config()
+    payload = conf.to_dict()
+    assert json.dumps(payload)  # serialisable
+    assert payload["nuclei"] == ["1H", "13C"]
+    assert payload["nmr_method"] == "mPW1PW91"
+    assert payload["nmr_basis"] == "6-311G(d)"
+    assert payload["solvent"] == "chloroform"
+    assert payload["solvent_model"] == "cpcm"
+    assert payload["energy_window_kcal"] == 3.0
+    assert payload["max_conformers"] == 10
+    assert payload["conformer_preset"] == "censo-light"
+    assert payload["boltzmann_temp"] == 298.15
+    assert payload["error_model"] == "goodman-legacy"
+    assert payload["tms_1h"] == 32.1243166667
+    assert payload["tms_13c"] == 188.452125
+    assert payload["protocol_fingerprint"] is None  # D-phase placeholder (T29)
+    assert conf.protocol_fingerprint is None

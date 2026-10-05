@@ -417,21 +417,38 @@ def _build_nmr_config(
     solvent_model: str | None = None,
     max_conformers: int | None = None,
 ) -> NmrConfig:
-    """Assemble :class:`NmrConfig` from cfg + explicit overrides."""
+    """Assemble :class:`NmrConfig` from cfg + explicit overrides.
+
+    Single resolution path (T21): explicit kwargs win over ``theory.nmr``,
+    and solvent + solvent_model are resolved together here — a second
+    default table downstream would desynchronize them.
+    """
     theory_nmr = (cfg.get("theory") or {}).get("nmr") or {}
     nmr_section = cfg.get("nmr") or {}
     refs = dict(nmr_section.get("references") or {})
 
-    resolved_solvent = solvent if solvent is not None else theory_nmr.get("solvent")
     resolved_method = nmr_method or theory_nmr.get("method") or "mPW1PW91"
     resolved_basis = nmr_basis or theory_nmr.get("basis") or "6-311G(d)"
-    effective_solvent = resolved_solvent if resolved_solvent else "chloroform"
+    # The model gates the solvent (T17 resolver contract: ``none`` ⇒ solvent
+    # ``""``), so it is resolved first and the chloroform default below is
+    # only reachable for solvated runs.
+    resolved_model = (
+        (solvent_model if solvent_model is not None else theory_nmr.get("solvent_model")) or "cpcm"
+    ).lower()
+    resolved_solvent = solvent if solvent is not None else theory_nmr.get("solvent")
+    if resolved_model == "none":
+        # Gas phase: no solvent, ever — the recorded effective config must
+        # equal what the GIAO level executes (never the chloroform default).
+        effective_solvent = ""
+    else:
+        effective_solvent = resolved_solvent if resolved_solvent else "chloroform"
 
     # TMS references: explicit overrides > user-configured references >
     # solvent-aware Goodman TMSdata table (DevDoc §10.3) > Goodman
-    # chloroform defaults. The table is keyed by (method, basis, solvent)
-    # with a gas-phase fallback, so switching --solvent keeps σ_TMS at the
-    # same level of theory as σ_sample.
+    # chloroform defaults. The table is keyed by (method, basis, solvent);
+    # a gas-phase run passes ``""`` which selects the table's ``solvent=
+    # "none"`` row (same level of theory as the gas-phase GIAO call), and
+    # any level absent from the table falls back to the Goodman defaults.
     tms_shieldings: dict[str, float] = {}
     if tms_1h is not None:
         tms_shieldings["1H"] = float(tms_1h)
@@ -455,10 +472,7 @@ def _build_nmr_config(
         nmr_method=resolved_method,
         nmr_basis=resolved_basis,
         solvent=effective_solvent,
-        solvent_model=(
-            solvent_model if solvent_model is not None else theory_nmr.get("solvent_model")
-        )
-        or "cpcm",
+        solvent_model=resolved_model,
         tms_shieldings=tms_shieldings
         or {
             "1H": 32.1243166667,  # Goodman TMSdata mPW1PW91/6-311G(d)/chloroform
@@ -818,6 +832,11 @@ def _run_giao_for_conformers(
 
     giao_dir.mkdir(parents=True, exist_ok=True)
 
+    # Gas-phase contract (T21): solvent_model=none executes with no solvent
+    # keyword at all — belt and braces on top of _build_nmr_config so a
+    # directly-built NmrConfig can never inject a cpcm/SMD block.
+    giao_solvent = "" if nmr_config.solvent_model.lower() == "none" else nmr_config.solvent
+
     results: list[ConformerShielding] = []
     for idx, (structure, weight, delta) in enumerate(conformers):
         coords: NDArray[np.float64] = (
@@ -840,7 +859,7 @@ def _run_giao_for_conformers(
                     level=MethodSpec(
                         method=nmr_config.nmr_method,
                         basis=nmr_config.nmr_basis,
-                        solvent=nmr_config.solvent,
+                        solvent=giao_solvent,
                         solvent_model=nmr_config.solvent_model,
                     ),
                     options=NmrShieldingOptions(),

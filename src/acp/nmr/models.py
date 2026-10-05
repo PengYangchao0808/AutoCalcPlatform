@@ -269,6 +269,20 @@ class NmrConfig:
     error_model: str = "goodman-legacy"
     conformer_preset: str = "censo-light"
     strict_equivalence: bool = False
+    #: D-phase (todo 29) shielding checkpoint fingerprint — geometry hash +
+    #: method/basis/solvent/solvent_model/nuclei/charge/multiplicity.
+    #: ``None`` until the checkpoint lands; placeholder reserved by todo 21.
+    protocol_fingerprint: str | None = None
+
+    @property
+    def tms_1h(self) -> float | None:
+        """Flat provenance view: 1H TMS reference shielding (``None`` unset)."""
+        return self.tms_shieldings.get("1H")
+
+    @property
+    def tms_13c(self) -> float | None:
+        """Flat provenance view: 13C TMS reference shielding (``None`` unset)."""
+        return self.tms_shieldings.get("13C")
 
     def tms_for(self, nucleus: str) -> float | None:
         """Return the TMS reference shielding for a nucleus label."""
@@ -278,6 +292,32 @@ class NmrConfig:
         """Return the configured nuclei whose element is present in *symbols*."""
         present = {normalize_symbol(s) for s in symbols}
         return [n for n in self.nuclei if element_of_nucleus(n) in present]
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe effective-config record (report schema v2 provenance).
+
+        Fields: nuclei, level (method/basis), solvent + solvent_model,
+        TMS references (flat + table), Boltzmann temperature, energy window,
+        conformer limits/preset, error model, strict-equivalence flag and
+        the D-phase ``protocol_fingerprint`` placeholder.
+        """
+        return {
+            "nuclei": list(self.nuclei),
+            "nmr_method": self.nmr_method,
+            "nmr_basis": self.nmr_basis,
+            "solvent": self.solvent,
+            "solvent_model": self.solvent_model,
+            "tms_shieldings": dict(self.tms_shieldings),
+            "tms_1h": self.tms_1h,
+            "tms_13c": self.tms_13c,
+            "boltzmann_temp": self.boltzmann_temp,
+            "energy_window_kcal": self.energy_window_kcal,
+            "max_conformers": self.max_conformers,
+            "error_model": self.error_model,
+            "conformer_preset": self.conformer_preset,
+            "strict_equivalence": self.strict_equivalence,
+            "protocol_fingerprint": self.protocol_fingerprint,
+        }
 
 
 # --- calculation products ------------------------------------------------
