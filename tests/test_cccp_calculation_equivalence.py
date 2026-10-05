@@ -1,10 +1,24 @@
-"""A7 goldens equivalence — accumulated from plan todo 17 onward.
+"""A7 three-way equivalence — legacy golden ↔ migrated ACP ↔ standalone cccp.
 
-Group ①/③ of the A7 matrix for ``singlepoint``: an independent cccp call's
-effective translation parameters must be identical to the **pre-migration**
-goldens in ``tests/baseline/cccp_calculation_goldens/`` (frozen record — a
-backfilled golden would carry a post-migration commit).  Future todos append
-their capability cases here.
+Plan todo 39 (architecture remediation, acceptance A7).  The frozen
+pre-migration goldens in ``tests/baseline/cccp_calculation_goldens/`` are the
+record of the *historical integration path* (ACP in place).  Every capability
+branch is compared across three surfaces:
+
+* **①** frozen golden → migrated ACP compatibility surface (platform compat);
+* **②** frozen golden → standalone cccp core (scientific semantics preserved);
+* **③** migrated ACP ↔ standalone cccp (adapter adds no defaults / loses no
+  fields — asserted both by object identity for pure re-export shims and by
+  field-level conversion checks for the PES2TS adapters).
+
+The goldens are never regenerated post-migration (a backfilled golden would
+carry a post-migration commit and defeat the comparison); ``manifest.json``
+pins ``source_commit`` + per-file sha256, and every intentional P0 deviation
+is authorization-tracked in ``expected_behavior_delta.md``.  Earlier todos
+(17–22) accumulated the per-task cases; todo 39 adds the remaining Wave-0
+branches (Hessian resolution, thermochemistry units, failure tokens, CENSO
+record identity, NMR atom index/shielding, XtbPathSearch/OrcaGradient request
+conversion) plus the coverage/delta integrity guards.
 """
 
 from __future__ import annotations
@@ -93,9 +107,7 @@ def _extract_fields(text: str) -> dict[str, Any]:
     basis_block = _block("%basis")
     aux_j = next((ln.split('"')[1] for ln in basis_block if ln.startswith("auxJ")), None)
     aux_c = next((ln.split('"')[1] for ln in basis_block if ln.startswith("auxC")), None)
-    inline_basis = next(
-        (ln.split('"')[1] for ln in basis_block if ln.startswith("basis ")), None
-    )
+    inline_basis = next((ln.split('"')[1] for ln in basis_block if ln.startswith("basis ")), None)
     return {
         "route_line": route_line,
         "route_tokens": route_line.lstrip("! ").split(),
@@ -198,10 +210,10 @@ def test_optimize_rescue_metadata_matches_goldens() -> None:
     import dataclasses
 
     from cccp.calculation.tasks.optimize import (
-        FAILURE_EXIT,
         _FAILURE_TYPES,
         _RESCUE_DESCRIPTIONS,
         _RESCUE_MATRIX,
+        FAILURE_EXIT,
         build_rescue_plan,
     )
 
@@ -905,3 +917,755 @@ def test_shermo_units_payload_matches_goldens(tmp_path: Path) -> None:
     assert payload.gibbs_hartree == pytest.approx(expected_case["gibbs"], abs=1e-9)
     assert payload.gibbs_source == expected_case["gibbs_source"]
     assert captured["temperature_k"] == 298.15
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# A7 three-way matrix — remaining Wave-0 branches + integrity guards (todo 39)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Group legend: ① golden → migrated ACP · ② golden → standalone cccp ·
+# ③ ACP ↔ cccp (adapter adds no defaults / loses no fields).
+
+#: Golden file → the A7 test functions pinning that branch (three-way).
+_GOLDEN_BRANCH_TESTS: dict[str, tuple[str, ...]] = {
+    "orca_routes.json": (
+        "test_singlepoint_effective_params_match_goldens",
+        "test_frequency_effective_params_match_goldens",
+    ),
+    "hessian_resolution.json": ("test_hessian_resolution_three_way_matches_goldens",),
+    "unit_strings.json": ("test_thermochemistry_unit_strings_three_way_match_goldens",),
+    "error_tokens.json": (
+        "test_failure_classification_tokens_match_goldens",
+        "test_rescue_and_typed_error_tokens_match_goldens",
+    ),
+    "optimize_rescue.json": ("test_optimize_rescue_metadata_matches_goldens",),
+    "scan.json": (
+        "test_scan_plan_metadata_matches_goldens",
+        "test_scan_runs_match_goldens",
+    ),
+    "irc.json": (
+        "test_irc_direction_resolution_matches_goldens",
+        "test_irc_completed_direction_semantics_match_goldens",
+        "test_irc_runs_match_goldens",
+    ),
+    "casscf_nevpt2.json": (
+        "test_casscf_input_generation_matches_goldens",
+        "test_casscf_output_parse_matches_goldens",
+        "test_casscf_spec_contract_matches_goldens",
+        "test_casscf_payload_projection_matches_goldens",
+    ),
+    "shermo_standard_state.json": (
+        "test_shermo_standard_state_semantics_match_goldens",
+        "test_shermo_units_payload_matches_goldens",
+    ),
+    "censo_records.json": (
+        "test_censo_record_identity_three_way_matches_goldens",
+        "test_censo_failure_paths_keep_error_semantics",
+    ),
+    "nmr_shielding.json": (
+        "test_nmr_shielding_three_way_matches_goldens",
+        "test_nmr_failure_path_missing_requested_atom_is_parse_failure",
+    ),
+    "workflow_requests.json": ("test_workflow_request_conversion_three_way_matches_goldens",),
+}
+
+
+def _sha256_text(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _resolution_projection(resolution: Any) -> dict[str, Any]:
+    return {
+        "interval": resolution.interval,
+        "source": resolution.source,
+        "reason": resolution.reason,
+        "enabled": resolution.enabled,
+        "heavy_elements": list(resolution.heavy_elements),
+        "triggering_elements": list(resolution.triggering_elements),
+    }
+
+
+def test_goldens_manifest_pins_source_commit_and_hashes() -> None:
+    """Goldens are non-empty, pre-migration, and hash-pinned by the manifest."""
+    import hashlib
+
+    manifest = _load("manifest.json")
+    assert manifest["schema"] == "cccp_calculation_goldens_manifest_v1"
+    assert manifest["source_commit"] == GOLDENS_SOURCE_COMMIT
+    assert manifest["generator"]
+    assert manifest["generator_sha256"]
+    files = manifest["files"]
+    assert set(files) == set(_GOLDEN_BRANCH_TESTS)
+    for name, entry in sorted(files.items()):
+        path = GOLDENS_DIR / name
+        assert path.is_file(), f"golden file missing: {name}"
+        raw = path.read_bytes()
+        assert raw, f"golden must be non-empty: {name}"
+        assert len(raw) == entry["bytes"], f"golden byte size drift: {name}"
+        assert hashlib.sha256(raw).hexdigest() == entry["sha256"], f"golden hash drift: {name}"
+
+
+def test_all_golden_branches_have_declared_a7_coverage() -> None:
+    """Every golden branch maps to ≥1 performed three-way test in this module."""
+    for golden_name, test_names in _GOLDEN_BRANCH_TESTS.items():
+        assert (GOLDENS_DIR / golden_name).is_file(), golden_name
+        for test_name in test_names:
+            assert callable(globals().get(test_name)), f"{golden_name} -> {test_name}"
+
+
+def test_expected_behavior_delta_tracks_every_golden_and_delta_row() -> None:
+    """No golden is silently compared without a delta-table classification."""
+    text = (GOLDENS_DIR / "expected_behavior_delta.md").read_text(encoding="utf-8")
+    for name in _load("manifest.json")["files"]:
+        assert name in text, f"{name} not classified in expected_behavior_delta.md"
+    for delta_id in (f"D{index}" for index in range(1, 9)):
+        assert f"| {delta_id} |" in text, f"approved delta row {delta_id} missing"
+
+
+# ── hessian resolution (three-way) ──────────────────────────────────────
+
+
+def test_hessian_resolution_three_way_matches_goldens() -> None:
+    from acp.chem.composition import (
+        AUTO_RECALC_HESS as ACP_AUTO,
+    )
+    from acp.chem.composition import (
+        MAX_RECALC_HESS_INTERVAL as ACP_MAX,
+    )
+    from acp.chem.composition import (
+        NON_LIGHT_DEFAULT_INTERVAL as ACP_NON_LIGHT,
+    )
+    from acp.chem.composition import (
+        resolve_recalc_hess as acp_resolve,
+    )
+    from cccp.qc.hessian_policy import (
+        AUTO_RECALC_HESS,
+        MAX_RECALC_HESS_INTERVAL,
+        NON_LIGHT_DEFAULT_INTERVAL,
+    )
+    from cccp.qc.hessian_policy import resolve_recalc_hess as cccp_resolve
+
+    golden = _load("hessian_resolution.json")
+
+    # ③ ACP compat module is a pure re-export — no duplicated defaults.
+    assert acp_resolve is cccp_resolve
+    assert (ACP_AUTO, ACP_MAX, ACP_NON_LIGHT) == (
+        AUTO_RECALC_HESS,
+        MAX_RECALC_HESS_INTERVAL,
+        NON_LIGHT_DEFAULT_INTERVAL,
+    )
+    assert golden["constants"] == {
+        "AUTO_RECALC_HESS": AUTO_RECALC_HESS,
+        "MAX_RECALC_HESS_INTERVAL": MAX_RECALC_HESS_INTERVAL,
+        "NON_LIGHT_DEFAULT_INTERVAL": NON_LIGHT_DEFAULT_INTERVAL,
+    }
+
+    for case in golden["matrix"]:
+        # ② standalone cccp == golden
+        cccp_resolution = cccp_resolve(case["explicit"], case["configured"], case["symbols"])
+        assert _resolution_projection(cccp_resolution) == case["result"], case
+        # ① migrated ACP == golden and ③ ACP == cccp
+        acp_resolution = acp_resolve(case["explicit"], case["configured"], case["symbols"])
+        assert _resolution_projection(acp_resolution) == case["result"], case
+
+    boundary_values = [MAX_RECALC_HESS_INTERVAL + 1, -1, True, 1.5, "2.5", "abc"]
+    assert [repr(value) for value in boundary_values] == [
+        case["value"] for case in golden["boundary_rejections"]
+    ]
+    for value, case in zip(boundary_values, golden["boundary_rejections"]):
+        for resolve in (cccp_resolve, acp_resolve):
+            with pytest.raises(ValueError) as excinfo:
+                resolve(value, None, None)
+            assert str(excinfo.value) == case["error"], case["value"]
+
+
+# ── thermochemistry unit strings (three-way) ────────────────────────────
+
+
+def test_thermochemistry_unit_strings_three_way_match_goldens() -> None:
+    from acp.calculations.primitives._thermochemistry_input import (
+        ValidatedRequest as AcpValidatedRequest,
+    )
+    from acp.calculations.primitives._thermochemistry_input import (
+        standard_state_correction_kcal as acp_standard_state_correction,
+    )
+    from acp.calculations.primitives._thermochemistry_support import (
+        ShermoSettings,
+    )
+    from acp.calculations.primitives._thermochemistry_support import (
+        build_metadata as acp_build_metadata,
+    )
+    from acp.results.frequencies import build_normal_modes_product
+    from cccp.qc.thermo_normalize import (
+        ThermochemistryContext,
+        ThermochemistryOutcome,
+        ValidatedRequest,
+    )
+    from cccp.qc.thermo_normalize import build_metadata as cccp_build_metadata
+    from cccp.qc.thermo_normalize import (
+        standard_state_correction_kcal as cccp_standard_state_correction,
+    )
+
+    golden = _load("unit_strings.json")
+
+    # ③ the ACP private surface re-exports the single normalization core.
+    assert acp_build_metadata is cccp_build_metadata
+
+    context = ThermochemistryContext(
+        config=None,
+        output_dir=Path("out"),
+        output_file=Path("out/Shermo.sum"),
+        runner_options={},
+        standard_state="1M",
+    )
+    settings = ShermoSettings(
+        shermo_bin="Shermo",
+        scl_zpe=1.0,
+        ilowfreq=2,
+        imagreal=0,
+        concentration=1.0,
+        qrrho=True,
+    )
+    outcome = ThermochemistryOutcome(
+        values={"u_sum": -40.4, "h_sum": -40.3, "g_sum": -40.6, "g_conc": -40.7, "s_total": 0.1},
+        gibbs=-40.7,
+        gibbs_source="g_conc",
+        standard_delta=None,
+    )
+
+    def _request(cls: type) -> Any:
+        return cls(
+            freq_log_path=Path("freq.log"),
+            sp_energy_hartree=-40.5,
+            temperature=298.15,
+            pressure=1.0,
+            standard_state="1M",
+        )
+
+    cccp_metadata = _round_floats(
+        cccp_build_metadata(_request(ValidatedRequest), context, settings, outcome, success=True)
+    )
+    acp_metadata = _round_floats(
+        acp_build_metadata(_request(AcpValidatedRequest), context, settings, outcome, success=True)
+    )
+    # ① migrated ACP == ② standalone cccp == ③ (same implementation)
+    assert acp_metadata == cccp_metadata
+    unit_suffixes = ("_hartree", "_kcal_mol", "_au", "_k", "_atm")
+    for metadata in (cccp_metadata, acp_metadata):
+        subset = {
+            key: metadata[key]
+            for key in sorted(metadata)
+            if key.endswith(unit_suffixes) or key in {"standard_state", "temperature", "pressure"}
+        }
+        assert subset == golden["thermochemistry_metadata_unit_keys"]
+        assert sorted(metadata) == golden["thermochemistry_all_keys"]
+
+    expected_correction = golden["standard_state_correction_kcal_at_298K"]
+    assert round(cccp_standard_state_correction(298.15), 10) == expected_correction
+    assert round(acp_standard_state_correction(298.15), 10) == expected_correction
+
+    class _Calc:
+        mode_vectors = {0: ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))}
+        mode_frequencies = {0: 123.4}
+        mode_ir_intensities = {0: 5.5}
+
+    modes_product = build_normal_modes_product(
+        _Calc(), geometry_product_id="geometry", atom_count=2
+    )
+    assert modes_product["units"] == golden["normal_modes_units"]
+
+
+# ── failure classification tokens / rescue matrix (three-way) ───────────
+
+
+def test_failure_classification_tokens_match_goldens(tmp_path: Path) -> None:
+    """② SCF / timeout / parse failure classification tokens are contract."""
+    from cccp.qc.interfaces.orca import classify_orca_failure
+
+    golden = _load("error_tokens.json")
+    samples = {
+        "scf_not_converged": "SCF NOT CONVERGED\n",
+        "diis_failure": "DIIS convergence not achieved\n",
+        "opt_not_converged": "THE OPTIMIZATION HAS NOT CONVERGED\n",
+        "memory": "std::bad_alloc\n",
+        "clean": "ORCA TERMINATED NORMALLY\n",
+    }
+    for name, body in samples.items():
+        log = tmp_path / f"{name}.out"
+        log.write_text(body, encoding="utf-8")
+        classified = classify_orca_failure(log)
+        assert classified == golden["classify_orca_failure_samples"][name], name
+    missing = classify_orca_failure(tmp_path / "does_not_exist.out")
+    assert missing == golden["classify_orca_failure_missing_file"]
+
+
+def test_rescue_and_typed_error_tokens_match_goldens() -> None:
+    """①/③ rescue tables and typed workflow error codes equal the goldens."""
+    from acp.calculations.primitives.optimize import (
+        _FAILURE_TYPES,
+        _RESCUE_DESCRIPTIONS,
+        FAILURE_EXIT,
+    )
+    from acp.workflows.orca_gradient import (
+        ORCA_GRADIENT_E_BACKEND,
+        ORCA_GRADIENT_E_ELECTRONIC_STATE,
+        ORCA_GRADIENT_E_GEOMETRY,
+        ORCA_GRADIENT_E_GRADIENT,
+        ORCA_GRADIENT_E_OUTPUT,
+        ORCA_GRADIENT_E_SCHEMA,
+    )
+    from acp.workflows.xtb_path import (
+        XTB_PATH_E_CHARGE,
+        XTB_PATH_E_OUTPUT,
+        XTB_PATH_E_RECIPE,
+        XTB_PATH_E_SCHEMA,
+        XTB_PATH_E_SOURCE,
+        XTB_PATH_E_XTB,
+    )
+    from cccp.calculation.tasks.optimize import _FAILURE_TYPES as CCCP_FAILURE_TYPES
+    from cccp.calculation.tasks.optimize import _RESCUE_DESCRIPTIONS as CCCP_RESCUE_DESCRIPTIONS
+    from cccp.calculation.tasks.optimize import FAILURE_EXIT as CCCP_FAILURE_EXIT
+
+    golden = _load("error_tokens.json")
+    assert sorted(_FAILURE_TYPES) == golden["failure_types"]
+    assert sorted(FAILURE_EXIT) == golden["failure_exit"]
+    assert _RESCUE_DESCRIPTIONS == golden["rescue_strategies"]
+    # ③ ACP compat re-export == cccp task core (no second rescue table).
+    assert sorted(CCCP_FAILURE_TYPES) == sorted(_FAILURE_TYPES)
+    assert sorted(CCCP_FAILURE_EXIT) == sorted(FAILURE_EXIT)
+    assert CCCP_RESCUE_DESCRIPTIONS == _RESCUE_DESCRIPTIONS
+
+    xtb_codes = sorted(
+        [
+            XTB_PATH_E_SCHEMA,
+            XTB_PATH_E_SOURCE,
+            XTB_PATH_E_CHARGE,
+            XTB_PATH_E_RECIPE,
+            XTB_PATH_E_XTB,
+            XTB_PATH_E_OUTPUT,
+        ]
+    )
+    gradient_codes = sorted(
+        [
+            ORCA_GRADIENT_E_SCHEMA,
+            ORCA_GRADIENT_E_GEOMETRY,
+            ORCA_GRADIENT_E_ELECTRONIC_STATE,
+            ORCA_GRADIENT_E_BACKEND,
+            ORCA_GRADIENT_E_GRADIENT,
+            ORCA_GRADIENT_E_OUTPUT,
+        ]
+    )
+    assert xtb_codes == golden["typed_error_codes"]["xtb_path"]
+    assert gradient_codes == golden["typed_error_codes"]["orca_gradient"]
+
+
+# ── CENSO record identity / free energy (three-way) ─────────────────────
+
+
+class _CensoStubBackend:
+    name = "censo"
+
+    def __init__(self, result: Any) -> None:
+        self.result = result
+
+    def refine_ensemble(self, ensemble_xyz: Path, output_dir: Path, **kwargs: Any) -> Any:
+        return self.result
+
+
+def _censo_run_result(tmp_path: Path, golden: dict[str, Any]) -> Any:
+    from cccp.qc.interfaces.censo import CensoInterface, CensoRunResult
+
+    json_path = tmp_path / "1_SCREENING.json"
+    xyz_path = tmp_path / "1_SCREENING.xyz"
+    json_path.write_text(json.dumps(golden["inputs"]["json"]), encoding="utf-8")
+    xyz_path.write_text(golden["inputs"]["xyz"], encoding="utf-8")
+    records = CensoInterface({}).parse_censo_json(json_path, xyz_path)
+    result = CensoRunResult(
+        preset="screening",
+        records=records,
+        final_part="screening",
+        work_dir=tmp_path,
+        temperature=298.15,
+    )
+    result.sort_by_gtot()
+    return result
+
+
+def test_censo_record_identity_three_way_matches_goldens(tmp_path: Path) -> None:
+    from acp.backends.censo_backend import CensoInterface as AcpCensoInterface
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.requests import (
+        CensoRefineOptions,
+        StructureInput,
+        TaskKind,
+        TaskRequest,
+    )
+    from cccp.calculation.tasks.censo_refine import run_censo_refine
+    from cccp.qc.interfaces.censo import CensoInterface, CensoRunResult, part_index
+
+    golden = _load("censo_records.json")
+
+    # ③ ACP backend is a pure re-export of the single CENSO subprocess layer.
+    assert AcpCensoInterface is CensoInterface
+
+    # ② standalone cccp low-level parse == golden (record identity + free energy)
+    records = _censo_run_result(tmp_path, golden).records
+    identity = [
+        {
+            "conf_id": record.conf_id,
+            "frame_index": record.frame_index,
+            "energy": record.energy,
+            "gsolv": record.gsolv,
+            "grrho": record.grrho,
+            "gtot": record.gtot,
+            "n_atoms": len(record.symbols),
+            "symbols": list(record.symbols),
+        }
+        for record in records
+    ]
+    assert identity == golden["records"]
+
+    weights = CensoRunResult(preset="light", records=records, temperature=298.15)
+    assert {
+        key: round(value, 10) for key, value in sorted(weights.boltzmann_weights().items())
+    } == golden["boltzmann_weights"]
+    weights.sort_by_gtot()
+    assert [record.conf_id for record in weights.records] == golden["sort_by_gtot_order"]
+
+    # ① migrated ACP path executes the task core → same identity/free energy.
+    (tmp_path / f"{part_index('screening')}_SCREENING.xyz").write_text(
+        "refined ensemble", encoding="utf-8"
+    )
+    backend = _CensoStubBackend(_censo_run_result(tmp_path, golden))
+    request = TaskRequest(
+        task=TaskKind.CENSO_REFINE,
+        structure=StructureInput(path=tmp_path / "ensemble.xyz"),
+        options=CensoRefineOptions(preset="censo-light", temperature_k=298.15),
+        output_dir=tmp_path / "out",
+    )
+    result = run_censo_refine(request, context=TaskContext(backend=backend, input_base=tmp_path))
+    assert result.status == "completed"
+    assert result.complete is True
+    expected = {row["conf_id"]: row for row in golden["records"]}
+    assert len(result.payload.records) == len(expected)
+    for record in result.payload.records:
+        row = expected[record.conf_id]
+        assert record.frame_index == row["frame_index"]
+        assert record.energy_hartree == pytest.approx(row["energy"])
+        assert record.free_energy_hartree == pytest.approx(row["gtot"])
+        assert record.weight == pytest.approx(golden["boltzmann_weights"][record.conf_id])
+
+
+def test_censo_failure_paths_keep_error_semantics(tmp_path: Path) -> None:
+    """Failure classification is stable (text may differ; ``error_kind`` is contract)."""
+    import numpy as np
+
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.requests import (
+        CensoRefineOptions,
+        StructureInput,
+        TaskKind,
+        TaskRequest,
+    )
+    from cccp.calculation.results import ErrorKind
+    from cccp.calculation.tasks.censo_refine import run_censo_refine
+    from cccp.qc.interfaces.censo import CensoConformerRecord, CensoRunResult, part_index
+
+    golden = _load("censo_records.json")
+    (tmp_path / f"{part_index('screening')}_SCREENING.xyz").write_text(
+        "refined ensemble", encoding="utf-8"
+    )
+
+    def _request() -> TaskRequest:
+        return TaskRequest(
+            task=TaskKind.CENSO_REFINE,
+            structure=StructureInput(path=tmp_path / "ensemble.xyz"),
+            options=CensoRefineOptions(),
+            output_dir=tmp_path / "out",
+        )
+
+    empty = CensoRunResult(
+        preset="screening", records=[], final_part="screening", work_dir=tmp_path
+    )
+    empty_result = run_censo_refine(
+        _request(), context=TaskContext(backend=_CensoStubBackend(empty), input_base=tmp_path)
+    )
+    assert empty_result.status == "failed"
+    assert empty_result.complete is False
+    assert empty_result.error_kind is ErrorKind.BACKEND_FAILURE
+
+    run_result = _censo_run_result(tmp_path, golden)
+    run_result.records.append(
+        CensoConformerRecord(
+            conf_id="CONF_UNMAPPED",
+            frame_index=-1,
+            energy=0.0,
+            gsolv=0.0,
+            grrho=0.0,
+            gtot=0.0,
+            coordinates=np.zeros((0, 3)),
+            symbols=[],
+        )
+    )
+    partial = run_censo_refine(
+        _request(),
+        context=TaskContext(backend=_CensoStubBackend(run_result), input_base=tmp_path),
+    )
+    assert partial.status == "failed"
+    assert partial.complete is False
+    assert [record.conf_id for record in partial.payload.records] == ["CONF1", "CONF2"]
+    assert [record.frame_index for record in partial.payload.records] == [0, 1]
+
+
+# ── NMR atom index / shielding (three-way) ──────────────────────────────
+
+
+class _NmrStubBackend:
+    name = "orca"
+
+    def __init__(self, result: Any) -> None:
+        self.result = result
+
+    def nmr_shielding(
+        self,
+        coordinates: Any,
+        symbols: Any,
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        return self.result
+
+
+def _nmr_task_result(
+    tmp_path: Path,
+    golden: dict[str, Any],
+    *,
+    options: Any | None = None,
+) -> Any:
+    from cccp.backends.base import QCResult
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.requests import (
+        MethodSpec,
+        NmrShieldingOptions,
+        StructureInput,
+        TaskKind,
+        TaskRequest,
+    )
+    from cccp.calculation.tasks.nmr_shielding import run_nmr_shielding
+    from cccp.qc.interfaces.orca import NmrShieldingParser
+
+    geometry = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.089))
+    symbols = ("C", "H")
+    log = tmp_path / "nmr_tensor.out"
+    log.write_text(golden["inputs"]["tensor_log"], encoding="utf-8")
+    parsed = NmrShieldingParser.parse(log, expected_symbols=list(symbols))
+    backend = _NmrStubBackend(
+        QCResult(
+            success=True,
+            energy=-40.5,
+            coordinates=geometry,
+            symbols=symbols,
+            metadata={"shieldings": parsed},
+        )
+    )
+    request = TaskRequest(
+        task=TaskKind.NMR_SHIELDING,
+        structure=StructureInput(coordinates=geometry, symbols=symbols),
+        level=MethodSpec(),
+        options=options if options is not None else NmrShieldingOptions(),
+    )
+    return run_nmr_shielding(request, context=TaskContext(backend=backend, input_base=tmp_path))
+
+
+def test_nmr_shielding_three_way_matches_goldens(tmp_path: Path) -> None:
+    from cccp.qc.interfaces.orca import NmrShieldingParser
+
+    golden = _load("nmr_shielding.json")
+
+    # ② standalone cccp parser == golden (0-based atom index + shielding).
+    tensor_log = tmp_path / "nmr_tensor.out"
+    summary_log = tmp_path / "nmr_summary.out"
+    tensor_log.write_text(golden["inputs"]["tensor_log"], encoding="utf-8")
+    summary_log.write_text(golden["inputs"]["summary_log"], encoding="utf-8")
+    tensor = NmrShieldingParser.parse(tensor_log, expected_symbols=["C", "H"])
+    summary = NmrShieldingParser.parse(summary_log, expected_symbols=["C", "H"])
+    assert {str(key): value for key, value in tensor.items()} == golden["tensor_block_parse"]
+    assert {str(key): value for key, value in summary.items()} == golden["summary_block_parse"]
+
+    # Pre-launch rejection: symbol/order mismatch is a ValueError with the
+    # recorded classification text (not silent reordering).
+    with pytest.raises(ValueError) as excinfo:
+        NmrShieldingParser.parse(tensor_log, expected_symbols=["H", "C"])
+    assert str(excinfo.value) == golden["symbol_mismatch_error"]
+
+    # ①/③ migrated task core payload == golden at the original atom-index base.
+    result = _nmr_task_result(tmp_path, golden)
+    assert result.status == "completed"
+    expected = golden["tensor_block_parse"]
+    assert set(result.payload.shieldings) == {int(key) for key in expected}
+    for key, entry in result.payload.shieldings.items():
+        assert entry.symbol == expected[str(key)]["symbol"]
+        assert entry.isotropic == pytest.approx(expected[str(key)]["isotropic"])
+
+
+def test_nmr_failure_path_missing_requested_atom_is_parse_failure(tmp_path: Path) -> None:
+    from cccp.calculation.requests import NmrShieldingOptions
+    from cccp.calculation.results import ErrorKind
+
+    golden = _load("nmr_shielding.json")
+    options = NmrShieldingOptions(atom_indices=(0, 5))
+    result = _nmr_task_result(tmp_path, golden, options=options)
+    assert result.status == "failed"
+    assert result.complete is False
+    assert result.error_kind is ErrorKind.PARSE_FAILURE
+    assert set(result.payload.shieldings) == {0}
+    assert result.payload.shieldings[0].symbol == "C"
+
+
+# ── XtbPathSearch / OrcaGradient request conversion (three-way) ─────────
+
+
+def test_workflow_request_conversion_three_way_matches_goldens(tmp_path: Path) -> None:
+    import numpy as np
+
+    from acp.calculations.legacy_adapters import (
+        pes2ts_orca_gradient_to_task_request,
+        pes2ts_xtb_path_to_task_request,
+    )
+    from acp.workflows.orca_gradient import (
+        ENERGY_PRODUCT_SCHEMA,
+        GRADIENT_PRODUCT_SCHEMA,
+        _persist_orca_gradient_outputs,
+        _validate_gradient_request,
+    )
+    from acp.workflows.xtb_path import _validate_path_request
+
+    golden = _load("workflow_requests.json")
+
+    # ---- XtbPathSearch --------------------------------------------------
+    path_request = _validate_path_request(golden["xtb_path"]["payload"])
+    expected_path = golden["xtb_path"]["converted_request"]
+    converted_path = {
+        "reaction_id": path_request.reaction_id,
+        "charge": path_request.charge,
+        "multiplicity": path_request.multiplicity,
+        "gfn_level": path_request.gfn_level,
+        "uhf": path_request.uhf,
+        "threads": path_request.threads,
+        "timeout_seconds": path_request.timeout_seconds,
+        "seed": path_request.seed,
+        "extra_args": list(path_request.extra_args),
+        "request_sha256": path_request.request_sha256,
+        "config_digest": path_request.config_digest,
+        "adapter_version": path_request.adapter_version,
+        "plan_sha256": path_request.plan_sha256,
+    }
+    # ① migrated ACP validation == golden (no recipe knobs defaulted).
+    assert converted_path == expected_path
+    written = {
+        "start.xyz": _sha256_text(path_request.start_xyz_text),
+        "end.xyz": _sha256_text(path_request.end_xyz_text),
+        "path.inp": _sha256_text(path_request.path_inp_text),
+    }
+    assert written == golden["xtb_path"]["converted_input_text_sha256"]
+
+    # ③ adapter keeps scientific fields + platform identity; adds no defaults.
+    path_task_request, path_binding = pes2ts_xtb_path_to_task_request(path_request)
+    assert path_task_request.charge == expected_path["charge"]
+    assert path_task_request.multiplicity == expected_path["multiplicity"]
+    assert path_task_request.resources.nproc == expected_path["threads"]
+    assert path_task_request.resources.timeout_s == expected_path["timeout_seconds"]
+    path_options = path_task_request.options
+    assert path_options.gfn_level == expected_path["gfn_level"]
+    assert path_options.uhf == expected_path["uhf"]
+    assert path_options.seed == expected_path["seed"]
+    fragments = {fragment.source: fragment.content for fragment in path_options.backend_inputs}
+    assert (
+        fragments["recipe.path_inp_text"]
+        == golden["xtb_path"]["payload"]["recipe"]["path_inp_text"]
+    )
+    assert fragments["recipe.extra_args"] == tuple(
+        golden["xtb_path"]["payload"]["recipe"]["extra_args"]
+    )
+    assert path_binding.platform_identity["request_sha256"] == expected_path["request_sha256"]
+
+    # ---- OrcaGradient ---------------------------------------------------
+    gradient_request = _validate_gradient_request(golden["orca_gradient"]["payload"])
+    expected_gradient = golden["orca_gradient"]["converted_request"]
+    converted_gradient = {
+        "schema_version": gradient_request.schema_version,
+        "method": gradient_request.method,
+        "basis": gradient_request.basis,
+        "charge": gradient_request.charge,
+        "multiplicity": gradient_request.multiplicity,
+        "route_extras": list(gradient_request.route_extras),
+        "timeout_seconds": gradient_request.timeout_seconds,
+        "nproc": gradient_request.nproc,
+        "extra_blocks": list(gradient_request.extra_blocks),
+        "scf_convergence": gradient_request.scf_convergence,
+        "output_name": gradient_request.output_name,
+        "request_sha256": gradient_request.request_sha256,
+        "xyz_text": gradient_request.xyz_text,
+        "xyz_text_sha256": _sha256_text(gradient_request.xyz_text),
+    }
+    assert converted_gradient == expected_gradient
+    assert {
+        "gradient": GRADIENT_PRODUCT_SCHEMA,
+        "energy": ENERGY_PRODUCT_SCHEMA,
+    } == golden["orca_gradient"]["product_schemas"]
+
+    output_root = tmp_path / "gradient_out"
+    gradient = np.array([[0.1, -0.2, 0.3], [-0.1, 0.2, -0.3]])
+    _persist_orca_gradient_outputs(
+        output_root=output_root,
+        request=gradient_request,
+        energy=-1.23456789,
+        gradient=gradient,
+        gradient_source="golden_recorded",
+        provenance={"request_sha256": gradient_request.request_sha256},
+    )
+    result_dir = output_root / "RESULT"
+    import hashlib
+
+    digests = {}
+    for relative in (
+        "geometry/geometry.xyz",
+        "gradient/gradient.json",
+        "energy/energy.json",
+        "result_manifest.json",
+        "result_summary.json",
+    ):
+        candidate = result_dir / relative
+        if candidate.is_file():
+            digests[relative] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    assert digests == golden["orca_gradient"]["artifact_digests"]
+
+    gradient_product = json.loads((result_dir / "gradient" / "gradient.json").read_text("utf-8"))
+    energy_product = json.loads((result_dir / "energy" / "energy.json").read_text("utf-8"))
+    assert gradient_product["gradient_unit"] == "hartree/bohr"
+    assert gradient_product["gradient_convention"] == "energy_gradient_dE_dX"
+    assert gradient_product["gradient_conversion"] == "hartree_per_bohr / 0.529177210903"
+    assert energy_product["energy_unit"] == "hartree"
+
+    # ③ adapter keeps method/basis/scf/resources and passes raw fragments via.
+    gradient_task_request, gradient_binding = pes2ts_orca_gradient_to_task_request(gradient_request)
+    assert gradient_task_request.level.method == expected_gradient["method"]
+    assert gradient_task_request.level.basis == expected_gradient["basis"]
+    assert gradient_task_request.charge == expected_gradient["charge"]
+    assert gradient_task_request.multiplicity == expected_gradient["multiplicity"]
+    assert gradient_task_request.resources.nproc == expected_gradient["nproc"]
+    assert gradient_task_request.resources.timeout_s == expected_gradient["timeout_seconds"]
+    gradient_fragments = {
+        fragment.source: fragment.content
+        for fragment in gradient_task_request.options.backend_inputs
+    }
+    assert gradient_fragments["route_extras"] == tuple(expected_gradient["route_extras"])
+    assert gradient_fragments["extra_blocks"] == tuple(expected_gradient["extra_blocks"])
+    assert gradient_fragments["output_name"] == expected_gradient["output_name"]
+    assert (
+        gradient_binding.platform_identity["request_sha256"] == expected_gradient["request_sha256"]
+    )
