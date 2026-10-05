@@ -71,6 +71,7 @@ from acp.calculations.step_result import (
     ResumeSource,
     dependency_artifacts,
     file_sha256,
+    locate_recorded_file,
     portable_path,
     read_step_result,
     resolve_resume_source,
@@ -254,6 +255,100 @@ _PRIMITIVE_DISPATCH: dict[StepKind, Callable[[CalculationRequest], CalculationRe
 _COORD_PRODUCING_KINDS: frozenset[StepKind] = frozenset({StepKind.OPTIMIZE})
 
 _HANDOFF_KEY = "__handoff__"
+
+
+@dataclass
+class _Handoff:
+    """Full downstream handoff (V03): geometry, freq log, SP energy + unit.
+
+    ``frequency_log_path`` is stored relative to the task root (portable
+    across attempt archives); ``single_point_energy`` is always hartree —
+    the unit of the ``sp_energy_hartree`` thermo parameter.  Geometry is
+    bound to its producing step via ``geometry_identity`` (step index +
+    coords sha256 + symbols).
+    """
+
+    coords: list[list[float]] | None = None
+    symbols: list[str] | None = None
+    frequency_log_path: str | None = None
+    single_point_energy: float | None = None
+    energy_unit: str = "hartree"
+    geometry_step_index: int | None = None
+    geometry_coords_sha256: str | None = None
+
+    @staticmethod
+    def _coords_sha256(coords: list[list[float]]) -> str:
+        blob = json.dumps(coords, separators=(",", ":")).encode()
+        return hashlib.sha256(blob).hexdigest()
+
+    def set_geometry(self, step_index: int, coords: list[list[float]], symbols: list[str]) -> None:
+        self.coords = [[float(value) for value in row] for row in coords]
+        self.symbols = list(symbols)
+        self.geometry_step_index = step_index
+        self.geometry_coords_sha256 = self._coords_sha256(self.coords)
+
+    def set_frequency_log(self, path: Path | str | None, task_root: Path) -> None:
+        if path is None:
+            return
+        self.frequency_log_path = portable_path(path, task_root)
+
+    def set_energy(self, energy: float) -> None:
+        self.single_point_energy = float(energy)
+        self.energy_unit = "hartree"
+
+    def locate_frequency_log(self, roots: tuple[Path, ...]) -> Path | None:
+        if not self.frequency_log_path:
+            return None
+        return locate_recorded_file(roots, self.frequency_log_path)
+
+    def to_checkpoint_value(self) -> dict[str, JsonValue] | None:
+        payload: dict[str, JsonValue] = {}
+        if self.coords is not None:
+            payload["coords"] = _json_geometry_value(self.coords)
+            payload["symbols"] = _json_text_list_value(self.symbols or [])
+        if self.frequency_log_path is not None:
+            payload["frequency_log_path"] = self.frequency_log_path
+        if self.single_point_energy is not None:
+            payload["single_point_energy"] = self.single_point_energy
+            payload["energy_unit"] = self.energy_unit
+        if (
+            self.coords is not None
+            and self.geometry_step_index is not None
+            and self.geometry_coords_sha256 is not None
+        ):
+            payload["geometry_identity"] = {
+                "step_index": self.geometry_step_index,
+                "coords_sha256": self.geometry_coords_sha256,
+                "symbols": _json_text_list_value(self.symbols or []),
+            }
+        return payload or None
+
+    @classmethod
+    def from_checkpoint(cls, raw: JsonValue | None) -> _Handoff:
+        handoff = cls()
+        if not isinstance(raw, dict):
+            return handoff
+        handoff.coords = _json_geometry(raw.get("coords"))
+        handoff.symbols = _json_text_list(raw.get("symbols")) or None
+        frequency_log_path = raw.get("frequency_log_path")
+        if isinstance(frequency_log_path, str) and frequency_log_path:
+            handoff.frequency_log_path = frequency_log_path
+        energy = raw.get("single_point_energy")
+        if isinstance(energy, (int, float)) and not isinstance(energy, bool):
+            unit = raw.get("energy_unit")
+            if unit is None or unit == "hartree":
+                handoff.single_point_energy = float(energy)
+            else:
+                logger.warning("handoff energy unit %r unsupported — energy not restored", unit)
+        geometry_identity = raw.get("geometry_identity")
+        if isinstance(geometry_identity, dict):
+            step_index = geometry_identity.get("step_index")
+            if isinstance(step_index, int) and not isinstance(step_index, bool):
+                handoff.geometry_step_index = step_index
+            coords_sha256 = geometry_identity.get("coords_sha256")
+            if isinstance(coords_sha256, str):
+                handoff.geometry_coords_sha256 = coords_sha256
+        return handoff
 
 
 def _json_text(value: JsonValue | None, default: str = "") -> str:
@@ -731,18 +826,10 @@ class CalculationPlanExecutor:
         default_method = plan.profile or "r2SCAN-3c"
         base_resources: dict[str, JsonValue] = {}
 
-        # track coordinates from optimize for downstream handoff
-        handoff_coords: list[list[float]] | None = None
-        handoff_symbols: list[str] | None = None
-        frequency_log_path: Path | None = None
-        single_point_energy: float | None = None
-
-        # restore handoff from checkpoint if resuming
-        if checkpoint is not None:
-            saved_handoff = checkpoint.items_state.get(_HANDOFF_KEY)
-            if isinstance(saved_handoff, dict):
-                handoff_coords = _json_geometry(saved_handoff.get("coords"))
-                handoff_symbols = _json_text_list(saved_handoff.get("symbols"))
+        # track the downstream handoff (geometry / freq log / SP energy)
+        handoff = _Handoff.from_checkpoint(
+            checkpoint.items_state.get(_HANDOFF_KEY) if checkpoint is not None else None
+        )
 
         # ③④⑥ execute steps sequentially
         for idx, step in enumerate(steps):
@@ -792,22 +879,31 @@ class CalculationPlanExecutor:
                     if publish_error:
                         state.status = "failed"
                         state.error = publish_error
-                    if step.kind in _COORD_PRODUCING_KINDS and adoption.result.coords is not None:
-                        handoff_coords = [
-                            [float(value) for value in row]
-                            for row in adoption.result.coords
-                        ]
-                        handoff_symbols = list(item.elements)
-                    self._write_result_manifest_tolerant(
-                        result_dir, plan, step_states, "running"
-                    )
+                    if state.status == "completed":
+                        if step.kind is StepKind.FREQUENCY:
+                            handoff.set_frequency_log(
+                                _frequency_log_path(adoption.result), task_root
+                            )
+                        elif (
+                            step.kind is StepKind.SINGLEPOINT and adoption.result.energy is not None
+                        ):
+                            handoff.set_energy(adoption.result.energy)
+                        if (
+                            step.kind in _COORD_PRODUCING_KINDS
+                            and adoption.result.coords is not None
+                        ):
+                            handoff.set_geometry(
+                                idx,
+                                [[float(value) for value in row] for row in adoption.result.coords],
+                                list(item.elements),
+                            )
+                    self._write_result_manifest_tolerant(result_dir, plan, step_states, "running")
                     self._persist_checkpoint(
                         runtime_dir,
                         fingerprint,
                         plan,
                         step_states,
-                        handoff_coords,
-                        handoff_symbols,
+                        handoff,
                     )
                     continue
                 if adoption.reason:
@@ -838,10 +934,11 @@ class CalculationPlanExecutor:
 
             step_resources = _step_resources(step)
             if step.kind is StepKind.THERMOCHEMISTRY:
-                if frequency_log_path is not None:
-                    step_resources["freq_log_path"] = str(frequency_log_path)
-                if single_point_energy is not None:
-                    step_resources["sp_energy_hartree"] = single_point_energy
+                freq_log = handoff.locate_frequency_log((science_root, task_root))
+                if freq_log is not None:
+                    step_resources["freq_log_path"] = str(freq_log)
+                if handoff.single_point_energy is not None:
+                    step_resources["sp_energy_hartree"] = handoff.single_point_energy
 
             request = _build_request(
                 step.kind,
@@ -849,8 +946,8 @@ class CalculationPlanExecutor:
                 step_method,
                 {**base_resources, **step_resources},
                 output_dir=step_work_dir,
-                coordinates=handoff_coords,
-                symbols=handoff_symbols,
+                coordinates=handoff.coords,
+                symbols=handoff.symbols,
             )
 
             # dispatch to primitive
@@ -864,8 +961,7 @@ class CalculationPlanExecutor:
                     fingerprint,
                     plan,
                     step_states,
-                    handoff_coords,
-                    handoff_symbols,
+                    handoff,
                 )
                 continue
 
@@ -904,8 +1000,7 @@ class CalculationPlanExecutor:
                         fingerprint,
                         plan,
                         step_states,
-                        handoff_coords,
-                        handoff_symbols,
+                        handoff,
                     )
                     continue
             else:
@@ -923,8 +1018,7 @@ class CalculationPlanExecutor:
                         fingerprint,
                         plan,
                         step_states,
-                        handoff_coords,
-                        handoff_symbols,
+                        handoff,
                     )
                     continue
 
@@ -956,7 +1050,7 @@ class CalculationPlanExecutor:
                         if identity is not None and idx < len(identity.step_identities)
                         else None
                     ),
-                    symbols=handoff_symbols if handoff_symbols else list(item.elements),
+                    symbols=handoff.symbols if handoff.symbols else list(item.elements),
                     request=request,
                 )
                 state.status = "completed"
@@ -965,8 +1059,7 @@ class CalculationPlanExecutor:
                     fingerprint,
                     plan,
                     step_states,
-                    handoff_coords,
-                    handoff_symbols,
+                    handoff,
                 )
                 publish_error = self._ensure_publication(
                     step_work_dir=step_work_dir,
@@ -992,15 +1085,18 @@ class CalculationPlanExecutor:
                 else:
                     logger.info("step %d (%s) completed", idx, step.kind.value)
 
-            if step.kind is StepKind.FREQUENCY:
-                frequency_log_path = _frequency_log_path(result)
-            elif step.kind is StepKind.SINGLEPOINT and result.energy is not None:
-                single_point_energy = result.energy
+            if state.status == "completed":
+                if step.kind is StepKind.FREQUENCY:
+                    handoff.set_frequency_log(_frequency_log_path(result), task_root)
+                elif step.kind is StepKind.SINGLEPOINT and result.energy is not None:
+                    handoff.set_energy(result.energy)
 
-            # ④ coordinate handoff from optimize → downstream steps
-            if step.kind in _COORD_PRODUCING_KINDS and result.coords is not None:
-                handoff_coords = [[float(v) for v in row] for row in result.coords]
-                handoff_symbols = list(item.elements)
+                if step.kind in _COORD_PRODUCING_KINDS and result.coords is not None:
+                    handoff.set_geometry(
+                        idx,
+                        [[float(v) for v in row] for row in result.coords],
+                        list(item.elements),
+                    )
 
             # Durable structures survive a later exception or cancellation.
             self._write_result_manifest_tolerant(result_dir, plan, step_states, "running")
@@ -1011,8 +1107,7 @@ class CalculationPlanExecutor:
                 fingerprint,
                 plan,
                 step_states,
-                handoff_coords,
-                handoff_symbols,
+                handoff,
             )
 
         # ③④⑥ post-hoc stability SP node (§3.4, §9.5): OPT/FREQ never carry
@@ -1023,8 +1118,8 @@ class CalculationPlanExecutor:
             steps=steps,
             item=item,
             work_dir=work_dir,
-            handoff_coords=handoff_coords,
-            handoff_symbols=handoff_symbols,
+            handoff_coords=handoff.coords,
+            handoff_symbols=handoff.symbols,
             base_resources=base_resources,
             identity=identity,
             fingerprint=fingerprint,
@@ -1039,8 +1134,7 @@ class CalculationPlanExecutor:
                 fingerprint,
                 plan,
                 step_states,
-                handoff_coords,
-                handoff_symbols,
+                handoff,
             )
 
         # ⑦ finalize: write RESULT/result_manifest.json
@@ -1441,16 +1535,13 @@ class CalculationPlanExecutor:
         fingerprint: str,
         plan: CalculationPlan,
         step_states: list[StepState],
-        handoff_coords: list[list[float]] | None,
-        handoff_symbols: list[str] | None,
+        handoff: _Handoff,
     ) -> None:
-        """Persist checkpoint including coordinate handoff state (v2 writer)."""
+        """Persist checkpoint including the full downstream handoff (V03)."""
         items_state: dict[str, JsonValue] = {}
-        if handoff_coords is not None:
-            items_state[_HANDOFF_KEY] = {
-                "coords": _json_geometry_value(handoff_coords),
-                "symbols": _json_text_list_value(handoff_symbols or []),
-            }
+        handoff_value = handoff.to_checkpoint_value()
+        if handoff_value is not None:
+            items_state[_HANDOFF_KEY] = handoff_value
         items_state["paths"] = {
             str(index): str(_ensure_artifact(raw_item).path)
             for index, raw_item in enumerate(plan.items)

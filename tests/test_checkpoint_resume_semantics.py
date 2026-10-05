@@ -24,6 +24,7 @@ Contract under test:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -238,6 +239,205 @@ def test_v1_fixture_serialisation_key_frozen() -> None:
     assert "resume_count" not in payload
     # legacy readers see the counter under the old key
     assert isinstance(payload["attempts"], int)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# V03 — full downstream handoff persistence (freq log / energy+unit / geometry)
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _thermo_plan(root: Path) -> CalculationPlan:
+    """OPT → FREQ → SP → THERMO plan bound to a real input under *root*."""
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "input.xyz"
+    path.write_text("1\ninput\nH 0 0 0\n", encoding="utf-8")
+    return CalculationPlan(
+        workflow="optimize",
+        profile="HF",
+        items=[StructureArtifact(path=path, elements=["H"])],
+        steps=[
+            CalculationStep(kind=StepKind.OPTIMIZE),
+            CalculationStep(kind=StepKind.FREQUENCY),
+            CalculationStep(kind=StepKind.SINGLEPOINT),
+            CalculationStep(kind=StepKind.THERMOCHEMISTRY),
+        ],
+    )
+
+
+def _thermo_resume_dispatcher(
+    root: Path,
+    counts: dict[str, int],
+    thermo_requests: list[dict[str, object]],
+    *,
+    interrupt_thermo: bool = True,
+    fail_opt: bool = False,
+    freq_requests: list[object] | None = None,
+) -> dict[StepKind, object]:
+    """Four-step dispatcher recording every thermo/freq handoff it receives."""
+
+    def opt(request: object) -> CalculationResult:
+        counts["opt"] += 1
+        if fail_opt:
+            return CalculationResult(
+                status="failed",
+                errors=["scf not converged"],
+                coords=[[9.0, 9.0, 9.0]],
+            )
+        return CalculationResult(energy=-40.0, coords=[[0.0, 0.0, 0.1]])
+
+    def freq(request: object) -> CalculationResult:
+        counts["freq"] += 1
+        if freq_requests is not None:
+            freq_requests.append(getattr(request, "resources", {}))
+        step_dir = root / "WORK" / "04_FREQ"
+        step_dir.mkdir(parents=True, exist_ok=True)
+        out = step_dir / "freq.out"
+        out.write_text("frequency log v1\n", encoding="utf-8")
+        return CalculationResult(
+            frequencies=[100.0, 200.0],
+            artifacts=[ArtifactRef(path=out, type="log", source="test")],
+        )
+
+    def sp(request: object) -> CalculationResult:
+        counts["sp"] += 1
+        return CalculationResult(energy=-3.0)
+
+    def thermo(request: object) -> CalculationResult:
+        counts["thermo"] += 1
+        resources = getattr(request, "resources", {})
+        thermo_requests.append(
+            {
+                "freq_log_path": resources.get("freq_log_path"),
+                "sp_energy_hartree": resources.get("sp_energy_hartree"),
+            }
+        )
+        if interrupt_thermo and counts["thermo"] == 1:
+            return CalculationResult(status="failed", errors=["simulated interruption"])
+        return CalculationResult(energy=-3.0)
+
+    return {
+        StepKind.OPTIMIZE: opt,
+        StepKind.FREQUENCY: freq,
+        StepKind.SINGLEPOINT: sp,
+        StepKind.THERMOCHEMISTRY: thermo,
+    }
+
+
+def _handoff(root: Path) -> dict[str, object]:
+    payload = _read_checkpoint(root)
+    handoff = payload["items_state"].get("__handoff__")
+    assert isinstance(handoff, dict)
+    return handoff
+
+
+def test_thermo_handoff_survives_resume(tmp_path: Path) -> None:
+    """FREQ+SP complete → THERMO interrupted → resume keeps the handoff.
+
+    The resumed THERMO step must receive exactly the ``freq_log_path`` and
+    ``sp_energy_hartree`` of the first run (probe −3.0), FREQ/SP/OPT call
+    counts must not increase, and the persisted handoff must carry the
+    energy unit plus the geometry-identity hash (V03 / probe 211–227
+    reversed: ``{"freq_log_path": None, ...}`` → identical values).
+    """
+    plan = _thermo_plan(tmp_path)
+    counts = {"opt": 0, "freq": 0, "sp": 0, "thermo": 0}
+    thermo_requests: list[dict[str, object]] = []
+
+    with patch.dict(
+        executor_module._PRIMITIVE_DISPATCH,
+        _thermo_resume_dispatcher(tmp_path, counts, thermo_requests),
+    ):
+        first = CalculationPlanExecutor().execute(plan, tmp_path)
+        handoff_first = _handoff(tmp_path)
+        second = CalculationPlanExecutor().execute(plan, tmp_path)
+        handoff_second = _handoff(tmp_path)
+
+    assert first.status == "failed"
+    assert second.status == "completed", second.errors
+    assert counts == {"opt": 1, "freq": 1, "sp": 1, "thermo": 2}
+
+    assert handoff_first["frequency_log_path"] == "WORK/04_FREQ/freq.out"
+    assert handoff_first["single_point_energy"] == -3.0
+    assert handoff_first["energy_unit"] == "hartree"
+    geometry = handoff_first.get("geometry_identity")
+    assert isinstance(geometry, dict)
+    assert geometry["step_index"] == 0
+    assert geometry["symbols"] == ["H"]
+    expected_sha = hashlib.sha256(
+        json.dumps([[0.0, 0.0, 0.1]], separators=(",", ":")).encode()
+    ).hexdigest()
+    assert geometry["coords_sha256"] == expected_sha
+
+    assert handoff_second == handoff_first
+
+    assert len(thermo_requests) == 2
+    assert thermo_requests[0]["sp_energy_hartree"] == -3.0
+    assert thermo_requests[1] == thermo_requests[0]
+    assert Path(str(thermo_requests[0]["freq_log_path"])).is_file()
+
+
+def test_failed_opt_partial_coords_never_enter_handoff(
+    tmp_path: Path,
+) -> None:
+    """A failed OPT step's partial coords must not enter the handoff (D07)."""
+    plan = _thermo_plan(tmp_path)
+    counts = {"opt": 0, "freq": 0, "sp": 0, "thermo": 0}
+    thermo_requests: list[dict[str, object]] = []
+    freq_requests: list[object] = []
+
+    with patch.dict(
+        executor_module._PRIMITIVE_DISPATCH,
+        _thermo_resume_dispatcher(
+            tmp_path,
+            counts,
+            thermo_requests,
+            interrupt_thermo=False,
+            fail_opt=True,
+            freq_requests=freq_requests,
+        ),
+    ):
+        result = CalculationPlanExecutor().execute(plan, tmp_path)
+
+    assert result.status == "failed"
+    handoff = _handoff(tmp_path)
+    assert "coords" not in handoff, "failed OPT partial coords leaked into handoff"
+    assert "geometry_identity" not in handoff
+    assert all("coordinates" not in resources for resources in freq_requests)
+    assert handoff["single_point_energy"] == -3.0
+    assert handoff["frequency_log_path"] == "WORK/04_FREQ/freq.out"
+
+
+def test_thermo_handoff_missing_freq_log_recomputes(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """QA failure case: deleted freq log → FREQ recomputes, never ``None``.
+
+    The resumed run must not silently feed ``None`` into THERMO: adoption
+    refuses the FREQ step (``identity_artifact_missing``), FREQ recomputes
+    and the handoff is refreshed with a real, existing log path.
+    """
+    plan = _thermo_plan(tmp_path)
+    counts = {"opt": 0, "freq": 0, "sp": 0, "thermo": 0}
+    thermo_requests: list[dict[str, object]] = []
+
+    with patch.dict(
+        executor_module._PRIMITIVE_DISPATCH,
+        _thermo_resume_dispatcher(tmp_path, counts, thermo_requests),
+    ):
+        CalculationPlanExecutor().execute(plan, tmp_path)
+        assert counts == {"opt": 1, "freq": 1, "sp": 1, "thermo": 1}
+        (tmp_path / "WORK" / "04_FREQ" / "freq.out").unlink()
+        with caplog.at_level(logging.INFO):
+            resumed = CalculationPlanExecutor().execute(plan, tmp_path)
+
+    assert resumed.status == "completed", resumed.errors
+    assert "identity_artifact_missing" in caplog.text
+    assert counts == {"opt": 1, "freq": 2, "sp": 1, "thermo": 2}
+    for request in thermo_requests:
+        assert request["freq_log_path"] is not None
+        assert Path(str(request["freq_log_path"])).is_file()
+        assert request["sp_energy_hartree"] == -3.0
 
 
 # ══════════════════════════════════════════════════════════════════════
