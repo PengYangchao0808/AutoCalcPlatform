@@ -79,6 +79,15 @@ from acp.nmr.spectra import (
     process_bruker_experiment,
     process_bruker_tree,
 )
+from acp.nmr.structure_map import (
+    LABEL_SCHEME_GOODMAN,
+    LABEL_SCHEME_PER_ELEMENT,
+    LABEL_SCHEMES,
+    AtomIdentity,
+    NmrStructureMap,
+    StructureMapError,
+    parse_ambiguous_labels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,4 +157,12 @@ __all__ = [
     "find_bruker_experiments",
     "process_bruker_experiment",
     "process_bruker_tree",
+    # structure map (stable atom identity + label schemes)
+    "AtomIdentity",
+    "NmrStructureMap",
+    "StructureMapError",
+    "parse_ambiguous_labels",
+    "LABEL_SCHEME_PER_ELEMENT",
+    "LABEL_SCHEME_GOODMAN",
+    "LABEL_SCHEMES",
 ]

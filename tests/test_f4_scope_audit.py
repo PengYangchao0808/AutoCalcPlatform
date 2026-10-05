@@ -1676,6 +1676,12 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/scheduler/",
     "src/acp/storage/",
     "src/acp/api/",
+    # acp-nmr-goodman-gap todo 6: per-peak assignment state + parse errors.
+    "src/acp/nmr/io.py",
+    "src/acp/nmr/models.py",
+    # acp-nmr-goodman-gap todo 2: stable atom identity + label schemes.
+    "src/acp/nmr/structure_map.py",
+    "src/acp/nmr/__init__.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
