@@ -17,12 +17,27 @@ import pytest
 
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.spectra import (
+    _import_nmrglue,
     bruker_result_to_text,
     find_bruker_experiments,
     process_bruker_experiment,
     process_bruker_tree,
     spectrum_probe_nucleus,
 )
+
+# Capability gate (todo 32): Bruker processing requires the optional
+# ``nmrglue`` dependency. When it is missing/broken this module SKIPS
+# EXPLICITLY up front instead of erroring inside the first test; the
+# production guard is ``_import_nmrglue`` itself (raises ``ImportError``
+# with an install hint — `pip install 'acp[nmr]'`). The call also arms the
+# numpy>=2 tecmag stub shim before any test runs.
+try:
+    _import_nmrglue()
+except ImportError as _nmrglue_missing:
+    pytest.skip(
+        f"nmrglue capability unavailable (acp[nmr] extra): {_nmrglue_missing}",
+        allow_module_level=True,
+    )
 
 
 def _write_bruker_experiment(
@@ -48,7 +63,7 @@ def _write_bruker_experiment(
         nu = (o1_ppm - ppm) * bf1_mhz  # nmrglue/Bruker sign convention
         fid += amp * np.exp(2j * np.pi * nu * t) * np.exp(-np.pi * r2 * t)
     rng = np.random.default_rng(seed)
-    fid += (rng.normal(0, noise, td) + 1j * rng.normal(0, noise, td))
+    fid += rng.normal(0, noise, td) + 1j * rng.normal(0, noise, td)
     fid *= 1e6
 
     root.mkdir(parents=True, exist_ok=True)
@@ -111,9 +126,7 @@ def test_find_bruker_experiments_flat(proton_dir: Path) -> None:
     assert find_bruker_experiments(proton_dir) == [proton_dir]
 
 
-def test_find_bruker_experiments_proton_carbon_layout(
-    proton_dir: Path, carbon_dir: Path
-) -> None:
+def test_find_bruker_experiments_proton_carbon_layout(proton_dir: Path, carbon_dir: Path) -> None:
     root = proton_dir.parent
     found = find_bruker_experiments(root)
     assert set(found) == {proton_dir, carbon_dir}
