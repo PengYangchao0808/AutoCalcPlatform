@@ -79,6 +79,7 @@ def _seed_job(
     result: dict | None = None,
     remote_job_id: str | None = None,
     make_dir: bool = True,
+    attempt: int = 1,
 ) -> JobRecord:
     if make_dir:
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -99,6 +100,7 @@ def _seed_job(
         completed_at=completed_at,
         result=result,
         remote_job_id=remote_job_id,
+        attempt=attempt,
     )
     store.create(record)
     return record
@@ -814,7 +816,7 @@ def test_continue_mechanism_failed_job_requeues(tmp_path: Path) -> None:
         assert rec.exit_code is None
         assert rec.completed_at is None
         assert rec.result is not None
-        assert rec.result["attempts"] == 2  # default 1 + 1
+        assert rec.attempt == 2  # jobs.attempt is the single counter
         assert rec.result["continued_from"] == "failed"
         _wait_submission(calls, "mech-failed")
 
@@ -836,6 +838,7 @@ def test_continue_cancelled_mechanism_increments_attempts(tmp_path: Path) -> Non
             workflow="mechanism",
             status=JobStatus.CANCELLED,
             result={"attempts": 3},
+            attempt=3,
         )
         calls: list[str] = []
         mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
@@ -843,7 +846,7 @@ def test_continue_cancelled_mechanism_increments_attempts(tmp_path: Path) -> Non
         rec = mgr.continue_job("mech-cancelled")
         assert rec.status == JobStatus.QUEUED
         assert rec.result is not None
-        assert rec.result["attempts"] == 4
+        assert rec.attempt == 4
         assert rec.result["continued_from"] == "cancelled"
         _wait_submission(calls, "mech-cancelled")
     finally:
@@ -1096,7 +1099,7 @@ def test_continue_default_returns_to_source_and_preserves_provenance(
 
         assert rec.status == JobStatus.QUEUED
         assert rec.result is not None
-        assert rec.result["attempts"] == 2
+        assert rec.attempt == 2
         assert rec.result["continued_from"] == "failed"
         assert rec.result["node"] == "comp-01"
         assert rec.result["execution_target"] == "comp-01"
@@ -1151,9 +1154,9 @@ def test_rerun_preserves_job_identity_and_clears_work_dir_in_place(tmp_path: Pat
         assert rerun.group_id == source.group_id
         assert rerun.status == JobStatus.QUEUED
         assert rerun.result is not None
-        assert rerun.result["attempts"] == 2
+        assert rerun.attempt == 2
         assert Path(rerun.work_dir) == work_dir
-        # No _attempts archive: attempt history lives in DB metadata only.
+        # Legacy _attempts archive relocated under attempts/<n>/ (contract B).
         assert not (work_dir / "_attempts").exists()
         # Attempt-scoped content cleared in place; identity files preserved.
         assert not (work_dir / "WORK" / "02_SEARCH").exists()
@@ -1454,7 +1457,7 @@ def test_rerun_captures_affinity_from_previous_execution_target(
         assert rerun is not None
         assert rerun.status == JobStatus.QUEUED
         assert rerun.result is not None
-        assert rerun.result["attempts"] == 2
+        assert rerun.attempt == 2
         assert "execution_target" not in rerun.result
         assert rerun.result["affinity_node"] == "comp-01"
         _wait_submission(calls, "rerun-affinity")

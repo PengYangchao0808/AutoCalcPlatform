@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import sqlite3
 import threading
@@ -11,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import acp.scheduler.manager as manager_module
 from acp.scheduler import migrations as migrations_module
 from acp.scheduler.job_edit import attempt_number, compute_source_revision
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
@@ -641,3 +643,333 @@ def test_starting_unconfirmed_picked_by_reconcile(tmp_path: Path) -> None:
         assert mgr.store.get(record.id).status == JobStatus.PENDING  # type: ignore[union-attr]
     finally:
         mgr.shutdown()
+
+
+# ====================================================================== #
+# Todo 3: every manager control write is CAS-conditional — permanent guard
+# against reintroducing whole-row store.update() calls in manager.py.
+# ====================================================================== #
+
+
+def _whole_row_update_lines(source: str) -> list[int]:
+    """1-based line numbers of ``<x>.store.update(...)`` whole-row writes.
+
+    Narrow conditional APIs (``update_progress`` / ``transition`` /
+    ``requeue_with_spec`` / ``update_work_dir_and_name``) are distinct
+    attribute names and are never flagged.
+    """
+    tree = ast.parse(source)
+    hits: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "update":
+            continue
+        value = node.func.value
+        if isinstance(value, ast.Attribute) and value.attr == "store":
+            hits.append(node.lineno)
+    return sorted(hits)
+
+
+def test_manager_has_no_whole_row_update(tmp_path: Path) -> None:
+    """manager.py must contain zero ``self.store.update(...)`` call sites.
+
+    All control writes go through the conditional store APIs; this guard is
+    the permanent tripwire (plan todo 3 / Metis M7) — implemented in this
+    plan's own test module rather than the shared ``check_grep_gates.py``.
+    """
+    manager_path = Path(manager_module.__file__)
+    source = manager_path.read_text(encoding="utf-8")
+    hits = _whole_row_update_lines(source)
+    assert hits == [], (
+        "manager.py must not perform whole-row store.update() writes — route "
+        "them through transition()/update_progress()/requeue_with_spec() "
+        f"(whole-row calls found at lines: {hits})"
+    )
+
+    # Negative self-check: scan an injected temporary copy (manager.py itself
+    # is never modified) and require the scanner to flag the whole-row call.
+    injected_path = tmp_path / "manager_injected.py"
+    injected_path.write_text(
+        source
+        + "\n\n"
+        + "def _injected_whole_row_write(manager, record):\n"
+        + "    manager.store.update(record)\n",
+        encoding="utf-8",
+    )
+    injected_hits = _whole_row_update_lines(
+        injected_path.read_text(encoding="utf-8")
+    )
+    assert injected_hits, "scanner must flag an injected whole-row store.update() call"
+
+
+# ====================================================================== #
+# Todo 3: barrier/sequenced interleavings + attempt isolation + contract B
+# (storage identity + receipt archiving).
+# ====================================================================== #
+
+
+def test_interleave_poll_vs_pause_barrier(tmp_path: Path) -> None:
+    """Barrier race [poll vs pause]: whichever writer lands first, the job
+    ends PAUSED — a stale poll observation can never win the pause."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "barrier-poll-pause")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        barrier = threading.Barrier(2, timeout=10)
+        seen: dict[str, object] = {}
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            barrier.wait()
+            stale_record.progress = 0.55
+            stale_record.current_stage = "late"
+            return (False, None)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+
+        def do_poll() -> None:
+            mgr._poll_job(record.id)
+
+        def do_pause() -> None:
+            barrier.wait()
+            seen["pause"] = mgr.pause_job(record.id).status
+
+        t_poll = threading.Thread(target=do_poll)
+        t_pause = threading.Thread(target=do_pause)
+        t_poll.start()
+        t_pause.start()
+        t_poll.join(timeout=30)
+        t_pause.join(timeout=30)
+        assert not t_poll.is_alive() and not t_pause.is_alive()
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert seen["pause"] == JobStatus.PAUSED, "pause must report PAUSED"
+        assert final.status == JobStatus.PAUSED, "pause must win regardless of interleaving"
+        assert final.revision >= 1
+        assert "job.paused" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_interleave_cancel_vs_unpause_barrier(tmp_path: Path) -> None:
+    """Barrier race [cancel vs unpause]: cancel always ends CANCELLING —
+    an unpause racing a cancel can never leave the job RUNNING."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "barrier-cancel-unpause", status=JobStatus.PAUSED)
+        barrier = threading.Barrier(2, timeout=10)
+
+        def _resume(job_id: str) -> bool:
+            barrier.wait()
+            return True
+
+        mgr.runner.resume_local = _resume  # type: ignore[method-assign]
+        mgr.runner.cancel_local = lambda job_id: True  # type: ignore[method-assign]
+        seen: dict[str, object] = {}
+
+        def do_unpause() -> None:
+            try:
+                seen["unpause"] = mgr.unpause_job(record.id).status
+            except ValueError as exc:
+                seen["unpause"] = f"rejected: {exc}"
+
+        def do_cancel() -> None:
+            barrier.wait()
+            result = mgr.cancel(record.id)
+            seen["cancel"] = None if result is None else result.status
+
+        t_unpause = threading.Thread(target=do_unpause)
+        t_cancel = threading.Thread(target=do_cancel)
+        t_unpause.start()
+        t_cancel.start()
+        t_unpause.join(timeout=30)
+        t_cancel.join(timeout=30)
+        assert not t_unpause.is_alive() and not t_cancel.is_alive()
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.CANCELLING, "cancel must beat the racing unpause"
+        assert seen["cancel"] == JobStatus.CANCELLING
+        assert "job.cancelling" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_interleave_terminal_vs_old_poll(tmp_path: Path) -> None:
+    """Sequenced [terminal vs old poll]: a terminal state committed while an
+    older observation is in flight is preserved; the stale write is dropped."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "barrier-terminal-poll")
+        terminal_committed = threading.Event()
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            committed = mgr.store.transition(
+                record.id,
+                expected_status=JobStatus.RUNNING,
+                expected_revision=stale_record.revision,
+                expected_attempt=stale_record.attempt,
+                status=JobStatus.COMPLETED,
+                exit_code=0,
+                progress=1.0,
+                completed_at="2026-01-01T00:00:00+00:00",
+            )
+            terminal_committed.set()
+            assert committed.status == JobStatus.COMPLETED
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+        assert terminal_committed.is_set()
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.COMPLETED, "terminal state must survive the old poll"
+        assert final.completed_at == "2026-01-01T00:00:00+00:00"
+        assert final.exit_code == 0
+        assert not (final.result or {}).get("terminal_side_effects_done"), (
+            "the dropped stale write must not run terminal side effects"
+        )
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_interleave_old_attempt_continue_vs_new_attempt_terminal(tmp_path: Path) -> None:
+    """[old attempt continue vs new attempt terminal]: replaying attempt=1
+    writes against an attempt=2 terminal row conflicts and drops — the new
+    attempt's row stays byte-identical."""
+    db = tmp_path / "acp_jobs.db"
+    mgr = _make_manager(tmp_path)
+    try:
+        mgr.store.create(_record("iso-1", status=JobStatus.FAILED, error="boom"))
+        old = mgr.store.get("iso-1")
+        assert old is not None and old.attempt == 1
+
+        updated = mgr.store.requeue_with_spec(
+            "iso-1",
+            new_spec=old.spec,
+            expected_revision=old.revision,
+            expected_attempt=1,
+            expected_status=JobStatus.FAILED,
+        )
+        mgr.store.transition(
+            "iso-1",
+            expected_status=JobStatus.QUEUED,
+            expected_revision=updated.revision,
+            expected_attempt=2,
+            status=JobStatus.CANCELLED,
+            completed_at="2026-01-02T00:00:00+00:00",
+        )
+        before = _raw_row(db, "iso-1")
+        assert before["attempt"] == 2
+
+        with pytest.raises(JobStateConflictError):
+            mgr._requeue_record_cas(
+                "iso-1",
+                new_spec=old.spec,
+                expected=old,
+                expected_status=(JobStatus.FAILED, JobStatus.CANCELLED),
+                result={"continued_from": "failed"},
+            )
+        with pytest.raises(JobStateConflictError):
+            mgr._cas_write(
+                old,
+                expected_status=JobStatus.FAILED,
+                status=JobStatus.RUNNING,
+            )
+    finally:
+        mgr.shutdown()
+
+    after = _raw_row(db, "iso-1")
+    assert after == before, "an old-attempt replay must never modify the new attempt's row"
+
+
+def test_requeue_preserves_storage_identity_and_archives_receipts(tmp_path: Path) -> None:
+    """Contract B: rerun keeps the persisted storage identity and archives the
+    closed attempt's checkpoint/step output/RESULT/run receipts under
+    ``WORK/00_RUNTIME/attempts/<n>/`` (recoverable, never deleted)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "runs" / "ident"
+        _seed_job_for_transitions(
+            mgr,
+            work_dir,
+            "ident",
+            status=JobStatus.FAILED,
+            result={
+                "attempts": 1,
+                "remote": {"node": "n1", "submit_state": "done", "lsf_job_id": "7"},
+                "remote_dir": "/scratch/acp/ident",
+            },
+        )
+        checkpoint = {"task_id": "ident", "workflow": "fake", "plan_fingerprint": "abc"}
+        runtime = work_dir / "WORK" / "00_RUNTIME"
+        runtime.mkdir(parents=True)
+        (runtime / "checkpoint.json").write_text(json.dumps(checkpoint), encoding="utf-8")
+        search = work_dir / "WORK" / "02_SEARCH"
+        search.mkdir(parents=True)
+        (search / "step.out").write_text("old-step", encoding="utf-8")
+        result_dir = work_dir / "RESULT"
+        result_dir.mkdir(parents=True)
+        (result_dir / "result.json").write_text("{}", encoding="utf-8")
+        (work_dir / ".exit_code").write_text("1", encoding="utf-8")
+        (work_dir / "state.json").write_text("{}", encoding="utf-8")
+        submissions: list[str] = []
+        mgr._execute_submission = lambda job_id: submissions.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("ident")
+        assert rerun is not None
+        assert rerun.attempt == 2
+        assert rerun.result is not None
+        assert rerun.result["remote"] == {"node": "n1"}, (
+            "storage identity survives; submission fields are cleared"
+        )
+        assert rerun.result["remote_dir"] == "/scratch/acp/ident"
+        assert "attempts" not in rerun.result, "jobs.attempt is the single counter"
+
+        archive = work_dir / "WORK" / "00_RUNTIME" / "attempts" / "1"
+        archived_checkpoint = archive / "WORK" / "00_RUNTIME" / "checkpoint.json"
+        assert json.loads(archived_checkpoint.read_text(encoding="utf-8")) == checkpoint
+        archived_step = archive / "WORK" / "02_SEARCH" / "step.out"
+        assert archived_step.read_text(encoding="utf-8") == "old-step"
+        assert (archive / "RESULT" / "result.json").is_file()
+        assert (archive / ".exit_code").read_text(encoding="utf-8") == "1"
+        assert (archive / "state.json").is_file()
+        assert not (work_dir / ".exit_code").exists(), "receipts live only in the archive"
+        assert submissions == ["ident"]
+    finally:
+        mgr.shutdown()
+
+
+def test_manager_control_writes_carry_attempt_in_events(tmp_path: Path) -> None:
+    """Migrated control events expose ``attempt`` (audit trail requirement)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "evt-attempt", status=JobStatus.RUNNING)
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        mgr.runner.resume_local = lambda job_id: True  # type: ignore[method-assign]
+        mgr.pause_job(record.id)
+        mgr.unpause_job(record.id)
+        events = {e["type"]: e for e in mgr.event_log(record.id).read_all()}  # type: ignore[union-attr]
+        assert events["job.paused"]["attempt"] == 1
+        assert events["job.resumed"]["attempt"] == 1
+    finally:
+        mgr.shutdown()
+
+
+def _seed_job_for_transitions(
+    mgr: JobManager, work_dir: Path, job_id: str, **overrides: object
+) -> JobRecord:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    kwargs: dict[str, object] = {
+        "spec": _spec(),
+        "status": JobStatus.FAILED,
+        "work_dir": str(work_dir),
+    }
+    kwargs.update(overrides)
+    record = JobRecord(id=job_id, **kwargs)  # pyright: ignore[reportArgumentType]
+    mgr.store.create(record)
+    return record

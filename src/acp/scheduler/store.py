@@ -306,6 +306,53 @@ class JobStore:
             conn.commit()
             return _row_to_record(row)
 
+    def update_execution_identity(
+        self,
+        job_id: str,
+        *,
+        expected_revision: int,
+        expected_attempt: int | None = None,
+        result: dict[str, Any],
+        node_id: str | None,
+        host: str | None,
+    ) -> JobRecord:
+        """CAS narrow identity write: ``node_id``/``host`` + ``result`` payload.
+
+        ``node_id``/``host`` sit outside :meth:`transition`'s progress
+        whitelist, so execution-target provenance (manager
+        ``_record_execution_target``) gets this dedicated conditional API
+        instead of a whole-row update (plan todo 3).
+        """
+        assignments = [
+            "revision=revision+1",
+            "updated_at=?",
+            "result_json=?",
+            "node_id=?",
+            "host=?",
+        ]
+        params: list[Any] = [_utc_now_iso(), _encode_field("result", result), node_id, host]
+        where = "id=? AND revision=?"
+        args: list[Any] = [job_id, expected_revision]
+        expected: dict[str, Any] = {"revision": expected_revision}
+        if expected_attempt is not None:
+            where += " AND attempt=?"
+            args.append(expected_attempt)
+            expected["attempt"] = expected_attempt
+
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                f"UPDATE jobs SET {', '.join(assignments)} WHERE {where}",
+                (*params, *args),
+            )
+            if cursor.rowcount != 1:
+                row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+                raise JobStateConflictError(job_id, expected, _conflict_state(row))
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobStateConflictError(job_id, expected, None)
+            conn.commit()
+            return _row_to_record(row)
+
     _REQUEUE_RESET_DEFAULTS: dict[str, Any] = {
         "started_at": None,
         "completed_at": None,

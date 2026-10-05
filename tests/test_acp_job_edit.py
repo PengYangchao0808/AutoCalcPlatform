@@ -604,7 +604,7 @@ def test_edit_in_place_updates_spec_attempts_and_clears(tmp_path: Path) -> None:
         assert updated.work_dir == record.work_dir
         assert updated.spec.method == {"levels": {"sp": {"functional": "wB97X-D4"}}}
         assert updated.result is not None
-        assert updated.result["attempts"] == 2
+        assert updated.attempt == 2, "jobs.attempt is the single counter"
         assert updated.result["attempt_history"][0]["mode"] == "edit_recalculate"
         work_dir = Path(updated.work_dir)
         assert not (work_dir / "WORK" / "old.out").exists()
@@ -802,29 +802,30 @@ def test_edit_cleanup_failure_blocks_queueing(tmp_path: Path) -> None:
         record = _seed(manager, "edit10")
         revision = compute_source_revision(record)
 
-        import acp.scheduler.manager as manager_module
-
-        original_rmtree = manager_module.shutil.rmtree
-
-        def _fail_rmtree(path: Any, *args: Any, **kwargs: Any) -> None:
-            if str(path).endswith("WORK"):
-                raise OSError("permission denied (simulated)")
-            original_rmtree(path, *args, **kwargs)
-
-        manager_module.shutil.rmtree = _fail_rmtree  # type: ignore[attr-defined]
-        try:
-            with pytest.raises(RuntimeError, match="清理旧尝试产物失败"):
-                manager.edit_recalculate(
-                    "edit10",
-                    mode="in_place",
-                    new_spec=_edit_spec("singlepoint"),
-                    expected_source_revision=revision,
-                    request_id="req-10",
-                    payload_hash="ph_x",
-                    payload_json="{}",
-                )
-        finally:
-            manager_module.shutil.rmtree = original_rmtree  # type: ignore[attr-defined]
+        # Contract B: a colliding attempt archive aborts the requeue —
+        # archiving old receipts never falls back to deletion.
+        work_dir = Path(record.work_dir)
+        stale = (
+            work_dir
+            / "WORK"
+            / "00_RUNTIME"
+            / "attempts"
+            / str(record.attempt)
+            / "WORK"
+            / "old.out"
+        )
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text("previous attempt", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="已阻断重跑"):
+            manager.edit_recalculate(
+                "edit10",
+                mode="in_place",
+                new_spec=_edit_spec("singlepoint"),
+                expected_source_revision=revision,
+                request_id="req-10",
+                payload_hash="ph_x",
+                payload_json="{}",
+            )
         updated = manager.get("edit10")
         assert updated is not None
         assert updated.status == JobStatus.FAILED  # stayed terminal
@@ -1221,8 +1222,8 @@ def test_rerun_endpoint_still_works_after_refactor(client: TestClient) -> None:
     assert body["id"] == "rr1"
     assert body["status"] == "queued"
     fetched = client.get("/api/v1/jobs/rr1").json()
-    assert fetched["result"]["attempts"] == 2
-    assert fetched["result"]["attempt_history"][0]["mode"] == "rerun"
+    history = fetched["result"]["attempt_history"]
+    assert history[0]["mode"] == "rerun" and history[0]["attempt"] == 1
 
 
 def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path) -> None:

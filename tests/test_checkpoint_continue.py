@@ -354,7 +354,7 @@ def test_remote_checkpoint_three_states(monkeypatch: pytest.MonkeyPatch, tmp_pat
         # Then: it is requeued and submitted once.
         assert continued.status == JobStatus.QUEUED
         assert continued.result is not None
-        assert continued.result["attempts"] == 2
+        assert continued.attempt == 2, "jobs.attempt column is the single counter"
         assert submissions == [record.id]
     finally:
         matching_manager.shutdown()

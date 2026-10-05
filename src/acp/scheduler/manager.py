@@ -22,6 +22,7 @@ import shutil
 import socket
 import threading
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -918,11 +919,11 @@ class JobManager:
 
         attempts = attempt_number(record) + 1
         old_status = record.status.value
-        result = dict(record.result or {})
+        previous_result = dict(record.result or {})
         # Affinity capture (design §3.4): remember where this job ran so
         # the rerun's auto dispatch prefers the same node.
-        source_target = result.get("execution_target")
-        history = result.get("attempt_history")
+        source_target = previous_result.get("execution_target")
+        history = previous_result.get("attempt_history")
         if not isinstance(history, list):
             history = []
         history.append(
@@ -952,36 +953,48 @@ class JobManager:
                         record.id,
                         exc_info=True,
                     )
-        if new_spec is not None:
-            record.spec = new_spec
-            record.input_hash = compute_input_hash(new_spec)
-        # Do not carry a previous workflow state, remote submission, or
-        # result payload into a full rerun.  Keep only scheduler history.
-        record.result = {
-            "attempts": attempts,
-            "attempt_history": history,
-        }
+        effective_spec = new_spec if new_spec is not None else record.spec
+        # Contract B: same storage directory across attempts — keep
+        # remote/remote_dir, clear only this attempt's submission fields;
+        # jobs.attempt (requeue_with_spec) is the single counter, the legacy
+        # result["attempts"] key is read-only.
+        result: dict[str, Any] = {"attempt_history": history}
+        remote_meta = previous_result.get("remote")
+        if isinstance(remote_meta, dict):
+            remote_meta = dict(remote_meta)
+            for stale_key in (
+                "lsf_job_id",
+                "submit_state",
+                "cancel_state",
+                "command_line",
+                "submission_id",
+                "requested_at",
+            ):
+                remote_meta.pop(stale_key, None)
+            result["remote"] = remote_meta
+        if "remote_dir" in previous_result:
+            result["remote_dir"] = previous_result["remote_dir"]
         if (
             isinstance(source_target, str)
             and source_target != LOCAL_NODE_NAME
-            and record.spec.target_node is None
-            and record.spec.execution_mode is None
+            and effective_spec.target_node is None
+            and effective_spec.execution_mode is None
         ):
             # Transient affinity hint for the auto branch; consumed when
             # the next execution target is recorded.
-            record.result["affinity_node"] = source_target
-        record.status = JobStatus.QUEUED
-        record.started_at = None
-        record.completed_at = None
-        record.current_stage = None
-        record.progress = None
-        record.error = None
-        record.pid = None
-        record.exit_code = None
-        record.remote_job_id = None
-        record.touch()
+            result["affinity_node"] = source_target
+        reset_fields: dict[str, Any] = {"result": result}
+        if new_spec is not None:
+            reset_fields["input_hash"] = compute_input_hash(new_spec)
+        record = self._requeue_record_cas(
+            job_id,
+            new_spec=effective_spec,
+            expected=record,
+            expected_status=record.status,
+            **reset_fields,
+        )
+        attempts = attempt_number(record)
         self._cancel_events[job_id] = threading.Event()
-        self.store.update(record)
         return record, attempts, old_status, killed, renamed_from
 
     def _finish_inplace_requeue(
@@ -1227,23 +1240,66 @@ class JobManager:
         return str(work_dir)
 
     def _reset_work_dir_in_place(self, record: JobRecord, *, strict: bool = True) -> None:
-        """Clear attempt-scoped content, keeping the task identity files.
+        """Archive the closed attempt's content instead of deleting it (contract B).
 
-        Deletes ``WORK``/``RESULT``, any legacy ``_attempts/`` archives, and
-        all run markers/logs in place so the rerun starts from a clean task
-        root without creating a duplicate directory.  The v2 scaffold is
-        recreated by the caller afterwards.
-
-        ``strict=True`` (edit-and-recalculate plan §10.5): individual delete
-        failures are collected and abort the requeue instead of being
-        logged-and-ignored — a half-cleaned task root must never be queued.
+        Moves ``WORK``/``RESULT``/legacy ``_attempts`` plus the local run
+        receipts (``.exit_code``/``state.json``/``run.lock``/``events.jsonl``)
+        into ``WORK/00_RUNTIME/attempts/<attempt>/`` so the old attempt stays
+        recoverable; only stray logs/markers are deleted afterwards.  Any
+        archiving failure aborts the requeue — never a fallback to deletion.
+        ``strict`` still controls stray-file delete failures (§10.5).
         """
         work_dir = Path(record.work_dir)
         if not work_dir.is_dir():
             return
+        attempt = attempt_number(record)
+        archive_root = work_dir / "WORK" / "00_RUNTIME" / "attempts" / str(attempt)
+
+        def _archive(src: Path, dest: Path) -> None:
+            if not src.exists():
+                return
+            if dest.exists():
+                raise RuntimeError(
+                    f"旧尝试回执归档目标已存在，已阻断重跑（请人工检查）: {dest}"
+                )
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                src.rename(dest)
+            except OSError as exc:
+                raise RuntimeError(
+                    f"归档旧尝试回执失败，已阻断重跑: {src} -> {dest}: {exc}"
+                ) from exc
+
+        work = work_dir / "WORK"
+        if work.is_dir():
+            for child in list(work.iterdir()):
+                if child.name == "00_RUNTIME":
+                    continue
+                _archive(child, archive_root / "WORK" / child.name)
+            runtime = work / "00_RUNTIME"
+            if runtime.is_dir():
+                for child in list(runtime.iterdir()):
+                    if child.name == "attempts":
+                        continue
+                    _archive(child, archive_root / "WORK" / "00_RUNTIME" / child.name)
+        _archive(work_dir / "RESULT", archive_root / "RESULT")
+        for name in (
+            ".exit_code",
+            "state.json",
+            "run.lock",
+            "events.jsonl",
+            "stdout.log",
+            "stderr.log",
+            "_attempts",
+        ):
+            _archive(work_dir / name, archive_root / name)
+
         failures: list[str] = []
         for child in list(work_dir.iterdir()):
             if child.name in _RERUN_STABLE_FILES or child.name == ".structure_history":
+                continue
+            if child.name == "WORK":
+                # WORK now holds only the attempts archive (contract B).
                 continue
             try:
                 if child.is_dir() and not child.is_symlink():
@@ -1648,6 +1704,101 @@ class JobManager:
     def counts(self) -> dict[str, int]:
         return self.store.counts()
 
+    def _cas_write(
+        self,
+        record: JobRecord,
+        *,
+        expected_status: JobStatus | Iterable[JobStatus],
+        decide: Callable[[JobRecord], JobRecord | None] | None = None,
+        max_attempts: int = 3,
+        **fields: Any,
+    ) -> JobRecord | None:
+        """Apply one conditional write pinned to *record*'s revision/attempt.
+
+        A soft race (row still matches the status precondition, revision
+        bumped by a concurrent progress write) retries against the fresh
+        revision.  A hard mismatch (status moved, or ``attempt`` changed — an
+        old-attempt replay) delegates to *decide* (re-read → decide from the
+        latest state) or raises :class:`JobStateConflictError`; the pinned
+        ``expected_attempt`` keeps a stale record from ever writing through
+        to a newer attempt's row.
+        """
+        allowed = (
+            {expected_status}
+            if isinstance(expected_status, JobStatus)
+            else set(expected_status)
+        )
+        revision = record.revision
+        last: JobStateConflictError | None = None
+        for _ in range(max_attempts):
+            try:
+                return self.store.transition(
+                    record.id,
+                    expected_status=allowed,
+                    expected_revision=revision,
+                    expected_attempt=record.attempt,
+                    **fields,
+                )
+            except JobStateConflictError as exc:
+                last = exc
+                fresh = self.store.get(record.id)
+                if fresh is None:
+                    return None
+                if fresh.status in allowed and fresh.attempt == record.attempt:
+                    revision = fresh.revision
+                    continue
+                if decide is not None:
+                    return decide(fresh)
+                raise
+        fresh = self.store.get(record.id)
+        if fresh is not None and decide is not None:
+            return decide(fresh)
+        raise last if last is not None else JobStateConflictError(record.id, {}, None)
+
+    def _requeue_record_cas(
+        self,
+        job_id: str,
+        *,
+        new_spec: JobSpec,
+        expected: JobRecord,
+        expected_status: JobStatus | Iterable[JobStatus],
+        **reset_fields: Any,
+    ) -> JobRecord:
+        """Persist a requeue via ``store.requeue_with_spec`` (CAS, attempt+1).
+
+        Pins the caller's revision/attempt: an old-attempt replay conflicts
+        instead of clobbering the new attempt's row; retries only while the
+        row still matches the caller's status/attempt precondition.
+        """
+        allowed = (
+            {expected_status}
+            if isinstance(expected_status, JobStatus)
+            else set(expected_status)
+        )
+        revision = expected.revision
+        attempt = expected.attempt
+        last: JobStateConflictError | None = None
+        for _ in range(3):
+            try:
+                return self.store.requeue_with_spec(
+                    job_id,
+                    new_spec=new_spec,
+                    expected_revision=revision,
+                    expected_attempt=attempt,
+                    expected_status=allowed,
+                    **reset_fields,
+                )
+            except JobStateConflictError as exc:
+                last = exc
+                fresh = self.store.get(job_id)
+                if fresh is None:
+                    raise KeyError(f"Unknown job {job_id!r}") from exc
+                if fresh.attempt == attempt and fresh.status in allowed:
+                    revision = fresh.revision
+                    continue
+                raise
+        raise last if last is not None else JobStateConflictError(job_id, {}, None)
+
     def cancel(self, job_id: str) -> JobRecord | None:
         record = self.store.get(job_id)
         if record is None:
@@ -1655,24 +1806,50 @@ class JobManager:
         if record.status.is_terminal:
             return record
 
-        if record.status == JobStatus.QUEUED:
-            with self._lock:
-                ev = self._cancel_events.pop(job_id, None)
-            if ev:
-                ev.set()
-            record.status = JobStatus.CANCELLED
-            record.completed_at = _utc_now_iso()
-            record.touch()
-            self.store.update(record)
+        # Re-read → re-decide CAS loop pinned to the record just read;
+        # on conflict the latest state wins (terminal is never clobbered).
+        final: JobRecord | None = None
+        for _ in range(4):
+            target = (
+                JobStatus.CANCELLED if record.status == JobStatus.QUEUED else JobStatus.CANCELLING
+            )
+            if target == JobStatus.CANCELLED:
+                with self._lock:
+                    ev = self._cancel_events.pop(job_id, None)
+                if ev:
+                    ev.set()
+            fields: dict[str, Any] = {"status": target}
+            if target == JobStatus.CANCELLED:
+                fields["completed_at"] = _utc_now_iso()
+            try:
+                final = self.store.transition(
+                    job_id,
+                    expected_status=record.status,
+                    expected_revision=record.revision,
+                    expected_attempt=record.attempt,
+                    **fields,
+                )
+                break
+            except JobStateConflictError:
+                fresh = self.store.get(job_id)
+                if fresh is None:
+                    return None
+                if fresh.status.is_terminal:
+                    return fresh
+                record = fresh
+        if final is None:
+            return self.store.get(job_id)
+        record = final
+
+        if record.status == JobStatus.CANCELLED:
             self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
             self._write_job_json(record)
-            self._event_log(record).append("job.cancelled", job_id=job_id)
+            self._event_log(record).append(
+                "job.cancelled", job_id=job_id, attempt=record.attempt
+            )
             self._dispatch_queued_jobs()
             return record
 
-        record.status = JobStatus.CANCELLING
-        record.touch()
-        self.store.update(record)
         with self._lock:
             ev = self._cancel_events.get(job_id)
         if ev:
@@ -1680,22 +1857,30 @@ class JobManager:
 
         if self._is_remote_job(record) and self.remote_runner is not None:
             if not record.remote_job_id and record.result and record.result.get("lsf_job_id"):
-                record.remote_job_id = str(record.result["lsf_job_id"])
-                record.touch()
-                self.store.update(record)
+                backfilled = self._cas_write(
+                    record,
+                    expected_status=JobStatus.CANCELLING,
+                    remote_job_id=str(record.result["lsf_job_id"]),
+                    decide=lambda fresh: fresh,
+                )
+                if backfilled is not None:
+                    record = backfilled
 
             if record.remote_job_id:
                 ok = self.remote_runner.cancel_remote(job_id, record)
                 if not ok:
                     self._event_log(record).append(
-                        "remote.cancel_failed", job_id=job_id, reason="bkill did not succeed"
+                        "remote.cancel_failed",
+                        job_id=job_id,
+                        reason="bkill did not succeed",
+                        attempt=record.attempt,
                     )
             else:
                 self.runner.cancel_local(job_id)
         else:
             self.runner.cancel_local(job_id)
 
-        self._event_log(record).append("job.cancelling", job_id=job_id)
+        self._event_log(record).append("job.cancelling", job_id=job_id, attempt=record.attempt)
         return record
 
     def pause_for_review(self, job_id: str, payload: dict[str, Any]) -> JobRecord:
@@ -1719,15 +1904,27 @@ class JobManager:
             raise ValueError(f"pause_for_review requires RUNNING status; got {record.status.value}")
         result = dict(record.result or {})
         result["review_payload"] = dict(payload)
-        record.result = result
-        record.status = JobStatus.WAITING_REVIEW
-        record.touch()
-        self.store.update(record)
+
+        def _conflict(fresh: JobRecord) -> JobRecord:
+            raise ValueError(
+                f"pause_for_review requires RUNNING status; got {fresh.status.value}"
+            )
+
+        record = self._cas_write(
+            record,
+            expected_status=JobStatus.RUNNING,
+            status=JobStatus.WAITING_REVIEW,
+            result=result,
+            decide=_conflict,
+        )
+        if record is None:
+            raise KeyError(f"Unknown job {job_id!r}")
         self._write_job_json(record)
         self._event_log(record).append(
             "job.waiting_review",
             job_id=job_id,
             payload=payload,
+            attempt=record.attempt,
         )
         return record
 
@@ -1756,17 +1953,30 @@ class JobManager:
             result = dict(record.result or {})
             if resolution is not None:
                 result["review_resolution"] = dict(resolution)
-            record.result = result
             rerun_submission = bool(resolution and resolution.get("requeue"))
-            record.status = JobStatus.STARTING if rerun_submission else JobStatus.RUNNING
-            record.touch()
-            self.store.update(record)
+            target = JobStatus.STARTING if rerun_submission else JobStatus.RUNNING
+
+            def _conflict(fresh: JobRecord) -> JobRecord:
+                raise ValueError(
+                    f"resume requires WAITING_REVIEW status; got {fresh.status.value}"
+                )
+
+            record = self._cas_write(
+                record,
+                expected_status=JobStatus.WAITING_REVIEW,
+                status=target,
+                result=result,
+                decide=_conflict,
+            )
+            if record is None:
+                raise KeyError(f"Unknown job {job_id!r}")
             self._write_job_json(record)
         self._event_log(record).append(
             "job.review_resumed",
             job_id=job_id,
             resolution=resolution,
             requeue=rerun_submission,
+            attempt=record.attempt,
         )
         if rerun_submission:
             self._start_submission_thread(job_id, f"acp-resume-{job_id}")
@@ -1793,6 +2003,17 @@ class JobManager:
         record = self.store.get(job_id)
         if record is None:
             raise KeyError(f"Unknown job {job_id!r}")
+        if record.status == JobStatus.CANCELLING or record.status.is_terminal:
+            # Conflict policy: never freeze a job being cancelled or done —
+            # report the current state instead of signalling.
+            self._event_log(record).append(
+                "job.pause_conflict",
+                job_id=job_id,
+                attempt=record.attempt,
+                current_status=record.status.value,
+                action="pause",
+            )
+            return record
         if record.status != JobStatus.RUNNING:
             raise ValueError(f"pause_job requires RUNNING status; got {record.status.value}")
 
@@ -1810,12 +2031,54 @@ class JobManager:
                 f"job {job_id} has no live local process to pause (it may have just finished)"
             )
 
-        record.status = JobStatus.PAUSED
-        record.touch()
-        self.store.update(record)
+        def _conflict(fresh: JobRecord) -> JobRecord:
+            if fresh.status == JobStatus.PAUSED:
+                return fresh
+            if fresh.status != JobStatus.RUNNING:
+                self._compensate_pause_signal(job_id, mode)
+            try:
+                self._event_log(fresh).append(
+                    "job.pause_conflict",
+                    job_id=job_id,
+                    attempt=fresh.attempt,
+                    current_status=fresh.status.value,
+                    action="pause",
+                    mode=mode,
+                )
+            except OSError:
+                logger.debug("pause_conflict event append failed for %s", job_id, exc_info=True)
+            return fresh
+
+        paused = self._cas_write(
+            record,
+            expected_status=JobStatus.RUNNING,
+            status=JobStatus.PAUSED,
+            decide=_conflict,
+        )
+        if paused is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        record = paused
         self._write_job_json(record)
-        self._event_log(record).append("job.paused", job_id=job_id, mode=mode)
+        self._event_log(record).append(
+            "job.paused", job_id=job_id, mode=mode, attempt=record.attempt
+        )
         return record
+
+    def _compensate_pause_signal(self, job_id: str, mode: str) -> None:
+        """Undo a pause signal whose CAS lost (row cancelled/finished meanwhile)."""
+        try:
+            if mode == "bstop":
+                record = self.store.get(job_id)
+                if (
+                    record is not None
+                    and self._is_remote_job(record)
+                    and self.remote_runner is not None
+                ):
+                    self._remote_bstop_bresume(record, "bresume_job", "unpause")
+            elif mode == "sigstop":
+                self.runner.resume_local(job_id)
+        except (OSError, RuntimeError, ValueError):
+            logger.info("pause compensation for job %s failed", job_id, exc_info=True)
 
     def unpause_job(self, job_id: str) -> JobRecord:
         """Resume a paused job: SIGCONT locally, ``bresume`` remotely.
@@ -1849,11 +2112,33 @@ class JobManager:
             # PAUSED rather than flipping to RUNNING with nothing to poll.
             raise RuntimeError(f"cannot unpause local job {job_id}: process is no longer tracked")
 
-        record.status = JobStatus.RUNNING
-        record.touch()
-        self.store.update(record)
+        def _conflict(fresh: JobRecord) -> JobRecord:
+            try:
+                self._event_log(fresh).append(
+                    "job.pause_conflict",
+                    job_id=job_id,
+                    attempt=fresh.attempt,
+                    current_status=fresh.status.value,
+                    action="unpause",
+                    mode=mode,
+                )
+            except OSError:
+                logger.debug("pause_conflict event append failed for %s", job_id, exc_info=True)
+            return fresh
+
+        resumed = self._cas_write(
+            record,
+            expected_status=JobStatus.PAUSED,
+            status=JobStatus.RUNNING,
+            decide=_conflict,
+        )
+        if resumed is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        record = resumed
         self._write_job_json(record)
-        self._event_log(record).append("job.resumed", job_id=job_id, mode=mode)
+        self._event_log(record).append(
+            "job.resumed", job_id=job_id, mode=mode, attempt=record.attempt
+        )
         return record
 
     def continue_job(self, job_id: str, *, target_node: str | None = None) -> JobRecord:
@@ -1935,30 +2220,47 @@ class JobManager:
 
             old_status = record.status.value
             result = dict(record.result or {})
-            result["attempts"] = int(result.get("attempts") or 1) + 1
             result["continued_from"] = old_status
-            record.spec = effective
-            record.result = result
-            record.status = JobStatus.QUEUED
-            record.error = None
-            record.started_at = None
-            record.exit_code = None
-            record.pid = None
-            record.remote_job_id = None
-            record.completed_at = None
             # LSF runtime state only — node/execution_target/execution_kind
             # stay so dispatch returns to the source node (回源, §3.4/R2).
             for key in ("lsf_job_id", "remote_dir", "command_line"):
                 result.pop(key, None)
-            record.touch()
-            self.store.update(record)
+            remote_meta = result.get("remote")
+            if isinstance(remote_meta, dict):
+                remote_meta = dict(remote_meta)
+                for stale_key in ("lsf_job_id", "submit_state", "cancel_state", "command_line"):
+                    remote_meta.pop(stale_key, None)
+                result["remote"] = remote_meta
+            pinned_attempt = record.attempt
+            try:
+                record = self._requeue_record_cas(
+                    job_id,
+                    new_spec=effective,
+                    expected=record,
+                    expected_status=(JobStatus.FAILED, JobStatus.CANCELLED),
+                    result=result,
+                )
+            except JobStateConflictError as exc:
+                fresh = self.store.get(job_id)
+                if fresh is None:
+                    raise KeyError(f"Unknown job {job_id!r}") from exc
+                if fresh.attempt != pinned_attempt:
+                    raise ValueError(
+                        f"job {job_id} was requeued concurrently; refresh and retry"
+                    ) from exc
+                raise ValueError(
+                    "continue_job requires FAILED or CANCELLED status; got "
+                    + fresh.status.value
+                ) from exc
+            attempts = attempt_number(record)
             self._cancel_events[job_id] = threading.Event()
         self._write_job_json(record)
         self._event_log(record).append(
             "job.continued",
             job_id=job_id,
             continued_from=old_status,
-            attempts=result["attempts"],
+            attempt=attempts,
+            attempts=attempts,
             workflow=workflow,
         )
         self._start_submission_thread(job_id, f"acp-continue-{job_id}")
@@ -2312,18 +2614,25 @@ class JobManager:
                     return
                 cancel_event = self._cancel_events.get(job_id)
                 if cancel_event and cancel_event.is_set():
-                    record.status = JobStatus.CANCELLED
-                    record.completed_at = _utc_now_iso()
-                    record.touch()
-                    self.store.update(record)
-                    self._sync_task_status(record)
-                    self._write_job_json(record)
-                    self._event_log(record).append(
-                        "job.cancelled",
-                        job_id=job_id,
-                        reason="cancelled while waiting for execution capacity",
-                    )
-                    self._stage_task_observer.finalize_job(job_id, "cancelled")
+                    if not record.status.is_terminal:
+                        cancelled = self._cas_write(
+                            record,
+                            expected_status=record.status,
+                            status=JobStatus.CANCELLED,
+                            completed_at=_utc_now_iso(),
+                            decide=lambda fresh: None,
+                        )
+                        if cancelled is not None:
+                            record = cancelled
+                            self._sync_task_status(record)
+                            self._write_job_json(record)
+                            self._event_log(record).append(
+                                "job.cancelled",
+                                job_id=job_id,
+                                reason="cancelled while waiting for execution capacity",
+                                attempt=record.attempt,
+                            )
+                            self._stage_task_observer.finalize_job(job_id, "cancelled")
                     self._release_reservation(job_id)
                     return
                 if record.status.is_terminal:
@@ -2339,23 +2648,33 @@ class JobManager:
                     job_id=job_id,
                     retry_after=retry_delay,
                     message=str(exc),
+                    attempt=record.attempt,
                 )
                 time.sleep(retry_delay)
             except Exception as exc:
                 logger.exception("Submission failed for job %s", job_id)
                 record = self.store.get(job_id)
                 if record and not record.status.is_terminal:
-                    record.status = JobStatus.FAILED
-                    record.error = f"Submission error: {exc}"
-                    record.completed_at = _utc_now_iso()
-                    record.touch()
                     # Terminal event first — same poller-consistency invariant
-                    # as the fake-completion branch in _submit_job.
-                    self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
-                    self.store.update(record)
-                    self._sync_task_status(record)
-                    self._write_job_json(record)
-                    self._stage_task_observer.finalize_job(job_id, "failed")
+                    # as the fake-completion branch in _submit_job; the CAS
+                    # below drops the write when a concurrent writer already
+                    # finished the job (never FAILED-on-conflict).
+                    self._event_log(record).append(
+                        "job.failed", job_id=job_id, error=str(exc), attempt=record.attempt
+                    )
+                    failed = self._cas_write(
+                        record,
+                        expected_status=record.status,
+                        status=JobStatus.FAILED,
+                        error=f"Submission error: {exc}",
+                        completed_at=_utc_now_iso(),
+                        decide=lambda fresh: None,
+                    )
+                    if failed is not None:
+                        record = failed
+                        self._sync_task_status(record)
+                        self._write_job_json(record)
+                        self._stage_task_observer.finalize_job(job_id, "failed")
                 self._release_reservation(job_id)
                 return
 
@@ -2448,10 +2767,18 @@ class JobManager:
         with self._lock:
             if not self._batch_slot_available(record):
                 return False
-            record.status = JobStatus.STARTING
-            record.started_at = _utc_now_iso()
-            record.touch()
-            self.store.update(record)
+            claimed = self._cas_write(
+                record,
+                expected_status=record.status,
+                status=JobStatus.STARTING,
+                started_at=_utc_now_iso(),
+                decide=lambda fresh: None,
+            )
+            if claimed is None:
+                # Row moved (cancel/terminal/requeue during the claim) — the
+                # winner owns the job; never submit on top of it.
+                return True
+            record = claimed
             self._sync_task_status(record)
             self._write_job_json(record)
 
@@ -2467,15 +2794,48 @@ class JobManager:
         # ------------------------------------------------------------------
         if record.spec.workflow == "fake":
             self.runner.submit(record, event_log, cancel_event)
-            record.status = JobStatus.COMPLETED
-            record.exit_code = record.exit_code if record.exit_code is not None else 0
-            record.progress = 1.0
-            record.completed_at = _utc_now_iso()
-            record.touch()
+            exit_code = record.exit_code if record.exit_code is not None else 0
             # Publish the terminal event before the terminal status so pollers
             # that observe COMPLETED always find a consistent event tail.
-            event_log.append("job.completed", job_id=job_id, exit_code=record.exit_code)
-            self.store.update(record)
+            event_log.append(
+                "job.completed",
+                job_id=job_id,
+                exit_code=exit_code,
+                attempt=record.attempt,
+            )
+
+            def _complete_from(fresh: JobRecord) -> JobRecord | None:
+                if fresh.status.is_terminal:
+                    return None
+                try:
+                    return self.store.transition(
+                        job_id,
+                        expected_status=fresh.status,
+                        expected_revision=fresh.revision,
+                        expected_attempt=fresh.attempt,
+                        status=JobStatus.COMPLETED,
+                        exit_code=exit_code,
+                        progress=1.0,
+                        completed_at=_utc_now_iso(),
+                    )
+                except JobStateConflictError:
+                    return None
+
+            completed = self._cas_write(
+                record,
+                expected_status=record.status,
+                status=JobStatus.COMPLETED,
+                exit_code=exit_code,
+                progress=1.0,
+                completed_at=_utc_now_iso(),
+                decide=_complete_from,
+            )
+            if completed is None:
+                with self._lock:
+                    self._cancel_events.pop(job_id, None)
+                self._dispatch_queued_jobs()
+                return True
+            record = completed
             self._sync_task_status(record)
             self._write_job_json(record)
             self._stage_task_observer.finalize_job(job_id, "completed")
@@ -2498,9 +2858,17 @@ class JobManager:
             with self._lock:
                 self._admit_local(record)
                 self.runner.submit(record, event_log, cancel_event)
-                record.status = JobStatus.RUNNING
-                record.touch()
-                self.store.update(record)
+                running = self._cas_write(
+                    record,
+                    expected_status=record.status,
+                    status=JobStatus.RUNNING,
+                    decide=lambda fresh: None,
+                )
+                if running is None:
+                    # Cancelled/requeued during dispatch — the cancel event
+                    # stops the spawned process; the latest state wins.
+                    return True
+                record = running
                 self._sync_task_status(record)
                 self._write_job_json(record)
             return True
@@ -2520,11 +2888,35 @@ class JobManager:
             # give the reservation back before the error propagates.
             self._release_reservation(record.id)
             raise
-        record.remote_job_id = lsf_job_id
-        record.status = JobStatus.PENDING
 
-        record.touch()
-        self.store.update(record)
+        def _after_submit(fresh: JobRecord) -> JobRecord | None:
+            if fresh.status.is_terminal:
+                return None
+            try:
+                # Persist the LSF id even when the status moved (e.g.
+                # CANCELLING) so cancel/reconcile can find the cluster job.
+                return self.store.transition(
+                    job_id,
+                    expected_status=fresh.status,
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    remote_job_id=lsf_job_id,
+                    result=record.result,
+                )
+            except JobStateConflictError:
+                return None
+
+        submitted = self._cas_write(
+            record,
+            expected_status=record.status,
+            status=JobStatus.PENDING,
+            remote_job_id=lsf_job_id,
+            result=record.result,
+            decide=_after_submit,
+        )
+        if submitted is None:
+            return True
+        record = submitted
         # Full re-sync now that remote_job_id / result.node are known: the
         # submit-time row predates dispatch and still says node_id="local".
         self._sync_task_status(record)
@@ -2662,13 +3054,36 @@ class JobManager:
         # read side falls back to ``result`` / ``spec.target_node``.
         record.node_id = target.name
         record.host = socket.gethostname() if target.kind == "local" else target.host
-        record.touch()
-        self.store.update(record)
+        revision = record.revision
+        for _ in range(3):
+            try:
+                stored = self.store.update_execution_identity(
+                    record.id,
+                    expected_revision=revision,
+                    expected_attempt=record.attempt,
+                    result=result,
+                    node_id=record.node_id,
+                    host=record.host,
+                )
+                break
+            except JobStateConflictError:
+                fresh = self.store.get(record.id)
+                if fresh is None or fresh.attempt != record.attempt:
+                    # Old-attempt replay or vanished row — drop the write.
+                    logger.info(
+                        "Dropping execution-target write for %s (row moved)", record.id
+                    )
+                    return
+                revision = fresh.revision
+        else:
+            return
+        record.revision = stored.revision
         self._event_log(record).append(
             "execution.target_resolved",
             job_id=record.id,
             target=target.name,
             kind=target.kind,
+            attempt=record.attempt,
         )
 
     def _release_reservation(self, job_id: str) -> None:
@@ -3331,11 +3746,17 @@ class JobManager:
                                 os.killpg(record.pid, signal.SIGCONT)
                         except (OSError, ProcessLookupError):
                             pass
-                record.status = JobStatus.FAILED
-                record.error = _RETIRED_INFLIGHT_REASON
-                record.completed_at = _utc_now_iso()
-                record.touch()
-                self.store.update(record)
+                failed = self._cas_write(
+                    record,
+                    expected_status=record.status,
+                    status=JobStatus.FAILED,
+                    error=_RETIRED_INFLIGHT_REASON,
+                    completed_at=_utc_now_iso(),
+                    decide=lambda fresh: None,
+                )
+                if failed is None:
+                    continue
+                record = failed
                 self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
                 logger.info(
                     "Swept retired inflight job %s (workflow=%s, was=%s) → FAILED",
@@ -3457,13 +3878,19 @@ class JobManager:
                 # Restart race guard: the workflow may have finished exactly
                 # as the server went down — probe disk before failing (Q12).
                 if self._disk_shows_completed(Path(record.work_dir)):
-                    record.status = JobStatus.COMPLETED
-                    record.exit_code = 0
-                    record.progress = 1.0
-                    record.completed_at = _utc_now_iso()
-                    record.result = self._collect_result(record)
-                    record.touch()
-                    self.store.update(record)
+                    completed = self._cas_write(
+                        record,
+                        expected_status=record.status,
+                        status=JobStatus.COMPLETED,
+                        exit_code=0,
+                        progress=1.0,
+                        completed_at=_utc_now_iso(),
+                        result=self._collect_result(record),
+                        decide=lambda fresh: None,
+                    )
+                    if completed is None:
+                        continue
+                    record = completed
                     self._write_job_json(record)
                     self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
                     logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
@@ -3526,12 +3953,18 @@ class JobManager:
         ``job.json``, on-disk ``task.json``, and ``events.jsonl`` so every
         surface reports the same terminal status.
         """
-        record.status = status
-        record.pid = None
-        record.error = error
-        record.completed_at = _utc_now_iso()
-        record.touch()
-        self.store.update(record)
+        final = self._cas_write(
+            record,
+            expected_status=record.status,
+            status=status,
+            pid=None,
+            error=error,
+            completed_at=_utc_now_iso(),
+            decide=lambda fresh: None,
+        )
+        if final is None:
+            return
+        record = final
         self._stage_task_observer.finalize_job(record.id, status.value)
         self._sync_task_status(record)
         try:
@@ -3545,7 +3978,11 @@ class JobManager:
             logger.debug("run.lock cleanup failed for %s", record.id, exc_info=True)
         try:
             self._event_log(record).append(
-                event_type, job_id=record.id, error=error, reason="server_restart"
+                event_type,
+                job_id=record.id,
+                error=error,
+                reason="server_restart",
+                attempt=record.attempt,
             )
         except OSError:
             logger.debug("Restart event failed for %s", record.id, exc_info=True)
