@@ -750,12 +750,9 @@ HISTORICAL_GATE_NAMES: Final[tuple[str, ...]] = tuple(
 # (e.g. COMMENT_LINE_PATTERN) that stops a hit from blocking makes its entry
 # stale and the entry must be removed in the same todo.  The allowlist only
 # ever shrinks (tests pin both the entry set and the count): a new violation
-# must be fixed, never allowlisted.
-ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = (
-    ("workflow_executes_qc", "src/acp/calculations/batch/singlepoint.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend"),
-    ("workflow_executes_qc", "src/acp/calculations/primitives/_common.py", "get_backend"),
-)
+# must be fixed, never allowlisted.  Empty since todo 29 (zero-exemption
+# acceptance) — the machinery is retained as a guard, not as an escape hatch.
+ARCHITECTURE_ALLOWLIST: Final[tuple[tuple[str, str, str], ...]] = ()
 
 ALLOWLIST_TRIPLES: Final[frozenset[tuple[str, str, str]]] = frozenset(ARCHITECTURE_ALLOWLIST)
 

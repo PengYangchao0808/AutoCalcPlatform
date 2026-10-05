@@ -426,7 +426,7 @@ def _run_scan_case(tmp_root: Path, case_id: str, scan_result: Any) -> dict[str, 
 
     stub = _ScanStubBackend(scan_result)
     request = _scan_request(tmp_root, case_id)
-    with patch("acp.backends.get_backend", lambda name: stub):
+    with patch("cccp.backends.registry.get_backend", lambda name: stub):
         calc = run_scan(request)
     return {
         "status": calc.status,
@@ -585,7 +585,7 @@ def _run_irc_case(
     artifact = _irc_artifact(tmp_root)
     work = tmp_root / "irc_work"
     stub = _IrcStubBackend(irc_result)
-    with patch("acp.backends.get_backend", lambda name: stub):
+    with patch("cccp.backends.registry.get_backend", lambda name: stub):
         calc = run_irc(
             artifact,
             directions=directions,

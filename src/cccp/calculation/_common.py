@@ -400,8 +400,8 @@ def backend_for_request(
 
     A registered class is constructed with *config* / *constructor_kwargs*;
     an already-built instance passes through unchanged (legacy instance
-    seams and tests).  *acquire* overrides the lookup (the ACP compat layer
-    passes ``acp.backends.get_backend`` to preserve its legacy seam).
+    seams and tests).  *acquire* overrides the lookup (default: the shared
+    ``cccp.backends.registry`` singleton).
     """
     if acquire is None:
         from cccp.backends.registry import get_backend as acquire

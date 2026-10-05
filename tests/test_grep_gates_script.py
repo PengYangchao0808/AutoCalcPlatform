@@ -14,8 +14,10 @@ import pytest
 from scripts.check_grep_gates import (
     ARCHITECTURE_ALLOWLIST,
     ARCHITECTURE_SUITE_GATES,
+    ARCHITECTURE_SUITE_NAME,
     HISTORICAL_GATE_NAMES,
     classify_text,
+    run_suite,
 )
 
 SCRIPT: Final[Path] = Path(__file__).parents[1] / "scripts" / "check_grep_gates.py"
@@ -370,7 +372,7 @@ WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
         ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
     }
 )
-ALLOWLIST_COUNT_PIN: Final[int] = 3
+ALLOWLIST_COUNT_PIN: Final[int] = 0
 CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
     "src/acp/backends/matrix.py",
     "src/acp/backends/base.py",
@@ -710,18 +712,23 @@ def test_suite_fails_when_violation_injected(case: InjectionCase, tmp_path: Path
     assert f"[{case.gate}|{case.module}|{case.symbol}]" in result.stdout
 
 
-def test_suite_flags_stale_allowlist_entries_when_violation_disappears(tmp_path: Path) -> None:
+def test_suite_flags_stale_allowlist_entries_when_violation_disappears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     root = _copy_src_tree(tmp_path)
-    (root / "src/acp/calculations/executor.py").unlink()
-
-    result = _run_suite(root)
-
-    assert result.returncode == 1, result.stdout
-    stale = _stale_entries(result.stdout)
     executor_key = ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend")
-    assert stale == {executor_key}
-    assert "stale allowlist entries: 1" in result.stdout
-    assert "workflow_executes_qc|src/acp/calculations/executor.py" in result.stdout
+    monkeypatch.setattr("scripts.check_grep_gates.ARCHITECTURE_ALLOWLIST", (executor_key,))
+    monkeypatch.setattr(
+        "scripts.check_grep_gates.ALLOWLIST_TRIPLES", frozenset({executor_key})
+    )
+
+    exit_code = run_suite(ARCHITECTURE_SUITE_NAME, root)
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1, captured
+    assert _stale_entries(captured) == {executor_key}
+    assert "stale allowlist entries: 1" in captured
+    assert "workflow_executes_qc|src/acp/calculations/executor.py" in captured
 
 
 def test_allowlist_only_shrinks_from_wave0_baseline() -> None:

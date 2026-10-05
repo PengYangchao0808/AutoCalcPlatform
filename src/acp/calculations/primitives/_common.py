@@ -253,14 +253,11 @@ def output_dir(request: CalculationRequest) -> Path | None:
 
 
 def backend_for_request(request: CalculationRequest, name: str) -> Any:
-    """Resolve a backend instance while preserving the legacy registry seam."""
-    import acp.backends
-
+    """Resolve a backend instance through the shared cccp registry seam."""
     return _cccp_backend_for_request(
         name,
         config=_backend_config(request),
         constructor_kwargs=_constructor_kwargs(request, name),
-        acquire=acp.backends.get_backend,
     )
 
 

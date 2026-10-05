@@ -447,7 +447,7 @@ class CalculationPlanExecutor:
         backend_factory: Callable[..., object] | None = None,
     ) -> None:
         # backend_factory is accepted for API compatibility but the
-        # primitives resolve backends internally via get_backend().
+        # primitives resolve backends internally via the cccp registry.
         self._backend_factory = backend_factory
 
     # ── public entry point ──────────────────────────────────────────────

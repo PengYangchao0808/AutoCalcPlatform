@@ -9,8 +9,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import final
 
-import acp.backends
 from acp.backends.base import SinglePointCalculator
+from cccp.calculation._common import backend_for_request
 
 from ._singlepoint_execution import (
     BatchSinglePointExecutionOptions,
@@ -158,8 +158,17 @@ class BatchSinglePointExecutor:
         )
 
     def _resolve_backend(self) -> SinglePointCalculator:
-        factory = self._backend_factory or acp.backends.get_backend
-        reference = factory(self._backend_name)
+        if self._backend_factory is None:
+            # Default acquisition goes through the shared cccp registry seam
+            # (same function object the ACP compat shim re-exports), resolved
+            # at call time so test patches on the registry module apply.
+            candidate = backend_for_request(self._backend_name, config=self._config)
+            if not isinstance(candidate, SinglePointCalculator):
+                raise TypeError(
+                    f"Backend {self._backend_name!r} does not implement single-point capability"
+                )
+            return candidate
+        reference = self._backend_factory(self._backend_name)
         if isinstance(reference, type):
             candidate = reference(dict(self._config or {}))
             if not isinstance(candidate, SinglePointCalculator):

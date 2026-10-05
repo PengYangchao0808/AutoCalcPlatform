@@ -469,7 +469,7 @@ def test_simple_optimize_threads_reporter_to_orca_trajectory(
                 converged=True,
             )
 
-    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    monkeypatch.setattr("cccp.backends.registry.get_backend", lambda _name: SyntheticOrca())
     reporter = ProgressReporter(tmp_path / "progress", min_interval=60.0)
 
     result = run_optimize(
