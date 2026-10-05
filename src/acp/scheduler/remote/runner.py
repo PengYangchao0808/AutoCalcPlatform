@@ -372,12 +372,19 @@ class RemoteJobRunner:
         if not submission_id:
             submission_id = submission_id_for(record.id, record.attempt)
 
+        # Heartbeats bracket each long pre-bsub phase so a slow node never
+        # leaves the in-process lease heartbeat stale past its TTL window
+        # (no-op when no worker is registered, e.g. the legacy run path).
+        heartbeat_submit_worker(submission_id)
         self._pre_submit_housekeeping(node, event_log, record.id)
+        heartbeat_submit_worker(submission_id)
         self._probe_required_binaries(node, spec, event_log, record.id)
+        heartbeat_submit_worker(submission_id)
 
         # D03: fail closed BEFORE any directory claim/upload when no
         # verified release can be bound — never warn-and-continue.
         code_release = self._ensure_code_release(node, event_log, record)
+        heartbeat_submit_worker(submission_id)
 
         try:
             remote_job_dir = self._resolve_remote_dir_for(

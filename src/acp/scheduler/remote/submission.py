@@ -104,6 +104,13 @@ class SubmitWorker:
     registered_at: str
     heartbeat_at: str
     released: bool = False
+    # Ident of the thread that registered (== the submitting thread):
+    # a live owning thread is authoritative liveness evidence even when a
+    # long pre-bsub phase leaves the heartbeat momentarily stale.
+    thread_ident: int | None = None
+    # Lease TTL this worker was registered with (F2: used by the
+    # heartbeat-freshness verdict instead of the caller's default).
+    ttl_seconds: int = 0
 
     def touch(self) -> None:
         self.heartbeat_at = datetime.now(timezone.utc).isoformat()
@@ -116,13 +123,19 @@ _WORKERS_LOCK = threading.Lock()
 
 
 def register_submit_worker(submission_id: str, owner: str, ttl_seconds: int) -> SubmitWorker:
-    """Register the submit worker for *submission_id* (fresh heartbeat)."""
+    """Register the submit worker for *submission_id* (fresh heartbeat).
+
+    Runs on the submitting thread (``_submit_job`` → ``submit_remote``),
+    so the entry records that thread's ident as the liveness handle.
+    """
     now = datetime.now(timezone.utc).isoformat()
     worker = SubmitWorker(
         worker_id=owner,
         submission_id=submission_id,
         registered_at=now,
         heartbeat_at=now,
+        thread_ident=threading.get_ident(),
+        ttl_seconds=int(ttl_seconds),
     )
     with _WORKERS_LOCK:
         SUBMIT_WORKERS[submission_id] = worker
@@ -146,6 +159,13 @@ def release_submit_worker(submission_id: str) -> None:
             worker.touch()
 
 
+def _thread_is_alive(ident: int | None) -> bool:
+    """True when a thread with *ident* is still running in this process."""
+    if ident is None:
+        return False
+    return any(t.ident == ident for t in threading.enumerate())
+
+
 def _worker_active_in_process(submission_id: str, ttl_seconds: int) -> bool | None:
     """Registry verdict for this process: True/False, or None if unregistered."""
     with _WORKERS_LOCK:
@@ -154,11 +174,19 @@ def _worker_active_in_process(submission_id: str, ttl_seconds: int) -> bool | No
         return None
     if worker.released:
         return False
+    # An explicit release is the only thing that overrides a live owner:
+    # long pre-bsub phases (housekeeping, binary probe, whole-tree release
+    # upload) can outlast the heartbeat window without the thread dying —
+    # never judge such a worker not_accepted (plan todo 5 d2).
+    if _thread_is_alive(worker.thread_ident):
+        return True
     heartbeat = _parse_iso(worker.heartbeat_at)
     if heartbeat is None:
         return False
-    # Stale heartbeat = the submit thread died without releasing.
-    return (time.time() - heartbeat) <= (ttl_seconds * 1.5)
+    # Stale heartbeat with no live thread = the submit thread died without
+    # releasing; converge using the TTL the worker was registered with.
+    ttl = worker.ttl_seconds or ttl_seconds
+    return (time.time() - heartbeat) <= (ttl * 1.5)
 
 
 def submit_lease_valid(remote_meta: object, *, ttl_seconds: int | None = None) -> bool:

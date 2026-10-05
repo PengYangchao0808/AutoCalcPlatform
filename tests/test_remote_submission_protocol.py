@@ -40,8 +40,10 @@ from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
 from acp.scheduler.remote.submission import (
     SUBMIT_WORKERS,
+    heartbeat_submit_worker,
     register_submit_worker,
     release_submit_worker,
+    submit_lease_valid,
     submission_id_for,
     submission_lsf_name,
 )
@@ -868,6 +870,7 @@ def test_submit_worker_death_converges_without_service_restart(tmp_path):
     harness = _RunnerHarness(str(tmp_path))
     record, _ev, remote_dir = harness.make_record("ix-death", lease_expires_at=_future_iso())
     sid = submission_id_for("ix-death", 1)
+    harness.sftp.dirs.add(remote_dir)  # dir exists from the earlier submit
     try:
         def not_found(cmd):
             if "bjobs" in cmd:
@@ -884,10 +887,109 @@ def test_submit_worker_death_converges_without_service_restart(tmp_path):
         release_submit_worker(sid)
         assert harness.reconcile(record) == "not_accepted"
         assert harness.removes == [], "not_accepted never deletes the directory"
-        assert posixpath.join(remote_dir) not in harness.sftp.dirs or True
+        assert remote_dir in harness.sftp.dirs, "not_accepted must never delete the directory"
     finally:
         SUBMIT_WORKERS.pop(sid, None)
         harness.close()
+
+
+# --------------------------------------------------------------------- #
+# (ix-b) F2: a live submit worker is never judged not_accepted
+# --------------------------------------------------------------------- #
+
+
+@requires_remote
+def test_live_worker_outranks_stale_heartbeat_and_expired_lease(tmp_path):
+    """F2 B2: live submit thread keeps the lease valid past both windows."""
+    harness = _RunnerHarness(str(tmp_path))
+    record, _ev, remote_dir = harness.make_record("ix-live", lease_expires_at=_past_iso())
+    sid = submission_id_for("ix-live", 1)
+    harness.sftp.dirs.add(remote_dir)  # dir exists from the earlier submit
+    try:
+
+        def not_found(cmd):
+            if "bjobs" in cmd:
+                return (0, "Job <acp_x> is not found.\n", "")
+            return None
+
+        harness.query_handler = not_found
+
+        worker = register_submit_worker(sid, "pid:1:2:1", 120)
+        # Heartbeat far older than ttl*1.5: a long pre-bsub phase (house-
+        # keeping, binary probe, whole-tree release upload) outlived the
+        # heartbeat window while the submitting thread is still alive here.
+        worker.heartbeat_at = _past_iso(600)
+
+        assert submit_lease_valid(record.result["remote"], ttl_seconds=120) is True
+        assert harness.reconcile(record) == "unknown"
+        assert harness.removes == []
+        assert remote_dir in harness.sftp.dirs
+    finally:
+        SUBMIT_WORKERS.pop(sid, None)
+        harness.close()
+
+
+def test_heartbeat_refresh_restores_lease_for_worker_without_thread_handle():
+    """Heartbeat renewal re-arms liveness; release stays dead regardless."""
+    sid = "sub_hb_refresh_unit"
+    try:
+        worker = register_submit_worker(sid, "pid:1:2:1", 120)
+        worker.thread_ident = None  # heartbeat is the only liveness evidence
+        worker.heartbeat_at = _past_iso(600)
+        meta = {"submission_id": sid, "lease_expires_at": _past_iso(600)}
+
+        assert submit_lease_valid(meta, ttl_seconds=120) is False
+
+        heartbeat_submit_worker(sid)
+        assert submit_lease_valid(meta, ttl_seconds=120) is True
+
+        # An explicit release always wins, even over a fresh heartbeat.
+        release_submit_worker(sid)
+        heartbeat_submit_worker(sid)
+        assert submit_lease_valid(meta, ttl_seconds=120) is False
+    finally:
+        SUBMIT_WORKERS.pop(sid, None)
+
+
+def test_submission_jobs_guard_keeps_starting_row_owned_by_submit_thread(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """F2 B2: reconcile skips a STARTING row its submit thread still owns."""
+    mgr = _make_manager(tmp_path, monkeypatch)
+    job_id = "guard-active-submit"
+    try:
+        runner = _ScriptedRunner(verdicts=["not_accepted"])
+        mgr.remote_runner = runner  # type: ignore[assignment]
+        # Ownership registered BEFORE the row exists so the background
+        # reconcile loop can never observe it unguarded.
+        mgr._submission_jobs.add(job_id)
+        work_dir = tmp_path / "runs" / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id=job_id,
+            spec=_confsearch_spec(),
+            status=JobStatus.STARTING,
+            work_dir=str(work_dir),
+            result={
+                "remote": {
+                    "submit_state": "intent",
+                    "submission_id": submission_id_for(job_id, 1),
+                }
+            },
+        )
+        mgr.store.create(record)
+
+        mgr._reconcile_once()
+
+        stored = mgr.store.get(job_id)
+        assert stored is not None
+        assert stored.status == JobStatus.STARTING
+        assert stored.status != JobStatus.FAILED
+        assert runner.reconcile_calls == 0, "guard must skip the row entirely"
+        assert _remote_meta(mgr, job_id).get("submit_state") == "intent"
+    finally:
+        mgr._submission_jobs.discard(job_id)
+        mgr.shutdown()
 
 
 # --------------------------------------------------------------------- #

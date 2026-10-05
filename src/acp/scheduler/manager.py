@@ -3481,6 +3481,14 @@ class JobManager:
         try:
             status = self._remote_monitor.get_lsf_status(node, lsf_job_id)
         except Exception:
+            logger.warning(
+                "Orphan cancel status query failed (node=%s, lsf_job_id=%s, "
+                "attempt=%s) — treating status as unknown",
+                node_name,
+                lsf_job_id,
+                entry.get("attempt"),
+                exc_info=True,
+            )
             status = "unknown"
         if status in ("not_found", "done", "failed"):
             return "confirmed"
@@ -3490,6 +3498,14 @@ class JobManager:
         try:
             ok = self._remote_monitor.cancel_job(node, lsf_job_id)
         except Exception:
+            logger.warning(
+                "Orphan cancel bkill failed (node=%s, lsf_job_id=%s, "
+                "attempt=%s) — will retry",
+                node_name,
+                lsf_job_id,
+                entry.get("attempt"),
+                exc_info=True,
+            )
             ok = False
         if not ok:
             entry["failures"] = int(entry.get("failures", 0) or 0) + 1
@@ -4897,6 +4913,12 @@ class JobManager:
 
     def _reconcile_starting_submission(self, record: JobRecord) -> None:
         """Category ①: converge a recoverable STARTING submission to PENDING."""
+        if record.id in self._submission_jobs:
+            # An in-process submit thread owns this row: it added the id in
+            # _start_submission_thread and discards it only when the
+            # submission attempt finished. Its bsub may not have run yet,
+            # so absence evidence must not fail the job (F2, todo 5 d2).
+            return
         self._reconcile_submission_record(record)
 
     def _reconcile_once(self) -> None:
