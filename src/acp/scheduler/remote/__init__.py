@@ -47,6 +47,18 @@ from acp.scheduler.remote.node_manager import (
     NodeStatus,
     detect_node_python,
 )
+from acp.scheduler.remote.release import (
+    PruneReport,
+    ReleaseBinding,
+    ReleaseError,
+    ReleaseManifest,
+    acquire_release_ref,
+    build_release_manifest,
+    ensure_node_release,
+    prune_releases,
+    release_release_ref,
+    releases_root,
+)
 from acp.scheduler.remote.runner import (
     RemoteJobRunner,
     RemoteNodeUnavailableError,
@@ -73,7 +85,7 @@ from acp.scheduler.remote.submission import (
     submission_lsf_name,
     submit_lease_valid,
 )
-from acp.scheduler.remote.sync import CodeSyncer, SyncResult
+from acp.scheduler.remote.sync import CodeSyncer, SyncResult, build_sync_file_list
 
 __all__ = [
     "CodeSyncer",
@@ -88,6 +100,7 @@ __all__ = [
     "NodeManager",
     "NodeStatus",
     "NotARemoteJobError",
+    "PruneReport",
     "RemoteCleanup",
     "RemoteExecutionConfig",
     "RemoteFileError",
@@ -101,19 +114,29 @@ __all__ = [
     "RemoteSubmissionError",
     "RemoteSubmissionIndeterminate",
     "RemoteSubmissionRejected",
+    "ReleaseBinding",
+    "ReleaseError",
+    "ReleaseManifest",
     "SSHConnectionPool",
     "SSHExecutionError",
     "SyncResult",
+    "acquire_release_ref",
     "build_lsf_script_spec",
     "build_owner_token",
     "build_remote_cli_command",
+    "build_release_manifest",
+    "build_sync_file_list",
     "derive_lsf_resources",
     "detect_node_python",
+    "ensure_node_release",
     "generate_lsf_script",
     "heartbeat_submit_worker",
     "lease_ttl_seconds",
+    "prune_releases",
     "register_submit_worker",
+    "release_release_ref",
     "release_submit_worker",
+    "releases_root",
     "submission_id_for",
     "submission_lsf_name",
     "submit_lease_valid",

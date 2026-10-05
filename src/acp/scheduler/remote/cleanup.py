@@ -29,12 +29,16 @@ import posixpath
 import shlex
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import RemoteJobMonitor
+from acp.scheduler.remote.release import prune_releases
 from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from acp.scheduler.store import JobStore
 
 logger = logging.getLogger(__name__)
 
@@ -152,11 +156,16 @@ class RemoteCleanup:
         monitor: RemoteJobMonitor | None = None,
         cleanup_threshold: int = DISK_CLEANUP_THRESHOLD,
         skip_threshold: int = DISK_SKIP_THRESHOLD,
+        job_store: JobStore | None = None,
     ) -> None:
         self._ssh = ssh_pool
         self._stager = stager
         self._config = remote_config
         self._monitor = monitor or RemoteJobMonitor(ssh_pool, stager)
+        # DB handle for release GC (D03).  Nullable: without it the release
+        # GC branch in cleanup_old_jobs is inert (fail-closed — prune never
+        # runs against a missing/stale reference snapshot).
+        self._job_store = job_store
         if cleanup_threshold > skip_threshold:
             raise ValueError(
                 f"cleanup_threshold ({cleanup_threshold}) must not exceed "
@@ -175,6 +184,7 @@ class RemoteCleanup:
         retention_days: int | None = None,
         dry_run: bool = False,
         max_dirs_per_sweep: int = DEFAULT_MAX_DIRS_PER_SWEEP,
+        with_release_gc: bool = True,
     ) -> CleanupReport:
         """Remove job directories under ``node.remote_work_dir`` older than retention.
 
@@ -183,6 +193,12 @@ class RemoteCleanup:
         recursively (``rm -rf`` over SSH).  Files at the top level are left
         alone — only job subdirectories are managed.  The ``remote_work_dir``
         itself, its ancestors, and unsafe shallow paths are never removed.
+
+        When *with_release_gc* is True AND a ``job_store`` was injected,
+        also runs :func:`~acp.scheduler.remote.release.prune_releases` for
+        the node (release GC needs the DB to refresh references — decoupled
+        from the DB-less ``pre_submit_housekeeping`` path by option (B) of
+        the D03 plan: that caller passes ``with_release_gc=False``).
 
         Args:
             node: Target remote node.
@@ -194,6 +210,7 @@ class RemoteCleanup:
                 this call (each costs two SSH round-trips: ``du`` + ``rm``).
                 ``<= 0`` means unlimited.  Leftover dirs are cleaned on the
                 next submission that triggers housekeeping.
+            with_release_gc: Gate for the release GC phase (default True).
 
         Returns:
             A :class:`CleanupReport` describing what was (or would be)
@@ -203,6 +220,32 @@ class RemoteCleanup:
             retention_days = self._config.retention_days
 
         report = CleanupReport(node=node.name, retention_days=retention_days, dry_run=dry_run)
+
+        if with_release_gc and self._job_store is not None:
+            # Release GC first: independent of the work-dir layout, needs
+            # the DB handle, and must run even when remote_work_dir is
+            # missing (production reachability, D03 plan (C)).
+            try:
+                prune_report = prune_releases(
+                    node,
+                    stager=self._stager,
+                    ssh=self._ssh,
+                    job_store=self._job_store,
+                    retention_days=retention_days,
+                    dry_run=dry_run,
+                )
+                if prune_report.pruned:
+                    logger.info(
+                        "Release GC on %s reclaimed %d release(s): %s",
+                        node.name,
+                        len(prune_report.pruned),
+                        ", ".join(prune_report.pruned),
+                    )
+                for err in prune_report.errors:
+                    report.errors.append(f"release gc: {err}")
+            except Exception as exc:
+                report.errors.append(f"release gc: {exc}")
+                logger.warning("Release GC failed on %s: %s", node.name, exc)
 
         base = node.remote_work_dir
         if not _is_safe_work_dir(base):
@@ -307,6 +350,12 @@ class RemoteCleanup:
         * usage > skip_threshold (after cleanup, or if cleanup failed) →
           the node is rejected (``should_skip=True``).
 
+        D03 decoupling (plan option **(B)**): this DB-less entry calls
+        ``cleanup_old_jobs(..., with_release_gc=False)`` — it performs
+        space checks / job-dir retention only and NEVER runs release GC
+        (which requires a live DB reference refresh), so no release can be
+        reclaimed from this path.
+
         Failures while querying disk usage are treated as 0 % (fail-open) so
         a transient SSH hiccup does not block submission.  Failures *inside*
         the sweep are recorded in the report but do not abort housekeeping.
@@ -326,7 +375,7 @@ class RemoteCleanup:
                 self._cleanup_threshold,
             )
             try:
-                cleanup = self.cleanup_old_jobs(node)
+                cleanup = self.cleanup_old_jobs(node, with_release_gc=False)
             except Exception as exc:
                 # Defensive: cleanup_old_jobs records per-dir errors but
                 # should never raise.  If it does, capture and continue.

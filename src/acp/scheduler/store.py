@@ -686,6 +686,41 @@ class JobStore:
             out[r["status"]] = r["n"]
         return out
 
+    def referenced_code_releases(self) -> set[str]:
+        """Release ids referenced by jobs in **any** status (D03).
+
+        Scans every ``result_json`` for a ``remote.code_release`` binding
+        (written pre-bsub by the submit-intent path).  Used by
+        ``prune_releases`` *inside* the node coordination lock so the
+        eligibility check never runs against a stale caller snapshot — a
+        release bound to a QUEUED/FAILED/RUNNING/... job must never be
+        reclaimed while that binding exists.
+        """
+        out: set[str] = set()
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT result_json FROM jobs WHERE result_json IS NOT NULL"
+            ).fetchall()
+        for r in rows:
+            raw = r["result_json"]
+            if not raw:
+                continue
+            try:
+                result = json.loads(raw)
+            except ValueError:
+                continue
+            if not isinstance(result, dict):
+                continue
+            top = result.get("code_release")
+            if isinstance(top, str) and top:
+                out.add(top)
+            remote = result.get("remote")
+            if isinstance(remote, dict):
+                release = remote.get("code_release")
+                if isinstance(release, str) and release:
+                    out.add(release)
+        return out
+
     def delete(self, job_id: str) -> None:
         with self._lock, self._connect() as conn:
             conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))

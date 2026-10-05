@@ -93,6 +93,11 @@ _STARTUP_RESUMABLE_WORKFLOWS: Final[frozenset[str]] = frozenset({"mechanism", "x
 # Single-instance guard: run_root ownership marker file (see
 # ``JobManager._acquire_instance_lock``).
 _MANAGER_LOCK_NAME: Final = ".manager.lock"
+# Delay before the startup release-GC tick (D03 plan (C) production
+# trigger).  Keeps boot-time SSH traffic off the critical start sequence;
+# the periodic `_cleanup_loop` tick covers later sweeps.  Tests patch this
+# to 0.0 to assert prune_releases reachability deterministically.
+_RELEASE_GC_STARTUP_DELAY: Final = 300.0
 
 # The poll scan set — single owner of these statuses: ``_poll_loop`` iterates
 # them and ``_poll_job`` refuses anything outside them.  STARTING and PAUSED
@@ -343,6 +348,11 @@ class JobManager:
         self._cleanup_interval_hours = max(1, int(local_cleanup_interval_hours))
         self._start_cleanup_thread()
 
+        # D03 release-GC production trigger (startup + periodic tick below).
+        self._release_gc_stop = threading.Event()
+        self._release_gc_thread: threading.Thread | None = None
+        self._start_release_gc_thread()
+
         self._requeue_active_on_startup()
         with self._lock:
             self._rebuild_reservations()
@@ -488,6 +498,7 @@ class JobManager:
             stager=runner_stager,
             remote_config=self._remote_config,
             monitor=monitor,
+            job_store=self.store,
         )
         self._remote_cleanup = cleanup
         self._node_manager: NodeManager = NodeManager(
@@ -557,6 +568,51 @@ class JobManager:
             return
         while not stop_event.wait(interval):
             self._run_background_cleanup()
+            # Periodic release-GC tick (D03 plan (C)) — DB-capable, so
+            # prune_releases is reachable from production retention too.
+            self._run_remote_release_gc()
+
+    # ------------------------------------------------------------------ #
+    # Remote release GC — production triggers (D03 plan (C))
+    # ------------------------------------------------------------------ #
+
+    def _start_release_gc_thread(self) -> None:
+        """Schedule the startup release-GC tick (daemon, delay-gated).
+
+        Without this, release GC would have no production caller once
+        ``pre_submit_housekeeping`` is decoupled (plan (A)/(B)) and D03
+        reclamation would be dead code reachable only from unit tests.
+        """
+        if self._remote_cleanup is None:
+            return
+
+        def _runner() -> None:
+            if self._release_gc_stop.wait(_RELEASE_GC_STARTUP_DELAY):
+                return
+            self._run_remote_release_gc()
+
+        self._release_gc_thread = threading.Thread(
+            target=_runner, daemon=True, name="acp-release-gc"
+        )
+        self._release_gc_thread.start()
+        logger.debug("Scheduled startup release GC (delay=%.0fs)", _RELEASE_GC_STARTUP_DELAY)
+
+    def _run_remote_release_gc(self) -> None:
+        """Run release GC (with job-dir retention) on every enabled node.
+
+        This is the DB-capable production path: it calls
+        ``cleanup_old_jobs(node, with_release_gc=True)`` with the injected
+        ``job_store``, so ``prune_releases`` can refresh DB references
+        inside the coordination lock before reclaiming anything.
+        """
+        cleanup = self._remote_cleanup
+        if cleanup is None or self._remote_config is None:
+            return
+        for node in self._remote_config.enabled_nodes:
+            try:
+                cleanup.cleanup_old_jobs(node, with_release_gc=True)
+            except Exception as exc:
+                logger.warning("Release GC failed on node %s: %s", node.name, exc)
 
     def _run_background_cleanup(self) -> LocalCleanupReport | None:
         """Run one full_cleanup sweep, guarded against re-entrancy.
@@ -2683,6 +2739,7 @@ class JobManager:
         if self._cleanup_stop_event is not None and self._cleanup_thread is not None:
             self._cleanup_stop_event.set()
             self._cleanup_thread.join(timeout=10)
+        self._release_gc_stop.set()
         self._poll_stop.set()
         if self._poll_thread.is_alive():
             self._poll_thread.join(timeout=10)

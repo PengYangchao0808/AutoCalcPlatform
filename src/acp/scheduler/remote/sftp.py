@@ -302,6 +302,59 @@ class FileStager:
             sftp.rename(src, dst)
             logger.debug("Renamed %s:%s -> %s", node.name, src, dst)
 
+    def remote_rename(
+        self, node: RemoteNode, src: str, dst: str, *, must_not_exist: bool = True
+    ) -> None:
+        """Rename *src* to *dst* with ``mv -n``/``mv -T`` semantics.
+
+        With *must_not_exist* (default) the target is asserted absent
+        BEFORE the rename so a POSIX ``mv`` can never nest *src* inside an
+        existing *dst* directory or clobber it (D03 release publish and
+        trash isolation both depend on this exclusivity).  Raises
+        :class:`FileExistsError` when the target already exists; *src* is
+        left untouched in every failure case.
+        """
+        src = _norm_remote(src)
+        dst = _norm_remote(dst)
+        with self._ssh.sftp_session(node) as sftp:
+            parent = posixpath.dirname(dst)
+            if parent:
+                _ensure_remote_dir(sftp, parent)
+            if must_not_exist:
+                try:
+                    sftp.stat(dst)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise FileExistsError(f"rename target already exists: {dst}")
+            sftp.rename(src, dst)
+            logger.debug(
+                "Renamed %s:%s -> %s (must_not_exist=%s)", node.name, src, dst, must_not_exist
+            )
+
+    def remote_sha256(self, node: RemoteNode, remote_path: str) -> str:
+        """Return the hex SHA-256 of *remote_path* via ``sha256sum``.
+
+        Raises :class:`FileNotFoundError` when the remote file is missing
+        or ``sha256sum`` fails — verification code treats that as "not
+        present / not verified" rather than trusting a stale guess.
+        """
+        import shlex
+
+        remote_path = _norm_remote(remote_path)
+        code, out, err = self._ssh.execute(
+            node, f"sha256sum {shlex.quote(remote_path)}", timeout=60
+        )
+        if code != 0:
+            raise FileNotFoundError(
+                f"remote sha256 failed for {remote_path} on {node.name}: "
+                f"{(err or out).strip() or f'exit {code}'}"
+            )
+        digest = out.strip().split(None, 1)[0].lower() if out.strip() else ""
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise OSError(f"unparseable sha256sum output for {remote_path} on {node.name}: {out!r}")
+        return digest
+
     def claim_remote_job_dir(self, node: RemoteNode, remote_job_dir: str, record: JobRecord) -> str:
         """Exclusively claim *remote_job_dir* for *record*.
 

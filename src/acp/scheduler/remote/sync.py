@@ -41,7 +41,7 @@ from acp.scheduler.remote.ssh import SSHConnectionPool
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["CodeSyncer", "SyncResult"]
+__all__ = ["CodeSyncer", "SyncResult", "build_sync_file_list"]
 
 # Directories under ``src/acp/`` that are NOT needed on the execution side.
 _ACP_EXCLUDE_DIRS: frozenset[str] = frozenset({"api", "scheduler"})
@@ -85,10 +85,12 @@ class SyncResult:
         return not self.errors
 
 
-def _build_sync_file_list(project_root: Path) -> list[Path]:
+def build_sync_file_list(project_root: Path) -> list[Path]:
     """Collect the full set of local files that should be synced.
 
-    Returns absolute paths sorted for deterministic ordering.
+    Returns absolute paths sorted for deterministic ordering.  This is the
+    single authority for the sync/release file set (D03 release manifests
+    build on exactly this list).
     """
     files: list[Path] = []
 
@@ -116,6 +118,11 @@ def _build_sync_file_list(project_root: Path) -> list[Path]:
 
     files.sort()
     return files
+
+
+# Compat alias — the pre-promotion private name still resolves (phase-1
+# tests and older call sites import `_build_sync_file_list`).
+_build_sync_file_list = build_sync_file_list
 
 
 def _walk_dir(root: Path, exclude_dirs: frozenset[str]) -> list[Path]:
@@ -196,7 +203,7 @@ class CodeSyncer:
     def check_sync_needed(self, node: RemoteNode) -> bool:
         """Return True if any local file's mtime differs from the last sync."""
         state = self._load_state(node)
-        for local_path in _build_sync_file_list(self._project_root):
+        for local_path in build_sync_file_list(self._project_root):
             rel = local_path.relative_to(self._project_root).as_posix()
             try:
                 mtime = local_path.stat().st_mtime
@@ -216,7 +223,7 @@ class CodeSyncer:
         Returns:
             :class:`SyncResult` summarising the operation.
         """
-        all_files = _build_sync_file_list(self._project_root)
+        all_files = build_sync_file_list(self._project_root)
         old_state = {} if force else self._load_state(node)
         new_state: dict[str, float] = {}
 
