@@ -31,6 +31,11 @@ Loadability is smoke-checked by `tests/test_recovery_fixtures_smoke.py`
   checkpoint; resume/`continue` treats the two `completed` steps as done (no recompute),
   re-runs `failed`/`pending` steps, keeps artifacts, and either accepts the stored
   fingerprint or applies a documented versioned-compat rule.
+- **Fingerprint rule (defined, todo 40 / A8)**: scheme `sha256-16` — first 16
+  lowercase hex chars of sha256 over canonical JSON (`sort_keys`) whose step
+  values embed `str(step.spec)`. It is the checkpoint identity; a spec/defaults
+  change is a new identity. Verified by `tests/test_recovery_cross_version.py`
+  (`test_plan_fingerprint_*`).
 
 ### (b) `partial_failure/` — partially-failed results
 - `RESULT/result_manifest.json` — `ResultManifest` (v2) with `status="failed"` and the
@@ -53,11 +58,29 @@ Loadability is smoke-checked by `tests/test_recovery_fixtures_smoke.py`
 - `<cache_key>.json` — cache record as written by `acp.backends.batch._write_cache`
   (`{"energy_hartree", "output_ref"}`), file name = `_geometry_cache_key` of
   `cache_input.json` (fixed water geometry, `r2SCAN-3c`).
-- `frames/frame_000/sp_output.log` — stub output so `_read_cache` can resolve `output_ref`
-  (tracked via the `!tests/baseline/recovery_fixtures/**` gitignore exemption).
-- **Future tests must verify**: the entry is still honored OR rejected under a
-  documented cache-version rule after `ResolvedCalculationSpec` lands
-  (旧缓存复用条件 must be defined; the cache key need not stay frozen forever).
+- `frames/frame_000/sp_output.log` — stub output so `_read_cache` can resolve
+  `output_ref` (tracked via the `!tests/baseline/recovery_fixtures/**` gitignore exemption).
+- **Cache-version rule (defined, todo 40 / A8):**
+  - This entry is **legacy format version `0` / `legacy-geometry-key`**: no
+    explicit version field; the filename *is* the identity.  The geometry key
+    is sha256 over symbols + 10-decimal coordinates + charge + multiplicity +
+    method + basis + solvent, so any spec/geometry change changes the key and
+    an incompatible specification can never collide with an old entry.
+  - **Old-cache reuse conditions (legacy reader `acp.backends.batch._read_cache`)**:
+    the key-named file loads, `energy_hartree` is numeric, `output_ref` is a
+    string, and the referenced output file exists.  A bare key match with a
+    missing artifact is **rejected** (forces recompute).
+  - **Not reusable by the new engine**: `cccp.calculation.batch` uses the
+    explicit `CACHE_SCHEMA_VERSION` (currently `1`) and requires a full
+    `CacheRecord` (identity digest / schema / complete / software version /
+    artifacts + hashes).  A legacy geometry-key record lacks those fields, so
+    `CacheRecord.from_dict` raises and `FileSystemCacheStore.read` returns
+    `None` — an **explicit miss**, never an incompatible reuse.  Bumping
+    `CACHE_SCHEMA_VERSION` invalidates all older-format records.
+  - The key need not stay frozen forever; the rule above is the contract that
+    keeps the *reuse* decision explicit.
+- **Verified by**: `tests/test_recovery_cross_version.py`
+  (`test_legacy_sp_cache_*`, `test_cccp_cache_*`).
 
 ### (e) `remote_path_reference/` — remote path reference
 - `remote_job_paths.json` — sftp job record (`remote_work_dir`, `remote_job_id`,
