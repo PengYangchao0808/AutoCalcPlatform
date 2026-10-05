@@ -23,8 +23,7 @@ from typing import Any
 
 import numpy as np
 
-from acp.backends.censo_backend import CensoBackend, CensoRunResult
-from acp.backends.registry import get_backend
+from acp.backends.censo_backend import CensoRunResult
 from acp.core.models import Structure, StructureEnsemble
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
@@ -37,7 +36,13 @@ from acp.workflows.energy_shared import (
     censo_record_to_candidate as _censo_record_to_candidate,
 )
 from acp.workflows.energy_shared import (
+    censo_refine_via_task as _censo_refine_via_task,
+)
+from acp.workflows.energy_shared import (
     conformer_tag as _conformer_tag,
+)
+from acp.workflows.energy_shared import (
+    crest_search_via_task as _crest_search_via_task,
 )
 from acp.workflows.energy_shared import (
     resolve_crest_ewin as _resolve_crest_ewin,
@@ -273,12 +278,6 @@ def run_conformer_energy(
             crest_dir.mkdir(parents=True, exist_ok=True)
 
             crest_cfg = cfg.get("executables", {}).get("crest", {})
-            crest_backend = get_backend("crest")(
-                config=cfg,
-                gfn_level=crest_cfg.get("gfn_level", 2),
-                solvent=censo_solvent,
-                solvent_model=_solvent_model,
-            )
 
             coords = (
                 np.asarray(structure.coordinates)
@@ -297,12 +296,17 @@ def run_conformer_energy(
                 list(structure.symbols),
                 title=f"CREST input for {safe_name}",
             )
-            crest_ensemble_xyz = crest_backend.search(
-                initial_xyz=crest_input_xyz,
+            crest_ensemble_xyz = _crest_search_via_task(
+                cfg,
+                crest_input_xyz,
+                crest_dir,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
-                output_dir=crest_dir,
                 energy_window=crest_ewin,
+                output_name=safe_name,
+                gfn_level=crest_cfg.get("gfn_level", 2),
+                solvent=censo_solvent,
+                solvent_model=_solvent_model,
             )
             state.complete_stage("crest", {"status": "completed"})
 
@@ -419,7 +423,6 @@ def run_conformer_energy(
             # All remaining paths invoke CENSO
             censo_dir = _v2_stage_dir(mol_dir, "02_SEARCH", "CENSO")
             censo_dir.mkdir(parents=True, exist_ok=True)
-            backend = CensoBackend(cfg)
 
             part_overrides: dict[str, dict[str, Any]] = {}
             if resolved["screening_overrides"]:
@@ -442,7 +445,8 @@ def run_conformer_energy(
                 censo_overrides = {k: v for k, v in part_overrides.items() if k == "screening"}
                 censo_templates = {k: v for k, v in part_templates.items() if k == "screening"}
                 state.set_stage("censo")
-                censo_result = backend.refine_ensemble(
+                censo_result = _censo_refine_via_task(
+                    cfg,
                     crest_ensemble_xyz,
                     censo_dir,
                     preset=preset,
@@ -552,7 +556,8 @@ def run_conformer_energy(
                             threshold * 100,
                         )
                 state.set_stage("censo")
-                censo_result = backend.refine_ensemble(
+                censo_result = _censo_refine_via_task(
+                    cfg,
                     crest_ensemble_xyz,
                     censo_dir,
                     preset=preset,
@@ -615,7 +620,8 @@ def run_conformer_energy(
                 # censo-default: full Part0–Part3 + same-level freq + Shermo
                 logger.info("censo-default: full CENSO Part0–Part3 funnel")
                 state.set_stage("censo")
-                censo_result = backend.refine_ensemble(
+                censo_result = _censo_refine_via_task(
+                    cfg,
                     crest_ensemble_xyz,
                     censo_dir,
                     preset=preset,

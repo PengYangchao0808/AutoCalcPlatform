@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -14,6 +14,10 @@ import pytest
 from acp.backends.censo_backend import CensoConformerRecord, CensoRunResult
 from acp.core.models import HARTREE_TO_KCAL
 from acp.workflows.ensemble_thermo import ensemble_total_gibbs as ensemble_total_gibbs_import
+from cccp.calculation.contracts import ArtifactRef
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import ConformerSearchPayload, TaskResult
+from cccp.qc.interfaces.censo import part_index
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -98,38 +102,111 @@ def multiframe_xyz(tmp_path: Path) -> Path:
     return xyz
 
 
-def _mock_orca_instance() -> MagicMock:
-    orca = MagicMock()
-    opt_result = MagicMock()
-    opt_result.success = True
-    opt_result.coordinates = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]])
-    opt_result.symbols = ["C", "H", "H"]
-    opt_result.energy = -154.90
-    opt_result.log_file = Path("/tmp/opt.out")
-    opt_result.error_message = None
-    orca.optimize.return_value = opt_result
+def _task_result(
+    task: TaskKind,
+    *,
+    energy: float | None = None,
+    coordinates: Any = None,
+    symbols: Any = None,
+    log: str | None = None,
+    log_type: str = "log",
+    status: str = "completed",
+    errors: tuple[str, ...] = (),
+    metadata: dict[str, Any] | None = None,
+) -> TaskResult:
+    artifacts = (ArtifactRef(path=Path(log), type=log_type),) if log else ()
+    return TaskResult(
+        task=task,
+        status=status,
+        complete=status == "completed",
+        errors=errors,
+        energy_hartree=energy,
+        coordinates=(
+            tuple(tuple(float(c) for c in row) for row in coordinates)
+            if coordinates is not None
+            else None
+        ),
+        symbols=tuple(symbols) if symbols is not None else None,
+        artifacts=artifacts,
+        metadata=dict(metadata or {}),
+    )
 
-    freq_result = MagicMock()
-    freq_result.success = True
-    freq_result.log_file = Path("/tmp/freq.out")
-    freq_result.error_message = None
-    orca.frequency.return_value = freq_result
 
-    sp_result = MagicMock()
-    sp_result.success = True
-    sp_result.energy = -155.001234
-    sp_result.log_file = Path("/tmp/sp.out")
-    sp_result.error_message = None
-    orca.single_point.return_value = sp_result
-
-    return orca
+def _mock_opt_result() -> TaskResult:
+    return _task_result(
+        TaskKind.OPTIMIZE,
+        energy=-154.90,
+        coordinates=[[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]],
+        symbols=["C", "H", "H"],
+        log="/tmp/opt.out",
+    )
 
 
-def _mock_orca_backend_cls(orca: MagicMock) -> MagicMock:
-    """Return a fake ``get_backend("orca")`` class that yields *orca*."""
-    backend_cls = MagicMock()
-    backend_cls.return_value = orca
-    return backend_cls
+def _mock_freq_result() -> TaskResult:
+    return _task_result(TaskKind.FREQUENCY, log="/tmp/freq.out", log_type="frequency_log")
+
+
+def _mock_sp_result() -> TaskResult:
+    return _task_result(TaskKind.SINGLEPOINT, energy=-155.001234, log="/tmp/sp.out")
+
+
+def _mock_shermo_result(values: dict[str, Any] | None) -> TaskResult:
+    if values is None:
+        return _task_result(
+            TaskKind.THERMOCHEMISTRY,
+            status="failed",
+            errors=("Shermo returned no thermochemistry data",),
+        )
+    return _task_result(TaskKind.THERMOCHEMISTRY, metadata=dict(values))
+
+
+def _fake_censo_refine(result: CensoRunResult) -> Any:
+    """Patch side effect for ``energy_shared.run_censo_refine``.
+
+    Writes the final-part CENSO JSON/XYZ artifacts (the
+    ``<idx>_<FINAL_PART>`` convention of the censo_refine task) and returns
+    the typed task result, so the ``CensoRunResult`` reconstruction is
+    exercised end to end.
+    """
+
+    def _run(request: Any, *, context: Any = None) -> TaskResult:
+        run_dir = Path(request.output_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        part = result.final_part
+        json_path = run_dir / f"{part_index(part)}_{part.upper()}.json"
+        xyz_path = run_dir / f"{part_index(part)}_{part.upper()}.xyz"
+        payload = {
+            rec.conf_id: {
+                "energy": rec.energy,
+                "gsolv": rec.gsolv,
+                "grrho": rec.grrho,
+                "gtot": rec.gtot,
+            }
+            for rec in result.records
+        }
+        json_path.write_text(json.dumps({"data": payload}), encoding="utf-8")
+        lines: list[str] = []
+        for rec in result.records:
+            lines.append(str(len(rec.symbols)))
+            lines.append(rec.conf_id)
+            lines.extend(
+                f"{sym} {x:.6f} {y:.6f} {z:.6f}"
+                for sym, (x, y, z) in zip(rec.symbols, rec.coordinates)
+            )
+        xyz_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return TaskResult(
+            task=TaskKind.CENSO_REFINE,
+            status="completed",
+            complete=True,
+            metadata={
+                "preset": result.preset,
+                "final_part": part,
+                "temperature_k": result.temperature,
+                "record_count": len(result.records),
+            },
+        )
+
+    return _run
 
 
 _SHERMO_OK = {
@@ -388,21 +465,25 @@ def test_energy_light_opt_on_end_to_end(
 ) -> None:
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
         patch(
-            "acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)
-        ) as mock_get_backend,
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ) as mock_censo,
         patch(
-            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+            "acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()
+        ) as mock_opt,
+        patch(
+            "acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()
+        ) as mock_freq,
+        patch(
+            "acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()
+        ) as mock_sp,
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
         ) as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_screening_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -419,18 +500,18 @@ def test_energy_light_opt_on_end_to_end(
     assert result.metadata["refinement_threshold"] == pytest.approx(0.99)
 
     # CENSO invoked with the light preset, no refinement appended
-    _, kwargs = backend.refine_ensemble.call_args
-    assert kwargs["preset"] == "censo-light"
-    assert kwargs.get("include_refinement", False) is False
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["preset"] == "censo-light"
+    assert extras.get("include_refinement", False) is False
 
     # ACP handoff: opt → freq → SP → Shermo, one call per selected conformer
-    assert orca.optimize.call_count == 2
-    assert orca.frequency.call_count == 2
-    assert orca.single_point.call_count == 2
+    assert mock_opt.call_count == 2
+    assert mock_freq.call_count == 2
+    assert mock_sp.call_count == 2
     assert mock_shermo.call_count == 2
 
     # Shermo consumed the SP energy
-    assert mock_shermo.call_args.kwargs["sp_energy"] == pytest.approx(-155.001234)
+    assert mock_shermo.call_args.args[0].options.sp_energy_hartree == pytest.approx(-155.001234)
 
     # finalDFT products (2 frames / 2 rows + TOTAL row) + global min + screening ranking
     mol_dir = tmp_path / "out" / "input"
@@ -456,9 +537,8 @@ def test_energy_light_opt_on_end_to_end(
     assert summary["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
     assert summary["population_coverage"] == pytest.approx(1.0)
 
-    # ORCA backend constructed with the default opt functional
-    _, orca_kwargs = mock_get_backend.return_value.call_args
-    assert orca_kwargs["method"] == "r2SCAN-3c"
+    # Opt task request carries the default opt functional
+    assert mock_opt.call_args.args[0].level.method == "r2SCAN-3c"
 
 
 def test_rank1_handoff_passes_configured_shermo_bin(
@@ -469,27 +549,28 @@ def test_rank1_handoff_passes_configured_shermo_bin(
 ) -> None:
     """Regression: run_rank1_handoff must resolve executables.shermo.path.
 
-    The rank1/cumulative handoff calls ``run_shermo`` directly; without this
-    wiring it fell back to the bare name ``"Shermo"`` and failed in stripped
-    service environments even when ``~/.cccp.yaml`` configured an absolute
-    Shermo path.
+    The rank1/cumulative handoff calls ``run_thermochemistry`` directly;
+    without this wiring it fell back to the bare name ``"Shermo"`` and
+    failed in stripped service environments even when ``~/.cccp.yaml``
+    configured an absolute Shermo path.
     """
     from acp.workflows.energy import run_conformer_energy
 
     sample_config["executables"]["shermo"]["path"] = "/opt/shermo/Shermo"
-    orca = _mock_orca_instance()
 
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch(
-            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ),
+        patch("acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
         ) as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_screening_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -499,7 +580,9 @@ def test_rank1_handoff_passes_configured_shermo_bin(
 
     assert result.status == "completed"
     assert mock_shermo.call_count >= 1
-    assert mock_shermo.call_args.kwargs["shermo_bin"] == "/opt/shermo/Shermo"
+    assert mock_shermo.call_args.kwargs["context"].capability_extras["shermo_bin"] == (
+        "/opt/shermo/Shermo"
+    )
 
 
 def test_energy_light_opt_on_rank1_is_lowest_gtot(
@@ -511,17 +594,19 @@ def test_energy_light_opt_on_rank1_is_lowest_gtot(
     """The lowest-gtot record (CONF1) must lead the selected ensemble."""
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ),
+        patch("acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
+        ),
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_screening_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -549,17 +634,16 @@ def test_energy_light_no_opt_cheap_path(
 ) -> None:
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_refinement_result),
+        ) as mock_censo,
+        patch("acp.workflows.energy_shared.run_optimize") as mock_opt,
+        patch("acp.workflows.energy_shared.run_frequency") as mock_freq,
+        patch("acp.workflows.energy_shared.run_singlepoint") as mock_sp,
+        patch("acp.workflows.energy_shared.run_thermochemistry") as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_refinement_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -574,12 +658,12 @@ def test_energy_light_no_opt_cheap_path(
     assert result.metadata["n_conformers"] == 2
 
     # CENSO called once with refinement appended; no ORCA/Shermo involvement
-    _, kwargs = backend.refine_ensemble.call_args
-    assert kwargs["include_refinement"] is True
-    assert kwargs["nconf"] is None
-    orca.optimize.assert_not_called()
-    orca.frequency.assert_not_called()
-    orca.single_point.assert_not_called()
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["include_refinement"] is True
+    assert extras.get("nconf") is None
+    mock_opt.assert_not_called()
+    mock_freq.assert_not_called()
+    mock_sp.assert_not_called()
     mock_shermo.assert_not_called()
 
     # gibbs comes straight from CENSO gtot
@@ -604,18 +688,22 @@ def test_energy_zero_opt_on_bypasses_censo(
     """
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
+        patch("acp.workflows.energy_shared.run_censo_refine") as mock_censo,
         patch(
-            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+            "acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()
+        ) as mock_opt,
+        patch(
+            "acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()
+        ) as mock_freq,
+        patch(
+            "acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()
+        ) as mock_sp,
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
         ) as mock_shermo,
     ):
-        backend = MagicMock()
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -624,11 +712,10 @@ def test_energy_zero_opt_on_bypasses_censo(
         )
 
     assert result.status == "completed"
-    mock_backend_cls.assert_not_called()
-    backend.refine_ensemble.assert_not_called()
-    assert orca.optimize.call_count == 1
-    assert orca.frequency.call_count == 1
-    assert orca.single_point.call_count == 1
+    mock_censo.assert_not_called()
+    assert mock_opt.call_count == 1
+    assert mock_freq.call_count == 1
+    assert mock_sp.call_count == 1
     assert mock_shermo.call_count == 1
     assert result.metadata["n_conformers"] == 1
 
@@ -651,17 +738,16 @@ def test_energy_zero_no_opt_censo_nconf1(
         temperature=298.15,
     )
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(refinement),
+        ) as mock_censo,
+        patch("acp.workflows.energy_shared.run_optimize") as mock_opt,
+        patch("acp.workflows.energy_shared.run_frequency") as mock_freq,
+        patch("acp.workflows.energy_shared.run_singlepoint") as mock_sp,
+        patch("acp.workflows.energy_shared.run_thermochemistry") as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = refinement
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -671,11 +757,13 @@ def test_energy_zero_no_opt_censo_nconf1(
         )
 
     assert result.status == "completed"
-    _, kwargs = backend.refine_ensemble.call_args
-    assert kwargs["preset"] == "censo-zero"
-    assert kwargs["nconf"] == 1
-    assert kwargs["include_refinement"] is False
-    orca.optimize.assert_not_called()
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["preset"] == "censo-zero"
+    assert extras["nconf"] == 1
+    assert extras["include_refinement"] is False
+    mock_opt.assert_not_called()
+    mock_freq.assert_not_called()
+    mock_sp.assert_not_called()
     mock_shermo.assert_not_called()
 
 
@@ -692,21 +780,26 @@ def test_energy_default_full_funnel(
 ) -> None:
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
     shermo_values = [
         {"g_sum": -154.955, "g_conc": None, "h_sum": None, "u_sum": None, "s_total": None},
         {"g_sum": -154.951, "g_conc": None, "h_sum": None, "u_sum": None, "s_total": None},
     ]
 
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", side_effect=shermo_values) as mock_shermo,
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_refinement_result),
+        ) as mock_censo,
+        patch("acp.workflows.energy_shared.run_optimize") as mock_opt,
+        patch(
+            "acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()
+        ) as mock_freq,
+        patch("acp.workflows.energy_shared.run_singlepoint") as mock_sp,
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            side_effect=[_mock_shermo_result(values) for values in shermo_values],
+        ) as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_refinement_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -719,17 +812,19 @@ def test_energy_default_full_funnel(
     assert result.metadata["opt_enabled"] is True
     assert result.metadata["n_conformers"] == 2
 
-    _, kwargs = backend.refine_ensemble.call_args
-    assert kwargs["preset"] == "censo-default"
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["preset"] == "censo-default"
 
     # Geometry already optimized by CENSO Part2: no ACP opt/SP, only freq+Shermo
-    orca.optimize.assert_not_called()
-    orca.single_point.assert_not_called()
-    assert orca.frequency.call_count == 2
+    mock_opt.assert_not_called()
+    mock_sp.assert_not_called()
+    assert mock_freq.call_count == 2
     assert mock_shermo.call_count == 2
 
     # Shermo consumed the refinement SP energies from CENSO JSON
-    sp_energies = sorted(c.kwargs["sp_energy"] for c in mock_shermo.call_args_list)
+    sp_energies = sorted(
+        call.args[0].options.sp_energy_hartree for call in mock_shermo.call_args_list
+    )
     expected = sorted(r.energy for r in mock_refinement_result.records)
     assert sp_energies == pytest.approx(expected)
 
@@ -751,17 +846,19 @@ def test_energy_default_shermo_failure_falls_back_to_gtot(
 ) -> None:
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=None),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_refinement_result),
+        ),
+        patch("acp.workflows.energy_shared.run_optimize"),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint"),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(None),
+        ),
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_refinement_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -1003,19 +1100,25 @@ def test_energy_rank1_only_light_opt_on(
     """
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
-
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch(
-            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ),
+        patch(
+            "acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()
+        ) as mock_opt,
+        patch(
+            "acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()
+        ) as mock_freq,
+        patch(
+            "acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()
+        ) as mock_sp,
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
         ) as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_screening_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -1029,9 +1132,9 @@ def test_energy_rank1_only_light_opt_on(
     assert result.metadata["n_conformers"] == 1
 
     # only rank1 received the fine DFT treatment
-    assert orca.optimize.call_count == 1
-    assert orca.frequency.call_count == 1
-    assert orca.single_point.call_count == 1
+    assert mock_opt.call_count == 1
+    assert mock_freq.call_count == 1
+    assert mock_sp.call_count == 1
     assert mock_shermo.call_count == 1
 
     # G_total = G1(fine) + kT·ln p1(CENSO table)
@@ -1096,15 +1199,19 @@ def test_energy_rank1_xyz_mirrors_boltzmann_table(
     """
     from acp.workflows.energy import run_conformer_energy
 
-    orca = _mock_orca_instance()
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ),
+        patch("acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
+        ),
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_screening_result
-        mock_backend_cls.return_value = backend
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(tmp_path / "out"),
@@ -1160,16 +1267,16 @@ def test_energy_rank1_only_cheap_path(
         temperature=298.15,
     )
 
-    orca = _mock_orca_instance()
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(refined),
+        ) as mock_censo,
+        patch("acp.workflows.energy_shared.run_optimize") as mock_opt,
+        patch("acp.workflows.energy_shared.run_frequency"),
+        patch("acp.workflows.energy_shared.run_singlepoint"),
+        patch("acp.workflows.energy_shared.run_thermochemistry") as mock_shermo,
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = refined
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(xyz),
             output_dir=str(tmp_path / "out"),
@@ -1181,13 +1288,13 @@ def test_energy_rank1_only_cheap_path(
 
     assert result.status == "completed"
     assert result.metadata["n_conformers"] == 1
-    orca.optimize.assert_not_called()
+    mock_opt.assert_not_called()
     mock_shermo.assert_not_called()
 
     # CENSO restricted to the rank1 frame
-    _, kwargs = backend.refine_ensemble.call_args
-    assert kwargs["nconf"] == 1
-    assert kwargs["include_refinement"] is True
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["nconf"] == 1
+    assert extras["include_refinement"] is True
 
     # p₁ from the xTB table: ΔE = 2 kcal/mol → p1 = 1/(1+exp(-2/0.5925))
     p1 = 1.0 / (1.0 + math.exp(-2.0 / (3.166811563e-6 * 298.15 * HARTREE_TO_KCAL)))
@@ -1231,16 +1338,19 @@ def test_energy_scheduler_task_dir_writes_flat(
     (out / "job.json").write_text("placeholder")
     (out / "task.json").write_text("placeholder")
 
-    orca = _mock_orca_instance()
     with (
-        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
-        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ),
+        patch("acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
+        ),
     ):
-        backend = MagicMock()
-        backend.refine_ensemble.return_value = mock_screening_result
-        mock_backend_cls.return_value = backend
-
         result = run_conformer_energy(
             input_source=str(multiframe_xyz),
             output_dir=str(out),
@@ -1274,3 +1384,119 @@ def test_handoff_stage_dir_splits_freq_sp_thermo(tmp_path):
     bare = tmp_path / "plain_conf"
     bare.mkdir()
     assert _handoff_stage_dir(bare, "04_FREQ", "ORCA") == bare
+
+
+# ---------------------------------------------------------------------------
+# cccp task-core adapters (todo 26a)
+# ---------------------------------------------------------------------------
+
+
+def test_part_template_tokens_round_trip() -> None:
+    from acp.workflows.energy_shared import _part_template_tokens
+    from cccp.qc.translation import render_censo_template_lines
+
+    templates = {"screening": render_censo_template_lines(["PBE0", "def2-SVP", "EnGrad"])}
+    tokens = _part_template_tokens(templates)
+    assert tokens == {"screening": ["PBE0", "def2-SVP", "EnGrad"]}
+    assert render_censo_template_lines(tokens["screening"]) == templates["screening"]
+
+
+def test_crest_search_via_task_returns_ensemble_and_raises_on_failure(tmp_path: Path) -> None:
+    from acp.workflows.energy_shared import crest_search_via_task
+
+    input_xyz = tmp_path / "in.xyz"
+    input_xyz.write_text("3\n\nC 0 0 0\nH 0 0 1\nH 1 0 0\n")
+    ensemble_ref = ArtifactRef(path=tmp_path / "crest_conformers.xyz", type="ensemble")
+    ok = TaskResult(
+        task=TaskKind.CONFORMER_SEARCH,
+        status="completed",
+        complete=True,
+        artifacts=(ensemble_ref,),
+        payload=ConformerSearchPayload(ensemble_ref=ensemble_ref, conformer_count=1),
+    )
+    with patch("acp.workflows.energy_shared.run_conformer_search", return_value=ok) as mock_search:
+        out = crest_search_via_task(
+            {},
+            input_xyz,
+            tmp_path / "crest",
+            charge=0,
+            multiplicity=1,
+            energy_window=6.0,
+            output_name="mol",
+            gfn_level=2,
+        )
+    assert out == tmp_path / "crest_conformers.xyz"
+    request = mock_search.call_args.args[0]
+    assert request.options.energy_window == pytest.approx(6.0)
+    assert mock_search.call_args.kwargs["context"].capability_extras == {"output_name": "mol"}
+
+    failed = TaskResult(
+        task=TaskKind.CONFORMER_SEARCH,
+        status="failed",
+        complete=False,
+        errors=("CREST output not found",),
+    )
+    with patch("acp.workflows.energy_shared.run_conformer_search", return_value=failed):
+        with pytest.raises(RuntimeError, match="CREST search failed: CREST output not found"):
+            crest_search_via_task(
+                {},
+                input_xyz,
+                tmp_path / "crest",
+                charge=0,
+                multiplicity=1,
+                energy_window=6.0,
+                output_name="mol",
+            )
+
+
+def test_shermo_via_task_maps_metadata_and_returns_none_on_failure(tmp_path: Path) -> None:
+    from acp.workflows.energy_shared import shermo_via_task
+
+    with patch(
+        "acp.workflows.energy_shared.run_thermochemistry",
+        return_value=_mock_shermo_result(dict(_SHERMO_OK)),
+    ) as mock_thermo:
+        values = shermo_via_task(
+            {},
+            freq_log="/tmp/freq.out",
+            sp_energy=-155.001234,
+            thermo_dir=tmp_path,
+            output_file=str(tmp_path / "Shermo.sum"),
+            shermo_bin="/opt/shermo/Shermo",
+            temperature_k=298.15,
+            pressure_atm=1.0,
+            scl_zpe=0.9905,
+            ilowfreq=2,
+            imagreal=0,
+            conc=None,
+        )
+    assert values == dict(_SHERMO_OK)
+    request = mock_thermo.call_args.args[0]
+    assert request.options.sp_energy_hartree == pytest.approx(-155.001234)
+    assert request.options.freq_log_path == Path("/tmp/freq.out")
+    assert mock_thermo.call_args.kwargs["context"].capability_extras == {
+        "output_file": str(tmp_path / "Shermo.sum"),
+        "shermo_bin": "/opt/shermo/Shermo",
+    }
+
+    with patch(
+        "acp.workflows.energy_shared.run_thermochemistry",
+        return_value=_mock_shermo_result(None),
+    ):
+        assert (
+            shermo_via_task(
+                {},
+                freq_log="/tmp/freq.out",
+                sp_energy=-1.0,
+                thermo_dir=tmp_path,
+                output_file=str(tmp_path / "Shermo.sum"),
+                shermo_bin="Shermo",
+                temperature_k=298.15,
+                pressure_atm=1.0,
+                scl_zpe=1.0,
+                ilowfreq=0,
+                imagreal=0,
+                conc=None,
+            )
+            is None
+        )

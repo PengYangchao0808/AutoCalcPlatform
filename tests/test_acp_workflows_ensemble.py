@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -15,7 +15,9 @@ from acp.backends.censo_backend import (
     CensoRunResult,
 )
 from acp.core.models import StructureEnsemble
-
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import TaskResult
+from cccp.qc.interfaces.censo import part_index
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -67,6 +69,54 @@ def mock_censo_result() -> CensoRunResult:
     )
     result.sort_by_gtot()
     return result
+
+
+def _fake_censo_refine(result: CensoRunResult) -> Any:
+    """Patch side effect for ``energy_shared.run_censo_refine``.
+
+    Writes the final-part CENSO JSON/XYZ artifacts (the
+    ``<idx>_<FINAL_PART>`` convention of the censo_refine task) and returns
+    the typed task result.
+    """
+
+    def _run(request: Any, *, context: Any = None) -> TaskResult:
+        run_dir = Path(request.output_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        part = result.final_part
+        json_path = run_dir / f"{part_index(part)}_{part.upper()}.json"
+        xyz_path = run_dir / f"{part_index(part)}_{part.upper()}.xyz"
+        payload = {
+            rec.conf_id: {
+                "energy": rec.energy,
+                "gsolv": rec.gsolv,
+                "grrho": rec.grrho,
+                "gtot": rec.gtot,
+            }
+            for rec in result.records
+        }
+        json_path.write_text(json.dumps({"data": payload}), encoding="utf-8")
+        lines: list[str] = []
+        for rec in result.records:
+            lines.append(str(len(rec.symbols)))
+            lines.append(rec.conf_id)
+            lines.extend(
+                f"{sym} {x:.6f} {y:.6f} {z:.6f}"
+                for sym, (x, y, z) in zip(rec.symbols, rec.coordinates)
+            )
+        xyz_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return TaskResult(
+            task=TaskKind.CENSO_REFINE,
+            status="completed",
+            complete=True,
+            metadata={
+                "preset": result.preset,
+                "final_part": part,
+                "temperature_k": result.temperature,
+                "record_count": len(result.records),
+            },
+        )
+
+    return _run
 
 
 # ---------------------------------------------------------------------------
@@ -267,19 +317,10 @@ def test_run_ensemble_generation_with_multi_frame_xyz(
         "3\nFrame 1\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
     )
 
-    with (
-        patch("cccp.qc.interfaces.censo.shutil.which", return_value="/usr/bin/censo"),
-        patch.object(
-            type("MockBackend", (), {"refine_ensemble": lambda *a, **kw: mock_censo_result})(),
-            "refine_ensemble",
-            return_value=mock_censo_result,
-        ),
-        patch("acp.workflows.ensemble.CensoBackend") as mock_backend_cls,
-    ):
-        mock_backend = MagicMock()
-        mock_backend.refine_ensemble.return_value = mock_censo_result
-        mock_backend_cls.return_value = mock_backend
-
+    with patch(
+        "acp.workflows.energy_shared.run_censo_refine",
+        side_effect=_fake_censo_refine(mock_censo_result),
+    ) as mock_censo:
         result = run_ensemble_generation(
             input_source=str(input_xyz),
             output_dir=str(tmp_path / "out"),
@@ -291,6 +332,8 @@ def test_run_ensemble_generation_with_multi_frame_xyz(
     assert result.metadata is not None
     assert result.metadata["n_conformers"] == 2
     assert result.metadata["preset"] == "censo-light"
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["preset"] == "censo-light"
 
     # Check that ensemble outputs exist
     out_root = tmp_path / "out" / "input"
