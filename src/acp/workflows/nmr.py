@@ -2068,52 +2068,41 @@ def run_nmr_analysis(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    products: list[dict[str, Any]] = [
-        {
-            "label": "NMR report (JSON)",
-            "path": f"RESULT/reports/{paths['json'].name}",
-            "kind": "report",
-        }
+    # todo 22 (gap §12.1): paths derive from the artifact's location relative
+    # to RESULT/ (plots live under reports/plots/, not reports/); artifacts
+    # missing on disk are NOT registered — explicit warning instead (policy).
+    result_dir = storage.result_dir()
+    artifact_entries: list[tuple[str, str, str, Path]] = [
+        ("nmr_report", "NMR report (JSON)", "report", paths["json"]),
     ]
     if paths["xlsx"]:
-        products.append(
-            {
-                "label": "NMR assignment (XLSX)",
-                "path": f"RESULT/reports/{paths['xlsx'].name}",
-                "kind": "table",
-            }
-        )
-    for i, plot in enumerate(paths["plots"], start=1):
-        try:
-            products.append(
-                {
-                    "label": f"Plot {i}",
-                    "path": f"RESULT/reports/{plot.name}",
-                    "kind": "plot",
-                }
-            )
-        except ValueError:
+        artifact_entries.append(("nmr_xlsx", "NMR assignment (XLSX)", "table", paths["xlsx"]))
+    artifact_entries.extend(
+        (f"plot_{index}", f"Plot {index}", "plot", plot)
+        for index, plot in enumerate(paths["plots"], start=1)
+    )
+
+    products: list[dict[str, Any]] = []
+    manifest_products: list[tuple[str, str, str]] = []
+    for product_id, label, kind, artifact in artifact_entries:
+        if not artifact.is_file():
+            logger.warning("nmr product missing on disk; not registered: %s", artifact)
             continue
+        rel = artifact.relative_to(result_dir).as_posix()
+        manifest_products.append((product_id, label, rel))
+        # result_summary.json lives at the task root, so re-root RESULT/<rel>
+        products.append({"label": label, "path": f"{result_dir.name}/{rel}", "kind": kind})
     write_result_summary(output_root, workflow="nmr", products=products)
 
     try:
-        manifest = ResultManifest.read(storage.result_dir())
+        manifest = ResultManifest.read(result_dir)
     except FileNotFoundError:
         manifest = ResultManifest(task_id="", workflow="nmr")
     manifest.status = "completed"
-    manifest.add_product(
-        "nmr_report", "NMR report (JSON)", f"reports/{paths['json'].name}", "report"
-    )
-    if paths["xlsx"]:
-        manifest.add_product(
-            "nmr_xlsx",
-            "NMR assignment (XLSX)",
-            f"reports/{paths['xlsx'].name}",
-            "report",
-        )
-    for i, plot in enumerate(paths["plots"], start=1):
-        manifest.add_product(f"plot_{i}", f"Plot {i}", f"reports/{plot.name}", "report")
-    manifest.write(storage.result_dir())
+    for product_id, label, rel in manifest_products:
+        # manifest kind stays "report" for every nmr product (schema unchanged)
+        manifest.add_product(product_id, label, rel, "report")
+    manifest.write(result_dir)
 
     if progress_reporter is not None:
         progress_reporter.complete_stage("nmr_report")
