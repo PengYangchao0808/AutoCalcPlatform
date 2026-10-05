@@ -227,13 +227,29 @@ class CalculationPlan:
 
 _STEP_KIND_VALUES = frozenset(step_kind.value for step_kind in StepKind)
 
+#: Exact rejection messages (contract text pinned by tests).
+_CARDINALITY_ERROR = (
+    "calculation plans support exactly one input item; "
+    "submit multiple structures via BatchOptimize"
+)
+_THERMOCHEMISTRY_ERROR = (
+    "thermochemistry requires preceding frequency and singlepoint steps"
+)
+
 
 def validate_plan(plan: CalculationPlan) -> list[str]:
     """Return validation errors for a calculation plan.
 
+    This is the single rejection layer for plan input (executor entry and
+    explicit callers).  The contract is intentionally narrow — exactly one
+    input item, at most one step per kind (output directories are
+    per-kind), no unsupported kinds (``irc`` is not a ``StepKind`` and must
+    be submitted independently), and ``THERMOCHEMISTRY`` only after
+    preceding ``FREQUENCY`` and ``SINGLEPOINT`` steps.  It is not a
+    general DAG validator.
+
     Raw mapping steps are accepted only at this boundary so malformed JSON
-    plans can produce actionable errors. In particular, ``irc`` is not a
-    ``StepKind`` and therefore cannot be part of a ``BatchOptimize`` plan.
+    plans can produce actionable errors.
 
     Args:
         plan: Plan to inspect.
@@ -242,6 +258,12 @@ def validate_plan(plan: CalculationPlan) -> list[str]:
         A list of human-readable validation errors; an empty list means valid.
     """
     errors: list[str] = []
+
+    if len(plan.items) != 1:
+        errors.append(_CARDINALITY_ERROR)
+
+    kind_values: list[str] = []
+    seen_kinds: set[str] = set()
     for index, step in enumerate(plan.steps):
         if isinstance(step, CalculationStep):
             kind = step.kind.value
@@ -252,6 +274,26 @@ def validate_plan(plan: CalculationPlan) -> list[str]:
             label = kind or "<missing>"
             prefix = f"steps[{index}]: unsupported kind {label!r};"
             errors.append(f"{prefix} IRC requests must be submitted independently")
+            kind_values.append("")
+            continue
+        if kind in seen_kinds:
+            errors.append(
+                f"duplicate step kind {kind!r} is unsupported: output directories "
+                "are per-kind; split into separate plans"
+            )
+        seen_kinds.add(kind)
+        kind_values.append(kind)
+
+    thermo_error_reported = False
+    for index, kind in enumerate(kind_values):
+        if kind != StepKind.THERMOCHEMISTRY.value or thermo_error_reported:
+            continue
+        preceding = set(kind_values[:index])
+        required = {StepKind.FREQUENCY.value, StepKind.SINGLEPOINT.value}
+        if not required <= preceding:
+            errors.append(_THERMOCHEMISTRY_ERROR)
+            thermo_error_reported = True
+
     return errors
 
 

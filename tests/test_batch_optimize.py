@@ -877,21 +877,40 @@ def test_four_profiles_have_correct_steps() -> None:
 
 def test_reject_irc_in_request() -> None:
     """IRC is not a StepKind; plans with unsupported step kinds are rejected."""
-    from acp.calculations.contracts import CalculationPlan, CalculationStep, validate_plan
+    from acp.calculations.contracts import (
+        CalculationPlan,
+        CalculationStep,
+        StructureArtifact,
+        validate_plan,
+    )
+
+    item = StructureArtifact(path=Path("input/mol.xyz"), elements=["H"], source="test")
 
     plan = CalculationPlan(
         workflow="BatchOptimize",
         profile="opt_freq",
-        items=[],
+        items=[item],
         steps=[CalculationStep(kind="optimize")],
     )
     errors = validate_plan(plan)
     assert errors == []
 
-    bad_plan = CalculationPlan(
+    empty_plan = CalculationPlan(
         workflow="BatchOptimize",
         profile="opt_freq",
         items=[],
+        steps=[CalculationStep(kind="optimize")],
+    )
+    errors = validate_plan(empty_plan)
+    assert errors == [
+        "calculation plans support exactly one input item; "
+        "submit multiple structures via BatchOptimize"
+    ]
+
+    bad_plan = CalculationPlan(
+        workflow="BatchOptimize",
+        profile="opt_freq",
+        items=[item],
         steps=[{"kind": "irc"}],
     )
     errors = validate_plan(bad_plan)
