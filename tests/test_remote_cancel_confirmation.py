@@ -73,6 +73,7 @@ class _RunnerSpy:
         remote_job_dir=None,
         on_submitted=None,
         submission_id=None,
+        on_code_release_bound=None,  # protocol double: no real release to bind
     ) -> str:
         self.submit_calls += 1
         if on_submitted is not None and self.lsf_id is not None:

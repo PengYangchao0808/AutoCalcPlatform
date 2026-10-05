@@ -1091,6 +1091,7 @@ class _FakeRemoteRunner:
         remote_job_dir=None,
         on_submitted=None,
         submission_id=None,
+        on_code_release_bound=None,  # protocol double: no real release to bind
     ) -> str:
         if self.error is not None:
             raise self.error

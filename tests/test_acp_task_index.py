@@ -336,6 +336,7 @@ class _NodeAwareRemoteRunner:
         remote_job_dir=None,
         on_submitted=None,
         submission_id=None,
+        on_code_release_bound=None,  # protocol double: no real release to bind
     ) -> str:
         result = dict(record.result or {})
         result["node"] = target_node or "comp-01"

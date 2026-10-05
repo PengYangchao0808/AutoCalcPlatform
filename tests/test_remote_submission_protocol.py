@@ -86,6 +86,7 @@ class _ScriptedRunner:
         remote_job_dir=None,
         on_submitted=None,
         submission_id=None,
+        on_code_release_bound=None,  # protocol double: no real release to bind
     ) -> str:
         self.submit_calls += 1
         if self.submit_error is not None:

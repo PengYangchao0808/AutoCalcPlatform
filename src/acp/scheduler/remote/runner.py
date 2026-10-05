@@ -7,7 +7,10 @@ OpenLAVA (LSF) compute node over SSH/SFTP and monitors it to completion.
 
 The full flow:
 
-1. **Sync code** to the selected node (if ``auto_sync`` and code changed).
+1. **Bind a verified code release** (D03) — build/ensure the content-hash
+   snapshot (or select the pinned/continue release), hold its temp ref
+   until the binding is persisted, THEN submit; ``auto_sync=False`` still
+   requires a verified release (dev hatch only for the shared dir).
 2. **Select node** — explicit ``target_node`` or least-loaded.
 3. **Materialise + upload input** — write ``input.xyz`` locally, SFTP to
    ``inputs/``.
@@ -30,16 +33,18 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import posixpath
 import re
 import shlex
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
@@ -56,6 +61,12 @@ from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMonitor
 from acp.scheduler.remote.node_manager import detect_node_python
 from acp.scheduler.remote.paths import resolve_remote_dir
+from acp.scheduler.remote.release import (
+    build_release_manifest,
+    ensure_node_release,
+    release_release_ref,
+    verify_existing_release,
+)
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
     build_remote_scan_config_payload,
@@ -70,7 +81,7 @@ from acp.scheduler.remote.submission import (
     submission_lsf_name,
     submit_lease_valid,
 )
-from acp.scheduler.remote.sync import CodeSyncer
+from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_root
 from acp.scheduler.runner import materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
@@ -99,6 +110,21 @@ _MONITOR_TIMEOUT_BUFFER = 3600
 _MONITOR_TIMEOUT_FALLBACK = 10 * 24 * 3600
 # Read state.json on every poll cycle for real-time remote progress.
 _STATE_READ_INTERVAL = 1
+
+# Provenance sentinel for the explicit dev escape hatch
+# (ACP_REMOTE_ALLOW_UNVERSIONED=1): the job runs from the shared, mutable
+# directory and the immutability guarantee does NOT cover this mode.
+_UNVERSIONED_RELEASE = "unversioned-shared"
+
+
+def _release_state_dir() -> Path:
+    """Local verified-release cache dir (``~/.acp/remote_sync``).
+
+    ``ACP_REMOTE_RELEASE_STATE_DIR`` overrides it so tests never touch the
+    developer's home directory.
+    """
+    env = os.environ.get("ACP_REMOTE_RELEASE_STATE_DIR")
+    return Path(env) if env else _default_state_dir()
 
 
 class _RemoteJobStateBase(TypedDict):
@@ -278,6 +304,10 @@ class RemoteJobRunner:
         # Keyed by node name; TTL 300 s so repeated submissions on the same
         # node don't re-probe every time.
         self._python_probe_cache: dict[str, tuple[float, str]] = {}
+        # job_id -> (node, release_id, ref_id): temporary release references
+        # held across the ensure→bind window so GC cannot reclaim a release
+        # between verification and the persisted binding (D03, todo 8).
+        self._pending_release_refs: dict[str, tuple[RemoteNode, str, str]] = {}
 
     # ------------------------------------------------------------------ #
     # Non-blocking poller-driven API
@@ -292,11 +322,12 @@ class RemoteJobRunner:
         remote_job_dir: str | None = None,
         on_submitted: Callable[[str], None] | None = None,
         submission_id: str | None = None,
+        on_code_release_bound: Callable[[str], None] | None = None,
     ) -> str:
         """Prepare and submit the LSF job, return the LSF job ID immediately.
 
         Executes steps 1-5 (node selection, housekeeping, binary probe,
-        code sync, upload, LSF script, ``bsub``).  Does **not** enter
+        code release, upload, LSF script, ``bsub``).  Does **not** enter
         the monitor loop — that is driven by :meth:`poll_remote`.
 
         ``target_node`` is the already-resolved execution target from
@@ -312,6 +343,13 @@ class RemoteJobRunner:
         ``bsub`` returns it (before stage-state/tail work) so the manager
         can persist the id with a fresh-revision CAS; ``submission_id``
         names the LSF job (contract A).
+
+        ``on_code_release_bound`` fires with the verified release id
+        BEFORE ``bsub`` so the manager can persist
+        ``result["remote"]["code_release"]`` through the same conditional
+        submit-intent write (contract D: the binding is durable before any
+        LSF job exists).  The temporary release reference is dropped only
+        after this callback returns — success or failure.
         """
         spec = record.spec
         work_dir = Path(record.work_dir)
@@ -337,39 +375,47 @@ class RemoteJobRunner:
         self._pre_submit_housekeeping(node, event_log, record.id)
         self._probe_required_binaries(node, spec, event_log, record.id)
 
-        if self._config.auto_sync:
-            self._sync_code_if_needed(node, event_log, record.id)
+        # D03: fail closed BEFORE any directory claim/upload when no
+        # verified release can be bound — never warn-and-continue.
+        code_release = self._ensure_code_release(node, event_log, record)
 
-        remote_job_dir = self._resolve_remote_dir_for(
-            record, node, event_log, explicit=remote_job_dir
-        )
-
-        claim_state: dict[str, str] = {}
         try:
-            lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record,
-                spec,
-                node,
-                remote_job_dir,
-                event_log,
-                work_dir,
-                claim_state=claim_state,
-                on_submitted=on_submitted,
-                submission_id=submission_id,
+            remote_job_dir = self._resolve_remote_dir_for(
+                record, node, event_log, explicit=remote_job_dir
             )
-        except RemoteSubmissionIndeterminate as exc:
-            # Contract A: keep the directory, project ``unconfirmed`` and
-            # reconcile later — never judge the job from a lost reply.
-            self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
-            raise
-        except RemoteSubmissionRejected:
-            # Contract A: a definitive rejection never deletes the dir —
-            # FAILED only; retention reclaims (checkpoint/RESULT intact).
-            raise
-        except Exception:
-            if claim_state.get("disposition") == "created":
-                self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
-            raise
+
+            claim_state: dict[str, str] = {}
+            try:
+                lsf_job_id, cli_cmd = self._prepare_and_submit(
+                    record,
+                    spec,
+                    node,
+                    remote_job_dir,
+                    event_log,
+                    work_dir,
+                    claim_state=claim_state,
+                    on_submitted=on_submitted,
+                    submission_id=submission_id,
+                    code_release=code_release,
+                    on_code_release_bound=on_code_release_bound,
+                )
+            except RemoteSubmissionIndeterminate as exc:
+                # Contract A: keep the directory, project ``unconfirmed`` and
+                # reconcile later — never judge the job from a lost reply.
+                self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
+                raise
+            except RemoteSubmissionRejected:
+                # Contract A: a definitive rejection never deletes the dir —
+                # FAILED only; retention reclaims (checkpoint/RESULT intact).
+                raise
+            except Exception:
+                if claim_state.get("disposition") == "created":
+                    self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+                raise
+        finally:
+            # Every exit path (success or failure) ends the bind window and
+            # drops the pending temp reference — never leak a ref.
+            self._release_pending_ref(record.id)
 
         self._set_remote_stage_state(record.id, "running", started=True)
 
@@ -1124,31 +1170,43 @@ class RemoteJobRunner:
         # environment, e.g. module load).
         self._probe_required_binaries(node, spec, event_log, record.id)
 
-        # 2. Code sync (if enabled and needed)
-        if self._config.auto_sync:
-            self._sync_code_if_needed(node, event_log, record.id)
+        # 2. Code release (D03): same wiring as submit_remote — verify or
+        # publish the immutable snapshot first, fail closed before any
+        # directory claim when no verified release can be bound.
+        code_release = self._ensure_code_release(node, event_log, record)
 
-        # Storage identity resolution — the SAME path as submit_remote
-        # (no second directory-join implementation in this legacy entry).
-        remote_job_dir = self._resolve_remote_dir_for(record, node, event_log)
-
-        # Steps 3–5: claim the remote dir, archive the previous attempt's
-        # receipts, upload input + script, submit.  Late failures only
-        # clean up a directory this submission created.
-        claim_state: dict[str, str] = {}
         try:
-            lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record, spec, node, remote_job_dir, event_log, work_dir, claim_state=claim_state
-            )
-        except RemoteSubmissionIndeterminate as exc:
-            self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
-            raise
-        except RemoteSubmissionRejected:
-            raise
-        except Exception:
-            if claim_state.get("disposition") == "created":
-                self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
-            raise
+            # Storage identity resolution — the SAME path as submit_remote
+            # (no second directory-join implementation in this legacy entry).
+            remote_job_dir = self._resolve_remote_dir_for(record, node, event_log)
+
+            # Steps 3–5: claim the remote dir, archive the previous attempt's
+            # receipts, upload input + script, submit.  Late failures only
+            # clean up a directory this submission created.
+            claim_state: dict[str, str] = {}
+            try:
+                lsf_job_id, cli_cmd = self._prepare_and_submit(
+                    record,
+                    spec,
+                    node,
+                    remote_job_dir,
+                    event_log,
+                    work_dir,
+                    claim_state=claim_state,
+                    code_release=code_release,
+                )
+            except RemoteSubmissionIndeterminate as exc:
+                self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
+                raise
+            except RemoteSubmissionRejected:
+                raise
+            except Exception:
+                if claim_state.get("disposition") == "created":
+                    self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+                raise
+        finally:
+            # Same guarantee as submit_remote: never leak a pending ref.
+            self._release_pending_ref(record.id)
 
         self._set_remote_stage_state(record.id, "running", started=True)
 
@@ -1202,8 +1260,10 @@ class RemoteJobRunner:
         claim_state: dict[str, str] | None = None,
         on_submitted: Callable[[str], None] | None = None,
         submission_id: str | None = None,
+        code_release: str | None = None,
+        on_code_release_bound: Callable[[str], None] | None = None,
     ) -> tuple[str, list[str]]:
-        """Claim the dir, archive old receipts, upload inputs, bsub.
+        """Claim the dir, archive old receipts, upload inputs, bind, bsub.
 
         Returns ``(lsf_job_id, cli_command)``.  Raises on any failure —
         contract A: **no submission failure ever deletes the directory**
@@ -1215,6 +1275,12 @@ class RemoteJobRunner:
         The exclusive claim runs BEFORE any file write, and the previous
         attempt's receipt archive runs BEFORE ``bsub`` — a failure there
         aborts the submission (no PENDING is published).
+
+        ``code_release`` (the verified release from
+        :meth:`_ensure_code_release`) drives the generated script's
+        PYTHONPATH and is persisted via ``on_code_release_bound`` BEFORE
+        ``bsub`` (contract D); the temp reference protecting the
+        ensure→bind window is dropped right after that write.
         """
         disposition = self._stager.claim_remote_job_dir(node, remote_job_dir, record)
         if claim_state is not None:
@@ -1281,6 +1347,9 @@ class RemoteJobRunner:
 
             # 4. Generate + upload LSF script
             py = self._resolve_node_python(node, job_id=record.id)
+            script_release = (
+                code_release if code_release and code_release != _UNVERSIONED_RELEASE else None
+            )
             lsf_spec, cli_cmd = build_lsf_script_spec(
                 spec,
                 record.id,
@@ -1295,6 +1364,7 @@ class RemoteJobRunner:
                 python_executable=py,
                 pre_cmds=self._config.pre_cmds,
                 submission_id=submission_id,
+                code_release=script_release,
             )
             script_text = generate_lsf_script(lsf_spec)
             script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
@@ -1324,6 +1394,12 @@ class RemoteJobRunner:
 
         # Initialise the remote_execution stage task.
         self._init_remote_stage(record.id)
+
+        # 4b. Bind the verified release BEFORE bsub (contract D): persist
+        # ``result["remote"]["code_release"]`` through the submit-intent
+        # write, then drop the temp reference — and only then submit.
+        # A failed bind aborts the submission (fail closed, no bsub).
+        self._bind_code_release(record, event_log, code_release, on_code_release_bound)
 
         # 5. Submit via bsub — the id is handed to the persistence callback
         # BEFORE any stage-state/log-tail work (contract A write order).
@@ -1822,30 +1898,235 @@ class RemoteJobRunner:
         return new_offset
 
     # ------------------------------------------------------------------ #
-    # Code sync
+    # Code release binding (D03, todo 8)
     # ------------------------------------------------------------------ #
 
-    def _sync_code_if_needed(self, node: RemoteNode, event_log: JobEventLog, job_id: str) -> None:
-        try:
-            if not self._syncer.check_sync_needed(node):
-                logger.debug("Code already in sync with %s", node.name)
-                return
-            event_log.append("remote.sync_start", job_id=job_id, node=node.name)
-            result = self._syncer.sync_code(node)
-            event_log.append(
-                "remote.sync_done",
-                job_id=job_id,
-                node=node.name,
-                uploaded=result.uploaded,
-                total=result.total,
-                errors=result.errors,
+    def _ensure_code_release(
+        self, node: RemoteNode, event_log: JobEventLog, record: JobRecord
+    ) -> str | None:
+        """Build or select the verified code release for *record*.
+
+        Selection order (frozen):
+
+        1. the job's ORIGINAL ``code_release`` (continue/rerun — verified
+           only, NEVER silently upgraded; a missing/failing release is an
+           explicit rejection),
+        2. explicit ``ACP_REMOTE_CODE_RELEASE``,
+        3. the node's ``pinned_release``,
+        4. a fresh content-hash release (``auto_sync=True``, verify-then-
+           publish),
+        5. the explicit dev escape hatch ``ACP_REMOTE_ALLOW_UNVERSIONED=1``
+           (shared directory, provenance ``unversioned-shared`` + alert —
+           the immutability guarantee does NOT cover this mode),
+        6. otherwise → reject.
+
+        Every failure raises :class:`RemoteSubmissionRejected` BEFORE the
+        submission is prepared — never a warn-and-continue into an
+        unverified tree.  On success the temp reference held by
+        ensure/verify is parked in :attr:`_pending_release_refs` until the
+        bind write lands (:meth:`_bind_code_release`).
+        """
+        job_id = record.id
+        prior = self._prior_code_release(record)
+        if prior and prior != _UNVERSIONED_RELEASE:
+            return self._select_existing_release(node, event_log, record, prior, source="reused")
+
+        explicit = (os.environ.get("ACP_REMOTE_CODE_RELEASE") or "").strip()
+        if explicit:
+            return self._select_existing_release(
+                node, event_log, record, explicit, source="explicit"
             )
-            if not result.ok:
-                logger.warning("Code sync to %s had errors: %s", node.name, result.errors)
+        if node.pinned_release:
+            return self._select_existing_release(
+                node, event_log, record, node.pinned_release, source="pinned"
+            )
+        if self._config.auto_sync:
+            return self._publish_release(node, event_log, record)
+        if (os.environ.get("ACP_REMOTE_ALLOW_UNVERSIONED") or "") == "1":
+            try:
+                event_log.append(
+                    "remote.code_release_ready",
+                    job_id=job_id,
+                    node=node.name,
+                    release_id=_UNVERSIONED_RELEASE,
+                    source=_UNVERSIONED_RELEASE,
+                    unversioned=True,
+                    warning=(
+                        "dev escape hatch ACP_REMOTE_ALLOW_UNVERSIONED=1: the job "
+                        "runs from the mutable shared directory; the immutable-"
+                        "release guarantee does NOT cover this mode"
+                    ),
+                )
+            except OSError:
+                logger.debug("code_release_ready event write failed for %s", job_id, exc_info=True)
+            return _UNVERSIONED_RELEASE
+
+        reason = (
+            "auto_sync is disabled and no verified code release is configured "
+            "(set cluster pinned_release or ACP_REMOTE_CODE_RELEASE); the "
+            "unversioned shared directory is only reachable via the explicit "
+            "dev escape hatch ACP_REMOTE_ALLOW_UNVERSIONED=1"
+        )
+        self._emit_code_release_failed(event_log, record, node, reason)
+        raise RemoteSubmissionRejected(f"job {job_id} cannot be submitted on {node.name}: {reason}")
+
+    @staticmethod
+    def _prior_code_release(record: JobRecord) -> str | None:
+        """The release bound to this job by an earlier attempt, if any."""
+        result = record.result or {}
+        for source in (result.get("remote"), result):
+            if isinstance(source, dict):
+                value = source.get("code_release")
+                if isinstance(value, str) and value:
+                    return value
+        return None
+
+    def _select_existing_release(
+        self,
+        node: RemoteNode,
+        event_log: JobEventLog,
+        record: JobRecord,
+        release_id: str,
+        *,
+        source: str,
+    ) -> str:
+        """Verify an existing release (pin/explicit/continue) and hold its ref."""
+        try:
+            binding = verify_existing_release(node, release_id, stager=self._stager, ssh=self._ssh)
         except Exception as exc:
-            logger.error("Code sync to %s failed: %s", node.name, exc)
-            event_log.append("remote.sync_failed", job_id=job_id, node=node.name, error=str(exc))
+            reason = f"code release {release_id} cannot be verified on {node.name}: {exc}"
+            self._emit_code_release_failed(event_log, record, node, reason)
+            detail = (
+                " — the job's original release is gone; refusing to upgrade to a different release"
+                if source == "reused"
+                else ""
+            )
+            raise RemoteSubmissionRejected(
+                f"job {record.id} cannot be submitted: {reason}{detail}"
+            ) from exc
+        self._pending_release_refs[record.id] = (
+            node,
+            binding.release_id,
+            binding.ref_id,
+        )
+        self._emit_code_release_ready(event_log, record, node, binding.release_id, source)
+        return binding.release_id
+
+    def _publish_release(self, node: RemoteNode, event_log: JobEventLog, record: JobRecord) -> str:
+        """Build the content manifest and ensure the release on *node*."""
+        try:
+            root = _project_root()
+            manifest = build_release_manifest(root)
+            binding = ensure_node_release(
+                node,
+                manifest,
+                stager=self._stager,
+                ssh=self._ssh,
+                state_dir=_release_state_dir(),
+                project_root=root,
+            )
+        except Exception as exc:
+            reason = f"code release build/verification failed on {node.name}: {exc}"
+            self._emit_code_release_failed(event_log, record, node, reason)
+            raise RemoteSubmissionRejected(
+                f"job {record.id} cannot be submitted: {reason}"
+            ) from exc
+        self._pending_release_refs[record.id] = (
+            node,
+            binding.release_id,
+            binding.ref_id,
+        )
+        self._emit_code_release_ready(event_log, record, node, binding.release_id, binding.source)
+        return binding.release_id
+
+    def _bind_code_release(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        code_release: str | None,
+        on_code_release_bound: Callable[[str], None] | None,
+    ) -> None:
+        """Persist the release binding BEFORE bsub, then close the bind window.
+
+        Order (frozen): bind write → drop temp ref → ``bsub``.  The temp
+        ref is dropped on EVERY exit path (success or failure), so GC can
+        never reclaim the release between verification and durability.
+        """
+        try:
+            if not code_release:
+                return
+            if on_code_release_bound is not None:
+                # Manager path: the binding lands through the SAME conditional
+                # submit-intent write that created the intent (contract D).
+                on_code_release_bound(code_release)
+            result = dict(record.result or {})
+            meta = dict(result.get("remote") or {})
+            meta["code_release"] = code_release
+            result["remote"] = meta
+            record.result = result
+        except RemoteSubmissionError:
             raise
+        except Exception as exc:
+            raise RemoteSubmissionRejected(
+                f"could not persist code release binding {code_release!r} for "
+                f"job {record.id} before bsub: {exc}"
+            ) from exc
+        finally:
+            self._release_pending_ref(record.id)
+
+    def _release_pending_ref(self, job_id: str) -> None:
+        """Drop the job's pending temp reference (idempotent, never raises).
+
+        Must never mask the submission outcome — a cleanup hiccup only
+        over-protects the release until the next GC pass.
+        """
+        pending = self._pending_release_refs.pop(job_id, None)
+        if pending is None:
+            return
+        node, release_id, ref_id = pending
+        try:
+            release_release_ref(node, release_id, ref_id, stager=self._stager, ssh=self._ssh)
+        except Exception as exc:  # logged — never mask the submission result
+            logger.warning(
+                "Could not release temp ref %s for job %s on %s: %s",
+                release_id,
+                job_id,
+                node.name,
+                exc,
+            )
+
+    @staticmethod
+    def _emit_code_release_ready(
+        event_log: JobEventLog,
+        record: JobRecord,
+        node: RemoteNode,
+        release_id: str,
+        source: str,
+    ) -> None:
+        try:
+            event_log.append(
+                "remote.code_release_ready",
+                job_id=record.id,
+                node=node.name,
+                release_id=release_id,
+                source=source,
+            )
+        except OSError:
+            logger.debug("code_release_ready event write failed for %s", record.id, exc_info=True)
+
+    @staticmethod
+    def _emit_code_release_failed(
+        event_log: JobEventLog, record: JobRecord, node: RemoteNode, reason: str
+    ) -> None:
+        try:
+            event_log.append(
+                "remote.code_release_failed",
+                job_id=record.id,
+                node=node.name,
+                reason=reason,
+            )
+        except OSError:
+            logger.debug("code_release_failed event write failed for %s", record.id, exc_info=True)
 
     # ------------------------------------------------------------------ #
     # Pre-submit housekeeping (Phase 5)

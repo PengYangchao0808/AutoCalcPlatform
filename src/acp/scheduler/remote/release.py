@@ -80,6 +80,7 @@ __all__ = [
     "prune_releases",
     "release_release_ref",
     "releases_root",
+    "verify_existing_release",
 ]
 
 SCHEMA_VERSION = 1
@@ -796,6 +797,83 @@ def ensure_node_release(
             )
         finally:
             _release_staging_claim(node, release_id)
+    except BaseException:
+        release_release_ref(node, release_id, ref_id, stager=stager, ssh=ssh, timeout=timeout)
+        raise
+
+
+# ---------------------------------------------------------------------- #
+# verify_existing_release
+# ---------------------------------------------------------------------- #
+
+
+def verify_existing_release(
+    node: RemoteNode,
+    release_id: str,
+    *,
+    stager: FileStager,
+    ssh: SSHConnectionPool,
+    timeout: float = _LOCK_TIMEOUT,
+) -> ReleaseBinding:
+    """Verify an ALREADY-published release without uploading anything.
+
+    Used by the ``auto_sync=False`` pin/explicit paths and by the continue
+    version rule (todo 8): the caller must SELECT an existing verified
+    release — there is no implicit fall back to the unversioned shared
+    directory and never a silent upgrade to a different release.
+
+    Takes the temporary reference FIRST (same contract as
+    :func:`ensure_node_release`): on success the ref is kept in the
+    returned binding for the caller's bind window, on every failure path
+    it is released again and nothing is bound.
+
+    Args:
+        node: Target remote node.
+        release_id: Published release to verify.
+        stager: SFTP stager for marker reads and content hashing.
+        ssh: Connection pool for the coordination lock.
+        timeout: Per-lock acquisition timeout.
+
+    Returns:
+        :class:`ReleaseBinding` with the temp ref the caller must release.
+
+    Raises:
+        ReleaseError: The release directory is absent, its ``.complete``
+            marker is missing/unreadable/mismatched, or any file fails the
+            per-file ``sha256`` comparison against the marker manifest.
+    """
+    ref_id = acquire_release_ref(node, release_id, stager=stager, ssh=ssh, timeout=timeout)
+    try:
+        final = release_dir(node, release_id)
+        if not _complete_marker_ok(node, final, release_id, stager):
+            raise ReleaseError(
+                f"release {release_id} is not present as a verified snapshot "
+                f"on {node.name} (missing or invalid {COMPLETE_MARKER} marker)"
+            )
+        try:
+            raw = stager.read_remote_text(node, posixpath.join(final, COMPLETE_MARKER))
+            manifest = ReleaseManifest.from_dict(json.loads(raw))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise ReleaseError(
+                f"release {release_id} marker on {node.name} is unreadable: {exc}"
+            ) from exc
+        if manifest.release_id != release_id:
+            raise ReleaseError(
+                f"release {release_id} marker on {node.name} declares a different "
+                f"identity ({manifest.release_id})"
+            )
+        if not _verify_release_dir(node, manifest, final, stager):
+            raise ReleaseError(
+                f"release {release_id} on {node.name} fails content verification "
+                "(file sha256 mismatch against its manifest)"
+            )
+        return ReleaseBinding(
+            node=node.name,
+            release_id=release_id,
+            release_dir=final,
+            ref_id=ref_id,
+            source="remote",
+        )
     except BaseException:
         release_release_ref(node, release_id, ref_id, stager=stager, ssh=ssh, timeout=timeout)
         raise

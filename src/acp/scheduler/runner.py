@@ -111,6 +111,7 @@ class JobRunnerRemoteProtocol(Protocol):
         remote_job_dir: str | None = None,
         on_submitted: Callable[[str], None] | None = None,
         submission_id: str | None = None,
+        on_code_release_bound: Callable[[str], None] | None = None,
     ) -> str: ...
 
     def poll_remote(

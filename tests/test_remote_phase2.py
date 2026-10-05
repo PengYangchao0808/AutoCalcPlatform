@@ -15,9 +15,11 @@ Run with: PYTHONPATH=src python3 tests/test_remote_phase2.py
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import posixpath
+import shlex
 import stat
 import tempfile
 import threading
@@ -1368,8 +1370,11 @@ def test_observe_remote_state_mirrors_state_json_to_work_dir():
 # submit.lsf captured from the PRE-change runner (node.queue=None,
 # cluster queue="normal").  Locks the compatibility red line: a node
 # without a queue override must produce a byte-identical script apart
-# from the `-J` line — the LSF job name is now the attempt-digested
-# submission id (approved behaviour change, plan todo 5).
+# from the `-J` line (LSF job name is now the attempt-digested
+# submission id, plan todo 5) and the PYTHONPATH line (D03, todo 8:
+# the queue scenario submits against a VERIFIED pinned release, so the
+# script points at the immutable snapshot releases/<id>/src instead of
+# the shared directory).
 _PRECHANGE_NORMAL_QUEUE_SCRIPT = """#!/bin/bash
 #BSUB -J acp_<submission_id>
 #BSUB -q normal
@@ -1382,15 +1387,51 @@ _acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }
 trap 'exit $?' USR2 TERM INT HUP
 trap _acp_record_exit EXIT
 
-export PYTHONPATH="/home/test/acp_code/src:$PYTHONPATH"
+export PYTHONPATH="/home/test/acp_code/releases/0d0e0fa11ce00001/src:$PYTHONPATH"
 cd "/scratch/test/acp_jobs/mol_ensemble"
 python3.13 -m acp.cli run ensemble --input input.xyz --output . --nproc 4
 echo $? > .exit_code
 """
 
+# Verified pinned release seeded into the fake node for the queue
+# scenarios (auto_sync=False requires an existing verified release).
+_QUEUE_PINNED_RELEASE_ID = "0d0e0fa11ce00001"
+_QUEUE_PINNED_FILES = {"src/acp/__init__.py": b'"""pinned"""\n'}
+
+
+def _seed_queue_pinned_release(sftp: FakeSFTP, node: RemoteNode, release_id: str) -> None:
+    """Publish ``releases/<id>`` with a ``.complete`` marker matching the files."""
+    root = posixpath.join(node.remote_code_dir, "releases", release_id)
+    manifest = {
+        rel: {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
+        for rel, data in _QUEUE_PINNED_FILES.items()
+    }
+    marker = json.dumps(
+        {
+            "schema_version": 1,
+            "release_id": release_id,
+            "files": manifest,
+            "requirements_sha256": "",
+            "defaults_sha256": "",
+            "git_commit": None,
+            "dirty": True,
+        },
+        sort_keys=True,
+        indent=2,
+    )
+    for rel, data in _QUEUE_PINNED_FILES.items():
+        sftp.files[posixpath.join(root, rel)] = data
+    sftp.files[posixpath.join(root, ".complete")] = marker.encode("utf-8")
+    sftp.dirs.add(root)
+
 
 def _submit_and_capture_script(node: RemoteNode, config: RemoteExecutionConfig) -> str:
     """Run the real submit path against the fakes, return uploaded submit.lsf text.
+
+    The node is pinned to a verified release (D03): ``auto_sync=False``
+    never falls back to the shared directory — it selects an existing
+    verified snapshot, so the captured script's PYTHONPATH points at
+    ``releases/<id>/src``.
 
     Args:
         node: The single configured remote node (may carry a queue override).
@@ -1402,10 +1443,18 @@ def _submit_and_capture_script(node: RemoteNode, config: RemoteExecutionConfig) 
     pool = SSHConnectionPool()
     sftp = FakeSFTP()
     client = FakeSSHClient(sftp)
+    node.pinned_release = _QUEUE_PINNED_RELEASE_ID
+    _seed_queue_pinned_release(sftp, node, _QUEUE_PINNED_RELEASE_ID)
 
     def cmd_handler(cmd):
         if "bsub" in cmd and "<" in cmd:
             return (0, "Job <54321> is submitted to queue <normal>.\n", "")
+        parts = shlex.split(cmd)
+        if parts and parts[0] == "sha256sum":
+            blob = sftp.files.get(parts[1])
+            if blob is None:
+                return (1, "", f"sha256sum: {parts[1]}: No such file or directory")
+            return (0, f"{hashlib.sha256(blob).hexdigest()}  {parts[1]}\n", "")
         return (0, "", "")
 
     client.cmd_handler = cmd_handler
@@ -1453,7 +1502,9 @@ def test_runner_node_queue_none_falls_back_to_config_queue():
 
 def test_runner_node_queue_none_script_matches_expected_with_submission_name():
     """node.queue=None + default cluster queue → expected script, byte-identical
-    except the approved ``-J acp_<submission_id>`` name change (plan todo 5)."""
+    except the approved ``-J acp_<submission_id>`` name change (plan todo 5)
+    and the PYTHONPATH line now pointing at the verified pinned release
+    ``releases/<id>/src`` (plan todo 8 — the queue scenario binds a release)."""
     from acp.scheduler.remote.submission import submission_id_for
 
     node = make_node()

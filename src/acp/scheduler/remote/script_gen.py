@@ -568,6 +568,7 @@ def build_lsf_script_spec(
     python_executable: str | None = None,
     pre_cmds: list[str] | None = None,
     submission_id: str | None = None,
+    code_release: str | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -598,12 +599,25 @@ def build_lsf_script_spec(
             never fall back to a too-old default ``python``.
         pre_cmds: Shell lines injected into the generated script before
             the CLI runs (cluster-level environment setup).
+        code_release: Verified content-hash release id the job is bound to
+            (D03, todo 8).  Reuses the existing
+            ``LSFScriptSpec.remote_code_dir`` field — no parallel code-dir
+            key: when given, it is set to
+            ``<node.remote_code_dir>/releases/<code_release>`` so the
+            PYTHONPATH line points at the immutable snapshot
+            ``releases/<id>/src``.  ``None`` keeps the shared directory
+            (unversioned dev-hatch mode only).
 
     Returns:
         ``(lsf_spec, cli_command)``.
     """
     if remote_job_dir is None:
         remote_job_dir = posixpath.join(node.remote_work_dir, remote_dir_name or job_id)
+    effective_code_dir = (
+        posixpath.join(node.remote_code_dir, "releases", code_release)
+        if code_release
+        else node.remote_code_dir
+    )
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,
@@ -623,7 +637,7 @@ def build_lsf_script_spec(
         nproc=nproc,
         mem_mb_per_core=mem_mb_per_core,
         walltime=walltime,
-        remote_code_dir=node.remote_code_dir,
+        remote_code_dir=effective_code_dir,
         remote_job_dir=remote_job_dir,
         cli_command=cli_command,
         pre_cmds=list(pre_cmds or []),

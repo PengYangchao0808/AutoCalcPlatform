@@ -3076,12 +3076,24 @@ class JobManager:
     # D02 submit protocol: intent + lease, id persistence, reconcile, orphans
     # ------------------------------------------------------------------ #
 
-    def _persist_submit_intent(self, record: JobRecord, node_name: str) -> JobRecord | None:
+    def _persist_submit_intent(
+        self,
+        record: JobRecord,
+        node_name: str,
+        *,
+        code_release: str | None = None,
+    ) -> JobRecord | None:
         """Persist contract-A submit intent (submission_id + lease) before bsub.
 
         Re-reads and retries on soft revision conflicts; returns ``None``
         only when the row left {STARTING, CANCELLING} (or the attempt
         moved) — the caller then never submits.
+
+        ``code_release`` (todo 8) binds the verified release through the
+        SAME conditional write: the manager's pre-bsub call omits it, and
+        the runner's ``on_code_release_bound`` callback re-runs this writer
+        with the id just before ``bsub`` — one writer, one transaction
+        shape, no second write path.
         """
         from acp.scheduler.remote.paths import compose_remote_dir
         from acp.scheduler.remote.submission import (
@@ -3109,6 +3121,8 @@ class JobManager:
             meta["submit_owner"] = build_owner_token(fresh.attempt)
             meta["lease_expires_at"] = lease_deadline_iso(ttl)
             meta["intent_at"] = _utc_now_iso()
+            if code_release is not None:
+                meta["code_release"] = code_release
             for stale in ("lsf_job_id", "aborted_at", "unconfirmed_at", "submitted_at"):
                 meta.pop(stale, None)
             result["remote"] = meta
@@ -4056,6 +4070,20 @@ class JobManager:
 
         owner = str(record.result["remote"].get("submit_owner") or _sub_id(job_id))
         register_submit_worker(submission_id, owner, lease_ttl_seconds(self._remote_config))
+        intent_record = record
+
+        def _on_code_release_bound(release_id: str) -> None:
+            # Contract D (todo 8): bind the verified release through the
+            # SAME conditional submit-intent write, strictly before bsub.
+            # A lost intent fails the submission closed — never submit
+            # unbound, never emit a second write path.
+            bound = self._persist_submit_intent(intent_record, target.name, code_release=release_id)
+            if bound is None:
+                raise RemoteSubmissionRejected(
+                    f"submit intent no longer valid for job {job_id}; code "
+                    f"release {release_id} could not be bound before bsub"
+                )
+
         try:
             # Pre-bsub barrier: a persisted cancel request aborts here —
             # ``bsub`` is never called (contract A: exactly one outcome).
@@ -4071,6 +4099,7 @@ class JobManager:
                     job_id, lsf_id, record.attempt
                 ),
                 submission_id=submission_id,
+                on_code_release_bound=_on_code_release_bound,
             )
         except RemoteSubmissionRejected as exc:
             self._handle_rejected_submission(record, exc)
