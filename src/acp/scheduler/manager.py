@@ -107,14 +107,36 @@ _POLL_SCAN_STATUSES: Final[tuple[JobStatus, ...]] = (
 
 _SUBMIT_RECONCILE_STATES: Final[frozenset[str]] = frozenset({"intent", "unconfirmed"})
 
+# Consecutive orphan-cancel failures before the stalled alert fires; retry
+# keeps running at the capped (1h) backoff — never unbounded fast retries.
+_ORPHAN_STALL_THRESHOLD: Final[int] = 5
+
+
+def _parse_iso_ts(value: object) -> float | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
 
 def _needs_submission_reconcile(record: JobRecord) -> bool:
     """Category ① of the reconcile loop: STARTING with a pending submission."""
     if record.status != JobStatus.STARTING:
         return False
+    return _has_pending_submission(record)
+
+
+def _has_pending_submission(record: JobRecord) -> bool:
+    """True when ``result["remote"]["submit_state"]`` is intent/unconfirmed."""
     remote_meta = (record.result or {}).get("remote")
-    submit_state = remote_meta.get("submit_state") if isinstance(remote_meta, dict) else None
-    return submit_state in _SUBMIT_RECONCILE_STATES
+    if not isinstance(remote_meta, dict):
+        return False
+    return remote_meta.get("submit_state") in _SUBMIT_RECONCILE_STATES
 
 
 def _needs_side_effect_retry(record: JobRecord) -> bool:
@@ -285,6 +307,9 @@ class JobManager:
         self._cancel_events: dict[str, threading.Event] = {}
         self._submission_jobs: set[str] = set()
         self._poll_failures: dict[str, int] = {}
+        # job_id -> monotonic timestamp of the last poll-path submission
+        # reconcile (rate limiter; the reconcile loop is unthrottled).
+        self._submit_reconcile_at: dict[str, float] = {}
         self._lock = threading.RLock()
         self._counter = 0
         self._metrics_extractor = MetricsExtractor()
@@ -1944,6 +1969,16 @@ class JobManager:
             fields: dict[str, Any] = {"status": target}
             if target == JobStatus.CANCELLED:
                 fields["completed_at"] = _utc_now_iso()
+            elif self._is_remote_job(record):
+                # Contract A: persist the cancel intent the submit thread
+                # and the reconcile chain both gate on.
+                result = dict(record.result or {})
+                meta = dict(result.get("remote") or {})
+                meta["cancel_state"] = "requested"
+                meta["requested_at"] = _utc_now_iso()
+                meta["attempt"] = record.attempt
+                result["remote"] = meta
+                fields["result"] = result
             try:
                 final = self.store.transition(
                     job_id,
@@ -2931,6 +2966,759 @@ class JobManager:
             return None
         return stored_remote_dir(record, node)
 
+    # ------------------------------------------------------------------ #
+    # D02 submit protocol: intent + lease, id persistence, reconcile, orphans
+    # ------------------------------------------------------------------ #
+
+    def _persist_submit_intent(self, record: JobRecord, node_name: str) -> JobRecord | None:
+        """Persist contract-A submit intent (submission_id + lease) before bsub.
+
+        Re-reads and retries on soft revision conflicts; returns ``None``
+        only when the row left {STARTING, CANCELLING} (or the attempt
+        moved) — the caller then never submits.
+        """
+        from acp.scheduler.remote.paths import compose_remote_dir
+        from acp.scheduler.remote.submission import (
+            build_owner_token,
+            lease_deadline_iso,
+            lease_ttl_seconds,
+            submission_id_for,
+        )
+
+        ttl = lease_ttl_seconds(self._remote_config)
+        last: JobStateConflictError | None = None
+        for _ in range(4):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.attempt != record.attempt:
+                return None
+            if fresh.status not in (JobStatus.STARTING, JobStatus.CANCELLING):
+                return None
+            result = dict(fresh.result or {})
+            meta = dict(result.get("remote") or {})
+            meta.setdefault("schema", 1)
+            meta["attempt"] = fresh.attempt
+            meta["submission_id"] = submission_id_for(fresh.id, fresh.attempt)
+            meta["node"] = node_name
+            meta["submit_state"] = "intent"
+            meta["submit_owner"] = build_owner_token(fresh.attempt)
+            meta["lease_expires_at"] = lease_deadline_iso(ttl)
+            meta["intent_at"] = _utc_now_iso()
+            for stale in ("lsf_job_id", "aborted_at", "unconfirmed_at", "submitted_at"):
+                meta.pop(stale, None)
+            result["remote"] = meta
+            result.setdefault("node", node_name)
+            relative = meta.get("relative")
+            if isinstance(relative, str) and relative:
+                node = self._remote_config.get_node(node_name) if self._remote_config else None
+                if node is not None:
+                    # Contract B: keep the single path key in sync with metadata.
+                    result["remote_dir"] = compose_remote_dir(relative, node)
+            try:
+                return self.store.transition(
+                    fresh.id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    result=result,
+                )
+            except JobStateConflictError as exc:
+                last = exc
+                continue
+        logger.debug("submit intent persist lost CAS for %s: %s", record.id, last)
+        return None
+
+    def _submit_checkpoint(self, job_id: str) -> bool:
+        """Pre-bsub CAS re-read: a persisted cancel request aborts the submit.
+
+        Returns ``True`` when submission may proceed (lease renewed in the
+        same transaction); ``False`` after persisting
+        ``submit_state="aborted_before_bsub"`` or when the row moved —
+        ``bsub`` is never called on ``False``.
+        """
+        from acp.scheduler.remote.submission import lease_deadline_iso, lease_ttl_seconds
+
+        for _ in range(4):
+            fresh = self.store.get(job_id)
+            if fresh is None or fresh.status.is_terminal:
+                return False
+            if fresh.status not in (JobStatus.STARTING, JobStatus.CANCELLING):
+                return False
+            meta = dict((fresh.result or {}).get("remote") or {})
+            if meta.get("cancel_state") == "requested":
+                self._persist_aborted_before_bsub(fresh)
+                return False
+            meta["lease_expires_at"] = lease_deadline_iso(
+                lease_ttl_seconds(self._remote_config)
+            )
+            result = dict(fresh.result or {})
+            result["remote"] = meta
+            try:
+                self.store.transition(
+                    job_id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    result=result,
+                )
+                return True
+            except JobStateConflictError:
+                continue
+        return False
+
+    def _persist_aborted_before_bsub(self, record: JobRecord) -> JobRecord | None:
+        """Persist ``aborted_before_bsub`` — the positive no-job evidence a
+        confirmed cancellation may rely on without querying LSF."""
+        submission_id = str((record.result or {}).get("remote", {}).get("submission_id") or "")
+        for _ in range(4):
+            fresh = self.store.get(record.id)
+            if fresh is None:
+                return None
+            result = dict(fresh.result or {})
+            meta = dict(result.get("remote") or {})
+            if meta.get("submit_state") == "aborted_before_bsub":
+                return fresh
+            meta["submit_state"] = "aborted_before_bsub"
+            meta["aborted_at"] = _utc_now_iso()
+            result["remote"] = meta
+            try:
+                stored = self.store.transition(
+                    fresh.id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    result=result,
+                )
+            except JobStateConflictError:
+                continue
+            if submission_id:
+                from acp.scheduler.remote.submission import release_submit_worker
+
+                release_submit_worker(submission_id)
+            try:
+                self._event_log(stored).append(
+                    "remote.submit_aborted",
+                    job_id=stored.id,
+                    attempt=stored.attempt,
+                    submission_id=meta.get("submission_id"),
+                    evidence="aborted_before_bsub",
+                )
+            except OSError:
+                logger.debug("submit_aborted event write failed for %s", stored.id)
+            return stored
+        return None
+
+    def _on_submitted(self, job_id: str, lsf_job_id: str, expected_attempt: int) -> None:
+        """Persist the LSF id from the ``on_submitted`` callback (contract A).
+
+        Re-reads the row for EVERY attempt (never a pre-bsub revision —
+        Oracle r12 F1), CAS-persists id + ``submit_state="submitted"``
+        with bounded retry, keeps a CANCELLING row CANCELLING (id only),
+        and records a persistent orphan when the row already reached a
+        terminal state instead of silently dropping the id.
+        """
+        last: JobStateConflictError | None = None
+        for _ in range(6):
+            fresh = self.store.get(job_id)
+            if fresh is None:
+                return
+            if fresh.attempt != expected_attempt:
+                return
+            if fresh.status.is_terminal:
+                self._record_submitted_orphan(fresh, lsf_job_id)
+                return
+            if fresh.remote_job_id == lsf_job_id:
+                return
+            result = dict(fresh.result or {})
+            meta = dict(result.get("remote") or {})
+            meta["submit_state"] = "submitted"
+            meta["lsf_job_id"] = lsf_job_id
+            meta["submitted_at"] = _utc_now_iso()
+            result["remote"] = meta
+            result["lsf_job_id"] = lsf_job_id
+            fields: dict[str, Any] = {"remote_job_id": lsf_job_id, "result": result}
+            if fresh.status == JobStatus.STARTING:
+                fields["status"] = JobStatus.PENDING
+            try:
+                stored = self.store.transition(
+                    job_id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    **fields,
+                )
+            except JobStateConflictError as exc:
+                last = exc
+                continue
+            try:
+                self._event_log(stored).append(
+                    "remote.submitted_persisted",
+                    job_id=job_id,
+                    lsf_job_id=lsf_job_id,
+                    attempt=stored.attempt,
+                    status=stored.status.value,
+                )
+            except OSError:
+                logger.debug("submitted_persisted event write failed for %s", job_id)
+            if stored.status == JobStatus.PENDING:
+                self._sync_task_status(stored)
+            return
+        raise last if last is not None else JobStateConflictError(job_id, {}, None)
+
+    def _record_submitted_orphan(self, record: JobRecord, lsf_job_id: str) -> None:
+        """Terminal-row id conflict: persist an orphan + first cancel attempt."""
+        now = _utc_now_iso()
+        for _ in range(3):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.attempt != record.attempt:
+                return
+            result = dict(fresh.result or {})
+            meta = dict(result.get("remote") or {})
+            raw_orphans = meta.get("orphans")
+            orphans = [dict(o) for o in raw_orphans if isinstance(o, dict)] if isinstance(
+                raw_orphans, list
+            ) else []
+            orphans.append(
+                {
+                    "node": str(meta.get("node") or result.get("node") or ""),
+                    "lsf_job_id": lsf_job_id,
+                    "attempt": fresh.attempt,
+                    "cancel_state": "unconfirmed",
+                    "requested_at": now,
+                    # None until the first cancel attempt runs, so the very
+                    # first pass never waits out the backoff window.
+                    "last_attempt_at": None,
+                    "failures": 0,
+                }
+            )
+            meta["orphans"] = orphans
+            result["remote"] = meta
+            try:
+                self.store.update_progress(
+                    fresh.id, expected_revision=fresh.revision, result=result
+                )
+            except JobStateConflictError:
+                continue
+            record = fresh
+            break
+        try:
+            self._event_log(record).append(
+                "remote.submitted_orphan",
+                job_id=record.id,
+                lsf_job_id=lsf_job_id,
+                attempt=record.attempt,
+                node=str((record.result or {}).get("remote", {}).get("node") or ""),
+            )
+        except OSError:
+            logger.debug("submitted_orphan event write failed for %s", record.id)
+        persisted = self.store.get(record.id) or record
+        self._orphan_cancel_pass(persisted)
+
+    @staticmethod
+    def _pending_orphans(result: dict[str, Any]) -> list[dict[str, Any]]:
+        remote_meta = result.get("remote")
+        if not isinstance(remote_meta, dict):
+            return []
+        raw = remote_meta.get("orphans")
+        if not isinstance(raw, list):
+            return []
+        return [dict(entry) for entry in raw if isinstance(entry, dict)]
+
+    def _orphan_backoff_seconds(self, entry: dict[str, Any]) -> int:
+        """Bounded exponential backoff: min(30s * 2**failures, 1h)."""
+        failures = int(entry.get("failures", 0) or 0)
+        return min(30 * (2 ** min(failures, 10)), 3600)
+
+    def _orphan_cancel_pass(self, record: JobRecord) -> bool:
+        """One bounded retry pass over *record*'s pending orphans.
+
+        Returns True when at least one orphan was confirmed-and-cleared.
+        The original job row stays terminal throughout; only
+        ``result["remote"]["orphans"]`` changes.
+        """
+        entries = self._pending_orphans(record.result or {})
+        if not entries:
+            return False
+        now = datetime.now(timezone.utc)
+        changed = False
+        cleared = False
+        survivors: list[dict[str, Any]] = []
+        for entry in entries:
+            if entry.get("cancel_state") == "confirmed":
+                changed = True
+                cleared = True
+                continue
+            last_attempt = _parse_iso_ts(entry.get("last_attempt_at"))
+            if last_attempt is not None and (
+                now.timestamp() - last_attempt < self._orphan_backoff_seconds(entry)
+            ):
+                survivors.append(entry)
+                continue
+            outcome = self._orphan_cancel_attempt(entry)
+            # Any attempt mutates last_attempt_at/failures — always persist
+            # them, otherwise the backoff window restarts from scratch.
+            changed = True
+            if outcome == "confirmed":
+                changed = True
+                cleared = True
+                try:
+                    self._event_log(record).append(
+                        "remote.orphan_cancel_confirmed",
+                        job_id=record.id,
+                        node=entry.get("node"),
+                        lsf_job_id=entry.get("lsf_job_id"),
+                        attempt=entry.get("attempt"),
+                        cancel_state="confirmed",
+                    )
+                except OSError:
+                    logger.debug("orphan confirm event failed for %s", record.id)
+                continue
+            failures = int(entry.get("failures", 0) or 0)
+            if failures >= _ORPHAN_STALL_THRESHOLD and not entry.get("stalled_alert"):
+                entry["stalled_alert"] = True
+                changed = True
+                try:
+                    self._event_log(record).append(
+                        "remote.orphan_cancel_stalled",
+                        job_id=record.id,
+                        node=entry.get("node"),
+                        lsf_job_id=entry.get("lsf_job_id"),
+                        attempt=entry.get("attempt"),
+                        failures=failures,
+                    )
+                except OSError:
+                    logger.debug("orphan stall event failed for %s", record.id)
+            survivors.append(entry)
+        if not changed:
+            return False
+        fresh = self.store.get(record.id)
+        if fresh is None:
+            return cleared
+        result = dict(fresh.result or {})
+        meta = dict(result.get("remote") or {})
+        if survivors:
+            meta["orphans"] = survivors
+        else:
+            meta.pop("orphans", None)
+        result["remote"] = meta
+        try:
+            self.store.update_progress(
+                fresh.id, expected_revision=fresh.revision, result=result
+            )
+        except JobStateConflictError:
+            logger.debug("orphan persist lost CAS for %s", record.id)
+        return cleared
+
+    def _orphan_cancel_attempt(self, entry: dict[str, Any]) -> str:
+        """Query + bkill one orphan. Returns ``confirmed``/``retry``/``unknown``."""
+        entry["last_attempt_at"] = _utc_now_iso()
+        node_name = str(entry.get("node") or "")
+        lsf_job_id = str(entry.get("lsf_job_id") or "")
+        node = self._remote_config.get_node(node_name) if self._remote_config else None
+        if node is None or self._remote_monitor is None or not lsf_job_id:
+            entry["failures"] = int(entry.get("failures", 0) or 0) + 1
+            return "unknown"
+        try:
+            status = self._remote_monitor.get_lsf_status(node, lsf_job_id)
+        except Exception:
+            status = "unknown"
+        if status in ("not_found", "done", "failed"):
+            return "confirmed"
+        if status == "unknown":
+            entry["failures"] = int(entry.get("failures", 0) or 0) + 1
+            return "unknown"
+        try:
+            ok = self._remote_monitor.cancel_job(node, lsf_job_id)
+        except Exception:
+            ok = False
+        if not ok:
+            entry["failures"] = int(entry.get("failures", 0) or 0) + 1
+            return "unknown"
+        return "retry"
+
+    def _handle_rejected_submission(self, record: JobRecord, exc: Exception) -> None:
+        """Contract A: definitive rejection → FAILED only, never a dir delete."""
+        fresh = self.store.get(record.id)
+        if fresh is None or fresh.status.is_terminal or fresh.attempt != record.attempt:
+            return
+        result = dict(fresh.result or {})
+        meta = dict(result.get("remote") or {})
+        meta["submit_state"] = "not_accepted"
+        result["remote"] = meta
+        try:
+            self._event_log(fresh).append(
+                "job.failed",
+                job_id=fresh.id,
+                error=str(exc),
+                reason="remote_submit_not_accepted",
+                attempt=fresh.attempt,
+            )
+        except OSError:
+            logger.debug("job.failed event write failed for %s", fresh.id)
+        failed = self._cas_write(
+            fresh,
+            expected_status=fresh.status,
+            status=JobStatus.FAILED,
+            error=f"remote_submit_not_accepted: {exc}",
+            completed_at=_utc_now_iso(),
+            result=result,
+            decide=lambda row: None,
+        )
+        if failed is None:
+            return
+        self._sync_task_status(failed)
+        self._write_job_json(failed)
+        self._stage_task_observer.finalize_job(failed.id, "failed")
+        self._release_reservation(failed.id)
+        self._dispatch_queued_jobs()
+
+    def _handle_indeterminate_submission(self, record: JobRecord, exc: Exception) -> None:
+        """Contract A: unknown outcome → keep STARTING, persist ``unconfirmed``."""
+        for _ in range(3):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.status.is_terminal or fresh.attempt != record.attempt:
+                return
+            result = dict(fresh.result or {})
+            meta = dict(result.get("remote") or {})
+            meta["submit_state"] = "unconfirmed"
+            meta["unconfirmed_at"] = _utc_now_iso()
+            result["remote"] = meta
+            try:
+                self.store.transition(
+                    fresh.id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    result=result,
+                )
+            except JobStateConflictError:
+                continue
+            try:
+                # Same idempotency key as the runner's emit: a real runner
+                # may already have written this event before re-raising.
+                self._event_log(fresh).append(
+                    "remote.submit_unconfirmed",
+                    job_id=fresh.id,
+                    attempt=fresh.attempt,
+                    submission_id=meta.get("submission_id"),
+                    reason=str(exc),
+                    idempotency_key=f"submit-unconfirmed:{fresh.id}:{fresh.attempt}",
+                )
+            except OSError:
+                logger.debug("submit_unconfirmed event write failed", exc_info=True)
+            return
+        logger.warning(
+            "unconfirmed submit state persist failed for %s (%s); reconcile retries",
+            record.id,
+            exc,
+        )
+
+    def _reconcile_submission_record(self, record: JobRecord) -> None:
+        """Converge one pending submission via ``reconcile_submission``."""
+        if self.remote_runner is None:
+            return
+        if record.remote_job_id or (record.result or {}).get("lsf_job_id"):
+            # Id already known: rebuild poll state; STARTING → PENDING.
+            if not self.remote_runner.recover_job_state(record):
+                return
+            if record.status != JobStatus.STARTING:
+                return
+            try:
+                stored = self.store.transition(
+                    record.id,
+                    expected_status=JobStatus.STARTING,
+                    expected_revision=record.revision,
+                    expected_attempt=record.attempt,
+                    status=JobStatus.PENDING,
+                )
+            except JobStateConflictError:
+                return
+            try:
+                self._event_log(stored).append(
+                    "remote.submit_reconciled",
+                    job_id=record.id,
+                    attempt=record.attempt,
+                )
+            except OSError:
+                logger.debug(
+                    "reconcile event append failed for job %s", record.id, exc_info=True
+                )
+            self._sync_task_status(stored)
+            return
+        try:
+            verdict = self.remote_runner.reconcile_submission(record)
+        except Exception as exc:
+            logger.warning(
+                "reconcile_submission failed for %s (keeping pending): %s",
+                record.id,
+                exc,
+            )
+            return
+        if verdict == "found":
+            self._adopt_submission(record)
+        elif verdict == "not_accepted":
+            self._mark_not_accepted(record)
+        else:
+            logger.info(
+                "Submission for %s still indeterminate — keeping pending", record.id
+            )
+
+    def _adopt_submission(self, record: JobRecord) -> None:
+        """Persist a reconciled LSF id; CANCELLING keeps its status (id only)."""
+        lsf_job_id = record.remote_job_id or str(
+            (record.result or {}).get("lsf_job_id") or ""
+        )
+        if not lsf_job_id:
+            return
+        for _ in range(4):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.status.is_terminal or fresh.attempt != record.attempt:
+                return
+            if fresh.remote_job_id == lsf_job_id:
+                break
+            result = dict(fresh.result or {})
+            meta = dict(result.get("remote") or {})
+            meta["submit_state"] = "submitted"
+            meta["lsf_job_id"] = lsf_job_id
+            meta["submitted_at"] = _utc_now_iso()
+            result["remote"] = meta
+            result["lsf_job_id"] = lsf_job_id
+            fields: dict[str, Any] = {"remote_job_id": lsf_job_id, "result": result}
+            if fresh.status == JobStatus.STARTING:
+                fields["status"] = JobStatus.PENDING
+            try:
+                stored = self.store.transition(
+                    fresh.id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    **fields,
+                )
+            except JobStateConflictError:
+                continue
+            fresh = stored
+            try:
+                self._event_log(stored).append(
+                    "remote.submit_reconciled",
+                    job_id=stored.id,
+                    lsf_job_id=lsf_job_id,
+                    attempt=stored.attempt,
+                    status=stored.status.value,
+                )
+            except OSError:
+                logger.debug("submit_reconciled event write failed for %s", stored.id)
+            if stored.status == JobStatus.PENDING:
+                self._sync_task_status(stored)
+            break
+        else:
+            return
+        if self.remote_runner is not None:
+            try:
+                adopted = self.store.get(record.id)
+                if adopted is not None and not adopted.status.is_terminal:
+                    self.remote_runner.recover_job_state(adopted)
+                    if (
+                        adopted.status == JobStatus.CANCELLING
+                        and isinstance(adopted.result, dict)
+                        and (adopted.result.get("remote") or {}).get("cancel_state")
+                        == "requested"
+                    ):
+                        self._cancel_adopted_submission(adopted)
+            except Exception:
+                logger.debug("post-adopt recover failed for %s", record.id, exc_info=True)
+
+    def _cancel_adopted_submission(self, record: JobRecord) -> None:
+        """Contract-A sequence: adopted id → bkill → confirm → CANCELLED."""
+        lsf_job_id = str(record.remote_job_id or "")
+        result = record.result or {}
+        node_name = str(result.get("node") or (result.get("remote") or {}).get("node") or "")
+        node = self._remote_config.get_node(node_name) if self._remote_config else None
+        if not lsf_job_id or node is None or self._remote_monitor is None:
+            return
+        try:
+            status = self._remote_monitor.get_lsf_status(node, lsf_job_id)
+        except Exception:
+            status = "unknown"
+        evidence: str | None = None
+        if status in ("not_found", "done", "failed"):
+            evidence = f"bjobs:{status}"
+        else:
+            try:
+                sent = self._remote_monitor.cancel_job(node, lsf_job_id)
+            except Exception:
+                sent = False
+            self._append_cancel_state(record, "sent" if sent else "unconfirmed")
+            if status == "unknown" or not sent:
+                return
+            try:
+                status = self._remote_monitor.get_lsf_status(node, lsf_job_id)
+            except Exception:
+                return
+            if status in ("not_found", "done", "failed"):
+                evidence = f"bkill+bjobs:{status}"
+            else:
+                return
+        for _ in range(3):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.status != JobStatus.CANCELLING:
+                return
+            meta = dict((fresh.result or {}).get("remote") or {})
+            meta["cancel_state"] = "confirmed"
+            meta["confirmed_at"] = _utc_now_iso()
+            result_payload = dict(fresh.result or {})
+            result_payload["remote"] = meta
+            try:
+                stored = self.store.transition(
+                    fresh.id,
+                    expected_status=JobStatus.CANCELLING,
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    status=JobStatus.CANCELLED,
+                    completed_at=_utc_now_iso(),
+                    result=result_payload,
+                )
+            except JobStateConflictError:
+                continue
+            self._sync_task_status(stored)
+            self._write_job_json(stored)
+            self._stage_task_observer.finalize_job(stored.id, "cancelled")
+            try:
+                self._event_log(stored).append(
+                    "remote.cancel_confirmed",
+                    job_id=stored.id,
+                    lsf_job_id=lsf_job_id,
+                    evidence=evidence,
+                    attempt=stored.attempt,
+                )
+            except OSError:
+                logger.debug("cancel_confirmed event write failed for %s", stored.id)
+            self._release_reservation(stored.id)
+            self._dispatch_queued_jobs()
+            return
+
+    def _append_cancel_state(self, record: JobRecord, state: str) -> None:
+        for _ in range(3):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.status != JobStatus.CANCELLING:
+                return
+            meta = dict((fresh.result or {}).get("remote") or {})
+            meta["cancel_state"] = state
+            payload = dict(fresh.result or {})
+            payload["remote"] = meta
+            try:
+                self.store.transition(
+                    fresh.id,
+                    expected_status=JobStatus.CANCELLING,
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    result=payload,
+                )
+                return
+            except JobStateConflictError:
+                continue
+
+    def _mark_not_accepted(self, record: JobRecord) -> None:
+        """Contract A: full positive evidence → FAILED (``remote_submit_not_accepted``)."""
+        fresh = self.store.get(record.id)
+        if fresh is None or fresh.status.is_terminal or fresh.attempt != record.attempt:
+            return
+        if fresh.status not in (JobStatus.STARTING, JobStatus.PENDING):
+            return
+        self._handle_rejected_submission(
+            fresh, RuntimeError("submission not accepted (reconciled with full evidence)")
+        )
+
+    def _confirm_aborted_cancellation(self, record: JobRecord) -> None:
+        """``aborted_before_bsub`` is the persisted positive no-job evidence."""
+        if record.status != JobStatus.CANCELLING:
+            return
+        remote_meta = (record.result or {}).get("remote")
+        if not isinstance(remote_meta, dict) or remote_meta.get("submit_state") != (
+            "aborted_before_bsub"
+        ):
+            return
+        for _ in range(3):
+            fresh = self.store.get(record.id)
+            if fresh is None or fresh.status != JobStatus.CANCELLING:
+                return
+            meta = dict((fresh.result or {}).get("remote") or {})
+            meta["cancel_state"] = "confirmed"
+            payload = dict(fresh.result or {})
+            payload["remote"] = meta
+            try:
+                stored = self.store.transition(
+                    fresh.id,
+                    expected_status=JobStatus.CANCELLING,
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    status=JobStatus.CANCELLED,
+                    completed_at=_utc_now_iso(),
+                    result=payload,
+                )
+            except JobStateConflictError:
+                continue
+            self._sync_task_status(stored)
+            self._write_job_json(stored)
+            self._stage_task_observer.finalize_job(stored.id, "cancelled")
+            try:
+                self._event_log(stored).append(
+                    "remote.cancel_confirmed",
+                    job_id=stored.id,
+                    evidence="aborted_before_bsub",
+                    attempt=stored.attempt,
+                )
+            except OSError:
+                logger.debug("cancel_confirmed event write failed for %s", stored.id)
+            self._release_reservation(stored.id)
+            self._dispatch_queued_jobs()
+            return
+
+    def _finalize_after_submit(
+        self, record: JobRecord, job_id: str, lsf_job_id: str
+    ) -> JobRecord | None:
+        """Post-``submit_remote`` write: tolerates an id the callback already wrote."""
+        for _ in range(4):
+            fresh = self.store.get(job_id)
+            if fresh is None or fresh.attempt != record.attempt:
+                return None
+            if fresh.status.is_terminal:
+                return fresh
+            merged = dict(record.result or {})
+            db_remote = dict((fresh.result or {}).get("remote") or {})
+            our_remote = dict((record.result or {}).get("remote") or {})
+            for key, value in db_remote.items():
+                our_remote.setdefault(key, value)
+            for key in ("submit_state", "lsf_job_id", "submitted_at", "orphans"):
+                if key in db_remote:
+                    our_remote[key] = db_remote[key]
+            our_remote["submit_state"] = "submitted"
+            our_remote["lsf_job_id"] = lsf_job_id
+            merged["remote"] = our_remote
+            merged["lsf_job_id"] = lsf_job_id
+            if fresh.remote_job_id == lsf_job_id:
+                if merged != (fresh.result or {}):
+                    try:
+                        return self.store.update_progress(
+                            job_id, expected_revision=fresh.revision, result=merged
+                        )
+                    except JobStateConflictError:
+                        continue
+                return fresh
+            fields: dict[str, Any] = {"remote_job_id": lsf_job_id, "result": merged}
+            if fresh.status == JobStatus.STARTING:
+                fields["status"] = JobStatus.PENDING
+            try:
+                return self.store.transition(
+                    job_id,
+                    expected_status=(JobStatus.STARTING, JobStatus.CANCELLING),
+                    expected_revision=fresh.revision,
+                    expected_attempt=fresh.attempt,
+                    **fields,
+                )
+            except JobStateConflictError:
+                continue
+        return None
+
+
     def _submit_job(self, job_id: str) -> bool:
         """Start the job (local subprocess or remote LSF). Non-blocking.
 
@@ -3073,45 +3861,86 @@ class JobManager:
                 "Remote execution target resolved but no remote runner is "
                 "available (no enabled remote nodes configured)"
             )
+
+        from acp.scheduler.remote.submission import (
+            heartbeat_submit_worker,
+            lease_ttl_seconds,
+            register_submit_worker,
+            release_submit_worker,
+        )
+        from acp.scheduler.remote.submission import submission_id_for as _sub_id
+
+        try:
+            from acp.scheduler.remote.runner import (
+                RemoteSubmissionIndeterminate,
+                RemoteSubmissionRejected,
+            )
+        except ImportError:  # pragma: no cover - paramiko missing
+            RemoteSubmissionIndeterminate = ()  # type: ignore[assignment,misc]
+            RemoteSubmissionRejected = ()  # type: ignore[assignment,misc]
+
         try:
             self._ensure_remote_capacity(record, target)
+        except BaseException:
+            self._release_reservation(record.id)
+            raise
+
+        intent = self._persist_submit_intent(record, node_name=target.name)
+        if intent is None:
+            fresh = self.store.get(job_id)
+            if fresh is not None and fresh.status == JobStatus.CANCELLING:
+                self._persist_aborted_before_bsub(fresh)
+            self._release_reservation(record.id)
+            return True
+        record = intent
+        submission_id = str(record.result["remote"]["submission_id"])
+        try:
+            self._event_log(record).append(
+                "remote.submit_intent",
+                job_id=job_id,
+                submission_id=submission_id,
+                node=target.name,
+                attempt=record.attempt,
+                relative=(record.result or {}).get("remote", {}).get("relative"),
+            )
+        except OSError:
+            logger.debug("submit_intent event write failed for %s", job_id)
+
+        owner = str(record.result["remote"].get("submit_owner") or _sub_id(job_id))
+        register_submit_worker(submission_id, owner, lease_ttl_seconds(self._remote_config))
+        try:
+            # Pre-bsub barrier: a persisted cancel request aborts here —
+            # ``bsub`` is never called (contract A: exactly one outcome).
+            if not self._submit_checkpoint(job_id):
+                return True
+            heartbeat_submit_worker(submission_id)
             lsf_job_id = self.remote_runner.submit_remote(
                 record,
                 event_log,
                 target_node=target.name,
                 remote_job_dir=self._stored_remote_dir_arg(record, target),
+                on_submitted=lambda lsf_id: self._on_submitted(
+                    job_id, lsf_id, record.attempt
+                ),
+                submission_id=submission_id,
             )
+        except RemoteSubmissionRejected as exc:
+            self._handle_rejected_submission(record, exc)
+            return True
+        except RemoteSubmissionIndeterminate as exc:
+            self._handle_indeterminate_submission(record, exc)
+            return True
         except BaseException:
             # The select→submit window closed without a live LSF job —
             # give the reservation back before the error propagates.
             self._release_reservation(record.id)
             raise
+        finally:
+            # Released only after the outcome (id/rejected/aborted/
+            # unconfirmed) was persisted by the branches above or below.
+            release_submit_worker(submission_id)
 
-        def _after_submit(fresh: JobRecord) -> JobRecord | None:
-            if fresh.status.is_terminal:
-                return None
-            try:
-                # Persist the LSF id even when the status moved (e.g.
-                # CANCELLING) so cancel/reconcile can find the cluster job.
-                return self.store.transition(
-                    job_id,
-                    expected_status=fresh.status,
-                    expected_revision=fresh.revision,
-                    expected_attempt=fresh.attempt,
-                    remote_job_id=lsf_job_id,
-                    result=record.result,
-                )
-            except JobStateConflictError:
-                return None
-
-        submitted = self._cas_write(
-            record,
-            expected_status=record.status,
-            status=JobStatus.PENDING,
-            remote_job_id=lsf_job_id,
-            result=record.result,
-            decide=_after_submit,
-        )
+        submitted = self._finalize_after_submit(record, job_id, lsf_job_id)
         if submitted is None:
             return True
         record = submitted
@@ -3465,6 +4294,12 @@ class JobManager:
         ):
             return
 
+        # D02: a pending/aborted submission is reconciled here — never
+        # through poll_remote's no-``_job_states`` terminal fast path,
+        # which would mis-finalise an indeterminate job as FAILED.
+        if self._poll_pending_submission(record):
+            return
+
         loaded_revision = record.revision
         loaded_attempt = record.attempt
         cancel_event = self._cancel_events.get(job_id, threading.Event())
@@ -3534,6 +4369,31 @@ class JobManager:
             is_remote,
             observation,
         )
+
+    def _poll_pending_submission(self, record: JobRecord) -> bool:
+        """Rate-limited reconcile for scan-set rows with a pending submission.
+
+        Returns True when the poll was consumed by reconciliation (the
+        caller must NOT fall through to ``poll_remote``).  A persisted
+        ``aborted_before_bsub`` confirms CANCELLED directly — the marker
+        is the positive no-job evidence (contract A).
+        """
+        remote_meta = (record.result or {}).get("remote")
+        if not isinstance(remote_meta, dict):
+            return False
+        submit_state = remote_meta.get("submit_state")
+        if submit_state == "aborted_before_bsub" and record.status == JobStatus.CANCELLING:
+            self._confirm_aborted_cancellation(record)
+            return True
+        if submit_state not in _SUBMIT_RECONCILE_STATES:
+            return False
+        now = time.monotonic()
+        last = self._submit_reconcile_at.get(record.id, 0.0)
+        if now - last < float(self.poll_interval):
+            return True
+        self._submit_reconcile_at[record.id] = now
+        self._reconcile_submission_record(record)
+        return True
 
     def _drop_stale_poll(
         self,
@@ -3802,54 +4662,44 @@ class JobManager:
                 )
 
     def _reconcile_starting_submission(self, record: JobRecord) -> None:
-        """Category ①: converge a recoverable STARTING submission to PENDING.
-
-        Records without an LSF id stay STARTING — adoption of indeterminate
-        submissions is owned by the submission-reconcile protocol (todo 5).
-        """
-        if self.remote_runner is None:
-            return
-        if not record.remote_job_id and not (record.result or {}).get("lsf_job_id"):
-            logger.info(
-                "Job %s: unconfirmed submission without an LSF id — waiting for reconcile",
-                record.id,
-            )
-            return
-        if not self.remote_runner.recover_job_state(record):
-            return
-        try:
-            stored = self.store.transition(
-                record.id,
-                expected_status=JobStatus.STARTING,
-                expected_revision=record.revision,
-                expected_attempt=record.attempt,
-                status=JobStatus.PENDING,
-            )
-        except JobStateConflictError:
-            return
-        try:
-            self._event_log(stored).append(
-                "remote.submit_reconciled",
-                job_id=record.id,
-                attempt=record.attempt,
-            )
-        except OSError:
-            logger.debug("reconcile event append failed for job %s", record.id, exc_info=True)
-        self._sync_task_status(stored)
+        """Category ①: converge a recoverable STARTING submission to PENDING."""
+        self._reconcile_submission_record(record)
 
     def _reconcile_once(self) -> None:
         """One pass over the categories outside the regular poll scan.
 
         Category ① STARTING + pending submission intent; category ②
-        terminal jobs whose side effects have not been marked done.
+        terminal jobs whose side effects have not been marked done;
+        category ③ terminal rows carrying unconfirmed orphans plus the
+        CANCELLING rows whose submission is pending or was aborted
+        before ``bsub``.
         """
         for record in self.store.list(status=JobStatus.STARTING.value, limit=10000):
             if _needs_submission_reconcile(record):
                 self._reconcile_starting_submission(record)
+        for record in self.store.list(status=JobStatus.CANCELLING.value, limit=10000):
+            remote_meta = (record.result or {}).get("remote")
+            if not isinstance(remote_meta, dict):
+                continue
+            if remote_meta.get("submit_state") == "aborted_before_bsub":
+                self._confirm_aborted_cancellation(record)
+            elif _has_pending_submission(record):
+                self._reconcile_submission_record(record)
+            elif (
+                record.remote_job_id
+                and remote_meta.get("cancel_state") in ("requested", "sent", "unconfirmed")
+                and self._is_remote_job(record)
+            ):
+                # Known id + unconfirmed cancel: bkill and confirm before
+                # CANCELLED (contract A); communication failure keeps
+                # CANCELLING for the next pass.
+                self._cancel_adopted_submission(record)
         for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             for record in self.store.list(status=status.value, limit=10000):
                 if _needs_side_effect_retry(record):
                     self._retry_terminal_side_effects(record)
+                elif self._pending_orphans(record.result or {}):
+                    self._orphan_cancel_pass(record)
 
     def _poll_loop(self) -> None:
         """Background daemon: periodically poll all RUNNING jobs."""
@@ -4058,12 +4908,19 @@ class JobManager:
         # must preserve their paused review state rather than marking them failed.
         for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING):
             for record in self.store.list(status=status.value):
-                if _needs_submission_reconcile(record):
-                    logger.info(
-                        "Deferring unconfirmed submission for job %s to the reconcile loop",
-                        record.id,
-                    )
-                    continue
+                if _needs_submission_reconcile(record) or _has_pending_submission(record):
+                    # D02: reconcile BEFORE recover/finalise so an
+                    # indeterminate submission is never restart-failed.
+                    self._reconcile_submission_record(record)
+                    record = self.store.get(record.id)
+                    if record is None or record.status.is_terminal:
+                        continue
+                    if _needs_submission_reconcile(record) or _has_pending_submission(record):
+                        logger.info(
+                            "Deferring unconfirmed submission for job %s to the reconcile loop",
+                            record.id,
+                        )
+                        continue
                 if self._try_recover_remote_job(record):
                     logger.info(
                         "Recovered remote job %s (lsf=%s) on restart, poller will resume",
@@ -4101,6 +4958,13 @@ class JobManager:
                     "job.failed",
                 )
                 logger.info("Marked interrupted job %s as FAILED", record.id)
+
+        # Orphaned LSF ids from terminal-row submit races keep being
+        # cancelled across restarts (bounded backoff, contract A r16 P1).
+        for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            for record in self.store.list(status=status.value, limit=10000):
+                if self._pending_orphans(record.result or {}):
+                    self._orphan_cancel_pass(record)
 
     def _restart_resume_hint(self, record: JobRecord) -> str:
         """Restart-failure hint matching the workflow's real resume support.

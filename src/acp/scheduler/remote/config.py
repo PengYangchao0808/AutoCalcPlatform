@@ -264,6 +264,9 @@ class RemoteExecutionConfig:
         max_concurrent_sessions: Maximum SFTP sessions in the connection pool.
         connect_timeout: Seconds to wait for an SSH connection.
         read_timeout: Seconds to wait for SFTP read operations.
+        submission_timeout: Seconds to wait for the ``bsub`` reply — the
+            only timeout governing the blocking submit call; the submit
+            lease TTL derives from it (contract A).
     """
 
     execution_mode: str = "local"
@@ -282,6 +285,7 @@ class RemoteExecutionConfig:
     max_concurrent_sessions: int = 20
     connect_timeout: int = 10
     read_timeout: int = 30
+    submission_timeout: int = 60
 
     @property
     def is_remote(self) -> bool:
@@ -340,6 +344,7 @@ class RemoteExecutionConfig:
         max_concurrent_sessions = int(data.get("max_concurrent_sessions", 20))
         connect_timeout = int(data.get("connect_timeout", 10))
         read_timeout = int(data.get("read_timeout", 30))
+        submission_timeout = int(data.get("submission_timeout", 60))
 
         raw_nodes = data.get("nodes") or []
         nodes: list[RemoteNode] = []
@@ -362,6 +367,7 @@ class RemoteExecutionConfig:
             max_concurrent_sessions=max_concurrent_sessions,
             connect_timeout=connect_timeout,
             read_timeout=read_timeout,
+            submission_timeout=submission_timeout,
         )
 
 

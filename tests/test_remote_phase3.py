@@ -537,7 +537,8 @@ def test_monitor_loop_times_out():
 
 
 def test_cleanup_on_submission_failure():
-    """If bsub fails, the remote job directory should be cleaned up."""
+    """Definitive bsub rejection never deletes the remote job directory
+    (contract A, plan todo 5 — retention reclaims it)."""
     node = make_node()
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
     pool = SSHConnectionPool()
@@ -577,7 +578,7 @@ def test_cleanup_on_submission_failure():
 
     pool.close()
     assert exit_code != 0
-    assert cleaned["done"] is True, "rm -rf should have been called after bsub failure"
+    assert cleaned["done"] is False, "rejected submission must not rm -rf the job dir"
 
 
 # ====================================================================== #

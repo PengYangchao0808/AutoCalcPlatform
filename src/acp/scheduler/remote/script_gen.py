@@ -567,6 +567,7 @@ def build_lsf_script_spec(
     remote_job_dir: str | None = None,
     python_executable: str | None = None,
     pre_cmds: list[str] | None = None,
+    submission_id: str | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -577,8 +578,13 @@ def build_lsf_script_spec(
         queue: LSF queue name.
         walltime: LSF wall-clock limit.
         extra_flags: Additional BSUB flags.
-        input_path: Relative path to the uploaded input file (default
-            ``inputs/input.xyz``).
+    input_path: Relative path to the uploaded input file (default
+        ``inputs/input.xyz``).
+    submission_id: Contract-A submission id — the LSF job name becomes
+        ``acp_<submission_id>`` (attempt-digested, unique per attempt).
+        When omitted a deterministic id is derived from *job_id* with
+        attempt 1 (bare/test callers); the runner always passes the
+        persisted id.
         config_path: Optional path to a job-level YAML config on the remote
             node (e.g. ``cccp.yaml`` in the job directory).
         remote_dir_name: Leaf directory name used only for display/LSF
@@ -607,8 +613,12 @@ def build_lsf_script_spec(
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
         spec, queue=queue, walltime=walltime, extra_flags=extra_flags
     )
+    # Contract A: ``-J acp_<submission_id>`` (attempt-digested) replaces the
+    # former ``acp_<job_id>`` name so reconcile can query it unambiguously.
+    from acp.scheduler.remote.submission import submission_id_for
+
     lsf_spec = LSFScriptSpec(
-        job_name=f"acp_{job_id}",
+        job_name=f"acp_{submission_id or submission_id_for(job_id, 1)}",
         queue=queue,
         nproc=nproc,
         mem_mb_per_core=mem_mb_per_core,

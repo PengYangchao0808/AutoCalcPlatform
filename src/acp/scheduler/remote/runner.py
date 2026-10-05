@@ -32,13 +32,14 @@ import json
 import logging
 import posixpath
 import re
+import shlex
 import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, Callable, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
@@ -60,8 +61,15 @@ from acp.scheduler.remote.script_gen import (
     build_remote_scan_config_payload,
     generate_lsf_script,
 )
-from acp.scheduler.remote.sftp import FileStager
+from acp.scheduler.remote.sftp import FileStager, RemoteDirConflictError
 from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
+from acp.scheduler.remote.submission import (
+    heartbeat_submit_worker,
+    lease_ttl_seconds,
+    submission_id_for,
+    submission_lsf_name,
+    submit_lease_valid,
+)
 from acp.scheduler.remote.sync import CodeSyncer
 from acp.scheduler.runner import materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
@@ -74,6 +82,8 @@ __all__ = [
     "RemoteNodeUnavailableError",
     "RemotePollObservation",
     "RemoteSubmissionError",
+    "RemoteSubmissionIndeterminate",
+    "RemoteSubmissionRejected",
 ]
 
 _LSF_JOB_ID_RE = re.compile(r"Job <(\d+)>")
@@ -166,6 +176,69 @@ class RemoteSubmissionError(RuntimeError):
     """LSF job submission (``bsub``) failed or produced no job ID."""
 
 
+class RemoteSubmissionRejected(RemoteSubmissionError):
+    """Definitive submission rejection — the job never entered LSF.
+
+    Never deletes the remote directory (contract A): the job goes FAILED
+    only and retention reclaims the directory, so a reused dir keeps its
+    checkpoint/step_result/RESULT intact.
+    """
+
+
+class RemoteSubmissionIndeterminate(RemoteSubmissionError):
+    """``bsub`` outcome unknown (SSH/timeout/unparseable reply).
+
+    The remote directory is kept, ``submit_state`` becomes
+    ``unconfirmed`` and the submission is reconciled — never judged
+    terminal from the transport failure alone.
+    """
+
+
+_NOT_FOUND_PHRASES = (
+    "not found",
+    "not submitted",
+    "no unfinished",
+    "no matching",
+    "no jobs",
+    "does not exist",
+)
+
+_UNSUPPORTED_PHRASES = (
+    "invalid option",
+    "unrecognized option",
+    "unknown option",
+    "illegal option",
+    "usage: bjobs",
+    "usage:bjobs",
+)
+
+
+def _explicit_not_found(raw: str) -> bool:
+    """True only on an EXPLICIT not-found report (never bare/empty output)."""
+    lower = raw.lower()
+    return any(phrase in lower for phrase in _NOT_FOUND_PHRASES)
+
+
+def _bjobs_option_unsupported(raw: str) -> bool:
+    """True when the ``bjobs`` dialect rejects the option we used."""
+    lower = (raw or "").lower()
+    return any(phrase in lower for phrase in _UNSUPPORTED_PHRASES)
+
+
+def _bjobs_name_column(lines: list[str]) -> int | None:
+    """Locate the job-name column of a ``bjobs -u`` table (feature detection)."""
+    for line in lines:
+        parts = line.split()
+        if not parts or parts[0] != "JOBID":
+            continue
+        upper = [p.upper() for p in parts]
+        for candidate in ("JOB_NAME", "JOBNAME", "NAME"):
+            if candidate in upper:
+                return upper.index(candidate)
+        return None
+    return None
+
+
 class RemoteJobRunner:
     """Submit and monitor a single ACP job on a remote LSF node.
 
@@ -217,6 +290,8 @@ class RemoteJobRunner:
         target_node: str | None = None,
         *,
         remote_job_dir: str | None = None,
+        on_submitted: Callable[[str], None] | None = None,
+        submission_id: str | None = None,
     ) -> str:
         """Prepare and submit the LSF job, return the LSF job ID immediately.
 
@@ -232,6 +307,11 @@ class RemoteJobRunner:
         identity dir; when omitted the record is resolved through
         :func:`~acp.scheduler.remote.paths.resolve_remote_dir` (persisted
         mapping → legacy dual-candidate probe → fallback).
+
+        ``on_submitted`` fires with the LSF job id **immediately** after
+        ``bsub`` returns it (before stage-state/tail work) so the manager
+        can persist the id with a fresh-revision CAS; ``submission_id``
+        names the LSF job (contract A).
         """
         spec = record.spec
         work_dir = Path(record.work_dir)
@@ -247,6 +327,13 @@ class RemoteJobRunner:
             node = self.select_node(spec)
         event_log.append("remote.node_selected", job_id=record.id, node=node.name, host=node.host)
 
+        if submission_id is None:
+            meta = (record.result or {}).get("remote")
+            if isinstance(meta, dict) and meta.get("submission_id"):
+                submission_id = str(meta["submission_id"])
+        if not submission_id:
+            submission_id = submission_id_for(record.id, record.attempt)
+
         self._pre_submit_housekeeping(node, event_log, record.id)
         self._probe_required_binaries(node, spec, event_log, record.id)
 
@@ -260,11 +347,26 @@ class RemoteJobRunner:
         claim_state: dict[str, str] = {}
         try:
             lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record, spec, node, remote_job_dir, event_log, work_dir, claim_state=claim_state
+                record,
+                spec,
+                node,
+                remote_job_dir,
+                event_log,
+                work_dir,
+                claim_state=claim_state,
+                on_submitted=on_submitted,
+                submission_id=submission_id,
             )
+        except RemoteSubmissionIndeterminate as exc:
+            # Contract A: keep the directory, project ``unconfirmed`` and
+            # reconcile later — never judge the job from a lost reply.
+            self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
+            raise
+        except RemoteSubmissionRejected:
+            # Contract A: a definitive rejection never deletes the dir —
+            # FAILED only; retention reclaims (checkpoint/RESULT intact).
+            raise
         except Exception:
-            # Only a directory this submission *created* is deletable; a
-            # `reused` dir (or an ownership conflict) is never cleaned.
             if claim_state.get("disposition") == "created":
                 self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
             raise
@@ -535,6 +637,210 @@ class RemoteJobRunner:
             "poll_cycle": 0,
             "seen_stages": set(),
         }
+        return True
+
+    def reconcile_submission(self, record: JobRecord) -> str:
+        """Contract-A verdict for a pending submission: found / not_accepted / unknown.
+
+        * ``remote_job_id`` present → rebuild poll state (``found`` when
+          the persisted metadata resolves, else ``unknown``).
+        * otherwise query LSF by the submission name
+          (``bjobs -J acp_<submission_id>``, OpenLAVA ``bjobs -u`` fallback
+          with feature detection) — adoption requires a SINGLE match plus
+          a readable remote ``job.json`` whose job_id/attempt is this
+          record's; multiple matches or unreadable markers → ``unknown``.
+        * ``not_accepted`` requires the full contract-A positive-evidence
+          set (explicit not-found query with the name-query feature
+          available, no ``.exit_code``, no ``state.json``, no ``.stage_*``,
+          no other-attempt evidence) **and** an invalid submit lease.
+          ``STATUS_UNKNOWN``/empty output/read failures/parse failures are
+          ALWAYS ``unknown``.  The directory is never deleted here.
+        * While the submit lease is valid, a missing job stays
+          ``unknown`` — the submit worker may not have run ``bsub`` yet.
+        """
+        result = record.result or {}
+        meta = result.get("remote") if isinstance(result.get("remote"), dict) else {}
+        lsf_job_id = record.remote_job_id or result.get("lsf_job_id")
+        if lsf_job_id:
+            return "found" if self.recover_job_state(record) else "unknown"
+
+        submission_id = meta.get("submission_id")
+        if not isinstance(submission_id, str) or not submission_id:
+            return "unknown"
+        node_name = meta.get("node") or result.get("node")
+        node = self._config.get_node(str(node_name)) if node_name else None
+        if node is None:
+            return "unknown"
+
+        name = submission_lsf_name(submission_id)
+        kind, match_ids = self._run_bjobs_name_query(node, name)
+        if kind == "found":
+            if len(match_ids) != 1:
+                return "unknown"
+            remote_dir = self._reconcile_remote_dir(record, node)
+            if remote_dir is None:
+                return "unknown"
+            if not self._markers_owned_by(node, remote_dir, record):
+                return "unknown"
+            record.remote_job_id = match_ids[0]
+            merged = dict(result)
+            merged["lsf_job_id"] = match_ids[0]
+            record.result = merged
+            return "found"
+        if kind == "not_found":
+            ttl = lease_ttl_seconds(self._config)
+            if submit_lease_valid(meta, ttl_seconds=ttl):
+                return "unknown"
+            evidence = self._submission_absence_evidence(node, record)
+            if evidence is True:
+                return "not_accepted"
+            return "unknown"
+        return "unknown"
+
+    def _run_bjobs_name_query(self, node: RemoteNode, name: str) -> tuple[str, list[str]]:
+        """Query LSF for *name*.  Returns ``(kind, job_ids)`` with kind in
+        ``{"found", "not_found", "empty", "unsupported", "error"}``.
+
+        ``not_found`` is only reported on an EXPLICIT not-found phrase;
+        empty output and unparseable tables stay non-committal (contract
+        A: monitor maps empty output to STATUS_NOT_FOUND — not usable).
+        """
+        try:
+            code, out, _err = self._ssh.execute(
+                node, f"bjobs -J {shlex.quote(name)} 2>&1", timeout=30
+            )
+        except SSHExecutionError:
+            return "error", []
+        raw = (out or "").strip()
+        if code != 0 or _bjobs_option_unsupported(raw):
+            return self._run_bjobs_user_scan(node, name)
+        if not raw:
+            return "empty", []
+        if _explicit_not_found(raw):
+            return "not_found", []
+        ids: list[str] = []
+        for line in raw.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[0].isdigit():
+                ids.append(parts[0])
+        if ids:
+            return "found", ids
+        return "empty", []
+
+    def _run_bjobs_user_scan(self, node: RemoteNode, name: str) -> tuple[str, list[str]]:
+        """OpenLAVA-compatible fallback: scan ``bjobs -u <user>`` by job name."""
+        user = shlex.quote(node.username or "")
+        try:
+            code, out, _err = self._ssh.execute(node, f"bjobs -u {user} 2>&1", timeout=30)
+        except SSHExecutionError:
+            return "error", []
+        raw = (out or "").strip()
+        if code != 0 and _bjobs_option_unsupported(raw):
+            return "unsupported", []
+        if not raw:
+            return "empty", []
+        if _explicit_not_found(raw):
+            return "not_found", []
+        lines = raw.splitlines()
+        name_idx = _bjobs_name_column(lines)
+        if name_idx is None:
+            return "unsupported", []
+        ids: list[str] = []
+        for line in lines:
+            parts = line.split()
+            if len(parts) > name_idx and parts[0].isdigit() and parts[name_idx] == name:
+                ids.append(parts[0])
+        if ids:
+            return "found", ids
+        return "empty", []
+
+    def _reconcile_remote_dir(self, record: JobRecord, node: RemoteNode) -> str | None:
+        result = record.result or {}
+        remote_dir = result.get("remote_dir")
+        if remote_dir:
+            return str(remote_dir)
+        meta = result.get("remote") if isinstance(result.get("remote"), dict) else {}
+        relative = meta.get("relative")
+        if isinstance(relative, str) and relative:
+            return posixpath.join(node.remote_work_dir, relative)
+        return None
+
+    def _markers_owned_by(self, node: RemoteNode, remote_dir: str, record: JobRecord) -> bool:
+        """True only when ``job.json`` is readable AND names this job/attempt."""
+        for marker in ("job.json", "task.json"):
+            try:
+                raw = self._stager.read_remote_file(
+                    node, posixpath.join(remote_dir, marker)
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, SSHExecutionError):
+                return False
+            if not raw:
+                return False
+            try:
+                payload = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                return False
+            if not isinstance(payload, dict):
+                return False
+            owner = payload.get("id") or payload.get("task_id")
+            if owner != record.id:
+                return False
+            declared = payload.get("attempt")
+            if isinstance(declared, int) and declared != record.attempt:
+                return False
+            return True
+        return False
+
+    def _submission_absence_evidence(self, node: RemoteNode, record: JobRecord) -> bool | None:
+        """Contract-A exclusion evidence: True = all clear, False = run
+        evidence present, None = unreadable (never counts as evidence)."""
+        remote_dir = self._reconcile_remote_dir(record, node)
+        if remote_dir is None:
+            return None
+        for marker in (".exit_code", "state.json"):
+            try:
+                content = self._stager.read_remote_file(
+                    node, posixpath.join(remote_dir, marker)
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, SSHExecutionError):
+                return None
+            if not content:
+                continue
+            return False
+        try:
+            entries = self._stager.list_remote_dir(node, remote_dir)
+        except FileNotFoundError:
+            return True
+        except (OSError, SSHExecutionError):
+            return None
+        names = {getattr(entry, "name", "") for entry in entries}
+        if any(name.startswith(".stage_") for name in names):
+            return False
+        if "job.json" not in names and "task.json" not in names:
+            return True
+        # Markers present: only this attempt's declared run may exist —
+        # a readable marker declaring another attempt is foreign evidence.
+        for marker in ("job.json", "task.json"):
+            try:
+                raw = self._stager.read_remote_file(
+                    node, posixpath.join(remote_dir, marker)
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, SSHExecutionError):
+                return None
+            try:
+                payload = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                return None
+            if isinstance(payload, dict):
+                declared = payload.get("attempt")
+                if isinstance(declared, int) and declared != record.attempt:
+                    return False
         return True
 
     def collect_final_state(
@@ -823,6 +1129,11 @@ class RemoteJobRunner:
             lsf_job_id, cli_cmd = self._prepare_and_submit(
                 record, spec, node, remote_job_dir, event_log, work_dir, claim_state=claim_state
             )
+        except RemoteSubmissionIndeterminate as exc:
+            self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
+            raise
+        except RemoteSubmissionRejected:
+            raise
         except Exception:
             if claim_state.get("disposition") == "created":
                 self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
@@ -878,12 +1189,17 @@ class RemoteJobRunner:
         event_log: JobEventLog,
         work_dir: Path,
         claim_state: dict[str, str] | None = None,
+        on_submitted: Callable[[str], None] | None = None,
+        submission_id: str | None = None,
     ) -> tuple[str, list[str]]:
         """Claim the dir, archive old receipts, upload inputs, bsub.
 
         Returns ``(lsf_job_id, cli_command)``.  Raises on any failure —
-        the caller cleans up only when ``claim_state["disposition"]`` is
-        ``"created"`` (reused/conflicting dirs are never deleted).
+        contract A: **no submission failure ever deletes the directory**
+        (reused dirs keep checkpoint/step_result/RESULT; a created dir is
+        reclaimed by retention).  Input/marker/script upload failures
+        raise :class:`RemoteSubmissionRejected`; transport/parse failures
+        around ``bsub`` raise :class:`RemoteSubmissionIndeterminate`.
 
         The exclusive claim runs BEFORE any file write, and the previous
         attempt's receipt archive runs BEFORE ``bsub`` — a failure there
@@ -893,74 +1209,97 @@ class RemoteJobRunner:
         if claim_state is not None:
             claim_state["disposition"] = disposition
 
-        self._archive_remote_attempt(node, remote_job_dir, record, event_log, disposition)
+        if submission_id is None:
+            submission_id = submission_id_for(record.id, record.attempt)
+        heartbeat_submit_worker(submission_id)
 
-        inputs_dir = work_dir
-        inputs_dir.mkdir(parents=True, exist_ok=True)
-        run_root = work_dir.parent.parent
-        materialized_roles: dict[str, Path] = {}
-        materialized = materialize_job_input(spec.input, inputs_dir, run_root, materialized_roles)
+        try:
+            self._archive_remote_attempt(node, remote_job_dir, record, event_log, disposition)
 
-        bond_scan_mode = spec.workflow == "PESsearch" and (
-            str(spec.method.get("mode") or "") == "bond_length_scan"
-        )
-        is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
-        remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
-        if bond_scan_mode:
-            scan_payload = build_remote_scan_config_payload(spec) or {}
-            scan_config_local = work_dir / SCAN_CONFIG_FILENAME
-            scan_config_local.write_text(
-                json.dumps(scan_payload, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
+            inputs_dir = work_dir
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+            run_root = work_dir.parent.parent
+            materialized_roles: dict[str, Path] = {}
+            materialized = materialize_job_input(
+                spec.input, inputs_dir, run_root, materialized_roles
             )
-            self._stager.upload_file(
+
+            bond_scan_mode = spec.workflow == "PESsearch" and (
+                str(spec.method.get("mode") or "") == "bond_length_scan"
+            )
+            is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
+            remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
+            if bond_scan_mode:
+                scan_payload = build_remote_scan_config_payload(spec) or {}
+                scan_config_local = work_dir / SCAN_CONFIG_FILENAME
+                scan_config_local.write_text(
+                    json.dumps(scan_payload, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                self._stager.upload_file(
+                    node,
+                    scan_config_local,
+                    posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
+                )
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="scan_config",
+                )
+            elif materialized and materialized.is_file():
+                remote_path = posixpath.join(remote_job_dir, remote_input_name)
+                self._stager.upload_file(node, materialized, remote_path)
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="input",
+                )
+            else:
+                raise RemoteSubmissionRejected(
+                    f"Failed to materialise input for job {record.id}"
+                )
+
+            # 3b. Scheduler-context markers (job.json + task.json): the node
+            # side detects them by existence only (workflows/_helpers.py) and
+            # otherwise nests products under <remote_job_dir>/<molecule>/,
+            # where the flat result-fetch layer never finds them.
+            self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
+            heartbeat_submit_worker(submission_id)
+
+            # 4. Generate + upload LSF script
+            py = self._resolve_node_python(node, job_id=record.id)
+            lsf_spec, cli_cmd = build_lsf_script_spec(
+                spec,
+                record.id,
                 node,
-                scan_config_local,
-                posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
+                # Per-node queue override; None keeps cluster queue byte-identically.
+                queue=node.queue or self._config.queue,
+                walltime=self._config.walltime,
+                extra_flags=self._config.extra_flags,
+                input_path=remote_input_name,
+                remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
+                remote_job_dir=remote_job_dir,
+                python_executable=py,
+                pre_cmds=self._config.pre_cmds,
+                submission_id=submission_id,
             )
-            event_log.append(
-                "remote.input_uploaded",
-                job_id=record.id,
-                node=node.name,
-                role="scan_config",
-            )
-        elif materialized and materialized.is_file():
-            remote_path = posixpath.join(remote_job_dir, remote_input_name)
-            self._stager.upload_file(node, materialized, remote_path)
-            event_log.append(
-                "remote.input_uploaded",
-                job_id=record.id,
-                node=node.name,
-                role="input",
-            )
-        else:
-            raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
-
-        # 3b. Scheduler-context markers (job.json + task.json): the node
-        # side detects them by existence only (workflows/_helpers.py) and
-        # otherwise nests products under <remote_job_dir>/<molecule>/,
-        # where the flat result-fetch layer never finds them.
-        self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
-
-        # 4. Generate + upload LSF script
-        py = self._resolve_node_python(node, job_id=record.id)
-        lsf_spec, cli_cmd = build_lsf_script_spec(
-            spec,
-            record.id,
-            node,
-            # Per-node queue override; None keeps cluster queue byte-identically.
-            queue=node.queue or self._config.queue,
-            walltime=self._config.walltime,
-            extra_flags=self._config.extra_flags,
-            input_path=remote_input_name,
-            remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
-            remote_job_dir=remote_job_dir,
-            python_executable=py,
-            pre_cmds=self._config.pre_cmds,
-        )
-        script_text = generate_lsf_script(lsf_spec)
-        script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
-        self._stager.upload_text(node, script_text, script_remote_path)
+            script_text = generate_lsf_script(lsf_spec)
+            script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
+            self._stager.upload_text(node, script_text, script_remote_path)
+        except (
+            RemoteSubmissionRejected,
+            RemoteSubmissionIndeterminate,
+            RemoteDirConflictError,
+        ):
+            raise
+        except RemoteSubmissionError as exc:
+            raise RemoteSubmissionRejected(str(exc)) from exc
+        except (OSError, SSHExecutionError) as exc:
+            raise RemoteSubmissionRejected(
+                f"submission preparation failed for job {record.id} on {node.name}: {exc}"
+            ) from exc
 
         record.current_stage = "remote_execution"
         record.progress = 0.0
@@ -975,16 +1314,82 @@ class RemoteJobRunner:
         # Initialise the remote_execution stage task.
         self._init_remote_stage(record.id)
 
-        # 5. Submit via bsub
-        lsf_job_id = self._submit_lsf(node, script_remote_path, remote_job_dir)
-        event_log.append(
-            "remote.submitted",
-            job_id=record.id,
-            lsf_job_id=lsf_job_id,
-            node=node.name,
-            remote_dir=remote_job_dir,
+        # 5. Submit via bsub — the id is handed to the persistence callback
+        # BEFORE any stage-state/log-tail work (contract A write order).
+        # The heartbeat renews the submit lease right before the blocking
+        # call so a slow upload phase never expires the lease mid-submit.
+        heartbeat_submit_worker(submission_id)
+        lsf_job_id = self._submit_lsf(
+            node, script_remote_path, remote_job_dir, submission_id=submission_id
         )
+        if on_submitted is not None:
+            try:
+                on_submitted(lsf_job_id)
+            except Exception as exc:
+                # Never roll back an accepted submission over a persistence
+                # failure: reconcile converges it (no second bsub).
+                logger.warning(
+                    "on_submitted persistence failed for %s (job <%s>): %s",
+                    record.id,
+                    lsf_job_id,
+                    exc,
+                )
+                try:
+                    event_log.append(
+                        "remote.submit_id_persist_failed",
+                        job_id=record.id,
+                        lsf_job_id=lsf_job_id,
+                        submission_id=submission_id,
+                        error=str(exc),
+                    )
+                except OSError:
+                    logger.debug("submit_id_persist_failed event write failed", exc_info=True)
+        try:
+            event_log.append(
+                "remote.submitted",
+                job_id=record.id,
+                lsf_job_id=lsf_job_id,
+                node=node.name,
+                remote_dir=remote_job_dir,
+            )
+        except OSError:
+            # Contract A (iii): an event write failure never rolls back an
+            # accepted submission — the id is already persisted/reconciled.
+            logger.warning(
+                "remote.submitted event write failed for %s; submission kept",
+                record.id,
+                exc_info=True,
+            )
         return lsf_job_id, cli_cmd
+
+    def _mark_submission_unconfirmed(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        node: RemoteNode,
+        remote_job_dir: str,
+        exc: Exception,
+    ) -> None:
+        """Project ``submit_state="unconfirmed"`` + event (in-memory; the
+        manager persists it) after an indeterminate ``bsub``."""
+        result = dict(record.result or {})
+        meta = dict(result.get("remote") or {})
+        meta["submit_state"] = "unconfirmed"
+        meta["unconfirmed_at"] = _utc_now_iso()
+        result["remote"] = meta
+        record.result = result
+        try:
+            event_log.append(
+                "remote.submit_unconfirmed",
+                job_id=record.id,
+                node=node.name,
+                remote_dir=remote_job_dir,
+                submission_id=meta.get("submission_id"),
+                reason=str(exc),
+                idempotency_key=f"submit-unconfirmed:{record.id}:{record.attempt}",
+            )
+        except OSError:
+            logger.debug("remote.submit_unconfirmed event write failed", exc_info=True)
 
     def _upload_scheduler_markers(
         self,
@@ -1679,27 +2084,52 @@ class RemoteJobRunner:
     # LSF submission
     # ------------------------------------------------------------------ #
 
-    def _submit_lsf(self, node: RemoteNode, script_remote_path: str, remote_job_dir: str) -> str:
-        """Run ``bsub < submit.lsf`` on *node* and return the parsed LSF job ID."""
+    def _submit_lsf(
+        self,
+        node: RemoteNode,
+        script_remote_path: str,
+        remote_job_dir: str,
+        *,
+        submission_id: str | None = None,
+    ) -> str:
+        """Run ``bsub < submit.lsf`` on *node* and return the parsed LSF job ID.
+
+        Classification (contract A): SSH/timeout failures and an
+        unparseable reply are :class:`RemoteSubmissionIndeterminate`
+        (outcome unknown); a non-zero ``bsub`` with readable diagnostics
+        is :class:`RemoteSubmissionRejected` (definitive refusal).
+        """
         cmd = f'cd "{remote_job_dir}" && bsub < "{script_remote_path}"'
         try:
-            code, out, err = self._ssh.execute(node, cmd, timeout=60)
+            code, out, err = self._ssh.execute(
+                node, cmd, timeout=self._config.submission_timeout
+            )
         except SSHExecutionError as exc:
-            raise RemoteSubmissionError(f"bsub SSH execution failed on {node.name}: {exc}") from exc
+            raise RemoteSubmissionIndeterminate(
+                f"bsub SSH execution failed on {node.name} (outcome unknown): {exc}"
+            ) from exc
         if code != 0:
-            raise RemoteSubmissionError(
-                f"bsub failed on {node.name} (exit={code}): {err.strip() or out.strip()}"
+            detail = err.strip() or out.strip()
+            if not detail:
+                raise RemoteSubmissionIndeterminate(
+                    f"bsub exited {code} on {node.name} without diagnostics "
+                    f"(outcome unknown)"
+                )
+            raise RemoteSubmissionRejected(
+                f"bsub failed on {node.name} (exit={code}): {detail}"
             )
         match = _LSF_JOB_ID_RE.search(out)
         if not match:
-            raise RemoteSubmissionError(
-                f"Could not parse LSF job ID from bsub output on {node.name}: {out!r}"
+            raise RemoteSubmissionIndeterminate(
+                f"Could not parse LSF job ID from bsub output on {node.name} "
+                f"(reply lost or garbled): {out!r}"
             )
         lsf_job_id = match.group(1)
         logger.info(
-            "Submitted LSF job <%s> on %s, remote_dir=%s",
+            "Submitted LSF job <%s> on %s (submission=%s), remote_dir=%s",
             lsf_job_id,
             node.name,
+            submission_id or "-",
             remote_job_dir,
         )
         return lsf_job_id

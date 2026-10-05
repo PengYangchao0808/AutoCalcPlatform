@@ -1082,10 +1082,24 @@ class _FakeRemoteRunner:
         self.error = error
         self.lsf_status = lsf_status
 
-    def submit_remote(self, record, event_log, target_node=None, *, remote_job_dir=None) -> str:
+    def submit_remote(
+        self,
+        record,
+        event_log,
+        target_node=None,
+        *,
+        remote_job_dir=None,
+        on_submitted=None,
+        submission_id=None,
+    ) -> str:
         if self.error is not None:
             raise self.error
+        if on_submitted is not None:
+            on_submitted(self.lsf_id)
         return self.lsf_id
+
+    def reconcile_submission(self, record) -> str:
+        return "found" if record.remote_job_id else "unknown"
 
     def poll_remote(self, record, event_log, cancel_event):
         # Mirrors RemoteJobRunner.poll_remote: the LSF RUN state is reported

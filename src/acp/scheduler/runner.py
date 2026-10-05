@@ -26,7 +26,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Protocol
 
 if TYPE_CHECKING:
     from acp.scheduler.remote.runner import RemotePollObservation
@@ -109,6 +109,8 @@ class JobRunnerRemoteProtocol(Protocol):
         target_node: str | None = None,
         *,
         remote_job_dir: str | None = None,
+        on_submitted: Callable[[str], None] | None = None,
+        submission_id: str | None = None,
     ) -> str: ...
 
     def poll_remote(
@@ -117,6 +119,8 @@ class JobRunnerRemoteProtocol(Protocol):
         event_log: JobEventLog,
         cancel_event: threading.Event,
     ) -> RemotePollObservation: ...
+
+    def reconcile_submission(self, record: JobRecord) -> str: ...
 
     def apply_terminal_side_effects(
         self,

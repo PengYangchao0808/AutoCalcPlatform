@@ -32,6 +32,7 @@ from acp.scheduler.remote.monitor import RemoteJobMonitor
 from acp.scheduler.remote.runner import (
     RemoteJobRunner,
     RemoteNodeUnavailableError,
+    RemoteSubmissionRejected,
 )
 from acp.scheduler.remote.script_gen import (
     LSFScriptSpec,
@@ -433,7 +434,11 @@ def test_build_lsf_script_spec_integration():
     lsf_spec, cli_cmd = build_lsf_script_spec(
         spec, "job_001", node, queue="normal", walltime="48:00"
     )
-    assert lsf_spec.job_name == "acp_job_001"
+    from acp.scheduler.remote.submission import submission_id_for
+
+    # `-J` carries the attempt-digested submission id (plan todo 5), not
+    # the raw job id.
+    assert lsf_spec.job_name == f"acp_{submission_id_for('job_001', 1)}"
     assert lsf_spec.nproc == 4
     assert lsf_spec.mem_mb_per_core == 2048  # 8192 / 4
     assert lsf_spec.remote_job_dir == "/scratch/test/acp_jobs/job_001"
@@ -1362,9 +1367,11 @@ def test_observe_remote_state_mirrors_state_json_to_work_dir():
 
 # submit.lsf captured from the PRE-change runner (node.queue=None,
 # cluster queue="normal").  Locks the compatibility red line: a node
-# without a queue override must produce a byte-identical script.
+# without a queue override must produce a byte-identical script apart
+# from the `-J` line — the LSF job name is now the attempt-digested
+# submission id (approved behaviour change, plan todo 5).
 _PRECHANGE_NORMAL_QUEUE_SCRIPT = """#!/bin/bash
-#BSUB -J acp_queuejob
+#BSUB -J acp_<submission_id>
 #BSUB -q normal
 #BSUB -n 4
 #BSUB -M 8601600
@@ -1444,13 +1451,19 @@ def test_runner_node_queue_none_falls_back_to_config_queue():
     print("  [OK] runner: node.queue=None falls back to config.queue")
 
 
-def test_runner_node_queue_none_script_byte_identical_to_prechange():
-    """node.queue=None + default cluster queue → byte-identical to pre-change output."""
+def test_runner_node_queue_none_script_matches_expected_with_submission_name():
+    """node.queue=None + default cluster queue → expected script, byte-identical
+    except the approved ``-J acp_<submission_id>`` name change (plan todo 5)."""
+    from acp.scheduler.remote.submission import submission_id_for
+
     node = make_node()
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
     script = _submit_and_capture_script(node, config)
-    assert script == _PRECHANGE_NORMAL_QUEUE_SCRIPT
-    print("  [OK] runner: queue=None script byte-identical to pre-change fixture")
+    expected = _PRECHANGE_NORMAL_QUEUE_SCRIPT.replace(
+        "acp_<submission_id>", f"acp_{submission_id_for('queuejob', 1)}"
+    )
+    assert script == expected
+    print("  [OK] runner: queue=None script matches expected fixture (submission-id -J)")
 
 
 # ====================================================================== #
@@ -1529,9 +1542,9 @@ def test_submit_remote_uploads_scheduler_markers_before_bsub():
         runner = RemoteJobRunner(pool, config, stager=FileStager(pool), poll_interval=0)
         original_submit_lsf = runner._submit_lsf
 
-        def snapshot_submit_lsf(n, script_path, remote_root):
+        def snapshot_submit_lsf(n, script_path, remote_root, **kwargs):
             snapshots["at_bsub"] = set(sftp.files)
-            return original_submit_lsf(n, script_path, remote_root)
+            return original_submit_lsf(n, script_path, remote_root, **kwargs)
 
         runner._submit_lsf = snapshot_submit_lsf  # type: ignore[assignment]
         with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
@@ -1596,9 +1609,10 @@ def test_uploaded_markers_make_confsearch_output_root_flat():
     print("  [OK] markers: uploaded bytes make resolve_task_output_root flat (Confsearch sites)")
 
 
-def test_submit_remote_marker_upload_failure_cleans_remote_dir():
-    """A marker upload failure fails the submission visibly and the except
-    branch cleans up the remote job dir — never a silent nested-layout task."""
+def test_submit_remote_marker_upload_failure_keeps_remote_dir():
+    """A marker upload failure is a RemoteSubmissionRejected: the submission
+    raises and bsub never runs — and the directory is NEVER deleted
+    (contract A, plan todo 5; retention reclaims it)."""
     node = make_node()
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
     pool = SSHConnectionPool()
@@ -1623,6 +1637,14 @@ def test_submit_remote_marker_upload_failure_cleans_remote_dir():
         return original_upload(n, local_path, remote_path)
 
     stager.upload_file = failing_upload  # type: ignore[assignment]
+    removed: list[str] = []
+    original_remove = stager.remove_remote_dir
+
+    def spy_remove(n, remote_path):
+        removed.append(str(remote_path))
+        return original_remove(n, remote_path)
+
+    stager.remove_remote_dir = spy_remove  # type: ignore[assignment]
 
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "markfail"
@@ -1636,7 +1658,7 @@ def test_submit_remote_marker_upload_failure_cleans_remote_dir():
         with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
             try:
                 runner.submit_remote(record, event_log)
-            except OSError:
+            except RemoteSubmissionRejected:
                 raised = True
 
         assert raised, "marker upload failure must propagate out of submit_remote"
@@ -1647,13 +1669,15 @@ def test_submit_remote_marker_upload_failure_cleans_remote_dir():
         assert "remote.markers_uploaded" not in event_types
         assert "remote.submitted" not in event_types
         cleanup_events = [e for e in events if e["type"] == "remote.cleanup"]
-        assert cleanup_events, "_cleanup_remote_dir must be invoked on marker upload failure"
-        assert cleanup_events[0]["remote_dir"] == posixpath.join(
-            node.remote_work_dir, spec.task_dir_name()
+        assert not cleanup_events, "rejection must never trigger directory cleanup"
+        assert removed == [], "remove_remote_dir must never run on a rejection"
+        remote_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
+        assert posixpath.join(remote_dir, "job.json") in sftp.files, (
+            "the (partially built) directory must be kept for retention"
         )
 
     pool.close()
-    print("  [OK] marker upload failure: submission raises, remote dir cleaned, bsub skipped")
+    print("  [OK] marker upload failure: rejection raises, remote dir kept, bsub skipped")
 
 
 # ====================================================================== #
@@ -1735,11 +1759,11 @@ def main():
         # per-node queue override (T7)
         test_runner_node_queue_override_emits_bsub_queue,
         test_runner_node_queue_none_falls_back_to_config_queue,
-        test_runner_node_queue_none_script_byte_identical_to_prechange,
+        test_runner_node_queue_none_script_matches_expected_with_submission_name,
         # scheduler-context markers before bsub (remote pending-fetch fix)
         test_submit_remote_uploads_scheduler_markers_before_bsub,
         test_uploaded_markers_make_confsearch_output_root_flat,
-        test_submit_remote_marker_upload_failure_cleans_remote_dir,
+        test_submit_remote_marker_upload_failure_keeps_remote_dir,
         # config
         test_remote_config_queue_walltime,
     ]

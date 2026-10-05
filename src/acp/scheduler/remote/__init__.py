@@ -51,6 +51,8 @@ from acp.scheduler.remote.runner import (
     RemoteJobRunner,
     RemoteNodeUnavailableError,
     RemoteSubmissionError,
+    RemoteSubmissionIndeterminate,
+    RemoteSubmissionRejected,
 )
 from acp.scheduler.remote.script_gen import (
     LSFScriptSpec,
@@ -61,6 +63,16 @@ from acp.scheduler.remote.script_gen import (
 )
 from acp.scheduler.remote.sftp import FileStager, RemoteFileInfo
 from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
+from acp.scheduler.remote.submission import (
+    build_owner_token,
+    heartbeat_submit_worker,
+    lease_ttl_seconds,
+    register_submit_worker,
+    release_submit_worker,
+    submission_id_for,
+    submission_lsf_name,
+    submit_lease_valid,
+)
 from acp.scheduler.remote.sync import CodeSyncer, SyncResult
 
 __all__ = [
@@ -87,12 +99,22 @@ __all__ = [
     "RemoteResultFetcher",
     "RemoteWriteError",
     "RemoteSubmissionError",
+    "RemoteSubmissionIndeterminate",
+    "RemoteSubmissionRejected",
     "SSHConnectionPool",
     "SSHExecutionError",
     "SyncResult",
     "build_lsf_script_spec",
+    "build_owner_token",
     "build_remote_cli_command",
     "derive_lsf_resources",
     "detect_node_python",
     "generate_lsf_script",
+    "heartbeat_submit_worker",
+    "lease_ttl_seconds",
+    "register_submit_worker",
+    "release_submit_worker",
+    "submission_id_for",
+    "submission_lsf_name",
+    "submit_lease_valid",
 ]

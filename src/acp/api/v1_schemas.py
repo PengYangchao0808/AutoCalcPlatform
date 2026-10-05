@@ -764,6 +764,11 @@ class JobRecovery(BaseModel):
     can_rerun: bool = False
     can_purge: bool = True
     can_cancel: bool = False
+    # D02 contract-A projection (no new JobStatus): the remote submit/cancel
+    # protocol state and what the reconcile chain will do next.
+    submit_state: str | None = None
+    cancel_state: str | None = None
+    reconcile_action: str = ""
 
 
 class V1JobDetailResponse(BaseModel):

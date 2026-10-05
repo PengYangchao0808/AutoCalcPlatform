@@ -28,7 +28,7 @@ from acp.scheduler.remote.paths import (
     resolve_remote_dir,
     storage_relative_path,
 )
-from acp.scheduler.remote.runner import RemoteJobRunner
+from acp.scheduler.remote.runner import RemoteJobRunner, RemoteSubmissionRejected
 from acp.scheduler.remote.sftp import FileStager, RemoteDirConflictError
 from acp.scheduler.remote.ssh import SSHConnectionPool
 from tests.test_remote_phase2 import FakeSFTP, FakeSSHClient, make_node
@@ -464,7 +464,7 @@ def test_reused_dir_late_failure_is_never_cleaned(tmp_path):
     runner._stager.upload_file = failing_upload  # type: ignore[assignment]
 
     event_log = JobEventLog(work_dir / "events.jsonl")
-    with pytest.raises(OSError):
+    with pytest.raises(RemoteSubmissionRejected):
         _submit(runner, record, event_log, client)
 
     assert cleanups == [], "reused dir must never be passed to _cleanup_remote_dir"
@@ -645,9 +645,9 @@ def test_remote_receipts_archived_before_bsub_as_submission_gate(tmp_path):
     order: list[str] = []
     original_submit_lsf = runner._submit_lsf
 
-    def spy_submit(n, script_path, remote_root):
+    def spy_submit(n, script_path, remote_root, **kwargs):
         order.append("bsub")
-        return original_submit_lsf(n, script_path, remote_root)
+        return original_submit_lsf(n, script_path, remote_root, **kwargs)
 
     runner._submit_lsf = spy_submit  # type: ignore[assignment]
 
@@ -694,14 +694,14 @@ def test_remote_archive_failure_aborts_submission_before_bsub(tmp_path):
     bsub_ran = {"yes": False}
     original_submit_lsf = runner._submit_lsf
 
-    def spy_submit(n, script_path, remote_root):
+    def spy_submit(n, script_path, remote_root, **kwargs):
         bsub_ran["yes"] = True
-        return original_submit_lsf(n, script_path, remote_root)
+        return original_submit_lsf(n, script_path, remote_root, **kwargs)
 
     runner._submit_lsf = spy_submit  # type: ignore[assignment]
 
     event_log = JobEventLog(work_dir / "events.jsonl")
-    with pytest.raises(OSError):
+    with pytest.raises(RemoteSubmissionRejected):
         _submit(runner, record, event_log, client)
     assert bsub_ran["yes"] is False, "archive failure must abort before bsub"
     print("  [OK] remote archive failure → submission gate aborts, no bsub")

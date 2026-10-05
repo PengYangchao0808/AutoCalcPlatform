@@ -327,15 +327,29 @@ def _real_node(name: str, max_jobs: int = 8) -> RemoteNode:
 class _NodeAwareRemoteRunner:
     """Stands in for ``RemoteJobRunner.submit_remote``: records the node."""
 
-    def submit_remote(self, record, event_log, target_node=None, *, remote_job_dir=None) -> str:
+    def submit_remote(
+        self,
+        record,
+        event_log,
+        target_node=None,
+        *,
+        remote_job_dir=None,
+        on_submitted=None,
+        submission_id=None,
+    ) -> str:
         result = dict(record.result or {})
         result["node"] = target_node or "comp-01"
         result["lsf_job_id"] = "424242"
         record.result = result
+        if on_submitted is not None:
+            on_submitted("424242")
         return "424242"
 
     def poll_remote(self, record, event_log, cancel_event):
         return RemotePollObservation(terminal=False)
+
+    def reconcile_submission(self, record) -> str:
+        return "found" if record.remote_job_id else "unknown"
 
 
 @_requires_remote_config
