@@ -13349,3 +13349,57 @@ def test_validate_method_warnings_rendered_in_modal_and_summary() -> None:
     # The wizard summary (renderMethodDetail) appends the same warnings.
     assert "(wizardState.method && wizardState.method.warnings) || []" in html
     assert 'warnItem.className = "method-detail-warning"' in html
+
+
+# ---------------------------------------------------------------------------
+# T23 — unified NMR report retrieval + null rendering (gap G13)
+# ---------------------------------------------------------------------------
+
+
+def _nmr_panel_region(html: str) -> str:
+    start = html.index("// ── NMR report viewer")
+    end = html.index("// ── CatalogUtils", start)
+    return html[start:end]
+
+
+def test_nmr_report_reader_unified_local_remote() -> None:
+    """fetchNmrReportJson probes the todo-22 layout first and unwraps remote previews."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    assert "NMR_REPORT_PATHS" in region
+    new_layout = region.index('"reports/nmr_report.json"')
+    disk_layout = region.index('"RESULT/reports/nmr_report.json"')
+    legacy_root = region.index('"nmr_report.json"')
+    assert new_layout < disk_layout < legacy_root, (
+        "probe order: manifest spelling, then disk path, then legacy root"
+    )
+
+    assert "fetchNmrReportFromPath" in region
+    assert "unwrapNmrPreviewReport" in region
+    assert "unwrapNmrFileReport" in region
+
+    assert "?mode=report" in region, "remote reads must use the deterministic report mode"
+    assert "apiRemote(" in region
+    assert 'content.type === "json_report"' in region
+    assert "content.report" in region
+
+
+def test_nmr_null_render_em_dash_not_zero() -> None:
+    """Missing winner/regression/boltzmann numerics render an em dash, never 0."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    assert "nmrDisplayNumber" in region
+    assert "nmrProbability" in region
+    assert 'NMR_NULL_DISPLAY = "—"' in region
+
+    assert "Number(cand.dp4_probability) || 0" not in region
+    assert "Number(cand.dp5_probability) || 0" not in region
+    assert "Number(winner.dp4).toFixed" not in region
+    assert "Number(r.slope).toFixed" not in region
+    assert "Number(c.boltzmann_weight).toFixed" not in region
+
+    assert "|| 0" not in region, "NMR panel must not coerce null to 0"
+    assert "?? 0" not in region, "NMR panel must not coerce null to 0"
+    assert "NaN" not in region.replace("isFinite", ""), "null/NaN must never print as NaN"

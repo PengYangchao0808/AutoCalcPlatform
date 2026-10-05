@@ -23251,18 +23251,77 @@ async function refreshS2Report(job) {
   }
 }
 
+// Unified NMR report reader (todo 23): one service for LOCAL and REMOTE jobs.
+// Probe order (first hit wins):
+//   1. reports/nmr_report.json        — the todo-22 result-manifest spelling
+//   2. RESULT/reports/nmr_report.json — the same file work_dir-rooted, which is
+//      what /jobs/{id}/files/{path} and the remote fetcher actually serve
+//   3. nmr_report.json                — legacy root layout
+// Remote unwrap contract (see acp.api.v1_routes._parse_remote_report):
+// .../remote-files/<path>/preview?mode=report returns content = the envelope
+// {type: "json_report", file_path, report} and the reader unwraps content.report;
+// a plain string content (mode=text envelope) is tolerated and JSON-parsed.
+var NMR_REPORT_PATHS = [
+  "reports/nmr_report.json",
+  "RESULT/reports/nmr_report.json",
+  "nmr_report.json",
+];
+
 async function fetchNmrReportJson(job) {
-  var jobId = job.id;
-  var path = "nmr_report.json";
-  var url;
-  if (jobRemoteNodeName(job)) {
-    url = "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encodeURIComponent(path) + "/preview";
-  } else {
-    url = "/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(path);
+  for (var i = 0; i < NMR_REPORT_PATHS.length; i++) {
+    var report = await fetchNmrReportFromPath(job, NMR_REPORT_PATHS[i]);
+    if (report) return report;
   }
-  var resp = jobRemoteNodeName(job) ? await apiRemote(url) : await api(url);
+  return null;
+}
+
+async function fetchNmrReportFromPath(job, path) {
+  var jobId = job.id;
+  var remote = !!jobRemoteNodeName(job);
+  var encoded = path.split("/").map(encodeURIComponent).join("/");
+  var url = remote
+    ? "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encoded + "/preview?mode=report"
+    : "/jobs/" + encodeURIComponent(jobId) + "/files/" + encoded;
+  var resp;
+  try {
+    resp = jobRemoteNodeName(job) ? await apiRemote(url) : await api(url);
+  } catch (e) {
+    return null;
+  }
+  return remote ? unwrapNmrPreviewReport(resp) : unwrapNmrFileReport(resp);
+}
+
+function unwrapNmrFileReport(resp) {
   if (typeof resp === "string") { try { resp = JSON.parse(resp); } catch (e) { return null; } }
   return resp && typeof resp === "object" ? resp : null;
+}
+
+function unwrapNmrPreviewReport(resp) {
+  if (typeof resp === "string") { try { resp = JSON.parse(resp); } catch (e) { return null; } }
+  if (!resp || typeof resp !== "object") return null;
+  var content = resp.content;
+  if (typeof content === "string") { try { content = JSON.parse(content); } catch (e) { return null; } }
+  if (!content || typeof content !== "object") return null;
+  if (content.type === "json_report") {
+    return (content.report && typeof content.report === "object") ? content.report : null;
+  }
+  if (content.type === "unknown_report") return null;
+  return content;
+}
+
+// Null-display contract (gap G13): missing and non-finite numerics render the
+// em dash held by NMR_NULL_DISPLAY — never as 0. Winner probabilities,
+// regression values and boltzmann weights all route through these helpers.
+var NMR_NULL_DISPLAY = "—";
+function nmrDisplayNumber(value, digits) {
+  if (value == null) return NMR_NULL_DISPLAY;
+  var n = Number(value);
+  return isFinite(n) ? n.toFixed(digits) : NMR_NULL_DISPLAY;
+}
+function nmrProbability(value) {
+  if (value == null) return null;
+  var n = Number(value);
+  return isFinite(n) ? n : null;
 }
 
 function renderNmrWinner(report) {
@@ -23281,7 +23340,7 @@ function renderNmrWinner(report) {
   if (winner) {
     var probs = document.createElement("div");
     probs.className = "nmr-winner-probs";
-    probs.textContent = "DP4 = " + Number(winner.dp4).toFixed(3) + "   ·   DP5 = " + Number(winner.dp5).toFixed(3);
+    probs.textContent = "DP4 = " + nmrDisplayNumber(winner.dp4, 3) + "   ·   DP5 = " + nmrDisplayNumber(winner.dp5, 3);
     wrap.appendChild(probs);
   }
   var nuclei = (summary.nuclei || []).join(", ");
@@ -23311,9 +23370,9 @@ function renderNmrCandidate(cand, report) {
   head.appendChild(meta);
   wrap.appendChild(head);
 
-  // DP4 / DP5 probability bars
-  var dp4 = Number(cand.dp4_probability) || 0;
-  var dp5 = Number(cand.dp5_probability) || 0;
+  // DP4 / DP5 probability bars (null probability → no bar, em dash value)
+  var dp4 = nmrProbability(cand.dp4_probability);
+  var dp5 = nmrProbability(cand.dp5_probability);
   [["DP4", dp4, ""], ["DP5", dp5, "dp5"]].forEach(function(pair) {
     var row = document.createElement("div");
     row.className = "nmr-prob-row";
@@ -23325,12 +23384,12 @@ function renderNmrCandidate(cand, report) {
     barWrap.className = "nmr-prob-bar-wrap";
     var bar = document.createElement("span");
     bar.className = "nmr-prob-bar" + (pair[2] ? " " + pair[2] : "");
-    bar.style.width = Math.min(100, Math.max(0, pair[1] * 100)) + "%";
+    bar.style.width = (pair[1] == null ? 0 : Math.min(100, Math.max(0, pair[1] * 100))) + "%";
     barWrap.appendChild(bar);
     row.appendChild(barWrap);
     var val = document.createElement("span");
     val.className = "nmr-prob-val";
-    val.textContent = pair[1].toFixed(3);
+    val.textContent = pair[1] == null ? NMR_NULL_DISPLAY : pair[1].toFixed(3);
     row.appendChild(val);
     wrap.appendChild(row);
   });
@@ -23383,7 +23442,7 @@ function renderNmrAssignTable(container, cand) {
     [a.atom, a.element, a.exp_ppm, a.calc_ppm, a.residual].forEach(function(v) {
       var td = document.createElement("td");
       if (typeof v === "number") td.className = "nmr-resid";
-      td.textContent = (typeof v === "number" && isFinite(v)) ? Number(v).toFixed(3) : (v == null ? "—" : String(v));
+      td.textContent = (typeof v === "number") ? nmrDisplayNumber(v, 3) : (v == null ? NMR_NULL_DISPLAY : String(v));
       row.appendChild(td);
     });
     tbody.appendChild(row);
@@ -23398,7 +23457,7 @@ function renderNmrAssignTable(container, cand) {
     regLine.style.marginTop = "6px";
     regLine.textContent = nuclei.map(function(n) {
       var r = reg[n] || {};
-      return n + ": slope=" + Number(r.slope).toFixed(3) + ", R²=" + Number(r.r_squared).toFixed(3) + ", MAE=" + Number(r.mae).toFixed(3);
+      return n + ": slope=" + nmrDisplayNumber(r.slope, 3) + ", R²=" + nmrDisplayNumber(r.r_squared, 3) + ", MAE=" + nmrDisplayNumber(r.mae, 3);
     }).join("   ·   ");
     container.appendChild(regLine);
   }
@@ -23426,7 +23485,7 @@ function renderNmrConformerTable(container, cand) {
     row.appendChild(tdId);
     var tdW = document.createElement("td");
     tdW.className = "nmr-resid";
-    tdW.textContent = Number(c.boltzmann_weight).toFixed(4);
+    tdW.textContent = nmrDisplayNumber(c.boltzmann_weight, 4);
     row.appendChild(tdW);
     tbody.appendChild(row);
   });

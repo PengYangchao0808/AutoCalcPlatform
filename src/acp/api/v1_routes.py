@@ -6005,7 +6005,10 @@ def preview_remote_file(
     *mode=auto* chooses the preview type based on the file extension:
     ``.xyz/.sdf/.mol`` -> ``structure``, text extensions -> ``tail`` for
     ``.log/.out`` and ``text`` otherwise, and ``report`` is not selected
-    automatically because it requires a known report file name.
+    automatically because it requires a known report file name.  Report
+    consumers (e.g. the NMR panel) request ``mode=report`` explicitly and
+    unwrap ``content["report"]`` — see ``_parse_remote_report`` for the
+    deterministic unwrap contract.
 
     Files larger than the online preview limit are automatically downgraded
     to ``tail`` mode and marked with ``truncated=true``.
@@ -6085,6 +6088,14 @@ def _parse_remote_report(
 
     Generic JSON reports are returned under a ``json_report`` envelope.
     Other files are returned as plain text wrapped in a generic envelope.
+
+    Deterministic unwrap contract (frontend ``fetchNmrReportJson``, todo 23):
+    ``mode=report`` responses carry the parsed document at
+    ``content["report"]`` whenever ``content["type"] == "json_report"`` and
+    report consumers unwrap exactly that key.  Values inside the document
+    dict are serialized verbatim — nulls survive (the preview model dumps
+    with ``exclude_none`` at the field level only), so missing numbers render
+    as an em dash upstream and are never coerced to 0.
     """
     import json
 
