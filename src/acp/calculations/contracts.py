@@ -212,6 +212,29 @@ class CalculationStep:
 
 
 @dataclass(frozen=True, slots=True)
+class ExecutionPolicy:
+    """Explicit execution policy for prerequisite failure (D07).
+
+    ``upstream_failure="block"`` (default): a step whose prerequisite is
+    unmet becomes ``blocked`` and its primitive is never invoked.
+    ``"diagnostics"``: the step runs anyway, but the result and every
+    manifest product are marked ``metadata["diagnostic_only"]=True`` and
+    can never satisfy a normal downstream prerequisite.
+    """
+
+    upstream_failure: str = "block"
+
+    def __post_init__(self) -> None:
+        if self.upstream_failure not in _UPSTREAM_FAILURE_POLICIES:
+            allowed = ", ".join(repr(value) for value in _UPSTREAM_FAILURE_POLICIES)
+            message = f"upstream_failure must be one of: {allowed}"
+            raise ValueError(message)
+
+
+_UPSTREAM_FAILURE_POLICIES: tuple[str, ...] = ("block", "diagnostics")
+
+
+@dataclass(frozen=True, slots=True)
 class CalculationPlan:
     """Ordered calculation steps and their structure inputs."""
 
@@ -219,6 +242,10 @@ class CalculationPlan:
     profile: str = "default"
     items: list[StructureArtifact | Mapping[str, JsonValue]] = field(default_factory=list)
     steps: list[CalculationStep | Mapping[str, JsonValue]] = field(default_factory=list)
+    #: Optional D07 execution policy; ``None`` means the default (``block``).
+    #: Raw mappings are accepted at the boundary and validated by
+    #: :func:`validate_plan` before :func:`resolve_execution_policy` coerces.
+    execution_policy: ExecutionPolicy | Mapping[str, JsonValue] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "items", list(self.items))
@@ -249,7 +276,9 @@ def validate_plan(plan: CalculationPlan) -> list[str]:
     general DAG validator.
 
     Raw mapping steps are accepted only at this boundary so malformed JSON
-    plans can produce actionable errors.
+    plans can produce actionable errors.  The optional ``execution_policy``
+    enum is validated here as well (a raw mapping may carry an unsupported
+    ``upstream_failure`` value).
 
     Args:
         plan: Plan to inspect.
@@ -261,6 +290,19 @@ def validate_plan(plan: CalculationPlan) -> list[str]:
 
     if len(plan.items) != 1:
         errors.append(_CARDINALITY_ERROR)
+
+    policy = plan.execution_policy
+    if policy is not None and not isinstance(policy, ExecutionPolicy):
+        if isinstance(policy, Mapping):
+            upstream = policy.get("upstream_failure", "block")
+            if upstream not in _UPSTREAM_FAILURE_POLICIES:
+                allowed = ", ".join(repr(value) for value in _UPSTREAM_FAILURE_POLICIES)
+                errors.append(
+                    f"execution_policy.upstream_failure must be one of: {allowed}; "
+                    f"got {upstream!r}"
+                )
+        else:
+            errors.append("execution_policy must be an ExecutionPolicy or a mapping")
 
     kind_values: list[str] = []
     seen_kinds: set[str] = set()
@@ -295,6 +337,21 @@ def validate_plan(plan: CalculationPlan) -> list[str]:
             thermo_error_reported = True
 
     return errors
+
+
+def resolve_execution_policy(plan: CalculationPlan) -> ExecutionPolicy:
+    """Return the effective :class:`ExecutionPolicy` of *plan*.
+
+    Call after :func:`validate_plan` — raw mapping policies are coerced
+    here; an absent policy resolves to the default (``block``).
+    """
+    policy = plan.execution_policy
+    if isinstance(policy, ExecutionPolicy):
+        return policy
+    if isinstance(policy, Mapping):
+        raw = policy.get("upstream_failure", "block")
+        return ExecutionPolicy(upstream_failure=str(raw))
+    return ExecutionPolicy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -713,6 +770,7 @@ __all__ = [
     "ElectronicStateExecutionMode",
     "ElectronicStateSpec",
     "ElectronicStateValidation",
+    "ExecutionPolicy",
     "GuessSpec",
     "GuessStrategy",
     "IncompatibleBasisPolicy",
@@ -744,6 +802,7 @@ __all__ = [
     "guess_spec_from_dict",
     "guess_spec_to_dict",
     "orca_xyz_multiplicity",
+    "resolve_execution_policy",
     "state_signature",
     "validate_casscf_spec",
     "validate_electronic_state",

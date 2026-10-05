@@ -5,15 +5,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 
+import acp.calculations.executor as executor_module
 from acp.backends.base import QCResult
 from acp.calculations import result_publication
 from acp.calculations.contracts import (
     CalculationPlan,
     CalculationRequest,
+    CalculationResult,
     CalculationStep,
     JsonValue,
     StepKind,
@@ -277,69 +280,77 @@ def test_three_step_plan(fake_backend: FakeBackend, tmp_path: Path) -> None:
     assert fake_backend.calls[2].method == "single_point"
 
 
-def test_step2_failure_isolated(fake_backend: FakeBackend, tmp_path: Path) -> None:
-    """Step 2 (frequency) raises → step_states[1] failed, step 0 preserved, resume possible."""
-    # Given: optimize succeeds, frequency raises, singlepoint succeeds.
-    coordinates = np.array([[0.5, 0.5, 0.5]], dtype=float)
-    fake_backend.set_result(
-        "optimize",
-        QCResult(
-            success=True,
-            energy=-40.0,
-            coordinates=coordinates,
-            symbols=["C"],
-            converged=True,
-        ),
-    )
-    fake_backend.fail_next("frequency", RuntimeError("frequency exploded"))
-    fake_backend.set_result("single_point", energy=-40.5, success=True)
+def test_step2_failure_isolated(tmp_path: Path) -> None:
+    """D07 default policy: a failed OPT blocks FREQ/SP (primitives never run).
 
+    Failure isolation now means: the original OPT failure is preserved in
+    ``errors`` while its dependents become ``blocked`` (not silently executed
+    on invalid geometry), and a resume re-attempts only the failed step.
+    """
+    # Given: optimize fails; frequency/singlepoint must never be invoked.
     plan = _plan_with_item(tmp_path)
     executor = CalculationPlanExecutor()
+    opt_calls: list[object] = []
+    freq_spy = Mock(return_value=CalculationResult(frequencies=[350.0]))
+    sp_spy = Mock(return_value=CalculationResult(energy=-40.5))
 
-    # When: the executor runs the plan.
-    result = executor.execute(plan, task_root=tmp_path)
+    def failing_opt(request: object) -> CalculationResult:
+        opt_calls.append(request)
+        return CalculationResult(status="failed", errors=["optimize exploded"])
 
-    # Then: the overall result is failed.
-    assert result.is_failed
-    assert len(result.step_states) == 3
+    dispatch = {
+        StepKind.OPTIMIZE: failing_opt,
+        StepKind.FREQUENCY: freq_spy,
+        StepKind.SINGLEPOINT: sp_spy,
+    }
 
-    # And: step 0 (optimize) completed successfully.
-    assert result.step_states[0].status == "completed"
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, dispatch):
+        # When: the executor runs the plan.
+        result = executor.execute(plan, task_root=tmp_path)
 
-    # And: step 1 (frequency) failed with the expected error.
-    assert result.step_states[1].status == "failed"
-    assert "frequency exploded" in result.step_states[1].error
+        # Then: the overall result is failed with the original OPT error.
+        assert result.is_failed
+        assert len(result.step_states) == 3
+        assert [state.status for state in result.step_states] == [
+            "failed",
+            "blocked",
+            "blocked",
+        ]
+        assert "optimize exploded" in result.errors[0]
+        assert result.blocked_reasons == [
+            {"index": 1, "reason": "upstream_failed"},
+            {"index": 2, "reason": "upstream_failed"},
+        ]
 
-    # And: step 2 (singlepoint) still ran (failure isolation).
-    assert result.step_states[2].status == "completed"
+        # And: the dependents' primitives were never invoked (spy = 0).
+        assert freq_spy.call_count == 0
+        assert sp_spy.call_count == 0
 
-    # And: the checkpoint recorded the failure.
-    cp_path = tmp_path / "WORK" / "00_RUNTIME" / "checkpoint.json"
-    cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
-    assert cp_data["step_states"][1]["status"] == "failed"
+        # And: the checkpoint records the failure and the blocked reasons.
+        cp_path = tmp_path / "WORK" / "00_RUNTIME" / "checkpoint.json"
+        cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
+        assert cp_data["step_states"][1]["status"] == "blocked"
+        assert cp_data["step_states"][1]["blocked_reason"] == "upstream_failed"
 
-    # And: the result manifest reports failed.
-    manifest = ResultManifest.read(tmp_path / "RESULT")
-    assert manifest.status == "failed"
+        # And: the result manifest reports failed.
+        manifest = ResultManifest.read(tmp_path / "RESULT")
+        assert manifest.status == "failed"
 
-    # And: the optimize step artifacts are preserved.
-    assert (tmp_path / "WORK" / "03_OPT").is_dir()
+        # And: the optimize step artifacts are preserved.
+        assert (tmp_path / "WORK" / "03_OPT").is_dir()
 
-    # And: resume is possible — completed steps keep their status and are
-    # not re-executed. Re-queue the failure so step 1 fails again on resume.
-    fake_backend.fail_next("frequency", RuntimeError("frequency exploded"))
-    executor2 = CalculationPlanExecutor()
-    result2 = executor2.execute(plan, task_root=tmp_path)
-    # Steps 0 and 2 stay completed (not executed this run); step 1 fails.
-    assert result2.step_states[0].status == "completed"
-    assert result2.step_states[0].executed_this_run is False
-    assert result2.step_states[1].status == "failed"
-    assert result2.step_states[2].status == "completed"
-    assert result2.step_states[2].executed_this_run is False
-    cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
-    assert cp_data["step_states"][0]["status"] == "completed"
-    assert cp_data["step_states"][0]["executed_this_run"] is False
+        # And: resume re-attempts the failed OPT only; FREQ/SP stay blocked
+        # and their primitives are still not invoked.
+        result2 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+        assert result2.step_states[0].status == "failed"
+        assert result2.step_states[1].status == "blocked"
+        assert result2.step_states[2].status == "blocked"
+        assert len(opt_calls) == 2
+        assert freq_spy.call_count == 0
+        assert sp_spy.call_count == 0
+        cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
+        assert cp_data["step_states"][0]["status"] == "failed"
+        assert cp_data["step_states"][1]["status"] == "blocked"
 
 
 def test_resume_after_interrupt_skips_completed(fake_backend: FakeBackend, tmp_path: Path) -> None:

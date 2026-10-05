@@ -379,7 +379,12 @@ def test_thermo_handoff_survives_resume(tmp_path: Path) -> None:
 def test_failed_opt_partial_coords_never_enter_handoff(
     tmp_path: Path,
 ) -> None:
-    """A failed OPT step's partial coords must not enter the handoff (D07)."""
+    """A failed OPT step's partial coords must not enter the handoff (D07).
+
+    D07 default policy: the failed OPT blocks FREQ/SP/THERMO outright, so
+    not even the freq log / SP energy are handed off — downstream primitives
+    are never invoked and the checkpoint carries no ``__handoff__`` payload.
+    """
     plan = _thermo_plan(tmp_path)
     counts = {"opt": 0, "freq": 0, "sp": 0, "thermo": 0}
     thermo_requests: list[dict[str, object]] = []
@@ -399,12 +404,17 @@ def test_failed_opt_partial_coords_never_enter_handoff(
         result = CalculationPlanExecutor().execute(plan, tmp_path)
 
     assert result.status == "failed"
-    handoff = _handoff(tmp_path)
-    assert "coords" not in handoff, "failed OPT partial coords leaked into handoff"
-    assert "geometry_identity" not in handoff
-    assert all("coordinates" not in resources for resources in freq_requests)
-    assert handoff["single_point_energy"] == -3.0
-    assert handoff["frequency_log_path"] == "WORK/04_FREQ/freq.out"
+    assert [state.status for state in result.step_states] == [
+        "failed",
+        "blocked",
+        "blocked",
+        "blocked",
+    ]
+    assert counts == {"opt": 1, "freq": 0, "sp": 0, "thermo": 0}
+    assert freq_requests == [], "blocked FREQ must never receive a request"
+    assert thermo_requests == []
+    handoff = _read_checkpoint(tmp_path)["items_state"].get("__handoff__")
+    assert handoff is None, "blocked downstream steps must never build a handoff"
 
 
 def test_thermo_handoff_missing_freq_log_recomputes(

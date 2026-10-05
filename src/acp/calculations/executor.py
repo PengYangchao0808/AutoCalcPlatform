@@ -36,6 +36,7 @@ from acp.calculations.contracts import (
     CalculationResult,
     CalculationStep,
     Checkpoint,
+    ExecutionPolicy,
     JsonValue,
     OptimizationMode,
     OptimizationSpec,
@@ -43,6 +44,7 @@ from acp.calculations.contracts import (
     StepKind,
     StructureArtifact,
     electronic_state_config_from_dict,
+    resolve_execution_policy,
     validate_plan,
 )
 from acp.calculations.identity import (
@@ -64,6 +66,12 @@ from acp.calculations.result_publication import (
     load_scientific_result,
     publish_result,
     register_result_manifest,
+)
+from acp.calculations.step_requirements import (
+    SATISFIED,
+    PriorStep,
+    evaluate_prerequisite,
+    payload_is_diagnostic,
 )
 from acp.calculations.step_result import (
     STEP_RESULT_FILENAME,
@@ -519,6 +527,17 @@ def _product_kind_for_step(kind: StepKind) -> ProductKind:
     return mapping.get(kind, ProductKind.FILE)
 
 
+def _diagnostic_metadata(
+    base: dict[str, object], diagnostic: bool
+) -> dict[str, object]:
+    """Stamp ``diagnostic_only`` on a product; diagnostics are never reusable."""
+    if not diagnostic:
+        return base
+    merged = {key: value for key, value in base.items() if key != "auto_reusable"}
+    merged["diagnostic_only"] = True
+    return merged
+
+
 # ── public data classes ─────────────────────────────────────────────────
 
 
@@ -530,14 +549,18 @@ class StepState:
     durable ``status`` fact: a step recovered from the checkpoint keeps
     ``status="completed"`` while ``executed_this_run=False`` (V01).  The
     legacy ``skipped`` status remains available for strategic skipping; a
-    resume never writes it.
+    resume never writes it.  ``blocked`` is a STEP-level status word only
+    (never a global ``JobStatus``): an unmet prerequisite under the default
+    execution policy, with the machine-readable ``blocked_reason``.
     """
 
     index: int
     kind: StepKind
-    status: str = "pending"  # pending | completed | failed | skipped
+    status: str = "pending"  # pending | completed | failed | blocked | skipped
     result: CalculationResult | None = None
     error: str = ""
+    #: ``upstream_failed`` | ``missing_requirement`` when ``status == "blocked"``.
+    blocked_reason: str = ""
     executed_this_run: bool = True
     last_executed_attempt: int | None = None
     #: Durable ``step_result.json`` reference (V02, contract C): path is
@@ -553,6 +576,7 @@ class StepState:
             "kind": self.kind.value,
             "status": self.status,
             "error": self.error,
+            "blocked_reason": self.blocked_reason,
             "energy": self.result.energy if self.result else None,
             "executed_this_run": self.executed_this_run,
             "last_executed_attempt": self.last_executed_attempt,
@@ -638,11 +662,18 @@ def _merge_completed_facts(
 
 @dataclass
 class ExecutionResult:
-    """Outcome of executing a ``CalculationPlan``."""
+    """Outcome of executing a ``CalculationPlan``.
+
+    ``status`` is ``failed`` when any step failed OR any required step is
+    blocked.  ``errors`` keeps ONLY the original step failures; blocked
+    steps are reported separately via ``blocked_reasons``
+    (``{"index", "reason"}`` entries) so the root cause is never lost.
+    """
 
     status: str = "completed"  # completed | failed
     step_states: list[StepState] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    blocked_reasons: list[dict[str, JsonValue]] = field(default_factory=list)
 
     @property
     def is_completed(self) -> bool:
@@ -670,9 +701,16 @@ class CalculationPlanExecutor:
     frequency and single-point steps so they operate on the relaxed
     geometry.
 
-    Failure isolation: a single step failure is recorded in
-    ``step_states`` and ``errors`` but does NOT abort the remaining
-    steps.  The overall status is ``"failed"`` if any step failed.
+    Failure isolation (D07): before each step the ``StepRequirement``
+    table (``acp.calculations.step_requirements``) is re-evaluated — on
+    every run, resume included.  An unmet prerequisite under the default
+    ``block`` policy marks the step ``blocked`` (with ``blocked_reason``)
+    without invoking its primitive; dependents block transitively while
+    independent steps still execute.  The explicit ``diagnostics`` policy
+    lets the step run, but the result and its manifest products carry
+    ``metadata["diagnostic_only"]=True`` and can never satisfy a normal
+    downstream prerequisite.  The overall status is ``"failed"`` if any
+    step failed or any required step is blocked.
 
     Resume: on restart the executor loads the checkpoint from
     ``WORK/00_RUNTIME``.  Steps already marked ``"completed"`` keep that
@@ -680,7 +718,9 @@ class CalculationPlanExecutor:
     records the separate "not executed here" observation.  A fingerprint
     mismatch never raises — the checkpoint is
     ignored (conservative recompute) and per-step adoption continues from
-    ``resume_source`` when available.
+    ``resume_source`` when available.  Diagnostic purposes persisted in
+    ``step_result.json`` are re-judged: a diagnostic result is never
+    adopted as a normal completed result under the default policy.
     """
 
     def __init__(
@@ -696,6 +736,7 @@ class CalculationPlanExecutor:
         self._job_id: str | None = None
         self._resume_count: int = 0
         self._loaded_completed_facts: dict[int, dict[str, JsonValue]] = {}
+        self._execution_policy: ExecutionPolicy = ExecutionPolicy()
 
     # ── public entry point ──────────────────────────────────────────────
 
@@ -733,6 +774,7 @@ class CalculationPlanExecutor:
             message = "plan validation failed: " + "; ".join(validation_errors)
             raise ValueError(message)
         steps = [_normalise_step(raw_step) for raw_step in plan.steps]
+        self._execution_policy = resolve_execution_policy(plan)
 
         identity = None if plan_fingerprint is not None else compute_identity(plan)
         fingerprint = plan_fingerprint if plan_fingerprint is not None else identity.plan_identity
@@ -836,6 +878,57 @@ class CalculationPlanExecutor:
             state = step_states[idx]
             integrity_failed = False
 
+            # D07 prerequisite gate — re-evaluated on EVERY run (resume
+            # included): a loaded completed fact never outranks an unmet
+            # prerequisite, and a diagnostic purpose is re-judged here.
+            prerequisite = SATISFIED
+            if state.status != "skipped":
+                prerequisite = evaluate_prerequisite(
+                    [
+                        PriorStep(
+                            kind=prior.kind,
+                            status=prior.status,
+                            result=prior.result,
+                        )
+                        for prior in step_states[:idx]
+                    ],
+                    step.kind,
+                    item.elements,
+                )
+            run_diagnostic = False
+            if not prerequisite.satisfied:
+                if self._execution_policy.upstream_failure == "block":
+                    state.status = "blocked"
+                    state.blocked_reason = prerequisite.reason
+                    state.executed_this_run = True
+                    state.result = None
+                    state.result_ref = None
+                    logger.warning(
+                        "step %d (%s) blocked: %s — prerequisite not met",
+                        idx,
+                        step.kind.value,
+                        prerequisite.reason,
+                    )
+                    self._write_result_manifest_tolerant(
+                        result_dir, plan, step_states, "running"
+                    )
+                    self._persist_checkpoint(
+                        runtime_dir,
+                        fingerprint,
+                        plan,
+                        step_states,
+                        handoff,
+                    )
+                    continue
+                run_diagnostic = True
+                logger.warning(
+                    "step %d (%s): prerequisite not met (%s) — running under "
+                    "the diagnostics policy (results marked diagnostic_only)",
+                    idx,
+                    step.kind.value,
+                    prerequisite.reason,
+                )
+
             if state.status != "skipped":
                 # V02 adoption: a verified durable step_result means the
                 # science already happened (resume, crash window between
@@ -860,6 +953,11 @@ class CalculationPlanExecutor:
                 )
                 if adoption.result is not None:
                     state.result = adoption.result
+                    if run_diagnostic:
+                        state.result = replace(
+                            state.result,
+                            metadata={**state.result.metadata, "diagnostic_only": True},
+                        )
                     state.status = "completed"
                     state.executed_this_run = False
                     state.reused_from_attempt = adoption.attempt
@@ -1022,6 +1120,11 @@ class CalculationPlanExecutor:
                     )
                     continue
 
+            if run_diagnostic:
+                result = replace(
+                    result,
+                    metadata={**result.metadata, "diagnostic_only": True},
+                )
             state.result = result
             if result.status == "failed":
                 state.status = "failed"
@@ -1138,13 +1241,21 @@ class CalculationPlanExecutor:
             )
 
         # ⑦ finalize: write RESULT/result_manifest.json
+        # Overall status: failed on ANY failed step OR ANY blocked required
+        # step — "no failed, only blocked" must never read as completed.
         overall_status = "completed"
         all_errors: list[str] = []
+        blocked_reasons: list[dict[str, JsonValue]] = []
         for state in step_states:
             if state.status == "failed":
                 overall_status = "failed"
                 if state.error:
                     all_errors.append(f"step {state.index} ({state.kind.value}): {state.error}")
+            elif state.status == "blocked":
+                overall_status = "failed"
+                blocked_reasons.append(
+                    {"index": state.index, "reason": state.blocked_reason}
+                )
 
         self._write_result_manifest_tolerant(
             result_dir=result_dir,
@@ -1157,6 +1268,7 @@ class CalculationPlanExecutor:
             status=overall_status,
             step_states=step_states,
             errors=all_errors,
+            blocked_reasons=blocked_reasons,
         )
 
     # ── private helpers ─────────────────────────────────────────────────
@@ -1226,6 +1338,8 @@ class CalculationPlanExecutor:
         """
         payload = result.to_step_result_dict(root=task_root)
         payload["schema_version"] = STEP_RESULT_SCHEMA_VERSION
+        if result.metadata.get("diagnostic_only") is True:
+            payload["diagnostic_only"] = True
         payload["step_identity"] = step_identity
         payload["step_id"] = _step_id(idx, kind)
         payload["index"] = idx
@@ -1274,6 +1388,17 @@ class CalculationPlanExecutor:
         payload = read_step_result(located)
         if payload is None:
             return _Adoption(reason="step_result_unreadable", integrity_failed=True)
+        # D07 resume re-judgement: a diagnostic purpose persisted in
+        # step_result.json must never be adopted as a normal result under
+        # the default (block) policy — the step recomputes instead.
+        if (
+            self._execution_policy.upstream_failure != "diagnostics"
+            and payload_is_diagnostic(payload)
+        ):
+            return _Adoption(
+                reason="diagnostic_result_not_reusable",
+                integrity_failed=True,
+            )
 
         prior_ref: Mapping[str, JsonValue] | None = None
         if was_completed:
@@ -1581,8 +1706,26 @@ class CalculationPlanExecutor:
         optimize_geometry_ref: str | None = None
 
         for state in step_states:
+            if state.status == "blocked":
+                product_id = f"step_{state.index}_{state.kind.value}"
+                manifest.add_product(
+                    id=f"{product_id}_blocked",
+                    label=f"{state.kind.value} (step {state.index}) — blocked",
+                    path="",
+                    kind=ProductKind.FILE,
+                    metadata={
+                        "status": "blocked",
+                        "stage_status": "blocked",
+                        "blocked_reason": state.blocked_reason,
+                        "reusable": False,
+                        "policy_version": 1,
+                    },
+                )
+                continue
             if state.result is None:
                 continue
+            diagnostic = state.result.metadata.get("diagnostic_only") is True
+
             product_kind = _product_kind_for_step(state.kind)
             product_id = f"step_{state.index}_{state.kind.value}"
             label = f"{state.kind.value} (step {state.index})"
@@ -1605,10 +1748,10 @@ class CalculationPlanExecutor:
                         downstream = [s for s in step_states if s.index > state.index]
                         freq = next((s.status for s in downstream if s.kind is StepKind.FREQUENCY), "pending")
                         manifest.add_product(product_id, label, rel, ProductKind.STRUCTURE,
-                            metadata={**geometry, "source_kind":"optimization", "optimization_status":"converged",
+                            metadata=_diagnostic_metadata({**geometry, "source_kind":"optimization", "optimization_status":"converged",
                                       "frequency_status":freq, "stage_id":product_id,
                                       "downstream_status":[{"kind":s.kind.value,"status":s.status} for s in downstream],
-                                      "auto_reusable":True, "policy_version":1})
+                                      "auto_reusable":True, "policy_version":1}, diagnostic))
                         optimize_product_id = product_id
                         optimize_geometry_ref = "RESULT/" + rel
 
@@ -1642,11 +1785,14 @@ class CalculationPlanExecutor:
                             label=f"{label} — normal modes",
                             path="frequencies/normal_modes.json",
                             kind=ProductKind.FREQUENCY_MODES,
-                            metadata={
-                                "geometry_product_id": optimize_product_id,
-                                "geometry_ref": optimize_geometry_ref,
-                                "geometry_fingerprint": geo_fingerprint,
-                            },
+                            metadata=_diagnostic_metadata(
+                                {
+                                    "geometry_product_id": optimize_product_id,
+                                    "geometry_ref": optimize_geometry_ref,
+                                    "geometry_fingerprint": geo_fingerprint,
+                                },
+                                diagnostic,
+                            ),
                         )
                     except OSError:
                         logger.debug(
@@ -1666,6 +1812,7 @@ class CalculationPlanExecutor:
                         label=f"{label} — {artifact.type}",
                         path=rel_path,
                         kind=ProductKind.FILE,
+                        metadata=_diagnostic_metadata({}, diagnostic),
                     )
             else:
                 # Only converged, valid single-geometry artifacts are reusable.
@@ -1683,9 +1830,12 @@ class CalculationPlanExecutor:
                         label=f"{label} — {artifact.type}",
                         path=rel_path,
                         kind=(ProductKind.FILE if state.kind is StepKind.OPTIMIZE else product_kind),
-                        metadata={"stage_status": state.status, "stage_id": product_id,
-                                  "optimization_status": state.result.metadata.get("optimization_status", "unknown"),
-                                  "policy_version": 1},
+                        metadata=_diagnostic_metadata(
+                            {"stage_status": state.status, "stage_id": product_id,
+                             "optimization_status": state.result.metadata.get("optimization_status", "unknown"),
+                             "policy_version": 1},
+                            diagnostic,
+                        ),
                     )
 
             # register energy as a file product if available
@@ -1695,6 +1845,7 @@ class CalculationPlanExecutor:
                     label=f"{label} — energy",
                     path="",
                     kind=ProductKind.ENERGY_REPORT,
+                    metadata=_diagnostic_metadata({}, diagnostic),
                 )
 
         register_result_manifest(result_dir, manifest)
