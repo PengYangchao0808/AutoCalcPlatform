@@ -327,7 +327,7 @@ def _real_node(name: str, max_jobs: int = 8) -> RemoteNode:
 class _NodeAwareRemoteRunner:
     """Stands in for ``RemoteJobRunner.submit_remote``: records the node."""
 
-    def submit_remote(self, record, event_log, target_node=None) -> str:
+    def submit_remote(self, record, event_log, target_node=None, *, remote_job_dir=None) -> str:
         result = dict(record.result or {})
         result["node"] = target_node or "comp-01"
         result["lsf_job_id"] = "424242"

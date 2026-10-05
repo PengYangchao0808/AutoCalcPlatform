@@ -135,6 +135,48 @@ class FakeSFTP:
     def mkdir(self, path):
         self.dirs.add(path)
 
+    def rename(self, src, dst):
+        if dst in self.files or dst in self.dirs:
+            raise OSError(f"[Errno 17] File exists: {dst}")
+        if src in self.files:
+            self.files[dst] = self.files.pop(src)
+            if src in self.attrs:
+                self.attrs[dst] = self.attrs.pop(src)
+        elif src in self.dirs:
+            self.dirs.discard(src)
+            self.dirs.add(dst)
+            for key in list(self.files):
+                if key.startswith(src + "/"):
+                    self.files[dst + key[len(src) :]] = self.files.pop(key)
+            for key in list(self.attrs):
+                if key.startswith(src + "/"):
+                    self.attrs[dst + key[len(src) :]] = self.attrs.pop(key)
+        else:
+            raise FileNotFoundError(src)
+
+    def listdir_attr(self, path):
+        prefix = path.rstrip("/") + "/" if path != "/" else "/"
+        seen: dict[str, MagicMock] = {}
+        for fpath in set(self.files) | self.dirs:
+            if not fpath.startswith(prefix):
+                continue
+            rest = fpath[len(prefix) :]
+            if not rest:
+                continue
+            name = rest.split("/", 1)[0]
+            if name in seen:
+                continue
+            attr = MagicMock()
+            attr.filename = name
+            attr.st_size = len(self.files.get(fpath, b""))
+            attr.st_mtime = 0.0
+            is_dir = "/" in rest or fpath in self.dirs
+            attr.st_mode = stat.S_IFDIR if is_dir else stat.S_IFREG
+            seen[name] = attr
+        if not seen and path not in self.dirs:
+            raise FileNotFoundError(path)
+        return list(seen.values())
+
     def remove(self, path):
         self.files.pop(path, None)
         self.attrs.pop(path, None)
@@ -1176,7 +1218,7 @@ def test_poll_remote_terminal_without_exit_code_finalizes_failed():
     runner._monitor.tail_stderr.return_value = ("", 0)
     runner._monitor.find_remote_state_json.return_value = None
     # Bypass the 30s grace wait inside _wait_exit_code.
-    runner._wait_exit_code = lambda n, d, timeout=30: None
+    runner._wait_exit_code = lambda n, d, timeout=30, attempt=None: None
 
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "tojob"
@@ -1233,7 +1275,7 @@ def test_poll_remote_done_without_exit_code_finalizes_completed():
     runner._monitor.tail_stdout.return_value = ("", 0)
     runner._monitor.tail_stderr.return_value = ("", 0)
     runner._monitor.find_remote_state_json.return_value = None
-    runner._wait_exit_code = lambda n, d, timeout=30: None
+    runner._wait_exit_code = lambda n, d, timeout=30, attempt=None: None
 
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "donejob"

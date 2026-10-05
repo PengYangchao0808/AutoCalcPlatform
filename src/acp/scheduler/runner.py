@@ -106,6 +106,9 @@ class JobRunnerRemoteProtocol(Protocol):
         self,
         record: JobRecord,
         event_log: JobEventLog,
+        target_node: str | None = None,
+        *,
+        remote_job_dir: str | None = None,
     ) -> str: ...
 
     def poll_remote(

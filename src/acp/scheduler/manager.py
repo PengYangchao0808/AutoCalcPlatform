@@ -911,6 +911,11 @@ class JobManager:
         preserved_outputs = preserve_outputs(self.run_root, Path(record.work_dir), previous_outputs,
             job_id=record.id, attempt=attempt_number(record), input_spec=record.spec.input)
 
+        # Contract B (D01): archive this attempt's receipts + the previous
+        # resume receipt BEFORE the reset clears stray files.
+        _prev_attempt = attempt_number(record)
+        self._archive_attempt_receipts(record, _prev_attempt, include_science=False)
+        self._archive_previous_resume_source(record, previous_attempt=_prev_attempt)
         # Keep the persisted location unchanged if strict cleanup fails.
         self._reset_work_dir_in_place(record, strict=True)
         renamed_from = self._migrate_unsafe_task_dir(record)
@@ -969,6 +974,7 @@ class JobManager:
                 "command_line",
                 "submission_id",
                 "requested_at",
+                "resume",
             ):
                 remote_meta.pop(stale_key, None)
             result["remote"] = remote_meta
@@ -1319,6 +1325,105 @@ class JobManager:
                 f"清理旧尝试产物失败（{len(failures)} 项），已阻断排队: " + "; ".join(failures[:5])
             )
 
+    def _archive_attempt_receipts(
+        self, record: JobRecord, previous_attempt: int, *, include_science: bool = True
+    ) -> None:
+        """Archive the closed attempt's local receipts (contract B, D01).
+
+        Always archives ``.exit_code``/``state.json``/``run.lock`` into
+        ``WORK/00_RUNTIME/attempts/<n>/``; ``include_science=False`` (the
+        continue path) leaves ``checkpoint.json``/``step_result*.json``/
+        ``RESULT/`` in place so the new attempt **adopts** them.  A clean
+        rerun archives the science through :meth:`_reset_work_dir_in_place`.
+        Never deletes; an existing archive target aborts the operation.
+        """
+        work_dir = Path(record.work_dir)
+        if not work_dir.is_dir() or previous_attempt < 1:
+            return
+        archive_root = work_dir / "WORK" / "00_RUNTIME" / "attempts" / str(previous_attempt)
+
+        def _archive(src: Path, dest: Path) -> None:
+            if not src.exists():
+                return
+            if dest.exists():
+                raise RuntimeError(
+                    f"旧尝试回执归档目标已存在，已阻断（请人工检查）: {dest}"
+                )
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                src.rename(dest)
+            except OSError as exc:
+                raise RuntimeError(
+                    f"归档旧尝试回执失败: {src} -> {dest}: {exc}"
+                ) from exc
+
+        for name in (".exit_code", "state.json"):
+            _archive(work_dir / name, archive_root / name)
+        runtime = work_dir / "WORK" / "00_RUNTIME"
+        _archive(runtime / "run.lock", archive_root / "WORK" / "00_RUNTIME" / "run.lock")
+        if not include_science:
+            return
+        _archive(work_dir / "checkpoint.json", archive_root / "checkpoint.json")
+        _archive(
+            runtime / "checkpoint.json",
+            archive_root / "WORK" / "00_RUNTIME" / "checkpoint.json",
+        )
+        for step in sorted(work_dir.glob("step_result*.json")):
+            _archive(step, archive_root / step.name)
+        if runtime.is_dir():
+            for step in sorted(runtime.glob("step_result*.json")):
+                _archive(step, archive_root / "WORK" / "00_RUNTIME" / step.name)
+        _archive(work_dir / "RESULT", archive_root / "RESULT")
+
+    def _archive_previous_resume_source(
+        self, record: JobRecord, *, previous_attempt: int
+    ) -> None:
+        """Archive an existing ``resume_source.json`` before a new one is written.
+
+        Consecutive continues must not overwrite the previous resume
+        receipt — it moves to ``WORK/00_RUNTIME/attempts/<n>/`` so both
+        stay recoverable.
+        """
+        work_dir = Path(record.work_dir)
+        src = work_dir / "resume_source.json"
+        if not src.is_file():
+            return
+        dest = work_dir / "WORK" / "00_RUNTIME" / "attempts" / str(
+            previous_attempt
+        ) / "resume_source.json"
+        if dest.exists():
+            raise RuntimeError(
+                f"旧尝试 resume_source 归档目标已存在，已阻断（请人工检查）: {dest}"
+            )
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            src.rename(dest)
+        except OSError as exc:
+            raise RuntimeError(
+                f"归档旧 resume_source 失败，已阻断: {src} -> {dest}: {exc}"
+            ) from exc
+
+    def _write_resume_source(
+        self, record: JobRecord, *, continued_from: str, previous_attempt: int
+    ) -> None:
+        """Write this attempt's ``resume_source.json`` (continue provenance)."""
+        work_dir = Path(record.work_dir)
+        payload = {
+            "attempt": record.attempt,
+            "previous_attempt": previous_attempt,
+            "continued_from": continued_from,
+            "written_at": _utc_now_iso(),
+        }
+        try:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            tmp = work_dir / "resume_source.json.tmp"
+            tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, work_dir / "resume_source.json")
+        except OSError:
+            logger.warning(
+                "resume_source.json write failed for %s", record.id, exc_info=True
+            )
+
     def _reset_job_artifacts(self, job_id: str) -> None:
         """Drop artifact rows captured by the previous attempt."""
         try:
@@ -1532,13 +1637,31 @@ class JobManager:
         return report
 
     def _delete_job_disk(self, record: JobRecord) -> None:
-        """Remove a job's remote directories and local work directory."""
+        """Remove a job's remote directories and local work directory.
+
+        Remote targets come from the persisted storage identity
+        (``result["remote"]["relative"]``), falling back to the derived
+        run_root-relative path — never a hand-joined leaf.
+        """
         job_id = record.id
         if self._is_remote_enabled() and self._remote_cleanup is not None:
+            rel: str | None = None
+            meta = (record.result or {}).get("remote")
+            if isinstance(meta, dict):
+                candidate = meta.get("relative")
+                if isinstance(candidate, str) and candidate:
+                    rel = candidate
+            if rel is None:
+                from acp.scheduler.remote.paths import storage_relative_path
+
+                try:
+                    rel = storage_relative_path(record, self.run_root)
+                except ValueError:
+                    rel = Path(record.work_dir).name
             try:
                 self._remote_cleanup.delete_job_dirs(
                     job_id,
-                    dir_names=[record.spec.task_dir_name()],
+                    dir_names=[rel],
                 )
             except Exception:
                 logger.warning("Remote cleanup failed for job %s", job_id, exc_info=True)
@@ -2227,8 +2350,19 @@ class JobManager:
                 remote_meta = dict(remote_meta)
                 for stale_key in ("lsf_job_id", "submit_state", "cancel_state", "command_line"):
                     remote_meta.pop(stale_key, None)
+                # D01: the next attempt ADOPTS checkpoint/step_result/RESULT
+                # (remote archiving keeps science in place on continue).
+                remote_meta["resume"] = True
                 result["remote"] = remote_meta
             pinned_attempt = record.attempt
+            # Contract B: archive the closed attempt's local receipts (and
+            # any previous resume receipt) before this continue writes new
+            # ones — science results stay in place (adopted, not reset).
+            _prev_attempt = attempt_number(record)
+            self._archive_attempt_receipts(record, _prev_attempt, include_science=False)
+            self._archive_previous_resume_source(
+                record, previous_attempt=_prev_attempt
+            )
             try:
                 record = self._requeue_record_cas(
                     job_id,
@@ -2251,6 +2385,9 @@ class JobManager:
                 ) from exc
             attempts = attempt_number(record)
             self._cancel_events[job_id] = threading.Event()
+            self._write_resume_source(
+                record, continued_from=old_status, previous_attempt=_prev_attempt
+            )
         self._write_job_json(record)
         self._event_log(record).append(
             "job.continued",
@@ -2737,6 +2874,63 @@ class JobManager:
                 return
             self._start_submission_thread(record.id, f"acp-queue-{record.id}")
 
+    def _persist_storage_identity(self, record: JobRecord) -> JobRecord | None:
+        """Persist contract-B storage identity into ``result["remote"]`` (D01).
+
+        Merges ``{"schema": 1, "relative": <run_root-relative incl. project
+        leaf + __NN dedupe>, "attempt": record.attempt}`` after work-dir
+        allocation and stores it through the CAS progress API (todo 5 folds
+        this into the submit-intent write).  Returns the fresh record, or
+        ``None`` when the row moved (the winner persisted it already).
+        """
+        from acp.scheduler.remote.paths import storage_relative_path
+
+        try:
+            rel = storage_relative_path(record, self.run_root)
+        except ValueError:
+            logger.warning(
+                "work_dir %s not under run_root %s; storage identity not persisted",
+                record.work_dir,
+                self.run_root,
+            )
+            return None
+        result = dict(record.result or {})
+        meta = dict(result.get("remote") or {})
+        if (
+            meta.get("schema") == 1
+            and meta.get("relative") == rel
+            and meta.get("attempt") == record.attempt
+        ):
+            return record
+        meta["schema"] = 1
+        meta["relative"] = rel
+        meta["attempt"] = record.attempt
+        result["remote"] = meta
+        try:
+            return self.store.update_progress(
+                record.id, expected_revision=record.revision, result=result
+            )
+        except JobStateConflictError:
+            logger.debug(
+                "storage identity persist lost CAS for %s; winner keeps it", record.id
+            )
+            return None
+
+    def _stored_remote_dir_arg(self, record: JobRecord, target: NodeSpec) -> str | None:
+        """Already-resolved remote dir for ``submit_remote`` (mapping only).
+
+        Returns ``None`` for records without a persisted mapping so the
+        runner performs the legacy dual-candidate ownership probe itself.
+        """
+        from acp.scheduler.remote.paths import stored_remote_dir
+
+        if self._remote_config is None:
+            return None
+        node = self._remote_config.get_node(str(target.name))
+        if node is None:
+            return None
+        return stored_remote_dir(record, node)
+
     def _submit_job(self, job_id: str) -> bool:
         """Start the job (local subprocess or remote LSF). Non-blocking.
 
@@ -2848,6 +3042,10 @@ class JobManager:
         # ------------------------------------------------------------------
         target = self._resolve_execution_target(record)
         self._record_execution_target(record, target)
+        if target.kind == "remote":
+            fresh = self._persist_storage_identity(record)
+            if fresh is not None:
+                record = fresh
 
         if target.kind == "local":
             # Admission gate + dispatch under the lock so concurrent
@@ -2878,7 +3076,10 @@ class JobManager:
         try:
             self._ensure_remote_capacity(record, target)
             lsf_job_id = self.remote_runner.submit_remote(
-                record, event_log, target_node=target.name
+                record,
+                event_log,
+                target_node=target.name,
+                remote_job_dir=self._stored_remote_dir_arg(record, target),
             )
         except BaseException:
             # The select→submit window closed without a live LSF job —
@@ -3874,7 +4075,7 @@ class JobManager:
                     continue
                 # Restart race guard: the workflow may have finished exactly
                 # as the server went down — probe disk before failing (Q12).
-                if self._disk_shows_completed(Path(record.work_dir)):
+                if self._disk_shows_completed(Path(record.work_dir), record.attempt):
                     completed = self._cas_write(
                         record,
                         expected_status=record.status,
@@ -4009,12 +4210,14 @@ class JobManager:
         except OSError:
             logger.debug("task.json refresh failed for %s", work_dir, exc_info=True)
 
-    def _disk_shows_completed(self, work_dir: Path) -> bool:
+    def _disk_shows_completed(self, work_dir: Path, attempt: int | None = None) -> bool:
         """Probe disk for a job that finished exactly as the server died.
 
         True when the workflow ``state.json`` parses and shows every stage
         completed or skipped, and the ``.exit_code`` marker file holds
-        ``0`` (the wrapper-script completion sentinel).
+        ``0`` (the wrapper-script completion sentinel).  When *attempt* is
+        given, a receipt declaring a different (older) attempt is rejected
+        so a previous attempt's receipt never finalises this one.
         """
         exit_code_path = work_dir / ".exit_code"
         try:
@@ -4033,6 +4236,10 @@ class JobManager:
             return False
         if not isinstance(data, dict):
             return False
+        if attempt is not None:
+            declared = data.get("attempt")
+            if isinstance(declared, int) and declared != attempt:
+                return False
         stages = data.get("stages")
         if not isinstance(stages, dict) or not stages:
             return False

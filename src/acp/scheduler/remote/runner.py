@@ -54,6 +54,7 @@ from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMonitor
 from acp.scheduler.remote.node_manager import detect_node_python
+from acp.scheduler.remote.paths import resolve_remote_dir
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
     build_remote_scan_config_payload,
@@ -214,6 +215,8 @@ class RemoteJobRunner:
         record: JobRecord,
         event_log: JobEventLog,
         target_node: str | None = None,
+        *,
+        remote_job_dir: str | None = None,
     ) -> str:
         """Prepare and submit the LSF job, return the LSF job ID immediately.
 
@@ -224,6 +227,11 @@ class RemoteJobRunner:
         ``target_node`` is the already-resolved execution target from
         ``NodeRegistry`` (single-point selection, M4).  When omitted the
         legacy ``select_node(spec)`` path runs for backward compatibility.
+
+        ``remote_job_dir`` is the manager's already-resolved storage
+        identity dir; when omitted the record is resolved through
+        :func:`~acp.scheduler.remote.paths.resolve_remote_dir` (persisted
+        mapping → legacy dual-candidate probe → fallback).
         """
         spec = record.spec
         work_dir = Path(record.work_dir)
@@ -245,17 +253,20 @@ class RemoteJobRunner:
         if self._config.auto_sync:
             self._sync_code_if_needed(node, event_log, record.id)
 
-        if spec.uses_v2_naming:
-            remote_job_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
-        else:
-            remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+        remote_job_dir = self._resolve_remote_dir_for(
+            record, node, event_log, explicit=remote_job_dir
+        )
 
+        claim_state: dict[str, str] = {}
         try:
             lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record, spec, node, remote_job_dir, event_log, work_dir
+                record, spec, node, remote_job_dir, event_log, work_dir, claim_state=claim_state
             )
         except Exception:
-            self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+            # Only a directory this submission *created* is deletable; a
+            # `reused` dir (or an ownership conflict) is never cleaned.
+            if claim_state.get("disposition") == "created":
+                self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
             raise
 
         self._set_remote_stage_state(record.id, "running", started=True)
@@ -334,7 +345,9 @@ class RemoteJobRunner:
                     bkill_ok=ok,
                 )
                 state["cancel_sent"] = True
-            exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+            exit_code = self._wait_exit_code(
+                node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+            )
             # Poll-state teardown happens in apply_terminal_side_effects,
             # only after the manager persists the terminal transition.
             return RemotePollObservation(
@@ -343,6 +356,11 @@ class RemoteJobRunner:
             )
 
         exit_code = self._monitor.get_exit_code(node, remote_job_dir)
+        if exit_code is not None and not self._receipt_is_current(
+            node, remote_job_dir, record.attempt
+        ):
+            # Stale receipt from a previous attempt — not this run's result.
+            exit_code = None
         if exit_code is not None:
             return self.collect_final_state(
                 record,
@@ -396,7 +414,9 @@ class RemoteJobRunner:
                 observed_status = JobStatus.PAUSED
 
             if RemoteJobMonitor.is_terminal(status):
-                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                exit_code = self._wait_exit_code(
+                    node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+                )
                 if exit_code is None:
                     # LSF reports a terminal state but the wrapper script
                     # never wrote ``.exit_code`` — this happens when LSF
@@ -791,20 +811,21 @@ class RemoteJobRunner:
         if self._config.auto_sync:
             self._sync_code_if_needed(node, event_log, record.id)
 
-        if spec.uses_v2_naming:
-            remote_job_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
-        else:
-            remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+        # Storage identity resolution — the SAME path as submit_remote
+        # (no second directory-join implementation in this legacy entry).
+        remote_job_dir = self._resolve_remote_dir_for(record, node, event_log)
 
-        # Steps 3–5: prepare remote dir, upload input + script, submit.
-        # If anything fails before bsub succeeds, clean up the remote
-        # directory so we don't leak stale inputs (plan P2-1).
+        # Steps 3–5: claim the remote dir, archive the previous attempt's
+        # receipts, upload input + script, submit.  Late failures only
+        # clean up a directory this submission created.
+        claim_state: dict[str, str] = {}
         try:
             lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record, spec, node, remote_job_dir, event_log, work_dir
+                record, spec, node, remote_job_dir, event_log, work_dir, claim_state=claim_state
             )
         except Exception:
-            self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+            if claim_state.get("disposition") == "created":
+                self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
             raise
 
         self._set_remote_stage_state(record.id, "running", started=True)
@@ -856,14 +877,23 @@ class RemoteJobRunner:
         remote_job_dir: str,
         event_log: JobEventLog,
         work_dir: Path,
+        claim_state: dict[str, str] | None = None,
     ) -> tuple[str, list[str]]:
-        """Prepare remote inputs, generate the LSF script, and bsub.
+        """Claim the dir, archive old receipts, upload inputs, bsub.
 
         Returns ``(lsf_job_id, cli_command)``.  Raises on any failure —
-        the caller is responsible for cleanup.
+        the caller cleans up only when ``claim_state["disposition"]`` is
+        ``"created"`` (reused/conflicting dirs are never deleted).
+
+        The exclusive claim runs BEFORE any file write, and the previous
+        attempt's receipt archive runs BEFORE ``bsub`` — a failure there
+        aborts the submission (no PENDING is published).
         """
-        # 3. Prepare remote directory + upload input
-        self._stager.make_remote_dir(node, remote_job_dir)
+        disposition = self._stager.claim_remote_job_dir(node, remote_job_dir, record)
+        if claim_state is not None:
+            claim_state["disposition"] = disposition
+
+        self._archive_remote_attempt(node, remote_job_dir, record, event_log, disposition)
 
         inputs_dir = work_dir
         inputs_dir.mkdir(parents=True, exist_ok=True)
@@ -924,6 +954,7 @@ class RemoteJobRunner:
             extra_flags=self._config.extra_flags,
             input_path=remote_input_name,
             remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
+            remote_job_dir=remote_job_dir,
             python_executable=py,
             pre_cmds=self._config.pre_cmds,
         )
@@ -999,6 +1030,176 @@ class RemoteJobRunner:
             files=["job.json", "task.json"],
         )
 
+    def _resolve_remote_dir_for(
+        self,
+        record: JobRecord,
+        node: RemoteNode,
+        event_log: JobEventLog,
+        *,
+        explicit: str | None = None,
+    ) -> str:
+        """Resolve storage identity → remote dir and emit legacy-path events.
+
+        Shared by ``submit_remote`` and the legacy ``run()``/``_run_remote``
+        entry so there is exactly one directory-resolution implementation.
+        """
+        resolved, fallback = resolve_remote_dir(
+            record,
+            node,
+            explicit=explicit,
+            probe=self._owner_probe(node, record),
+        )
+        source = ((record.result or {}).get("remote") or {}).get("path_source")
+        if fallback:
+            event_log.append(
+                "remote.path_legacy_fallback",
+                job_id=record.id,
+                node=node.name,
+                remote_dir=resolved,
+            )
+        elif source == "legacy_flat":
+            # Legacy in-flight job adopted at its old flat directory —
+            # persist happens through the record.result write-back.
+            event_log.append(
+                "remote.path_legacy_flat",
+                job_id=record.id,
+                node=node.name,
+                remote_dir=resolved,
+            )
+        return resolved
+
+    def _owner_probe(self, node: RemoteNode, record: JobRecord):
+        """Ownership predicate for the dual-candidate probe (job.json/task.json)."""
+
+        def probe(candidate: str) -> bool:
+            for marker in ("job.json", "task.json"):
+                try:
+                    raw = self._stager.read_remote_file(
+                        node, posixpath.join(candidate, marker)
+                    )
+                except (OSError, SSHExecutionError):
+                    continue
+                if not raw:
+                    continue
+                try:
+                    payload = json.loads(raw.decode("utf-8", errors="replace"))
+                except ValueError:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                owner = payload.get("id") or payload.get("task_id")
+                if owner == record.id:
+                    return True
+            return False
+
+        return probe
+
+    def _archive_remote_attempt(
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        record: JobRecord,
+        event_log: JobEventLog,
+        disposition: str,
+    ) -> None:
+        """Archive the previous attempt's receipts into ``attempts/<n>/``.
+
+        Runs inside the submit thread BEFORE ``bsub``: a failure aborts the
+        submission (no PENDING published before archiving completes) and the
+        poller never observes the directory first.  ``checkpoint.json`` /
+        ``step_result*.json`` / ``RESULT/`` are archived too unless this is
+        a **continue** (``remote.resume``), which adopts them in place.
+        """
+        previous_attempt = record.attempt - 1
+        if previous_attempt < 1 or disposition == "created":
+            return
+        meta = (record.result or {}).get("remote")
+        adopt_results = isinstance(meta, dict) and bool(meta.get("resume"))
+        archive_root = posixpath.join(
+            remote_job_dir, "WORK", "00_RUNTIME", "attempts", str(previous_attempt)
+        )
+        moved: list[str] = []
+
+        def _move(rel_src: str, rel_dst: str) -> None:
+            src = posixpath.join(remote_job_dir, rel_src)
+            if not self._stager.remote_exists(node, src):
+                return
+            self._stager.rename_remote(node, src, posixpath.join(archive_root, rel_dst))
+            moved.append(rel_src)
+
+        for name in (".exit_code", "state.json"):
+            _move(name, name)
+        try:
+            entries = self._stager.list_remote_dir(node, remote_job_dir)
+        except (FileNotFoundError, OSError):
+            entries = []
+        for entry in entries:
+            if entry.name.startswith(".stage_"):
+                _move(entry.name, entry.name)
+        runtime_rel = posixpath.join("WORK", "00_RUNTIME")
+        _move(posixpath.join(runtime_rel, "run.lock"), posixpath.join(runtime_rel, "run.lock"))
+        if adopt_results:
+            if moved:
+                event_log.append(
+                    "remote.attempts_archived",
+                    job_id=record.id,
+                    attempt=previous_attempt,
+                    files=moved,
+                    adopted_results=True,
+                )
+            return
+
+        _runtime_checkpoint = posixpath.join(runtime_rel, "checkpoint.json")
+        _move(_runtime_checkpoint, _runtime_checkpoint)
+        _move("checkpoint.json", "checkpoint.json")
+        _move("RESULT", "RESULT")
+        try:
+            runtime_entries = self._stager.list_remote_dir(
+                node, posixpath.join(remote_job_dir, runtime_rel)
+            )
+        except (FileNotFoundError, OSError):
+            runtime_entries = []
+        for source_entries, rel_prefix in ((entries, ""), (runtime_entries, runtime_rel)):
+            for entry in source_entries:
+                if entry.name.startswith("step_result"):
+                    rel = posixpath.join(rel_prefix, entry.name)
+                    _move(rel, rel)
+        if moved:
+            event_log.append(
+                "remote.attempts_archived",
+                job_id=record.id,
+                attempt=previous_attempt,
+                files=moved,
+                adopted_results=False,
+            )
+
+    def _receipt_is_current(self, node: RemoteNode, remote_job_dir: str, attempt: int) -> bool:
+        """True unless the remote receipts demonstrably belong to an older attempt.
+
+        ``state.json``/``job.json`` may declare the attempt they were
+        written for; a declared-but-different attempt means the receipt
+        set predates the current attempt and must not drive finalisation.
+        Unknown/undeclared receipts stay current (legacy compatibility).
+        """
+        for marker in ("state.json", "job.json"):
+            try:
+                raw = self._stager.read_remote_file(
+                    node, posixpath.join(remote_job_dir, marker)
+                )
+            except (OSError, SSHExecutionError):
+                continue
+            if not raw:
+                continue
+            try:
+                payload = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                continue
+            if isinstance(payload, dict):
+                declared = payload.get("attempt")
+                if isinstance(declared, int) and declared != attempt:
+                    return False
+        return True
+
     def _cleanup_remote_dir(
         self, node: RemoteNode, remote_job_dir: str, event_log: JobEventLog, job_id: str
     ) -> None:
@@ -1069,11 +1270,18 @@ class RemoteJobRunner:
                     bkill_ok=ok,
                 )
                 # Grace period for .exit_code to appear.
-                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                exit_code = self._wait_exit_code(
+                    node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+                )
                 break
 
             # --- Definitive terminal signal: .exit_code file ---
             exit_code = self._monitor.get_exit_code(node, remote_job_dir)
+            if exit_code is not None and not self._receipt_is_current(
+                node, remote_job_dir, record.attempt
+            ):
+                # Stale receipt from a previous attempt — keep polling.
+                exit_code = None
             if exit_code is not None:
                 try:
                     self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
@@ -1116,7 +1324,9 @@ class RemoteJobRunner:
 
             # --- LSF reports terminal but no .exit_code yet ---
             if RemoteJobMonitor.is_terminal(status):
-                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                exit_code = self._wait_exit_code(
+                    node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+                )
                 break
 
             time.sleep(self._poll_interval)
@@ -1149,14 +1359,24 @@ class RemoteJobRunner:
         return exit_code
 
     def _wait_exit_code(
-        self, node: RemoteNode, remote_job_dir: str, timeout: float = _EXIT_CODE_GRACE
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        timeout: float = _EXIT_CODE_GRACE,
+        attempt: int | None = None,
     ) -> int | None:
-        """Poll for ``.exit_code`` for up to *timeout* seconds."""
+        """Poll for ``.exit_code`` for up to *timeout* seconds.
+
+        When *attempt* is given, receipts declaring a different attempt are
+        rejected (stale previous-attempt ``.exit_code`` never finalises the
+        current attempt).
+        """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             ec = self._monitor.get_exit_code(node, remote_job_dir)
             if ec is not None:
-                return ec
+                if attempt is None or self._receipt_is_current(node, remote_job_dir, attempt):
+                    return ec
             time.sleep(1.0)
         return None
 

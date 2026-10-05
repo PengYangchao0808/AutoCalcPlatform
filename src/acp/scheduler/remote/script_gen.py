@@ -564,6 +564,7 @@ def build_lsf_script_spec(
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     remote_dir_name: str | None = None,
+    remote_job_dir: str | None = None,
     python_executable: str | None = None,
     pre_cmds: list[str] | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
@@ -571,8 +572,7 @@ def build_lsf_script_spec(
 
     Args:
         spec: The scheduler job specification.
-        job_id: The ACP job identifier (used for the BSUB job name and the
-            remote working directory).
+        job_id: The ACP job identifier (used for the BSUB job name).
         node: The target remote compute node.
         queue: LSF queue name.
         walltime: LSF wall-clock limit.
@@ -581,8 +581,11 @@ def build_lsf_script_spec(
             ``inputs/input.xyz``).
         config_path: Optional path to a job-level YAML config on the remote
             node (e.g. ``cccp.yaml`` in the job directory).
-        remote_dir_name: Leaf directory name for the remote job dir (v1.2
-            task-dir naming); falls back to ``job_id`` when not given.
+        remote_dir_name: Leaf directory name used only for display/LSF
+            job-name derivation when *remote_job_dir* is not given.
+        remote_job_dir: Already-resolved absolute remote job directory
+            (from ``resolve_remote_dir``).  When given it is used verbatim —
+            the caller owns storage identity; this function never re-joins.
         python_executable: Interpreter to use on the node.  When given it
             overrides ``node.python_executable`` — callers pass a
             probe-resolved (Python 3.10+) interpreter here so LSF scripts
@@ -593,8 +596,8 @@ def build_lsf_script_spec(
     Returns:
         ``(lsf_spec, cli_command)``.
     """
-    dir_leaf = remote_dir_name or job_id
-    remote_job_dir = posixpath.join(node.remote_work_dir, dir_leaf)
+    if remote_job_dir is None:
+        remote_job_dir = posixpath.join(node.remote_work_dir, remote_dir_name or job_id)
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,

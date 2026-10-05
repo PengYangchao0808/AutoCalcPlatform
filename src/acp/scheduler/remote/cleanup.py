@@ -382,10 +382,12 @@ class RemoteCleanup:
     def delete_job_dirs(self, job_id: str, dir_names: list[str] | None = None) -> dict[str, Any]:
         """Remove the remote working directory for a single job from every node.
 
-        *dir_names* lists the remote directory leaves to remove (v2
-        ``task_dir_name`` for new jobs, plus the legacy ``job_id`` leaf for
-        pre-migration jobs); when omitted only the legacy ``job_id`` leaf
-        is removed.
+        *dir_names* lists the remote directories to remove — the persisted
+        full relative dir (``project_leaf/task_leaf``, may include the
+        ``__NN`` dedupe suffix) or an absolute node path, plus the legacy
+        ``job_id`` leaf for pre-migration jobs); when omitted only the
+        legacy ``job_id`` leaf is removed.  Targets are containment-checked
+        by :meth:`delete_project_dirs`.
         """
         leaves = [job_id] + (dir_names or [])
         return self.delete_project_dirs(project_id="job", job_ids=leaves)
@@ -398,7 +400,11 @@ class RemoteCleanup:
         """Remove remote working directories for all jobs of a project.
 
         Iterates every configured node and attempts ``rm -rf`` on
-        ``node.remote_work_dir / job_id`` for each supplied job id.
+        ``node.remote_work_dir / dir`` for each supplied dir.  Entries may
+        be multi-component relative dirs (``leaf`` or ``project_leaf/
+        task_leaf``); the joined target is validated with
+        ``posixpath.normpath`` containment (must stay strictly inside the
+        base — equality rejected too) and then with ``_is_safe_work_dir``.
         Missing directories are ignored.  Errors are collected per node
         rather than raised so one unreachable node does not abort the
         whole operation.
@@ -419,11 +425,20 @@ class RemoteCleanup:
                 node_report["errors"].append(f"unsafe remote_work_dir: {base!r}")
                 report["nodes"].append(node_report)
                 continue
+            norm_base = posixpath.normpath(base)
+            base_prefix = norm_base.rstrip("/") + "/"
             for job_id in job_ids:
-                target = posixpath.join(base, job_id)
-                norm_target = posixpath.normpath(target)
-                if norm_target == posixpath.normpath(base):
-                    node_report["errors"].append(f"refusing to remove base dir: {target}")
+                if posixpath.isabs(job_id):
+                    target = posixpath.normpath(job_id)
+                else:
+                    target = posixpath.normpath(posixpath.join(base, job_id))
+                if target == norm_base or not target.startswith(base_prefix):
+                    node_report["errors"].append(
+                        f"refusing to remove path outside work dir: {job_id!r}"
+                    )
+                    continue
+                if not _is_safe_work_dir(target):
+                    node_report["errors"].append(f"unsafe target: {target!r}")
                     continue
                 try:
                     self._stager.remove_remote_dir(node, target)

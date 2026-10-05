@@ -122,6 +122,7 @@ _SCHEDULER_MARKERS: set[str] = {
     "input.xyz",
     "task.json",
     "input_source.json",
+    "resume_source.json",
 }
 
 
