@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal
@@ -27,6 +28,8 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 import numpy as np
 from numpy.typing import NDArray
 
+from acp.calculations.checkpoint import Checkpoint, load_checkpoint, write_checkpoint
+from acp.calculations.identity import IDENTITY_SCHEMA, identity_fingerprint
 from acp.calculations.progress import ProgressReporter
 from acp.core.models import Structure, StructureEnsemble
 from acp.core.workflow import WorkflowResult
@@ -85,6 +88,7 @@ from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name, write_result_summary
 from cccp.backends.crest import CrestBackend
+from cccp.calculation._common import theory_run_config
 from cccp.calculation.context import TaskContext
 from cccp.calculation.requests import (
     CensoRefineOptions,
@@ -808,18 +812,238 @@ def _select_conformers(
     return [(r.structure, w, d) for (r, _), w, d in zip(selected, weights, deltas)]
 
 
+# ── Per-conformer GIAO shielding checkpoints + resource budget (todo 28 / gap G15) ──
+
+_GIAO_CHECKPOINT_SCHEMA: Final = "acp-nmr-giao-shielding-v1"
+
+
+def _giao_geometry_token(coords: Any) -> list[float]:
+    """Canonical geometry token: 10-dp rounded, ``-0.0`` normalised to ``0.0``."""
+    array = (
+        np.asarray(coords, dtype=np.float64)
+        if coords is not None
+        else np.zeros((0, 3), dtype=np.float64)
+    )
+    return [round(float(value), 10) + 0.0 for value in array.ravel()]
+
+
+def _giao_fingerprint(
+    nmr_config: NmrConfig,
+    cfg: Mapping[str, Any] | None,
+    structure: Structure,
+    giao_solvent: str,
+    target_elements: list[str],
+    *,
+    atom_index_base: int,
+    geometry: list[float] | None,
+) -> str:
+    """Science identity of one GIAO shielding result — no stale reuse ever.
+
+    Covers every input that reaches ``run_nmr_shielding``: method/basis/
+    solvent (effective, gas-phase ``""``)/solvent_model/nuclei (target
+    elements as sent), charge/multiplicity, atom mapping (symbols +
+    atom_index_base) and the ``theory.*`` run-config layer that
+    ``resolve_spec`` folds into the rendered ORCA input. ``geometry=None``
+    yields the non-geometry plan fingerprint that gates the whole
+    checkpoint file (method-level changes invalidate everything); passing
+    the geometry token yields the per-conformer entry fingerprint
+    (geometry changes invalidate a single entry).
+    """
+    payload: dict[str, Any] = {
+        "scope": "acp_nmr_giao_shielding",
+        "schema": _GIAO_CHECKPOINT_SCHEMA,
+        "method": nmr_config.nmr_method,
+        "basis": nmr_config.nmr_basis,
+        "solvent": giao_solvent,
+        "solvent_model": nmr_config.solvent_model,
+        "nuclei": list(target_elements),
+        "charge": structure.charge,
+        "multiplicity": structure.multiplicity,
+        "atom_mapping": {
+            "symbols": list(structure.symbols),
+            "atom_index_base": atom_index_base,
+        },
+        "theory_run_config": theory_run_config(cfg),
+    }
+    if geometry is not None:
+        payload["geometry"] = geometry
+    return identity_fingerprint(payload)
+
+
+def _shieldings_from_cache(entry: Mapping[str, Any]) -> dict[int, dict[str, object]] | None:
+    """Rebuild ``{atom: {symbol, isotropic}}`` from a cached entry; ``None`` if malformed."""
+    raw = entry.get("shieldings")
+    if not isinstance(raw, Mapping) or not raw:
+        return None
+    restored: dict[int, dict[str, object]] = {}
+    try:
+        for key, value in raw.items():
+            if not isinstance(value, Mapping):
+                return None
+            symbol = value.get("symbol")
+            isotropic = value.get("isotropic")
+            if symbol is None or isotropic is None:
+                return None
+            restored[int(key)] = {"symbol": str(symbol), "isotropic": float(isotropic)}
+    except (TypeError, ValueError):
+        return None
+    return restored
+
+
+def _log_file_token(log_file: Path | None, giao_dir: Path) -> str | None:
+    if log_file is None:
+        return None
+    try:
+        return Path(log_file).resolve().relative_to(giao_dir.resolve()).as_posix()
+    except ValueError:
+        return str(log_file)
+
+
+def _stored_log_file(giao_dir: Path, stored: Any) -> Path | None:
+    if not isinstance(stored, str) or not stored:
+        return None
+    path = Path(stored)
+    resolved = path if path.is_absolute() else giao_dir / path
+    return resolved if resolved.exists() else None
+
+
+def _load_giao_checkpoint(giao_dir: Path, plan_fingerprint: str) -> tuple[dict[str, Any], int]:
+    """Load the per-candidate GIAO checkpoint under the D06 identity contract.
+
+    Missing, malformed or fingerprint-mismatched files return ``({}, 0)``
+    — conservative recompute, never a crash and never stale reuse.
+    """
+    checkpoint = load_checkpoint(giao_dir, plan_fingerprint)
+    if checkpoint is None:
+        return {}, 0
+    items = {
+        str(key): value
+        for key, value in checkpoint.items_state.items()
+        if isinstance(value, Mapping)
+    }
+    return items, checkpoint.resume_count
+
+
+def _write_giao_checkpoint(
+    giao_dir: Path, plan_fingerprint: str, items_state: Mapping[str, Any], resume_count: int
+) -> None:
+    """Atomic ``checkpoint.json`` write inside the GIAO stage dir.
+
+    A cache-write failure only costs a future recompute — it can never
+    fail the run (``OSError`` degrade-to-uncached) nor poison the cache.
+    """
+    try:
+        write_checkpoint(
+            giao_dir,
+            Checkpoint(
+                task_id="nmr",
+                workflow="nmr",
+                plan_fingerprint=plan_fingerprint,
+                step_states=[],
+                items_state=dict(items_state),
+                resume_count=resume_count,
+                identity_schema=IDENTITY_SCHEMA,
+            ),
+        )
+    except OSError as exc:
+        logger.warning(
+            "GIAO checkpoint write failed for %s (%s); results kept uncached", giao_dir, exc
+        )
+
+
+def _giao_resource_budget(
+    cfg: Mapping[str, Any], *, n_candidates: int, n_conformers: int
+) -> dict[str, Any]:
+    """Explicit ``候选×构象×nproc`` GIAO resource budget — capped, verified.
+
+    * ``nproc``/``mem`` are the job spec (merged-config ``resources``);
+    * one GIAO job may use ``executables.orca.nproc`` threads, clamped to
+      the job ``nproc`` (never budget more threads per job than the job
+      owns) — ``oversubscribed`` records a raw ORCA request above the job
+      spec so oversubscription is loud, never silent;
+    * ``max_parallel_giao_jobs = min(max(1, nproc // nproc_per_giao), giao_jobs)``
+      is the worker cap over the ``候选×构象`` demand envelope; the current
+      execution is sequential (1 worker), always ≤ this cap.
+    """
+    resources = cfg.get("resources")
+    resources = resources if isinstance(resources, Mapping) else {}
+    raw_nproc = resources.get("nproc")
+    job_nproc = (
+        raw_nproc
+        if isinstance(raw_nproc, int) and not isinstance(raw_nproc, bool) and raw_nproc > 0
+        else 1
+    )
+    mem = resources.get("mem")
+    executables = cfg.get("executables")
+    executables = executables if isinstance(executables, Mapping) else {}
+    orca_cfg = executables.get("orca")
+    orca_cfg = orca_cfg if isinstance(orca_cfg, Mapping) else {}
+    raw_requested = orca_cfg.get("nproc")
+    requested = (
+        raw_requested
+        if isinstance(raw_requested, int)
+        and not isinstance(raw_requested, bool)
+        and raw_requested > 0
+        else job_nproc
+    )
+    nproc_per_giao = min(requested, job_nproc)
+    giao_jobs = max(0, int(n_candidates)) * max(0, int(n_conformers))
+    return {
+        "nproc": job_nproc,
+        "mem": mem if isinstance(mem, (str, int)) and not isinstance(mem, bool) else None,
+        "nproc_per_giao": nproc_per_giao,
+        "oversubscribed": requested > job_nproc,
+        "n_candidates": int(n_candidates),
+        "n_conformers": int(n_conformers),
+        "giao_jobs": giao_jobs,
+        "max_parallel_giao_jobs": min(max(1, job_nproc // nproc_per_giao), giao_jobs),
+        "execution": "sequential",
+    }
+
+
+def _verify_giao_budget(budget: Mapping[str, Any]) -> None:
+    """Bound check: recorded workers must fit the job spec (raises otherwise)."""
+    nproc = int(budget["nproc"])
+    per = int(budget["nproc_per_giao"])
+    parallel = int(budget["max_parallel_giao_jobs"])
+    jobs = int(budget["giao_jobs"])
+    if nproc < 1 or per < 1:
+        raise RuntimeError(
+            f"GIAO budget has non-positive core counts: nproc={nproc}, nproc_per_giao={per}"
+        )
+    if parallel > jobs:
+        raise RuntimeError(f"GIAO budget workers {parallel} exceed demand giao_jobs={jobs}")
+    if per * parallel > nproc:
+        raise RuntimeError(
+            f"GIAO budget oversubscribes the job spec: "
+            f"{per} threads x {parallel} workers > {nproc} cores"
+        )
+
+
 def _run_giao_for_conformers(
     conformers: list[tuple[Structure, float, float]],
     nmr_config: NmrConfig,
     giao_dir: Path,
     cfg: dict[str, Any],
     solvent: str | None,
+    *,
+    budget: Mapping[str, Any] | None = None,
 ) -> list[ConformerShielding]:
     """Run ORCA GIAO NMR for each conformer and parse shieldings.
 
     *giao_dir* is the final per-candidate GIAO root (v2 layout:
     ``WORK/05_SP/ORCA/<candidate_id>``); per-conformer outputs land in
     ``conf_<idx>`` subdirectories beneath it.
+
+    Per-conformer shieldings are fingerprinted into
+    ``<giao_dir>/checkpoint.json`` (todo 28): a re-run with matching
+    fingerprints reuses stored results and computes only missing or
+    invalidated conformers; method-level changes invalidate the whole
+    file (plan fingerprint mismatch), a geometry change invalidates a
+    single entry. Successful results are checkpointed atomically after
+    each conformer, so an interrupted run resumes exactly where it
+    stopped. Execution is sequential — one GIAO at a time, always within
+    the explicit ``budget`` cap (verified before the loop).
     """
     nmr_nuclei = [n.split(maxsplit=1)[-1] if n[0].isdigit() else n for n in nmr_config.nuclei]
     # deduplicate elements
@@ -837,13 +1061,97 @@ def _run_giao_for_conformers(
     # directly-built NmrConfig can never inject a cpcm/SMD block.
     giao_solvent = "" if nmr_config.solvent_model.lower() == "none" else nmr_config.solvent
 
+    if budget is None:
+        budget = _giao_resource_budget(cfg, n_candidates=1, n_conformers=len(conformers))
+    _verify_giao_budget(budget)
+    logger.info("GIAO resource budget: %s", json.dumps(budget, sort_keys=True))
+    if budget["oversubscribed"]:
+        logger.warning(
+            "GIAO orca nproc exceeds the job nproc budget "
+            "(nproc_per_giao=%s requested, capped at nproc=%s) — "
+            "thread oversubscription recorded, not silent",
+            budget["nproc_per_giao"],
+            budget["nproc"],
+        )
+
     results: list[ConformerShielding] = []
+    if not conformers:
+        return results
+
+    giao_options = NmrShieldingOptions()
+    probe_structure = conformers[0][0]
+    plan_fingerprint = _giao_fingerprint(
+        nmr_config,
+        cfg,
+        probe_structure,
+        giao_solvent,
+        target_elements,
+        atom_index_base=giao_options.atom_index_base,
+        geometry=None,
+    )
+    stored_items, resume_count = _load_giao_checkpoint(giao_dir, plan_fingerprint)
+    if stored_items:
+        resume_count += 1
+        _write_giao_checkpoint(giao_dir, plan_fingerprint, stored_items, resume_count)
+        logger.info(
+            "GIAO resume: checkpoint hit for plan %s — %d cached conformer(s), resume #%d",
+            plan_fingerprint,
+            len(stored_items),
+            resume_count,
+        )
+    else:
+        logger.info(
+            "GIAO resume: no reusable checkpoint for plan %s — fresh compute",
+            plan_fingerprint,
+        )
+
+    items_state: dict[str, Any] = {}
     for idx, (structure, weight, delta) in enumerate(conformers):
         coords: NDArray[np.float64] = (
             np.asarray(structure.coordinates, dtype=np.float64)
             if structure.coordinates is not None
             else np.zeros((0, 3), dtype=np.float64)
         )
+        conformer_id = f"conf_{idx:03d}"
+        entry_fingerprint = _giao_fingerprint(
+            nmr_config,
+            cfg,
+            structure,
+            giao_solvent,
+            target_elements,
+            atom_index_base=giao_options.atom_index_base,
+            geometry=_giao_geometry_token(coords),
+        )
+        cached = stored_items.get(conformer_id)
+        reused: dict[int, dict[str, object]] | None = None
+        if isinstance(cached, Mapping) and cached.get("fingerprint") == entry_fingerprint:
+            reused = _shieldings_from_cache(cached)
+        if reused is not None and isinstance(cached, Mapping):
+            items_state[conformer_id] = cached
+            results.append(
+                ConformerShielding(
+                    conformer_id=conformer_id,
+                    boltzmann_weight=float(weight),
+                    shieldings=reused,
+                    log_file=_stored_log_file(giao_dir, cached.get("log_file")),
+                    coordinates=structure.coordinates,
+                    symbols=list(structure.symbols),
+                )
+            )
+            logger.info(
+                "GIAO %s: RESUMED from checkpoint (fingerprint match %s)",
+                conformer_id,
+                entry_fingerprint,
+            )
+            continue
+        if cached is None:
+            logger.info("GIAO %s: COMPUTING (no checkpoint entry)", conformer_id)
+        else:
+            logger.info(
+                "GIAO %s: COMPUTING (fingerprint mismatch — stale entry invalidated)",
+                conformer_id,
+            )
+
         out_dir = giao_dir / f"conf_{idx:03d}"
         out_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -862,7 +1170,7 @@ def _run_giao_for_conformers(
                         solvent=giao_solvent,
                         solvent_model=nmr_config.solvent_model,
                     ),
-                    options=NmrShieldingOptions(),
+                    options=giao_options,
                     output_dir=out_dir,
                 ),
                 context=TaskContext(
@@ -900,9 +1208,21 @@ def _run_giao_for_conformers(
             ),
             None,
         )
+        items_state[conformer_id] = {
+            "fingerprint": entry_fingerprint,
+            "shieldings": {
+                str(int(atom_index)): {
+                    "symbol": str(entry["symbol"]),
+                    "isotropic": float(entry["isotropic"]),  # type: ignore[arg-type]
+                }
+                for atom_index, entry in shieldings.items()
+            },
+            "log_file": _log_file_token(log_file, giao_dir),
+        }
+        _write_giao_checkpoint(giao_dir, plan_fingerprint, items_state, resume_count)
         results.append(
             ConformerShielding(
-                conformer_id=f"conf_{idx:03d}",
+                conformer_id=conformer_id,
                 boltzmann_weight=float(weight),
                 shieldings=shieldings,
                 log_file=log_file,
@@ -910,6 +1230,7 @@ def _run_giao_for_conformers(
                 symbols=list(structure.symbols),
             )
         )
+    _ = delta  # ΔG is Boltzmann bookkeeping, not a shielding input
     _ = solvent  # provenance only — solvent is applied via nmr_config
     return results
 
@@ -1823,6 +2144,16 @@ def run_nmr_analysis(
         progress_reporter.complete_stage("ensemble_export", skipped)
         progress_reporter.start_stage("giao_nmr")
 
+    selected_conformers = [
+        _select_conformers(ensemble, nmr_config) for ensemble in resolved_ensembles
+    ]
+    giao_budget = _giao_resource_budget(
+        cfg,
+        n_candidates=len(candidates),
+        n_conformers=max((len(selected) for selected in selected_conformers), default=0),
+    )
+    logger.info("NMR GIAO budget (候选×构象×nproc): %s", json.dumps(giao_budget, sort_keys=True))
+
     conformer_shieldings_by_candidate: list[list[ConformerShielding]] = []
     for idx, structure in enumerate(candidates):
         giao_dir = storage.stage_dir("05_SP", "ORCA") / structure.id
@@ -1834,11 +2165,12 @@ def run_nmr_analysis(
             ]
         else:
             conformer_shieldings = _run_giao_for_conformers(
-                _select_conformers(ensemble, nmr_config),
+                selected_conformers[idx],
                 nmr_config,
                 giao_dir,
                 cfg,
                 solvent,
+                budget=giao_budget,
             )
 
         if not conformer_shieldings:
@@ -2095,6 +2427,7 @@ def run_nmr_analysis(
         "dp5_modes": dp5_modes,
         "fchl_kernel": fchl_kernel,
         "stages": stages_completed,
+        "giao_resource_budget": giao_budget,
         "outputs": {
             "json": str(paths["json"]),
             "xlsx": str(paths["xlsx"]) if paths["xlsx"] else None,
@@ -2155,6 +2488,7 @@ def run_nmr_analysis(
             "error_model": actual_error_model,
             "dp5_mode": report.dp5_mode,
             "fchl_kernel": fchl_kernel,
+            "giao_resource_budget": giao_budget,
             "note": (
                 "DP4/DP5 use placeholder error-model parameters (P1a); values are relative only."
                 if actual_error_model.startswith("placeholder")
