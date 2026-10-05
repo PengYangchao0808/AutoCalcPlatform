@@ -576,13 +576,32 @@ class CandidateResult:
         }
 
 
-def _dp4_rank_key(candidate: CandidateResult) -> tuple[float, float]:
-    """Sort key for DP4 ranking; missing probabilities sort last (never win)."""
+def _dp4_rank_key(candidate: CandidateResult) -> tuple[float, float, int]:
+    """Sort key for DP4 ranking: ``(DP4, DP5, -index)`` — missing sorts last.
+
+    DP4 is the primary key (``None`` → ``-inf``, never wins). DP5 enters the
+    tie-break ONLY as a real, valid probability: the typed block must say
+    ``probability.dp5.status == "valid"`` AND ``dp5_probability`` must be
+    set. Placeholder / diagnostic / unavailable / not_applicable / invalid
+    DP5 — including a stale float left on the flat field while the typed
+    block says otherwise — is treated as missing so it can never decide a
+    tie. The final ``-index`` component settles a full tie deterministically
+    in favour of the smallest candidate index (documented rule: input order
+    never decides ambiguity unpredictably).
+    """
     dp4 = candidate.dp4_probability
-    dp5 = candidate.dp5_probability
+    probability = candidate.probability
+    dp5 = (
+        candidate.dp5_probability
+        if probability is not None
+        and probability.dp5.status == "valid"
+        and candidate.dp5_probability is not None
+        else None
+    )
     return (
         dp4 if dp4 is not None else float("-inf"),
         dp5 if dp5 is not None else float("-inf"),
+        -candidate.index,
     )
 
 
@@ -602,21 +621,28 @@ class NmrReport:
 
         A candidate ranks only when its evidence is valid (or unset for
         legacy callers) AND it carries a DP4 probability — invalid /
-        evidence-insufficient candidates never compete.
+        evidence-insufficient candidates never compete. When a typed
+        probability block is attached it must also say ``dp4.status ==
+        "valid"``: a stale float on the flat field can never rank a
+        candidate whose typed DP4 state is anything else.
         """
         return [
             candidate
             for candidate in self.candidates
             if (candidate.evidence is None or candidate.evidence.status == "valid")
             and candidate.dp4_probability is not None
+            and (candidate.probability is None or candidate.probability.dp4.status == "valid")
         ]
 
     @property
     def winner(self) -> CandidateResult | None:
-        """Return the highest-DP4 rankable candidate (ties broken by DP5).
+        """Return the highest-DP4 rankable candidate.
 
-        Candidates excluded by the evidence gate (or without a probability)
-        are never eligible; ``None`` when nobody qualifies.
+        Ties are broken by a REAL valid DP5 only (see ``_dp4_rank_key``),
+        then by the smallest candidate index; unavailable/placeholder DP5
+        never influences the order. Candidates excluded by the evidence gate
+        (or without a probability) are never eligible; ``None`` when nobody
+        qualifies — a winner is never invented.
         """
         ranked = self.ranked_candidates
         if not ranked:

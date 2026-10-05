@@ -1227,3 +1227,172 @@ def test_stage7_maps_invalid_dp5_outcome_to_typed_invalid(tmp_path: Path) -> Non
     # invalid candidates never surface in the stage-8 mode aggregation
     summary = _load_summary(result)
     assert summary["dp5_modes"] == []
+
+
+# ---------------------------------------------------------------------------
+# todo 16: winner/ranking never influenced by invalid/unavailable/placeholder
+# DP5 state (G05) + per-candidate typed statuses in the stage-8 summary.
+#
+# BEFORE (raw capture: .omo/evidence/.../task-16-before-tiebreak-stale-dp5.txt):
+# ``_dp4_rank_key`` read the flat ``dp5_probability`` unconditionally — a
+# stale float left on the flat field while the typed block said
+# ``placeholder`` won a DP4 tie against an honest ``unavailable`` candidate
+# (keys (0.5, 0.99) beat (0.5, -inf); winner = "placeholder-stale").
+#
+# AFTER: DP5 enters the tie-break only when ``probability.dp5.status ==
+# "valid"`` AND the float is set; a full tie falls to the smallest index
+# (explicit ``-index`` key, never raw input order).
+# ---------------------------------------------------------------------------
+
+
+def test_winner_tie_break_never_uses_non_valid_dp5() -> None:
+    """Equal DP4: a placeholder diagnostic (even with a stale float) vs unavailable."""
+    from acp.nmr.models import _dp4_rank_key
+
+    unavailable = CandidateResult(
+        index=0,
+        label="unavailable",
+        dp4_probability=0.5,
+        dp5_probability=None,
+        evidence=_valid_evidence(),
+        probability=CandidateProbability(
+            dp4=_dp4_result(probability=0.5),
+            dp5=ProbabilityResult(
+                model_id="goodman-dp5",
+                model_version="goodman-dp5",
+                status="unavailable",
+                probability=None,
+                mode=None,
+                calibration_status="not_evaluated",
+                reasons=("dp5_model_unavailable",),
+            ),
+        ),
+    )
+    stale = CandidateResult(
+        index=1,
+        label="placeholder-stale",
+        dp4_probability=0.5,
+        dp5_probability=0.99,  # stale flat float; the typed block says placeholder
+        evidence=_valid_evidence(),
+        probability=CandidateProbability(
+            dp4=_dp4_result(probability=0.5),
+            dp5=_dp5_result(status="placeholder", probability=None),
+        ),
+    )
+    # BEFORE: winner was `placeholder-stale` — the stale 0.99 decided the tie
+    key_unavailable = _dp4_rank_key(unavailable)
+    key_stale = _dp4_rank_key(stale)
+    assert key_unavailable[:2] == key_stale[:2] == (0.5, float("-inf"))
+    assert (key_unavailable[2], key_stale[2]) == (0, -1)  # documented -index rule
+
+    report = NmrReport(candidates=[unavailable, stale])
+    assert report.winner is unavailable  # decided by index, never by the diagnostic
+    # order invariance: reordering the candidate list cannot flip a full tie —
+    # the -index key decides, not insertion order (and not the 0.99 float)
+    swapped = NmrReport(candidates=[stale, unavailable])
+    assert swapped.winner is unavailable
+    assert _dp4_rank_key(stale)[:2] == (0.5, float("-inf"))  # the 0.99 never votes
+
+
+def test_stale_dp4_float_with_non_valid_typed_status_never_ranks() -> None:
+    """A typed dp4.status != valid excludes a candidate even with a legacy float."""
+    stale_dp4 = CandidateResult(
+        index=0,
+        label="stale-dp4",
+        dp4_probability=0.99,  # stale float slipped onto the flat field
+        dp5_probability=None,
+        evidence=_valid_evidence(),
+        probability=CandidateProbability(
+            dp4=_dp4_result(status="invalid", probability=None),
+            dp5=_dp5_result(status="unavailable", probability=None),
+        ),
+    )
+    good = CandidateResult(
+        index=1,
+        label="good",
+        dp4_probability=0.1,
+        evidence=_valid_evidence(),
+        probability=CandidateProbability(
+            dp4=_dp4_result(probability=0.1),
+            dp5=_dp5_result(status="unavailable", probability=None),
+        ),
+    )
+    report = NmrReport(candidates=[stale_dp4, good])
+    assert stale_dp4 not in report.ranked_candidates
+    assert report.winner is good  # never the fabricated 0.99
+    assert report.dp4_ranking == "not_applicable"  # only one ranked candidate
+
+
+def test_workflow_summary_carries_typed_statuses_per_candidate(tmp_path: Path) -> None:
+    """Stage-8 summary exposes dp4_status/dp5_status next to evidence_status."""
+    struct_a = _structure("candA", ["C", "H", "H", "H", "H"])
+    struct_b = _structure("candB", ["C", "C", "C", *["H"] * 11])
+    spectrum = "C: 40.0(C2)\nH: 4.0(H5), 3.0(H6), 1.0(H7), 0.0(H8)"
+    result = _run_workflow(
+        tmp_path,
+        [struct_a, struct_b],
+        spectrum,
+        [40.0, 40.0],
+        error_model="placeholder-student-t",
+    )
+    assert result.status == "completed", result.error
+
+    summary = _load_summary(result)
+    excluded, valid = summary["candidates"]
+    assert excluded["evidence_status"] == "invalid"
+    assert excluded["dp4_status"] == "invalid"
+    assert excluded["dp5_status"] == "unavailable"
+    assert excluded["exclusion_reasons"]
+    assert excluded["dp4_probability"] is None  # null-never-0
+    assert valid["evidence_status"] == "valid"
+    assert valid["dp4_status"] == "valid"
+    assert valid["dp5_status"] == "placeholder"
+    assert valid["dp5_probability"] is None  # placeholder never becomes a probability
+    # only the valid candidate ranks → winner present, ranking not applicable
+    assert summary["winner"] is not None
+    assert summary["winner"]["index"] == 1
+    assert summary["dp4_ranking"] == "not_applicable"
+
+
+def test_workflow_all_invalid_summary_has_no_winner_and_statuses(tmp_path: Path) -> None:
+    """Failure QA: every candidate invalid → no winner, statuses + reasons visible."""
+    struct_a = _structure("candA", ["C", "H", "H", "H", "H"])
+    struct_b = _structure("candB", ["C", "H", "H", "H", "H"])
+    # none of C9/H6..H9 exist on either candidate → zero matched signals each
+    spectrum = "C: 40.0(C9)\nH: 4.0(H9), 3.0(H8), 1.0(H7), 0.0(H6)"
+    result = _run_workflow(
+        tmp_path,
+        [struct_a, struct_b],
+        spectrum,
+        [40.0, 30.0],
+        error_model="placeholder-student-t",
+    )
+    assert result.status == "completed", result.error
+    assert result.metadata["winner"] is None
+
+    summary = _load_summary(result)
+    assert summary["winner"] is None  # never invented
+    assert summary["dp4_ranking"] == "not_applicable"
+    for entry in summary["candidates"]:
+        assert entry["dp4_status"] == "invalid"
+        assert entry["dp5_status"] == "unavailable"
+        assert entry["exclusion_reasons"]
+        assert entry["dp4_probability"] is None
+
+
+def test_workflow_happy_winner_competes_only_among_valid_candidates(tmp_path: Path) -> None:
+    """Happy QA: two valid candidates — statuses valid, winner is a valid one."""
+    result, _model = _run_two_candidate_workflow(tmp_path, geometry_a=True, geometry_b=False)
+    assert result.status == "completed", result.error
+
+    summary = _load_summary(result)
+    assert summary["dp4_ranking"] == "normal"  # two ranked candidates
+    for entry in summary["candidates"]:
+        assert entry["dp4_status"] == "valid"
+        assert entry["dp5_status"] == "valid"
+    assert summary["winner"] is not None
+    winning = summary["candidates"][summary["winner"]["index"]]
+    assert winning["dp4_status"] == "valid"
+    assert winning["dp5_status"] == "valid"
+    # equal DP4 (identical candidates) → the real valid DP5 decides: A 0.65 > B 0.55
+    assert summary["winner"]["index"] == 0

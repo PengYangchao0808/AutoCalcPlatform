@@ -2044,6 +2044,9 @@ def run_nmr_analysis(
                 "dp4_probability": cr.dp4_probability,
                 "dp5_probability": cr.dp5_probability,
                 "evidence_status": cr.evidence.status if cr.evidence is not None else None,
+                # G05: typed statuses are null only when no probability block is attached
+                "dp4_status": cr.probability.dp4.status if cr.probability is not None else None,
+                "dp5_status": cr.probability.dp5.status if cr.probability is not None else None,
                 "exclusion_reasons": list(cr.evidence.exclusion_reasons)
                 if cr.evidence is not None
                 else [],
