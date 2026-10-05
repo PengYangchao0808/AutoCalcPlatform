@@ -513,12 +513,43 @@ def _extract_sdf_title(block: str, idx: int) -> str:
     return f"molecule_{idx + 1}"
 
 
+_COUNTS_LINE_RE = re.compile(r"^\s*\d+\s+\d+.*\b(?:V2000|V3000)\b")
+
+
+def normalize_molblock(block: str) -> str:
+    """Put the V2000/V3000 counts line back on line 4 of a mol block.
+
+    Title-less records (RDKit ``SDWriter``/``MolToMolBlock`` emit an empty
+    first line) lose their title line when callers ``strip()`` the block,
+    which shifts the counts line and makes ``MolFromMolBlock`` read an atom
+    line as the counts line. Leading blank lines are removed (or blank header
+    lines inserted) until the counts line sits at index 3, exactly restoring
+    the 3-line header whenever the scan finds a counts line near the top.
+    """
+    lines = block.split("\n")
+    counts_idx = None
+    for idx, line in enumerate(lines[:10]):
+        if _COUNTS_LINE_RE.match(line):
+            counts_idx = idx
+            break
+    if counts_idx is None:
+        return block
+    while counts_idx > 3 and not lines[0].strip():
+        lines.pop(0)
+        counts_idx -= 1
+    while counts_idx < 3:
+        lines.insert(0, "")
+        counts_idx += 1
+    return "\n".join(lines)
+
+
 def _parse_molblock(block: str) -> dict[str, Any]:
     try:
         from rdkit import Chem
     except ImportError:
         return _parse_molblock_manual(block)
 
+    block = normalize_molblock(block)
     mol = Chem.MolFromMolBlock(block, sanitize=True, removeHs=False)
     if mol is None:
         raise ValueError("RDKit failed to parse MOL block")
@@ -558,6 +589,7 @@ def _parse_molblock(block: str) -> dict[str, Any]:
 
 
 def _parse_molblock_manual(block: str) -> dict[str, Any]:
+    block = normalize_molblock(block)
     lines = block.splitlines()
     if len(lines) < 4:
         raise ValueError("MOL block too short")
@@ -812,6 +844,7 @@ def parse_smiles_list(content: str) -> StructureParseResult:
 __all__ = [
     "detect_and_parse",
     "detect_format",
+    "normalize_molblock",
     "parse_gjf_text",
     "parse_mol_text",
     "parse_orca_inp_text",

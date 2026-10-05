@@ -1682,6 +1682,9 @@ MIGRATION_STATION_PREFIXES = (
     # acp-nmr-goodman-gap todo 2: stable atom identity + label schemes.
     "src/acp/nmr/structure_map.py",
     "src/acp/nmr/__init__.py",
+    # acp-nmr-goodman-gap todo 3: input-layer molecular graph + topology provenance.
+    "src/acp/io/structures.py",
+    "src/acp/intake/parsers.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {

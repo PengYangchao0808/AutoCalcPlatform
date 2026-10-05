@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -29,7 +29,13 @@ from numpy.typing import NDArray
 from acp.calculations.progress import ProgressReporter
 from acp.core.models import Structure, StructureEnsemble
 from acp.core.workflow import WorkflowResult
-from acp.io.structures import StructureReader
+from acp.io.structures import (
+    NMR_TOPOLOGY_SOURCES,
+    NMR_TOPOLOGY_XYZ_UNAVAILABLE,
+    StructureReader,
+    TopologyUnavailableError,
+    capture_nmr_topology,
+)
 from acp.nmr.assignment import (
     collect_residual_inputs,
     match_assigned,
@@ -64,6 +70,7 @@ from acp.nmr.probability import (
 )
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
+from acp.nmr.structure_map import NmrStructureMap
 from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name, write_result_summary
@@ -92,6 +99,9 @@ from cccp.qc.interfaces.censo import (
 )
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from rdkit import Chem
 
 NMR_STAGES: Final[tuple[str, ...]] = (
     "embed_smiles",
@@ -126,8 +136,21 @@ def _parse_candidates(
     input_sources: list[str],
     charge: int | None,
     multiplicity: int | None,
+    strict_topology: bool = False,
 ) -> list[Structure]:
-    """Parse each input source (SMILES or XYZ path) into a :class:`Structure`."""
+    """Parse each input source (SMILES/SDF/XYZ) into a :class:`Structure`.
+
+    Every candidate additionally captures its bonded molecular graph (gap
+    G01) into metadata: ``nmr_topology_source`` (one of
+    :data:`~acp.io.structures.NMR_TOPOLOGY_SOURCES`),
+    ``nmr_structure_map`` (JSON-safe :class:`NmrStructureMap` payload fixing
+    source↔mol atom order for ``atom_uid`` joins), ``nmr_topology_mol`` (the
+    captured RDKit Mol or ``None``) and ``nmr_topology_reason``. Nothing is
+    fabricated when topology is unavailable — the map and mol stay ``None``.
+
+    With *strict_topology* a missing graph raises
+    :class:`TopologyUnavailableError` instead of degrading.
+    """
     reader = StructureReader()
     candidates: list[Structure] = []
     for idx, source in enumerate(input_sources):
@@ -138,6 +161,13 @@ def _parse_candidates(
             name=f"candidate_{idx + 1}",
         )
         safe = sanitize_job_name(structure.id) or f"candidate_{idx + 1}"
+        metadata: dict[str, object] = {"source": source, **(structure.metadata or {})}
+        metadata.update(_capture_candidate_topology(structure, source, charge, multiplicity))
+        if strict_topology and metadata["nmr_structure_map"] is None:
+            raise TopologyUnavailableError(
+                f"topology unavailable for candidate {idx + 1} ({source!r}): "
+                f"{metadata['nmr_topology_reason'] or 'no bonded graph captured'}"
+            )
         candidates.append(
             Structure(
                 id=safe,
@@ -145,10 +175,95 @@ def _parse_candidates(
                 multiplicity=structure.multiplicity,
                 symbols=structure.symbols,
                 coordinates=structure.coordinates,
-                metadata={"source": source, **(structure.metadata or {})},
+                metadata=metadata,
             )
         )
     return candidates
+
+
+def _capture_candidate_topology(
+    structure: Structure,
+    source: str,
+    charge: int | None,
+    multiplicity: int | None,
+) -> dict[str, object]:
+    """Capture the candidate's bonded graph + structure-map provenance (G01).
+
+    Returns the four ``nmr_topology_*`` metadata keys. The map and mol are
+    attached only when the captured graph matches the parsed structure
+    atom-for-atom — provenance is never fabricated for a mismatched graph.
+    """
+    capture = capture_nmr_topology(source, charge=charge, multiplicity=multiplicity)
+    unavailable: dict[str, object] = {
+        "nmr_topology_source": capture.topology_source,
+        "nmr_structure_map": None,
+        "nmr_topology_mol": None,
+        "nmr_topology_reason": capture.reason or "bonded graph unavailable",
+    }
+    mol = capture.mol
+    if mol is None:
+        return unavailable
+    if mol.GetNumAtoms() != len(structure.symbols):
+        reason = (
+            f"captured graph has {mol.GetNumAtoms()} atoms but the parsed structure "
+            f"has {len(structure.symbols)} (source/structure mismatch)"
+        )
+        logger.debug("NMR topology capture discarded for %r: %s", source, reason)
+        unavailable["nmr_topology_reason"] = reason
+        return unavailable
+    try:
+        structure_map = NmrStructureMap.from_mol(mol)
+    except ValueError as exc:
+        unavailable["nmr_topology_reason"] = f"NmrStructureMap build failed: {exc}"
+        return unavailable
+    return {
+        "nmr_topology_source": capture.topology_source,
+        "nmr_structure_map": {
+            "elements": list(structure_map.elements),
+            "source_atom_indices": list(structure_map.source_atom_indices),
+            "canonical_ranks": list(structure_map.canonical_ranks),
+        },
+        "nmr_topology_mol": mol,
+        "nmr_topology_reason": None,
+    }
+
+
+def nmr_topology_source_for(structure: Structure) -> str:
+    """Return the captured ``nmr_topology_source`` (``xyz_unavailable`` if absent)."""
+    value = structure.metadata.get("nmr_topology_source")
+    if isinstance(value, str) and value in NMR_TOPOLOGY_SOURCES:
+        return value
+    return NMR_TOPOLOGY_XYZ_UNAVAILABLE
+
+
+def nmr_structure_map_for(structure: Structure) -> NmrStructureMap | None:
+    """Rebuild the captured :class:`NmrStructureMap` from candidate metadata.
+
+    Returns ``None`` when topology is unavailable (never an element-merged
+    stand-in). Raises on a malformed stored payload — provenance is not
+    silently dropped.
+    """
+    raw = structure.metadata.get("nmr_structure_map")
+    if raw is None:
+        return None
+    if isinstance(raw, NmrStructureMap):
+        return raw
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"nmr_structure_map metadata must be a dict or NmrStructureMap, "
+            f"got {type(raw).__name__}"
+        )
+    return NmrStructureMap.from_elements(
+        [str(element) for element in raw["elements"]],
+        source_atom_indices=[int(i) for i in raw["source_atom_indices"]],
+        ranks=[int(r) for r in raw["canonical_ranks"]],
+    )
+
+
+def nmr_topology_mol_for(structure: Structure) -> Chem.Mol | None:
+    """Return the captured bonded RDKit Mol, or ``None`` when unavailable."""
+    mol = structure.metadata.get("nmr_topology_mol")
+    return mol if mol is not None else None
 
 
 def _load_experiment(spectrum_input: str | Path) -> ExperimentalNmr:
@@ -1033,6 +1148,7 @@ def run_nmr_analysis(
     solvent: str | None = None,
     charge: int | None = None,
     multiplicity: int | None = None,
+    strict_topology: bool = False,
     nproc: int | None = None,
     boltzmann_temp: float | None = None,
     tms_1h: float | None = None,
@@ -1066,6 +1182,11 @@ def run_nmr_analysis(
             ``mPW1PW91/6-311G(d)`` — must match the error model).
         solvent: Solvent name (applied to both conformer gen and GIAO NMR).
         charge / multiplicity: Per-candidate overrides.
+        strict_topology: When ``True``, stage-0 parsing raises
+            :class:`TopologyUnavailableError` (surfaced as a failed result)
+            if any candidate has no bonded molecular graph — e.g. an XYZ
+            input without an explicit charge. Defaults to ``False``;
+            ``NmrConfig.strict_equivalence`` wires here later (todo 4).
         nproc: CPU core override.
         boltzmann_temp: Boltzmann-weight temperature (K).
         tms_1h / tms_13c: Override TMS reference shieldings.
@@ -1109,7 +1230,9 @@ def run_nmr_analysis(
             error=error,
         )
     try:
-        candidates = _parse_candidates(input_sources, charge, multiplicity)
+        candidates = _parse_candidates(
+            input_sources, charge, multiplicity, strict_topology=strict_topology
+        )
         if bruker is not None:
             experiment = _load_experiment_bruker(bruker, bruker_references, output_root)
         else:
