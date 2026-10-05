@@ -4,6 +4,14 @@ QC Runners
 
 Runners for auxiliary QC tasks like clustering and thermodynamics.
 
+``run_shermo`` below is the single Shermo runner (QC-interface/runner
+responsibility).  Every thermochemistry entry point funnels through the
+shared scientific implementation ``cccp.qc.shermo_adapter`` +
+``cccp.qc.thermo_normalize``; this runner is called by that adapter and by
+the low-level compatibility wrapper ``batch_process_thermo`` — entry
+count != implementation count.  Gate: FINAL_SHERMO_ALLOWED_PATHS covers
+``src/cccp`` only.
+
 Author: QCcalc Team (adapted from RPH)
 """
 
