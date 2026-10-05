@@ -260,6 +260,11 @@ CREATE INDEX IF NOT EXISTS idx_tasks_project_archived_created
     ON tasks(project_id, archived, created_at DESC, task_id ASC);
 """,
     },
+    {
+        "id": "020",
+        "description": "add revision/attempt columns to jobs (CAS transitions, 1-based attempt)",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility + backfill",
+    },
 ]
 
 
@@ -583,6 +588,58 @@ CREATE INDEX IF NOT EXISTS idx_org_events_object ON organization_events(object_t
     return True
 
 
+def _apply_jobs_revision_attempt_columns(conn: sqlite3.Connection) -> bool:
+    """Add ``revision`` / ``attempt`` to jobs (CAS token + 1-based attempt).
+
+    ``attempt`` backfills from the legacy ``result_json['attempts']`` counter
+    for rows still sitting on the column default (1).  JSON1 is probed first;
+    when unavailable, a Python row scan takes over with default 1.
+    """
+    if not _table_exists(conn, "jobs"):
+        return False
+    if not _column_exists(conn, "jobs", "revision"):
+        conn.execute("ALTER TABLE jobs ADD COLUMN revision INTEGER NOT NULL DEFAULT 0")
+    if not _column_exists(conn, "jobs", "attempt"):
+        conn.execute("ALTER TABLE jobs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1")
+
+    if _json1_available(conn):
+        conn.execute(
+            "UPDATE jobs SET attempt = MAX("
+            "CAST(COALESCE(json_extract(result_json, '$.attempts'), 1) AS INTEGER), 1) "
+            "WHERE attempt = 1 AND json_valid(result_json)"
+        )
+    else:
+        log = logging.getLogger(__name__)
+        log.info("JSON1 unavailable; backfilling jobs.attempt via Python row scan")
+        rows = conn.execute("SELECT id, result_json FROM jobs WHERE attempt = 1").fetchall()
+        for row in rows:
+            attempts = 1
+            raw = row["result_json"]
+            if raw:
+                try:
+                    payload = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    payload = None
+                if isinstance(payload, dict):
+                    try:
+                        attempts = int(payload.get("attempts") or 1)
+                    except (TypeError, ValueError):
+                        attempts = 1
+            conn.execute(
+                "UPDATE jobs SET attempt=? WHERE id=?",
+                (max(attempts, 1), row["id"]),
+            )
+    return True
+
+
+def _json1_available(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("SELECT json_valid('[]')").fetchone()
+    except sqlite3.Error:
+        return False
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -605,6 +662,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_case_preserving_molecule_key_refresh(conn)
     if migration_id == "017":
         return _apply_tasks_custom_name_columns(conn)
+    if migration_id == "020":
+        return _apply_jobs_revision_attempt_columns(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

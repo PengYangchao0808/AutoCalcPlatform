@@ -159,8 +159,17 @@ def normalize_for_compare(*sections: Any) -> str:
 
 
 def attempt_number(record: JobRecord) -> int:
-    """1-based attempt number tracked in ``record.result['attempts']``."""
-    return int((record.result or {}).get("attempts") or 1)
+    """1-based attempt number; the ``jobs.attempt`` column is authoritative.
+
+    Falls back to the legacy ``result['attempts']`` counter only while the
+    column still sits at its untouched default (pre-migration rows and
+    in-memory records).
+    """
+    column = int(record.attempt or 1)
+    if column > 1:
+        return column
+    legacy = int((record.result or {}).get("attempts") or 1)
+    return max(column, legacy)
 
 
 def compute_source_revision(record: JobRecord) -> str:

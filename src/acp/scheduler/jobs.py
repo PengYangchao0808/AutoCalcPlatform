@@ -656,6 +656,8 @@ class JobRecord:
     node_id: str | None = None
     host: str | None = None
     result: dict[str, Any] | None = None
+    revision: int = 0
+    attempt: int = 1
 
     def touch(self) -> None:
         self.updated_at = _utc_now_iso()
@@ -682,6 +684,8 @@ class JobRecord:
             "node_id": self.node_id,
             "host": self.host,
             "result": self.result,
+            "revision": self.revision,
+            "attempt": self.attempt,
         }
 
 

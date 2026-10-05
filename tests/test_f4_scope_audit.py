@@ -1672,6 +1672,10 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/workflows/xtbmd_censo_energy.py",
     "src/acp/workflows/xtbmd_md.py",
     "src/acp/confsearch/protocols/xtb_md.py",
+    # acp-execution-integrity todos 1-19: scheduler/store/api 迁移驻点。
+    "src/acp/scheduler/",
+    "src/acp/storage/",
+    "src/acp/api/",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
@@ -1820,6 +1824,9 @@ def test_migration_scope_catches_unaudited_change() -> None:
     issues = _migration_audit_issues(["src/acp/nmr/smuggled.py"])
     assert issues, "unaudited change outside migration stations was not detected"
     assert "unaudited" in issues[0]
+    unregistered = _migration_audit_issues(["src/acp/scheduler_utils/rogue.py"])
+    assert unregistered, "unregistered path under a migration prefix was not detected"
+    assert "unaudited" in unregistered[0]
 
 
 def test_migration_scope_catches_workflow_backend_direct() -> None:

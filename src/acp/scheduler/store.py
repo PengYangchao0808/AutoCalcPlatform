@@ -14,7 +14,9 @@ import json
 import logging
 import sqlite3
 import threading
+from collections.abc import Collection
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,56 @@ from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _status_clause(
+    expected_status: Collection[JobStatus] | JobStatus | str | None,
+) -> tuple[str, list[Any]]:
+    """SQL fragment + params for an ``expected_status`` precondition."""
+    if expected_status is None:
+        return "", []
+    if isinstance(expected_status, (JobStatus, str)):
+        value = expected_status.value if isinstance(expected_status, JobStatus) else expected_status
+        return " AND status=?", [value]
+    statuses = list(expected_status)
+    if not statuses:
+        raise ValueError("expected_status collection must not be empty")
+    placeholders = ",".join("?" for _ in statuses)
+    values = [s.value if isinstance(s, JobStatus) else str(s) for s in statuses]
+    return f" AND status IN ({placeholders})", values
+
+
+def _encode_field(name: str, value: Any) -> Any:
+    if name == "result":
+        return json.dumps(value) if value is not None else None
+    if name == "status":
+        return value.value if isinstance(value, JobStatus) else str(value)
+    return value
+
+
+def _conflict_state(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    columns = set(row.keys())
+    state: dict[str, Any] = {}
+    for key in ("status", "revision", "attempt"):
+        if key in columns:
+            state[key] = row[key]
+    return state
+
+
+class JobStateConflictError(Exception):
+    """CAS precondition failed: the jobs row is not in the expected state."""
+
+    def __init__(self, job_id: str, expected: dict[str, Any], actual: dict[str, Any] | None):
+        super().__init__(f"job {job_id} state conflict: expected {expected}, actual {actual}")
+        self.job_id = job_id
+        self.expected = expected
+        self.actual = actual
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -78,13 +130,20 @@ class JobStore:
                 """INSERT INTO jobs (id, workflow, name, status, work_dir, spec_json,
                        created_at, updated_at, started_at, completed_at, project_id,
                        input_hash, current_stage, progress, error, pid, exit_code,
-                       remote_job_id, group_id, result_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       remote_job_id, group_id, result_json, revision, attempt)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 _record_to_row(record),
             )
             conn.commit()
 
     def update(self, record: JobRecord) -> None:
+        """Persist a whole record unconditionally (bare UPDATE, no CAS).
+
+        Deprecated: prefer :meth:`transition`, :meth:`update_progress`, or
+        :meth:`requeue_with_spec` — a stale whole-row write can clobber
+        concurrent state changes.  Kept until the manager write sites are
+        migrated; does not touch ``revision`` / ``attempt``.
+        """
         record.touch()
         with self._lock, self._connect() as conn:
             conn.execute(
@@ -116,6 +175,228 @@ class JobStore:
                 ),
             )
             conn.commit()
+
+    _TRANSITION_FIELDS = frozenset(
+        {
+            "status",
+            "current_stage",
+            "progress",
+            "error",
+            "pid",
+            "exit_code",
+            "remote_job_id",
+            "started_at",
+            "completed_at",
+            "result",
+        }
+    )
+
+    def transition(
+        self,
+        job_id: str,
+        *,
+        expected_status: Collection[JobStatus] | JobStatus | None,
+        expected_revision: int,
+        expected_attempt: int | None = None,
+        **fields: Any,
+    ) -> JobRecord:
+        """CAS single-row state update: one UPDATE guarded by revision/status/attempt.
+
+        Only whitelisted fields are written (never ``spec_json``); ``revision``
+        increments and the fresh record is read back on the same connection.
+        Raises :class:`JobStateConflictError` when the row does not match the
+        expectation, and :class:`ValueError` for unknown or forbidden fields.
+        """
+        unknown = sorted(set(fields) - self._TRANSITION_FIELDS)
+        if unknown:
+            raise ValueError(f"transition does not allow field(s): {', '.join(unknown)}")
+
+        assignments = ["revision=revision+1", "updated_at=?"]
+        params: list[Any] = [_utc_now_iso()]
+        for name, value in fields.items():
+            column = "result_json" if name == "result" else name
+            assignments.append(f"{column}=?")
+            params.append(_encode_field(name, value))
+
+        status_sql, status_params = _status_clause(expected_status)
+        where = "id=? AND revision=?" + status_sql
+        args: list[Any] = [job_id, expected_revision, *status_params]
+        expected: dict[str, Any] = {"revision": expected_revision}
+        if expected_status is not None:
+            if isinstance(expected_status, (JobStatus, str)):
+                expected["status"] = (
+                    expected_status.value
+                    if isinstance(expected_status, JobStatus)
+                    else expected_status
+                )
+            else:
+                expected["status"] = sorted(
+                    s.value if isinstance(s, JobStatus) else str(s) for s in expected_status
+                )
+        if expected_attempt is not None:
+            where += " AND attempt=?"
+            args.append(expected_attempt)
+            expected["attempt"] = expected_attempt
+
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                f"UPDATE jobs SET {', '.join(assignments)} WHERE {where}",
+                (*params, *args),
+            )
+            if cursor.rowcount != 1:
+                row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+                raise JobStateConflictError(job_id, expected, _conflict_state(row))
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobStateConflictError(job_id, expected, None)
+            conn.commit()
+            return _row_to_record(row)
+
+    def update_progress(
+        self,
+        job_id: str,
+        *,
+        expected_revision: int,
+        progress: float | None = None,
+        current_stage: str | None = None,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+        pid: int | None = None,
+        exit_code: int | None = None,
+    ) -> JobRecord:
+        """CAS narrow progress write: only the non-None arguments are persisted.
+
+        Never touches ``status`` or ``spec_json``; ``revision`` increments on
+        success and :class:`JobStateConflictError` guards stale writers.
+        """
+        provided: dict[str, Any] = {}
+        if progress is not None:
+            provided["progress"] = progress
+        if current_stage is not None:
+            provided["current_stage"] = current_stage
+        if result is not None:
+            provided["result"] = result
+        if error is not None:
+            provided["error"] = error
+        if pid is not None:
+            provided["pid"] = pid
+        if exit_code is not None:
+            provided["exit_code"] = exit_code
+
+        assignments = ["revision=revision+1", "updated_at=?"]
+        params: list[Any] = [_utc_now_iso()]
+        for name, value in provided.items():
+            column = "result_json" if name == "result" else name
+            assignments.append(f"{column}=?")
+            params.append(_encode_field(name, value))
+
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                f"UPDATE jobs SET {', '.join(assignments)} WHERE id=? AND revision=?",
+                (*params, job_id, expected_revision),
+            )
+            if cursor.rowcount != 1:
+                row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+                raise JobStateConflictError(
+                    job_id, {"revision": expected_revision}, _conflict_state(row)
+                )
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobStateConflictError(job_id, {"revision": expected_revision}, None)
+            conn.commit()
+            return _row_to_record(row)
+
+    _REQUEUE_RESET_DEFAULTS: dict[str, Any] = {
+        "started_at": None,
+        "completed_at": None,
+        "current_stage": None,
+        "progress": None,
+        "error": None,
+        "pid": None,
+        "exit_code": None,
+        "remote_job_id": None,
+    }
+
+    def requeue_with_spec(
+        self,
+        job_id: str,
+        *,
+        new_spec: JobSpec,
+        expected_revision: int,
+        expected_attempt: int,
+        expected_status: Collection[JobStatus] | JobStatus | None,
+        **reset_fields: Any,
+    ) -> JobRecord:
+        """CAS requeue in one transaction: new spec + attempt+1 + QUEUED.
+
+        The only legal spec-changing entry point.  Runtime fields reset to
+        NULL by default (``reset_fields`` may override them plus ``result``
+        and ``input_hash``); ``result_json`` is untouched unless passed.
+        Raises :class:`TypeError` for a non-:class:`JobSpec` ``new_spec`` and
+        :class:`ValueError` for forbidden ``reset_fields``.
+        """
+        if not isinstance(new_spec, JobSpec):
+            raise TypeError(
+                f"requeue_with_spec requires a JobSpec, got {type(new_spec).__name__}"
+            )
+        allowed = set(self._REQUEUE_RESET_DEFAULTS) | {"result", "input_hash"}
+        unknown = sorted(set(reset_fields) - allowed)
+        if unknown:
+            raise ValueError(f"requeue_with_spec does not allow field(s): {', '.join(unknown)}")
+
+        values: dict[str, Any] = dict(self._REQUEUE_RESET_DEFAULTS)
+        for name in self._REQUEUE_RESET_DEFAULTS:
+            if name in reset_fields:
+                values[name] = reset_fields[name]
+
+        assignments = [
+            "spec_json=?",
+            "attempt=attempt+1",
+            "revision=revision+1",
+            "updated_at=?",
+            "status=?",
+        ]
+        params: list[Any] = [_spec_to_json(new_spec), _utc_now_iso(), JobStatus.QUEUED.value]
+        for name, value in values.items():
+            assignments.append(f"{name}=?")
+            params.append(value)
+        if "result" in reset_fields:
+            assignments.append("result_json=?")
+            params.append(_encode_field("result", reset_fields["result"]))
+        if "input_hash" in reset_fields:
+            assignments.append("input_hash=?")
+            params.append(reset_fields["input_hash"])
+
+        status_sql, status_params = _status_clause(expected_status)
+        where = "id=? AND revision=? AND attempt=?" + status_sql
+        args: list[Any] = [job_id, expected_revision, expected_attempt, *status_params]
+
+        expected: dict[str, Any] = {"revision": expected_revision, "attempt": expected_attempt}
+        if expected_status is not None:
+            if isinstance(expected_status, (JobStatus, str)):
+                expected["status"] = (
+                    expected_status.value
+                    if isinstance(expected_status, JobStatus)
+                    else expected_status
+                )
+            else:
+                expected["status"] = sorted(
+                    s.value if isinstance(s, JobStatus) else str(s) for s in expected_status
+                )
+
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                f"UPDATE jobs SET {', '.join(assignments)} WHERE {where}",
+                (*params, *args),
+            )
+            if cursor.rowcount != 1:
+                row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+                raise JobStateConflictError(job_id, expected, _conflict_state(row))
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                raise JobStateConflictError(job_id, expected, None)
+            conn.commit()
+            return _row_to_record(row)
 
     def get(self, job_id: str) -> JobRecord | None:
         with self._lock, self._connect() as conn:
@@ -545,6 +826,8 @@ def _record_to_row(record: JobRecord) -> tuple[Any, ...]:
         record.remote_job_id,
         record.group_id,
         json.dumps(record.result) if record.result is not None else None,
+        record.revision,
+        record.attempt,
     )
 
 
@@ -617,6 +900,8 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         node_id=row["node_id"] if "node_id" in columns else None,
         host=row["host"] if "host" in columns else None,
         result=result,
+        revision=int(row["revision"]) if "revision" in columns and row["revision"] is not None else 0,
+        attempt=int(row["attempt"]) if "attempt" in columns and row["attempt"] is not None else 1,
     )
 
 
@@ -624,4 +909,4 @@ def _spec_to_json(spec: JobSpec) -> str:
     return json.dumps(spec.to_dict())
 
 
-__all__ = ["JobStore"]
+__all__ = ["JobStateConflictError", "JobStore"]
