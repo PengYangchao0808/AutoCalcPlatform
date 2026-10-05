@@ -426,6 +426,71 @@ def test_startup_marks_interrupted_cancelling_job_cancelled(tmp_path: Path) -> N
         mgr.shutdown()
 
 
+def test_startup_remote_cancelling_requires_confirmation(tmp_path: Path) -> None:
+    """Remote counterpart of the local seed above: a remote CANCELLING row
+    survives the restart as CANCELLING and is only reconciled — never a
+    direct CANCELLED without LSF confirmation (plan todo 6, Metis Q3)."""
+    store = JobStore(tmp_path / "jobs.db")
+    _seed_job(
+        store,
+        tmp_path / "runs/j1",
+        "mid-cancel-remote",
+        status=JobStatus.CANCELLING,
+        remote_job_id="4545",
+        result={
+            "node": "compute-01",
+            "remote_dir": "/scratch/test/acp_jobs/projA/mid-cancel-remote",
+            "execution_kind": "remote",
+            "remote": {
+                "submit_state": "submitted",
+                "node": "compute-01",
+                "relative": "projA/mid-cancel-remote",
+                "cancel_state": "requested",
+            },
+        },
+    )
+
+    mgr = _make_manager(tmp_path, store=store)
+    try:
+        rec = mgr.get("mid-cancel-remote")
+        assert rec is not None
+        assert rec.status == JobStatus.CANCELLING, (
+            "restart must not short-circuit remote CANCELLING"
+        )
+        assert rec.completed_at is None
+
+        # Restart-time reconcile with the job still alive on LSF: the bkill
+        # is re-sent and the row stays CANCELLING until bjobs confirms.
+        mgr._remote_config = RemoteExecutionConfig(execution_mode="local", nodes=[_make_node()])
+        gets: list[str] = []
+        kills: list[str] = []
+
+        class _Monitor:
+            def get_lsf_status(self, node, lsf_job_id: str) -> str:
+                gets.append(lsf_job_id)
+                return "running"
+
+            def cancel_job(self, node, lsf_job_id: str) -> bool:
+                kills.append(lsf_job_id)
+                return True
+
+        mgr._remote_monitor = _Monitor()  # type: ignore[assignment]
+        mgr.remote_runner = SimpleNamespace(  # type: ignore[assignment]
+            recover_job_state=lambda record: True,
+            reconcile_submission=lambda record: "unknown",
+            cancel_remote=lambda job_id, record=None: True,
+        )
+        mgr._requeue_active_on_startup()
+
+        rec = mgr.get("mid-cancel-remote")
+        assert rec is not None
+        assert rec.status == JobStatus.CANCELLING, "never CANCELLED before confirmation"
+        assert gets and kills == ["4545"], "reconcile must classify then re-send bkill"
+        assert rec.completed_at is None
+    finally:
+        mgr.shutdown()
+
+
 def test_startup_disk_probe_recovers_completed_race(tmp_path: Path) -> None:
     """Q12: RUNNING + complete state.json + .exit_code 0 → COMPLETED + result."""
     store = JobStore(tmp_path / "jobs.db")

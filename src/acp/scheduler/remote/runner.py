@@ -446,6 +446,17 @@ class RemoteJobRunner:
                     lsf_job_id=lsf_job_id,
                     bkill_ok=ok,
                 )
+                if not ok:
+                    # D05: a failed bkill is not a cancellation.  Keep the
+                    # poll state (no ``cancel_sent``) and return a
+                    # non-terminal observation so the manager stays
+                    # CANCELLING and retries bkill on the next poll —
+                    # only a bjobs-confirmed disappearance finalises.
+                    return RemotePollObservation(
+                        terminal=False,
+                        progress=record.progress,
+                        current_stage=record.current_stage,
+                    )
                 state["cancel_sent"] = True
             exit_code = self._wait_exit_code(
                 node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt

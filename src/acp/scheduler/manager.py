@@ -107,6 +107,13 @@ _POLL_SCAN_STATUSES: Final[tuple[JobStatus, ...]] = (
 
 _SUBMIT_RECONCILE_STATES: Final[frozenset[str]] = frozenset({"intent", "unconfirmed"})
 
+# ``get_lsf_status`` classifications (contract A): the first set positively
+# proves the job is gone/terminated → cancel confirmation evidence; the
+# second means the job is still alive → bkill must be (re)sent.  Anything
+# else (``unknown`` / communication failure) keeps CANCELLING unconfirmed.
+_CANCEL_CONFIRMED_LSF: Final[frozenset[str]] = frozenset({"not_found", "done", "failed"})
+_CANCEL_ALIVE_LSF: Final[frozenset[str]] = frozenset({"pending", "running", "paused"})
+
 # Consecutive orphan-cancel failures before the stalled alert fires; retry
 # keeps running at the capped (1h) backoff — never unbounded fast retries.
 _ORPHAN_STALL_THRESHOLD: Final[int] = 5
@@ -167,7 +174,7 @@ if TYPE_CHECKING:
     from acp.results.remote_structure_cache import RemoteStructureCache
     from acp.scheduler.local_cleanup import LocalCleanup, LocalCleanupReport, RetentionPolicy
     from acp.scheduler.remote.cleanup import RemoteCleanup
-    from acp.scheduler.remote.config import RemoteExecutionConfig
+    from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
     from acp.scheduler.remote.fetcher import RemoteResultFetcher
     from acp.scheduler.remote.monitor import RemoteJobMonitor
     from acp.scheduler.remote.node_manager import NodeManager
@@ -425,14 +432,32 @@ class JobManager:
     def _is_remote_job(record: JobRecord) -> bool:
         """Route lifecycle decisions from the job's own execution provenance.
 
-        Covers all three provenance sources: ``remote_job_id``,
-        ``result.lsf_job_id``, and ``result.execution_kind == "remote"``.
-        The server default mode is never consulted for dispatched jobs.
+        Covers all provenance sources: ``remote_job_id``,
+        ``result.lsf_job_id``, ``result.execution_kind == "remote"``,
+        ``result.target_node``, a pinned remote ``spec.target_node``, and
+        the persisted ``result["remote"]`` intent (``submit_state`` / node /
+        relative dir) written before an LSF id exists.  A job with no remote
+        intent whatsoever is local.  The server default mode is never
+        consulted for dispatched jobs.
         """
         if record.remote_job_id:
             return True
         result = record.result or {}
-        return bool(result.get("lsf_job_id") or result.get("execution_kind") == "remote")
+        if result.get("lsf_job_id") or result.get("execution_kind") == "remote":
+            return True
+        if result.get("target_node"):
+            return True
+        pinned = record.spec.target_node
+        if pinned is not None and pinned != LOCAL_NODE_NAME:
+            return True
+        remote_meta = result.get("remote")
+        if isinstance(remote_meta, dict):
+            return bool(
+                remote_meta.get("submit_state")
+                or remote_meta.get("node")
+                or remote_meta.get("relative")
+            )
+        return False
 
     def _create_remote_runner(self):
         """Instantiate the SSH pool + helpers + :class:`RemoteJobRunner`.
@@ -2013,28 +2038,52 @@ class JobManager:
         if ev:
             ev.set()
 
-        if self._is_remote_job(record) and self.remote_runner is not None:
-            if not record.remote_job_id and record.result and record.result.get("lsf_job_id"):
-                backfilled = self._cas_write(
-                    record,
-                    expected_status=JobStatus.CANCELLING,
-                    remote_job_id=str(record.result["lsf_job_id"]),
-                    decide=lambda fresh: fresh,
-                )
-                if backfilled is not None:
-                    record = backfilled
+        if self._is_remote_job(record):
+            # Contract A: a remote job is never killed locally — its
+            # lifecycle belongs to LSF, and CANCELLED requires confirmed
+            # evidence even when the remote layer is unavailable (the
+            # startup/poll reconcile finishes the job later).
+            if self.remote_runner is not None:
+                if not record.remote_job_id and record.result and record.result.get(
+                    "lsf_job_id"
+                ):
+                    backfilled = self._cas_write(
+                        record,
+                        expected_status=JobStatus.CANCELLING,
+                        remote_job_id=str(record.result["lsf_job_id"]),
+                        decide=lambda fresh: fresh,
+                    )
+                    if backfilled is not None:
+                        record = backfilled
 
-            if record.remote_job_id:
-                ok = self.remote_runner.cancel_remote(job_id, record)
-                if not ok:
+                if record.remote_job_id:
+                    try:
+                        ok = self.remote_runner.cancel_remote(job_id, record)
+                    except Exception:
+                        logger.debug("cancel_remote raised for %s", job_id, exc_info=True)
+                        ok = False
+                    if ok:
+                        self._append_cancel_state(record, "sent")
+                        # Immediate bjobs confirmation — a second bkill is
+                        # never sent on this path (resend is the next pass).
+                        self._reconcile_cancelling_remote(record, resend_bkill=False)
+                    else:
+                        self._append_cancel_state(record, "unconfirmed")
+                        self._event_log(record).append(
+                            "remote.cancel_failed",
+                            job_id=job_id,
+                            reason="bkill did not succeed",
+                            attempt=record.attempt,
+                        )
+                else:
+                    # No LSF id yet: submission reconcile adopts the job and
+                    # then sends bkill — no duplicate submission, no local kill.
                     self._event_log(record).append(
-                        "remote.cancel_failed",
+                        "remote.cancel_deferred",
                         job_id=job_id,
-                        reason="bkill did not succeed",
+                        reason="awaiting submission reconciliation",
                         attempt=record.attempt,
                     )
-            else:
-                self.runner.cancel_local(job_id)
         else:
             self.runner.cancel_local(job_id)
 
@@ -3516,47 +3565,89 @@ class JobManager:
                 adopted = self.store.get(record.id)
                 if adopted is not None and not adopted.status.is_terminal:
                     self.remote_runner.recover_job_state(adopted)
-                    if (
-                        adopted.status == JobStatus.CANCELLING
-                        and isinstance(adopted.result, dict)
-                        and (adopted.result.get("remote") or {}).get("cancel_state")
-                        == "requested"
-                    ):
-                        self._cancel_adopted_submission(adopted)
+                    if adopted.status == JobStatus.CANCELLING:
+                        self._reconcile_cancelling_remote(adopted)
             except Exception:
                 logger.debug("post-adopt recover failed for %s", record.id, exc_info=True)
 
-    def _cancel_adopted_submission(self, record: JobRecord) -> None:
-        """Contract-A sequence: adopted id → bkill → confirm → CANCELLED."""
-        lsf_job_id = str(record.remote_job_id or "")
+    def _reconcile_cancelling_remote(self, record: JobRecord, *, resend_bkill: bool = True) -> None:
+        """Contract A: publish CANCELLED only with LSF confirmation evidence.
+
+        Classification comes from ``monitor.get_lsf_status``'s return value
+        (never from exceptions): alive → (re)send ``bkill`` and keep
+        CANCELLING; gone/DONE/EXIT → confirm CANCELLED with
+        ``remote.cancel_confirmed``; ``STATUS_UNKNOWN`` or a communication
+        failure → keep CANCELLING with ``cancel_state="unconfirmed"`` for
+        the next pass.  A row without a job id first reconciles the pending
+        submission (adopt id → bkill in the post-adopt chain, never a second
+        ``bsub``); ``aborted_before_bsub`` is positive no-job evidence and
+        confirms without any LSF query.
+        """
+        if record.status != JobStatus.CANCELLING or not self._is_remote_job(record):
+            return
+        remote_meta = (record.result or {}).get("remote")
+        if (
+            isinstance(remote_meta, dict)
+            and remote_meta.get("submit_state") == "aborted_before_bsub"
+        ):
+            self._confirm_aborted_cancellation(record)
+            return
+        if self.remote_runner is None:
+            return
+        if not record.remote_job_id:
+            if _has_pending_submission(record):
+                self._reconcile_submission_record(record)
+            return
+        lsf_job_id = str(record.remote_job_id)
         result = record.result or {}
         node_name = str(result.get("node") or (result.get("remote") or {}).get("node") or "")
         node = self._remote_config.get_node(node_name) if self._remote_config else None
-        if not lsf_job_id or node is None or self._remote_monitor is None:
+        if node is None or self._remote_monitor is None:
+            self._append_cancel_state(record, "unconfirmed")
+            return
+        status = self._lsf_status_or_unknown(node, lsf_job_id)
+        if status in _CANCEL_CONFIRMED_LSF:
+            self._publish_cancel_confirmed(record, lsf_job_id, f"bjobs:{status}")
+            return
+        if status not in _CANCEL_ALIVE_LSF:
+            self._append_cancel_state(record, "unconfirmed")
+            return
+        if not resend_bkill:
+            # cancel() delivered bkill moments ago; the next pass confirms.
             return
         try:
-            status = self._remote_monitor.get_lsf_status(node, lsf_job_id)
+            sent = self._remote_monitor.cancel_job(node, lsf_job_id)
         except Exception:
-            status = "unknown"
-        evidence: str | None = None
-        if status in ("not_found", "done", "failed"):
-            evidence = f"bjobs:{status}"
-        else:
+            logger.debug("bkill raised for job %s", record.id, exc_info=True)
+            sent = False
+        self._append_cancel_state(record, "sent" if sent else "unconfirmed")
+        if not sent:
             try:
-                sent = self._remote_monitor.cancel_job(node, lsf_job_id)
-            except Exception:
-                sent = False
-            self._append_cancel_state(record, "sent" if sent else "unconfirmed")
-            if status == "unknown" or not sent:
-                return
-            try:
-                status = self._remote_monitor.get_lsf_status(node, lsf_job_id)
-            except Exception:
-                return
-            if status in ("not_found", "done", "failed"):
-                evidence = f"bkill+bjobs:{status}"
-            else:
-                return
+                self._event_log(record).append(
+                    "remote.cancel_failed",
+                    job_id=record.id,
+                    lsf_job_id=lsf_job_id,
+                    reason="bkill did not succeed",
+                    attempt=record.attempt,
+                )
+            except OSError:
+                logger.debug("cancel_failed event write failed for %s", record.id)
+            return
+        status = self._lsf_status_or_unknown(node, lsf_job_id)
+        if status in _CANCEL_CONFIRMED_LSF:
+            self._publish_cancel_confirmed(record, lsf_job_id, f"bkill+bjobs:{status}")
+
+    def _lsf_status_or_unknown(self, node: RemoteNode, lsf_job_id: str) -> str:
+        """bjobs classification; any communication failure is ``unknown``."""
+        try:
+            assert self._remote_monitor is not None
+            return str(self._remote_monitor.get_lsf_status(node, lsf_job_id))
+        except Exception:
+            logger.debug("bjobs classification failed for %s", lsf_job_id, exc_info=True)
+            return "unknown"
+
+    def _publish_cancel_confirmed(self, record: JobRecord, lsf_job_id: str, evidence: str) -> None:
+        """CAS CANCELLING → CANCELLED with the confirmation evidence event."""
         for _ in range(3):
             fresh = self.store.get(record.id)
             if fresh is None or fresh.status != JobStatus.CANCELLING:
@@ -4300,6 +4391,13 @@ class JobManager:
         if self._poll_pending_submission(record):
             return
 
+        # D05: a remote CANCELLING row is single-owned by the cancel
+        # confirmation reconcile — never finalised from a raw poll
+        # observation (cancel_event + non-zero exit is not evidence).
+        if record.status == JobStatus.CANCELLING and self._is_remote_job(record):
+            self._reconcile_cancelling_remote(record)
+            return
+
         loaded_revision = record.revision
         loaded_attempt = record.attempt
         cancel_event = self._cancel_events.get(job_id, threading.Event())
@@ -4556,6 +4654,15 @@ class JobManager:
             }
         else:
             if cancel_event.is_set() and exit_code and exit_code != 0:
+                if is_remote:
+                    # Contract A (D05): a remote cancel is finalised only
+                    # after bjobs confirms the job is gone — never from
+                    # cancel_event + non-zero exit alone; the CANCELLING
+                    # reconcile owns that confirmation.
+                    fresh = self.store.get(job_id)
+                    if fresh is not None and fresh.status == JobStatus.CANCELLING:
+                        self._reconcile_cancelling_remote(fresh)
+                    return
                 status = JobStatus.CANCELLED
             elif exit_code == 0:
                 status = JobStatus.COMPLETED
@@ -4678,22 +4785,8 @@ class JobManager:
             if _needs_submission_reconcile(record):
                 self._reconcile_starting_submission(record)
         for record in self.store.list(status=JobStatus.CANCELLING.value, limit=10000):
-            remote_meta = (record.result or {}).get("remote")
-            if not isinstance(remote_meta, dict):
-                continue
-            if remote_meta.get("submit_state") == "aborted_before_bsub":
-                self._confirm_aborted_cancellation(record)
-            elif _has_pending_submission(record):
-                self._reconcile_submission_record(record)
-            elif (
-                record.remote_job_id
-                and remote_meta.get("cancel_state") in ("requested", "sent", "unconfirmed")
-                and self._is_remote_job(record)
-            ):
-                # Known id + unconfirmed cancel: bkill and confirm before
-                # CANCELLED (contract A); communication failure keeps
-                # CANCELLING for the next pass.
-                self._cancel_adopted_submission(record)
+            if self._is_remote_job(record):
+                self._reconcile_cancelling_remote(record)
         for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             for record in self.store.list(status=status.value, limit=10000):
                 if _needs_side_effect_retry(record):
@@ -4868,10 +4961,19 @@ class JobManager:
         # Remote jobs with a valid remote_job_id are recovered instead —
         # the poller re-checks bjobs + .exit_code.
         restart_marker = "[RESTART_FAILED] interrupted by server restart"
-        # CANCELLING jobs that were interrupted mid-cancellation should stay
-        # CANCELLED — the user's cancel intent must survive a restart.
+        # CANCELLING jobs interrupted mid-cancellation: local ones honour
+        # the user's cancel intent immediately (no remote lifecycle to
+        # confirm); remote ones are reconciled against LSF first — only a
+        # confirmed-gone/finished classification publishes CANCELLED.
         for record in self.store.list(status=JobStatus.CANCELLING.value):
             if self._skip_recovery_for_peer(record):
+                continue
+            if self._is_remote_job(record):
+                self._reconcile_cancelling_remote(record)
+                logger.info(
+                    "Reconciling remote CANCELLING job %s after restart (never a direct CANCELLED)",
+                    record.id,
+                )
                 continue
             self._cleanup_local_orphans(record)
             self._finalize_restarted_job(
