@@ -11,8 +11,9 @@ never an upgrade:
 * ``population_energy`` — energy window + Boltzmann temperature in force;
 * ``shielding`` — the GIAO method/basis/solvent_model actually executed;
 * ``reference`` — TMS source (exact match / gas-phase fallback / custom /
-  unknown), the effective solvent, the reference values in force and which
-  required nuclei are missing a reference;
+  unknown), the effective solvent, the reference values in force, which
+  required nuclei are missing a reference and (todo 31) whether pinned
+  reference-validation data was requested/attached;
 * ``statistical_model`` — the DP4 error model + DP5 model/mode presence.
 
 Modes (least-claiming first): ``exploratory`` < ``reference_validation`` <
@@ -20,7 +21,11 @@ Modes (least-claiming first): ``exploratory`` < ``reference_validation`` <
 
 * ``acp_calibrated`` — the statistical model is bound at the recorded level,
   the reference state is present and a DFT optimization actually executed;
-* ``reference_validation`` — actual (pinned) reference data was recorded;
+* ``reference_validation`` — actual (pinned) reference data was recorded
+  (``reference_data_present``, set only through
+  ``acp.nmr.reference_validation.attach_reference_segment`` with a real,
+  non-empty dataset); a request without an attached dataset stays
+  ``exploratory`` + ``unvalidated_protocol`` + ``missing_reference``;
 * ``exploratory`` — everything else.
 
 Protocol-level validation (``acp.nmr.error_model.validate_protocol_binding``)
@@ -120,9 +125,15 @@ class ReferenceSegment:
     effective_solvent: str
     tms_shieldings: dict[str, float]
     missing_nuclei: tuple[str, ...] = ()
-    #: Pinned upstream reference dataset recorded (todo 31 fills); ``False``
-    #: means no actual reference data — never auto-set to ``True``.
+    #: Pinned upstream reference dataset recorded (todo 31); ``False`` means
+    #: no actual reference data — never auto-set to ``True``. Set through
+    #: ``acp.nmr.reference_validation.attach_reference_segment`` (a real,
+    #: non-empty dataset must be attached).
     reference_data_present: bool = False
+    #: Reference-validation was explicitly requested (todo 31). Requested
+    #: without an attached dataset ⇒ ``missing_reference`` issue and the
+    #: spec stays ``exploratory`` / ``unvalidated_protocol``.
+    reference_validation_requested: bool = False
 
     @property
     def available(self) -> bool:
@@ -228,6 +239,7 @@ def _reference_from_dict(payload: Mapping[str, Any]) -> ReferenceSegment:
         tms_shieldings={str(k): float(v) for k, v in dict(payload["tms_shieldings"]).items()},
         missing_nuclei=tuple(str(n) for n in payload.get("missing_nuclei", ())),
         reference_data_present=bool(payload.get("reference_data_present", False)),
+        reference_validation_requested=bool(payload.get("reference_validation_requested", False)),
     )
 
 

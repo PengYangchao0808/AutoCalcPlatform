@@ -78,6 +78,23 @@ from acp.nmr.probability import (
     normalize_dp4,
     normalize_dp4_gated,
 )
+from acp.nmr.reference_validation import (
+    ASSET_FILES,
+    PINNED_GOODMAN_UPSTREAM,
+    ComparisonRow,
+    PinnedSetting,
+    PinnedUpstreamSettings,
+    ReferenceAvailability,
+    ReferenceComparison,
+    ReferenceDataset,
+    ReferenceRecord,
+    apply_reference_validation,
+    assess_reference_dataset,
+    asset_hashes,
+    attach_reference_segment,
+    compare_reference_vs_migration,
+    pinned_goodman_upstream,
+)
 from acp.nmr.scaling import build_assignments, fit_regression, fit_scaling_goodman
 from acp.nmr.spectra import (
     BrukerProcessResult,
@@ -147,6 +164,22 @@ __all__ = [
     "compute_dp5",
     "compute_dp5_goodman",
     "dp5_log_to_probability",
+    # reference validation (todo 31)
+    "ASSET_FILES",
+    "PINNED_GOODMAN_UPSTREAM",
+    "ComparisonRow",
+    "PinnedSetting",
+    "PinnedUpstreamSettings",
+    "ReferenceAvailability",
+    "ReferenceComparison",
+    "ReferenceDataset",
+    "ReferenceRecord",
+    "apply_reference_validation",
+    "asset_hashes",
+    "assess_reference_dataset",
+    "attach_reference_segment",
+    "compare_reference_vs_migration",
+    "pinned_goodman_upstream",
     # error model
     "ErrorModel",
     "GoodmanErrorModel",

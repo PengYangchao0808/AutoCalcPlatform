@@ -96,7 +96,9 @@ def validate_protocol_binding(spec: NmrProtocolSpec) -> list[str]:
     * ``statistical_model_not_bound`` — placeholder model, unknown model id,
       or the recorded level diverges from the model's trained level;
     * ``missing_reference`` — a required nucleus has no TMS reference (a
-      shielding must never stand in for a missing shift reference);
+      shielding must never stand in for a missing shift reference), or pinned
+      reference validation was requested without a real reference dataset
+      attached (todo 31);
     * ``reference_not_for_level`` — the table has no row for the recorded
       level, so the in-force references are unverifiable defaults;
     * ``geometry_not_optimized`` — no optimization level executed (or
@@ -120,7 +122,9 @@ def validate_protocol_binding(spec: NmrProtocolSpec) -> list[str]:
         if not (method_ok and basis_ok):
             issues.append("statistical_model_not_bound")
 
-    if spec.reference.missing_nuclei:
+    if spec.reference.missing_nuclei or (
+        spec.reference.reference_validation_requested and not spec.reference.reference_data_present
+    ):
         issues.append("missing_reference")
     if spec.reference.tms_source == "unknown":
         issues.append("reference_not_for_level")
