@@ -352,13 +352,19 @@ class ConformerShielding:
 
     Attributes:
         conformer_id: Conformer identifier (matches ensemble record id).
-        boltzmann_weight: Boltzmann weight in ``[0, 1]``.
+        boltzmann_weight: Boltzmann weight in ``[0, 1]``. This is the weight
+            the averaging/DP5 algorithms actually consume: after the GIAO
+            stage it is renormalized over the successful complete
+            conformers (todo 30), so reported weights equal algorithm input.
         shieldings: ``{atom_index(0-based): {"symbol", "isotropic", ...}}``.
         log_file: ORCA log path the shieldings were parsed from.
         coordinates: Optional ``(N, 3)`` conformer geometry (CENSO
             screening-level optimised), threaded through for the
             FCHL-weighted DP5 path (DevDoc appendix D).
         symbols: Optional element symbols aligned with *coordinates*.
+        delta_hartree: Optional relative energy (Δ under the ensemble's
+            unified definition, minimum = 0) — the Boltzmann bookkeeping
+            needed to recompute weights at another temperature (todo 30).
     """
 
     conformer_id: str
@@ -367,6 +373,7 @@ class ConformerShielding:
     log_file: Path | None = None
     coordinates: object | None = None
     symbols: list[str] | None = None
+    delta_hartree: float | None = None
 
 
 @dataclass(frozen=True)
@@ -579,6 +586,167 @@ class CandidateProbability:
         return {"dp4": self.dp4.as_dict(), "dp5": self.dp5.as_dict()}
 
 
+# --- ensemble quality gate (todo 30 / gap G09) ------------------------------
+
+#: Energy definitions an ensemble can be compared on. ``none`` = no record
+#: carried a usable energy — nothing may be selected (missing is never 0).
+ENERGY_DEFINITIONS: tuple[str, ...] = ("free_energy", "energy", "none")
+
+#: Closed vocabulary of per-conformer exclusion reasons (G09). ``None`` on a
+#: successful conformer; every non-selected / failed conformer carries one.
+CONFORMER_EXCLUSION_REASONS: tuple[str, ...] = (
+    "missing_energy",  # no value under the ensemble's unified definition
+    "outside_energy_window",
+    "population_threshold",  # cumulative-population gate (engineering target)
+    "resource_cap",  # hard max_conformers cap — uncovered mass is recorded
+    "giao_failed",  # QC produced no usable result
+    "incomplete_shieldings",  # required-nuclei atoms missing from the parse
+)
+
+#: Closed vocabulary of ensemble-quality facts. Facts only — a flag never
+#: claims solution coverage; it marks engineering-visible quality losses.
+ENSEMBLE_QUALITY_FLAGS: tuple[str, ...] = (
+    "energy_definition_incomplete",
+    "resource_cap_truncated",
+    "population_gate_applied",
+    "dominant_conformer_failed",
+    "successful_population_below_target",
+    "tail_conformer_failed",
+)
+
+ENSEMBLE_QUALITY_STATUSES: tuple[str, ...] = ("ok", "degraded")
+
+
+@dataclass(frozen=True)
+class ConformerPopulation:
+    """Per-conformer ensemble-selection evidence (todo 30 / G09).
+
+    Populations are relative to the discovered ensemble — NOT solution
+    coverage: a well-covered discovered ensemble says nothing about
+    conformers the search never found.
+
+    Attributes:
+        conformer_id: Stable id (``conf_<discovered index>``).
+        energy_definition: Definition the ensemble was compared on
+            (:data:`ENERGY_DEFINITIONS`).
+        energy_hartree: Value under that definition, or ``None`` when the
+            record carried no usable value (never 0-filled).
+        delta_hartree: Relative energy (minimum = 0), ``None`` when missing.
+        raw_weight: Boltzmann weight over the energy-valid records.
+        selected_weight: Weight normalized over the selected set (the GIAO
+            input), ``None`` when not selected.
+        final_weight: Weight normalized over the successful complete
+            conformers (what averaging/DP5 actually consumed).
+        exclusion_reason: Closed reason or ``None`` when successful.
+    """
+
+    conformer_id: str
+    energy_definition: str
+    energy_hartree: float | None
+    delta_hartree: float | None
+    raw_weight: float | None
+    selected_weight: float | None
+    final_weight: float | None
+    exclusion_reason: str | None
+
+    def __post_init__(self) -> None:
+        if self.energy_definition not in ENERGY_DEFINITIONS:
+            raise ValueError(
+                f"unknown energy definition {self.energy_definition!r}; "
+                f"expected one of {ENERGY_DEFINITIONS}"
+            )
+        if self.exclusion_reason is not None and self.exclusion_reason not in (
+            CONFORMER_EXCLUSION_REASONS
+        ):
+            raise ValueError(
+                f"unknown conformer exclusion reason {self.exclusion_reason!r}; "
+                f"expected one of {CONFORMER_EXCLUSION_REASONS}"
+            )
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "conformer_id": self.conformer_id,
+            "energy_definition": self.energy_definition,
+            "energy_hartree": self.energy_hartree,
+            "delta_hartree": self.delta_hartree,
+            "raw_weight": round(self.raw_weight, 6) if self.raw_weight is not None else None,
+            "selected_weight": (
+                round(self.selected_weight, 6) if self.selected_weight is not None else None
+            ),
+            "final_weight": (
+                round(self.final_weight, 6) if self.final_weight is not None else None
+            ),
+            "exclusion_reason": self.exclusion_reason,
+        }
+
+
+@dataclass(frozen=True)
+class EnsembleQuality:
+    """Ensemble population/quality evidence for one candidate (G09).
+
+    Population denominators (documented, never conflated):
+    ``preselection_population`` = count fraction of discovered records with
+    a usable energy; ``selected_population`` = Boltzmann mass fraction of
+    the energy-valid ensemble that entered GIAO; ``successful_population`` =
+    selected-weight fraction whose shieldings completed and were complete.
+    ``uncovered_population`` = energy-valid mass dropped by the hard
+    ``max_conformers`` cap; ``population_gate_dropped`` = mass intentionally
+    dropped by the cumulative-population target.
+
+    ``quality_status`` is ``degraded`` when a dominant (selected weight
+    ≥ 0.5) conformer failed, when the successful population fell below the
+    engineering target, or when the cap left more than the uncovered-mass
+    limit outside the analysis.
+    """
+
+    energy_definition: str
+    n_discovered: int
+    n_selected: int
+    n_successful: int
+    preselection_population: float
+    selected_population: float
+    successful_population: float
+    uncovered_population: float
+    population_gate_dropped: float
+    quality_status: str
+    quality_flags: tuple[str, ...]
+    conformers: tuple[ConformerPopulation, ...]
+
+    def __post_init__(self) -> None:
+        if self.energy_definition not in ENERGY_DEFINITIONS:
+            raise ValueError(
+                f"unknown energy definition {self.energy_definition!r}; "
+                f"expected one of {ENERGY_DEFINITIONS}"
+            )
+        if self.quality_status not in ENSEMBLE_QUALITY_STATUSES:
+            raise ValueError(
+                f"unknown ensemble quality status {self.quality_status!r}; "
+                f"expected one of {ENSEMBLE_QUALITY_STATUSES}"
+            )
+        unknown = [flag for flag in self.quality_flags if flag not in ENSEMBLE_QUALITY_FLAGS]
+        if unknown:
+            raise ValueError(
+                f"unknown ensemble quality flag(s) {unknown}; "
+                f"expected subset of {ENSEMBLE_QUALITY_FLAGS}"
+            )
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "energy_definition": self.energy_definition,
+            "n_discovered": self.n_discovered,
+            "n_selected": self.n_selected,
+            "n_successful": self.n_successful,
+            "preselection_population": round(self.preselection_population, 6),
+            "selected_population": round(self.selected_population, 6),
+            "successful_population": round(self.successful_population, 6),
+            "uncovered_population": round(self.uncovered_population, 6),
+            "population_gate_dropped": round(self.population_gate_dropped, 6),
+            "quality_status": self.quality_status,
+            "quality_flags": list(self.quality_flags),
+            "conformers": [c.as_dict() for c in self.conformers],
+        }
+
+
 @dataclass
 class CandidateResult:
     """Full per-candidate analysis (stages 4–7 product).
@@ -608,6 +776,7 @@ class CandidateResult:
     conformer_shieldings: list[ConformerShielding] = field(default_factory=list)
     evidence: CandidateEvidence | None = None
     probability: CandidateProbability | None = None
+    ensemble_quality: EnsembleQuality | None = None
 
     def analysis_status(self) -> str | None:
         """Schema-v2 per-candidate status (gap §8.2).
@@ -624,21 +793,20 @@ class CandidateResult:
         return None
 
     def coverage(self) -> dict[str, object]:
-        """Schema-v2 coverage record (gap §8.2; todo 24).
+        """Schema-v2 coverage record (gap §8.2; todo 24, populated by T30).
 
         Signal counts come from the evidence gate (``expected_signals`` =
         Σ per-nucleus expected, ``matched_signals`` = ``total_matched``);
         both (plus ``per_nucleus``) are ``None`` when no evidence was
-        attached — never coerced to 0. Conformer population:
-        ``n_conformers_successful`` counts the conformers actually present
-        in the report (complete parsed shieldings) and
-        ``successful_population`` sums their stored Boltzmann weights
-        (rounded like every other serialized weight). The pre-GIAO
-        *selected* set (size + raw-ensemble weight fraction) is NOT
-        recorded on this container — stored weights are already normalized
-        over the selected set — so ``n_conformers_selected`` /
-        ``selected_population`` stay ``None`` until the D-phase
-        ConformerEvidence layer records them (no invented numbers).
+        attached — never coerced to 0. Conformer population: when the
+        ensemble-quality record is attached (workflow runs, todo 30) the
+        pre-GIAO selected set is real — ``n_conformers_selected`` and
+        ``selected_population`` (energy-valid Boltzmann mass fraction) come
+        from it, and ``successful_population`` is the selected-weight
+        fraction whose shieldings completed and were complete. Without the
+        record (hand-built candidates) the legacy view stays: selected
+        fields ``None`` (never invented) and ``successful_population`` =
+        sum of the stored conformer weights.
         """
         if self.evidence is not None:
             expected: int | None = sum(ev.expected for ev in self.evidence.per_nucleus.values())
@@ -650,15 +818,22 @@ class CandidateResult:
             expected = None
             matched = None
             per_nucleus = None
+        quality = self.ensemble_quality
         return {
             "expected_signals": expected,
             "matched_signals": matched,
             "per_nucleus": per_nucleus,
-            "n_conformers_selected": None,
-            "n_conformers_successful": len(self.conformer_shieldings),
-            "selected_population": None,
-            "successful_population": round(
-                sum(cs.boltzmann_weight for cs in self.conformer_shieldings), 6
+            "n_conformers_selected": quality.n_selected if quality is not None else None,
+            "n_conformers_successful": (
+                quality.n_successful if quality is not None else len(self.conformer_shieldings)
+            ),
+            "selected_population": (
+                round(quality.selected_population, 6) if quality is not None else None
+            ),
+            "successful_population": (
+                round(quality.successful_population, 6)
+                if quality is not None
+                else round(sum(cs.boltzmann_weight for cs in self.conformer_shieldings), 6)
             ),
         }
 
@@ -685,6 +860,9 @@ class CandidateResult:
             "probability": self.probability.as_dict() if self.probability is not None else None,
             "analysis_status": self.analysis_status(),
             "coverage": self.coverage(),
+            "ensemble_quality": (
+                self.ensemble_quality.as_dict() if self.ensemble_quality is not None else None
+            ),
             "n_conformers": len(self.conformer_shieldings),
             "regression": regression_obj,
             "assignment": [a.as_dict() for a in self.assignments],
@@ -877,6 +1055,9 @@ class NmrReport:
             "dp5_mode": self.dp5_mode,
             "fchl_kernel": self.metadata.get("fchl_kernel", ""),
             "provenance": self._provenance(),
+            # todo 30: leave-one-conformer-out / temperature winner-stability
+            # verdict (workflow-populated; None for hand-built reports).
+            "sensitivity": self.metadata.get("sensitivity"),
             "note": (
                 "DP4/DP5 use placeholder error-model parameters (P1a); "
                 "values are relative only — do not use for publication."
@@ -902,6 +1083,12 @@ __all__ = [
     "PROBABILITY_STATUSES",
     "ProbabilityResult",
     "CandidateProbability",
+    "ENERGY_DEFINITIONS",
+    "CONFORMER_EXCLUSION_REASONS",
+    "ENSEMBLE_QUALITY_FLAGS",
+    "ENSEMBLE_QUALITY_STATUSES",
+    "ConformerPopulation",
+    "EnsembleQuality",
     "CandidateResult",
     "NmrReport",
     "normalize_symbol",

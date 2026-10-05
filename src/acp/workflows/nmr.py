@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal
@@ -44,7 +45,7 @@ from acp.nmr.assignment import (
     collect_residual_inputs,
     match_assigned,
 )
-from acp.nmr.averaging import boltzmann_average_shieldings
+from acp.nmr.averaging import boltzmann_average_shieldings, incomplete_conformer_ids
 from acp.nmr.enumerate import enumerate_candidates
 from acp.nmr.equivalence import (
     EquivalenceError,
@@ -63,7 +64,9 @@ from acp.nmr.models import (
     CandidateEvidence,
     CandidateProbability,
     CandidateResult,
+    ConformerPopulation,
     ConformerShielding,
+    EnsembleQuality,
     EvidenceStatus,
     ExperimentalNmr,
     ExperimentalPeak,
@@ -124,6 +127,7 @@ from cccp.qc.interfaces.censo import (
     CensoRunResult,
     part_index,
 )
+from cccp.utils.constants import HARTREE_TO_KCAL
 
 logger = logging.getLogger(__name__)
 
@@ -870,53 +874,315 @@ def _structure_to_xyz(structure: Structure, work_dir: Path) -> str:
     return str(xyz_path)
 
 
+#: Engineering population target for the cumulative-population gate (G09:
+#: 0.99 is an engineering goal, not a validated scientific threshold).
+CUMULATIVE_POPULATION_TARGET: Final = 0.99
+#: A conformer carrying at least this share of the selected population is
+#: "dominant" — its failure degrades the ensemble quality (G09).
+DOMINANT_POPULATION: Final = 0.5
+#: Successful-population floor for an undegraded ensemble.
+QUALITY_POPULATION_TARGET: Final = 0.95
+#: Resource-cap uncovered mass above which the quality degrades.
+UNCOVERED_POPULATION_LIMIT: Final = 0.05
+
+
+@dataclass(frozen=True)
+class _SelectedConformer:
+    """One conformer selected for GIAO: weights + Δ for recomputation."""
+
+    conformer_id: str
+    structure: Structure
+    raw_weight: float
+    selected_weight: float
+    delta_hartree: float
+
+
+@dataclass(frozen=True)
+class _SelectionResult:
+    """Ensemble selection evidence before GIAO (todo 30 / G09)."""
+
+    definition: str
+    selected: tuple[_SelectedConformer, ...]
+    populations: tuple[ConformerPopulation, ...]
+    preselection_population: float
+    selected_population: float
+    uncovered_population: float
+    population_gate_dropped: float
+    flags: tuple[str, ...]
+
+
 def _select_conformers(
     ensemble: StructureEnsemble,
     nmr_config: NmrConfig,
-) -> list[tuple[Structure, float, float]]:
-    """Select conformers within the energy window, return (structure, weight, ΔG)."""
+) -> _SelectionResult:
+    """Select conformers under ONE energy definition with population evidence.
+
+    G09 rules enforced here:
+
+    * the ensemble is compared on a single energy definition — ``free_energy``
+      when every energy-bearing record carries it, else ``energy`` (the more
+      complete column when neither is complete); a record without the chosen
+      definition is excluded with ``missing_energy`` and NEVER assigned 0;
+    * the energy window, a cumulative-population gate (engineering target
+      :data:`CUMULATIVE_POPULATION_TARGET`) and the hard
+      ``max_conformers`` cap jointly decide the selected set;
+    * every conformer's raw/selected weights, Δ and exclusion reason are
+      recorded so the weights are recomputable (``ConformerPopulation``);
+    * cap truncation records its uncovered mass loudly
+      (``resource_cap_truncated``) — discovered-ensemble coverage is not
+      solution coverage.
+    """
     records = list(ensemble.records)
     if not records:
-        return []
+        return _SelectionResult("none", (), (), 0.0, 0.0, 0.0, 0.0, ())
 
-    # prefer free_energy_hartree; fall back to energy_hartree
-    def _g(rec: Any) -> float | None:
-        return (
-            rec.free_energy_hartree if rec.free_energy_hartree is not None else rec.energy_hartree
+    def _finite(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) else None
+
+    free_values = [_finite(record.free_energy_hartree) for record in records]
+    energy_values = [_finite(record.energy_hartree) for record in records]
+    has_free = [value is not None for value in free_values]
+    has_energy = [value is not None for value in energy_values]
+    any_energy = [free or energy for free, energy in zip(has_free, has_energy, strict=True)]
+
+    if not any(any_energy):
+        populations = tuple(
+            ConformerPopulation(
+                conformer_id=f"conf_{index:03d}",
+                energy_definition="none",
+                energy_hartree=None,
+                delta_hartree=None,
+                raw_weight=None,
+                selected_weight=None,
+                final_weight=None,
+                exclusion_reason="missing_energy",
+            )
+            for index in range(len(records))
+        )
+        return _SelectionResult(
+            "none", (), populations, 0.0, 0.0, 0.0, 0.0, ("energy_definition_incomplete",)
         )
 
-    valid: list[tuple[Any, float]] = []
-    for record in records:
-        energy = _g(record)
-        if energy is not None:
-            valid.append((record, energy))
-    if not valid:
-        logger.warning("No energies on ensemble records; using raw records without window")
-        valid = [(r, 0.0) for r in records]
-    valid.sort(key=lambda x: x[1])
-    min_g = valid[0][1]
-    # energy-window cutoff
-    from cccp.utils.constants import HARTREE_TO_KCAL
+    n_any = sum(any_energy)
+    n_free = sum(has_free)
+    n_energy = sum(has_energy)
+    if n_free == n_any:
+        definition = "free_energy"
+    elif n_energy == n_any:
+        definition = "energy"
+    elif n_free >= n_energy:
+        definition = "free_energy"
+    else:
+        definition = "energy"
+    values = free_values if definition == "free_energy" else energy_values
+
+    valid = sorted(
+        ((index, value) for index, value in enumerate(values) if value is not None),
+        key=lambda item: (item[1], item[0]),
+    )
+    minimum = valid[0][1]
+    delta_by_index = {index: value - minimum for index, value in valid}
+    kt = 0.001987204259 * nmr_config.boltzmann_temp / HARTREE_TO_KCAL
+    if kt > 0:
+        factors = [(index, math.exp(-(value - minimum) / kt)) for index, value in valid]
+    else:
+        factors = [(index, 1.0) for index, _ in valid]
+    total = sum(factor for _, factor in factors)
+    raw_by_index = {index: factor / total for index, factor in factors}
 
     window = nmr_config.energy_window_kcal / HARTREE_TO_KCAL
-    selected = [(r, g) for r, g in valid if (g - min_g) <= window]
-    if len(selected) > nmr_config.max_conformers:
-        selected = selected[: nmr_config.max_conformers]
-    # Boltzmann weights. RT in Hartree = R[kcal/(mol·K)] · T[K] / HARTREE_TO_KCAL.
-    # (Parity audit 2026-08-07: the previous ``/ 1000.0`` was a unit-confusion
-    # bug — it divided by 1000 instead of 627.509, making the weights 1.59×
-    # too sharp and over-weighting the global minimum.)
-    deltas = [g - min_g for _, g in selected]
-    kt = 0.001987204259 * nmr_config.boltzmann_temp / HARTREE_TO_KCAL
-    if kt <= 0:
-        weights = [1.0 / len(selected)] * len(selected)
-    else:
-        import math
+    window_indices = [index for index, _ in valid if delta_by_index[index] <= window]
 
-        exps = [math.exp(-d / kt) for d in deltas]
-        total = sum(exps)
-        weights = [e / total for e in exps] if total > 0 else [1.0 / len(selected)] * len(selected)
-    return [(r.structure, w, d) for (r, _), w, d in zip(selected, weights, deltas)]
+    # cumulative-population gate: keep the most populated records until the
+    # engineering target is met (ties resolved by discovered order)
+    by_weight = sorted(window_indices, key=lambda index: (-raw_by_index[index], index))
+    cumulative = 0.0
+    gate_indices: list[int] = []
+    for index in by_weight:
+        gate_indices.append(index)
+        cumulative += raw_by_index[index]
+        if cumulative >= CUMULATIVE_POPULATION_TARGET:
+            break
+    gate_set = set(gate_indices)
+    population_gate_dropped = sum(
+        raw_by_index[index] for index in window_indices if index not in gate_set
+    )
+
+    # hard resource cap on the energy-sorted gate set (lowest energy first)
+    gate_sorted = sorted(gate_indices, key=lambda index: (values[index], index))
+    cap = max(0, int(nmr_config.max_conformers))
+    cap_indices = gate_sorted[:cap]
+    cap_set = set(cap_indices)
+    uncovered_population = sum(raw_by_index[index] for index in gate_sorted if index not in cap_set)
+    selected_mass = sum(raw_by_index[index] for index in cap_indices)
+    if selected_mass > 0:
+        selected_weight_by_index = {
+            index: raw_by_index[index] / selected_mass for index in cap_indices
+        }
+    else:
+        selected_weight_by_index = {index: 1.0 / len(cap_indices) for index in cap_indices}
+
+    selected = tuple(
+        _SelectedConformer(
+            conformer_id=f"conf_{index:03d}",
+            structure=records[index].structure,
+            raw_weight=raw_by_index[index],
+            selected_weight=selected_weight_by_index[index],
+            delta_hartree=delta_by_index[index],
+        )
+        for index in cap_indices
+    )
+
+    cap_drop_set = gate_set - cap_set
+    gate_drop_set = set(window_indices) - gate_set
+    populations: list[ConformerPopulation] = []
+    for index in range(len(records)):
+        if index not in raw_by_index:
+            reason: str | None = "missing_energy"
+        elif index in cap_set:
+            reason = None
+        elif index in cap_drop_set:
+            reason = "resource_cap"
+        elif index in gate_drop_set:
+            reason = "population_threshold"
+        else:
+            reason = "outside_energy_window"
+        populations.append(
+            ConformerPopulation(
+                conformer_id=f"conf_{index:03d}",
+                energy_definition=definition,
+                energy_hartree=values[index],
+                delta_hartree=delta_by_index.get(index),
+                raw_weight=raw_by_index.get(index),
+                selected_weight=selected_weight_by_index.get(index),
+                final_weight=None,
+                exclusion_reason=reason,
+            )
+        )
+
+    flags: list[str] = []
+    if any(population.exclusion_reason == "missing_energy" for population in populations):
+        flags.append("energy_definition_incomplete")
+    if population_gate_dropped > 1e-12:
+        flags.append("population_gate_applied")
+    if uncovered_population > 1e-12:
+        flags.append("resource_cap_truncated")
+
+    return _SelectionResult(
+        definition=definition,
+        selected=selected,
+        populations=tuple(populations),
+        preselection_population=len(valid) / len(records),
+        selected_population=selected_mass,
+        uncovered_population=uncovered_population,
+        population_gate_dropped=population_gate_dropped,
+        flags=tuple(flags),
+    )
+
+
+def _finalize_ensemble_quality(
+    selection: _SelectionResult,
+    shieldings: list[ConformerShielding],
+    symbols: list[str],
+    nmr_config: NmrConfig,
+    omit_atom_indices: list[int] | None = None,
+) -> tuple[list[ConformerShielding], EnsembleQuality]:
+    """Reject incomplete conformers whole and build the quality record (G09).
+
+    Returns the conformers the averaging/DP5 algorithms may consume — weights
+    renormalized over the successful complete set (reported weights = actual
+    algorithm input) with their Δ threaded through — plus the
+    :class:`EnsembleQuality` evidence record.
+    """
+    incomplete = set(incomplete_conformer_ids(shieldings, symbols, nmr_config, omit_atom_indices))
+    complete = [cs for cs in shieldings if cs.conformer_id not in incomplete]
+    total_weight = sum(float(cs.boltzmann_weight) for cs in complete)
+    if complete and total_weight > 0:
+        final_weights = [float(cs.boltzmann_weight) / total_weight for cs in complete]
+    elif complete:
+        final_weights = [1.0 / len(complete)] * len(complete)
+    else:
+        final_weights = []
+
+    delta_by_id = {item.conformer_id: item.delta_hartree for item in selection.selected}
+    selected_weight_by_id = {item.conformer_id: item.selected_weight for item in selection.selected}
+    finalized = [
+        replace(
+            cs,
+            boltzmann_weight=weight,
+            delta_hartree=delta_by_id.get(cs.conformer_id),
+        )
+        for cs, weight in zip(complete, final_weights, strict=True)
+    ]
+    final_by_id = {cs.conformer_id: cs.boltzmann_weight for cs in finalized}
+    successful_ids = set(final_by_id)
+    successful_population = 0.0
+    for cs, original in zip(finalized, complete, strict=True):
+        selected_weight = selected_weight_by_id.get(cs.conformer_id)
+        if selected_weight is None:
+            selected_weight = float(original.boltzmann_weight)
+        successful_population += selected_weight
+
+    updated: list[ConformerPopulation] = []
+    for population in selection.populations:
+        if population.conformer_id in successful_ids:
+            updated.append(
+                replace(
+                    population,
+                    final_weight=final_by_id[population.conformer_id],
+                    exclusion_reason=None,
+                )
+            )
+        elif population.exclusion_reason is None:
+            reason = (
+                "incomplete_shieldings" if population.conformer_id in incomplete else "giao_failed"
+            )
+            updated.append(replace(population, exclusion_reason=reason))
+        else:
+            updated.append(population)
+
+    flags = list(selection.flags)
+    failed_selected = [
+        population
+        for population in updated
+        if population.exclusion_reason in ("giao_failed", "incomplete_shieldings")
+    ]
+    if any(
+        (population.selected_weight or 0.0) >= DOMINANT_POPULATION for population in failed_selected
+    ):
+        flags.append("dominant_conformer_failed")
+    if any(
+        (population.selected_weight or 0.0) < DOMINANT_POPULATION for population in failed_selected
+    ):
+        flags.append("tail_conformer_failed")
+    if successful_population < QUALITY_POPULATION_TARGET:
+        flags.append("successful_population_below_target")
+    degraded = (
+        "dominant_conformer_failed" in flags
+        or "successful_population_below_target" in flags
+        or selection.uncovered_population > UNCOVERED_POPULATION_LIMIT
+    )
+    quality = EnsembleQuality(
+        energy_definition=selection.definition,
+        n_discovered=len(selection.populations),
+        n_selected=len(selection.selected),
+        n_successful=len(finalized),
+        preselection_population=selection.preselection_population,
+        selected_population=selection.selected_population,
+        successful_population=successful_population,
+        uncovered_population=selection.uncovered_population,
+        population_gate_dropped=selection.population_gate_dropped,
+        quality_status="degraded" if degraded else "ok",
+        quality_flags=tuple(flags),
+        conformers=tuple(updated),
+    )
+    return finalized, quality
 
 
 # ── Per-conformer GIAO shielding checkpoints + resource budget (todo 28 / gap G15) ──
@@ -1135,6 +1401,7 @@ def _run_giao_for_conformers(
     solvent: str | None,
     *,
     budget: Mapping[str, Any] | None = None,
+    conformer_ids: Sequence[str] | None = None,
 ) -> list[ConformerShielding]:
     """Run ORCA GIAO NMR for each conformer and parse shieldings.
 
@@ -1219,7 +1486,7 @@ def _run_giao_for_conformers(
             if structure.coordinates is not None
             else np.zeros((0, 3), dtype=np.float64)
         )
-        conformer_id = f"conf_{idx:03d}"
+        conformer_id = conformer_ids[idx] if conformer_ids is not None else f"conf_{idx:03d}"
         entry_fingerprint = _giao_fingerprint(
             nmr_config,
             cfg,
@@ -1486,6 +1753,231 @@ def _build_candidate_evidence(
         exclusion_reasons=tuple(reasons),
         total_matched=total_matched,
     )
+
+
+#: Sensitivity axes capped for cost: leave-one-out × conformers and two
+#: temperature bounds per candidate set.
+_SENSITIVITY_MAX_CONFORMERS: Final = 40
+_SENSITIVITY_TEMPERATURE_SPREAD: Final = 0.1
+
+SENSITIVITY_FLAGS: Final[tuple[str, ...]] = (
+    "leave_one_out_winner_flip",
+    "temperature_winner_flip",
+)
+
+
+def _dp4_log_likelihood(
+    candidate_result: CandidateResult,
+    nmr_config: NmrConfig,
+    error_model: Any,
+) -> float:
+    """DP4 log-likelihood of one candidate from its own residuals."""
+    return compute_dp4(
+        {
+            nucleus: [
+                assignment.residual
+                for assignment in candidate_result.assignments
+                if _nucleus_of_element(assignment.element) == nucleus
+            ]
+            for nucleus in nmr_config.nuclei
+        },
+        error_model,
+    )
+
+
+def _dp4_ranking_winner(
+    probabilities: list[float | None],
+    candidate_results: list[CandidateResult],
+    nmr_config: NmrConfig,
+    error_model_id: str,
+) -> str | None:
+    """Winner label under the DP4-only ranking (no DP5 tie-break).
+
+    Sensitivity compares the primary (DP4) order; typed probability blocks
+    are dropped from the temporary candidates so a stale DP5 value can never
+    influence a perturbed ranking.
+    """
+    temporary = [
+        replace(cr, dp4_probability=probability, dp5_probability=None, probability=None)
+        for cr, probability in zip(candidate_results, probabilities, strict=True)
+    ]
+    report = NmrReport(candidates=temporary, config=nmr_config, error_model=error_model_id)
+    winner = report.winner
+    return winner.label if winner is not None else None
+
+
+def _reweight_by_temperature(
+    shieldings: list[ConformerShielding],
+    temperature_k: float,
+    nmr_config: NmrConfig,
+) -> list[ConformerShielding] | None:
+    """Boltzmann-recompute weights at *temperature_k*; ``None`` when no Δ data."""
+    deltas = [cs.delta_hartree for cs in shieldings]
+    if any(delta is None for delta in deltas):
+        return None
+    kt = 0.001987204259 * temperature_k / HARTREE_TO_KCAL
+    if kt <= 0:
+        return None
+    factors = [math.exp(-float(delta) / kt) for delta in deltas]
+    total = sum(factors)
+    if total <= 0:
+        return None
+    return [
+        replace(cs, boltzmann_weight=factor / total)
+        for cs, factor in zip(shieldings, factors, strict=True)
+    ]
+
+
+def _sensitivity_analysis(
+    structures: list[Structure],
+    candidate_results: list[CandidateResult],
+    conformer_shieldings_by_candidate: list[list[ConformerShielding]],
+    experiment: ExperimentalNmr,
+    nmr_config: NmrConfig,
+    error_model: Any,
+) -> dict[str, object]:
+    """Leave-one-conformer-out + temperature stability of the DP4 winner.
+
+    A conclusion that flips when one conformer is removed or the Boltzmann
+    temperature moves ±10 % is marked ``requires_review`` — never reported
+    as a stable ranking (G09). Pure post-processing on cached shieldings: no
+    QC is re-run.
+    """
+    n_conformers = sum(len(confs) for confs in conformer_shieldings_by_candidate)
+    baseline_ll = [_dp4_log_likelihood(cr, nmr_config, error_model) for cr in candidate_results]
+    statuses = [
+        cr.evidence.status if cr.evidence is not None else "valid" for cr in candidate_results
+    ]
+    baseline_probs = normalize_dp4_gated(baseline_ll, statuses)
+    baseline_winner = _dp4_ranking_winner(
+        baseline_probs, candidate_results, nmr_config, error_model.model_id
+    )
+    report: dict[str, object] = {
+        "status": "computed",
+        "flags": [],
+        "requires_review": False,
+        "baseline_winner": baseline_winner,
+        "leave_one_out": {"n_cases": 0, "n_flips": 0, "cases": []},
+        "temperature": {
+            "status": "skipped",
+            "reason": "not_evaluated",
+            "range_k": [],
+            "results": [],
+        },
+    }
+    if baseline_winner is None or len(candidate_results) < 2:
+        report["status"] = "skipped"
+        report["reason"] = "no_ranking"
+        return report
+    if n_conformers > _SENSITIVITY_MAX_CONFORMERS:
+        report["status"] = "skipped"
+        report["reason"] = "resource_guard"
+        report["n_conformers"] = n_conformers
+        return report
+
+    flags: list[str] = []
+    cases: list[dict[str, object]] = []
+    for index, confs in enumerate(conformer_shieldings_by_candidate):
+        if len(confs) < 2:
+            continue
+        for position, removed in enumerate(confs):
+            remaining = list(confs[:position]) + list(confs[position + 1 :])
+            perturbed = _analyze_candidate(
+                index, structures[index], remaining, experiment, nmr_config
+            )
+            perturbed_ll = list(baseline_ll)
+            perturbed_ll[index] = _dp4_log_likelihood(perturbed, nmr_config, error_model)
+            perturbed_statuses = list(statuses)
+            perturbed_statuses[index] = (
+                perturbed.evidence.status if perturbed.evidence is not None else "valid"
+            )
+            probabilities = normalize_dp4_gated(perturbed_ll, perturbed_statuses)
+            perturbed_candidates = list(candidate_results)
+            perturbed_candidates[index] = perturbed
+            winner = _dp4_ranking_winner(
+                probabilities, perturbed_candidates, nmr_config, error_model.model_id
+            )
+            cases.append(
+                {
+                    "candidate": index,
+                    "label": candidate_results[index].label,
+                    "removed_conformer": removed.conformer_id,
+                    "winner": winner,
+                    "flips": winner != baseline_winner,
+                }
+            )
+    n_flips = sum(1 for case in cases if case["flips"])
+    report["leave_one_out"] = {"n_cases": len(cases), "n_flips": n_flips, "cases": cases}
+    if n_flips:
+        flags.append("leave_one_out_winner_flip")
+
+    temperature = nmr_config.boltzmann_temp
+    lower = temperature * (1.0 - _SENSITIVITY_TEMPERATURE_SPREAD)
+    upper = temperature * (1.0 + _SENSITIVITY_TEMPERATURE_SPREAD)
+    if all(len(confs) < 2 for confs in conformer_shieldings_by_candidate):
+        report["temperature"] = {
+            "status": "skipped",
+            "reason": "single_conformer",
+            "range_k": [lower, upper],
+            "results": [],
+        }
+    else:
+        temperature_results: list[dict[str, object]] = []
+        skip_reason: str | None = None
+        for bound in (lower, upper):
+            reweighted: list[list[ConformerShielding]] = []
+            for confs in conformer_shieldings_by_candidate:
+                updated = _reweight_by_temperature(confs, bound, nmr_config)
+                if updated is None:
+                    skip_reason = "missing_delta_evidence"
+                    break
+                reweighted.append(updated)
+            if skip_reason is not None:
+                break
+            perturbed_results = [
+                _analyze_candidate(
+                    index, structures[index], reweighted[index], experiment, nmr_config
+                )
+                for index in range(len(candidate_results))
+            ]
+            likelihoods = [
+                _dp4_log_likelihood(cr, nmr_config, error_model) for cr in perturbed_results
+            ]
+            perturbed_statuses = [
+                cr.evidence.status if cr.evidence is not None else "valid"
+                for cr in perturbed_results
+            ]
+            probabilities = normalize_dp4_gated(likelihoods, perturbed_statuses)
+            winner = _dp4_ranking_winner(
+                probabilities, perturbed_results, nmr_config, error_model.model_id
+            )
+            temperature_results.append(
+                {
+                    "temperature_k": bound,
+                    "winner": winner,
+                    "flips": winner != baseline_winner,
+                }
+            )
+        if skip_reason is not None:
+            report["temperature"] = {
+                "status": "skipped",
+                "reason": skip_reason,
+                "range_k": [lower, upper],
+                "results": [],
+            }
+        else:
+            report["temperature"] = {
+                "status": "computed",
+                "reason": None,
+                "range_k": [lower, upper],
+                "results": temperature_results,
+            }
+            if any(entry["flips"] for entry in temperature_results):
+                flags.append("temperature_winner_flip")
+
+    report["flags"] = flags
+    report["requires_review"] = bool(flags)
+    return report
 
 
 def _apply_evidence_comparability_gate(candidate_results: list[CandidateResult]) -> None:
@@ -2240,7 +2732,8 @@ def run_nmr_analysis(
             generated_manifest = ResultManifest.read(storage.result_dir())
         except FileNotFoundError:
             generated_manifest = ResultManifest(workflow="nmr", status="running")
-        for rank, (generated, _weight, _energy) in enumerate(_select_conformers(ensemble, nmr_config), 1):
+        for rank, selected in enumerate(_select_conformers(ensemble, nmr_config).selected, 1):
+            generated = selected.structure
             lines = [str(len(generated.symbols)), f"NMR generated conformer rank={rank}"]
             if generated.coordinates is None:
                 continue
@@ -2268,13 +2761,11 @@ def run_nmr_analysis(
         progress_reporter.complete_stage("ensemble_export", skipped)
         progress_reporter.start_stage("giao_nmr")
 
-    selected_conformers = [
-        _select_conformers(ensemble, nmr_config) for ensemble in resolved_ensembles
-    ]
+    selections = [_select_conformers(ensemble, nmr_config) for ensemble in resolved_ensembles]
     giao_budget = _giao_resource_budget(
         cfg,
         n_candidates=len(candidates),
-        n_conformers=max((len(selected) for selected in selected_conformers), default=0),
+        n_conformers=max((len(selection.selected) for selection in selections), default=0),
     )
     logger.info("NMR GIAO budget (候选×构象×nproc): %s", json.dumps(giao_budget, sort_keys=True))
 
@@ -2289,12 +2780,16 @@ def run_nmr_analysis(
             ]
         else:
             conformer_shieldings = _run_giao_for_conformers(
-                selected_conformers[idx],
+                [
+                    (selected.structure, selected.selected_weight, selected.delta_hartree)
+                    for selected in selections[idx].selected
+                ],
                 nmr_config,
                 giao_dir,
                 cfg,
                 solvent,
                 budget=giao_budget,
+                conformer_ids=[selected.conformer_id for selected in selections[idx].selected],
             )
 
         if not conformer_shieldings:
@@ -2310,12 +2805,38 @@ def run_nmr_analysis(
     if progress_reporter is not None:
         progress_reporter.complete_stage("giao_nmr")
         progress_reporter.start_stage("boltzmann_average")
+    final_shieldings_by_candidate: list[list[ConformerShielding]] = []
     for idx, (structure, conformer_shieldings) in enumerate(
         zip(candidates, conformer_shieldings_by_candidate, strict=True)
     ):
-        candidate_results.append(
-            _analyze_candidate(idx, structure, conformer_shieldings, experiment, nmr_config)
+        omit_indices = _omit_atom_indices(
+            experiment, structure, strict=nmr_config.strict_equivalence
         )
+        final_shieldings, quality = _finalize_ensemble_quality(
+            selections[idx],
+            conformer_shieldings,
+            list(structure.symbols),
+            nmr_config,
+            omit_indices,
+        )
+        if not final_shieldings:
+            error = (
+                f"no complete GIAO shieldings for {structure.id}: "
+                f"{len(conformer_shieldings)} returned conformer(s), none complete "
+                "for the required nuclei"
+            )
+            _fail_progress(progress_reporter, error)
+            return WorkflowResult(
+                status="failed",
+                stages_completed=stages_completed,
+                error=error,
+            )
+        candidate_result = _analyze_candidate(
+            idx, structure, final_shieldings, experiment, nmr_config
+        )
+        candidate_result.ensemble_quality = quality
+        candidate_results.append(candidate_result)
+        final_shieldings_by_candidate.append(final_shieldings)
 
     stages_completed.append("giao_shielding")
     stages_completed.append("averaging_matching_scaling")
@@ -2479,6 +3000,21 @@ def run_nmr_analysis(
             ),
         )
     stages_completed.append("probability")
+    # todo 30 / G09: winner stability under leave-one-conformer-out and
+    # ±10 % temperature — a wobbling conclusion is marked, not hidden.
+    sensitivity = _sensitivity_analysis(
+        candidates,
+        candidate_results,
+        final_shieldings_by_candidate,
+        experiment,
+        nmr_config,
+        em,
+    )
+    if sensitivity.get("requires_review"):
+        logger.warning(
+            "NMR sensitivity: conclusion marked for review (%s)",
+            ", ".join(str(flag) for flag in sensitivity.get("flags", [])),
+        )
     if progress_reporter is not None:
         progress_reporter.complete_stage("dp4_dp5_probability")
         progress_reporter.start_stage("nmr_report")
@@ -2539,6 +3075,7 @@ def run_nmr_analysis(
             "fchl_kernel": fchl_kernel,
             "protocol_id": str(protocol_block["fingerprint"]),
             "protocol": protocol_block,
+            "sensitivity": sensitivity,
         },
     )
     reports_dir = storage.result_category_dir("reports")
@@ -2583,6 +3120,7 @@ def run_nmr_analysis(
         "stages": stages_completed,
         "giao_resource_budget": giao_budget,
         "protocol": protocol_block,
+        "sensitivity": sensitivity,
         "outputs": {
             "json": str(paths["json"]),
             "xlsx": str(paths["xlsx"]) if paths["xlsx"] else None,
@@ -2644,6 +3182,7 @@ def run_nmr_analysis(
             "dp5_mode": report.dp5_mode,
             "fchl_kernel": fchl_kernel,
             "giao_resource_budget": giao_budget,
+            "sensitivity": sensitivity,
             "note": (
                 "DP4/DP5 use placeholder error-model parameters (P1a); values are relative only."
                 if actual_error_model.startswith("placeholder")

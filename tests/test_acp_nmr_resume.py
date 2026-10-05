@@ -53,7 +53,13 @@ def _fake_shielding(calls: list[float], interrupt_at: float | None = None) -> An
             raise KeyboardInterrupt("simulated interruption before conformer completes")
         value = 100.0 + x
         return _shielding_result(
-            {0: {"symbol": "C", "isotropic": value}, 1: {"symbol": "H", "isotropic": value - 70.0}}
+            {
+                0: {"symbol": "C", "isotropic": value},
+                1: {"symbol": "H", "isotropic": value - 70.0},
+                2: {"symbol": "H", "isotropic": value - 70.1},
+                3: {"symbol": "H", "isotropic": value - 70.2},
+                4: {"symbol": "H", "isotropic": value - 70.3},
+            }
         )
 
     return fake

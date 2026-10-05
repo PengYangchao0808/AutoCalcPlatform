@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,53 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _isotropic_value(shielding: dict[str, object] | None) -> float | None:
+    """Finite isotropic shielding value, or ``None`` when absent/malformed."""
+    if not shielding or "isotropic" not in shielding:
+        return None
+    try:
+        value = float(shielding["isotropic"])
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _required_atom_indices(
+    symbols: Sequence[str],
+    config: NmrConfig,
+    omit_atom_indices: Sequence[int] | None = None,
+) -> list[int]:
+    """Atoms whose configured nucleus must be present for a conformer to count."""
+    omit_set = set(omit_atom_indices or [])
+    required: list[int] = []
+    for atom_idx, symbol in enumerate(symbols):
+        if atom_idx in omit_set:
+            continue
+        if _nucleus_for_element(normalize_symbol(symbol), config) is not None:
+            required.append(atom_idx)
+    return required
+
+
+def incomplete_conformer_ids(
+    conformers: Sequence[ConformerShielding],
+    symbols: Sequence[str],
+    config: NmrConfig,
+    omit_atom_indices: Sequence[int] | None = None,
+) -> list[str]:
+    """Ids of conformers missing at least one required-nucleus shielding.
+
+    Required = every non-omitted atom whose element has a configured
+    nucleus. A conformer missing any of them is unusable as a whole (G09) —
+    it is never partially averaged into a subset of atoms.
+    """
+    required = _required_atom_indices(symbols, config, omit_atom_indices)
+    incomplete: list[str] = []
+    for conf in conformers:
+        if any(_isotropic_value(conf.shieldings.get(atom_idx)) is None for atom_idx in required):
+            incomplete.append(conf.conformer_id)
+    return incomplete
+
+
 def boltzmann_average_shieldings(
     conformers: list[ConformerShielding],
     symbols: list[str],
@@ -33,10 +81,14 @@ def boltzmann_average_shieldings(
 
     Steps (DevDoc §8.1 / §8.2):
 
-    1. ``σ_avg(atom) = Σ_i w_i · σ_i(atom)`` over conformers.
-    2. Equivalence-group averaging: members of a group are replaced by
+    1. Conformer completeness gate (G09): conformers missing any required
+       nucleus shielding are excluded WHOLE — every atom then averages the
+       same conformer subset with one shared renormalization (the former
+       per-atom denominator silently averaged different ensembles per atom).
+    2. ``σ_avg(atom) = Σ_i w_i · σ_i(atom)`` over the complete conformers.
+    3. Equivalence-group averaging: members of a group are replaced by
        their mean. Atoms without an equivalence group are singletons.
-    3. TMS conversion: ``δ_calc = σ_TMS − σ_avg`` using the configured
+    4. TMS conversion: ``δ_calc = σ_TMS − σ_avg`` using the configured
        reference for the atom's nucleus.
 
     Args:
@@ -50,31 +102,43 @@ def boltzmann_average_shieldings(
         List of :class:`AtomShift` (one per non-omitted atom / group
         representative). When equivalence groups are present, only one
         representative per group is emitted (the lowest-indexed member).
+        Empty when no conformer is complete.
     """
     omit_set = set(omit_atom_indices or [])
     n_atoms = len(symbols)
     if n_atoms == 0 or not conformers:
         return []
 
-    # raw Boltzmann-weighted shielding per atom
+    required = _required_atom_indices(symbols, config, omit_atom_indices)
+    complete = [
+        conf
+        for conf in conformers
+        if all(_isotropic_value(conf.shieldings.get(atom_idx)) is not None for atom_idx in required)
+    ]
+    if not complete:
+        logger.warning("No conformer carries complete required-nuclei shieldings")
+        return []
+    total_weight = sum(float(conf.boltzmann_weight) for conf in complete)
+    if total_weight > 0:
+        weights = [float(conf.boltzmann_weight) / total_weight for conf in complete]
+    else:
+        weights = [1.0 / len(complete)] * len(complete)
+
+    # raw Boltzmann-weighted shielding per atom — one shared conformer subset
+    # and one shared weight normalization for every atom
     avg_shielding: dict[int, float] = {}
     for atom_idx in range(n_atoms):
         if atom_idx in omit_set:
             continue
+        if _nucleus_for_element(normalize_symbol(symbols[atom_idx]), config) is None:
+            continue
         total = 0.0
-        total_w = 0.0
-        for conf in conformers:
-            sh = conf.shieldings.get(atom_idx)
-            if not sh or "isotropic" not in sh:
+        for conf, weight in zip(complete, weights, strict=True):
+            value = _isotropic_value(conf.shieldings.get(atom_idx))
+            if value is None:
                 continue
-            try:
-                value = float(sh["isotropic"])
-            except (TypeError, ValueError):
-                continue
-            total += conf.boltzmann_weight * value
-            total_w += conf.boltzmann_weight
-        if total_w > 0:
-            avg_shielding[atom_idx] = total / total_w
+            total += weight * value
+        avg_shielding[atom_idx] = total
 
     # equivalence averaging — replace each member's value with the group mean
     if equivalence_groups:
@@ -175,4 +239,4 @@ def labels_for_atoms(symbols: list[str]) -> list[str]:
     return build_all_labels(symbols)
 
 
-__all__ = ["boltzmann_average_shieldings", "labels_for_atoms"]
+__all__ = ["boltzmann_average_shieldings", "incomplete_conformer_ids", "labels_for_atoms"]
