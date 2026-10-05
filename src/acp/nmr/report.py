@@ -13,12 +13,17 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TypedDict
 
-from acp.nmr.models import NmrReport
+from acp.nmr.models import REPORT_SCHEMA_VERSION, NmrReport
 
 logger = logging.getLogger(__name__)
+
+#: Rendered for payloads written before schema v2 (no ``schema_version``):
+#: historical reports carry no validation state and are never upgraded.
+LEGACY_REPORT_NOTE = "历史报告：验证状态未知"
 
 
 class ReportPaths(TypedDict):
@@ -27,8 +32,25 @@ class ReportPaths(TypedDict):
     plots: list[Path]
 
 
+def report_validation_note(payload: Mapping[str, object]) -> str | None:
+    """Validation-display note for an already-parsed report payload.
+
+    Payloads with ``schema_version == 2`` return ``None`` (validation state
+    known). Anything else — notably v1 payloads written before todo 24,
+    identified by the *absence* of ``schema_version`` — returns
+    :data:`LEGACY_REPORT_NOTE`: readers display it and must not rewrite or
+    auto-upgrade the stored file.
+
+    Pure read helper: the legacy read path (path probe order, file serving,
+    remote unwrap) is untouched; this only classifies a payload for display.
+    """
+    if payload.get("schema_version") == REPORT_SCHEMA_VERSION:
+        return None
+    return LEGACY_REPORT_NOTE
+
+
 def write_json_report(report: NmrReport, output_path: Path) -> Path:
-    """Write ``nmr_report.json``."""
+    """Write ``nmr_report.json`` (schema v2 payload from ``NmrReport.as_dict``)."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = report.as_dict()
@@ -38,6 +60,10 @@ def write_json_report(report: NmrReport, output_path: Path) -> Path:
 
 def write_xlsx_report(report: NmrReport, output_path: Path) -> Path | None:
     """Write ``nmr_assignment.xlsx`` (one sheet per candidate).
+
+    Every number mirrors the JSON serialization of the same raw field
+    (``scaled_ppm`` raw; DP4/DP5/regression at round-6) so both artifacts
+    carry identical values — nothing is recomputed from display output.
 
     Returns ``None`` (and logs) when openpyxl is unavailable.
     """
@@ -64,19 +90,21 @@ def write_xlsx_report(report: NmrReport, output_path: Path) -> Path | None:
                     assignment.element,
                     round(assignment.exp_ppm, 4),
                     round(assignment.calc_ppm, 4),
-                    round(assignment.scaled_ppm, 4),
+                    assignment.scaled_ppm,
                     round(assignment.residual, 4),
                 ]
             )
         ws.append([])
-        ws.append(["DP4", candidate.dp4_probability])
-        ws.append(["DP5", candidate.dp5_probability])
+        dp4 = candidate.dp4_probability
+        dp5 = candidate.dp5_probability
+        ws.append(["DP4", round(dp4, 6) if dp4 is not None else None])
+        ws.append(["DP5", round(dp5, 6) if dp5 is not None else None])
         for nucleus, regression in candidate.regressions.items():
             ws.append([])
-            ws.append([f"regression[{nucleus}]", "slope", regression.slope])
-            ws.append(["", "intercept", regression.intercept])
-            ws.append(["", "r_squared", regression.r_squared])
-            ws.append(["", "mae", regression.mae])
+            ws.append([f"regression[{nucleus}]", "slope", round(regression.slope, 6)])
+            ws.append(["", "intercept", round(regression.intercept, 6)])
+            ws.append(["", "r_squared", round(regression.r_squared, 6)])
+            ws.append(["", "mae", round(regression.mae, 6)])
 
     if default_ws is not None and len(wb.sheetnames) > 1:
         wb.remove(default_ws)
@@ -179,5 +207,7 @@ __all__ = [
     "write_xlsx_report",
     "write_plots",
     "write_all_reports",
+    "report_validation_note",
+    "LEGACY_REPORT_NOTE",
     "ReportPaths",
 ]

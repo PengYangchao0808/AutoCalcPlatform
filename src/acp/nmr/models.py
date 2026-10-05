@@ -323,6 +323,29 @@ class NmrConfig:
 # --- calculation products ------------------------------------------------
 
 
+def _tms_source(config: NmrConfig) -> str:
+    """Classify where the configured TMS references came from (schema v2).
+
+    Compares the configured 1H/13C values (the only nuclei the Goodman
+    table carries) against ``lookup_tms_shieldings`` for this level:
+    ``"goodman_tmsdata"`` when every comparable value matches the table,
+    ``"custom"`` when any comparable value differs, ``"unknown"`` when the
+    table has no row for the level (nothing to compare against).
+    """
+    sigma_13c, sigma_1h = lookup_tms_shieldings(config.nmr_method, config.nmr_basis, config.solvent)
+    table = {"13C": sigma_13c, "1H": sigma_1h}
+    comparable = {
+        nucleus: sigma
+        for nucleus, sigma in table.items()
+        if nucleus in config.tms_shieldings and sigma is not None
+    }
+    if not comparable:
+        return "unknown"
+    if all(config.tms_shieldings[nucleus] == sigma for nucleus, sigma in comparable.items()):
+        return "goodman_tmsdata"
+    return "custom"
+
+
 @dataclass(frozen=True)
 class ConformerShielding:
     """Per-conformer Boltzmann weight + parsed shieldings.
@@ -382,6 +405,10 @@ class Assignment:
             "element": self.element,
             "exp_ppm": round(self.exp_ppm, 4),
             "calc_ppm": round(self.calc_ppm, 4),
+            # schema v2 (todo 24): the RAW field value — never a display
+            # rounding; the XLSX sheet writes this same float so JSON and
+            # XLSX carry identical numbers (gap §8.2).
+            "scaled_ppm": self.scaled_ppm,
             "residual": round(self.residual, 4),
         }
 
@@ -582,6 +609,59 @@ class CandidateResult:
     evidence: CandidateEvidence | None = None
     probability: CandidateProbability | None = None
 
+    def analysis_status(self) -> str | None:
+        """Schema-v2 per-candidate status (gap §8.2).
+
+        Evidence-gate status when the gate ran; otherwise the typed DP4
+        status (legacy callers that only attach a probability block);
+        ``None`` = unknown — a historical/foreign candidate is never
+        auto-upgraded to a status it never recorded.
+        """
+        if self.evidence is not None:
+            return self.evidence.status
+        if self.probability is not None:
+            return self.probability.dp4.status
+        return None
+
+    def coverage(self) -> dict[str, object]:
+        """Schema-v2 coverage record (gap §8.2; todo 24).
+
+        Signal counts come from the evidence gate (``expected_signals`` =
+        Σ per-nucleus expected, ``matched_signals`` = ``total_matched``);
+        both (plus ``per_nucleus``) are ``None`` when no evidence was
+        attached — never coerced to 0. Conformer population:
+        ``n_conformers_successful`` counts the conformers actually present
+        in the report (complete parsed shieldings) and
+        ``successful_population`` sums their stored Boltzmann weights
+        (rounded like every other serialized weight). The pre-GIAO
+        *selected* set (size + raw-ensemble weight fraction) is NOT
+        recorded on this container — stored weights are already normalized
+        over the selected set — so ``n_conformers_selected`` /
+        ``selected_population`` stay ``None`` until the D-phase
+        ConformerEvidence layer records them (no invented numbers).
+        """
+        if self.evidence is not None:
+            expected: int | None = sum(ev.expected for ev in self.evidence.per_nucleus.values())
+            matched: int | None = self.evidence.total_matched
+            per_nucleus: dict[str, object] | None = {
+                nucleus: ev.as_dict() for nucleus, ev in self.evidence.per_nucleus.items()
+            }
+        else:
+            expected = None
+            matched = None
+            per_nucleus = None
+        return {
+            "expected_signals": expected,
+            "matched_signals": matched,
+            "per_nucleus": per_nucleus,
+            "n_conformers_selected": None,
+            "n_conformers_successful": len(self.conformer_shieldings),
+            "selected_population": None,
+            "successful_population": round(
+                sum(cs.boltzmann_weight for cs in self.conformer_shieldings), 6
+            ),
+        }
+
     def as_dict(self) -> dict[str, object]:
         regression_obj: dict[str, object] = {}
         for nucleus, regression in self.regressions.items():
@@ -603,6 +683,8 @@ class CandidateResult:
             "dp5_kernel": self.dp5_kernel,
             "evidence": self.evidence.as_dict() if self.evidence is not None else None,
             "probability": self.probability.as_dict() if self.probability is not None else None,
+            "analysis_status": self.analysis_status(),
+            "coverage": self.coverage(),
             "n_conformers": len(self.conformer_shieldings),
             "regression": regression_obj,
             "assignment": [a.as_dict() for a in self.assignments],
@@ -643,6 +725,14 @@ def _dp4_rank_key(candidate: CandidateResult) -> tuple[float, float, int]:
         dp5 if dp5 is not None else float("-inf"),
         -candidate.index,
     )
+
+
+#: nmr_report.json serialization schema version. v2 = todo 24: full
+#: effective config, per-candidate analysis_status/coverage, calibration
+#: provenance, raw scaled_ppm. v1 payloads (no ``schema_version`` key) are
+#: historical reports and stay read-only — see
+#: :func:`acp.nmr.report.report_validation_note`.
+REPORT_SCHEMA_VERSION: int = 2
 
 
 @dataclass
@@ -706,9 +796,52 @@ class NmrReport:
             return any(p.dp5.status == "placeholder" for p in typed)
         return self.error_model.startswith("placeholder")
 
+    def _calibration_status(self, side: Literal["dp4", "dp5"]) -> str | None:
+        """Aggregate one probability side's calibration_status (gap §8.2).
+
+        ``None`` when no candidate carries a typed block; the single value
+        when all agree; ``"mixed"`` when candidates disagree — the
+        per-candidate values always stay visible in each probability block.
+        """
+        statuses = {
+            (c.probability.dp4 if side == "dp4" else c.probability.dp5).calibration_status
+            for c in self.candidates
+            if c.probability is not None
+        }
+        if not statuses:
+            return None
+        return next(iter(statuses)) if len(statuses) == 1 else "mixed"
+
+    def _provenance(self) -> dict[str, object]:
+        """Calibration provenance block (schema v2 / gap §8.2).
+
+        Records which error model ran, the aggregated per-side
+        calibration status, the TMS reference values in force and where
+        they came from (``goodman_tmsdata`` = configured values equal the
+        Goodman table row for this level, ``custom`` = some comparable
+        value differs, ``unknown`` = the table has no row for the level —
+        classification only compares 1H/13C, the only nuclei the table
+        carries).
+        """
+        return {
+            "error_model": self.error_model,
+            "dp5_mode": self.dp5_mode,
+            "calibration_status": {
+                "dp4": self._calibration_status("dp4"),
+                "dp5": self._calibration_status("dp5"),
+            },
+            "tms_references": dict(self.config.tms_shieldings),
+            "tms_source": _tms_source(self.config),
+        }
+
     def as_dict(self) -> dict[str, object]:
         winner = self.winner
         return {
+            "schema_version": REPORT_SCHEMA_VERSION,
+            # D-phase (todo 29) protocol identity — placeholder until then;
+            # NmrConfig.protocol_fingerprint (also under config) is the
+            # reserved source T29 will populate.
+            "protocol_id": None,
             "summary": {
                 "n_candidates": len(self.candidates),
                 "winner": (
@@ -733,14 +866,14 @@ class NmrReport:
                 "nuclei": list(self.config.nuclei),
             },
             "candidates": [c.as_dict() for c in self.candidates],
-            "config": {
-                "nmr_method": self.config.nmr_method,
-                "nmr_basis": self.config.nmr_basis,
-                "solvent": self.config.solvent,
-            },
+            # schema v2: the full T21 effective-config record — a strict
+            # superset of the old {nmr_method, nmr_basis, solvent} block, so
+            # existing readers keep those keys unchanged.
+            "config": self.config.to_dict(),
             "error_model": self.error_model,
             "dp5_mode": self.dp5_mode,
             "fchl_kernel": self.metadata.get("fchl_kernel", ""),
+            "provenance": self._provenance(),
             "note": (
                 "DP4/DP5 use placeholder error-model parameters (P1a); "
                 "values are relative only — do not use for publication."
@@ -757,6 +890,7 @@ __all__ = [
     "ParseIssueCode",
     "PARSE_ISSUE_CODES",
     "NmrConfig",
+    "REPORT_SCHEMA_VERSION",
     "ConformerShielding",
     "AtomShift",
     "Assignment",
