@@ -397,36 +397,65 @@ def xtbmd_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
-# ── nmr flag emission (E7: runner ⇄ script_gen parity) ──────────────────
-# NMR workflow scalar knobs that flow method → CLI. Nuclei is emitted as
-# a comma-joined string. Solvent/ewin go through the shared resolvers
-# (censo_solvent_from_method / censo_ewin_from_method), not here.
-_NMR_SCALAR_FLAGS: dict[str, str] = {
-    "boltzmann_temp": "--boltzmann-temp",
-    "tms_shielding_h": "--tms-1h",
-    "tms_shielding_c": "--tms-13c",
-    "error_model": "--error-model",
-    "nmr_method": "--nmr-method",
-    "nmr_basis": "--nmr-basis",
-}
+# ── nmr flag emission (T19: single resolver source; E7 parity) ──────────
+# NMR CLI flags are rendered from acp.nmr.method_config.resolve_nmr_method
+# (G06 single source of truth) — the resolver owns key precedence, so this
+# module never reads flat nmr_method/nmr_basis keys. Flag spellings match
+# the ``acp run nmr`` parser in cli.py. Solvent/ewin/preset ALSO still go
+# through the caller-side censo_* helpers (runner.py / script_gen.py) until
+# T20 rewires those call sites; where both fire they agree because the
+# resolver reads the same method-level keys first.
+_NMR_FLAG_FIELDS: tuple[tuple[str, str], ...] = (
+    ("nmr_method", "--nmr-method"),
+    ("nmr_basis", "--nmr-basis"),
+    ("solvent_model", "--solvent-model"),
+    ("solvent", "--solvent"),
+    ("boltzmann_temp", "--boltzmann-temp"),
+    ("tms_1h", "--tms-1h"),
+    ("tms_13c", "--tms-13c"),
+    ("ewin", "--ewin"),
+    ("max_conformers", "--max-conformers"),
+    ("error_model", "--error-model"),
+    ("conformer_preset", "--preset"),
+)
 
 
-def nmr_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the NMR CLI flag group from a job's method dict (E7 parity).
+def nmr_method_flags(method: dict[str, Any], config: Mapping[str, Any] | None = None) -> list[str]:
+    """Emit the NMR CLI flag group from a job's method payload (E7 parity).
 
-    Nuclei (a list) is emitted as a comma-joined ``--nuclei`` value when
-    present. Solvent and ewin are resolved through the shared
-    :func:`censo_solvent_from_method` / :func:`censo_ewin_from_method`
-    helpers (caller-side), not here, so the NMR and energy/ensemble
-    branches stay consistent.
+    G06: :func:`acp.nmr.method_config.resolve_nmr_method` is the single
+    source — this function only renders the resolved config into argv. A
+    flag is emitted only when its resolved value differs from the
+    resolver's built-in default (an empty payload resolved against no
+    config), so payloads that set nothing emit nothing and the CLI defaults
+    apply unchanged. Nuclei is comma-joined; ``None``/empty values are
+    never emitted (gas phase resolves ``solvent`` to ``""`` — ``--solvent``
+    drops while ``--solvent-model none`` still carries the signal).
+
+    Args:
+        method: Job/wizard NMR method payload (flat legacy keys or the
+            frontend's ``{schema_id, profile_id, levels}`` shape).
+        config: Merged cccp config mapping (``load_config()`` output) or
+            ``None`` — forwarded to the resolver as-is.
+
+    Returns:
+        Flattened ``[flag, value, ...]`` argv fragment.
+
+    Raises:
+        NmrMethodConfigError: The payload cannot become a valid NMR config
+            (rejection rules live in the resolver — nothing mismatched
+            silently falls back to defaults).
     """
+    from acp.nmr.method_config import resolve_nmr_method
+
+    resolved = resolve_nmr_method(method, config)
+    builtin = resolve_nmr_method({}, None)
     flags: list[str] = []
-    nuclei = method.get("nuclei")
-    if isinstance(nuclei, (list, tuple)) and nuclei:
-        flags += ["--nuclei", ",".join(str(n) for n in nuclei)]
-    for key, flag in _NMR_SCALAR_FLAGS.items():
-        value = method.get(key)
-        if value is None or value == "":
+    if resolved.nuclei != builtin.nuclei:
+        flags += ["--nuclei", ",".join(resolved.nuclei)]
+    for attr, flag in _NMR_FLAG_FIELDS:
+        value = getattr(resolved, attr)
+        if value is None or value == "" or value == getattr(builtin, attr):
             continue
         flags += [flag, str(value)]
     return flags

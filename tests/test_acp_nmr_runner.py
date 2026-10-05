@@ -247,3 +247,54 @@ def test_run_nmr_analysis_forwards_solvent_model_and_max_conformers(
         )
     assert built[-1].solvent_model == "cpcm"
     assert built[-1].max_conformers == 10
+
+
+# ── T19: nmr_method_flags consumes the single resolver (G06) ────────────
+
+
+def test_nmr_method_flags_custom_payload_emits_resolver_flags() -> None:
+    """{functional, basis, solvent_model} (wizard shape) → non-empty argv."""
+    from acp.scheduler.jobs import nmr_method_flags
+
+    flags = nmr_method_flags({"functional": "B3LYP", "basis": "def2-TZVP", "solvent_model": "smd"})
+    assert flags  # BEFORE repro: [] (flat nmr_method/nmr_basis keys absent)
+    assert flags[flags.index("--nmr-method") + 1] == "B3LYP"
+    assert flags[flags.index("--nmr-basis") + 1] == "def2-TZVP"
+    assert flags[flags.index("--solvent-model") + 1] == "smd"
+
+
+def test_nmr_method_flags_empty_payload_omits_everything() -> None:
+    """Missing/empty fields → no flags, no error (defaults stay CLI-side)."""
+    from acp.scheduler.jobs import nmr_method_flags
+
+    assert nmr_method_flags({}) == []
+    # legacy flat keys equal to the resolver defaults stay omitted too —
+    # the resolver owns precedence, there is no second emission path
+    assert nmr_method_flags({"nmr_method": "mPW1PW91", "nmr_basis": "6-311G(d)"}) == []
+    assert nmr_method_flags({"nmr_method": "", "basis": None, "nuclei": []}) == []
+
+
+def test_nmr_method_flags_joins_nuclei_comma() -> None:
+    """Nuclei list → comma-joined ``--nuclei`` value (as today)."""
+    from acp.scheduler.jobs import nmr_method_flags
+
+    flags = nmr_method_flags({"nuclei": ["13C", "1H"]})
+    assert flags[flags.index("--nuclei") + 1] == "13C,1H"
+
+
+def test_nmr_method_flags_gas_phase_emits_solvent_model_none() -> None:
+    """solvent_model=none emits ``--solvent-model none`` (empty solvent dropped)."""
+    from acp.scheduler.jobs import nmr_method_flags
+
+    flags = nmr_method_flags({"solvent_model": "none"})
+    assert flags == ["--solvent-model", "none"]
+    assert "--solvent" not in flags
+
+
+def test_nmr_method_flags_legacy_flat_keys_still_win() -> None:
+    """Flat nmr_method/nmr_basis keep top precedence through the resolver."""
+    from acp.scheduler.jobs import nmr_method_flags
+
+    flags = nmr_method_flags({"nmr_method": "B3LYP", "nmr_basis": "def2-TZVP"})
+    assert flags[flags.index("--nmr-method") + 1] == "B3LYP"
+    assert flags[flags.index("--nmr-basis") + 1] == "def2-TZVP"
