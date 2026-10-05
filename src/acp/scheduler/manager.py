@@ -2004,16 +2004,13 @@ class JobManager:
         if record is None:
             raise KeyError(f"Unknown job {job_id!r}")
         if record.status == JobStatus.CANCELLING or record.status.is_terminal:
-            # Conflict policy: never freeze a job being cancelled or done —
-            # report the current state instead of signalling.
-            self._event_log(record).append(
-                "job.pause_conflict",
-                job_id=job_id,
-                attempt=record.attempt,
-                current_status=record.status.value,
-                action="pause",
+            # Entry-time invalid action: keep the historical 409 contract
+            # (frontend guidance relies on it).  The genuine race — a pause
+            # that loses the CAS to a concurrent cancel/terminal write — is
+            # handled by the ``_conflict`` callback below.
+            raise ValueError(
+                f"pause_job requires RUNNING status; got {record.status.value}"
             )
-            return record
         if record.status != JobStatus.RUNNING:
             raise ValueError(f"pause_job requires RUNNING status; got {record.status.value}")
 

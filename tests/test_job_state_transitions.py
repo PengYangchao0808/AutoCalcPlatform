@@ -973,3 +973,31 @@ def _seed_job_for_transitions(
     record = JobRecord(id=job_id, **kwargs)  # pyright: ignore[reportArgumentType]
     mgr.store.create(record)
     return record
+
+
+def test_pause_on_terminal_raises_without_signal(tmp_path: Path) -> None:
+    """Entry-time pause on a terminal job keeps the historical ValueError/409
+    contract and must not signal the runner or mutate the record."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "term-pause",
+            status=JobStatus.COMPLETED,
+            exit_code=0,
+            completed_at="2026-01-01T00:00:00+00:00",
+        )
+        signals: list[str] = []
+        mgr.runner.pause_local = lambda job_id: signals.append(job_id) or True  # type: ignore[method-assign]
+
+        with pytest.raises(ValueError, match="requires RUNNING status"):
+            mgr.pause_job(record.id)
+
+        assert signals == [], "terminal entry must never signal the runner"
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.COMPLETED
+        assert final.revision == record.revision, "rejected pause must not write"
+    finally:
+        mgr.shutdown()

@@ -360,7 +360,10 @@ def test_v1_job_rerun_requeues_original_task(client: TestClient) -> None:
     second = _wait_for_terminal_job(client, job_id)
     assert second["id"] == job_id
     assert second["work_dir"] == work_dir
-    assert second["result"]["attempts"] == 2
+    history = second["result"].get("attempt_history") or []
+    assert history, "in-place rerun must archive the previous attempt"
+    assert history[-1]["attempt"] == 1, "attempt_history must record the first attempt"
+    assert "attempts" not in second["result"], "legacy result['attempts'] is retired"
 
     jobs = client.get("/api/v1/jobs?limit=100")
     assert jobs.status_code == 200
