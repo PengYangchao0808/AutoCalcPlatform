@@ -1512,16 +1512,30 @@ class JobManager:
             ) from exc
 
     def _write_resume_source(
-        self, record: JobRecord, *, continued_from: str, previous_attempt: int
+        self,
+        record: JobRecord,
+        *,
+        continued_from: str,
+        previous_attempt: int,
+        compatible: bool = True,
+        incompatible_reason: str = "",
     ) -> None:
-        """Write this attempt's ``resume_source.json`` (continue provenance)."""
+        """Write this attempt's ``resume_source.json`` (continue provenance).
+
+        ``compatible`` carries the pre-archive recovery-protocol verdict for
+        the archived attempt (V02): readers refuse adoption when it is
+        ``False`` and recompute everything.
+        """
         work_dir = Path(record.work_dir)
         payload = {
             "attempt": record.attempt,
             "previous_attempt": previous_attempt,
             "continued_from": continued_from,
             "written_at": _utc_now_iso(),
+            "compatible": bool(compatible),
         }
+        if not compatible:
+            payload["incompatible_reason"] = incompatible_reason
         try:
             work_dir.mkdir(parents=True, exist_ok=True)
             tmp = work_dir / "resume_source.json.tmp"
@@ -2497,10 +2511,31 @@ class JobManager:
                 remote_meta["resume"] = True
                 result["remote"] = remote_meta
             pinned_attempt = record.attempt
+            _prev_attempt = attempt_number(record)
+            # V02: probe the OLD attempt's recovery-protocol markers BEFORE
+            # archiving it; the verdict rides on resume_source.json and a
+            # refusal means full recompute (no silent adoption).
+            from acp.calculations.step_result import check_resume_protocol
+
+            protocol_compatible, protocol_reason = check_resume_protocol(
+                Path(record.work_dir),
+                kind="batch" if workflow == "BatchOptimize" else "executor",
+            )
+            if not protocol_compatible:
+                self._event_log(record).append(
+                    "recovery.protocol_incompatible",
+                    job_id=job_id,
+                    reason=protocol_reason,
+                    attempt=_prev_attempt,
+                )
+                logger.warning(
+                    "recovery.protocol_incompatible for %s: %s",
+                    job_id,
+                    protocol_reason,
+                )
             # Contract B: archive the closed attempt's local receipts (and
             # any previous resume receipt) before this continue writes new
             # ones — science results stay in place (adopted, not reset).
-            _prev_attempt = attempt_number(record)
             self._archive_attempt_receipts(record, _prev_attempt, include_science=False)
             self._archive_previous_resume_source(
                 record, previous_attempt=_prev_attempt
@@ -2528,7 +2563,11 @@ class JobManager:
             attempts = attempt_number(record)
             self._cancel_events[job_id] = threading.Event()
             self._write_resume_source(
-                record, continued_from=old_status, previous_attempt=_prev_attempt
+                record,
+                continued_from=old_status,
+                previous_attempt=_prev_attempt,
+                compatible=protocol_compatible,
+                incompatible_reason=protocol_reason,
             )
         self._write_job_json(record)
         self._event_log(record).append(

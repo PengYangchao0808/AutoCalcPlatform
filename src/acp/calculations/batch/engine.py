@@ -64,6 +64,17 @@ from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.calculations.primitives.thermochemistry import execute_thermochemistry
 from acp.calculations.progress import LiveMetric, ProgressReporter
+from acp.calculations.step_result import (
+    STEP_RESULT_FILENAME,
+    STEP_RESULT_SCHEMA_VERSION,
+    ResumeSource,
+    file_sha256,
+    portable_path,
+    read_step_result,
+    resolve_resume_source,
+    verify_step_result,
+    write_step_result,
+)
 from acp.core.stage_labels import stage_label
 from acp.storage.manifest import ProductKind, ResultManifest
 
@@ -430,6 +441,108 @@ class BatchOptimizeEngine:
             return self._work_root / _SINGLE_ITEM_STAGE_DIRS[step_kind]
         return self._item_work_dir(item) / step_kind.value
 
+    def _item_step_result_rel(self, item: BatchStructureItem) -> str:
+        """Task-root-relative ``step_result.json`` path for one batch item."""
+        return f"{_rel_to(self.task_root, self._item_work_dir(item))}/{STEP_RESULT_FILENAME}"
+
+    def _write_item_step_result(
+        self,
+        item: BatchStructureItem,
+        record: BatchCalculationItem,
+        *,
+        index: int,
+        profile: str,
+        workflow: str,
+    ) -> None:
+        """Persist the item's science: schema + resolved cache identity + digests.
+
+        The batch item is not a ``CalculationPlan`` step, so its
+        ``step_identity`` is the RESOLVED cache key (actual charge/multiplicity
+        + geometry/method/profile) — the receipt a resume verifies against.
+        """
+        from cccp.version import __version__ as platform_version
+
+        item_dir = self._item_work_dir(item)
+        candidates: list[Path] = [item_dir / "optimized.xyz"]
+        if record.optimized_xyz:
+            recorded = Path(record.optimized_xyz)
+            for base in (self.task_root, self._result_root):
+                candidates.append(recorded if recorded.is_absolute() else base / recorded)
+        artifacts: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = str(candidate)
+            if key in seen or not candidate.is_file():
+                continue
+            seen.add(key)
+            sha256 = file_sha256(candidate)
+            if sha256 is None:
+                continue
+            artifacts.append(
+                {
+                    "path": portable_path(candidate, self.task_root),
+                    "type": "structure" if candidate.name == "optimized.xyz" else "file",
+                    "sha256": sha256,
+                    "source": "batch",
+                }
+            )
+        energy = record.single_point.get("energy_hartree")
+        payload: dict[str, object] = {
+            "schema_version": STEP_RESULT_SCHEMA_VERSION,
+            "kind": "batch_item",
+            "step_id": f"step_item_{record.item_id}",
+            "step_identity": record.cache_key,
+            "index": index,
+            "status": record.status,
+            "energy": float(energy) if isinstance(energy, (int, float)) else None,
+            "coords": None,
+            "symbols": [],
+            "frequencies": [],
+            "artifacts": artifacts,
+            "dependency_artifacts": [],
+            "errors": [record.error] if record.error else [],
+            "metadata": {
+                "item_id": record.item_id,
+                "candidate_id": record.candidate_id,
+                "profile": profile,
+                "workflow": workflow,
+                "charge": record.charge,
+                "multiplicity": record.multiplicity,
+                "state_id": record.state_id,
+            },
+            "code_release": str(platform_version),
+        }
+        write_step_result(item_dir / STEP_RESULT_FILENAME, payload)
+
+    def _verify_item_step_result(
+        self,
+        item: BatchStructureItem,
+        record: BatchCalculationItem,
+        *,
+        science_root: Path,
+    ) -> tuple[bool, str]:
+        """Verify the durable per-item ``step_result.json`` for adoption."""
+        rel = self._item_step_result_rel(item)
+        located: Path | None = None
+        for base in (science_root, self.task_root):
+            candidate = base / rel
+            if candidate.is_file():
+                located = candidate
+                break
+        if located is None:
+            return False, "step_result_missing"
+        payload = read_step_result(located)
+        if payload is None:
+            return False, "step_result_unreadable"
+        reason = verify_step_result(
+            payload,
+            expected_identity=record.cache_key,
+            roots=(science_root, self.task_root),
+        )
+        if reason:
+            return False, reason
+        return True, ""
+
     # ── public entry point ───────────────────────────────────────────────
 
     def run(
@@ -502,7 +615,25 @@ class BatchOptimizeEngine:
             job_multiplicity=multiplicity,
         )
         runtime_dir = self._work_root / "00_RUNTIME"
-        checkpoint = load_checkpoint(runtime_dir, fingerprint, allow_legacy_fingerprint=True)
+        # V02: the shared resume-source oracle — batch adoption reads the
+        # attempt referenced by resume_source.json (archived attempt when it
+        # owns the science), never only the active dir; an incompatible
+        # receipt refuses every per-item adoption (full recompute).
+        resume_source: ResumeSource | None = resolve_resume_source(self.task_root, kind="batch")
+        if resume_source is not None and not resume_source.compatible:
+            logger.warning(
+                "recovery.protocol_incompatible: %s — batch full recompute",
+                resume_source.reason or "declared incompatible",
+            )
+        science_root = resume_source.science_root if resume_source is not None else self.task_root
+        checkpoint_dir = runtime_dir
+        if resume_source is not None and resume_source.compatible:
+            checkpoint_dir = resume_source.checkpoint_dir
+        checkpoint = (
+            load_checkpoint(checkpoint_dir, fingerprint, allow_legacy_fingerprint=True)
+            if resume_source is None or resume_source.compatible
+            else None
+        )
         previous_by_id = self._checkpoint_items(checkpoint)
         checkpoint_items_state: dict[str, JsonValue] = (
             dict(checkpoint.items_state) if checkpoint is not None else {}
@@ -537,19 +668,35 @@ class BatchOptimizeEngine:
             record.work_dir = _rel_to(self.task_root, item_dir)
 
             prev_record = previous_by_id.get(item.item_id)
+            adopt_item = False
             if (
                 prev_record is not None
                 and prev_record.cache_key == record.cache_key
                 and prev_record.status in {"completed", "skipped"}
                 and prev_record.optimized_xyz
             ):
+                # V02 per-item gate: checkpoint facts alone are not enough —
+                # the durable step_result must self-certify schema +
+                # step_identity (= resolved cache key) + artifact digests.
+                adopt_item, adopt_reason = self._verify_item_step_result(
+                    item, record, science_root=science_root
+                )
+                if not adopt_item:
+                    logger.warning(
+                        "recovery.step_not_adopted: batch item %s: %s — recomputing",
+                        item.item_id,
+                        adopt_reason,
+                    )
+            if adopt_item:
                 record.status = "skipped"
                 record.optimized_xyz = prev_record.optimized_xyz
                 record.frequency = dict(prev_record.frequency)
                 record.single_point = dict(prev_record.single_point)
                 record.thermochemistry = dict(prev_record.thermochemistry)
                 carried.append(record)
-                logger.info("Batch item %s skipped (cache hit)", item.item_id)
+                logger.info(
+                    "Batch item %s skipped (adopted from attempt resume)", item.item_id
+                )
             else:
                 executed_count += 1
                 progress = (
@@ -586,6 +733,16 @@ class BatchOptimizeEngine:
 
             if active_progress_reporter is not None:
                 active_progress_reporter.finish_batch_item(index)
+            if record.status == "completed":
+                # Contract C: durable per-item science BEFORE the checkpoint
+                # references it (self-certified by cache identity + digests).
+                self._write_item_step_result(
+                    item,
+                    record,
+                    index=index,
+                    profile=profile,
+                    workflow=workflow,
+                )
             records.append(record)
             checkpoint_items_state[item.item_id] = _to_checkpoint_json(record.to_dict())
             next_index = index + 1

@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 # ── relocated scientific types (unchanged semantics; A is B) ────────────
 from cccp.calculation.contracts import (
@@ -273,6 +273,174 @@ class CalculationResult:
         object.__setattr__(self, "artifacts", list(self.artifacts))
         object.__setattr__(self, "errors", list(self.errors))
         object.__setattr__(self, "metadata", dict(self.metadata))
+
+    def to_step_result_dict(
+        self, *, root: Path | str | None = None
+    ) -> dict[str, JsonValue]:
+        """Serialise the science payload of ``step_result.json`` (V02).
+
+        Artifact paths are stored relative to *root* when the file lives
+        inside it (portable across attempt archives); each persisted
+        artifact carries its ``sha256``.  Artifacts that are not readable
+        right now are omitted — an unverifiable reference must never be
+        recorded as durable science.
+
+        Symmetric counterpart: :meth:`from_step_result_dict`.  Unknown-field
+        policy: the reader ignores unknown keys and falls back to field
+        defaults for type-invalid values, so a newer writer stays readable.
+        """
+        from acp.calculations.step_result import file_sha256, json_safe, portable_path
+
+        artifacts: list[JsonValue] = []
+        for artifact in self.artifacts:
+            path = Path(artifact.path)
+            sha256 = file_sha256(path)
+            if sha256 is None:
+                continue
+            artifacts.append(
+                {
+                    "path": portable_path(path, root),
+                    "type": artifact.type,
+                    "sha256": sha256,
+                    "source": artifact.source,
+                }
+            )
+        payload: dict[str, JsonValue] = {
+            "energy": self.energy,
+            "coords": (
+                [[float(value) for value in row] for row in self.coords]
+                if self.coords is not None
+                else None
+            ),
+            "frequencies": [float(value) for value in self.frequencies],
+            "artifacts": artifacts,
+            "status": self.status,
+            "errors": [str(entry) for entry in self.errors],
+            "metadata": dict(json_safe(self.metadata) or {}),
+        }
+        if self.provenance is not None:
+            payload["provenance"] = {
+                "backend": self.provenance.backend,
+                "method": self.provenance.method,
+                "profile": self.provenance.profile,
+                "version": self.provenance.version,
+                "input_signature": self.provenance.input_signature,
+            }
+        return payload
+
+    @classmethod
+    def from_step_result_dict(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        root: Path | str | None = None,
+        roots: Sequence[Path | str] | None = None,
+    ) -> CalculationResult:
+        """Rebuild a result from a ``step_result.json`` payload (V02).
+
+        *roots* is the ordered resolution base for relative artifact paths
+        (archived attempt first, active task root second); *root* is a
+        single-base shorthand.  Unresolvable paths fall back to the first
+        base so the artifact shape is preserved.
+        """
+        from acp.calculations.step_result import locate_recorded_file
+
+        bases: Sequence[Path] = (
+            tuple(Path(entry) for entry in roots)
+            if roots is not None
+            else ((Path(root),) if root is not None else ())
+        )
+
+        def _float(value: Any) -> float | None:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+            return float(value)
+
+        energy = _float(payload.get("energy"))
+
+        coords_raw = payload.get("coords")
+        coords: list[list[float]] | None = None
+        if isinstance(coords_raw, list):
+            parsed: list[list[float]] = []
+            valid = True
+            for row in coords_raw:
+                if not isinstance(row, list):
+                    valid = False
+                    break
+                numeric_row: list[float] = []
+                for entry in row:
+                    number = _float(entry)
+                    if number is None:
+                        valid = False
+                        break
+                    numeric_row.append(number)
+                if not valid:
+                    break
+                parsed.append(numeric_row)
+            coords = parsed if valid else None
+
+        frequencies_raw = payload.get("frequencies")
+        frequencies = (
+            [number for entry in frequencies_raw if (number := _float(entry)) is not None]
+            if isinstance(frequencies_raw, list)
+            else []
+        )
+
+        artifacts: list[ArtifactRef] = []
+        raw_artifacts = payload.get("artifacts")
+        for entry in raw_artifacts if isinstance(raw_artifacts, list) else []:
+            if not isinstance(entry, Mapping):
+                continue
+            recorded = entry.get("path")
+            if not isinstance(recorded, str) or not recorded:
+                continue
+            resolved = locate_recorded_file(bases, recorded) if bases else None
+            if resolved is None:
+                resolved = (bases[0] / recorded) if bases else Path(recorded)
+            sha256 = entry.get("sha256")
+            artifacts.append(
+                ArtifactRef(
+                    path=resolved,
+                    type=str(entry.get("type") or "file"),
+                    checksum=sha256 if isinstance(sha256, str) else "",
+                    source=str(entry.get("source") or ""),
+                )
+            )
+
+        raw_errors = payload.get("errors")
+        errors = [str(entry) for entry in raw_errors] if isinstance(raw_errors, list) else []
+
+        raw_metadata = payload.get("metadata")
+        metadata: dict[str, JsonValue] = (
+            {str(key): value for key, value in raw_metadata.items()}
+            if isinstance(raw_metadata, Mapping)
+            else {}
+        )
+
+        provenance: Provenance | None = None
+        raw_provenance = payload.get("provenance")
+        if isinstance(raw_provenance, Mapping) and all(
+            isinstance(raw_provenance.get(field), str) and raw_provenance.get(field)
+            for field in ("backend", "method", "version", "input_signature")
+        ):
+            provenance = Provenance(
+                backend=str(raw_provenance.get("backend")),
+                method=str(raw_provenance.get("method")),
+                profile=str(raw_provenance.get("profile") or ""),
+                version=str(raw_provenance.get("version")),
+                input_signature=str(raw_provenance.get("input_signature")),
+            )
+
+        return cls(
+            energy=energy,
+            coords=coords,
+            frequencies=frequencies,
+            artifacts=artifacts,
+            status=str(payload.get("status") or "completed"),
+            errors=errors,
+            provenance=provenance,
+            metadata=metadata,
+        )
 
 
 @dataclass(frozen=True, slots=True)

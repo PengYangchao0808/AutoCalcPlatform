@@ -49,6 +49,7 @@ from acp.calculations.identity import (
     IDENTITY_SCHEMA,
     compute_identity,
     current_config_digest,
+    identity_fingerprint,
 )
 from acp.calculations.primitives.casscf import run_casscf
 from acp.calculations.primitives.frequency import run_frequency
@@ -59,11 +60,24 @@ from acp.calculations.primitives.thermochemistry import execute_thermochemistry
 from acp.calculations.result_publication import (
     ArtifactReference,
     ScientificResultRecord,
+    load_publication_state,
     load_scientific_result,
     publish_result,
     register_result_manifest,
 )
-from acp.storage.manifest import ProductKind, ResultManifest
+from acp.calculations.step_result import (
+    STEP_RESULT_FILENAME,
+    STEP_RESULT_SCHEMA_VERSION,
+    ResumeSource,
+    dependency_artifacts,
+    file_sha256,
+    portable_path,
+    read_step_result,
+    resolve_resume_source,
+    verify_step_result,
+    write_step_result,
+)
+from acp.storage.manifest import MANIFEST_FILENAME, ProductKind, ResultManifest
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +156,28 @@ def _frequency_log_path(result: CalculationResult) -> Path | None:
 
 def _step_result_id(fingerprint: str, idx: int, kind: StepKind) -> str:
     return f"{fingerprint}-step{idx}-{kind.value}"
+
+
+def _step_id(idx: int, kind: StepKind) -> str:
+    """Stable per-step id — same rule as the manifest ``step_{index}_{kind}``.
+
+    Shared by every step and by the appended §9.5 stability node so a
+    resumed run maps results back to the same identity (Metis m4).
+    """
+    return f"step_{idx}_{kind.value}"
+
+
+def _stability_step_identity(identity: object, index: int) -> str | None:
+    """Science identity of the derived stability diagnostic node.
+
+    Not part of the plan's per-step tuple (the node has no plan step), so
+    it is bound to the full plan identity: any science change upstream
+    invalidates it, and identical plans reproduce it across resumes.
+    """
+    plan_identity = getattr(identity, "plan_identity", None)
+    if not isinstance(plan_identity, str):
+        return None
+    return identity_fingerprint({"scope": "stability", "index": index, "plan_identity": plan_identity})
 
 
 def _step_scientific_record(
@@ -409,6 +445,11 @@ class StepState:
     error: str = ""
     executed_this_run: bool = True
     last_executed_attempt: int | None = None
+    #: Durable ``step_result.json`` reference (V02, contract C): path is
+    #: relative to the task root, ``sha256`` binds the file content.
+    result_ref: dict[str, str] | None = None
+    #: ``jobs.attempt`` of the attempt whose science was adopted (V02).
+    reused_from_attempt: int | None = None
 
     def to_dict(self) -> dict[str, JsonValue]:
         """Serialise for checkpoint persistence."""
@@ -420,6 +461,8 @@ class StepState:
             "energy": self.result.energy if self.result else None,
             "executed_this_run": self.executed_this_run,
             "last_executed_attempt": self.last_executed_attempt,
+            "result_ref": dict(self.result_ref) if self.result_ref else None,
+            "reused_from_attempt": self.reused_from_attempt,
         }
 
 
@@ -439,6 +482,29 @@ def _jobs_attempt(task_root: Path) -> int | None:
     if isinstance(raw, int) and not isinstance(raw, bool):
         return raw
     return None
+
+
+def _jobs_job_id(task_root: Path) -> str | None:
+    """Read the scheduler job id from ``job.json`` (execution identity only)."""
+    try:
+        payload: object = json.loads((task_root / "job.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    job_id = payload.get("id")
+    return job_id if isinstance(job_id, str) and job_id else None
+
+
+@dataclass(frozen=True)
+class _Adoption:
+    """Outcome of one V02 step_result adoption attempt."""
+
+    result: CalculationResult | None = None
+    reason: str = ""
+    integrity_failed: bool = False
+    attempt: int | None = None
+    result_ref: dict[str, str] | None = None
 
 
 def _merge_completed_facts(
@@ -532,6 +598,7 @@ class CalculationPlanExecutor:
         self._backend_factory = backend_factory
         self._execution_record: dict[str, JsonValue] = {}
         self._jobs_attempt: int | None = None
+        self._job_id: str | None = None
         self._resume_count: int = 0
         self._loaded_completed_facts: dict[int, dict[str, JsonValue]] = {}
 
@@ -589,9 +656,26 @@ class CalculationPlanExecutor:
         for d in dirs_to_create:
             d.mkdir(parents=True, exist_ok=True)
 
-        # ⑤ resume from checkpoint (v2 identity compare; never raises)
+        # ⑤ resume from checkpoint (v2 identity compare; never raises).
+        # V02: ``continue``/edit-recalculate read the attempt referenced by
+        # ``resume_source.json`` (archived attempt when it owns the science,
+        # the in-place attempt otherwise); a receipt declared protocol-
+        # incompatible refuses adoption entirely (full recompute).  ``rerun``
+        # never carries the receipt, so it always starts clean.
         self._jobs_attempt = _jobs_attempt(task_root)
-        checkpoint = load_checkpoint(runtime_dir, fingerprint)
+        self._job_id = _jobs_job_id(task_root)
+        resume_source: ResumeSource | None = resolve_resume_source(task_root, kind="executor")
+        if resume_source is not None and not resume_source.compatible:
+            logger.warning(
+                "recovery.protocol_incompatible: %s — full recompute (no adoption)",
+                resume_source.reason or "declared incompatible",
+            )
+        adoption_enabled = resume_source is None or resume_source.compatible
+        science_root = resume_source.science_root if resume_source is not None else task_root
+        checkpoint_dir = runtime_dir
+        if resume_source is not None and resume_source.compatible:
+            checkpoint_dir = resume_source.checkpoint_dir
+        checkpoint = load_checkpoint(checkpoint_dir, fingerprint) if adoption_enabled else None
         config_changed = False
         if checkpoint is not None:
             checkpoint, config_changed = self._drop_on_config_digest_change(checkpoint)
@@ -663,6 +747,83 @@ class CalculationPlanExecutor:
         # ③④⑥ execute steps sequentially
         for idx, step in enumerate(steps):
             state = step_states[idx]
+            integrity_failed = False
+
+            if state.status != "skipped":
+                # V02 adoption: a verified durable step_result means the
+                # science already happened (resume, crash window between
+                # result and checkpoint, publication retry) — never re-run QC.
+                step_rel = _step_dir_name(step.kind) or f"step_{idx}"
+                step_work_dir = work_dir / step_rel
+                step_identity = (
+                    identity.step_identities[idx]
+                    if identity is not None and idx < len(identity.step_identities)
+                    else None
+                )
+                was_completed = state.status == "completed" and not state.executed_this_run
+                result_id = _step_result_id(fingerprint, idx, step.kind)
+                adoption = self._adopt_step_result(
+                    idx=idx,
+                    step_identity=step_identity,
+                    science_root=science_root,
+                    task_root=task_root,
+                    rel=f"WORK/{step_rel}/{STEP_RESULT_FILENAME}",
+                    enabled=adoption_enabled and not config_changed,
+                    was_completed=was_completed,
+                )
+                if adoption.result is not None:
+                    state.result = adoption.result
+                    state.status = "completed"
+                    state.executed_this_run = False
+                    state.reused_from_attempt = adoption.attempt
+                    state.result_ref = adoption.result_ref
+                    logger.info(
+                        "recovery.step_adopted: step %d (%s) reused from attempt %s",
+                        idx,
+                        step.kind.value,
+                        adoption.attempt,
+                    )
+                    publish_error = self._ensure_publication(
+                        step_work_dir=step_work_dir,
+                        result=adoption.result,
+                        result_id=result_id,
+                        kind=step.kind,
+                    )
+                    if publish_error:
+                        state.status = "failed"
+                        state.error = publish_error
+                    if step.kind in _COORD_PRODUCING_KINDS and adoption.result.coords is not None:
+                        handoff_coords = [
+                            [float(value) for value in row]
+                            for row in adoption.result.coords
+                        ]
+                        handoff_symbols = list(item.elements)
+                    self._write_result_manifest_tolerant(
+                        result_dir, plan, step_states, "running"
+                    )
+                    self._persist_checkpoint(
+                        runtime_dir,
+                        fingerprint,
+                        plan,
+                        step_states,
+                        handoff_coords,
+                        handoff_symbols,
+                    )
+                    continue
+                if adoption.reason:
+                    integrity_failed = adoption.integrity_failed
+                    logger.warning(
+                        "recovery.step_not_adopted: step %d (%s): %s — recomputing",
+                        idx,
+                        step.kind.value,
+                        adoption.reason,
+                    )
+                    # the stale completed fact must not survive the merge
+                    self._loaded_completed_facts.pop(idx, None)
+                    state.status = "pending"
+                    state.executed_this_run = True
+                    state.result = None
+                    state.result_ref = None
 
             # V01 resume: completed facts loaded from the checkpoint are not
             # re-executed and their status is NOT rewritten; "skipped" stays
@@ -710,8 +871,12 @@ class CalculationPlanExecutor:
 
             result_id = _step_result_id(fingerprint, idx, step.kind)
             prior_record = load_scientific_result(step_work_dir)
+            # An incompatible resume source refuses ALL reuse — including
+            # the legacy publication-only branch (unverifiable → recompute).
             recovered = (
-                not config_changed
+                adoption_enabled
+                and not integrity_failed
+                and not config_changed
                 and prior_record is not None
                 and prior_record.result_id == result_id
             )
@@ -773,30 +938,58 @@ class CalculationPlanExecutor:
                     step.kind.value,
                     state.error,
                 )
-            elif recovered:
-                state.status = "completed"
-                logger.info(
-                    "step %d (%s) completed (publication recovered)", idx, step.kind.value
-                )
             else:
-                record = _step_scientific_record(
-                    result,
+                # Contract C order: ① durable step_result + artifact digests →
+                # ② checkpoint references the result → ③ manifest publish →
+                # ④ publish-complete marker.  A publication failure stays a
+                # publication failure: the next resume adopts the result and
+                # retries only the publish (never QC).
+                self._write_step_result(
+                    state=state,
+                    result=result,
+                    task_root=task_root,
+                    step_work_dir=step_work_dir,
+                    idx=idx,
+                    kind=step.kind,
+                    step_identity=(
+                        identity.step_identities[idx]
+                        if identity is not None and idx < len(identity.step_identities)
+                        else None
+                    ),
+                    symbols=handoff_symbols if handoff_symbols else list(item.elements),
+                    request=request,
+                )
+                state.status = "completed"
+                self._persist_checkpoint(
+                    runtime_dir,
+                    fingerprint,
+                    plan,
+                    step_states,
+                    handoff_coords,
+                    handoff_symbols,
+                )
+                publish_error = self._ensure_publication(
+                    step_work_dir=step_work_dir,
+                    result=result,
                     result_id=result_id,
                     kind=step.kind,
-                    result_dir=step_work_dir,
                 )
-                try:
-                    publish_result(
-                        step_work_dir,
-                        record=record,
-                        manifest=_step_publication_manifest(record),
-                    )
-                except Exception as exc:
+                if publish_error:
                     state.status = "failed"
-                    state.error = f"publication failed: {exc or type(exc).__name__}"
-                    logger.exception("step %d (%s) publication failed", idx, step.kind.value)
+                    state.error = publish_error
+                    logger.warning(
+                        "step %d (%s) publication failed: %s",
+                        idx,
+                        step.kind.value,
+                        publish_error,
+                    )
+                elif recovered:
+                    logger.info(
+                        "step %d (%s) completed (publication recovered)",
+                        idx,
+                        step.kind.value,
+                    )
                 else:
-                    state.status = "completed"
                     logger.info("step %d (%s) completed", idx, step.kind.value)
 
             if step.kind is StepKind.FREQUENCY:
@@ -810,7 +1003,7 @@ class CalculationPlanExecutor:
                 handoff_symbols = list(item.elements)
 
             # Durable structures survive a later exception or cancellation.
-            self._write_result_manifest(result_dir, plan, step_states, "running")
+            self._write_result_manifest_tolerant(result_dir, plan, step_states, "running")
 
             # ⑤ write checkpoint after each step
             self._persist_checkpoint(
@@ -833,6 +1026,11 @@ class CalculationPlanExecutor:
             handoff_coords=handoff_coords,
             handoff_symbols=handoff_symbols,
             base_resources=base_resources,
+            identity=identity,
+            fingerprint=fingerprint,
+            task_root=task_root,
+            science_root=science_root,
+            adoption_enabled=adoption_enabled and not config_changed,
         )
         if stability_state is not None:
             step_states.append(stability_state)
@@ -854,7 +1052,7 @@ class CalculationPlanExecutor:
                 if state.error:
                     all_errors.append(f"step {state.index} ({state.kind.value}): {state.error}")
 
-        self._write_result_manifest(
+        self._write_result_manifest_tolerant(
             result_dir=result_dir,
             plan=plan,
             step_states=step_states,
@@ -912,6 +1110,177 @@ class CalculationPlanExecutor:
                     current,
                 )
 
+    # ── V02: durable step results, adoption, publication retry ──────────
+
+    def _write_step_result(
+        self,
+        *,
+        state: StepState,
+        result: CalculationResult,
+        task_root: Path,
+        step_work_dir: Path,
+        idx: int,
+        kind: StepKind,
+        step_identity: str | None,
+        symbols: list[str],
+        request: CalculationRequest,
+    ) -> None:
+        """Contract C step ① — atomically persist the step's science.
+
+        Platform execution identity (``job_id``/``attempt``/``code_release``)
+        rides along for provenance but never enters ``step_identity``.
+        """
+        payload = result.to_step_result_dict(root=task_root)
+        payload["schema_version"] = STEP_RESULT_SCHEMA_VERSION
+        payload["step_identity"] = step_identity
+        payload["step_id"] = _step_id(idx, kind)
+        payload["index"] = idx
+        payload["kind"] = kind.value
+        payload["symbols"] = [str(symbol) for symbol in symbols]
+        payload["job_id"] = self._job_id
+        payload["attempt"] = self._jobs_attempt
+        payload["code_release"] = str(self._execution_record.get("code_release") or "")
+        payload["config_digest"] = self._execution_record.get("config_digest")
+        payload["dependency_artifacts"] = dependency_artifacts(request.resources, task_root)
+        path = step_work_dir / STEP_RESULT_FILENAME
+        digest = write_step_result(path, payload)
+        state.result_ref = {"path": portable_path(path, task_root), "sha256": digest}
+
+    def _adopt_step_result(
+        self,
+        *,
+        idx: int,
+        step_identity: str | None,
+        science_root: Path,
+        task_root: Path,
+        rel: str,
+        enabled: bool,
+        was_completed: bool,
+    ) -> _Adoption:
+        """Verify the durable ``step_result.json`` for one step (V02 gate).
+
+        Adoption requires ``step_identity`` equality (todo-10 science
+        identity) AND every recorded artifact present with an equal sha256.
+        Anything unverifiable → ``reason`` set with ``integrity_failed`` so
+        the caller recomputes and the legacy publication-only branch stays
+        suppressed for that step.
+        """
+        located: Path | None = None
+        for base in (science_root, task_root):
+            candidate = base / rel
+            if candidate.is_file():
+                located = candidate
+                break
+        if located is None:
+            if was_completed:
+                return _Adoption(reason="step_result_missing", integrity_failed=True)
+            return _Adoption()
+        if not enabled:
+            return _Adoption(reason="adoption_disabled", integrity_failed=True)
+        payload = read_step_result(located)
+        if payload is None:
+            return _Adoption(reason="step_result_unreadable", integrity_failed=True)
+
+        prior_ref: Mapping[str, JsonValue] | None = None
+        if was_completed:
+            raw_ref = self._loaded_completed_facts.get(idx, {}).get("result_ref")
+            if isinstance(raw_ref, dict):
+                prior_ref = raw_ref
+        reason = verify_step_result(
+            payload,
+            expected_identity=step_identity,
+            roots=(science_root, task_root),
+            expected_ref_path=(
+                str(prior_ref.get("path"))
+                if prior_ref is not None and isinstance(prior_ref.get("path"), str)
+                else None
+            ),
+            expected_ref_sha256=(
+                str(prior_ref.get("sha256"))
+                if prior_ref is not None and isinstance(prior_ref.get("sha256"), str)
+                else None
+            ),
+            expected_config_digest=self._execution_record.get("config_digest"),
+        )
+        if reason:
+            return _Adoption(reason=reason, integrity_failed=True)
+
+        result = CalculationResult.from_step_result_dict(
+            payload, roots=(science_root, task_root)
+        )
+        raw_attempt = payload.get("attempt")
+        attempt = (
+            raw_attempt
+            if isinstance(raw_attempt, int) and not isinstance(raw_attempt, bool)
+            else None
+        )
+        return _Adoption(
+            result=result,
+            attempt=attempt,
+            result_ref={"path": rel, "sha256": file_sha256(located) or ""},
+        )
+
+    def _ensure_publication(
+        self,
+        *,
+        step_work_dir: Path,
+        result: CalculationResult,
+        result_id: str,
+        kind: StepKind,
+    ) -> str:
+        """Contract C steps ③④ — publish unless already complete; ``""`` on ok.
+
+        Idempotent via ``publish_result`` (stable ``result_id``): a resume
+        that adopted a result only re-runs the publication sequence when the
+        marker or the per-step manifest is missing.
+        """
+        existing_record = load_scientific_result(step_work_dir)
+        existing_state = load_publication_state(step_work_dir)
+        if (
+            existing_state is not None
+            and existing_state.complete
+            and existing_state.result_id == result_id
+            and existing_record is not None
+            and existing_record.result_id == result_id
+            and (step_work_dir / MANIFEST_FILENAME).is_file()
+        ):
+            return ""
+        try:
+            record = _step_scientific_record(
+                result, result_id=result_id, kind=kind, result_dir=step_work_dir
+            )
+            publish_result(
+                step_work_dir, record=record, manifest=_step_publication_manifest(record)
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning(
+                "step %s publication failed: %s", result_id, exc, exc_info=True
+            )
+            return f"publication failed: {exc}"
+        return ""
+
+    @staticmethod
+    def _write_result_manifest_tolerant(
+        result_dir: Path,
+        plan: CalculationPlan,
+        step_states: list[StepState],
+        status: str,
+    ) -> None:
+        """Publish ``RESULT/result_manifest.json``; a write failure is pending.
+
+        A manifest failure must never become a science failure — the next
+        resume rebuilds and re-publishes it from the adopted results.
+        """
+        try:
+            CalculationPlanExecutor._write_result_manifest(
+                result_dir, plan, step_states, status
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning(
+                "result_manifest_write_pending: publication retried on next resume (%s)",
+                exc,
+            )
+
     @staticmethod
     def _build_execution_record(
         checkpoint: Checkpoint | None, jobs_attempt: int | None
@@ -941,12 +1310,19 @@ class CalculationPlanExecutor:
         handoff_coords: list[list[float]] | None,
         handoff_symbols: list[str] | None,
         base_resources: dict[str, JsonValue],
+        identity: object,
+        fingerprint: str,
+        task_root: Path,
+        science_root: Path,
+        adoption_enabled: bool,
     ) -> StepState | None:
         """Append the §9.5 stability SP on the final geometry, or ``None``.
 
         Only fires when the plan contains OPT/FREQ steps (a pure SP plan
         already carries ``STABPerform`` in its own input) and every such
-        step completed.
+        step completed.  Metis m4: the appended node carries the STABLE
+        ``step_{index}_{kind}`` id and adopts its durable ``step_result``
+        on resume, so it is never re-run or re-published twice.
         """
         geometry_kinds = {StepKind.OPTIMIZE, StepKind.FREQUENCY}
         if not any(step.kind in geometry_kinds for step in steps):
@@ -969,6 +1345,44 @@ class CalculationPlanExecutor:
 
         stability_dir = work_dir / "05_SP" / "stability"
         stability_dir.mkdir(parents=True, exist_ok=True)
+        stability_index = len(steps)
+        stability_identity = _stability_step_identity(identity, stability_index)
+        rel = f"WORK/05_SP/stability/{STEP_RESULT_FILENAME}"
+
+        adoption = self._adopt_step_result(
+            idx=stability_index,
+            step_identity=stability_identity,
+            science_root=science_root,
+            task_root=task_root,
+            rel=rel,
+            enabled=adoption_enabled,
+            was_completed=(
+                self._loaded_completed_facts.get(stability_index, {}).get("status")
+                == "completed"
+            ),
+        )
+        if adoption.result is not None:
+            adopted = StepState(
+                index=stability_index,
+                kind=StepKind.SINGLEPOINT,
+                status="completed",
+                result=adoption.result,
+                executed_this_run=False,
+                reused_from_attempt=adoption.attempt,
+                result_ref=adoption.result_ref,
+            )
+            logger.info(
+                "recovery.step_adopted: stability node reused from attempt %s",
+                adoption.attempt,
+            )
+            return adopted
+        if adoption.reason:
+            logger.warning(
+                "recovery.step_not_adopted: stability node: %s — recomputing",
+                adoption.reason,
+            )
+            self._loaded_completed_facts.pop(stability_index, None)
+
         resources: dict[str, JsonValue] = {**base_resources, **state_resources}
         resources["stability_check"] = True
         resources.pop("freq_log_path", None)
@@ -982,7 +1396,7 @@ class CalculationPlanExecutor:
             symbols=handoff_symbols,
         )
 
-        state_record = StepState(index=len(steps), kind=StepKind.SINGLEPOINT, status="pending")
+        state_record = StepState(index=stability_index, kind=StepKind.SINGLEPOINT, status="pending")
         logger.info("post-stability: running SCF stability diagnostic on the final geometry")
         state_record.last_executed_attempt = self._jobs_attempt
         try:
@@ -997,6 +1411,18 @@ class CalculationPlanExecutor:
             state_record.error = "; ".join(result.errors) or "stability diagnostic failed"
         else:
             state_record.status = "completed"
+            self._write_step_result(
+                state=state_record,
+                result=result,
+                task_root=task_root,
+                step_work_dir=stability_dir,
+                idx=stability_index,
+                kind=StepKind.SINGLEPOINT,
+                step_identity=stability_identity,
+                symbols=handoff_symbols if handoff_symbols else list(item.elements),
+                request=request,
+            )
+            logger.debug("post-stability: step_result persisted at %s", rel)
         return state_record
 
     @staticmethod
