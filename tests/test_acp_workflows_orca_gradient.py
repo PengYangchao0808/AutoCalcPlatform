@@ -6,9 +6,11 @@ FAKE ORCA binary + patched ``subprocess.run`` — no real ORCA is executed.
 
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
@@ -27,6 +29,7 @@ from acp.workflows.orca_gradient import (
     OrcaGradientInputError,
     run_orca_gradient,
 )
+from cccp.calculation.requests import TaskResources
 from tests.test_acp_orca_gradient_backend import (
     ENGRAAD_OK,
     STDOUT_ENERGY_ONLY,
@@ -89,9 +92,32 @@ def _patch_resolve_executable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     exe = tmp_path / "fake_orca"
     if not exe.exists():
         exe.write_text("#!/bin/sh\necho fake-orca\n", encoding="utf-8")
-        exe.chmod(0o755)
+    exe.chmod(0o755)
     monkeypatch.setattr("cccp.qc.interfaces.orca.resolve_executable", lambda *a, **k: exe)
     return exe
+
+
+def _capture_task_layer(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    captured: dict[str, Any] = {}
+
+    def _fake_run(task_request: Any, *, context: Any = None) -> Any:
+        captured["task_request"] = task_request
+        captured["context"] = context
+        return SimpleNamespace(
+            status="completed",
+            energy_hartree=ENERGY,
+            errors=[],
+            artifacts=[],
+            payload=SimpleNamespace(
+                gradients=GRADIENT,
+                energy_hartree=ENERGY,
+                gradient_unit="hartree/bohr",
+                gradient_convention="energy_gradient_dE_dX",
+            ),
+        )
+
+    monkeypatch.setattr("acp.workflows.orca_gradient.run_orca_gradient_task", _fake_run)
+    return captured
 
 
 def test_run_orca_gradient_writes_acp_standard_products(
@@ -246,3 +272,110 @@ def test_run_orca_gradient_backend_unavailable_raises_typed_error(
                 config=_config_with_fake_orca(tmp_path),
             )
     assert "unavailable" in str(excinfo.value).lower()
+
+
+_TIMEOUT_LAYER_CASES: list[tuple[str, dict[str, Any] | None]] = [
+    ("missing", None),
+    ("null", {"recalc_hess": "auto", "timeout": None}),
+    (
+        "mapping",
+        {"recalc_hess": "auto", "timeout": {"wall_seconds": 120, "max_seconds": 300}},
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("case_name", "optimization_control"),
+    _TIMEOUT_LAYER_CASES,
+    ids=[case for case, _ in _TIMEOUT_LAYER_CASES],
+)
+def test_timeout_layer_normalized_and_execution_params_captured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case_name: str,
+    optimization_control: dict[str, Any] | None,
+) -> None:
+    config = _config_with_fake_orca(tmp_path)
+    if optimization_control is not None:
+        config["optimization_control"] = optimization_control
+    caller_snapshot = copy.deepcopy(config)
+    captured = _capture_task_layer(monkeypatch)
+
+    result = run_orca_gradient(request=_request(), output_dir=tmp_path / "out", config=config)
+
+    assert isinstance(result, WorkflowResult)
+    assert result.status == "completed"
+    assert result.stages_completed == list(ORCA_GRADIENT_STAGES)
+
+    resources = captured["task_request"].resources
+    assert isinstance(resources, TaskResources)
+    assert resources.timeout_s == 600
+
+    executed_cfg = captured["context"].config
+    assert executed_cfg["executables"]["orca"]["nproc"] == 2
+    assert executed_cfg["resources"]["nproc"] == 2
+    timeout_cfg = executed_cfg["optimization_control"]["timeout"]
+    assert timeout_cfg["default_seconds"] == 600
+    assert timeout_cfg["default_seconds"] == resources.timeout_s
+
+    if case_name == "mapping":
+        assert timeout_cfg["wall_seconds"] == 120
+        assert timeout_cfg["max_seconds"] == 300
+        assert executed_cfg["optimization_control"]["recalc_hess"] == "auto"
+
+    assert config == caller_snapshot
+
+
+def test_missing_payload_timeout_seconds_defaults_consistently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config_with_fake_orca(tmp_path)
+    caller_snapshot = copy.deepcopy(config)
+    captured = _capture_task_layer(monkeypatch)
+
+    result = run_orca_gradient(
+        request=_request(timeout_seconds=None),
+        output_dir=tmp_path / "out",
+        config=config,
+    )
+
+    assert result.status == "completed"
+    resources = captured["task_request"].resources
+    assert isinstance(resources, TaskResources)
+    assert resources.timeout_s is None
+    executed_cfg = captured["context"].config
+    assert executed_cfg.get("optimization_control") is None
+    assert config == caller_snapshot
+
+
+@pytest.mark.parametrize(
+    ("layer", "value", "match"),
+    [
+        ("optimization_control.timeout", 42, "optimization_control.timeout"),
+        ("optimization_control.timeout", "x", "optimization_control.timeout"),
+        ("optimization_control.timeout", [1, 2], "optimization_control.timeout"),
+        ("optimization_control", ["timeout"], "config optimization_control must be"),
+        ("resources", 42, "config resources must be"),
+    ],
+    ids=["timeout-int", "timeout-str", "timeout-list", "opt-control-list", "resources-int"],
+)
+def test_non_mapping_config_layer_raises_input_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    layer: str,
+    value: Any,
+    match: str,
+) -> None:
+    config = _config_with_fake_orca(tmp_path)
+    if layer == "optimization_control.timeout":
+        config["optimization_control"] = {"timeout": value}
+    else:
+        config[layer] = value
+    caller_snapshot = copy.deepcopy(config)
+    captured = _capture_task_layer(monkeypatch)
+
+    with pytest.raises(OrcaGradientInputError, match=match):
+        run_orca_gradient(request=_request(), output_dir=tmp_path / "out", config=config)
+
+    assert "task_request" not in captured
+    assert config == caller_snapshot

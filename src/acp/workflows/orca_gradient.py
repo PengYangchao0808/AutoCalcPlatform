@@ -9,6 +9,7 @@ energy gradient dE/dX in Hartree/bohr — never forces, never fabricated.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import logging
@@ -281,6 +282,29 @@ def _validate_gradient_request(payload: Mapping[str, Any]) -> OrcaGradientReques
     )
 
 
+def _writable_config_layer(value: Any, layer: str) -> dict[str, Any]:
+    """Detach a config layer for mutation — missing/null becomes a fresh dict.
+
+    Args:
+        value: raw layer value from the caller config; ``None`` (absent or
+            explicit null) is normalized into a new writable mapping.
+        layer: dotted layer name used in the error message.
+
+    Returns:
+        Deep-copied dict that is safe to mutate without touching the caller.
+
+    Raises:
+        OrcaGradientInputError: layer present but not a JSON object.
+    """
+    if value is None:
+        return {}
+    if isinstance(value, Mapping):
+        return copy.deepcopy(dict(value))
+    raise OrcaGradientInputError(
+        f"[{ORCA_GRADIENT_E_SCHEMA}] config {layer} must be a JSON object, got {value!r}"
+    )
+
+
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = tempfile.NamedTemporaryFile(
@@ -499,19 +523,28 @@ def run_orca_gradient(
         progress_reporter.start_stage("prepare")
     _write_text_atomic(run_dir / "input.xyz", validated.xyz_text)
 
-    cfg: dict[str, Any] = dict(config) if config is not None else {}
-    raw_resources = cfg.get("resources")
-    resources = dict(raw_resources) if isinstance(raw_resources, Mapping) else {}
+    # Detach the whole config so neither this function's writes nor any
+    # downstream TaskContext use can ever pollute the caller's dict.
+    cfg: dict[str, Any] = copy.deepcopy(dict(config)) if config is not None else {}
+    resources = _writable_config_layer(cfg.get("resources"), "resources")
     if validated.nproc is not None:
         resources["nproc"] = validated.nproc
-        cfg.setdefault("executables", {}).setdefault("orca", {})["nproc"] = validated.nproc
+        executables = _writable_config_layer(cfg.get("executables"), "executables")
+        orca_entry = _writable_config_layer(executables.get("orca"), "executables.orca")
+        orca_entry["nproc"] = validated.nproc
+        executables["orca"] = orca_entry
+        cfg["executables"] = executables
     cfg["resources"] = resources
     if validated.timeout_seconds is not None:
-        timeout_cfg = cfg.setdefault("optimization_control", {}).setdefault("timeout", {})
-        if isinstance(timeout_cfg, Mapping):
-            timeout_cfg = dict(timeout_cfg)
+        opt_control = _writable_config_layer(
+            cfg.get("optimization_control"), "optimization_control"
+        )
+        timeout_cfg = _writable_config_layer(
+            opt_control.get("timeout"), "optimization_control.timeout"
+        )
         timeout_cfg["default_seconds"] = validated.timeout_seconds
-        cfg.setdefault("optimization_control", {})["timeout"] = timeout_cfg
+        opt_control["timeout"] = timeout_cfg
+        cfg["optimization_control"] = opt_control
     if progress_reporter is not None:
         progress_reporter.complete_stage("prepare")
 
@@ -530,9 +563,7 @@ def run_orca_gradient(
             message=f"ORCA backend unavailable: {error}",
         ) from error
     except TaskInputError as error:
-        raise OrcaGradientInputError(
-            f"[{ORCA_GRADIENT_E_ELECTRONIC_STATE}] {error}"
-        ) from error
+        raise OrcaGradientInputError(f"[{ORCA_GRADIENT_E_ELECTRONIC_STATE}] {error}") from error
 
     payload = getattr(task_result, "payload", None)
     rows = list(getattr(payload, "gradients", ()) or ())
@@ -591,9 +622,7 @@ def run_orca_gradient(
             "request_sha256": validated.request_sha256,
             "energy_hartree": float(energy),
             "gradient_unit": getattr(payload, "gradient_unit", "hartree/bohr"),
-            "gradient_convention": getattr(
-                payload, "gradient_convention", "energy_gradient_dE_dX"
-            ),
+            "gradient_convention": getattr(payload, "gradient_convention", "energy_gradient_dE_dX"),
             "gradient_source": gradient_source,
             "run_dir": str(run_dir),
             "gradient_product_path": str(gradient_path),
