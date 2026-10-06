@@ -1087,3 +1087,188 @@ def test_nmr_config_effective_config_to_dict_round_trip() -> None:
     assert payload["tms_13c"] == 188.452125
     assert payload["protocol_fingerprint"] is None  # D-phase placeholder (T29)
     assert conf.protocol_fingerprint is None
+
+
+# ---------------------------------------------------------------------------
+# Stage-resolved solvent models (todo 8 / gap GAP-4)
+#
+# The CREST/xTB sampling segment and the CENSO DFT segment resolve their own
+# solvent model. Sampling reads ONLY nmr.sampling_solvent_model (alpb/gbsa/
+# none): absent key + solvent name ⇒ ALPB (receipt defaulted=True); explicit
+# "none" ⇒ gas phase; explicit alpb/gbsa used as given. The old
+# theory.preoptimization/censo keys keep their CENSO semantics (SMD fallback
+# confined to that stage) and never leak into CREST/xTB.
+# ---------------------------------------------------------------------------
+
+
+def _sampling_config(model: str | None) -> dict[str, Any]:
+    """Minimal cfg carrying (or omitting) the dedicated sampling key."""
+    if model is None:
+        return {}
+    return {"nmr": {"sampling_solvent_model": model}}
+
+
+def _run_conformer_generation_capture(
+    tmp_path: Path, cfg: dict[str, Any], solvent: str | None
+) -> tuple[Any, dict[str, Any]]:
+    """Run conformer gen with the REAL CrestBackend; capture stage resolution."""
+    from acp.workflows.nmr import _run_conformer_generation
+    from cccp.backends.crest import CrestBackend
+
+    captured: dict[str, Any] = {}
+    real_init = CrestBackend.__init__
+
+    def _capturing_init(self: Any, config: Any, **kwargs: Any) -> None:
+        captured["instance"] = self
+        captured["kwargs"] = dict(kwargs)
+        real_init(self, config, **kwargs)
+
+    structure = _make_structure(["H", "H"], [(0.0, 0.0, 0.0), (0.0, 0.0, 0.74)])
+    ensemble_xyz = _crest_ensemble_xyz(tmp_path / "crest_conformers.xyz", [-100.25, -100.24])
+
+    def fake_refine(request: Any, *, context: Any = None) -> Any:
+        captured["censo_extras"] = dict((context.capability_extras if context else None) or {})
+        _write_censo_final_part(request.output_dir)
+        return _censo_refine_result()
+
+    with (
+        patch("acp.workflows.nmr.CrestBackend.__init__", _capturing_init),
+        patch(
+            "acp.workflows.nmr.run_conformer_search",
+            return_value=_search_result(ensemble_xyz, [-100.25, -100.24]),
+        ),
+        patch("acp.workflows.nmr.run_censo_refine", side_effect=fake_refine),
+    ):
+        ensemble = _run_conformer_generation(
+            structure, tmp_path / "02_SEARCH", NmrConfig(), cfg, solvent, None, None
+        )
+    return ensemble, captured
+
+
+def test_sampling_absent_key_defaults_to_alpb(tmp_path: Path) -> None:
+    """(a) solvent + absent key → CREST receives alpb+chloroform, defaulted=True."""
+    from acp.workflows.nmr import _resolve_sampling_solvent
+
+    receipt = _resolve_sampling_solvent({}, "chloroform")
+    assert receipt.solvent == "chloroform"
+    assert receipt.solvent_model == "alpb"
+    assert receipt.defaulted is True
+
+    ensemble, captured = _run_conformer_generation_capture(tmp_path, {}, "chloroform")
+    assert ensemble is not None
+    assert captured["kwargs"]["solvent"] == "chloroform"
+    assert captured["kwargs"]["solvent_model"] == "alpb"
+    assert captured["instance"]._interface._solvent_args() == ["--alpb", "chcl3"]
+    # The sampling receipt persists the effective model + defaulted flag.
+    # (The CENSO DFT segment keeps its own model: the old smd fallback.)
+    assert captured["censo_extras"]["solvent_model"] == "smd"
+
+
+def test_sampling_explicit_none_is_gas_phase(tmp_path: Path) -> None:
+    """(b) explicit none → CREST receives NO solvent (default ALPB suppressed)."""
+    from acp.workflows.nmr import _resolve_sampling_solvent
+
+    receipt = _resolve_sampling_solvent(_sampling_config("none"), "chloroform")
+    assert receipt.solvent_model == "none"
+    assert receipt.defaulted is False
+
+    ensemble, captured = _run_conformer_generation_capture(
+        tmp_path, _sampling_config("none"), "chloroform"
+    )
+    assert ensemble is not None
+    assert captured["kwargs"]["solvent_model"] == "none"
+    assert captured["instance"]._interface._solvent_args() == []
+
+
+def test_sampling_explicit_gbsa_used_as_given(tmp_path: Path) -> None:
+    """(c) explicit gbsa → used as-is."""
+    from acp.workflows.nmr import _resolve_sampling_solvent
+
+    receipt = _resolve_sampling_solvent(_sampling_config("gbsa"), "chloroform")
+    assert receipt.solvent_model == "gbsa"
+    assert receipt.defaulted is False
+
+    ensemble, captured = _run_conformer_generation_capture(
+        tmp_path, _sampling_config("gbsa"), "chloroform"
+    )
+    assert ensemble is not None
+    assert captured["kwargs"]["solvent_model"] == "gbsa"
+    assert captured["instance"]._interface._solvent_args() == ["--gbsa", "chcl3"]
+
+
+def test_sampling_solvent_free_run_sends_no_solvent(tmp_path: Path) -> None:
+    """(e) no solvent anywhere → no sampling flags, no default ALPB."""
+    from acp.workflows.nmr import _resolve_sampling_solvent
+
+    receipt = _resolve_sampling_solvent({}, None)
+    assert receipt.solvent is None
+    assert receipt.solvent_model == "none"
+    assert receipt.defaulted is False
+
+    ensemble, captured = _run_conformer_generation_capture(tmp_path, {}, None)
+    assert ensemble is not None
+    assert captured["kwargs"]["solvent"] is None
+    assert captured["kwargs"]["solvent_model"] == "none"
+    assert captured["instance"]._interface._solvent_args() == []
+
+
+def test_sampling_unknown_model_fails_strictly(tmp_path: Path) -> None:
+    """(f) unknown new-key value → SolventValueError; run fails (returns None)."""
+    from acp.workflows.nmr import _resolve_sampling_solvent
+    from cccp.utils.solvent_map import SolventValueError
+
+    with pytest.raises(SolventValueError, match="solvent models"):
+        _resolve_sampling_solvent(_sampling_config("mdm"), "chloroform")
+
+    ensemble, captured = _run_conformer_generation_capture(
+        tmp_path, _sampling_config("mdm"), "chloroform"
+    )
+    assert ensemble is None
+    assert captured == {}  # the backend is never constructed
+
+
+@pytest.mark.parametrize(
+    ("model", "expected_token"),
+    [
+        ("none", None),
+        ("cpcm", "CPCM(chloroform)"),
+        ("smd", "SMD(chloroform)"),
+    ],
+)
+def test_giao_solvent_model_independent_of_sampling_key(
+    tmp_path: Path, model: str, expected_token: str | None
+) -> None:
+    """(d) GIAO --solvent-model semantics are independent of the sampling key."""
+    conf = _build_test_nmr_config(solvent="chloroform", solvent_model=model)
+    level, input_text = _run_giao_capture(conf, tmp_path)
+    assert level.solvent_model == model
+    if expected_token is None:
+        assert "CPCM(" not in input_text
+        assert "SMD(" not in input_text
+    else:
+        assert expected_token in input_text
+
+
+def test_sampling_key_is_ignored_by_giao_config_resolution() -> None:
+    """The new key never feeds the GIAO effective config."""
+    from acp.workflows.nmr import _build_nmr_config
+    from cccp.config import load_config
+
+    cfg = load_config()
+    cfg.setdefault("nmr", {})["sampling_solvent_model"] = "gbsa"
+    conf = _build_nmr_config(
+        cfg,
+        nuclei=None,
+        nmr_method=None,
+        nmr_basis=None,
+        solvent="chloroform",
+        boltzmann_temp=None,
+        tms_1h=None,
+        tms_13c=None,
+        error_model=None,
+        conformer_preset=None,
+        solvent_model="cpcm",
+        max_conformers=None,
+    )
+    assert conf.solvent == "chloroform"
+    assert conf.solvent_model == "cpcm"

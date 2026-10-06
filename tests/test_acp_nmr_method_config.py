@@ -307,3 +307,23 @@ def test_custom_matrix_case_round_trips_through_to_dict() -> None:
     )
     assert NmrMethodConfig(**cfg.to_dict()) == cfg
     assert cfg.solvent_model == "none" and cfg.solvent == ""
+
+
+# ── sampling solvent key is independent of the GIAO resolver (todo 8) ──────
+
+
+def test_no_builtin_default_for_sampling_solvent_model() -> None:
+    """ANTI #3: the dedicated sampling key must NOT be injected by defaults."""
+    from cccp.config import _get_default_config
+
+    assert "sampling_solvent_model" not in _get_default_config()["nmr"]
+
+
+def test_sampling_solvent_model_key_does_not_change_giao_resolution() -> None:
+    """The sampling key is read only by the workflow sampling stage, never GIAO."""
+    config = {"theory": {"nmr": {"solvent_model": "cpcm", "solvent": "chloroform"}}}
+    with_sampling_key = {
+        **config,
+        "nmr": {"sampling_solvent_model": "gbsa"},
+    }
+    assert resolve_nmr_method({}, config) == resolve_nmr_method({}, with_sampling_key)

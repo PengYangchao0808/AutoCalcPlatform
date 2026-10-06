@@ -154,6 +154,7 @@ from cccp.qc.interfaces.censo import (
     part_index,
 )
 from cccp.utils.constants import HARTREE_TO_KCAL
+from cccp.utils.solvent_map import LEGAL_SOLVENT_MODELS, SolventValueError
 
 logger = logging.getLogger(__name__)
 
@@ -636,6 +637,81 @@ def _protocol_spec_for_candidate(
 # Per-candidate pipeline
 # ---------------------------------------------------------------------------
 
+#: Dedicated NMR sampling-segment solvent-model key. Intentionally ABSENT
+#: from ``cccp.config._get_default_config()`` and ``config/defaults.yaml``:
+#: absence itself is the signal (see :func:`_resolve_sampling_solvent`).
+_SAMPLING_SOLVENT_CONFIG_KEY: Final = "sampling_solvent_model"
+#: Sampling model applied when the key is absent but a solvent name is present.
+_SAMPLING_DEFAULT_SOLVENT_MODEL: Final = "alpb"
+
+
+@dataclass(frozen=True)
+class _SamplingSolventReceipt:
+    """Effective-parameters receipt for the sampling (CREST/xTB) segment.
+
+    ``defaulted`` is ``True`` ONLY when the dedicated key was absent and a
+    solvent name was present, so ACP chose ALPB rather than the user. An
+    explicit ``none``/``alpb``/``gbsa`` is never ``defaulted`` — a recorded
+    default must never masquerade as a user statement.
+    """
+
+    solvent: str | None
+    solvent_model: str
+    defaulted: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "solvent": self.solvent,
+            "solvent_model": self.solvent_model,
+            "defaulted": self.defaulted,
+        }
+
+
+def _resolve_sampling_solvent(
+    cfg: Mapping[str, Any],
+    solvent: str | None,
+) -> _SamplingSolventReceipt:
+    """Resolve the sampling (CREST/xTB) solvent model for one candidate run.
+
+    Reads ONLY the dedicated :data:`_SAMPLING_SOLVENT_CONFIG_KEY` key — the
+    legacy ``theory.preoptimization.solvent_model`` / ``censo.solvent_model``
+    keys keep their own CENSO semantics and are deliberately not consulted
+    here (todo 8). The model vocabulary is validated against the single source
+    :data:`cccp.utils.solvent_map.LEGAL_SOLVENT_MODELS`.
+
+    Three-state semantics:
+
+    * key ABSENT + solvent name present → ``alpb`` (``defaulted=True``);
+    * key ABSENT + no solvent → ``none`` (gas phase, no flags emitted);
+    * key explicitly ``none`` → gas phase (``defaulted=False``);
+    * key explicitly ``alpb``/``gbsa`` → used as given.
+
+    Raises:
+        SolventValueError: the key carries a value outside
+            :data:`LEGAL_SOLVENT_MODELS`.
+    """
+    nmr_section = cfg.get("nmr")
+    raw = (
+        nmr_section.get(_SAMPLING_SOLVENT_CONFIG_KEY) if isinstance(nmr_section, Mapping) else None
+    )
+    name = solvent if solvent else None
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        # Absence (or an empty/whitespace value) is the signal — never read as
+        # an explicit statement. A named solvent defaults to ALPB; otherwise
+        # the sampling segment runs gas phase.
+        if name is None:
+            return _SamplingSolventReceipt(solvent=None, solvent_model="none", defaulted=False)
+        return _SamplingSolventReceipt(
+            solvent=name, solvent_model=_SAMPLING_DEFAULT_SOLVENT_MODEL, defaulted=True
+        )
+    model = str(raw).strip().lower()
+    if model not in LEGAL_SOLVENT_MODELS:
+        raise SolventValueError(
+            f"Unknown xTB solvent model {raw!r} for nmr.{_SAMPLING_SOLVENT_CONFIG_KEY}; "
+            f"legal solvent models: {', '.join(sorted(LEGAL_SOLVENT_MODELS))}"
+        )
+    return _SamplingSolventReceipt(solvent=name, solvent_model=model, defaulted=False)
+
 
 def _run_conformer_generation(
     structure: Structure,
@@ -671,17 +747,22 @@ def _run_conformer_generation(
     crest_dir = stage_storage.stage_dir("02_SEARCH", "CREST")
     crest_dir.mkdir(parents=True, exist_ok=True)
 
-    # Solvent/ewin resolution mirrors the old ensemble-generation rules
-    # (including the smd default when a solvent has no model).
-    censo_solvent, solvent_model = _resolve_solvent_config(cfg, solvent)
-    if censo_solvent and solvent_model == "none":
-        solvent_model = "smd"
+    # CENSO DFT segment: old keys keep their original semantics (smd/cpcm are
+    # legal there); the historical "default SMD" fallback is confined to this
+    # stage and must never leak into the CREST/xTB sampling segment.
+    censo_solvent, censo_solvent_model = _resolve_solvent_config(cfg, solvent)
+    if censo_solvent and censo_solvent_model == "none":
+        censo_solvent_model = "smd"
     safe_nproc: int | None = nproc if (nproc is not None and nproc > 0) else None
     crest_ewin = _resolve_crest_ewin(cfg, ewin)
 
     input_xyz = _structure_to_xyz(structure, work_dir)
 
     try:
+        # Sampling segment: dedicated key only (alpb/gbsa/none). Resolution is
+        # inside the guard so an unknown model fails the run through the same
+        # path as a backend rejection.
+        sampling = _resolve_sampling_solvent(cfg, solvent)
         crest_result_ensemble = _run_conformer_tasks(
             structure,
             nmr_config,
@@ -691,7 +772,8 @@ def _run_conformer_generation(
             crest_dir,
             stage_storage,
             censo_solvent,
-            solvent_model,
+            censo_solvent_model,
+            sampling,
             safe_nproc,
             crest_ewin,
         )
@@ -713,11 +795,17 @@ def _run_conformer_tasks(
     crest_dir: Path,
     stage_storage: TaskStorage,
     censo_solvent: str | None,
-    solvent_model: str,
+    censo_solvent_model: str,
+    sampling: _SamplingSolventReceipt,
     safe_nproc: int | None,
     crest_ewin: float,
 ) -> StructureEnsemble | None:
-    """CREST task + CENSO/xtb-passthrough task → ensemble (see _run_conformer_generation)."""
+    """CREST task + CENSO/xtb-passthrough task → ensemble (see _run_conformer_generation).
+
+    The CREST/xTB sampling segment receives the dedicated sampling resolution
+    (``sampling``), while CENSO keeps its own effective model
+    (``censo_solvent_model``) — the two stages are resolved separately.
+    """
     from acp.workflows.ensemble import _build_ensemble_from_censo
 
     # CREST: configured instance via the sanctioned runtime seam (the task
@@ -726,8 +814,8 @@ def _run_conformer_tasks(
     crest = CrestBackend(
         config=cfg,
         gfn_level=crest_cfg.get("gfn_level", 2),
-        solvent=censo_solvent,
-        solvent_model=solvent_model,
+        solvent=sampling.solvent,
+        solvent_model=sampling.solvent_model,
     )
     search_result = run_conformer_search(
         TaskRequest(
@@ -741,7 +829,10 @@ def _run_conformer_tasks(
         context=TaskContext(
             backend=crest,
             config=cfg,
-            capability_extras={"output_name": safe_name},
+            capability_extras={
+                "output_name": safe_name,
+                "sampling_solvent": sampling.to_dict(),
+            },
         ),
     )
     search_payload = search_result.payload
@@ -783,7 +874,10 @@ def _run_conformer_tasks(
             ),
             context=TaskContext(
                 config=cfg,
-                capability_extras={"solvent": censo_solvent, "solvent_model": solvent_model},
+                capability_extras={
+                    "solvent": censo_solvent,
+                    "solvent_model": censo_solvent_model,
+                },
             ),
         )
         censo_result = _censo_result_from_refine(refine_result, censo_dir, preset, cfg)
@@ -3415,6 +3509,7 @@ def run_nmr_analysis(
         # Publish successful structure generation before GIAO can fail.
         from acp.results.frame_candidate_store import atomic_write_text
         from acp.results.structure_policy import single_geometry
+
         try:
             generated_manifest = ResultManifest.read(storage.result_dir())
         except FileNotFoundError:
@@ -3424,18 +3519,28 @@ def run_nmr_analysis(
             lines = [str(len(generated.symbols)), f"NMR generated conformer rank={rank}"]
             if generated.coordinates is None:
                 continue
-            lines.extend(f"{symbol} {float(row[0]):.10f} {float(row[1]):.10f} {float(row[2]):.10f}"
-                         for symbol, row in zip(generated.symbols, generated.coordinates))
+            lines.extend(
+                f"{symbol} {float(row[0]):.10f} {float(row[1]):.10f} {float(row[2]):.10f}"
+                for symbol, row in zip(generated.symbols, generated.coordinates)
+            )
             xyz = "\n".join(lines) + "\n"
             if single_geometry(xyz) is None:
                 continue
             rel = f"structures/nmr_{idx}_{rank}.xyz"
             atomic_write_text(storage.result_dir() / rel, xyz)
-            generated_manifest.add_product(f"nmr_conformer_{idx}_{rank}",
-                f"NMR conformer {idx + 1}/{rank}", rel, "structure",
-                metadata={"source_kind":"conformer", "rank":rank, "stage_id":"conformer_generation", "policy_version":1})
+            generated_manifest.add_product(
+                f"nmr_conformer_{idx}_{rank}",
+                f"NMR conformer {idx + 1}/{rank}",
+                rel,
+                "structure",
+                metadata={
+                    "source_kind": "conformer",
+                    "rank": rank,
+                    "stage_id": "conformer_generation",
+                    "policy_version": 1,
+                },
+            )
         generated_manifest.write(storage.result_dir())
-
 
     if progress_reporter is not None:
         skipped = {"status": "skipped"} if not needs_generation else None
