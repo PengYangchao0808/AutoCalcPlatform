@@ -54,6 +54,7 @@ from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
     PROBABILITY_STATUSES,
     SIGNAL_GROUP_BASES,
+    AcquisitionSpectrum,
     Assignment,
     AtomShift,
     CandidateEvidence,
@@ -68,9 +69,15 @@ from acp.nmr.models import (
     NucleusEvidence,
     ProbabilityResult,
     ProbabilityStatus,
+    ProcessedSpectrum,
+    ProcessingProvenance,
+    ProcessingQuality,
     RegressionResult,
+    ResonanceSignal,
     SignalGroup,
+    SpectralLine,
     lookup_tms_shieldings,
+    resonance_signals_from_peaks,
 )
 from acp.nmr.probability import (
     compute_dp4,
@@ -100,7 +107,6 @@ from acp.nmr.reference_validation import (
 from acp.nmr.scaling import build_assignments, fit_regression, fit_scaling_goodman
 from acp.nmr.spectra import (
     BrukerProcessResult,
-    ProcessedSpectrum,
     bruker_result_to_text,
     find_bruker_experiments,
     process_bruker_experiment,
@@ -139,6 +145,14 @@ __all__ = [
     "SignalGroup",
     "SIGNAL_GROUP_BASES",
     "lookup_tms_shieldings",
+    # four-layer spectrum model (todo 41 / G10)
+    "AcquisitionSpectrum",
+    "ProcessedSpectrum",
+    "ProcessingProvenance",
+    "ProcessingQuality",
+    "SpectralLine",
+    "ResonanceSignal",
+    "resonance_signals_from_peaks",
     # io
     "parse_experimental_nmr",
     # equivalence

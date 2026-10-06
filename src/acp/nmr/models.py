@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Literal
 
@@ -196,6 +197,39 @@ class ExperimentalPeak:
         """True for unassigned-with-candidates (several labels, no resolution)."""
         return self.atom_label is None and bool(self.label_candidates)
 
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (exact values; candidates as list or ``None``)."""
+        return {
+            "shift_ppm": self.shift_ppm,
+            "element": self.element,
+            "atom_label": self.atom_label,
+            "multiplicity": self.multiplicity,
+            "label_candidates": (
+                list(self.label_candidates) if self.label_candidates is not None else None
+            ),
+            "index": self.index,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ExperimentalPeak:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        candidates_raw = payload["label_candidates"]
+        return cls(
+            shift_ppm=_coerce_required_float(payload["shift_ppm"], "ExperimentalPeak.shift_ppm"),
+            element=_coerce_required_str(payload["element"], "ExperimentalPeak.element"),
+            atom_label=_payload_str(payload, "ExperimentalPeak", "atom_label"),
+            multiplicity=_coerce_required_int(
+                payload["multiplicity"], "ExperimentalPeak.multiplicity"
+            ),
+            label_candidates=(
+                None
+                if candidates_raw is None
+                else _coerce_str_tuple(candidates_raw, "ExperimentalPeak.label_candidates")
+            ),
+            index=_payload_int(payload, "ExperimentalPeak", "index"),
+        )
+
 
 @dataclass
 class ExperimentalNmr:
@@ -319,6 +353,550 @@ class NmrConfig:
             "strict_equivalence": self.strict_equivalence,
             "protocol_fingerprint": self.protocol_fingerprint,
         }
+
+
+# --- four-layer spectrum model (todo 41 / G10) ------------------------------
+#
+# Layer separation (never conflated):
+#   acquisition → AcquisitionSpectrum: what the spectrometer recorded;
+#   processed   → ProcessedSpectrum: processed data + ProcessingProvenance
+#                 + ProcessingQuality + observed/fitted lines;
+#   lines       → SpectralLine: elementary lines of the processed data;
+#   resonances  → ResonanceSignal: chemically meaningful assigned signals,
+#                 created only through assignment — a raw unmatched peak is
+#                 NEVER auto-promoted to a resonance.
+
+
+def _require_payload_fields(payload: Mapping[str, object], cls: type) -> None:
+    """Reject a layer payload missing any declared field (no silent defaults)."""
+    missing = [f.name for f in fields(cls) if f.name not in payload]
+    if missing:
+        raise ValueError(f"{cls.__name__}.from_dict: missing required field(s) {missing}")
+
+
+def _coerce_optional_float(value: object, field_name: str) -> float | None:
+    """Return *value* as float, or ``None``; reject non-numeric payloads."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be a number or None, got {value!r}")
+    return float(value)
+
+
+def _coerce_optional_int(value: object, field_name: str) -> int | None:
+    """Return *value* as int, or ``None``; reject non-integer payloads."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an int or None, got {value!r}")
+    return int(value)
+
+
+def _coerce_optional_str(value: object, field_name: str) -> str | None:
+    """Return *value* as str, or ``None``; reject non-string payloads."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string or None, got {value!r}")
+    return value
+
+
+def _coerce_required_float(value: object, field_name: str) -> float:
+    """Return *value* as float; reject booleans and non-numbers."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be a number, got {value!r}")
+    return float(value)
+
+
+def _coerce_required_int(value: object, field_name: str) -> int:
+    """Return *value* as int; reject booleans and non-integers."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an int, got {value!r}")
+    return int(value)
+
+
+def _coerce_required_str(value: object, field_name: str) -> str:
+    """Return *value* as str; reject non-strings."""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string, got {value!r}")
+    return value
+
+
+def _coerce_str_tuple(value: object, field_name: str) -> tuple[str, ...]:
+    """Return *value* as a tuple of strings; reject non-sequences/members."""
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"{field_name} must be a list/tuple, got {type(value).__name__}")
+    out: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError(f"{field_name} entries must be strings, got {item!r}")
+        out.append(item)
+    return tuple(out)
+
+
+def _coerce_payload_mapping(value: object, field_name: str) -> Mapping[str, object]:
+    """Return *value* as a mapping; reject non-mappings."""
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field_name} must be a mapping, got {type(value).__name__}")
+    return value
+
+
+def _payload_float(payload: Mapping[str, object], cls_name: str, key: str) -> float | None:
+    """Read an optional float field from an already-validated payload."""
+    return _coerce_optional_float(payload[key], f"{cls_name}.{key}")
+
+
+def _payload_int(payload: Mapping[str, object], cls_name: str, key: str) -> int | None:
+    """Read an optional int field from an already-validated payload."""
+    return _coerce_optional_int(payload[key], f"{cls_name}.{key}")
+
+
+def _payload_str(payload: Mapping[str, object], cls_name: str, key: str) -> str | None:
+    """Read an optional str field from an already-validated payload."""
+    return _coerce_optional_str(payload[key], f"{cls_name}.{key}")
+
+
+@dataclass(frozen=True)
+class AcquisitionSpectrum:
+    """Layer 1 — raw acquisition metadata recorded by the spectrometer.
+
+    Container only: processing decisions (windows, phase, baseline,
+    referencing) live in :class:`ProcessingProvenance`, never here.
+    ``point_count`` is the number of acquired complex points actually read
+    from the raw FID.
+
+    Attributes:
+        spectrometer: Instrument label the reader is bound to.
+        nucleus: Nucleus label from ``acqus`` (e.g. ``"1H"``).
+        frequency_mhz: Observe frequency (``SFO1``/``BF1``) in MHz.
+        solvent: Solvent as recorded in ``acqus`` (e.g. ``"CDCl3"``).
+        temperature_k: Sample temperature in K (``TE``).
+        pulse_program: Pulse program name (``PULPROG``).
+        point_count: Acquired complex points in the direct dimension.
+        spectral_width_hz: Spectral width in Hz (``SW_h``).
+        carrier_ppm: Carrier/offset position in ppm (``O1``/``SFO1``).
+        group_delay_points: Raw Bruker group delay (``GRPDLY``, points) —
+            digital-filter provenance for the todo 42 compensation audit.
+        dspfvs: Bruker DSP firmware version parameter (``DSPFVS``).
+        spectrometer_reference: Raw ``SR`` referencing value as recorded
+            (units as stored in ``acqus``); ``None`` when absent.
+        source_dir: Bruker experiment directory the spectrum came from.
+    """
+
+    spectrometer: str
+    nucleus: str
+    frequency_mhz: float | None = None
+    solvent: str | None = None
+    temperature_k: float | None = None
+    pulse_program: str | None = None
+    point_count: int | None = None
+    spectral_width_hz: float | None = None
+    carrier_ppm: float | None = None
+    group_delay_points: float | None = None
+    dspfvs: int | None = None
+    spectrometer_reference: float | None = None
+    source_dir: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field, exact values)."""
+        return {
+            "spectrometer": self.spectrometer,
+            "nucleus": self.nucleus,
+            "frequency_mhz": self.frequency_mhz,
+            "solvent": self.solvent,
+            "temperature_k": self.temperature_k,
+            "pulse_program": self.pulse_program,
+            "point_count": self.point_count,
+            "spectral_width_hz": self.spectral_width_hz,
+            "carrier_ppm": self.carrier_ppm,
+            "group_delay_points": self.group_delay_points,
+            "dspfvs": self.dspfvs,
+            "spectrometer_reference": self.spectrometer_reference,
+            "source_dir": self.source_dir,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> AcquisitionSpectrum:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "AcquisitionSpectrum"
+        return cls(
+            spectrometer=_coerce_required_str(payload["spectrometer"], f"{name}.spectrometer"),
+            nucleus=_coerce_required_str(payload["nucleus"], f"{name}.nucleus"),
+            frequency_mhz=_payload_float(payload, name, "frequency_mhz"),
+            solvent=_payload_str(payload, name, "solvent"),
+            temperature_k=_payload_float(payload, name, "temperature_k"),
+            pulse_program=_payload_str(payload, name, "pulse_program"),
+            point_count=_payload_int(payload, name, "point_count"),
+            spectral_width_hz=_payload_float(payload, name, "spectral_width_hz"),
+            carrier_ppm=_payload_float(payload, name, "carrier_ppm"),
+            group_delay_points=_payload_float(payload, name, "group_delay_points"),
+            dspfvs=_payload_int(payload, name, "dspfvs"),
+            spectrometer_reference=_payload_float(payload, name, "spectrometer_reference"),
+            source_dir=_coerce_required_str(payload["source_dir"], f"{name}.source_dir"),
+        )
+
+
+@dataclass(frozen=True)
+class ProcessingProvenance:
+    """Layer 2a — the processing chain ACTUALLY applied to one spectrum (G10).
+
+    Records apodization / digital-filter window parameters (LB/GB/SB),
+    zero-filling, phase (method + PHC0/PHC1 when known — ``None`` when the
+    optimizer does not report angles), baseline correction and referencing
+    (manual anchor vs plain spectrometer reference). Nothing here is
+    assumed: unset numeric parameters stay ``None``.
+
+    Attributes:
+        apodization: Window function applied (e.g. ``"exponential"``).
+        lb_hz: Exponential line broadening (LB) in Hz.
+        gb: Gaussian broadening (GB) parameter.
+        sb: Sine-bell shift (SB) parameter.
+        zero_fill_points: Final complex point count after zero-filling.
+        zero_fill_factor: Final / original point count.
+        phase_method: ``"peak_minima"``, ``"acme"``, ``"manual"``,
+            ``"unphased"`` (every optimizer failed) or ``"none"``.
+        phase_p0_deg: Zero-order phase (TopSpin ``PHC0``/``p0``), degrees.
+        phase_p1_deg: First-order phase (TopSpin ``PHC1``/``p1``), degrees.
+        baseline_method: Baseline-correction description.
+        baseline_window_fraction: Window fraction used by the correction.
+        reference_method: ``"spectrometer_sr"`` (acquisition referencing
+            trusted), ``"manual_anchor"`` (a picked peak was anchored to a
+            requested reference) or ``"none"``.
+        reference_ppm: Requested reference position in ppm (``None`` when no
+            manual reference was requested).
+        applied_shift_ppm: ppm shift actually applied to the picked peaks
+            (``None`` when no anchor was applied).
+    """
+
+    apodization: str
+    phase_method: str
+    baseline_method: str
+    reference_method: str
+    lb_hz: float | None = None
+    gb: float | None = None
+    sb: float | None = None
+    zero_fill_points: int | None = None
+    zero_fill_factor: float | None = None
+    phase_p0_deg: float | None = None
+    phase_p1_deg: float | None = None
+    baseline_window_fraction: float | None = None
+    reference_ppm: float | None = None
+    applied_shift_ppm: float | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field, exact values)."""
+        return {
+            "apodization": self.apodization,
+            "lb_hz": self.lb_hz,
+            "gb": self.gb,
+            "sb": self.sb,
+            "zero_fill_points": self.zero_fill_points,
+            "zero_fill_factor": self.zero_fill_factor,
+            "phase_method": self.phase_method,
+            "phase_p0_deg": self.phase_p0_deg,
+            "phase_p1_deg": self.phase_p1_deg,
+            "baseline_method": self.baseline_method,
+            "baseline_window_fraction": self.baseline_window_fraction,
+            "reference_method": self.reference_method,
+            "reference_ppm": self.reference_ppm,
+            "applied_shift_ppm": self.applied_shift_ppm,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ProcessingProvenance:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "ProcessingProvenance"
+        return cls(
+            apodization=_coerce_required_str(payload["apodization"], f"{name}.apodization"),
+            lb_hz=_payload_float(payload, name, "lb_hz"),
+            gb=_payload_float(payload, name, "gb"),
+            sb=_payload_float(payload, name, "sb"),
+            zero_fill_points=_payload_int(payload, name, "zero_fill_points"),
+            zero_fill_factor=_payload_float(payload, name, "zero_fill_factor"),
+            phase_method=_coerce_required_str(payload["phase_method"], f"{name}.phase_method"),
+            phase_p0_deg=_payload_float(payload, name, "phase_p0_deg"),
+            phase_p1_deg=_payload_float(payload, name, "phase_p1_deg"),
+            baseline_method=_coerce_required_str(
+                payload["baseline_method"], f"{name}.baseline_method"
+            ),
+            baseline_window_fraction=_payload_float(payload, name, "baseline_window_fraction"),
+            reference_method=_coerce_required_str(
+                payload["reference_method"], f"{name}.reference_method"
+            ),
+            reference_ppm=_payload_float(payload, name, "reference_ppm"),
+            applied_shift_ppm=_payload_float(payload, name, "applied_shift_ppm"),
+        )
+
+
+@dataclass(frozen=True)
+class ProcessingQuality:
+    """Layer 2b — quality metrics of one processed spectrum (G10).
+
+    Each metric is ``None`` when it could not be computed (e.g. no picked
+    peak for S/N and linewidth) — never fabricated as 0.
+    """
+
+    snr: float | None = None
+    linewidth_hz: float | None = None
+    baseline_rms: float | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field, exact values)."""
+        return {
+            "snr": self.snr,
+            "linewidth_hz": self.linewidth_hz,
+            "baseline_rms": self.baseline_rms,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ProcessingQuality:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "ProcessingQuality"
+        return cls(
+            snr=_payload_float(payload, name, "snr"),
+            linewidth_hz=_payload_float(payload, name, "linewidth_hz"),
+            baseline_rms=_payload_float(payload, name, "baseline_rms"),
+        )
+
+
+@dataclass(frozen=True)
+class SpectralLine:
+    """Layer 3 — one observed/fitted line of the processed data.
+
+    Processing output only: a line carries no chemical assignment — turning
+    lines into signals is an assignment step (:class:`ResonanceSignal`).
+    """
+
+    position_ppm: float
+    intensity: float
+    width_hz: float | None = None
+    integral: float | None = None
+    index: int | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field, exact values)."""
+        return {
+            "position_ppm": self.position_ppm,
+            "intensity": self.intensity,
+            "width_hz": self.width_hz,
+            "integral": self.integral,
+            "index": self.index,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> SpectralLine:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "SpectralLine"
+        return cls(
+            position_ppm=_coerce_required_float(payload["position_ppm"], f"{name}.position_ppm"),
+            intensity=_coerce_required_float(payload["intensity"], f"{name}.intensity"),
+            width_hz=_payload_float(payload, name, "width_hz"),
+            integral=_payload_float(payload, name, "integral"),
+            index=_payload_int(payload, name, "index"),
+        )
+
+
+@dataclass(frozen=True)
+class ResonanceSignal:
+    """Layer 4 — chemically meaningful signal created through assignment.
+
+    Never built from a raw unmatched peak: use
+    :meth:`from_experimental_peak` (rejects unassigned/ambiguous peaks) or
+    :func:`resonance_signals_from_peaks` (skips them). ``atom_refs`` are the
+    resolved atom labels; ``group_refs`` the signal-definition references
+    (``SignalGroup`` uids / experiment refs) behind the signal.
+
+    Attributes:
+        shift_ppm: Observed chemical shift in ppm.
+        element: Element symbol the signal belongs to.
+        multiplicity: Integral multiplicity (e.g. 3 for CH3).
+        atom_refs: Resolved atom labels this signal is assigned to.
+        group_refs: Signal-group/experiment references behind the signal.
+    """
+
+    shift_ppm: float
+    element: str
+    multiplicity: int = 1
+    atom_refs: tuple[str, ...] = ()
+    group_refs: tuple[str, ...] = ()
+
+    @classmethod
+    def from_experimental_peak(
+        cls,
+        peak: ExperimentalPeak,
+        *,
+        group_refs: tuple[str, ...] = (),
+    ) -> ResonanceSignal:
+        """Create a resonance from an ASSIGNED experimental peak.
+
+        Raises:
+            ValueError: When *peak* is unassigned or ambiguous — a raw
+                unmatched peak is never auto-promoted to a resonance.
+        """
+        if peak.atom_label is None or not peak.assigned:
+            raise ValueError(
+                f"cannot create ResonanceSignal from unassigned peak at "
+                f"{peak.shift_ppm} ppm (element {peak.element!r}, "
+                f"label_candidates={peak.label_candidates!r}) — resonances "
+                "exist only through assignment"
+            )
+        return cls(
+            shift_ppm=peak.shift_ppm,
+            element=normalize_symbol(peak.element),
+            multiplicity=int(peak.multiplicity),
+            atom_refs=(peak.atom_label,),
+            group_refs=tuple(group_refs),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field; refs as lists)."""
+        return {
+            "shift_ppm": self.shift_ppm,
+            "element": self.element,
+            "multiplicity": self.multiplicity,
+            "atom_refs": list(self.atom_refs),
+            "group_refs": list(self.group_refs),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ResonanceSignal:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "ResonanceSignal"
+        return cls(
+            shift_ppm=_coerce_required_float(payload["shift_ppm"], f"{name}.shift_ppm"),
+            element=_coerce_required_str(payload["element"], f"{name}.element"),
+            multiplicity=_coerce_required_int(payload["multiplicity"], f"{name}.multiplicity"),
+            atom_refs=_coerce_str_tuple(payload["atom_refs"], f"{name}.atom_refs"),
+            group_refs=_coerce_str_tuple(payload["group_refs"], f"{name}.group_refs"),
+        )
+
+
+def resonance_signals_from_peaks(peaks: Iterable[ExperimentalPeak]) -> list[ResonanceSignal]:
+    """Create resonance signals from ASSIGNED peaks only (G10).
+
+    Unassigned/ambiguous peaks (raw unmatched peaks) are skipped, never
+    auto-promoted; the skip count is logged for visibility.
+    """
+    signals: list[ResonanceSignal] = []
+    skipped = 0
+    for peak in peaks:
+        if not peak.assigned:
+            skipped += 1
+            continue
+        signals.append(ResonanceSignal.from_experimental_peak(peak))
+    if skipped:
+        logger.info(
+            "resonance_signals_from_peaks: skipped %d unassigned peak(s) — "
+            "resonances exist only through assignment",
+            skipped,
+        )
+    return signals
+
+
+@dataclass(frozen=True)
+class ProcessedSpectrum:
+    """Layer 2 — one processed spectrum: picked peaks + explicit layer records.
+
+    Additively extends the pre-todo-41 shape: the original fields
+    (``nucleus``/``element``/``peaks``/``noise``/``reference_shift``/
+    ``source_dir``) keep their names, order and meaning, so legacy
+    constructors and readers are unchanged. The layer records are optional
+    (``None``/empty for hand-built or text-parsed spectra).
+
+    Attributes:
+        nucleus: Nucleus label from ``acqus`` (e.g. ``"1H"``).
+        element: Element symbol (``"H"`` / ``"C"``).
+        peaks: Picked peaks (unassigned, multiplicity from integration).
+        noise: Estimated noise level (edge MAD before baseline correction).
+        reference_shift: ppm shift applied by manual referencing, if any.
+        source_dir: Bruker experiment directory the spectrum came from.
+        acquisition: Layer-1 acquisition record (``None`` when unknown).
+        processing: Layer-2a processing provenance (``None`` when unknown).
+        quality: Layer-2b quality metrics (``None`` when unknown).
+        lines: Layer-3 observed/fitted lines (empty when not fitted).
+    """
+
+    nucleus: str
+    element: str
+    peaks: list[ExperimentalPeak]
+    noise: float
+    reference_shift: float | None = None
+    source_dir: str = ""
+    acquisition: AcquisitionSpectrum | None = None
+    processing: ProcessingProvenance | None = None
+    quality: ProcessingQuality | None = None
+    lines: list[SpectralLine] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record: peaks + every layer block, exact values."""
+        return {
+            "nucleus": self.nucleus,
+            "element": self.element,
+            "peaks": [peak.to_dict() for peak in self.peaks],
+            "noise": self.noise,
+            "reference_shift": self.reference_shift,
+            "source_dir": self.source_dir,
+            "acquisition": (self.acquisition.to_dict() if self.acquisition is not None else None),
+            "processing": (self.processing.to_dict() if self.processing is not None else None),
+            "quality": self.quality.to_dict() if self.quality is not None else None,
+            "lines": [line.to_dict() for line in self.lines],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ProcessedSpectrum:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "ProcessedSpectrum"
+        peaks_raw = payload["peaks"]
+        if not isinstance(peaks_raw, (list, tuple)):
+            raise ValueError(f"{name}.peaks must be a list, got {type(peaks_raw).__name__}")
+        lines_raw = payload["lines"]
+        if not isinstance(lines_raw, (list, tuple)):
+            raise ValueError(f"{name}.lines must be a list, got {type(lines_raw).__name__}")
+        acquisition_raw = payload["acquisition"]
+        processing_raw = payload["processing"]
+        quality_raw = payload["quality"]
+        return cls(
+            nucleus=_coerce_required_str(payload["nucleus"], f"{name}.nucleus"),
+            element=_coerce_required_str(payload["element"], f"{name}.element"),
+            peaks=[
+                ExperimentalPeak.from_dict(_coerce_payload_mapping(peak, f"{name}.peaks[]"))
+                for peak in peaks_raw
+            ],
+            noise=_coerce_required_float(payload["noise"], f"{name}.noise"),
+            reference_shift=_payload_float(payload, name, "reference_shift"),
+            source_dir=_coerce_required_str(payload["source_dir"], f"{name}.source_dir"),
+            acquisition=(
+                None
+                if acquisition_raw is None
+                else AcquisitionSpectrum.from_dict(
+                    _coerce_payload_mapping(acquisition_raw, f"{name}.acquisition")
+                )
+            ),
+            processing=(
+                None
+                if processing_raw is None
+                else ProcessingProvenance.from_dict(
+                    _coerce_payload_mapping(processing_raw, f"{name}.processing")
+                )
+            ),
+            quality=(
+                None
+                if quality_raw is None
+                else ProcessingQuality.from_dict(
+                    _coerce_payload_mapping(quality_raw, f"{name}.quality")
+                )
+            ),
+            lines=[
+                SpectralLine.from_dict(_coerce_payload_mapping(line, f"{name}.lines[]"))
+                for line in lines_raw
+            ],
+        )
 
 
 # --- calculation products ------------------------------------------------
@@ -1254,6 +1832,13 @@ class NmrReport:
 __all__ = [
     "ExperimentalPeak",
     "ExperimentalNmr",
+    "AcquisitionSpectrum",
+    "ProcessingProvenance",
+    "ProcessingQuality",
+    "SpectralLine",
+    "ResonanceSignal",
+    "ProcessedSpectrum",
+    "resonance_signals_from_peaks",
     "ParseIssue",
     "ParseIssueCode",
     "PARSE_ISSUE_CODES",

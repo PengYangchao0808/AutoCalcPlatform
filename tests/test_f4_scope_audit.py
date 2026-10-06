@@ -1709,6 +1709,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/protocol.py",
     # acp-nmr-goodman-gap todo 31: reference-validation comparison module.
     "src/acp/nmr/reference_validation.py",
+    # acp-nmr-goodman-gap todo 41: four-layer spectrum model + processing provenance.
+    "src/acp/nmr/spectra.py",
     # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
     "src/acp/workflows/irc.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker

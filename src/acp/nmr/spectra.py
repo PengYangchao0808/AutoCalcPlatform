@@ -39,7 +39,16 @@ from pathlib import Path
 
 import numpy as np
 
-from acp.nmr.models import ExperimentalNmr, ExperimentalPeak, normalize_symbol
+from acp.nmr.models import (
+    AcquisitionSpectrum,
+    ExperimentalNmr,
+    ExperimentalPeak,
+    ProcessedSpectrum,
+    ProcessingProvenance,
+    ProcessingQuality,
+    SpectralLine,
+    normalize_symbol,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,27 +57,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LB_HZ: dict[str, float] = {"H": 0.3, "C": 1.0}
 # Search window (ppm, ±) when locating the manual reference peak.
 _DEFAULT_REF_WINDOW_PPM: dict[str, float] = {"H": 0.5, "C": 3.0}
-
-
-@dataclass(frozen=True)
-class ProcessedSpectrum:
-    """One processed Bruker experiment: picked peaks + diagnostics.
-
-    Attributes:
-        nucleus: Nucleus label from ``acqus`` (e.g. ``"1H"``).
-        element: Element symbol (``"H"`` / ``"C"``).
-        peaks: Picked peaks (unassigned, multiplicity from integration).
-        noise: Estimated noise level (edge MAD after baseline correction).
-        reference_shift: ppm shift applied by manual referencing, if any.
-        source_dir: Bruker experiment directory the spectrum came from.
-    """
-
-    nucleus: str
-    element: str
-    peaks: list[ExperimentalPeak]
-    noise: float
-    reference_shift: float | None = None
-    source_dir: str = ""
+# Morphological baseline window as a fraction of the spectrum length.
+_BASELINE_WINDOW_FRACTION: float = 0.02
+# SNR threshold default for peak picking (edge-noise MAD units).
+_DEFAULT_SNR_THRESHOLD: float = 8.0
 
 
 @dataclass
@@ -155,8 +147,34 @@ def find_bruker_experiments(root: Path) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
+def _acqus_text(value: object) -> str | None:
+    """Normalize an acqus string parameter (strip ``<>``); ``None`` when empty."""
+    if value is None:
+        return None
+    text = str(value).strip().strip("<>").strip()
+    return text or None
+
+
+def _acqus_float(value: object) -> float | None:
+    """Parse an acqus numeric parameter; ``None`` when absent/non-numeric."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except ValueError:
+        return None
+
+
+def _acqus_int(value: object) -> int | None:
+    """Parse an acqus integer parameter; ``None`` when absent/non-numeric."""
+    number = _acqus_float(value)
+    return int(number) if number is not None else None
+
+
 def _acqus_params(dic: dict) -> dict:
-    """Return the direct-dimension acquisition parameters."""
+    """Return the direct-dimension acquisition parameters + metadata."""
     acqus = dic.get("acqus") or {}
     sw_hz = acqus.get("SW_h") or (float(acqus["SW"]) * float(acqus["BF1"]))
     nucleus = str(acqus.get("NUC1") or "1H").strip()
@@ -167,6 +185,12 @@ def _acqus_params(dic: dict) -> dict:
         "nucleus": nucleus,
         "obs_mhz": obs_mhz,
         "car_hz": car_hz,
+        "solvent": _acqus_text(acqus.get("SOLVENT")),
+        "temperature_k": _acqus_float(acqus.get("TE")),
+        "pulse_program": _acqus_text(acqus.get("PULPROG")),
+        "group_delay_points": _acqus_float(acqus.get("GRPDLY")),
+        "dspfvs": _acqus_int(acqus.get("DSPFVS")),
+        "sr_value": _acqus_float(acqus.get("SR")),
     }
 
 
@@ -174,11 +198,14 @@ def _fft_pipeline(
     fid: np.ndarray,
     sw_hz: float,
     lb_hz: float,
-) -> np.ndarray:
+) -> tuple[np.ndarray, int]:
     """Apodize → first-point halve → zero-fill → FFT (pure numpy).
 
     nmrglue's ``proc_base.em`` treats ``lb`` as a *per-point* decay (not
     Hz), so the exponential window is applied explicitly here.
+
+    Returns ``(spectrum, zero_filled_points)`` — the final complex point
+    count is returned so the caller can record it in the provenance.
     """
     n = fid.shape[-1]
     t = np.arange(n) / sw_hz
@@ -189,11 +216,17 @@ def _fft_pipeline(
     data[0] *= 0.5
     size = 2 ** int(np.ceil(np.log2(2 * n)))
     data = np.concatenate([data, np.zeros(size - n, dtype=np.complex128)])
-    return np.fft.fftshift(np.fft.fft(data))
+    return np.fft.fftshift(np.fft.fft(data)), int(size)
 
 
-def _auto_phase(spectrum: np.ndarray) -> np.ndarray:
-    """Automatic phase correction via nmrglue (peak_minima → acme → none)."""
+def _auto_phase(spectrum: np.ndarray) -> tuple[np.ndarray, str]:
+    """Automatic phase correction via nmrglue (peak_minima → acme → none).
+
+    Returns ``(phased_spectrum, method)`` — the method actually applied
+    (``"peak_minima"`` / ``"acme"``), or ``"unphased"`` when every
+    optimizer failed. The method is recorded in the provenance so a failed
+    phase is visible (todo 42 gates on it instead of silently continuing).
+    """
     ng = _import_nmrglue()
     from nmrglue.process import proc_autophase  # noqa: PLC0415
 
@@ -203,14 +236,16 @@ def _auto_phase(spectrum: np.ndarray) -> np.ndarray:
             with contextlib.redirect_stdout(_io.StringIO()):
                 phased = proc_autophase.autops(spectrum, method)
             if np.isfinite(phased.real).all() and phased.real.max() > 0:
-                return np.asarray(phased, dtype=np.complex128)
+                return np.asarray(phased, dtype=np.complex128), method
         except Exception as exc:  # optimizer failure — try next method
             logger.debug("autops(%s) failed: %s", method, exc)
     logger.warning("Automatic phase correction failed; using unphased spectrum")
-    return spectrum
+    return spectrum, "unphased"
 
 
-def _baseline_correct(real: np.ndarray, window_fraction: float = 0.02) -> np.ndarray:
+def _baseline_correct(
+    real: np.ndarray, window_fraction: float = _BASELINE_WINDOW_FRACTION
+) -> np.ndarray:
     """Morphological baseline correction (grey opening + smoothing).
 
     Robust for high-dynamic-range spectra: polynomial fits suffer edge
@@ -289,6 +324,27 @@ def _apply_reference(
     return ppm_values + shift, shift
 
 
+def _region_areas(real: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    """Area of each peak integrated between the midpoints to its neighbours.
+
+    Returned in the original peak order (not sorted by position).
+    """
+    if len(indices) == 0:
+        return np.zeros(0)
+    order = np.argsort(indices)
+    sorted_idx = indices[order]
+    areas = np.zeros(len(sorted_idx))
+    n = real.shape[-1]
+    for pos, idx in enumerate(sorted_idx):
+        left = 0 if pos == 0 else (sorted_idx[pos - 1] + idx) // 2
+        right = n - 1 if pos == len(sorted_idx) - 1 else (idx + sorted_idx[pos + 1]) // 2
+        region = real[left : right + 1]
+        areas[pos] = float(np.sum(np.clip(region, 0.0, None)))
+    out = np.zeros(len(indices))
+    out[order] = areas
+    return out
+
+
 def _integrate_multiplicities(
     real: np.ndarray,
     indices: np.ndarray,
@@ -304,22 +360,55 @@ def _integrate_multiplicities(
     """
     if element != "H" or len(indices) <= 1:
         return [1] * len(indices)
-    order = np.argsort(indices)
-    sorted_idx = indices[order]
-    areas = np.zeros(len(sorted_idx))
-    n = real.shape[-1]
-    for pos, idx in enumerate(sorted_idx):
-        left = 0 if pos == 0 else (sorted_idx[pos - 1] + idx) // 2
-        right = n - 1 if pos == len(sorted_idx) - 1 else (idx + sorted_idx[pos + 1]) // 2
-        region = real[left : right + 1]
-        areas[pos] = float(np.sum(np.clip(region, 0.0, None)))
+    areas = _region_areas(real, indices)
     min_area = float(areas.min()) if areas.size else 1.0
     if min_area <= 0:
         return [1] * len(indices)
     mults = np.maximum(1, np.round(areas / min_area).astype(int))
-    out = np.ones(len(indices), dtype=int)
-    out[order] = mults
-    return out.tolist()
+    return mults.tolist()
+
+
+def _linewidth_hz(real: np.ndarray, index: int, sw_hz: float) -> float | None:
+    """FWHM estimate (Hz) of one picked peak, or ``None`` when not measurable."""
+    n = real.shape[-1]
+    peak = float(real[index])
+    if n < 3 or peak <= 0:
+        return None
+    half = peak / 2.0
+    left = index
+    while left > 0 and real[left - 1] > half:
+        left -= 1
+    right = index
+    while right < n - 1 and real[right + 1] > half:
+        right += 1
+    return max(right - left, 1) * float(sw_hz) / n
+
+
+def _estimate_quality(
+    real: np.ndarray,
+    noise: float,
+    indices: np.ndarray,
+    heights: np.ndarray,
+    sw_hz: float,
+) -> ProcessingQuality:
+    """Derive the processing quality metrics from the corrected spectrum (G10).
+
+    Baseline RMS comes from the spectrum edges (same edge fraction as the
+    noise estimate); S/N and the linewidth estimate come from the tallest
+    picked peak and stay ``None`` when no peak was picked.
+    """
+    n = real.shape[-1]
+    edge = max(n // 10, 16)
+    samples = np.concatenate([real[:edge], real[-edge:]])
+    baseline_rms = float(np.sqrt(np.mean(np.square(samples))))
+    if len(indices):
+        tallest = int(indices[int(np.argmax(heights))])
+        snr = float(heights.max() / noise)
+        linewidth = _linewidth_hz(real, tallest, sw_hz)
+    else:
+        snr = None
+        linewidth = None
+    return ProcessingQuality(snr=snr, linewidth_hz=linewidth, baseline_rms=baseline_rms)
 
 
 def process_bruker_experiment(
@@ -327,7 +416,7 @@ def process_bruker_experiment(
     reference_ppm: float | None = None,
     reference_window_ppm: float | None = None,
     lb_hz: float | None = None,
-    snr_threshold: float = 8.0,
+    snr_threshold: float = _DEFAULT_SNR_THRESHOLD,
 ) -> ProcessedSpectrum:
     """Process one Bruker experiment directory into an unassigned peak list.
 
@@ -368,8 +457,9 @@ def process_bruker_experiment(
     sw_hz = params["sw_hz"]
     lb = lb_hz if lb_hz is not None else _DEFAULT_LB_HZ.get(element, 0.5)
 
-    spectrum = _fft_pipeline(np.asarray(data), sw_hz, lb)
-    spectrum = _auto_phase(spectrum)
+    fid = np.asarray(data)
+    spectrum, zero_fill_points = _fft_pipeline(fid, sw_hz, lb)
+    spectrum, phase_method = _auto_phase(spectrum)
     # Estimate noise BEFORE baseline correction: the morphological opening
     # tracks the lower noise envelope, so post-correction the noise floor
     # becomes strictly positive bumps and its MAD underestimates sigma.
@@ -397,6 +487,7 @@ def process_bruker_experiment(
         )
 
     multiplicities = _integrate_multiplicities(real, indices, element)
+    areas = _region_areas(real, indices)
 
     peaks = [
         ExperimentalPeak(
@@ -407,13 +498,58 @@ def process_bruker_experiment(
         )
         for ppm, mult in zip(ppm_values, multiplicities)
     ]
+    lines = [
+        SpectralLine(
+            position_ppm=round(float(ppm), 4),
+            intensity=float(height),
+            width_hz=_linewidth_hz(real, int(idx), sw_hz),
+            integral=float(area),
+            index=position,
+        )
+        for position, (idx, ppm, height, area) in enumerate(
+            zip(indices, ppm_values, heights, areas)
+        )
+    ]
+
+    obs_mhz = params["obs_mhz"]
+    acquisition = AcquisitionSpectrum(
+        spectrometer="Bruker",
+        nucleus=nucleus,
+        frequency_mhz=obs_mhz,
+        solvent=params["solvent"],
+        temperature_k=params["temperature_k"],
+        pulse_program=params["pulse_program"],
+        point_count=int(fid.shape[-1]),
+        spectral_width_hz=sw_hz,
+        carrier_ppm=(params["car_hz"] / obs_mhz) if obs_mhz else None,
+        group_delay_points=params["group_delay_points"],
+        dspfvs=params["dspfvs"],
+        spectrometer_reference=params["sr_value"],
+        source_dir=str(exp_dir),
+    )
+    processing = ProcessingProvenance(
+        apodization="exponential",
+        lb_hz=float(lb),
+        zero_fill_points=zero_fill_points,
+        zero_fill_factor=(
+            float(zero_fill_points) / float(fid.shape[-1]) if fid.shape[-1] else None
+        ),
+        phase_method=phase_method,
+        baseline_method="morphological_grey_opening",
+        baseline_window_fraction=_BASELINE_WINDOW_FRACTION,
+        reference_method=("manual_anchor" if reference_shift is not None else "spectrometer_sr"),
+        reference_ppm=reference_ppm,
+        applied_shift_ppm=reference_shift,
+    )
+    quality = _estimate_quality(real, noise, indices, heights, sw_hz)
     logger.info(
-        "Bruker %s: picked %d peak(s) (%s, noise=%.3g, lb=%.2f Hz) from %s",
+        "Bruker %s: picked %d peak(s) (%s, noise=%.3g, lb=%.2f Hz, phase=%s) from %s",
         nucleus,
         len(peaks),
         exp_dir.name,
         noise,
         lb,
+        phase_method,
         exp_dir,
     )
     return ProcessedSpectrum(
@@ -423,6 +559,10 @@ def process_bruker_experiment(
         noise=noise,
         reference_shift=reference_shift,
         source_dir=str(exp_dir),
+        acquisition=acquisition,
+        processing=processing,
+        quality=quality,
+        lines=lines,
     )
 
 
@@ -435,7 +575,7 @@ def process_bruker_tree(
     path: str | Path,
     references: dict[str, float] | None = None,
     lb_hz: float | None = None,
-    snr_threshold: float = 8.0,
+    snr_threshold: float = _DEFAULT_SNR_THRESHOLD,
     extract_dir: str | Path | None = None,
 ) -> BrukerProcessResult:
     """Process a Bruker directory tree (or zip archive) into an ExperimentalNmr.
@@ -555,8 +695,12 @@ def bruker_result_to_text(result: BrukerProcessResult) -> str:
 
 
 __all__ = [
+    "AcquisitionSpectrum",
     "BrukerProcessResult",
     "ProcessedSpectrum",
+    "ProcessingProvenance",
+    "ProcessingQuality",
+    "SpectralLine",
     "bruker_result_to_text",
     "find_bruker_experiments",
     "process_bruker_experiment",
