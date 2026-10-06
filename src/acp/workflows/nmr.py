@@ -41,6 +41,23 @@ from acp.io.structures import (
     TopologyUnavailableError,
     capture_nmr_topology,
 )
+from acp.nmr.analysis_revision import (
+    AnalysisRevision,
+    EvidenceHashMismatchError,
+    NmrAnalysisSnapshot,
+    PeakEdit,
+    PeakEditError,
+    PeakRevision,
+    analysis_evidence_hash,
+    analysis_result_identity,
+    apply_peak_edits,
+    experiment_peak_digest,
+    review_only_status,
+    revision_identity,
+    utc_now_iso,
+    verify_evidence_hash,
+    write_revision_record,
+)
 from acp.nmr.assignment import (
     collect_residual_inputs,
     match_assigned,
@@ -2752,6 +2769,299 @@ def _compute_candidate_dp5(
 
 
 # ---------------------------------------------------------------------------
+# Pure-analysis stages (shared by the full run and the revision entry, todo 47)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _ProbabilityStage:
+    """Stage-7 product: sensitivity verdict + whether the DP5 model loaded."""
+
+    sensitivity: dict[str, Any]
+    dp5_model_present: bool
+
+
+@dataclass(frozen=True)
+class _ReportStage:
+    """Stage-8 product: the report object + aggregated DP5 provenance."""
+
+    report: NmrReport
+    dp5_mode: str
+    fchl_kernel: str
+    dp5_modes: tuple[dict[str, Any], ...]
+
+
+def _score_candidate_probabilities(
+    candidate_results: list[CandidateResult],
+    candidates: list[Structure],
+    final_shieldings_by_candidate: list[list[ConformerShielding]],
+    experiment: ExperimentalNmr,
+    nmr_config: NmrConfig,
+    em: Any,
+) -> _ProbabilityStage:
+    """Stage 7: evidence gate, DP4/DP5 probabilities and the sensitivity verdict.
+
+    Pure analysis over already-computed shieldings/residuals — never runs QC.
+    Shared by the full workflow and the analysis-only revision path (todo 47).
+    """
+    actual_error_model = em.model_id
+    log_likelihoods = [
+        compute_dp4(
+            {
+                nuc: [a.residual for a in cr.assignments if _nucleus_of_element(a.element) == nuc]
+                for nuc in nmr_config.nuclei
+            },
+            em,
+        )
+        for cr in candidate_results
+    ]
+    _apply_evidence_comparability_gate(candidate_results)
+    statuses = [
+        cr.evidence.status if cr.evidence is not None else "valid" for cr in candidate_results
+    ]
+    dp4_probs = normalize_dp4_gated(log_likelihoods, statuses)
+
+    # DP5 (G05/G07): the real Goodman KDE model only when its assets load.
+    # Missing assets → status "unavailable" + probability None (never a
+    # fabricated placeholder value). The placeholder path is explicit-only
+    # (error_model=placeholder-*) and writes the separately-named
+    # ``dp5_diagnostic_score``; DP5 needs ¹³C evidence, otherwise
+    # "not_applicable" without invoking the model.
+    dp5_placeholder_requested = nmr_config.error_model.startswith("placeholder")
+    dp5_model = None
+    dp5_unavailable_reason: str | None = None
+    if not dp5_placeholder_requested:
+        if not dp5_model_available():
+            dp5_unavailable_reason = "dp5_model_unavailable"
+        else:
+            try:
+                dp5_model = load_dp5_model()
+            except Exception as exc:  # pragma: no cover - asset-load robustness
+                logger.warning("Goodman DP5 model load failed (%s); DP5 unavailable", exc)
+                dp5_unavailable_reason = "dp5_model_load_failed"
+    dp5_model_id = "placeholder-dp5" if dp5_placeholder_requested else "goodman-dp5"
+    dp5_model_version = (
+        str(getattr(dp5_model, "model_id", "goodman-dp5"))
+        if dp5_model is not None
+        else actual_error_model
+    )
+
+    for cr, p4 in zip(candidate_results, dp4_probs):
+        evidence_status = cr.evidence.status if cr.evidence is not None else "valid"
+        exclusion_reasons = tuple(cr.evidence.exclusion_reasons) if cr.evidence is not None else ()
+        if p4 is None:
+            # excluded by the evidence gate — a probability is never fabricated
+            cr.dp4_probability = None
+            cr.dp5_probability = None
+            cr.dp5_diagnostic_score = None
+            cr.dp5_kernel = None
+            cr.probability = CandidateProbability(
+                dp4=ProbabilityResult(
+                    model_id="goodman-dp4",
+                    model_version=actual_error_model,
+                    status=evidence_status,
+                    probability=None,
+                    mode=None,
+                    calibration_status=evidence_status,
+                    reasons=exclusion_reasons,
+                ),
+                dp5=ProbabilityResult(
+                    model_id=dp5_model_id,
+                    model_version=dp5_model_version,
+                    status="unavailable",
+                    probability=None,
+                    mode=None,
+                    calibration_status="not_evaluated",
+                    reasons=exclusion_reasons or ("dp5_probability_unavailable",),
+                ),
+            )
+            continue
+        residual_by_nuc = {
+            nuc: [a.residual for a in cr.assignments if _nucleus_of_element(a.element) == nuc]
+            for nuc in nmr_config.nuclei
+        }
+        cr.dp4_probability = float(p4)
+        cr.dp5_probability = None
+        cr.dp5_diagnostic_score = None
+        cr.dp5_kernel = None
+        dp5_reasons: tuple[str, ...] = ()
+        if dp5_model is not None:
+            if not residual_by_nuc.get("13C"):
+                # no ¹³C residuals for this candidate — DP5 does not apply
+                dp5_status = "not_applicable"
+                dp5_calibration = "not_evaluated"
+                candidate_dp5_mode = None
+                dp5_reasons = ("no_carbon_evidence",)
+            else:
+                outcome = _compute_candidate_dp5(cr, candidates[cr.index], nmr_config, dp5_model)
+                if outcome.status == "invalid":
+                    # zero complete conformers — typed invalid, never a
+                    # silently averaged value; mode/kernel stay unset and a
+                    # None probability already excludes the candidate
+                    cr.dp5_probability = None
+                    dp5_status = "invalid"
+                    dp5_calibration = "not_evaluated"
+                    candidate_dp5_mode = None
+                    fallback_reason = (
+                        outcome.diagnostics[0].get("fallback_reason")
+                        if outcome.diagnostics
+                        else None
+                    )
+                    dp5_reasons = (
+                        str(fallback_reason) if fallback_reason else "no_complete_conformers",
+                    )
+                else:
+                    cr.dp5_probability = outcome.probability
+                    if cr.dp5_probability is None:
+                        dp5_status = "unavailable"
+                        dp5_calibration = "not_evaluated"
+                        candidate_dp5_mode = None
+                        dp5_reasons = ("dp5_probability_unavailable",)
+                    else:
+                        dp5_status = "valid"
+                        dp5_calibration = "goodman_kde"
+                        candidate_dp5_mode = outcome.mode
+                        cr.dp5_kernel = outcome.kernel or None
+        elif dp5_placeholder_requested:
+            # explicit placeholder mode only — renamed to a diagnostic so it
+            # can never masquerade as a probability in reports or ranking
+            cr.dp5_diagnostic_score = float(
+                dp5_log_to_probability(compute_dp5(residual_by_nuc, em))
+            )
+            dp5_status = "placeholder"
+            dp5_calibration = "placeholder_parameters"
+            candidate_dp5_mode = "fallback"
+            dp5_reasons = ("placeholder_error_model",)
+        else:
+            # assets missing / load failed — report honestly, compute nothing
+            dp5_status = "unavailable"
+            dp5_calibration = "not_evaluated"
+            candidate_dp5_mode = None
+            dp5_reasons = (dp5_unavailable_reason or "dp5_model_unavailable",)
+        cr.probability = CandidateProbability(
+            dp4=ProbabilityResult(
+                model_id="goodman-dp4",
+                model_version=actual_error_model,
+                status=evidence_status,
+                probability=cr.dp4_probability,
+                mode=None,
+                calibration_status=evidence_status,
+                reasons=exclusion_reasons,
+            ),
+            dp5=ProbabilityResult(
+                model_id=dp5_model_id,
+                model_version=dp5_model_version,
+                status=dp5_status,
+                probability=cr.dp5_probability,
+                mode=candidate_dp5_mode,
+                calibration_status=dp5_calibration,
+                reasons=dp5_reasons,
+            ),
+        )
+    # todo 30 / G09: winner stability under leave-one-conformer-out and
+    # ±10 % temperature — a wobbling conclusion is marked, not hidden.
+    sensitivity = _sensitivity_analysis(
+        candidates,
+        candidate_results,
+        final_shieldings_by_candidate,
+        experiment,
+        nmr_config,
+        em,
+    )
+    if sensitivity.get("requires_review"):
+        logger.warning(
+            "NMR sensitivity: conclusion marked for review (%s)",
+            ", ".join(str(flag) for flag in sensitivity.get("flags", [])),
+        )
+    return _ProbabilityStage(
+        sensitivity=sensitivity,
+        dp5_model_present=dp5_model is not None,
+    )
+
+
+def _build_nmr_report(
+    candidates: list[Structure],
+    candidate_results: list[CandidateResult],
+    nmr_config: NmrConfig,
+    em: Any,
+    generated_ensembles: list[bool],
+    dp5_model_present: bool,
+    sensitivity: dict[str, Any],
+) -> _ReportStage:
+    """Stage 8: aggregate DP5 modes + protocol verdict into the report object.
+
+    Pure analysis — never runs QC. Shared by the full workflow and the
+    analysis-only revision path (todo 47).
+    """
+    actual_error_model = em.model_id
+    # Per-candidate DP5 modes come from each candidate's own immutable
+    # outcome (G07), never from shared model-object state.
+    real_dp5: list[tuple[int, str, str | None]] = []
+    for cr in candidate_results:
+        prob = cr.probability
+        if prob is not None and prob.dp5.status == "valid" and prob.dp5.mode is not None:
+            real_dp5.append((cr.index, prob.dp5.mode, cr.dp5_kernel))
+    dp5_mode_set = {mode for _, mode, _ in real_dp5}
+    if not dp5_mode_set:
+        dp5_mode = "fallback"
+        fchl_kernel = ""
+    elif len(dp5_mode_set) == 1:
+        dp5_mode = next(iter(dp5_mode_set))
+        kernel_set = {kernel or "" for _, _, kernel in real_dp5}
+        fchl_kernel = next(iter(kernel_set)) if len(kernel_set) == 1 else ""
+    else:
+        dp5_mode = "mixed"
+        fchl_kernel = ""
+    dp5_modes = tuple(
+        {"index": index, "mode": mode, "kernel": kernel} for index, mode, kernel in real_dp5
+    )
+
+    # Stage 7/8 boundary (todo 29): record what actually ran per candidate
+    # and surface the protocol verdict (mode + calibration_status).
+    protocol_specs = [
+        _protocol_spec_for_candidate(
+            nmr_config,
+            structure,
+            generation_executed=generated_ensembles[idx],
+            error_model=actual_error_model,
+            dp5_model_id=(cr.probability.dp5.model_id if cr.probability is not None else None),
+            dp5_mode=cr.probability.dp5.mode if cr.probability is not None else None,
+            dp5_model_present=dp5_model_present,
+        )
+        for idx, (structure, cr) in enumerate(zip(candidates, candidate_results, strict=True))
+    ]
+    protocol_block = aggregate_protocol_block(protocol_specs)
+    logger.info(
+        "NMR protocol verdict: mode=%s calibration_status=%s issues=%s fingerprint=%s",
+        protocol_block["mode"],
+        protocol_block["calibration_status"],
+        protocol_block["issues"],
+        protocol_block["fingerprint"],
+    )
+    report_config = replace(nmr_config, protocol_fingerprint=str(protocol_block["fingerprint"]))
+
+    report = NmrReport(
+        candidates=candidate_results,
+        config=report_config,
+        error_model=actual_error_model,
+        dp5_mode=dp5_mode,
+        metadata={
+            "n_candidates": len(candidate_results),
+            "fchl_kernel": fchl_kernel,
+            "protocol_id": str(protocol_block["fingerprint"]),
+            "protocol": protocol_block,
+            "sensitivity": sensitivity,
+        },
+    )
+    return _ReportStage(
+        report=report,
+        dp5_mode=dp5_mode,
+        fchl_kernel=fchl_kernel,
+        dp5_modes=dp5_modes,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Top-level entry
 # ---------------------------------------------------------------------------
 
@@ -3123,238 +3433,34 @@ def run_nmr_analysis(
 
     # Stage 7: DP4 / DP5 — evidence gate first (G05): candidates without
     # comparable valid evidence never enter the normalization.
-    log_likelihoods = [
-        compute_dp4(
-            {
-                nuc: [a.residual for a in cr.assignments if _nucleus_of_element(a.element) == nuc]
-                for nuc in nmr_config.nuclei
-            },
-            em,
-        )
-        for cr in candidate_results
-    ]
-    _apply_evidence_comparability_gate(candidate_results)
-    statuses = [
-        cr.evidence.status if cr.evidence is not None else "valid" for cr in candidate_results
-    ]
-    dp4_probs = normalize_dp4_gated(log_likelihoods, statuses)
-
-    # DP5 (G05/G07): the real Goodman KDE model only when its assets load.
-    # Missing assets → status "unavailable" + probability None (never a
-    # fabricated placeholder value). The placeholder path is explicit-only
-    # (error_model=placeholder-*) and writes the separately-named
-    # ``dp5_diagnostic_score``; DP5 needs ¹³C evidence, otherwise
-    # "not_applicable" without invoking the model.
-    dp5_placeholder_requested = nmr_config.error_model.startswith("placeholder")
-    dp5_model = None
-    dp5_unavailable_reason: str | None = None
-    if not dp5_placeholder_requested:
-        if not dp5_model_available():
-            dp5_unavailable_reason = "dp5_model_unavailable"
-        else:
-            try:
-                dp5_model = load_dp5_model()
-            except Exception as exc:  # pragma: no cover - asset-load robustness
-                logger.warning("Goodman DP5 model load failed (%s); DP5 unavailable", exc)
-                dp5_unavailable_reason = "dp5_model_load_failed"
-    dp5_model_id = "placeholder-dp5" if dp5_placeholder_requested else "goodman-dp5"
-    dp5_model_version = (
-        str(getattr(dp5_model, "model_id", "goodman-dp5"))
-        if dp5_model is not None
-        else actual_error_model
-    )
-
-    for cr, p4 in zip(candidate_results, dp4_probs):
-        evidence_status = cr.evidence.status if cr.evidence is not None else "valid"
-        exclusion_reasons = tuple(cr.evidence.exclusion_reasons) if cr.evidence is not None else ()
-        if p4 is None:
-            # excluded by the evidence gate — a probability is never fabricated
-            cr.dp4_probability = None
-            cr.dp5_probability = None
-            cr.dp5_diagnostic_score = None
-            cr.dp5_kernel = None
-            cr.probability = CandidateProbability(
-                dp4=ProbabilityResult(
-                    model_id="goodman-dp4",
-                    model_version=actual_error_model,
-                    status=evidence_status,
-                    probability=None,
-                    mode=None,
-                    calibration_status=evidence_status,
-                    reasons=exclusion_reasons,
-                ),
-                dp5=ProbabilityResult(
-                    model_id=dp5_model_id,
-                    model_version=dp5_model_version,
-                    status="unavailable",
-                    probability=None,
-                    mode=None,
-                    calibration_status="not_evaluated",
-                    reasons=exclusion_reasons or ("dp5_probability_unavailable",),
-                ),
-            )
-            continue
-        residual_by_nuc = {
-            nuc: [a.residual for a in cr.assignments if _nucleus_of_element(a.element) == nuc]
-            for nuc in nmr_config.nuclei
-        }
-        cr.dp4_probability = float(p4)
-        cr.dp5_probability = None
-        cr.dp5_diagnostic_score = None
-        cr.dp5_kernel = None
-        dp5_reasons: tuple[str, ...] = ()
-        if dp5_model is not None:
-            if not residual_by_nuc.get("13C"):
-                # no ¹³C residuals for this candidate — DP5 does not apply
-                dp5_status = "not_applicable"
-                dp5_calibration = "not_evaluated"
-                candidate_dp5_mode = None
-                dp5_reasons = ("no_carbon_evidence",)
-            else:
-                outcome = _compute_candidate_dp5(cr, candidates[cr.index], nmr_config, dp5_model)
-                if outcome.status == "invalid":
-                    # zero complete conformers — typed invalid, never a
-                    # silently averaged value; mode/kernel stay unset and a
-                    # None probability already excludes the candidate
-                    cr.dp5_probability = None
-                    dp5_status = "invalid"
-                    dp5_calibration = "not_evaluated"
-                    candidate_dp5_mode = None
-                    fallback_reason = (
-                        outcome.diagnostics[0].get("fallback_reason")
-                        if outcome.diagnostics
-                        else None
-                    )
-                    dp5_reasons = (
-                        str(fallback_reason) if fallback_reason else "no_complete_conformers",
-                    )
-                else:
-                    cr.dp5_probability = outcome.probability
-                    if cr.dp5_probability is None:
-                        dp5_status = "unavailable"
-                        dp5_calibration = "not_evaluated"
-                        candidate_dp5_mode = None
-                        dp5_reasons = ("dp5_probability_unavailable",)
-                    else:
-                        dp5_status = "valid"
-                        dp5_calibration = "goodman_kde"
-                        candidate_dp5_mode = outcome.mode
-                        cr.dp5_kernel = outcome.kernel or None
-        elif dp5_placeholder_requested:
-            # explicit placeholder mode only — renamed to a diagnostic so it
-            # can never masquerade as a probability in reports or ranking
-            cr.dp5_diagnostic_score = float(
-                dp5_log_to_probability(compute_dp5(residual_by_nuc, em))
-            )
-            dp5_status = "placeholder"
-            dp5_calibration = "placeholder_parameters"
-            candidate_dp5_mode = "fallback"
-            dp5_reasons = ("placeholder_error_model",)
-        else:
-            # assets missing / load failed — report honestly, compute nothing
-            dp5_status = "unavailable"
-            dp5_calibration = "not_evaluated"
-            candidate_dp5_mode = None
-            dp5_reasons = (dp5_unavailable_reason or "dp5_model_unavailable",)
-        cr.probability = CandidateProbability(
-            dp4=ProbabilityResult(
-                model_id="goodman-dp4",
-                model_version=actual_error_model,
-                status=evidence_status,
-                probability=cr.dp4_probability,
-                mode=None,
-                calibration_status=evidence_status,
-                reasons=exclusion_reasons,
-            ),
-            dp5=ProbabilityResult(
-                model_id=dp5_model_id,
-                model_version=dp5_model_version,
-                status=dp5_status,
-                probability=cr.dp5_probability,
-                mode=candidate_dp5_mode,
-                calibration_status=dp5_calibration,
-                reasons=dp5_reasons,
-            ),
-        )
-    stages_completed.append("probability")
-    # todo 30 / G09: winner stability under leave-one-conformer-out and
-    # ±10 % temperature — a wobbling conclusion is marked, not hidden.
-    sensitivity = _sensitivity_analysis(
-        candidates,
+    probability_stage = _score_candidate_probabilities(
         candidate_results,
+        candidates,
         final_shieldings_by_candidate,
         experiment,
         nmr_config,
         em,
     )
-    if sensitivity.get("requires_review"):
-        logger.warning(
-            "NMR sensitivity: conclusion marked for review (%s)",
-            ", ".join(str(flag) for flag in sensitivity.get("flags", [])),
-        )
+    sensitivity = probability_stage.sensitivity
+    stages_completed.append("probability")
     if progress_reporter is not None:
         progress_reporter.complete_stage("dp4_dp5_probability")
         progress_reporter.start_stage("nmr_report")
 
     # Stage 8: report — per-candidate DP5 modes come from each candidate's
     # own immutable outcome (G07), never from shared model-object state.
-    real_dp5: list[tuple[int, str, str | None]] = []
-    for cr in candidate_results:
-        prob = cr.probability
-        if prob is not None and prob.dp5.status == "valid" and prob.dp5.mode is not None:
-            real_dp5.append((cr.index, prob.dp5.mode, cr.dp5_kernel))
-    dp5_mode_set = {mode for _, mode, _ in real_dp5}
-    if not dp5_mode_set:
-        dp5_mode = "fallback"
-        fchl_kernel = ""
-    elif len(dp5_mode_set) == 1:
-        dp5_mode = next(iter(dp5_mode_set))
-        kernel_set = {kernel or "" for _, _, kernel in real_dp5}
-        fchl_kernel = next(iter(kernel_set)) if len(kernel_set) == 1 else ""
-    else:
-        dp5_mode = "mixed"
-        fchl_kernel = ""
-    dp5_modes = [
-        {"index": index, "mode": mode, "kernel": kernel} for index, mode, kernel in real_dp5
-    ]
-
-    # Stage 7/8 boundary (todo 29): record what actually ran per candidate
-    # and surface the protocol verdict (mode + calibration_status).
-    protocol_specs = [
-        _protocol_spec_for_candidate(
-            nmr_config,
-            structure,
-            generation_executed=generated_ensembles[idx],
-            error_model=actual_error_model,
-            dp5_model_id=(cr.probability.dp5.model_id if cr.probability is not None else None),
-            dp5_mode=cr.probability.dp5.mode if cr.probability is not None else None,
-            dp5_model_present=dp5_model is not None,
-        )
-        for idx, (structure, cr) in enumerate(zip(candidates, candidate_results, strict=True))
-    ]
-    protocol_block = aggregate_protocol_block(protocol_specs)
-    logger.info(
-        "NMR protocol verdict: mode=%s calibration_status=%s issues=%s fingerprint=%s",
-        protocol_block["mode"],
-        protocol_block["calibration_status"],
-        protocol_block["issues"],
-        protocol_block["fingerprint"],
+    report_stage = _build_nmr_report(
+        candidates,
+        candidate_results,
+        nmr_config,
+        em,
+        generated_ensembles,
+        probability_stage.dp5_model_present,
+        sensitivity,
     )
-    report_config = replace(nmr_config, protocol_fingerprint=str(protocol_block["fingerprint"]))
-
-    report = NmrReport(
-        candidates=candidate_results,
-        config=report_config,
-        error_model=actual_error_model,
-        dp5_mode=dp5_mode,
-        metadata={
-            "n_candidates": len(candidate_results),
-            "fchl_kernel": fchl_kernel,
-            "protocol_id": str(protocol_block["fingerprint"]),
-            "protocol": protocol_block,
-            "sensitivity": sensitivity,
-        },
-    )
+    report = report_stage.report
+    fchl_kernel = report_stage.fchl_kernel
+    dp5_modes = list(report_stage.dp5_modes)
     reports_dir = storage.result_category_dir("reports")
     paths = write_all_reports(report, reports_dir)
     stages_completed.append("report")
@@ -3396,7 +3502,7 @@ def run_nmr_analysis(
         "fchl_kernel": fchl_kernel,
         "stages": stages_completed,
         "giao_resource_budget": giao_budget,
-        "protocol": protocol_block,
+        "protocol": report.metadata.get("protocol"),
         "sensitivity": sensitivity,
         "outputs": {
             "json": str(paths["json"]),
@@ -3469,6 +3575,209 @@ def run_nmr_analysis(
     )
 
 
+def _report_relative_path(path: Path | str, reports_root: Path) -> str:
+    """Report path relative to the reports root when possible (POSIX)."""
+    candidate = Path(path)
+    try:
+        return candidate.relative_to(reports_root).as_posix()
+    except ValueError:
+        return str(candidate)
+
+
+def revise_nmr_analysis(
+    snapshot: NmrAnalysisSnapshot,
+    edits: Sequence[PeakEdit],
+    *,
+    output_dir: str | Path | None = None,
+    require_review: bool | None = None,
+) -> WorkflowResult:
+    """Recompute ONLY the pure-analysis stages for manually revised peaks (todo 47).
+
+    Reuses the snapshot's cached per-conformer shieldings — no conformer
+    generation, no GIAO/ORCA subprocess, no WORK/ QC artifacts. The base
+    report is preserved; a NEW revision report is written under
+    ``<reports>/revisions/<revision_id>/`` together with an explicit
+    :class:`AnalysisRevision` record linking ``report_before`` →
+    ``report_after``. A changed original-evidence hash invalidates the
+    revision (:class:`EvidenceHashMismatchError`, reported as a failed
+    result with ``revision_status="invalidated"``) — never a silent
+    recompute on stale shieldings. When review is required (derived from
+    the sensitivity verdict or forced via *require_review*), the result
+    carries the EXISTING ``WAITING_REVIEW`` review-only semantics; no new
+    lifecycle entry point is introduced.
+    """
+    try:
+        actual_evidence_hash = analysis_evidence_hash(
+            snapshot.candidates,
+            snapshot.conformer_shieldings,
+            snapshot.nmr_config,
+            protocol_id=snapshot.protocol_id,
+            error_model_id=snapshot.error_model_id,
+            dp5_model_id=snapshot.dp5_model_id,
+        )
+        verify_evidence_hash(snapshot.evidence_hash, actual_evidence_hash)
+    except EvidenceHashMismatchError as exc:
+        logger.error("NMR analysis revision refused: %s", exc)
+        return WorkflowResult(
+            status="failed",
+            stages_completed=[],
+            error=str(exc),
+            metadata={
+                "revision_status": "invalidated",
+                "expected_evidence_hash": exc.expected,
+                "actual_evidence_hash": exc.actual,
+            },
+        )
+
+    try:
+        revised_experiment = apply_peak_edits(snapshot.experiment, edits)
+    except PeakEditError as exc:
+        logger.error("NMR analysis revision rejected: %s", exc)
+        return WorkflowResult(
+            status="failed",
+            stages_completed=[],
+            error=str(exc),
+            metadata={"revision_status": "rejected"},
+        )
+
+    peak_revision = PeakRevision(
+        base_digest=experiment_peak_digest(snapshot.experiment),
+        revised_digest=experiment_peak_digest(revised_experiment),
+        edits=tuple(edits),
+        reason=next((edit.reason for edit in edits if edit.reason), ""),
+    )
+    revision_id = revision_identity(
+        base_evidence_hash=snapshot.evidence_hash,
+        peak_revision=peak_revision,
+        protocol_id=snapshot.protocol_id,
+        error_model_id=snapshot.error_model_id,
+        dp5_model_id=snapshot.dp5_model_id,
+    )
+    reports_root = snapshot.base_report_path.parent
+    revision_dir = (
+        Path(output_dir) if output_dir is not None else reports_root / "revisions" / revision_id
+    )
+
+    nmr_config = snapshot.nmr_config
+    try:
+        validate_error_model_binding(nmr_config)
+        em = load_error_model(nmr_config.error_model)
+    except ValueError as exc:
+        logger.error("NMR analysis revision failed: %s", exc)
+        return WorkflowResult(
+            status="failed",
+            stages_completed=[],
+            error=str(exc),
+            metadata={"revision_status": "failed"},
+        )
+
+    candidates = list(snapshot.candidates)
+    final_shieldings_by_candidate = [list(group) for group in snapshot.conformer_shieldings]
+    candidate_results: list[CandidateResult] = []
+    for idx, structure in enumerate(candidates):
+        candidate_result = _analyze_candidate(
+            idx, structure, final_shieldings_by_candidate[idx], revised_experiment, nmr_config
+        )
+        candidate_result.ensemble_quality = snapshot.ensemble_qualities[idx]
+        candidate_results.append(candidate_result)
+
+    probability_stage = _score_candidate_probabilities(
+        candidate_results,
+        candidates,
+        final_shieldings_by_candidate,
+        revised_experiment,
+        nmr_config,
+        em,
+    )
+    report_stage = _build_nmr_report(
+        candidates,
+        candidate_results,
+        nmr_config,
+        em,
+        list(snapshot.generated_ensembles),
+        probability_stage.dp5_model_present,
+        probability_stage.sensitivity,
+    )
+    paths = write_all_reports(report_stage.report, revision_dir)
+    result_identity = analysis_result_identity(report_stage.report)
+    requires_review = (
+        require_review
+        if require_review is not None
+        else bool(probability_stage.sensitivity.get("requires_review"))
+    )
+    revision = AnalysisRevision(
+        revision_id=revision_id,
+        base_evidence_hash=snapshot.evidence_hash,
+        peak_revision=peak_revision,
+        protocol_id=snapshot.protocol_id,
+        error_model_id=snapshot.error_model_id,
+        dp5_model_id=snapshot.dp5_model_id,
+        report_before=_report_relative_path(snapshot.base_report_path, reports_root),
+        report_after=_report_relative_path(paths["json"], reports_root),
+        result_identity=result_identity,
+        created_at=utc_now_iso(),
+        requires_review=requires_review,
+        review_status=review_only_status(requires_review) or "",
+    )
+    write_revision_record(revision_dir, revision, index_root=revision_dir.parent)
+
+    report = report_stage.report
+    winner = report.winner
+    summary = {
+        "status": "completed",
+        "revision": revision.as_dict(),
+        "n_candidates": len(candidate_results),
+        "winner": (
+            {
+                "index": winner.index,
+                "label": winner.label,
+                "dp4": winner.dp4_probability,
+                "dp5": winner.dp5_probability,
+            }
+            if winner is not None
+            else None
+        ),
+        "dp4_ranking": report.dp4_ranking,
+        "dp5_mode": report_stage.dp5_mode,
+        "dp5_modes": list(report_stage.dp5_modes),
+        "fchl_kernel": report_stage.fchl_kernel,
+        "error_model": em.model_id,
+        "review_required": revision.requires_review,
+        "review_status": revision.review_status or None,
+        "outputs": {
+            "json": str(paths["json"]),
+            "xlsx": str(paths["xlsx"]) if paths["xlsx"] else None,
+            "plots": [str(plot) for plot in paths["plots"]],
+        },
+    }
+    summary_path = revision_dir / "nmr_summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return WorkflowResult(
+        status="completed",
+        stages_completed=["analysis_revision", "report"],
+        metadata={
+            "revision_id": revision_id,
+            "revision_dir": str(revision_dir),
+            "revision_report": str(paths["json"]),
+            "revision_xlsx": str(paths["xlsx"]) if paths["xlsx"] else None,
+            "revision_summary": str(summary_path),
+            "base_report": str(snapshot.base_report_path),
+            "base_evidence_hash": snapshot.evidence_hash,
+            "result_identity": result_identity,
+            "report_before": revision.report_before,
+            "report_after": revision.report_after,
+            "n_candidates": len(candidate_results),
+            "winner": summary["winner"],
+            "dp5_mode": report_stage.dp5_mode,
+            "fchl_kernel": report_stage.fchl_kernel,
+            "error_model": em.model_id,
+            "review_required": revision.requires_review,
+            "review_status": revision.review_status or None,
+        },
+    )
+
+
 def _nucleus_of_element(element: str) -> str:
     sym = (element or "").strip()
     if not sym:
@@ -3478,4 +3787,4 @@ def _nucleus_of_element(element: str) -> str:
     return defaults.get(sym, f"1{sym}")
 
 
-__all__ = ["NMR_STAGES", "run_nmr_analysis"]
+__all__ = ["NMR_STAGES", "revise_nmr_analysis", "run_nmr_analysis"]

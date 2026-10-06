@@ -1719,6 +1719,8 @@ MIGRATION_STATION_PREFIXES = (
     # acp-nmr-goodman-gap todo 37: FCHL ≥86-atom fragment path (openbabel
     # radius-3 fragmentation + frag_reps residual-index correspondence).
     "src/acp/nmr/fchl.py",
+    # acp-nmr-goodman-gap todo 47: revision-scoped recomputation.
+    "src/acp/nmr/analysis_revision.py",
     # acp-nmr-goodman-gap todo 44: proton spectrum processor.
     "src/acp/nmr/proton_processor.py",
     # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
