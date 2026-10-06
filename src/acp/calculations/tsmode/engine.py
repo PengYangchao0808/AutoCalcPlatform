@@ -74,6 +74,11 @@ __all__ = ["TsmodeEngine", "TsmodeEngineResult", "compute_engine_fingerprint"]
 
 _CHECKPOINT_NAME = "tsmode_checkpoint.json"
 _EXECUTION_STATUSES = ("pending", "running", "completed", "failed")
+#: Artifact types that may carry the final frequency table, best first.
+#: ORCA's ``QCResult.output_file`` (type ``"output"``) names the ``.inp``
+#: route file — it never contains the table — so type priority alone is
+#: not enough when artifacts arrive in interface field order.
+_FREQUENCY_LOG_ARTIFACT_TYPES: tuple[str, ...] = ("frequency_log", "log", "output")
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,11 +245,24 @@ class TsmodeEngine:
         for symbol, row in zip(bundle.elements, optimized_coords):
             geometry_lines.append(f"{symbol:2s} {row[0]:15.10f} {row[1]:15.10f} {row[2]:15.10f}")
 
-        pending_report = self._report(request, bundle, resolution, attempts,
-            execution_status="running", optimization_status="completed", frequency_status="pending",
-            frequencies=None, warnings=warnings)
-        self._publish(root, result_dir, pending_report,
-            optimized_xyz="\n".join(geometry_lines) + "\n", normal_modes=None)
+        pending_report = self._report(
+            request,
+            bundle,
+            resolution,
+            attempts,
+            execution_status="running",
+            optimization_status="completed",
+            frequency_status="pending",
+            frequencies=None,
+            warnings=warnings,
+        )
+        self._publish(
+            root,
+            result_dir,
+            pending_report,
+            optimized_xyz="\n".join(geometry_lines) + "\n",
+            normal_modes=None,
+        )
 
         # 4. frequency_final — same level, on the final structure.
         frequency_status = "pending"
@@ -464,19 +482,34 @@ class TsmodeEngine:
     def _parse_frequency_products(
         result: CalculationResult,
     ) -> tuple[dict[int, float], dict[int, NDArray[np.float64]]]:
-        """Parse the final-frequency log into (frequency map, mode vectors)."""
-        log_path = next(
-            (
-                Path(artifact.path)
-                for artifact in result.artifacts
-                if artifact.type in ("log", "frequency_log", "output")
-            ),
-            None,
+        """Parse the final-frequency log into (frequency map, mode vectors).
+
+        Candidates are ordered by artifact-type priority
+        (``frequency_log`` > ``log`` > ``output``), then by ``.out``
+        suffix, then by artifact order; every existing candidate is parsed
+        until one yields a non-empty frequency map.  The ``.out`` rule
+        matters because ORCA's type ``"output"`` artifact is the ``.inp``
+        route file (interface field order puts it before the real log).
+        """
+        candidates = [
+            (artifact.type, Path(artifact.path))
+            for artifact in result.artifacts
+            if artifact.type in _FREQUENCY_LOG_ARTIFACT_TYPES
+        ]
+        candidates.sort(
+            key=lambda item: (
+                _FREQUENCY_LOG_ARTIFACT_TYPES.index(item[0]),
+                0 if item[1].suffix.lower() == ".out" else 1,
+            )
         )
-        if log_path is None or not log_path.is_file():
-            return {}, {}
-        text = log_path.read_text(encoding="utf-8", errors="replace")
-        return parse_ts_frequency_map(text), parse_ts_mode_vectors(text)
+        for _artifact_type, path in candidates:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            frequency_map = parse_ts_frequency_map(text)
+            if len(frequency_map) > 0:
+                return frequency_map, parse_ts_mode_vectors(text)
+        return {}, {}
 
     def _mode_correspondence_evidence(
         self,
@@ -665,10 +698,15 @@ class TsmodeEngine:
                 label="TS Mode optimized structure (saddle-point candidate)",
                 path="tsmode/optimized.xyz",
                 kind=ProductKind.STRUCTURE,
-                metadata={"role": "transition_state", "candidate": "tsmode",
-                          "optimization_status": "converged", "source_kind": "optimization",
-                          "frequency_status": report.frequency_status,
-                          "validation": report.validation, "policy_version": 1},
+                metadata={
+                    "role": "transition_state",
+                    "candidate": "tsmode",
+                    "optimization_status": "converged",
+                    "source_kind": "optimization",
+                    "frequency_status": report.frequency_status,
+                    "validation": report.validation,
+                    "policy_version": 1,
+                },
             )
         if normal_modes is not None:
             manifest.add_product(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -117,8 +119,7 @@ class TestResolveTarget:
         # two-mode degenerate subspace can explain the printed vector.
         mixed = rng.normal(size=modes.shape[1:])
         corrupted = {
-            k: (mixed if k == max(freq_map) else np.asarray(v))
-            for k, v in mode_map.items()
+            k: (mixed if k == max(freq_map) else np.asarray(v)) for k, v in mode_map.items()
         }
         corrupt_out = tmp_path / "corrupt.out"
         write_out_file(corrupt_out, coords, freq_map, corrupted)
@@ -140,17 +141,13 @@ class TestLaunchGate:
             tmp_path, frequencies_cm1=freqs, seed=13, mode_seed=21
         )
         bundle = load_bundle_from_files(out_path, hess_path)
-        resolution = resolve_target_mode(
-            bundle, bundle.imaginary_modes()[0].source_mode_index
-        )
+        resolution = resolve_target_mode(bundle, bundle.imaginary_modes()[0].source_mode_index)
         with pytest.raises(TsmodeError) as excinfo:
             enforce_launch_gate(resolution, require_verified=True, orca_version="6.0.1")
         assert excinfo.value.error_code == MODE_MAPPING_AMBIGUOUS
 
     def test_unverified_version_blocked_by_default(self, bundle):
-        resolution = resolve_target_mode(
-            bundle, bundle.imaginary_modes()[0].source_mode_index
-        )
+        resolution = resolve_target_mode(bundle, bundle.imaginary_modes()[0].source_mode_index)
         assert TS_MODE_MAPPING_VERIFIED_VERSIONS == frozenset()
         with pytest.raises(TsmodeError) as excinfo:
             enforce_launch_gate(resolution, require_verified=True, orca_version="6.0.1")
@@ -158,9 +155,7 @@ class TestLaunchGate:
         assert "P0" in excinfo.value.detail or "verified" in excinfo.value.detail
 
     def test_optout_allows_unverified(self, bundle):
-        resolution = resolve_target_mode(
-            bundle, bundle.imaginary_modes()[0].source_mode_index
-        )
+        resolution = resolve_target_mode(bundle, bundle.imaginary_modes()[0].source_mode_index)
         enforce_launch_gate(resolution, require_verified=False, orca_version=None)
 
     def test_verified_version_matrix_allows(self, bundle, monkeypatch):
@@ -175,3 +170,33 @@ class TestLaunchGate:
         )
         assert resolution.evidence["verified_against_orca"] == "6.0"
         enforce_launch_gate(resolution, require_verified=True, orca_version="6.0.1")
+
+
+class TestRealFixtureCorrespondence:
+    """Selected-frequency-index ↔ mode correspondence on the frozen bundle."""
+
+    FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "qc" / "orca61"
+
+    @pytest.fixture()
+    def real_bundle(self):
+        directory = self.FIXTURE_DIR
+        return load_bundle_from_files(directory / "ts_opt.out", directory / "ts_opt.hess")
+
+    def test_imaginary_index_maps_to_lowest_eigenvalue(self, real_bundle):
+        mode = real_bundle.mode_by_index(6)
+        assert mode is not None
+        assert mode.frequency_cm1 == pytest.approx(-1122.09, abs=0.01)
+        assert mode.is_imaginary
+        resolution = resolve_target_mode(real_bundle, 6)
+        assert resolution.status == "resolved"
+        assert resolution.optimizer_mode_index == 0
+        assert resolution.evidence["best_overlap"] > 0.99
+        assert resolution.evidence["best_eigen_frequency_cm1"] == pytest.approx(-1122.09, abs=0.5)
+        assert resolution.mapping_version == MAPPING_VERSION
+        # Nonlinear TS geometry → external rank 6 → six zero modes removed.
+        assert resolution.evidence["n_zero_modes_removed"] == 6
+
+    def test_non_imaginary_index_rejected(self, real_bundle):
+        with pytest.raises(TsmodeError) as excinfo:
+            resolve_target_mode(real_bundle, 7)
+        assert excinfo.value.error_code == TARGET_MODE_INVALID

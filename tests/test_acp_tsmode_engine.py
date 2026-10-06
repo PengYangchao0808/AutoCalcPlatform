@@ -66,9 +66,7 @@ def _ok_frequency_result(frequencies, vectors=None, log_text=None, tmp_path=None
     if log_text is not None and tmp_path is not None:
         log_path = tmp_path / "freq_final.out"
         log_path.write_text(log_text, encoding="utf-8")
-    artifacts = (
-        [ArtifactRef(path=log_path, type="log")] if log_path is not None else []
-    )
+    artifacts = [ArtifactRef(path=log_path, type="log")] if log_path is not None else []
     return CalculationResult(
         energy=-100.6,
         frequencies=list(frequencies),
@@ -94,10 +92,7 @@ class TestEngineHappyPath:
         )
         final_freqs = {index: freq for index, freq in enumerate(positives)}
         final_freqs[len(positives)] = -430.0
-        final_vectors = {
-            mode.source_mode_index: np.asarray(mode.vectors)
-            for mode in bundle.modes
-        }
+        final_vectors = {mode.source_mode_index: np.asarray(mode.vectors) for mode in bundle.modes}
         freq_log = tmp_path / "final.out"
         write_out_file(
             freq_log,
@@ -114,16 +109,10 @@ class TestEngineHappyPath:
 
         def fake_frequency(req):
             calls["frequency"] = req
-            return _ok_frequency_result(
-                list(final_freqs.values()), log_text=None, tmp_path=None
-            )
+            return _ok_frequency_result(list(final_freqs.values()), log_text=None, tmp_path=None)
 
-        monkeypatch.setattr(
-            "acp.calculations.tsmode.engine.run_optimize", fake_optimize
-        )
-        monkeypatch.setattr(
-            "acp.calculations.tsmode.engine.run_frequency", fake_frequency
-        )
+        monkeypatch.setattr("acp.calculations.tsmode.engine.run_optimize", fake_optimize)
+        monkeypatch.setattr("acp.calculations.tsmode.engine.run_frequency", fake_frequency)
 
         engine = TsmodeEngine(config={})
         result = engine.run(_request(), bundle, tmp_path / "task")
@@ -134,16 +123,12 @@ class TestEngineHappyPath:
         assert (result_dir / "tsmode_report.json").is_file()
         assert (result_dir / "optimized.xyz").is_file()
         assert (result_dir / "normal_modes.json").is_file()
-        manifest = json.loads(
-            (tmp_path / "task" / "RESULT" / "result_manifest.json").read_text()
-        )
+        manifest = json.loads((tmp_path / "task" / "RESULT" / "result_manifest.json").read_text())
         product_ids = {product["id"] for product in manifest["products"]}
         assert "tsmode_optimized" in product_ids
         assert "tsmode_normal_modes" in product_ids
         assert "tsmode_report" in product_ids
-        structure = next(
-            p for p in manifest["products"] if p["id"] == "tsmode_optimized"
-        )
+        structure = next(p for p in manifest["products"] if p["id"] == "tsmode_optimized")
         assert structure["metadata"]["role"] == "transition_state"
 
         report = json.loads((result_dir / "tsmode_report.json").read_text())
@@ -167,7 +152,11 @@ class TestEngineHappyPath:
         assert optimize_req.resources["ts_mode"] == 0
         assert optimize_req.resources["initial_hessian"] == "read"
         assert optimize_req.resources["structure_kind"] == "ts"
-        assert Path(optimize_req.resources["hess_file"]).name == "source.hess"
+        staged_hess = Path(optimize_req.resources["hess_file"])
+        assert staged_hess == input_dir / "source.hess"
+        # Raw-byte handoff: the path handed to transition_state_opt is the
+        # STAGED snapshot, byte-identical to the bundle's source Hessian.
+        assert staged_hess.read_bytes() == Path(bundle.hessian_file).read_bytes()
 
     def test_frequency_stage_resume_skips_optimize(self, tmp_path, bundle, monkeypatch):
         optimized = np.asarray(bundle.coordinates_angstrom) + 0.01
@@ -207,14 +196,68 @@ class TestEngineHappyPath:
         assert len(frequency_calls) == 2
 
 
+class TestParseFrequencyProducts:
+    FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "qc" / "orca61"
+
+    def test_out_log_not_shadowed_by_output_inp(self, tmp_path):
+        # ORCA interface field order: type "output" = .inp route file (no
+        # frequency table), type "log" = .out with the real table. The old
+        # first-match selection grabbed the .inp and returned ({}, {}).
+        inp = tmp_path / "freq.inp"
+        inp.write_text(
+            "! r2SCAN-3c OptTS NumFreq\n%pal nprocs 4 end\n\n"
+            "* xyz 0 1\nC   0.0000000000   0.0000000000   0.0000000000\n*\n",
+            encoding="utf-8",
+        )
+        out = self.FIXTURE_DIR / "ts_opt.out"
+        result = CalculationResult(
+            status="completed",
+            artifacts=[
+                ArtifactRef(path=inp, type="output"),
+                ArtifactRef(path=out, type="log"),
+            ],
+        )
+        frequency_map, vectors = TsmodeEngine._parse_frequency_products(result)
+        assert len(frequency_map) > 0
+        assert set(frequency_map) == {6, 7, 8}
+        assert frequency_map[6] == pytest.approx(-1122.09, abs=0.01)
+        assert 6 in vectors
+        assert vectors[6].shape == (3, 3)
+
+    def test_single_output_artifact_behavior_unchanged(self, tmp_path):
+        # One matched artifact still wins even when it is the table-less
+        # .inp — same ({}, {}) outcome as before the fix.
+        inp = tmp_path / "freq.inp"
+        inp.write_text("! r2SCAN-3c OptTS NumFreq\n", encoding="utf-8")
+        result = CalculationResult(
+            status="completed",
+            artifacts=[ArtifactRef(path=inp, type="output")],
+        )
+        assert TsmodeEngine._parse_frequency_products(result) == ({}, {})
+
+    def test_missing_log_falls_through_to_existing_output(self, tmp_path):
+        # type "log" path missing on disk → the existing .out-suffixed
+        # type "output" artifact must still be parsed.
+        out = self.FIXTURE_DIR / "ts_opt.out"
+        result = CalculationResult(
+            status="completed",
+            artifacts=[
+                ArtifactRef(path=tmp_path / "vanished.out", type="log"),
+                ArtifactRef(path=out, type="output"),
+            ],
+        )
+        frequency_map, vectors = TsmodeEngine._parse_frequency_products(result)
+        assert len(frequency_map) > 0
+        assert frequency_map[6] == pytest.approx(-1122.09, abs=0.01)
+        assert vectors
+
+
 class TestEngineFailures:
     def test_gate_blocks_when_verification_required(self, tmp_path, bundle, monkeypatch):
         def must_not_run(req):
             raise AssertionError("optimize must not run behind the gate")
 
-        monkeypatch.setattr(
-            "acp.calculations.tsmode.engine.run_optimize", must_not_run
-        )
+        monkeypatch.setattr("acp.calculations.tsmode.engine.run_optimize", must_not_run)
         engine = TsmodeEngine(config={})
         with pytest.raises(TsmodeError) as excinfo:
             engine.run(_request(require_verified_mapping=True), bundle, tmp_path / "t")
@@ -223,9 +266,7 @@ class TestEngineFailures:
     def test_optimize_failure_publishes_failed_report(self, tmp_path, bundle, monkeypatch):
         monkeypatch.setattr(
             "acp.calculations.tsmode.engine.run_optimize",
-            lambda req: CalculationResult(
-                status="failed", errors=["ORCA crashed [crash_timeout]"]
-            ),
+            lambda req: CalculationResult(status="failed", errors=["ORCA crashed [crash_timeout]"]),
         )
         engine = TsmodeEngine(config={})
         result = engine.run(_request(), bundle, tmp_path / "task")
@@ -238,9 +279,7 @@ class TestEngineFailures:
         assert report["frequency_status"] == "skipped"
         assert not (tmp_path / "task" / "RESULT" / "tsmode" / "optimized.xyz").exists()
 
-    def test_optimize_success_frequency_failure_is_recoverable(
-        self, tmp_path, bundle, monkeypatch
-    ):
+    def test_optimize_success_frequency_failure_is_recoverable(self, tmp_path, bundle, monkeypatch):
         optimized = np.asarray(bundle.coordinates_angstrom) + 0.01
         monkeypatch.setattr(
             "acp.calculations.tsmode.engine.run_optimize",
@@ -248,9 +287,7 @@ class TestEngineFailures:
         )
         monkeypatch.setattr(
             "acp.calculations.tsmode.engine.run_frequency",
-            lambda req: CalculationResult(
-                status="failed", errors=["SCF failure"]
-            ),
+            lambda req: CalculationResult(status="failed", errors=["SCF failure"]),
         )
         engine = TsmodeEngine(config={})
         engine.run(_request(), bundle, tmp_path / "task")
@@ -261,9 +298,7 @@ class TestEngineFailures:
         assert report["frequency_status"] == "failed"
         assert report["validation"]["classification"] == "not_verified"
         checkpoint = json.loads(
-            (
-                tmp_path / "task" / "WORK" / "tsmode" / "tsmode_checkpoint.json"
-            ).read_text()
+            (tmp_path / "task" / "WORK" / "tsmode" / "tsmode_checkpoint.json").read_text()
         )
         assert checkpoint["optimization"]["status"] == "completed"
         assert "frequency" not in checkpoint or checkpoint["frequency"]["status"] != "completed"
@@ -273,9 +308,7 @@ class TestFingerprint:
     def test_target_change_invalidates(self, bundle):
         from acp.calculations.tsmode.mode_mapping import resolve_target_mode
 
-        first = resolve_target_mode(
-            bundle, bundle.imaginary_modes()[0].source_mode_index
-        )
+        first = resolve_target_mode(bundle, bundle.imaginary_modes()[0].source_mode_index)
         second_mode = bundle.imaginary_modes()[1]
         second = resolve_target_mode(bundle, second_mode.source_mode_index)
         base = TsmodeOptimizationSettings(require_verified_mapping=False)
@@ -286,9 +319,7 @@ class TestFingerprint:
     def test_settings_change_invalidates(self, bundle):
         from acp.calculations.tsmode.mode_mapping import resolve_target_mode
 
-        resolution = resolve_target_mode(
-            bundle, bundle.imaginary_modes()[0].source_mode_index
-        )
+        resolution = resolve_target_mode(bundle, bundle.imaginary_modes()[0].source_mode_index)
         fp1 = compute_engine_fingerprint(
             bundle, resolution, TsmodeOptimizationSettings(recalc_hess=None)
         )

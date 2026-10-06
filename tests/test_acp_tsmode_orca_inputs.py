@@ -16,9 +16,7 @@ SYMBOLS = ["H", "O", "H"]
 
 class TestTsGeomBlockHessianRead:
     def test_hess_file_emits_inhess_read(self):
-        block = ts_geom_block(
-            "read", 0, 0.15, ts_mode=2, hess_file_name="source.hess"
-        )
+        block = ts_geom_block("read", 0, 0.15, ts_mode=2, hess_file_name="source.hess")
         assert "InHess Read" in block
         assert 'InHessName "source.hess"' in block
         assert "TS_Mode {M 2} end" in block
@@ -49,12 +47,13 @@ class TestTransitionStateOptHessStaging:
     @pytest.fixture()
     def hess_source(self, tmp_path):
         source = tmp_path / "upstream.hess"
-        source.write_text("$atoms\n1\nH 1.0\n", encoding="utf-8")
+        source.write_text(
+            "$atoms\n1\nH 1.007 0.0 0.0 0.0\n$hessian\n1\n1.0\n$act_energy\n  -100.123456\n",
+            encoding="utf-8",
+        )
         return source
 
-    def test_hess_staged_and_referenced(
-        self, tmp_path, interface, hess_source, monkeypatch
-    ):
+    def test_hess_staged_and_referenced(self, tmp_path, interface, hess_source, monkeypatch):
         captured = {}
 
         def fake_run_orca(inp, out, output_callback=None):
@@ -76,12 +75,20 @@ class TestTransitionStateOptHessStaging:
         )
         staged = work / "ts.hess"
         assert staged.is_file()
-        assert staged.read_text(encoding="utf-8") == hess_source.read_text(encoding="utf-8")
+        # Byte-identical raw copy: unparsed sections ($act_energy, …) survive
+        # staging — the Python-side matrix is never re-flattened.
+        assert staged.read_bytes() == hess_source.read_bytes()
+        assert b"$act_energy" in staged.read_bytes()
         text = captured["inp"]
         assert "InHess Read" in text
         assert 'InHessName "ts.hess"' in text
         assert "TS_Mode {M 1} end" in text
         assert "Calc_Hess true" not in text
+        # The ORCA input references the staged file only — no $hessian
+        # section or matrix values re-emitted into the input.
+        assert "$hessian" not in text
+        assert "$orca_hessian" not in text
+        assert "$act_energy" not in text
         assert result.output_file is not None
 
     def test_calculate_with_hess_rejected(self, tmp_path, interface, hess_source):
