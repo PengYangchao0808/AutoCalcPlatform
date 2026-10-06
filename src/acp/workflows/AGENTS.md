@@ -14,7 +14,7 @@ workflows/
 ├── batch_optimize.py        # `acp run BatchOptimize` — per-item Opt/TS + freq + SP + thermochemistry
 ├── irc.py                   # `acp run irc` — TS → IRC both directions → endpoint classification
 ├── tsmode.py                # `acp run tsmode` — 选虚频 → 源 Hessian → 定向 OptTS → 验证
-├── nmr.py                   # `acp run nmr` — conformer search → GIAO → Boltzmann averaging → DP4/DP5
+├── nmr.py                   # `acp run nmr` — 输入/谱处理 → conformer search → GIAO → Boltzmann averaging → 归属 → DP4/DP5（证据门/协议 spec/诊断/报告）；另含 revise_nmr_analysis（峰值修订只重算分析）
 ├── xtb_path.py              # `acp run XtbPathSearch` — GFN2-xTB PATH metadynamics (frozen pes2ts_xtb_path_request_v1)
 ├── orca_gradient.py         # `acp run OrcaGradient` — ORCA EnGrad (frozen pes2ts_orca_gradient_request_v1)
 ├── ensemble.py              # RETIRED engine — CREST → CENSO preset+screening；仍作 Confsearch 协议引擎
@@ -32,7 +32,7 @@ workflows/
 | Batch optimize | `batch_optimize.py` | 编排 `acp/calculations/batch/engine.py`；批量底层 `cccp.calculation.batch` |
 | IRC | `irc.py` | 经 `acp.calculations.primitives.irc` 转发到 `cccp.calculation.tasks.irc`；端点分类 `cccp/calculation/irc_endpoints.py` |
 | TS mode | `tsmode.py` | 编排 `acp/calculations/tsmode/engine.py` |
-| NMR | `nmr.py` | 直连 `cccp.calculation.tasks.{conformer_search,censo_refine,nmr_shielding}`（TaskContext/typed contracts）|
+| NMR | `nmr.py` | `run_nmr_analysis` + `revise_nmr_analysis`（AnalysisRevision，谱峰修订只重算分析不重跑 QC）；直连 `cccp.calculation.tasks.{conformer_search,censo_refine,nmr_shielding}`（TaskContext/typed contracts）|
 | XtbPathSearch | `xtb_path.py` | `run_xtb_path_search()` 薄封套 → `cccp.calculation.tasks.xtb_path_search.run_xtb_path_search`（TaskContext/typed errors）|
 | OrcaGradient | `orca_gradient.py` | `run_orca_gradient()` 薄封套 → `cccp.calculation.tasks.orca_gradient.run_orca_gradient` |
 | Confsearch 协议引擎 | `ensemble.py` / `xtbmd_censo_energy.py` | `confsearch/protocols/` 懒加载复用（勿删）；helper 共享于 `energy_shared.py` |

@@ -27,7 +27,7 @@ src/acp/
 ├── storage/              # result_manifest v2 写入（含 electronic-state product kinds）
 ├── core/  backends/  chem/  intake/  io/      # 通用机制 / 纯 re-export shim（→ cccp.backends）/ 化学 / 摄入 / 结构 I/O
 ├── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
-├── nmr/                  # DP4/DP5、平均、缩放/归属、FCHL、谱图、报告
+├── nmr/                  # DP4/DP5、平均、缩放/归属、FCHL、谱图/处理、协议/证据门、报告、修订/诊断、DP5q 隔离（25 模块；见 nmr/AGENTS.md）
 ├── api/                  # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
 └── scheduler/            # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
 frontend/                 # ACP_Workbench_v2.html（v1 遗留）；js/ 含 structure_viewer/structure_editor/vibration_viewer/structure_source_picker/task_input_workspace/candidate_details/job_editor
@@ -47,7 +47,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 | `src/acp/chem/AGENTS.md` | RDKit embedding + composition |
 | `src/acp/core/AGENTS.md` | Structure/WorkflowRunner/Registry/State/Config |
 | `src/acp/intake/AGENTS.md` | 文件解析器（6 格式） |
-| `src/acp/nmr/AGENTS.md` | DP4/DP5 + FCHL + 谱图 + 报告 |
+| `src/acp/nmr/AGENTS.md` | DP4/DP5 + FCHL + 谱图/处理 + 协议/证据门 + 报告 + 修订/诊断 + DP5q 隔离 |
 | `src/acp/scheduler/AGENTS.md` | Job 生命周期、持久化、stage_tasks |
 | `src/acp/scheduler/remote/AGENTS.md` | LSF 远程执行：SSH/SFTP/bsub/bjobs/结果拉取 |
 | `src/acp/workflows/AGENTS.md` | 工作流实现 + registry（14 active） |

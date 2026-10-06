@@ -79,7 +79,7 @@ ACP 的前端文件树采用**本地磁盘直接映射**（后端 `build_manifes
 | 工作流 | 产物根（调度器任务） | 说明 |
 |---|---|---|
 | ensemble / energy / xtbmd_censo_energy | 任务根 `WORK/{02_SEARCH,03_OPT}` + `RESULT/` | `RESULT/{structures,energies,ensembles}/` 经 `energy_shared.write_final_outputs` 统一收口；历史 `finalDFT/` 仅只读兼容 |
-| nmr | 任务根（本就平铺） | `nmr_report.json`、`nmr_assignment.xlsx`、plots；`nmr_summary.json` |
+| nmr | `RESULT/reports/`（`storage.result_category_dir("reports")`） | `nmr_report.json`、`nmr_summary.json`、`nmr_assignment.xlsx`（可选）、`plots/*.png`；旧任务根平铺布局仅只读兼容 |
 | simple (singlepoint/optimize/frequency/xtb-optimize) | 任务根 `WORK/<stage>` | `optimized.xyz`、`energy.json`、`frequencies.txt`、`thermo.json` |
 | scan | 任务根 `RESULT/trajectories/` + `RESULT/structures/` | `scan_trajectory.json`、逐帧 XYZ |
 | irc | 任务根 `RESULT/irc/` | `irc_forward.xyz`、`irc_reverse.xyz`、`irc_report.json` |

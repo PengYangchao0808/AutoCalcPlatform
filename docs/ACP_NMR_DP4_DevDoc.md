@@ -2,7 +2,7 @@
 
 **版本:** v0.4
 **日期:** 2026-08-07
-**状态:** P0/P1a/P1b/P2/P3/P4-代码完成（P4 代码 + 资产 + 运行时切换 + 测试已落地；真实 ORCA 冒烟与 P1.5 数据集验证待外部输入）；详见附录 A（P0+P1a）、附录 A-bis（P1b）、附录 A-ter（对等审计）、附录 B（P2）、附录 C（P3）、附录 D（FCHL-ML DP5 与完整对等性分析）
+**状态:** P0/P1a/P1b/P2/P3/P4-代码完成（P4 代码 + 资产 + 运行时切换 + 测试已落地）；**2026-10-06 更正**：level-1 真实 ORCA GIAO 连通性冒烟已执行（4 分子 + CREST/CENSO 链路；仅连通性/解析，**非**准确率；证据见 `.omo/evidence/acp-nmr-goodman-gap-remediation/`），P1.5 数据集校准验证仍未执行（NOT_VERIFIED）；gap §11 旧表述逐项更正见 §11.2，FCHL 验收状态见附录 D.9。详见附录 A（P0+P1a）、附录 A-bis（P1b）、附录 A-ter（对等审计）、附录 B（P2）、附录 C（P3）、附录 D（FCHL-ML DP5 与完整对等性分析）
 **作者:** QCcalc Team
 
 ====================================================================
@@ -41,7 +41,7 @@
 ### 1.3 为什么 ACP 适合做这件事
 
 计算化学位移的标准链路是三步：**构象搜索 → 每构象 GIAO 单点 → Boltzmann 加权平均**。
-ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛选），强于 Goodman 方案的 MM 构象搜索（MacroModel/Tinker）。因此本工作流只需在已有构象生成能力**之后接两段**：GIAO 计算 + DP4/DP5 概率统计。NMR 场景下构象生成走 censo-lite（筛选级）即可，无需 energy 工作流的高精度 DFT。
+ACP 已具备 CREST + CENSO 构象生成能力（`acp run Confsearch --protocol censo-crest`；旧 `acp run ensemble` 已退役），作为 Goodman 方案 MM 构象搜索（MacroModel/Tinker）的**替代计算协议**——相对准确率与校准迁移**待成对验证**（§11.2）。因此本工作流只需在已有构象生成能力**之后接两段**：GIAO 计算 + DP4/DP5 概率统计。NMR 场景下构象生成走 `censo-light`（筛选级，**不执行独立 DFT 优化**，详见 §5 阶段 2 与 D 阶段注记）即可，无需 energy 工作流的高精度 DFT。
 
 ### 1.4 目标效果（用户视角）
 
@@ -64,10 +64,10 @@ ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛�
 **关键文献：**
 - Smith & Goodman, *JACS* 2010, 132, 12946 — DP4 概率（DOI 10.1021/ja105035r）
 - Smith & Goodman, *J. Org. Chem.* 2009, 74, 4597 — GIAO 方法论（DOI 10.1021/jo900408d）
-- Howarth, Ermanis, Goodman, *Chem. Sci.* 2021, DOI 10.1039/D1SC04406K — DP5 + NMR-AI 自动化
-- Howarth, Ermanis, Goodman, *Chem. Sci.* 2020, 11, 4351 — DP4-AI（DOI 10.1039/D0SC00442A）
+- Howarth & Goodman, *Chem. Sci.* **2022**, 13, 3507–3518 — DP5 独立概率（DOI 10.1039/D1SC04406K；**不要把 DP4-AI 的作者表/年份移到 DP5**）
+- Howarth, Ermanis, Goodman, *Chem. Sci.* 2020, 11, 4351–4359 — DP4-AI 自动化（DOI 10.1039/D0SC00442A）
 
-**开源参考实现：** `Goodman-lab/DP5`（GitHub，MIT 许可）—— 工作流为：RDKit 清洗 → 非对映体/互变异构体生成 → MM 构象搜索（MacroModel/Tinker）→ DFT 优化 → GIAO → DP4/DP5 统计。ACP 用更强的构象搜索替换其 MM 段，统计核心可参考移植。
+**开源参考实现：** `Goodman-lab/DP5`（GitHub，MIT 许可）—— 工作流为：RDKit 清洗 → 非对映体/互变异构体生成 → MM 构象搜索（MacroModel/Tinker）→ DFT 优化 → GIAO → DP4/DP5 统计。ACP 用 CREST/CENSO **替代**其 MM 段（替代协议，准确率/校准迁移**待成对验证**，§11.2），统计核心参考固定上游实现移植。
 
 **缩放因子参考库：** CHESHIRE（Tantillo 组，cheshirenmr.info）—— 存储各方法/基组对的线性标定参数。
 
@@ -75,12 +75,12 @@ ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛�
 
 ## 3. 设计原则
 
-1. **复用构象生成**：不重写 CREST/CENSO，工作流在 `acp run ensemble`（censo-lite 协议）产出之上接 GIAO。NMR 只需筛选级几何 + 自由能，**刻意省略** energy 工作流的高精度 DFT handoff（opt+freq+SP+Shermo），避免冗余算力。
+1. **复用构象生成**：不重写 CREST/CENSO，工作流在 `run_ensemble_generation`（`censo-light` 预设）产出之上接 GIAO。NMR 用筛选级几何 + 自由能，**刻意省略** energy 工作流的高精度 DFT handoff（opt+freq+SP+Shermo）。注意：`censo-light` 只执行 prescreening/screening，**不含独立 DFT 几何优化段**（§5 D 阶段注记 / §11.2）。
 2. **单进程层在 cccp**：遵循 2026-08-02 治理原则——所有 subprocess（ORCA GIAO 调用、谱图处理）在 `cccp.qc.interfaces`，`acp/backends` 只做薄适配。
 3. **能力驱动**：新增 `NmrShieldingCalculator` Protocol（PEP 544），ORCABackend 声明该能力。
 4. **误差模型可替换**：DP4/DP5 依赖预训练误差分布，作为独立可替换组件，初始用占位模型。
 5. **输入多模**：已归属 / 未归属 / Bruker 原始三种实验谱输入，用户任选。
-6. **不做 ML 自动归属**：原始谱只做到峰拾取 + 匈牙利匹配，不引入神经网络归属（那是 NMR-AI 独立论文工作量）。
+6. **不做 ML 自动归属**：DP4-AI（Howarth/Ermanis/Goodman 2020）已实现原始谱自动处理与归属；ACP 当前是**另一种简化实现**（四层谱模型 + 碳/氢处理器 + 迭代归属，`carbon_processor.py`/`proton_processor.py`/`iterative_assignment.py`，不含神经网络），不构成相对 Goodman 的独有增强（§11.2）。
 
 ====================================================================
 
@@ -101,7 +101,7 @@ ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛�
         ║   对每个候选 k = 1..K：               ║
         ╠═══════════════════════════════════════╣
         ║  2  构象生成(ensemble +   【复用 ACP】  ║
-        ║     censo-lite) → {geom_i, w_i}        ║
+        ║     censo-light) → {geom_i, w_i}       ║
         ║                                       ║
         ║  3  每构象 GIAO NMR 单点 【新 cccp】   ║
         ║     → 每构象每核 σ_i                  ║
@@ -126,7 +126,7 @@ ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛�
         └──────────────────────────────────────────┘
 ```
 
-**算力分布**：阶段 2（构象搜索）和 3（每构象 GIAO）是算力大头，跑在 LSF 远程节点；阶段 4–8 是轻量 CPU 逻辑，本地即可。
+**算力分布**：阶段 2（构象搜索）和 3（每构象 GIAO）是算力大头。**以实际调度命令为准**：远端提交的是整个 `acp run nmr` CLI（`scheduler/runner.py::_build_nmr_cmd` / `remote/script_gen.py::build_remote_nmr_cmd_tail`），阶段 4–8 的统计与报告处理在**同一节点、同一进程**执行——不能按"计算节点只跑 QC、无需 scipy/openpyxl/matplotlib/nmrglue"安装依赖（`requirements-node.txt` 已含这些依赖，见 §11.2）。
 
 ====================================================================
 
@@ -179,13 +179,13 @@ ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛�
 
 ### 阶段 2：构象生成（每候选独立）【复用】
 
-**目的**：得到每个候选的低能构象集合及 Boltzmann 权重。这是 ACP 相对 Goodman 的核心优势。
+**目的**：得到每个候选的低能构象集合及 Boltzmann 权重。这是 ACP 采用的**替代协议**（并非已证实的准确率优势；协议转移待成对验证，§11.2）。
 
 **输入**：单个候选结构
 
-**处理**：直接复用 `acp run ensemble` 工作流，配 **`censo-lite` 协议**（CREST → CENSO 预筛+筛选），得到构象集合与 Boltzmann 权重。**不做** energy 工作流里那套精细 DFT（opt+freq+SP+Shermo）handoff——NMR 只需筛选级优化几何 + 自由能，高精度 DFT 是冗余开销。
+**处理**：复用 `run_ensemble_generation`（`acp/workflows/ensemble.py`；退役 CLI 引擎的内部复用）配 **`censo-light` 预设**（CREST → CENSO prescreening/screening），得到构象集合与 Boltzmann 权重。**不做** energy 工作流那套精细 DFT（opt+freq+SP+Shermo）handoff。现状要点：`censo-light` **不执行独立 DFT 优化**（`optimization_executed=False`）；`censo-zero` 不调用 CENSO；预建/外部 ensemble → `unknown`（绝不升级）。执行事实见 §5 D 阶段注记与 §11.2。
 
-**输出**：构象集合，每个构象含：CENSO 筛选级优化几何、相对自由能 ΔG、Boltzmann 权重 w
+**输出**：构象集合，每个构象含：CENSO 筛选级几何（**非**独立 DFT 优化产物）、相对自由能 ΔG（能量层级与缺失记录的排除规则见 D 阶段注记）、Boltzmann 权重 w
 
 **实现位置**：复用 `acp/workflows/ensemble.py`（`run_ensemble_generation`），强制 `preset=censo-light`。GIAO 工作流在其输出目录上接续。
 
@@ -430,7 +430,7 @@ nmr_data/
 | `boltzmann_temp` | 298.15 | Boltzmann 权重温度（K） |
 | `error_model` | `goodman-legacy` | 误差模型标识（见 §10） |
 | `conformer_source` | `ensemble` | 构象来源工作流（默认 ensemble） |
-| `conformer_preset` | `censo-light` | 构象生成协议；NMR 用筛选级即可，不走高精度 DFT |
+| `conformer_preset` | `censo-light` | 构象生成协议。`censo-light` = prescreening/screening（**不执行独立 DFT 优化**）；`censo-zero` = 直接用 CREST ensemble（不调用 CENSO）；非 `censo-zero` 预设再经 `run_censo_refine`（见 §5 D 阶段注记 / §11.2） |
 
 ====================================================================
 
@@ -470,6 +470,8 @@ nmr_data/
 }
 ```
 
+> **schema v2 增补（2026-10-06，todos 10–25/39/42）**：在保留上述键的同时新增 `schema_version: 2`、逐候选 `analysis_status`/`coverage`（期望/实际信号、布居）、类型化 `probability`（DP4/DP5 `status`/`probability=null`，缺失不落 0）、`diagnostics`（原子级风险与逐核 DP4，命名与校准概率分离）、顶层 `provenance`（校准状态、TMS 来源、R² 定义），`assignment` 行新增原始 `scaled_ppm`，以及 `processing_quality`（原始谱处理门/质量指标）。旧 v1 报告只读兼容，前端显示"历史报告：验证状态未知"，绝不自动升级或重写。
+
 ### 7.2 XLSX（`nmr_assignment.xlsx`）
 
 每候选一 sheet：原子 | 元素 | 实验 ppm | 计算 ppm | 残差 | 是否等价组 | 是否忽略。
@@ -477,7 +479,9 @@ nmr_data/
 ### 7.3 图表
 
 - `scatter_<nucleus>.png`：δ_calc vs δ_exp 散点 + 回归线（每候选一色）
-- `error_hist.png`：残差分布直方图
+- `error_hist.png`：残差分布直方图（逐核分开，符号约定 `scaled − exp`）
+
+**产物路径（2026-10-06 更正）**：报告与图表落 `RESULT/reports/`（图表在 `RESULT/reports/plots/`），`result_manifest.json` 中的路径以 `relative_to(RESULT)` 生成（如 `reports/nmr_report.json`）且写入前校验文件存在（缺文件不注册 + warning）；布局契约见 `docs/ACP_Job_File_Layout_Spec.md` §3 Zone B。
 
 ====================================================================
 
@@ -490,10 +494,10 @@ nmr_data/
 | 层级 | 方法/基组 | 用途 | ACP 是否需要 |
 |------|-----------|------|--------------|
 | **NMR** | **mPW1PW91 / 6-311G(d)** + GIAO | 各向同性磁屏蔽 σ | **需要**（核心） |
-| Opt | B3LYP / 6-31G(d,p) | 构象几何优化 | **不需要**（CENSO 替代） |
-| Energy | M062X / def2-TZVP | 单点能 → Boltzmann 权重 | **不需要**（CENSO 自由能替代） |
+| Opt | B3LYP / 6-31G(d,p) | 构象几何优化 | **不直接复用**；ACP 走 `censo-light` prescreening/screening（**不执行独立 DFT 优化**，§11.2） |
+| Energy | M062X / def2-TZVP | 单点能 → Boltzmann 权重 | **不直接复用**；ACP 用 CENSO 自由能（能量层级按实际执行记录，见 D 阶段注记） |
 
-**关键耦合**：Goodman 的误差模型（Student-t / KDE）是**针对 mPW1PW91/6-311G(d) 训练的**。换方法 = 换误差模型，否则概率失真。ORCA 支持 `mPW1PW91` 与 `6-311G(d)`，可**逐字复现**该层级，从而直接复用 Goodman 训练好的误差模型——这是采用 mPW1PW91/6-311G(d) 而非 wB97X-D4 的根本理由。
+**关键耦合**：Goodman 的误差模型（DP4 高斯 σ + DP5 KDE）是针对 mPW1PW91/6-311G(d) 训练的。换方法 = 换误差模型，否则概率失真。ORCA 支持 `mPW1PW91` 与 `6-311G(d)`，可复现该 **NMR 层级关键字**；但"可迁移复用误差模型"还需程序实现（ORCA vs Gaussian）、几何来源与权重层级的**成对验证**——相同层级只满足**部分必要条件**（§11.2）。这仍是采用 mPW1PW91/6-311G(d) 而非 wB97X-D4 的根本理由。
 
 **GIAO 输入**（Gaussian 原版 `nmr=giao`，ORCA 对应见 §9.2）：NMR 层级 + GIAO + PCM 溶剂（`scrf`）。
 
@@ -503,7 +507,7 @@ nmr_data/
 
 **InternalScaling**：δ_exp 对 δ_calc 的线性回归，得到 slope/intercept，残差 = δ_exp − δ_scaled。这是 DP4/DP5 概率的输入。
 
-**结论**：ACP 工作流把 Goodman 的"Opt + Energy + NMR"三层压缩为"CENSO 构象 + 单层 NMR"，NMR 层级必须保持 mPW1PW91/6-311G(d) 以复用误差模型。
+**结论**：ACP 工作流把 Goodman 的"Opt + Energy + NMR"三层压缩为"CENSO 构象 + 单层 NMR"；保持 mPW1PW91/6-311G(d) 是复用误差模型的必要条件之一（还需引擎/几何/权重/溶剂的成对验证，§11.2）。`censo-light` **不执行独立 DFT 优化**——该压缩对 DP5 适用域（要求 DFT 优化几何）的影响**未验证**。
 
 ### 8.1 Boltzmann 加权
 
@@ -544,7 +548,7 @@ residual r_i = δ_exp,i − δ_scaled,i
 ```
 L_k = Π_i  f(r_{k,i} | 核种类i)
 ```
-其中 f 是误差分布。**【源码核实 2026-08-07】** 原版 DP4 用 **Gaussian** 分布（`2·Φ(-|r/σ|)`，非早期草案所写的 Student-t），尺度参数 σ 按核种类：σ_H = 0.18731058105269952、σ_C = 2.269372270818724 ppm（`DP4.py:17-21` 实测值）。
+其中 f 是误差分布。**【源码核实 2026-08-07；2026-10-06 更正】** 固定上游 Python 版（`Goodman-lab/DP5@b6cf559`）的**默认分支**使用 **Gaussian** 双尾分布（`2·Φ(-|r/σ|)`）；早期官方工具（网页版）另提供正态/Student-t 选项并曾推荐 t 分布——**不能概括为"原版 DP4 只用 Gaussian"**（§11.2）。尺度参数 σ 按核种类：σ_H = 0.18731058105269952、σ_C = 2.269372270818724 ppm（`DP4.py:17-21` 实测值）。
 
 DP4 归一化：
 ```
@@ -557,7 +561,7 @@ P(DP4, k) = L_k / Σ_{j=1..K} L_j
 ```
 P(DP5, k) = Π_i g(|r_{k,i}|)
 ```
-g 由训练集折叠残差分布拟合（scipy `gaussian_kde`，**bandwidth = 0.025**，源码 `kde_probs(..., 0.025)`）。源码流程：`ProcessIsomers → InternalScaling → kde_probs → BoltzmannWeight_DP5 → Calculate_DP5 → Rescale_DP5`。P(DP5) 高 = 该候选独立可信；低 = 即便 DP4 高也存疑（候选集可能都不对）。**DP5 要求 DFT 优化几何**（源码硬校验：`o` 必须在 workflow）——ACP 由 CENSO 满足。
+g 的构造分三层（2026-10-06 更正，§11.2）：① **FCHL 相似度核宽度 σ = 0.025**（`FCHL_SIGMA`，用于逐原子相似度 `K_sim`）；② **逐原子/加权 KDE** 由 scipy `gaussian_kde(folded_errors[, weights=K_sim])` 的**默认带宽规则**（Scott）构造；③ 候选重标定资产（`c_w_kde_mean_s_0.025.p` / `i_w_kde_mean_s_0.025.p`）在 pickle 中各自保存自己的 `factor`（由各自数据集大小按 Scott 规则得到，实测 ≈0.183 / ≈0.154）。**不能把 0.025 写成所有原子 KDE 的固定带宽**。源码流程：`ProcessIsomers → InternalScaling → kde_probs → BoltzmannWeight_DP5 → Calculate_DP5 → Rescale_DP5`。P(DP5) 高 = 该候选独立可信；低 = 即便 DP4 高也存疑（候选集可能都不对）。**DP5 要求 DFT 优化几何**（源码硬校验：`o` 必须在 workflow）；ACP 现状：`censo-light` **不执行独立 DFT 优化**，`censo-zero` 不调用 CENSO，预建/外部 ensemble → `unknown`——"CENSO 已满足该前提"不成立，DP5 适用域与降级状态见 D 阶段注记 / §11.2 / 附录 D.9。
 
 ====================================================================
 
@@ -667,24 +671,24 @@ def nmr_shielding(self, coordinates, symbols, charge=0, multiplicity=1,
 
 ## 10. 误差模型
 
-DP4/DP5 概率依赖预训练误差分布。**核心约束：误差模型与 NMR 计算层级强耦合**——Goodman 的 t-分布/KDE 是针对 mPW1PW91/6-311G(d) 训练的（§8.0）。
+DP4/DP5 概率依赖预训练误差分布。**核心约束：误差模型与 NMR 计算层级强耦合**——Goodman 的 DP4 高斯 σ / DP5 KDE 是针对 mPW1PW91/6-311G(d) 训练的（§8.0）。
 
 ### 10.1 方案对比（修订）
 
-由于 §8.0 已确认我们采用 mPW1PW91/6-311G(d)（与 Goodman 完全一致），方案 A 的"系统误差不一致"问题**基本消除**：
+采用 mPW1PW91/6-311G(d)（与 Goodman NMR 层级一致）只满足**部分必要条件**；引擎（ORCA vs Gaussian）、几何来源（CENSO 筛选级 vs B3LYP 优化）、权重层级（CENSO ΔG vs SCF 电子能）与溶剂实现（CPCM vs SCRF）的差异**仍需成对验证**（§11.2；协议转移 harness 见 `tests/benchmark/nmr/`）。方案 A 的对价：
 
 | 方案 | 做法 | 优 | 劣 |
 |------|------|----|----|
-| **A. 复用 Goodman 模型（推荐）** | 直接用 DP5 仓库的 pickle/t-分布参数 | 最快，且因层级一致**精度有保障** | Gaussian→ORCA 仍有微小系统差，可后期标定 |
+| **A. 复用 Goodman 模型（推荐）** | 直接加载 DP5 仓库资产（Gaussian σ + KDE 训练数据） | 最快；层级一致只是**必要条件之一** | 程序/几何/权重差异使模型转移**未经验证**（§11.2） |
 | B. 自训模型 | 用 ORCA mPW1PW91/6-311G(d) 攒数据集重训 | 彻底消除 Gaussian/ORCA 差异 | 工作量大，需 NMRShiftDB 等数据集 |
 | C. 换层级（不推荐） | 用 wB97X-D4 等更强方法 | 几何/屏蔽更准 | **误差模型须同步重训**，否则概率失真，得不偿失 |
 
 ### 10.2 实现约定
 
 - 设计 `ErrorModel` 抽象（`load(path)` → `likelihood(residuals, nucleus) -> float`），P1a 用占位参数适配器，P1b 切换为 Goodman 模型文件适配器
-- **配置绑定校验**：`error_model` 与 `nmr_method/nmr_basis` 必须一致；mPW1PW91/6-311G(d) ↔ goodman-legacy，换方法须换模型，否则启动报错
-- DP4 用 **Gaussian**（`2·Φ(-|r/σ|)`，σ_C=2.269/σ_H=0.187，`DP4.py:17-21,190` 核实；早期草案误记为 Student-t，已纠正）
-- DP5 用 KDE（bandwidth 0.025，源码 `kde_probs(Isomers, DP5data, 0.025)`），折叠残差 |r|
+- **配置绑定校验**：`error_model` 与 `nmr_method/nmr_basis` 必须一致；mPW1PW91/6-311G(d) ↔ goodman-legacy，换方法须换模型，否则启动报错。注意：该校验只覆盖**名称必要条件**，不核对几何/能量层级/溶剂/引擎版本或训练域；协议完整性与适用性由 `NmrProtocolSpec` 与 reference-validation 门记录（§5 D 阶段注记 / §11.2）
+- DP4 用 **Gaussian**（`2·Φ(-|r/σ|)`，σ_C=2.269/σ_H=0.187，`DP4.py:17-21,190` 核实；**固定上游 Python 默认分支**；早期草案误记为 Student-t，已纠正——精确范围见 §8.5/§11.2）
+- DP5 用 KDE：逐原子/加权 KDE 取 `gaussian_kde` 的**默认带宽规则**（Scott）；`0.025` 是 FCHL 相似度核宽度与重标定资产命名，**不是**全局固定带宽（见 §8.6/§11.2）。折叠残差 |r|
 - 后续若要更高精度，走方案 B：用 ORCA 重训，换 pickle 即可，业务代码不动
 
 ### 10.3 TMS 参考标定
@@ -804,6 +808,26 @@ DP4/DP5 概率依赖预训练误差分布。**核心约束：误差模型与 NMR
 
 > 说明：P1 验收只要求"CLI 能跑 + 前端提交分支可下单（含双通道输入与单 job 语义）"；报告可视化属 P2，避免拖慢核心闭环。
 
+### 11.2 文档更正（gap §11 全表，2026-10-06）
+
+> 本节按 `.omo/evidence/acp-cccp-remediation/discovered/ACP_NMR_Goodman_Gap_Investigation_2026-10-05.md` §11
+> 逐行更正既有表述。**历史附录（A / A-bis / A-ter / B / C / D）保留为审计痕迹**，不静默重写；
+> 被更正的结论在本节汇总，正文对应位置带日期标注。未执行的校准 / 未测量的准确率一律标注
+> "未验证 / NOT_VERIFIED"，不做完成态断言。
+
+| # | 旧表述 | 更正（2026-10-06） | 落地位置 |
+|---|--------|--------------------|----------|
+| 1 | CREST/CENSO 构象搜索优于 Goodman MM 链，因而更准确 | 替代计算协议；**准确率与校准迁移待成对验证**（`tests/benchmark/nmr/` 的协议转移 harness 只提供隔离实验入口，真实结论待数据） | §1.3、§2、§5 阶段 2、附录 A-ter 表 |
+| 2 | CENSO 已满足 DP5 所需的 DFT 优化几何 | 区分预设：`censo-light` 仅 prescreening/screening、**不执行独立 DFT 优化**；`censo-zero` 不调用 CENSO；预建/外部 ensemble → `unknown`（绝不升级） | §5 阶段 2、§6.4、§8.0、§8.6、§5 D 阶段注记 |
+| 3 | 泛函与基组相同即可消除系统误差 | 相同层级只满足**部分必要条件**；引擎（ORCA vs Gaussian）、几何来源、权重层级、溶剂实现差异**仍需成对验证** | §8.0、§10.1、§10.2 |
+| 4 | ACP 独有未归属能力（旧叙事） | DP4-AI（Howarth/Ermanis/Goodman 2020）已有原始谱自动处理与归属；ACP 当前是**另一种简化实现**（四层谱模型 + 碳/氢处理器 + 迭代归属），非独有增强 | §3 设计原则 6、附录 D.4 |
+| 5 | DP4 分布只能是 Gaussian | 精确到**固定上游 Python 默认分支**（`Goodman-lab/DP5@b6cf559`，Gaussian 双尾）；早期官方工具另有正态/Student-t 选项并曾推荐 t 分布 | §8.5、§10.2、附录 A-bis.3 注 |
+| 6 | DP5 文献记为 Howarth/Ermanis/Goodman 2021 | 正式论文为 **Howarth & Goodman, *Chem. Sci.* 2022, 13, 3507–3518**（DOI 10.1039/D1SC04406K）；DP4-AI 的作者表/年份不得移到 DP5 | §2 关键文献 |
+| 7 | 0.025 为全部原子 KDE 的固定带宽 | 区分三者：**FCHL 相似度核宽度 σ = 0.025**（`FCHL_SIGMA`）；逐原子/加权 KDE 用 `gaussian_kde` **默认带宽规则**（Scott）；候选重标定资产各自保存自己的 `factor`（实测 ≈0.183/≈0.154，并非 0.025） | §8.6、§10.2、附录 A-bis.4 |
+| 8 | FCHL 代码完成即完整 DP5 等价 | 代码落地**不等于完整 DP5 等价**：单构象已入加权管线；≥86 原子碎片路径因出厂资产残差索引不匹配（2×63541≠106416）实测不可用（typed `residual-index-mismatch`，降级不静默）；真实 qml 编译核数值对照 NOT_VERIFIED；模型适用域未评测 | 附录 D.4 / D.7.6 / **D.9** |
+| 9 | 报告字段完整 | 补齐记录：旧 JSON 缺 `scaled_ppm`、完整有效配置与模型 provenance、逐候选概率状态、产物路径缺 `plots/`；schema v2 已新增上述键，旧报告只读兼容并显示"历史报告：验证状态未知" | §7.1 / §7.3、附录 D.8.2 |
+| 10 | NMR 分析一定运行在 head | 以实际调度命令为准：远端提交的是整个 `acp run nmr` CLI，统计/报告阶段与 QC 在**同一节点**执行；节点依赖必须覆盖 scipy/openpyxl/matplotlib/nmrglue（`requirements-node.txt`） | §4 算力分布、附录 A.4 注 |
+
 ====================================================================
 
 ## 12. 分步实施方案
@@ -830,7 +854,7 @@ DP4/DP5 概率依赖预训练误差分布。**核心约束：误差模型与 NMR
 1. **git 恢复**：恢复 `src/acp/nmr/{models,parser,calibration}.py`、`src/acp/reports/nmr_report.py`、`src/acp/workflows/nmr.py`、5 个测试文件（`test_acp_nmr_parser/calibration/reports`、`test_acp_workflows_nmr*`）；核对与现 catalog/config 的接口差异后改造。
 2. **cccp**：重写 `nmr_shielding()`（orca.py:918）+ 新增 `_write_nmr_input`（`%eprnmr` 绝对屏蔽、ORCA 版本分支、溶剂 CPCM）+ `NmrShieldingParser`（SUMMARY 表与 TENSOR 块双解析 cross-check，复用恢复的 `parse_orca_nmr_log` 正则）。
 3. **acp/backends**：恢复 `NMRCalculator`/`NmrShieldingCalculator` Protocol + ORCA 适配 + `CAPABILITY_MATRIX` 增 `nmr_shielding` 行（AVAILABLE）。
-4. **acp/nmr 新模块**：`io.py`（§6.2 文本格式）/ `equivalence.py`（RDKit 对称等价检测）/ `averaging.py` / `assignment.py`（已归属直通 + **未归属：等价检测→强度加权→匈牙利**，scipy）/ `scaling.py`（InternalScaling）/ `probability.py`（DP4 Student-t / DP5 KDE bandwidth 0.025，**先接占位参数**，模型文件接口不变）/ `error_model.py`（抽象 + 配置绑定校验）/ `report.py`（JSON+XLSX+图）。
+4. **acp/nmr 新模块**：`io.py`（§6.2 文本格式）/ `equivalence.py`（RDKit 对称等价检测）/ `averaging.py` / `assignment.py`（已归属直通 + **未归属：等价检测→强度加权→匈牙利**，scipy）/ `scaling.py`（InternalScaling）/ `probability.py`（P1a 历史计划曾按 Student-t 分布与固定 KDE 带宽假设编写，**后经源码核实修正**为：固定上游 Python 默认 Gaussian 双尾 + `gaussian_kde` 默认带宽（§8.5/§8.6）；**先接占位参数**，模型文件接口不变）/ `error_model.py`（抽象 + 配置绑定校验）/ `report.py`（JSON+XLSX+图）。
 5. **acp/workflows/nmr.py**：编排，复用 `run_ensemble_generation()`（censo-light）返回的 `StructureEnsemble`（`free_energy_hartree`=gtot、`weight`）。
 6. **接线**：catalog `nmr` 改 active + 填 schema（`conformer`+`giaoa` 两级）、registry 增条目、CLI `acp run nmr`、stage_tasks 增 provider。
 7. **前端提交分支**（§11.1，与 CLI 并行）：`#nmr-experiment-panel` + `#nmr-enumerate-row` + nuclei/error_model 小扩展 + `submitJobModal()` nmr 单 job 分支 + runner/script_gen 的 candidates/experiment 物化。
@@ -1106,9 +1130,11 @@ git HEAD 即存在，**与本次改动无关**）。
 4. **TMS 参考**：`NmrConfig.tms_shieldings` 默认 1H=31.75 / 13C=191.69（文献值）。
    回归 intercept 会吸收常数偏移，故 P1a 不影响相对 DP4；P1b 用 mPW1PW91/6-311G(d)
    重算 TMS 覆盖默认。
-5. **远程节点依赖**：scipy/matplotlib 已装入 head 节点 `.venv`。若分析阶段
-   （Boltzmann/匹配/概率/绘图）在 compute-01 上跑，需在该节点 Python 环境同步安装。
-   `scheduler/remote/sync.py` 只同步源码，不同步 site-packages。
+5. **远程节点依赖**：scipy/matplotlib 已装入 head 节点 `.venv`。**2026-10-06 更正**：
+   远端提交的是整个 `acp run nmr` CLI，分析阶段（Boltzmann/匹配/概率/绘图/XLSX）必定
+   在计算节点运行——节点依赖由 `requirements-node.txt` 声明（scipy/matplotlib/openpyxl/
+   nmrglue 已含，todo 32 同步；`scheduler/remote/sync.py` 只同步源码，site-packages 由
+   节点 bootstrap 安装）。不能按"节点只跑 QC"省略这些依赖。
 6. **`acp/nmr/enumerate.py`**：P2 非对映体枚举模块已存在（506 行，未跟踪），
    lint 通过（`# ruff: noqa: N803`），import OK。属 P2 交付物，本次 P1a 不验收。
 
@@ -1191,6 +1217,10 @@ NOTE: (空)                            # 不再有"relative only"告警
 | 4 | TMS：占位 31.75/191.69 | `TMSdata` mPW1PW91/6-311G(d)/CHCl3 = 32.124/188.452 | `lookup_tms_shieldings()` 查真实表 |
 | 5 | DP5：sigmoid 占位 | `DP5.py:98,356,381` KDE+gmean+rescale | `GoodmanDP5Model` 全流程（无 FCHL 回退路径） |
 
+> **2026-10-06 更正**：上表第 1 行的"Gaussian"结论精确到**固定上游 Python 默认分支**
+> （`Goodman-lab/DP5@b6cf559`）；早期官方工具（网页版）另有正态/Student-t 选项并曾
+> 推荐 t 分布——不可概括为"所有 DP4 只用 Gaussian"（§8.5/§11.2）。
+
 ### A-bis.4 模型资产
 
 `src/acp/nmr/models/`（25MB，MIT，NOTICE + LICENSE-DP5 致谢）：
@@ -1198,7 +1228,7 @@ NOTE: (空)                            # 不再有"relative only"告警
 | 文件 | 大小 | 用途 |
 |------|------|------|
 | `folded_scaled_errors.p` | 851KB | 106 416 折叠残差 → 每原子 DP5 KDE（`DP5.py:98` 回退路径） |
-| `c_w_kde_mean_s_0.025.p` | 80KB | "正确归属"加权 KDE（bandwidth 0.025） |
+| `c_w_kde_mean_s_0.025.p` | 80KB | "正确归属"加权重标定 KDE（资产自存 `factor`；`s_0.025` 为命名，**非** KDE 带宽，见 §8.6） |
 | `i_w_kde_mean_s_0.025.p` | 24MB | "错误归属"加权 KDE（`Rescale_DP5`） |
 | `tms_references.txt` | 4.6KB | TMS ¹³C/¹H 参考屏蔽（按 method/basis/solvent） |
 
@@ -1224,8 +1254,9 @@ NOTE: (空)                            # 不再有"relative only"告警
 
 > 经逐阶段对比 Goodman-lab/DP5 源码（`DP4.py`/`DP5.py`/`NMR.py`/`Gaussian.py`/
 > `PyDP4.py`）与 ACP 实现，发现并修复 **2 个 CRITICAL bug + 2 个 MEDIUM 偏差**。
-> 修复后 ACP 在 DP4 路径与 Goodman **数值级等价**；DP5 路径用 Goodman 文档的无
-> FCHL 回退（`DP5.py:98`），在该回退包络内。
+> 修复后 ACP 在 DP4 路径与 Goodman **代数层数值一致**（限固定残差集对照；
+> 2026-10-06 更正：不等于全链路"功能对等"）；DP5 路径用 Goodman 文档的无
+> FCHL 回退（`DP5.py:98`），在该回退包络内。范围界定见 §11.2。
 
 ### 审计结果总表
 
@@ -1233,13 +1264,13 @@ NOTE: (空)                            # 不再有"relative only"告警
 |---|------|--------------------------|----------|------|
 | 1 | GIAO 输入 | `nmr=giao scrf`（`Gaussian.py:357`） | `%eprnmr CPCM`（`orca.py:1181`） | ✅ 物理等价 |
 | 2 | 屏蔽解析 | `ReadShieldings`（`Gaussian.py:494`） | `NmrShieldingParser`（`orca.py:130`） | ✅ 匹配 |
-| 3 | 构象生成 | MacroModel/Tinker MM（`PyDP4.py:261`） | CREST+CENSO（`nmr.py:277`） | ✅ ACP 优势（刻意） |
-| 4 | Boltzmann 能源 | M062X SCF 电子能（`Gaussian.py:433`） | CENSO 自由能 gtot（`nmr.py:335`） | ⚠️ 刻意分歧（ACP 更严谨） |
+| 3 | 构象生成 | MacroModel/Tinker MM（`PyDP4.py:261`） | CREST+CENSO（`nmr.py:277`） | ⚠️ 替代协议（刻意）；准确率/校准迁移**待成对验证**（§11.2，2026-10-06 更正） |
+| 4 | Boltzmann 能源 | M062X SCF 电子能（`Gaussian.py:433`） | CENSO 自由能 gtot（`nmr.py:335`） | ⚠️ 刻意分歧（用自由能而非 SCF 电子能；相对优劣待成对评测，§11.2） |
 | 5 | 屏蔽平均 | `Σ w_i σ_i`（`NMR.py:314`） | 同（`averaging.py:60`） | ✅ 匹配 |
 | 6 | 内标定回归 | calc-on-exp OLS（`DP4.py:151`） | `fit_scaling_goodman` 同（`scaling.py:143`） | ✅ 精确匹配 |
 | 7 | DP4 概率 | Gaussian `2·Φ(-\|r/σ\|)`（`DP4.py:190`） | `GoodmanErrorModel erfc`（`error_model.py:155`） | ✅ 匹配 |
 | 8 | DP5 概率 | ¹³C-only + FCHL KDE + gmean + rescale（`DP5.py`） | ¹³C-only + 无FCHL KDE + 同公式（`error_model.py:197`） | ⚠️ 简化路径（Goodman 回退包络内） |
-| 9 | 归属匹配 | 全归属必须；sort-and-match（`NMR.py:543`） | 已归属直通 + 未归属匈牙利（`assignment.py:65`） | ✅ ACP 优势 |
+| 9 | 归属匹配 | 原版流程依赖全归属标注；sort-and-match（`NMR.py:543`） | 已归属直通 + 未归属匹配（迭代归属见 `iterative_assignment.py`） | ⚠️ 差异实现（DP4-AI 已有原始谱自动处理与归属；ACP 为简化实现，待评测；§11.2） |
 | 10 | 溶剂一致 | opt/energy/NMR 同溶剂（`Gaussian.py:357`） | CENSO+GIAO 同溶剂（`nmr.py:256`） | ✅ 匹配 |
 | 11 | 等价原子 | 不显式处理（依赖 MM 对称） | RDKit `CanonicalRankAtoms`（`equivalence.py:55`） | ✅ ACP 增强 |
 | 12 | TMS 换算 | `(σ_TMS-σ)/(1-σ_TMS/10⁶)`（`NMR.py:391`） | `σ_TMS-σ`（`averaging.py:153`） | ✅ 差异被回归吸收 |
@@ -1256,8 +1287,8 @@ NOTE: (空)                            # 不再有"relative only"告警
 ### 已知残留差异（刻意保留，不修复）
 
 1. **能源分歧**：ACP 用 CENSO 自由能（gtot），Goodman 用 M062X SCF 电子能。ACP
-   更严谨（含熵/热修正），但权重分布不同。**DevDoc §8.0 已论证**这是 ACP 的设计
-   优势，非缺陷。
+   使用另一能量层级（含熵/热修正），权重分布不同——这是**刻意的协议分歧**；
+   相对优劣**未经成对评测**，不构成设计优势结论（2026-10-06 更正，§11.2）。
 2. **DP5 无 FCHL ML**：Goodman 的核心创新是按原子 FCHL 相似度加权的 KDE
    （`DP5.py:85-108`），给每个原子量身定制的误差分布。ACP 用全局无权重 KDE
    （`DP5.py:98` 的 `sum(K_sim)==0` 回退路径）。**在 Goodman 文档的回退包络内**，
@@ -1265,7 +1296,9 @@ NOTE: (空)                            # 不再有"relative only"告警
 3. **DP4 分核报告**：Goodman 分别报 C-only / H-only / combined DP4（`DP4.py:337-358`）。
    ACP 只报 combined。**显示层差异，不影响结论**。
 4. **Gaussian↔ORCA 系统差**：即便 NMR 层级一致（mPW1PW91/6-311G(d)），GIAO 实现
-   + CPCM vs SCRF 有 ~0.5–1 ppm 系统偏移。**被内标定回归（§6）吸收**，不影响残差。
+   + CPCM vs SCRF 的偏移量级**未经成对测量**（历史估计 ~0.5–1 ppm）。内标定回归
+   （§6）可吸收常数偏移，但"不影响残差分布"是设计预期、**未经验证**（2026-10-06
+   更正，§11.2）。
 
 ### 验证
 
@@ -1360,7 +1393,7 @@ git HEAD 即存在、与 P2 无关，属 P1 isostat 修复范畴。
 #### 前端验证
 
 - 内联 JS 提取后 `node --check` 通过
-- 报告面板经既有 `/jobs/{id}/files/nmr_report.json` 内容 API 取数，无新后端端点
+- 报告面板经既有 `/jobs/{id}/files/<path>` 内容 API 取数（**2026-10-06 更正**：统一读取器 `fetchNmrReportJson` 依次探测 `reports/nmr_report.json` → `RESULT/reports/nmr_report.json` → 根 `nmr_report.json`（legacy 只读兼容）；远端经 `/remote-files/<path>/preview?mode=report` 解包 `content.report`），无新后端端点
 
 ### B.4 实施中发现的缺陷与修复
 
@@ -1589,9 +1622,11 @@ ruff check src/acp/nmr src/acp/workflows/nmr.py \
 
 ## 附录 D：FCHL-ML DP5 与 Goodman 完整对等性分析（2026-08-07）
 
-> **结论先行：** ACP 在 **DP4 路径与 Goodman 数值级等价**（已核查）；
-> **DP5 路径用 Goodman 文档的无 FCHL 回退**（精度低于完整 FCHL 路径）；
-> **全链路未经真实 ORCA GIAO + 数据集验证**——这是宣称"功能等价"前的硬阻断项。
+> **结论先行（2026-08-07；2026-10-06 更正见 §11.2 / D.9）：** ACP 在 **DP4 路径与固定上游的代数层数值一致**（限固定残差集 `atol=1e-10` 对照，非全链路等价）；
+> **DP5 路径的历史实现用 Goodman 文档的无 FCHL 回退**（精度低于完整 FCHL 路径）；
+> FCHL 代码已于 P4 落地（D.7），但**代码完成 ≠ 完整 DP5 等价**——碎片路径/真实 qml 核/适用域见 D.9；
+> 真实 ORCA GIAO 已有 level-1 连通性冒烟（4 分子，仅连通性/解析，见 `.omo/evidence/` 的 T51 证据），
+> 数据集校准**未执行**——"功能等价"结论不成立。
 > 本附录逐条核查对等性，并给出补齐 FCHL-ML 的 P4 实施方案。
 
 ### D.1 FCHL 表示是什么
@@ -1652,15 +1687,16 @@ methods）的标准"原子指纹"。
 | Boltzmann kt | R·T 正确单位 | `nmr.py:358` `/HARTREE_TO_KCAL`（P0-1 已修） | ✅ |
 | TMS 参考 | TMSdata mPW1PW91/6-311G(d)/CHCl3 | `lookup_tms_shieldings` → 188.452/32.124 | ✅ |
 | 模型资产 | 106 416 折叠残差 + 双 rescale KDE | 同文件入库，`_rebuild_kde` 重建 | ✅ |
-| **DP5 FCHL 加权** | **按原子 FCHL 相似度加权 KDE**（核心创新） | **已实现且无 qml 可跑**（`fchl.py` + `GoodmanDP5Model.atom_probability_fchl`，核函数 qml Fortran / 纯 numpy 双后端，`sum(K_sim)==0` 回退）；qml 可装时自动用快速 Fortran，否则 `ACP_FCHL_NUMPY=1` 走纯 numpy 移植核 | ✅（P4） |
-| GIAO 程序 | Gaussian `nmr=giao scrf` | ORCA `%eprnmr CPCM` | ⚠️ 同层级，~0.5–1 ppm 系统差（回归吸收） |
-| 几何来源 | B3LYP/6-31G(d,p) 优化 | CENSO 筛选级几何 | ⚠️ 刻意分歧（ACP 论证更优），误差模型转移未验证 |
+| **DP5 FCHL 加权** | **按原子 FCHL 相似度加权 KDE**（核心创新） | **已实现且无 qml 可跑**（`fchl.py` + `GoodmanDP5Model.atom_probability_fchl`，核函数 qml Fortran / 纯 numpy 双后端，`sum(K_sim)==0` 回退）；qml 可装时自动用快速 Fortran，否则 `ACP_FCHL_NUMPY=1` 走纯 numpy 移植核 | ⚠️ 代码已落地；**完整等价未成立**（碎片/真实 qml 核/适用域，见 D.9；2026-10-06 更正） |
+| GIAO 程序 | Gaussian `nmr=giao scrf` | ORCA `%eprnmr CPCM` | ⚠️ 同层级；系统偏移量级**未经成对测量**（§11.2） |
+| 几何来源 | B3LYP/6-31G(d,p) 优化 | CENSO 筛选级几何 | ⚠️ 刻意分歧（替代协议，非已证实的更优）；误差模型转移未验证（§11.2） |
 
 **端到端冒烟**（2 候选，候选 A 残差小）：winner DP4=1.0 / DP5=0.72，排序单调正确，
 `error_model=goodman-legacy`（非占位）。98 个 NMR 测试全过（含 14 个 FCHL 路径单元测试）。
 
-**ACP 相对 Goodman 的增强**（已实现）：构象生成（CREST+CENSO 替代 MM）、显式等价检测
-（RDKit）、未归属匈牙利匹配（Goodman 要求全归属）、Bruker 原始谱处理、非对映体枚举。
+**ACP 的差异实现**（历史列表；✅ 只表示工程代码存在，**不等于已证实的增强/准确率**）：构象生成
+（CREST+CENSO 替代 MM，协议待验证）、显式等价检测（RDKit）、未归属匹配（DP4-AI 已有
+原始谱自动处理与归属，ACP 为简化实现）、Bruker 原始谱处理、非对映体枚举（2026-10-06 更正，§11.2）。
 
 ### D.5 阻断"功能等价"结论的硬伤
 
@@ -1901,7 +1937,7 @@ ruff check src/acp/nmr src/acp/workflows/nmr.py tests/test_acp_nmr_fchl.py
 | SUMMARY 表解析 | —（Gaussian 无此格式） | 末段 + 0-based（修复后） | ✅ 与真实 ORCA 一致 |
 | 原子索引 | 字符串标签 `data[1]+data[0]`（Gaussian.py:503） | 0-based int dict key + `_validate_symbols` 校验 | ✅ ACP 更强 |
 | 能量读取 | 末段 `SCF Done:`（Gaussian.py:458） | `LogParser.extract_energy` 末段 | ✅ 等效；但 ORCA GIAO 能量未被消费（权重来自 CENSO gtot，刻意设计） |
-| 报告 JSON | DP4/DP5 文本输出 | `nmr_report.json`（assignment/regression/conformers/概率） | ✅ 字段完整 |
+| 报告 JSON | DP4/DP5 文本输出 | `nmr_report.json` schema v2（assignment/regression/conformers/概率 + `scaled_ppm`/逐候选状态/`coverage`/`provenance`/`diagnostics`/`processing_quality`） | ⚠️ 2026-10-06 更正：此前缺 `scaled_ppm`、配置/模型 provenance 及产物路径（缺 `plots/`）；现已补齐（§11.2），旧报告只读兼容 |
 | Bruker 谱 | Proton/Carbon_processing（peak pick + integral） | `spectra.py`（FT/相位/基线/峰拾取/多重度） | ✅ 处理链合理 |
 | 谱格式容错 | 格式漂移 → IndexError 崩溃 | 正则锚定 + 双格式回退 + warning | ✅ ACP 更鲁棒 |
 | 多 NMR 段 | 首段 + 扫到 EOF（会双计） | 末段（不双计） | ✅ ACP 更安全 |
@@ -1915,5 +1951,27 @@ ruff check src/acp/nmr src/acp/workflows/nmr.py tests/test_acp_nmr_fchl.py
 | 第三轮（本附录） | GIAO 解析 + 报告 + 谱处理 | SUMMARY 表 0-based off-by-one（严重）、nuclei 静默退化（中） |
 
 **修复后测试**：1057 passed / 1 pre-existing failure（molclus mock，无关）/ 3 skipped，零回归。
+
+===================================================================
+
+## 附录 D.9：验收状态更正（2026-10-06，gap §11 第 8 行）
+
+> 本附录只记录**当前实测验收状态**，不重写 D.1–D.8 的历史审计叙述；D.7 的"P4 完成"
+> 指代码/资产/运行时切换落地，**不等于完整 DP5 等价**。原始门禁与证据见
+> `.omo/evidence/acp-nmr-goodman-gap-remediation/`。
+
+| 维度 | 当前状态 | 依据 |
+|------|----------|------|
+| 0 构象 | 直接无效（不产生 DP5 概率，`status="invalid"`） | G07 修复（todo 15） |
+| 1 构象 | 以权重 `[1.0]` 走同一几何加权（FCHL 可达）管线，不再绕过 | G07 修复（todo 15） |
+| 多构象 SignalGroup | 逐构象用 `SignalGroup` 成员×系数重建信号屏蔽；代表原子替换不改变结果 | G08 修复（todos 34/35） |
+| ≥86 原子碎片路径 | 已接线（openbabel 半径-3 碎片 + `frag_reps.gz`），但**出厂资产残差索引不匹配**（2×63541≠106416；上游该分支在现代 scipy 下本不可用）→ `fragment_path_status()="residual-index-mismatch"`，实际以 typed reason 降级到全局 KDE（不静默） | `tests/test_acp_nmr_fchl_fragments.py` |
+| 真实 qml 编译核 | **NOT_VERIFIED**：head 无法构建 qml；分层 golden 的 `kernel_qml` 行状态 NOT_VERIFIED，stub qml 测试不能证明与真实编译核数值等价 | `tests/baseline/nmr/fchl_golden_tolerances.json` |
+| 纯 numpy 核 | 已实现并 opt-in（`ACP_FCHL_NUMPY=1`）；分层 golden 覆盖 descriptor→kernel→加权 KDE→候选概率 | `tests/test_acp_nmr_fchl_golden.py` |
+| 模型适用域 / 校准 | **未评测**：无外部数据集、无准确率/校准声明；`acp_calibrated` 仅表示协议级绑定与执行事实 | `.omo/evidence/acp-nmr-goodman-gap-remediation/GAP_COVERAGE.md`（G12/G17） |
+| DP4 数值 | 与固定上游在固定残差集上逐位一致（`atol=1e-10`），仅代数层对照 | `tests/benchmark/nmr/reference_validation.py` |
+
+**结论**：凡"FCHL 代码完成"不得扩写为"完整 DP5 等价 / 已校准"。上述未验证项在收口
+口径中保留 `NOT_VERIFIED`（见 `scripts/check_nmr_gap_coverage.py` 索引）。
 
 

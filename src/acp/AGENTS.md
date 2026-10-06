@@ -23,7 +23,7 @@ acp/
 ├── intake/              # 数据摄入：models, parsers（6 格式）, storage
 ├── io/                  # StructureReader / StructureWriter（thin cccp wrapper）
 ├── workflows/           # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
-├── nmr/                 # DP4/DP5、平均、缩放/归属、FCHL、谱图、报告（13 模块；见 nmr/AGENTS.md）
+├── nmr/                 # DP4/DP5、平均、缩放/归属、FCHL、谱图、报告（25 模块；见 nmr/AGENTS.md）
 ├── api/                 # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
 └── scheduler/           # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
 ```
