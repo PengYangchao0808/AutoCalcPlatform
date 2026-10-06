@@ -19,8 +19,10 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 
+import numpy as np
 import pytest
 
+from acp.core.models import Structure
 from acp.nmr.assignment import collect_residual_inputs, match_assigned
 from acp.nmr.averaging import boltzmann_average_shieldings
 from acp.nmr.equivalence import (
@@ -422,3 +424,267 @@ def test_nmr_package_exports_signal_group() -> None:
 
     assert acp.nmr.SignalGroup is SignalGroup
     assert acp.nmr.SIGNAL_GROUP_BASES == SIGNAL_GROUP_BASES
+
+
+# ---------------------------------------------------------------------------
+# (e) DP5 per-conformer reconstruction from SignalGroup membership (todo 35)
+#
+# BEFORE: ``_compute_candidate_dp5`` looked the representative label back up
+# (``label_to_idx[a.atom_label]``) and read that atom's raw per-conformer
+# shielding, so a multi-member EQ group fed DP5 a different signal than the
+# group-averaged one DP4 was calibrated on (G08).
+#
+# AFTER: each conformer's signal is reconstructed as the coefficient-weighted
+# mean of its group members' shieldings — the same linear definition
+# ``boltzmann_average_shieldings`` used — so swapping the representative
+# (same membership) leaves every DP5 probability unchanged. Unresolvable
+# members/length mismatches are typed degradations (logged + fallback reason),
+# never a representative substitution.
+# ---------------------------------------------------------------------------
+
+
+class _ReconstructionDP5Model:
+    """DP5 stand-in returning the mean |reconstructed - exp| and recording inputs."""
+
+    model_id = "goodman-dp5"
+
+    def __init__(self) -> None:
+        self.fchl_available = False
+        self.conformer_shifts: list[list[float]] = []
+        self.exp_shifts: list[float] = []
+        self.weights: list[float] = []
+        self.averaged_calls: list[list[float]] = []
+
+    def probability(self, carbon_errors: list[float]) -> float:
+        self.averaged_calls.append([float(error) for error in carbon_errors])
+        return 0.5
+
+    def probability_per_conformer(self, shifts, exp, weights) -> float:
+        self.conformer_shifts = [list(row) for row in shifts]
+        self.exp_shifts = [float(value) for value in exp]
+        self.weights = [float(weight) for weight in weights]
+        errors = [abs(s - e) for row in shifts for s, e in zip(row, exp, strict=True)]
+        return sum(errors) / len(errors)
+
+
+def _dp5_structure(*, with_map: bool = False) -> Structure:
+    metadata: dict[str, object] = {}
+    if with_map:
+        metadata["nmr_structure_map"] = {
+            "elements": list(SYMBOLS),
+            "source_atom_indices": [0, 1, 2, 3],
+            "canonical_ranks": [0, 1, 2, 3],
+        }
+    return Structure(
+        id="cand",
+        charge=0,
+        multiplicity=1,
+        symbols=list(SYMBOLS),
+        coordinates=np.zeros((len(SYMBOLS), 3)),
+        metadata=metadata,
+    )
+
+
+def _carbon_assignment(
+    group: SignalGroup | None,
+    *,
+    atom_label: str = "C1",
+    exp_ppm: float = 85.0,
+) -> Assignment:
+    return Assignment(
+        atom_label=atom_label,
+        element="C",
+        exp_ppm=exp_ppm,
+        calc_ppm=exp_ppm,
+        scaled_ppm=exp_ppm,
+        residual=0.0,
+        signal_group=group,
+    )
+
+
+def _dp5_candidate(*assignments: Assignment) -> CandidateResult:
+    return CandidateResult(
+        index=0,
+        label="cand",
+        assignments=list(assignments),
+        conformer_shieldings=[_conformer()],
+    )
+
+
+def _group(uids=("C1", "C2"), coefficients=(0.5, 0.5)) -> SignalGroup:
+    return SignalGroup(
+        atom_uids=uids, coefficients=coefficients, equivalence_basis=EQ_BASIS_EXPLICIT
+    )
+
+
+def test_dp5_reconstruction_uses_coefficient_weighted_group_members() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    group = _group(coefficients=(0.25, 0.75))
+    candidate = _dp5_candidate(_carbon_assignment(group))
+    model = _ReconstructionDP5Model()
+
+    outcome = _compute_candidate_dp5(candidate, _dp5_structure(), NmrConfig(), model)
+
+    weighted = 0.25 * C_ISO_REPRESENTATIVE + 0.75 * C_ISO_PARTNER
+    expected_signal = _shift_for(weighted, "13C", NmrConfig())
+    assert outcome.mode == "fallback"
+    assert outcome.status == "valid"
+    assert model.conformer_shifts == [[pytest.approx(expected_signal)]]
+    # the representative's RAW shielding never reaches DP5
+    representative_signal = _shift_for(C_ISO_REPRESENTATIVE, "13C", NmrConfig())
+    assert model.conformer_shifts[0][0] != pytest.approx(representative_signal)
+    assert outcome.probability == pytest.approx(abs(expected_signal - 85.0))
+
+
+def test_dp5_representative_swap_leaves_probability_unchanged() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    group = _group()
+    model_a = _ReconstructionDP5Model()
+    model_b = _ReconstructionDP5Model()
+    out_a = _compute_candidate_dp5(
+        _dp5_candidate(_carbon_assignment(group, atom_label="C1")),
+        _dp5_structure(),
+        NmrConfig(),
+        model_a,
+    )
+    out_b = _compute_candidate_dp5(
+        _dp5_candidate(_carbon_assignment(group, atom_label="C2")),
+        _dp5_structure(),
+        NmrConfig(),
+        model_b,
+    )
+
+    # same membership → same reconstructed signal → same probability
+    assert model_a.conformer_shifts == model_b.conformer_shifts
+    assert model_a.exp_shifts == model_b.exp_shifts
+    assert out_a.probability == pytest.approx(out_b.probability)
+    assert model_a.conformer_shifts == [
+        [pytest.approx(_shift_for(C_GROUP_MEAN, "13C", NmrConfig()))]
+    ]
+
+    # sensitivity proof: the old representative-label lookup would have fed a
+    # DIFFERENT probability for each representative (unequal member shieldings)
+    old_error_a = abs(_shift_for(C_ISO_REPRESENTATIVE, "13C", NmrConfig()) - 85.0)
+    old_error_b = abs(_shift_for(C_ISO_PARTNER, "13C", NmrConfig()) - 85.0)
+    assert old_error_a != pytest.approx(old_error_b)
+    assert out_a.probability != pytest.approx(old_error_a)
+    assert out_a.probability != pytest.approx(old_error_b)
+
+
+def test_dp5_resolves_signal_group_map_uids() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    group = _group(uids=("C:0", "C:2"))
+    candidate = _dp5_candidate(_carbon_assignment(group))
+    model = _ReconstructionDP5Model()
+
+    outcome = _compute_candidate_dp5(candidate, _dp5_structure(with_map=True), NmrConfig(), model)
+
+    expected_signal = _shift_for(C_GROUP_MEAN, "13C", NmrConfig())
+    assert outcome.mode == "fallback"
+    assert model.conformer_shifts == [[pytest.approx(expected_signal)]]
+
+
+def test_dp5_singleton_group_matches_legacy_representative_path() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    grouped = _dp5_candidate(_carbon_assignment(_group(uids=("C1",), coefficients=(1.0,))))
+    legacy = _dp5_candidate(_carbon_assignment(None))
+    model_grouped = _ReconstructionDP5Model()
+    model_legacy = _ReconstructionDP5Model()
+
+    out_grouped = _compute_candidate_dp5(grouped, _dp5_structure(), NmrConfig(), model_grouped)
+    out_legacy = _compute_candidate_dp5(legacy, _dp5_structure(), NmrConfig(), model_legacy)
+
+    assert model_grouped.conformer_shifts == model_legacy.conformer_shifts
+    assert out_grouped.probability == pytest.approx(out_legacy.probability)
+    assert model_grouped.conformer_shifts == [
+        [pytest.approx(_shift_for(C_ISO_REPRESENTATIVE, "13C", NmrConfig()))]
+    ]
+
+
+def test_dp5_unresolvable_group_member_degrades_typed_not_silent() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    group = _group(uids=("C1", "C9"))  # C9 does not exist in the structure
+    candidate = _dp5_candidate(_carbon_assignment(group))
+    model = _ReconstructionDP5Model()
+
+    outcome = _compute_candidate_dp5(candidate, _dp5_structure(), NmrConfig(), model)
+
+    assert outcome.mode == "averaged"
+    assert outcome.status == "valid"
+    assert outcome.diagnostics[0]["fallback_reason"] == "signal_group_unresolved"
+    # the group-residual path ran; no representative substitution reached DP5
+    assert model.conformer_shifts == []
+    assert model.averaged_calls == [[0.0]]
+
+
+def test_dp5_partial_unresolvable_group_skips_only_that_signal() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    good = _group()
+    bad = _group(uids=("C9",), coefficients=(1.0,))
+    candidate = _dp5_candidate(
+        _carbon_assignment(good, atom_label="C1", exp_ppm=85.0),
+        _carbon_assignment(bad, atom_label="C9", exp_ppm=80.0),
+    )
+    model = _ReconstructionDP5Model()
+
+    outcome = _compute_candidate_dp5(candidate, _dp5_structure(), NmrConfig(), model)
+
+    assert outcome.mode == "fallback"
+    assert model.exp_shifts == [85.0]
+    assert model.conformer_shifts == [[pytest.approx(_shift_for(C_GROUP_MEAN, "13C", NmrConfig()))]]
+    skipped = outcome.diagnostics[0]["skipped_signal_groups"]
+    assert isinstance(skipped, list) and len(skipped) == 1
+    assert skipped[0] == {
+        "atom_label": "C9",
+        "atom_uids": ["C9"],
+        "reason": "member_unresolved",
+    }
+
+
+def test_dp5_group_length_mismatch_degrades_typed() -> None:
+    from acp.workflows.nmr import _compute_candidate_dp5
+
+    group = _group()
+    # simulate a malformed external payload: bypass the frozen dataclass
+    # invariant so the resolver's explicit length check is exercised
+    object.__setattr__(group, "coefficients", (0.5,))
+    candidate = _dp5_candidate(_carbon_assignment(group))
+    model = _ReconstructionDP5Model()
+
+    outcome = _compute_candidate_dp5(candidate, _dp5_structure(), NmrConfig(), model)
+
+    assert outcome.mode == "averaged"
+    assert outcome.diagnostics[0]["fallback_reason"] == "signal_group_unresolved"
+    assert model.conformer_shifts == []
+    skipped = outcome.diagnostics[0]["skipped_signal_groups"]
+    assert isinstance(skipped, list) and skipped[0]["reason"] == "length_mismatch"
+
+
+def test_analyze_candidate_threads_signal_groups_end_to_end() -> None:
+    from acp.workflows.nmr import _analyze_candidate, _compute_candidate_dp5
+
+    structure = _dp5_structure(with_map=True)
+    experiment = parse_experimental_nmr("C: 85.0(C1)\nEQ: C1,C2")
+    candidate = _analyze_candidate(0, structure, [_conformer()], experiment, NmrConfig())
+
+    carbon = [a for a in candidate.assignments if a.element == "C"]
+    assert len(carbon) == 1
+    assignment_group = carbon[0].signal_group
+    assert assignment_group is not None
+    assert assignment_group.atom_uids == ("C:0", "C:2")
+    assert assignment_group.coefficients == pytest.approx((0.5, 0.5))
+    # the explicit candidate record is populated from the emitted shifts
+    assert candidate.signal_groups[0] == assignment_group
+    assert candidate.signal_groups_used() == candidate.signal_groups
+
+    # the DP5 reconstruction consumes that same group identity
+    model = _ReconstructionDP5Model()
+    outcome = _compute_candidate_dp5(candidate, structure, NmrConfig(), model)
+    assert outcome.mode == "fallback"
+    assert model.conformer_shifts == [[pytest.approx(_shift_for(C_GROUP_MEAN, "13C", NmrConfig()))]]

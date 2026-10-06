@@ -74,6 +74,7 @@ from acp.nmr.models import (
     NmrReport,
     NucleusEvidence,
     ProbabilityResult,
+    SignalGroup,
     element_of_nucleus,
     normalize_symbol,
 )
@@ -1649,6 +1650,7 @@ def _analyze_candidate(
         nmr_config,
         equivalence_groups=equivalence_groups,
         omit_atom_indices=omit_indices,
+        structure_map=nmr_structure_map_for(structure),
     )
     atom_shifts = _relabel_shifts_with_map(atom_shifts, structure)
 
@@ -1691,8 +1693,17 @@ def _analyze_candidate(
                 arrays["calc"],
                 scaled,
                 residuals,
+                signal_groups=arrays["signal_groups"],
             )
         )
+
+    emitted_groups: list[SignalGroup] = []
+    seen_groups: set[SignalGroup] = set()
+    for shift in atom_shifts:
+        group = shift.signal_group
+        if group is not None and group not in seen_groups:
+            seen_groups.add(group)
+            emitted_groups.append(group)
 
     evidence = _build_candidate_evidence(experiment, nmr_config, residual_by_nucleus, pairs)
     return CandidateResult(
@@ -1703,6 +1714,7 @@ def _analyze_candidate(
         regressions=regressions,
         conformer_shieldings=conformer_shieldings,
         evidence=evidence,
+        signal_groups=tuple(emitted_groups),
         # probabilities set by the orchestrator (need all candidates first)
     )
 
@@ -2285,6 +2297,88 @@ class Dp5Outcome:
             raise ValueError("invalid DP5 outcome must carry probability=None")
 
 
+def _isotropic_shielding(
+    shieldings: Mapping[int, dict[str, object]],
+    atom_index: int,
+) -> float | None:
+    """Finite isotropic shielding of *atom_index*, or ``None`` when absent/malformed."""
+    entry = shieldings.get(atom_index)
+    if not entry or "isotropic" not in entry:
+        return None
+    raw = entry["isotropic"]
+    if not isinstance(raw, (int, float, str)):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _conformer_index_for_signal_uid(
+    uid: str,
+    structure_map: NmrStructureMap | None,
+    label_to_idx: Mapping[str, int],
+) -> int | None:
+    """Resolve one SignalGroup member uid → conformer atom index (G08).
+
+    Map uids (``"C:3"``) go through :meth:`NmrStructureMap.mol_index_for_atom_uid`;
+    label uids (``"C1"``) through the per-element label index, with the
+    structure map's source-order label scheme as a fallback. ``None`` when
+    neither scheme resolves the uid — the caller degrades explicitly.
+    """
+    if ":" in uid:
+        if structure_map is None:
+            return None
+        try:
+            return structure_map.mol_index_for_atom_uid(uid)
+        except StructureMapError:
+            return None
+    idx = label_to_idx.get(uid)
+    if idx is not None:
+        return idx
+    if structure_map is not None:
+        try:
+            return structure_map.mol_index_for_source(structure_map.source_index_for_label(uid))
+        except StructureMapError:
+            return None
+    return None
+
+
+def _resolve_signal_group_members(
+    group: SignalGroup,
+    structure_map: NmrStructureMap | None,
+    label_to_idx: Mapping[str, int],
+) -> tuple[tuple[int, float], ...] | None:
+    """Resolve every member of *group*, or return ``None``.
+
+    A signal is reconstructed from ALL its members with their coefficients or
+    skipped whole — a partial member list or the representative's raw
+    shielding is never substituted (G08).
+    """
+    if len(group.atom_uids) != len(group.coefficients):
+        logger.warning(
+            "SignalGroup for %s has %d atom_uids but %d coefficients; signal skipped",
+            list(group.atom_uids),
+            len(group.atom_uids),
+            len(group.coefficients),
+        )
+        return None
+    members: list[tuple[int, float]] = []
+    for uid, coefficient in zip(group.atom_uids, group.coefficients, strict=True):
+        atom_index = _conformer_index_for_signal_uid(uid, structure_map, label_to_idx)
+        if atom_index is None:
+            logger.warning(
+                "signal group member %r of %s does not resolve in this structure; "
+                "the whole signal is skipped — the representative atom is never substituted",
+                uid,
+                list(group.atom_uids),
+            )
+            return None
+        members.append((atom_index, float(coefficient)))
+    return tuple(members)
+
+
 def _compute_candidate_dp5(
     candidate: CandidateResult,
     structure: Structure,
@@ -2296,14 +2390,22 @@ def _compute_candidate_dp5(
     Goodman evaluates the KDE per conformer then averages probabilities
     (DP5.py:339-353), which differs from evaluating once on the averaged
     shielding because the KDE is nonlinear. This helper reconstructs the
-    per-conformer ¹³C calc shifts aligned with the matched exp shifts,
-    then calls :meth:`GoodmanDP5Model.probability_per_conformer`.
+    per-conformer ¹³C calc shifts aligned with the matched exp shifts from
+    each assignment's :class:`SignalGroup` membership — the
+    coefficient-weighted member combination, i.e. the same signal definition
+    the DP4 residual was calibrated on (G08) — then calls
+    :meth:`GoodmanDP5Model.probability_per_conformer`.
 
     When ``qml`` + the FCHL assets are available (DevDoc appendix D, P4),
     the per-atom probabilities use the FCHL-similarity weighted KDE
     (:meth:`GoodmanDP5Model.probability_per_conformer_fchl`) built from the
-    conformer geometries threaded through :class:`ConformerShielding`.
-    Otherwise the unweighted-KDE fallback is used.
+    conformer geometries threaded through :class:`ConformerShielding`, for
+    single-member signals. A multi-member signal has no single atomic
+    environment, so those candidates use the unweighted-KDE fallback —
+    descriptors are never averaged for convenience (G08). Signals whose
+    members do not resolve are skipped with explicit diagnostics (the
+    averaged-residual path runs when nothing remains); the representative's
+    raw shielding is never substituted.
 
     Zero complete conformers return ``status="invalid"`` (probability
     ``None``) — never a silently averaged value; exactly one conformer runs
@@ -2333,9 +2435,10 @@ def _compute_candidate_dp5(
 
     symbols = list(structure.symbols)
     label_to_idx = _build_label_index(symbols)
+    structure_map = nmr_structure_map_for(structure)
     tms_c = nmr_config.tms_for("13C")
 
-    # 13C assignments give us the matched (atom_label, exp_ppm) pairs
+    # 13C assignments give us the matched (exp_ppm, signal definition) pairs
     c_assignments = [a for a in candidate.assignments if a.element.upper() == "C"]
     if not c_assignments:
         return Dp5Outcome(
@@ -2350,10 +2453,69 @@ def _compute_candidate_dp5(
             ),
         )
 
-    exp_c = [a.exp_ppm for a in c_assignments]
-    maybe_indices = [label_to_idx.get(a.atom_label) for a in c_assignments]
-    if any(idx is None for idx in maybe_indices):
-        # label mismatch — fall back to averaged-residual path
+    signals: list[tuple[float, tuple[tuple[int, float], ...]]] = []
+    skipped_signal_groups: list[dict[str, object]] = []
+    for assignment in c_assignments:
+        group = assignment.signal_group
+        if group is None:
+            # legacy hand-built assignment: the representative label is the
+            # only member definition available
+            idx = label_to_idx.get(assignment.atom_label)
+            if idx is None:
+                # label mismatch — fall back to averaged-residual path
+                residual_by_nuc = {"13C": [a.residual for a in c_assignments]}
+                return Dp5Outcome(
+                    probability=compute_dp5_goodman(residual_by_nuc, dp5_model),
+                    mode="averaged",
+                    diagnostics=(
+                        {
+                            "n_conformers_used": 0,
+                            "fchl_attempted": False,
+                            "fallback_reason": "label_mismatch",
+                        },
+                    ),
+                )
+            signals.append((assignment.exp_ppm, ((idx, 1.0),)))
+            continue
+        if len(group.atom_uids) != len(group.coefficients):
+            skipped_signal_groups.append(
+                {
+                    "atom_label": assignment.atom_label,
+                    "atom_uids": list(group.atom_uids),
+                    "reason": "length_mismatch",
+                }
+            )
+            logger.warning(
+                "DP5 candidate %s: signal %s has %d members but %d coefficients; "
+                "skipping the signal (no representative substitution)",
+                candidate.label,
+                assignment.atom_label,
+                len(group.atom_uids),
+                len(group.coefficients),
+            )
+            continue
+        members = _resolve_signal_group_members(group, structure_map, label_to_idx)
+        if members is None:
+            skipped_signal_groups.append(
+                {
+                    "atom_label": assignment.atom_label,
+                    "atom_uids": list(group.atom_uids),
+                    "reason": "member_unresolved",
+                }
+            )
+            logger.warning(
+                "DP5 candidate %s: signal %s (%s) has an unresolvable member; "
+                "skipping the signal (no representative substitution)",
+                candidate.label,
+                assignment.atom_label,
+                list(group.atom_uids),
+            )
+            continue
+        signals.append((assignment.exp_ppm, members))
+
+    if not signals:
+        # every carbon signal is unreconstructable — typed averaged-residual
+        # degradation, never a representative substitution
         residual_by_nuc = {"13C": [a.residual for a in c_assignments]}
         return Dp5Outcome(
             probability=compute_dp5_goodman(residual_by_nuc, dp5_model),
@@ -2362,34 +2524,51 @@ def _compute_candidate_dp5(
                 {
                     "n_conformers_used": 0,
                     "fchl_attempted": False,
-                    "fallback_reason": "label_mismatch",
+                    "fallback_reason": "signal_group_unresolved",
+                    "skipped_signal_groups": skipped_signal_groups,
                 },
             ),
         )
-    c_indices = [idx for idx in maybe_indices if idx is not None]
 
-    # per-conformer ¹³C calc shifts (TMS-converted)
+    exp_c = [exp_ppm for exp_ppm, _ in signals]
+    fchl_indices = (
+        [members[0][0] for _, members in signals]
+        if all(len(members) == 1 for _, members in signals)
+        else []
+    )
+    # per-conformer ¹³C calc shifts (TMS-converted), reconstructed from the
+    # SignalGroup members with their averaging coefficients — the same linear
+    # definition the DP4 residual was calibrated on (G08)
     conformer_shifts: list[list[float]] = []
     weights: list[float] = []
     conformer_reps: list[list[NDArray[np.float64]]] = []
     # FCHL atomic path is only valid for molecules < 86 atoms (DP5.py:57);
     # larger molecules need the openbabel fragmentation + frag_reps path
-    # (not yet wired → degrade to fallback for those rare cases).
-    fchl_requested = bool(getattr(dp5_model, "fchl_available", False))
-    fchl_requested = fchl_requested and len(symbols) < FRAG_ATOM_THRESHOLD
-    fchl_ok = fchl_requested
+    # (not yet wired → degrade to fallback for those rare cases). A signal
+    # with several members has no single atomic environment — FCHL is not
+    # attempted for it (no uncalibrated descriptor averaging, G08).
+    fchl_available = bool(getattr(dp5_model, "fchl_available", False))
+    fchl_requested = fchl_available and len(symbols) < FRAG_ATOM_THRESHOLD
+    fchl_multi_member_blocked = fchl_requested and not fchl_indices
+    fchl_ok = fchl_requested and bool(fchl_indices)
+    fchl_attempted = fchl_requested and not fchl_multi_member_blocked
     for conf in candidate.conformer_shieldings:
         shifts: list[float] = []
         ok = True
-        for idx in c_indices:
-            sh = conf.shieldings.get(idx)
-            isotropic = sh.get("isotropic") if sh else None
-            if not isinstance(isotropic, (int, float, str)):
-                ok = False
+        for _, members in signals:
+            shielding = 0.0
+            for idx, coefficient in members:
+                iso = _isotropic_shielding(conf.shieldings, idx)
+                if iso is None:
+                    ok = False
+                    break
+                shielding += coefficient * iso
+            if not ok:
                 break
-            iso = float(isotropic)
             # Goodman TMS formula (NMR.py:392): δ = (σ_TMS − σ) / (1 − σ_TMS/10⁶)
-            shifts.append((tms_c - iso) / (1.0 - tms_c / 1e6) if tms_c is not None else iso)
+            shifts.append(
+                (tms_c - shielding) / (1.0 - tms_c / 1e6) if tms_c is not None else shielding
+            )
         if ok:
             conformer_shifts.append(shifts)
             weights.append(conf.boltzmann_weight)
@@ -2404,7 +2583,7 @@ def _compute_candidate_dp5(
                         reps = build_atom_representations(
                             coords,
                             conf_symbols,
-                            c_indices,
+                            fchl_indices,
                         )
                     except Exception as exc:  # pragma: no cover - qml/kernel edge
                         logger.warning(
@@ -2428,8 +2607,9 @@ def _compute_candidate_dp5(
             diagnostics=(
                 {
                     "n_conformers_used": 0,
-                    "fchl_attempted": fchl_requested,
+                    "fchl_attempted": fchl_attempted,
                     "fallback_reason": "no_complete_conformers",
+                    "skipped_signal_groups": skipped_signal_groups,
                 },
             ),
         )
@@ -2448,7 +2628,9 @@ def _compute_candidate_dp5(
 
     base_diag: dict[str, object] = {
         "n_conformers_used": len(conformer_shifts),
-        "fchl_attempted": fchl_requested,
+        "fchl_attempted": fchl_attempted,
+        "n_signals_used": len(signals),
+        "skipped_signal_groups": skipped_signal_groups,
     }
     if fchl_ok and len(conformer_reps) == len(conformer_shifts):
         return Dp5Outcome(
@@ -2467,7 +2649,11 @@ def _compute_candidate_dp5(
             {
                 **base_diag,
                 "fallback_reason": (
-                    "fchl_unavailable" if not fchl_requested else "fchl_representations_incomplete"
+                    "fchl_unavailable"
+                    if not fchl_requested
+                    else "fchl_multi_member_signal"
+                    if fchl_multi_member_blocked
+                    else "fchl_representations_incomplete"
                 ),
             },
         ),
