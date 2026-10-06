@@ -10,7 +10,12 @@ Public seams for later consumers:
 * todo 54 (reference-validation comparison) — ``build_reference_validation_table``
   juxtaposes the todo-31 pinned references + todo-36 layered golden against the
   ACP runtime values, with ``collect_asset_manifest`` (NOTICE/golden/tolerance
-  pin matches) and the typed ``ReferenceAssetHashMismatchError`` refusal.
+  pin matches) and the typed ``ReferenceAssetHashMismatchError`` refusal;
+* todo 57 (ShiftPredictor screening hooks) — ``run_screening_evaluation`` wires
+  a todo-55 predictor in as a screening/prioritization AID (typed DFT
+  escalation decisions, never executed; false-drop rate + molecule-clustered
+  CI; trade-off table), returning ``not_verified`` without a declared
+  independent evaluation set.
 
 Thresholds are pre-registered in ``thresholds.json``; the loader verifies the
 recorded content hash and refuses silent edits (re-freeze via
@@ -118,6 +123,30 @@ from tests.benchmark.nmr.schema import (
     load_dataset_manifest,
     validate_dataset_manifest,
 )
+from tests.benchmark.nmr.shift_predictor_eval import (
+    DEFAULT_Z_THRESHOLD,
+    ESCALATION_REASONS,
+    EVALUATION_SET_KINDS,
+    PREDICTOR_REFUSAL_TYPES,
+    SCREENING_AID_CLAIM,
+    SCREENING_AID_SCOPE,
+    SCREENING_DATASET_SCHEMA,
+    SCREENING_EVAL_SCHEMA,
+    DatasetNotIndependentError,
+    InvalidScreeningCutError,
+    PredictorNotSuppliedError,
+    ScreeningCandidate,
+    ScreeningDataset,
+    ScreeningEvaluationSet,
+    ScreeningItem,
+    ScreeningManifestError,
+    ScreeningSignal,
+    ScreeningSupport,
+    ShiftPredictorEvalError,
+    load_screening_manifest,
+    run_screening_evaluation,
+    write_screening_evaluation,
+)
 from tests.benchmark.nmr.thresholds import (
     KNOWN_METRIC_KEYS,
     THRESHOLDS_SCHEMA,
@@ -157,11 +186,16 @@ __all__ = [
     "DEFAULT_SETTINGS",
     "DEFAULT_THRESHOLDS_PATH",
     "DEFAULT_TOLERANCES_PATH",
+    "DEFAULT_Z_THRESHOLD",
     "DatasetHashMismatchError",
     "DatasetLoaderError",
+    "DatasetNotIndependentError",
+    "ESCALATION_REASONS",
+    "EVALUATION_SET_KINDS",
     "EXACT_TOLERANCE",
     "FixedInputsChangedError",
     "HARNESS_SCHEMA",
+    "InvalidScreeningCutError",
     "KNOWN_METRIC_KEYS",
     "LAYER_FIELD_SPECS",
     "LAYER_PROFILE",
@@ -178,8 +212,10 @@ __all__ = [
     "NUCLEI",
     "NOT_VERIFIED",
     "NoAxisChangeError",
+    "PREDICTOR_REFUSAL_TYPES",
     "PROTOCOL_TRANSFER_SCHEMA",
     "PairedBootstrapResult",
+    "PredictorNotSuppliedError",
     "ProtocolRun",
     "ProtocolRunError",
     "ProtocolRunner",
@@ -190,7 +226,19 @@ __all__ = [
     "ReferenceAssetError",
     "ReferenceAssetHashMismatchError",
     "ReferenceValidationError",
+    "SCREENING_AID_CLAIM",
+    "SCREENING_AID_SCOPE",
+    "SCREENING_DATASET_SCHEMA",
+    "SCREENING_EVAL_SCHEMA",
     "SOURCES",
+    "ScreeningCandidate",
+    "ScreeningDataset",
+    "ScreeningEvaluationSet",
+    "ScreeningItem",
+    "ScreeningManifestError",
+    "ScreeningSignal",
+    "ScreeningSupport",
+    "ShiftPredictorEvalError",
     "THRESHOLDS_SCHEMA",
     "ThresholdError",
     "ThresholdIntegrityError",
@@ -217,6 +265,7 @@ __all__ = [
     "load_dataset_manifest",
     "load_layer_datasets",
     "load_raw_spectra",
+    "load_screening_manifest",
     "load_stereochemistry",
     "load_thresholds",
     "metric_value",
@@ -226,10 +275,12 @@ __all__ = [
     "refreeze_thresholds",
     "run_ab_comparison",
     "run_harness",
+    "run_screening_evaluation",
     "seal_thresholds",
     "thresholds_payload_hash",
     "validate_dataset_manifest",
     "write_impact_table",
     "write_metrics",
     "write_reference_validation_table",
+    "write_screening_evaluation",
 ]
