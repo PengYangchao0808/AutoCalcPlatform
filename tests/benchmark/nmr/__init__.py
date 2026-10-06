@@ -7,8 +7,10 @@ Public seams for later consumers:
   metric blocks and ``paired_clustered_bootstrap_ci`` for paired deltas;
 * todo 53 (dataset loaders 2-5) — ``load_dataset_manifest`` schema and typed
   provenance errors;
-* todo 54 (reference-validation comparison) — ``run_harness`` provenance
-  (dataset hash / threshold hash / code revision) and ``write_metrics``.
+* todo 54 (reference-validation comparison) — ``build_reference_validation_table``
+  juxtaposes the todo-31 pinned references + todo-36 layered golden against the
+  ACP runtime values, with ``collect_asset_manifest`` (NOTICE/golden/tolerance
+  pin matches) and the typed ``ReferenceAssetHashMismatchError`` refusal.
 
 Thresholds are pre-registered in ``thresholds.json``; the loader verifies the
 recorded content hash and refuses silent edits (re-freeze via
@@ -83,6 +85,24 @@ from tests.benchmark.nmr.protocol_transfer import (
     run_ab_comparison,
     write_impact_table,
 )
+from tests.benchmark.nmr.reference_validation import (
+    DEFAULT_GOLDEN_PATH,
+    DEFAULT_MODELS_DIR,
+    DEFAULT_NOTICE_PATH,
+    DEFAULT_TOLERANCES_PATH,
+    EXACT_TOLERANCE,
+    REFERENCE_VALIDATION_SCHEMA,
+    SOURCES,
+    VERDICTS,
+    ReferenceAssetError,
+    ReferenceAssetHashMismatchError,
+    ReferenceValidationError,
+    build_reference_validation_table,
+    collect_asset_manifest,
+    compare_numeric_values,
+    parse_notice_pins,
+    write_reference_validation_table,
+)
 from tests.benchmark.nmr.schema import (
     CANDIDATE_STATUSES,
     LAYERS,
@@ -130,11 +150,16 @@ __all__ = [
     "DEFAULT_ALPHA",
     "DEFAULT_BOOTSTRAP_SEED",
     "DEFAULT_DATASET_MANIFEST",
+    "DEFAULT_GOLDEN_PATH",
+    "DEFAULT_MODELS_DIR",
+    "DEFAULT_NOTICE_PATH",
     "DEFAULT_N_RESAMPLES",
     "DEFAULT_SETTINGS",
     "DEFAULT_THRESHOLDS_PATH",
+    "DEFAULT_TOLERANCES_PATH",
     "DatasetHashMismatchError",
     "DatasetLoaderError",
+    "EXACT_TOLERANCE",
     "FixedInputsChangedError",
     "HARNESS_SCHEMA",
     "KNOWN_METRIC_KEYS",
@@ -161,20 +186,29 @@ __all__ = [
     "ProtocolSettings",
     "ProtocolTransferError",
     "ProtocolUnavailableError",
+    "REFERENCE_VALIDATION_SCHEMA",
+    "ReferenceAssetError",
+    "ReferenceAssetHashMismatchError",
+    "ReferenceValidationError",
+    "SOURCES",
     "THRESHOLDS_SCHEMA",
     "ThresholdError",
     "ThresholdIntegrityError",
     "ThresholdSchemaError",
+    "VERDICTS",
     "UnknownAxisError",
     "UnsupportedLayerError",
     "assert_single_axis_change",
     "build_impact_table",
+    "build_reference_validation_table",
     "candidate_set_sha256",
     "canonical_dataset_hash",
     "canonical_json_bytes",
     "changed_axes",
     "clustered_bootstrap_ci",
+    "collect_asset_manifest",
     "compare_dataset_metrics",
+    "compare_numeric_values",
     "dataset_hashes",
     "evaluate_dataset",
     "experimental_spectrum_sha256",
@@ -187,6 +221,7 @@ __all__ = [
     "load_thresholds",
     "metric_value",
     "paired_clustered_bootstrap_ci",
+    "parse_notice_pins",
     "pooled_mean",
     "refreeze_thresholds",
     "run_ab_comparison",
@@ -196,4 +231,5 @@ __all__ = [
     "validate_dataset_manifest",
     "write_impact_table",
     "write_metrics",
+    "write_reference_validation_table",
 ]
