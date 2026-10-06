@@ -615,17 +615,26 @@ class ScanOptions:
     points: int | None = None
     values: tuple[float, ...] = ()
     mode: ScanMode = ScanMode.RELAXED
+    #: ORCA ``ScanTS`` route toggle — default OFF so a plain relaxed scan never
+    #: emits a transition-state-oriented scan.  The task layer always forwards
+    #: the effective boolean to the backend (the ORCA interface default stays
+    #: ``True``); ``ScanMode.RELAXED`` semantics are unchanged.
+    use_scants: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "coordinates", tuple(self.coordinates))
         object.__setattr__(self, "values", tuple(float(v) for v in self.values))
         object.__setattr__(self, "mode", ScanMode(self.mode))
+        if not isinstance(self.use_scants, bool):
+            message = "use_scants must be a boolean"
+            raise TaskInputError(message)
 
     def to_dict(self) -> JsonObject:
         """Serialise to a JSON-safe dict."""
         payload: JsonObject = {
             "coordinates": [coordinate.to_dict() for coordinate in self.coordinates],
             "mode": self.mode.value,
+            "use_scants": self.use_scants,
         }
         if self.points is not None:
             payload["points"] = self.points
@@ -635,7 +644,13 @@ class ScanOptions:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, object] | None) -> ScanOptions:
-        """Parse strictly; unknown fields are ignored (rule S2)."""
+        """Parse strictly; unknown fields are ignored (rule S2).
+
+        ``use_scants`` is a strict boolean: a non-bool value raises.  A
+        missing field defaults to ``False`` (the typed contract), while the
+        raw payload distinction (field absent vs explicit ``False``) is
+        preserved for identity — see ``acp.calculations.identity``.
+        """
         if not payload:
             return cls()
         default_mode = ScanMode.RELAXED
@@ -650,11 +665,13 @@ class ScanOptions:
                 message = f"options.coordinates[{index}] must be a mapping"
                 raise TaskInputError(message)
             coordinates.append(ScanCoordinateSpec.from_dict(entry))
+        use_scants = parse_bool_strict(payload, "use_scants")
         return cls(
             coordinates=tuple(coordinates),
             points=parse_int_strict(payload, "points"),
             values=parse_float_tuple_strict(payload, "values"),
             mode=mode,  # type: ignore[arg-type]
+            use_scants=use_scants if use_scants is not None else False,
         )
 
 
@@ -993,11 +1010,7 @@ def _fragment_knob_value(fragment: BackendInputFragment, token: str) -> str | No
     Accepts ``token=value`` and ``token value`` forms; returns ``""`` for a
     bare flag (re-specification without a value is unresolvable overlap).
     """
-    haystack = (
-        fragment.content
-        if isinstance(fragment.content, str)
-        else " ".join(fragment.content)
-    )
+    haystack = fragment.content if isinstance(fragment.content, str) else " ".join(fragment.content)
     parts = haystack.replace("\n", " ").split()
     for index, part in enumerate(parts):
         if part == token:

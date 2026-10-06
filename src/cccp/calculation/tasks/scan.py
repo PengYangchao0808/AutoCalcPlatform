@@ -113,8 +113,13 @@ def run_scan(
     )
 
     options = request.options if isinstance(request.options, ScanOptions) else None
+    use_scants = _effective_use_scants(options, ctx.capability_extras)
     plan = build_scan_plan(options, raw_plan=_raw_plan(ctx.capability_extras))
     validate_atom_indices(plan, len(symbols))
+    if use_scants:
+        unsupported = _scants_unsupported_reason(plan)
+        if unsupported is not None:
+            raise TaskInputError(unsupported)
 
     state = request.electronic_state
     if state is not None:
@@ -163,6 +168,7 @@ def run_scan(
         message = f"backend {type(backend).__name__} does not implement capability 'relaxed_scan'"
         raise UnsupportedCapabilityError(message)
     kwargs = _scan_capability_kwargs(ctx.capability_extras, request)
+    kwargs["use_scants"] = use_scants
     try:
         raw_result = operation(
             inputs.coordinates,
@@ -447,6 +453,45 @@ def _raw_plan(extras: Mapping[str, Any] | None) -> Mapping[str, object] | None:
         return None
     candidate = extras.get("scan_plan")
     return candidate if isinstance(candidate, Mapping) else None
+
+
+def _effective_use_scants(options: ScanOptions | None, extras: Mapping[str, Any] | None) -> bool:
+    """Resolve the effective ScanTS toggle for one scan call.
+
+    The typed option is authoritative when it asks for ScanTS; otherwise a
+    verbatim legacy ``use_scants`` capability extra (the PES pipeline seam)
+    is honoured, and the plain default is OFF.  The ORCA interface default
+    (``True``) is never relied upon — the task layer always overrides it.
+    """
+    if options is not None and options.use_scants:
+        return True
+    if extras:
+        raw = extras.get("use_scants")
+        if raw is not None:
+            return bool(raw)
+    return False
+
+
+def _scants_unsupported_reason(plan: Any) -> str | None:
+    """Explicit error for ScanTS branches ORCA cannot deliver.
+
+    A synchronous multi-coordinate path, an explicit per-frame grid or a
+    fixed-endpoint reference path runs through the interface's synchronous
+    loop, which cannot apply ``ScanTS``; silently ignoring the request is
+    forbidden.
+    """
+    synchronous = (
+        len(plan.drive_coordinates()) > 1
+        or bool(getattr(plan, "fixed_endpoints", False))
+        or any(coordinate.values for coordinate in plan.coordinates)
+    )
+    if not synchronous:
+        return None
+    return (
+        "use_scants (ORCA ScanTS) is unavailable for synchronous "
+        "multi-coordinate, explicit-grid or fixed-endpoint scans; "
+        "use a single-coordinate scan or disable ScanTS"
+    )
 
 
 def _scan_capability_kwargs(

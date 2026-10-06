@@ -422,6 +422,16 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             default=21,
             help="Number of scan frames including both endpoints (default: 21)",
         )
+        parser.add_argument(
+            "--scants",
+            action="store_true",
+            default=False,
+            help=(
+                "Use the ORCA ScanTS route (transition-state-oriented scans). "
+                "Off by default; unavailable for synchronous multi-coordinate "
+                "or explicit-grid scans."
+            ),
+        )
 
 
 def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
@@ -3254,6 +3264,7 @@ def _handle_scan(args: argparse.Namespace) -> int:
                 "result_dir": str(storage.result_dir()),
                 "scan_coordinates": list(args.coordinate),
                 "scan_points": args.scan_points,
+                "use_scants": bool(args.scants),
             }
         )
         effective_charge = args.charge if args.charge is not None else input_plan.charge

@@ -498,9 +498,7 @@ def _options_from_resources(
         max_rescue = _pop_named(resources, "opt_max_rescue", key_names)
         is_ts = _as_str(structure_kind) == "ts" or role is StructureRole.TRANSITION_STATE
         return OptimizeOptions(
-            mode=(
-                OptimizationMode.TRANSITION_STATE if is_ts else OptimizationMode.UNCONSTRAINED
-            ),
+            mode=(OptimizationMode.TRANSITION_STATE if is_ts else OptimizationMode.UNCONSTRAINED),
             initial_hessian=_as_str(
                 _pop_alias(
                     resources, _ALIAS_RESOURCE_KEYS["initial_hessian"], key_names, "initial_hessian"
@@ -655,12 +653,25 @@ def _scan_options_from_resources(
     if points_value is not None:
         points = _as_int(points_value)
 
+    use_scants_raw: object | None = None
+    for name in ("use_scants", "scan_use_scants"):
+        if name in resources:
+            use_scants_raw = resources.pop(name)
+            raw[name] = use_scants_raw  # type: ignore[assignment]
+            key_names["use_scants"] = name
+            break
+    use_scants_bool = _as_bool(use_scants_raw)
+
     if not entries and points is None:
         return None
     coordinates = tuple(
         _parse_legacy_coordinate(entry, index) for index, entry in enumerate(entries)
     )
-    return ScanOptions(coordinates=coordinates, points=points)
+    return ScanOptions(
+        coordinates=coordinates,
+        points=points,
+        use_scants=bool(use_scants_bool) if use_scants_bool is not None else False,
+    )
 
 
 def to_legacy_request(
@@ -710,6 +721,7 @@ def to_legacy_request(
             _emit("failure_type", options.rescue.failure_type)
     elif isinstance(options, ScanOptions):
         _emit("scan_points", options.points)
+        _emit("use_scants", options.use_scants)
     elif isinstance(options, IrcOptions):
         if "directions" in binding.resources_key_names:
             _emit("directions", [direction.value for direction in options.directions])

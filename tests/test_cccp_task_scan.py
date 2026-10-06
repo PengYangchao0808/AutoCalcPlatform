@@ -345,3 +345,162 @@ def test_build_scan_plan_rejects_points_below_two() -> None:
 def test_build_scan_plan_requires_a_coordinate() -> None:
     with pytest.raises(TaskInputError, match="scan requires at least one coordinate"):
         build_scan_plan(ScanOptions())
+
+
+# ── ScanTS (use_scants) contract: default OFF + full projection ──────────
+
+_ORCA_SCAN_OUTPUT = """RELAXED SURFACE SCAN STEP 1
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+C      0.0000000000    0.0000000000    0.0000000000
+C      1.2000000000    0.0000000000    0.0000000000
+O      0.0000000000    1.1000000000    0.0000000000
+H      1.2000000000    1.1000000000    0.0000000000
+-------------------
+
+RELAXED SURFACE SCAN STEP 2
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+C      0.0000000000    0.0000000000    0.0000000000
+C      1.6000000000    0.0000000000    0.0000000000
+O      0.0000000000    1.1000000000    0.0000000000
+H      1.2000000000    1.1000000000    0.0000000000
+-------------------
+
+RELAXED SURFACE SCAN STEP 3
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+C      0.0000000000    0.0000000000    0.0000000000
+C      2.0000000000    0.0000000000    0.0000000000
+O      0.0000000000    1.1000000000    0.0000000000
+H      1.2000000000    1.1000000000    0.0000000000
+-------------------
+
+The Calculated Surface using the RELAXED SURFACE SCAN
+-----------------------------------------------------
+  1    1.20000000   -100.00000000
+  2    1.60000000    -99.95000000
+  3    2.00000000    -99.90000000
+
+****ORCA-CHEMISTRY JOB DONE****
+"""
+
+
+def _single_options(*, use_scants: bool = False) -> ScanOptions:
+    return ScanOptions(
+        coordinates=(
+            ScanCoordinateSpec(
+                atoms=(0, 1),
+                start=1.2,
+                end=2.0,
+                kind="distance",
+                atom_index_base=0,
+            ),
+        ),
+        points=3,
+        use_scants=use_scants,
+    )
+
+
+def test_scan_options_use_scants_defaults_false_and_serialises() -> None:
+    options = ScanOptions()
+    assert options.use_scants is False
+    payload = options.to_dict()
+    assert payload["use_scants"] is False
+    assert ScanOptions.from_dict(payload).use_scants is False
+
+
+def test_scan_options_from_dict_strict_bool() -> None:
+    assert ScanOptions.from_dict({"use_scants": True}).use_scants is True
+    assert ScanOptions.from_dict({"use_scants": False}).use_scants is False
+    assert ScanOptions.from_dict({}).use_scants is False
+    with pytest.raises(TaskInputError, match="use_scants must be a boolean"):
+        ScanOptions.from_dict({"use_scants": "true"})
+    with pytest.raises(TaskInputError, match="use_scants must be a boolean"):
+        ScanOptions.from_dict({"use_scants": 1})
+
+
+def test_run_scan_forwards_effective_use_scants_to_backend(tmp_path: Path) -> None:
+    backend = _RecordingBackend()
+    run_scan(
+        _request(options=_single_options(), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    assert backend.calls[0]["kwargs"]["use_scants"] is False
+
+    backend_true = _RecordingBackend()
+    run_scan(
+        _request(options=_single_options(use_scants=True), output_dir=tmp_path),
+        context=TaskContext(backend=backend_true),
+    )
+    assert backend_true.calls[0]["kwargs"]["use_scants"] is True
+
+
+def test_run_scan_capability_extra_use_scants_is_honoured(tmp_path: Path) -> None:
+    backend = _RecordingBackend()
+    run_scan(
+        _request(options=_single_options(), output_dir=tmp_path),
+        context=TaskContext(backend=backend, capability_extras={"use_scants": True}),
+    )
+    assert backend.calls[0]["kwargs"]["use_scants"] is True
+
+
+def test_multi_coordinate_plus_scants_rejected_before_backend(tmp_path: Path) -> None:
+    backend = _RecordingBackend()
+    options = ScanOptions(
+        coordinates=_multi_options().coordinates,
+        points=4,
+        use_scants=True,
+    )
+    with pytest.raises(TaskInputError, match="unavailable for synchronous"):
+        run_scan(
+            _request(options=options, output_dir=tmp_path),
+            context=TaskContext(backend=backend),
+        )
+    assert backend.calls == []
+
+
+def test_explicit_grid_plus_scants_rejected_before_backend(tmp_path: Path) -> None:
+    backend = _RecordingBackend()
+    options = ScanOptions(
+        coordinates=(ScanCoordinateSpec(atoms=(0, 1), start=1.0, end=2.0, atom_index_base=0),),
+        values=(1.0, 1.5, 2.0),
+        use_scants=True,
+    )
+    with pytest.raises(TaskInputError, match="unavailable for synchronous"):
+        run_scan(
+            _request(options=options, output_dir=tmp_path),
+            context=TaskContext(backend=backend),
+        )
+    assert backend.calls == []
+
+
+def test_orca_input_default_has_no_scants_and_flag_adds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cccp.backends.orca import ORCABackend
+    from cccp.qc.interfaces.orca import ORCAInterface
+
+    interface = ORCAInterface(config={})
+
+    def _fake_run(_input_file: Path, output_file: Path) -> bool:
+        _ = output_file.write_text(_ORCA_SCAN_OUTPUT, encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(interface, "_run_orca", _fake_run)
+    backend = ORCABackend.__new__(ORCABackend)
+    backend._interface = interface
+
+    run_scan(
+        _request(options=_single_options(), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    default_input = (tmp_path / "orca_relaxed_scan.inp").read_text(encoding="utf-8")
+    assert "ScanTS" not in default_input
+
+    run_scan(
+        _request(options=_single_options(use_scants=True), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    scants_input = (tmp_path / "orca_relaxed_scan.inp").read_text(encoding="utf-8")
+    assert "ScanTS" in scants_input

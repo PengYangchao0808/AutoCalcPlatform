@@ -252,3 +252,107 @@ def test_materialized_smiles_geometry_binds_scan_identity(tmp_path: Path) -> Non
     input_path.write_text(perturbed, encoding="utf-8")
 
     assert _fingerprint() != first
+
+
+def test_scan_cli_projects_scants_flag_into_resources(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from types import SimpleNamespace
+
+    from acp.cli import _handle_scan, build_parser
+
+    captured: list[object] = []
+
+    def _fake_run_scan(req, *, progress_reporter=None):
+        captured.append(req)
+        return SimpleNamespace(status="completed", metadata={}, errors=[])
+
+    monkeypatch.setattr("acp.workflows.simple.run_scan", _fake_run_scan)
+
+    for extra, expected in (([], False), (["--scants"], True)):
+        args = build_parser().parse_args(
+            [
+                "run",
+                "scan",
+                "--input",
+                "CCO",
+                "--coordinate",
+                "0,1,1.0,1.4",
+                "--scan-points",
+                "2",
+                "--output",
+                str(tmp_path / f"out_{expected}"),
+                "--log-level",
+                "ERROR",
+                *extra,
+            ]
+        )
+        assert _handle_scan(args) == 0
+        assert captured[-1].resources["use_scants"] is expected
+
+
+def test_scan_cli_rejects_scants_with_multi_coordinate(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    from acp.cli import _handle_scan, build_parser
+
+    input_path = tmp_path / "m.xyz"
+    input_path.write_text("3\nm\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\nH 0.0 1.0 0.0\n", encoding="utf-8")
+    args = build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--coordinate",
+            "1,2,1.0,1.5",
+            "--scants",
+            "--output",
+            str(tmp_path / "out"),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    with caplog.at_level(logging.ERROR):
+        assert _handle_scan(args) == 2
+    assert "unavailable for synchronous" in caplog.text
+
+
+def _scan_job_spec(*, use_scants: bool) -> object:
+    from acp.scheduler.jobs import JobSpec
+
+    return JobSpec(
+        workflow="scan",
+        input={"source": "input.xyz", "source_type": "file", "coordinate": "0,1,1.0,1.4"},
+        method={"levels": {"scan": {"scan_use_scants": use_scants, "scan_coordinate_points": 3}}},
+        resources={"nproc": 4},
+    )
+
+
+def test_scan_method_flags_emits_scants_iff_enabled() -> None:
+    from acp.scheduler.jobs import scan_method_flags
+
+    enabled = scan_method_flags({"scan_coordinates": "0,1,1.0,1.4", "scan_use_scants": True}, {})
+    disabled = scan_method_flags({"scan_coordinates": "0,1,1.0,1.4", "scan_use_scants": False}, {})
+    absent = scan_method_flags({"scan_coordinates": "0,1,1.0,1.4"}, {})
+    assert enabled.count("--scants") == 1
+    assert "--scants" not in disabled
+    assert "--scants" not in absent
+
+
+def test_scan_scants_projected_by_local_and_remote_argv(tmp_path: Path) -> None:
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+    from acp.scheduler.runner import JobRunner
+
+    runner = JobRunner(python_executable="python")
+    for enabled in (False, True):
+        spec = _scan_job_spec(use_scants=enabled)
+        local = runner._build_cmd(spec, tmp_path, input_path="input.xyz")
+        remote = build_remote_cli_command(spec, input_path="input.xyz")
+        assert ("--scants" in local) is enabled
+        assert ("--scants" in remote) is enabled
+        assert local.index("--scants") == remote.index("--scants") if enabled else True

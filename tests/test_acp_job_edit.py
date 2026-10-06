@@ -498,6 +498,23 @@ def test_diff_preserves_false_zero_null_distinctions() -> None:
     assert "method.tags" in paths  # order is semantic for item lists
 
 
+def test_scan_use_scants_enters_editable_diff() -> None:
+    from acp.scheduler.job_edit import editable_spec_from_parts
+
+    def _spec(use_scants: bool) -> dict:
+        return editable_spec_from_parts(
+            workflow="scan",
+            input_spec={"source": "CCO", "source_type": "smiles"},
+            method={"schema_id": "dft_scan", "levels": {"scan": {"scan_use_scants": use_scants}}},
+            resources={},
+        )
+
+    diff = diff_editable_specs(_spec(False), _spec(True))
+    by_path = {entry["path"]: entry for entry in diff}
+    assert by_path["method.levels.scan.scan_use_scants"]["old"] is False
+    assert by_path["method.levels.scan.scan_use_scants"]["new"] is True
+
+
 def test_preview_fingerprint_binds_configuration() -> None:
     a = compute_preview_fingerprint(
         "j1", "sr_x", "singlepoint", {"source": "CCO"}, {"m": 1}, {"nproc": 8}
@@ -812,13 +829,7 @@ def test_edit_cleanup_failure_blocks_queueing(tmp_path: Path) -> None:
         # archiving old receipts never falls back to deletion.
         work_dir = Path(record.work_dir)
         stale = (
-            work_dir
-            / "WORK"
-            / "00_RUNTIME"
-            / "attempts"
-            / str(record.attempt)
-            / "WORK"
-            / "old.out"
+            work_dir / "WORK" / "00_RUNTIME" / "attempts" / str(record.attempt) / "WORK" / "old.out"
         )
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("previous attempt", encoding="utf-8")
@@ -1301,31 +1312,49 @@ def test_rerun_endpoint_still_works_after_refactor(client: TestClient) -> None:
 
 
 def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path) -> None:
-    from acp.storage.manifest import ResultManifest
     from acp.scheduler.structure_sources import StructureSourceService
+    from acp.storage.manifest import ResultManifest
+
     manager = _make_manager(tmp_path)
     try:
         record = _seed(manager, "snapshot_opt", workflow="optimize")
         root = Path(record.work_dir)
         (root / "RESULT" / "optimized.xyz").write_text(XYZ_COOH, encoding="utf-8")
         manifest = ResultManifest(workflow="optimize", status="failed")
-        manifest.add_product("opt", "OPT", "optimized.xyz", "structure",
-                             metadata={"optimization_status":"converged"})
+        manifest.add_product(
+            "opt",
+            "OPT",
+            "optimized.xyz",
+            "structure",
+            metadata={"optimization_status": "converged"},
+        )
         manifest.write(root / "RESULT")
-        manager.edit_recalculate(record.id, mode="in_place", new_spec=record.spec,
-                                 expected_source_revision=compute_source_revision(record),
-                                 request_id="snapshot_request", payload_hash="snapshot_hash", payload_json="{}")
+        manager.edit_recalculate(
+            record.id,
+            mode="in_place",
+            new_spec=record.spec,
+            expected_source_revision=compute_source_revision(record),
+            request_id="snapshot_request",
+            payload_hash="snapshot_hash",
+            payload_json="{}",
+        )
         assert not (root / "RESULT" / "optimized.xyz").exists()
-        refs = json.loads((root / ".structure_history" / "sources.json").read_text(encoding="utf-8"))
+        refs = json.loads(
+            (root / ".structure_history" / "sources.json").read_text(encoding="utf-8")
+        )
         assert len(refs) == 1
         assert (root / refs[0]["path"]).read_text(encoding="utf-8") == XYZ_COOH
         assert (root / ".structure_history" / "input_1.xyz").is_file()
         service = StructureSourceService(manager.store, manager.run_root)
         asset, checksum = service.get(refs[0]["source_ref"]["source_id"])
         assert asset["atom_count"] == 3
-        for actual, expected in zip(asset["xyz"].splitlines()[2:], XYZ_COOH.splitlines()[2:], strict=True):
+        for actual, expected in zip(
+            asset["xyz"].splitlines()[2:], XYZ_COOH.splitlines()[2:], strict=True
+        ):
             assert actual.split()[0] == expected.split()[0]
-            assert [float(v) for v in actual.split()[1:]] == pytest.approx([float(v) for v in expected.split()[1:]])
+            assert [float(v) for v in actual.split()[1:]] == pytest.approx(
+                [float(v) for v in expected.split()[1:]]
+            )
         old_asset, _ = service.get(f"job_{record.id}:RESULT/optimized.xyz")
         assert old_asset["atom_count"] == 3
         assert checksum.startswith("sha256:")
@@ -1335,18 +1364,31 @@ def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path)
 
 def test_inplace_snapshot_failure_does_not_cleanup_or_queue(tmp_path: Path) -> None:
     from acp.storage.manifest import ResultManifest
+
     manager = _make_manager(tmp_path)
     try:
         record = _seed(manager, "snapshot_invalid", workflow="optimize")
         root = Path(record.work_dir)
         (root / "RESULT" / "optimized.xyz").write_text("1\ninvalid\nH nan 0 0\n", encoding="utf-8")
         manifest = ResultManifest(workflow="optimize", status="failed")
-        manifest.add_product("opt", "OPT", "optimized.xyz", "structure", metadata={"optimization_status":"converged"})
+        manifest.add_product(
+            "opt",
+            "OPT",
+            "optimized.xyz",
+            "structure",
+            metadata={"optimization_status": "converged"},
+        )
         manifest.write(root / "RESULT")
         with pytest.raises(ValueError, match="单帧"):
-            manager.edit_recalculate(record.id, mode="in_place", new_spec=record.spec,
-                                     expected_source_revision=compute_source_revision(record),
-                                     request_id="invalid_snapshot", payload_hash="hash", payload_json="{}")
+            manager.edit_recalculate(
+                record.id,
+                mode="in_place",
+                new_spec=record.spec,
+                expected_source_revision=compute_source_revision(record),
+                request_id="invalid_snapshot",
+                payload_hash="hash",
+                payload_json="{}",
+            )
         assert (root / "RESULT" / "optimized.xyz").is_file()
         assert (root / "WORK" / "old.out").is_file()
         assert manager.get(record.id).status == JobStatus.FAILED

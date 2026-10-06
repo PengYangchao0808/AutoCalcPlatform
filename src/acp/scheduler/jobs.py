@@ -296,6 +296,18 @@ def scan_method_flags(
         points = scan_level.get("scan_points")
     if points is not None:
         flags += ["--scan-points", str(points)]
+
+    use_scants = method.get("scan_use_scants")
+    if use_scants is None:
+        use_scants = scan_level.get("scan_use_scants")
+    if use_scants is None:
+        use_scants = method.get("use_scants")
+    if use_scants is None:
+        use_scants = payload.get("scan_use_scants")
+    if use_scants is None:
+        use_scants = payload.get("use_scants")
+    if _as_bool(use_scants) is True:
+        flags += ["--scants"]
     return flags
 
 
@@ -584,7 +596,6 @@ _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
 )
 
 
-
 def batchoptimize_method_flags(
     method: Mapping[str, Any],
     inp: Mapping[str, Any] | None = None,
@@ -815,7 +826,8 @@ def build_task_record(record: JobRecord) -> TaskRecord:
         current_stage=record.current_stage,
         created_at=record.created_at,
         updated_at=record.updated_at,
-        custom_name=getattr(record, "custom_name", None) or getattr(record.spec, "custom_name", None),
+        custom_name=getattr(record, "custom_name", None)
+        or getattr(record.spec, "custom_name", None),
     )
 
 

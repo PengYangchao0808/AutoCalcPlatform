@@ -12,9 +12,11 @@ import json
 import logging
 import os
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 
+import acp.calculations.executor as executor_module
 from acp.calculations.batch._items import BatchStructureItem, item_cache_key
 from acp.calculations.batch.engine import _batch_plan_fingerprint
 from acp.calculations.checkpoint import load_checkpoint, write_checkpoint
@@ -200,6 +202,55 @@ def test_task_option_changes_change_identity_all_four_kinds(tmp_path: Path) -> N
     casscf_a = {"casscf": {"active_electrons": 2, "active_orbitals": 2}}
     casscf_b = {"casscf": {"active_electrons": 4, "active_orbitals": 4}}
     assert fingerprint_for(StepKind.CASSCF, casscf_a) != fingerprint_for(StepKind.CASSCF, casscf_b)
+
+
+def test_scan_use_scants_changes_identity(tmp_path: Path) -> None:
+    base = {"scan_coordinates": ["0,1,1.0,1.4"], "scan_points": 3}
+
+    def fingerprint(**extra: object) -> str:
+        spec = {**base, **extra}
+        return compute_identity(
+            _plan(tmp_path, steps=[CalculationStep(kind=StepKind.SCAN, spec=spec)])
+        ).plan_identity
+
+    off = fingerprint(use_scants=False)
+    on = fingerprint(use_scants=True)
+    legacy = fingerprint()  # field absent — pre-change payload
+    assert len({off, on, legacy}) == 3
+
+
+def test_scan_use_scants_alias_is_canonicalised(tmp_path: Path) -> None:
+    def fingerprint(spec: dict) -> str:
+        return compute_identity(
+            _plan(tmp_path, steps=[CalculationStep(kind=StepKind.SCAN, spec=spec)])
+        ).plan_identity
+
+    canonical = fingerprint({"scan_coordinates": ["0,1,1.0,1.4"], "use_scants": True})
+    alias = fingerprint({"scan_coordinates": ["0,1,1.0,1.4"], "scan_use_scants": True})
+    assert canonical == alias
+
+
+def test_legacy_scan_spec_without_use_scants_forces_recompute(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A checkpoint bound to the pre-change scan spec (no ``use_scants``)
+    must not be adopted for the new plain-scan semantics: fingerprints differ
+    and the executor conservatively recomputes."""
+    coords = {"scan_coordinates": ["0,1,1.0,1.4"], "scan_points": 3}
+    legacy_plan = _plan(tmp_path, steps=[CalculationStep(kind=StepKind.SCAN, spec=dict(coords))])
+    new_plan = _plan(
+        tmp_path,
+        steps=[CalculationStep(kind=StepKind.SCAN, spec={**coords, "use_scants": False})],
+    )
+    spy = Mock(return_value=CalculationResult(status="completed"))
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, {StepKind.SCAN: spy}):
+        assert CalculationPlanExecutor().execute(legacy_plan, task_root=tmp_path).is_completed
+        calls_after_first = spy.call_count
+        with caplog.at_level(logging.INFO, logger="acp.calculations.checkpoint"):
+            second = CalculationPlanExecutor().execute(new_plan, task_root=tmp_path)
+    assert second.is_completed
+    assert spy.call_count > calls_after_first
+    assert "identity_fingerprint_mismatch" in caplog.text
 
 
 # ── position separation / path remapping ─────────────────────────────────

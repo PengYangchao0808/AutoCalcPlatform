@@ -206,6 +206,24 @@ def _optional_int(value: Any, default: int) -> int:
     return value
 
 
+def _normalise_scan_task_options(spec: dict[str, Any]) -> dict[str, Any]:
+    """Collapse the scan ScanTS aliases onto one canonical key.
+
+    ``scan_use_scants`` / ``use_scants`` both name the effective ScanTS
+    toggle; canonicalising the alias means the spelling never changes the
+    identity.  An absent field is left absent — a legacy payload without the
+    field must not be adopted as the new plain-scan semantics, so the
+    conservative recompute path stays reachable.
+    """
+    alias = spec.get("scan_use_scants")
+    if not isinstance(alias, bool):
+        return spec
+    normalised = dict(spec)
+    normalised.pop("scan_use_scants", None)
+    normalised.setdefault("use_scants", alias)
+    return normalised
+
+
 # ── identity object ──────────────────────────────────────────────────────
 
 
@@ -281,6 +299,8 @@ def compute_identity(
             run_config if run_config is not None else theory_run_config(spec_raw.get("config"))
         )
         spec = _canonical(spec_raw, location_root=location_root)
+        if step.kind is StepKind.SCAN:
+            spec = _normalise_scan_task_options(spec)
         method = _extract_method(step.spec, plan.profile or "r2SCAN-3c")
         basis = spec.get("basis")
         parameters = {key: spec[key] for key in RESOLVED_FIELDS if spec.get(key) is not None}
