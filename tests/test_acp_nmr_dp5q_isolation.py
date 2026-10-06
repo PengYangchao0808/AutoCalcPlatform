@@ -706,6 +706,7 @@ def test_reloading_the_module_without_the_dependency_is_safe(
     def _missing() -> types.ModuleType:
         raise ModuleNotFoundError("No module named 'dp5q'", name="dp5q")
 
+    original_state = dict(dp5q_stub.__dict__)
     monkeypatch.setattr(dp5q_stub, "_import_optional_runtime", _missing)
     reloaded = importlib.reload(dp5q_stub)
     try:
@@ -714,4 +715,10 @@ def test_reloading_the_module_without_the_dependency_is_safe(
         assert status.reason == "optional_dependency_missing"
         assert list_shift_predictors() == ()
     finally:
-        importlib.reload(dp5q_stub)
+        # Reloading rebinds every module-global (including the exception
+        # classes) to fresh objects; other modules that imported those names
+        # before the reload keep the originals and would stop catching the
+        # raised types. Restore the pre-reload namespace exactly instead of
+        # reloading again (which would leave yet another class generation).
+        dp5q_stub.__dict__.clear()
+        dp5q_stub.__dict__.update(original_state)
