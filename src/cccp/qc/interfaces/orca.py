@@ -627,12 +627,8 @@ def scf_route_extras(scf_options: dict | None) -> list[str]:
 # ── Spin diagnostics parsing (design doc §10.3, §12.1) ──────────────────
 
 _SPIN_CONTAMINATION_HEADER = "UHF SPIN CONTAMINATION"
-_S2_EXPECTATION_RE = re.compile(
-    r"Expectation value of <S\*\*2>\s*:\s*([-+]?\d+\.\d+)"
-)
-_S2_IDEAL_RE = re.compile(
-    r"Ideal value S\*\(S\+1\) for S=([-+]?\d+\.\d+)\s*:\s*([-+]?\d+\.\d+)"
-)
+_S2_EXPECTATION_RE = re.compile(r"Expectation value of <S\*\*2>\s*:\s*([-+]?\d+\.\d+)")
+_S2_IDEAL_RE = re.compile(r"Ideal value S\*\(S\+1\) for S=([-+]?\d+\.\d+)\s*:\s*([-+]?\d+\.\d+)")
 _MULLIKEN_SPIN_HEADER = "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS"
 _LOEWDIN_SPIN_HEADER = "LOEWDIN ATOMIC CHARGES AND SPIN POPULATIONS"
 _ATOMIC_POPULATION_ROW_RE = re.compile(
@@ -718,20 +714,23 @@ def _with_spin_metadata(metadata: dict[str, Any] | None, output_file: Path) -> d
 # ── CASSCF / NEVPT2 parsing (design doc §11, §12.1) ─────────────────────
 
 _FINAL_ENERGY_RE = re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)")
-_NATURAL_OCCUPATION_RE = re.compile(
-    r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE
-)
+_NATURAL_OCCUPATION_RE = re.compile(r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE)
 _NATURAL_OCCUPATION_HEADER_RE = re.compile(
     r"Natural Orbital Occupation Numbers\s*?:?", re.IGNORECASE
 )
 _ORBITAL_OPT_CONVERGED_MARKER = "ORBITAL OPTIMIZATION HAS CONVERGED"
 _NEVPT2_ROOT_HEADER_RE = re.compile(r"MULT\s+(\d+)\s*,\s*ROOT\s+(\d+)")
-_NEVPT2_TOTAL_CORRECTION_RE = re.compile(
-    r"Total Energy Correction\s*:\s*dE\s*=\s*([-+]?\d+\.\d+)"
-)
+_NEVPT2_TOTAL_CORRECTION_RE = re.compile(r"Total Energy Correction\s*:\s*dE\s*=\s*([-+]?\d+\.\d+)")
 _NEVPT2_ZERO_ORDER_RE = re.compile(r"Zero Order Energy\s*:\s*E0\s*=\s*([-+]?\d+\.\d+)")
 _NEVPT2_TOTAL_RE = re.compile(r"Total Energy \(E0\+dE\)\s*:\s*E\s*=\s*([-+]?\d+\.\d+)")
-_CASSCF_RESULTS_HEADER = "CAS-SCF RESULTS"
+_CAS_ENERGY_CONVERGED_RE = re.compile(r"THE\s+CAS-SCF\s+ENERGY\s+HAS\s+CONVERGED")
+_CAS_GRADIENT_CONVERGED_RE = re.compile(r"THE\s+CAS-SCF\s+GRADIENT\s+HAS\s+CONVERGED")
+_CAS_RESULTS_SECTION_RE = re.compile(r"(?:CAS-SCF|CASSCF)\s+RESULTS")
+_FINAL_CASSCF_ENERGY_RE = re.compile(r"Final CASSCF energy\s*:\s*([-+]?\d+\.\d+)")
+_N_OCC_LINE_RE = re.compile(r"^\s*N\(occ\)=\s*((?:[-+]?\d+\.\d+\s*)+)\s*$", re.MULTILINE)
+_CAS_ROOT_LINE_RE = re.compile(r"^\s*ROOT\s+(\d+):\s*E=\s*([-+]?\d+\.\d+)")
+_CAS_MULT_IN_LINE_RE = re.compile(r"MULT\s*=\s*(\d+)")
+_CASSCF_JOB_BOUNDARY_RE = re.compile(r"ORCA TERMINATED NORMALLY|Program Version \d")
 _CASSCF_ROOT_ENERGY_RE = re.compile(
     r"^\s*(?:Mult|MULT)\s+(\d+)\s*,\s*(?:Root|ROOT)\s+(\d+).*?([-+]?\d+\.\d{4,})",
 )
@@ -749,6 +748,38 @@ def _parse_natural_occupations(text: str) -> list[float]:
         if len(occupations) >= 500:
             break
     return [value for _, value in sorted(occupations)]
+
+
+def _last_cas_convergence_marker_end(text: str) -> int | None:
+    """End offset of the last CAS convergence marker, or ``None``.
+
+    Recognizes the ORCA 6.1.1 ``THE CAS-SCF ENERGY/GRADIENT HAS CONVERGED``
+    marker lines (variable whitespace) and the legacy
+    ``ORBITAL OPTIMIZATION HAS CONVERGED`` marker.  Plain SCF convergence
+    (``THE SCF HAS CONVERGED``) is deliberately NOT a CAS marker.
+    """
+    ends = [m.end() for m in _CAS_ENERGY_CONVERGED_RE.finditer(text)]
+    ends += [m.end() for m in _CAS_GRADIENT_CONVERGED_RE.finditer(text)]
+    legacy = text.find(_ORBITAL_OPT_CONVERGED_MARKER)
+    if legacy >= 0:
+        ends.append(legacy + len(_ORBITAL_OPT_CONVERGED_MARKER))
+    return max(ends) if ends else None
+
+
+def _parse_active_occupations(text: str) -> list[float]:
+    """Active-space occupations (never inactive/virtual ``OCC`` table entries).
+
+    Prefers the LAST ``N(occ)= v1 v2 ...`` print occurring after the final
+    CAS convergence marker (ORCA 6.1.x CAS-SCF iteration output — the line
+    lists active orbitals only); otherwise falls back to the explicit
+    ``Natural Orbital Occupation Numbers`` listing (older format).
+    """
+    marker_end = _last_cas_convergence_marker_end(text)
+    if marker_end is not None:
+        matches = list(_N_OCC_LINE_RE.finditer(text, marker_end))
+        if matches:
+            return [float(value) for value in matches[-1].group(1).split()]
+    return _parse_natural_occupations(text)
 
 
 def _parse_nevpt2_roots(text: str) -> list[dict[str, Any]]:
@@ -777,12 +808,16 @@ def _parse_nevpt2_roots(text: str) -> list[dict[str, Any]]:
 
 
 def _parse_casscf_root_energies(text: str) -> list[dict[str, Any]]:
-    """Best-effort per-root energies from the ``CAS-SCF RESULTS`` section."""
-    sections = text.split(_CASSCF_RESULTS_HEADER)
+    """Per-root energies from the last ``CAS-SCF RESULTS``/``CASSCF RESULTS`` section."""
+    sections = _CAS_RESULTS_SECTION_RE.split(text)
     if len(sections) < 2:
         return []
     roots: list[dict[str, Any]] = []
+    multiplicity: int | None = None
     for line in sections[-1].splitlines():
+        mult_match = _CAS_MULT_IN_LINE_RE.search(line)
+        if mult_match:
+            multiplicity = int(mult_match.group(1))
         match = _CASSCF_ROOT_ENERGY_RE.match(line)
         if match:
             roots.append(
@@ -792,7 +827,64 @@ def _parse_casscf_root_energies(text: str) -> list[dict[str, Any]]:
                     "casscf_energy_hartree": float(match.group(3)),
                 }
             )
+            continue
+        root_match = _CAS_ROOT_LINE_RE.match(line)
+        if root_match:
+            roots.append(
+                {
+                    "multiplicity": multiplicity if multiplicity is not None else 1,
+                    "root": int(root_match.group(1)),
+                    "casscf_energy_hartree": float(root_match.group(2)),
+                }
+            )
     return roots
+
+
+def _final_cas_results_present(text: str, casscf_roots: list[dict[str, Any]]) -> bool:
+    """True when the last CAS results section carries final converged facts.
+
+    A convergence marker alone (e.g. an energy marker on a truncated log)
+    does not prove completion — the results section must hold a
+    ``Final CASSCF energy`` line or parsed per-root energies.
+    """
+    sections = list(_CAS_RESULTS_SECTION_RE.finditer(text))
+    if not sections:
+        return False
+    tail = text[sections[-1].end() :]
+    return bool(_FINAL_CASSCF_ENERGY_RE.search(tail)) or bool(casscf_roots)
+
+
+def _casscf_job_blocks(text: str) -> list[str]:
+    """Split a multi-job log at ORCA job boundaries (banner / termination)."""
+    blocks = [block for block in _CASSCF_JOB_BOUNDARY_RE.split(text) if block.strip()]
+    return blocks or [text]
+
+
+def _casscf_bound_energy(text: str) -> float | None:
+    """CAS energy bound to the last CAS-bearing job block.
+
+    The block must show CAS evidence (convergence marker or CAS results
+    section); ``FINAL SINGLE POINT ENERGY`` occurrences after the block's
+    ``NEVPT2 Results`` correlation region are excluded so an unrelated
+    later method never masquerades as the CAS energy.  Falls back to the
+    section's ``Final CASSCF energy`` line, then to the ROOT 0 energy.
+    """
+    for block in reversed(_casscf_job_blocks(text)):
+        has_marker = _last_cas_convergence_marker_end(block) is not None
+        if not has_marker and not _CAS_RESULTS_SECTION_RE.search(block):
+            continue
+        cas_region = block.split("NEVPT2 Results")[0]
+        matches = _FINAL_ENERGY_RE.findall(cas_region)
+        if matches:
+            return float(matches[-1])
+        final_match = _FINAL_CASSCF_ENERGY_RE.search(block)
+        if final_match:
+            return float(final_match.group(1))
+        roots = _parse_casscf_root_energies(block)
+        if roots:
+            ground = next((r for r in roots if r["root"] == 0), roots[0])
+            return float(ground["casscf_energy_hartree"])
+    return None
 
 
 def parse_casscf_output(output_file: Path) -> dict[str, Any]:
@@ -818,15 +910,13 @@ def parse_casscf_output(output_file: Path) -> dict[str, Any]:
         logger.warning("Could not read CASSCF output %s: %s", output_file, exc)
         return result
 
-    energy_matches = _FINAL_ENERGY_RE.findall(text)
-    if energy_matches:
-        result["casscf_energy"] = float(energy_matches[-1])
-    result["converged"] = (
-        _ORBITAL_OPT_CONVERGED_MARKER in text or "THE SCF HAS CONVERGED" in text
-    )
-    result["natural_occupations"] = _parse_natural_occupations(text)
+    casscf_roots = _parse_casscf_root_energies(text)
+    has_marker = _last_cas_convergence_marker_end(text) is not None
+    result["casscf_energy"] = _casscf_bound_energy(text)
+    result["converged"] = has_marker and _final_cas_results_present(text, casscf_roots)
+    result["natural_occupations"] = _parse_active_occupations(text)
     result["nevpt2_roots"] = _parse_nevpt2_roots(text)
-    result["casscf_roots"] = _parse_casscf_root_energies(text)
+    result["casscf_roots"] = casscf_roots
     return result
 
 

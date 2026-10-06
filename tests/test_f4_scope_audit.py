@@ -422,7 +422,15 @@ def _is_amendment_e_addition(ln: int, txt: str, worktree_src: str, class_name: s
 
 
 def _is_amendment_e_deletion(ln: int, baseline_src: str) -> bool:
-    """Sanctioned E deletions: docstring reflow inside the six input methods."""
+    """Sanctioned E deletions: the contiguous block + docstring reflow in six methods.
+
+    The block scope (same helper as the addition side) covers the ORCA 6.1.1
+    CASSCF parsing rewrite (real-qc-gap todo 10), which replaced baseline
+    lines between ``_SCF_OPTIONS_KEYS`` and ``parse_casscf_output``.
+    """
+    block = _amendment_e_orca_block(baseline_src)
+    if block is not None and block[0] <= ln <= block[1]:
+        return True
     ranges = _func_ranges(baseline_src)
     return any(
         (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1]
@@ -1370,6 +1378,27 @@ def test_amendment_o_predicates_confined_and_negatives() -> None:
     # …and dropping one site below the pair fires the count tooth.
     issues = _amendment_o_crest_teeth(worktree.replace('"--chrg"', '"-x"', 1))
     assert any("chrg" in issue for issue in issues)
+
+
+def test_amendment_e_deletion_confined_and_negatives() -> None:
+    """Amendment E deletions are confined to the contiguous block + six methods."""
+    fp = "src/cccp/qc/interfaces/orca.py"
+    baseline = _baseline_content(fp)
+    block = _amendment_e_orca_block(baseline)
+    assert block is not None
+
+    assert _is_amendment_e_deletion(block[0], baseline)
+    assert _is_amendment_e_deletion(block[1], baseline)
+
+    # Negative: five lines past the block's end sits in neither the block nor
+    # any of the six input-method scopes, so it stays unauthorized.
+    outside = block[1] + 5
+    ranges = _func_ranges(baseline)
+    assert not any(
+        (fr := ranges.get(name)) is not None and fr[0] <= outside <= fr[1]
+        for name in _E_METHOD_SCOPES[:-1]
+    )
+    assert not _is_amendment_e_deletion(outside, baseline)
 
 
 # ── Amendment P: hess_file real ORCA 6.1.1 block-format rewrite (2026-10-07,
