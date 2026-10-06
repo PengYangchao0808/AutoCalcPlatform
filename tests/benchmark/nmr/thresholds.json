@@ -1,0 +1,69 @@
+{
+  "content_sha256": "44962bb7c17b8078626bbc3543cd55d7ea9e6daff3062e2dc7f68f603398fa6e",
+  "preregistered_at": "2026-10-06T04:32:32+00:00",
+  "preregistered_note": "Frozen BEFORE the first harness metrics run; no benchmark results had been observed when these bounds were chosen. Rationale: DevDoc P1b target magnitudes (1H MAE < 0.1 ppm, 13C MAE < 2 ppm) and gap section 10.3 (non-inferiority bounds fixed before results; molecule-clustered paired confidence intervals). These bounds apply to benchmark datasets; a metric with no data compares as NOT_VERIFIED, never as pass. Re-freezing requires an explicit re-measurement note via refreeze_thresholds (recorded in 'remeasurements').",
+  "remeasurements": [],
+  "schema": "acp-nmr-benchmark-thresholds-v1",
+  "thresholds": {
+    "absent_confident_winner_rate": {
+      "op": "<=",
+      "rationale": "When the true structure is absent, a confident (DP4 >= 0.5) winner in more than 60% of cases is a false-confidence signal; refusal or low confidence is the desired behavior.",
+      "value": 0.6
+    },
+    "assignment_accuracy": {
+      "op": ">=",
+      "rationale": "Gap section 10.3 layer-2 assigned-statistical set: automatic assignment must recover reference labels on at least 90% of paired signals.",
+      "value": 0.9
+    },
+    "brier_dp5": {
+      "op": "<=",
+      "rationale": "A balanced positive/negative construction has chance Brier 0.25; the model must beat chance on the benchmark before any calibration claim.",
+      "value": 0.25
+    },
+    "item_refusal_rate": {
+      "op": "<=",
+      "rationale": "Share of items with no valid candidate; same 30% representativeness bound.",
+      "value": 0.3
+    },
+    "log_loss_dp5": {
+      "op": "<=",
+      "rationale": "Chance log-loss on a balanced set is ln 2 ~ 0.693; bound sits just above chance and is tightened by re-measurement.",
+      "value": 0.7
+    },
+    "refusal_rate": {
+      "op": "<=",
+      "rationale": "Gap section 10.3 requires reporting the failure/refusal share; more than 30% non-valid candidates makes aggregate metrics unrepresentative.",
+      "value": 0.3
+    },
+    "shift_mae_13c_ppm": {
+      "op": "<=",
+      "rationale": "DevDoc P1b target magnitude for 13C MAE (< 2 ppm) on assigned benchmark datasets.",
+      "value": 2.0
+    },
+    "shift_mae_1h_ppm": {
+      "op": "<=",
+      "rationale": "DevDoc P1b target magnitude for 1H MAE (< 0.1 ppm).",
+      "value": 0.1
+    },
+    "shift_rmse_13c_ppm": {
+      "op": "<=",
+      "rationale": "RMSE bound slightly looser than MAE; heavy-tail residuals must not hide behind the mean.",
+      "value": 3.0
+    },
+    "shift_rmse_1h_ppm": {
+      "op": "<=",
+      "rationale": "RMSE bound slightly looser than MAE for 1H.",
+      "value": 0.15
+    },
+    "top1_dp4": {
+      "op": ">=",
+      "rationale": "Gap section 10.3: candidate Top-1 (true structure ranked first) target ~90% magnitude; below this the dataset is exploratory.",
+      "value": 0.9
+    },
+    "top1_dp5": {
+      "op": ">=",
+      "rationale": "Same Top-1 bar when a DP5 probability is available; measured separately because null DP5 is excluded, never zeroed.",
+      "value": 0.9
+    }
+  }
+}
