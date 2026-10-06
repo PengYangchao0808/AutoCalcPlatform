@@ -190,7 +190,9 @@ def _stability_step_identity(identity: object, index: int) -> str | None:
     plan_identity = getattr(identity, "plan_identity", None)
     if not isinstance(plan_identity, str):
         return None
-    return identity_fingerprint({"scope": "stability", "index": index, "plan_identity": plan_identity})
+    return identity_fingerprint(
+        {"scope": "stability", "index": index, "plan_identity": plan_identity}
+    )
 
 
 def _step_scientific_record(
@@ -525,22 +527,7 @@ def _build_request(
     )
 
 
-def _product_kind_for_step(kind: StepKind) -> ProductKind:
-    """Map a step kind to the manifest product kind."""
-    mapping = {
-        StepKind.OPTIMIZE: ProductKind.STRUCTURE,
-        StepKind.FREQUENCY: ProductKind.FREQUENCY_MODES,
-        StepKind.SINGLEPOINT: ProductKind.ENERGY_REPORT,
-        StepKind.THERMOCHEMISTRY: ProductKind.THERMO_REPORT,
-        StepKind.SCAN: ProductKind.TRAJECTORY,
-        StepKind.CASSCF: ProductKind.MULTIREFERENCE_REPORT,
-    }
-    return mapping.get(kind, ProductKind.FILE)
-
-
-def _diagnostic_metadata(
-    base: dict[str, object], diagnostic: bool
-) -> dict[str, object]:
+def _diagnostic_metadata(base: dict[str, object], diagnostic: bool) -> dict[str, object]:
     """Stamp ``diagnostic_only`` on a product; diagnostics are never reusable."""
     if not diagnostic:
         return base
@@ -931,9 +918,7 @@ class CalculationPlanExecutor:
                         step.kind.value,
                         prerequisite.reason,
                     )
-                    self._write_result_manifest_tolerant(
-                        result_dir, plan, step_states, "running"
-                    )
+                    self._write_result_manifest_tolerant(result_dir, plan, step_states, "running")
                     self._persist_checkpoint(
                         runtime_dir,
                         fingerprint,
@@ -1135,9 +1120,7 @@ class CalculationPlanExecutor:
                 except Exception as exc:
                     state.status = "failed"
                     state.error = f"publication retry failed: {exc or type(exc).__name__}"
-                    logger.exception(
-                        "step %d (%s) publication retry failed", idx, step.kind.value
-                    )
+                    logger.exception("step %d (%s) publication retry failed", idx, step.kind.value)
                     self._persist_checkpoint(
                         runtime_dir,
                         fingerprint,
@@ -1298,9 +1281,7 @@ class CalculationPlanExecutor:
                     all_errors.append(f"step {state.index} ({state.kind.value}): {state.error}")
             elif state.status == "blocked":
                 overall_status = "failed"
-                blocked_reasons.append(
-                    {"index": state.index, "reason": state.blocked_reason}
-                )
+                blocked_reasons.append({"index": state.index, "reason": state.blocked_reason})
 
         self._write_result_manifest_tolerant(
             result_dir=result_dir,
@@ -1441,9 +1422,8 @@ class CalculationPlanExecutor:
         # D07 resume re-judgement: a diagnostic purpose persisted in
         # step_result.json must never be adopted as a normal result under
         # the default (block) policy — the step recomputes instead.
-        if (
-            self._execution_policy.upstream_failure != "diagnostics"
-            and payload_is_diagnostic(payload)
+        if self._execution_policy.upstream_failure != "diagnostics" and payload_is_diagnostic(
+            payload
         ):
             return _Adoption(
                 reason="diagnostic_result_not_reusable",
@@ -1474,9 +1454,7 @@ class CalculationPlanExecutor:
         if reason:
             return _Adoption(reason=reason, integrity_failed=True)
 
-        result = CalculationResult.from_step_result_dict(
-            payload, roots=(science_root, task_root)
-        )
+        result = CalculationResult.from_step_result_dict(payload, roots=(science_root, task_root))
         if kind is StepKind.CASSCF:
             # Shared science gate (plan todo 11): the same validator the
             # scientific-record publish-retry entry calls.  Receipt digests
@@ -1540,9 +1518,7 @@ class CalculationPlanExecutor:
                 step_work_dir, record=record, manifest=_step_publication_manifest(record)
             )
         except (OSError, ValueError, TypeError) as exc:
-            logger.warning(
-                "step %s publication failed: %s", result_id, exc, exc_info=True
-            )
+            logger.warning("step %s publication failed: %s", result_id, exc, exc_info=True)
             return f"publication failed: {exc}"
         return ""
 
@@ -1559,9 +1535,7 @@ class CalculationPlanExecutor:
         resume rebuilds and re-publishes it from the adopted results.
         """
         try:
-            CalculationPlanExecutor._write_result_manifest(
-                result_dir, plan, step_states, status
-            )
+            CalculationPlanExecutor._write_result_manifest(result_dir, plan, step_states, status)
         except (OSError, ValueError, TypeError) as exc:
             logger.warning(
                 "result_manifest_write_pending: publication retried on next resume (%s)",
@@ -1644,8 +1618,7 @@ class CalculationPlanExecutor:
             rel=rel,
             enabled=adoption_enabled,
             was_completed=(
-                self._loaded_completed_facts.get(stability_index, {}).get("status")
-                == "completed"
+                self._loaded_completed_facts.get(stability_index, {}).get("status") == "completed"
             ),
             kind=StepKind.SINGLEPOINT,
         )
@@ -1795,32 +1768,71 @@ class CalculationPlanExecutor:
                 continue
             diagnostic = state.result.metadata.get("diagnostic_only") is True
 
-            product_kind = _product_kind_for_step(state.kind)
             product_id = f"step_{state.index}_{state.kind.value}"
             label = f"{state.kind.value} (step {state.index})"
 
-            if state.kind is StepKind.OPTIMIZE and state.result.metadata.get("optimization_status") == "converged":
+            if (
+                state.kind is StepKind.OPTIMIZE
+                and state.result.metadata.get("optimization_status") == "converged"
+            ):
                 from acp.results.frame_candidate_store import atomic_write_text
                 from acp.results.structure_policy import single_geometry
+
                 source_item = plan.items[0] if plan.items else None
-                symbols = (source_item.elements if isinstance(source_item, StructureArtifact)
-                           else list((source_item or {}).get("elements") or (source_item or {}).get("symbols") or []))
+                symbols = (
+                    source_item.elements
+                    if isinstance(source_item, StructureArtifact)
+                    else list(
+                        (source_item or {}).get("elements")
+                        or (source_item or {}).get("symbols")
+                        or []
+                    )
+                )
                 coords = state.result.coords
                 if coords is not None and len(symbols) == len(coords):
-                    text = str(len(symbols)) + "\n" + label + "\n" + "\n".join(
-                        f"{symbol} {float(row[0]):.10f} {float(row[1]):.10f} {float(row[2]):.10f}"
-                        for symbol, row in zip(symbols, coords)) + "\n"
+                    text = (
+                        str(len(symbols))
+                        + "\n"
+                        + label
+                        + "\n"
+                        + "\n".join(
+                            f"{symbol} {float(row[0]):.10f} {float(row[1]):.10f} "
+                            f"{float(row[2]):.10f}"
+                            for symbol, row in zip(symbols, coords)
+                        )
+                        + "\n"
+                    )
                     geometry = single_geometry(text)
                     if geometry:
                         rel = f"structures/{product_id}.xyz"
                         atomic_write_text(result_dir / rel, text)
                         downstream = [s for s in step_states if s.index > state.index]
-                        freq = next((s.status for s in downstream if s.kind is StepKind.FREQUENCY), "pending")
-                        manifest.add_product(product_id, label, rel, ProductKind.STRUCTURE,
-                            metadata=_diagnostic_metadata({**geometry, "source_kind":"optimization", "optimization_status":"converged",
-                                      "frequency_status":freq, "stage_id":product_id,
-                                      "downstream_status":[{"kind":s.kind.value,"status":s.status} for s in downstream],
-                                      "auto_reusable":True, "policy_version":1}, diagnostic))
+                        freq = next(
+                            (s.status for s in downstream if s.kind is StepKind.FREQUENCY),
+                            "pending",
+                        )
+                        manifest.add_product(
+                            product_id,
+                            label,
+                            rel,
+                            ProductKind.STRUCTURE,
+                            metadata=_diagnostic_metadata(
+                                {
+                                    **geometry,
+                                    "source_kind": "optimization",
+                                    "optimization_status": "converged",
+                                    "frequency_status": freq,
+                                    "stage_id": product_id,
+                                    "downstream_status": [
+                                        {"kind": s.kind.value, "status": s.status}
+                                        for s in downstream
+                                    ],
+                                    "auto_reusable": True,
+                                    "policy_version": 1,
+                                },
+                                diagnostic,
+                            ),
+                        )
                         optimize_product_id = product_id
                         optimize_geometry_ref = "RESULT/" + rel
 
@@ -1846,9 +1858,9 @@ class CalculationPlanExecutor:
                         if optimize_geometry_ref is not None:
                             geo_path = result_dir.parent / optimize_geometry_ref
                             if geo_path.is_file():
-                                geo_fingerprint = hashlib.sha256(
-                                    geo_path.read_bytes()
-                                ).hexdigest()[:16]
+                                geo_fingerprint = hashlib.sha256(geo_path.read_bytes()).hexdigest()[
+                                    :16
+                                ]
                         manifest.add_product(
                             id=f"{product_id}_normal_modes",
                             label=f"{label} — normal modes",
@@ -1871,9 +1883,7 @@ class CalculationPlanExecutor:
                 # Remaining frequency artifacts (logs, etc.) as FILE products.
                 for artifact in other_artifacts:
                     try:
-                        rel_path = str(
-                            artifact.path.relative_to(result_dir.parent)
-                        )
+                        rel_path = str(artifact.path.relative_to(result_dir.parent))
                     except ValueError:
                         rel_path = str(artifact.path)
                     manifest.add_product(
@@ -1886,35 +1896,66 @@ class CalculationPlanExecutor:
             else:
                 # Only converged, valid single-geometry artifacts are reusable.
                 from acp.results.structure_policy import single_geometry
+
                 # Non-frequency steps: register artifacts with step-mapped kind.
                 for artifact in state.result.artifacts:
                     try:
-                        rel_path = str(
-                            artifact.path.relative_to(result_dir.parent)
-                        )
+                        rel_path = str(artifact.path.relative_to(result_dir.parent))
                     except ValueError:
                         rel_path = str(artifact.path)
                     manifest.add_product(
                         id=f"{product_id}_{artifact.type}",
                         label=f"{label} — {artifact.type}",
                         path=rel_path,
-                        kind=(ProductKind.FILE if state.kind is StepKind.OPTIMIZE else product_kind),
+                        kind=ProductKind.FILE,
                         metadata=_diagnostic_metadata(
-                            {"stage_status": state.status, "stage_id": product_id,
-                             "optimization_status": state.result.metadata.get("optimization_status", "unknown"),
-                             "policy_version": 1},
+                            {
+                                "stage_status": state.status,
+                                "stage_id": product_id,
+                                "optimization_status": state.result.metadata.get(
+                                    "optimization_status", "unknown"
+                                ),
+                                "policy_version": 1,
+                            },
                             diagnostic,
                         ),
                     )
 
-            # register energy as a file product if available
+            # Publish energy as a real RESULT/energy file (plan D6/T11).
             if state.result.energy is not None:
+                from acp.results.frame_candidate_store import atomic_write_text
+
+                energy_hartree = float(state.result.energy)
+                method = plan.profile or ""
+                if state.index < len(plan.steps):
+                    method = _extract_method_from_resources(
+                        _step_resources(_normalise_step(plan.steps[state.index])), method
+                    )
+                rel = f"energy/{product_id}.json"
+                atomic_write_text(
+                    result_dir / rel,
+                    json.dumps(
+                        {
+                            "schema_version": "acp_energy_product_v1",
+                            "step_id": product_id,
+                            "step_kind": state.kind.value,
+                            "energy": energy_hartree,
+                            "energy_hartree": energy_hartree,
+                            "unit": "hartree",
+                            "method": method,
+                            "source": "scientific_result.json",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                )
                 manifest.add_product(
                     id=f"{product_id}_energy",
                     label=f"{label} — energy",
-                    path="",
+                    path=rel,
                     kind=ProductKind.ENERGY_REPORT,
-                    metadata=_diagnostic_metadata({}, diagnostic),
+                    metadata=_diagnostic_metadata({"energy_hartree": energy_hartree}, diagnostic),
                 )
 
         register_result_manifest(result_dir, manifest)

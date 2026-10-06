@@ -94,3 +94,58 @@ def test_old_manifest_backward_compat(tmp_path: Path) -> None:
         ProductKind.STRUCTURE,
         ProductKind.ENERGY_REPORT,
     ]
+
+
+def test_energy_product_path_and_metadata_roundtrip(tmp_path: Path) -> None:
+    result_dir = tmp_path / "RESULT"
+    (result_dir / "energy").mkdir(parents=True)
+    (result_dir / "energy" / "step_0_singlepoint.json").write_text(
+        json.dumps({"energy": -76.4, "unit": "hartree"}),
+        encoding="utf-8",
+    )
+    manifest = ResultManifest(task_id="task_energy", workflow="singlepoint", status="completed")
+
+    manifest.add_product(
+        "step_0_singlepoint_energy",
+        "singlepoint (step 0) — energy",
+        "energy/step_0_singlepoint.json",
+        ProductKind.ENERGY_REPORT,
+        metadata={"energy_hartree": -76.4},
+    )
+
+    manifest.write(result_dir)
+    loaded = ResultManifest.read(result_dir)
+
+    product = loaded.products[0]
+    assert product.path == "energy/step_0_singlepoint.json"
+    assert product.kind is ProductKind.ENERGY_REPORT
+    assert product.metadata["energy_hartree"] == -76.4
+    assert (result_dir / product.path).is_file()
+
+
+def test_empty_path_energy_product_reads_without_error(tmp_path: Path) -> None:
+    result_dir = tmp_path / "RESULT"
+    result_dir.mkdir()
+    old_manifest = {
+        "version": 2,
+        "task_id": "legacy_task",
+        "workflow": "optimize",
+        "status": "failed",
+        "products": [
+            {
+                "id": "step_0_singlepoint_energy",
+                "label": "singlepoint (step 0) — energy",
+                "path": "",
+                "kind": "energy_report",
+            }
+        ],
+    }
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(old_manifest),
+        encoding="utf-8",
+    )
+
+    loaded = ResultManifest.read(result_dir)
+
+    assert loaded.to_dict() == old_manifest
+    assert loaded.products[0].path == ""

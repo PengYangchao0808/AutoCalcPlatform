@@ -29,7 +29,7 @@ from acp.calculations.executor import CalculationPlanExecutor, _run_thermochemis
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
-from acp.storage.manifest import ResultManifest
+from acp.storage.manifest import ProductKind, ResultManifest
 from cccp import calculation as cccp_calculation
 from tests.conftest import FakeBackend
 
@@ -830,3 +830,161 @@ def test_casscf_record_publish_retry_restores_without_qc(
     publication = result_publication.load_publication_state(step_dir)
     assert publication is not None and publication.complete is True
     assert step_dir.joinpath("step_result.json").is_file(), "receipt re-materialised"
+
+
+# ── T11/D6: real RESULT/energy product files ───────────────────────────────
+
+_ENERGY_PRODUCING_KINDS = (
+    StepKind.SINGLEPOINT,
+    StepKind.OPTIMIZE,
+    StepKind.FREQUENCY,
+    StepKind.SCAN,
+    StepKind.CASSCF,
+)
+
+
+def _single_step_plan(task_root: Path, kind: StepKind) -> CalculationPlan:
+    return CalculationPlan(
+        workflow="test",
+        profile="r2SCAN-3c",
+        items=[
+            StructureArtifact(
+                path=_make_input_xyz(task_root),
+                elements=["C"],
+                source="test",
+            )
+        ],
+        steps=[CalculationStep(kind=kind)],
+    )
+
+
+@pytest.mark.parametrize("kind", _ENERGY_PRODUCING_KINDS)
+def test_energy_product_publishes_real_file(kind: StepKind, tmp_path: Path) -> None:
+    """(a) each energy-producing step kind publishes a readable RESULT file."""
+    task_root = tmp_path
+    expected_energy = -76.4
+    calls: dict[str, int] = {}
+
+    def dispatch(request: object) -> CalculationResult:
+        calls["n"] = calls.get("n", 0) + 1
+        return CalculationResult(status="completed", energy=expected_energy)
+
+    plan = _single_step_plan(task_root, kind)
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, {kind: dispatch}):
+        result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert result.is_completed, f"{kind.value} step did not complete"
+    assert calls["n"] == 1
+
+    product_id = f"step_0_{kind.value}"
+    manifest = ResultManifest.read(task_root / "RESULT")
+    matches = [p for p in manifest.products if p.id == f"{product_id}_energy"]
+    assert len(matches) == 1
+    product = matches[0]
+    assert product.kind is ProductKind.ENERGY_REPORT
+    assert product.path == f"energy/{product_id}.json"
+    assert product.metadata.get("energy_hartree") == expected_energy
+
+    energy_path = task_root / "RESULT" / product.path
+    assert energy_path.is_file()
+    payload = json.loads(energy_path.read_text(encoding="utf-8"))
+    assert payload["energy"] == expected_energy
+    assert payload["energy_hartree"] == expected_energy
+    assert payload["unit"] == "hartree"
+    assert payload["step_id"] == product_id
+    assert payload["step_kind"] == kind.value
+    assert payload["method"] == "r2SCAN-3c"
+
+
+def test_energy_product_id_stable_and_value_matches_scientific_record(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """(b) frozen energy product id; published value equals the scientific record."""
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    plan = _singlepoint_plan(tmp_path)
+
+    result = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    assert result.is_completed
+    manifest = ResultManifest.read(tmp_path / "RESULT")
+    energy_products = [p for p in manifest.products if p.kind is ProductKind.ENERGY_REPORT]
+    assert [p.id for p in energy_products] == ["step_0_singlepoint_energy"]
+    assert energy_products[0].path == "energy/step_0_singlepoint.json"
+    for product in manifest.products:
+        if product.kind is ProductKind.ENERGY_REPORT:
+            assert product.path.startswith("energy/"), (
+                f"energy product {product.id} must not carry a WORK path"
+            )
+
+    published = json.loads(
+        (tmp_path / "RESULT" / "energy" / "step_0_singlepoint.json").read_text(encoding="utf-8")
+    )
+    scientific = json.loads(
+        (tmp_path / "WORK" / "05_SP" / "scientific_result.json").read_text(encoding="utf-8")
+    )
+    assert published["energy"] == scientific["summary"]["energy_hartree"] == -40.5
+
+
+def test_energy_publish_interrupted_resume_republishes_only(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """(c) interrupted energy publication → resume re-publishes, QC count flat."""
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    plan = _singlepoint_plan(tmp_path)
+    energy_file = tmp_path / "RESULT" / "energy" / "step_0_singlepoint.json"
+
+    import acp.results.frame_candidate_store as frame_candidate_store
+
+    real_write = frame_candidate_store.atomic_write_text
+    active = {"on": True}
+
+    def flaky_write(path: Path, text: str) -> None:
+        if active["on"] and Path(path).parent.name == "energy":
+            raise OSError("injected energy publish failure")
+        real_write(path, text)
+
+    monkeypatch.setattr(frame_candidate_store, "atomic_write_text", flaky_write)
+
+    result1 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+    assert result1.is_completed
+    assert not energy_file.exists(), "interrupted publication must leave no energy file"
+    assert len(fake_backend.calls) == 1
+
+    active["on"] = False
+    result2 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    assert result2.is_completed
+    assert len(fake_backend.calls) == 1, "publish-only retry must not re-run QC"
+    assert energy_file.is_file()
+    payload = json.loads(energy_file.read_text(encoding="utf-8"))
+    assert payload["energy"] == -40.5
+    assert payload["unit"] == "hartree"
+
+
+def test_old_empty_path_energy_manifest_reads(tmp_path: Path) -> None:
+    """(d) a legacy manifest with ``path: ""`` energy products reads without error."""
+    result_dir = tmp_path / "RESULT"
+    result_dir.mkdir()
+    legacy = {
+        "version": 2,
+        "task_id": "legacy",
+        "workflow": "optimize",
+        "status": "failed",
+        "products": [
+            {
+                "id": "step_0_singlepoint_energy",
+                "label": "singlepoint (step 0) — energy",
+                "path": "",
+                "kind": "energy_report",
+            }
+        ],
+    }
+    (result_dir / "result_manifest.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+    loaded = ResultManifest.read(result_dir)
+
+    assert loaded.to_dict() == legacy
+    assert loaded.products[0].path == ""
