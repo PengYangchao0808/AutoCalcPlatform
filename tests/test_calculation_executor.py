@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -14,6 +15,7 @@ import acp.calculations.executor as executor_module
 from acp.backends.base import QCResult
 from acp.calculations import result_publication
 from acp.calculations.contracts import (
+    ArtifactRef,
     CalculationPlan,
     CalculationRequest,
     CalculationResult,
@@ -521,3 +523,310 @@ def test_executor_recovery_retries_publish_only(
     assert len(fake_backend.calls) == qc_calls_after_first
     state_loaded = result_publication.load_publication_state(step_dir)
     assert state_loaded is not None and state_loaded.complete is True
+
+
+# ── CASSCF completion gating + conservative recovery (T10/D5) ──────────────
+
+_CASSCF_STEP_SPEC: dict[str, JsonValue] = {
+    "method": "casscf",
+    "backend": "orca",
+    "casscf": {"active_electrons": 2, "active_orbitals": 2},
+}
+
+_CASSCF_CONVERGED_METADATA: dict[str, JsonValue] = {
+    "casscf": {
+        "casscf_energy_hartree": -109.0,
+        "natural_occupations": [1.9, 0.1],
+        "nevpt2_roots": [],
+        "converged": True,
+    }
+}
+
+_CASSCF_NOT_CONVERGED_METADATA: dict[str, JsonValue] = {
+    "casscf": {
+        "casscf_energy_hartree": -109.0,
+        "natural_occupations": [1.6, 0.4],
+        "nevpt2_roots": [],
+        "converged": False,
+    }
+}
+
+
+def _casscf_plan(task_root: Path, *, with_dependent: bool = False) -> CalculationPlan:
+    """A CAS plan (optionally followed by a dependent singlepoint step)."""
+    task_root.mkdir(parents=True, exist_ok=True)
+    steps = [CalculationStep(kind=StepKind.CASSCF, spec=dict(_CASSCF_STEP_SPEC))]
+    if with_dependent:
+        steps.append(CalculationStep(kind=StepKind.SINGLEPOINT, spec={"method": "r2SCAN-3c"}))
+    return CalculationPlan(
+        workflow="casscf",
+        profile="default",
+        items=[
+            StructureArtifact(path=_make_input_xyz(task_root), elements=["C"], source="test"),
+        ],
+        steps=steps,
+    )
+
+
+def _casscf_recompute_dispatch(calls: dict[str, int]) -> dict[StepKind, object]:
+    def recompute(request: object) -> CalculationResult:
+        calls["casscf"] = calls.get("casscf", 0) + 1
+        return CalculationResult(
+            energy=-108.5,
+            metadata={"multireference": {"converged": True}},
+        )
+
+    return {StepKind.CASSCF: recompute}
+
+
+def test_casscf_not_converged_fails_and_blocks_dependents(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """(b) backend success + parsed converged=false → failed + blocked + not completed."""
+    fake_backend.set_result(
+        "casscf",
+        QCResult(
+            success=True,
+            energy=-109.14691549,
+            symbols=["C"],
+            converged=False,
+            metadata=dict(_CASSCF_NOT_CONVERGED_METADATA),
+        ),
+    )
+    task_root = tmp_path / "task"
+    plan = _casscf_plan(task_root, with_dependent=True)
+    sp_spy = Mock(return_value=CalculationResult(energy=-40.5))
+
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, {StepKind.SINGLEPOINT: sp_spy}):
+        result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert result.is_failed
+    assert [state.status for state in result.step_states] == ["failed", "blocked"]
+    assert result.blocked_reasons == [{"index": 1, "reason": "upstream_failed"}]
+    assert sp_spy.call_count == 0, "dependent steps must not run after a CAS failure"
+    assert len(fake_backend.calls) == 1, "only the necessary CAS invocation happened"
+
+    cas_state = result.step_states[0]
+    assert cas_state.result is not None
+    assert cas_state.result.energy == pytest.approx(-109.14691549)
+    assert cas_state.result.metadata["multireference"]["converged"] is False
+    assert (task_root / "WORK" / "08_CASSCF" / "active_space.json").is_file()
+    assert ResultManifest.read(task_root / "RESULT").status == "failed"
+
+
+def test_casscf_step_result_adoption_refuses_false_convergence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """(c1) a stored completed receipt with converged=false is never adopted."""
+    from acp.calculations.checkpoint import write_checkpoint
+    from acp.calculations.contracts import Checkpoint
+    from acp.calculations.identity import compute_identity
+    from acp.calculations.step_result import STEP_RESULT_SCHEMA_VERSION, write_step_result
+
+    task_root = tmp_path / "task"
+    plan = _casscf_plan(task_root)
+    identity = compute_identity(plan)
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    step_dir.mkdir(parents=True)
+    receipt = CalculationResult(
+        status="completed",
+        energy=-108.5,
+        metadata={"multireference": {"converged": False, "casscf_energy_hartree": -108.5}},
+    )
+    payload = receipt.to_step_result_dict(root=task_root)
+    payload.update(
+        {
+            "schema_version": STEP_RESULT_SCHEMA_VERSION,
+            "step_identity": identity.step_identities[0],
+            "step_id": executor_module._step_id(0, StepKind.CASSCF),
+            "index": 0,
+            "kind": "casscf",
+            "symbols": ["C"],
+            "job_id": None,
+            "attempt": None,
+            "code_release": "",
+            "config_digest": None,
+            "dependency_artifacts": [],
+        }
+    )
+    digest = write_step_result(step_dir / "step_result.json", payload)
+    write_checkpoint(
+        task_root / "WORK" / "00_RUNTIME",
+        Checkpoint(
+            task_id="t11_c1",
+            workflow="casscf",
+            plan_fingerprint=identity.plan_identity,
+            step_states=[
+                {
+                    "index": 0,
+                    "kind": "casscf",
+                    "status": "completed",
+                    "error": "",
+                    "energy": -108.5,
+                    "executed_this_run": False,
+                    "last_executed_attempt": 1,
+                    "result_ref": {
+                        "path": "WORK/08_CASSCF/step_result.json",
+                        "sha256": digest,
+                    },
+                    "reused_from_attempt": None,
+                }
+            ],
+            items_state={},
+            resume_count=0,
+            identity_schema=2,
+        ),
+    )
+    monkeypatch.setattr(executor_module, "current_config_digest", lambda: None)
+
+    calls: dict[str, int] = {}
+    with caplog.at_level(logging.INFO):
+        with patch.dict(executor_module._PRIMITIVE_DISPATCH, _casscf_recompute_dispatch(calls)):
+            result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert "recovery.step_not_adopted" in caplog.text
+    assert "cas_not_converged" in caplog.text
+    assert calls.get("casscf", 0) == 1, "refused adoption must conservatively recompute once"
+    assert result.is_completed
+    state = result.step_states[0]
+    assert state.executed_this_run is True
+    assert state.reused_from_attempt is None
+
+
+def test_casscf_scientific_record_entry_refuses_false_convergence(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """(c2) the publish-retry entry must not restore converged=false records."""
+    from acp.calculations.identity import compute_identity
+
+    task_root = tmp_path / "task"
+    plan = _casscf_plan(task_root)
+    identity = compute_identity(plan)
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    step_dir.mkdir(parents=True)
+    log_path = step_dir / "casscf.log"
+    log_path.write_text("CAS-SCF did not converge\n", encoding="utf-8")
+    science = CalculationResult(
+        status="completed",
+        energy=-108.5,
+        artifacts=[ArtifactRef(path=log_path, type="log", source="test")],
+        metadata={"multireference": {"converged": False}},
+    )
+    record = executor_module._step_scientific_record(
+        science,
+        result_id=executor_module._step_result_id(identity.plan_identity, 0, StepKind.CASSCF),
+        kind=StepKind.CASSCF,
+        result_dir=step_dir,
+    )
+    result_publication.save_scientific_result(step_dir, record)
+
+    calls: dict[str, int] = {}
+    with caplog.at_level(logging.INFO):
+        with patch.dict(executor_module._PRIMITIVE_DISPATCH, _casscf_recompute_dispatch(calls)):
+            result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert "recovery.scientific_result_not_reusable" in caplog.text
+    assert "cas_not_converged" in caplog.text
+    assert calls.get("casscf", 0) == 1, "only the necessary recompute executes QC"
+    assert result.is_completed
+    assert result.step_states[0].executed_this_run is True
+
+
+def _run_casscf_with_flaky_publish(
+    fake_backend: FakeBackend,
+    task_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> int:
+    """Execute one CAS plan once with an injected publish failure; QC count."""
+    real_register = result_publication.register_result_manifest
+    state = {"failures": 1}
+
+    def flaky_register(result_dir, manifest):  # type: ignore[no-untyped-def]
+        if state["failures"]:
+            state["failures"] -= 1
+            raise OSError("injected manifest write failure")
+        return real_register(result_dir, manifest)
+
+    monkeypatch.setattr(result_publication, "register_result_manifest", flaky_register)
+    plan = _casscf_plan(task_root)
+    first = CalculationPlanExecutor().execute(plan, task_root=task_root)
+    assert first.is_failed
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    assert result_publication.load_scientific_result(step_dir) is not None
+    return len(fake_backend.calls)
+
+
+def test_casscf_publish_retry_adopts_receipt_without_qc(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """(d) true-converged publish-only retry: QC invocation count unchanged."""
+    fake_backend.set_result(
+        "casscf",
+        QCResult(
+            success=True,
+            energy=-109.14691549,
+            symbols=["C"],
+            converged=True,
+            metadata=dict(_CASSCF_CONVERGED_METADATA),
+        ),
+    )
+    task_root = tmp_path / "task"
+    qc_after_first = _run_casscf_with_flaky_publish(fake_backend, task_root, monkeypatch)
+    assert qc_after_first == 1
+
+    result = CalculationPlanExecutor().execute(_casscf_plan(task_root), task_root=task_root)
+
+    assert result.is_completed
+    assert len(fake_backend.calls) == qc_after_first, "publish retry must not re-run QC"
+    state = result.step_states[0]
+    assert state.status == "completed"
+    assert state.executed_this_run is False
+    publication = result_publication.load_publication_state(task_root / "WORK" / "08_CASSCF")
+    assert publication is not None and publication.complete is True
+
+
+def test_casscf_record_publish_retry_restores_without_qc(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """(d, entry ii) a converged record restores completed without QC."""
+    fake_backend.set_result(
+        "casscf",
+        QCResult(
+            success=True,
+            energy=-109.14691549,
+            symbols=["C"],
+            converged=True,
+            metadata=dict(_CASSCF_CONVERGED_METADATA),
+        ),
+    )
+    task_root = tmp_path / "task"
+    qc_after_first = _run_casscf_with_flaky_publish(fake_backend, task_root, monkeypatch)
+    assert qc_after_first == 1
+
+    # Remove the receipt so only the WORK-layer scientific record remains
+    # (the legacy publication-only branch reaches entry (ii)).
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    (step_dir / "step_result.json").unlink()
+    cp_path = task_root / "WORK" / "00_RUNTIME" / "checkpoint.json"
+    cp_payload = json.loads(cp_path.read_text(encoding="utf-8"))
+    cp_payload["step_states"][0]["status"] = "pending"
+    cp_payload["step_states"][0]["result_ref"] = None
+    cp_path.write_text(json.dumps(cp_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = CalculationPlanExecutor().execute(_casscf_plan(task_root), task_root=task_root)
+
+    assert result.is_completed
+    assert len(fake_backend.calls) == qc_after_first, (
+        "the scientific-record publish-retry entry must not re-run QC"
+    )
+    publication = result_publication.load_publication_state(step_dir)
+    assert publication is not None and publication.complete is True
+    assert step_dir.joinpath("step_result.json").is_file(), "receipt re-materialised"

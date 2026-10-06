@@ -164,6 +164,25 @@ files → ④ `publication_state.json` marker.
   run never raises `IndexError` nor reuses the mis-bound completed fact
   (FREQ recomputes; adopted SP QC stays 0).
 
+### (i) `v2_casscf_not_converged/` — converged=false-completed CASSCF counterexample (plan todo 11)
+- Single CASSCF-step plan (`workflow=casscf`, content-bound identity) whose
+  `WORK/08_CASSCF/` carries BOTH durable receipts as a stale `completed`
+  state: `step_result.json` (schema 1, `step_identity`, artifact sha256 over
+  `casscf.log` + `active_space.json`, `config_digest: null`) and the
+  publication-sequence `scientific_result.json` / `result_manifest.json` /
+  `publication_state.json` — every record's CAS convergence fact
+  (`metadata.multireference.converged`) is **false**; the checkpoint marks
+  the step `completed` with its `result_ref`.
+- **Verified by** (smoke) `test_v2_casscf_not_converged_never_adopted` —
+  the `step_result.json` adoption entry refuses the receipt through the
+  shared `validate_casscf_completion` validator (`recovery.step_not_adopted`
+  + `cas_not_converged`) and conservatively recomputes; and
+  `test_v2_casscf_not_converged_record_entry_never_restored` — with the
+  receipt removed, the `scientific_result.json` publish-retry entry refuses
+  through the SAME validator (`recovery.scientific_result_not_reusable`)
+  instead of restoring `completed`.  Never regenerated (counterexample is
+  frozen state).
+
 ## v1 recovery semantics frozen by the smoke suite
 
 - **Default = conservative recompute + event.**  A schema-less (schema 1)

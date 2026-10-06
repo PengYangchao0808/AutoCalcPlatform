@@ -733,3 +733,91 @@ def test_fingerprint_stable_across_contract_field_moves(tmp_path: Path) -> None:
     payload: dict[str, object] = {"scope": "plan", "alpha": 1, "beta": {"x": 1, "y": 2}}
     reversed_payload = dict(reversed(list(payload.items())))
     assert identity_fingerprint(payload) == identity_fingerprint(reversed_payload)
+
+
+# ── (i) converged=false-completed CASSCF counterexample (plan todo 11) ──────
+
+
+def _casscf_fixture_plan(root: Path) -> CalculationPlan:
+    """Rebuild the ``v2_casscf_not_converged`` plan (content-bound identity)."""
+    return CalculationPlan(
+        workflow="casscf",
+        profile="default",
+        items=[StructureArtifact(path=root / "structures" / "input.xyz", elements=["O", "H", "H"])],
+        steps=[
+            CalculationStep(
+                kind=StepKind.CASSCF,
+                spec={"casscf": {"active_electrons": 2, "active_orbitals": 2}},
+            )
+        ],
+    )
+
+
+def _execute_casscf_fixture(root: Path, calls: dict[str, int]) -> ExecutionResult:
+    """Execute the CAS counterexample plan with fake QC (counted) dispatch."""
+
+    def cas(request: object) -> CalculationResult:
+        calls["casscf"] = calls.get("casscf", 0) + 1
+        return CalculationResult(energy=-108.5, metadata={"multireference": {"converged": True}})
+
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, {StepKind.CASSCF: cas}):
+        with patch.object(executor_module, "current_config_digest", lambda: None):
+            return CalculationPlanExecutor().execute(_casscf_fixture_plan(root), root)
+
+
+def test_v2_casscf_not_converged_never_adopted(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The ``step_result.json`` entry refuses a converged=false receipt.
+
+    Identity + artifact digests verify, but the shared science validator
+    refuses the stale ``completed`` fact — recovery conservatively
+    recomputes exactly once and never reports ``reused_from_attempt``.
+    """
+    root = _copy_fixture("v2_casscf_not_converged", tmp_path)
+    stored = _stored_identity(root)
+    identity = compute_identity(_casscf_fixture_plan(root))
+    assert identity.plan_identity == stored["plan_identity"]
+    assert list(identity.step_identities) == stored["step_identities"]
+
+    calls: dict[str, int] = {}
+    with caplog.at_level(logging.INFO):
+        result = _execute_casscf_fixture(root, calls)
+
+    assert "recovery.step_not_adopted" in caplog.text
+    assert "cas_not_converged" in caplog.text
+    assert calls.get("casscf", 0) == 1, "refused receipt must conservatively recompute"
+    assert result.is_completed
+    state = result.step_states[0]
+    assert state.executed_this_run is True
+    assert state.reused_from_attempt is None
+
+
+def test_v2_casscf_not_converged_record_entry_never_restored(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The ``scientific_result.json`` entry never restores converged=false.
+
+    With the receipt removed (legacy publication-only branch), the SAME
+    validator refuses the record's false fact — the step recomputes
+    instead of being restored as ``completed`` without QC evidence.
+    """
+    root = _copy_fixture("v2_casscf_not_converged", tmp_path)
+    (root / "WORK" / "08_CASSCF" / "step_result.json").unlink()
+    runtime = root / "WORK" / "00_RUNTIME"
+    payload = json.loads((runtime / "checkpoint.json").read_text(encoding="utf-8"))
+    payload["step_states"][0]["status"] = "pending"
+    payload["step_states"][0]["result_ref"] = None
+    (runtime / "checkpoint.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    calls: dict[str, int] = {}
+    with caplog.at_level(logging.INFO):
+        result = _execute_casscf_fixture(root, calls)
+
+    assert "recovery.scientific_result_not_reusable" in caplog.text
+    assert "cas_not_converged" in caplog.text
+    assert calls.get("casscf", 0) == 1, "record refusal must conservatively recompute"
+    assert result.is_completed
+    assert result.step_states[0].status == "completed"

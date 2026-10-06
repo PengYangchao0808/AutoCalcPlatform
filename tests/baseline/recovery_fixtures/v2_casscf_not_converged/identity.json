@@ -1,0 +1,32 @@
+{
+  "plan_identity": "v2:052106151753ea19bf3c1d22b7de2dfe",
+  "plan_repr": {
+    "items": [
+      {
+        "elements": [
+          "O",
+          "H",
+          "H"
+        ],
+        "path": "structures/input.xyz"
+      }
+    ],
+    "profile": "default",
+    "steps": [
+      {
+        "kind": "casscf",
+        "mode": "unconstrained",
+        "spec": {
+          "casscf": {
+            "active_electrons": 2,
+            "active_orbitals": 2
+          }
+        }
+      }
+    ],
+    "workflow": "casscf"
+  },
+  "step_identities": [
+    "v2:e44db28af6a80fd6dd2ce02da422db4b"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": "casscf.log",
+      "kind": "file",
+      "label": "casscf.log",
+      "path": "casscf.log"
+    },
+    {
+      "id": "active_space.json",
+      "kind": "file",
+      "label": "active_space.json",
+      "path": "active_space.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "v2:052106151753ea19bf3c1d22b7de2dfe-step0-casscf",
+  "version": 2,
+  "workflow": "casscf"
+}

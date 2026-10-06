@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +65,137 @@ _BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 _ACTIVE_SPACE_REQUIRED = (
     "CASSCF requires an active-space definition (active_electrons/active_orbitals)"
 )
+
+
+# ── shared science-completion validator (plan todo 11 / T10-D5) ─────────
+
+
+@dataclass(frozen=True)
+class CasscfCompletionVerdict:
+    """Verdict of :func:`validate_casscf_completion`.
+
+    ``reason`` is ``""`` when ``passed``; otherwise one of the stable
+    tokens ``integrity_unverified`` / ``requested_artifacts_missing`` /
+    ``cas_not_converged`` / ``convergence_fact_missing``.
+    """
+
+    passed: bool
+    reason: str = ""
+
+
+def extract_cas_convergence_fact(metadata: Mapping[str, Any] | None) -> bool | None:
+    """Return the three-state CAS convergence fact from persisted metadata.
+
+    Reads the production ``metadata["multireference"]["converged"]`` block
+    first (the legacy-shaped record every CASSCF receipt/scientific record
+    carries once produced by this task core), falling back to the raw
+    ``metadata["casscf"]["converged"]`` parser block.  ``None`` means no
+    convergence fact was recorded (old or foreign evidence) — never an
+    implicit ``True``.
+    """
+    if not isinstance(metadata, Mapping):
+        return None
+    for key in ("multireference", "casscf"):
+        block = metadata.get(key)
+        if isinstance(block, Mapping) and "converged" in block:
+            value = block.get("converged")
+            if isinstance(value, bool):
+                return value
+    return None
+
+
+def _rejudge_cas_log(log_path: Path) -> bool | None:
+    """Re-judge convergence from the original log with the CURRENT parser.
+
+    ``None`` means the log was unreadable — no evidence either way (the
+    caller falls back to the recorded fact).  Truncated / incomplete logs
+    parse to ``False`` (the parser never relaxes that rule).
+    """
+    # Lazy import: keep this module free of QC-interface load cost so the
+    # task core and the ACP executor can import it cheaply.
+    from cccp.qc.interfaces.orca import parse_casscf_output
+
+    try:
+        parsed = parse_casscf_output(log_path)
+    except OSError:
+        return None
+    value = parsed.get("converged")
+    return value if isinstance(value, bool) else None
+
+
+def validate_casscf_completion(
+    metadata: Mapping[str, Any] | None,
+    *,
+    artifact_paths: Sequence[Path | str] = (),
+    log_path: Path | str | None = None,
+    integrity_valid: bool = True,
+    allow_log_rejudge: bool = False,
+) -> CasscfCompletionVerdict:
+    """The single CASSCF science-completion validator (plan todo 11).
+
+    Invoked by the task core on fresh execution AND by both recovery
+    entries of the ACP plan executor — the ``step_result.json`` adoption
+    path and the ``scientific_result.json`` publication-retry path.  The
+    executor only CALLS this validator; it never re-implements the science.
+
+    Checks, in order:
+
+    1. *integrity_valid* — the caller verified identity/digest (receipt
+       ``step_identity`` + artifact sha256, or the record ``result_id``);
+    2. every requested artifact in *artifact_paths* exists on disk;
+    3. the CAS convergence fact: an explicit ``False`` never passes; an
+       explicit ``True`` passes; an absent fact is re-judged from the
+       original log ONLY when *allow_log_rejudge* (digest-verified log —
+       receipts verified by ``verify_step_result``) and the log parses to
+       converged under the current parser rules.  Anything else is refused
+       so the caller conservatively recomputes.  Reading never rewrites
+       historical task data.
+
+    Args:
+        metadata: Persisted task metadata (or ``None`` when absent).
+        artifact_paths: Requested artifacts that must all be present.
+        log_path: Candidate original CAS log for conservative re-judgement.
+        integrity_valid: Caller-verified identity/digest outcome.
+        allow_log_rejudge: Whether the log's digest/identity was verified
+            (only the ``step_result.json`` adoption path can offer this).
+
+    Returns:
+        The verdict; ``passed=False`` carries a stable ``reason`` token.
+    """
+    if not integrity_valid:
+        return CasscfCompletionVerdict(False, "integrity_unverified")
+    for raw_path in artifact_paths:
+        if not Path(raw_path).is_file():
+            return CasscfCompletionVerdict(False, "requested_artifacts_missing")
+    fact = extract_cas_convergence_fact(metadata)
+    if fact is False:
+        # An explicit non-convergence fact is conclusive: a log must never
+        # "rescue" a receipt that recorded CAS non-convergence.
+        return CasscfCompletionVerdict(False, "cas_not_converged")
+    if allow_log_rejudge and log_path is not None:
+        log = Path(log_path)
+        if log.is_file():
+            rejudged = _rejudge_cas_log(log)
+            if rejudged is False:
+                # Stale or absent fact re-judged against the original log
+                # under the current parser rules.
+                return CasscfCompletionVerdict(False, "cas_not_converged")
+            if rejudged is True:
+                return CasscfCompletionVerdict(True)
+            # Unreadable log → no evidence; fall back to the recorded fact.
+    if fact is True:
+        return CasscfCompletionVerdict(True)
+    return CasscfCompletionVerdict(False, "convergence_fact_missing")
+
+
+def _completion_failure_message(reason: str) -> str:
+    if reason == "requested_artifacts_missing":
+        return "CASSCF required artifact missing after calculation"
+    if reason == "convergence_fact_missing":
+        return "CASSCF completion not proven: no CAS convergence fact recorded"
+    if reason == "integrity_unverified":
+        return "CASSCF completion not proven: identity/digest not verified"
+    return "CASSCF calculation did not converge (CAS convergence not proven)"
 
 
 def run_casscf(
@@ -229,6 +362,38 @@ def run_casscf(
     artifacts.extend(_write_active_space_artifacts(target_dir, multireference, backend_label))
     metadata["multireference"] = multireference
     payload: CasscfPayload = casscf_payload_from_multireference(multireference)
+
+    # Completion gate: backend success + energy is NOT enough — completed
+    # only with an explicit CAS convergence fact AND the requested
+    # artifacts present (shared validator, plan todo 11).
+    required_artifacts: tuple[Path, ...] = (
+        (target_dir / "active_space.json",) if target_dir is not None else ()
+    )
+    verdict = validate_casscf_completion(
+        metadata, artifact_paths=required_artifacts, integrity_valid=True
+    )
+    if not verdict.passed:
+        error_kind = (
+            ErrorKind.BACKEND_FAILURE
+            if verdict.reason == "requested_artifacts_missing"
+            else ErrorKind.NOT_CONVERGED
+        )
+        return TaskResult(
+            task=TaskKind.CASSCF,
+            status="failed",
+            complete=False,
+            error_kind=error_kind,
+            errors=(_completion_failure_message(verdict.reason),),
+            energy_hartree=qc_result.energy,
+            coordinates=_coordinates(qc_result),
+            symbols=_symbols(qc_result),
+            artifacts=tuple(artifacts),
+            provenance=_provenance(backend_label, request),
+            payload=None,
+            metadata=metadata,
+            converged=extract_cas_convergence_fact(metadata),
+        )
+
     return TaskResult(
         task=TaskKind.CASSCF,
         status="completed",
@@ -241,6 +406,7 @@ def run_casscf(
         provenance=_provenance(backend_label, request),
         payload=payload,
         metadata=metadata,
+        converged=True,
     )
 
 
@@ -272,7 +438,10 @@ def _multireference_metadata(
         "correlated_energy_hartree": parsed.get("correlated_energy_hartree"),
         "natural_occupations": parsed.get("natural_occupations") or [],
         "nevpt2_roots": parsed.get("nevpt2_roots") or [],
-        "converged": bool(parsed.get("converged")),
+        # Production parser facts ride both channels identically; the
+        # QCResult channel covers legacy/mock backends that only set the
+        # envelope flag (never an implicit True: both default to False).
+        "converged": bool(parsed.get("converged")) or bool(getattr(qc_result, "converged", False)),
     }
 
 
@@ -330,4 +499,9 @@ def _provenance(backend: str, request: TaskRequest) -> Provenance:
     )
 
 
-__all__ = ["run_casscf"]
+__all__ = [
+    "CasscfCompletionVerdict",
+    "extract_cas_convergence_fact",
+    "run_casscf",
+    "validate_casscf_completion",
+]

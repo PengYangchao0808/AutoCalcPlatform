@@ -69,7 +69,9 @@ from acp.calculations.result_publication import (
 )
 from acp.calculations.step_requirements import (
     SATISFIED,
+    UPSTREAM_FAILED,
     PriorStep,
+    RequirementOutcome,
     evaluate_prerequisite,
     payload_is_diagnostic,
 )
@@ -79,6 +81,7 @@ from acp.calculations.step_result import (
     ResumeSource,
     dependency_artifacts,
     file_sha256,
+    json_safe,
     locate_recorded_file,
     portable_path,
     read_step_result,
@@ -87,6 +90,7 @@ from acp.calculations.step_result import (
     write_step_result,
 )
 from acp.storage.manifest import MANIFEST_FILENAME, ProductKind, ResultManifest
+from cccp.calculation.tasks.casscf import validate_casscf_completion
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +210,11 @@ def _step_scientific_record(
             rel = path
         artifacts.append(ArtifactReference(path=str(rel), type=artifact.type))
     summary: dict[str, object] = {"status": result.status, "errors": list(result.errors)}
+    if result.metadata:
+        # Completion facts (e.g. CAS convergence) ride the durable record so
+        # the publish-retry recovery entry can run the shared validator
+        # without re-executing QC (plan todo 11).
+        summary["metadata"] = dict(json_safe(result.metadata) or {})
     if result.energy is not None:
         summary["energy_hartree"] = result.energy
     if result.coords is not None:
@@ -232,6 +241,7 @@ def _step_result_from_record(record: ScientificResultRecord, result_dir: Path) -
     energy_raw = summary.get("energy_hartree")
     coords_raw = summary.get("coords")
     freq_raw = summary.get("frequencies")
+    raw_metadata = summary.get("metadata")
     return CalculationResult(
         energy=float(energy_raw) if isinstance(energy_raw, (int, float)) else None,
         coords=(
@@ -246,6 +256,7 @@ def _step_result_from_record(record: ScientificResultRecord, result_dir: Path) -
         ],
         status=str(summary.get("status", "completed")),
         errors=[str(e) for e in summary.get("errors") or []],
+        metadata=dict(raw_metadata) if isinstance(raw_metadata, Mapping) else {},
     )
 
 
@@ -883,18 +894,29 @@ class CalculationPlanExecutor:
             # prerequisite, and a diagnostic purpose is re-judged here.
             prerequisite = SATISFIED
             if state.status != "skipped":
-                prerequisite = evaluate_prerequisite(
-                    [
-                        PriorStep(
-                            kind=prior.kind,
-                            status=prior.status,
-                            result=prior.result,
-                        )
-                        for prior in step_states[:idx]
-                    ],
-                    step.kind,
-                    item.elements,
-                )
+                prior_states = [
+                    PriorStep(
+                        kind=prior.kind,
+                        status=prior.status,
+                        result=prior.result,
+                    )
+                    for prior in step_states[:idx]
+                ]
+                # D07/invariant 4 (T10/D5): a failed or blocked CASSCF step
+                # is an unmet required upstream — every later plan step is
+                # blocked (upstream_failed) instead of consuming an
+                # incomplete multireference stage.
+                if any(
+                    prior.kind is StepKind.CASSCF and prior.status in ("failed", "blocked")
+                    for prior in prior_states
+                ):
+                    prerequisite = RequirementOutcome(satisfied=False, reason=UPSTREAM_FAILED)
+                else:
+                    prerequisite = evaluate_prerequisite(
+                        prior_states,
+                        step.kind,
+                        item.elements,
+                    )
             run_diagnostic = False
             if not prerequisite.satisfied:
                 if self._execution_policy.upstream_failure == "block":
@@ -950,6 +972,7 @@ class CalculationPlanExecutor:
                     rel=f"WORK/{step_rel}/{STEP_RESULT_FILENAME}",
                     enabled=adoption_enabled and not config_changed,
                     was_completed=was_completed,
+                    kind=step.kind,
                 )
                 if adoption.result is not None:
                     state.result = adoption.result
@@ -1074,6 +1097,28 @@ class CalculationPlanExecutor:
                 and prior_record is not None
                 and prior_record.result_id == result_id
             )
+            if recovered and prior_record is not None and step.kind is StepKind.CASSCF:
+                # Shared science gate (plan todo 11): restoring a completed
+                # result from the WORK-layer scientific record must pass the
+                # SAME validator the step_result adoption path calls.  The
+                # record carries no per-artifact digests, so log re-judgement
+                # is not allowed here — a record whose CAS convergence fact
+                # is false/absent recomputes instead of restoring completed.
+                candidate = _step_result_from_record(prior_record, step_work_dir)
+                verdict = validate_casscf_completion(
+                    candidate.metadata,
+                    artifact_paths=[Path(artifact.path) for artifact in candidate.artifacts],
+                    integrity_valid=True,
+                    allow_log_rejudge=False,
+                )
+                if not verdict.passed:
+                    logger.warning(
+                        "recovery.scientific_result_not_reusable: step %d (%s): %s — recomputing",
+                        idx,
+                        step.kind.value,
+                        verdict.reason,
+                    )
+                    recovered = False
             if recovered and prior_record is not None:
                 logger.info(
                     "step %d (%s): stored scientific result found — publication retry only",
@@ -1364,6 +1409,7 @@ class CalculationPlanExecutor:
         rel: str,
         enabled: bool,
         was_completed: bool,
+        kind: StepKind | None = None,
     ) -> _Adoption:
         """Verify the durable ``step_result.json`` for one step (V02 gate).
 
@@ -1372,6 +1418,10 @@ class CalculationPlanExecutor:
         Anything unverifiable → ``reason`` set with ``integrity_failed`` so
         the caller recomputes and the legacy publication-only branch stays
         suppressed for that step.
+
+        For a CASSCF step the verified receipt must additionally pass the
+        shared science validator (:func:`validate_casscf_completion`) —
+        identity/digest validity alone never proves CAS convergence.
         """
         located: Path | None = None
         for base in (science_root, task_root):
@@ -1427,6 +1477,24 @@ class CalculationPlanExecutor:
         result = CalculationResult.from_step_result_dict(
             payload, roots=(science_root, task_root)
         )
+        if kind is StepKind.CASSCF:
+            # Shared science gate (plan todo 11): the same validator the
+            # scientific-record publish-retry entry calls.  Receipt digests
+            # were verified above, so an absent/stale convergence fact may
+            # be re-judged from the digest-verified original log.
+            log_path = next(
+                (Path(artifact.path) for artifact in result.artifacts if artifact.type == "log"),
+                None,
+            )
+            verdict = validate_casscf_completion(
+                result.metadata,
+                artifact_paths=[Path(artifact.path) for artifact in result.artifacts],
+                log_path=log_path,
+                integrity_valid=True,
+                allow_log_rejudge=True,
+            )
+            if not verdict.passed:
+                return _Adoption(reason=verdict.reason, integrity_failed=True)
         raw_attempt = payload.get("attempt")
         attempt = (
             raw_attempt
@@ -1579,6 +1647,7 @@ class CalculationPlanExecutor:
                 self._loaded_completed_facts.get(stability_index, {}).get("status")
                 == "completed"
             ),
+            kind=StepKind.SINGLEPOINT,
         )
         if adoption.result is not None:
             adopted = StepState(

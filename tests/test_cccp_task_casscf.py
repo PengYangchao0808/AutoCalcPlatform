@@ -20,8 +20,18 @@ from cccp.calculation.requests import (
     TaskKind,
     TaskRequest,
 )
-from cccp.calculation.results import CasscfPayload, casscf_payload_from_multireference
-from cccp.calculation.tasks.casscf import run_casscf
+from cccp.calculation.results import (
+    CasscfPayload,
+    ErrorKind,
+    casscf_payload_from_multireference,
+)
+from cccp.calculation.tasks.casscf import (
+    extract_cas_convergence_fact,
+    run_casscf,
+    validate_casscf_completion,
+)
+
+_ORCA61_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "qc" / "orca61"
 
 _COORDS = ((0.0, 0.0, 0.0), (0.0, 0.0, 1.4))
 _SYMBOLS = ("C", "C")
@@ -167,16 +177,15 @@ def test_independent_cccp_call_returns_payload_and_legacy_metadata(tmp_path: Pat
 
     payload = result.payload
     assert isinstance(payload, CasscfPayload)
-    assert payload.root_energies == pytest.approx(
-        (-108.9812345678, -108.8123456789)
-    )
+    assert payload.root_energies == pytest.approx((-108.9812345678, -108.8123456789))
     assert payload.nevpt2_energies == pytest.approx((-109.1046913568, -108.92345679))
-    assert payload.natural_occupations == pytest.approx(
-        (1.98123, 1.95211, 0.04789, 0.01877)
+    assert payload.natural_occupations == pytest.approx((1.98123, 1.95211, 0.04789, 0.01877))
+    assert (
+        payload.active_space
+        == casscf_spec_from_dict(
+            {"active_electrons": 2, "active_orbitals": 2, "dynamic_correlation": "sc_nevpt2"}
+        ).active_space_signature()
     )
-    assert payload.active_space == casscf_spec_from_dict(
-        {"active_electrons": 2, "active_orbitals": 2, "dynamic_correlation": "sc_nevpt2"}
-    ).active_space_signature()
 
     active_space_file = tmp_path / "active_space.json"
     assert active_space_file.is_file()
@@ -332,3 +341,164 @@ def test_cccp_casscf_stations_never_import_the_acp_package() -> None:
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 assert not module.startswith("acp"), f"{relative}:{node.lineno}"
+
+
+# ── completion gating (T10/D5): explicit CAS convergence fact ─────────────
+
+
+def _qcresult_from_parsed_log(log: Path) -> Any:
+    """Build the QCResult ORCAInterface.casscf() would return for *log*."""
+    from cccp.qc.interfaces.orca import parse_casscf_output
+
+    parsed = parse_casscf_output(log)
+    return QCResult(
+        success=True,
+        energy=parsed["casscf_energy"],
+        symbols=list(_SYMBOLS),
+        converged=bool(parsed["converged"]),
+        metadata={
+            "casscf": {
+                "casscf_energy_hartree": parsed["casscf_energy"],
+                "natural_occupations": parsed["natural_occupations"],
+                "nevpt2_roots": parsed["nevpt2_roots"],
+                "converged": bool(parsed["converged"]),
+            }
+        },
+    )
+
+
+def test_real_cas_converged_fixture_completes(tmp_path: Path) -> None:
+    """(a) real ORCA 6.1.1 CAS log → completed with the convergence fact."""
+    backend = _RecordingBackend(_qcresult_from_parsed_log(_ORCA61_FIXTURES / "casscf_water.out"))
+    result = run_casscf(
+        _request(options=_spec_options(), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    assert result.status == "completed"
+    assert result.complete is True
+    assert result.converged is True
+    assert result.error_kind is None
+
+    multiref = result.metadata["multireference"]
+    assert multiref["converged"] is True
+    assert multiref["natural_occupations"] == pytest.approx([1.99733, 0.00267])
+    assert multiref["casscf_energy_hartree"] == pytest.approx(-75.976220169701)
+    assert (tmp_path / "active_space.json").is_file()
+
+    payload = result.payload
+    assert isinstance(payload, CasscfPayload)
+    assert payload.root_energies == pytest.approx((-75.976220169701,))
+
+
+def test_backend_success_without_cas_convergence_fails(tmp_path: Path) -> None:
+    """(b) backend success + parsed converged=false → structured failure.
+
+    Diagnostic evidence (energy, active-space record, metadata fact) is
+    retained on the failed result — failure is not deletion.
+    """
+    response = QCResult(
+        success=True,
+        energy=-108.9,
+        symbols=list(_SYMBOLS),
+        converged=False,
+        metadata={
+            "casscf": {
+                "casscf_energy_hartree": -108.9,
+                "natural_occupations": [1.6, 0.4],
+                "nevpt2_roots": [],
+                "converged": False,
+            }
+        },
+    )
+    backend = _RecordingBackend(response)
+    result = run_casscf(
+        _request(options=_spec_options(), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    assert result.status == "failed"
+    assert result.complete is False
+    assert result.error_kind is ErrorKind.NOT_CONVERGED
+    assert result.converged is False
+    assert result.payload is None
+    assert any("converge" in error.lower() for error in result.errors)
+
+    assert result.energy_hartree == pytest.approx(-108.9)
+    assert result.metadata["multireference"]["converged"] is False
+    assert len(backend.calls) == 1
+    active_space = tmp_path / "active_space.json"
+    assert active_space.is_file()
+    recorded = json.loads(active_space.read_text(encoding="utf-8"))
+    assert recorded["converged"] is False
+    assert any(artifact.type == "active_space" for artifact in result.artifacts)
+
+
+def test_validator_rejects_missing_integrity_and_artifacts(tmp_path: Path) -> None:
+    missing_fact = {"multireference": {"converged": True}}
+    assert validate_casscf_completion(missing_fact, integrity_valid=False).reason == (
+        "integrity_unverified"
+    )
+    absent = tmp_path / "nope.json"
+    verdict = validate_casscf_completion(missing_fact, artifact_paths=[absent])
+    assert verdict.reason == "requested_artifacts_missing"
+    present = tmp_path / "active_space.json"
+    present.write_text("{}", encoding="utf-8")
+    assert validate_casscf_completion(missing_fact, artifact_paths=[present]).passed is True
+
+
+def test_validator_explicit_false_never_rescued_by_converged_log(tmp_path: Path) -> None:
+    """A recorded converged=false fact is conclusive — the log cannot rescue it."""
+    log = _ORCA61_FIXTURES / "casscf_water.out"
+    verdict = validate_casscf_completion(
+        {"multireference": {"converged": False}},
+        log_path=log,
+        integrity_valid=True,
+        allow_log_rejudge=True,
+    )
+    assert verdict.passed is False
+    assert verdict.reason == "cas_not_converged"
+
+
+def test_validator_absent_fact_rejudged_from_original_log(tmp_path: Path) -> None:
+    water = validate_casscf_completion(
+        None,
+        log_path=_ORCA61_FIXTURES / "casscf_water.out",
+        allow_log_rejudge=True,
+    )
+    assert water.passed is True
+
+    scf_only = validate_casscf_completion(
+        None,
+        log_path=_ORCA61_FIXTURES / "scf_without_casscf.out",
+        allow_log_rejudge=True,
+    )
+    assert scf_only.passed is False
+    assert scf_only.reason == "cas_not_converged"
+
+    # no log and no fact → conservative recompute, never an implicit pass
+    assert validate_casscf_completion(None).reason == "convergence_fact_missing"
+    # re-judgement without a digest-verified log is not allowed
+    assert (
+        validate_casscf_completion(
+            None, log_path=_ORCA61_FIXTURES / "casscf_water.out", allow_log_rejudge=False
+        ).reason
+        == "convergence_fact_missing"
+    )
+
+
+def test_validator_stale_true_fact_rejudged_against_log() -> None:
+    """An old receipt's converged=true is re-judged under CURRENT parse rules."""
+    verdict = validate_casscf_completion(
+        {"multireference": {"converged": True}},
+        log_path=_ORCA61_FIXTURES / "scf_without_casscf.out",
+        allow_log_rejudge=True,
+    )
+    assert verdict.passed is False
+    assert verdict.reason == "cas_not_converged"
+
+
+def test_extract_cas_convergence_fact_three_states() -> None:
+    assert extract_cas_convergence_fact({"multireference": {"converged": True}}) is True
+    assert extract_cas_convergence_fact({"casscf": {"converged": False}}) is False
+    assert extract_cas_convergence_fact({"casscf": {}}) is None
+    assert extract_cas_convergence_fact({}) is None
+    assert extract_cas_convergence_fact(None) is None

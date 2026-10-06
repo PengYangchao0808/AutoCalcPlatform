@@ -578,6 +578,124 @@ def build_v2_checkpoint_malformed() -> None:
     )
 
 
+def build_v2_casscf_not_converged() -> None:
+    """(i) v2 counterexample: converged=false-completed CASSCF receipts.
+
+    Plan todo 11 (T10/D5): both recovery entries must refuse a stored
+    ``completed`` receipt whose recorded CAS convergence fact is
+    ``false`` — the ``step_result.json`` adoption path and the
+    ``scientific_result.json`` publish-retry path — and conservatively
+    recompute instead.  ``config_digest`` stays ``null`` (attempt
+    metadata, never science), like every v2 fixture.
+    """
+    root = FIXTURES_DIR / "v2_casscf_not_converged"
+    root.mkdir(parents=True, exist_ok=True)
+    xyz_path = root / "structures" / "input.xyz"
+    xyz_path.parent.mkdir(parents=True, exist_ok=True)
+    xyz_path.write_text(V2_INPUT_XYZ, encoding="utf-8")
+    plan = CalculationPlan(
+        workflow="casscf",
+        profile="default",
+        items=[StructureArtifact(path=xyz_path, elements=["O", "H", "H"])],
+        steps=[
+            CalculationStep(
+                kind=StepKind.CASSCF,
+                spec={"casscf": {"active_electrons": 2, "active_orbitals": 2}},
+            )
+        ],
+    )
+    identity = compute_identity(plan)
+    _dump(
+        root / "identity.json",
+        {
+            "plan_identity": identity.plan_identity,
+            "step_identities": list(identity.step_identities),
+            "plan_repr": {
+                "workflow": plan.workflow,
+                "profile": plan.profile,
+                "items": [{"path": "structures/input.xyz", "elements": ["O", "H", "H"]}],
+                "steps": [
+                    {"kind": s.kind.value, "mode": s.mode.value, "spec": s.spec} for s in plan.steps
+                ],
+            },
+        },
+    )
+
+    step_dir = root / "WORK" / "08_CASSCF"
+    step_dir.mkdir(parents=True, exist_ok=True)
+    log_path = step_dir / "casscf.log"
+    log_path.write_text("v2 fixture: CAS-SCF did not converge\n", encoding="utf-8")
+    multireference = {
+        "active_electrons": 2,
+        "active_orbitals": 2,
+        "multiplicity": 1,
+        "nroots": 1,
+        "casscf_energy_hartree": -108.5,
+        "natural_occupations": [1.7, 0.3],
+        "converged": False,
+    }
+    active_space_path = step_dir / "active_space.json"
+    active_space_path.write_text(
+        json.dumps(multireference, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    result = CalculationResult(
+        energy=-108.5,
+        artifacts=[
+            ArtifactRef(path=log_path, type="log", source="fixture"),
+            ArtifactRef(path=active_space_path, type="active_space", source="fixture"),
+        ],
+        metadata={
+            "multireference": dict(multireference),
+            "casscf": {"casscf_energy_hartree": -108.5, "converged": False},
+        },
+    )
+    payload = result.to_step_result_dict(root=root)
+    payload.update(
+        {
+            "schema_version": STEP_RESULT_SCHEMA_VERSION,
+            "step_identity": identity.step_identities[0],
+            "step_id": _step_id(0, StepKind.CASSCF),
+            "index": 0,
+            "kind": "casscf",
+            "symbols": ["O", "H", "H"],
+            "job_id": None,
+            "attempt": None,
+            "code_release": str(_platform_version),
+            "config_digest": None,
+            "dependency_artifacts": [],
+        }
+    )
+    digest = write_step_result(step_dir / "step_result.json", payload)
+    result_ref = {"path": "WORK/08_CASSCF/step_result.json", "sha256": digest}
+    result_id = _step_result_id(identity.plan_identity, 0, StepKind.CASSCF)
+    record = _step_scientific_record(
+        result, result_id=result_id, kind=StepKind.CASSCF, result_dir=step_dir
+    )
+    publish_result(step_dir, record=record, manifest=_step_publication_manifest(record))
+
+    cas_state = StepState(
+        index=0,
+        kind=StepKind.CASSCF,
+        status="completed",
+        result=CalculationResult(energy=-108.5),
+        executed_this_run=False,
+        last_executed_attempt=1,
+        result_ref=dict(result_ref),
+    )
+    write_checkpoint(
+        root / "WORK" / "00_RUNTIME",
+        Checkpoint(
+            task_id=V2_TASK_ID,
+            workflow="casscf",
+            plan_fingerprint=identity.plan_identity,
+            step_states=[cas_state.to_dict()],
+            items_state={},
+            resume_count=0,
+            identity_schema=2,
+        ),
+    )
+
+
 def main() -> int:
     # legacy v1 — byte-frozen write path
     build_checkpoint_mixed()
@@ -589,6 +707,7 @@ def main() -> int:
     build_v2_checkpoint_mixed()
     build_v2_publish_interrupted()
     build_v2_checkpoint_malformed()
+    build_v2_casscf_not_converged()
     print(f"fixtures regenerated under {FIXTURES_DIR}")
     return 0
 

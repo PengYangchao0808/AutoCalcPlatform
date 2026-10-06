@@ -1,0 +1,25 @@
+{
+  "identity_schema": 2,
+  "items_state": {},
+  "plan_fingerprint": "v2:052106151753ea19bf3c1d22b7de2dfe",
+  "resume_count": 0,
+  "step_states": [
+    {
+      "blocked_reason": "",
+      "energy": -108.5,
+      "error": "",
+      "executed_this_run": false,
+      "index": 0,
+      "kind": "casscf",
+      "last_executed_attempt": 1,
+      "result_ref": {
+        "path": "WORK/08_CASSCF/step_result.json",
+        "sha256": "150e8fdea3403c9959e84940d7597fa6ccc2ec5e2216358b3080b78f998c9124"
+      },
+      "reused_from_attempt": null,
+      "status": "completed"
+    }
+  ],
+  "task_id": "fixture_recovery_v2",
+  "workflow": "casscf"
+}
