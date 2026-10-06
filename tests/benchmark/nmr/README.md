@@ -18,6 +18,7 @@ reuses todo 48's `tests/nmr_spectra_benchmark.py` unchanged.
 | `harness.py` | `run_harness` orchestration + provenance + spectra layer |
 | `thresholds.json` | frozen, sealed thresholds (content hash) |
 | `fixtures/synthetic_dataset.json` | synthetic self-test dataset (hash re-signed) |
+| `loaders.py` + `RUNBOOK.md` | layers 2–5 dataset loaders + acquisition/run runbook (todo 53) |
 | `test_harness.py` | acceptance suite |
 
 ```bash

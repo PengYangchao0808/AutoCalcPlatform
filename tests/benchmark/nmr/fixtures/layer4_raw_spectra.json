@@ -1,0 +1,78 @@
+{
+  "datasets": [
+    {
+      "dataset_id": "raw-spectra-selftest-v1",
+      "distribution": {
+        "balanced_by_construction": true,
+        "note": "balanced by construction for the loader self-test only; NOT a realistic prevalence and never model-performance evidence"
+      },
+      "hash": "8e687caa36b4af25be746ae63527cd78d21daeba2cfbdc048bc218d3a46feab7",
+      "items": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "raw-selftest-candidate",
+              "dp4_probability": 0.5,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 3.58,
+                    "signal_id": "H1"
+                  }
+                ]
+              },
+              "status": "valid"
+            }
+          ],
+          "experimental": {
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 3.62,
+                "signal_id": "H1"
+              }
+            ]
+          },
+          "item_id": "raw-proton-selftest",
+          "molecule_id": "ethanol-raw-selftest",
+          "raw_spectra": [
+            {
+              "annotations_ref": "tests/fixtures/nmr/manifest.json#phase_deviation_proton",
+              "fixture_id": "phase_deviation_proton",
+              "fixture_sha256": "f2c1a6edc739d27b6828870ab8b338d45c095a3d216ef998835f8f8660caa1d2",
+              "nucleus": "1H",
+              "processing": {
+                "metrics_ref": "self-test://layer4/phase_deviation_proton/processing (declared in this manifest; no separate metrics artifact)",
+                "note": null,
+                "status": "measured"
+              }
+            },
+            {
+              "annotations_ref": "tests/fixtures/nmr/manifest.json#digital_filter_proton",
+              "fixture_id": "digital_filter_proton",
+              "fixture_sha256": "462a3b5b5d473dff72d7ed476b287505514f0ac0a9e31c1ecb7003b48b259c30",
+              "nucleus": "1H",
+              "processing": {
+                "metrics_ref": null,
+                "note": "NOT_VERIFIED: digital-filter compensation unverified for this self-test link",
+                "status": "not_verified"
+              }
+            }
+          ],
+          "spectra_fixture_id": "phase_deviation_proton",
+          "true_structure_candidate_id": null,
+          "true_structure_present": false
+        }
+      ],
+      "layer": "raw_spectra",
+      "license": "CC0-1.0 (synthetic test data authored in this repository)",
+      "source": "authored in-repo for tests/benchmark/nmr; links to the committed todo-48 synthetic fixtures (no external data)",
+      "title": "Synthetic raw-spectra self-test (links to committed todo-48 fixtures)",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "acp-nmr-benchmark-dataset-manifest-v1"
+}

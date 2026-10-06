@@ -1,0 +1,102 @@
+{
+  "datasets": [
+    {
+      "dataset_id": "assigned-statistical-selftest-v1",
+      "distribution": {
+        "balanced_by_construction": true,
+        "note": "balanced by construction for the loader self-test only; NOT a realistic prevalence and never model-performance evidence"
+      },
+      "hash": "8a1df38abf02d6609777eab273075652f6ba7dc705f89eb3cdbd7367be6330a0",
+      "items": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "acetone-true",
+              "dp4_probability": 0.9,
+              "dp5_probability": null,
+              "is_true_structure": true,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 30.9,
+                    "signal_id": "C1"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 2.1,
+                    "signal_id": "H1"
+                  }
+                ]
+              },
+              "status": "valid"
+            },
+            {
+              "candidate_id": "acetone-decoy",
+              "dp4_probability": 0.1,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 45.0,
+                    "signal_id": "C1"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 1.0,
+                    "signal_id": "H1"
+                  }
+                ]
+              },
+              "status": "valid"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 30.8,
+                "reference_label": "methyl_carbon",
+                "signal_id": "C1"
+              }
+            ],
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 2.17,
+                "reference_label": "methyl_proton",
+                "signal_id": "H1"
+              }
+            ]
+          },
+          "item_id": "acetone-item",
+          "molecule_id": "acetone",
+          "reference": {
+            "reference_id": "selftest:acetone:assigned-shifts:v1",
+            "source": "synthetic reference table authored in-repo",
+            "version": "1.0.0"
+          },
+          "true_structure_candidate_id": "acetone-true",
+          "true_structure_present": true
+        }
+      ],
+      "layer": "assigned_statistical",
+      "license": "CC0-1.0 (synthetic test data authored in this repository)",
+      "source": "authored in-repo for tests/benchmark/nmr (synthetic; no external data)",
+      "split": {
+        "note": "self-test placeholder split declaration; a real layer-2 dataset must document the actual scaffold split",
+        "split_by": "molecular_scaffold",
+        "train_disjoint": true
+      },
+      "title": "Synthetic assigned-statistical self-test (1 molecule, 2 candidates)",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "acp-nmr-benchmark-dataset-manifest-v1"
+}
