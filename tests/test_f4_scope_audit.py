@@ -1726,6 +1726,8 @@ MIGRATION_STATION_PREFIXES = (
     # acp-nmr-goodman-gap todo 39: atomic/signal risk diagnostics +
     # per-nucleus DP4 decomposition (leave-one-signal-out, conflict matrix).
     "src/acp/nmr/atomic_diagnostics.py",
+    # acp-nmr-goodman-gap todo 45: per-nucleus spectrum-processor registry.
+    "src/acp/nmr/spectra_registry.py",
     # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
     "src/acp/workflows/irc.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker

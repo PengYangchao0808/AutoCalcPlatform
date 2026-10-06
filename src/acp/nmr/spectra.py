@@ -34,6 +34,7 @@ import tempfile
 import types
 import warnings
 import zipfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -49,8 +50,10 @@ from acp.nmr.models import (
     ProcessingQuality,
     SpectralLine,
     assess_processing,
+    element_of_nucleus,
     normalize_symbol,
 )
+from acp.nmr.spectra_registry import NucleusProcessorError, lookup_processor
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,31 @@ _DEFAULT_SNR_THRESHOLD: float = 8.0
 _DIGITAL_FILTER_COMPENSATION: str = DIGITAL_FILTER_COMPENSATION_NONE
 
 
+@dataclass(frozen=True, eq=False)
+class ProcessedTrace:
+    """Dense processed trace of one experiment (todo 45 handoff).
+
+    Threads the exact ``(ppm, intensity)`` pair the todo-43/44 processors
+    consume (``process_carbon_spectrum(spectrum, trace=...)``). ``intensity``
+    is the baseline-corrected real part from which the picked lines were
+    measured; ``noise`` is the edge-MAD of the same trace estimated before
+    baseline correction (the documented pipeline order, see
+    :func:`_estimate_noise`). ``ppm`` keeps acquisition order (descending for
+    Bruker); consumers sort as needed (the carbon processor already does).
+
+    ``eq=False`` keeps numpy array semantics (no ambiguous truth value).
+    """
+
+    source_dir: str
+    ppm: np.ndarray
+    intensity: np.ndarray
+    noise: float
+
+    def as_pair(self) -> tuple[np.ndarray, np.ndarray]:
+        """Return the ``(ppm, intensity)`` pair in processor call shape."""
+        return (self.ppm, self.intensity)
+
+
 @dataclass
 class BrukerProcessResult:
     """Aggregate result of :func:`process_bruker_tree`."""
@@ -76,11 +104,30 @@ class BrukerProcessResult:
     experiment: ExperimentalNmr
     spectra: list[ProcessedSpectrum] = field(default_factory=list)
     extracted_dir: Path | None = None
+    #: Per-nucleus selection record: which experiment(s) fed which nucleus,
+    #: under which policy, and the registered processor (todo 45).
+    selection: tuple[NucleusSelectionRecord, ...] = ()
+    #: Per-experiment disposition, including rejected 2D experiments (never
+    #: silently swallowed).
+    experiments: tuple[ExperimentSelectionRecord, ...] = ()
+    #: Dense processed traces for the SELECTED experiments (todo 45 handoff).
+    traces: tuple[ProcessedTrace, ...] = ()
 
     @property
     def formal_spectra(self) -> list[ProcessedSpectrum]:
         """Spectra that passed the processing gate (failed ones excluded)."""
         return [spectrum for spectrum in self.spectra if spectrum.formal_usable]
+
+    def trace_for(self, source: str | Path | ProcessedSpectrum) -> ProcessedTrace | None:
+        """The dense processed trace recorded for *source*, or ``None``."""
+        if isinstance(source, ProcessedSpectrum):
+            key = source.source_dir
+        else:
+            key = str(Path(source))
+        for trace in self.traces:
+            if trace.source_dir == key:
+                return trace
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +198,456 @@ def find_bruker_experiments(root: Path) -> list[Path]:
                 if _is_bruker_experiment(grandchild):
                     found.append(grandchild)
     return found
+
+
+# ---------------------------------------------------------------------------
+# 1D dimensionality gate (todo 45)
+# ---------------------------------------------------------------------------
+
+#: Closed vocabulary: why an experiment is NOT a 1D acquisition.
+NOT_1D_REASONS: tuple[str, ...] = ("ser_file", "acqu2s_present", "parmode_not_1d")
+
+
+class Not1DExperimentError(ValueError):
+    """Typed rejection of a non-1D (2D/3D) Bruker experiment.
+
+    The 1D processing chain must never consume multi-dimensional data: a
+    ``ser`` serial file, ``acqu2s``/``acqu3s`` acquisition parameters, or an
+    ``acqus`` ``PARMODE`` other than 0 all mean "not 1D" and are rejected
+    before nmrglue (or any FID read) runs.
+    """
+
+    def __init__(self, exp_dir: str | Path, reason: str, detail: str = "") -> None:
+        if reason not in NOT_1D_REASONS:
+            raise ValueError(f"unknown not-1D reason {reason!r}; expected {NOT_1D_REASONS}")
+        self.exp_dir = str(exp_dir)
+        self.reason = reason
+        self.detail = detail
+        message = (
+            f"Not a 1D Bruker experiment ({reason}): {exp_dir} — "
+            "2D data must not be processed by the 1D chain"
+        )
+        if detail:
+            message = f"{message} ({detail})"
+        super().__init__(message)
+
+
+def _probe_acqus_text(exp_dir: str | Path, parameter: str) -> str | None:
+    """Read one ``##$PARAM=`` value from ``acqus``; ``None`` when absent/empty."""
+    acqus = Path(exp_dir) / "acqus"
+    prefix = f"##${parameter.upper()}"
+    try:
+        for line in acqus.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped.upper().startswith(prefix):
+                _, _, value = stripped.partition("=")
+                return value.strip().strip("<>").strip() or None
+    except OSError:
+        pass
+    return None
+
+
+def not_1d_reason(exp_dir: str | Path) -> str | None:
+    """Closed-vocabulary reason *exp_dir* is not 1D, or ``None`` when it is.
+
+    Dependency-free detection order (no nmrglue, no FID read):
+
+    1. a ``ser`` serial file (2D/3D raw data);
+    2. ``acqu2s`` / ``acqu3s`` (acquisition parameters of dimensions 2/3);
+    3. ``acqus`` ``PARMODE`` != 0 (0 = 1D).
+    """
+    directory = Path(exp_dir)
+    if (directory / "ser").is_file():
+        return "ser_file"
+    if (directory / "acqu2s").is_file() or (directory / "acqu3s").is_file():
+        return "acqu2s_present"
+    parmode = _probe_acqus_text(directory, "PARMODE")
+    if parmode is not None:
+        try:
+            if int(float(parmode)) != 0:
+                return "parmode_not_1d"
+        except ValueError:
+            logger.warning("Unparseable PARMODE %r in %s; treated as 1D", parmode, directory)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Experiment selection (todo 45)
+# ---------------------------------------------------------------------------
+
+#: Closed vocabulary: how one nucleus's experiment set was chosen.
+SELECTION_POLICIES: tuple[str, ...] = (
+    "single",
+    "default_deterministic",
+    "explicit_single",
+    "explicit_multi",
+)
+
+#: Per-experiment disposition in the selection plan.
+EXPERIMENT_SELECTION_STATUSES: tuple[str, ...] = ("selected", "not_selected", "rejected")
+
+#: Closed vocabulary of per-experiment reasons (``None`` only for ``selected``).
+EXPERIMENT_SELECTION_REASONS: tuple[str, ...] = (
+    "not_requested",
+    "default_deterministic",
+    "nucleus_unreadable",
+    *NOT_1D_REASONS,
+)
+
+#: Closed vocabulary of typed selection failures.
+SELECTION_ERROR_REASONS: tuple[str, ...] = (
+    "unknown_experiment",
+    "ambiguous_experiment",
+    "duplicate_experiment",
+    "nucleus_mismatch",
+    "unknown_nucleus",
+    "nucleus_unreadable",
+)
+
+
+class ExperimentSelectionError(ValueError):
+    """Typed user-selection failure (unknown/ambiguous/mismatched labels)."""
+
+    def __init__(self, reason: str, detail: str) -> None:
+        if reason not in SELECTION_ERROR_REASONS:
+            raise ValueError(
+                f"unknown selection error reason {reason!r}; expected {SELECTION_ERROR_REASONS}"
+            )
+        self.reason = reason
+        self.detail = detail
+        super().__init__(f"{reason}: {detail}")
+
+
+@dataclass(frozen=True)
+class ExperimentSelectionRecord:
+    """Per-experiment disposition recorded by the tree selection plan.
+
+    ``status`` is ``selected`` (feeds the formal peak list), ``not_selected``
+    (a 1D experiment the policy did not choose; ``reason`` says why) or
+    ``rejected`` (2D / unreadable nucleus — never processed).
+    """
+
+    label: str
+    nucleus: str
+    element: str
+    status: str
+    reason: str | None
+    user_requested: bool
+
+    def __post_init__(self) -> None:
+        if self.status not in EXPERIMENT_SELECTION_STATUSES:
+            raise ValueError(f"unknown experiment status {self.status!r}")
+        if self.status == "selected":
+            if self.reason is not None:
+                raise ValueError("a selected experiment carries no reason")
+        elif self.reason not in EXPERIMENT_SELECTION_REASONS:
+            raise ValueError(
+                f"unknown experiment selection reason {self.reason!r}; "
+                f"expected {EXPERIMENT_SELECTION_REASONS}"
+            )
+
+
+@dataclass(frozen=True)
+class NucleusSelectionRecord:
+    """Which experiment(s) fed one nucleus, and how they were chosen.
+
+    ``policy`` is one of :data:`SELECTION_POLICIES`: ``single`` (one 1D
+    candidate), ``default_deterministic`` (several candidates, first by label
+    kept), ``explicit_single`` / ``explicit_multi`` (user-requested).
+    ``combined`` is true only when several experiments were explicitly
+    combined into the nucleus; ``processor_id`` names the registered
+    per-nucleus processor, or ``None`` when no processor is registered.
+    """
+
+    element: str
+    nucleus_label: str
+    selected_labels: tuple[str, ...]
+    policy: str
+    combined: bool
+    processor_id: str | None
+
+    def __post_init__(self) -> None:
+        if self.policy not in SELECTION_POLICIES:
+            raise ValueError(f"unknown selection policy {self.policy!r}")
+        if not self.selected_labels:
+            raise ValueError("a nucleus selection record needs at least one selected label")
+        if self.combined != (len(self.selected_labels) > 1):
+            raise ValueError(
+                f"combined={self.combined!r} inconsistent with "
+                f"{len(self.selected_labels)} selected label(s)"
+            )
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe selection record."""
+        return {
+            "element": self.element,
+            "nucleus_label": self.nucleus_label,
+            "selected_labels": list(self.selected_labels),
+            "policy": self.policy,
+            "combined": self.combined,
+            "processor_id": self.processor_id,
+        }
+
+
+@dataclass(frozen=True)
+class ExperimentSelectionPlan:
+    """Deterministic plan for which 1D experiment(s) feed which nucleus."""
+
+    experiments: tuple[ExperimentSelectionRecord, ...]
+    nuclei: tuple[NucleusSelectionRecord, ...]
+
+    @property
+    def selected_labels(self) -> tuple[str, ...]:
+        """Labels of the experiments selected for processing."""
+        return tuple(record.label for record in self.experiments if record.status == "selected")
+
+
+def _experiment_label(exp_dir: Path, root: Path | None) -> str:
+    """Tree-relative POSIX label for one experiment directory."""
+    if root is not None:
+        try:
+            relative = exp_dir.relative_to(Path(root))
+        except ValueError:
+            relative = None
+        if relative is not None:
+            label = relative.as_posix()
+            return label if label != "." else Path(root).name
+    return exp_dir.name
+
+
+def _selection_keys(
+    select_experiments: Mapping[str, object],
+) -> dict[str, tuple[str, ...]]:
+    """Normalize selection keys to elements and validate token containers."""
+    normalized: dict[str, tuple[str, ...]] = {}
+    for key, raw in select_experiments.items():
+        element = element_of_nucleus(str(key))
+        if not element:
+            raise ExperimentSelectionError(
+                "unknown_nucleus", f"selection key {key!r} names no nucleus"
+            )
+        if isinstance(raw, str):
+            tokens = (raw.strip(),)
+        elif isinstance(raw, (list, tuple)):
+            tokens = tuple(str(token).strip() for token in raw)
+        else:
+            raise ExperimentSelectionError(
+                "unknown_experiment",
+                f"selection for {key!r} must be a label or a list of labels, "
+                f"got {type(raw).__name__}",
+            )
+        if not tokens or any(not token for token in tokens):
+            raise ExperimentSelectionError("unknown_experiment", f"selection for {key!r} is empty")
+        if element in normalized:
+            raise ExperimentSelectionError(
+                "duplicate_experiment",
+                f"selection for element {element!r} was given more than once",
+            )
+        normalized[element] = tokens
+    return normalized
+
+
+def _match_experiment(
+    token: str,
+    entries: Sequence[_ExperimentEntry],
+) -> _ExperimentEntry:
+    """Resolve one selector token by directory name or tree-relative label."""
+    matches = [
+        entry for entry in entries if token == entry.label or token == Path(entry.label).name
+    ]
+    if not matches:
+        available = sorted(entry.label for entry in entries)
+        raise ExperimentSelectionError(
+            "unknown_experiment", f"{token!r} matches no experiment; available: {available}"
+        )
+    if len(matches) > 1:
+        raise ExperimentSelectionError(
+            "ambiguous_experiment",
+            f"{token!r} matches several experiments: {sorted(entry.label for entry in matches)}",
+        )
+    return matches[0]
+
+
+@dataclass(frozen=True)
+class _ExperimentEntry:
+    """Internal probe result for one discovered experiment directory."""
+
+    label: str
+    directory: Path
+    nucleus: str
+    element: str
+    reject_reason: str | None
+
+
+def plan_experiment_selection(
+    exp_dirs: Sequence[str | Path],
+    *,
+    root: str | Path | None = None,
+    select_experiments: Mapping[str, str | Sequence[str]] | None = None,
+) -> ExperimentSelectionPlan:
+    """Choose which 1D experiment(s) feed which nucleus (todo 45 / G10).
+
+    Default (``select_experiments=None``): ONE experiment per nucleus, picked
+    deterministically as the first by label (``default_deterministic`` when
+    several 1D experiments compete, ``single`` when only one exists) — peaks
+    of same-nucleus experiments are never concatenated implicitly.
+
+    Explicit mapping keys are nucleus labels or elements (``"1H"``/``"H"``);
+    values select one experiment by directory name or tree-relative label, or
+    several to combine explicitly (``explicit_multi``). Unknown labels,
+    ambiguous basenames, nucleus mismatches and explicitly-selected 2D
+    experiments raise typed errors (:class:`ExperimentSelectionError` /
+    :class:`Not1DExperimentError`); 2D experiments are never processed as 1D.
+    """
+    entries: list[_ExperimentEntry] = []
+    seen_labels: set[str] = set()
+    for raw_dir in exp_dirs:
+        directory = Path(raw_dir)
+        label = _experiment_label(directory, Path(root) if root is not None else None)
+        if label in seen_labels:
+            raise ExperimentSelectionError(
+                "duplicate_experiment", f"duplicate experiment label {label!r}"
+            )
+        seen_labels.add(label)
+        nucleus = spectrum_probe_nucleus(directory)
+        element = normalize_symbol(nucleus.lstrip("0123456789")) if nucleus else ""
+        dimension_reason = not_1d_reason(directory)
+        if not element:
+            entries.append(
+                _ExperimentEntry(
+                    label=label,
+                    directory=directory,
+                    nucleus=nucleus,
+                    element="",
+                    reject_reason=dimension_reason or "nucleus_unreadable",
+                )
+            )
+        elif dimension_reason is not None:
+            entries.append(
+                _ExperimentEntry(
+                    label=label,
+                    directory=directory,
+                    nucleus=nucleus,
+                    element=element,
+                    reject_reason=dimension_reason,
+                )
+            )
+        else:
+            entries.append(
+                _ExperimentEntry(
+                    label=label,
+                    directory=directory,
+                    nucleus=nucleus,
+                    element=element,
+                    reject_reason=None,
+                )
+            )
+
+    requested = _selection_keys(select_experiments or {})
+    candidates_by_element: dict[str, list[_ExperimentEntry]] = {}
+    for entry in entries:
+        if entry.element and entry.reject_reason is None:
+            candidates_by_element.setdefault(entry.element, []).append(entry)
+    for key_element in requested:
+        if key_element not in candidates_by_element:
+            raise ExperimentSelectionError(
+                "unknown_nucleus",
+                f"selection key element {key_element!r} has no 1D experiment; "
+                f"available: {sorted(candidates_by_element)}",
+            )
+
+    chosen_labels: set[str] = set()
+    user_requested: set[str] = set()
+    nuclei: list[NucleusSelectionRecord] = []
+    for element in sorted(candidates_by_element):
+        candidates = sorted(candidates_by_element[element], key=lambda entry: entry.label)
+        tokens = requested.get(element)
+        if tokens is None:
+            chosen = [candidates[0]]
+            policy = "single" if len(candidates) == 1 else "default_deterministic"
+        else:
+            chosen = []
+            for token in tokens:
+                match = _match_experiment(token, entries)
+                if match.reject_reason is not None:
+                    if match.reject_reason in NOT_1D_REASONS:
+                        raise Not1DExperimentError(
+                            match.directory,
+                            match.reject_reason,
+                            detail=f"explicitly selected via {token!r}",
+                        )
+                    raise ExperimentSelectionError(
+                        match.reject_reason,
+                        f"explicitly selected experiment {token!r} has no readable nucleus",
+                    )
+                if match.element != element:
+                    raise ExperimentSelectionError(
+                        "nucleus_mismatch",
+                        f"selection for {element!r} names {token!r} which belongs to "
+                        f"element {match.element!r}",
+                    )
+                if match.label in user_requested:
+                    raise ExperimentSelectionError(
+                        "duplicate_experiment", f"experiment {token!r} selected twice"
+                    )
+                chosen.append(match)
+                user_requested.add(match.label)
+            policy = "explicit_single" if len(chosen) == 1 else "explicit_multi"
+        selected_labels = tuple(sorted(entry.label for entry in chosen))
+        chosen_labels.update(selected_labels)
+        descriptor = None
+        try:
+            descriptor = lookup_processor(element)
+        except NucleusProcessorError as exc:
+            logger.warning("processor registry lookup failed for %s: %s", element, exc)
+        nuclei.append(
+            NucleusSelectionRecord(
+                element=element,
+                nucleus_label=chosen[0].nucleus,
+                selected_labels=selected_labels,
+                policy=policy,
+                combined=len(selected_labels) > 1,
+                processor_id=descriptor.processor_id if descriptor is not None else None,
+            )
+        )
+
+    records: list[ExperimentSelectionRecord] = []
+    for entry in entries:
+        if entry.label in chosen_labels:
+            records.append(
+                ExperimentSelectionRecord(
+                    label=entry.label,
+                    nucleus=entry.nucleus,
+                    element=entry.element,
+                    status="selected",
+                    reason=None,
+                    user_requested=entry.label in user_requested,
+                )
+            )
+        elif entry.reject_reason is not None:
+            records.append(
+                ExperimentSelectionRecord(
+                    label=entry.label,
+                    nucleus=entry.nucleus,
+                    element=entry.element,
+                    status="rejected",
+                    reason=entry.reject_reason,
+                    user_requested=entry.label in user_requested,
+                )
+            )
+        else:
+            reason = "not_requested" if entry.element in requested else "default_deterministic"
+            records.append(
+                ExperimentSelectionRecord(
+                    label=entry.label,
+                    nucleus=entry.nucleus,
+                    element=entry.element,
+                    status="not_selected",
+                    reason=reason,
+                    user_requested=entry.label in user_requested,
+                )
+            )
+    return ExperimentSelectionPlan(experiments=tuple(records), nuclei=tuple(nuclei))
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +925,8 @@ def process_bruker_experiment(
     reference_window_ppm: float | None = None,
     lb_hz: float | None = None,
     snr_threshold: float = _DEFAULT_SNR_THRESHOLD,
+    *,
+    trace_sink: list[ProcessedTrace] | None = None,
 ) -> ProcessedSpectrum:
     """Process one Bruker experiment directory into an unassigned peak list.
 
@@ -442,14 +941,23 @@ def process_bruker_experiment(
         snr_threshold: Peak-picking threshold in units of the edge-noise
             MAD (default 8 — ~5σ tails across a full 1D spectrum reach
             ~4σ, so 8 keeps white-noise spikes out).
+        trace_sink: Optional collector; when given, the dense processed
+            :class:`ProcessedTrace` of this experiment is appended to it
+            (the tree path threads it to the processors, todo 45 handoff).
+            The collector keeps this the single processing seam.
 
     Raises:
         ImportError: When nmrglue is not installed.
         ValueError: When *exp_dir* is not a Bruker experiment.
+        Not1DExperimentError: When the experiment is 2D/3D (``ser`` file,
+            ``acqu2s`` or ``PARMODE`` != 0) — never processed as 1D.
     """
     exp_dir = Path(exp_dir)
     if not _is_bruker_experiment(exp_dir):
         raise ValueError(f"Not a Bruker experiment directory: {exp_dir}")
+    dimension_reason = not_1d_reason(exp_dir)
+    if dimension_reason is not None:
+        raise Not1DExperimentError(exp_dir, dimension_reason)
 
     ng = _import_nmrglue()
     with warnings.catch_warnings():
@@ -573,7 +1081,7 @@ def process_bruker_experiment(
         phase_method,
         exp_dir,
     )
-    return ProcessedSpectrum(
+    spectrum_record = ProcessedSpectrum(
         nucleus=nucleus,
         element=element,
         peaks=peaks,
@@ -586,6 +1094,17 @@ def process_bruker_experiment(
         lines=lines,
         assessment=assessment,
     )
+    if trace_sink is not None:
+        trace_ppm = ppm_scale if reference_shift is None else ppm_scale + reference_shift
+        trace_sink.append(
+            ProcessedTrace(
+                source_dir=str(exp_dir),
+                ppm=np.asarray(trace_ppm, dtype=np.float64),
+                intensity=np.asarray(real, dtype=np.float64),
+                noise=float(noise),
+            )
+        )
+    return spectrum_record
 
 
 # ---------------------------------------------------------------------------
@@ -599,8 +1118,19 @@ def process_bruker_tree(
     lb_hz: float | None = None,
     snr_threshold: float = _DEFAULT_SNR_THRESHOLD,
     extract_dir: str | Path | None = None,
+    select_experiments: Mapping[str, str | Sequence[str]] | None = None,
 ) -> BrukerProcessResult:
     """Process a Bruker directory tree (or zip archive) into an ExperimentalNmr.
+
+    Same-nucleus experiments are never concatenated blindly: for each nucleus
+    exactly one 1D experiment is selected by default (deterministically, the
+    first by label), and several experiments combine only when
+    *select_experiments* explicitly requests it — the combination policy and
+    which experiments fed which nucleus are recorded in
+    :attr:`BrukerProcessResult.selection`. 2D/non-1D experiments are rejected
+    per experiment (:attr:`BrukerProcessResult.experiments` carries the
+    closed reason) and never processed; explicitly selecting one raises
+    :class:`Not1DExperimentError`.
 
     Args:
         path: Root directory (§6.3 layout, single experiment, or expno
@@ -610,11 +1140,16 @@ def process_bruker_tree(
         lb_hz / snr_threshold: Forwarded to :func:`process_bruker_experiment`.
         extract_dir: Where to extract zip archives (default: a fresh
             temporary directory — the caller is responsible for cleanup).
+        select_experiments: Optional explicit per-nucleus experiment
+            selection keyed by nucleus label or element (``"1H"``/``"H"``);
+            values are one experiment directory name / tree-relative label
+            or a sequence of labels to combine explicitly.
 
     Returns:
         :class:`BrukerProcessResult` with an unassigned
-        :class:`ExperimentalNmr` (peaks grouped by element) plus per-
-        experiment diagnostics.
+        :class:`ExperimentalNmr` (peaks grouped by element), per-nucleus
+        selection records, per-experiment dispositions, and the dense
+        processed traces of the selected experiments.
     """
     path = Path(path)
     root = path
@@ -642,21 +1177,54 @@ def process_bruker_tree(
             "or numbered expno dirs)."
         )
 
+    plan = plan_experiment_selection(exp_dirs, root=root, select_experiments=select_experiments)
+    if not plan.selected_labels:
+        rejected = {
+            record.label: record.reason
+            for record in plan.experiments
+            if record.status == "rejected"
+        }
+        not_1d = {label: reason for label, reason in rejected.items() if reason in NOT_1D_REASONS}
+        if not_1d and len(not_1d) == len(plan.experiments):
+            first_label = next(iter(not_1d))
+            raise Not1DExperimentError(
+                first_label,
+                not_1d[first_label],
+                detail=f"all {len(not_1d)} experiment(s) under {path} are non-1D",
+            )
+        raise ValueError(f"No usable 1D Bruker experiment under {path}: rejected {rejected}")
+
+    dirs_by_label = {_experiment_label(Path(exp_dir), root): Path(exp_dir) for exp_dir in exp_dirs}
+    selection_by_element = {record.element: record for record in plan.nuclei}
+
     references = references or {}
     spectra: list[ProcessedSpectrum] = []
+    traces: list[ProcessedTrace] = []
     peaks_by_element: dict[str, list[ExperimentalPeak]] = {}
-    for exp_dir in exp_dirs:
+    for label in plan.selected_labels:
+        exp_dir = dirs_by_label[label]
+        trace_sink: list[ProcessedTrace] = []
         spectrum = process_bruker_experiment(
             exp_dir,
             reference_ppm=_reference_for(spectrum_probe_nucleus(exp_dir), references),
             lb_hz=lb_hz,
             snr_threshold=snr_threshold,
+            trace_sink=trace_sink,
         )
         spectra.append(spectrum)
+        traces.extend(trace_sink)
         if not spectrum.formal_usable:
             continue
         if spectrum.peaks:
-            peaks_by_element.setdefault(spectrum.element, []).extend(spectrum.peaks)
+            selection = selection_by_element.get(spectrum.element)
+            if (
+                selection is not None
+                and selection.combined
+                and peaks_by_element.get(spectrum.element)
+            ):
+                peaks_by_element[spectrum.element].extend(spectrum.peaks)
+            else:
+                peaks_by_element[spectrum.element] = list(spectrum.peaks)
 
     excluded = [spectrum for spectrum in spectra if not spectrum.formal_usable]
     if excluded:
@@ -673,7 +1241,8 @@ def process_bruker_tree(
     if not peaks_by_element:
         raise ValueError(
             f"Bruker processing picked no peaks under {path} "
-            f"({len(exp_dirs)} experiment(s) scanned, {len(excluded)} excluded "
+            f"({len(plan.selected_labels)} experiment(s) selected of "
+            f"{len(exp_dirs)} scanned, {len(excluded)} excluded "
             "by the processing gate) — check SNR/phase."
         )
 
@@ -686,19 +1255,15 @@ def process_bruker_tree(
         ),
         spectra=spectra,
         extracted_dir=extracted,
+        selection=plan.nuclei,
+        experiments=plan.experiments,
+        traces=tuple(traces),
     )
 
 
 def spectrum_probe_nucleus(exp_dir: str | Path) -> str:
     """Read just the ``NUC1`` nucleus label from an experiment's ``acqus``."""
-    acqus = Path(exp_dir) / "acqus"
-    try:
-        for line in acqus.read_text(encoding="utf-8", errors="replace").splitlines():
-            if line.upper().startswith("##$NUC1"):
-                return line.split("=", 1)[1].strip().strip("<>").strip()
-    except OSError:
-        pass
-    return ""
+    return _probe_acqus_text(exp_dir, "NUC1") or ""
 
 
 def _reference_for(nucleus: str, references: dict[str, float]) -> float | None:
@@ -732,14 +1297,27 @@ def bruker_result_to_text(result: BrukerProcessResult) -> str:
 
 
 __all__ = [
+    "EXPERIMENT_SELECTION_REASONS",
+    "EXPERIMENT_SELECTION_STATUSES",
+    "NOT_1D_REASONS",
+    "SELECTION_ERROR_REASONS",
+    "SELECTION_POLICIES",
     "AcquisitionSpectrum",
     "BrukerProcessResult",
+    "ExperimentSelectionError",
+    "ExperimentSelectionPlan",
+    "ExperimentSelectionRecord",
+    "Not1DExperimentError",
+    "NucleusSelectionRecord",
     "ProcessedSpectrum",
+    "ProcessedTrace",
     "ProcessingProvenance",
     "ProcessingQuality",
     "SpectralLine",
     "bruker_result_to_text",
     "find_bruker_experiments",
+    "not_1d_reason",
+    "plan_experiment_selection",
     "process_bruker_experiment",
     "process_bruker_tree",
     "spectrum_probe_nucleus",
