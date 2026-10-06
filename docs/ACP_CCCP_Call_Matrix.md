@@ -1,6 +1,8 @@
 # ACP → CCCP Workflow Call Matrix (A3/A4)
 
 **Generated:** 2026-10-05 (plan todo 36)
+**Updated:** 2026-10-06 (plan todo 33 — nmr row / chain brought to the final
+task-core, checkpoint and solvent evidence)
 **Scope:** the 14 active `acp run <workflow>` workflows and every legal
 protocol / profile / branch, mapped to the **unique execution core**
 `cccp.calculation` task entries.
@@ -37,7 +39,7 @@ The `fake` demo workflow is intentionally excluded (no QC execution).
 | 5 | `scan` | `acp.workflows.simple.run_scan` | coordinate kind ∈ {distance, angle, dihedral}; single/multi coordinate | `run_scan` |
 | 6 | `tsmode` | `acp.workflows.tsmode.run_tsmode` | `--no-final-frequency` on/off; mapping verified vs `allow_unverified_mapping` | `run_optimize`, `run_frequency` |
 | 7 | `casscf` | `acp.workflows.simple.run_casscf` | CASSCF only; CASSCF + SC-/FIC-NEVPT2; electronic-state routing | `run_casscf` |
-| 8 | `nmr` | `acp.workflows.nmr.run_nmr_analysis` | preset = `censo-zero` (skip CENSO) vs non-zero preset; per-conformer GIAO | `run_conformer_search`, `run_censo_refine`, `run_nmr_shielding` |
+| 8 | `nmr` | `acp.workflows.nmr.run_nmr_analysis` (`src/acp/workflows/nmr.py`) | preset = `censo-zero` (skip CENSO) vs non-zero preset; per-conformer GIAO (`solvent_model=none` = gas phase, no cpcm); per-conformer checkpoint + resource budget stay ACP-side | `run_conformer_search`, `run_censo_refine`, `run_nmr_shielding` |
 | 9 | `singlepoint` | `acp.workflows.simple.run_singlepoint` | single-step plan (`StepKind.SINGLEPOINT`) | `run_singlepoint` |
 | 10 | `optimize` | `acp.workflows.simple.run_optimize` | single-step plan (`StepKind.OPTIMIZE`) | `run_optimize` |
 | 11 | `frequency` | `acp.workflows.simple.run_frequency` | single-step plan (`StepKind.FREQUENCY`) | `run_frequency` |
@@ -122,9 +124,16 @@ NEVPT2 correlation is an option of the same core (no second implementation).
 
 ### 8. nmr
 
-`run_nmr_analysis` → conformer stage calls the `run_conformer_search` core,
-then `run_censo_refine` for every preset except `censo-zero` (which skips
-CENSO), then per-conformer `run_nmr_shielding`.  The configured `CrestBackend`
+`run_nmr_analysis` (`src/acp/workflows/nmr.py`) → conformer stage calls the
+`run_conformer_search` core, then `run_censo_refine` for every preset except
+`censo-zero` (which skips CENSO), then per-conformer GIAO straight through the
+unique `cccp.calculation.tasks.nmr_shielding.run_nmr_shielding` core (direct
+import, `TaskContext(capability_extras={"nuclei": ...})`).  `solvent_model=none`
+runs the shielding stage gas-phase with no cpcm/solvent keyword; the effective
+model is recorded in the protocol/report evidence.  ACP keeps orchestration and
+publication only: the per-conformer shielding checkpoint + resource budget
+(plan todo 28) and the six-part protocol / ensemble-quality records (todos
+29/30) live here, never a second executor.  The configured `CrestBackend`
 instance is only a runtime seam injected into the core's `TaskContext`; it is
 not an alternate execution path.
 

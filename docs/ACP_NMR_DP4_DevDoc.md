@@ -280,6 +280,88 @@ ACP 已具备行业一流的构象生成能力（`acp run ensemble` + CENSO 筛�
 
 **实现位置**：`acp/nmr/report.py`（新），沿用 `acp/reports/` 风格
 
+### D 阶段（迁移收敛后）实际执行证据（2026-10-06）
+
+> 本注记只记录**当前代码实际执行**的事实，对应 `acp-nmr-goodman-gap-remediation`
+> 计划 D 波（todos 26–32；本注记即 todo 33 收口）。未执行、未测量的校准与精度
+> 一律不在此声明；原始门禁输出见 `.omo/evidence/acp-nmr-goodman-gap-remediation/`。
+
+**sampling / geometry（todos 26–27、29）**
+- 采样仍由 ACP 编排：`run_conformer_search`，非 `censo-zero` 预设再经
+  `run_censo_refine`（均为 cccp 任务核心）；NMR 不经过 energy 工作流的 DFT handoff。
+- `NmrProtocolSpec.sampling` / `geometry` 按**实际执行**记录：`censo-zero` 不调用
+  CENSO（`parts=()`、`censo_executed=False`）；`censo-light` 只跑
+  prescreening/screening，**不执行 DFT 优化**（`optimization_executed=False`）；
+  预建/外部 ensemble → `None`（unknown，绝不升级）。“调用 CENSO”不再被写成
+  “已满足 DFT 优化几何”。
+
+**population energy / 权重（todo 30）**
+- 单一能量定义：`free_energy` 完整则用 `free_energy`，否则用更完整的 `energy`
+  （并列时取 `free_energy`）；缺该定义的记录以 `missing_energy` 排除，**不按 0 计入**
+  （`_select_conformers`）。
+- 选择性门：能窗 + 累积布居门（工程目标 0.99，非已校准科学阈值）+ `max_conformers`
+  硬上限；逐构象记录 raw/selected/final 权重、Δ 与剔除原因；cap 截断的未覆盖质量
+  显式记录（`resource_cap_truncated`）。
+- 完整性门：缺目标核的构象**整只**剔除（`incomplete_shieldings`/`giao_failed`），
+  最终权重在成功完整集合上重归一化 —— 报告权重 = 算法实际输入
+  （`_finalize_ensemble_quality`，`tests/test_acp_nmr_ensemble_quality.py`）。
+- 质量状态：支配构象（selected_weight ≥ 0.5）失败 / 成功布居 < 0.95 / 未覆盖 > 0.05
+  ⇒ `EnsembleQuality.quality_status="degraded"` + flags。
+- 敏感性：leave-one-conformer-out（winner flip）与温度敏感性（T ± 10%）触发
+  `requires_review`；这些是质量提示，**不是**已校准的准确率。
+
+**shielding（todos 21/26/27/28）**
+- 唯一任务核心：`src/cccp/calculation/tasks/nmr_shielding.py::run_nmr_shielding`
+  （GIAO；ORCA 子进程仍在 `cccp/qc/interfaces`）；`src/acp/workflows/nmr.py` 直接
+  消费该核心（`TaskContext(capability_extras={"nuclei": ...})`），无第二执行体、
+  无 backend 直调（`tests/test_acp_workflows_nmr.py`、
+  `tests/test_acp_workflow_task_matrix.py` 守护）。
+- 气相契约：`solvent_model=none` ⇒ GIAO 段 `giao_solvent=""`，ORCA 输入**不含**
+  cpcm/SMD 溶剂块；其余模型经 resolver 透传。报告记录的是有效 `solvent_model`
+  （none 保留为 none，不再回退 chloroform/cpcm）。
+- TMS 来源分类：`exact` / `gas_phase_fallback` / `custom` / `unknown`，并记录缺失核
+  （`missing_nuclei`）；缺参考核在 stage-0 直接拒绝，不会用屏蔽值冒充位移。
+- 每构象 checkpoint（todo 28，`tests/test_acp_nmr_resume.py`）：指纹覆盖几何 token
+  （坐标 10 位小数）+ method/basis/solvent(effective)/solvent_model/nuclei/charge/
+  multiplicity/原子映射/`theory_run_config`；方法级变化整文件失效、几何变化单条失效；
+  中断后只补缺失构象；GIAO 串行执行并受显式资源预算约束（超卖显式告警，不静默）。
+
+**statistical model（todos 10–16、29）**
+- DP5 按资产实际可用性记录：资产缺失/加载失败 ⇒ `status="unavailable"`、
+  `probability=None` + reasons；无 ¹³C 证据 ⇒ `not_applicable`；显式
+  `error_model=placeholder-*` 的占位路径只写单独命名的 `dp5_diagnostic_score`，
+  永不冒充正式概率；报告 schema v2 逐候选记录状态。
+
+**protocol spec（todo 29，`src/acp/nmr/protocol.py`）**
+- `NmrProtocolSpec` 六段（sampling / geometry / population_energy / shielding /
+  reference / statistical_model）+ `spec_version=1`；`fingerprint()` 可由记录值重算
+  （`from_dict(...).fingerprint()` 稳定），报告逐候选携带、运行级取最弱聚合
+  （`aggregate_protocol_block`）。
+- 模式（主张最弱优先）：`exploratory` < `reference_validation` < `acp_calibrated`；
+  任一候选 mismatch ⇒ `calibration_status="unvalidated_protocol"`。
+- `acp_calibrated` 不是名称匹配：需模型绑定 + 参考态在册 + DFT 优化实际执行；因此
+  默认 `censo-light`（无优化）只能得 `exploratory`
+  （`tests/test_acp_nmr_protocol_spec.py`）。
+
+**reference-validation 门（todo 31，`src/acp/nmr/reference_validation.py`）**
+- `reference_validation` 模式**仅**在附加真实非空参考数据集时成立
+  （`attach_reference_segment` 才置 `reference_data_present=True`）；请求但无数据
+  ⇒ 保持 `exploratory` + `unvalidated_protocol` + `missing_reference`。
+- 缺失/空参考 ⇒ 类型化 unavailable（`missing_reference`/`empty_reference`），绝不以
+  迁移值或占位值顶替；`compare_reference_vs_migration` 并列
+  `difference = migrated − reference` 与 n/mean/MAE/RMSE/max|diff|（原始浮点，
+  非展示四舍五入）。
+- `PINNED_GOODMAN_UPSTREAM` 每个值带 DevDoc §8.0 / NOTICE 引用（冲突的旧
+  6-31G(d)/6-31G** 描述不 pin）；`asset_hashes()` 记录 NOTICE 资产 sha256（缺失 →
+  None）；可复现校验脚本 `scripts/nmr_reference_validation.py`
+  （`tests/test_acp_nmr_reference_validation.py`）。
+
+**未测量与未声明（honesty）**
+- 本节不包含任何外部数据集校准、DP5 重训或准确率数字；`acp_calibrated` 只表示协议级
+  绑定与执行事实，**不等于**统计精度已校准。
+- 真实 QC（ORCA/CREST/CENSO）冒烟为 `--run-slow --run-integration` 门控，跳过时
+  标记 `NOT_VERIFIED`（三态规则，不当作通过）——本收口不据此声明真实 QC 结果。
+
 ====================================================================
 
 ## 6. 输入规范
