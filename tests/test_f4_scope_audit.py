@@ -1152,6 +1152,144 @@ def test_amendment_m_predicates_confined_and_negatives() -> None:
     assert issues, "removing the round-trip scope must fire the teeth"
 
 
+# ── Amendment N: ORCA 6 GIAO NMR chain compatibility (2026-10-06, plan
+#    todo 51) ──────────────────────────────────────────────────────────────
+#
+# The level-1 real-QC smoke against the host's ORCA 6.1.1 found two chain
+# breaks: (1) an ``%eprnmr`` block placed before the coordinate block aborts
+# ORCA >= 6 ("nuclear properties are requested but no coordinates have been
+# read"), and (2) ORCA 6 summary rows drop the element-number column and
+# append anisotropy, while ``_validate_symbols`` required contiguous 0..N-1
+# indices — rejecting molecules with non-NMR-active atoms (ethanol's
+# oxygen).  Sanctioned scopes: the ``_NMR_SUMMARY_ROW_ORCA6_RE`` constant,
+# the ``NmrShieldingParser._parse_summary_block`` body, and the
+# ``NmrShieldingParser._validate_symbols`` body.  The ``_write_nmr_input``
+# block relocation stays inside Amendment L's sanctioned body.  Teeth: the
+# ORCA 6 regex constant must land, the summary parser must consult it,
+# validation must not re-introduce the contiguity requirement, and the
+# writer must relocate the eprnmr block after the coordinates.
+
+_AMENDMENT_N_PARSER_FUNCS = ("_parse_summary_block", "_validate_symbols")
+_AMENDMENT_N_CONSTANT = "_NMR_SUMMARY_ROW_ORCA6_RE"
+
+
+def _amendment_n_constant_range(src: str) -> tuple[int, int] | None:
+    lines = src.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith(_AMENDMENT_N_CONSTANT):
+            end = index
+            while end < len(lines) - 1 and not lines[end].strip().endswith(")"):
+                end += 1
+            return (index + 1, end + 1)
+    return None
+
+
+def _amendment_n_ranges(src: str) -> list[tuple[int, int]]:
+    ranges = _func_ranges(src)
+    out = [ranges[name] for name in _AMENDMENT_N_PARSER_FUNCS if name in ranges]
+    constant = _amendment_n_constant_range(src)
+    if constant is not None:
+        out.append(constant)
+    return out
+
+
+def _is_amendment_n_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the ORCA 6 NMR parser scopes."""
+    return any(start <= ln <= end for start, end in _amendment_n_ranges(worktree_src))
+
+
+def _is_amendment_n_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions stay inside the baseline N scopes."""
+    ranges = _func_ranges(baseline_src)
+    return any(
+        ranges[name][0] <= ln <= ranges[name][1]
+        for name in _AMENDMENT_N_PARSER_FUNCS
+        if name in ranges
+    )
+
+
+def _amendment_n_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: the ORCA 6 NMR parse + input-order fixes must actually land."""
+    issues: list[str] = []
+    constant = _amendment_n_constant_range(worktree)
+    if constant is None:
+        issues.append(f"  Amendment N: {_AMENDMENT_N_CONSTANT} constant missing")
+    else:
+        block = "\n".join(worktree.splitlines()[constant[0] - 1 : constant[1]])
+        if "re.compile" not in block:
+            issues.append("  Amendment N: ORCA 6 summary row regex must be compiled")
+
+    summary = _func_ranges(worktree).get("_parse_summary_block")
+    if summary is None:
+        issues.append("  Amendment N scope missing _parse_summary_block")
+    else:
+        body = "\n".join(worktree.splitlines()[summary[0] - 1 : summary[1]])
+        if _AMENDMENT_N_CONSTANT not in body:
+            issues.append("  Amendment N: _parse_summary_block must consult the ORCA 6 regex")
+
+    validate = _func_ranges(worktree).get("_validate_symbols")
+    if validate is None:
+        issues.append("  Amendment N scope missing _validate_symbols")
+    else:
+        body = "\n".join(worktree.splitlines()[validate[0] - 1 : validate[1]])
+        if "list(range(len(expected)))" in body:
+            issues.append("  Amendment N: _validate_symbols must not require contiguous indices")
+
+    write = _func_range(worktree, "_write_nmr_input", "ORCAInterface")
+    if write is None:
+        issues.append("  Amendment N scope missing _write_nmr_input")
+    else:
+        body = "\n".join(worktree.splitlines()[write[0] - 1 : write[1]])
+        if "eprnmr_lines" not in body:
+            issues.append("  Amendment N: _write_nmr_input must relocate the eprnmr block")
+    return issues
+
+
+def test_amendment_n_predicates_confined_and_negatives() -> None:
+    """Amendment N is confined to the ORCA 6 NMR scopes — negative injection."""
+    fp = "src/cccp/qc/interfaces/orca.py"
+    worktree = _worktree_content(fp)
+    baseline_src = _baseline_content(fp)
+    summary_range = _func_range(worktree, "_parse_summary_block", "NmrShieldingParser")
+    validate_range = _func_range(worktree, "_validate_symbols", "NmrShieldingParser")
+    assert summary_range is not None
+    assert validate_range is not None
+    constant = _amendment_n_constant_range(worktree)
+    assert constant is not None
+
+    assert _is_amendment_n_addition(summary_range[0], "x = 1", worktree)
+    assert _is_amendment_n_addition(validate_range[0], "x = 1", worktree)
+    assert _is_amendment_n_addition(constant[0], "x = 1", worktree)
+    other_range = _func_range(worktree, "_run_orca", "ORCAInterface")
+    assert other_range is not None
+    assert not _is_amendment_n_addition(other_range[0], "x = 1", worktree)
+
+    base_summary = _func_range(baseline_src, "_parse_summary_block", "NmrShieldingParser")
+    base_validate = _func_range(baseline_src, "_validate_symbols", "NmrShieldingParser")
+    assert base_summary is not None
+    assert base_validate is not None
+    assert _is_amendment_n_deletion(base_summary[0], baseline_src)
+    assert _is_amendment_n_deletion(base_validate[0], baseline_src)
+    base_other = _func_range(baseline_src, "_run_orca", "ORCAInterface")
+    assert base_other is not None
+    assert not _is_amendment_n_deletion(base_other[0], baseline_src)
+
+    assert not _amendment_n_orca_teeth(worktree)
+    renamed = worktree.replace(_AMENDMENT_N_CONSTANT, "_renamed_orca6")
+    issues = _amendment_n_orca_teeth(renamed)
+    assert any("constant missing" in issue for issue in issues)
+    contiguity = worktree.replace(
+        "        indices = sorted(shieldings)",
+        "        indices = sorted(shieldings)\n"
+        "        assert indices == list(range(len(expected)))",
+    )
+    issues = _amendment_n_orca_teeth(contiguity)
+    assert any("contiguous" in issue for issue in issues)
+    no_relocation = worktree.replace("eprnmr_lines", "_kept_in_place")
+    issues = _amendment_n_orca_teeth(no_relocation)
+    assert any("relocate" in issue for issue in issues)
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1296,6 +1434,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_l_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_n_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -1338,6 +1478,7 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_h_orca_teeth(worktree))
             violations.extend(_amendment_i_orca_teeth(worktree))
             violations.extend(_amendment_l_orca_teeth(worktree))
+            violations.extend(_amendment_n_orca_teeth(worktree))
             continue
 
         # ── interfaces/base.py: Amendment J (QCResult merge) ─────────────
@@ -1432,6 +1573,9 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_l_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t) for ln, t in bad_entries if not _is_amendment_n_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             if _is_pure_reexport_shim(_worktree_content(fp)):

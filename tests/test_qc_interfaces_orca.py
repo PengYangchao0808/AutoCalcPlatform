@@ -25,6 +25,7 @@ COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
 
 REAL_FREQ_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "orca_optfreq_real_sections.txt"
+REAL_NMR_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "orca_nmr_giao_real_sections.txt"
 
 ORCA_OPT_OUTPUT = """FINAL SINGLE POINT ENERGY      -200.654321
 CARTESIAN COORDINATES (ANGSTROEM)
@@ -281,6 +282,34 @@ CHEMICAL SHIELDING SUMMARY (ppm)
     assert parsed[0]["symbol"] == "C"
     assert parsed[0]["isotropic"] == pytest.approx(140.230)
     assert parsed[1]["symbol"] == "H"
+
+
+def test_nmr_shielding_parser_orca6_real_summary_allows_inactive_atom_gap() -> None:
+    """Real ORCA 6.1.1 summary rows (index symbol iso anisotropy) parse.
+
+    ORCA 6 replaced the element-number column with the element symbol and
+    appended anisotropy.  Ethanol's oxygen is outside the NMR-active set, so
+    its index is absent: the parsed indices are intentionally non-contiguous
+    and validation is per-index symbol identity, not 0..N-1 contiguity.
+    """
+    expected = ["C", "C", "O", "H", "H", "H", "H", "H", "H"]
+    parsed = NmrShieldingParser.parse(REAL_NMR_FIXTURE, expected_symbols=expected)
+    assert set(parsed) == {0, 1, 3, 4, 5, 6, 7, 8}
+    assert parsed[0]["symbol"] == "C"
+    assert parsed[0]["isotropic"] == pytest.approx(184.706)
+    assert parsed[0]["anisotropy"] == pytest.approx(21.749)
+    assert parsed[1]["isotropic"] == pytest.approx(147.611)
+    assert parsed[1]["anisotropy"] == pytest.approx(55.441)
+    assert parsed[8]["symbol"] == "H"
+    assert parsed[8]["isotropic"] == pytest.approx(32.318)
+    assert parsed[8]["anisotropy"] == pytest.approx(21.840)
+
+
+def test_nmr_shielding_parser_orca6_real_summary_rejects_symbol_mismatch() -> None:
+    """Per-index symbol identity still rejects a mis-ordered expectation."""
+    expected = ["H", "C", "O", "H", "H", "H", "H", "H", "H"]
+    with pytest.raises(ValueError, match="do not match expected"):
+        NmrShieldingParser.parse(REAL_NMR_FIXTURE, expected_symbols=expected)
 
 
 def test_resolve_nmr_nuclei_unsupported_falls_back_to_molecule(
@@ -584,9 +613,15 @@ def test_nmr_gfn_rejected_by_default_with_actionable_message(tmp_path: Path) -> 
 def test_nmr_dft_implicit_basis_unchanged(tmp_path: Path) -> None:
     interface = _bare_nmr_interface("mPW1PW91")
     interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
-    lines = (tmp_path / "nmr.inp").read_text(encoding="utf-8").splitlines()
+    text = (tmp_path / "nmr.inp").read_text(encoding="utf-8")
+    lines = text.splitlines()
     assert lines[0] == "! mPW1PW91 6-311G(d) TightSCF"
-    assert lines[1] == "%eprnmr"
+    # ORCA >= 6 resolves `%eprnmr` nuclear selections against the already
+    # parsed geometry: the coordinate block must precede the eprnmr block,
+    # otherwise ORCA aborts with "nuclear properties are requested but no
+    # coordinates have been read".
+    assert text.index("* xyz 0 1") < text.index("%eprnmr")
+    assert "%eprnmr" in text
 
 
 def test_nmr_gfn_allow_switch_no_implicit_basis_and_alpb_solvent(

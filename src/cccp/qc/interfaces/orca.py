@@ -217,6 +217,13 @@ _NMR_TENSOR_COMP_RE = re.compile(r"([XYZ]{2})\s*=\s*([-+]?\d+\.\d+)")
 #   Nucleus   Element   Isotropic(ppm)
 #      0         6 C       45.230
 _NMR_SUMMARY_ROW_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s*([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s*$")
+# ORCA 6.x summary table variant — the element-number column is replaced by
+# the element symbol and anisotropy is appended:
+#   Nucleus  Element    Isotropic     Anisotropy
+#       0       C          184.706         21.749
+_NMR_SUMMARY_ROW_ORCA6_RE = re.compile(
+    r"^\s*(\d+)\s+([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s+([-+]?\d+\.\d+)\s*$"
+)
 _NMR_TENSOR_HEADER = "NMR SHIELDING TENSOR"
 _NMR_SUMMARY_HEADER = "CHEMICAL SHIELDING SUMMARY"
 _NMR_SHIELDING_HEADERS = (_NMR_TENSOR_HEADER, _NMR_SUMMARY_HEADER)
@@ -331,8 +338,9 @@ class NmrShieldingParser:
 
         result: dict[int, dict[str, Any]] = {}
         for line in lines[start:]:
-            m = _NMR_SUMMARY_ROW_RE.match(line)
-            if not m:
+            m5 = _NMR_SUMMARY_ROW_RE.match(line)
+            m6 = _NMR_SUMMARY_ROW_ORCA6_RE.match(line)
+            if m5 is None and m6 is None:
                 stripped = line.strip()
                 if not stripped or stripped.startswith("-"):
                     continue
@@ -343,18 +351,30 @@ class NmrShieldingParser:
                 if result:
                     break  # already collected rows → left the table
                 continue  # haven't seen data yet → keep scanning
-            # group layout: <nucleus#> <element_num> <element_sym> <iso>
-            # ORCA 5.x summary table Nucleus column is 0-based (starts at 0),
-            # unlike the TENSOR block's "Nucleus N El:" which is 1-based.
-            # Real ORCA 5.x output example (confirmed by ORCA manual §9.10):
-            #   Nucleus   Element   Isotropic(ppm)
-            #      0         6 C       45.230
-            atom_idx = int(m.group(1))  # 0-based, no -1
+            if m5 is not None:
+                # ORCA 5.x layout: <nucleus#> <element_num> <element_sym> <iso>
+                # ORCA 5.x summary table Nucleus column is 0-based (starts at 0),
+                # unlike the TENSOR block's "Nucleus N El:" which is 1-based.
+                # Real ORCA 5.x output example (confirmed by ORCA manual §9.10):
+                #   Nucleus   Element   Isotropic(ppm)
+                #      0         6 C       45.230
+                atom_idx = int(m5.group(1))  # 0-based, no -1
+                symbol = _normalize_nmr_symbol(m5.group(3))
+                isotropic = float(m5.group(4))
+                anisotropy: float | None = None
+            else:
+                if m6 is None:  # pragma: no cover - guard above
+                    continue
+                # ORCA 6.x layout: <nucleus#> <element_sym> <iso> <anisotropy>
+                atom_idx = int(m6.group(1))
+                symbol = _normalize_nmr_symbol(m6.group(2))
+                isotropic = float(m6.group(3))
+                anisotropy = float(m6.group(4))
             result[atom_idx] = {
                 "atom_index": atom_idx,
-                "symbol": _normalize_nmr_symbol(m.group(3)),
-                "isotropic": float(m.group(4)),
-                "anisotropy": None,
+                "symbol": symbol,
+                "isotropic": isotropic,
+                "anisotropy": anisotropy,
                 "tensor_components": {},
             }
         return result
@@ -366,13 +386,15 @@ class NmrShieldingParser:
     ) -> None:
         expected = [_normalize_nmr_symbol(s) for s in expected_symbols]
         indices = sorted(shieldings)
-        if indices != list(range(len(expected))):
+        out_of_range = [index for index in indices if index < 0 or index >= len(expected)]
+        if out_of_range:
+            raise ValueError(f"Parsed shielding atom indices outside the molecule: {out_of_range}")
+        parsed = [shieldings[index]["symbol"] for index in indices]
+        expected_at_indices = [expected[index] for index in indices]
+        if parsed != expected_at_indices:
             raise ValueError(
-                f"Parsed shielding atom indices do not form a contiguous 0..N-1 sequence: {indices}"
+                f"Parsed shielding symbols {parsed} do not match expected {expected_at_indices}"
             )
-        parsed = [shieldings[i]["symbol"] for i in indices]
-        if parsed != expected:
-            raise ValueError(f"Parsed shielding symbols {parsed} do not match expected {expected}")
 
 
 def _normalize_nmr_symbol(symbol: str) -> str:
@@ -3508,11 +3530,26 @@ class ORCAInterface(QCInterfaceBase):
             nuclei=nuclei,
         )
 
+        # ORCA >= 6 resolves %eprnmr nuclear selections against the geometry
+        # parsed so far and aborts when the block precedes the coordinates
+        # ("nuclear properties are requested but no coordinates have been
+        # read").  Move the rendered eprnmr block after the xyz body.
+        eprnmr_lines: list[str] = []
+        if "%eprnmr" in lines:
+            start = lines.index("%eprnmr")
+            end = start + 1
+            while end < len(lines) and lines[end].strip() != "end":
+                end += 1
+            eprnmr_lines = lines[start : end + 1]
+            del lines[start : end + 1]
+
         body = "\n".join(lines) + "\n"
         body += f"\n* xyz {charge} {multiplicity}\n"
         for symbol, coord in zip(symbols, coordinates):
             body += f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n"
         body += "*\n"
+        if eprnmr_lines:
+            body += "\n" + "\n".join(eprnmr_lines) + "\n"
 
         ensure_dir(input_file.parent)
         input_file.write_text(body, encoding="utf-8")
