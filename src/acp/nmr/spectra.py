@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 
 from acp.nmr.models import (
+    DIGITAL_FILTER_COMPENSATION_NONE,
     AcquisitionSpectrum,
     ExperimentalNmr,
     ExperimentalPeak,
@@ -47,6 +48,7 @@ from acp.nmr.models import (
     ProcessingProvenance,
     ProcessingQuality,
     SpectralLine,
+    assess_processing,
     normalize_symbol,
 )
 
@@ -61,6 +63,10 @@ _DEFAULT_REF_WINDOW_PPM: dict[str, float] = {"H": 0.5, "C": 3.0}
 _BASELINE_WINDOW_FRACTION: float = 0.02
 # SNR threshold default for peak picking (edge-noise MAD units).
 _DEFAULT_SNR_THRESHOLD: float = 8.0
+# This chain applies no digital-filter (group-delay) compensation. The
+# decision is recorded explicitly so the quality gate reports what was
+# actually done instead of silently assuming the filter had no effect (G10).
+_DIGITAL_FILTER_COMPENSATION: str = DIGITAL_FILTER_COMPENSATION_NONE
 
 
 @dataclass
@@ -70,6 +76,11 @@ class BrukerProcessResult:
     experiment: ExperimentalNmr
     spectra: list[ProcessedSpectrum] = field(default_factory=list)
     extracted_dir: Path | None = None
+
+    @property
+    def formal_spectra(self) -> list[ProcessedSpectrum]:
+        """Spectra that passed the processing gate (failed ones excluded)."""
+        return [spectrum for spectrum in self.spectra if spectrum.formal_usable]
 
 
 # ---------------------------------------------------------------------------
@@ -540,8 +551,18 @@ def process_bruker_experiment(
         reference_method=("manual_anchor" if reference_shift is not None else "spectrometer_sr"),
         reference_ppm=reference_ppm,
         applied_shift_ppm=reference_shift,
+        digital_filter_compensation=_DIGITAL_FILTER_COMPENSATION,
     )
     quality = _estimate_quality(real, noise, indices, heights, sw_hz)
+    assessment = assess_processing(processing, acquisition)
+    if assessment is not None and not assessment.is_ok:
+        logger.warning(
+            "Bruker %s processing gate %s (%s) from %s",
+            nucleus,
+            assessment.status,
+            ", ".join(assessment.reasons),
+            exp_dir,
+        )
     logger.info(
         "Bruker %s: picked %d peak(s) (%s, noise=%.3g, lb=%.2f Hz, phase=%s) from %s",
         nucleus,
@@ -563,6 +584,7 @@ def process_bruker_experiment(
         processing=processing,
         quality=quality,
         lines=lines,
+        assessment=assessment,
     )
 
 
@@ -631,13 +653,28 @@ def process_bruker_tree(
             snr_threshold=snr_threshold,
         )
         spectra.append(spectrum)
+        if not spectrum.formal_usable:
+            continue
         if spectrum.peaks:
             peaks_by_element.setdefault(spectrum.element, []).extend(spectrum.peaks)
 
+    excluded = [spectrum for spectrum in spectra if not spectrum.formal_usable]
+    if excluded:
+        logger.warning(
+            "Bruker processing gate excluded %d/%d spectrum(s) from the formal peak list: %s",
+            len(excluded),
+            len(spectra),
+            {
+                spectrum.source_dir: list(spectrum.assessment.reasons)
+                for spectrum in excluded
+                if spectrum.assessment is not None
+            },
+        )
     if not peaks_by_element:
         raise ValueError(
             f"Bruker processing picked no peaks under {path} "
-            f"({len(exp_dirs)} experiment(s) scanned) — check SNR/phase."
+            f"({len(exp_dirs)} experiment(s) scanned, {len(excluded)} excluded "
+            "by the processing gate) — check SNR/phase."
         )
 
     return BrukerProcessResult(

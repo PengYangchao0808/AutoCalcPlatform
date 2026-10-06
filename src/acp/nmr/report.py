@@ -15,14 +15,26 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TypedDict
 
-from acp.nmr.models import REPORT_SCHEMA_VERSION, Assignment, CandidateResult, NmrReport
+from acp.nmr.models import (
+    REPORT_SCHEMA_VERSION,
+    Assignment,
+    CandidateResult,
+    NmrReport,
+    ProcessedSpectrum,
+    check_digital_filter,
+)
 from acp.nmr.scaling import prediction_r_squared
 
 logger = logging.getLogger(__name__)
+
+#: Additive top-level ``nmr_report.json`` key (todo 42): per-spectrum
+#: processing gate verdicts + quality metrics. ``None`` when no raw spectra
+#: were involved (hand-built reports / text input); existing keys untouched.
+PROCESSING_QUALITY_KEY = "processing_quality"
 
 #: Rendered for payloads written before schema v2 (no ``schema_version``):
 #: historical reports carry no validation state and are never upgraded.
@@ -119,16 +131,57 @@ def _augment_split_r2(report: NmrReport, payload: object) -> object:
     return payload
 
 
+def processing_quality_records(spectra: Iterable[ProcessedSpectrum]) -> list[dict[str, object]]:
+    """JSON-safe per-spectrum processing gate + quality records (todo 42 / G10).
+
+    One record per processed spectrum for the additive
+    :data:`PROCESSING_QUALITY_KEY` report block: gate verdict (``unknown``
+    when the spectrum carries no assessment), reasons, phase/reference
+    provenance, measured quality metrics (``None`` when not measurable —
+    never zeroed) and the digital-filter check result. No existing report
+    key is touched or renamed.
+    """
+    records: list[dict[str, object]] = []
+    for spectrum in spectra:
+        assessment = spectrum.assessment
+        processing = spectrum.processing
+        check = check_digital_filter(spectrum.acquisition, processing)
+        records.append(
+            {
+                "nucleus": spectrum.nucleus,
+                "element": spectrum.element,
+                "source_dir": spectrum.source_dir,
+                "status": assessment.status if assessment is not None else "unknown",
+                "reasons": list(assessment.reasons) if assessment is not None else [],
+                "formal_usable": spectrum.formal_usable,
+                "phase_method": processing.phase_method if processing is not None else None,
+                "reference_method": (
+                    processing.reference_method if processing is not None else None
+                ),
+                "reference_ppm": processing.reference_ppm if processing is not None else None,
+                "applied_shift_ppm": (
+                    processing.applied_shift_ppm if processing is not None else None
+                ),
+                "quality": spectrum.quality.to_dict() if spectrum.quality is not None else None,
+                "digital_filter": check.to_dict() if check is not None else None,
+            }
+        )
+    return records
+
+
 def write_json_report(report: NmrReport, output_path: Path) -> Path:
     """Write ``nmr_report.json`` (schema v2 payload from ``NmrReport.as_dict``).
 
     The payload additionally carries the split R² keys
     (``r2_regression``/``r2_prediction`` per fitted nucleus) and the
-    ``provenance.r2_definitions`` block (todo 25).
+    ``provenance.r2_definitions`` block (todo 25), plus the additive
+    :data:`PROCESSING_QUALITY_KEY` block (todo 42).
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = _augment_split_r2(report, report.as_dict())
+    if isinstance(payload, dict):
+        payload[PROCESSING_QUALITY_KEY] = report.metadata.get(PROCESSING_QUALITY_KEY)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return output_path
 
@@ -296,6 +349,8 @@ __all__ = [
     "report_validation_note",
     "GOODMAN_RESIDUAL_LABEL",
     "LEGACY_REPORT_NOTE",
+    "PROCESSING_QUALITY_KEY",
     "R2_DEFINITIONS",
     "ReportPaths",
+    "processing_quality_records",
 ]

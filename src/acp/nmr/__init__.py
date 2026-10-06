@@ -52,7 +52,12 @@ from acp.nmr.fchl import (
 )
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
+    DIGITAL_FILTER_COMPENSATION_GROUP_DELAY,
+    DIGITAL_FILTER_COMPENSATION_NONE,
+    DIGITAL_FILTER_STATUSES,
     PROBABILITY_STATUSES,
+    PROCESSING_REASONS,
+    PROCESSING_STATUSES,
     SIGNAL_GROUP_BASES,
     AcquisitionSpectrum,
     Assignment,
@@ -61,6 +66,7 @@ from acp.nmr.models import (
     CandidateProbability,
     CandidateResult,
     ConformerShielding,
+    DigitalFilterCheck,
     EvidenceStatus,
     ExperimentalNmr,
     ExperimentalPeak,
@@ -70,12 +76,15 @@ from acp.nmr.models import (
     ProbabilityResult,
     ProbabilityStatus,
     ProcessedSpectrum,
+    ProcessingAssessment,
     ProcessingProvenance,
     ProcessingQuality,
     RegressionResult,
     ResonanceSignal,
     SignalGroup,
     SpectralLine,
+    assess_processing,
+    check_digital_filter,
     lookup_tms_shieldings,
     resonance_signals_from_peaks,
 )
@@ -153,6 +162,16 @@ __all__ = [
     "SpectralLine",
     "ResonanceSignal",
     "resonance_signals_from_peaks",
+    # processing quality gates (todo 42 / G10)
+    "ProcessingAssessment",
+    "PROCESSING_STATUSES",
+    "PROCESSING_REASONS",
+    "DigitalFilterCheck",
+    "DIGITAL_FILTER_STATUSES",
+    "DIGITAL_FILTER_COMPENSATION_NONE",
+    "DIGITAL_FILTER_COMPENSATION_GROUP_DELAY",
+    "assess_processing",
+    "check_digital_filter",
     # io
     "parse_experimental_nmr",
     # equivalence

@@ -567,6 +567,12 @@ class ProcessingProvenance:
             manual reference was requested).
         applied_shift_ppm: ppm shift actually applied to the picked peaks
             (``None`` when no anchor was applied).
+        digital_filter_compensation: What was done about the acquisition
+            digital filter / group delay: ``"none"`` (explicitly not
+            compensated), ``"group_delay_removal"`` (removed), or ``None``
+            (not recorded / legacy). The filter effect is never assumed
+            absent: unknown values are treated as unverified by
+            :func:`check_digital_filter` (todo 42 / G10).
     """
 
     apodization: str
@@ -583,6 +589,7 @@ class ProcessingProvenance:
     baseline_window_fraction: float | None = None
     reference_ppm: float | None = None
     applied_shift_ppm: float | None = None
+    digital_filter_compensation: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """JSON-safe record (every declared field, exact values)."""
@@ -601,6 +608,7 @@ class ProcessingProvenance:
             "reference_method": self.reference_method,
             "reference_ppm": self.reference_ppm,
             "applied_shift_ppm": self.applied_shift_ppm,
+            "digital_filter_compensation": self.digital_filter_compensation,
         }
 
     @classmethod
@@ -627,6 +635,7 @@ class ProcessingProvenance:
             ),
             reference_ppm=_payload_float(payload, name, "reference_ppm"),
             applied_shift_ppm=_payload_float(payload, name, "applied_shift_ppm"),
+            digital_filter_compensation=_payload_str(payload, name, "digital_filter_compensation"),
         )
 
 
@@ -660,6 +669,263 @@ class ProcessingQuality:
             linewidth_hz=_payload_float(payload, name, "linewidth_hz"),
             baseline_rms=_payload_float(payload, name, "baseline_rms"),
         )
+
+
+# ---------------------------------------------------------------------------
+# Processing quality gates (todo 42 / G10)
+# ---------------------------------------------------------------------------
+
+#: Closed vocabulary of processing-gate verdicts, ascending severity.
+PROCESSING_STATUSES: tuple[str, ...] = ("ok", "degraded", "failed")
+
+#: Closed vocabulary of gate reasons. ``phase_failed`` is a HARD failure —
+#: unphased data must never feed formal probabilities; the others are
+#: degradations that stay visible without discarding otherwise usable peaks.
+PROCESSING_REASONS: tuple[str, ...] = (
+    "phase_failed",
+    "reference_not_applied",
+    "digital_filter_unverified",
+)
+
+#: Reason → verdict mapping (single severity definition; a verdict is never
+#: hand-set — :class:`ProcessingAssessment` derives and validates it).
+_PROCESSING_REASON_STATUS: dict[str, str] = {
+    "phase_failed": "failed",
+    "reference_not_applied": "degraded",
+    "digital_filter_unverified": "degraded",
+}
+
+#: Compensation values recorded in provenance (single definition; ``None``
+#: means "not recorded" and legacy values are treated as unverified — never
+#: as "no effect" — by :func:`check_digital_filter` (todo 42 / G10)).
+DIGITAL_FILTER_COMPENSATION_NONE = "none"
+DIGITAL_FILTER_COMPENSATION_GROUP_DELAY = "group_delay_removal"
+DIGITAL_FILTER_COMPENSATIONS: tuple[str, ...] = (
+    DIGITAL_FILTER_COMPENSATION_NONE,
+    DIGITAL_FILTER_COMPENSATION_GROUP_DELAY,
+)
+
+#: Closed vocabulary of digital-filter verification states.
+DIGITAL_FILTER_STATUSES: tuple[str, ...] = (
+    "not_applicable",
+    "unverified",
+    "not_compensated",
+    "compensated",
+)
+
+
+def _canonical_processing_reasons(reasons: object) -> tuple[str, ...]:
+    """Validate reasons against the closed vocabulary; canonicalize order."""
+    if not isinstance(reasons, (tuple, list)):
+        raise ValueError(
+            f"ProcessingAssessment.reasons must be a tuple/list, got {type(reasons).__name__}"
+        )
+    unknown = [r for r in reasons if not isinstance(r, str) or r not in PROCESSING_REASONS]
+    if unknown:
+        raise ValueError(f"unknown processing reason(s) {unknown!r}; expected {PROCESSING_REASONS}")
+    present = set(reasons)
+    return tuple(reason for reason in PROCESSING_REASONS if reason in present)
+
+
+def _assessed_status(reasons: tuple[str, ...]) -> str:
+    """Derive the verdict from canonical reasons (single severity mapping)."""
+    if not reasons:
+        return "ok"
+    statuses = {_PROCESSING_REASON_STATUS[reason] for reason in reasons}
+    return "failed" if "failed" in statuses else "degraded"
+
+
+@dataclass(frozen=True)
+class ProcessingAssessment:
+    """Typed gate verdict for one processed spectrum (todo 42 / G10).
+
+    Consumers distinguish ``ok`` / ``degraded`` / ``failed``
+    deterministically; a ``failed`` verdict (unphased data) must not feed
+    formal probability consumers. ``status`` is never hand-waved: it must
+    agree with the severity mapping of ``reasons`` or validation raises.
+
+    Attributes:
+        status: Closed verdict — ``"ok"``, ``"degraded"`` or ``"failed"``.
+        reasons: Closed-vocabulary reasons behind the verdict, canonicalized
+            to :data:`PROCESSING_REASONS` order and de-duplicated.
+    """
+
+    status: str
+    reasons: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.status not in PROCESSING_STATUSES:
+            raise ValueError(
+                f"unknown processing status {self.status!r}; expected {PROCESSING_STATUSES}"
+            )
+        canonical = _canonical_processing_reasons(self.reasons)
+        derived = _assessed_status(canonical)
+        if self.status != derived:
+            raise ValueError(
+                f"inconsistent processing assessment: status {self.status!r} "
+                f"contradicts reasons {canonical!r} (expected {derived!r})"
+            )
+        object.__setattr__(self, "reasons", canonical)
+
+    @property
+    def is_ok(self) -> bool:
+        """True for the ``ok`` verdict."""
+        return self.status == "ok"
+
+    @property
+    def is_degraded(self) -> bool:
+        """True for the ``degraded`` verdict."""
+        return self.status == "degraded"
+
+    @property
+    def is_failed(self) -> bool:
+        """True for the ``failed`` verdict."""
+        return self.status == "failed"
+
+    @property
+    def formal_usable(self) -> bool:
+        """Whether the spectrum may feed formal probability consumers."""
+        return self.status != "failed"
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field, exact values)."""
+        return {"status": self.status, "reasons": list(self.reasons)}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> ProcessingAssessment:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        return cls(
+            status=_coerce_required_str(payload["status"], "ProcessingAssessment.status"),
+            reasons=_coerce_str_tuple(payload["reasons"], "ProcessingAssessment.reasons"),
+        )
+
+
+@dataclass(frozen=True)
+class DigitalFilterCheck:
+    """Dedicated digital-filter / group-delay check for one spectrum (todo 42).
+
+    The Bruker digital filter leaves a known group delay (``GRPDLY``) in the
+    raw FID; the ACP chain applies no compensation, and a metadata-only
+    check must never claim the filter effect was verified. ``status`` is
+    ``not_applicable`` (no filter declared), ``not_compensated`` (filter
+    present, explicitly not compensated), ``compensated`` (a recorded
+    compensation step) or ``unverified`` (compensation not on record /
+    unrecognized — conservative).
+
+    Attributes:
+        status: Closed :data:`DIGITAL_FILTER_STATUSES` value.
+        filter_present: Whether acquisition metadata declares a filter.
+        group_delay_points: Raw ``GRPDLY`` value (``None`` when absent).
+        dspfvs: Raw ``DSPFVS`` firmware parameter (``None`` when absent).
+        compensation: Recorded compensation decision (``"none"`` /
+            ``"group_delay_removal"`` / unknown string / ``None``).
+    """
+
+    status: str
+    filter_present: bool
+    group_delay_points: float | None = None
+    dspfvs: int | None = None
+    compensation: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status not in DIGITAL_FILTER_STATUSES:
+            raise ValueError(
+                f"unknown digital-filter status {self.status!r}; expected {DIGITAL_FILTER_STATUSES}"
+            )
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-safe record (every declared field, exact values)."""
+        return {
+            "status": self.status,
+            "filter_present": self.filter_present,
+            "group_delay_points": self.group_delay_points,
+            "dspfvs": self.dspfvs,
+            "compensation": self.compensation,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> DigitalFilterCheck:
+        """Rebuild from :meth:`to_dict`; a missing field fails explicitly."""
+        _require_payload_fields(payload, cls)
+        name = "DigitalFilterCheck"
+        present = payload["filter_present"]
+        if not isinstance(present, bool):
+            raise ValueError(f"{name}.filter_present must be a bool, got {present!r}")
+        return cls(
+            status=_coerce_required_str(payload["status"], f"{name}.status"),
+            filter_present=present,
+            group_delay_points=_payload_float(payload, name, "group_delay_points"),
+            dspfvs=_payload_int(payload, name, "dspfvs"),
+            compensation=_payload_str(payload, name, "compensation"),
+        )
+
+
+def check_digital_filter(
+    acquisition: AcquisitionSpectrum | None,
+    processing: ProcessingProvenance | None,
+) -> DigitalFilterCheck | None:
+    """Check group-delay/filter metadata and its compensation record (G10).
+
+    Filter presence: the recorded ``GRPDLY`` when present (``> 0`` =
+    active); when ``GRPDLY`` is absent, DSP firmware (``DSPFVS >= 10``) is
+    treated conservatively as possibly filtered. Returns ``None`` when no
+    acquisition record exists — an unknown filter state is never reported
+    as "no filter".
+    """
+    if acquisition is None:
+        return None
+    group_delay = acquisition.group_delay_points
+    dspfvs = acquisition.dspfvs
+    if group_delay is not None:
+        filter_present = group_delay > 0
+    else:
+        filter_present = dspfvs is not None and dspfvs >= 10
+    compensation = processing.digital_filter_compensation if processing is not None else None
+    if not filter_present:
+        status = "not_applicable"
+    elif compensation == DIGITAL_FILTER_COMPENSATION_GROUP_DELAY:
+        status = "compensated"
+    elif compensation == DIGITAL_FILTER_COMPENSATION_NONE:
+        status = "not_compensated"
+    else:
+        # No recorded compensation (legacy) or an unrecognized value: the
+        # group-delay effect is NOT verified — never silently assumed absent.
+        status = "unverified"
+    return DigitalFilterCheck(
+        status=status,
+        filter_present=filter_present,
+        group_delay_points=group_delay,
+        dspfvs=dspfvs,
+        compensation=compensation,
+    )
+
+
+def assess_processing(
+    processing: ProcessingProvenance | None,
+    acquisition: AcquisitionSpectrum | None = None,
+) -> ProcessingAssessment | None:
+    """Deterministic gate verdict for one processed spectrum (todo 42 / G10).
+
+    Gates: a failed auto-phase (hard failure), a requested-but-unapplied
+    manual reference (the T41 combination ``reference_method ==
+    "spectrometer_sr"`` with a non-``None`` ``reference_ppm``) and an
+    uncompensated/unverified digital filter. Returns ``None`` when no
+    provenance is recorded (legacy/hand-built spectrum) — a verdict is
+    never invented from absent evidence.
+    """
+    if processing is None:
+        return None
+    reasons: list[str] = []
+    if processing.phase_method == "unphased":
+        reasons.append("phase_failed")
+    if processing.reference_method == "spectrometer_sr" and processing.reference_ppm is not None:
+        reasons.append("reference_not_applied")
+    check = check_digital_filter(acquisition, processing)
+    if check is not None and check.status in ("unverified", "not_compensated"):
+        reasons.append("digital_filter_unverified")
+    canonical = _canonical_processing_reasons(tuple(reasons))
+    return ProcessingAssessment(status=_assessed_status(canonical), reasons=canonical)
 
 
 @dataclass(frozen=True)
@@ -819,6 +1085,9 @@ class ProcessedSpectrum:
         processing: Layer-2a processing provenance (``None`` when unknown).
         quality: Layer-2b quality metrics (``None`` when unknown).
         lines: Layer-3 observed/fitted lines (empty when not fitted).
+        assessment: Typed gate verdict (``ok``/``degraded``/``failed``) —
+            ``None`` only for legacy/hand-built spectra with no verdict
+            recorded (todo 42).
     """
 
     nucleus: str
@@ -831,6 +1100,17 @@ class ProcessedSpectrum:
     processing: ProcessingProvenance | None = None
     quality: ProcessingQuality | None = None
     lines: list[SpectralLine] = field(default_factory=list)
+    assessment: ProcessingAssessment | None = None
+
+    @property
+    def formal_usable(self) -> bool:
+        """Whether this spectrum may feed formal probability consumers (G10).
+
+        Legacy spectra with no recorded verdict stay usable (current
+        behaviour); a spectrum assessed ``failed`` never is — an unphased
+        spectrum cannot silently produce formal probabilities (todo 42).
+        """
+        return self.assessment is None or self.assessment.status != "failed"
 
     def to_dict(self) -> dict[str, object]:
         """JSON-safe record: peaks + every layer block, exact values."""
@@ -845,6 +1125,7 @@ class ProcessedSpectrum:
             "processing": (self.processing.to_dict() if self.processing is not None else None),
             "quality": self.quality.to_dict() if self.quality is not None else None,
             "lines": [line.to_dict() for line in self.lines],
+            "assessment": (self.assessment.to_dict() if self.assessment is not None else None),
         }
 
     @classmethod
@@ -861,6 +1142,7 @@ class ProcessedSpectrum:
         acquisition_raw = payload["acquisition"]
         processing_raw = payload["processing"]
         quality_raw = payload["quality"]
+        assessment_raw = payload["assessment"]
         return cls(
             nucleus=_coerce_required_str(payload["nucleus"], f"{name}.nucleus"),
             element=_coerce_required_str(payload["element"], f"{name}.element"),
@@ -896,6 +1178,13 @@ class ProcessedSpectrum:
                 SpectralLine.from_dict(_coerce_payload_mapping(line, f"{name}.lines[]"))
                 for line in lines_raw
             ],
+            assessment=(
+                None
+                if assessment_raw is None
+                else ProcessingAssessment.from_dict(
+                    _coerce_payload_mapping(assessment_raw, f"{name}.assessment")
+                )
+            ),
         )
 
 
@@ -1820,6 +2109,10 @@ class NmrReport:
             # todo 30: leave-one-conformer-out / temperature winner-stability
             # verdict (workflow-populated; None for hand-built reports).
             "sensitivity": self.metadata.get("sensitivity"),
+            # todo 42: per-spectrum processing gate + quality records
+            # (workflow-populated via metadata; None for reports that never
+            # touched raw spectra). Additive key — existing keys unchanged.
+            "processing_quality": self.metadata.get("processing_quality"),
             "note": (
                 "DP4/DP5 use placeholder error-model parameters (P1a); "
                 "values are relative only — do not use for publication."
@@ -1835,6 +2128,16 @@ __all__ = [
     "AcquisitionSpectrum",
     "ProcessingProvenance",
     "ProcessingQuality",
+    "ProcessingAssessment",
+    "PROCESSING_STATUSES",
+    "PROCESSING_REASONS",
+    "DigitalFilterCheck",
+    "DIGITAL_FILTER_STATUSES",
+    "DIGITAL_FILTER_COMPENSATIONS",
+    "DIGITAL_FILTER_COMPENSATION_NONE",
+    "DIGITAL_FILTER_COMPENSATION_GROUP_DELAY",
+    "assess_processing",
+    "check_digital_filter",
     "SpectralLine",
     "ResonanceSignal",
     "ProcessedSpectrum",
