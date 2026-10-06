@@ -155,6 +155,44 @@ def test_handle_nmr_propagates_solvent_model_and_max_conformers(monkeypatch, tmp
     assert captured["ewin"] == 6.0
 
 
+def test_handle_nmr_tolerates_none_dp5_in_summary(monkeypatch, tmp_path):
+    """Placeholder error model yields dp5=None — the report line must not crash."""
+    from types import SimpleNamespace
+
+    from acp.cli import _handle_nmr, build_parser
+
+    def _fake_run_nmr_analysis(**kwargs):
+        return SimpleNamespace(
+            status="completed",
+            metadata={
+                "winner": {"index": 0, "label": "candidate_1", "dp4": 1.0, "dp5": None},
+                "n_candidates": 1,
+            },
+            error=None,
+        )
+
+    monkeypatch.setattr("acp.workflows.nmr.run_nmr_analysis", _fake_run_nmr_analysis)
+    args = build_parser().parse_args(
+        [
+            "run",
+            "nmr",
+            "--input",
+            "CCO",
+            "--spectrum",
+            "C: 40.0(C1)",
+            "--output",
+            str(tmp_path / "out"),
+            "--nmr-method",
+            "B3LYP",
+            "--nmr-basis",
+            "def2-TZVPP",
+            "--error-model",
+            "placeholder-student-t",
+        ]
+    )
+    assert _handle_nmr(args) == 0
+
+
 def test_handle_nmr_rejects_unknown_method_via_resolver(tmp_path):
     """G06 rejection: a non-METHOD_META functional fails fast with exit 1."""
     from acp.cli import _handle_nmr, build_parser

@@ -3795,12 +3795,14 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         logger.info("NMR + DP4/DP5 workflow completed successfully")
         winner = meta.get("winner")
         if winner:
+            dp4 = winner.get("dp4")
+            dp5 = winner.get("dp5")
             logger.info(
-                "  Winner: candidate %s (%s) — DP4=%.3f, DP5=%.3f",
+                "  Winner: candidate %s (%s) — DP4=%s, DP5=%s",
                 winner.get("index"),
                 winner.get("label"),
-                float(winner.get("dp4", 0.0)),
-                float(winner.get("dp5", 0.0)),
+                f"{float(dp4):.3f}" if dp4 is not None else "N/A",
+                f"{float(dp5):.3f}" if dp5 is not None else "N/A",
             )
         logger.info("  Candidates        : %s", meta.get("n_candidates", "N/A"))
         logger.info("  Report JSON       : %s", meta.get("report_json", "N/A"))
