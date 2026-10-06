@@ -1372,6 +1372,35 @@ def test_amendment_o_predicates_confined_and_negatives() -> None:
     assert any("chrg" in issue for issue in issues)
 
 
+# ── Amendment P: hess_file real ORCA 6.1.1 block-format rewrite (2026-10-07,
+#    real-qc-gap task 4) ──────────────────────────────────────────────────────
+#
+# Amendment G introduced ``hess_file.py`` as a new pure parser, but its flat
+# token read assumed the synthetic row-major layout and mis-decoded the real
+# ORCA 6.1.1 ``$hessian`` block format (column-index header lines + row-index
+# prefixes), so every real ``.hess`` died on the symmetry gate (audit D1).
+# The sanctioned rewrite decodes blocks by header/row indices with range/
+# duplicate/missing validation and a narrow final block, requires a geometry
+# source (``$atoms`` Bohr coordinates or ``$coords`` — never silent zeros),
+# and decodes ``$vibrational_frequencies`` as count + index/value pairs so
+# structural tokens stay out of the frequency list.  Teeth assert the four
+# rewrite markers survive; the legacy flat path is kept for synthetic files.
+
+
+def _amendment_p_hess_teeth(worktree: str) -> list[str]:
+    """Teeth: the ORCA 6.1.1 real-format rewrite markers must be present."""
+    issues: list[str] = []
+    if "def _parse_hessian_blocks" not in worktree:
+        issues.append("  Amendment P: hess_file.py block decoder _parse_hessian_blocks missing")
+    if "duplicate row index" not in worktree:
+        issues.append("  Amendment P: hess_file.py row-index validation missing")
+    if "no geometry source" not in worktree:
+        issues.append("  Amendment P: hess_file.py geometry-source requirement missing")
+    if "def _parse_frequencies_section" not in worktree:
+        issues.append("  Amendment P: hess_file.py indexed frequency decode missing")
+    return issues
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1577,13 +1606,14 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_j_base_teeth(worktree))
             continue
 
-        # ── hess_file.py: Amendment G (new pure-parser module) ───────────
+        # ── hess_file.py: Amendment G (new pure-parser module) + P (real-format rewrite) ──
         if fp == "src/cccp/qc/interfaces/hess_file.py":
             worktree = _worktree_content(fp)
             if "def parse_orca_hess_file" not in worktree:
                 violations.append("  Amendment G scope parse_orca_hess_file missing")
             if "import subprocess" in worktree:
                 violations.append("  Amendment G: hess_file.py must not use subprocess")
+            violations.extend(_amendment_p_hess_teeth(worktree))
             continue
 
         # ── crest.py: Amendment O (CREST charge-flag fix) ────────────────

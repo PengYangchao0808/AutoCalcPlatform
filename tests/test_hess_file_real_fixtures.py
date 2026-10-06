@@ -5,10 +5,12 @@ Expected values come from the audit's independent decode
 from the parser under test. Fixtures are byte-identical freezes of real ORCA
 6.1.1 output (see ``tests/fixtures/qc/orca61/README.md``).
 
-xfail discipline: only assertions that currently fail carry
-``xfail(strict=True)`` — the parser rejects the real block format with
-``HessFileError: Hessian is not symmetric`` (audit D1). When T04 lands the fix
-these markers must be removed; strict XPASS turns any leftover marker red.
+History: the two parse tests carried ``xfail(strict=True)`` while the parser
+mis-decoded the real block format (``HessFileError: Hessian is not
+symmetric``, audit D1). T04 rewrote ``parse_orca_hess_file`` for the real
+ORCA 6.1.1 block layout and the markers were removed — these tests now pass
+genuinely (a leftover strict xfail would XPASS=FAIL). Format-boundary
+positives/negatives live in ``tests/test_hess_file_block_format.py``.
 """
 
 from __future__ import annotations
@@ -34,8 +36,6 @@ EXPECTED_SHA256 = {
     "ts_opt.xyz": "5319d4ce17c6013afd1902cc9f9ea5e8b1c543a6a4ebd53e17ae973aab4839ba",
     "water_freq.hess": "3d4459d8c69abe661fb05f816d05a58a67b0f2f53e6a357ac05d8de44875c42b",
 }
-
-D1_HESS_PARSE_REASON = "D1 real-format hessian parse broken — see T04"
 
 # Printed frequencies, audit D1 "printed_frequencies" (exact floats — the
 # fixture decimal tokens round-trip to these doubles).
@@ -106,13 +106,11 @@ def test_ts_opt_bundle_description_loads() -> None:
     }
 
 
-@pytest.mark.xfail(strict=True, reason=D1_HESS_PARSE_REASON)
 def test_water_freq_hess_real_format() -> None:
     """water_freq.hess: dimension, printed frequencies, $atoms geometry/masses.
 
-    Currently the flat token read misaligns the real block format and
-    ``parse_orca_hess_file`` raises ``HessFileError: Hessian is not
-    symmetric`` before any assertion runs (audit D1).
+    Guards the T04 fix: the real block format (column-index headers +
+    row-index prefixes) must decode to the audit's independent values.
     """
     data = parse_orca_hess_file(FIXTURE_DIR / "water_freq.hess")
     assert data.dimension == 9
@@ -122,13 +120,8 @@ def test_water_freq_hess_real_format() -> None:
     np.testing.assert_allclose(data.coordinates_bohr, WATER_COORDS_BOHR, atol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason=D1_HESS_PARSE_REASON)
 def test_ts_freq_hess_real_format() -> None:
-    """ts_freq.hess: dimension, printed frequencies (real TS, mode 0 < 0), geometry.
-
-    Same D1 defect as the water fixture: ``HessFileError: Hessian is not
-    symmetric`` on the real block format.
-    """
+    """ts_freq.hess: dimension, printed frequencies (real TS, mode 0 < 0), geometry."""
     data = parse_orca_hess_file(FIXTURE_DIR / "ts_freq.hess")
     assert data.dimension == 9
     assert data.symbols == TS_SYMBOLS
