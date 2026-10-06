@@ -29,14 +29,22 @@ len(folded_scaled_errors)``), so the path reports typed unavailability
 instead of computing with mispaired KDE weights.
 
 ``qml`` is an optional runtime dependency (see ``models/NOTICE.md``); the
-DP5 path degrades to the unweighted KDE fallback (``dp5_mode="fallback"``)
-when it is unavailable.
+pure-numpy kernel port is a first-class alternative, opt-in via
+``ACP_FCHL_NUMPY=1`` (see :func:`fchl_kernel_availability` for the typed
+qml / numpy / off tri-state). The DP5 path degrades to the unweighted KDE
+fallback (``dp5_mode="fallback"``) when no kernel is active. Out-of-domain
+samples (no contributing training neighbour) are typed via
+:func:`kernel_similarity_support` / :func:`atom_probability_fchl_diagnostic`
+and never yield a formal probability.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
 import pickle
+from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -189,6 +197,100 @@ def qml_kernel_available() -> bool:
         return True
     except Exception:
         return False
+
+
+#: Environment variable that opts in to the pure-numpy FCHL kernel port.
+KERNEL_NUMPY_OPT_IN_ENV = "ACP_FCHL_NUMPY"
+#: Accepted opt-in values (exact, case-sensitive — historical behaviour).
+KERNEL_NUMPY_OPT_IN_VALUES = ("1", "true", "yes", "on")
+
+#: Compiled Fortran kernel importable (fast reference).
+KERNEL_STATE_QML = "qml"
+#: Pure-numpy port active because ``ACP_FCHL_NUMPY`` is set (same math, slower).
+KERNEL_STATE_NUMPY = "numpy"
+#: Neither active — FCHL inactive; the numpy kernel is present but opt-in.
+KERNEL_STATE_OFF = "off"
+
+#: Closed vocabulary of :class:`FchlKernelAvailability` states.
+KERNEL_STATES: tuple[str, ...] = (KERNEL_STATE_QML, KERNEL_STATE_NUMPY, KERNEL_STATE_OFF)
+
+_KERNEL_REASONS = {
+    KERNEL_STATE_QML: (
+        "compiled qml.fchl.get_atomic_kernels is importable (fast Fortran reference kernel)"
+    ),
+    KERNEL_STATE_NUMPY: (
+        "pure-numpy FCHL kernel opted in via ACP_FCHL_NUMPY (same math as qml; "
+        "slower for large training sets)"
+    ),
+    KERNEL_STATE_OFF: (
+        "compiled qml is not importable and the pure-numpy FCHL kernel is not opted in; "
+        "the numpy kernel is present but opt-in — set ACP_FCHL_NUMPY=1 to enable the "
+        "FCHL path, otherwise DP5 uses the unweighted KDE fallback"
+    ),
+}
+
+
+def numpy_kernel_opt_in() -> bool:
+    """True when ``ACP_FCHL_NUMPY`` opts in to the pure-numpy FCHL kernel."""
+    return os.environ.get(KERNEL_NUMPY_OPT_IN_ENV, "").strip() in KERNEL_NUMPY_OPT_IN_VALUES
+
+
+@dataclass(frozen=True)
+class FchlKernelAvailability:
+    """Typed tri-state availability of the FCHL kernel backend.
+
+    ``state`` is one of :data:`KERNEL_STATES`:
+
+    * ``qml`` — the compiled Fortran kernel is importable (fast reference);
+    * ``numpy`` — the pure-numpy port is opted in via ``ACP_FCHL_NUMPY``
+      (same math, much slower for the full training set);
+    * ``off`` — neither is active. The pure-numpy kernel is *present* in the
+      codebase but opt-in; this is a configuration state, not "FCHL cannot
+      run" (set the env var to activate it).
+    """
+
+    state: str
+    reason: str
+    qml_importable: bool
+    numpy_opt_in: bool
+
+    def __post_init__(self) -> None:
+        if self.state not in KERNEL_STATES:
+            raise ValueError(f"unknown FCHL kernel state {self.state!r}")
+
+    @property
+    def active(self) -> bool:
+        """True when an FCHL kernel should actually run (qml or numpy)."""
+        return self.state != KERNEL_STATE_OFF
+
+    @property
+    def backend(self) -> str:
+        """Backend id for callers: ``"qml"``/``"numpy"``, or ``""`` when off."""
+        return "" if self.state == KERNEL_STATE_OFF else self.state
+
+
+def fchl_kernel_availability() -> FchlKernelAvailability:
+    """Typed availability + reason for the FCHL kernel backend (todo 38 / G12)."""
+    if qml_kernel_available():
+        return FchlKernelAvailability(
+            state=KERNEL_STATE_QML,
+            reason=_KERNEL_REASONS[KERNEL_STATE_QML],
+            qml_importable=True,
+            numpy_opt_in=numpy_kernel_opt_in(),
+        )
+    if numpy_kernel_opt_in():
+        return FchlKernelAvailability(
+            state=KERNEL_STATE_NUMPY,
+            reason=_KERNEL_REASONS[KERNEL_STATE_NUMPY],
+            qml_importable=False,
+            numpy_opt_in=True,
+        )
+    return FchlKernelAvailability(
+        state=KERNEL_STATE_OFF,
+        reason=_KERNEL_REASONS[KERNEL_STATE_OFF],
+        qml_importable=False,
+        numpy_opt_in=False,
+    )
 
 
 def fchl_assets_available(models_dir: Path | None = None) -> bool:
@@ -660,6 +762,7 @@ def _periodic_distance(a: int, b: int, r_width: float, c_width: float) -> float:
     return float(np.exp(-((ra - rb) ** 2) / (4 * r_width**2) - ((ca - cb) ** 2) / (4 * c_width**2)))
 
 
+@lru_cache(maxsize=4)
 def _periodic_distance_matrix(
     emax: int = _ALCHEMY_EMAX,
     r_width: float = _ALCHEMY_GROUP_WIDTH,
@@ -683,6 +786,7 @@ def _cut_function(r: float, cut_start: float, cut_distance: float) -> float:
     return float(10.0 * x**3 - 15.0 * x**4 + 6.0 * x**5)
 
 
+@lru_cache(maxsize=8)
 def _angular_norm2(t_width: float, limit: int = 10000) -> float:
     pi = np.pi
     n = np.arange(-limit, limit + 1)
@@ -852,6 +956,145 @@ def _count_neighbors(reps: np.ndarray, cut_distance: float) -> np.ndarray:
     return np.array([int(np.sum(atom[0] < cut_distance)) for atom in reps], dtype=int)
 
 
+#: Maximum number of kernel matrices kept in the bounded content-keyed cache.
+KERNEL_CACHE_MAXSIZE = 8
+#: Training-side chunk size for the pure-numpy kernel (bounds peak memory).
+DEFAULT_KERNEL_CHUNK_SIZE = 256
+
+
+def _array_digest(array: np.ndarray) -> tuple[tuple[int, ...], str, str]:
+    """Content digest of an array for the kernel cache key (no copy when contiguous)."""
+    contiguous = np.ascontiguousarray(array)
+    digest = hashlib.sha256(memoryview(contiguous)).hexdigest()
+    return (contiguous.shape, contiguous.dtype.str, digest)
+
+
+class _BoundedKernelCache:
+    """Deterministic content-keyed LRU cache for computed kernel matrices.
+
+    A call is a hit only when the input arrays and hyper-parameters are
+    identical (full content digests), so cached values are always the values
+    the call would have computed. The stored array is returned as-is — callers
+    must treat kernel matrices as read-only.
+    """
+
+    def __init__(self, maxsize: int = KERNEL_CACHE_MAXSIZE) -> None:
+        self.maxsize = int(maxsize)
+        self._store: OrderedDict[tuple, np.ndarray] = OrderedDict()
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: tuple) -> np.ndarray | None:
+        value = self._store.get(key)
+        if value is None:
+            self.misses += 1
+            return None
+        self._store.move_to_end(key)
+        self.hits += 1
+        return value
+
+    def put(self, key: tuple, value: np.ndarray) -> None:
+        self._store[key] = value
+        self._store.move_to_end(key)
+        while len(self._store) > self.maxsize:
+            self._store.popitem(last=False)
+
+    def __len__(self) -> int:
+        return len(self._store)
+
+    def clear(self) -> None:
+        self._store.clear()
+        self.hits = 0
+        self.misses = 0
+
+    def info(self) -> dict[str, int]:
+        return {
+            "size": len(self._store),
+            "maxsize": self.maxsize,
+            "hits": self.hits,
+            "misses": self.misses,
+        }
+
+
+_KERNEL_CACHE = _BoundedKernelCache()
+
+
+def kernel_cache_info() -> dict[str, int]:
+    """Bounded kernel-cache statistics (size/maxsize/hits/misses)."""
+    return _KERNEL_CACHE.info()
+
+
+def clear_kernel_cache() -> None:
+    """Drop every cached kernel matrix and reset the hit/miss counters."""
+    _KERNEL_CACHE.clear()
+
+
+def _resolve_chunk_size(chunk_size: int | None, n_b: int) -> int:
+    """Effective training-side chunk size: bounded, never larger than n_b."""
+    chunk = DEFAULT_KERNEL_CHUNK_SIZE if chunk_size is None else int(chunk_size)
+    if chunk <= 0:
+        chunk = DEFAULT_KERNEL_CHUNK_SIZE
+    return max(1, min(chunk, max(1, n_b)))
+
+
+def _kernel_side_terms(
+    reps: np.ndarray,
+    nneigh: np.ndarray,
+    pmax: int,
+    *,
+    two_body_power: float,
+    three_body_power: float,
+    cut_start: float,
+    cut_distance: float,
+    fourier_order: int,
+    three_body_width: float,
+    two_body_width: float,
+    pd: np.ndarray,
+    ang_norm2: float,
+    distance_scale: float,
+    angular_scale: float,
+) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray], np.ndarray]:
+    """Per-atom two/three-body terms + self scalar for one kernel side.
+
+    Shared by the a-side (query) and every b-side (training) chunk; the
+    arithmetic per atom is identical whatever the chunking, so the chunked
+    result is bit-identical to the unchunked one.
+    """
+    count = reps.shape[0]
+    ksi: list[np.ndarray] = [np.zeros(0)] * count
+    cos: list[np.ndarray] = [np.zeros(0)] * count
+    sin: list[np.ndarray] = [np.zeros(0)] * count
+    self_scalar = np.zeros(count)
+    for idx in range(count):
+        n = int(nneigh[idx])
+        ksi[idx] = _twobody_weights(reps[idx], n, two_body_power, cut_start, cut_distance)
+        c, s = _threebody_fourier(
+            reps[idx], n, fourier_order, three_body_power, cut_start, cut_distance, pmax
+        )
+        cos[idx] = c
+        sin[idx] = s
+        self_scalar[idx] = _scalar_alchemy(
+            reps[idx],
+            reps[idx],
+            n,
+            n,
+            ksi[idx],
+            ksi[idx],
+            c,
+            s,
+            c,
+            s,
+            three_body_width,
+            two_body_width,
+            fourier_order,
+            pd,
+            ang_norm2,
+            distance_scale,
+            angular_scale,
+        )
+    return ksi, cos, sin, self_scalar
+
+
 def get_atomic_kernels_numpy(
     a: np.ndarray,
     b: np.ndarray,
@@ -867,6 +1110,7 @@ def get_atomic_kernels_numpy(
     fourier_order: int = _FOURIER_ORDER,
     alchemy_period_width: float = _ALCHEMY_PERIOD_WIDTH,
     alchemy_group_width: float = _ALCHEMY_GROUP_WIDTH,
+    chunk_size: int | None = None,
 ) -> np.ndarray:
     """Pure-numpy port of ``qml.fchl.get_atomic_kernels`` (0.4.0.27).
 
@@ -875,16 +1119,44 @@ def get_atomic_kernels_numpy(
     FCHL scalar-product distance (two-body + three-body + alchemy). Returns
     shape ``(n_sigmas, n_a, n_b)``.
 
+    The training side *b* is processed in chunks of *chunk_size* (default
+    :data:`DEFAULT_KERNEL_CHUNK_SIZE`) so peak memory stays bounded; chunking
+    changes no arithmetic, so results are bit-identical to a single pass.
+    Results are memoized in the bounded content-keyed cache (see
+    :func:`kernel_cache_info` / :func:`clear_kernel_cache`).
+
     Args:
         a: ``(n_a, 5, max_size)`` FCHL atom representations.
         b: ``(n_b, 5, max_size)`` FCHL atom representations.
         sigmas: kernel widths.
+        chunk_size: Training-side chunk size; ``None`` uses the default,
+            non-positive falls back to the default.
 
     Returns:
-        ``(len(sigmas), n_a, n_b)`` kernel matrix.
+        ``(len(sigmas), n_a, n_b)`` kernel matrix (read-only; do not mutate).
     """
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
+    cache_key = (
+        _array_digest(a),
+        _array_digest(b),
+        tuple(float(s) for s in sigmas),
+        float(two_body_scaling),
+        float(three_body_scaling),
+        float(two_body_width),
+        float(three_body_width),
+        float(two_body_power),
+        float(three_body_power),
+        float(cut_start),
+        float(cut_distance),
+        int(fourier_order),
+        float(alchemy_period_width),
+        float(alchemy_group_width),
+    )
+    cached = _KERNEL_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     na1, na2 = a.shape[0], b.shape[0]
     nneigh1 = _count_neighbors(a, cut_distance)
     nneigh2 = _count_neighbors(b, cut_distance)
@@ -896,121 +1168,71 @@ def get_atomic_kernels_numpy(
     pmax1 = int(max((np.max(ai[1, : nneigh1[i]]) for i, ai in enumerate(a)), default=0))
     pmax2 = int(max((np.max(bi[1, : nneigh2[i]]) for i, bi in enumerate(b)), default=0))
 
-    # Pre-compute ksi, fourier, self-scalar per atom
-    ksi1 = [None] * na1
-    cos1 = [None] * na1
-    sin1 = [None] * na1
-    self1 = np.zeros(na1)
-    for i in range(na1):
-        n = int(nneigh1[i])
-        ksi1[i] = _twobody_weights(a[i], n, two_body_power, cut_start, cut_distance)
-        c, s = _threebody_fourier(
-            a[i], n, fourier_order, three_body_power, cut_start, cut_distance, pmax1
-        )
-        cos1[i] = c
-        sin1[i] = s
-        self1[i] = _scalar_alchemy(
-            a[i],
-            a[i],
-            n,
-            n,
-            ksi1[i],
-            ksi1[i],
-            c,
-            s,
-            c,
-            s,
-            three_body_width,
-            two_body_width,
-            fourier_order,
-            pd,
-            ang_norm2,
-            true_distance_scale,
-            true_angular_scale,
-        )
-    ksi2 = [None] * na2
-    cos2 = [None] * na2
-    sin2 = [None] * na2
-    self2 = np.zeros(na2)
-    for j in range(na2):
-        n = int(nneigh2[j])
-        ksi2[j] = _twobody_weights(b[j], n, two_body_power, cut_start, cut_distance)
-        c, s = _threebody_fourier(
-            b[j], n, fourier_order, three_body_power, cut_start, cut_distance, pmax2
-        )
-        cos2[j] = c
-        sin2[j] = s
-        self2[j] = _scalar_alchemy(
-            b[j],
-            b[j],
-            n,
-            n,
-            ksi2[j],
-            ksi2[j],
-            c,
-            s,
-            c,
-            s,
-            three_body_width,
-            two_body_width,
-            fourier_order,
-            pd,
-            ang_norm2,
-            true_distance_scale,
-            true_angular_scale,
-        )
+    side_kwargs = {
+        "two_body_power": two_body_power,
+        "three_body_power": three_body_power,
+        "cut_start": cut_start,
+        "cut_distance": cut_distance,
+        "fourier_order": fourier_order,
+        "three_body_width": three_body_width,
+        "two_body_width": two_body_width,
+        "pd": pd,
+        "ang_norm2": ang_norm2,
+        "distance_scale": true_distance_scale,
+        "angular_scale": true_angular_scale,
+    }
+    ksi1, cos1, sin1, self1 = _kernel_side_terms(a, nneigh1, pmax1, **side_kwargs)
 
     sigmas_arr = np.asarray(sigmas, dtype=float)
     inv_sigma2 = -0.5 / sigmas_arr**2
     kernels = np.zeros((len(sigmas), na1, na2))
-    for i in range(na1):
-        ni = int(nneigh1[i])
-        for j in range(na2):
-            nj = int(nneigh2[j])
-            cross = _scalar_alchemy(
-                a[i],
-                b[j],
-                ni,
-                nj,
-                ksi1[i],
-                ksi2[j],
-                cos1[i],
-                sin1[i],
-                cos2[j],
-                sin2[j],
-                three_body_width,
-                two_body_width,
-                fourier_order,
-                pd,
-                ang_norm2,
-                true_distance_scale,
-                true_angular_scale,
-            )
-            l2dist = self1[i] + self2[j] - 2.0 * cross
-            kernels[:, i, j] = np.exp(l2dist * inv_sigma2)
+    chunk = _resolve_chunk_size(chunk_size, na2)
+    for start in range(0, na2, chunk):
+        stop = min(start + chunk, na2)
+        chunk_reps = b[start:stop]
+        chunk_nneigh = nneigh2[start:stop]
+        ksi2, cos2, sin2, self2 = _kernel_side_terms(chunk_reps, chunk_nneigh, pmax2, **side_kwargs)
+        for i in range(na1):
+            ni = int(nneigh1[i])
+            for local_j in range(stop - start):
+                j = start + local_j
+                nj = int(chunk_nneigh[local_j])
+                cross = _scalar_alchemy(
+                    a[i],
+                    chunk_reps[local_j],
+                    ni,
+                    nj,
+                    ksi1[i],
+                    ksi2[local_j],
+                    cos1[i],
+                    sin1[i],
+                    cos2[local_j],
+                    sin2[local_j],
+                    three_body_width,
+                    two_body_width,
+                    fourier_order,
+                    pd,
+                    ang_norm2,
+                    true_distance_scale,
+                    true_angular_scale,
+                )
+                l2dist = self1[i] + self2[local_j] - 2.0 * cross
+                kernels[:, i, j] = np.exp(l2dist * inv_sigma2)
+    _KERNEL_CACHE.put(cache_key, kernels)
     return kernels
 
 
 def kernel_backend() -> str:
-    """Return the active FCHL kernel backend: ``"qml"`` or ``"numpy"``.
+    """Return the active FCHL kernel backend: ``"qml"``, ``"numpy"`` or ``""``.
 
-    ``"qml"`` uses the compiled Fortran kernel (fast, exact reference);
-    ``"numpy"`` uses the pure-numpy port (same math, much slower for the full
-    53 208-atom training set). The FCHL path works on both; ``dp5_mode``
-    reports ``fchl`` either way.
-
-    The numpy backend is opt-in (it can take minutes per atom on the full
-    training set): set ``ACP_FCHL_NUMPY=1`` to use it when ``qml`` is absent.
-    Otherwise the FCHL path only activates when ``qml`` is importable, and
-    the DP5 probability degrades to the unweighted KDE fallback.
+    Thin string view over :func:`fchl_kernel_availability` (kept for existing
+    callers and patch points). ``"qml"`` uses the compiled Fortran kernel
+    (fast, exact reference); ``"numpy"`` uses the pure-numpy port (same math,
+    much slower for the full 53 208-atom training set); ``""`` means no kernel
+    is active — the numpy kernel is present but opt-in (set
+    ``ACP_FCHL_NUMPY=1``), and DP5 degrades to the unweighted KDE fallback.
     """
-    import os
-
-    if qml_kernel_available():
-        return "qml"
-    if os.environ.get("ACP_FCHL_NUMPY", "").strip() in ("1", "true", "yes", "on"):
-        return "numpy"
-    return ""  # FCHL not active (caller falls back to the unweighted KDE)
+    return fchl_kernel_availability().backend
 
 
 def fchl_kernel_active() -> bool:
@@ -1065,6 +1287,162 @@ def atom_kernel_similarities(
     return np.asarray(k_sim, dtype=float)
 
 
+# ---------------------------------------------------------------------------
+# Neighbour support / out-of-domain gating (todo 38 / G12)
+# ---------------------------------------------------------------------------
+
+#: A training neighbour contributes when its similarity weight is strictly
+#: above this threshold. 0.0 matches the upstream fallback condition exactly
+#: (``sum(K_sim) == 0`` → unweighted KDE, ``DP5.py:98``).
+SUPPORT_SIMILARITY_THRESHOLD = 0.0
+#: Minimum effective-neighbour count for an in-domain atom. The effective
+#: count is the importance-sampling effective sample size ``(Σw)²/Σw²`` over
+#: the unique training atoms: exactly 0 when no weight is positive, ≥ 1
+#: otherwise (a single contributing neighbour scores 1.0).
+MIN_EFFECTIVE_NEIGHBORS = 1.0
+
+
+@dataclass(frozen=True)
+class FchlSupport:
+    """How many training neighbours actually support an atom's weighted KDE.
+
+    ``effective_neighbors`` is the importance-sampling effective sample size
+    ``(Σw)²/Σw²``; ``support_fraction`` normalizes it by the training-set
+    size. ``out_of_domain`` is True when no training neighbour contributes,
+    i.e. the similarity-weighted KDE degenerates to the unweighted fallback.
+    """
+
+    n_train: int
+    contributing_neighbors: int
+    effective_neighbors: float
+    support_fraction: float
+    similarity_mass: float
+    threshold: float = SUPPORT_SIMILARITY_THRESHOLD
+
+    @property
+    def out_of_domain(self) -> bool:
+        """True when no contributing training neighbour supports the atom."""
+        return self.effective_neighbors < MIN_EFFECTIVE_NEIGHBORS
+
+    def as_dict(self) -> dict[str, float | int | bool]:
+        """JSON-safe view for workflow diagnostics."""
+        return {
+            "n_train": int(self.n_train),
+            "contributing_neighbors": int(self.contributing_neighbors),
+            "effective_neighbors": float(self.effective_neighbors),
+            "support_fraction": float(self.support_fraction),
+            "similarity_mass": float(self.similarity_mass),
+            "threshold": float(self.threshold),
+            "out_of_domain": bool(self.out_of_domain),
+        }
+
+
+def kernel_similarity_support(
+    k_sim: np.ndarray,
+    *,
+    n_train: int | None = None,
+    threshold: float = SUPPORT_SIMILARITY_THRESHOLD,
+) -> FchlSupport:
+    """Neighbour-support metrics for a (doubled) ``K_sim`` similarity vector.
+
+    ``k_sim`` is the vector returned by :func:`atom_kernel_similarities`, i.e.
+    ``np.hstack((K, K))`` over the training atoms. Only the first half is
+    counted (unique training neighbours); pass *n_train* explicitly when the
+    vector is not doubled.
+    """
+    k = np.asarray(k_sim, dtype=float).ravel()
+    if n_train is None:
+        n_train = k.size // 2 if k.size % 2 == 0 else k.size
+    n_train = max(0, min(int(n_train), k.size))
+    half = k[:n_train]
+    if half.size == 0:
+        return FchlSupport(
+            n_train=0,
+            contributing_neighbors=0,
+            effective_neighbors=0.0,
+            support_fraction=0.0,
+            similarity_mass=0.0,
+            threshold=float(threshold),
+        )
+    mass = float(np.sum(half))
+    sq_sum = float(np.sum(half**2))
+    effective = (mass * mass) / sq_sum if sq_sum > 0.0 else 0.0
+    return FchlSupport(
+        n_train=n_train,
+        contributing_neighbors=int(np.count_nonzero(half > threshold)),
+        effective_neighbors=float(effective),
+        support_fraction=float(effective / n_train),
+        similarity_mass=mass,
+        threshold=float(threshold),
+    )
+
+
+ATOM_PROBABILITY_MODE_FCHL = "fchl"
+ATOM_PROBABILITY_MODE_FALLBACK = "fallback"
+#: Closed vocabulary of per-atom FCHL probability modes.
+ATOM_PROBABILITY_MODES: tuple[str, ...] = (
+    ATOM_PROBABILITY_MODE_FCHL,
+    ATOM_PROBABILITY_MODE_FALLBACK,
+)
+
+
+@dataclass(frozen=True)
+class AtomFchlProbability:
+    """One atom's FCHL-weighted probability plus its path and neighbour support."""
+
+    probability: float
+    mode: str
+    support: FchlSupport
+
+    def __post_init__(self) -> None:
+        if self.mode not in ATOM_PROBABILITY_MODES:
+            raise ValueError(f"unknown atom probability mode {self.mode!r}")
+
+    @property
+    def out_of_domain(self) -> bool:
+        """True when the weighted KDE had no contributing training neighbour."""
+        return self.support.out_of_domain
+
+
+def atom_probability_fchl_diagnostic(
+    representation: np.ndarray,
+    scaled_error: float,
+    folded_errors: np.ndarray,
+    mean_abs_error: float,
+    atomic_reps: np.ndarray,
+    sigma: float = FCHL_SIGMA,
+    cut_distance: float = C_DISTANCE,
+) -> AtomFchlProbability:
+    """Per-atom DP5 probability with path + neighbour-support diagnostics.
+
+    Same math as :func:`atom_probability_fchl` (a thin float wrapper over this
+    function), but the result is typed: ``mode`` records whether the
+    FCHL-weighted KDE ran or the upstream ``sum(K_sim)==0`` unweighted
+    fallback (``DP5.py:98``), and ``support`` reports how many training
+    neighbours actually contributed. An atom with no contributing neighbour
+    is ``out_of_domain`` — its value must not be presented as a formal
+    calibrated probability.
+    """
+    from scipy.stats import gaussian_kde
+
+    k_sim = atom_kernel_similarities(representation, atomic_reps, sigma, cut_distance)
+    support = kernel_similarity_support(k_sim)
+    if float(np.sum(k_sim)) == 0.0:
+        mode = ATOM_PROBABILITY_MODE_FALLBACK
+        kde_est = gaussian_kde(np.asarray(folded_errors, dtype=float))
+    else:
+        mode = ATOM_PROBABILITY_MODE_FCHL
+        kde_est = gaussian_kde(np.asarray(folded_errors, dtype=float), weights=k_sim)
+    diff = abs(float(scaled_error) - float(mean_abs_error))
+    lo = float(mean_abs_error) - diff
+    hi = float(mean_abs_error) + diff
+    return AtomFchlProbability(
+        probability=float(kde_est.integrate_box_1d(lo, hi)),
+        mode=mode,
+        support=support,
+    )
+
+
 def atom_probability_fchl(
     representation: np.ndarray,
     scaled_error: float,
@@ -1076,31 +1454,29 @@ def atom_probability_fchl(
 ) -> float:
     """Per-atom DP5 probability with the FCHL-similarity weighted KDE.
 
-    Faithful port of ``DP5.py:85-108``:
-
-    * ``K_sim`` from :func:`atom_kernel_similarities` (qml if available,
-      else the pure-numpy kernel);
-    * when ``sum(K_sim)==0`` use the unweighted KDE over
-      ``folded_errors`` (``DP5.py:98``);
-    * otherwise build a ``gaussian_kde(folded_errors, weights=K_sim)``;
-    * ``s_e_diff = |scaled_error - mean_abs_error|`` then
-      ``p = kde.integrate_box_1d(mean - diff, mean + diff)``.
+    Faithful port of ``DP5.py:85-108``; float view over
+    :func:`atom_probability_fchl_diagnostic` (which additionally reports the
+    path and neighbour support). When ``sum(K_sim)==0`` the unweighted KDE
+    over ``folded_errors`` is used (``DP5.py:98``).
     """
-    from scipy.stats import gaussian_kde
-
-    k_sim = atom_kernel_similarities(representation, atomic_reps, sigma, cut_distance)
-    if np.sum(k_sim) == 0:
-        kde_est = gaussian_kde(np.asarray(folded_errors, dtype=float))
-    else:
-        kde_est = gaussian_kde(np.asarray(folded_errors, dtype=float), weights=k_sim)
-    diff = abs(float(scaled_error) - float(mean_abs_error))
-    lo = float(mean_abs_error) - diff
-    hi = float(mean_abs_error) + diff
-    return float(kde_est.integrate_box_1d(lo, hi))
+    return atom_probability_fchl_diagnostic(
+        representation,
+        scaled_error,
+        folded_errors,
+        mean_abs_error,
+        atomic_reps,
+        sigma,
+        cut_distance,
+    ).probability
 
 
 __all__ = [
+    "ATOM_PROBABILITY_MODES",
+    "ATOM_PROBABILITY_MODE_FALLBACK",
+    "ATOM_PROBABILITY_MODE_FCHL",
+    "AtomFchlProbability",
     "C_DISTANCE",
+    "DEFAULT_KERNEL_CHUNK_SIZE",
     "FCHL_SIGMA",
     "FRAG_ATOM_THRESHOLD",
     "FRAG_MAX_SIZE",
@@ -1110,15 +1486,29 @@ __all__ = [
     "FRAGMENT_STATUS_AVAILABLE",
     "FRAGMENT_STATUS_INDEX_MISMATCH",
     "FRAGMENT_STATUS_OPENBABEL_MISSING",
+    "FchlKernelAvailability",
+    "FchlSupport",
     "FragmentPathStatus",
     "FragmentPathUnavailableError",
+    "KERNEL_CACHE_MAXSIZE",
+    "KERNEL_NUMPY_OPT_IN_ENV",
+    "KERNEL_NUMPY_OPT_IN_VALUES",
+    "KERNEL_STATES",
+    "KERNEL_STATE_NUMPY",
+    "KERNEL_STATE_OFF",
+    "KERNEL_STATE_QML",
+    "MIN_EFFECTIVE_NEIGHBORS",
+    "SUPPORT_SIMILARITY_THRESHOLD",
     "atom_kernel_similarities",
     "atom_probability_fchl",
+    "atom_probability_fchl_diagnostic",
     "atomic_numbers",
     "build_atom_representations",
     "build_fragment_representations",
+    "clear_kernel_cache",
     "fchl_assets_available",
     "fchl_kernel_active",
+    "fchl_kernel_availability",
     "fragment_atom_indices",
     "fragment_path_status",
     "fragment_residual_index_ok",
@@ -1126,7 +1516,10 @@ __all__ = [
     "generate_fchl_representation",
     "get_atomic_kernels_numpy",
     "kernel_backend",
+    "kernel_cache_info",
+    "kernel_similarity_support",
     "load_atomic_reps",
+    "numpy_kernel_opt_in",
     "openbabel_available",
     "qml_kernel_available",
     "read_openbabel_adjacency",

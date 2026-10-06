@@ -23,6 +23,7 @@ import logging
 import math
 import pickle
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -32,6 +33,7 @@ from scipy.special import log_ndtr
 from acp.nmr.models import NmrConfig
 
 if TYPE_CHECKING:
+    from acp.nmr.fchl import AtomFchlProbability
     from acp.nmr.protocol import NmrProtocolSpec
 
 logger = logging.getLogger(__name__)
@@ -268,6 +270,81 @@ def _rebuild_kde(pickle_path: Path):
         return gaussian_kde(dataset, weights=weights, bw_method=old.factor)
 
 
+# ---------------------------------------------------------------------------
+# Typed DP5 path record: weighted vs unweighted calibration (todo 38 / G12)
+# ---------------------------------------------------------------------------
+
+DP5_PATH_FCHL = "fchl"
+DP5_PATH_FALLBACK = "fallback"
+DP5_PATH_MIXED = "mixed"
+#: Closed vocabulary of DP5 atom paths.
+DP5_PATHS: tuple[str, ...] = (DP5_PATH_FCHL, DP5_PATH_FALLBACK, DP5_PATH_MIXED)
+
+#: Goodman FCHL-weighted KDE — the calibrated path (in-domain samples only).
+DP5_CALIBRATION_WEIGHTED = "weighted"
+#: Unweighted global KDE fallback — its own (distinct) calibration status.
+DP5_CALIBRATION_UNWEIGHTED = "unweighted"
+#: Out-of-domain: no contributing training neighbour — no formal probability.
+DP5_CALIBRATION_OUT_OF_DOMAIN = "out_of_domain"
+#: Closed vocabulary of DP5 calibration statuses.
+DP5_CALIBRATION_STATUSES: tuple[str, ...] = (
+    DP5_CALIBRATION_WEIGHTED,
+    DP5_CALIBRATION_UNWEIGHTED,
+    DP5_CALIBRATION_OUT_OF_DOMAIN,
+)
+
+
+@dataclass(frozen=True)
+class Dp5ProbabilityRecord:
+    """A DP5 probability plus which path produced it and its calibration status.
+
+    ``calibration_status`` is one of :data:`DP5_CALIBRATION_STATUSES`:
+    ``weighted`` (FCHL-weighted KDE), ``unweighted`` (global-KDE fallback) or
+    ``out_of_domain`` (no contributing training neighbour). In the
+    out-of-domain case the raw fallback value is kept for diagnostics but
+    :attr:`formal_probability` is None — it must never be presented as a
+    formal calibrated probability.
+    """
+
+    probability: float
+    path: str
+    calibration_status: str
+    out_of_domain: bool
+    n_atoms: int
+    out_of_domain_atoms: int
+    min_effective_neighbors: float | None = None
+    min_support_fraction: float | None = None
+    reasons: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.path not in DP5_PATHS:
+            raise ValueError(f"unknown DP5 path {self.path!r}")
+        if self.calibration_status not in DP5_CALIBRATION_STATUSES:
+            raise ValueError(f"unknown DP5 calibration status {self.calibration_status!r}")
+
+    @property
+    def formal_probability(self) -> float | None:
+        """The value only when it may be presented as a formal probability."""
+        if self.calibration_status == DP5_CALIBRATION_OUT_OF_DOMAIN:
+            return None
+        return self.probability
+
+    def as_dict(self) -> dict[str, object]:
+        """JSON-safe view for workflow/report diagnostics."""
+        return {
+            "probability": float(self.probability),
+            "formal_probability": self.formal_probability,
+            "path": self.path,
+            "calibration_status": self.calibration_status,
+            "out_of_domain": bool(self.out_of_domain),
+            "n_atoms": int(self.n_atoms),
+            "out_of_domain_atoms": int(self.out_of_domain_atoms),
+            "min_effective_neighbors": self.min_effective_neighbors,
+            "min_support_fraction": self.min_support_fraction,
+            "reasons": list(self.reasons),
+        }
+
+
 class GoodmanDP5Model:
     """Goodman DP5 probability model (verified DP5.py:73-141, 356-383).
 
@@ -390,6 +467,32 @@ class GoodmanDP5Model:
         hi = self.mean_abs_error + diff
         return float(self.atom_kde.integrate_box_1d(lo, hi))
 
+    def atom_probability_fchl_diagnostic(
+        self,
+        representation: np.ndarray,
+        scaled_error: float,
+        *,
+        use_fragment_reps: bool = False,
+    ) -> AtomFchlProbability:
+        """FCHL-weighted per-atom DP5 probability with path/support diagnostics.
+
+        Same computation as :meth:`atom_probability_fchl` (its float view),
+        but the result records the path (weighted vs ``sum(K_sim)==0``
+        fallback) and the neighbour-support metrics; ``out_of_domain`` is True
+        when no training neighbour contributes. With ``use_fragment_reps=True``
+        the training side is ``frag_reps.gz`` (>=86-atom radius-3 fragments).
+        """
+        from acp.nmr.fchl import atom_probability_fchl_diagnostic
+
+        training_reps = self._get_fragment_reps() if use_fragment_reps else self._get_atomic_reps()
+        return atom_probability_fchl_diagnostic(
+            representation,
+            scaled_error,
+            self.folded_errors,
+            self.mean_abs_error,
+            training_reps,
+        )
+
     def atom_probability_fchl(
         self,
         representation: np.ndarray,
@@ -407,16 +510,9 @@ class GoodmanDP5Model:
         (the caller should route via :meth:`probability_per_conformer_fchl`,
         which handles the switch).
         """
-        from acp.nmr.fchl import atom_probability_fchl
-
-        training_reps = self._get_fragment_reps() if use_fragment_reps else self._get_atomic_reps()
-        return atom_probability_fchl(
-            representation,
-            scaled_error,
-            self.folded_errors,
-            self.mean_abs_error,
-            training_reps,
-        )
+        return self.atom_probability_fchl_diagnostic(
+            representation, scaled_error, use_fragment_reps=use_fragment_reps
+        ).probability
 
     def candidate_probability(self, atom_probs: list[float]) -> float:
         """Raw per-candidate DP5 before rescale (DP5.py:356-364).
@@ -489,6 +585,22 @@ class GoodmanDP5Model:
         """
         return self._probability_per_conformer(conformer_calc_shifts, exp_shifts, boltzmann_weights)
 
+    def probability_per_conformer_diagnostic(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+    ) -> Dp5ProbabilityRecord:
+        """Unweighted-KDE DP5 with a typed path/calibration record (todo 38).
+
+        The unweighted path is its own calibration regime
+        (:data:`DP5_CALIBRATION_UNWEIGHTED`), recorded separately from the
+        FCHL-weighted one.
+        """
+        return self._probability_per_conformer_record(
+            conformer_calc_shifts, exp_shifts, boltzmann_weights
+        )
+
     def probability_per_conformer_fchl(
         self,
         conformer_calc_shifts: list[list[float]],
@@ -528,6 +640,32 @@ class GoodmanDP5Model:
         Returns:
             DP5 probability in ``[0, 1]``.
         """
+        return self.probability_per_conformer_fchl_diagnostic(
+            conformer_calc_shifts,
+            exp_shifts,
+            boltzmann_weights,
+            conformer_reps,
+            use_fragment_reps=use_fragment_reps,
+        ).probability
+
+    def probability_per_conformer_fchl_diagnostic(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+        conformer_reps: list[list[np.ndarray]],
+        *,
+        use_fragment_reps: bool = False,
+    ) -> Dp5ProbabilityRecord:
+        """FCHL-weighted DP5 with path/support/calibration record (todo 38).
+
+        Same computation as :meth:`probability_per_conformer_fchl` (its float
+        view). ``calibration_status`` distinguishes the weighted path from the
+        unweighted fallback, and :attr:`Dp5ProbabilityRecord.formal_probability`
+        is None when any atom slot is out of domain (no contributing training
+        neighbour) — such values must never be presented as formal
+        probabilities.
+        """
         if not self.fchl_available:
             raise RuntimeError(
                 "FCHL-weighted DP5 requires the FCHL assets (atomic_reps.gz/"
@@ -536,7 +674,7 @@ class GoodmanDP5Model:
             )
         if len(conformer_reps) != len(conformer_calc_shifts):
             raise ValueError("conformer_reps and conformer_calc_shifts lengths differ")
-        return self._probability_per_conformer(
+        return self._probability_per_conformer_record(
             conformer_calc_shifts,
             exp_shifts,
             boltzmann_weights,
@@ -552,20 +690,52 @@ class GoodmanDP5Model:
         conformer_reps: list[list[np.ndarray]] | None = None,
         use_fragment_reps: bool = False,
     ) -> float:
+        """Shared per-conformer DP5 pipeline (float view over the record path)."""
+        return self._probability_per_conformer_record(
+            conformer_calc_shifts,
+            exp_shifts,
+            boltzmann_weights,
+            conformer_reps,
+            use_fragment_reps,
+        ).probability
+
+    def _probability_per_conformer_record(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+        conformer_reps: list[list[np.ndarray]] | None = None,
+        use_fragment_reps: bool = False,
+    ) -> Dp5ProbabilityRecord:
         """Shared per-conformer DP5 pipeline (DP5.py:73-141, 339-383).
 
         When *conformer_reps* is provided, per-atom probabilities use the
         FCHL-weighted KDE (fragment training set when *use_fragment_reps*);
-        otherwise the unweighted global KDE fallback.
+        otherwise the unweighted global KDE fallback. The returned record
+        distinguishes the weighted/unweighted calibration status and flags
+        out-of-domain atom slots (no contributing training neighbour).
         """
         import numpy as np
         from scipy.stats import linregress
 
+        from acp.nmr.fchl import ATOM_PROBABILITY_MODE_FALLBACK, ATOM_PROBABILITY_MODE_FCHL
+
         n_atoms = len(exp_shifts)
         if n_atoms == 0 or not conformer_calc_shifts:
-            return 0.0
+            return Dp5ProbabilityRecord(
+                probability=0.0,
+                path=DP5_PATH_FALLBACK,
+                calibration_status=DP5_CALIBRATION_UNWEIGHTED,
+                out_of_domain=False,
+                n_atoms=0,
+                out_of_domain_atoms=0,
+            )
 
         use_fchl = conformer_reps is not None
+        modes_seen: set[str] = set()
+        out_of_domain_flags = [False] * n_atoms
+        effective_values: list[float] = []
+        fraction_values: list[float] = []
 
         # Per-conformer: scale + per-atom KDE probability (DP5.py:75-110)
         # Boltzmann-average the probabilities (DP5.py:339-353)
@@ -585,16 +755,69 @@ class GoodmanDP5Model:
             for i in range(n_atoms):
                 err = abs(scaled[i] - exp_shifts[i])
                 if use_fchl:
-                    p = self.atom_probability_fchl(  # type: ignore[index]
+                    atom_record = self.atom_probability_fchl_diagnostic(  # type: ignore[index]
                         conformer_reps[conf_idx][i], err, use_fragment_reps=use_fragment_reps
                     )
+                    modes_seen.add(atom_record.mode)
+                    out_of_domain_flags[i] = out_of_domain_flags[i] or atom_record.out_of_domain
+                    effective_values.append(atom_record.support.effective_neighbors)
+                    fraction_values.append(atom_record.support.support_fraction)
+                    p = atom_record.probability
                 else:
                     p = self.atom_probability(err)
                 avg_atom_probs[i] += weight * p
 
         # Candidate-level: gmean combine (DP5.py:356-364) + rescale (DP5.py:381)
         raw = self.candidate_probability(avg_atom_probs)
-        return self.rescale(raw)
+        probability = self.rescale(raw)
+
+        if not use_fchl:
+            return Dp5ProbabilityRecord(
+                probability=probability,
+                path=DP5_PATH_FALLBACK,
+                calibration_status=DP5_CALIBRATION_UNWEIGHTED,
+                out_of_domain=False,
+                n_atoms=n_atoms,
+                out_of_domain_atoms=0,
+            )
+
+        if modes_seen == {ATOM_PROBABILITY_MODE_FCHL}:
+            path = DP5_PATH_FCHL
+        elif modes_seen and modes_seen <= {ATOM_PROBABILITY_MODE_FALLBACK}:
+            path = DP5_PATH_FALLBACK
+        elif modes_seen:
+            path = DP5_PATH_MIXED
+        else:
+            path = DP5_PATH_FALLBACK
+        out_of_domain_atoms = sum(1 for flag in out_of_domain_flags if flag)
+        out_of_domain = out_of_domain_atoms > 0
+        if out_of_domain:
+            calibration_status = DP5_CALIBRATION_OUT_OF_DOMAIN
+            reasons: tuple[str, ...] = ("out_of_domain",)
+            logger.warning(
+                "FCHL-weighted DP5: %d/%d atom slots out of domain (no contributing "
+                "training neighbours); values are uncalibrated fallbacks, not formal "
+                "probabilities",
+                out_of_domain_atoms,
+                n_atoms,
+            )
+        elif path == DP5_PATH_FCHL:
+            calibration_status = DP5_CALIBRATION_WEIGHTED
+            reasons = ()
+        else:
+            calibration_status = DP5_CALIBRATION_UNWEIGHTED
+            reasons = ()
+        return Dp5ProbabilityRecord(
+            probability=probability,
+            path=path,
+            calibration_status=calibration_status,
+            out_of_domain=out_of_domain,
+            n_atoms=n_atoms,
+            out_of_domain_atoms=out_of_domain_atoms,
+            min_effective_neighbors=min(effective_values) if effective_values else None,
+            min_support_fraction=min(fraction_values) if fraction_values else None,
+            reasons=reasons,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -645,6 +868,15 @@ def dp5_fchl_available(models_dir: Path | None = None) -> bool:
 
 
 __all__ = [
+    "DP5_CALIBRATION_OUT_OF_DOMAIN",
+    "DP5_CALIBRATION_STATUSES",
+    "DP5_CALIBRATION_UNWEIGHTED",
+    "DP5_CALIBRATION_WEIGHTED",
+    "DP5_PATHS",
+    "DP5_PATH_FALLBACK",
+    "DP5_PATH_FCHL",
+    "DP5_PATH_MIXED",
+    "Dp5ProbabilityRecord",
     "ErrorModel",
     "NonFiniteResidualError",
     "PlaceholderStudentTErrorModel",
