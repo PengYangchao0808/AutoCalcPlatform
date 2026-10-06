@@ -1711,6 +1711,9 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/reference_validation.py",
     # acp-nmr-goodman-gap todo 41: four-layer spectrum model + processing provenance.
     "src/acp/nmr/spectra.py",
+    # acp-nmr-goodman-gap todo 46: iterative assignment engine (seeded
+    # assignment↔calibration convergence + near-optima + anti-overfit guard).
+    "src/acp/nmr/iterative_assignment.py",
     # acp-nmr-goodman-gap todo 37: FCHL ≥86-atom fragment path (openbabel
     # radius-3 fragmentation + frag_reps residual-index correspondence).
     "src/acp/nmr/fchl.py",
