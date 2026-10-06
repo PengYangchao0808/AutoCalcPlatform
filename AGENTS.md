@@ -147,14 +147,14 @@ acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
 acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo
 acp run XtbPathSearch --path-config request.json --output ./path_out
 acp run OrcaGradient --gradient-config request.json --output ./grad_out
-acp run irc --input ts_structure.xyz --output ./irc_out
-acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
-acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
+acp run irc --input ts_structure.xyz --input-role transition_state --ts-provenance prov.json --output ./irc_out
+acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out   # 默认无 ScanTS；--scants 显式 opt-in
+acp run nmr --input "CCO" --spectrum exp_spectrum.txt --output ./nmr_out
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c" --charge 0 --multiplicity 1
 acp run frequency --input molecule.xyz
 acp run xtb_optimize --input molecule.xyz
-acp run tsmode --source-bundle bundle.json --source-mode-index 0
+acp run tsmode --source-bundle bundle.json --source-mode-index 7   # 原生打印序号（非位置序）；真实运行另需 --allow-unverified-mapping
 acp run casscf --input molecule.xyz
 acp run serve --port 8765
 acp doctor

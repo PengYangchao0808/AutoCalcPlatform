@@ -152,8 +152,10 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         (
             "scan",
             "Relaxed Scan",
-            "Run an ORCA relaxed internal-coordinate scan",
-            "Examples:\n  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out",
+            "Run an ORCA relaxed internal-coordinate scan (no ScanTS unless --scants)",
+            "Examples:\n"
+            "  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out\n"
+            "  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --scants --output ./out",
         ),
     ]:
         p = run_sub.add_parser(
@@ -167,16 +169,25 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         help="Run an independent IRC from a transition-state structure",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Examples:\n"
-            "  acp run irc --input ts.xyz --input-role transition_state\n"
-            "  acp run irc --input ts.xyz --direction forward --output ./out"
+            "Examples (one of --ts-provenance FILE / --ts-provenance-json INLINE\n"
+            "is required; file paths go to --ts-provenance, --ts-provenance-json\n"
+            "is reserved for scheduler-supplied inline JSON):\n"
+            "  acp run irc --input ts.xyz --input-role transition_state \\\n"
+            "      --ts-provenance prov.json\n"
+            "  acp run irc --input ts.xyz --direction forward --output ./out \\\n"
+            "      --ts-provenance prov.json"
         ),
     )
     p.set_defaults(workflow="irc")
     p.add_argument("--input", "-i", required=True, help="Verified transition-state XYZ snapshot")
     proof = p.add_mutually_exclusive_group(required=True)
-    proof.add_argument("--ts-provenance", help="Verified upstream TS result provenance file")
-    proof.add_argument("--ts-provenance-json", help="Scheduler supplied TS provenance JSON")
+    proof.add_argument(
+        "--ts-provenance", help="Verified upstream TS provenance FILE (irc_ts_source_v1 JSON)"
+    )
+    proof.add_argument(
+        "--ts-provenance-json",
+        help="Scheduler-supplied TS provenance as INLINE JSON text (not a file path)",
+    )
     p.add_argument("--input-role", choices=["transition_state"], help="Explicit input role")
     p.add_argument(
         "--direction",
@@ -188,7 +199,15 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
     p.add_argument("--method", default="", help="Inherited TS method (scheduler supplied)")
     p.add_argument("--basis", default="", help="Basis set (default: empty)")
     p.add_argument("--maxpoints", "--max-points", dest="maxpoints", type=int, default=100)
-    p.add_argument("--step", type=float, default=0.1, help="IRC step size (default: 0.1)")
+    p.add_argument(
+        "--step",
+        type=float,
+        default=0.1,
+        help=(
+            "Accepted for compatibility only: never reaches the ORCA %%irc block "
+            "(no effect on the run; an unused-kwarg warning is logged)"
+        ),
+    )
     p.add_argument("--charge", type=int, default=None)
     p.add_argument("--multiplicity", type=int, default=None)
     p.add_argument("--name", type=str, help="Task name")
@@ -524,7 +543,11 @@ Examples:
         "--refinement-policy",
         default="screen",
         choices=["screen", "rank1", "cumulative-99", "all"],
-        help="Fine-refinement scope (default: screen)",
+        help=(
+            "Fine-refinement scope (default: screen). Pure-xTB protocols "
+            "(xtb-crest/xtb-md) run no DFT refinement under ANY policy; screen "
+            "selects zero refinement candidates everywhere (selection returns [])."
+        ),
     )
     conf.add_argument(
         "--backend",

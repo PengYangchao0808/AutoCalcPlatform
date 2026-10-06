@@ -22,9 +22,13 @@
 
 ### 1. Confsearch — 统一构象搜索 + 能量排名 `acp run Confsearch`
 - SMILES / XYZ / GJF / LOG / OUT / SDF / MOL / ORCA INP 多格式输入
-- 四种协议：`--protocol xtb-crest`（CREST搜索+DFT精修）、`xtb-md`（xTB-MD采样+DFT）、`censo-crest`（CREST+CENSO排序）、`xtbmd-censo`（xTB-MD+ISOSTAT+CENSO）
+- 四种协议（实际阶段，以代码为准）：
+  - `xtb-crest`：CREST 构象搜索（GFN-xTB 级）+ xTB 能量排序。**纯 xTB 协议，无 DFT 精修阶段**（非 `screen` 精修策略仅告警并按 `screen` 处理）
+  - `xtb-md`：xTB-MD 采样 + 构象提取（同样**无 DFT 精修**）
+  - `censo-crest`：CREST 搜索 + CENSO 排序/精修（DFT 级别由 `--preset` 决定）
+  - `xtbmd-censo`：xTB-MD 采样 + ISOSTAT 聚类 + CENSO 排序/精修
 - 资源档位：`--profile light|default|high`
-- 精修策略：`--refinement-policy screen|rank1|cumulative-99|all`
+- 精修策略：`--refinement-policy screen|rank1|cumulative-99|all`（`screen` 为默认且在所有协议下都**不追加**精修候选）
 - 统一产物：`confsearch_manifest.json` 供下游 PESsearch 消费
 
 ### 2. PESsearch — 势能面搜索 `acp run PESsearch`
@@ -73,11 +77,13 @@ Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中�
 
 ### 4. IRC — 端点验证 `acp run irc`
 - 对 TS 结构运行 IRC（正向 + 逆向），发现反应端点
+- 必填互斥组：`--ts-provenance <文件路径>`（手工路径）或 `--ts-provenance-json <内联JSON>`（调度器专用）；建议同时显式 `--input-role transition_state`
 - 输出：`RESULT/irc/irc_forward.xyz` + `RESULT/irc/irc_reverse.xyz`
 - 端点分类：connectivity fingerprint + mapped heavy-atom RMSD
 
 ### 5. Scan — 势能面扫描 `acp run scan`
 - 柔性坐标扫描（distance/angle/dihedral），逐步优化 + 单点能
+- 默认**不启用 ScanTS**（普通柔性扫描）；需 TS 导向扫描时显式加 `--scants`
 - 输出：`RESULT/trajectories/scan_trajectory.json` + 能量曲线
 - 坐标格式：`--coordinate atom1,atom2,start,end`
 
@@ -298,10 +304,11 @@ acp run PESsearch --from-artifact RESULT/confsearch/confsearch_manifest.json --o
 acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
 acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo --output ./batch_out
 
-# === IRC — 端点验证 ===
-acp run irc --input ts_structure.xyz --output ./irc_out
+# === IRC — 端点验证（provenance 必填：文件用 --ts-provenance） ===
+acp run irc --input ts_structure.xyz --input-role transition_state \
+    --ts-provenance prov.json --output ./irc_out
 
-# === Scan — 势能面扫描 ===
+# === Scan — 势能面扫描（默认不启用 ScanTS；显式 --scants 开启） ===
 acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 
 # === 简单 ORCA 工作流 ===
@@ -314,9 +321,9 @@ acp run xtb_optimize --input molecule.xyz
 acp run XtbPathSearch --path-config request.json --output ./path_out
 acp run OrcaGradient --gradient-config request.json --output ./grad_out
 
-# === NMR 化学位移预测 ===
-acp run nmr --input "CCO" --output ./nmr_results
-acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
+# === NMR 化学位移预测（运行时必须恰好提供 --spectrum 或 --bruker 之一） ===
+acp run nmr --input "CCO" --spectrum exp_spectrum.txt --output ./nmr_results
+acp run nmr --input "CCO" --spectrum exp_spectrum.txt --nmr-method mPW1PW91 --nmr-basis "6-311G(d)"
 
 # === 初始化向导（交互式配置本地软件与远程计算节点） ===
 acp init
@@ -354,15 +361,18 @@ acp run BatchOptimize --from-job <PESsearch job id>
                       --output <输出目录>
                       --nproc --mem --config ...
 
-acp run irc --input <TS 结构文件路径>
+acp run irc --input <TS 结构文件路径> \
+            --ts-provenance <irc_ts_source_v1 JSON 文件> \
+            --input-role transition_state \
             --output <输出目录>
-            --direction <forward|reverse|both>
-            --nproc --mem --config ...
+            [--direction <forward|reverse|both>]
+            [--nproc --mem --config ...]
 
-acp run scan --input <SMILES或文件路径>
-             --coordinate <atom1,atom2,start,end>
+acp run scan --input <SMILES或文件路径> \
+             --coordinate <atom1,atom2,start,end> \
+             [--scants]
              --output <输出目录>
-             --nproc --mem --config ...
+             [--nproc --mem --config ...]
 
 acp run singlepoint|optimize|frequency|xtb_optimize --input <SMILES或文件路径>
                   --output <输出目录>
@@ -374,10 +384,15 @@ acp run OrcaGradient --gradient-config <pes2ts_orca_gradient_request_v1 JSON> --
                       --nproc --mem --config ...
 
 acp run nmr --input <SMILES或文件路径> --output <输出目录>
-            --backend <orca> --reference "13C=185.0" "1H=31.5"
+            (--spectrum <实验谱文件> | --bruker <Bruker原始数据目录>)   # 运行时二选一（必填）
+            [--nuclei "1H,13C"] [--nmr-method mPW1PW91] [--nmr-basis "6-311G(d)"]
 
 acp run serve [--host <host>] [--port <port>] [--reload]
 ```
+
+- **IRC provenance 必填互斥组**：文件路径用 `--ts-provenance`；`--ts-provenance-json` 仅供调度器注入**内联 JSON 文本**（非文件路径），二者必选其一（缺失 → exit 2）。`--step` 仅为兼容保留，对 ORCA 计算无影响。
+- **scan**：默认**不启用 ScanTS**，`--scants` 为显式 opt-in（多坐标同步/显式网格扫描不可用）。
+- **nmr**：运行时必须恰好提供 `--spectrum` 或 `--bruker` 之一。
 
 ---
 
