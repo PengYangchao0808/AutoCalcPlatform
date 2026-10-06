@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -33,9 +34,20 @@ from acp.io.structures import StructureReader
 from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
 from cccp.config import load_config
 
+if TYPE_CHECKING:
+    from acp.storage.layout import TaskStorage
+
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".xyz", ".gjf", ".com", ".inp"}
+
+#: File-like suffixes beyond ``_SUPPORTED_EXTENSIONS``: such tokens still route
+#: through ``_check_input`` so a missing/unsupported path keeps its old error.
+_FILE_LIKE_SUFFIXES = frozenset({".sdf", ".sd", ".mol", ".log", ".out", ".smi", ".txt"})
+
+#: Must match ``cccp.io.input_handler.parse_smiles`` (``randomSeed=42``), the
+#: single embedding site; provenance records it so reruns reuse the recipe.
+_RDKIT_SMILES_EMBED_SEED = 42
 
 
 def _check_input(input_source: str) -> Path:
@@ -62,6 +74,134 @@ def _read_input(
         raise ValueError("Failed to extract coordinates/symbols from input")
     coordinates: NDArray[np.float64] = np.asarray(structure.coordinates, dtype=np.float64)
     return coordinates, list(structure.symbols), structure.charge, structure.multiplicity
+
+
+@dataclass(frozen=True, slots=True)
+class ScanInputPlan:
+    """Resolved scan input: an existing file, or materialized SMILES XYZ text.
+
+    ``file_path`` is set for file inputs and ``xyz_text``/``provenance`` for
+    SMILES inputs.  ``charge``/``multiplicity`` are ``None`` for files (their
+    existing auto-detection semantics stay untouched) and the SMILES-resolved
+    values otherwise.
+    """
+
+    file_path: Path | None
+    xyz_text: str | None
+    provenance: dict[str, Any] | None
+    symbols: list[str]
+    charge: int | None
+    multiplicity: int | None
+
+    @property
+    def is_smiles(self) -> bool:
+        """Whether this plan must be materialized into ``input.xyz``."""
+        return self.file_path is None
+
+    def materialize(self, storage: TaskStorage) -> Path:
+        """Write the SMILES XYZ + provenance into *storage*; return the input path."""
+        if self.file_path is not None:
+            return self.file_path
+        if self.xyz_text is None:
+            raise ValueError("SMILES scan input has no materialized XYZ text")
+        _ = storage.write_input_xyz(self.xyz_text)
+        if self.provenance is not None:
+            _ = storage.write_input_source_json(self.provenance)
+        return storage.input_xyz()
+
+
+def _looks_like_file_path(text: str) -> bool:
+    path = Path(text)
+    if path.is_absolute():
+        return True
+    suffix = path.suffix.lower()
+    return suffix in _SUPPORTED_EXTENSIONS or suffix in _FILE_LIKE_SUFFIXES
+
+
+def _format_xyz_text(
+    symbols: Sequence[str],
+    coordinates: NDArray[np.float64],
+    comment: str,
+) -> str:
+    lines = [str(len(symbols)), comment]
+    for symbol, row in zip(symbols, coordinates, strict=True):
+        lines.append(
+            f"{symbol:2s} {float(row[0]):15.10f} {float(row[1]):15.10f} {float(row[2]):15.10f}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def prepare_scan_input(
+    input_source: str,
+    *,
+    charge: int | None = None,
+    multiplicity: int | None = None,
+    name: str | None = None,
+) -> ScanInputPlan:
+    """Classify a scan input as a structure file or a raw SMILES string.
+
+    File paths keep the historical ``_check_input`` validation (supported
+    extension + existence).  Non-file tokens are parsed by the shared
+    :class:`StructureReader` into a traceable XYZ plus a provenance record;
+    an invalid SMILES raises ``ValueError`` and a missing file raises
+    ``FileNotFoundError`` — both before any QC starts.
+    """
+    try:
+        is_file = Path(input_source).is_file()
+    except (OSError, ValueError):
+        is_file = False
+
+    if is_file:
+        return ScanInputPlan(
+            file_path=_check_input(input_source),
+            xyz_text=None,
+            provenance=None,
+            symbols=[],
+            charge=None,
+            multiplicity=None,
+        )
+
+    if _looks_like_file_path(input_source):
+        _check_input(input_source)
+
+    structure = StructureReader().read(
+        input_source, charge=charge, multiplicity=multiplicity, name=name
+    )
+    if structure.coordinates is None or structure.symbols is None:
+        raise ValueError(f"Failed to embed SMILES input: {input_source}")
+
+    symbols = [str(symbol) for symbol in structure.symbols]
+    coordinates: NDArray[np.float64] = np.asarray(structure.coordinates, dtype=np.float64)
+    effective_charge = int(structure.charge)
+    effective_multiplicity = int(structure.multiplicity)
+    safe_smiles = " ".join(input_source.split())[:120]
+    comment = (
+        f"source={safe_smiles} | generated_by=rdkit_etkdg | "
+        f"seed={_RDKIT_SMILES_EMBED_SEED} | charge={effective_charge} "
+        f"multiplicity={effective_multiplicity}"
+    )
+    xyz_text = _format_xyz_text(symbols, coordinates, comment)
+    provenance: dict[str, Any] = {
+        "schema": "scan_input_source_v1",
+        "source_type": "smiles",
+        "smiles": input_source,
+        "generator": "rdkit_etkdg",
+        "embedding": {"method": "ETKDGv3", "seed": _RDKIT_SMILES_EMBED_SEED},
+        "atom_count": len(symbols),
+        "symbols": symbols,
+        "charge": effective_charge,
+        "multiplicity": effective_multiplicity,
+        "xyz_file": "input.xyz",
+        "xyz_content_sha256": hashlib.sha256(xyz_text.encode("utf-8")).hexdigest(),
+    }
+    return ScanInputPlan(
+        file_path=None,
+        xyz_text=xyz_text,
+        provenance=provenance,
+        symbols=symbols,
+        charge=effective_charge,
+        multiplicity=effective_multiplicity,
+    )
 
 
 def _write_energy_json(output_dir: Path, energy: float | None, unit: str = "Hartree") -> None:
@@ -544,6 +684,8 @@ def run_scan(
 
 
 __all__ = [
+    "ScanInputPlan",
+    "prepare_scan_input",
     "run_singlepoint",
     "run_optimize",
     "run_frequency",

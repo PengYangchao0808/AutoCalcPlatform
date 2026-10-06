@@ -241,6 +241,80 @@ def test_read_input_xyz(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# scan input materialization (SMILES → traceable XYZ + provenance)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("suffix", [".xyz", ".gjf", ".com", ".inp"])
+def test_prepare_scan_input_accepts_supported_files(tmp_path, suffix):
+    from acp.workflows.simple import prepare_scan_input
+
+    f = tmp_path / f"mol{suffix}"
+    f.write_text("placeholder\n")
+    plan = prepare_scan_input(str(f))
+    assert plan.is_smiles is False
+    assert plan.file_path == f
+    assert plan.symbols == []
+    assert plan.charge is None and plan.multiplicity is None
+
+
+def test_prepare_scan_input_missing_file_raises_filenotfound():
+    from acp.workflows.simple import prepare_scan_input
+
+    with pytest.raises(FileNotFoundError):
+        prepare_scan_input("/nonexistent/file.xyz")
+
+
+def test_prepare_scan_input_invalid_smiles_raises_valueerror_with_token():
+    from acp.workflows.simple import prepare_scan_input
+
+    with pytest.raises(ValueError, match="SMILES") as excinfo:
+        prepare_scan_input("CCOXX!!")
+    assert "CCOXX!!" in str(excinfo.value)
+
+
+def test_prepare_scan_input_materializes_smiles_to_traceable_xyz(tmp_path):
+    from acp.storage.layout import TaskStorage
+    from acp.workflows.simple import prepare_scan_input
+
+    plan = prepare_scan_input("CCO")
+    assert plan.is_smiles is True
+    assert plan.file_path is None
+    storage = TaskStorage(tmp_path)
+    input_path = plan.materialize(storage)
+
+    assert input_path == tmp_path / "input.xyz"
+    xyz_lines = input_path.read_text(encoding="utf-8").splitlines()
+    assert xyz_lines[0] == "9"
+    assert "source=CCO" in xyz_lines[1]
+    assert "seed=42" in xyz_lines[1]
+
+    provenance = json.loads((tmp_path / "input_source.json").read_text(encoding="utf-8"))
+    assert provenance["smiles"] == "CCO"
+    assert provenance["source_type"] == "smiles"
+    assert provenance["embedding"] == {"method": "ETKDGv3", "seed": 42}
+    assert provenance["atom_count"] == 9
+    assert provenance["charge"] == 0
+    assert provenance["multiplicity"] == 1
+    import hashlib
+
+    assert provenance["xyz_content_sha256"] == hashlib.sha256(input_path.read_bytes()).hexdigest()
+
+
+def test_prepare_scan_input_charged_smiles_records_effective_charge(tmp_path):
+    from acp.storage.layout import TaskStorage
+    from acp.workflows.simple import prepare_scan_input
+
+    plan = prepare_scan_input("[NH4+]")
+    assert plan.charge == 1
+    assert plan.multiplicity == 1
+    plan.materialize(TaskStorage(tmp_path))
+    provenance = json.loads((tmp_path / "input_source.json").read_text(encoding="utf-8"))
+    assert provenance["charge"] == 1
+    assert provenance["atom_count"] == 5
+
+
+# ---------------------------------------------------------------------------
 # output writers
 # ---------------------------------------------------------------------------
 

@@ -795,7 +795,9 @@ dE/dX in Hartree/bohr (not forces).
             "(or an inline JSON string)"
         ),
     )
-    orca_gradient.add_argument("--output", "-o", default="./orca_gradient_out", help="Output directory")
+    orca_gradient.add_argument(
+        "--output", "-o", default="./orca_gradient_out", help="Output directory"
+    )
     orca_gradient.add_argument("--nproc", type=int, help="Number of CPU cores")
     orca_gradient.add_argument(
         "--mem",
@@ -2011,7 +2013,11 @@ def _handle_orca_gradient(args: argparse.Namespace) -> int:
         return 1
     logger.info("OrcaGradient completed")
     logger.info("  Energy      : %s Eh", result.metadata.get("energy_hartree", "N/A"))
-    logger.info("  Gradient    : %s (%s)", result.metadata.get("gradient_source", "N/A"), result.metadata.get("gradient_unit", "N/A"))
+    logger.info(
+        "  Gradient    : %s (%s)",
+        result.metadata.get("gradient_source", "N/A"),
+        result.metadata.get("gradient_unit", "N/A"),
+    )
     logger.info("  Manifest    : %s", result.metadata.get("result_manifest_path", "N/A"))
     reporter.complete()
     if getattr(args, "register", False):
@@ -3214,17 +3220,28 @@ def _handle_scan(args: argparse.Namespace) -> int:
     from acp.calculations.primitives.scan import ScanCoordinateError
     from acp.calculations.progress import ProgressReporter
     from acp.storage.layout import TaskStorage
-    from acp.workflows.simple import _calc_subdir, _check_input, _resolve_output_dir, run_scan
+    from acp.workflows.simple import (
+        _calc_subdir,
+        _resolve_output_dir,
+        prepare_scan_input,
+        run_scan,
+    )
 
     setup_logging(args.log_level)
     reporter = ProgressReporter(Path(args.output), job_name="scan", stages=["scan"])
     try:
-        _check_input(args.input)
+        input_plan = prepare_scan_input(
+            args.input,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=args.name,
+        )
         cfg = _build_config(args)
         output_root = _resolve_output_dir(Path(args.output))
         calc_dir = _calc_subdir(output_root, args.name, args.input, "scan")
         storage = TaskStorage(calc_dir)
         storage.ensure_layout(stages=["07_PATH"], categories=["structures", "trajectories"])
+        input_path = input_plan.materialize(storage)
 
         method_kwargs = _build_simple_method_kwargs(args)
         method_kwargs.pop("method", None)
@@ -3239,16 +3256,21 @@ def _handle_scan(args: argparse.Namespace) -> int:
                 "scan_points": args.scan_points,
             }
         )
-        if args.charge is not None:
-            resources["charge"] = args.charge
-        if args.multiplicity is not None:
-            resources["multiplicity"] = args.multiplicity
+        effective_charge = args.charge if args.charge is not None else input_plan.charge
+        effective_multiplicity = (
+            args.multiplicity if args.multiplicity is not None else input_plan.multiplicity
+        )
+        if effective_charge is not None:
+            resources["charge"] = effective_charge
+        if effective_multiplicity is not None:
+            resources["multiplicity"] = effective_multiplicity
 
         result = run_scan(
             CalculationRequest(
                 input_artifact=StructureArtifact(
-                    path=Path(args.input),
-                    source="cli",
+                    path=input_path,
+                    elements=list(input_plan.symbols),
+                    source="smiles" if input_plan.is_smiles else "cli",
                 ),
                 method=args.method,
                 resources=resources,
