@@ -1,0 +1,22 @@
+{
+  "schema_version": "tsmode_bundle_v1",
+  "files": {
+    "output": "ts_opt.out",
+    "hessian": "ts_opt.hess",
+    "geometry": "ts_opt.xyz"
+  },
+  "charge": 0,
+  "multiplicity": 1,
+  "level": {
+    "method": "r2SCAN-3c",
+    "basis": "",
+    "orca_version": "6.1.1"
+  },
+  "origin": {
+    "kind": "files"
+  },
+  "source": {
+    "kind": "bundle_file",
+    "description": "Frozen ORCA 6.1.1 OptTS+NumFreq TS source (HCN, TS_Mode {M 0}, source nu = -464.72 cm^-1)"
+  }
+}
