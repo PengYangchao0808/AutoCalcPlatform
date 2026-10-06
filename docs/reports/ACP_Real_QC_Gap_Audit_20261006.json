@@ -1,0 +1,238 @@
+{
+  "python": "3.11.13",
+  "interpreter": "/opt/acp/venv/bin/python",
+  "D1": [
+    {
+      "path": "/tmp/acp_mt/freq/water/WORK/04_FREQ/freq.hess",
+      "current_parser": "Hessian is not symmetric (max |H - H^T| = 8.234e+00)",
+      "dimension": 9,
+      "asymmetry": 0.0,
+      "printed_frequencies": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1638.5873873880607,
+        3865.2889845814966,
+        3987.4664767421837
+      ],
+      "computed_frequencies": [
+        1638.5874666346922,
+        3865.289171493837,
+        3987.466669563671
+      ],
+      "external_basis_columns": 6,
+      "sha256": "3d4459d8c69abe661fb05f816d05a58a67b0f2f53e6a357ac05d8de44875c42b"
+    },
+    {
+      "path": "/tmp/acp_mt/tsmode_src/freq.hess",
+      "current_parser": "Hessian is not symmetric (max |H - H^T| = 7.986e+00)",
+      "dimension": 9,
+      "asymmetry": 0.0,
+      "printed_frequencies": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -464.71990158819756,
+        1950.5489968017332,
+        2799.906692985535
+      ],
+      "computed_frequencies": [
+        -464.71992405899965,
+        1950.549091122728,
+        2799.906828382459
+      ],
+      "external_basis_columns": 6,
+      "sha256": "351947b14fdb75739565e40e9df04635f4483dffdab6393d41e1bf2889e259a0"
+    },
+    {
+      "path": "/tmp/acp_mt/hcn_freq/ts_hcn/WORK/04_FREQ/freq.hess",
+      "current_parser": "Hessian is not symmetric (max |H - H^T| = 7.986e+00)",
+      "dimension": 9,
+      "asymmetry": 0.0,
+      "printed_frequencies": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -464.71990158819756,
+        1950.5489968017332,
+        2799.906692985535
+      ],
+      "computed_frequencies": [
+        -464.71992405899965,
+        1950.549091122728,
+        2799.906828382459
+      ],
+      "external_basis_columns": 6,
+      "sha256": "351947b14fdb75739565e40e9df04635f4483dffdab6393d41e1bf2889e259a0"
+    }
+  ],
+  "D1_linear_edge": {
+    "expected_external_rank": 5,
+    "actual_external_columns": 6
+  },
+  "D5": {
+    "casscf_energy": -75.976220169701,
+    "natural_occupations": [],
+    "nevpt2_roots": [],
+    "casscf_roots": [],
+    "converged": false,
+    "actual_markers": [
+      "---- THE CAS-SCF ENERGY   HAS CONVERGED ----",
+      "---- THE CAS-SCF GRADIENT HAS CONVERGED ----"
+    ],
+    "last_printed_active_occupations": [
+      "1.99733",
+      "0.00267"
+    ]
+  },
+  "D5_scf_false_positive": {
+    "casscf_energy": -75.0,
+    "natural_occupations": [],
+    "nevpt2_roots": [],
+    "casscf_roots": [],
+    "converged": true
+  },
+  "D6": [
+    {
+      "case": "sp/water",
+      "empty_energy_products": [
+        "step_0_singlepoint_energy"
+      ]
+    },
+    {
+      "case": "opt/water",
+      "empty_energy_products": [
+        "step_0_optimize_energy"
+      ]
+    },
+    {
+      "case": "freq/water",
+      "empty_energy_products": [
+        "step_0_frequency_energy"
+      ]
+    },
+    {
+      "case": "xtb/water",
+      "empty_energy_products": [
+        "step_0_optimize_energy"
+      ]
+    },
+    {
+      "case": "casscf/water",
+      "empty_energy_products": [
+        "step_0_casscf_energy"
+      ]
+    }
+  ],
+  "D8": {
+    "orca": {
+      "on_path": "/usr/bin/orca",
+      "configured_path": "/home/<user>/orca611/orca",
+      "production_resolved": "/home/<user>/orca611/orca"
+    },
+    "crest": {
+      "on_path": "/home/<user>/bin/crest",
+      "configured_path": "/home/<user>/crest/crest",
+      "production_resolved": "/home/<user>/crest/crest"
+    },
+    "xtb": {
+      "on_path": "/home/<user>/xtb-dist/bin/xtb",
+      "configured_path": "/home/<user>/xtb-dist/bin/xtb",
+      "production_resolved": "/home/<user>/xtb-dist/bin/xtb"
+    },
+    "censo": {
+      "on_path": "/home/<user>/.local/bin/censo",
+      "configured_path": "/home/<user>/anaconda3/bin/censo",
+      "production_resolved": "/home/<user>/anaconda3/bin/censo"
+    },
+    "shermo": {
+      "on_path": null,
+      "configured_path": "/home/<user>/Shermo_2.6.1/Shermo",
+      "production_resolved": "/home/<user>/Shermo_2.6.1/Shermo"
+    },
+    "isostat": {
+      "on_path": null,
+      "configured_path": "/home/<user>/molclus_1.14_Linux/isostat",
+      "production_resolved": "/home/<user>/molclus_1.14_Linux/isostat"
+    }
+  },
+  "repository_head": "32d474890495e2d0f92940f5cfd074d84988337e",
+  "reported_baseline": "a90d00b",
+  "audit_date": "2026-10-06",
+  "scope": "Production code review; existing raw QC artifacts; two new real ORCA scan tasks; CLI reproductions; focused tests. No implementation fixes applied.",
+  "scan_control": [
+    {
+      "case": "scan_default",
+      "status": "failed",
+      "complete": false,
+      "errors": [
+        "ORCA relaxed scan failed"
+      ],
+      "frames": 0,
+      "energies": [],
+      "distances": []
+    },
+    {
+      "case": "scan_relaxed",
+      "status": "completed",
+      "complete": true,
+      "errors": [],
+      "frames": 3,
+      "energies": [
+        -76.41475646,
+        -76.39847304,
+        -76.3775457
+      ],
+      "distances": [
+        1.0500003118823347,
+        1.1499994782907512,
+        1.250000123295994
+      ]
+    }
+  ],
+  "focused_tests": {
+    "result": "38 passed",
+    "elapsed_seconds": 0.57,
+    "command": "/opt/acp/venv/bin/python -m pytest tests/test_acp_tsmode_source.py tests/test_cccp_task_scan.py tests/test_acp_workflows_orca_gradient.py tests/test_acp_electronic_state.py::test_casscf_output_parser -q -p no:cacheprovider"
+  },
+  "cli_reproductions": {
+    "D2": {
+      "exit_code": 1,
+      "log": "/tmp/acp_gap_review/scan_smiles.log",
+      "symptom": "Unsupported input format ''"
+    },
+    "D3": {
+      "exit_code": 1,
+      "log": "/tmp/acp_gap_review/nmr_solvent_repro.log",
+      "symptom": "Unknown xTB solvent model 'smd'",
+      "preset": "censo-zero"
+    },
+    "D4": {
+      "exit_code": 1,
+      "log": "/tmp/acp_gap_review/gradient_timeout.log",
+      "symptom": "TypeError: 'NoneType' object does not support item assignment"
+    }
+  },
+  "evidence_hashes": {
+    "/tmp/acp_gap_review/audit.py": "2bdb5df3930d5ac9d91f9109d91f20fbe2caea0e12d3aff5e8153faab02979ae",
+    "/tmp/acp_gap_review/scan_probe.py": "72a333d7cc4b110d2193cb9e601afc22c3d8e17fb5b518363f62ffbf130dc971",
+    "/tmp/acp_gap_review/scan_probe.log": "30eec5409ad1226581ce3964a56993b6be2cbbeea4b1e9b2b48b12b4e5b2478a",
+    "/tmp/acp_gap_review/focused_pytest.log": "f04611f097ea36e0df3aca4e147f87e8c3cba45a7d7bbb3b1f7715d88e14a082",
+    "/tmp/acp_gap_review/scan_smiles.log": "22e0f2d4e5b8dd0450b4d38ff2b535bd7524e6ab0a4aa241c10e248c8bf3e76f",
+    "/tmp/acp_gap_review/nmr_solvent_repro.log": "6d08daf3fbb2c69c3d2859136d220d9d396b5c7e961a3ca2ab6e12c2045cab8c",
+    "/tmp/acp_gap_review/gradient_timeout.log": "d2fdbb355ef1ddfb6b39017ac7d07e29a5d6f2183e1c97f840a4f960808d6241",
+    "/tmp/acp_mt/FULL_TEST_REPORT.md": "915e49bcf0fe0c7c4aaa85bb697ce7c1ad4a794431cc1ddc6bb86864839bd8a8",
+    "/tmp/acp_mt/tsmode_src/freq.hess": "351947b14fdb75739565e40e9df04635f4483dffdab6393d41e1bf2889e259a0",
+    "/tmp/acp_mt/ts_opt_m0/freq.hess": "351947b14fdb75739565e40e9df04635f4483dffdab6393d41e1bf2889e259a0",
+    "/tmp/acp_mt/casscf/water/WORK/08_CASSCF/casscf.out": "d1a07e81ccf578853bfea5ccb46ec88fe300f9dcad6a1a3f0c1055907aa21d95"
+  }
+}
