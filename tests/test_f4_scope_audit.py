@@ -1872,6 +1872,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/atomic_diagnostics.py",
     # acp-nmr-goodman-gap todo 45: per-nucleus spectrum-processor registry.
     "src/acp/nmr/spectra_registry.py",
+    # acp-nmr-goodman-gap todo 55: ShiftPredictor protocol + registry.
+    "src/acp/nmr/shift_predictor.py",
     # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
     "src/acp/workflows/irc.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker

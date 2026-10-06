@@ -114,6 +114,26 @@ from acp.nmr.reference_validation import (
     pinned_goodman_upstream,
 )
 from acp.nmr.scaling import build_assignments, fit_regression, fit_scaling_goodman
+from acp.nmr.shift_predictor import (
+    CALIBRATION_STATUSES,
+    CalibrationStatus,
+    DuplicateShiftPredictorError,
+    GeometryRequirements,
+    InvalidShiftPredictorError,
+    PredictedShift,
+    PredictorGeometry,
+    ShiftDistribution,
+    ShiftModelProvenance,
+    ShiftPrediction,
+    ShiftPredictionRequest,
+    ShiftPredictor,
+    ShiftPredictorError,
+    UnknownShiftPredictorError,
+    get_shift_predictor,
+    list_shift_predictors,
+    register_shift_predictor,
+    unregister_shift_predictor,
+)
 from acp.nmr.spectra import (
     BrukerProcessResult,
     bruker_result_to_text,
@@ -251,4 +271,24 @@ __all__ = [
     "LABEL_SCHEME_PER_ELEMENT",
     "LABEL_SCHEME_GOODMAN",
     "LABEL_SCHEMES",
+    # shift predictor (todo 55 / gap G17): isolated research route — never a
+    # replacement for the GIAO/DP4/DP5 chain and never selected by default.
+    "ShiftPredictor",
+    "ShiftModelProvenance",
+    "GeometryRequirements",
+    "ShiftDistribution",
+    "PredictedShift",
+    "ShiftPrediction",
+    "ShiftPredictionRequest",
+    "PredictorGeometry",
+    "CalibrationStatus",
+    "CALIBRATION_STATUSES",
+    "ShiftPredictorError",
+    "InvalidShiftPredictorError",
+    "DuplicateShiftPredictorError",
+    "UnknownShiftPredictorError",
+    "register_shift_predictor",
+    "get_shift_predictor",
+    "list_shift_predictors",
+    "unregister_shift_predictor",
 ]
