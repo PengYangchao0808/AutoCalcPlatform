@@ -16,10 +16,11 @@ Two goodness-of-fit numbers exist and must never be conflated
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 import numpy as np
 
-from acp.nmr.models import Assignment, RegressionResult
+from acp.nmr.models import Assignment, RegressionResult, SignalGroup
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +96,24 @@ def build_assignments(
     calc_ppm: list[float],
     scaled_ppm: list[float],
     residuals: list[float],
+    signal_groups: Sequence[SignalGroup | None] | None = None,
 ) -> list[Assignment]:
-    """Assemble :class:`Assignment` rows from parallel arrays."""
+    """Assemble :class:`Assignment` rows from parallel arrays.
+
+    ``signal_groups`` is optional and additive (todo 34 / G08): when given
+    it must be parallel to the other arrays and each row records the full
+    signal definition behind its representative atom, so DP4 residuals and
+    the DP5 per-conformer reconstruction share one definition. Legacy
+    callers that omit it keep ``Assignment.signal_group`` as ``None``.
+    """
     if not (len(atom_labels) == len(elements) == len(exp_ppm) == len(calc_ppm)):
         raise ValueError("parallel-array length mismatch")
+    n = len(atom_labels)
+    if signal_groups is not None and len(signal_groups) != n:
+        raise ValueError(f"signal_groups length mismatch: {len(signal_groups)} != {n}")
+    groups: list[SignalGroup | None] = (
+        list(signal_groups) if signal_groups is not None else [None] * n
+    )
     return [
         Assignment(
             atom_label=atom_labels[i],
@@ -107,8 +122,9 @@ def build_assignments(
             calc_ppm=float(calc_ppm[i]),
             scaled_ppm=float(scaled_ppm[i]),
             residual=float(residuals[i]),
+            signal_group=groups[i],
         )
-        for i in range(len(atom_labels))
+        for i in range(n)
     ]
 
 

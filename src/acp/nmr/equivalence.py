@@ -23,19 +23,23 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from acp.nmr.models import normalize_symbol
+from acp.nmr.models import (
+    EQ_BASIS_EXPLICIT,
+    EQ_BASIS_TOPOLOGY,
+    EQ_BASIS_UNKNOWN,
+    SIGNAL_GROUP_BASES,
+    normalize_symbol,
+)
 
 if TYPE_CHECKING:
     from rdkit import Chem
 
 logger = logging.getLogger(__name__)
 
-# Closed, JSON-serializable vocabulary for group equivalence bases.
-EQ_BASIS_TOPOLOGY = "topology"
-EQ_BASIS_EXPLICIT = "explicit"
-EQ_BASIS_UNKNOWN = "unknown"
-
-_EQ_BASIS_VALUES = frozenset({EQ_BASIS_TOPOLOGY, EQ_BASIS_EXPLICIT, EQ_BASIS_UNKNOWN})
+# Closed, JSON-serializable vocabulary for group equivalence bases —
+# defined once in acp.nmr.models (the leaf module) and re-exported here so
+# SignalGroup validation and equivalence detection cannot drift apart.
+_EQ_BASIS_VALUES = frozenset(SIGNAL_GROUP_BASES)
 
 
 class EquivalenceError(ValueError):

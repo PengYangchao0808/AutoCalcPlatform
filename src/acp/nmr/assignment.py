@@ -405,8 +405,12 @@ def collect_residual_inputs(
 ) -> dict[str, dict[str, list]]:
     """Flatten matched pairs into parallel arrays per nucleus.
 
-    Returns ``{nucleus: {"labels", "elements", "calc", "exp"}}`` ready
-    to feed :func:`acp.nmr.scaling.fit_regression`.
+    Returns ``{nucleus: {"labels", "elements", "calc", "exp",
+    "signal_groups"}}`` ready to feed :func:`acp.nmr.scaling.fit_regression`.
+    ``signal_groups`` is parallel to the other arrays — one
+    :class:`~acp.nmr.models.SignalGroup` per row (``None`` for legacy
+    hand-built shifts) so DP4 and DP5 share one signal definition per group
+    (todo 34 / G08).
     """
     out: dict[str, dict[str, list]] = {}
     for nucleus, group in pairs.items():
@@ -417,6 +421,7 @@ def collect_residual_inputs(
             "elements": [s.symbol for s, _ in group],
             "calc": [s.shift_ppm for s, _ in group],
             "exp": [p.shift_ppm for _, p in group],
+            "signal_groups": [s.signal_group for s, _ in group],
         }
     return out
 

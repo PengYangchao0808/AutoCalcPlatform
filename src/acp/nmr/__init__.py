@@ -53,6 +53,7 @@ from acp.nmr.fchl import (
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
     PROBABILITY_STATUSES,
+    SIGNAL_GROUP_BASES,
     Assignment,
     AtomShift,
     CandidateEvidence,
@@ -68,6 +69,7 @@ from acp.nmr.models import (
     ProbabilityResult,
     ProbabilityStatus,
     RegressionResult,
+    SignalGroup,
     lookup_tms_shieldings,
 )
 from acp.nmr.probability import (
@@ -134,6 +136,8 @@ __all__ = [
     "ProbabilityStatus",
     "PROBABILITY_STATUSES",
     "RegressionResult",
+    "SignalGroup",
+    "SIGNAL_GROUP_BASES",
     "lookup_tms_shieldings",
     # io
     "parse_experimental_nmr",

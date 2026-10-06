@@ -10,6 +10,7 @@ assignment / scaling products, and the final DP4/DP5 probabilities.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -376,9 +377,149 @@ class ConformerShielding:
     delta_hartree: float | None = None
 
 
+# --- signal groups (todo 34 / G08) ------------------------------------------
+
+#: Closed vocabulary of equivalence bases a signal group can be justified by.
+#: Defined here — models is the leaf module of the NMR package — and
+#: re-exported by :mod:`acp.nmr.equivalence` as ``EQ_BASIS_*`` so the
+#: vocabulary has exactly one definition without an import cycle.
+EQ_BASIS_TOPOLOGY = "topology"
+EQ_BASIS_EXPLICIT = "explicit"
+EQ_BASIS_UNKNOWN = "unknown"
+SIGNAL_GROUP_BASES: tuple[str, ...] = (EQ_BASIS_TOPOLOGY, EQ_BASIS_EXPLICIT, EQ_BASIS_UNKNOWN)
+
+
+def _signal_group_uids(value: object, field_name: str) -> tuple[str, ...]:
+    """Coerce *value* into a tuple of non-blank strings or raise ``ValueError``."""
+    if not isinstance(value, (tuple, list)):
+        raise ValueError(
+            f"SignalGroup.{field_name} must be a tuple/list of strings, got {type(value).__name__}"
+        )
+    uids = tuple(value)
+    for uid in uids:
+        if not isinstance(uid, str) or not uid.strip():
+            raise ValueError(
+                f"SignalGroup.{field_name} entries must be non-blank strings, got {uid!r}"
+            )
+    return uids
+
+
+def _signal_group_coefficients(value: object) -> tuple[float, ...]:
+    """Coerce *value* into a tuple of finite floats or raise ``ValueError``."""
+    if not isinstance(value, (tuple, list)):
+        raise ValueError(
+            f"SignalGroup.coefficients must be a tuple/list of numbers, got {type(value).__name__}"
+        )
+    coefficients: list[float] = []
+    for coefficient in value:
+        if isinstance(coefficient, bool) or not isinstance(coefficient, (int, float)):
+            raise ValueError(
+                f"SignalGroup.coefficients entries must be real numbers, got {coefficient!r}"
+            )
+        number = float(coefficient)
+        if not math.isfinite(number):
+            raise ValueError(f"SignalGroup.coefficients must be finite, got {coefficient!r}")
+        coefficients.append(number)
+    return tuple(coefficients)
+
+
+@dataclass(frozen=True)
+class SignalGroup:
+    """Full membership of one computed NMR signal (G08).
+
+    Averaging an equivalence group used to keep only its representative
+    atom label, so the DP5 per-conformer reconstruction re-read the
+    representative's raw shielding and disagreed with the averaged DP4
+    residual. A ``SignalGroup`` carries the whole definition — who belongs
+    to the signal, with which averaging coefficients, on what equivalence
+    basis — so averaging, assignment, DP4 and DP5 all consume ONE signal
+    definition and the representative label is a display choice only.
+
+    Attributes:
+        atom_uids: Stable member identities — ``NmrStructureMap`` uids
+            (``"C:3"``) when a structure map is available, element +
+            1-based label uids (``"C1"``) otherwise. Non-empty, no
+            duplicates.
+        coefficients: Averaging coefficients of the linear combination
+            producing the group signal — equal weights (``1/n``) unless a
+            group carried explicit coefficients. Finite, same length as
+            ``atom_uids``.
+        equivalence_basis: Why the members form one signal —
+            :data:`EQ_BASIS_TOPOLOGY` (molecular-graph symmetry),
+            :data:`EQ_BASIS_EXPLICIT` (user ``EQ:`` assertion) or
+            :data:`EQ_BASIS_UNKNOWN` (no justification on record).
+        peak_capacity: Number of experimental peaks this signal may occupy
+            (integral/multiplicity capacity), or ``None`` when unknown —
+            unknown is never assumed to be 1.
+        experiment_ref: Stable reference to the experimental observation
+            this signal was matched to (``"element:index"``), or ``None``
+            when unknown.
+    """
+
+    atom_uids: tuple[str, ...]
+    coefficients: tuple[float, ...]
+    equivalence_basis: str
+    peak_capacity: int | None = None
+    experiment_ref: str | None = None
+
+    def __post_init__(self) -> None:
+        uids = _signal_group_uids(self.atom_uids, "atom_uids")
+        if not uids:
+            raise ValueError("SignalGroup.atom_uids must be non-empty")
+        if len(set(uids)) != len(uids):
+            raise ValueError(f"SignalGroup.atom_uids contains duplicates: {uids!r}")
+        coefficients = _signal_group_coefficients(self.coefficients)
+        if not coefficients:
+            raise ValueError("SignalGroup.coefficients must be non-empty")
+        if len(coefficients) != len(uids):
+            raise ValueError(
+                "SignalGroup length mismatch: "
+                f"{len(uids)} atom_uids != {len(coefficients)} coefficients"
+            )
+        if self.equivalence_basis not in SIGNAL_GROUP_BASES:
+            raise ValueError(
+                f"unknown equivalence basis {self.equivalence_basis!r}; "
+                f"expected one of {SIGNAL_GROUP_BASES}"
+            )
+        if self.peak_capacity is not None:
+            if isinstance(self.peak_capacity, bool) or not isinstance(self.peak_capacity, int):
+                raise ValueError(
+                    f"SignalGroup.peak_capacity must be a positive int or None, "
+                    f"got {self.peak_capacity!r}"
+                )
+            if self.peak_capacity < 1:
+                raise ValueError(
+                    f"SignalGroup.peak_capacity must be >= 1, got {self.peak_capacity!r}"
+                )
+        if self.experiment_ref is not None and (
+            not isinstance(self.experiment_ref, str) or not self.experiment_ref.strip()
+        ):
+            raise ValueError(
+                f"SignalGroup.experiment_ref must be a non-blank string or None, "
+                f"got {self.experiment_ref!r}"
+            )
+        object.__setattr__(self, "atom_uids", uids)
+        object.__setattr__(self, "coefficients", coefficients)
+
+    def as_dict(self) -> dict[str, object]:
+        """JSON-safe provenance record (lists, never tuples)."""
+        return {
+            "atom_uids": list(self.atom_uids),
+            "coefficients": list(self.coefficients),
+            "equivalence_basis": self.equivalence_basis,
+            "peak_capacity": self.peak_capacity,
+            "experiment_ref": self.experiment_ref,
+        }
+
+
 @dataclass(frozen=True)
 class AtomShift:
-    """Per-atom computed chemical shift for one candidate."""
+    """Per-atom computed chemical shift for one candidate.
+
+    ``signal_group`` carries the full membership the shift was averaged
+    from (G08) — ``None`` only for legacy hand-built shifts that never went
+    through equivalence-aware averaging.
+    """
 
     atom_index: int
     symbol: str
@@ -386,18 +527,26 @@ class AtomShift:
     shielding_ppm: float
     shift_ppm: float
     atom_label: str
+    signal_group: SignalGroup | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
             "atom": self.atom_label,
             "element": self.symbol,
             "calc_ppm": round(self.shift_ppm, 4),
+            "signal_group": self.signal_group.as_dict() if self.signal_group is not None else None,
         }
 
 
 @dataclass(frozen=True)
 class Assignment:
-    """One (computed, experimental) pair after matching/calibration."""
+    """One (computed, experimental) pair after matching/calibration.
+
+    ``signal_group`` is the full signal definition behind the matched
+    representative atom (G08): DP4 residuals and the DP5 per-conformer
+    reconstruction read the same group instead of re-deriving a signal
+    from the representative label.
+    """
 
     atom_label: str
     element: str
@@ -405,6 +554,7 @@ class Assignment:
     calc_ppm: float
     scaled_ppm: float
     residual: float
+    signal_group: SignalGroup | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -417,6 +567,7 @@ class Assignment:
             # XLSX carry identical numbers (gap §8.2).
             "scaled_ppm": self.scaled_ppm,
             "residual": round(self.residual, 4),
+            "signal_group": self.signal_group.as_dict() if self.signal_group is not None else None,
         }
 
 
@@ -777,6 +928,38 @@ class CandidateResult:
     evidence: CandidateEvidence | None = None
     probability: CandidateProbability | None = None
     ensemble_quality: EnsembleQuality | None = None
+    #: Explicit record of the signal definitions this candidate consumed
+    #: (todo 34 / G08), populated by the workflow from the averaged shifts.
+    #: Empty for hand-built/legacy candidates — :meth:`signal_groups_used`
+    #: then derives the record from assignments/atom_shifts instead of
+    #: pretending there were no signals.
+    signal_groups: tuple[SignalGroup, ...] = ()
+
+    def signal_groups_used(self) -> tuple[SignalGroup, ...]:
+        """Return the signal definitions this candidate consumed (G08).
+
+        Prefers the explicit ``signal_groups`` record. When a caller only
+        threaded groups through ``assignments``/``atom_shifts``, they are
+        derived in first-appearance order (deduplicated by equality) so the
+        record is never empty just because the field was not populated.
+        """
+        if self.signal_groups:
+            return self.signal_groups
+        derived: list[SignalGroup] = []
+        seen: set[SignalGroup] = set()
+        for assignment in self.assignments:
+            group = assignment.signal_group
+            if group is not None and group not in seen:
+                seen.add(group)
+                derived.append(group)
+        if derived:
+            return tuple(derived)
+        for shift in self.atom_shifts:
+            group = shift.signal_group
+            if group is not None and group not in seen:
+                seen.add(group)
+                derived.append(group)
+        return tuple(derived)
 
     def analysis_status(self) -> str | None:
         """Schema-v2 per-candidate status (gap §8.2).
@@ -863,6 +1046,7 @@ class CandidateResult:
             "ensemble_quality": (
                 self.ensemble_quality.as_dict() if self.ensemble_quality is not None else None
             ),
+            "signal_groups": [group.as_dict() for group in self.signal_groups_used()],
             "n_conformers": len(self.conformer_shieldings),
             "regression": regression_obj,
             "assignment": [a.as_dict() for a in self.assignments],
@@ -1076,6 +1260,11 @@ __all__ = [
     "NmrConfig",
     "REPORT_SCHEMA_VERSION",
     "ConformerShielding",
+    "SignalGroup",
+    "SIGNAL_GROUP_BASES",
+    "EQ_BASIS_TOPOLOGY",
+    "EQ_BASIS_EXPLICIT",
+    "EQ_BASIS_UNKNOWN",
     "AtomShift",
     "Assignment",
     "RegressionResult",

@@ -8,14 +8,21 @@ import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from acp.nmr.equivalence import EquivalenceResult, build_all_labels, build_label_for_atom
+from acp.nmr.equivalence import (
+    EQ_BASIS_UNKNOWN,
+    EquivalenceResult,
+    build_all_labels,
+    build_label_for_atom,
+)
 from acp.nmr.models import (
     AtomShift,
     ConformerShielding,
     NmrConfig,
+    SignalGroup,
     element_of_nucleus,
     normalize_symbol,
 )
+from acp.nmr.structure_map import NmrStructureMap
 
 if TYPE_CHECKING:
     pass
@@ -76,6 +83,7 @@ def boltzmann_average_shieldings(
     config: NmrConfig,
     equivalence_groups: Sequence[Sequence[int]] | EquivalenceResult | None = None,
     omit_atom_indices: list[int] | None = None,
+    structure_map: NmrStructureMap | None = None,
 ) -> list[AtomShift]:
     """Average per-conformer shieldings into per-atom shifts.
 
@@ -91,18 +99,28 @@ def boltzmann_average_shieldings(
     4. TMS conversion: ``δ_calc = σ_TMS − σ_avg`` using the configured
        reference for the atom's nucleus.
 
+    Every emitted :class:`AtomShift` carries its full :class:`SignalGroup`
+    (todo 34 / G08): member uids, averaging coefficients and equivalence
+    basis — not just the representative label. Membership uids come from
+    *structure_map* when supplied, else from element + 1-based label uids.
+
     Args:
         conformers: Per-conformer shieldings + Boltzmann weights.
         symbols: Element symbols (length N).
         config: NMR configuration (TMS references, nuclei).
-        equivalence_groups: Optional equivalence groups (0-based indices).
+        equivalence_groups: Optional equivalence groups (0-based indices),
+            as a plain sequence (basis ``unknown``) or an
+            :class:`EquivalenceResult` (per-group basis preserved).
         omit_atom_indices: Atoms to exclude from the result.
+        structure_map: Optional stable atom identity map aligned with
+            *symbols* (same atom order); when omitted, member uids use the
+            per-element label fallback.
 
     Returns:
-        List of :class:`AtomShift` (one per non-omitted atom / group
-        representative). When equivalence groups are present, only one
-        representative per group is emitted (the lowest-indexed member).
-        Empty when no conformer is complete.
+        List of :class:`AtomShift` (one per signal). When equivalence groups
+        are present, one representative per group is emitted (the
+        lowest-indexed member) carrying the full group membership. Empty
+        when no conformer is complete.
     """
     omit_set = set(omit_atom_indices or [])
     n_atoms = len(symbols)
@@ -140,71 +158,100 @@ def boltzmann_average_shieldings(
             total += weight * value
         avg_shielding[atom_idx] = total
 
-    # equivalence averaging — replace each member's value with the group mean
+    basis_by_atom: dict[int, str] = {}
+    if isinstance(equivalence_groups, EquivalenceResult):
+        for eq_group in equivalence_groups:
+            for atom_idx in eq_group.indices:
+                basis_by_atom[atom_idx] = eq_group.basis
+
+    membership: list[tuple[object | None, list[int]]] = []
     if equivalence_groups:
-        group_of: dict[int, int] = {}
-        group_means: dict[int, float] = {}
-        for g_idx, group in enumerate(equivalence_groups):
-            members = [i for i in group if i in avg_shielding]
-            if not members:
-                continue
-            mean = sum(avg_shielding[i] for i in members) / len(members)
-            group_means[g_idx] = mean
-            for m in members:
-                group_of[m] = g_idx
-
-        representatives: set[int] = set()
-        for g_idx, group in enumerate(equivalence_groups):
-            members = [i for i in group if i in avg_shielding]
+        for eq_group in equivalence_groups:
+            members = sorted(atom_idx for atom_idx in eq_group if atom_idx in avg_shielding)
             if members:
-                representatives.add(min(members))
-        # singletons (not in any group) stay as their own representative
-        for atom_idx in avg_shielding:
-            if atom_idx not in group_of:
-                representatives.add(atom_idx)
-
-        result_atoms = sorted(representatives)
-        shifts: list[AtomShift] = []
-        for atom_idx in result_atoms:
-            sym = normalize_symbol(symbols[atom_idx])
-            nucleus = _nucleus_for_element(sym, config)
-            if nucleus is None:
-                continue
-            g_idx = group_of.get(atom_idx)
-            shielding = group_means[g_idx] if g_idx is not None else avg_shielding[atom_idx]
-            shift = _shielding_to_shift(shielding, nucleus, config)
-            shifts.append(
-                AtomShift(
-                    atom_index=atom_idx,
-                    symbol=sym,
-                    nucleus=nucleus,
-                    shielding_ppm=shielding,
-                    shift_ppm=shift,
-                    atom_label=build_label_for_atom(atom_idx, symbols),
-                )
-            )
-        return shifts
-
-    # no equivalence grouping — one shift per atom
-    shifts = []
+                membership.append((eq_group, members))
+        covered = {atom_idx for _, members in membership for atom_idx in members}
+    else:
+        covered = set()
     for atom_idx in sorted(avg_shielding):
-        sym = normalize_symbol(symbols[atom_idx])
+        if atom_idx not in covered:
+            membership.append((None, [atom_idx]))
+
+    shifts: list[AtomShift] = []
+    for eq_group, members in sorted(membership, key=lambda entry: entry[1][0]):
+        representative = members[0]
+        sym = normalize_symbol(symbols[representative])
         nucleus = _nucleus_for_element(sym, config)
         if nucleus is None:
             continue
-        shielding = avg_shielding[atom_idx]
-        shift = _shielding_to_shift(shielding, nucleus, config)
+        explicit = _explicit_group_coefficients(eq_group, len(members))
+        if explicit is None:
+            coefficients = tuple(1.0 / len(members) for _ in members)
+            shielding = sum(avg_shielding[i] for i in members) / len(members)
+        else:
+            coefficients = explicit
+            shielding = sum(
+                coeff * avg_shielding[i] for coeff, i in zip(explicit, members, strict=True)
+            )
+        signal_group = SignalGroup(
+            atom_uids=tuple(_atom_uid_for(member, symbols, structure_map) for member in members),
+            coefficients=coefficients,
+            equivalence_basis=basis_by_atom.get(representative, EQ_BASIS_UNKNOWN),
+        )
         shifts.append(
             AtomShift(
-                atom_index=atom_idx,
+                atom_index=representative,
                 symbol=sym,
                 nucleus=nucleus,
                 shielding_ppm=shielding,
-                shift_ppm=shift,
-                atom_label=build_label_for_atom(atom_idx, symbols),
+                shift_ppm=_shielding_to_shift(shielding, nucleus, config),
+                atom_label=build_label_for_atom(representative, symbols),
+                signal_group=signal_group,
             )
         )
     return shifts
+
+
+def _atom_uid_for(
+    atom_index: int,
+    symbols: Sequence[str],
+    structure_map: NmrStructureMap | None,
+) -> str:
+    """Stable member uid: structure-map uid when available, else label uid."""
+    if structure_map is not None:
+        return structure_map.atom_uid_for_mol(atom_index)
+    return build_label_for_atom(atom_index, list(symbols))
+
+
+def _explicit_group_coefficients(
+    group: object | None,
+    n_members: int,
+) -> tuple[float, ...] | None:
+    """Explicit averaging coefficients carried by *group*, or ``None``.
+
+    Today's :class:`~acp.nmr.equivalence.EquivalenceGroup` carries no
+    coefficients, so equal weights (``1/n``) are the default. A richer
+    group object exposing a ``coefficients`` sequence is honored only when
+    it matches the surviving member count and is finite; anything else
+    falls back to equal weights with a warning — never a silent partial
+    weighting.
+    """
+    raw = getattr(group, "coefficients", None)
+    if raw is None:
+        return None
+    try:
+        values = tuple(float(c) for c in raw)
+    except (TypeError, ValueError):
+        logger.warning("group carries malformed coefficients %r; using equal weights", raw)
+        return None
+    if len(values) != n_members or any(not math.isfinite(c) for c in values):
+        logger.warning(
+            "group coefficients %r unusable for %d surviving members; using equal weights",
+            raw,
+            n_members,
+        )
+        return None
+    return values
 
 
 def _nucleus_for_element(element: str, config: NmrConfig) -> str | None:
