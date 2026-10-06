@@ -1,0 +1,511 @@
+{
+  "fixtures": [
+    {
+      "annotations": {
+        "kind": "proton_grouping",
+        "multiplets": [
+          {
+            "atom_count": 3,
+            "center_ppm": 1.26,
+            "label": "CH3",
+            "line_positions_ppm": [
+              1.242,
+              1.26,
+              1.278
+            ]
+          },
+          {
+            "atom_count": 2,
+            "center_ppm": 4.1,
+            "label": "CH2",
+            "line_positions_ppm": [
+              4.073,
+              4.091,
+              4.109,
+              4.127
+            ]
+          },
+          {
+            "atom_count": 3,
+            "center_ppm": 3.8,
+            "label": "OCH3",
+            "line_positions_ppm": [
+              3.8
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 7.4,
+            "label": "ArH",
+            "line_positions_ppm": [
+              7.4
+            ]
+          }
+        ],
+        "position_tolerance_ppm": 0.05
+      },
+      "category": "phase_deviation",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "phase_deviation_proton",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "1H",
+      "path": "nmr/phase_deviation_proton",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "synthetic deterministic FID with a 120 deg zero-order receiver phase error (autophase must recover the lines)"
+    },
+    {
+      "annotations": {},
+      "category": "phase_deviation",
+      "files": [
+        "phase_unphased_gate.json"
+      ],
+      "id": "phase_unphased_gate",
+      "kind": "processed_spectrum",
+      "layer": "synthetic",
+      "nucleus": "1H",
+      "path": "nmr/phase_unphased_gate.json",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "none",
+      "source": "derived pipeline-state fixture: phase_method='unphased' + failed processing assessment (the todo-42 gate must refuse it)"
+    },
+    {
+      "annotations": {
+        "kind": "proton_grouping",
+        "multiplets": [
+          {
+            "atom_count": 3,
+            "center_ppm": 1.26,
+            "label": "CH3",
+            "line_positions_ppm": [
+              1.242,
+              1.26,
+              1.278
+            ]
+          },
+          {
+            "atom_count": 2,
+            "center_ppm": 4.1,
+            "label": "CH2",
+            "line_positions_ppm": [
+              4.073,
+              4.091,
+              4.109,
+              4.127
+            ]
+          },
+          {
+            "atom_count": 3,
+            "center_ppm": 3.8,
+            "label": "OCH3",
+            "line_positions_ppm": [
+              3.8
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 7.4,
+            "label": "ArH",
+            "line_positions_ppm": [
+              7.4
+            ]
+          }
+        ],
+        "position_tolerance_ppm": 0.05
+      },
+      "category": "digital_filter",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "digital_filter_proton",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "1H",
+      "path": "nmr/digital_filter_proton",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "synthetic FID with real DSP firmware metadata GRPDLY=67.986 / DSPFVS=12; no compensation is applied (metadata-level degradation, effect unverified)"
+    },
+    {
+      "annotations": {
+        "kind": "resonance_precision_recall",
+        "resonances": [
+          {
+            "label": "C1",
+            "position_ppm": 18.0
+          },
+          {
+            "label": "C2",
+            "position_ppm": 57.2
+          },
+          {
+            "label": "C3",
+            "position_ppm": 128.4
+          },
+          {
+            "label": "C4",
+            "position_ppm": 167.3
+          }
+        ],
+        "tolerance_ppm": 0.05
+      },
+      "category": "solvent_large",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "solvent_large_carbon",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "13C",
+      "path": "nmr/solvent_large_carbon",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "synthetic 13C FID: large CDCl3 triplet (3x analyte) + four singlets"
+    },
+    {
+      "annotations": {
+        "kind": "resonance_precision_recall",
+        "resonances": [
+          {
+            "label": "C1",
+            "position_ppm": 18.0
+          },
+          {
+            "label": "C2",
+            "position_ppm": 57.2
+          },
+          {
+            "label": "C3",
+            "position_ppm": 128.4
+          },
+          {
+            "label": "C4",
+            "position_ppm": 167.3
+          }
+        ],
+        "tolerance_ppm": 0.05
+      },
+      "category": "impurity",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "impurity_carbon",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "13C",
+      "path": "nmr/impurity_carbon",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "synthetic 13C FID: analyte + two unannotated impurity peaks (29.7/23.5)"
+    },
+    {
+      "annotations": {
+        "kind": "resonance_precision_recall",
+        "resonances": [
+          {
+            "label": "C1",
+            "position_ppm": 18.0
+          },
+          {
+            "label": "C2",
+            "position_ppm": 57.2
+          },
+          {
+            "label": "C3",
+            "position_ppm": 128.4
+          },
+          {
+            "label": "C4",
+            "position_ppm": 167.3
+          },
+          {
+            "label": "weak",
+            "position_ppm": 45.0
+          }
+        ],
+        "tolerance_ppm": 0.05
+      },
+      "category": "low_snr",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "low_snr_carbon",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "13C",
+      "path": "nmr/low_snr_carbon",
+      "processing_options": {
+        "snr_threshold": 6.0
+      },
+      "processor_options": {
+        "min_snr": 2000.0
+      },
+      "requires": "nmrglue",
+      "source": "synthetic 13C FID with one weak analyte line (S/N near the gate)"
+    },
+    {
+      "annotations": {
+        "kind": "proton_grouping",
+        "multiplets": [
+          {
+            "atom_count": 3,
+            "center_ppm": 1.26,
+            "label": "CH3",
+            "line_positions_ppm": [
+              1.242,
+              1.26,
+              1.278
+            ]
+          },
+          {
+            "atom_count": 2,
+            "center_ppm": 4.1,
+            "label": "CH2",
+            "line_positions_ppm": [
+              4.073,
+              4.091,
+              4.109,
+              4.127
+            ]
+          },
+          {
+            "atom_count": 3,
+            "center_ppm": 3.8,
+            "label": "OCH3",
+            "line_positions_ppm": [
+              3.8
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 7.4,
+            "label": "ArH",
+            "line_positions_ppm": [
+              7.4
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 6.2,
+            "label": "weak",
+            "line_positions_ppm": [
+              6.2
+            ]
+          }
+        ],
+        "position_tolerance_ppm": 0.05
+      },
+      "category": "low_snr",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "low_snr_proton",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "1H",
+      "path": "nmr/low_snr_proton",
+      "processing_options": {
+        "snr_threshold": 6.0
+      },
+      "processor_options": {
+        "snr_threshold": 50.0,
+        "total_hydrogens": 10
+      },
+      "requires": "nmrglue",
+      "source": "synthetic 1H FID with one weak singlet at 6.20 ppm (S/N near the gate)"
+    },
+    {
+      "annotations": {
+        "kind": "multiplet_grouping",
+        "multiplets": [
+          {
+            "atom_count": 2,
+            "center_ppm": 3.4,
+            "label": "CH2 quartet",
+            "line_positions_ppm": [
+              3.373,
+              3.391,
+              3.409,
+              3.427
+            ]
+          },
+          {
+            "atom_count": 3,
+            "center_ppm": 3.39,
+            "label": "OCH3 overlap",
+            "line_positions_ppm": [
+              3.39
+            ]
+          },
+          {
+            "atom_count": 3,
+            "center_ppm": 1.26,
+            "label": "CH3",
+            "line_positions_ppm": [
+              1.26
+            ]
+          }
+        ],
+        "position_tolerance_ppm": 0.05
+      },
+      "category": "overlap",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "overlap_proton",
+      "kind": "bruker_experiment",
+      "layer": "synthetic",
+      "nucleus": "1H",
+      "path": "nmr/overlap_proton",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "synthetic 1H FID: methoxy singlet interleaved inside an ethyl quartet"
+    },
+    {
+      "annotations": {},
+      "category": "same_nucleus_duplicates",
+      "files": [
+        "11/acqus",
+        "11/fid",
+        "12/acqus",
+        "12/fid",
+        "13/acqus",
+        "13/fid"
+      ],
+      "id": "same_nucleus_duplicates",
+      "kind": "bruker_tree",
+      "layer": "synthetic",
+      "nucleus": "1H+13C",
+      "path": "nmr/same_nucleus_duplicates",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "synthetic Bruker tree with two 1H experiments (11, 12) + one 13C (13): default selects one per nucleus; explicit selection may combine"
+    },
+    {
+      "annotations": {},
+      "category": "not_1d",
+      "files": [
+        "proton_1d/acqus",
+        "proton_1d/fid",
+        "ser_experiment/acqus",
+        "ser_experiment/ser"
+      ],
+      "id": "two_d_ser",
+      "kind": "not_1d",
+      "layer": "synthetic",
+      "nucleus": "1H",
+      "path": "nmr/two_d_ser",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "none",
+      "source": "non-1D experiment directory (acqus + ser serial file) next to a 1D companion: 2D rejection in a mixed tree + typed explicit-selection raise"
+    },
+    {
+      "annotations": {
+        "kind": "proton_grouping",
+        "multiplets": [
+          {
+            "atom_count": 2,
+            "center_ppm": 8.08,
+            "label": "ArH (ortho-COOH)",
+            "line_positions_ppm": [
+              8.0921,
+              8.0716
+            ]
+          },
+          {
+            "atom_count": 2,
+            "center_ppm": 7.5,
+            "label": "ArH (ortho-vinyl)",
+            "line_positions_ppm": [
+              7.5118,
+              7.491
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 7.259,
+            "label": "CHCl3 residual",
+            "line_positions_ppm": [
+              7.2586
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 6.77,
+            "label": "CH=",
+            "line_positions_ppm": [
+              6.8106,
+              6.7834,
+              6.7666,
+              6.7394
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 5.9,
+            "label": "=CH2 (trans)",
+            "line_positions_ppm": [
+              5.9216,
+              5.8776
+            ]
+          },
+          {
+            "atom_count": 1,
+            "center_ppm": 5.42,
+            "label": "=CH2 (cis)",
+            "line_positions_ppm": [
+              5.4329,
+              5.4183,
+              5.4056,
+              5.3913
+            ]
+          }
+        ],
+        "position_tolerance_ppm": 0.05
+      },
+      "category": "real_acquisition",
+      "declared_verification": "not_verified",
+      "files": [
+        "acqus",
+        "fid"
+      ],
+      "id": "real_avance_neo_group_delay_1h",
+      "kind": "bruker_experiment",
+      "layer": "real",
+      "nucleus": "1H",
+      "path": "bruker_real_group_delay",
+      "processing_options": {},
+      "processor_options": {},
+      "requires": "nmrglue",
+      "source": "real AVANCE NEO 400 MHz 1H dataset (4-vinylbenzoic acid in CDCl3, 2018-05-24; TopSpin 4.0.2); acqus + fid only, fid trimmed to 16384 complex points (see fixture README). Manual annotations derive from the TopSpin peak list + structure assignment.",
+      "verification_reasons": [
+        "instrument_storage_convention_unverified: the ACP raw-read path does not recover the TopSpin reference peak positions from this AVANCE NEO float64 FID (observed peak set is mirrored about the carrier and carries the uncompensated group-delay transient)",
+        "digital_filter_effect_unverified: no group-delay compensation is applied by the pipeline; the real filter effect is marked, not corrected (todo-42 three-state)"
+      ]
+    }
+  ],
+  "generator": "tests/fixtures/nmr/generate_fixtures.py",
+  "schema": "acp-nmr-spectra-fixture-manifest-v1",
+  "tolerances": {
+    "carbon_resonance_match_ppm": 0.05,
+    "proton_multiplet_position_ppm": 0.05
+  }
+}

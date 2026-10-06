@@ -707,12 +707,16 @@ def test_group_delay_fixture_detects_filter_and_stays_honest(tmp_path: Path) -> 
 _GROUP_DELAY_REAL_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "bruker_real_group_delay"
 
 
+@requires_nmrglue
 def test_real_instrument_group_delay_dataset_not_verified() -> None:
-    """A REAL instrument dataset must confirm group-delay handling (G10).
+    """A REAL instrument dataset confirms group-delay detection (G10).
 
-    No real Bruker dataset ships with this repository, so the real-instrument
-    filter effect stays NOT_VERIFIED — never silently claimed as verified.
-    A faithful synthetic metadata fixture (above) proves detection only.
+    A real AVANCE NEO dataset (GRPDLY=76 / DSPFVS=21) ships at
+    ``fixtures/bruker_real_group_delay/``. The pipeline applies no
+    group-delay compensation, so the verdict stays ``not_compensated`` and
+    the real filter effect remains NOT_VERIFIED — never silently claimed as
+    verified. When a stripped checkout has no real dataset the test skips
+    explicitly.
     """
     if not _GROUP_DELAY_REAL_FIXTURE.is_dir():
         pytest.skip(
