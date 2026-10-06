@@ -1711,6 +1711,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/reference_validation.py",
     # acp-nmr-goodman-gap todo 41: four-layer spectrum model + processing provenance.
     "src/acp/nmr/spectra.py",
+    # acp-nmr-goodman-gap todo 43: carbon spectrum processor.
+    "src/acp/nmr/carbon_processor.py",
     # acp-nmr-goodman-gap todo 46: iterative assignment engine (seeded
     # assignment↔calibration convergence + near-optima + anti-overfit guard).
     "src/acp/nmr/iterative_assignment.py",
