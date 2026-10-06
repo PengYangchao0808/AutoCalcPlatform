@@ -121,6 +121,7 @@ ALLOWED_PY = frozenset(
         "src/cccp/qc/interfaces/constraints.py",
         "src/cccp/qc/interfaces/hess_file.py",
         "src/cccp/qc/interfaces/base.py",
+        "src/cccp/qc/interfaces/crest.py",
         "src/acp/backends/orca.py",
     }
 )
@@ -411,8 +412,7 @@ def _is_amendment_e_addition(ln: int, txt: str, worktree_src: str, class_name: s
         method_names = _E_METHOD_SCOPES[:-1]
         ranges = _func_ranges(worktree_src)
         if any(
-            (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1]
-            for name in method_names
+            (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1] for name in method_names
         ):
             return True
         casscf_method = _func_range(worktree_src, "casscf", "ORCAInterface")
@@ -728,7 +728,6 @@ def _amendment_i_orca_teeth(worktree: str) -> list[str]:
     return issues
 
 
-
 def test_amendment_i_predicates_confined_and_negatives() -> None:
     """Amendment I is confined to the meta lookup — negative injection."""
     worktree = _worktree_content("src/cccp/qc/interfaces/orca.py")
@@ -813,7 +812,8 @@ def _amendment_j_base_teeth(worktree: str) -> list[str]:
     ]
     if len(qcresult_classes) != 1:
         issues.append(
-            f"  Amendment J: QCResult must have exactly one definition, found {len(qcresult_classes)}"
+            "  Amendment J: QCResult must have exactly one definition, "
+            f"found {len(qcresult_classes)}"
         )
     else:
         fields = {
@@ -1134,14 +1134,17 @@ def test_amendment_m_predicates_confined_and_negatives() -> None:
 
     injected = worktree.replace(
         '        raw_lambda = data.get("lambda_values") or ()',
-        '        raw_lambda = data.get("lambda_values") or ()\n        smuggled = algorithm_change()',
+        '        raw_lambda = data.get("lambda_values") or ()'
+        "\n        smuggled = algorithm_change()",
     )
     issues = _amendment_m_constraints_teeth(injected)
     assert not issues, "in-body edits stay inside the sanctioned scope"
     stripped = worktree.replace("            fixed_endpoints=fixed_endpoints,\n", "")
     issues = _amendment_m_constraints_teeth(stripped)
     assert any("fixed_endpoints" in issue for issue in issues)
-    unpaired = worktree.replace('        fixed_endpoints = bool(data.get("fixed_endpoints") or False)', "")
+    unpaired = worktree.replace(
+        '        fixed_endpoints = bool(data.get("fixed_endpoints") or False)', ""
+    )
     issues = _amendment_m_constraints_teeth(unpaired)
     assert any("from_dict must parse fixed_endpoints" in issue for issue in issues)
     removed = worktree.replace(
@@ -1288,6 +1291,85 @@ def test_amendment_n_predicates_confined_and_negatives() -> None:
     no_relocation = worktree.replace("eprnmr_lines", "_kept_in_place")
     issues = _amendment_n_orca_teeth(no_relocation)
     assert any("relocate" in issue for issue in issues)
+
+
+# ── Amendment O: CREST charge-flag fix (2026-10-07, real-qc-gap task 15) ────
+#
+# The real-QC CREST smoke found the charge flag was passed as ``-charge``,
+# which CREST rejects — the CLI token is the long form ``--chrg``.  The fix
+# is mechanical: the ``"-charge"`` literal becomes ``"--chrg"`` in the two
+# argument builders of ``CRESTInterface`` (``run_conformer_search`` and
+# ``run_batch_optimization``).  Sanctioned scope: the ``--chrg`` added lines
+# inside those two builder bodies only.  Teeth: exactly two ``"--chrg"``
+# sites must exist and no legacy ``"-charge"`` token may survive anywhere
+# in the module.
+
+_AMENDMENT_O_BUILDERS = ("run_conformer_search", "run_batch_optimization")
+
+
+def _is_amendment_o_crest_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``crest.py`` additions: ``--chrg`` inside the two builders."""
+    if "--chrg" not in txt:
+        return False
+    for func_name in _AMENDMENT_O_BUILDERS:
+        span = _func_range(worktree_src, func_name, "CRESTInterface")
+        if span is not None and span[0] <= ln <= span[1]:
+            return True
+    return False
+
+
+def _amendment_o_crest_teeth(worktree: str) -> list[str]:
+    """Teeth: both builders emit ``--chrg`` and no ``-charge`` token survives."""
+    issues: list[str] = []
+    chrg_sites = worktree.count('"--chrg"')
+    if chrg_sites < 2:
+        issues.append(f'  Amendment O: expected two "--chrg" sites, found {chrg_sites}')
+    if '"-charge"' in worktree:
+        issues.append('  Amendment O: legacy "-charge" token must be replaced by "--chrg"')
+    return issues
+
+
+def test_amendment_o_predicates_confined_and_negatives() -> None:
+    """Amendment O is confined to the two CREST builders — negative injection."""
+    fp = "src/cccp/qc/interfaces/crest.py"
+    worktree = _worktree_content(fp)
+    added, _ = _diff_hunks(fp)
+    chrg_lines = [(ln, txt) for ln, txt in added if "--chrg" in txt]
+    assert len(chrg_lines) == 2, f"expected 2 --chrg additions, got {chrg_lines}"
+
+    conf_range = _func_range(worktree, "run_conformer_search", "CRESTInterface")
+    batch_range = _func_range(worktree, "run_batch_optimization", "CRESTInterface")
+    assert conf_range is not None
+    assert batch_range is not None
+    sanctioned_max = max(conf_range[1], batch_range[1])
+
+    for ln, txt in chrg_lines:
+        assert _is_amendment_o_crest_addition(ln, txt, worktree), f"{ln}: {txt!r}"
+
+    # Out-of-span: a --chrg line past both sanctioned builders.
+    assert not _is_amendment_o_crest_addition(sanctioned_max + 5, '    "--chrg", str(x),', worktree)
+
+    # Textual injection: smuggle a --chrg line into an unrelated
+    # CRESTInterface method and confirm the predicate rejects it at its
+    # real (injected) line number.
+    anchor = "        return self.executable is not None"
+    assert anchor in worktree
+    smuggled = '        return ["--chrg"] if charge else []  # smuggled'
+    injected = worktree.replace(anchor, f"{anchor}\n{smuggled}", 1)
+    assert injected != worktree
+    lines = injected.splitlines()
+    smuggled_ln = next(i for i, line in enumerate(lines, 1) if "# smuggled" in line)
+    assert not _is_amendment_o_crest_addition(smuggled_ln, lines[smuggled_ln - 1], injected)
+
+    # Teeth: the real worktree passes…
+    assert not _amendment_o_crest_teeth(worktree)
+    # …reverting one builder site to "-charge" fires both teeth…
+    issues = _amendment_o_crest_teeth(worktree.replace('"--chrg"', '"-charge"', 1))
+    assert any("-charge" in issue for issue in issues)
+    assert any("chrg" in issue for issue in issues)
+    # …and dropping one site below the pair fires the count tooth.
+    issues = _amendment_o_crest_teeth(worktree.replace('"--chrg"', '"-x"', 1))
+    assert any("chrg" in issue for issue in issues)
 
 
 # ── ① AST function-scope audit ──────────────────────────────────────────────
@@ -1504,6 +1586,19 @@ def test_algorithm_body_untouched() -> None:
                 violations.append("  Amendment G: hess_file.py must not use subprocess")
             continue
 
+        # ── crest.py: Amendment O (CREST charge-flag fix) ────────────────
+        if fp == "src/cccp/qc/interfaces/crest.py":
+            worktree = _worktree_content(fp)
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if _is_amendment_o_crest_addition(ln, txt, worktree):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_o_crest_teeth(worktree))
+            continue
+
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
 
 
@@ -1540,9 +1635,7 @@ def test_deleted_lines_in_target_regions() -> None:
         if fp == "src/cccp/qc/interfaces/orca.py":
             baseline_src = _baseline_content(fp)
             bad_entries = [
-                (ln, t)
-                for ln, t in bad_entries
-                if not _is_amendment_e_deletion(ln, baseline_src)
+                (ln, t) for ln, t in bad_entries if not _is_amendment_e_deletion(ln, baseline_src)
             ]
             bad_entries = [
                 (ln, t)
@@ -1550,9 +1643,7 @@ def test_deleted_lines_in_target_regions() -> None:
                 if not _is_amendment_f_orca_deletion(ln, t, baseline_src)
             ]
             bad_entries = [
-                (ln, t)
-                for ln, t in bad_entries
-                if not _is_amendment_e_deletion(ln, baseline_src)
+                (ln, t) for ln, t in bad_entries if not _is_amendment_e_deletion(ln, baseline_src)
             ]
             bad_entries = [
                 (ln, t)
@@ -1560,19 +1651,13 @@ def test_deleted_lines_in_target_regions() -> None:
                 if not _is_amendment_g_orca_deletion(ln, baseline_src)
             ]
             bad_entries = [
-                (ln, t)
-                for ln, t in bad_entries
-                if not _is_amendment_h_deletion(ln, baseline_src)
+                (ln, t) for ln, t in bad_entries if not _is_amendment_h_deletion(ln, baseline_src)
             ]
             bad_entries = [
-                (ln, t)
-                for ln, t in bad_entries
-                if not _is_amendment_i_deletion(ln, baseline_src)
+                (ln, t) for ln, t in bad_entries if not _is_amendment_i_deletion(ln, baseline_src)
             ]
             bad_entries = [
-                (ln, t)
-                for ln, t in bad_entries
-                if not _is_amendment_l_deletion(ln, baseline_src)
+                (ln, t) for ln, t in bad_entries if not _is_amendment_l_deletion(ln, baseline_src)
             ]
             bad_entries = [
                 (ln, t) for ln, t in bad_entries if not _is_amendment_n_deletion(ln, baseline_src)
@@ -1592,9 +1677,7 @@ def test_deleted_lines_in_target_regions() -> None:
                 scan_range = _func_range(baseline_src, "relaxed_scan", "ORCABackend")
                 if scan_range is not None:
                     bad_entries = [
-                        (ln, t)
-                        for ln, t in bad_entries
-                        if not scan_range[0] <= ln <= scan_range[1]
+                        (ln, t) for ln, t in bad_entries if not scan_range[0] <= ln <= scan_range[1]
                     ]
         bad = [f"  {fp}:{ln}: {t!r}" for ln, t in bad_entries]
         assert not bad, "Deleted lines outside target regions:\n" + "\n".join(bad)
@@ -1716,9 +1799,7 @@ def test_scheduler_db_jobs_node_columns() -> None:
             "'completed', '/tmp/x', '{}', '2026-01-01', '2026-01-01')"
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT node_id, host FROM jobs WHERE id='legacy-1'"
-        ).fetchone()
+        row = conn.execute("SELECT node_id, host FROM jobs WHERE id='legacy-1'").fetchone()
         assert (row[0], row[1]) == (None, None), "migration 013 must not backfill"
         conn.close()
     finally:
@@ -1876,7 +1957,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/shift_predictor.py",
     # acp-nmr-goodman-gap todo 56: isolated DP5q stub adapter.
     "src/acp/nmr/dp5q_stub.py",
-    # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
+    # foreign recovery workstream: irc.py consumes calculations/identity
+    # (registered to keep the audit green).
     "src/acp/workflows/irc.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker
     # landed outside the registered stations; registered here so the audit
@@ -2052,9 +2134,7 @@ def test_migration_scope_catches_acp_import_in_cccp() -> None:
     file used here is absent from *BASELINE*, proving new paths never skip."""
     target = "src/cccp/calculation/errors.py"
     assert not _in_baseline(target), f"{target} unexpectedly present at {BASELINE}"
-    issues = _migration_audit_issues(
-        [target], {target: "from acp.calculations import contracts\n"}
-    )
+    issues = _migration_audit_issues([target], {target: "from acp.calculations import contracts\n"})
     assert issues and ("imports" in issues[0] or "from acp" in issues[0]), (
         f"acp import in a new-station file not detected: {issues}"
     )

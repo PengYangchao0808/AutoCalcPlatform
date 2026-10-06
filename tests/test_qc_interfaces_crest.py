@@ -25,6 +25,24 @@ conf-2
 H 0.0000000000 0.0000000000 0.5000000000
 """
 
+# Real CREST accepts `-chrg`/`--chrg` (and `-charges <file>`), never `-charge`.
+LEGAL_CREST_CHARGE_FLAGS = ("-chrg", "--chrg")
+
+
+def _assert_crest_charge_flag(args: list[str], charge: int) -> None:
+    """Charge must ride a CREST-legal flag and `-charge` must not appear."""
+    assert "-charge" not in args, f"illegal `-charge` token in CREST args: {args}"
+    seen = False
+    for index, token in enumerate(args):
+        if token not in LEGAL_CREST_CHARGE_FLAGS:
+            continue
+        assert index + 1 < len(args), f"charge flag {token} without a value: {args}"
+        assert args[index + 1] == str(charge), (
+            f"charge flag {token} not followed by {charge}: {args}"
+        )
+        seen = True
+    assert seen, f"no legal CREST charge flag in args: {args}"
+
 
 def test_crest_interface_instantiates_with_minimal_config(
     sample_config: dict[str, object],
@@ -222,3 +240,71 @@ def test_xtb_optimize_no_solvent_with_solvent_model_none(
     args = mock_run.call_args[0][0]
     assert "--alpb" not in args
     assert "--gbsa" not in args
+
+
+@pytest.mark.parametrize("charge", [-1, 0, 1])
+def test_crest_conformer_search_builds_legal_charge_flag(
+    sample_config: dict[str, object], tmp_path: Path, charge: int
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["crest", str(tmp_path / "crest_input.xyz")],
+        returncode=0,
+        stdout=CREST_ENSEMBLE,
+        stderr="",
+    )
+
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config)
+        interface.run_conformer_search(
+            COORDINATES,
+            SYMBOLS,
+            output_dir=tmp_path,
+            charge=charge,
+            multiplicity=2,
+        )
+
+    args = mock_run.call_args[0][0]
+    _assert_crest_charge_flag(args, charge)
+
+
+@pytest.mark.parametrize("charge", [-1, 0, 1])
+def test_crest_batch_optimization_builds_legal_charge_flag(
+    sample_config: dict[str, object], tmp_path: Path, charge: int
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["crest", "-mdopt", "crest_ensemble.xyz"],
+        returncode=0,
+        stdout="",
+        stderr="",
+    )
+
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config)
+        interface.run_batch_optimization(
+            COORDINATES,
+            SYMBOLS,
+            output_dir=tmp_path,
+            charge=charge,
+            multiplicity=2,
+        )
+
+    args = mock_run.call_args[0][0]
+    _assert_crest_charge_flag(args, charge)

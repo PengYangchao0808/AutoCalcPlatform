@@ -136,7 +136,7 @@ class CRESTInterface:
             "-T", str(self.threads),
             "-P", str(self.threads),
             "-gfn", str(gfn_level),
-            "-charge", str(charge),
+            "--chrg", str(charge),
             "-uhf", str(multiplicity - 1),
         ]
 
@@ -282,7 +282,7 @@ class CRESTInterface:
             "-gfn", str(gfn_level),
             "-T", str(self.threads),
             "-P", str(self.threads),
-            "-charge", str(charge),
+            "--chrg", str(charge),
             "-uhf", str(multiplicity - 1),
         ]
 
