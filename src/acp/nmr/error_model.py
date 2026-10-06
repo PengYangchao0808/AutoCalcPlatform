@@ -345,6 +345,23 @@ class Dp5ProbabilityRecord:
         }
 
 
+@dataclass(frozen=True)
+class Dp5FchlDiagnostics:
+    """FCHL DP5 outcome + per-conformer per-atom records from the same pass.
+
+    ``atom_records[c][i]`` is the
+    :class:`~acp.nmr.fchl.AtomFchlProbability` computed for atom/signal *i*
+    in the *c*-th conformer that entered the Boltzmann average. The records
+    come from the weighted-KDE pass itself — never recomputed (the kernel is
+    expensive) and never fabricated: an atom with no contributing training
+    neighbour is flagged by ``record.out_of_domain`` / its
+    :class:`~acp.nmr.fchl.FchlSupport`.
+    """
+
+    record: Dp5ProbabilityRecord
+    atom_records: tuple[tuple[AtomFchlProbability, ...], ...]
+
+
 class GoodmanDP5Model:
     """Goodman DP5 probability model (verified DP5.py:73-141, 356-383).
 
@@ -682,6 +699,45 @@ class GoodmanDP5Model:
             use_fragment_reps=use_fragment_reps,
         )
 
+    def probability_per_conformer_fchl_atom_diagnostics(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+        conformer_reps: list[list[np.ndarray]],
+        *,
+        use_fragment_reps: bool = False,
+    ) -> Dp5FchlDiagnostics:
+        """FCHL-weighted DP5 plus the per-atom records from the same KDE pass.
+
+        Same computation as
+        :meth:`probability_per_conformer_fchl_diagnostic` (which stays the
+        record-only view), additionally returning the per-conformer
+        :class:`~acp.nmr.fchl.AtomFchlProbability` records whose support /
+        out-of-domain flags back the atomic diagnostics (todo 39 / G16).
+        """
+        if not self.fchl_available:
+            raise RuntimeError(
+                "FCHL-weighted DP5 requires the FCHL assets (atomic_reps.gz/"
+                "frag_reps.gz). Use probability_per_conformer() for the "
+                "fallback path."
+            )
+        if len(conformer_reps) != len(conformer_calc_shifts):
+            raise ValueError("conformer_reps and conformer_calc_shifts lengths differ")
+        collector: list[list[AtomFchlProbability]] = []
+        record = self._probability_per_conformer_record(
+            conformer_calc_shifts,
+            exp_shifts,
+            boltzmann_weights,
+            conformer_reps=conformer_reps,
+            use_fragment_reps=use_fragment_reps,
+            atom_records=collector,
+        )
+        return Dp5FchlDiagnostics(
+            record=record,
+            atom_records=tuple(tuple(row) for row in collector),
+        )
+
     def _probability_per_conformer(
         self,
         conformer_calc_shifts: list[list[float]],
@@ -706,6 +762,7 @@ class GoodmanDP5Model:
         boltzmann_weights: list[float],
         conformer_reps: list[list[np.ndarray]] | None = None,
         use_fragment_reps: bool = False,
+        atom_records: list[list[AtomFchlProbability]] | None = None,
     ) -> Dp5ProbabilityRecord:
         """Shared per-conformer DP5 pipeline (DP5.py:73-141, 339-383).
 
@@ -714,6 +771,10 @@ class GoodmanDP5Model:
         otherwise the unweighted global KDE fallback. The returned record
         distinguishes the weighted/unweighted calibration status and flags
         out-of-domain atom slots (no contributing training neighbour).
+
+        *atom_records*, when passed, collects the per-conformer
+        :class:`~acp.nmr.fchl.AtomFchlProbability` records produced by the
+        weighted-KDE pass (one list per conformer that entered the average).
         """
         import numpy as np
         from scipy.stats import linregress
@@ -745,6 +806,7 @@ class GoodmanDP5Model:
         ):
             if len(conf_shifts) != n_atoms:
                 continue
+            conf_atom_records: list[AtomFchlProbability] = []
             if n_atoms >= 2:
                 slope, intercept, _, _, _ = linregress(exp_shifts, conf_shifts)
                 if slope == 0 or not np.isfinite(slope):
@@ -762,10 +824,14 @@ class GoodmanDP5Model:
                     out_of_domain_flags[i] = out_of_domain_flags[i] or atom_record.out_of_domain
                     effective_values.append(atom_record.support.effective_neighbors)
                     fraction_values.append(atom_record.support.support_fraction)
+                    if atom_records is not None:
+                        conf_atom_records.append(atom_record)
                     p = atom_record.probability
                 else:
                     p = self.atom_probability(err)
                 avg_atom_probs[i] += weight * p
+            if atom_records is not None and use_fchl:
+                atom_records.append(conf_atom_records)
 
         # Candidate-level: gmean combine (DP5.py:356-364) + rescale (DP5.py:381)
         raw = self.candidate_probability(avg_atom_probs)
@@ -877,6 +943,7 @@ __all__ = [
     "DP5_PATH_FCHL",
     "DP5_PATH_MIXED",
     "Dp5ProbabilityRecord",
+    "Dp5FchlDiagnostics",
     "ErrorModel",
     "NonFiniteResidualError",
     "PlaceholderStudentTErrorModel",

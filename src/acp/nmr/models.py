@@ -14,7 +14,10 @@ import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from acp.nmr.atomic_diagnostics import CandidateAtomicDiagnostics
 
 logger = logging.getLogger(__name__)
 
@@ -1413,6 +1416,10 @@ class Assignment:
     representative atom (G08): DP4 residuals and the DP5 per-conformer
     reconstruction read the same group instead of re-deriving a signal
     from the representative label.
+
+    ``observation_id`` is the stable experimental observation this row was
+    matched to (``"element:index"``, G16) — ``None`` for hand-built/legacy
+    rows that never went through the experiment-aware analysis.
     """
 
     atom_label: str
@@ -1422,6 +1429,7 @@ class Assignment:
     scaled_ppm: float
     residual: float
     signal_group: SignalGroup | None = None
+    observation_id: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -1435,6 +1443,7 @@ class Assignment:
             "scaled_ppm": self.scaled_ppm,
             "residual": round(self.residual, 4),
             "signal_group": self.signal_group.as_dict() if self.signal_group is not None else None,
+            "observation_id": self.observation_id,
         }
 
 
@@ -1801,6 +1810,11 @@ class CandidateResult:
     #: then derives the record from assignments/atom_shifts instead of
     #: pretending there were no signals.
     signal_groups: tuple[SignalGroup, ...] = ()
+    #: Atomic/signal risk diagnostics (todo 39 / G16), serialized under the
+    #: ``diagnostics`` namespace. Risk indicators only — the calibrated
+    #: probabilities stay in :attr:`probability`; ``None`` for hand-built /
+    #: legacy candidates that never ran the diagnostics builder.
+    atomic_diagnostics: CandidateAtomicDiagnostics | None = None
 
     def signal_groups_used(self) -> tuple[SignalGroup, ...]:
         """Return the signal definitions this candidate consumed (G08).
@@ -1908,6 +1922,11 @@ class CandidateResult:
             "dp5_kernel": self.dp5_kernel,
             "evidence": self.evidence.as_dict() if self.evidence is not None else None,
             "probability": self.probability.as_dict() if self.probability is not None else None,
+            # G16: the risk-diagnostics namespace sits next to (never inside)
+            # the calibrated probability block.
+            "diagnostics": (
+                self.atomic_diagnostics.as_dict() if self.atomic_diagnostics is not None else None
+            ),
             "analysis_status": self.analysis_status(),
             "coverage": self.coverage(),
             "ensemble_quality": (
@@ -2113,6 +2132,10 @@ class NmrReport:
             # (workflow-populated via metadata; None for reports that never
             # touched raw spectra). Additive key — existing keys unchanged.
             "processing_quality": self.metadata.get("processing_quality"),
+            # todo 39 (G16): cross-candidate risk diagnostics (conflict matrix
+            # + leave-one-signal-out flip summary). Additive top-level key —
+            # None for hand-built/legacy reports.
+            "diagnostics": self.metadata.get("atomic_diagnostics"),
             "note": (
                 "DP4/DP5 use placeholder error-model parameters (P1a); "
                 "values are relative only — do not use for publication."

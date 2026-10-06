@@ -62,6 +62,12 @@ from acp.nmr.assignment import (
     collect_residual_inputs,
     match_assigned,
 )
+from acp.nmr.atomic_diagnostics import (
+    AtomDp5Support,
+    AtomicDiagnosticsBundle,
+    aggregate_atom_support,
+    build_atomic_diagnostics,
+)
 from acp.nmr.averaging import boltzmann_average_shieldings, incomplete_conformer_ids
 from acp.nmr.enumerate import enumerate_candidates
 from acp.nmr.equivalence import (
@@ -70,6 +76,7 @@ from acp.nmr.equivalence import (
     merge_explicit_and_detected,
 )
 from acp.nmr.error_model import (
+    Dp5ProbabilityRecord,
     dp5_model_available,
     load_dp5_model,
     load_error_model,
@@ -77,6 +84,7 @@ from acp.nmr.error_model import (
 )
 from acp.nmr.io import parse_experimental_nmr
 from acp.nmr.models import (
+    Assignment,
     AtomShift,
     CandidateEvidence,
     CandidateProbability,
@@ -1627,6 +1635,24 @@ def _run_giao_for_conformers(
     return results
 
 
+def _observation_id_for_peak(
+    peak: ExperimentalPeak,
+    element_peaks: Sequence[ExperimentalPeak],
+) -> str:
+    """Stable observation id (``"element:index"``) for a matched peak (G16).
+
+    Mirrors the evidence gate's ids; a hand-built peak without an index
+    falls back to its position in the element's peak list so the id stays
+    stable and unique.
+    """
+    if peak.index is not None:
+        return f"{peak.element}:{peak.index}"
+    for position, candidate in enumerate(element_peaks):
+        if candidate is peak:
+            return f"{peak.element}:{position}"
+    return f"{peak.element}:{peak.shift_ppm}"
+
+
 def _analyze_candidate(
     index: int,
     structure: Structure,
@@ -1702,16 +1728,24 @@ def _analyze_candidate(
         reg, scaled, residuals = fit_scaling_goodman(arrays["calc"], arrays["exp"], nucleus)
         regressions[nucleus] = reg
         residual_by_nucleus[nucleus] = residuals
+        built = build_assignments(
+            arrays["labels"],
+            arrays["elements"],
+            arrays["exp"],
+            arrays["calc"],
+            scaled,
+            residuals,
+            signal_groups=arrays["signal_groups"],
+        )
+        # G16: keep the matched experimental observation on each row so the
+        # atomic diagnostics can link signal ↔ assignment ↔ experiment peak.
+        peaks_for_element = experiment.peaks_for(element_of_nucleus(nucleus))
         assignments.extend(
-            build_assignments(
-                arrays["labels"],
-                arrays["elements"],
-                arrays["exp"],
-                arrays["calc"],
-                scaled,
-                residuals,
-                signal_groups=arrays["signal_groups"],
+            replace(
+                assignment,
+                observation_id=_observation_id_for_peak(peak, peaks_for_element),
             )
+            for assignment, (_shift, peak) in zip(built, pairs.get(nucleus, ()), strict=True)
         )
 
     emitted_groups: list[SignalGroup] = []
@@ -2294,6 +2328,12 @@ class Dp5Outcome:
         status: One of :data:`DP5_OUTCOME_STATUSES`. ``"invalid"`` carries
             ``probability=None`` (validated) — stage 7 maps it to the typed
             ``ProbabilityStatus "invalid"``; ``mode`` is informational there.
+        record: The todo-38 :class:`Dp5ProbabilityRecord` when the model
+            produced one (path/calibration/support diagnostics), else
+            ``None`` for legacy float-only stand-ins.
+        atom_support: Per-signal FCHL support records (todo 39) collected
+            from the SAME weighted-KDE pass — empty when the unweighted
+            fallback ran (no neighbour support exists there).
     """
 
     probability: float | None
@@ -2301,6 +2341,8 @@ class Dp5Outcome:
     kernel: str = ""
     diagnostics: tuple[dict[str, object], ...] = ()
     status: Literal["valid", "invalid"] = "valid"
+    record: Dp5ProbabilityRecord | None = None
+    atom_support: tuple[AtomDp5Support, ...] = ()
 
     def __post_init__(self) -> None:
         if self.mode not in DP5_OUTCOME_MODES:
@@ -2510,6 +2552,7 @@ def _compute_candidate_dp5(
         )
 
     signals: list[tuple[float, tuple[tuple[int, float], ...]]] = []
+    used_assignments: list[Assignment] = []
     skipped_signal_groups: list[dict[str, object]] = []
     for assignment in c_assignments:
         group = assignment.signal_group
@@ -2532,6 +2575,7 @@ def _compute_candidate_dp5(
                     ),
                 )
             signals.append((assignment.exp_ppm, ((idx, 1.0),)))
+            used_assignments.append(assignment)
             continue
         if len(group.atom_uids) != len(group.coefficients):
             skipped_signal_groups.append(
@@ -2568,6 +2612,7 @@ def _compute_candidate_dp5(
             )
             continue
         signals.append((assignment.exp_ppm, members))
+        used_assignments.append(assignment)
 
     if not signals:
         # every carbon signal is unreconstructable — typed averaged-residual
@@ -2725,7 +2770,23 @@ def _compute_candidate_dp5(
         **fragment_diag,
     }
     if fchl_ok and len(conformer_reps) == len(conformer_shifts):
-        if fragment_mode:
+        record: Dp5ProbabilityRecord | None = None
+        atom_records: tuple[tuple[Any, ...], ...] = ()
+        atom_diagnostics_method = getattr(
+            dp5_model, "probability_per_conformer_fchl_atom_diagnostics", None
+        )
+        if callable(atom_diagnostics_method):
+            fchl_diagnostics = atom_diagnostics_method(
+                conformer_shifts,
+                exp_c,
+                weights,
+                conformer_reps,
+                use_fragment_reps=fragment_mode,
+            )
+            record = fchl_diagnostics.record
+            atom_records = fchl_diagnostics.atom_records
+            probability = record.probability
+        elif fragment_mode:
             probability = dp5_model.probability_per_conformer_fchl(
                 conformer_shifts,
                 exp_c,
@@ -2740,11 +2801,18 @@ def _compute_candidate_dp5(
                 weights,
                 conformer_reps,
             )
+        atom_support_records = (
+            aggregate_atom_support(used_assignments, exp_c, atom_records, weights)
+            if atom_records
+            else ()
+        )
         return Dp5Outcome(
             probability=probability,
             mode="fchl",
             kernel=kernel_backend(),
             diagnostics=({**base_diag, "fallback_reason": None},),
+            record=record,
+            atom_support=atom_support_records,
         )
 
     if not fchl_requested:
@@ -2756,8 +2824,15 @@ def _compute_candidate_dp5(
         fallback_reason = "fchl_multi_member_signal"
     else:
         fallback_reason = "fchl_representations_incomplete"
+    fallback_diagnostics_method = getattr(dp5_model, "probability_per_conformer_diagnostic", None)
+    fallback_record: Dp5ProbabilityRecord | None = None
+    if callable(fallback_diagnostics_method):
+        fallback_record = fallback_diagnostics_method(conformer_shifts, exp_c, weights)
+        probability = fallback_record.probability
+    else:
+        probability = dp5_model.probability_per_conformer(conformer_shifts, exp_c, weights)
     return Dp5Outcome(
-        probability=dp5_model.probability_per_conformer(conformer_shifts, exp_c, weights),
+        probability=probability,
         mode="fallback",
         diagnostics=(
             {
@@ -2765,6 +2840,7 @@ def _compute_candidate_dp5(
                 "fallback_reason": fallback_reason,
             },
         ),
+        record=fallback_record,
     )
 
 
@@ -2779,6 +2855,7 @@ class _ProbabilityStage:
 
     sensitivity: dict[str, Any]
     dp5_model_present: bool
+    diagnostics: AtomicDiagnosticsBundle | None = None
 
 
 @dataclass(frozen=True)
@@ -2846,6 +2923,8 @@ def _score_candidate_probabilities(
         else actual_error_model
     )
 
+    dp5_records: dict[int, Dp5ProbabilityRecord] = {}
+    atom_support_by_candidate: dict[int, tuple[AtomDp5Support, ...]] = {}
     for cr, p4 in zip(candidate_results, dp4_probs):
         evidence_status = cr.evidence.status if cr.evidence is not None else "valid"
         exclusion_reasons = tuple(cr.evidence.exclusion_reasons) if cr.evidence is not None else ()
@@ -2894,6 +2973,10 @@ def _score_candidate_probabilities(
                 dp5_reasons = ("no_carbon_evidence",)
             else:
                 outcome = _compute_candidate_dp5(cr, candidates[cr.index], nmr_config, dp5_model)
+                if outcome.record is not None:
+                    dp5_records[cr.index] = outcome.record
+                if outcome.atom_support:
+                    atom_support_by_candidate[cr.index] = outcome.atom_support
                 if outcome.status == "invalid":
                     # zero complete conformers — typed invalid, never a
                     # silently averaged value; mode/kernel stay unset and a
@@ -2958,6 +3041,18 @@ def _score_candidate_probabilities(
                 reasons=dp5_reasons,
             ),
         )
+    # todo 39 (G16): atomic/signal risk diagnostics built from the same
+    # residuals/records — attached per candidate and returned for the report.
+    diagnostics = build_atomic_diagnostics(
+        candidate_results,
+        nmr_config,
+        em,
+        experiment=experiment,
+        dp5_records=dp5_records,
+        atom_support=atom_support_by_candidate,
+    )
+    for cr, candidate_diagnostics in zip(candidate_results, diagnostics.candidates, strict=True):
+        cr.atomic_diagnostics = candidate_diagnostics
     # todo 30 / G09: winner stability under leave-one-conformer-out and
     # ±10 % temperature — a wobbling conclusion is marked, not hidden.
     sensitivity = _sensitivity_analysis(
@@ -2976,6 +3071,7 @@ def _score_candidate_probabilities(
     return _ProbabilityStage(
         sensitivity=sensitivity,
         dp5_model_present=dp5_model is not None,
+        diagnostics=diagnostics,
     )
 
 
@@ -2987,6 +3083,7 @@ def _build_nmr_report(
     generated_ensembles: list[bool],
     dp5_model_present: bool,
     sensitivity: dict[str, Any],
+    diagnostics: AtomicDiagnosticsBundle | None = None,
 ) -> _ReportStage:
     """Stage 8: aggregate DP5 modes + protocol verdict into the report object.
 
@@ -3040,18 +3137,21 @@ def _build_nmr_report(
     )
     report_config = replace(nmr_config, protocol_fingerprint=str(protocol_block["fingerprint"]))
 
+    metadata: dict[str, Any] = {
+        "n_candidates": len(candidate_results),
+        "fchl_kernel": fchl_kernel,
+        "protocol_id": str(protocol_block["fingerprint"]),
+        "protocol": protocol_block,
+        "sensitivity": sensitivity,
+    }
+    if diagnostics is not None:
+        metadata["atomic_diagnostics"] = diagnostics.report_block()
     report = NmrReport(
         candidates=candidate_results,
         config=report_config,
         error_model=actual_error_model,
         dp5_mode=dp5_mode,
-        metadata={
-            "n_candidates": len(candidate_results),
-            "fchl_kernel": fchl_kernel,
-            "protocol_id": str(protocol_block["fingerprint"]),
-            "protocol": protocol_block,
-            "sensitivity": sensitivity,
-        },
+        metadata=metadata,
     )
     return _ReportStage(
         report=report,
@@ -3457,6 +3557,7 @@ def run_nmr_analysis(
         generated_ensembles,
         probability_stage.dp5_model_present,
         sensitivity,
+        probability_stage.diagnostics,
     )
     report = report_stage.report
     fchl_kernel = report_stage.fchl_kernel
@@ -3697,6 +3798,7 @@ def revise_nmr_analysis(
         list(snapshot.generated_ensembles),
         probability_stage.dp5_model_present,
         probability_stage.sensitivity,
+        probability_stage.diagnostics,
     )
     paths = write_all_reports(report_stage.report, revision_dir)
     result_identity = analysis_result_identity(report_stage.report)
