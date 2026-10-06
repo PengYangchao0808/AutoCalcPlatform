@@ -51,7 +51,7 @@ from acp.workflows.energy_shared import (
     resolve_levels as _resolve_levels,
 )
 from acp.workflows.energy_shared import (
-    resolve_solvent_config as _resolve_solvent_config,
+    resolve_stage_solvent_models,
 )
 from acp.workflows.energy_shared import (
     run_rank1_handoff as _run_rank1_handoff,
@@ -90,10 +90,10 @@ _ENERGY_PRESETS = ("censo-light", "censo-default", "censo-zero")
 # ``select_cumulative_boltzmann``), the final-output writers
 # (``write_final_outputs`` / ``build_ensemble_summary``),
 # ``censo_record_to_candidate`` and the ensemble helpers
-# (``xtb_passthrough_result`` / ``resolve_solvent_config`` /
-# ``resolve_crest_ewin``) live in :mod:`acp.workflows.energy_shared` (E4);
-# they are re-imported here under their historical private names so the
-# module body and existing importers keep working unchanged.
+# (``xtb_passthrough_result`` / ``resolve_crest_ewin``) live in
+# :mod:`acp.workflows.energy_shared` (E4); they are re-imported here under
+# their historical private names so the module body and existing importers
+# keep working unchanged.
 
 
 def _write_screening_ranking(result: CensoRunResult, mol_dir: Path) -> str:
@@ -249,12 +249,6 @@ def run_conformer_energy(
 
     # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
     effective_solvent_arg = solvent if solvent is not None else resolved["levels_solvent"]
-    censo_solvent, solvent_model = _resolve_solvent_config(cfg, effective_solvent_arg)
-    if censo_solvent and resolved["levels_solvent_model"]:
-        solvent_model = resolved["levels_solvent_model"]
-    _solvent_model = solvent_model if solvent_model else "none"
-    if censo_solvent and _solvent_model == "none":
-        _solvent_model = "smd"
 
     safe_nproc: int | None = None
     if nproc is not None and nproc > 0:
@@ -265,6 +259,19 @@ def run_conformer_energy(
     screening_ranking_csv: str | None = None
 
     try:
+        # T08b: stage-split solvent models — CENSO/DFT keeps its effective
+        # model (historical ``none → smd`` fallback, legal there); CREST/xTB
+        # only ever receives legal sampling models (dedicated key → default
+        # ALPB). Inside the guard so an unknown dedicated-key model fails
+        # like a backend rejection.
+        stage_solvent = resolve_stage_solvent_models(
+            cfg,
+            effective_solvent_arg,
+            dft_model_override=resolved["levels_solvent_model"],
+        )
+        censo_solvent = stage_solvent.solvent
+        _solvent_model = stage_solvent.dft_model
+        sampling = stage_solvent.sampling
         # ---- Stage: CREST search (or external ensemble) -------------------
         is_file = input_format not in (InputFormat.SMILES,) and _is_file_input(input_source)
         state.set_stage("crest")
@@ -305,8 +312,8 @@ def run_conformer_energy(
                 energy_window=crest_ewin,
                 output_name=safe_name,
                 gfn_level=crest_cfg.get("gfn_level", 2),
-                solvent=censo_solvent,
-                solvent_model=_solvent_model,
+                solvent=sampling.solvent,
+                solvent_model=sampling.solvent_model,
             )
             state.complete_stage("crest", {"status": "completed"})
 

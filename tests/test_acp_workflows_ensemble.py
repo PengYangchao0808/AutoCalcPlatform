@@ -356,3 +356,170 @@ def test_run_ensemble_generation_invalid_input(tmp_path: Path) -> None:
         output_dir=str(tmp_path / "out"),
     )
     assert result.status == "failed"
+
+
+# ---------------------------------------------------------------------------
+# T08b — stage-split solvent models on the shared Confsearch engines
+# ---------------------------------------------------------------------------
+
+
+def _single_frame_xyz(path: Path) -> Path:
+    path.write_text("3\nSingle\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n", encoding="utf-8")
+    return path
+
+
+def _crest_args(solvent: str | None, solvent_model: str) -> list[str]:
+    """Legality proof at the CREST interface level (not just no-raise)."""
+    from cccp.backends.crest import CrestBackend
+
+    backend = CrestBackend(
+        config={"executables": {"crest": {"path": "crest"}}},
+        gfn_level=2,
+        solvent=solvent,
+        solvent_model=solvent_model,
+    )
+    return backend._interface._solvent_args()
+
+
+@pytest.mark.parametrize("dft_model", ["smd", "cpcm"])
+def test_ensemble_crest_never_receives_dft_model(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_censo_result: CensoRunResult,
+    dft_model: str,
+) -> None:
+    """CREST/xTB gets a legal sampling model; CENSO keeps the configured
+    DFT model (the historical ``none → smd`` fallback never leaks across)."""
+    from acp.workflows.ensemble import run_ensemble_generation
+
+    input_xyz = _single_frame_xyz(tmp_path / "input.xyz")
+    config = {**sample_config, "theory": {"preoptimization": {"solvent_model": dft_model}}}
+    crest_calls: list[dict[str, Any]] = []
+
+    def fake_crest(cfg: Any, xyz: Path, out_dir: Path, **kwargs: Any) -> Path:
+        crest_calls.append(dict(kwargs))
+        return xyz
+
+    with (
+        patch("acp.workflows.ensemble._crest_search_via_task", side_effect=fake_crest),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_censo_result),
+        ) as mock_censo,
+    ):
+        result = run_ensemble_generation(
+            input_source=str(input_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=config,
+            solvent="water",
+        )
+
+    assert result.status == "completed", result.error
+    assert crest_calls, "CREST must run for a single-frame input"
+    assert crest_calls[0]["solvent"] == "water"
+    assert crest_calls[0]["solvent_model"] == "alpb"
+    assert _crest_args(crest_calls[0]["solvent"], crest_calls[0]["solvent_model"]) == [
+        "--alpb",
+        "water",
+    ]
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["solvent"] == "water"
+    assert extras["solvent_model"] == dft_model
+
+
+def test_ensemble_censo_zero_sampling_model_parametrized(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+) -> None:
+    """xtb-crest Confsearch path (censo-zero): the dedicated key is the
+    explicit sampling config — ``none`` stays gas, ``gbsa`` is used as given."""
+    from acp.workflows.ensemble import run_ensemble_generation
+
+    cases: list[tuple[str | None, str]] = [(None, "alpb"), ("none", "none"), ("gbsa", "gbsa")]
+    for dedicated, expected in cases:
+        input_xyz = _single_frame_xyz(tmp_path / f"input_{expected}.xyz")
+        nmr_section = {} if dedicated is None else {"sampling_solvent_model": dedicated}
+        config = {**sample_config, "nmr": nmr_section}
+        crest_calls: list[dict[str, Any]] = []
+
+        def fake_crest(cfg: Any, xyz: Path, out_dir: Path, **kwargs: Any) -> Path:
+            crest_calls.append(dict(kwargs))
+            return xyz
+
+        with patch("acp.workflows.ensemble._crest_search_via_task", side_effect=fake_crest):
+            result = run_ensemble_generation(
+                input_source=str(input_xyz),
+                output_dir=str(tmp_path / f"out_{expected}"),
+                preset="censo-zero",
+                config=config,
+                solvent="water",
+            )
+
+        assert result.status == "completed", result.error
+        assert crest_calls[0]["solvent"] == "water"
+        assert crest_calls[0]["solvent_model"] == expected
+        assert _crest_args("water", expected) == (
+            [] if expected == "none" else [f"--{expected}", "water"]
+        )
+
+
+def test_ensemble_gas_phase_without_solvent_unchanged(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_censo_result: CensoRunResult,
+) -> None:
+    """No solvent anywhere → both stages stay gas phase (no default)."""
+    from acp.workflows.ensemble import run_ensemble_generation
+
+    input_xyz = _single_frame_xyz(tmp_path / "input.xyz")
+    crest_calls: list[dict[str, Any]] = []
+
+    def fake_crest(cfg: Any, xyz: Path, out_dir: Path, **kwargs: Any) -> Path:
+        crest_calls.append(dict(kwargs))
+        return xyz
+
+    with (
+        patch("acp.workflows.ensemble._crest_search_via_task", side_effect=fake_crest),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_censo_result),
+        ) as mock_censo,
+    ):
+        result = run_ensemble_generation(
+            input_source=str(input_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=sample_config,
+        )
+
+    assert result.status == "completed", result.error
+    assert crest_calls[0]["solvent"] is None
+    assert crest_calls[0]["solvent_model"] == "none"
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert "solvent" not in extras
+    assert extras["solvent_model"] == "none"
+
+
+def test_ensemble_unknown_sampling_model_fails_strictly(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+) -> None:
+    """A malformed dedicated-key value fails the run before any QC — never
+    silently coerced to a legal model."""
+    from acp.workflows.ensemble import run_ensemble_generation
+
+    input_xyz = _single_frame_xyz(tmp_path / "input.xyz")
+    config = {**sample_config, "nmr": {"sampling_solvent_model": "mdm"}}
+    with patch("acp.workflows.ensemble._crest_search_via_task") as mock_crest:
+        result = run_ensemble_generation(
+            input_source=str(input_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=config,
+            solvent="water",
+        )
+
+    assert result.status == "failed"
+    assert "sampling_solvent_model" in (result.error or "")
+    mock_crest.assert_not_called()

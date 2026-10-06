@@ -368,9 +368,7 @@ def test_xtb_md_carries_xtb_provenance(tmp_path: Path, monkeypatch: pytest.Monke
         "acp.workflows.xtbmd_censo_energy._batch_opt_frames",
         lambda *a, **k: SimpleNamespace(n_ok=2),
     )
-    monkeypatch.setattr(
-        "acp.workflows.xtbmd_censo_energy._isostat_cluster_via_task", fake_isostat
-    )
+    monkeypatch.setattr("acp.workflows.xtbmd_censo_energy._isostat_cluster_via_task", fake_isostat)
     monkeypatch.setattr("acp.workflows.xtbmd_censo_energy._filter_energy_window", fake_filter)
 
     outcome = run_xtb_md(
@@ -538,3 +536,47 @@ def test_outcome_metadata_carries_delegated_temperature(
     )
     assert outcome.temperature_k == 333.0
     assert np.isfinite(outcome.temperature_k)
+
+
+# ── solvent forwarding (T08b): every Confsearch reachable path ──────────────
+
+
+@pytest.mark.parametrize(
+    ("policy", "target"),
+    [
+        ("screen", "acp.workflows.ensemble.run_ensemble_generation"),
+        ("rank1", "acp.workflows.energy.run_conformer_energy"),
+        ("cumulative-99", "acp.workflows.energy.run_conformer_energy"),
+    ],
+)
+def test_censo_crest_forwards_solvent_to_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, policy: str, target: str
+) -> None:
+    """screen → ensemble, rank1/cumulative → energy: ``--solvent`` must
+    reach the delegated engine (the Confsearch crash entry points)."""
+    captured: dict[str, Any] = {}
+
+    def fake_engine(**kwargs: Any) -> WorkflowResult:
+        captured.update(kwargs)
+        return _workflow_result({"boltzmann_table_json": _write_table(tmp_path)})
+
+    monkeypatch.setattr(target, fake_engine)
+    run_censo_crest(
+        _request(tmp_path, protocol="censo-crest", policy=policy, solvent="water"),
+        {},
+    )
+    assert captured["solvent"] == "water"
+
+
+def test_xtb_crest_forwards_solvent_to_engine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_ensemble(**kwargs: Any) -> WorkflowResult:
+        captured.update(kwargs)
+        return _workflow_result({})
+
+    monkeypatch.setattr("acp.workflows.ensemble.run_ensemble_generation", fake_ensemble)
+    run_xtb_crest(_request(tmp_path, protocol="xtb-crest", policy="screen", solvent="water"), {})
+    assert captured["solvent"] == "water"

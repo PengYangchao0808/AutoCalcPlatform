@@ -180,9 +180,7 @@ def _run(
     **kwargs: object,
 ) -> BatchOptResult:
     with (
-        patch(
-            "acp.workflows.xtbmd_censo_energy.XTBBackend", side_effect=harness._xtb_factory
-        ),
+        patch("acp.workflows.xtbmd_censo_energy.XTBBackend", side_effect=harness._xtb_factory),
         patch(
             "acp.workflows.xtbmd_censo_energy.IsostatBackend",
             side_effect=harness._isostat_factory,
@@ -1057,14 +1055,46 @@ def test_workflow_parameter_passthrough(tmp_path: Path, _wf_sample_config: dict[
 
 
 def test_workflow_solvent_consistency(tmp_path: Path, _wf_sample_config: dict[str, Any]) -> None:
+    """T08b stage split: xTB stages (MD/batch opt) get ONLY legal models.
+
+    The historical ``none → smd`` fallback is DFT-only — SMD is illegal for
+    xTB and would raise ``SolventValueError`` at arg-build time, so the
+    sampling segment defaults to ALPB while CENSO keeps SMD.
+    """
     harness = _WorkflowHarness()
     _run_workflow(harness, tmp_path, _wf_sample_config, solvent="water")
 
     assert harness.md_kwargs["solvent"] == "water"
-    assert harness.md_kwargs["solvent_model"] == "smd"
+    assert harness.md_kwargs["solvent_model"] == "alpb"
     assert harness.batch_kwargs["solvent"] == "water"
-    assert harness.batch_kwargs["solvent_model"] == "smd"
+    assert harness.batch_kwargs["solvent_model"] == "alpb"
     assert harness.censo_kwargs["solvent"] == "water"
+    assert harness.censo_kwargs["solvent_model"] == "smd"
+
+
+def test_workflow_sampling_solvent_model_explicit_gbsa(
+    tmp_path: Path, _wf_sample_config: dict[str, Any]
+) -> None:
+    """An explicit dedicated key wins for the xTB stages (never defaulted)."""
+    config = {**_wf_sample_config, "nmr": {"sampling_solvent_model": "gbsa"}}
+    harness = _WorkflowHarness()
+    _run_workflow(harness, tmp_path, config, solvent="water")
+
+    assert harness.md_kwargs["solvent_model"] == "gbsa"
+    assert harness.batch_kwargs["solvent_model"] == "gbsa"
+    assert harness.censo_kwargs["solvent_model"] == "smd"
+
+
+def test_workflow_sampling_solvent_model_explicit_none_is_gas(
+    tmp_path: Path, _wf_sample_config: dict[str, Any]
+) -> None:
+    """Explicit ``none`` keeps the xTB stages gas phase even with a solvent."""
+    config = {**_wf_sample_config, "nmr": {"sampling_solvent_model": "none"}}
+    harness = _WorkflowHarness()
+    _run_workflow(harness, tmp_path, config, solvent="water")
+
+    assert harness.md_kwargs["solvent_model"] == "none"
+    assert harness.batch_kwargs["solvent_model"] == "none"
     assert harness.censo_kwargs["solvent_model"] == "smd"
 
 

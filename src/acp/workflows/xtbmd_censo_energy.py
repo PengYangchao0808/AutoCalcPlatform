@@ -55,7 +55,7 @@ from acp.workflows.energy_shared import (
     conformer_tag,
     resolve_crest_ewin,
     resolve_levels,
-    resolve_solvent_config,
+    resolve_stage_solvent_models,
     run_rank1_handoff,
     select_cumulative_boltzmann,
     v2_stage_dir,
@@ -1444,15 +1444,7 @@ def run_xtbmd_censo_energy(
     )
 
     # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
-    # The resolved solvent is applied consistently to MD, batch opt, ISOSTAT
-    # and CENSO (doc §4 E6).
     effective_solvent_arg = solvent if solvent is not None else resolved["levels_solvent"]
-    censo_solvent, solvent_model = resolve_solvent_config(cfg, effective_solvent_arg)
-    if censo_solvent and resolved["levels_solvent_model"]:
-        solvent_model = resolved["levels_solvent_model"]
-    _solvent_model = solvent_model if solvent_model else "none"
-    if censo_solvent and _solvent_model == "none":
-        _solvent_model = "smd"
 
     safe_nproc: int | None = None
     if nproc is not None and nproc > 0:
@@ -1472,6 +1464,20 @@ def run_xtbmd_censo_energy(
     stages_completed: list[str] = ["embed"]
 
     try:
+        # T08b: stage-split solvent models — the solvent NAME stays one run-
+        # wide value, but xTB stages (MD, batch opt) only ever receive legal
+        # sampling models (dedicated key → default ALPB) while CENSO/ORCA
+        # keep the DFT model (historical ``none → smd`` fallback, legal
+        # there). Inside the guard so an unknown dedicated-key model fails
+        # like a backend rejection.
+        stage_solvent = resolve_stage_solvent_models(
+            cfg,
+            effective_solvent_arg,
+            dft_model_override=resolved["levels_solvent_model"],
+        )
+        censo_solvent = stage_solvent.solvent
+        _solvent_model = stage_solvent.dft_model
+        sampling = stage_solvent.sampling
         # ------------------------------------------------------------------ MD --
         xtbmd_dir = v2_stage_dir(mol_dir, "02_SEARCH", "xTB")
         embed_xyz = v2_stage_dir(mol_dir, "01_PREPARE") / "embed.xyz"
@@ -1497,8 +1503,8 @@ def run_xtbmd_censo_energy(
             # change must invalidate the cached trajectory too (embed.xyz is
             # rewritten before the fingerprint check).
             "embed_xyz_sha256": _file_sha256(embed_xyz),
-            "solvent": censo_solvent,
-            "solvent_model": _solvent_model,
+            "solvent": sampling.solvent,
+            "solvent_model": sampling.solvent_model,
             "charge": structure.charge,
             "multiplicity": structure.multiplicity,
             "input_source": input_source,
@@ -1527,8 +1533,8 @@ def run_xtbmd_censo_energy(
                 hmass=md_hmass,
                 shake=md_shake,
                 nvt=md_nvt,
-                solvent=censo_solvent,
-                solvent_model=_solvent_model,
+                solvent=sampling.solvent,
+                solvent_model=sampling.solvent_model,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
                 output_dir=xtbmd_dir,
@@ -1570,8 +1576,8 @@ def run_xtbmd_censo_energy(
             "opt_level": opt_level,
             "charge": structure.charge,
             "multiplicity": structure.multiplicity,
-            "solvent": censo_solvent,
-            "solvent_model": _solvent_model,
+            "solvent": sampling.solvent,
+            "solvent_model": sampling.solvent_model,
             "max_frames": max_frames,
             "opt_timeout": opt_timeout,
             "conv_check": conv_check,
@@ -1598,8 +1604,8 @@ def run_xtbmd_censo_energy(
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
                 nproc=batch_nproc,
-                solvent=censo_solvent,
-                solvent_model=_solvent_model,
+                solvent=sampling.solvent,
+                solvent_model=sampling.solvent_model,
                 max_frames=max_frames,
                 opt_timeout=opt_timeout,
                 keep_frames=keep_frames,

@@ -87,6 +87,11 @@ class SamplingSegment:
     #: Parts CENSO actually ran; ``()`` = ran none (censo-zero passthrough),
     #: ``None`` = unknown (prebuilt/foreign ensemble).
     parts: tuple[str, ...] | None = None
+    #: Effective CREST/xTB solvent model of this run's sampling segment
+    #: (``alpb``/``gbsa``/``none``). ``None`` = historically unrecorded or
+    #: the segment did not run here — never defaulted to ``"none"``, which
+    #: would fabricate gas phase for old records.
+    solvent_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,10 @@ class GeometrySegment:
     optimization_executed: bool | None
     #: Level that ACTUALLY executed (``None`` whenever not executed).
     optimization_level: str | None = None
+    #: Effective DFT solvent model of the executed optimization stage;
+    #: ``None`` = not executed here / historically unrecorded (same
+    #: sentinel rule as :attr:`SamplingSegment.solvent_model`).
+    solvent_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +114,11 @@ class PopulationEnergySegment:
 
     energy_window_kcal: float
     boltzmann_temp: float
+    #: Effective solvent model of the stage that produced the population
+    #: energies (CENSO DFT model, or the sampling model for the censo-zero
+    #: xTB passthrough); ``None`` = generation did not run here /
+    #: historically unrecorded — never fabricated as ``"none"``.
+    solvent_model: str | None = None
 
 
 @dataclass(frozen=True)

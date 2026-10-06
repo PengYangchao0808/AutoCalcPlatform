@@ -59,6 +59,9 @@ def _segments(
     tms_shieldings: dict[str, float] | None = None,
     missing_nuclei: tuple[str, ...] = (),
     reference_data_present: bool = False,
+    sampling_solvent_model: str | None = None,
+    geometry_solvent_model: str | None = None,
+    population_solvent_model: str | None = None,
 ) -> tuple[Any, ...]:
     return (
         SamplingSegment(
@@ -66,12 +69,18 @@ def _segments(
             crest_executed=generated,
             censo_executed=generated and preset != "censo-zero",
             parts=parts,
+            solvent_model=sampling_solvent_model,
         ),
         GeometrySegment(
             optimization_executed=optimization_executed,
             optimization_level=optimization_level,
+            solvent_model=geometry_solvent_model,
         ),
-        PopulationEnergySegment(energy_window_kcal=3.0, boltzmann_temp=298.15),
+        PopulationEnergySegment(
+            energy_window_kcal=3.0,
+            boltzmann_temp=298.15,
+            solvent_model=population_solvent_model,
+        ),
         ShieldingSegment(nmr_method=nmr_method, nmr_basis=nmr_basis, solvent_model="cpcm"),
         ReferenceSegment(
             tms_source=tms_source,
@@ -229,6 +238,56 @@ def test_fingerprint_changes_with_any_segment_value() -> None:
         {"preset": "censo-light"},
     ):
         assert _spec(**kwargs).fingerprint() != base, kwargs
+
+
+# ---------------------------------------------------------------------------
+# Stage solvent models (T08b) — tri-state fingerprint + old-spec round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_sampling_solvent_model_tri_state_fingerprints_mutually_distinct() -> None:
+    """``None`` (historically unrecorded) ≠ ``"none"`` (explicit gas) ≠ a
+    concrete model — a missing field must never read as gas phase."""
+    fingerprints = {
+        value: _spec(sampling_solvent_model=value).fingerprint()
+        for value in (None, "none", "alpb", "gbsa")
+    }
+    assert len(set(fingerprints.values())) == 4, fingerprints
+
+
+def test_geometry_and_population_solvent_model_changes_alter_fingerprint() -> None:
+    base = _spec(geometry_solvent_model="smd", population_solvent_model="smd").fingerprint()
+    changed = (
+        _spec(geometry_solvent_model="cpcm", population_solvent_model="smd"),
+        _spec(geometry_solvent_model="smd", population_solvent_model="cpcm"),
+        _spec(geometry_solvent_model=None, population_solvent_model="smd"),
+        _spec(geometry_solvent_model="smd", population_solvent_model=None),
+    )
+    for spec in changed:
+        assert spec.fingerprint() != base
+
+
+def test_old_spec_without_solvent_model_fields_round_trips_as_none() -> None:
+    """Persisted pre-T08b specs (fields absent) rebuild with ``None`` —
+    never coerced to ``"none"`` — with a stable fingerprint."""
+    spec = _spec(
+        sampling_solvent_model="alpb",
+        geometry_solvent_model="smd",
+        population_solvent_model="smd",
+    )
+    old = spec.to_dict()
+    for segment in ("sampling", "geometry", "population_energy"):
+        old[segment].pop("solvent_model", None)
+
+    rebuilt = NmrProtocolSpec.from_dict(old)
+    assert rebuilt.sampling.solvent_model is None
+    assert rebuilt.geometry.solvent_model is None
+    assert rebuilt.population_energy.solvent_model is None
+    again = NmrProtocolSpec.from_dict(rebuilt.to_dict())
+    assert again == rebuilt
+    assert again.fingerprint() == rebuilt.fingerprint()
+    assert rebuilt.fingerprint() != spec.fingerprint()
+    assert rebuilt.fingerprint() != _spec(sampling_solvent_model="none").fingerprint()
 
 
 def test_per_candidate_fingerprints_differ_with_geometry() -> None:
@@ -402,6 +461,11 @@ def test_workflow_surfaces_protocol_block(tmp_path: Path) -> None:
     assert "geometry_not_optimized" in block["issues"]
     assert len(block["candidates"]) == 1
     recorded = dict(block["candidates"][0])
+    # prebuilt ensemble: no science stage ran here — stage solvent models
+    # stay the "historically unrecorded" None, never fabricated as "none"
+    assert recorded["sampling"]["solvent_model"] is None
+    assert recorded["geometry"]["solvent_model"] is None
+    assert recorded["population_energy"]["solvent_model"] is None
     fp = recorded.pop("fingerprint")
     assert NmrProtocolSpec.from_dict(recorded).fingerprint() == fp
 
@@ -458,3 +522,78 @@ def test_workflow_censo_default_generation_records_optimized_geometry(tmp_path: 
     assert candidate["statistical_model"]["error_model"] == "goodman-legacy"
     assert candidate["population_energy"]["energy_window_kcal"] == 3.0
     assert candidate["shielding"]["solvent_model"] == "cpcm"
+    # generation ran here → the actual effective stage models are recorded
+    assert candidate["sampling"]["solvent_model"] == "none"
+    assert candidate["geometry"]["solvent_model"] == "none"
+    assert candidate["population_energy"]["solvent_model"] == "none"
+
+
+def test_workflow_new_run_records_actual_stage_solvent_models(tmp_path: Path) -> None:
+    """A new run with a solvent records the REAL effective model per stage:
+    sampling defaults to ALPB (dedicated key absent), the CENSO/DFT stages
+    keep the historical SMD fallback — never None."""
+    from acp.workflows.nmr import run_nmr_analysis
+
+    structure = _structure(["C", "H", "H", "H", "H"])
+    ensemble = StructureEnsemble(
+        records=[
+            StructureRecord(
+                structure=structure, energy_hartree=-1.0, free_energy_hartree=-1.0, weight=1.0
+            )
+        ]
+    )
+    with (
+        patch("acp.workflows.nmr.StructureReader") as reader_cls,
+        patch("acp.workflows.nmr._run_conformer_generation", return_value=ensemble),
+        patch("acp.workflows.nmr.run_nmr_shielding", return_value=_shielding_result(_SH)),
+    ):
+        reader = MagicMock()
+        reader.read.return_value = structure
+        reader_cls.return_value = reader
+        result = run_nmr_analysis(
+            input_sources=["CCO"],
+            spectrum=_SPECTRUM,
+            output_dir=str(tmp_path),
+            conformer_preset="censo-default",
+            solvent="chloroform",
+        )
+
+    assert result.status == "completed", result.error
+    report = json.loads(Path(result.metadata["report_json"]).read_text(encoding="utf-8"))
+    candidate = report["provenance"]["protocol"]["candidates"][0]
+    assert candidate["sampling"]["solvent_model"] == "alpb"
+    assert candidate["geometry"]["solvent_model"] == "smd"
+    assert candidate["population_energy"]["solvent_model"] == "smd"
+    # the recorded models bind into the fingerprint: dropping them to the
+    # historical unrecorded state must change the candidate fingerprint
+    recorded = dict(candidate)
+    fp = recorded.pop("fingerprint")
+    for segment in ("sampling", "geometry", "population_energy"):
+        recorded[segment] = dict(recorded[segment])
+        recorded[segment]["solvent_model"] = None
+    assert NmrProtocolSpec.from_dict(recorded).fingerprint() != fp
+
+
+def test_workflow_unknown_sampling_solvent_model_fails_strictly(tmp_path: Path) -> None:
+    """Malformed dedicated-key value → SolventValueError surfaces as a
+    failed run (no silent coercion to a legal model)."""
+    from acp.workflows.nmr import run_nmr_analysis
+
+    structure = _structure(["C", "H", "H", "H", "H"])
+    with (
+        patch("acp.workflows.nmr.StructureReader") as reader_cls,
+        patch("acp.workflows.nmr._run_conformer_generation") as mock_generation,
+    ):
+        reader = MagicMock()
+        reader.read.return_value = structure
+        reader_cls.return_value = reader
+        result = run_nmr_analysis(
+            input_sources=["CCO"],
+            spectrum=_SPECTRUM,
+            output_dir=str(tmp_path),
+            config={"nmr": {"sampling_solvent_model": "mdm"}},
+        )
+
+    assert result.status == "failed"
+    assert "sampling_solvent_model" in (result.error or "")
+    mock_generation.assert_not_called()

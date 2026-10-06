@@ -1500,3 +1500,139 @@ def test_shermo_via_task_maps_metadata_and_returns_none_on_failure(tmp_path: Pat
             )
             is None
         )
+
+
+# ---------------------------------------------------------------------------
+# T08b — stage-split solvent models on the shared Confsearch engines
+# ---------------------------------------------------------------------------
+
+
+def _single_frame_xyz(path: Path) -> Path:
+    path.write_text("3\nSingle\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n", encoding="utf-8")
+    return path
+
+
+def _crest_backend_solvent_args(solvent: str | None, solvent_model: str) -> list[str]:
+    """Legality proof at the CREST interface level (not just no-raise)."""
+    from cccp.backends.crest import CrestBackend
+
+    backend = CrestBackend(
+        config={"executables": {"crest": {"path": "crest"}}},
+        gfn_level=2,
+        solvent=solvent,
+        solvent_model=solvent_model,
+    )
+    return backend._interface._solvent_args()
+
+
+def _run_energy_solvent_case(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+    *,
+    config: dict[str, Any],
+    solvent: str | None = None,
+    levels: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], Any]:
+    from acp.workflows.energy import run_conformer_energy
+
+    input_xyz = _single_frame_xyz(tmp_path / "single.xyz")
+    crest_calls: list[dict[str, Any]] = []
+
+    def fake_crest(cfg: Any, xyz: Path, out_dir: Path, **kwargs: Any) -> Path:
+        crest_calls.append(dict(kwargs))
+        return xyz
+
+    with (
+        patch("acp.workflows.energy._crest_search_via_task", side_effect=fake_crest),
+        patch(
+            "acp.workflows.energy_shared.run_censo_refine",
+            side_effect=_fake_censo_refine(mock_screening_result),
+        ) as mock_censo,
+        patch("acp.workflows.energy_shared.run_optimize", return_value=_mock_opt_result()),
+        patch("acp.workflows.energy_shared.run_frequency", return_value=_mock_freq_result()),
+        patch("acp.workflows.energy_shared.run_singlepoint", return_value=_mock_sp_result()),
+        patch(
+            "acp.workflows.energy_shared.run_thermochemistry",
+            return_value=_mock_shermo_result(dict(_SHERMO_OK)),
+        ),
+    ):
+        result = run_conformer_energy(
+            input_source=str(input_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=config,
+            solvent=solvent,
+            levels=levels,
+        )
+    assert result.status == "completed", result.error
+    assert crest_calls, "CREST must run for a single-frame input"
+    return crest_calls, mock_censo
+
+
+def test_energy_crest_never_receives_dft_model(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+) -> None:
+    """A configured DFT model reaches CENSO only; CREST gets ALPB."""
+    config = {**sample_config, "theory": {"preoptimization": {"solvent_model": "cpcm"}}}
+    crest_calls, mock_censo = _run_energy_solvent_case(
+        tmp_path,
+        sample_config,
+        mock_screening_result,
+        config=config,
+        solvent="water",
+    )
+    assert crest_calls[0]["solvent"] == "water"
+    assert crest_calls[0]["solvent_model"] == "alpb"
+    assert _crest_backend_solvent_args("water", "alpb") == ["--alpb", "water"]
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["solvent"] == "water"
+    assert extras["solvent_model"] == "cpcm"
+
+
+def test_energy_levels_smd_override_keeps_crest_legal(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+) -> None:
+    """The wizard levels path (SMD on the refinement SP level) is the
+    Confsearch rank1/cumulative crash path: CREST must still get a legal
+    sampling model while CENSO keeps the levels DFT model."""
+    crest_calls, mock_censo = _run_energy_solvent_case(
+        tmp_path,
+        sample_config,
+        mock_screening_result,
+        config=sample_config,
+        levels={"refinement_sp": {"solvent_model": "SMD", "solvent": "water"}},
+    )
+    assert crest_calls[0]["solvent"] == "water"
+    assert crest_calls[0]["solvent_model"] == "alpb"
+    extras = mock_censo.call_args.kwargs["context"].capability_extras
+    assert extras["solvent"] == "water"
+    assert extras["solvent_model"] == "smd"
+
+
+def test_energy_unknown_sampling_model_fails_strictly(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+) -> None:
+    """Malformed dedicated-key value → the run fails before any QC."""
+    from acp.workflows.energy import run_conformer_energy
+
+    input_xyz = _single_frame_xyz(tmp_path / "single.xyz")
+    config = {**sample_config, "nmr": {"sampling_solvent_model": "mdm"}}
+    with patch("acp.workflows.energy._crest_search_via_task") as mock_crest:
+        result = run_conformer_energy(
+            input_source=str(input_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=config,
+            solvent="water",
+        )
+
+    assert result.status == "failed"
+    assert "sampling_solvent_model" in (result.error or "")
+    mock_crest.assert_not_called()

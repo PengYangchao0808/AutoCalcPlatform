@@ -34,7 +34,7 @@ from acp.workflows.energy_shared import (
     resolve_crest_ewin as _resolve_crest_ewin,
 )
 from acp.workflows.energy_shared import (
-    resolve_solvent_config as _resolve_solvent_config,
+    resolve_stage_solvent_models,
 )
 from acp.workflows.energy_shared import (
     v2_stage_dir as _v2_stage_dir,
@@ -272,16 +272,6 @@ def run_ensemble_generation(
         stage_names=["crest", "censo", "ensemble_generation"],
     )
 
-    censo_solvent, solvent_model = _resolve_solvent_config(cfg, solvent)
-
-    if censo_solvent and solvent_model == "none":
-        logger.info(
-            "Solvent '%s' specified without a solvent model — "
-            "defaulting to SMD for CENSO and CREST/xTB.",
-            censo_solvent,
-        )
-        solvent_model = "smd"
-
     safe_nproc: int | None = None
     if nproc is not None and nproc > 0:
         safe_nproc = nproc
@@ -292,6 +282,15 @@ def run_ensemble_generation(
     crest_skipped = False
 
     try:
+        # T08b: stage-split solvent models — CENSO/DFT keeps its effective
+        # model (historical ``none → smd`` fallback, legal there); the
+        # CREST/xTB sampling segment only ever receives legal models
+        # (alpb/gbsa/none, dedicated key → default ALPB). Inside the guard
+        # so an unknown dedicated-key model fails like a backend rejection.
+        stage_solvent = resolve_stage_solvent_models(cfg, solvent)
+        censo_solvent = stage_solvent.solvent
+        solvent_model = stage_solvent.dft_model
+        sampling = stage_solvent.sampling
         is_file = input_format not in (InputFormat.SMILES,) and _is_file_input(input_source)
         state.set_stage("crest")
         if is_file and _is_multiframe_xyz(Path(input_source)):
@@ -327,8 +326,8 @@ def run_ensemble_generation(
                 energy_window=crest_ewin,
                 output_name=safe_name,
                 gfn_level=crest_cfg.get("gfn_level", 2),
-                solvent=censo_solvent,
-                solvent_model=solvent_model,
+                solvent=sampling.solvent,
+                solvent_model=sampling.solvent_model,
             )
 
             state.complete_stage("crest", {"status": "completed"})

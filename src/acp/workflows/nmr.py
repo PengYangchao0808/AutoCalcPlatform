@@ -128,6 +128,11 @@ from acp.nmr.structure_map import NmrStructureMap, StructureMapError
 from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name, write_result_summary
+from acp.workflows.energy_shared import (
+    SamplingSolventReceipt,
+    resolve_sampling_solvent,
+    resolve_stage_solvent_models,
+)
 from cccp.backends.crest import CrestBackend
 from cccp.calculation._common import theory_run_config
 from cccp.calculation.context import TaskContext
@@ -154,7 +159,7 @@ from cccp.qc.interfaces.censo import (
     part_index,
 )
 from cccp.utils.constants import HARTREE_TO_KCAL
-from cccp.utils.solvent_map import LEGAL_SOLVENT_MODELS, SolventValueError
+from cccp.utils.solvent_map import SolventValueError
 
 logger = logging.getLogger(__name__)
 
@@ -559,6 +564,7 @@ def _protocol_spec_for_candidate(
     dp5_model_id: str | None,
     dp5_mode: str | None,
     dp5_model_present: bool,
+    stage_solvent_models: tuple[str | None, str | None] | None = None,
 ) -> NmrProtocolSpec:
     """Build one candidate's six-segment protocol record from what ran.
 
@@ -566,6 +572,13 @@ def _protocol_spec_for_candidate(
     calls CENSO (empty parts), a prebuilt/foreign ensemble records ``None``
     (unknown — never upgraded), and an optimization level is only recorded
     when the preset's optimization part actually executed.
+
+    ``stage_solvent_models`` is ``(sampling_model, dft_model)`` for this run
+    (T08b); each segment records the effective model of the stage that ran —
+    ``None`` whenever generation did not execute here or the models are
+    historically unrecorded (never coerced to ``"none"``). Population
+    energies come from the CENSO DFT stage, except the censo-zero xTB
+    passthrough which keeps the sampling model.
     """
     preset = nmr_config.conformer_preset or ""
     if not generation_executed:
@@ -588,6 +601,18 @@ def _protocol_spec_for_candidate(
             func = opt_cfg.get("func") if isinstance(opt_cfg, dict) else None
             optimization_level = str(func) if func else None
 
+    sampling_solvent_model: str | None = None
+    dft_solvent_model: str | None = None
+    if generation_executed and stage_solvent_models is not None:
+        sampling_solvent_model, dft_solvent_model = stage_solvent_models
+    geometry_solvent_model = dft_solvent_model if optimization_executed else None
+    if not generation_executed:
+        population_solvent_model: str | None = None
+    elif parts == ():
+        population_solvent_model = sampling_solvent_model
+    else:
+        population_solvent_model = dft_solvent_model
+
     missing_all = {n for n in nmr_config.nuclei if nmr_config.tms_for(n) is None}
     missing_here = tuple(
         sorted(missing_all & set(nmr_config.element_nuclei(list(structure.symbols))))
@@ -598,14 +623,17 @@ def _protocol_spec_for_candidate(
             crest_executed=generation_executed,
             censo_executed=generation_executed and preset.lower() != "censo-zero",
             parts=parts,
+            solvent_model=sampling_solvent_model,
         ),
         GeometrySegment(
             optimization_executed=optimization_executed,
             optimization_level=optimization_level,
+            solvent_model=geometry_solvent_model,
         ),
         PopulationEnergySegment(
             energy_window_kcal=nmr_config.energy_window_kcal,
             boltzmann_temp=nmr_config.boltzmann_temp,
+            solvent_model=population_solvent_model,
         ),
         ShieldingSegment(
             nmr_method=nmr_config.nmr_method,
@@ -637,80 +665,11 @@ def _protocol_spec_for_candidate(
 # Per-candidate pipeline
 # ---------------------------------------------------------------------------
 
-#: Dedicated NMR sampling-segment solvent-model key. Intentionally ABSENT
-#: from ``cccp.config._get_default_config()`` and ``config/defaults.yaml``:
-#: absence itself is the signal (see :func:`_resolve_sampling_solvent`).
-_SAMPLING_SOLVENT_CONFIG_KEY: Final = "sampling_solvent_model"
-#: Sampling model applied when the key is absent but a solvent name is present.
-_SAMPLING_DEFAULT_SOLVENT_MODEL: Final = "alpb"
-
-
-@dataclass(frozen=True)
-class _SamplingSolventReceipt:
-    """Effective-parameters receipt for the sampling (CREST/xTB) segment.
-
-    ``defaulted`` is ``True`` ONLY when the dedicated key was absent and a
-    solvent name was present, so ACP chose ALPB rather than the user. An
-    explicit ``none``/``alpb``/``gbsa`` is never ``defaulted`` — a recorded
-    default must never masquerade as a user statement.
-    """
-
-    solvent: str | None
-    solvent_model: str
-    defaulted: bool
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "solvent": self.solvent,
-            "solvent_model": self.solvent_model,
-            "defaulted": self.defaulted,
-        }
-
-
-def _resolve_sampling_solvent(
-    cfg: Mapping[str, Any],
-    solvent: str | None,
-) -> _SamplingSolventReceipt:
-    """Resolve the sampling (CREST/xTB) solvent model for one candidate run.
-
-    Reads ONLY the dedicated :data:`_SAMPLING_SOLVENT_CONFIG_KEY` key — the
-    legacy ``theory.preoptimization.solvent_model`` / ``censo.solvent_model``
-    keys keep their own CENSO semantics and are deliberately not consulted
-    here (todo 8). The model vocabulary is validated against the single source
-    :data:`cccp.utils.solvent_map.LEGAL_SOLVENT_MODELS`.
-
-    Three-state semantics:
-
-    * key ABSENT + solvent name present → ``alpb`` (``defaulted=True``);
-    * key ABSENT + no solvent → ``none`` (gas phase, no flags emitted);
-    * key explicitly ``none`` → gas phase (``defaulted=False``);
-    * key explicitly ``alpb``/``gbsa`` → used as given.
-
-    Raises:
-        SolventValueError: the key carries a value outside
-            :data:`LEGAL_SOLVENT_MODELS`.
-    """
-    nmr_section = cfg.get("nmr")
-    raw = (
-        nmr_section.get(_SAMPLING_SOLVENT_CONFIG_KEY) if isinstance(nmr_section, Mapping) else None
-    )
-    name = solvent if solvent else None
-    if raw is None or (isinstance(raw, str) and not raw.strip()):
-        # Absence (or an empty/whitespace value) is the signal — never read as
-        # an explicit statement. A named solvent defaults to ALPB; otherwise
-        # the sampling segment runs gas phase.
-        if name is None:
-            return _SamplingSolventReceipt(solvent=None, solvent_model="none", defaulted=False)
-        return _SamplingSolventReceipt(
-            solvent=name, solvent_model=_SAMPLING_DEFAULT_SOLVENT_MODEL, defaulted=True
-        )
-    model = str(raw).strip().lower()
-    if model not in LEGAL_SOLVENT_MODELS:
-        raise SolventValueError(
-            f"Unknown xTB solvent model {raw!r} for nmr.{_SAMPLING_SOLVENT_CONFIG_KEY}; "
-            f"legal solvent models: {', '.join(sorted(LEGAL_SOLVENT_MODELS))}"
-        )
-    return _SamplingSolventReceipt(solvent=name, solvent_model=model, defaulted=False)
+# T08b: the sampling solvent-model resolver moved to ``workflows/energy_shared``
+# (shared home — no import cycle) so the retired Confsearch engines and this
+# workflow reuse ONE rule; the historical private names stay importable here.
+_resolve_sampling_solvent = resolve_sampling_solvent
+_SamplingSolventReceipt = SamplingSolventReceipt
 
 
 def _run_conformer_generation(
@@ -3178,6 +3137,8 @@ def _build_nmr_report(
     dp5_model_present: bool,
     sensitivity: dict[str, Any],
     diagnostics: AtomicDiagnosticsBundle | None = None,
+    *,
+    stage_solvent_models: tuple[str | None, str | None] | None = None,
 ) -> _ReportStage:
     """Stage 8: aggregate DP5 modes + protocol verdict into the report object.
 
@@ -3218,6 +3179,7 @@ def _build_nmr_report(
             dp5_model_id=(cr.probability.dp5.model_id if cr.probability is not None else None),
             dp5_mode=cr.probability.dp5.mode if cr.probability is not None else None,
             dp5_model_present=dp5_model_present,
+            stage_solvent_models=stage_solvent_models,
         )
         for idx, (structure, cr) in enumerate(zip(candidates, candidate_results, strict=True))
     ]
@@ -3449,6 +3411,20 @@ def run_nmr_analysis(
             stages_completed=stages_completed,
             error=str(exc),
         )
+
+    # T08b: stage-split effective solvent models — the same resolution the
+    # conformer-generation path applies, recorded into the protocol segments.
+    # An unknown dedicated-key model fails the run here, strictly.
+    try:
+        stage_solvent = resolve_stage_solvent_models(cfg, solvent)
+    except SolventValueError as exc:
+        _fail_progress(progress_reporter, str(exc))
+        return WorkflowResult(
+            status="failed",
+            stages_completed=stages_completed,
+            error=str(exc),
+        )
+    stage_solvent_models = (stage_solvent.sampling.solvent_model, stage_solvent.dft_model)
     actual_error_model = em.model_id
 
     # todo 29: missing-reference gate — a required nucleus without a TMS
@@ -3663,6 +3639,7 @@ def run_nmr_analysis(
         probability_stage.dp5_model_present,
         sensitivity,
         probability_stage.diagnostics,
+        stage_solvent_models=stage_solvent_models,
     )
     report = report_stage.report
     fchl_kernel = report_stage.fchl_kernel
@@ -3790,6 +3767,38 @@ def _report_relative_path(path: Path | str, reports_root: Path) -> str:
         return str(candidate)
 
 
+def _stage_solvent_models_from_report(
+    report_path: Path,
+) -> tuple[str | None, str | None] | None:
+    """Carry the recorded stage solvent models over from the base report (T08b).
+
+    A revision re-derives the protocol block without re-running any science
+    stage, so the effective models recorded by the original run are read back
+    from its protocol block. Old reports predate the fields → the segments
+    keep ``None`` (historically unrecorded, never ``"none"``).
+    """
+    try:
+        payload = json.loads(Path(report_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    provenance = payload.get("provenance")
+    protocol = provenance.get("protocol") if isinstance(provenance, dict) else None
+    candidates = protocol.get("candidates") if isinstance(protocol, dict) else None
+    if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], dict):
+        return None
+    first = candidates[0]
+    sampling = first.get("sampling")
+    geometry = first.get("geometry")
+    population = first.get("population_energy")
+    sampling_model = sampling.get("solvent_model") if isinstance(sampling, dict) else None
+    geometry_model = geometry.get("solvent_model") if isinstance(geometry, dict) else None
+    population_model = population.get("solvent_model") if isinstance(population, dict) else None
+    dft_model = geometry_model if geometry_model is not None else population_model
+    return (sampling_model, dft_model)
+
+
 def revise_nmr_analysis(
     snapshot: NmrAnalysisSnapshot,
     edits: Sequence[PeakEdit],
@@ -3904,6 +3913,7 @@ def revise_nmr_analysis(
         probability_stage.dp5_model_present,
         probability_stage.sensitivity,
         probability_stage.diagnostics,
+        stage_solvent_models=_stage_solvent_models_from_report(snapshot.base_report_path),
     )
     paths = write_all_reports(report_stage.report, revision_dir)
     result_identity = analysis_result_identity(report_stage.report)
