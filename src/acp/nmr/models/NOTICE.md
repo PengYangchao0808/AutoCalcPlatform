@@ -12,7 +12,7 @@ These files are redistributed from the **Goodman-lab/DP5** repository
 | `i_w_kde_mean_s_0.025.p` | 24 MB | DP5 repo | "incorrect-assignment" weighted KDE (bandwidth 0.025) for `Rescale_DP5` |
 | `tms_references.txt` | 4.6 KB | DP5 repo (`TMSdata`) | TMS ¹³C/¹H reference shieldings per (method, basis, solvent) |
 | `atomic_reps.gz` | 22 MB | DP5 repo | 53 208 precomputed training-set atom FCHL19 representations → per-atom FCHL-weighted KDE (DP5.py:59,85-108). Used for molecules < 86 atoms. |
-| `frag_reps.gz` | 18 MB | DP5 repo | Fragmented training-set FCHL representations (radius-3 fragments, `max_size=54`) for molecules ≥ 86 atoms (DP5.py:63-67,277-302). Requires openbabel. |
+| `frag_reps.gz` | 18 MB | DP5 repo | 63 541 fragmented training-set FCHL representations (radius-3 fragments, stored width **53**; upstream DP5.py:292 requests `max_size=54`) for molecules ≥ 86 atoms (DP5.py:63-67,277-302). Requires openbabel. **Index note:** the upstream fragment branch doubles the similarity vector before using it as KDE weights over `folded_scaled_errors.p` (106 416 residuals = 2 × 53 208 atomic entries), so `2 × 63 541 ≠ 106 416` does not pair; `acp.nmr.fchl.fragment_path_status` verifies this correspondence and reports `residual-index-mismatch` instead of running with mispaired weights. |
 
 ## Source revision
 

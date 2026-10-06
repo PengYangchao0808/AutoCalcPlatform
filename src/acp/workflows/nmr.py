@@ -2379,6 +2379,40 @@ def _resolve_signal_group_members(
     return tuple(members)
 
 
+def _conformer_mol_block(
+    structure: Structure,
+    conf: ConformerShielding,
+) -> str | None:
+    """MolBlock of the candidate graph carrying *conf*'s coordinates.
+
+    The ≥86-atom FCHL fragment path needs bond connectivity for the
+    openbabel radius-3 BFS. The captured candidate graph is preferred, then
+    the SMILES rebuild; ``None`` when no graph matches the structure's
+    atom order (the caller degrades explicitly, never element-merges).
+    """
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+
+    mol = nmr_topology_mol_for(structure)
+    if mol is None:
+        mol = _try_build_rdkit_mol(structure)
+    if mol is None or mol.GetNumAtoms() != len(structure.symbols):
+        return None
+    if [atom.GetSymbol() for atom in mol.GetAtoms()] != list(structure.symbols):
+        return None
+    coordinates = np.asarray(conf.coordinates, dtype=float)
+    if coordinates.shape != (mol.GetNumAtoms(), 3):
+        return None
+    work = Chem.Mol(mol)
+    rd_conformer = Chem.Conformer(work.GetNumAtoms())
+    for index in range(work.GetNumAtoms()):
+        x, y, z = (float(value) for value in coordinates[index])
+        rd_conformer.SetAtomPosition(index, Point3D(x, y, z))
+    work.RemoveAllConformers()
+    work.AddConformer(rd_conformer, assignId=True)
+    return Chem.MolToMolBlock(work)
+
+
 def _compute_candidate_dp5(
     candidate: CandidateResult,
     structure: Structure,
@@ -2429,7 +2463,12 @@ def _compute_candidate_dp5(
     from acp.nmr.equivalence import _build_label_index
     from acp.nmr.fchl import (
         FRAG_ATOM_THRESHOLD,
+        FRAG_MAX_SIZE,
+        FragmentPathStatus,
         build_atom_representations,
+        build_fragment_representations,
+        fragment_path_status,
+        fragment_status_fallback_reason,
         kernel_backend,
     )
 
@@ -2542,13 +2581,23 @@ def _compute_candidate_dp5(
     conformer_shifts: list[list[float]] = []
     weights: list[float] = []
     conformer_reps: list[list[NDArray[np.float64]]] = []
-    # FCHL atomic path is only valid for molecules < 86 atoms (DP5.py:57);
-    # larger molecules need the openbabel fragmentation + frag_reps path
-    # (not yet wired → degrade to fallback for those rare cases). A signal
-    # with several members has no single atomic environment — FCHL is not
-    # attempted for it (no uncalibrated descriptor averaging, G08).
+    # FCHL training-set switch (DP5.py:57): <86 atoms use whole-molecule
+    # atomic_reps; ≥86 atoms use openbabel radius-3 fragments against
+    # frag_reps.gz. The fragment path is gated by the typed asset/residual
+    # index correspondence (G12) — never by assuming the atomic array can be
+    # swapped for the fragment array. A signal with several members has no
+    # single atomic environment — FCHL is not attempted for it (no
+    # uncalibrated descriptor averaging, G08).
     fchl_available = bool(getattr(dp5_model, "fchl_available", False))
-    fchl_requested = fchl_available and len(symbols) < FRAG_ATOM_THRESHOLD
+    large_molecule = len(symbols) >= FRAG_ATOM_THRESHOLD
+    fragment_status: FragmentPathStatus | None = None
+    if fchl_available and large_molecule:
+        fragment_status = fragment_path_status(getattr(dp5_model, "models_dir", None))
+    fragment_mode = fragment_status is not None and fragment_status.available
+    fragment_diag: dict[str, object] = (
+        {"fchl_fragment_status": fragment_status.status} if fragment_status is not None else {}
+    )
+    fchl_requested = fchl_available and (not large_molecule or fragment_mode)
     fchl_multi_member_blocked = fchl_requested and not fchl_indices
     fchl_ok = fchl_requested and bool(fchl_indices)
     fchl_attempted = fchl_requested and not fchl_multi_member_blocked
@@ -2580,11 +2629,25 @@ def _compute_candidate_dp5(
                     conformer_reps = []
                 else:
                     try:
-                        reps = build_atom_representations(
-                            coords,
-                            conf_symbols,
-                            fchl_indices,
-                        )
+                        if fragment_mode:
+                            mol_block = _conformer_mol_block(structure, conf)
+                            reps = (
+                                None
+                                if mol_block is None
+                                else build_fragment_representations(
+                                    coords,
+                                    conf_symbols,
+                                    fchl_indices,
+                                    mol_block=mol_block,
+                                    max_size=fragment_status.representation_size or FRAG_MAX_SIZE,
+                                )
+                            )
+                        else:
+                            reps = build_atom_representations(
+                                coords,
+                                conf_symbols,
+                                fchl_indices,
+                            )
                     except Exception as exc:  # pragma: no cover - qml/kernel edge
                         logger.warning(
                             "FCHL representation build failed for %s conformer %s: %s",
@@ -2595,7 +2658,17 @@ def _compute_candidate_dp5(
                         fchl_ok = False
                         conformer_reps = []
                     else:
-                        conformer_reps.append(reps)
+                        if reps is None:
+                            logger.warning(
+                                "FCHL fragment path needs a bonded candidate graph for %s "
+                                "conformer %s; degrading",
+                                structure.id,
+                                conf.conformer_id,
+                            )
+                            fchl_ok = False
+                            conformer_reps = []
+                        else:
+                            conformer_reps.append(reps)
 
     if len(conformer_shifts) == 0:
         # zero complete conformers — no geometry-weighted input exists, so
@@ -2610,6 +2683,7 @@ def _compute_candidate_dp5(
                     "fchl_attempted": fchl_attempted,
                     "fallback_reason": "no_complete_conformers",
                     "skipped_signal_groups": skipped_signal_groups,
+                    **fragment_diag,
                 },
             ),
         )
@@ -2631,30 +2705,47 @@ def _compute_candidate_dp5(
         "fchl_attempted": fchl_attempted,
         "n_signals_used": len(signals),
         "skipped_signal_groups": skipped_signal_groups,
+        **fragment_diag,
     }
     if fchl_ok and len(conformer_reps) == len(conformer_shifts):
+        if fragment_mode:
+            probability = dp5_model.probability_per_conformer_fchl(
+                conformer_shifts,
+                exp_c,
+                weights,
+                conformer_reps,
+                use_fragment_reps=True,
+            )
+        else:
+            probability = dp5_model.probability_per_conformer_fchl(
+                conformer_shifts,
+                exp_c,
+                weights,
+                conformer_reps,
+            )
         return Dp5Outcome(
-            probability=dp5_model.probability_per_conformer_fchl(
-                conformer_shifts, exp_c, weights, conformer_reps
-            ),
+            probability=probability,
             mode="fchl",
             kernel=kernel_backend(),
             diagnostics=({**base_diag, "fallback_reason": None},),
         )
 
+    if not fchl_requested:
+        if fragment_status is not None:
+            fallback_reason = fragment_status_fallback_reason(fragment_status.status)
+        else:
+            fallback_reason = "fchl_unavailable"
+    elif fchl_multi_member_blocked:
+        fallback_reason = "fchl_multi_member_signal"
+    else:
+        fallback_reason = "fchl_representations_incomplete"
     return Dp5Outcome(
         probability=dp5_model.probability_per_conformer(conformer_shifts, exp_c, weights),
         mode="fallback",
         diagnostics=(
             {
                 **base_diag,
-                "fallback_reason": (
-                    "fchl_unavailable"
-                    if not fchl_requested
-                    else "fchl_multi_member_signal"
-                    if fchl_multi_member_blocked
-                    else "fchl_representations_incomplete"
-                ),
+                "fallback_reason": fallback_reason,
             },
         ),
     )

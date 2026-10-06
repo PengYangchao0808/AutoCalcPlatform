@@ -1711,6 +1711,9 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/nmr/reference_validation.py",
     # acp-nmr-goodman-gap todo 41: four-layer spectrum model + processing provenance.
     "src/acp/nmr/spectra.py",
+    # acp-nmr-goodman-gap todo 37: FCHL ≥86-atom fragment path (openbabel
+    # radius-3 fragmentation + frag_reps residual-index correspondence).
+    "src/acp/nmr/fchl.py",
     # foreign recovery workstream: irc.py consumes calculations/identity (registered to keep the audit green).
     "src/acp/workflows/irc.py",
     # pre-existing gap at HEAD 55262dd: resume_source.json scheduler marker

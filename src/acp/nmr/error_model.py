@@ -315,6 +315,7 @@ class GoodmanDP5Model:
         self._incorrect_kde = _rebuild_kde(i_path)
         self._atom_kde = None  # lazy — built on first use
         self._atomic_reps = None  # lazy — loaded when FCHL first used
+        self._fragment_reps = None  # lazy — loaded when the >=86-atom path first used
         self.models_dir = models_dir
 
     @property
@@ -350,6 +351,34 @@ class GoodmanDP5Model:
             self._atomic_reps = load_atomic_reps(self.models_dir)
         return self._atomic_reps
 
+    def _get_fragment_reps(self) -> np.ndarray:
+        """Lazily load + verify the fragment training-set FCHL representations.
+
+        The >=86-atom path pairs ``K_sim`` from ``frag_reps.gz`` with the
+        doubled ``folded_scaled_errors`` vector, so the training-index
+        correspondence (``2 * n_fragment_train == len(folded_errors)``) is
+        enforced here: a mismatched asset set raises instead of silently
+        weighting residuals with the wrong neighbours (the shipped upstream
+        assets mismatch — see :func:`acp.nmr.fchl.fragment_path_status`).
+        """
+        from acp.nmr.fchl import (
+            FragmentPathUnavailableError,
+            fragment_residual_index_ok,
+            load_atomic_reps,
+        )
+
+        if self._fragment_reps is None:
+            reps = load_atomic_reps(self.models_dir, use_frag=True)
+            if not fragment_residual_index_ok(int(reps.shape[0]), int(self.folded_errors.size)):
+                raise FragmentPathUnavailableError(
+                    f"frag_reps.gz has {reps.shape[0]} training fragments but "
+                    f"folded_scaled_errors.p has {self.folded_errors.size} residuals; "
+                    "the doubled fragment similarities cannot be paired with the "
+                    "residual vector (refusing to weight the wrong neighbours)"
+                )
+            self._fragment_reps = reps
+        return self._fragment_reps
+
     def atom_probability(self, scaled_error: float) -> float:
         """Per-atom DP5 probability (DP5.py:104-108).
 
@@ -365,22 +394,28 @@ class GoodmanDP5Model:
         self,
         representation: np.ndarray,
         scaled_error: float,
+        *,
+        use_fragment_reps: bool = False,
     ) -> float:
         """FCHL-weighted per-atom DP5 probability (DP5.py:85-108).
 
         Uses the atom's FCHL representation to weight the KDE against the
-        training-set similarity. Falls back to the global KDE when ``qml``
-        is unavailable (the caller should route via
-        :meth:`probability_per_conformer_fchl`, which handles the switch).
+        training-set similarity. With ``use_fragment_reps=True`` the training
+        side is ``frag_reps.gz`` (>=86-atom radius-3 fragments, capacity 53)
+        instead of ``atomic_reps.gz``; the two paths are not numerically
+        equivalent. Falls back to the global KDE when ``qml`` is unavailable
+        (the caller should route via :meth:`probability_per_conformer_fchl`,
+        which handles the switch).
         """
         from acp.nmr.fchl import atom_probability_fchl
 
+        training_reps = self._get_fragment_reps() if use_fragment_reps else self._get_atomic_reps()
         return atom_probability_fchl(
             representation,
             scaled_error,
             self.folded_errors,
             self.mean_abs_error,
-            self._get_atomic_reps(),
+            training_reps,
         )
 
     def candidate_probability(self, atom_probs: list[float]) -> float:
@@ -460,6 +495,8 @@ class GoodmanDP5Model:
         exp_shifts: list[float],
         boltzmann_weights: list[float],
         conformer_reps: list[list[np.ndarray]],
+        *,
+        use_fragment_reps: bool = False,
     ) -> float:
         """Goodman-faithful DP5 with the FCHL-weighted atom path.
 
@@ -470,6 +507,14 @@ class GoodmanDP5Model:
         FCHL assets (``atomic_reps.gz``); the kernel runs on ``qml`` when
         importable, else the pure-numpy port.
 
+        With ``use_fragment_reps=True`` (molecules >= 86 atoms) the training
+        side is ``frag_reps.gz`` and ``conformer_reps`` must hold radius-3
+        fragment descriptors (see
+        :func:`acp.nmr.fchl.build_fragment_representations`); the fragment
+        and atomic paths are **not numerically equivalent** and the fragment
+        asset/residual index correspondence is enforced by
+        :meth:`_get_fragment_reps`.
+
         Args:
             conformer_calc_shifts: Per-conformer ¹³C calc shifts.
             exp_shifts: Experimental ¹³C shifts.
@@ -478,6 +523,7 @@ class GoodmanDP5Model:
                 ¹³C atoms (parallel to ``conformer_calc_shifts``);
                 ``conformer_reps[c][i]`` = descriptor of atom *i* in
                 conformer *c*.
+            use_fragment_reps: Use the fragment training set (>=86 atoms).
 
         Returns:
             DP5 probability in ``[0, 1]``.
@@ -495,6 +541,7 @@ class GoodmanDP5Model:
             exp_shifts,
             boltzmann_weights,
             conformer_reps=conformer_reps,
+            use_fragment_reps=use_fragment_reps,
         )
 
     def _probability_per_conformer(
@@ -503,11 +550,13 @@ class GoodmanDP5Model:
         exp_shifts: list[float],
         boltzmann_weights: list[float],
         conformer_reps: list[list[np.ndarray]] | None = None,
+        use_fragment_reps: bool = False,
     ) -> float:
         """Shared per-conformer DP5 pipeline (DP5.py:73-141, 339-383).
 
         When *conformer_reps* is provided, per-atom probabilities use the
-        FCHL-weighted KDE; otherwise the unweighted global KDE fallback.
+        FCHL-weighted KDE (fragment training set when *use_fragment_reps*);
+        otherwise the unweighted global KDE fallback.
         """
         import numpy as np
         from scipy.stats import linregress
@@ -536,7 +585,9 @@ class GoodmanDP5Model:
             for i in range(n_atoms):
                 err = abs(scaled[i] - exp_shifts[i])
                 if use_fchl:
-                    p = self.atom_probability_fchl(conformer_reps[conf_idx][i], err)  # type: ignore[index]
+                    p = self.atom_probability_fchl(  # type: ignore[index]
+                        conformer_reps[conf_idx][i], err, use_fragment_reps=use_fragment_reps
+                    )
                 else:
                     p = self.atom_probability(err)
                 avg_atom_probs[i] += weight * p

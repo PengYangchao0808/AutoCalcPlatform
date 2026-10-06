@@ -16,6 +16,18 @@ Faithful port of the Goodman DP5.py FCHL path (``DP5.py:85-108``):
 4. When ``sum(K_sim)==0`` (no similar training neighbours) fall back to
    the unweighted global KDE (``DP5.py:98``).
 
+At/above :data:`FRAG_ATOM_THRESHOLD` (86) atoms DP5.py switches the training
+set to ``frag_reps.gz`` and the query descriptor is the central atom of an
+openbabel radius-3 fragment (``DP5.py:57-67, 249-302, 529-604``), not a
+whole-molecule atom. The fragment path is **not numerically equivalent** to
+the atomic path: different training entities (radius-3 fragments vs
+whole-molecule atoms), different descriptor capacity (53 vs 86) and a
+different similarity/residual indexing. It is therefore wired behind the
+explicit correspondence gate :func:`fragment_path_status`; the shipped
+upstream assets fail that gate (``2 * len(frag_reps) !=
+len(folded_scaled_errors)``), so the path reports typed unavailability
+instead of computing with mispaired KDE weights.
+
 ``qml`` is an optional runtime dependency (see ``models/NOTICE.md``); the
 DP5 path degrades to the unweighted KDE fallback (``dp5_mode="fallback"``)
 when it is unavailable.
@@ -25,6 +37,8 @@ from __future__ import annotations
 
 import logging
 import pickle
+from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +49,10 @@ logger = logging.getLogger(__name__)
 # kernel. Must match exactly or the kernel similarities are meaningless.
 C_DISTANCE = 4.532297920317418
 # DP5.py:57 — molecules >= this many atoms use the fragmented representation
-# set (frag_reps.gz); smaller molecules use atomic_reps.gz.
+# set (frag_reps.gz); smaller molecules use atomic_reps.gz. The fragment
+# branch needs openbabel radius-3 fragmentation **and** a fragment/residual
+# index correspondence that the shipped assets do not satisfy — callers must
+# gate on :func:`fragment_path_status` before running it.
 FRAG_ATOM_THRESHOLD = 86
 # DP5.py:500 / PyDP4.py:500 — kernel width passed to get_atomic_kernels.
 FCHL_SIGMA = 0.025
@@ -184,12 +201,15 @@ def load_atomic_reps(
     models_dir: Path | None = None,
     use_frag: bool = False,
 ) -> np.ndarray:
-    """Load the FCHL training-set atom representations (gzip pickle).
+    """Load the FCHL training-set representations (gzip pickle).
 
-    Returns an ``(n_train, 5, max_size)`` array. The ``frag_reps.gz`` set
-    stores per-fragment central-atom descriptors and is only valid with the
-    openbabel radius-3 fragmentation path (not yet wired — ACP degrades to
-    the unweighted KDE for molecules >= :data:`FRAG_ATOM_THRESHOLD` atoms).
+    Returns an ``(n_train, 5, max_size)`` array. With ``use_frag=False``
+    this is ``atomic_reps.gz`` (whole-molecule atoms, width 86). With
+    ``use_frag=True`` it is ``frag_reps.gz`` — per-fragment central-atom
+    descriptors for the openbabel radius-3 path (molecules >=
+    :data:`FRAG_ATOM_THRESHOLD`, ``DP5.py:63-67``); the fragment set is only
+    valid together with the fragment/residual index correspondence verified
+    by :func:`fragment_path_status`.
     """
     d = Path(models_dir) if models_dir is not None else _MODELS_DIR
     name = "frag_reps.gz" if use_frag else "atomic_reps.gz"
@@ -205,6 +225,302 @@ def load_atomic_reps(
         return arr
     # ragged legacy storage — stack into a dense array
     return np.stack([np.asarray(x, dtype=float) for x in arr])
+
+
+# ---------------------------------------------------------------------------
+# >=86-atom fragmentation path (DP5.py:57-67, 249-302, 529-604)
+#
+# DP5.py switches the FCHL training set at 86 atoms and builds the large-
+# molecule query descriptor as the central atom of an openbabel radius-3
+# subgraph (``mol_fragments``), not a whole-molecule atom. This is *not*
+# numerically equivalent to the atomic path (different training entities,
+# capacity 53 vs 86, different similarity/residual indexing), so it stays
+# behind the explicit :func:`fragment_path_status` correspondence gate.
+# ---------------------------------------------------------------------------
+
+#: Bond-hop radius of the upstream fragment breadth-first search (DP5.py:559).
+FRAGMENT_RADIUS = 3
+#: Feature width of the shipped ``frag_reps.gz``. Upstream DP5.py:292 asks
+#: for ``max_size=54`` while the checked-in asset stores ``(63541, 5, 53)``;
+#: the builder uses the training asset's width so the per-atom capacity
+#: matches the stored representations.
+FRAG_MAX_SIZE = 53
+
+FRAGMENT_STATUS_AVAILABLE = "available"
+FRAGMENT_STATUS_OPENBABEL_MISSING = "openbabel-missing"
+FRAGMENT_STATUS_ASSETS_MISSING = "assets-missing"
+#: Assets present but ``2 * n_fragment_train != n_folded_errors`` — the
+#: fragment similarities cannot be paired with the residual vector.
+FRAGMENT_STATUS_INDEX_MISMATCH = "residual-index-mismatch"
+
+#: Closed vocabulary of :class:`FragmentPathStatus` statuses.
+FRAGMENT_STATUSES: tuple[str, ...] = (
+    FRAGMENT_STATUS_AVAILABLE,
+    FRAGMENT_STATUS_OPENBABEL_MISSING,
+    FRAGMENT_STATUS_ASSETS_MISSING,
+    FRAGMENT_STATUS_INDEX_MISMATCH,
+)
+
+_FRAGMENT_STATUS_FALLBACK_REASONS = {
+    FRAGMENT_STATUS_OPENBABEL_MISSING: "fchl_fragment_openbabel_missing",
+    FRAGMENT_STATUS_ASSETS_MISSING: "fchl_fragment_assets_missing",
+    FRAGMENT_STATUS_INDEX_MISMATCH: "fchl_fragment_residual_index_mismatch",
+}
+
+
+class FragmentPathUnavailableError(RuntimeError):
+    """Typed refusal when the >=86-atom FCHL fragment path cannot run correctly."""
+
+
+@dataclass(frozen=True)
+class FragmentPathStatus:
+    """Typed availability of the >=86-atom FCHL fragment path.
+
+    ``status`` is one of :data:`FRAGMENT_STATUSES`; ``available`` is True
+    only when openbabel is importable, both fragment assets exist **and** the
+    fragment-similarity / folded-residual index correspondence holds.
+    """
+
+    status: str
+    reason: str | None = None
+    n_fragment_train: int | None = None
+    n_folded_errors: int | None = None
+    representation_size: int | None = None
+
+    @property
+    def available(self) -> bool:
+        """True only for :data:`FRAGMENT_STATUS_AVAILABLE`."""
+        return self.status == FRAGMENT_STATUS_AVAILABLE
+
+
+def fragment_residual_index_ok(n_fragment_train: int, n_folded_errors: int) -> bool:
+    """True when the doubled fragment similarities pair with the folded residuals.
+
+    ``DP5.py:89-92`` doubles ``K_sim`` (``np.hstack((K_sim, K_sim))``) and
+    passes it as the KDE weights over ``folded_scaled_errors`` — the index
+    pairing is only defined when ``2 * n_fragment_train == n_folded_errors``
+    (modern scipy rejects anything else).
+    """
+    return 2 * int(n_fragment_train) == int(n_folded_errors)
+
+
+def fragment_status_fallback_reason(status: str) -> str:
+    """Map a non-available fragment status to the workflow ``fallback_reason``."""
+    try:
+        return _FRAGMENT_STATUS_FALLBACK_REASONS[status]
+    except KeyError:
+        raise ValueError(f"no fragment fallback reason for status {status!r}") from None
+
+
+def _import_openbabel():
+    """Lazily import the openbabel SWIG module (never at module import time)."""
+    try:
+        from openbabel import openbabel as ob
+    except ImportError:
+        import openbabel as legacy_openbabel
+
+        if not hasattr(legacy_openbabel, "OBConversion"):
+            raise ImportError(
+                "openbabel python bindings are not importable (install "
+                "'openbabel>=3.1' to enable the >=86-atom fragment path)"
+            ) from None
+        return legacy_openbabel
+    return ob
+
+
+def openbabel_available() -> bool:
+    """True when the openbabel python bindings are importable.
+
+    Missing bindings are a typed unavailability
+    (:data:`FRAGMENT_STATUS_OPENBABEL_MISSING`) — never a silent pass.
+    """
+    try:
+        _import_openbabel()
+    except ImportError:
+        return False
+    return True
+
+
+def read_openbabel_adjacency(mol_block: str) -> list[list[int]]:
+    """Bond adjacency (0-based, sorted neighbours) from a MolBlock via openbabel.
+
+    Uses the same SWIG iterators as upstream's ``mol_fragments``
+    (``OBMolAtomIter`` / ``OBAtomAtomIter``), mapping atoms through their
+    position in the iteration order so the indices align with the coordinate
+    array the caller fragments.
+    """
+    ob = _import_openbabel()
+    conversion = ob.OBConversion()
+    if not conversion.SetInFormat("mol"):
+        raise FragmentPathUnavailableError("openbabel has no 'mol' input format")
+    mol = ob.OBMol()
+    if not conversion.ReadString(mol, mol_block):
+        raise FragmentPathUnavailableError("openbabel could not parse the MolBlock")
+    atoms = list(ob.OBMolAtomIter(mol))
+    position = {int(atom.GetIdx()): index for index, atom in enumerate(atoms)}
+    adjacency: list[list[int]] = [[] for _ in atoms]
+    for index, atom in enumerate(atoms):
+        adjacency[index] = sorted(
+            position[int(neighbour.GetIdx())] for neighbour in ob.OBAtomAtomIter(atom)
+        )
+    return adjacency
+
+
+def fragment_atom_indices(
+    adjacency: list[list[int]] | tuple[tuple[int, ...], ...],
+    center: int,
+    radius: int = FRAGMENT_RADIUS,
+) -> list[int]:
+    """Radius-*radius* BFS fragment atom order, central atom first.
+
+    Faithful port of ``DP5.py:549-580``: breadth-first expansion over
+    ``radius`` bond hops, then the central atom followed by its discovered
+    neighbourhood sorted ascending. The central atom must stay at index 0 —
+    the descriptor taken for the fragment is ``representation[0]``.
+    """
+    n_atoms = len(adjacency)
+    center = int(center)
+    if not 0 <= center < n_atoms:
+        raise IndexError(f"fragment center {center} out of range for {n_atoms} atoms")
+    seen = {center}
+    discovered = [center]
+    frontier = [center]
+    for _ in range(int(radius)):
+        next_frontier: list[int] = []
+        for node in frontier:
+            for neighbour in adjacency[node]:
+                neighbour = int(neighbour)
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    discovered.append(neighbour)
+                    next_frontier.append(neighbour)
+        frontier = next_frontier
+        if not frontier:
+            break
+    return [center, *sorted(discovered[1:])]
+
+
+def build_fragment_representations(
+    coordinates: np.ndarray,
+    symbols: list[str],
+    atom_indices: list[int],
+    *,
+    mol_block: str | None = None,
+    adjacency: list[list[int]] | tuple[tuple[int, ...], ...] | None = None,
+    max_size: int = FRAG_MAX_SIZE,
+    cut_distance: float = C_DISTANCE,
+    radius: int = FRAGMENT_RADIUS,
+) -> list[np.ndarray]:
+    """Radius-3 fragment descriptors (central atom) for the requested atoms.
+
+    For every index in *atom_indices* the fragment is discovered by a
+    radius-*radius* BFS over the molecular graph, its atoms re-ordered
+    central-first (``DP5.py:580``), and an FCHL19 representation is generated
+    for the subgraph with capacity *max_size*; index 0 of that representation
+    (the central atom) is what ``frag_reps.gz`` trained on.
+
+    Connectivity comes from *adjacency* when supplied (already-validated
+    graph; the pure-numpy path used by tests), otherwise from *mol_block*,
+    parsed with openbabel — imported lazily here, never at module import
+    time. When openbabel is unavailable the lazy import raises
+    ``ImportError``; callers must report typed unavailability rather than
+    fabricate descriptors.
+    """
+    coords = np.asarray(coordinates, dtype=float)
+    symbols_list = list(symbols)
+    if coords.ndim != 2 or coords.shape[1] != 3:
+        raise ValueError(f"coordinates must have shape (N, 3), got {coords.shape}")
+    if coords.shape[0] != len(symbols_list):
+        raise ValueError(
+            f"coordinates rows ({coords.shape[0]}) must match len(symbols) ({len(symbols_list)})"
+        )
+    if adjacency is None:
+        if mol_block is None:
+            raise ValueError("build_fragment_representations requires mol_block or adjacency")
+        adjacency = read_openbabel_adjacency(mol_block)
+    for index in atom_indices:
+        if not 0 <= int(index) < len(adjacency):
+            raise IndexError(f"atom index {index} out of range for {len(adjacency)} atoms")
+    representations: list[np.ndarray] = []
+    for index in atom_indices:
+        fragment_indices = fragment_atom_indices(adjacency, int(index), radius)
+        fragment_coordinates = coords[fragment_indices]
+        fragment_symbols = [symbols_list[atom_index] for atom_index in fragment_indices]
+        representation = generate_fchl_representation(
+            fragment_coordinates,
+            atomic_numbers(fragment_symbols),
+            max_size,
+            cut_distance,
+        )
+        representations.append(representation[0])
+    return representations
+
+
+@lru_cache(maxsize=16)
+def _fragment_asset_facts(models_dir_key: str) -> tuple[int, int, int]:
+    """(n_fragment_train, n_folded_errors, representation_size) from a model dir."""
+    directory = Path(models_dir_key)
+    fragment_reps = load_atomic_reps(directory, use_frag=True)
+    with (directory / "folded_scaled_errors.p").open("rb") as handle:
+        folded_errors = np.asarray(pickle.load(handle))
+    return int(fragment_reps.shape[0]), int(folded_errors.size), int(fragment_reps.shape[2])
+
+
+def fragment_path_status(models_dir: Path | None = None) -> FragmentPathStatus:
+    """Typed availability of the >=86-atom fragment path.
+
+    Statuses (closed vocabulary :data:`FRAGMENT_STATUSES`):
+
+    * ``available`` — openbabel importable, both fragment assets present and
+      ``2 * n_fragment_train == n_folded_errors`` (the KDE weight/residual
+      index pairing).
+    * ``openbabel-missing`` — the SWIG bindings are not importable.
+    * ``assets-missing`` — a fragment asset file is absent.
+    * ``residual-index-mismatch`` — assets present but the fragment
+      similarities cannot be paired with the residual vector. This is the
+      state of the shipped upstream assets (``2 * 63541 != 106416``), where
+      upstream's ``DP5.py`` fragment branch would raise inside
+      ``gaussian_kde`` (modern scipy rejects the length mismatch).
+    """
+    directory = Path(models_dir) if models_dir is not None else _MODELS_DIR
+    if not openbabel_available():
+        return FragmentPathStatus(
+            status=FRAGMENT_STATUS_OPENBABEL_MISSING,
+            reason=(
+                "openbabel python bindings are not importable; the radius-3 "
+                "fragmentation cannot run (install 'openbabel>=3.1')"
+            ),
+        )
+    fragment_path = directory / "frag_reps.gz"
+    folded_path = directory / "folded_scaled_errors.p"
+    if not fragment_path.exists() or not folded_path.exists():
+        return FragmentPathStatus(
+            status=FRAGMENT_STATUS_ASSETS_MISSING,
+            reason=(
+                f"fragment assets missing in {directory}: expected "
+                "frag_reps.gz + folded_scaled_errors.p"
+            ),
+        )
+    n_fragment_train, n_folded_errors, representation_size = _fragment_asset_facts(str(directory))
+    if not fragment_residual_index_ok(n_fragment_train, n_folded_errors):
+        return FragmentPathStatus(
+            status=FRAGMENT_STATUS_INDEX_MISMATCH,
+            reason=(
+                f"frag_reps.gz ({n_fragment_train} training fragments) does not pair "
+                f"with folded_scaled_errors.p ({n_folded_errors} residuals): "
+                f"expected 2 * {n_fragment_train} = {2 * n_fragment_train}"
+            ),
+            n_fragment_train=n_fragment_train,
+            n_folded_errors=n_folded_errors,
+            representation_size=representation_size,
+        )
+    return FragmentPathStatus(
+        status=FRAGMENT_STATUS_AVAILABLE,
+        reason=None,
+        n_fragment_train=n_fragment_train,
+        n_folded_errors=n_folded_errors,
+        representation_size=representation_size,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -787,15 +1103,31 @@ __all__ = [
     "C_DISTANCE",
     "FCHL_SIGMA",
     "FRAG_ATOM_THRESHOLD",
+    "FRAG_MAX_SIZE",
+    "FRAGMENT_RADIUS",
+    "FRAGMENT_STATUSES",
+    "FRAGMENT_STATUS_ASSETS_MISSING",
+    "FRAGMENT_STATUS_AVAILABLE",
+    "FRAGMENT_STATUS_INDEX_MISMATCH",
+    "FRAGMENT_STATUS_OPENBABEL_MISSING",
+    "FragmentPathStatus",
+    "FragmentPathUnavailableError",
     "atom_kernel_similarities",
     "atom_probability_fchl",
     "atomic_numbers",
     "build_atom_representations",
+    "build_fragment_representations",
     "fchl_assets_available",
     "fchl_kernel_active",
+    "fragment_atom_indices",
+    "fragment_path_status",
+    "fragment_residual_index_ok",
+    "fragment_status_fallback_reason",
     "generate_fchl_representation",
     "get_atomic_kernels_numpy",
     "kernel_backend",
     "load_atomic_reps",
+    "openbabel_available",
     "qml_kernel_available",
+    "read_openbabel_adjacency",
 ]

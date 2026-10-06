@@ -34,7 +34,7 @@ nmr/
 | Atom↔peak assignment | `assignment.py` + `scaling.py` | match → regression fit → build_assignments |
 | DP4 probability | `probability.py` | `compute_dp4` (nucleus-aggregated) |
 | DP5 probability | `probability.py` + `error_model.py` | `compute_dp5`/`compute_dp5_goodman` need error model from `load_dp5_model` |
-| FCHL kernels | `fchl.py` | Optional (qml extra); gated by `fchl_assets_available()` / `dp5_fchl_available()` |
+| FCHL kernels | `fchl.py` | Optional (qml extra or `ACP_FCHL_NUMPY=1`); <86 atoms = atomic_reps, ≥86 = openbabel radius-3 fragments against frag_reps — fragment path gated by `fragment_path_status()` (typed available/openbabel-missing/assets-missing/residual-index-mismatch; shipped frag assets fail the residual-index pairing) |
 | Bruker data | `spectra.py` | P3: process Bruker experiment trees (needs `acp.nmr.models` conventions) |
 | Report emission | `report.py` | nmr_report.json + nmr_assignment.xlsx + scatter/error PNGs |
 | Workflow entry | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging → DP4/DP5 (502 L) |
