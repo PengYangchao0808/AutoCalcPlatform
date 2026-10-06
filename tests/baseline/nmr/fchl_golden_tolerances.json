@@ -1,0 +1,105 @@
+{
+  "schema": "acp_nmr_fchl_golden_tolerances_v1",
+  "golden_file": "fchl_golden.json",
+  "golden_sha256": "3534fe6c463e1bb3f6eab154f8a266952876378e71b649b4a665a46a3e686426",
+  "dp5_revision": "b6cf559007a5d13fe79654f37daf945ee1661a23",
+  "frozen_at": "2026-10-06",
+  "environment": {
+    "python": "3.11.13",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "rdkit": "present (atomic_numbers only)",
+    "qml": "NOT importable (qml_kernel_available() == false) — compiled-kernel parity layer NOT_VERIFIED",
+    "note": "Recorded for the freeze; golden bit-reproducibility comes from the NOTICE-pinned assets, not from these library versions."
+  },
+  "measurement": {
+    "commands": [
+      "PYTHONPATH=src python3.11 tests/baseline/nmr/generate_fchl_goldens.py  # computes every layer twice in-process and prints per-layer max |delta|",
+      "PYTHONPATH=src PYTHONHASHSEED=1 python3.11 tests/baseline/nmr/generate_fchl_goldens.py --out-dir /tmp/opencode/g1",
+      "PYTHONPATH=src PYTHONHASHSEED=98765 python3.11 tests/baseline/nmr/generate_fchl_goldens.py --out-dir /tmp/opencode/g2",
+      "cmp /tmp/opencode/g1/fchl_golden.json /tmp/opencode/g2/fchl_golden.json",
+      "PYTHONPATH=src python3.11 tests/baseline/nmr/generate_fchl_goldens.py --check",
+      "PYTHONPATH=src python3.11 -m pytest tests/test_acp_nmr_fchl_golden.py -q"
+    ],
+    "repeats_in_process_per_layer": 2,
+    "repeats_fresh_process": 2,
+    "observed_in_process_max_abs_dev": 0.0,
+    "observed_fresh_process_max_abs_dev": 0.0,
+    "fresh_process_note": "Two fresh processes with different PYTHONHASHSEED produced byte-identical goldens (sha256 3534fe6c463e1bb3f6eab154f8a266952876378e71b649b4a665a46a3e686426); --check likewise passes.",
+    "full_training_set_budget_note": "Measured pure-numpy kernel cost: ~28 ms per training atom (15.1 s for train[:512], 29.1 s for train[:1024]), i.e. ~25 min per query atom against the full 53208-atom atomic_reps.gz. The FCHL candidate layer therefore uses the first 32 training atoms / first 64 folded residuals; layers 1-3 anchor the full-precision descriptor, real training-slice kernel and full-residual KDE separately.",
+    "freeze_policy": "Every layer's observed repeat deviation is exactly 0.0; the frozen rtol=1e-12 is ~4500x float64 eps and orders of magnitude tighter than any decision-relevant layer signal (descriptor neighbour terms 1e-3..8, kernel values spanning 1e-200..1, KDE/probabilities 0.06..0.88). Tolerances were NOT relaxed to make the final probability agree: lower layers carry the tighter absolute floor (1e-300) because a descriptor/kernel regression must fail on its own assertion before the candidate probability is even reached. Any re-freeze must re-run the measurement above and update this block."
+  },
+  "layers": {
+    "descriptor_c0": {
+      "rtol": 1e-12,
+      "atol": 1e-300,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.descriptor_c0"],
+      "note": "Pure float64 descriptor construction; 1e-300 is only an underflow-boundary floor (padding 1e100 is code-constant and covered relatively)."
+    },
+    "descriptor_c1": {
+      "rtol": 1e-12,
+      "atol": 1e-300,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.descriptor_c1"],
+      "note": "Same as descriptor_c0."
+    },
+    "kernel_numpy_query_train32": {
+      "rtol": 1e-12,
+      "atol": 1e-300,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.kernel_numpy_query_train32"],
+      "note": "Real training-slice kernel (first 32 atoms of the pinned atomic_reps.gz); values span 3.3e-200..8.9e-05 with exact underflow zeros; rtol catches relative drift, the floor only rescues literal 0-vs-subnormal boundary cases."
+    },
+    "kernel_numpy_self4": {
+      "rtol": 1e-12,
+      "atol": 1e-300,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.kernel_numpy_self4"],
+      "note": "Training atoms vs themselves; self-kernel diagonal is exactly 1.0 and the remaining entries pin the alchemy/cut terms."
+    },
+    "kernel_qml": {
+      "rtol": 1e-8,
+      "atol": 1e-12,
+      "observed_max_abs_dev": null,
+      "status": "NOT_VERIFIED",
+      "applies_to": ["compiled qml kernel vs golden.kernel_numpy_query_train32"],
+      "note": "Provisional bound: no qml environment was available at freeze time, so compiled-vs-numpy parity was NOT measured and is skipped with an explicit NOT_VERIFIED reason. When qml becomes importable, run the layer, record the observed deviation, and re-freeze this entry; do not treat the current bound as verified."
+    },
+    "kde_weighted_fixed": {
+      "rtol": 1e-12,
+      "atol": 1e-12,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.kde_weighted_fixed"],
+      "note": "Weighted Gaussian KDE over the full checked-in folded_scaled_errors.p (106416 residuals) with fixed linspace(0.001, 1.0) weights via patched kernel seam; independent of kernel-layer correctness by construction."
+    },
+    "kde_zero_weight_fallback": {
+      "rtol": 1e-12,
+      "atol": 1e-12,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.kde_zero_weight_fallback"],
+      "note": "sum(K_sim)==0 branch (DP5.py:98) — unweighted global KDE over the same residual set."
+    },
+    "probability_per_conformer": {
+      "rtol": 1e-12,
+      "atol": 1e-12,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.probability_per_conformer"],
+      "note": "Public GoodmanDP5Model seam on the full checked-in assets; per-conformer scaling + Boltzmann-averaged atom probabilities + gmean + Bayesian rescale."
+    },
+    "probability_single": {
+      "rtol": 1e-12,
+      "atol": 1e-12,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.probability_single"],
+      "note": "Simplified single-residual-set seam (KDE on already-averaged inputs)."
+    },
+    "probability_per_conformer_fchl_reduced32": {
+      "rtol": 1e-12,
+      "atol": 1e-12,
+      "observed_max_abs_dev": 0.0,
+      "applies_to": ["golden.probability_per_conformer_fchl_reduced32"],
+      "note": "FCHL-weighting pipeline on the pinned 32-atom training slice (see measurement.full_training_set_budget_note); backend pinned to the numpy port for determinism — qml parity is the kernel_qml layer."
+    }
+  }
+}
