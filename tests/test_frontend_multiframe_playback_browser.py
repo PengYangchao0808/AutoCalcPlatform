@@ -20,6 +20,7 @@ Prerequisites (CI installs these on one matrix leg)::
 
 from __future__ import annotations
 
+import logging
 import socket
 import threading
 import time
@@ -41,6 +42,8 @@ except ImportError:  # pragma: no cover — old playwright without sync_api
     )
 
 pytestmark = pytest.mark.slow
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -177,36 +180,47 @@ def browser_errors() -> list[str]:
 def browser_page(server_url: str, browser_errors: list[str]) -> Generator[Page, None, None]:
     """Launch headless Chromium, open the Workbench and initialize the viewer.
 
-    Skips (rather than fails) when Chromium binaries or the 3Dmol CDN are
+    Skips (rather than fails) when Chromium binaries or the 3Dmol library are
     unavailable; uncaught page errors are collected into ``browser_errors``
     and asserted at the end of each test via ``_assert_no_page_errors``.
+
+    Teardown is guaranteed by a ``finally`` block: any failure after
+    ``sync_playwright().start()`` still runs the cleanup chain (a leaked
+    sync Playwright context makes every later test in the process die with
+    "Sync API inside the asyncio loop").
     """
     pw_ctx = sync_playwright().start()
+    browser: Browser | None = None
+    context = None
     try:
-        if not _chromium_launchable(pw_ctx):
+        try:
+            if not _chromium_launchable(pw_ctx):
+                pytest.skip(
+                    "Chromium binaries not installed — run 'python -m playwright install chromium'"
+                )
+            browser = pw_ctx.chromium.launch(headless=True)
+        except Exception as exc:
             pytest.skip(
-                "Chromium binaries not installed — "
-                "run 'python -m playwright install chromium'"
+                f"Cannot launch Chromium ({exc}) — run 'python -m playwright install chromium'"
             )
-        browser: Browser = pw_ctx.chromium.launch(headless=True)
-    except Exception as exc:
-        pw_ctx.stop()
-        pytest.skip(
-            f"Cannot launch Chromium ({exc}) — "
-            "run 'python -m playwright install chromium'"
+
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800}, device_scale_factor=1
         )
+        # Hermetic: abort any 3Dmol CDN request (local vendor is authoritative
+        # in ACP_Workbench_v2.html) so the suite never depends on network
+        # access and a CDN regression cannot block DOMContentLoaded.
+        context.route("https://3Dmol.org/**", lambda route: route.abort())
+        page = context.new_page()
+        page.on("pageerror", lambda exc: browser_errors.append(str(exc)))
 
-    context = browser.new_context(viewport={"width": 1280, "height": 800}, device_scale_factor=1)
-    page = context.new_page()
-    page.on("pageerror", lambda exc: browser_errors.append(str(exc)))
-
-    # The Workbench bootstrap (DOMContentLoaded handler) awaits several network
-    # loads BEFORE calling setupEventListeners() (ACP_Workbench_v2.html:25352),
-    # which wires the frame-play/prev/next/slider listeners. Clicking before
-    # that silently no-ops, so mark the moment the listeners exist and wait
-    # for it below.
-    context.add_init_script(
-        """
+        # The Workbench bootstrap (DOMContentLoaded handler) awaits several network
+        # loads BEFORE calling setupEventListeners() (ACP_Workbench_v2.html:25352),
+        # which wires the frame-play/prev/next/slider listeners. Clicking before
+        # that silently no-ops, so mark the moment the listeners exist and wait
+        # for it below.
+        context.add_init_script(
+            """
         (() => {
           window.__acpEventListenersReady = false;
           const timer = setInterval(() => {
@@ -223,43 +237,53 @@ def browser_page(server_url: str, browser_errors: list[str]) -> Generator[Page, 
           }, 5);
         })();
         """
-    )
-
-    page.goto(server_url, wait_until="domcontentloaded")
-
-    try:
-        page.wait_for_function("typeof $3Dmol !== 'undefined'", timeout=15_000)
-    except Exception:
-        error_text = page.evaluate("document.getElementById('viewer-empty')?.textContent || ''")
-        context.close()
-        browser.close()
-        pw_ctx.stop()
-        pytest.skip(
-            f"3Dmol CDN unreachable (frontend shows: '{error_text.strip()}'). "
-            "Tests require network access to https://3Dmol.org/build/3Dmol-min.js"
         )
 
-    page.wait_for_function(
-        "typeof initViewer === 'function' && typeof renderMolDoc === 'function'",
-        timeout=120_000,
-    )
+        page.goto(server_url, wait_until="domcontentloaded")
 
-    initialized = page.evaluate("() => initViewer() === true")
-    assert initialized, "initViewer() failed — 3Dmol viewer could not be created"
+        try:
+            page.wait_for_function("typeof $3Dmol !== 'undefined'", timeout=15_000)
+        except Exception:
+            error_text = page.evaluate("document.getElementById('viewer-empty')?.textContent || ''")
+            pytest.skip(
+                f"3Dmol CDN unreachable (frontend shows: '{error_text.strip()}'). "
+                "Tests require network access to https://3Dmol.org/build/3Dmol-min.js"
+            )
 
-    page.wait_for_function(
-        "typeof window._svLoadXyzToViewer === 'function'",
-        timeout=30_000,
-    )
+        page.wait_for_function(
+            "typeof initViewer === 'function' && typeof renderMolDoc === 'function'",
+            timeout=120_000,
+        )
 
-    # Frame controls are unusable (clicks no-op) until the bootstrap wired them.
-    page.wait_for_function("window.__acpEventListenersReady === true", timeout=60_000)
+        initialized = page.evaluate("() => initViewer() === true")
+        assert initialized, "initViewer() failed — 3Dmol viewer could not be created"
 
-    yield page
+        page.wait_for_function(
+            "typeof window._svLoadXyzToViewer === 'function'",
+            timeout=30_000,
+        )
 
-    context.close()
-    browser.close()
-    pw_ctx.stop()
+        # Frame controls are unusable (clicks no-op) until the bootstrap wired them.
+        page.wait_for_function("window.__acpEventListenersReady === true", timeout=60_000)
+
+        yield page
+    finally:
+        # Guaranteed teardown: each step guarded so a raising close cannot
+        # skip pw_ctx.stop() — stop is the LAST and MUST-run step.
+        try:
+            if context is not None:
+                context.close()
+        except Exception as exc:
+            logger.debug("browser_page teardown: context.close() failed: %s", exc)
+        try:
+            if browser is not None:
+                browser.close()
+        except Exception as exc:
+            logger.debug("browser_page teardown: browser.close() failed: %s", exc)
+        try:
+            pw_ctx.stop()
+        except Exception as exc:
+            logger.debug("browser_page teardown: pw_ctx.stop() failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +337,8 @@ def test_multiframe_playback_bar_stays_visible_during_play(
         "playing: framePlayTimer !== null })"
     )
     assert post_play["display"] == "flex", (
-        f"frame controller inline display must stay flex during playback, got {post_play['display']!r}"
+        "frame controller inline display must stay flex during playback, "
+        f"got {post_play['display']!r}"
     )
     assert post_play["stopLabel"], "Play button must still read Stop while playback is running"
     assert post_play["playing"], "playback interval must still be armed after the tick"

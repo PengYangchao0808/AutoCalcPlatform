@@ -17,13 +17,16 @@ Prerequisites (CI installs these automatically on one matrix leg)::
 
 from __future__ import annotations
 
+import logging
 import math
 import socket
 import threading
 import time
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Guard: skip the entire module if playwright is not installed
@@ -34,7 +37,7 @@ _playwright = pytest.importorskip(
 )
 
 try:
-    from playwright.sync_api import sync_playwright, Page, Browser  # noqa: F401
+    from playwright.sync_api import Browser, Page, sync_playwright  # noqa: F401
 except ImportError:  # pragma: no cover — old playwright without sync_api
     pytest.skip(
         "playwright.sync_api unavailable — upgrade playwright >= 1.40",
@@ -87,6 +90,7 @@ def _chromium_launchable(playwright_instance) -> bool:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def server_url() -> Generator[str, None, None]:
@@ -151,88 +155,105 @@ def browser_page(server_url: str) -> Generator[Page, None, None]:
 
     Skips the test (rather than failing) when Chromium binaries are not
     installed — the error message tells the developer how to install them.
+
+    Teardown is guaranteed by a ``finally`` block: any failure after
+    ``sync_playwright().start()`` still runs the cleanup chain (a leaked
+    sync Playwright context makes every later test in the process die with
+    "Sync API inside the asyncio loop").
     """
     import os
 
     pw_ctx = sync_playwright().start()
+    browser: Browser | None = None
+    context = None
     try:
-        if not _chromium_launchable(pw_ctx):
+        try:
+            if not _chromium_launchable(pw_ctx):
+                pytest.skip(
+                    "Chromium binaries not installed — "
+                    "run 'python -m playwright install --with-deps chromium'"
+                )
+            browser = pw_ctx.chromium.launch(headless=True)
+        except Exception as exc:
             pytest.skip(
-                "Chromium binaries not installed — "
+                f"Cannot launch Chromium ({exc}) — "
                 "run 'python -m playwright install --with-deps chromium'"
             )
-        browser: Browser = pw_ctx.chromium.launch(headless=True)
-    except Exception as exc:
-        pw_ctx.stop()
-        pytest.skip(
-            f"Cannot launch Chromium ({exc}) — "
-            "run 'python -m playwright install --with-deps chromium'"
+
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            device_scale_factor=1,
         )
+        # Hermetic: the workbench's only external resource is the 3Dmol CDN
+        # script tag (local vendor is authoritative in ACP_Workbench_v2.html).
+        # Abort any CDN request so these tests never depend on network access
+        # and a CDN regression cannot block DOMContentLoaded.
+        context.route("https://3Dmol.org/**", lambda route: route.abort())
+        page = context.new_page()
 
-    context = browser.new_context(
-        viewport={"width": 1280, "height": 800},
-        device_scale_factor=1,
-    )
-    page = context.new_page()
+        # Navigate and wait for the page to be ready.
+        page.goto(server_url, wait_until="domcontentloaded")
 
-    # Navigate and wait for the page to be ready.
-    page.goto(server_url, wait_until="domcontentloaded")
+        # 3Dmol must have loaded (local vendor; a missing library skips with
+        # a clear reason instead of failing).
+        try:
+            page.wait_for_function(
+                "typeof $3Dmol !== 'undefined'",
+                timeout=15_000,
+            )
+        except Exception:
+            # Check if it's a CDN issue by looking for the error message the
+            # frontend shows when 3Dmol fails to load.
+            error_text = page.evaluate("document.getElementById('viewer-empty')?.textContent || ''")
+            pytest.skip(
+                f"3Dmol CDN unreachable (frontend shows: '{error_text.strip()}'). "
+                "Tests require network access to https://3Dmol.org/build/3Dmol-min.js"
+            )
 
-    # 3Dmol is loaded from CDN (https://3Dmol.org/build/3Dmol-min.js).
-    # If the CDN is unreachable, skip with a clear reason.
-    try:
+        # Wait for the app's viewer globals to be defined.
         page.wait_for_function(
-            "typeof $3Dmol !== 'undefined'",
-            timeout=15_000,
-        )
-    except Exception:
-        # Check if it's a CDN issue by looking for the error message the
-        # frontend shows when 3Dmol fails to load.
-        error_text = page.evaluate(
-            "document.getElementById('viewer-empty')?.textContent || ''"
-        )
-        browser.close()
-        pw_ctx.stop()
-        pytest.skip(
-            f"3Dmol CDN unreachable (frontend shows: '{error_text.strip()}'). "
-            "Tests require network access to https://3Dmol.org/build/3Dmol-min.js"
+            "typeof initViewer === 'function' && typeof renderMolDoc === 'function'",
+            timeout=120_000,
         )
 
-    # Wait for the app's viewer globals to be defined.
-    page.wait_for_function(
-        "typeof initViewer === 'function' && typeof renderMolDoc === 'function'",
-        timeout=120_000,
-    )
+        # Initialize the viewer (equivalent to the frontend's DOMContentLoaded).
+        page.evaluate("initViewer()")
 
-    # Initialize the viewer (equivalent to the frontend's DOMContentLoaded).
-    page.evaluate("initViewer()")
+        # 3Dmol's ResizeObserver-based framing never settles in headless CI
+        # (SwiftShader WebGL + headless Chromium layout quirks).
+        if os.environ.get("CI"):
+            pytest.skip("3Dmol framing tests unreliable in headless CI")
 
-    # 3Dmol's ResizeObserver-based framing never settles in headless CI
-    # (SwiftShader WebGL + headless Chromium layout quirks).
-    if os.environ.get("CI"):
-        browser.close()
-        pw_ctx.stop()
-        pytest.skip("3Dmol framing tests unreliable in headless CI")
-
-    yield page
-
-    # Teardown: close browser cleanly.
-    context.close()
-    browser.close()
-    pw_ctx.stop()
+        yield page
+    finally:
+        # Guaranteed teardown: each step guarded so a raising close cannot
+        # skip pw_ctx.stop() — stop is the LAST and MUST-run step.
+        try:
+            if context is not None:
+                context.close()
+        except Exception as exc:
+            logger.debug("browser_page teardown: context.close() failed: %s", exc)
+        try:
+            if browser is not None:
+                browser.close()
+        except Exception as exc:
+            logger.debug("browser_page teardown: browser.close() failed: %s", exc)
+        try:
+            pw_ctx.stop()
+        except Exception as exc:
+            logger.debug("browser_page teardown: pw_ctx.stop() failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.slow
 class TestMainViewerFraming:
     """Verify the main 3D viewer centers molecules after first load."""
 
-    def test_main_viewer_first_load_centers_model(
-        self, browser_page: Page
-    ) -> None:
+    def test_main_viewer_first_load_centers_model(self, browser_page: Page) -> None:
         """After loading a molecule, ``frame3DViewer`` should center the
         camera on the bounding-box center (not at the origin).
 
@@ -261,8 +282,7 @@ class TestMainViewerFraming:
         # the test will fail with a clear message.
         try:
             page.wait_for_function(
-                "typeof mainViewerFraming !== 'undefined' && "
-                "mainViewerFraming.settled === true",
+                "typeof mainViewerFraming !== 'undefined' && mainViewerFraming.settled === true",
                 timeout=120_000,
             )
         except Exception:
@@ -304,16 +324,16 @@ class TestMainViewerFraming:
         # approximately the negative of the bbox center, because center()
         # translates the model group so the bbox centroid sits at the origin.
         # Tolerance: ≤ 1.0 Å per axis.
-        TOL = 1.0
+        tol = 1.0
         view_x, view_y, view_z = view[0], view[1], view[2]
-        assert math.fabs(view_x - (-bbox["cx"])) <= TOL, (
-            f"view X {view_x:.3f} != -bbox.cx {-bbox['cx']:.3f} (tol {TOL})"
+        assert math.fabs(view_x - (-bbox["cx"])) <= tol, (
+            f"view X {view_x:.3f} != -bbox.cx {-bbox['cx']:.3f} (tol {tol})"
         )
-        assert math.fabs(view_y - (-bbox["cy"])) <= TOL, (
-            f"view Y {view_y:.3f} != -bbox.cy {-bbox['cy']:.3f} (tol {TOL})"
+        assert math.fabs(view_y - (-bbox["cy"])) <= tol, (
+            f"view Y {view_y:.3f} != -bbox.cy {-bbox['cy']:.3f} (tol {tol})"
         )
-        assert math.fabs(view_z - (-bbox["cz"])) <= TOL, (
-            f"view Z {view_z:.3f} != -bbox.cz {-bbox['cz']:.3f} (tol {TOL})"
+        assert math.fabs(view_z - (-bbox["cz"])) <= tol, (
+            f"view Z {view_z:.3f} != -bbox.cz {-bbox['cz']:.3f} (tol {tol})"
         )
 
         # --- Assertion (b): canvas CSS size ≈ container size ---
@@ -334,14 +354,14 @@ class TestMainViewerFraming:
             }"""
         )
         assert sizes is not None, "Canvas or container element not found"
-        SIZE_TOL = 4.0  # pixels
-        assert math.fabs(sizes["canvasW"] - sizes["containerW"]) <= SIZE_TOL, (
+        size_tol = 4.0  # pixels
+        assert math.fabs(sizes["canvasW"] - sizes["containerW"]) <= size_tol, (
             f"Canvas width {sizes['canvasW']:.1f} != container {sizes['containerW']:.1f} "
-            f"(tol {SIZE_TOL}px)"
+            f"(tol {size_tol}px)"
         )
-        assert math.fabs(sizes["canvasH"] - sizes["containerH"]) <= SIZE_TOL, (
+        assert math.fabs(sizes["canvasH"] - sizes["containerH"]) <= size_tol, (
             f"Canvas height {sizes['canvasH']:.1f} != container {sizes['containerH']:.1f} "
-            f"(tol {SIZE_TOL}px)"
+            f"(tol {size_tol}px)"
         )
 
     def test_main_viewer_resize_after_settle_preserves_user_camera(
@@ -369,8 +389,7 @@ class TestMainViewerFraming:
 
         try:
             page.wait_for_function(
-                "typeof mainViewerFraming !== 'undefined' && "
-                "mainViewerFraming.settled === true",
+                "typeof mainViewerFraming !== 'undefined' && mainViewerFraming.settled === true",
                 timeout=120_000,
             )
         except Exception:
@@ -406,11 +425,11 @@ class TestMainViewerFraming:
 
         # The view must match the user-adjusted view, NOT the original framing.
         view_after_resize = page.evaluate("viewer.getView().slice()")
-        CAM_TOL = 0.5
+        cam_tol = 0.5
         for i in range(min(len(view_after_pan), len(view_after_resize), 3)):
-            assert math.fabs(view_after_resize[i] - view_after_pan[i]) <= CAM_TOL, (
+            assert math.fabs(view_after_resize[i] - view_after_pan[i]) <= cam_tol, (
                 f"Axis {i}: view after resize {view_after_resize[i]:.3f} != "
-                f"user view {view_after_pan[i]:.3f} (tol {CAM_TOL}). "
+                f"user view {view_after_pan[i]:.3f} (tol {cam_tol}). "
                 "Post-settle resize re-framed the camera — this is the bug."
             )
 
@@ -419,9 +438,7 @@ class TestMainViewerFraming:
 class TestPreviewViewerFraming:
     """Verify the new-task modal preview viewer centres molecules."""
 
-    def test_preview_viewer_modal_centers_model(
-        self, browser_page: Page
-    ) -> None:
+    def test_preview_viewer_modal_centers_model(self, browser_page: Page) -> None:
         """Open the new-task modal, load a structure into the preview viewer,
         and verify that the camera centres on the molecule.
 
@@ -494,9 +511,7 @@ class TestPreviewViewerFraming:
             )
         except Exception:
             # Close the modal before failing to avoid leaking state.
-            page.evaluate(
-                "() => { if (typeof closeModal === 'function') closeModal(); }"
-            )
+            page.evaluate("() => { if (typeof closeModal === 'function') closeModal(); }")
             pytest.fail(
                 "previewViewerFraming.settled never became true within 10 s. "
                 "Either previewViewerFraming is not defined (parallel framing "
@@ -528,22 +543,20 @@ class TestPreviewViewerFraming:
         )
 
         # Close the modal to clean up.
-        page.evaluate(
-            "() => { if (typeof closeModal === 'function') closeModal(); }"
-        )
+        page.evaluate("() => { if (typeof closeModal === 'function') closeModal(); }")
 
         assert result is not None, (
             "previewViewer or previewModel not available after framing settled"
         )
 
-        TOL = 1.0
+        tol = 1.0
         vx, vy, vz = result["view"][0], result["view"][1], result["view"][2]
-        assert math.fabs(vx - (-result["cx"])) <= TOL, (
-            f"Preview view X {vx:.3f} != -bbox.cx {-result['cx']:.3f} (tol {TOL})"
+        assert math.fabs(vx - (-result["cx"])) <= tol, (
+            f"Preview view X {vx:.3f} != -bbox.cx {-result['cx']:.3f} (tol {tol})"
         )
-        assert math.fabs(vy - (-result["cy"])) <= TOL, (
-            f"Preview view Y {vy:.3f} != -bbox.cy {-result['cy']:.3f} (tol {TOL})"
+        assert math.fabs(vy - (-result["cy"])) <= tol, (
+            f"Preview view Y {vy:.3f} != -bbox.cy {-result['cy']:.3f} (tol {tol})"
         )
-        assert math.fabs(vz - (-result["cz"])) <= TOL, (
-            f"Preview view Z {vz:.3f} != -bbox.cz {-result['cz']:.3f} (tol {TOL})"
+        assert math.fabs(vz - (-result["cz"])) <= tol, (
+            f"Preview view Z {vz:.3f} != -bbox.cz {-result['cz']:.3f} (tol {tol})"
         )
