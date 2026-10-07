@@ -1430,6 +1430,103 @@ def _amendment_p_hess_teeth(worktree: str) -> list[str]:
     return issues
 
 
+# ── Amendment Q: scan MaxIter failure-message enrichment (2026-10-07, plan
+#    acp-legacy-bug-remediation todo 4 / BUG-3a, commit d65d6e1) ─────────────
+#
+# The per-point geometry-iteration budget piped to ORCA ``%geom MaxIter``
+# (``geom_maxiter``) enriched ``ORCAInterface.relaxed_scan``'s failure
+# branch: it computes the effective budget and reports the ``raise
+# --geom-maxiter`` remedy instead of the bare ``"ORCA relaxed scan failed"``
+# message.  Sanctioned scopes: the ``maxiter`` computation and the multi-line
+# message inside ``relaxed_scan`` (worktree) plus the baseline bare-message
+# line (baseline).  Teeth: the effective-MaxIter computation and the remedy
+# hint must survive in ``relaxed_scan`` so the registration cannot outlive
+# the feature.
+
+_AMENDMENT_Q_DELETED_LINE = '                message="ORCA relaxed scan failed",'
+_AMENDMENT_Q_MESSAGE_MARKERS = ("per-point geometry MaxIter", "raise --geom-maxiter")
+
+
+def _is_amendment_q_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions: the enriched relaxed_scan failure branch."""
+    scan_range = _func_range(worktree_src, "relaxed_scan", "ORCAInterface")
+    if scan_range is None or not scan_range[0] <= ln <= scan_range[1]:
+        return False
+    stripped = txt.strip()
+    return stripped.startswith("maxiter = geom_maxiter") or any(
+        marker in txt for marker in _AMENDMENT_Q_MESSAGE_MARKERS
+    )
+
+
+def _is_amendment_q_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletion: the baseline bare relaxed_scan failure message."""
+    if txt != _AMENDMENT_Q_DELETED_LINE:
+        return False
+    scan_range = _func_range(baseline_src, "relaxed_scan", "ORCAInterface")
+    return scan_range is not None and scan_range[0] <= ln <= scan_range[1]
+
+
+def _amendment_q_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: the relaxed_scan failure branch must keep the MaxIter remedy."""
+    issues: list[str] = []
+    scan_range = _func_range(worktree, "relaxed_scan", "ORCAInterface")
+    if scan_range is None:
+        issues.append("  Amendment Q scope ORCAInterface.relaxed_scan missing")
+        return issues
+    body = "\n".join(worktree.splitlines()[scan_range[0] - 1 : scan_range[1]])
+    if "maxiter = geom_maxiter" not in body:
+        issues.append("  Amendment Q: relaxed_scan must compute the effective geom MaxIter")
+    if "per-point geometry MaxIter" not in body:
+        issues.append("  Amendment Q: relaxed_scan failure message must report the MaxIter")
+    if "raise --geom-maxiter" not in body:
+        issues.append("  Amendment Q: relaxed_scan failure message must keep the remedy hint")
+    return issues
+
+
+def test_amendment_q_predicates_confined_and_negatives() -> None:
+    """Amendment Q is confined to the relaxed_scan failure branch — negative injection."""
+    fp = "src/cccp/qc/interfaces/orca.py"
+    worktree = _worktree_content(fp)
+    baseline_src = _baseline_content(fp)
+    scan_range = _func_range(worktree, "relaxed_scan", "ORCAInterface")
+    base_scan = _func_range(baseline_src, "relaxed_scan", "ORCAInterface")
+    assert scan_range is not None
+    assert base_scan is not None
+
+    added, deleted = _diff_hunks(fp)
+    q_added = [(ln, txt) for ln, txt in added if _is_amendment_q_addition(ln, txt, worktree)]
+    assert len(q_added) == 3, f"expected 3 sanctioned additions, got {q_added}"
+
+    # Confinement: the same text outside relaxed_scan stays unauthorized, and
+    # in-scope lines without the MaxIter markers are not blanket-allowed.
+    other_range = _func_range(worktree, "_run_orca", "ORCAInterface")
+    assert other_range is not None
+    assert not _is_amendment_q_addition(other_range[0], "maxiter = geom_maxiter", worktree)
+    assert not _is_amendment_q_addition(scan_range[0], "success = True", worktree)
+
+    q_deleted = [
+        (ln, txt) for ln, txt in deleted if _is_amendment_q_deletion(ln, txt, baseline_src)
+    ]
+    assert len(q_deleted) == 1, f"expected 1 sanctioned deletion, got {q_deleted}"
+
+    # Confinement: the exact deleted text elsewhere in the baseline is rejected.
+    assert not _is_amendment_q_deletion(base_scan[1] + 1, _AMENDMENT_Q_DELETED_LINE, baseline_src)
+    assert not _is_amendment_q_deletion(base_scan[0], "success = True", baseline_src)
+
+    assert not _amendment_q_orca_teeth(worktree)
+    stripped = worktree.replace("raise --geom-maxiter", "raise the geometry budget")
+    issues = _amendment_q_orca_teeth(stripped)
+    assert any("remedy hint" in issue for issue in issues)
+    dropped = worktree.replace(
+        '            maxiter = geom_maxiter if geom_maxiter is not None else "ORCA default"', ""
+    )
+    issues = _amendment_q_orca_teeth(dropped)
+    assert any("effective geom MaxIter" in issue for issue in issues)
+    renamed = worktree.replace("def relaxed_scan(", "def _renamed_scan(", 1)
+    issues = _amendment_q_orca_teeth(renamed)
+    assert any("scope" in issue for issue in issues)
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1576,6 +1673,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_n_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_q_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -1619,6 +1718,7 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_i_orca_teeth(worktree))
             violations.extend(_amendment_l_orca_teeth(worktree))
             violations.extend(_amendment_n_orca_teeth(worktree))
+            violations.extend(_amendment_q_orca_teeth(worktree))
             continue
 
         # ── interfaces/base.py: Amendment J (QCResult merge) ─────────────
@@ -1720,6 +1820,11 @@ def test_deleted_lines_in_target_regions() -> None:
             ]
             bad_entries = [
                 (ln, t) for ln, t in bad_entries if not _is_amendment_n_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_q_deletion(ln, t, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             if _is_pure_reexport_shim(_worktree_content(fp)):
