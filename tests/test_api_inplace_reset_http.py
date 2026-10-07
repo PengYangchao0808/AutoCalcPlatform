@@ -17,6 +17,10 @@ progress.  Observed latencies are recorded in
 (verdict reproduced / not_reproduced; on a hang a faulthandler thread dump is
 saved for TODO 12).
 
+BUG-9 disposition: not reproduced on dev host 2026-10-08, see
+.omo/evidence/acp-legacy-bug-remediation/task-12-acp-legacy-bug-remediation.md
+— environment gap enumeration; harness = standing gate.
+
 Boundaries: the ``fake`` workflow is runner-internal (no QC binaries; completes
 in-process), so NO manifest / output-dir / artifact semantics are asserted —
 latency and HTTP status shapes only.  ``fake`` is not in ``EDIT_ACTIVE_WORKFLOWS``
