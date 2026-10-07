@@ -263,6 +263,15 @@ _SCHEDULER_MARKERS: set[str] = {
     "task.json",
     "input_source.json",
     "resume_source.json",
+    # Preserved across rerun/edit (structure_snapshots.preserve_outputs) —
+    # unregistered here it redirected reruns to <work_dir>_1 (BUG-1a).
+    ".structure_history",
+    # Runner root-write audit (ANTI #11 closeout): written at the task root
+    # BEFORE the workflow subprocess starts, so present at resolve time on
+    # first run, rerun and continue alike.
+    "electronic_state.json",
+    "input.com",
+    "input.inp",
 }
 
 
