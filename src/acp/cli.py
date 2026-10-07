@@ -3165,7 +3165,10 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
         return 1
     if result.status == "completed":
         logger.info("Single-point calculation completed")
-        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        logger.info(
+            "  Energy: %s Hartree",
+            result.metadata.get("energy") or result.metadata.get("sp_energy") or "N/A",
+        )
         reporter.complete()
         return 0
     logger.error("Single-point calculation failed: %s", result.error)

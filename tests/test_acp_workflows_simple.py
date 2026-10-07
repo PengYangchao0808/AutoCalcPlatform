@@ -8,6 +8,7 @@ execution for supported entry points, and CLI help smoke tests.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -477,6 +478,8 @@ def test_run_singlepoint_mock(fake_backend, tmp_path):
     fake_backend.set_result("single_point", energy=-40.0, success=True)
     result = run_singlepoint(str(inp), output_dir=out)
     assert result.status == "completed"
+    # Canonical summary key "energy" plus legacy "sp_energy" coexist (BUG-7).
+    assert result.metadata.get("energy") == -40.0
     assert result.metadata.get("sp_energy") == -40.0
     assert len(fake_backend.calls) == 1
 
@@ -636,6 +639,9 @@ def test_run_xtb_optimize_mock(fake_backend, tmp_path):
     assert result.status == "completed"
     assert result.metadata.get("converged") is True
     assert result.metadata.get("energy") == -10.5
+    # OPTIMIZE-kind writes the canonical "energy" key only; the legacy
+    # "sp_energy" alias is singlepoint-exclusive (BUG-7 key contract).
+    assert "sp_energy" not in result.metadata
 
 
 def test_run_xtb_optimize_gfn_mapping(tmp_path):
@@ -699,20 +705,33 @@ def test_run_frequency_no_modes(fake_backend, tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("workflow", "handler", "stage"),
+    ("workflow", "handler", "stage", "metadata", "energy_value"),
     [
-        ("singlepoint", "_handle_singlepoint", "single_point"),
-        ("optimize", "_handle_optimize", "optimize"),
-        ("frequency", "_handle_frequency", "frequency"),
-        ("xtb_optimize", "_handle_xtb_optimize", "xtb_optimize"),
+        # New-form singlepoint metadata writes BOTH keys (canonical + legacy).
+        (
+            "singlepoint",
+            "_handle_singlepoint",
+            "single_point",
+            {"energy": -40.0, "sp_energy": -40.0},
+            -40.0,
+        ),
+        # Legacy results carry only sp_energy — summary must still render a number.
+        ("singlepoint", "_handle_singlepoint", "single_point", {"sp_energy": -40.0}, -40.0),
+        ("optimize", "_handle_optimize", "optimize", {"energy": -76.42}, -76.42),
+        ("frequency", "_handle_frequency", "frequency", {}, None),
+        ("xtb_optimize", "_handle_xtb_optimize", "xtb_optimize", {"energy": -10.5}, -10.5),
+        ("casscf", "_handle_casscf", "casscf", {"energy": -1.23}, -1.23),
     ],
 )
 def test_simple_cli_handlers_construct_reporter(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
     workflow: str,
     handler: str,
     stage: str,
+    metadata: dict[str, Any],
+    energy_value: float | None,
 ) -> None:
     import acp.cli as acp_cli
     import acp.workflows.simple as simple_workflow
@@ -721,31 +740,41 @@ def test_simple_cli_handlers_construct_reporter(
     input_path = tmp_path / "mol.xyz"
     input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
     output_dir = tmp_path / f"{workflow}-output"
-    args = acp_cli.build_parser().parse_args(
-        [
-            "run",
-            workflow,
-            "--input",
-            str(input_path),
-            "--output",
-            str(output_dir),
-            "--log-level",
-            "ERROR",
-        ]
-    )
+    cli_args = [
+        "run",
+        workflow,
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_dir),
+        "--log-level",
+        "ERROR",
+    ]
+    if workflow == "casscf":
+        cli_args += ["--nel", "4", "--norb", "4"]
+    args = acp_cli.build_parser().parse_args(cli_args)
     captured: dict[str, Any] = {}
 
     def fake_run(**kwargs) -> WorkflowResult:
         captured.update(kwargs)
-        return WorkflowResult(status="completed", metadata={})
+        return WorkflowResult(status="completed", metadata=dict(metadata))
 
     monkeypatch.setattr(simple_workflow, f"run_{workflow}", fake_run)
 
-    assert getattr(acp_cli, handler)(args) == 0
+    with caplog.at_level(logging.INFO, logger="acp.cli"):
+        assert getattr(acp_cli, handler)(args) == 0
     assert isinstance(captured["progress_reporter"], ProgressReporter)
     state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
     assert list(state["stages"]) == [stage]
     assert state["status"] == "completed"
+
+    energy_lines = [r.getMessage() for r in caplog.records if "Energy:" in r.getMessage()]
+    if energy_value is None:
+        assert energy_lines == []
+    else:
+        assert len(energy_lines) == 1
+        assert "N/A" not in energy_lines[0]
+        assert str(energy_value) in energy_lines[0]
 
 
 def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: Path) -> None:

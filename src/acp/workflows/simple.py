@@ -513,6 +513,9 @@ def _workflow_result(execution: Any, calc_dir: Path) -> WorkflowResult:
             metadata["n_frequencies"] = len(result.frequencies)
             metadata["has_frequencies"] = bool(result.frequencies)
         elif step_state.kind is StepKind.SINGLEPOINT:
+            # Canonical summary key is "energy" (matches OPTIMIZE/CASSCF and the CLI
+            # summary read); "sp_energy" kept for legacy results/readers.
+            metadata["energy"] = result.energy
             metadata["sp_energy"] = result.energy
         elif step_state.kind is StepKind.THERMOCHEMISTRY:
             metadata["thermo_success"] = result.status == "completed"
