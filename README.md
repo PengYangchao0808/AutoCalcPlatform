@@ -312,7 +312,7 @@ acp run irc --input ts_structure.xyz --input-role transition_state \
 acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 
 # === 简单 ORCA 工作流 ===
-acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
+acp run singlepoint --input molecule.xyz --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c"
 acp run frequency --input molecule.xyz
 acp run xtb_optimize --input molecule.xyz
@@ -374,7 +374,7 @@ acp run scan --input <SMILES或文件路径> \
              --output <输出目录>
              [--nproc --mem --config ...]
 
-acp run singlepoint|optimize|frequency|xtb_optimize --input <SMILES或文件路径>
+acp run singlepoint|optimize|frequency|xtb_optimize --input <结构文件路径（.xyz/.gjf/.com/.inp）>
                   --output <输出目录>
                   --method <method> --basis <basis>
                   --nproc --mem --config ...
@@ -402,7 +402,7 @@ acp run serve [--host <host>] [--port <port>] [--reload]
 
 ```bash
 # 生成配置模板
-acp run singlepoint --input "CCO" --save-config my_config.yaml
+acp run singlepoint --input molecule.xyz --save-config my_config.yaml
 
 # 编辑 my_config.yaml 调整参数
 # 然后用该配置运行

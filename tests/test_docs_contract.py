@@ -247,3 +247,44 @@ def test_parser_accepts_irc_file_provenance() -> None:
     )
     assert args.ts_provenance == "prov.json"
     assert args.input_role == "transition_state"
+
+
+# --- (f) simple workflows are file-input only (todo 17) ---------------------
+#
+# ``acp run singlepoint|optimize|frequency|xtb_optimize --help`` documents
+# "Input structure file (XYZ, GJF, COM, ORCA .inp)" and ``_check_input``
+# enforces exactly those suffixes; SMILES examples for these workflows would
+# advertise an entry point that cannot run (F3 finding).
+
+_SIMPLE_WORKFLOWS = ("singlepoint", "optimize", "frequency", "xtb_optimize")
+_SIMPLE_INPUT_TOKEN = re.compile(r"--input[ =](?P<token>\"[^\"]+\"|'[^']+'|\S+)")
+_SIMPLE_INPUT_SUFFIXES = (".xyz", ".gjf", ".com", ".inp")
+
+
+@pytest.mark.parametrize("workflow", _SIMPLE_WORKFLOWS)
+def test_simple_workflow_examples_use_file_inputs(workflow: str) -> None:
+    for path in (README, ROOT_AGENTS):
+        commands = _commands(_read(path), workflow)
+        assert commands, f"{path.name} has no runnable {workflow} example"
+        for command in commands:
+            match = _SIMPLE_INPUT_TOKEN.search(command)
+            assert match is not None, f"{path.name} {workflow} example lacks --input: {command}"
+            token = match.group("token").strip("\"'")
+            if token.startswith("<"):
+                assert "SMILES" not in token.upper(), (
+                    f"{path.name} {workflow} synopsis still advertises SMILES: {token}"
+                )
+                continue
+            assert token.lower().endswith(_SIMPLE_INPUT_SUFFIXES), (
+                f"{path.name} {workflow} example uses a non-file --input token {token!r}; "
+                f"simple workflows accept {'/'.join(_SIMPLE_INPUT_SUFFIXES)} only"
+            )
+
+
+def test_manual_simple_workflow_lines_do_not_promise_smiles() -> None:
+    for lineno, line in enumerate(_read(MANUAL).splitlines(), start=1):
+        if "SMILES" not in line:
+            continue
+        assert not re.search(r"acp run (singlepoint|optimize|frequency|xtb_optimize)\b", line), (
+            f"{MANUAL.name}:{lineno} advertises SMILES for a simple workflow: {line!r}"
+        )

@@ -150,7 +150,7 @@ acp run OrcaGradient --gradient-config request.json --output ./grad_out
 acp run irc --input ts_structure.xyz --input-role transition_state --ts-provenance prov.json --output ./irc_out
 acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out   # 默认无 ScanTS；--scants 显式 opt-in
 acp run nmr --input "CCO" --spectrum exp_spectrum.txt --output ./nmr_out
-acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
+acp run singlepoint --input molecule.xyz --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c" --charge 0 --multiplicity 1
 acp run frequency --input molecule.xyz
 acp run xtb_optimize --input molecule.xyz

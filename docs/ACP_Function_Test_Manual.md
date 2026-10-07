@@ -269,7 +269,7 @@ EOF
 
 ```bash
 acp run singlepoint --input water.xyz --method r2SCAN-3c --output /tmp/acp_mt/sp --nproc 4
-# 或 SMILES：acp run singlepoint --input "O" --method wB97X-D4 --basis def2-TZVPPD
+# 注：simple 系列仅接受结构文件输入（.xyz/.gjf/.com/.inp）；SMILES 输入支持见 scan / Confsearch / nmr 工作流
 ```
 
 - **预期产物**（`<out>/RESULT/`）：
