@@ -10,6 +10,7 @@ Coverage layers:
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -1392,5 +1393,74 @@ def test_inplace_snapshot_failure_does_not_cleanup_or_queue(tmp_path: Path) -> N
         assert (root / "RESULT" / "optimized.xyz").is_file()
         assert (root / "WORK" / "old.out").is_file()
         assert manager.get(record.id).status == JobStatus.FAILED
+    finally:
+        manager.shutdown()
+
+
+def _wait_terminal(manager: JobManager, job_id: str, timeout: float = 60.0) -> JobRecord:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        record = manager.get(job_id)
+        if (
+            record is not None
+            and record.status.is_terminal
+            and job_id not in manager._submission_jobs
+        ):
+            return record
+        time.sleep(0.25)
+    raise AssertionError(f"job {job_id} did not settle within {timeout}s")
+
+
+def test_fake_rerun_and_edit_reuse_task_dir_without_sibling(tmp_path: Path) -> None:
+    """BUG-1(b) manager-layer guard (scheduler side only).
+
+    ``fake`` is an in-process runner workflow: it never passes through
+    ``_resolve_output_dir`` and produces no ``result_manifest.json``, so this
+    test asserts only what the scheduler owns.  In-place rerun and
+    edit-recalculate must keep the SAME task directory (no ``<work_dir>_1``
+    sibling), preserve ``.structure_history``, archive each closed attempt
+    under ``WORK/00_RUNTIME/attempts/<n>/``, and leave the fake run COMPLETED
+    with ``state.json`` at the task root.
+    """
+    manager = JobManager(run_root=tmp_path / "runs", max_running=1)
+    try:
+        record = manager.submit(
+            JobSpec(workflow="fake", name="fake_inplace", input={"source": "CCO"})
+        )
+        done = _wait_terminal(manager, record.id)
+        assert done.status == JobStatus.COMPLETED
+        work_dir = Path(done.work_dir)
+        assert (work_dir / "state.json").is_file()
+
+        history = work_dir / ".structure_history"
+        history.mkdir(exist_ok=True)
+        (history / "sources.json").write_text("[]", encoding="utf-8")
+
+        assert manager.rerun_job(record.id) is not None
+        rerun_done = _wait_terminal(manager, record.id)
+        assert rerun_done.status == JobStatus.COMPLETED
+        assert Path(rerun_done.work_dir) == work_dir
+        assert not (work_dir.parent / f"{work_dir.name}_1").exists()
+        assert history.is_dir()
+        assert (work_dir / "state.json").is_file()
+        assert (work_dir / "WORK" / "00_RUNTIME" / "attempts" / "1").is_dir()
+
+        new_spec = replace(rerun_done.spec, resources={"nproc": 2})
+        manager.edit_recalculate(
+            record.id,
+            mode="in_place",
+            new_spec=new_spec,
+            expected_source_revision=compute_source_revision(rerun_done),
+            request_id="fake-edit-1",
+            payload_hash="fake-hash",
+            payload_json="{}",
+        )
+        edit_done = _wait_terminal(manager, record.id)
+        assert edit_done.status == JobStatus.COMPLETED
+        assert Path(edit_done.work_dir) == work_dir
+        assert not (work_dir.parent / f"{work_dir.name}_1").exists()
+        assert history.is_dir()
+        assert (work_dir / "WORK" / "00_RUNTIME" / "attempts" / "2").is_dir()
+        assert (work_dir / "state.json").is_file()
     finally:
         manager.shutdown()

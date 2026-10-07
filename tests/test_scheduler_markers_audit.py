@@ -68,10 +68,12 @@ _EXPECTED_SCHEDULER_MARKERS: frozenset[str] = frozenset(
 _MARKER_DIRS: frozenset[str] = frozenset({"WORK", "RESULT", "INPUT", ".structure_history"})
 
 
-def _materialize_marker_tree(base: Path) -> None:
+def _materialize_marker_tree(base: Path, *, include_identity: bool = True) -> None:
     """Create *base* holding job.json + task.json + every snapshot marker."""
     base.mkdir(parents=True)
     for name in sorted(_EXPECTED_SCHEDULER_MARKERS):
+        if not include_identity and name in ("job.json", "task.json"):
+            continue
         path = base / name
         if name in _MARKER_DIRS:
             path.mkdir()
@@ -101,12 +103,18 @@ def test_resolve_output_dir_reuses_task_root_with_all_markers(tmp_path: Path) ->
 
 
 def test_resolve_output_dir_still_redirects_unknown_extra_file(tmp_path: Path) -> None:
-    """Negative control: an UNREGISTERED non-marker file (no scheduler
-    identity semantics beyond the whitelist) still redirects to ``_1`` — the
-    existing intent of ``tests/test_acp_workflows_simple.py`` must hold.
+    """Negative control: an UNREGISTERED non-marker file still redirects to
+    ``_1`` when the directory has NO scheduler identity (``job.json`` /
+    ``task.json`` absent).
+
+    BUG-1(b) added a positive scheduler-identity layer that reuses any dir
+    carrying ``job.json`` + ``task.json`` (covered by the test above and by
+    ``test_acp_workflows_simple``'s identity branch).  This control therefore
+    drops identity so it remains a true negative: the whitelist plus identity
+    are the two guards, and absent both, redirection still happens.
     """
     base = tmp_path / "task"
-    _materialize_marker_tree(base)
+    _materialize_marker_tree(base, include_identity=False)
     (base / "stray_product.xyz").write_text("1\n\nC 0 0 0\n", encoding="utf-8")
 
     resolved = _resolve_output_dir(base)

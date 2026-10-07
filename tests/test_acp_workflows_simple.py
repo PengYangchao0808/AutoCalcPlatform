@@ -124,6 +124,19 @@ def _make_scheduler_dir(root: Path, name: str) -> Path:
     return d
 
 
+def _make_marker_only_dir(root: Path, name: str) -> Path:
+    """Markers but NO scheduler identity (no ``job.json``/``task.json``).
+
+    A directory without identity is not a scheduler task dir; unknown extra
+    files there must still redirect (BUG-1b negative branch).
+    """
+    d = root / name
+    d.mkdir()
+    for fname in ("events.jsonl", "stdout.log", "stderr.log", "metrics.json"):
+        (d / fname).write_text("placeholder")
+    return d
+
+
 def test_resolve_output_dir_reuses_scheduler_marker_dir(tmp_path):
     d = _make_scheduler_dir(tmp_path, "job_out")
     assert _resolve_output_dir(d) == d.resolve()
@@ -131,8 +144,37 @@ def test_resolve_output_dir_reuses_scheduler_marker_dir(tmp_path):
     assert not (tmp_path / "job_out_1").exists()
 
 
-def test_resolve_output_dir_redirects_when_extra_file_present(tmp_path):
+def test_resolve_output_dir_reuses_scheduler_dir_with_structure_history(tmp_path):
+    """Branch (a): job.json + task.json + the markers a rerun/edit preserves
+    (incl. ``.structure_history``) are reused in place."""
     d = _make_scheduler_dir(tmp_path, "job_out")
+    (d / ".structure_history").mkdir()
+    (d / "electronic_state.json").write_text("{}")
+    (d / "input.com").write_text("placeholder")
+    assert _resolve_output_dir(d) == d.resolve()
+    assert not (tmp_path / "job_out_1").exists()
+
+
+def test_resolve_output_dir_reuses_scheduler_identity_with_unknown_file(tmp_path):
+    """Branch (b) — positive identity guarantee independent of the whitelist:
+    job.json + task.json + an UNKNOWN extra file (incomplete marker set) must
+    STILL reuse base.  The marker-subset whitelist alone would redirect here;
+    the positive scheduler-identity check keeps the task dir in place."""
+    d = tmp_path / "job_out"
+    d.mkdir()
+    (d / "job.json").write_text("placeholder")
+    (d / "task.json").write_text("placeholder")
+    (d / "unknown_extra.dat").write_text("not a scheduler marker")
+    assert _resolve_output_dir(d) == d.resolve(), (
+        "scheduler identity must reuse base even with unregistered extra files"
+    )
+    assert not (tmp_path / "job_out_1").exists()
+
+
+def test_resolve_output_dir_redirects_when_extra_file_present(tmp_path):
+    """Branch (c): no scheduler identity + an unknown extra file redirects to
+    ``<name>_1`` (the original CLI redirection intent)."""
+    d = _make_marker_only_dir(tmp_path, "job_out")
     (d / "prev_result.xyz").write_text("1\n\nC 0 0 0\n")
     result = _resolve_output_dir(d)
     assert result != d.resolve()

@@ -31,7 +31,11 @@ from acp.core.models import HARTREE_TO_KCAL
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
-from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
+from acp.workflows._helpers import (
+    is_scheduler_task_dir,
+    resolve_task_output_root,
+    sanitize_job_name,
+)
 from cccp.config import load_config
 
 if TYPE_CHECKING:
@@ -279,7 +283,18 @@ def _resolve_output_dir(output_dir: str | Path) -> Path:
     base = Path(output_dir).resolve()
     if base.is_dir():
         contents = {path.name for path in base.iterdir()}
-        if not contents or contents <= _SCHEDULER_MARKERS:
+        if not contents:
+            base.mkdir(parents=True, exist_ok=True)
+            return base
+        # Positive scheduler-identity check (BUG-1b, the second insurance layer
+        # beside the _SCHEDULER_MARKERS whitelist): a directory carrying both
+        # ``job.json`` and ``task.json`` is a scheduler task dir and is ALWAYS
+        # reused — even when it holds files the whitelist does not enumerate.
+        # This is what keeps an unregistered scheduler root write from
+        # redirecting a rerun/edit to a ``<work_dir>_1`` sibling.
+        if is_scheduler_task_dir(base):
+            return base
+        if contents <= _SCHEDULER_MARKERS:
             base.mkdir(parents=True, exist_ok=True)
             return base
     return ensure_unique_dir(output_dir)
