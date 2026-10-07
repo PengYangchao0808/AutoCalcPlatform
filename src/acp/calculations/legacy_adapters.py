@@ -664,6 +664,7 @@ def _scan_options_from_resources(
 
     if not entries and points is None:
         return None
+    geom_maxiter = _as_int(_pop_named(resources, "geom_maxiter", key_names))
     coordinates = tuple(
         _parse_legacy_coordinate(entry, index) for index, entry in enumerate(entries)
     )
@@ -671,6 +672,7 @@ def _scan_options_from_resources(
         coordinates=coordinates,
         points=points,
         use_scants=bool(use_scants_bool) if use_scants_bool is not None else False,
+        geom_maxiter=geom_maxiter,
     )
 
 
@@ -722,6 +724,7 @@ def to_legacy_request(
     elif isinstance(options, ScanOptions):
         _emit("scan_points", options.points)
         _emit("use_scants", options.use_scants)
+        _emit("geom_maxiter", options.geom_maxiter)
     elif isinstance(options, IrcOptions):
         if "directions" in binding.resources_key_names:
             _emit("directions", [direction.value for direction in options.directions])

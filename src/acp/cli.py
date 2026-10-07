@@ -388,12 +388,14 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             "--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS
         )
 
-    if wf == "optimize":
+    if wf in ("optimize", "scan"):
         parser.add_argument(
             "--geom-maxiter",
             type=int,
             help="Max geometry iterations (maps to MaxIter in %%geom block)",
         )
+
+    if wf == "optimize":
         parser.add_argument(
             "--opt-convergence",
             default="Tight",
@@ -3279,6 +3281,7 @@ def _handle_scan(args: argparse.Namespace) -> int:
         method_kwargs = _build_simple_method_kwargs(args)
         method_kwargs.pop("method", None)
         resources: dict[str, Any] = dict(method_kwargs)
+        resources.setdefault("geom_maxiter", 200)
         resources.update(
             {
                 "backend": "orca",

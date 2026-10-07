@@ -2280,12 +2280,16 @@ class ORCAInterface(QCInterfaceBase):
                 message=str(exc),
             )
         if not success:
+            maxiter = geom_maxiter if geom_maxiter is not None else "ORCA default"
             return RelaxedScanResult(
                 points=[],
                 input_xyz=input_xyz,
                 scan_dir=output_dir,
                 success=False,
-                message="ORCA relaxed scan failed",
+                message=(
+                    f"ORCA relaxed scan failed (per-point geometry MaxIter={maxiter}); "
+                    "if a scan point did not converge, raise --geom-maxiter"
+                ),
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")

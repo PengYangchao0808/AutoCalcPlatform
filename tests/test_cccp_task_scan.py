@@ -386,7 +386,7 @@ The Calculated Surface using the RELAXED SURFACE SCAN
 """
 
 
-def _single_options(*, use_scants: bool = False) -> ScanOptions:
+def _single_options(*, use_scants: bool = False, geom_maxiter: int | None = None) -> ScanOptions:
     return ScanOptions(
         coordinates=(
             ScanCoordinateSpec(
@@ -399,6 +399,7 @@ def _single_options(*, use_scants: bool = False) -> ScanOptions:
         ),
         points=3,
         use_scants=use_scants,
+        geom_maxiter=geom_maxiter,
     )
 
 
@@ -418,6 +419,28 @@ def test_scan_options_from_dict_strict_bool() -> None:
         ScanOptions.from_dict({"use_scants": "true"})
     with pytest.raises(TaskInputError, match="use_scants must be a boolean"):
         ScanOptions.from_dict({"use_scants": 1})
+
+
+def test_scan_options_geom_maxiter_serialisation_gated_on_none() -> None:
+    absent = ScanOptions()
+    assert absent.geom_maxiter is None
+    assert "geom_maxiter" not in absent.to_dict()
+    assert ScanOptions.from_dict(absent.to_dict()).geom_maxiter is None
+
+    present = ScanOptions(geom_maxiter=200)
+    assert present.to_dict()["geom_maxiter"] == 200
+    assert ScanOptions.from_dict(present.to_dict()).geom_maxiter == 200
+    assert ScanOptions.from_dict({"geom_maxiter": 200}).geom_maxiter == 200
+    assert ScanOptions.from_dict({"geom_maxiter": 0}).geom_maxiter == 0
+
+
+def test_run_scan_forwards_geom_maxiter_from_options_to_backend(tmp_path: Path) -> None:
+    backend = _RecordingBackend()
+    run_scan(
+        _request(options=_single_options(geom_maxiter=200), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    assert backend.calls[0]["kwargs"]["geom_maxiter"] == 200
 
 
 def test_run_scan_forwards_effective_use_scants_to_backend(tmp_path: Path) -> None:
@@ -497,6 +520,7 @@ def test_orca_input_default_has_no_scants_and_flag_adds_it(
     )
     default_input = (tmp_path / "orca_relaxed_scan.inp").read_text(encoding="utf-8")
     assert "ScanTS" not in default_input
+    assert "MaxIter" not in default_input
 
     run_scan(
         _request(options=_single_options(use_scants=True), output_dir=tmp_path),
@@ -504,3 +528,20 @@ def test_orca_input_default_has_no_scants_and_flag_adds_it(
     )
     scants_input = (tmp_path / "orca_relaxed_scan.inp").read_text(encoding="utf-8")
     assert "ScanTS" in scants_input
+
+    run_scan(
+        _request(options=_single_options(geom_maxiter=200), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    maxiter_input = (tmp_path / "orca_relaxed_scan.inp").read_text(encoding="utf-8")
+    geom_start = maxiter_input.index("%geom")
+    geom_section = maxiter_input[geom_start:].split("\nend\n", 1)[0]
+    assert "MaxIter 200" in geom_section
+    assert "Scan" in geom_section
+
+    run_scan(
+        _request(options=_single_options(geom_maxiter=0), output_dir=tmp_path),
+        context=TaskContext(backend=backend),
+    )
+    zero_input = (tmp_path / "orca_relaxed_scan.inp").read_text(encoding="utf-8")
+    assert "MaxIter" not in zero_input

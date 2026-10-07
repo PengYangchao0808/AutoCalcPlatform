@@ -777,6 +777,84 @@ def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: 
     assert "live_metrics" not in state
 
 
+def test_scan_cli_defaults_geom_maxiter_to_200(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("2\nmol\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\n", encoding="utf-8")
+    output_dir = tmp_path / "scan-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--scan-points",
+            "3",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run(req, *, progress_reporter=None) -> WorkflowResult:
+        captured["resources"] = dict(req.resources)
+        return WorkflowResult(status="completed", metadata={})
+
+    monkeypatch.setattr(simple_workflow, "run_scan", fake_run)
+
+    assert acp_cli._handle_scan(args) == 0
+    assert captured["resources"]["geom_maxiter"] == 200
+
+
+def test_scan_cli_explicit_geom_maxiter_wins(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("2\nmol\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\n", encoding="utf-8")
+    output_dir = tmp_path / "scan-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--scan-points",
+            "3",
+            "--geom-maxiter",
+            "250",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run(req, *, progress_reporter=None) -> WorkflowResult:
+        captured["resources"] = dict(req.resources)
+        return WorkflowResult(status="completed", metadata={})
+
+    monkeypatch.setattr(simple_workflow, "run_scan", fake_run)
+
+    assert acp_cli._handle_scan(args) == 0
+    assert captured["resources"]["geom_maxiter"] == 250
+
+
 # ---------------------------------------------------------------------------
 # CLI help smoke tests
 # ---------------------------------------------------------------------------
@@ -784,6 +862,7 @@ def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: 
 _SIMPLE_WF = [
     ("singlepoint", "--method"),
     ("optimize", "--geom-maxiter"),
+    ("scan", "--geom-maxiter"),
     ("frequency", "--solvent-model"),
 ]
 
@@ -797,6 +876,17 @@ def test_cli_help_contains_expected_flags(wf_name, expected_flag):
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert expected_flag in result.stdout, f"Expected '{expected_flag}' in help for {wf_name}"
+
+
+def test_cli_scan_help_geom_maxiter_registered_once():
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "scan", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "--geom-maxiter" in result.stdout
+    assert result.stdout.count("Max geometry iterations (maps to MaxIter in %geom") == 1
 
 
 def test_cli_singlepoint_help_common_args():

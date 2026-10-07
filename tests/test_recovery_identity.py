@@ -230,6 +230,26 @@ def test_scan_use_scants_alias_is_canonicalised(tmp_path: Path) -> None:
     assert canonical == alias
 
 
+def test_scan_geom_maxiter_none_keeps_legacy_identity(tmp_path: Path) -> None:
+    """Adding ``geom_maxiter`` must not shift the None-case scan identity.
+
+    A scan options payload WITHOUT the field (the PES/legacy path) must
+    serialise and hash byte-identically to the pre-change contract — pinned by
+    a golden digest so old checkpoints keep resuming.
+    """
+    from cccp.calculation.requests import ScanCoordinateSpec, ScanOptions
+
+    options = ScanOptions(
+        coordinates=(ScanCoordinateSpec(atoms=(1, 2), start=1.0, end=3.0, atom_index_base=1),),
+        points=11,
+    )
+    assert "geom_maxiter" not in options.to_dict()
+    digest = compute_identity(
+        _plan(tmp_path, steps=[CalculationStep(kind=StepKind.SCAN, spec=options.to_dict())])
+    ).plan_identity
+    assert digest == "v2:eeeeef4cdb7524ae0536aa1a633a6552"
+
+
 def test_legacy_scan_spec_without_use_scants_forces_recompute(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

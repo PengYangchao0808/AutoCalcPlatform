@@ -262,6 +262,31 @@ def test_scan_use_scants_catalog_alias_projects() -> None:
     assert "use_scants" not in rebuilt.resources
 
 
+def test_scan_geom_maxiter_projection_and_round_trip() -> None:
+    request = _legacy_request(
+        coordinate="3,4,1.0,3.0",
+        scan_points=11,
+        geom_maxiter=200,
+    )
+    task_request, binding = to_task_request(request, "scan")
+    options = task_request.options
+    assert isinstance(options, ScanOptions)
+    assert options.geom_maxiter == 200
+    rebuilt = to_legacy_request(task_request, binding)
+    assert rebuilt.resources.get("geom_maxiter") == 200
+    assert rebuilt == request
+
+
+def test_scan_geom_maxiter_absent_stays_absent_on_round_trip() -> None:
+    request = _legacy_request(coordinate="3,4,1.0,3.0", scan_points=11)
+    task_request, binding = to_task_request(request, "scan")
+    assert isinstance(task_request.options, ScanOptions)
+    assert task_request.options.geom_maxiter is None
+    rebuilt = to_legacy_request(task_request, binding)
+    assert "geom_maxiter" not in rebuilt.resources
+    assert rebuilt == request
+
+
 def test_irc_directions_from_out_of_band_argument() -> None:
     request = _legacy_request()
     task_request, binding = to_task_request(request, "irc", directions=("forward",))

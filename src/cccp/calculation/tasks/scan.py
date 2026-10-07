@@ -169,6 +169,8 @@ def run_scan(
         raise UnsupportedCapabilityError(message)
     kwargs = _scan_capability_kwargs(ctx.capability_extras, request)
     kwargs["use_scants"] = use_scants
+    if options is not None and options.geom_maxiter is not None:
+        kwargs.setdefault("geom_maxiter", options.geom_maxiter)
     try:
         raw_result = operation(
             inputs.coordinates,

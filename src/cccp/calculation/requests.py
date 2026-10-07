@@ -620,6 +620,12 @@ class ScanOptions:
     #: the effective boolean to the backend (the ORCA interface default stays
     #: ``True``); ``ScanMode.RELAXED`` semantics are unchanged.
     use_scants: bool = False
+    #: Per-point geometry-optimisation iteration cap → ORCA ``%geom MaxIter``.
+    #: ``None`` (the contract default) leaves ORCA's own default in force; a
+    #: value ``<= 0`` is accepted but never rendered (the translation gate is
+    #: ``> 0``), so an explicit ``0`` behaves like ``None``.  The 200 default
+    #: for the manual ``acp run scan`` path is owned by the CLI layer.
+    geom_maxiter: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "coordinates", tuple(self.coordinates))
@@ -640,6 +646,8 @@ class ScanOptions:
             payload["points"] = self.points
         if self.values:
             payload["values"] = list(self.values)
+        if self.geom_maxiter is not None:
+            payload["geom_maxiter"] = self.geom_maxiter
         return payload
 
     @classmethod
@@ -672,6 +680,7 @@ class ScanOptions:
             values=parse_float_tuple_strict(payload, "values"),
             mode=mode,  # type: ignore[arg-type]
             use_scants=use_scants if use_scants is not None else False,
+            geom_maxiter=parse_int_strict(payload, "geom_maxiter"),
         )
 
 
