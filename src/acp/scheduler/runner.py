@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 from acp.chem.embedding import smiles_to_xyz, xyz_to_multiframe_demo
 from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
+from acp.scheduler.files import is_archived_attempt_path
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
     GRADIENT_CONFIG_FILENAME,
@@ -169,11 +170,15 @@ def find_workflow_state(work_dir: Path) -> Path | None:
     conformer state at ``<output>/conformer/<id>/state.json``. Shallowest-first
     selection picks the correct (outer) state in both cases. The ``fake``
     workflow writes directly at the root.
+
+    Archived attempt receipts under ``WORK/00_RUNTIME/attempts/`` (contract B)
+    are never candidates — they belong to a closed attempt and must not be
+    replayed into the current attempt's observation.
     """
     root_state = work_dir / "state.json"
     if root_state.exists():
         return root_state
-    candidates = list(work_dir.rglob("state.json"))
+    candidates = [c for c in work_dir.rglob("state.json") if not is_archived_attempt_path(c)]
     if not candidates:
         return None
 
@@ -2006,11 +2011,19 @@ class JobRunner:
         read-only fallback (single-mol jobs nest one level under ``work_dir``).
         """
         canonical = sorted(
-            work_dir.rglob("RESULT/energies/ensemble_thermo.json"),
+            (
+                p
+                for p in work_dir.rglob("RESULT/energies/ensemble_thermo.json")
+                if not is_archived_attempt_path(p)
+            ),
             key=lambda p: len(p.parts),
         )
         legacy = sorted(
-            work_dir.rglob("finalDFT/ensemble_thermo.json"),
+            (
+                p
+                for p in work_dir.rglob("finalDFT/ensemble_thermo.json")
+                if not is_archived_attempt_path(p)
+            ),
             key=lambda p: len(p.parts),
         )
         candidates = canonical or legacy

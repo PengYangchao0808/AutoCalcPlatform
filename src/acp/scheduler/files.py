@@ -105,7 +105,9 @@ def _collect_pinned(root: Path) -> list[dict[str, Any]]:
     """
     pinned: list[dict[str, Any]] = []
     try:
-        candidates = list(root.rglob(_RESULT_SUMMARY_FILENAME))
+        candidates = [
+            c for c in root.rglob(_RESULT_SUMMARY_FILENAME) if not is_archived_attempt_path(c)
+        ]
     except OSError:
         return pinned
     for summary_path in sorted(candidates):
@@ -150,4 +152,18 @@ def resolve_safe(work_dir: Path | str, relative: str) -> Path | None:
     return target if target.is_file() else None
 
 
-__all__ = ["build_manifest", "resolve_safe"]
+def is_archived_attempt_path(path: Path | str) -> bool:
+    """True when *path* lies under a ``WORK/00_RUNTIME/attempts/`` receipt archive.
+
+    In-place rerun archives the closed attempt's receipts and science under
+    ``WORK/00_RUNTIME/attempts/<n>/`` (contract B).  Discovery sweeps of the
+    **current** attempt (state observation, result/structure/product rglobs)
+    must never consume those archived files.
+    """
+    parts = Path(path).parts
+    return any(
+        parts[i] == "00_RUNTIME" and parts[i + 1] == "attempts" for i in range(len(parts) - 1)
+    )
+
+
+__all__ = ["build_manifest", "is_archived_attempt_path", "resolve_safe"]

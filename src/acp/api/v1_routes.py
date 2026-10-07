@@ -206,7 +206,7 @@ from acp.scheduler.capabilities import (
     matches_capabilities,
 )
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.files import build_manifest, resolve_safe
+from acp.scheduler.files import build_manifest, is_archived_attempt_path, resolve_safe
 from acp.scheduler.job_edit import (
     EditConflictError,
     EditValidationError,
@@ -3481,7 +3481,7 @@ def _discover_frequency_sources(work_dir: Path, job_id: str) -> list[FrequencySo
     # 1) Walk WORK/ for .out files with vibrational frequencies
     work = work_dir / "WORK"
     if work.is_dir():
-        for out_file in sorted(work.rglob("*.out")):
+        for out_file in sorted(p for p in work.rglob("*.out") if not is_archived_attempt_path(p)):
             try:
                 head = out_file.read_text(encoding="utf-8", errors="replace")[:8192]
             except OSError:

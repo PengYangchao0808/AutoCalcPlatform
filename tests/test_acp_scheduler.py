@@ -405,6 +405,84 @@ def test_find_state_file_prefers_shallowest(tmp_path: Path) -> None:
     assert find_workflow_state(tmp_path / "empty") is None
 
 
+def _seed_archived_attempt_state(work_dir: Path) -> dict[str, object]:
+    """Seed ONLY an archived attempt state.json (contract-B rerun archive)."""
+    archive = work_dir / "WORK" / "00_RUNTIME" / "attempts" / "1"
+    archive.mkdir(parents=True)
+    payload: dict[str, object] = {
+        "status": "completed",
+        "current_stage": "finalize",
+        "stages": {
+            "init": {"status": "completed", "completed_at": "2026-01-01T00:00:00+00:00"},
+            "finalize": {"status": "completed", "completed_at": "2026-01-01T00:01:00+00:00"},
+        },
+    }
+    (archive / "state.json").write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def test_find_workflow_state_ignores_archived_attempt_state(tmp_path: Path) -> None:
+    """BUG-5: archived ``attempts/<n>/state.json`` must never be discovered."""
+    from acp.scheduler.runner import find_workflow_state
+
+    work = tmp_path / "task"
+    _seed_archived_attempt_state(work)
+    assert find_workflow_state(work) is None
+
+
+def test_find_workflow_state_root_priority_with_archived_present(tmp_path: Path) -> None:
+    """Positive: root hit still beats an archived state; legacy depth rule intact."""
+    from acp.scheduler.runner import find_workflow_state
+
+    work = tmp_path / "task"
+    _seed_archived_attempt_state(work)
+    (work / "state.json").write_text(json.dumps({"current_stage": "live"}), encoding="utf-8")
+    found = find_workflow_state(work)
+    assert found is not None
+    assert found == work / "state.json"
+
+    work2 = tmp_path / "task2"
+    _seed_archived_attempt_state(work2)
+    (work2 / "mol_x").mkdir(parents=True)
+    (work2 / "mol_x" / "state.json").write_text(
+        json.dumps({"current_stage": "live"}), encoding="utf-8"
+    )
+    found2 = find_workflow_state(work2)
+    assert found2 is not None
+    assert found2.relative_to(work2) == Path("mol_x/state.json")
+
+
+def test_observe_state_no_stale_stage_events_from_archived_state(tmp_path: Path) -> None:
+    """BUG-5 regression: one poll cycle with ONLY archived state writes no stale events."""
+    from acp.storage.layout import runtime_file
+
+    work_dir = tmp_path / "task"
+    _seed_archived_attempt_state(work_dir)
+
+    spec = JobSpec(workflow="fake", name="rerun", input={"source": "Y"})
+    record = JobRecord(
+        id="job-bug5", spec=spec, status=JobStatus.RUNNING, work_dir=str(work_dir)
+    )
+    event_log = JobEventLog(runtime_file(work_dir, "events.jsonl"))
+
+    runner = JobRunner()
+    proc = MagicMock()
+    proc.poll.return_value = None  # still running → observe branch of poll()
+    runner._processes[record.id] = proc
+    runner._event_logs[record.id] = event_log
+    runner._cancel_events[record.id] = threading.Event()
+
+    is_terminal, _exit_code = runner.poll(record)
+    assert is_terminal is False
+
+    events = event_log.read_all()
+    stale = [e for e in events if str(e.get("type", "")).startswith("stage.")]
+    assert stale == [], f"stale stage events replayed from archived state: {stale}"
+    seen = runner._seen_stages.get(record.id, set())
+    assert not any(k.startswith(("done:", "running:", "failed:")) for k in seen), seen
+    assert record.current_stage is None, "archived current_stage must not leak into the record"
+
+
 def test_queued_job_cancel_is_immediate(tmp_path: Path) -> None:
     """P1#3: cancelling a running job transitions to CANCELLING then terminal.
 

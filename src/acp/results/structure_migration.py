@@ -9,7 +9,7 @@ from typing import Any
 from acp.results.frame_candidate_store import atomic_write_text
 from acp.results.manifest import load_result_manifest
 from acp.results.structure_policy import POLICY_VERSION, single_geometry
-from acp.scheduler.files import resolve_safe
+from acp.scheduler.files import is_archived_attempt_path, resolve_safe
 from acp.storage.manifest import ResultManifest
 
 
@@ -31,7 +31,9 @@ def backfill_successful_optimizations(task_root: Path, workflow: str, *, dry_run
     manifest = manifest or ResultManifest(workflow=workflow, status="failed")
     known = {product.id for product in manifest.products}
     recovered = []
-    for evidence in sorted(work.rglob("optimization_trajectory.json")):
+    for evidence in sorted(
+        p for p in work.rglob("optimization_trajectory.json") if not is_archived_attempt_path(p)
+    ):
         try:
             evidence.resolve().relative_to(root.resolve())
             payload = json.loads(evidence.read_text(encoding="utf-8"))
