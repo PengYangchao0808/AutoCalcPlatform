@@ -8,9 +8,11 @@ Every real case is gated twice and may only end in PASS, FAIL or
 - ``@pytest.mark.slow`` + ``@pytest.mark.integration``: not executed unless
   ``--run-slow``/``--run-integration`` is passed.
 - ``@requires_orca`` / ``@requires_crest`` / ``@requires_censo`` (add
-  ``@requires_xtb`` when a case needs it): detection is ``shutil.which`` at
-  ``tests/conftest`` import over ``CONFSEARCH_<NAME>_PATH`` or the bare
-  binary name.
+  ``@requires_xtb`` when a case needs it): detection is the conftest
+  production resolver — ``cccp.config.load_config`` +
+  ``cccp.software.resolve_executable``, resolved once at import over
+  ``~/.cccp.yaml`` and ``CONFSEARCH_<NAME>_PATH`` (never ``shutil.which``
+  over the bare binary name).
 
 A skip is ``NOT_VERIFIED`` — never a green pass — and the literal token is
 carried in every binary-gate skip reason (``pytest -rs`` shows it).

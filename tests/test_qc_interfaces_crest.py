@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +12,7 @@ import pytest
 
 from cccp.qc.interfaces.crest import CRESTInterface
 from cccp.qc.interfaces.xtb import XTBInterface
-from tests.conftest import requires_crest
+from tests.conftest import RealQCSnapshot, requires_crest
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
@@ -58,10 +58,24 @@ def test_crest_interface_instantiates_with_minimal_config(
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_crest
-def test_crest_binary_smoke_check(sample_config: dict[str, object]) -> None:
-    interface = CRESTInterface(sample_config)
+def test_crest_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Gate and body must resolve CREST through the SAME production path.
 
-    assert shutil.which(str(interface.exe_path)) is not None
+    ``sample_config`` carries the bare name ``crest``, which misses a binary
+    configured only in ``~/.cccp.yaml`` (BUG-4).  The body therefore builds
+    the interface from the conftest snapshot config (``load_config`` at
+    collection) and asserts its ``resolve_executable`` result is verbatim the
+    path the ``requires_crest`` gate opened on.
+    """
+    interface = CRESTInterface(real_qc_snapshot.config)
+    gate_path = real_qc_binary_path("crest")
+
+    assert gate_path is not None
+    assert interface.executable == gate_path
+    assert gate_path.is_file()
 
 
 def test_crest_run_uses_alpb_with_solvent_model_alpb(

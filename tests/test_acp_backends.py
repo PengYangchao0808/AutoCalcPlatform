@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -36,7 +37,7 @@ from acp.backends.xtb import XTBInterface
 from cccp.qc.interfaces import CRESTInterface
 from cccp.qc.interfaces.constraints import DistanceConstraint
 from cccp.qc.interfaces.xtb_thermo import XTBThermoResult
-from tests.conftest import requires_isostat, requires_shermo
+from tests.conftest import RealQCSnapshot, requires_isostat, requires_shermo
 
 
 def _make_config() -> dict[str, Any]:
@@ -567,10 +568,25 @@ def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
 @pytest.mark.integration
 @requires_isostat
 @requires_shermo
-def test_external_backend_binary_smoke_check() -> None:
-    backend = ExternalBackend(_make_config())
+def test_external_backend_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Availability must hold under the SAME production config the gate used.
+
+    ``_make_config()`` carries bare ``isostat``/``Shermo`` names, which miss
+    binaries configured only in ``~/.cccp.yaml`` (BUG-4).  The body therefore
+    builds the backend from the conftest snapshot config (``load_config`` at
+    collection) — the config the ``requires_*`` gates resolved against — and
+    re-asserts the gated binaries are still on disk at their gate paths.
+    """
+    backend = ExternalBackend(real_qc_snapshot.config)
 
     assert backend.is_available() is True
+    for name in ("isostat", "shermo"):
+        gate_path = real_qc_binary_path(name)
+        assert gate_path is not None
+        assert gate_path.is_file()
 
 
 def test_isostat_title_normalisation_to_molclus_format(tmp_path: Path) -> None:

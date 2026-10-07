@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import io
-import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,7 +19,7 @@ from cccp.qc.interfaces.orca import (
     _parse_frequencies,
 )
 from cccp.qc.keyword_registry import KeywordValueError
-from tests.conftest import requires_orca
+from tests.conftest import RealQCSnapshot, requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
@@ -131,10 +131,26 @@ def test_orca_optimize_parses_mocked_run_into_qcresult(
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_orca
-def test_orca_binary_smoke_check(sample_config: dict[str, object]) -> None:
-    interface = ORCAInterface(sample_config)
+def test_orca_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Gate and body must resolve ORCA through the SAME production path.
 
-    assert shutil.which(str(interface.exe_path)) is not None
+    ``sample_config`` carries the bare name ``orca``, so the old
+    ``shutil.which(str(interface.exe_path))`` probe matched whatever sat on
+    ``PATH`` — including the 40.3 Python-script ``/usr/bin/orca`` decoy —
+    instead of the configured production binary (BUG-4).  The body therefore
+    builds the interface from the conftest snapshot config (``load_config``
+    at collection) and asserts its ``resolve_executable`` result is verbatim
+    the path the ``requires_orca`` gate opened on.
+    """
+    interface = ORCAInterface(real_qc_snapshot.config)
+    gate_path = real_qc_binary_path("orca")
+
+    assert gate_path is not None
+    assert interface.executable == gate_path
+    assert gate_path.is_file()
 
 
 def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(

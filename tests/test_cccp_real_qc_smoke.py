@@ -14,7 +14,9 @@ cleanly, never error):
 - ``@pytest.mark.slow`` + ``@pytest.mark.integration``: the default run (no
   ``--run-integration``) skips every smoke case.
 - ``@requires_orca/crest/xtb/isostat/shermo/censo`` (``tests.conftest``,
-  ``shutil.which`` over ``CONFSEARCH_<NAME>_PATH`` at conftest import):
+  resolved ONCE at conftest import through the production chain
+  ``cccp.config.load_config`` then ``cccp.software.resolve_executable`` —
+  ``~/.cccp.yaml`` paths and ``CONFSEARCH_<NAME>_PATH`` both open the gate):
   missing binaries skip with a ``NOT_VERIFIED`` reason — a skipped real-QC
   case is never a green pass (three-state rule, plan todo 49).
 
@@ -46,7 +48,6 @@ from tests.conftest import (
     requires_isostat,
     requires_orca,
     requires_shermo,
-    requires_xtb,
 )
 
 # --- small stable samples ---------------------------------------------------
@@ -173,7 +174,9 @@ def _assert_run_recorded(result: object, *, backend: str) -> None:
     """Provenance + artifact acceptance: backend identity, artifacts on disk."""
     provenance = result.provenance
     assert provenance is not None, "provenance must be recorded"
-    assert provenance.backend == backend, f"provenance backend {provenance.backend!r} != {backend!r}"
+    assert provenance.backend == backend, (
+        f"provenance backend {provenance.backend!r} != {backend!r}"
+    )
     assert result.artifacts, "at least one artifact must be recorded"
     for artifact in result.artifacts:
         assert artifact.path.exists(), f"recorded artifact {artifact.type} missing: {artifact.path}"
@@ -214,7 +217,9 @@ def _read_first_frame(path: Path, *, symbols: tuple[str, ...]) -> None:
     assert frame_symbols == symbols, f"frame atom order {frame_symbols} != {symbols}"
 
 
-def _write_ensemble(path: Path, frames: list[tuple[str, tuple[tuple[float, float, float], ...]]]) -> Path:
+def _write_ensemble(
+    path: Path, frames: list[tuple[str, tuple[tuple[float, float, float], ...]]]
+) -> Path:
     """Write a multi-frame XYZ whose comment line carries the Molclus energy.
 
     ISOSTAT/clustering requires a per-frame energy float in the title
