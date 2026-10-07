@@ -114,7 +114,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 8. **新代码禁裸 `except Exception:`** — 历史 80+ 处蔓延，pyright suppressions 重（nmr/ 最密，pyright 不在工具链）
 9. **常量单点定义** — `HARTREE_TO_KCAL` ×2（值同）、气体常数 R ×3（精度不一）；新常量禁复制
 10. **CI（2026-08-21 起）**: push main/feat/** + PR → py3.10/3.11/3.12 compileall + `pytest -m "not slow"`。install 行必须含全部 extras — `pip install -e '.[dev,api,remote]'`（漏 `api` 是 2026-09-05 全红原因）。lint/format 门仍注释中
-11. **`_SCHEDULER_MARKERS` 必须列出调度器预建文件全集** — 漏列使 `_resolve_output_dir` 把产物重定向到不可见 `<work_dir>_1/`
+11. **`_SCHEDULER_MARKERS` 必须列出调度器预建文件全集** — 漏列使 `_resolve_output_dir` 把产物重定向到不可见 `<work_dir>_1/`。审计已收口（2026-10-07）：全集含 `.structure_history`（rerun/edit 保留）与 `electronic_state.json`/`input.com`/`input.inp`（均先于子进程启动写入，首跑/重跑/续跑 resolve 时都在场）；另有第二道保险 = `_resolve_output_dir` 正向调度身份判定（`job.json`+`task.json` 同时存在 → 无条件复用，即使目录含集合未登记文件）。豁免两类：resolve 之后才写入的根文件（`state.json`）与不经 `_resolve_output_dir` 的工作流专属根写（`batch_items.json`/`scan_config.json`）。守护：`tests/test_scheduler_markers_audit.py`（行为断言 + 全集 snapshot pin）；完整审计表见 `.omo/evidence/acp-legacy-bug-remediation/task-1-acp-legacy-bug-remediation.log`
 12. **新增 job status 必须全表面同步** — `jobs.py::JobStatus` is_active/is_terminal + `store.counts()` 消费者 + 前端 `getStatusClass`/i18n（zh+en）
 13. **NEVER 裸 `DELETE FROM jobs`** — schema 无 FK 级联；走 `store.purge_cascade`（先删 tasks 行）
 14. **`resume()` 仅 WAITING_REVIEW review-only** — pause/unpause/continue 是独立方法；非 requeue resume 有 RUNNING-bounce footgun

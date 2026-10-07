@@ -157,7 +157,7 @@ PESsearch（S2）的新任务使用 `WORK/07_PATH/pes_scan_001/`，不得再把�
 
 ## 6. 相关防回归约束
 
-1. **`_SCHEDULER_MARKERS`**（`simple.py`）：调度器在 subprocess 启动前创建的任何文件（如 `metrics.json`）必须加入该集合，否则 `_resolve_output_dir` 会把 simple 工作流重定向到 `<work_dir>_1/` 兄弟目录。v1.2 起集合为：`submit.lsf` `.exit_code` `events.jsonl` `job.json` `stdout.log` `stderr.log` `mechanism_config.json` `metrics.json` `WORK` `RESULT` `input.xyz` `task.json` `input_source.json`（小写 `inputs/work/results` 已随脚手架移除而删除）。
+1. **`_SCHEDULER_MARKERS` 与目录复用语义**（`simple.py::_resolve_output_dir`）：目录复用按序判定 — (a) **调度身份**：`job.json` + `task.json` 同时存在 → 无条件复用（第二道保险，即使目录含集合未登记文件）；(b) 空目录或纯 marker 白名单（目录内容 ⊆ 集合）→ 复用；否则重定向 `<work_dir>_1/` 兄弟目录（非调度 CLI 再嵌套 `<safe_name>/`）。调度器在 subprocess 启动前创建的任何文件（如 `metrics.json`）必须加入该集合。当前全集（2026-10-07 审计收口）：`submit.lsf` `.exit_code` `events.jsonl` `job.json` `stdout.log` `stderr.log` `mechanism_config.json` `metrics.json` `path_config.json` `gradient_config.json` `WORK` `RESULT` `INPUT` `input.xyz` `task.json` `input_source.json` `resume_source.json` `.structure_history` `electronic_state.json` `input.com` `input.inp`（小写 `inputs/work/results` 已随脚手架移除而删除；豁免类别与审计表见 root AGENTS.md ANTI #11）。
 2. **resume 兼容**：`result_summary.json` 与 `metrics.json` 均为 **write-only by 工作流/调度器，绝不参与 resume/checkpoint 判定**。`state.json`、`.stage_*`、`WORK/08_ANALYSIS/**`（mechanism checkpoint，双探针兼容 legacy `mechanism_study/**`）才是 checkpoint 真相源。
 3. **display-only**：`metrics.json` 永不 gate 任何控制流（resume/purge/cleanup 不得依赖它）。
 4. **工作流侧调度器探测契约**：`workflows/_helpers.is_scheduler_task_dir`（`job.json` + `task.json` 双文件存在）。调度器将来新增预创建文件时若影响该判定，必须同步本契约。远程作业目录同样适用：提交时由 `RemoteJobRunner._upload_scheduler_markers` 上传这两份标记（§2a）；缺失时节点产物嵌套到 `<molecule>/`，扁平结果拉取与远程 checkpoint 读取系统性失败。

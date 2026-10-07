@@ -61,8 +61,10 @@ remote/
 - **Generated-script strings contain fake `except Exception:`** at `runner.py:1025/1042` — these are literal text inside the LSF submission script template, NOT real handlers; do not "fix" them
 - **`type: ignore` density**: 13 in runner.py alone — typed-state contracts with remote JSON are unresolved
 - **No local fallback**: remote failures surface as `RemoteNodeUnavailableError`/`RemoteSubmissionError` — job manager must handle, not the remote layer
+- **`monitor.py::_pkill_acp` substring-match risk** (known, documented — code frozen): the bkill/bstop/bresume fallback sweeps cmdlines via `pgrep -f 'acp.cli run.*<lsf_job_id>'` (`monitor.py:314-349`), the same substring-overmatch class as the fixed local `processctl` bug (6e051e8). No live defect: every primary path passes the numeric `lsf_job_id` (`:295` bkill / `:362` bstop / `:387` bresume), never a path. It becomes real the moment a path-based job id feeds these fallbacks — fix the matching before adding one.
 
 ## NOTES
 - Tested by `tests/test_remote_phase{1..6}.py` — mock paramiko (FakeSFTPFile/FakeSFTPClient); phase1_integration is `@pytest.mark.integration`
 - Requires `pip install -e '.[remote]'` (paramiko)
 - CLI-flag parity (E7): shared resolution lives in `scheduler/jobs.py` (`censo_preset_from_method`, `xtbmd_method_flags`, `_as_bool`) — used by BOTH local `runner.py` and remote `script_gen.py`
+- Directory-reuse fix (BUG-1, root AGENTS.md ANTI #11): remote nodes run the synced `acp/workflows/simple.py::_resolve_output_dir` in their `python -m acp.cli run ...` subprocesses, so scheduler-identity reuse + the full marker whitelist apply remotely through the identical code path; no new runtime imports (`requirements-node.txt` unchanged)

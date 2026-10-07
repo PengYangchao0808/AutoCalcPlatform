@@ -107,6 +107,7 @@ Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中�
 - 任务提交、分子上传、任务管理 REST API
 - ACP Workbench 前端（暗色主题，实时轮询）
 - systemd 服务管理
+- 兼容提示：`GET /api/workflows` 现恰好返回 14 个 active 工作流（合成 `fake` id 不再公开列出，内部提交受理不变）；外部脚本请直接消费响应内容，勿硬编码旧的 15 项固定列表
 
 ### 8. 远程 LSF 执行 ✅
 - SSH/SFTP 多节点连接池
@@ -371,6 +372,7 @@ acp run irc --input <TS 结构文件路径> \
 acp run scan --input <SMILES或文件路径> \
              --coordinate <atom1,atom2,start,end> \
              [--scants]
+             [--geom-maxiter <N>]
              --output <输出目录>
              [--nproc --mem --config ...]
 
@@ -391,7 +393,7 @@ acp run serve [--host <host>] [--port <port>] [--reload]
 ```
 
 - **IRC provenance 必填互斥组**：文件路径用 `--ts-provenance`；`--ts-provenance-json` 仅供调度器注入**内联 JSON 文本**（非文件路径），二者必选其一（缺失 → exit 2）。`--step` 仅为兼容保留，对 ORCA 计算无影响。
-- **scan**：默认**不启用 ScanTS**，`--scants` 为显式 opt-in（多坐标同步/显式网格扫描不可用）。
+- **scan**：默认**不启用 ScanTS**，`--scants` 为显式 opt-in（多坐标同步/显式网格扫描不可用）；`--geom-maxiter` 每点几何优化迭代上限（映射 ORCA `%geom MaxIter`，默认 200，与 `optimize` 复用同一选项）。
 - **nmr**：运行时必须恰好提供 `--spectrum` 或 `--bruker` 之一。
 
 ---
