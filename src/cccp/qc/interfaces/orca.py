@@ -3512,6 +3512,10 @@ class ORCAInterface(QCInterfaceBase):
         and resource blocks.  Persistence and the xyz body belong to
         :meth:`_write_nmr_input`.
         """
+        # Emission-layer alias only (T16): local import keeps the module
+        # top untouched (Amendment L confines orca.py edits to these bodies).
+        from cccp.qc.keyword_registry import orca_native_functional
+
         _method = method if method is not None else self.method
         if not _method:
             _method = "mPW1PW91"
@@ -3560,9 +3564,23 @@ class ORCAInterface(QCInterfaceBase):
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
 
-        lines: list[str] = [
-            render_route_line([_method, RouteKeyword("basis", _basis), "TightSCF"], method=_method)
-        ]
+        # T16: ORCA >= 6 rejects the legacy Goodman functional keyword
+        # ("UNRECOGNIZED OR DUPLICATED KEYWORD(S) … MPW1PW91") and exposes
+        # the same functional as mPW1PW — alias ONLY the emitted
+        # simple-input token; the requested level name stays intact
+        # everywhere else (METHOD_META, error-model binding, receipts).
+        # Not silent: the input carries an alias comment and the NMR
+        # workflow records requested+executed (ShieldingSegment).
+        _emitted_method = orca_native_functional(_method)
+        lines: list[str] = []
+        if _emitted_method != _method:
+            lines.append(f"# functional alias: requested={_method} executed={_emitted_method}")
+        lines.append(
+            render_route_line(
+                [_emitted_method, RouteKeyword("basis", _basis), "TightSCF"],
+                method=_method,
+            )
+        )
         if _gfn_nmr:
             # GFN solvent rule (T7): ALPB-only under ORCA (PLATFORM POLICY),
             # same shared rule as every other !-line site.
@@ -3606,7 +3624,12 @@ class ORCAInterface(QCInterfaceBase):
 
         Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
         when neither the override nor the instance default is set to an NMR
-        level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
+        level.  When the requested functional carries an ORCA-native alias
+        (T16: ``mPW1PW91`` → ``mPW1PW``, rejected by ORCA >= 6 otherwise),
+        the route line emits the native keyword plus a
+        ``# functional alias: requested=… executed=…`` provenance comment —
+        the requested level itself is unchanged.
+        Solvent is emitted as the standalone ``CPCM(<name>)`` /
         ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
         the GFN family follows the shared ALPB-only rule
         (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).

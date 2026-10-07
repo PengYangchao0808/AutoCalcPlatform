@@ -98,8 +98,12 @@ def test_materialize_bruker_asset_rejects_traversal(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Unsafe path"):
         JobRunner._materialize_bruker_asset(
-            experiment={"mode": "bruker", "spectrum_asset_id": "id",
-                        "filename": "evil.zip", "project_id": "p"},
+            experiment={
+                "mode": "bruker",
+                "spectrum_asset_id": "id",
+                "filename": "evil.zip",
+                "project_id": "p",
+            },
             inputs_dir=work_dir / "inputs",
             work_dir=work_dir,
         )
@@ -505,7 +509,8 @@ def test_nmr_closed_loop_default_payload(tmp_path: Path, monkeypatch) -> None:
     assert cap["solvent_model"] == "cpcm"
     assert cap["solvent"] == "chloroform"
     assert cap["ewin"] == 6.0
-    assert "! mPW1PW91 6-311G(d)" in orca_input
+    assert "! mPW1PW 6-311G(d)" in orca_input
+    assert "# functional alias: requested=mPW1PW91 executed=mPW1PW" in orca_input
     assert "! CPCM(chloroform)" in orca_input
 
 

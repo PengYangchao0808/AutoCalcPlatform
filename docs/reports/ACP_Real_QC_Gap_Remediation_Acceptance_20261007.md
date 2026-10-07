@@ -124,3 +124,42 @@ Unchanged workflows (PESsearch/BatchOptimize/XtbPathSearch/irc) were **not** re-
 - Temporary baseline ruff worktree `/tmp/acp_baseline_ruff` removed.
 - Repo worktree: only `src/acp/cli.py` + `tests/test_acp_cli.py` modified; test byproducts (`e2e-task-root.txt`, `grad.engrad`) reverted/removed.
 - Historical jobs/data (e.g. `20261005_213230_002_Confsearch`) untouched. Not committed.
+
+---
+
+## 11. Addendum (T16, 2026-10-07) — NMR default level now runs on ORCA 6.1.1
+
+The §5/§9 discovered defect **`D-NMR-ORCA61-FUNCTIONAL`** (ORCA 6.1.1 rejects the
+Goodman default functional `mPW1PW91`; the binary spells it `mPW1PW`) is **fixed** by
+plan todo 16 — an emission-layer alias, recorded non-silently:
+
+- **Single alias source**: `cccp/qc/keyword_registry.ORCA_FUNCTIONAL_ALIASES` +
+  `orca_native_functional()` (`{"MPW1PW91": "mPW1PW"}`, case/whitespace-folded).
+- **Emission**: `cccp/qc/interfaces/orca.py::_build_nmr_input_lines` (Amendment L
+  sanctioned body only) emits the native route token and prepends
+  `# functional alias: requested=mPW1PW91 executed=mPW1PW`; registry context still
+  resolves from the requested name.
+- **Receipt**: `ShieldingSegment.nmr_method_executed` recorded by
+  `acp/workflows/nmr.py::_protocol_spec_for_candidate`, persisted in
+  `nmr_report.json → provenance.protocol` (requested `mPW1PW91` + executed `mPW1PW`).
+- **Unchanged**: Goodman error-model level logic, TMS calibration tables, `METHOD_META`,
+  `resolve_nmr_method`, every other engine — the REQUESTED level stays `mPW1PW91`
+  everywhere except the emitted ORCA keyword.
+
+**Real acceptance (case 5b, matrix.json)**: isolated run root
+`/tmp/opencode/t16_nmr`, `ACP_RUN_ROOT=… timeout 2400 acp run nmr --input "CCO"
+--spectrum … --solvent chloroform --preset censo-zero --nproc 4` (no method overrides,
+default `goodman-legacy`) → **exit 0 in ~51 s**; both GIAO runs
+`ORCA TERMINATED NORMALLY` with `GIAO … (SHARK) … done` + chemical-shielding summary,
+zero `UNRECOGNIZED`; emitted inputs show the alias comment + `! mPW1PW 6-311G(d)
+TightSCF`; report/summary/plots written, coverage 5/5 matched signals. Same-default
+fail-first before the fix: dry-run input → ORCA **exit 4**
+(`UNRECOGNIZED … MPW1PW91`). Receipt: `{"nmr_method": "mPW1PW91", …,
+"nmr_method_executed": "mPW1PW"}`.
+
+Gates: mandated suites `test_qc_interfaces_orca.py + test_acp_nmr_method_config.py +
+test_acp_workflows_nmr.py` → 109 passed/1 skipped (218 passed with route-render +
+nmr-runner); `test_f4_scope_audit.py` → 24 passed; `tests/test_acp_nmr_*.py` →
+796 passed/13 skipped; ruff check+format clean on touched files (orca.py HEAD-parity:
+13×E501 / 16 format hunks identical to HEAD — zero new violations).
+Evidence: `.omo/evidence/real-qc-gap-remediation/task-16-nmr-alias.md`. Not committed.

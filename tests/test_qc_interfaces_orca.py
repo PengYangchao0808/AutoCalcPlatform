@@ -615,13 +615,40 @@ def test_nmr_dft_implicit_basis_unchanged(tmp_path: Path) -> None:
     interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
     text = (tmp_path / "nmr.inp").read_text(encoding="utf-8")
     lines = text.splitlines()
-    assert lines[0] == "! mPW1PW91 6-311G(d) TightSCF"
+    # T16: ORCA >= 6 rejects the legacy keyword — the emitted simple-input
+    # line carries the ORCA-native token + provenance comment (requested
+    # level itself unchanged); no `!`-line may spell mPW1PW91.
+    assert lines[0] == "# functional alias: requested=mPW1PW91 executed=mPW1PW"
+    assert lines[1] == "! mPW1PW 6-311G(d) TightSCF"
+    assert all(not (line.startswith("!") and "mPW1PW91" in line) for line in lines)
     # ORCA >= 6 resolves `%eprnmr` nuclear selections against the already
     # parsed geometry: the coordinate block must precede the eprnmr block,
     # otherwise ORCA aborts with "nuclear properties are requested but no
     # coordinates have been read".
     assert text.index("* xyz 0 1") < text.index("%eprnmr")
     assert "%eprnmr" in text
+
+
+@pytest.mark.parametrize("requested", ["mPW1PW91", "MPW1PW91", "mpw1pw91"])
+def test_nmr_functional_alias_is_case_insensitive(tmp_path: Path, requested: str) -> None:
+    """T16: every spelling of the Goodman functional aliases to mPW1PW."""
+    interface = _bare_nmr_interface(requested)
+    interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
+    lines = (tmp_path / "nmr.inp").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == f"# functional alias: requested={requested} executed=mPW1PW"
+    assert lines[1].startswith("! mPW1PW ")
+    assert all(not (line.startswith("!") and "PW91" in line) for line in lines)
+
+
+def test_nmr_non_aliased_method_input_unchanged(tmp_path: Path) -> None:
+    """T16: a method without an alias renders exactly as before — no alias
+    comment, no native-token swap."""
+    interface = _bare_nmr_interface("B3LYP")
+    interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
+    lines = (tmp_path / "nmr.inp").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "! B3LYP 6-311G(d) TightSCF"
+    assert all(not line.startswith("# functional alias") for line in lines)
+    assert not any("mPW1PW" in line for line in lines)
 
 
 def test_nmr_gfn_allow_switch_no_implicit_basis_and_alpb_solvent(
@@ -663,4 +690,3 @@ def test_nmr_gfn_allow_switch_rejects_cpcm_smd(
                 solvent_model=model,
             )
     assert not (tmp_path / "nmr.inp").exists()
-

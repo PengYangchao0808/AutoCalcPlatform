@@ -128,6 +128,12 @@ class ShieldingSegment:
     nmr_method: str
     nmr_basis: str
     solvent_model: str
+    #: ORCA-native functional keyword actually emitted for ``nmr_method``
+    #: (alias target — ``"mPW1PW"`` for the requested ``"mPW1PW91"``);
+    #: equals ``nmr_method`` when the engine keyword needs no alias.
+    #: ``None`` = historically unrecorded (pre-T16 records). Receipt only:
+    #: calibration binding keeps reading the REQUESTED ``nmr_method``.
+    nmr_method_executed: str | None = None
 
 
 @dataclass(frozen=True)

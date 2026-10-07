@@ -158,6 +158,7 @@ from cccp.qc.interfaces.censo import (
     CensoRunResult,
     part_index,
 )
+from cccp.qc.keyword_registry import orca_native_functional
 from cccp.utils.constants import HARTREE_TO_KCAL
 from cccp.utils.solvent_map import SolventValueError
 
@@ -637,6 +638,10 @@ def _protocol_spec_for_candidate(
         ),
         ShieldingSegment(
             nmr_method=nmr_config.nmr_method,
+            # T16 receipt: BOTH names — requested level stays the calibration
+            # key above; this records the ORCA-native keyword the GIAO stage
+            # emits (alias target, verbatim when no alias applies).
+            nmr_method_executed=orca_native_functional(nmr_config.nmr_method),
             nmr_basis=nmr_config.nmr_basis,
             solvent_model=nmr_config.solvent_model,
         ),

@@ -139,6 +139,11 @@ def test_run_nmr_analysis_assigned_two_candidates(tmp_path: Path) -> None:
     report = json.loads(report_path.read_text())
     assert report["summary"]["n_candidates"] == 2
     assert len(report["candidates"]) == 2
+    # T16 receipt in the durable report: requested level (calibration key)
+    # + the ORCA-native keyword the GIAO stage emits.
+    shielding = report["provenance"]["protocol"]["candidates"][0]["shielding"]
+    assert shielding["nmr_method"] == "mPW1PW91"
+    assert shielding["nmr_method_executed"] == "mPW1PW"
 
 
 def test_run_nmr_analysis_unassigned(tmp_path: Path) -> None:
@@ -1066,6 +1071,33 @@ def test_giao_orca_input_gas_phase_has_no_cpcm(tmp_path: Path) -> None:
     level2, solvated_input = _run_giao_capture(solvated, tmp_path)
     assert level2.solvent_model == "cpcm"
     assert "! CPCM(chloroform)" in solvated_input
+
+
+def test_giao_functional_alias_receipt_records_requested_and_executed() -> None:
+    """T16: the GIAO-stage receipt records BOTH names — the requested level
+    (calibration key, unchanged) and the ORCA-native keyword emitted."""
+    from acp.workflows.nmr import _protocol_spec_for_candidate
+
+    structure = _make_structure(["C", "H", "H", "H", "H"], [(0.0, 0.0, 0.0)] * 5)
+    kwargs: dict[str, Any] = dict(
+        generation_executed=False,
+        error_model="goodman-legacy",
+        dp5_model_id="goodman-dp5",
+        dp5_mode="fallback",
+        dp5_model_present=True,
+    )
+    default_spec = _protocol_spec_for_candidate(_build_test_nmr_config(), structure, **kwargs)
+    assert default_spec.shielding.nmr_method == "mPW1PW91"
+    assert default_spec.shielding.nmr_method_executed == "mPW1PW"
+
+    # non-aliased method: executed == requested (receipt stays truthful)
+    b3lyp_spec = _protocol_spec_for_candidate(
+        _build_test_nmr_config(nmr_method="B3LYP", nmr_basis="def2-SVP"),
+        structure,
+        **kwargs,
+    )
+    assert b3lyp_spec.shielding.nmr_method == "B3LYP"
+    assert b3lyp_spec.shielding.nmr_method_executed == "B3LYP"
 
 
 def test_nmr_config_effective_config_to_dict_round_trip() -> None:
