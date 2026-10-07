@@ -2128,6 +2128,10 @@ MIGRATION_STATION_PREFIXES = (
     # landed outside the registered stations; registered here so the audit
     # gate is green again (unrelated to the nmr remediation).
     "src/acp/workflows/simple.py",
+    # acp-legacy-bug-remediation: BUG-5 attempts isolation (0ab3fa9)
+    "src/acp/results/structure_migration.py",
+    # acp-legacy-bug-remediation: BUG-8 public surface split (3c9321a)
+    "src/acp/workflows/registry.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
