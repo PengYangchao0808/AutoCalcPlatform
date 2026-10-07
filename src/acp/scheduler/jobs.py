@@ -121,45 +121,63 @@ def is_deletion_eligible(
 EXIT_WAITING_REVIEW = 77
 
 
-def _derive_supported_workflows() -> tuple[str, ...]:
-    """Derive the scheduler's supported workflow set from WORKFLOW_CATALOG.
+#: Catalog ``status == "active"`` workflow ids in catalog order, used only when
+#: ``acp.catalog`` cannot be imported (e.g. early bootstrap / standalone cccp).
+_FALLBACK_ACTIVE_WORKFLOWS: tuple[str, ...] = (
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "tsmode",
+    "casscf",
+    "xtb_optimize",
+    "nmr",
+    "Confsearch",
+    "PESsearch",
+    "BatchOptimize",
+    "XtbPathSearch",
+    "OrcaGradient",
+)
 
-    R14/D5: previously this was a hand-maintained tuple that drifted out
-    of sync with ``acp.catalog.WORKFLOW_CATALOG``. It now derives from the
-    catalog's ``status == "active"`` entries, plus the synthetic ``fake``
-    workflow that exists only for scheduler tests (kept here, not in the
-    public catalog — see test 3.12 which excludes ``fake`` from the
-    equality assertion against the catalog's active set).
+#: Synthetic scheduler-only workflows (no catalog entry). ``fake`` is an
+#: in-process no-op used by the scheduler test base and the legacy Workbench
+#: demo button; it is accepted internally but never advertised publicly.
+_SYNTHETIC_WORKFLOWS: tuple[str, ...] = ("fake",)
 
-    Falls back to a static list when ``acp.catalog`` cannot be imported
-    (e.g. during early bootstrap or standalone cccp use).
+
+def _derive_public_workflows() -> tuple[str, ...]:
+    """Derive the public workflow set from ``WORKFLOW_CATALOG``.
+
+    R14/D5: previously a hand-maintained tuple that drifted out of sync with
+    ``acp.catalog.WORKFLOW_CATALOG``. It now derives from the catalog's
+    ``status == "active"`` entries.  The synthetic ``fake`` workflow is
+    deliberately excluded — it belongs only on internal acceptance surfaces.
+
+    Falls back to a static list when ``acp.catalog`` cannot be imported.
     """
     try:
         from acp.catalog import WORKFLOW_CATALOG
     except ImportError:
-        return (
-            "Confsearch",
-            "PESsearch",
-            "BatchOptimize",
-            "XtbPathSearch",
-            "OrcaGradient",
-            "irc",
-            "scan",
-            "nmr",
-            "singlepoint",
-            "optimize",
-            "frequency",
-            "xtb_optimize",
-            "fake",
-        )
-    active = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
-    # ``fake`` is a synthetic scheduler-only workflow (no catalog entry);
-    # append it so test 3.12's set difference `SUPPORTED_WORKFLOWS - {"fake"}`
-    # equals the catalog's active id set exactly.
-    return active + ("fake",)
+        return _FALLBACK_ACTIVE_WORKFLOWS
+    return tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
 
-SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
+def _derive_all_workflows() -> tuple[str, ...]:
+    """Internal acceptance set = public workflows + synthetic ``fake``.
+
+    The scheduler accepts ``fake`` (API/scheduler submission stays 200), but it
+    must stay out of :data:`PUBLIC_WORKFLOWS`.
+    """
+    return _derive_public_workflows() + _SYNTHETIC_WORKFLOWS
+
+
+#: Public workflow surface (API listings / error strings): catalog active only.
+PUBLIC_WORKFLOWS: tuple[str, ...] = _derive_public_workflows()
+#: Internal acceptance set: public workflows plus the synthetic ``fake``.
+ALL_WORKFLOWS: tuple[str, ...] = _derive_all_workflows()
+#: Backward-compatible alias for the internal acceptance set (includes ``fake``).
+SUPPORTED_WORKFLOWS: tuple[str, ...] = ALL_WORKFLOWS
 
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
 SCAN_CONFIG_FILENAME = "scan_config.json"
@@ -840,6 +858,8 @@ __all__ = [
     "CONFIRMED_CANCEL_STATES",
     "is_deletion_eligible",
     "build_task_record",
+    "PUBLIC_WORKFLOWS",
+    "ALL_WORKFLOWS",
     "SUPPORTED_WORKFLOWS",
     "censo_preset_from_method",
     "censo_solvent_from_method",

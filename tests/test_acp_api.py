@@ -209,7 +209,10 @@ def test_workflows_and_protocols(client: TestClient) -> None:
         "XtbPathSearch",
         "OrcaGradient",
     }
-    assert names == active | {"fake"}
+    assert names == active
+    from acp.scheduler.jobs import ALL_WORKFLOWS
+
+    assert "fake" in ALL_WORKFLOWS
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
 

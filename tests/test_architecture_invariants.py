@@ -11,7 +11,7 @@ import pytest
 from acp.calculations.batch import engine as batch_engine
 from acp.calculations.batch.models import BatchStructureItem, JsonObject, load_batch_request
 from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS, SUPPORTED_WORKFLOWS
 from acp.storage.manifest import ProductKind, ResultManifest
 
 CURRENT_ACTIVE_IDS = (
@@ -112,6 +112,8 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
 def test_scheduler_workflows_follow_catalog_order_with_fake_hook() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
+    assert PUBLIC_WORKFLOWS == active_ids
+    assert ALL_WORKFLOWS == active_ids + ("fake",)
     assert SUPPORTED_WORKFLOWS == active_ids + ("fake",)
 
 

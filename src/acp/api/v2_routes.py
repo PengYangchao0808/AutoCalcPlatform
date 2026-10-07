@@ -53,7 +53,7 @@ from acp.api.v2_schemas import (
 )
 from acp.scheduler.capabilities import NoCapableNodeError
 from acp.scheduler.files import resolve_safe
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
 from acp.scheduler.nodes import (
     ExecutionTargetError,
@@ -598,8 +598,8 @@ def _submit_batch_item(
     When *req_batch_id* is given and the item's resources lack a
     ``batch_id``, it is injected so the task view can group batch items.
     """
-    if item.workflow not in SUPPORTED_WORKFLOWS:
-        return f"Unsupported workflow '{item.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}"
+    if item.workflow not in ALL_WORKFLOWS:
+        return f"Unsupported workflow '{item.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}"
     resources = dict(item.resources) if item.resources else {}
     if req_batch_id and "batch_id" not in resources:
         resources["batch_id"] = req_batch_id

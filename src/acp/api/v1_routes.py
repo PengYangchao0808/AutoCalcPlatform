@@ -220,7 +220,7 @@ from acp.scheduler.job_edit import (
     input_structure_changed,
     workflow_edit_status,
 )
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
@@ -2174,10 +2174,10 @@ def preview_irc_ts_source(request: Request, source_id: str = Query(...)) -> dict
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
-    if req.workflow not in SUPPORTED_WORKFLOWS:
+    if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
     if req.workflow == "irc":
@@ -7192,10 +7192,10 @@ def node_matching(
     except ValidationError as exc:
         first_error = exc.errors()[0] if exc.errors() else {}
         raise HTTPException(status_code=400, detail=first_error.get("msg", str(exc))) from exc
-    if req.workflow not in SUPPORTED_WORKFLOWS:
+    if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     manager = _manager(request)
     try:

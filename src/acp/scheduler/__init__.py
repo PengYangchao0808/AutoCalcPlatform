@@ -31,7 +31,14 @@ from acp.scheduler.job_edit import (
     effective_config_info,
     resolve_last_structure,
 )
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    ALL_WORKFLOWS,
+    PUBLIC_WORKFLOWS,
+    SUPPORTED_WORKFLOWS,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+)
 from acp.scheduler.local_cleanup import (
     DEFAULT_MAX_DIRS_PER_SWEEP,
     DISK_CLEANUP_THRESHOLD,
@@ -110,6 +117,8 @@ __all__ = [
     "Provenance",
     "RetentionPolicy",
     "ResultSchema",
+    "PUBLIC_WORKFLOWS",
+    "ALL_WORKFLOWS",
     "SUPPORTED_WORKFLOWS",
     "StagePlan",
     "StageTask",

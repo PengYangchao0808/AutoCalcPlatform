@@ -146,16 +146,16 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
 
 
 def list_workflow_entries() -> list[WorkflowRegistryEntry]:
-    """Return metadata entries for every scheduler-supported workflow.
+    """Return metadata entries for every public workflow.
 
-    Entries are returned in the registry's canonical order (fake first, then
-    real QC workflows).  Only workflows that are also in ``SUPPORTED_WORKFLOWS``
-    are included, so newly added workflows appear automatically once they are
-    registered and supported.
+    Entries are returned in the registry's canonical order.  Only workflows
+    that are also in ``PUBLIC_WORKFLOWS`` are included, so the synthetic
+    ``fake`` workflow and retired ids stay off public surfaces while newly
+    added active workflows appear automatically once registered.
     """
-    from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+    from acp.scheduler.jobs import PUBLIC_WORKFLOWS
 
-    return [_WORKFLOW_REGISTRY[name] for name in _WORKFLOW_REGISTRY if name in SUPPORTED_WORKFLOWS]
+    return [_WORKFLOW_REGISTRY[name] for name in _WORKFLOW_REGISTRY if name in PUBLIC_WORKFLOWS]
 
 
 def get_workflow_entry(name: str) -> WorkflowRegistryEntry | None:

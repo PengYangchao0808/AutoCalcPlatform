@@ -24,7 +24,7 @@ from acp.catalog import (
     get_method_catalog,
     normalize_and_validate_method_config,
 )
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+from acp.scheduler.jobs import PUBLIC_WORKFLOWS, SUPPORTED_WORKFLOWS
 
 CONFSEARCH_SCHEMA = {
     "method_levels": [
@@ -702,8 +702,9 @@ def test_supported_workflows_matches_catalog_active() -> None:
 
     wf_catalog = get_workflow_catalog()
     active_ids = {w["id"] for w in wf_catalog if w.get("status") == "active"}
-    derived = set(SUPPORTED_WORKFLOWS) - {"fake"}
-    assert derived == active_ids, f"SUPPORTED_WORKFLOWS mismatch: {derived ^ active_ids}"
+    public = set(PUBLIC_WORKFLOWS)
+    assert public == active_ids, f"PUBLIC_WORKFLOWS mismatch: {public ^ active_ids}"
+    assert "fake" in SUPPORTED_WORKFLOWS
 
 
 def test_mechanism_entries_retired_and_stage_workflows_active() -> None:

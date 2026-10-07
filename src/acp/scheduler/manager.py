@@ -45,8 +45,9 @@ from acp.scheduler.job_edit import (
     normalize_for_compare,
 )
 from acp.scheduler.jobs import (
+    ALL_WORKFLOWS,
     EXIT_WAITING_REVIEW,
-    SUPPORTED_WORKFLOWS,
+    PUBLIC_WORKFLOWS,
     JobRecord,
     JobSpec,
     JobStatus,
@@ -656,9 +657,9 @@ class JobManager:
                 (self-rooted); pass an ancestor's id to link a clone (e.g.
                 a ``rerun_job``) into the same group.
         """
-        if spec.workflow not in SUPPORTED_WORKFLOWS:
+        if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
-                f"Unsupported workflow: {spec.workflow}. Supported: {SUPPORTED_WORKFLOWS}"
+                f"Unsupported workflow: {spec.workflow}. Supported: {PUBLIC_WORKFLOWS}"
             )
 
         if spec.workflow == "irc":
@@ -1260,9 +1261,9 @@ class JobManager:
         new_spec: JobSpec,
         diff_summary: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        if new_spec.workflow not in SUPPORTED_WORKFLOWS:
+        if new_spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
-                f"Unsupported workflow: {new_spec.workflow}. Supported: {SUPPORTED_WORKFLOWS}"
+                f"Unsupported workflow: {new_spec.workflow}. Supported: {PUBLIC_WORKFLOWS}"
             )
         new_spec = replace(new_spec, output_dir=None)
         created = self.submit(new_spec, group_id=record.group_id)

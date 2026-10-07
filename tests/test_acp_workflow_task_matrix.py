@@ -304,13 +304,14 @@ def _module_imports_acp_backends_batch(tree: ast.Module) -> bool:
 
 
 def test_active_workflow_set_matches_matrix() -> None:
-    from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+    from acp.scheduler.jobs import PUBLIC_WORKFLOWS, SUPPORTED_WORKFLOWS
 
-    runtime = set(SUPPORTED_WORKFLOWS) - {"fake"}
+    runtime = set(PUBLIC_WORKFLOWS)
     assert runtime == set(ACTIVE_WORKFLOWS), (
         "active workflow set drifted from the matrix; update ACTIVE_WORKFLOWS "
         "and docs/ACP_CCCP_Call_Matrix.md"
     )
+    assert "fake" in SUPPORTED_WORKFLOWS
     assert set(WORKFLOW_ROUTES) == set(ACTIVE_WORKFLOWS)
 
 
