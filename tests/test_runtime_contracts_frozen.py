@@ -604,15 +604,6 @@ def test_contract_8_frontend_wrapper_rules_present_in_source() -> None:
     assert "var API_TIMEOUT_MS = 8000;" in html
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FROZEN contract (8): v2 remote result calls must pass the 60s remote budget "
-        "while preserving /api/v2 (e.g. apiV2(path, {timeoutMs: API_REMOTE_TIMEOUT_MS})). "
-        "Remove/convert this xfail when todo 6 (R6, JS acceptance in todos 11/13) wires "
-        "the v2 remote reads."
-    ),
-)
 def test_contract_8_v2_remote_call_sites_pass_remote_budget() -> None:
     html = _FRONTEND.read_text(encoding="utf-8")
     assert "timeoutMs: API_REMOTE_TIMEOUT_MS" in html, (

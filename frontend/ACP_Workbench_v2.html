@@ -10112,10 +10112,21 @@ function apiRemote(path, opts) {
 
 // T4: v2 API helper — same error handling as api(), fetches "/api/v2" + path.
 // api() and API_BASE are NOT changed (40+ v1 call sites depend on them).
+// opts.timeoutMs overrides the 8s local default; apiRequest converts an own
+// timeout into a localized Error, never a raw AbortError (root ANTI #28).
 async function apiV2(path, opts) {
   var result = await apiRequest("/api/v2" + path, opts);
   if (opts && opts.method && opts.method !== "GET") invalidateTaskViewMetadata();
   return result;
+}
+
+// T6 (R6): version-aware remote wrapper for v2 reads that may trigger a
+// server-side on-demand remote fetch (/results, /tree, /files/*,
+// /structures/*, /frequencies/*). Keeps the /api/v2 namespace — never routed
+// through the v1-pinned apiRemote() — and shares apiRequest's error
+// conversion with the 60s remote budget (root ANTI #28).
+function apiV2Remote(path, opts) {
+  return apiV2(path, Object.assign({}, opts || {}, { timeoutMs: API_REMOTE_TIMEOUT_MS }));
 }
 
 function t(key, vars) {

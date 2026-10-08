@@ -2592,3 +2592,154 @@ class TestInvalidProductJsonConsistency:
         assert ep_body["source"] == "historical_projection"
         assert cat_vib["imaginary_count"] == ep_body["imaginary_count"]
         assert cat_vib["imaginary_count"] == 2
+
+
+# ── v2 remote reads via the manager-owned cache singleton (todo 6 / R6) ─────
+
+
+class TestV2RemoteReadsSharedCache:
+    """v2 structure downloads (R6) share the manager cache singleton.
+
+    Cold-cache contract: only the manifest is seeded into the injected
+    manager singleton; the node holds the structure bytes; the task work_dir
+    has no RESULT tree and must stay untouched.
+    """
+
+    _JOB = "v2sv_remote"
+
+    def _seed_remote(self, client: TestClient, tmp_path: Path) -> Path:
+        manager = client.app.state.job_manager
+        work_dir = tmp_path / "v2sv_remote_task"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id=self._JOB,
+            spec=JobSpec(
+                workflow="optimize",
+                name="v2sv_remote_task",
+                molecule_name="m",
+                task_name="opt",
+                remark="final",
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            remote_job_id="9",
+            result={"node": "node1", "remote_dir": "/remote/v2sv_remote_task"},
+        )
+        manager.store.create(record)
+        return work_dir
+
+    def _seed_manifest(self, manager: Any) -> None:
+        from acp.storage.manifest import ResultManifest
+
+        manifest = ResultManifest(task_id=self._JOB, workflow="optimize", status="completed")
+        manifest.add_product(
+            id="optimized",
+            label="optimized structure",
+            path="simple/optimized.xyz",
+            kind="structure",
+        )
+        manifest_path = manager.structure_cache.cache_path(self._JOB, "RESULT/result_manifest.json")
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest.to_dict()), encoding="utf-8")
+
+    def test_v2_structure_download_populates_manager_singleton(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """The injected manager singleton receives the bytes; no second cache root."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        work_dir = self._seed_remote(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+        content = b"2\nshared singleton structure\nH 0 0 0\n"
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if filename == "RESULT/simple/optimized.xyz":
+                    return content
+                raise FileNotFoundError(filename)
+
+        injected = RemoteStructureCache(
+            manager.run_root, fetcher_factory=lambda _jid: FakeFetcher()
+        )
+        manager._remote_structure_cache = injected  # type: ignore[attr-defined]
+        self._seed_manifest(manager)
+        assert manager.structure_cache is injected
+
+        response = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert response.status_code == 200, response.text
+        assert response.content == content
+
+        # The manager-owned singleton got populated (not a private second cache).
+        assert injected.get_cached(self._JOB, "RESULT/simple/optimized.xyz") is not None
+        assert manager.structure_cache is injected
+        # One on-disk controlled cache under run_root/.remote_cache shared by
+        # any instance rooted at the same run_root.
+        assert (
+            RemoteStructureCache(manager.run_root).get_cached(
+                self._JOB, "RESULT/simple/optimized.xyz"
+            )
+            is not None
+        )
+        # work_dir never written.
+        assert not (work_dir / "RESULT").exists()
+
+    def test_v2_structure_download_never_writes_task_dir(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """On-demand remote fetch serves from the cache; work_dir stays byte-identical."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        work_dir = self._seed_remote(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                return b"3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        manager._remote_structure_cache = RemoteStructureCache(  # type: ignore[attr-defined]
+            manager.run_root, fetcher_factory=lambda _jid: FakeFetcher()
+        )
+        self._seed_manifest(manager)
+        before = set(work_dir.rglob("*"))
+
+        response = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert response.status_code == 200, response.text
+
+        assert set(work_dir.rglob("*")) == before
+        assert not (work_dir / "RESULT").exists()
+
+    def test_v2_structure_missing_is_404_and_transport_failure_is_502(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """remote-missing (node says no such file) vs connection failure differ."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        self._seed_remote(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def __init__(self) -> None:
+                self.transport_down = False
+
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if self.transport_down:
+                    raise RuntimeError("ssh transport broken")
+                raise FileNotFoundError(filename)
+
+        fetcher = FakeFetcher()
+        manager._remote_structure_cache = RemoteStructureCache(  # type: ignore[attr-defined]
+            manager.run_root, fetcher_factory=lambda _jid: fetcher
+        )
+        self._seed_manifest(manager)
+
+        missing = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert missing.status_code == 404, (
+            f"remote-missing must stay 404: {missing.status_code} {missing.text}"
+        )
+
+        fetcher.transport_down = True
+        failed = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert failed.status_code == 502, (
+            f"connection failure must not read as missing: {failed.status_code} {failed.text}"
+        )
+        assert "remote fetch failed" in failed.json()["detail"]

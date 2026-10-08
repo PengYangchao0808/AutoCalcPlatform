@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
+import subprocess
+import textwrap
 import time
 from collections.abc import Generator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -13,6 +18,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.nodes import NodeRegistry
 from acp.storage.manifest import ResultManifest
 
@@ -542,3 +548,426 @@ def test_v2_batch_without_node_fields_matches_previous_behaviour(
     assert len(calls) == 2  # validator ran for both — none rejected
     assert body["failed"] == []
     assert len(body["created"]) == 2
+
+
+# ── Remote-aware v2 reads (plan todo 6 / GAP-5 / R6) ─────────────────────────
+#
+# Cold-cache contract: only RESULT/result_manifest.json is seeded into the
+# manager-owned RemoteStructureCache singleton; the node holds the structure,
+# `.out` and frequency files; the local work_dir deliberately has NO RESULT
+# tree.  The v2 read/download/tree endpoints must serve the manifest from the
+# cache, fetch missing files on demand exactly once, distinguish remote-missing
+# (404) from transport failure (502), reject traversal before any SFTP call,
+# and never write inside work_dir.
+
+_V2_REMOTE_JOB = "v2_remote_job"
+
+
+class _NodeFetcher:
+    """Fake compute node: serves known files; per-path transport failure."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.fail: set[str] = set()
+        self.files: dict[str, bytes] = {}
+
+    def read_file(self, record: Any, rel_path: str) -> bytes:
+        self.calls.append(rel_path)
+        if rel_path in self.fail:
+            raise RuntimeError("ssh transport broken")
+        if rel_path in self.files:
+            return self.files[rel_path]
+        raise FileNotFoundError(rel_path)
+
+
+def _v2_remote_manifest(job_id: str) -> ResultManifest:
+    manifest = ResultManifest(task_id=job_id, workflow="optimize", status="completed")
+    manifest.add_product(
+        id="optimized", label="optimized structure", path="simple/optimized.xyz", kind="structure"
+    )
+    manifest.add_product(id="opt_out", label="orca output", path="simple/opt.out", kind="file")
+    manifest.add_product(
+        id="freq_1", label="normal modes", path="frequencies/modes.json", kind="frequency_modes"
+    )
+    return manifest
+
+
+@pytest.fixture()
+def v2_remote(tmp_path: Path) -> Generator[dict[str, Any], None, None]:
+    """TestClient whose remote job has a manifest-only cache and a live node."""
+    os.environ["ACP_RUN_ROOT"] = str(tmp_path)
+    from acp.api.server import create_app
+
+    with TestClient(create_app(run_root=tmp_path, max_running=1)) as client:
+        manager = client.app.state.job_manager
+        work_dir = tmp_path / "v2_remote_task"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id=_V2_REMOTE_JOB,
+            spec=JobSpec(
+                workflow="optimize",
+                name="v2_remote_task",
+                molecule_name="m",
+                task_name="opt",
+                remark="final",
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            remote_job_id="7",
+            result={"node": "node1", "remote_dir": "/remote/v2_remote_task"},
+        )
+        manager.store.create(record)
+
+        fetcher = _NodeFetcher()
+        fetcher.files = {
+            "RESULT/simple/optimized.xyz": b"2\nattempt-remote structure\nH 0 0 0\n",
+            "RESULT/simple/opt.out": b"ORCA fake output\n",
+            "RESULT/frequencies/modes.json": b'{"modes": []}\n',
+        }
+        # Production wiring: the manager-owned lazy singleton reads _remote_fetcher.
+        manager._remote_fetcher = fetcher  # type: ignore[attr-defined]
+
+        # Seed EXACTLY the manifest into the controlled cache (cold file cache).
+        cache = manager.structure_cache
+        manifest_path = cache.cache_path(_V2_REMOTE_JOB, "RESULT/result_manifest.json")
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(_v2_remote_manifest(_V2_REMOTE_JOB).to_dict()), encoding="utf-8"
+        )
+        assert cache.get_cached(_V2_REMOTE_JOB, "RESULT/simple/optimized.xyz") is None
+        yield {
+            "client": client,
+            "fetcher": fetcher,
+            "record": record,
+            "work_dir": work_dir,
+            "manager": manager,
+        }
+
+
+def test_v2_remote_results_served_from_manifest_only_cache(
+    v2_remote: dict[str, Any],
+) -> None:
+    """/results serves the cached manifest for a remote job with no local RESULT."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+    work_dir: Path = v2_remote["work_dir"]
+
+    response = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/results")
+    assert response.status_code == 200, response.text
+    product_ids = {product["id"] for product in response.json()["products"]}
+    assert {"optimized", "opt_out", "freq_1"} <= product_ids
+
+    # The manifest read must come from the cache, never from work_dir.
+    assert not (work_dir / "RESULT").exists()
+    # ...and no geometry on-demand fetch was triggered by the manifest read.
+    assert "RESULT/simple/optimized.xyz" not in fetcher.calls
+
+
+def test_v2_remote_structure_download_fetches_once_then_hits_cache(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Cold structure download fetches from the node exactly once; repeat hits cache."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+    work_dir: Path = v2_remote["work_dir"]
+    before = set(work_dir.rglob("*"))
+
+    first = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/structures/optimized")
+    assert first.status_code == 200, first.text
+    assert b"attempt-remote structure" in first.content
+    assert fetcher.calls.count("RESULT/simple/optimized.xyz") == 1
+
+    second = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/structures/optimized")
+    assert second.status_code == 200
+    assert second.content == first.content
+    assert fetcher.calls.count("RESULT/simple/optimized.xyz") == 1, "repeat hit re-fetched"
+
+    # Never write into the task work_dir.
+    assert set(work_dir.rglob("*")) == before
+    assert not (work_dir / "RESULT").exists()
+
+
+def test_v2_remote_out_file_download_fetches_once_then_hits_cache(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Generic .out download: one on-demand fetch, then served from the cache."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+
+    first = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/files/RESULT/simple/opt.out")
+    assert first.status_code == 200, first.text
+    assert first.content == b"ORCA fake output\n"
+    assert fetcher.calls.count("RESULT/simple/opt.out") == 1
+
+    second = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/files/RESULT/simple/opt.out")
+    assert second.status_code == 200
+    assert fetcher.calls.count("RESULT/simple/opt.out") == 1, "repeat hit re-fetched"
+    assert (
+        v2_remote["manager"].structure_cache.get_cached(_V2_REMOTE_JOB, "RESULT/simple/opt.out")
+        is not None
+    )
+
+
+def test_v2_remote_frequency_download_fetches_once_then_hits_cache(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Frequency product download: exactly one node fetch across repeated reads."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+
+    first = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/frequencies/freq_1")
+    assert first.status_code == 200, first.text
+    assert b'"modes"' in first.content
+    assert fetcher.calls.count("RESULT/frequencies/modes.json") == 1
+
+    second = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/frequencies/freq_1")
+    assert second.status_code == 200
+    assert second.content == first.content
+    assert fetcher.calls.count("RESULT/frequencies/modes.json") == 1, "repeat hit re-fetched"
+
+
+def test_v2_remote_missing_vs_transport_failure_distinguished(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Remote-missing → 404; connection failure → 502 (never conflated)."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+
+    missing = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/files/RESULT/simple/nope.out")
+    assert missing.status_code == 404, missing.text
+
+    fetcher.fail.add("RESULT/simple/opt.out")
+    failed = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/files/RESULT/simple/opt.out")
+    assert failed.status_code == 502, (
+        f"transport failure not distinguished from missing: {failed.status_code} {failed.text}"
+    )
+    assert "remote fetch failed" in failed.json()["detail"]
+    assert "ssh transport broken" in failed.json()["detail"]
+
+
+def test_v2_remote_traversal_rejected_before_sftp(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Malicious relative paths are rejected before any remote read."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+
+    for url_path in (
+        "/api/v2/tasks/{job}/files/RESULT/%2e%2e/%2e%2e/etc/passwd",
+        "/api/v2/tasks/{job}/files/%2e%2e/%2e%2e/etc/passwd",
+        "/api/v2/tasks/{job}/files/RESULT/%5c..%5c..%5cetc%5cpasswd",
+    ):
+        response = client.get(url_path.format(job=_V2_REMOTE_JOB))
+        assert response.status_code == 404, f"{url_path} -> {response.status_code}"
+
+    assert not any("etc/passwd" in call for call in fetcher.calls), (
+        f"traversal reached the node: {fetcher.calls}"
+    )
+
+
+def test_v2_remote_evil_manifest_product_rejected_before_fetch(
+    v2_remote: dict[str, Any],
+) -> None:
+    """A manifest product path escaping RESULT/ is rejected without an SFTP read."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+    manager = v2_remote["manager"]
+
+    manifest_path = manager.structure_cache.cache_path(
+        _V2_REMOTE_JOB, "RESULT/result_manifest.json"
+    )
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["products"].append(
+        {"id": "evil", "label": "evil", "path": "../../etc/passwd", "kind": "structure"}
+    )
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    response = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/structures/evil")
+    assert response.status_code == 404, response.text
+    assert not any("etc/passwd" in call for call in fetcher.calls), (
+        f"escaped product path reached the node: {fetcher.calls}"
+    )
+
+
+def test_v2_remote_tree_declared_scope_never_masquerades(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Remote tree = manifest-registered products only; work area stays empty.
+
+    Declared contract (endpoint docstring): for remote tasks ``area=result``
+    lists a one-level view synthesized from the cached result manifest, and
+    ``area=work`` always returns an empty entry list — a partial cache
+    directory must never masquerade as the full RESULT/WORK tree.
+    """
+    client = v2_remote["client"]
+    manager = v2_remote["manager"]
+    work_dir: Path = v2_remote["work_dir"]
+
+    # Partial-cache noise: files the manifest never registered.
+    cache = manager.structure_cache
+    stray = cache.cache_path(_V2_REMOTE_JOB, "RESULT/stray.txt")
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_text("not registered\n", encoding="utf-8")
+    work_file = cache.cache_path(_V2_REMOTE_JOB, "WORK/stage_01/run.out")
+    work_file.parent.mkdir(parents=True, exist_ok=True)
+    work_file.write_text("partial work copy\n", encoding="utf-8")
+
+    result = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/tree?area=result")
+    assert result.status_code == 200, result.text
+    body = result.json()
+    assert body["area"] == "result"
+    assert body["base"].endswith("RESULT")
+    entries = {entry["path"]: entry for entry in body["entries"]}
+    assert set(entries) == {"simple", "frequencies"}, (
+        f"tree scope must equal manifest-registered products: {sorted(entries)}"
+    )
+    assert all(entry["is_dir"] for entry in entries.values())
+    assert "stray.txt" not in entries
+
+    work = client.get(f"/api/v2/tasks/{_V2_REMOTE_JOB}/tree?area=work")
+    assert work.status_code == 200, work.text
+    assert work.json()["entries"] == [], (
+        "partial cache WORK files must never masquerade as the full WORK tree"
+    )
+
+    # The listing itself never materializes anything in the task dir.
+    assert not (work_dir / "RESULT").exists()
+    assert not (work_dir / "WORK").exists()
+
+
+def test_v2_remote_concurrent_downloads_fetch_once(
+    v2_remote: dict[str, Any],
+) -> None:
+    """Concurrent cold downloads trigger exactly one node fetch (cache dedup)."""
+    client = v2_remote["client"]
+    fetcher: _NodeFetcher = v2_remote["fetcher"]
+    url = f"/api/v2/tasks/{_V2_REMOTE_JOB}/structures/optimized"
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        responses = list(pool.map(lambda _i: client.get(url), range(4)))
+
+    assert all(response.status_code == 200 for response in responses), [
+        (r.status_code, r.text) for r in responses
+    ]
+    assert fetcher.calls.count("RESULT/simple/optimized.xyz") == 1, (
+        f"concurrent requests re-fetched: {fetcher.calls}"
+    )
+
+
+def test_v2_remote_js_helper_v2_namespace_60s_budget_and_timeout_conversion() -> None:
+    """Executed JS probe: /api/v2 namespace + 60000ms budget + converted timeout.
+
+    Root ANTI #28: remote-backed v2 reads must opt into the 60s remote budget
+    while preserving the /api/v2 namespace (never routed through the v1-pinned
+    ``apiRemote()``) and sharing ``apiRequest``'s error conversion — a slow or
+    failed remote fetch surfaces a localized timeout Error, never a raw
+    AbortError.  The probe extracts the real helper functions from the workbench
+    source and executes them under node with a stubbed ``fetch``.
+    """
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    frontend = Path(__file__).resolve().parents[1] / "frontend" / "ACP_Workbench_v2.html"
+    html = frontend.read_text(encoding="utf-8")
+    assert "timeoutMs: API_REMOTE_TIMEOUT_MS" in html, (
+        "no version-aware v2 remote helper passes the 60s budget yet"
+    )
+
+    match = re.search(
+        r"(var API_TIMEOUT_MS = 8000;[\s\S]*?async function apiV2\(path, opts\) \{[\s\S]*?\n\})",
+        html,
+    )
+    assert match, "api/apiRequest/apiRemote/apiV2 block not found in workbench HTML"
+    remote_match = re.search(r"(function apiV2Remote\(path, opts\) \{[\s\S]*?\n\})", html)
+    assert remote_match, "apiV2Remote helper missing from workbench HTML"
+    api_source = match.group(1) + "\n" + remote_match.group(1)
+
+    script = (
+        "const API_BASE = '/api/v1';\n"
+        "function t(key, vars) { return key + (vars ? ':' + JSON.stringify(vars) : ''); }\n"
+        "function invalidateTaskViewMetadata() {}\n"
+        "function fail(msg) { console.error('FAIL: ' + msg); process.exit(1); }\n"
+        "class FakeAbortError extends Error {\n"
+        "  constructor() {\n"
+        "    super('signal is aborted without reason');\n"
+        "    this.name = 'AbortError';\n"
+        "  }\n"
+        "}\n"
+        + api_source
+        + "\n"
+        + textwrap.dedent(
+            """
+            (async function main() {
+              var capturedUrls = [];
+              var capturedDelays = [];
+              var realSetTimeout = global.setTimeout;
+              var realClearTimeout = global.clearTimeout;
+              // Budget spy: record the requested delay, fire immediately (no 60s wait).
+              global.setTimeout = function (fn, ms) {
+                capturedDelays.push(ms);
+                return realSetTimeout(fn, 0);
+              };
+              global.clearTimeout = function (id) { return realClearTimeout(id); };
+              global.fetch = function (url, opts) {
+                capturedUrls.push(url);
+                return new Promise(function (_resolve, reject) {
+                  if (opts && opts.signal) {
+                    opts.signal.addEventListener('abort', function () {
+                      reject(new FakeAbortError());
+                    });
+                  }
+                });
+              };
+              if (API_TIMEOUT_MS !== 8000) fail('local default budget changed: ' + API_TIMEOUT_MS);
+              if (API_REMOTE_TIMEOUT_MS !== 60000)
+                fail('remote budget changed: ' + API_REMOTE_TIMEOUT_MS);
+
+              // (1) version-aware remote wrapper: /api/v2 URL + 60000ms budget.
+              try {
+                await apiV2Remote('/tasks/task_demo/structures/optimized');
+                fail('remote timeout did not reject');
+              } catch (e) {
+                if (capturedUrls[0] !== '/api/v2/tasks/task_demo/structures/optimized')
+                  fail('wrong request URL: ' + capturedUrls[0]);
+                if (capturedDelays[0] !== 60000)
+                  fail('remote budget not 60000ms: ' + capturedDelays[0]);
+                if (e.name === 'AbortError') fail('remote timeout leaked AbortError');
+                if (String(e.message).indexOf('aborted') >= 0)
+                  fail('remote timeout leaked raw abort text: ' + e.message);
+                if (String(e.message).indexOf('api.timeout') !== 0)
+                  fail('timeout not converted by apiRequest: ' + e.message);
+              }
+
+              // (2) explicit frozen form: apiV2(path, {timeoutMs: API_REMOTE_TIMEOUT_MS}).
+              capturedUrls.length = 0; capturedDelays.length = 0;
+              try {
+                await apiV2('/tasks/task_demo/results', { timeoutMs: API_REMOTE_TIMEOUT_MS });
+                fail('explicit remote timeout did not reject');
+              } catch (e) {
+                if (capturedUrls[0] !== '/api/v2/tasks/task_demo/results')
+                  fail('wrong explicit URL: ' + capturedUrls[0]);
+                if (capturedDelays[0] !== 60000)
+                  fail('explicit budget not 60000ms: ' + capturedDelays[0]);
+                if (e.name === 'AbortError') fail('explicit timeout leaked AbortError');
+                if (String(e.message).indexOf('api.timeout') !== 0)
+                  fail('explicit timeout not converted: ' + e.message);
+              }
+
+              // (3) plain v2 calls keep the local 8s default.
+              capturedUrls.length = 0; capturedDelays.length = 0;
+              try {
+                await apiV2('/tasks/task_demo/tree');
+                fail('local timeout did not reject');
+              } catch (e) {
+                if (capturedDelays[0] !== 8000)
+                  fail('local default budget changed: ' + capturedDelays[0]);
+              }
+
+              console.log('PASS');
+            })().catch(function (e) { console.error('FAIL: unexpected', e); process.exit(1); });
+            """
+        )
+    )
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, f"node failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    assert "PASS" in result.stdout

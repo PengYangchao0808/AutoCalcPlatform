@@ -320,15 +320,6 @@ def test_repro_c_manifest_only_cache_is_the_registered_setup(
     assert cache.get_cached(_C_JOB, _C_OUT) is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Reproduction (c): /api/v2 results for a remote job with only the manifest "
-        "cached must be served from the manager cache. Desired: 200 + manifest body. "
-        "Owning todos 6/11/15 (R6). Removal rule: convert/remove this xfail when "
-        "todo 6 lands remote-aware v2 reads (acceptance in todo 11)."
-    ),
-)
 def test_repro_c_v2_results_served_from_remote_cache(remote_client: TestClient) -> None:
     response = remote_client.get(f"/api/v2/tasks/{_C_JOB}/results")
     assert response.status_code == 200, (
@@ -339,15 +330,6 @@ def test_repro_c_v2_results_served_from_remote_cache(remote_client: TestClient) 
     assert {"optimized", "opt_out"} <= product_ids
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Reproduction (c): structure download for a manifest-only remote cache must "
-        "fetch on demand from the node and serve the bytes. Desired: 200 + remote "
-        "content. Owning todos 6/11 (R6). Removal rule: convert/remove this xfail "
-        "when todo 6 lands on-demand v2 structure fetch (acceptance in todo 11)."
-    ),
-)
 def test_repro_c_v2_structure_download_fetches_on_demand(remote_client: TestClient) -> None:
     response = remote_client.get(f"/api/v2/tasks/{_C_JOB}/structures/optimized")
     assert response.status_code == 200, (
@@ -356,15 +338,6 @@ def test_repro_c_v2_structure_download_fetches_on_demand(remote_client: TestClie
     assert b"attempt-remote structure" in response.content
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Reproduction (c): generic `.out` file download for a manifest-only remote "
-        "cache must fetch on demand. Desired: 200 + remote content. Owning todos "
-        "6/11 (R6). Removal rule: convert/remove this xfail when todo 6 lands "
-        "on-demand v2 file fetch (acceptance in todo 11)."
-    ),
-)
 def test_repro_c_v2_out_file_download_fetches_on_demand(remote_client: TestClient) -> None:
     response = remote_client.get(f"/api/v2/tasks/{_C_JOB}/files/{_C_OUT}")
     assert response.status_code == 200, (

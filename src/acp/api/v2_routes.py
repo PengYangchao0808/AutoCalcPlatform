@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import posixpath
 import re
 import sqlite3
 from pathlib import Path
@@ -51,6 +52,7 @@ from acp.api.v2_schemas import (
     V2TaskViewResponse,
     V2TreeResponse,
 )
+from acp.results.remote_structure_cache import RemotePushError, RemoteStructureCache
 from acp.scheduler.capabilities import NoCapableNodeError
 from acp.scheduler.files import resolve_safe
 from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -174,14 +176,175 @@ def _enrich_active_rows(
 
 
 def _storage_for(record: JobRecord) -> TaskStorageBackend:
-    """Storage backend serving a task's files (§9: server stores no copies).
+    """Storage backend serving a LOCAL task's files (§9: server stores no copies).
 
-    Local tasks read the task dir directly; remote tasks read the local
-    mirror populated by the on-demand fetcher (SFTP wiring lands with the
-    node-agent phase). All v2 file endpoints go through this single swap
-    point so the backend can change without touching routes.
+    Remote tasks do not read ``work_dir`` — they go through the manager-owned
+    ``RemoteStructureCache`` singleton (see ``_serve_task_file`` /
+    ``_remote_tree_entries``), so this swap point now serves the local branch
+    only.
     """
     return LocalStorageBackend(Path(record.work_dir))
+
+
+# ---------------------------------------------------------------------------
+# Remote-aware reads (plan todo 6 / GAP-5, R6).
+#
+# v2-local mirrors of v1_routes._is_remote_job/_job_read_root: v1_routes.py
+# is a user-dirty file, so the mirror lives here instead of hoisting shared
+# code out of it.  All remote reads use the ONE manager-owned cache
+# singleton (``JobManager.structure_cache``) — never a second cache — and
+# never write into the task ``work_dir``.
+# ---------------------------------------------------------------------------
+
+
+def _is_remote_job(record: JobRecord) -> bool:
+    """True when *record* carries remote execution metadata (v1 mirror)."""
+    result = record.result or {}
+    return bool(result.get("node") and result.get("remote_dir"))
+
+
+def _remote_cache(request: Request) -> RemoteStructureCache:
+    """Return the manager-owned ``RemoteStructureCache`` singleton."""
+    return _manager(request).structure_cache
+
+
+def _job_read_root(request: Request, record: JobRecord) -> Path:
+    """Readable result root: ``work_dir`` locally, controlled cache for remote.
+
+    v1 mirror: terminal remote jobs fetch the small catalog files first
+    (``cache.fetch_catalog``), so manifest reads never depend on a frontend
+    ``?fetch=1`` retry.  Remote geometry/files stay lazy — downloads fetch
+    them on demand.
+    """
+    if not _is_remote_job(record):
+        return Path(record.work_dir)
+    cache = _remote_cache(request)
+    if record.status.is_terminal:
+        cache.fetch_catalog(record, str(record.spec.workflow or ""))
+    return cache.job_root(record.id)
+
+
+def _normalize_task_rel_path(file_path: str) -> str | None:
+    """Normalize a task-relative path; ``None`` when it escapes the task root.
+
+    Runs BEFORE any cache read or SFTP request so traversal never reaches
+    the node.  Backslash separators are folded to ``/`` first; absolute
+    paths, NUL bytes and any ``..`` segment are rejected after normpath.
+    """
+    raw = str(file_path).replace("\\", "/")
+    if not raw or "\x00" in raw:
+        return None
+    normalized = posixpath.normpath(raw)
+    if normalized.startswith("/") or normalized in {".", ".."}:
+        return None
+    if normalized.startswith("../") or any(part == ".." for part in normalized.split("/")):
+        return None
+    return normalized
+
+
+def _read_result_manifest(request: Request, record: JobRecord) -> ResultManifest:
+    """Read ``RESULT/result_manifest.json`` from the job's read root (§8)."""
+    root = _job_read_root(request, record)
+    try:
+        return ResultManifest.read(root / TaskLayout.RESULT_DIR_NAME)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="no result manifest") from exc
+
+
+def _resolve_local_mirror(record: JobRecord, normalized: str) -> Path | None:
+    """A synced local copy under ``work_dir`` (v1-era mirrors), else ``None``."""
+    if not record.work_dir:
+        return None
+    return resolve_safe(record.work_dir, normalized)
+
+
+def _serve_task_file(request: Request, record: JobRecord, file_path: str) -> Path:
+    """Resolve *file_path* to a readable local file for a download endpoint.
+
+    Local tasks resolve under ``work_dir`` (traversal-guarded).  Remote
+    tasks are served from the manager-owned cache: the path is normalized
+    first, the cache is read, and on miss ``cache.fetch(record, rel_path)``
+    pulls the file from the node — bytes are always served from the
+    controlled cache and the task ``work_dir`` is never written.  A
+    confirmed remote miss falls back to a synced local mirror (v1-era
+    remote jobs) and then 404s; a transport failure surfaces 502 and is
+    never conflated with "remote file missing".
+    """
+    normalized = _normalize_task_rel_path(file_path)
+    if normalized is None:
+        raise HTTPException(status_code=404, detail="File not found or outside work directory")
+    if not _is_remote_job(record):
+        resolved = _resolve_local_mirror(record, normalized)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="File not found or outside work directory")
+        return resolved
+
+    cache = _remote_cache(request)
+    try:
+        cached = cache.get_cached(record.id, normalized)
+    except ValueError:
+        cached = None
+    if cached is not None:
+        return cached
+
+    try:
+        cached = cache.fetch(record, normalized, raise_errors=True)
+    except ValueError:
+        cached = None
+    except RemotePushError as exc:
+        logger.debug("Remote fetch unavailable for %s/%s: %s", record.id, normalized, exc)
+        raise HTTPException(status_code=502, detail=f"remote fetch failed: {exc}") from exc
+    except Exception as exc:
+        logger.warning(
+            "v2 remote fetch failed for %s/%s: %s", record.id, normalized, exc, exc_info=True
+        )
+        raise HTTPException(status_code=502, detail=f"remote fetch failed: {exc}") from exc
+
+    if cached is not None:
+        return cached
+    mirror = _resolve_local_mirror(record, normalized)
+    if mirror is not None:
+        return mirror
+    raise HTTPException(status_code=404, detail="File not found")
+
+
+def _remote_tree_entries(request: Request, record: JobRecord, area: str) -> list[V2FileEntry]:
+    """One-level manifest-product view for a remote task (never the raw cache).
+
+    Declared scope: only manifest-registered ``RESULT/`` products are
+    listed (grouped to their first path segment); ``area=work`` has no
+    manifest-registered scope and always lists nothing.  A partial
+    ``.remote_cache`` directory must never masquerade as the full
+    RESULT/WORK tree.
+    """
+    if area != "result":
+        return []
+    try:
+        manifest = _read_result_manifest(request, record)
+    except HTTPException:
+        return []
+    except (OSError, ValueError):
+        return []
+    cache = _remote_cache(request)
+    entries: dict[str, V2FileEntry] = {}
+    for product in manifest.products:
+        rel = _normalize_task_rel_path(str(product.path))
+        if rel is None:
+            continue
+        name, sep, _rest = rel.partition("/")
+        if sep:
+            entries.setdefault(name, V2FileEntry(path=name, is_dir=True))
+            continue
+        size, mtime = 0, 0.0
+        try:
+            cached = cache.get_cached(record.id, f"{TaskLayout.RESULT_DIR_NAME}/{rel}")
+            if cached is not None:
+                stat = cached.stat()
+                size, mtime = stat.st_size, stat.st_mtime
+        except (OSError, ValueError):
+            pass
+        entries[name] = V2FileEntry(path=name, size=size, modified=mtime, is_dir=False)
+    return sorted(entries.values(), key=lambda e: (not e.is_dir, e.path))
 
 
 @router.get("/projects", response_model=list[V2ProjectSummary])
@@ -451,11 +614,23 @@ def get_task_tree(
 ) -> V2TreeResponse:
     """One-level listing of the task's ``RESULT/`` or ``WORK/`` area (§12).
 
+    Declared scope (remote reads):
+
+    * local tasks — the real ``RESULT/``/``WORK/`` directory tree, one level.
+    * remote tasks — ``area=result`` lists only manifest-registered products
+      (a one-level view synthesized from the cached ``result_manifest.json``);
+      ``area=work`` always returns an empty entry list.  A partial
+      ``.remote_cache`` directory never masquerades as the full RESULT/WORK
+      tree.
+
     A missing area base yields an empty entry list, not an error.
     """
     record = _task_or_404(request, task_id)
     area_name = TaskLayout.RESULT_DIR_NAME if area == "result" else TaskLayout.WORK_DIR_NAME
     base = Path(record.work_dir) / area_name
+    if _is_remote_job(record):
+        entries = _remote_tree_entries(request, record, area)
+        return V2TreeResponse(task_id=record.id, area=area, base=str(base), entries=entries)
     storage = _storage_for(record)
     try:
         listing = storage.list_dir(area_name)
@@ -471,51 +646,48 @@ def get_task_tree(
 
 @router.get("/tasks/{task_id}/files/{file_path:path}")
 def download_task_file(task_id: str, file_path: str, request: Request) -> FileResponse:
-    """Download a file from the task directory (traversal-guarded, §12)."""
-    work_dir = _manager(request).work_dir_of(task_id)
-    if work_dir is None:
-        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
-    resolved = resolve_safe(work_dir, file_path)
-    if resolved is None:
-        raise HTTPException(status_code=404, detail="File not found or outside work directory")
+    """Download a file from the task directory (traversal-guarded, §12).
+
+    Remote tasks are served from the manager-owned ``RemoteStructureCache``
+    singleton: the path is normalized before any SFTP, a cache miss fetches
+    the file on demand from the node, and bytes are always served from the
+    controlled cache — the task ``work_dir`` is never written.  Remote-missing
+    surfaces 404; a transport failure surfaces 502.
+    """
+    record = _task_or_404(request, task_id)
+    resolved = _serve_task_file(request, record, file_path)
     return FileResponse(str(resolved), filename=resolved.name)
 
 
 @router.get("/tasks/{task_id}/results")
 def get_task_results(task_id: str, request: Request) -> dict[str, Any]:
-    """Return the task's ``RESULT/result_manifest.json`` verbatim (§8 shape)."""
+    """Return the task's ``RESULT/result_manifest.json`` verbatim (§8 shape).
+
+    Remote tasks read it from the manager-owned cache after the terminal
+    catalog fetch (v1 parity) — the task ``work_dir`` is never consulted or
+    written for remote jobs.
+    """
     record = _task_or_404(request, task_id)
-    result_dir = Path(record.work_dir) / TaskLayout.RESULT_DIR_NAME
-    try:
-        manifest = ResultManifest.read(result_dir)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="no result manifest") from exc
+    manifest = _read_result_manifest(request, record)
     return {**manifest.to_dict(), "task_id": record.id}
 
 
 def _manifest_product_file(
+    request: Request,
     record: JobRecord,
     product_id: str,
     kinds: frozenset[str],
 ) -> Path:
-    """Resolve ``RESULT/<product.path>`` for a manifest product of *kinds*."""
-    result_dir = Path(record.work_dir) / TaskLayout.RESULT_DIR_NAME
-    try:
-        manifest = ResultManifest.read(result_dir)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="no result manifest") from exc
+    """Resolve a manifest product of *kinds* to a readable file (remote-aware).
+
+    The manifest is read from the job's read root (controlled cache for
+    remote jobs); the product path is normalized before any SFTP and the
+    bytes are served via :func:`_serve_task_file`.
+    """
+    manifest = _read_result_manifest(request, record)
     for product in manifest.products:
         if product.id == product_id and product.kind.value in kinds:
-            resolved = resolve_safe(
-                Path(record.work_dir),
-                f"{TaskLayout.RESULT_DIR_NAME}/{product.path}",
-            )
-            if resolved is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="File not found or outside work directory",
-                )
-            return resolved
+            return _serve_task_file(request, record, f"{TaskLayout.RESULT_DIR_NAME}/{product.path}")
     raise HTTPException(
         status_code=404,
         detail=f"Product not found: {product_id}",
@@ -524,21 +696,28 @@ def _manifest_product_file(
 
 @router.get("/tasks/{task_id}/structures/{structure_id}")
 def download_task_structure(structure_id: str, task_id: str, request: Request) -> FileResponse:
-    """Serve a ``kind == "structure"`` product file from ``RESULT/`` (§12)."""
+    """Serve a ``kind == "structure"`` product file (§12).
+
+    Remote tasks fetch the product file on demand through the manager-owned
+    cache singleton; ``work_dir`` is never written.
+    """
     record = _task_or_404(request, task_id)
-    resolved = _manifest_product_file(record, structure_id, frozenset({"structure"}))
+    resolved = _manifest_product_file(request, record, structure_id, frozenset({"structure"}))
     return FileResponse(str(resolved), filename=resolved.name)
 
 
 @router.get("/tasks/{task_id}/frequencies/{frequency_id}")
 def download_task_frequencies(frequency_id: str, task_id: str, request: Request) -> FileResponse:
-    """Serve a frequency product's raw file from ``RESULT/`` (§12).
+    """Serve a frequency product's raw file (§12).
 
     Until the Phase 5 parsers land this serves the raw product file for
-    kinds ``frequency_modes`` and ``file``.
+    kinds ``frequency_modes`` and ``file``.  Remote tasks fetch on demand
+    through the manager-owned cache singleton; ``work_dir`` is never written.
     """
     record = _task_or_404(request, task_id)
-    resolved = _manifest_product_file(record, frequency_id, frozenset({"frequency_modes", "file"}))
+    resolved = _manifest_product_file(
+        request, record, frequency_id, frozenset({"frequency_modes", "file"})
+    )
     return FileResponse(str(resolved), filename=resolved.name)
 
 
