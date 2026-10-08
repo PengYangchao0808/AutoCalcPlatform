@@ -13625,3 +13625,123 @@ def test_nmr_panel_pure_helpers_behavior() -> None:
     assert payload["firstClaim"]["observation_id"] == "C:0"
     assert payload["firstClaim"]["candidate_indices"] == [0, 1]
     assert payload["firstClaim"]["atom_labels"] == ["C1", "C2"]
+
+
+def test_scan_wizard_fields_dom_and_i18n_lock() -> None:
+    """DOM + i18n lock for the scan wizard coordinate fields (GAP-8).
+
+    The panel and its five fields are new ids (existing pinned ids stay
+    untouched); every user-visible label/message exists in BOTH locale
+    blocks.  Removing the panel, renaming an id, or shipping an
+    untranslated error turns this red.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    for dom_id in (
+        "scan-wizard-panel",
+        "scan-wiz-atom-1",
+        "scan-wiz-atom-2",
+        "scan-wiz-start",
+        "scan-wiz-end",
+        "scan-wiz-points",
+        "scan-wiz-status",
+    ):
+        assert f'id="{dom_id}"' in html, dom_id
+    # The panel lives inside #job-modal so the generic draft capture
+    # (_captureWizardDraft's input[id]/select[id]/textarea[id] sweep)
+    # round-trips the fields without any per-field registry.
+    assert html.index('id="job-modal"') < html.index('id="scan-wizard-panel"')
+    assert html.index('id="scan-wizard-panel"') < html.index("function _captureWizardDraft()")
+    assert 'modal.querySelectorAll("input[id], select[id], textarea[id]")' in html
+    i18n_keys = [
+        "modal.scan_coord",
+        "modal.scan_atom_1",
+        "modal.scan_atom_2",
+        "modal.scan_start",
+        "modal.scan_end",
+        "modal.scan_points",
+        "modal.scan_hint",
+        "modal.scan_invalid",
+        "modal.scan_err_fields_required",
+        "modal.scan_err_atom_not_integer",
+        "modal.scan_err_atom_not_positive",
+        "modal.scan_err_atoms_not_distinct",
+        "modal.scan_err_atom_out_of_range",
+        "modal.scan_err_range_not_finite",
+        "modal.scan_err_range_not_positive",
+        "modal.scan_err_range_equal",
+        "modal.scan_err_points_invalid",
+        "modal.scan_err_no_confirmed_structure",
+    ]
+    for key in i18n_keys:
+        assert html.count(f'"{key}":') == 2, f"{key} must exist in zh-CN and en-US"
+
+
+def test_scan_wizard_submission_path_lock() -> None:
+    """The wizard submit path uses the pure builder; conversion is once.
+
+    ``submitJobModal`` must route every scan body through
+    ``buildScanWizardBodyParts`` (validated per final submitted structure)
+    and the 1-based -> 0-based conversion must live in exactly one place.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function buildScanWizardBodyParts(fields, structureEntry)" in html
+    assert "function scanWizardCountAtoms(xyzText)" in html
+    # Exactly-once conversion: both atom conversions sit at the single
+    # marked site inside the builder and nowhere else in the page.
+    builder = html.split("function buildScanWizardBodyParts", 1)[1].split(
+        "function scanWizardErrorMessage", 1
+    )[0]
+    assert builder.count("scan-index-base-convert") == 1
+    assert builder.count("atomA - 1") == 1
+    assert builder.count("atomB - 1") == 1
+    assert html.count("atomA - 1") == 1
+    assert html.count("atomB - 1") == 1
+    # submitJobModal consumes the builder result; it never re-derives
+    # coordinates or points itself.
+    assert "scanParts = buildScanWizardBodyParts(scanWizardFieldValues(), s);" in html
+    assert "inputPayload.scan_coordinates = scanParts.input.scan_coordinates;" in html
+    assert "methodPayload.scan_points = scanParts.method.scan_points;" in html
+    assert (
+        "methodPayload.levels.scan = Object.assign({}, methodPayload.levels.scan"
+        " || {}, scanParts.mirror);" in html
+    )
+    # Scan bodies are bound to the final submitted structure's geometry:
+    # the scan branch submits explicit xyz_text, never a smiles/asset guess.
+    scan_branch = html.split("if (scanParts) {", 1)[1].split("} else if", 1)[0]
+    assert (
+        'inputPayload = { source_type: "xyz_text", '
+        'source: String(s.xyz || s.xyz_text || "") };' in scan_branch
+    )
+    # Batch semantics: a failed per-structure validation aborts the whole
+    # submit with a clear result instead of queueing an unverifiable job.
+    assert "scanWizardSetStatus(scanMsg);" in html
+    assert "window.alert(scanMsg);" in html
+
+
+def test_scan_wizard_state_hydration_and_switch_away_lock() -> None:
+    """Draft restore, edit-recalc hydration, and switch-away wiring (GAP-8)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    visibility = html.split("function updateInputModeVisibility()", 1)[1].split(
+        "function updateTaskNamePlaceholder", 1
+    )[0]
+    assert (
+        "var isScan = wizardState && wizardState.workflow "
+        '&& wizardState.workflow.id === "scan";' in visibility
+    )
+    assert 'scanPanel.style.display = isScan ? "block" : "none";' in visibility
+    assert "scanWizardClear();" in visibility
+    # Fresh context on pending-task/editor hydrate; the hydrate chain's
+    # final updateConfigCards() refills from the method-stage mirror.
+    pending = html.split("function applyPendingNewTask()", 1)[1].split(
+        "function configureStageSourcePanel", 1
+    )[0]
+    assert "scanWizardClear();" in pending
+    config = html.split("function updateConfigCards()", 1)[1].split(
+        "function loadDefaultMethodProfile", 1
+    )[0]
+    assert "scanWizardSyncFromMethodState();" in config
+    assert "function scanWizardSyncFromMethodState()" in html
+    assert "function refreshScanWizardStatus()" in html
+    # Structure changes re-validate: remove/clear paths call
+    # updateInputModeVisibility, which refreshes the scan status.
+    assert "function scanWizardEnsureListeners()" in html

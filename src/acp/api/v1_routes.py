@@ -220,7 +220,14 @@ from acp.scheduler.job_edit import (
     input_structure_changed,
     workflow_edit_status,
 )
-from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    ALL_WORKFLOWS,
+    PUBLIC_WORKFLOWS,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+    validate_scan_submission,
+)
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
@@ -2171,6 +2178,27 @@ def preview_irc_ts_source(request: Request, source_id: str = Query(...)) -> dict
     return source.provenance()
 
 
+def _validate_scan_submission(
+    workflow: str, method: dict[str, Any], inp: dict[str, Any]
+) -> None:
+    """Reject invalid ``scan`` submissions with a synchronous 422.
+
+    ``scan_method_flags`` is the single coordinate contract the local/remote
+    runner consumes; validating at the API boundary turns the previous
+    201-then-async-failure ("scan job requires at least one coordinate") into
+    an immediate client error (NEW-2).  The shared
+    ``validate_scan_submission`` boundary validator completes the same
+    check for v1 and v2 (indices/finite range/points).  No-op for other
+    workflows.
+    """
+    if workflow != "scan":
+        return
+    try:
+        validate_scan_submission(workflow, method, inp)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -2180,6 +2208,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    _validate_scan_submission(req.workflow, req.method, req.input)
     if req.workflow == "irc":
         req.input = _resolve_irc_source_reference(req.input, manager)
     if req.workflow == "BatchOptimize":
@@ -5275,6 +5304,7 @@ def _edited_spec_diff(record: JobRecord, spec: JobSpec) -> list[dict[str, Any]]:
 
 
 def _validate_edited_execution(spec: JobSpec, manager: JobManager) -> None:
+    _validate_scan_submission(spec.workflow, spec.method, spec.input)
     try:
         validate_execution_request(spec)
     except ExecutionTargetError as exc:

@@ -55,7 +55,14 @@ from acp.api.v2_schemas import (
 from acp.results.remote_structure_cache import RemotePushError, RemoteStructureCache
 from acp.scheduler.capabilities import NoCapableNodeError
 from acp.scheduler.files import resolve_safe
-from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    ALL_WORKFLOWS,
+    PUBLIC_WORKFLOWS,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+    validate_scan_submission,
+)
 from acp.scheduler.manager import JobManager
 from acp.scheduler.nodes import (
     ExecutionTargetError,
@@ -781,6 +788,11 @@ def _submit_batch_item(
     """
     if item.workflow not in ALL_WORKFLOWS:
         return f"Unsupported workflow '{item.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}"
+    try:
+        validate_scan_submission(item.workflow, item.method, item.input)
+    except ValueError as exc:
+        logger.warning("batch item %s/%s rejected: %s", item.molecule_name, item.task_name, exc)
+        return str(exc)
     resources = dict(item.resources) if item.resources else {}
     if req_batch_id and "batch_id" not in resources:
         resources["batch_id"] = req_batch_id

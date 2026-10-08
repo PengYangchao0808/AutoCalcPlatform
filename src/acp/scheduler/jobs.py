@@ -12,6 +12,7 @@ metadata.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -327,6 +328,217 @@ def scan_method_flags(
     if _as_bool(use_scants) is True:
         flags += ["--scants"]
     return flags
+
+
+# ── scan submission validation (shared ACP submission boundary) ──────────
+# ``scan_method_flags`` is the parameter generator, NOT a validator; this
+# module holds the boundary rules both v1 create/edit and v2 batch use.
+# First phase is DISTANCE scans only (angle/dihedral deferred).
+
+
+def _scan_atom_count_from_xyz(text: Any) -> int | None:
+    """Atom count of a standard XYZ block, or None when unparseable."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    lines = text.splitlines()
+    if not lines:
+        return None
+    first = lines[0].strip()
+    try:
+        declared = int(first)
+    except ValueError:
+        return None
+    if declared <= 0:
+        return None
+    return declared
+
+
+def _scan_atom_count_from_input(payload: Mapping[str, Any]) -> int | None:
+    """Best-effort atom count of the confirmed structure in an input payload."""
+    for key in ("xyz_text",):
+        count = _scan_atom_count_from_xyz(payload.get(key))
+        if count is not None:
+            return count
+    source_type = str(payload.get("source_type") or "")
+    if source_type in ("xyz_text", "xyz", "plain"):
+        count = _scan_atom_count_from_xyz(payload.get("source"))
+        if count is not None:
+            return count
+    geometry = payload.get("geometry")
+    if isinstance(geometry, (list, tuple)) and geometry:
+        return len(geometry)
+    for key in ("symbols", "atoms"):
+        values = payload.get(key)
+        if isinstance(values, (list, tuple)) and values:
+            return len(values)
+    scan_request = payload.get("scan_request")
+    if isinstance(scan_request, Mapping):
+        inner = scan_request.get("source")
+        if isinstance(inner, Mapping):
+            return _scan_atom_count_from_input(inner)
+    return None
+
+
+def _submission_scan_coordinates(
+    payload: Mapping[str, Any], method: Mapping[str, Any]
+) -> list[Any]:
+    """Raw coordinate entries, mirroring ``scan_method_flags`` source order."""
+    raw_coordinates: Any = None
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                raw_coordinates = candidate
+                break
+        if raw_coordinates is not None:
+            break
+    if raw_coordinates is None:
+        raise ValueError("scan job requires at least one coordinate")
+    if isinstance(raw_coordinates, (str, Mapping)):
+        coordinates = [raw_coordinates]
+    elif isinstance(raw_coordinates, (list, tuple)):
+        coordinates = list(raw_coordinates)
+    else:
+        raise ValueError("scan coordinates must be a string or a sequence")
+    if not coordinates:
+        raise ValueError("scan job requires at least one coordinate")
+    return coordinates
+
+
+def _submission_scan_points(method: Mapping[str, Any], payload: Mapping[str, Any]) -> Any:
+    """Scan point count as the generator resolves it (None when absent)."""
+    points = method.get("scan_points")
+    if points is None:
+        levels = method.get("levels")
+        scan_level: Mapping[str, Any] = {}
+        if isinstance(levels, Mapping):
+            candidate_level = levels.get("scan") or levels.get("scan_coordinate")
+            if isinstance(candidate_level, Mapping):
+                scan_level = candidate_level
+        points = scan_level.get("scan_coordinate_points")
+        if points is None:
+            points = scan_level.get("scan_points")
+    return points
+
+
+def _parse_submission_coordinate(entry: Any, index: int) -> tuple[tuple[int, int], float, float]:
+    """Parse one coordinate entry into ((atom_a, atom_b), start, end)."""
+    label = f"scan coordinate {index + 1}"
+    if isinstance(entry, Mapping):
+        kind = str(entry.get("kind") or "distance")
+        if kind != "distance":
+            raise ValueError(f"{label}: only distance scans are supported, got kind {kind!r}")
+        atoms_raw = entry.get("atoms")
+        if not isinstance(atoms_raw, (list, tuple)) or len(atoms_raw) != 2:
+            raise ValueError(f"{label}: distance coordinates require exactly two atoms")
+        raw_atoms = list(atoms_raw)
+        start_raw = entry.get("start")
+        end_raw = entry.get("end")
+        if start_raw is None or end_raw is None:
+            raise ValueError(f"{label}: scan coordinate objects require start and end")
+    elif isinstance(entry, str):
+        parts = [text.strip() for text in entry.split(",")]
+        if len(parts) != 4:
+            raise ValueError(f"{label} must be atom1,atom2,start,end")
+        raw_atoms = parts[:2]
+        start_raw, end_raw = parts[2], parts[3]
+    else:
+        raise ValueError(f"{label} must be a string or a coordinate object")
+
+    atoms: list[int] = []
+    for raw_atom in raw_atoms:
+        if isinstance(raw_atom, bool):
+            raise ValueError(f"{label}: atom indices must be integers")
+        if isinstance(raw_atom, int):
+            atoms.append(raw_atom)
+            continue
+        try:
+            parsed = int(str(raw_atom).strip())
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label}: atom indices must be integers") from error
+        atoms.append(parsed)
+
+    def _finite(value: Any) -> float:
+        if isinstance(value, bool):
+            raise ValueError(f"{label}: start and end must be finite numbers")
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label}: start and end must be finite numbers") from error
+        if not math.isfinite(parsed):
+            raise ValueError(f"{label}: start and end must be finite numbers")
+        return parsed
+
+    return (atoms[0], atoms[1]), _finite(start_raw), _finite(end_raw)
+
+
+def validate_scan_submission(
+    workflow: str,
+    method: Mapping[str, Any] | None = None,
+    inp: Mapping[str, Any] | None = None,
+    *,
+    atom_count: int | None = None,
+) -> None:
+    """Validate a scan submission at the shared ACP submission boundary.
+
+    Both v1 (create/edit-recalculate) and v2 (batch per-item) call this
+    before queueing work; violations raise :class:`ValueError` with a
+    client-safe message.  Rules (distance scans only, first phase):
+    non-empty coordinates; integer distinct 0-based indices within the
+    known atom count; finite positive differing start/end; integer
+    ``scan_points`` >= 2.  When the input carries no confirmed structure
+    geometry the atom selection cannot be verified and the submission is
+    rejected instead of queueing an unverifiable selection.
+
+    Args:
+        workflow: Workflow id; anything other than ``scan`` is a no-op.
+        method: Submission ``method`` mapping (may be empty).
+        inp: Submission ``input`` mapping (may be empty).
+        atom_count: Explicit atom count of the final submitted structure;
+            when omitted it is resolved from inline geometry in ``inp``.
+
+    Raises:
+        ValueError: On any rule violation.
+    """
+    if workflow != "scan":
+        return
+    payload: Mapping[str, Any] = inp or {}
+    method_map: Mapping[str, Any] = method or {}
+    coordinates = _submission_scan_coordinates(payload, method_map)
+    known = atom_count if atom_count is not None else _scan_atom_count_from_input(payload)
+    for index, entry in enumerate(coordinates):
+        (atom_a, atom_b), start, end = _parse_submission_coordinate(entry, index)
+        label = f"scan coordinate {index + 1}"
+        if atom_a == atom_b:
+            raise ValueError("scan coordinate atoms must be different atoms")
+        for atom in (atom_a, atom_b):
+            if atom < 0:
+                raise ValueError(f"{label}: atom indices must be 0-based and non-negative")
+            if known is not None and atom >= known:
+                raise ValueError(f"{label}: atom index {atom} is out of range for {known} atoms")
+        if known is None:
+            raise ValueError(
+                f"{label}: atom indices cannot be verified without a confirmed "
+                "structure (atom count unknown); submit explicit geometry "
+                "(xyz_text/geometry) so the atom selection can be checked"
+            )
+        if start <= 0 or end <= 0:
+            raise ValueError("start and end distances must be greater than 0")
+        if math.isclose(start, end, abs_tol=1.0e-9):
+            raise ValueError("start and end distances must differ")
+    points = _submission_scan_points(method_map, payload)
+    if points is None:
+        return
+    if isinstance(points, bool):
+        raise ValueError("scan_points must be an integer >= 2")
+    try:
+        parsed_points = int(points)
+    except (TypeError, ValueError) as error:
+        raise ValueError("scan_points must be an integer >= 2") from error
+    if isinstance(points, float) and not points.is_integer():
+        raise ValueError("scan_points must be an integer >= 2")
+    if parsed_points < 2:
+        raise ValueError("scan_points must be an integer >= 2")
 
 
 # ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────
@@ -866,6 +1078,7 @@ __all__ = [
     "censo_ewin_from_method",
     "input_chemistry_flags",
     "scan_method_flags",
+    "validate_scan_submission",
     "xtbmd_method_flags",
     "nmr_method_flags",
     "nmr_flag_config",

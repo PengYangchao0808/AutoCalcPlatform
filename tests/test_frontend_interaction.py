@@ -656,3 +656,234 @@ class TestMethodFamilyGatingBrowser:
             {"modal": warn_text, "summary": summary_text, "dialogs": dialogs},
         )
         _shot(page, "flow5-02-warnings-in-summary.png")
+
+
+# ---------------------------------------------------------------------------
+# Scan wizard (GAP-8): fields, 1-based->0-based once, real submission body
+# ---------------------------------------------------------------------------
+
+_SCAN_XYZ = "3\ntriatomic\nO 0.0 0.0 0.0\nC 1.2 0.0 0.0\nH 2.0 0.0 0.0\n"
+
+
+def _pick_workflow(page: Page, title_pattern: str) -> None:
+    """Pick a workflow by its rendered title in the workflow picker."""
+    page.click("#btn-config-workflow")
+    page.wait_for_selector("#workflow-config-modal", state="visible")
+    title = page.locator(".workflow-option-title", has_text=re.compile(rf"^{title_pattern}$"))
+    title.first.locator("xpath=..").click()
+    page.click("#wf-config-ok")
+    page.wait_for_selector("#workflow-config-modal", state="hidden")
+
+
+def _back_to_structure_step(page: Page) -> None:
+    """Step back to the structure step via the modal back button."""
+    page.click("#modal-back")
+    page.wait_for_selector('#job-modal[data-create-step="1"]', state="attached")
+
+
+def _fill_scan_fields(page: Page, atom_a: str, atom_b: str) -> None:
+    page.fill("#scan-wiz-atom-1", atom_a)
+    page.fill("#scan-wiz-atom-2", atom_b)
+
+
+@pytest.mark.slow
+class TestScanWizardBrowser:
+    """Todo 9 browser acceptance: the scan wizard on the real submit path."""
+
+    def _open_scan_step_one(self, page: Page) -> None:
+        _wait_wizard_open(page)
+        page.click('.input-mode-tab[data-input-mode="structure"]')
+        page.fill("#modal-structure-input", _SCAN_XYZ)
+        page.wait_for_function("wizardStructures.length > 0", timeout=20_000)
+        page.click("#modal-submit")  # next step -> 2
+        page.wait_for_selector('#job-modal[data-create-step="2"]', state="attached")
+        _pick_workflow(page, r"Relaxed Scan")
+        _back_to_structure_step(page)
+        page.wait_for_selector("#scan-wizard-panel", state="visible")
+
+    def test_scan_wizard_submit_posts_real_body_with_0_based_coordinate(self, page: Page) -> None:
+        captured: list[dict] = []
+
+        def _handler(route) -> None:  # noqa: ANN001 - playwright route
+            request = route.request
+            if request.method == "POST":
+                captured.append(json.loads(request.post_data or "{}"))
+            route.fulfill(
+                status=201,
+                content_type="application/json",
+                body=json.dumps(
+                    {"job_id": "scan_browser_001", "status": "queued", "workflow": "scan"}
+                ),
+            )
+
+        page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
+        self._open_scan_step_one(page)
+        _fill_scan_fields(page, "1", "2")
+        page.fill("#scan-wiz-start", "1.0")
+        page.fill("#scan-wiz-end", "3.0")
+        page.fill("#scan-wiz-points", "21")
+        page.click("#modal-submit")  # step 1 -> 2
+        page.click("#modal-submit")  # step 2 -> 3
+        dialogs: list[str] = []
+        page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        page.click("#modal-submit")  # submit
+        page.wait_for_timeout(1500)
+
+        assert not dialogs, f"valid submit must not alert: {dialogs}"
+        assert len(captured) == 1, captured
+        body = captured[0]
+        _evidence("flow6-scan-wizard-body.json", body)
+        assert body["workflow"] == "scan"
+        assert body["input"]["source_type"] == "xyz_text"
+        # 1-based display (1,2) converted to 0-based exactly once at submit.
+        assert body["input"]["scan_coordinates"] == ["0,1,1.0,3.0"]
+        assert body["method"]["scan_points"] == 21
+        assert body["method"]["levels"]["scan"]["scan_coordinate_atoms"] == [1, 2]
+        _shot(page, "flow6-scan-wizard-submitted.png")
+
+    def test_scan_wizard_rejects_out_of_range_atom_without_submitting(self, page: Page) -> None:
+        captured: list[dict] = []
+
+        def _handler(route) -> None:  # noqa: ANN001 - playwright route
+            request = route.request
+            if request.method == "POST":
+                captured.append(json.loads(request.post_data or "{}"))
+            route.fulfill(
+                status=201,
+                content_type="application/json",
+                body=json.dumps(
+                    {"job_id": "scan_browser_002", "status": "queued", "workflow": "scan"}
+                ),
+            )
+
+        page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
+        self._open_scan_step_one(page)
+        _fill_scan_fields(page, "1", "99")
+        dialogs: list[str] = []
+        page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        page.click("#modal-submit")
+        page.click("#modal-submit")
+        page.click("#modal-submit")
+        page.wait_for_timeout(1500)
+
+        assert captured == [], "invalid scan fields must never reach the API"
+        assert dialogs, "invalid scan fields must produce a clear validation result"
+        status_text = page.evaluate("document.getElementById('scan-wiz-status').textContent")
+        assert "99" in status_text or any(
+            "range" in d.lower() or "out of" in d.lower() or "invalid" in d.lower() for d in dialogs
+        ), dialogs
+        _evidence("flow7-scan-wizard-rejected.json", {"dialogs": dialogs, "posted": captured})
+
+    def test_scan_wizard_switch_away_drops_scan_fields(self, page: Page) -> None:
+        self._open_scan_step_one(page)
+        _fill_scan_fields(page, "1", "2")
+        page.click("#modal-submit")  # step 1 -> 2
+        _pick_workflow(page, r"Geometry Optimization")
+        _back_to_structure_step(page)
+        page.wait_for_timeout(300)
+        panel_display = page.evaluate("document.getElementById('scan-wizard-panel').style.display")
+        atom_a = page.evaluate("document.getElementById('scan-wiz-atom-1').value")
+        assert panel_display == "none", panel_display
+        assert atom_a == "", f"scan atom fields must clear on switch-away, got {atom_a!r}"
+        _evidence("flow8-scan-switch-away.json", {"panel": panel_display, "atomA": atom_a})
+
+    def test_scan_draft_restore_round_trips_fields(self, page: Page) -> None:
+        _wait_wizard_open(page)
+        snapshot = {
+            "structures": [],
+            "selectedIndex": 0,
+            "activeTab": "task",
+            "step": 1,
+            "fields": {
+                "scan-wiz-atom-1": {"value": "2"},
+                "scan-wiz-atom-2": {"value": "3"},
+                "scan-wiz-start": {"value": "1.5"},
+                "scan-wiz-end": {"value": "2.5"},
+                "scan-wiz-points": {"value": "7"},
+            },
+            "workflowState": {
+                "workflow": {"id": "scan", "label": "Relaxed Scan", "schema_id": "dft_scan"},
+                "method": {
+                    "profile_id": "default",
+                    "profile_label": "default",
+                    "stages": {
+                        "scan": {
+                            "engine": "orca",
+                            "scan_coordinate_atoms": [2, 3],
+                            "scan_coordinate_start": 1.5,
+                            "scan_coordinate_end": 2.5,
+                            "scan_coordinate_points": 7,
+                        }
+                    },
+                },
+            },
+        }
+        created = page.evaluate(
+            """async (args) => {
+                const resp = await fetch("/api/v1/drafts", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        name: args.name, project_id: "",
+                        workflow: "scan", snapshot: args.snapshot,
+                    }),
+                });
+                return await resp.json();
+            }""",
+            {"name": "scan-wizard-draft", "snapshot": snapshot},
+        )
+        assert created.get("draft_id"), created
+        page.click("#wizard-drafts-open")
+        page.wait_for_selector("#wizard-drafts-modal", state="visible")
+        row = page.locator("#wizard-drafts-list > div").filter(has_text="scan-wizard-draft")
+        row.locator("button.btn.primary").click()
+        page.wait_for_timeout(1500)
+
+        values = page.evaluate(
+            """() => ({
+                atomA: document.getElementById("scan-wiz-atom-1").value,
+                atomB: document.getElementById("scan-wiz-atom-2").value,
+                start: document.getElementById("scan-wiz-start").value,
+                end: document.getElementById("scan-wiz-end").value,
+                points: document.getElementById("scan-wiz-points").value,
+            })"""
+        )
+        _evidence("flow9-scan-draft-restore.json", values)
+        assert values["atomA"] == "2", values
+        assert values["atomB"] == "3", values
+        assert values["start"] in ("1.5", "1.50"), values
+        assert values["end"] in ("2.5", "2.50"), values
+        assert values["points"] == "7", values
+
+    def test_scan_edit_hydration_fills_fields_from_stage_mirror(self, page: Page) -> None:
+        _wait_wizard_open(page)
+        values = page.evaluate(
+            """() => {
+                scanWizardClear();
+                scanWizardUserDirty = false;
+                wizardState.workflow = {id: "scan", label: "Relaxed Scan", schema_id: "dft_scan"};
+                wizardState.method.stages = {
+                    scan: {
+                        engine: "orca",
+                        scan_coordinate_atoms: [2, 3],
+                        scan_coordinate_start: 1.25,
+                        scan_coordinate_end: 2.75,
+                        scan_coordinate_points: 9,
+                    }
+                };
+                updateConfigCards();
+                return {
+                    atomA: document.getElementById("scan-wiz-atom-1").value,
+                    atomB: document.getElementById("scan-wiz-atom-2").value,
+                    start: document.getElementById("scan-wiz-start").value,
+                    end: document.getElementById("scan-wiz-end").value,
+                    points: document.getElementById("scan-wiz-points").value,
+                };
+            }"""
+        )
+        _evidence("flow10-scan-edit-hydration.json", values)
+        assert values["atomA"] == "2", values
+        assert values["atomB"] == "3", values
+        assert values["start"] == "1.25", values
+        assert values["end"] == "2.75", values
+        assert values["points"] == "9", values
