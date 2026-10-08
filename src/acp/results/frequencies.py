@@ -23,8 +23,11 @@ def build_normal_modes_product(
     and ``mode_ir_intensities`` (dict[int, float] | None).
 
     Modes are emitted in ascending ``mode_index`` order using ORCA's native
-    indices (never reindexed).  A mode is skipped with a warning when:
+    indices (never reindexed).  The expected set is the union of
+    ``mode_frequencies`` and ``mode_vectors``.  A mode is skipped with a
+    warning when:
     - its frequency is missing from ``mode_frequencies``
+    - it is required by ``mode_frequencies`` but has no vectors
     - ``len(vectors) != atom_count``
     - any vector row has != 3 components or contains non-finite values
 
@@ -34,27 +37,31 @@ def build_normal_modes_product(
     warnings: list[str] = []
     modes: list[dict[str, Any]] = []
 
-    mode_vectors: dict[int, tuple[tuple[float, float, float], ...]] = getattr(
-        calc, "mode_vectors", {}
+    mode_vectors: dict[int, tuple[tuple[float, float, float], ...]] = (
+        getattr(calc, "mode_vectors", {}) or {}
     )
-    mode_frequencies: dict[int, float] = getattr(calc, "mode_frequencies", {})
-    mode_ir_intensities: dict[int, float] | None = getattr(
-        calc, "mode_ir_intensities", None
-    )
+    mode_frequencies: dict[int, float] = getattr(calc, "mode_frequencies", {}) or {}
+    mode_ir_intensities: dict[int, float] | None = getattr(calc, "mode_ir_intensities", None)
 
-    for mode_index in sorted(mode_vectors.keys()):
-        vectors = mode_vectors[mode_index]
+    expected_indices = sorted(set(mode_frequencies) | set(mode_vectors)) if mode_vectors else []
 
+    for mode_index in expected_indices:
+        vectors = mode_vectors.get(mode_index)
         freq = mode_frequencies.get(mode_index)
         if freq is None:
+            warnings.append(f"Mode {mode_index}: frequency missing from mode_frequencies; skipped")
+            continue
+
+        if vectors is None:
             warnings.append(
-                f"Mode {mode_index}: frequency missing from mode_frequencies; skipped"
+                f"Mode {mode_index}: vectors missing from mode_vectors for a required mode; skipped"
             )
             continue
 
         if len(vectors) != atom_count:
             warnings.append(
-                f"Mode {mode_index}: len(vectors)={len(vectors)} != atom_count={atom_count}; skipped"
+                f"Mode {mode_index}: len(vectors)={len(vectors)} != "
+                f"atom_count={atom_count}; skipped"
             )
             continue
 
@@ -68,9 +75,7 @@ def build_normal_modes_product(
                 break
             for val in row:
                 if not math.isfinite(val):
-                    warnings.append(
-                        f"Mode {mode_index}: non-finite value in vectors; skipped"
-                    )
+                    warnings.append(f"Mode {mode_index}: non-finite value in vectors; skipped")
                     valid = False
                     break
             if not valid:

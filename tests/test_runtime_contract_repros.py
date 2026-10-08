@@ -129,16 +129,6 @@ def test_repro_a_first_run_publishes_vectors_for_every_mode(
     assert missing == [], f"first run dropped vectors for modes {missing}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Reproduction (a): first run 9 modes WITH vectors -> resume rewrites "
-        "normal_modes with 0 vectors. Desired: resumed vectors non-empty and equal "
-        "to the fresh-run control. Owning todos 4/12 (R5). "
-        "Removal rule: convert/remove this xfail when todo 4 lands v2 credentials + "
-        "resume-equals-fresh-run (acceptance in todo 12)."
-    ),
-)
 def test_repro_a_resume_keeps_mode_vectors_equal_to_fresh_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

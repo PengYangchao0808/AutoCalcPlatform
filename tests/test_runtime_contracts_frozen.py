@@ -544,15 +544,6 @@ def test_contract_7_publication_failure_does_not_fail_science() -> None:
     assert "zero QC calls" in FROZEN_SCIENCE_PUBLICATION_RULES["publication_failure"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FROZEN contract (7): the EXPECTED native mode index set must be validated - "
-        "a product missing a required mode (input ids {6,7}, vectors for {6} only) must "
-        "be flagged, never silently emitted. Remove/convert this xfail when todo 4 "
-        "(R5, with acceptance in todo 12) lands the set-completeness check."
-    ),
-)
 def test_contract_7_partial_mode_product_is_flagged_incomplete() -> None:
     from acp.results.frequencies import build_normal_modes_product
     from cccp.calculation.results import FrequencyAnalysis

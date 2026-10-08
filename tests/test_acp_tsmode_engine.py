@@ -110,7 +110,12 @@ class TestEngineHappyPath:
 
         def fake_frequency(req):
             calls["frequency"] = req
-            return _ok_frequency_result(list(final_freqs.values()), log_text=None, tmp_path=None)
+            return CalculationResult(
+                energy=-100.6,
+                frequencies=list(final_freqs.values()),
+                status="completed",
+                artifacts=[ArtifactRef(path=freq_log, type="log")],
+            )
 
         monkeypatch.setattr("acp.calculations.tsmode.engine.run_optimize", fake_optimize)
         monkeypatch.setattr("acp.calculations.tsmode.engine.run_frequency", fake_frequency)
@@ -146,8 +151,12 @@ class TestEngineHappyPath:
         assert (input_dir / "source_bundle.json").is_file()
         checkpoint = tmp_path / "task" / "WORK" / "tsmode" / "tsmode_checkpoint.json"
         payload = json.loads(checkpoint.read_text())
-        assert payload["optimization"]["status"] == "completed"
-        assert payload["frequency"]["status"] == "completed"
+        assert payload["schema_version"] == "tsmode_checkpoint_v2"
+        assert payload["optimize_credential"]["optimized_structure_sha256"]
+        assert (
+            payload["frequency_credential"]["adopted_optimized_structure_sha256"]
+            == payload["optimize_credential"]["optimized_structure_sha256"]
+        )
 
         optimize_req = calls["optimize"]
         assert optimize_req.resources["ts_mode"] == 0
@@ -189,7 +198,7 @@ class TestEngineHappyPath:
         # Simulate losing the frequency stage (e.g. crash after optimize):
         checkpoint_path = task_root / "WORK" / "tsmode" / "tsmode_checkpoint.json"
         payload = json.loads(checkpoint_path.read_text())
-        del payload["frequency"]
+        del payload["frequency_credential"]
         checkpoint_path.write_text(json.dumps(payload), encoding="utf-8")
 
         engine.run(request, bundle, task_root)
@@ -301,8 +310,8 @@ class TestEngineFailures:
         checkpoint = json.loads(
             (tmp_path / "task" / "WORK" / "tsmode" / "tsmode_checkpoint.json").read_text()
         )
-        assert checkpoint["optimization"]["status"] == "completed"
-        assert "frequency" not in checkpoint or checkpoint["frequency"]["status"] != "completed"
+        assert checkpoint["optimize_credential"]["optimized_structure_sha256"]
+        assert "frequency_credential" not in checkpoint
 
 
 def _read_report(tmp_path):
@@ -445,3 +454,251 @@ class TestCliGateSmoke:
         assert result.returncode == 2
         combined = result.stdout + result.stderr
         assert "mode_mapping_unsupported" in combined
+
+
+def _credential_harness(tmp_path, monkeypatch):
+    """Mocked stages that rewrite the frequency log on every call.
+
+    The rewrite is what lets a test tamper the on-disk artifact and then see
+    whether the engine adopted the stale credential or re-ran the stage.
+    """
+    import acp.calculations.tsmode.engine as engine_module
+
+    out_path, hess_path, _coords, freqs_by_native, modes_by_native = make_consistent_pair(tmp_path)
+    bundle = load_bundle_from_files(out_path, hess_path)
+    optimized = np.asarray(bundle.coordinates_angstrom) + 0.02
+    log_path = tmp_path / "freq_final.out"
+    frequencies = [freqs_by_native[index] for index in sorted(freqs_by_native)]
+    calls = {"optimize": 0, "frequency": 0}
+
+    def fake_optimize(req):
+        calls["optimize"] += 1
+        return CalculationResult(
+            energy=-100.5,
+            coords=[[float(v) for v in row] for row in optimized],
+            status="completed",
+            artifacts=[ArtifactRef(path=Path("ts_opt.out"), type="output")],
+        )
+
+    def fake_frequency(req):
+        calls["frequency"] += 1
+        write_out_file(log_path, optimized, freqs_by_native, modes_by_native)
+        return CalculationResult(
+            energy=-100.6,
+            frequencies=list(frequencies),
+            status="completed",
+            artifacts=[ArtifactRef(path=log_path, type="log")],
+        )
+
+    monkeypatch.setattr(engine_module, "run_optimize", fake_optimize)
+    monkeypatch.setattr(engine_module, "run_frequency", fake_frequency)
+    return bundle, optimized, log_path, freqs_by_native, modes_by_native, calls
+
+
+def _checkpoint_file(task_root: Path) -> Path:
+    return task_root / "WORK" / "tsmode" / "tsmode_checkpoint.json"
+
+
+def _read_checkpoint(task_root: Path) -> dict:
+    return json.loads(_checkpoint_file(task_root).read_text(encoding="utf-8"))
+
+
+def _write_checkpoint(task_root: Path, payload: dict) -> None:
+    _checkpoint_file(task_root).write_text(json.dumps(payload), encoding="utf-8")
+
+
+class TestCheckpointV2Credentials:
+    def test_new_run_freezes_v2_credentials(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        TsmodeEngine(config={}).run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+        payload = _read_checkpoint(task_root)
+        assert payload["schema_version"] == "tsmode_checkpoint_v2"
+        optimize = payload["optimize_credential"]
+        assert optimize["source_content_sha256"] == bundle.source_revision()
+        assert optimize["target_mode_id"] == "tm_test123" or optimize["target_mode_id"]
+        assert optimize["optimized_structure_sha256"]
+        assert optimize["effective_level"] == bundle.level.to_dict()
+        frequency = payload["frequency_credential"]
+        assert (
+            frequency["adopted_optimized_structure_sha256"]
+            == optimize["optimized_structure_sha256"]
+        )
+        assert frequency["artifacts"], "exact frequency artifact path + digest not recorded"
+        assert frequency["expected_mode_indices"]
+        assert payload["publication"]["status"] == "published"
+
+    def test_coordinate_tamper_triggers_optimize_recompute(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+        payload = _read_checkpoint(task_root)
+        payload["optimize_credential"]["coordinates"][0][0] += 0.5
+        _write_checkpoint(task_root, payload)
+
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 2, "frequency": 2}
+
+    def test_bad_coordinate_shape_invalid(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+
+        payload = _read_checkpoint(task_root)
+        payload["optimize_credential"]["coordinates"] = [[0.0, 0.0, 0.0]]
+        _write_checkpoint(task_root, payload)
+
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 2, "frequency": 2}
+
+    def test_effective_default_config_change_invalidates(self, tmp_path, monkeypatch):
+        import acp.calculations.tsmode.engine as engine_module
+
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        monkeypatch.setattr(engine_module, "load_config", lambda overrides=None: {"marker": "A"})
+        TsmodeEngine(config={}).run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+        monkeypatch.setattr(engine_module, "load_config", lambda overrides=None: {"marker": "B"})
+        TsmodeEngine(config={}).run(_request(), bundle, task_root)
+        assert calls == {"optimize": 2, "frequency": 2}
+
+    def test_old_schema_conservative_recompute_despite_parseable_log(self, tmp_path, monkeypatch):
+        bundle, optimized, _log, freqs, modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        tsmode_dir = task_root / "WORK" / "tsmode"
+        freq_dir = tsmode_dir / "frequency"
+        freq_dir.mkdir(parents=True)
+        write_out_file(freq_dir / "freq.out", optimized, freqs, modes)
+        (tsmode_dir / "tsmode_checkpoint.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "tsmode_checkpoint_v1",
+                    "fingerprint": "fp_legacy",
+                    "optimization": {
+                        "status": "completed",
+                        "coordinates": optimized.tolist(),
+                    },
+                    "frequency": {
+                        "status": "completed",
+                        "frequencies": [freqs[index] for index in sorted(freqs)],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        TsmodeEngine(config={}).run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+    def test_same_path_log_replacement_invalidates_frequency(self, tmp_path, monkeypatch):
+        bundle, optimized, log_path, freqs, modes, calls = _credential_harness(
+            tmp_path, monkeypatch
+        )
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+        # Parseable replacement at the recorded path must still be rejected.
+        write_out_file(log_path, optimized + 0.25, freqs, modes)
+
+        engine.run(_request(), bundle, task_root)
+        assert calls["optimize"] == 1, "optimize credential was needlessly invalidated"
+        assert calls["frequency"] == 2
+
+    def test_parseable_old_structure_log_invalidates_frequency(self, tmp_path, monkeypatch):
+        bundle, optimized, log_path, freqs, modes, calls = _credential_harness(
+            tmp_path, monkeypatch
+        )
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+
+        other = optimized[::-1, :].copy()
+        write_out_file(log_path, other, freqs, modes)
+
+        engine.run(_request(), bundle, task_root)
+        assert calls["optimize"] == 1
+        assert calls["frequency"] == 2
+
+    def test_incomplete_mode_vectors_invalidates_frequency(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+
+        payload = _read_checkpoint(task_root)
+        payload["frequency_credential"]["modes"][0]["vectors"] = []
+        _write_checkpoint(task_root, payload)
+
+        engine.run(_request(), bundle, task_root)
+        assert calls["optimize"] == 1
+        assert calls["frequency"] == 2
+
+    def test_publish_only_failure_republishes_with_zero_qc(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        normal_modes = task_root / "RESULT" / "tsmode" / "normal_modes.json"
+        first = json.loads(normal_modes.read_text(encoding="utf-8"))
+        assert all(mode["vectors"] for mode in first["modes"])
+
+        normal_modes.unlink()
+        engine.run(_request(), bundle, task_root)
+
+        assert calls == {"optimize": 1, "frequency": 1}, "publish retry re-ran QC"
+        second = json.loads(normal_modes.read_text(encoding="utf-8"))
+        assert second["modes"] == first["modes"]
+
+    def test_wrapper_write_failure_recovers_with_zero_qc(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        assert not (task_root / "WORK" / "tsmode" / "frequency" / "normal_modes.json").exists()
+
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+        normal_modes = json.loads(
+            (task_root / "RESULT" / "tsmode" / "normal_modes.json").read_text(encoding="utf-8")
+        )
+        assert all(mode["vectors"] for mode in normal_modes["modes"])
+
+    def test_final_publish_failure_recovers_with_zero_qc(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        real_publish = TsmodeEngine._publish
+        state = {"armed": True}
+
+        def flaky_publish(self, root, result_dir, report, *, optimized_xyz, normal_modes):
+            if state["armed"] and report.execution_status == "completed":
+                state["armed"] = False
+                raise OSError("simulated final publish failure")
+            return real_publish(
+                self,
+                root,
+                result_dir,
+                report,
+                optimized_xyz=optimized_xyz,
+                normal_modes=normal_modes,
+            )
+
+        monkeypatch.setattr(TsmodeEngine, "_publish", flaky_publish)
+        with pytest.raises(OSError):
+            engine.run(_request(), bundle, task_root)
+        assert calls["frequency"] == 1
+        assert state["armed"] is False
+
+        monkeypatch.setattr(TsmodeEngine, "_publish", real_publish)
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}, "publish-only retry re-ran QC"
