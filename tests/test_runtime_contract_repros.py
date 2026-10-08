@@ -362,17 +362,6 @@ def test_repro_d_generator_accepts_empty_and_invalid_coordinates() -> None:
     assert negative == ["--coordinate", "-1,0,1.0,2.0", "--scan-points", "2"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Reproduction (d): the ACP submission boundary must reject empty/invalid "
-        "scan coordinates with 422 (empty list, non-finite/out-of-range atoms, "
-        "negative indices, points < 2). Today the boundary only catches a MISSING "
-        "coordinate because it delegates to the permissive generator. Owning todos "
-        "9/13 (R8). Removal rule: convert/remove this xfail when todo 9 lands the "
-        "shared v1/v2 submission validation (acceptance in todo 13)."
-    ),
-)
 def test_repro_d_submission_boundary_rejects_invalid_coordinates() -> None:
     from fastapi import HTTPException
 
