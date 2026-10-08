@@ -36,7 +36,6 @@ from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import is_archived_attempt_path
 from acp.scheduler.jobs import (
-    EXIT_WAITING_REVIEW,
     GRADIENT_CONFIG_FILENAME,
     PATH_CONFIG_FILENAME,
     SCAN_CONFIG_FILENAME,
@@ -525,6 +524,10 @@ class JobRunner:
         # Per-task execution locks (WORK/00_RUNTIME/run.lock): at most one
         # live execution per task directory, across service restarts.
         self._run_locks: dict[str, Path] = {}
+        # Serializes the read-registered-paths → register flow so concurrent
+        # capture passes (manager terminal side effects, repeat retries) can
+        # never both register the same file.
+        self._artifact_capture_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     # New non-blocking API (poller-driven)
@@ -664,10 +667,12 @@ class JobRunner:
             event_log = self._event_logs.get(record.id)
             exit_code = record.exit_code if record.exit_code is not None else 1
             if event_log:
+                event_type = "job.failed" if exit_code != 0 else "job.completed"
                 event_log.append(
-                    "job.failed" if exit_code != 0 else "job.completed",
+                    event_type,
                     job_id=record.id,
                     exit_code=exit_code,
+                    idempotency_key=f"terminal:{record.id}:{record.attempt}:{event_type}",
                 )
             self._release_run_lock(record.id)
             with self._proc_lock:
@@ -706,24 +711,9 @@ class JobRunner:
                 self._observe_state(record, event_log, state_path, seen)
             observer = self._observer_for_record(record)
             observer.poll_and_mirror(record.id, Path(record.work_dir))
-            with self._proc_lock:
-                ce = self._cancel_events.get(record.id)
-            if ce and ce.is_set() and ret != 0:
-                event_log.append(
-                    "job.cancelled", job_id=record.id, exit_code=ret
-                ) if event_log else None
-            elif ret == 0:
-                event_log.append(
-                    "job.completed", job_id=record.id, exit_code=ret
-                ) if event_log else None
-            elif ret == EXIT_WAITING_REVIEW:
-                event_log.append(
-                    "job.waiting_review", job_id=record.id, exit_code=ret
-                ) if event_log else None
-            else:
-                event_log.append(
-                    "job.failed", job_id=record.id, exit_code=ret
-                ) if event_log else None
+            # Terminal completion events are emitted by the manager AFTER the
+            # terminal CAS (idempotent, attempt-scoped) — never here, so a
+            # CAS-rejected stale observation leaves no terminal side effect.
             self._release_run_lock(record.id)
             with self._proc_lock:
                 self._processes.pop(record.id, None)
@@ -1978,7 +1968,14 @@ class JobRunner:
         return self.stage_task_observer
 
     def _capture_artifacts(self, record: JobRecord, work_dir: Path) -> None:
-        """Register output files as artifacts after job completion."""
+        """Register output files as artifacts after job completion.
+
+        At-least-once: the whole read-registered-paths → register flow runs
+        under ``_artifact_capture_lock`` so a repeat capture (terminal retry)
+        cannot double-register.  Already-registered paths are supplied as the
+        snapshot AND ``result.artifacts`` is rebuilt from the full registry,
+        so a crash mid-capture converges on the next pass.
+        """
         observer = self.stage_task_observer
         store = getattr(observer, "store", None) if observer is not None else None
         db_path = getattr(store, "db_path", None)
@@ -1986,17 +1983,21 @@ class JobRunner:
         if db_path is None or not results_dir.exists():
             return
 
-        registry = ArtifactRegistry(db_path)
-        artifacts = capture_stage_artifacts(
-            registry=registry,
-            job_id=record.id,
-            task_id=None,
-            work_dir=work_dir,
-            stage_dir=results_dir,
-        )
+        with self._artifact_capture_lock:
+            registry = ArtifactRegistry(db_path)
+            registered = {artifact.file_path for artifact in registry.list_by_job(record.id)}
+            capture_stage_artifacts(
+                registry=registry,
+                job_id=record.id,
+                task_id=None,
+                work_dir=work_dir,
+                stage_dir=results_dir,
+                snapshot_before=registered,
+            )
+            artifacts = registry.list_by_job(record.id)
+
         if not artifacts:
             return
-
         result = dict(record.result or {})
         result["artifacts"] = [asdict(artifact) for artifact in artifacts]
         record.result = result

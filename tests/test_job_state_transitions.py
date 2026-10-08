@@ -14,6 +14,7 @@ import pytest
 
 import acp.scheduler.manager as manager_module
 from acp.scheduler import migrations as migrations_module
+from acp.scheduler.artifacts import ArtifactRegistry
 from acp.scheduler.job_edit import attempt_number, compute_source_revision
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
@@ -587,6 +588,230 @@ def test_terminal_side_effects_retry(tmp_path: Path) -> None:
         mgr._reconcile_once()
         terminal_events = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
         assert len(terminal_events) == 1, "idempotency key must prevent duplicate events"
+    finally:
+        mgr.shutdown()
+
+
+# ====================================================================== #
+# Todo 2 (R2): CAS-post terminal side effects — cross-attempt isolation,
+# idempotent persistence, failure-injection convergence.
+# ====================================================================== #
+
+
+def _seed_local_terminal_with_results(
+    mgr: JobManager,
+    tmp_path: Path,
+    job_id: str,
+    *,
+    status: JobStatus = JobStatus.COMPLETED,
+    files: tuple[str, ...] = ("a.xyz", "b.log"),
+    exit_code: int | None = 0,
+) -> JobRecord:
+    """Seed a local terminal row whose side effects still owe (marker False)."""
+    work_dir = tmp_path / "runs" / job_id
+    result_dir = work_dir / "RESULT"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    for name in files:
+        (result_dir / name).write_text(name, encoding="utf-8")
+    record = JobRecord(
+        id=job_id,
+        spec=_spec(),
+        status=status,
+        work_dir=str(work_dir),
+        exit_code=exit_code,
+        progress=1.0,
+        completed_at="2026-01-01T00:00:00+00:00",
+        result={"terminal_side_effects_done": False},
+    )
+    mgr.store.create(record)
+    return record
+
+
+def _registry_paths(mgr: JobManager, job_id: str) -> list[str]:
+    registry = ArtifactRegistry(mgr.store.db_path)
+    return [artifact.file_path for artifact in registry.list_by_job(job_id)]
+
+
+def test_stale_terminal_cas_registers_zero_side_effects(tmp_path: Path) -> None:
+    """(a) A terminal CAS rejected as stale must register ZERO terminal side
+    effects — no artifact capture, no marker, no completion event."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "stale-term")
+        results = Path(record.work_dir) / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "late.xyz").write_text("late", encoding="utf-8")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.pause_job(record.id)  # pause wins between load and CAS
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.PAUSED, "stale terminal write must lose to pause"
+        assert _registry_paths(mgr, record.id) == [], (
+            "capture is a terminal side effect: a stale CAS must register none"
+        )
+        assert "artifacts" not in (final.result or {})
+        assert not (final.result or {}).get("terminal_side_effects_done")
+        assert "job.completed" not in _event_types(mgr, record.id)
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+@pytest.mark.parametrize(
+    "injection", ["after_first_artifact", "after_provenance", "before_marker"]
+)
+def test_terminal_side_effect_failure_injection_converges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, injection: str
+) -> None:
+    """(b) A failure after the first artifact insert / after provenance /
+    before the marker leaves the marker retryable; the next reconcile pass
+    converges to a consistent registry + result + provenance with no
+    duplicate artifact rows."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_local_terminal_with_results(mgr, tmp_path, f"inject-{injection}")
+        state = {"fired": False}
+
+        if injection == "after_first_artifact":
+            from acp.scheduler import artifacts as artifacts_module
+
+            real_register = artifacts_module.ArtifactRegistry.register
+            calls = {"n": 0}
+
+            def flaky_register(self: ArtifactRegistry, artifact: object) -> None:
+                calls["n"] += 1
+                if calls["n"] == 2 and not state["fired"]:
+                    state["fired"] = True
+                    raise RuntimeError("injected failure after first artifact insert")
+                return real_register(self, artifact)  # type: ignore[arg-type]
+
+            monkeypatch.setattr(
+                artifacts_module.ArtifactRegistry, "register", flaky_register
+            )
+        elif injection == "after_provenance":
+            real_store = mgr.runner._store_provenance
+
+            def flaky_provenance(rec: JobRecord, command_line: str = "") -> None:
+                if not state["fired"]:
+                    state["fired"] = True
+                    raise RuntimeError("injected failure after provenance")
+                return real_store(rec, command_line)
+
+            monkeypatch.setattr(mgr.runner, "_store_provenance", flaky_provenance)
+        else:  # before_marker
+            real_write = mgr._write_job_json
+
+            def flaky_write(rec: JobRecord) -> None:
+                if not state["fired"]:
+                    state["fired"] = True
+                    raise RuntimeError("injected failure before marker")
+                return real_write(rec)
+
+            monkeypatch.setattr(mgr, "_write_job_json", flaky_write)
+
+        mgr._reconcile_once()
+        assert state["fired"], "the injected failure must fire on the first pass"
+        mid = mgr.store.get(record.id)
+        assert mid is not None
+        assert (mid.result or {}).get("terminal_side_effects_done") is False, (
+            "a partial side-effect pass must stay retryable (marker not set)"
+        )
+
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert (final.result or {}).get("terminal_side_effects_done") is True
+        paths = _registry_paths(mgr, record.id)
+        assert len(paths) == 2 and len(set(paths)) == 2, "no duplicate artifact rows"
+        assert {entry["file_path"] for entry in final.result["artifacts"]} == set(paths), (
+            "result.artifacts must be rebuilt from the full registry, not just new rows"
+        )
+        assert final.result.get("provenance") is not None, "provenance must converge"
+        completed = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
+        assert len(completed) == 1, "terminal event idempotency key must prevent duplicates"
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_cas_then_rerun_isolates_old_attempt(tmp_path: Path) -> None:
+    """(c) A terminal CAS followed immediately by a rerun: the superseded
+    attempt's retry exits without touching the new attempt's job.json, tasks
+    row, artifacts, or cancel event."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_local_terminal_with_results(mgr, tmp_path, "iso-attempt")
+        old = mgr.store.get(record.id)
+        assert old is not None and old.attempt == 1
+
+        submissions: list[str] = []
+        mgr._execute_submission = lambda job_id: submissions.append(job_id)  # type: ignore[method-assign]
+        rerun = mgr.rerun_job(record.id)
+        assert rerun is not None
+        assert rerun.attempt == 2 and rerun.status == JobStatus.QUEUED
+        # A new-attempt output appears after the rerun cleaned the directory.
+        new_results = Path(rerun.work_dir) / "RESULT"
+        new_results.mkdir(parents=True, exist_ok=True)
+        (new_results / "new_attempt.xyz").write_text("new", encoding="utf-8")
+
+        cancel_event = threading.Event()
+        mgr._cancel_events[record.id] = cancel_event
+
+        mgr._retry_terminal_side_effects(old)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.attempt == 2 and final.status == JobStatus.QUEUED
+        assert _registry_paths(mgr, record.id) == [], (
+            "a stale attempt's retry must not capture for the new attempt"
+        )
+        assert (final.result or {}).get("terminal_side_effects_done") is not True
+        assert mgr._cancel_events.get(record.id) is cancel_event, (
+            "a stale attempt's retry must not drop the new attempt's cancel event"
+        )
+        job_json = json.loads(
+            (Path(final.work_dir) / "job.json").read_text(encoding="utf-8")
+        )
+        assert job_json["attempt"] == 2, "stale retry must not rewrite job.json"
+        assert job_json["status"] == JobStatus.QUEUED.value
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None
+        assert task_row["status"] == JobStatus.QUEUED.value, (
+            "stale retry must not project the old attempt's status onto tasks"
+        )
+    finally:
+        mgr.shutdown()
+
+
+@pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
+def test_non_completed_terminal_reconcile_registers_zero_artifacts(
+    tmp_path: Path, status: JobStatus
+) -> None:
+    """(d) FAILED/CANCELLED rows register zero artifact rows after one
+    reconcile pass (capture is local-COMPLETED only)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        exit_code = 1 if status == JobStatus.FAILED else 130
+        record = _seed_local_terminal_with_results(
+            mgr, tmp_path, f"nocap-{status.value}", status=status, exit_code=exit_code
+        )
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert (final.result or {}).get("terminal_side_effects_done") is True
+        assert _registry_paths(mgr, record.id) == [], "non-COMPLETED must never capture"
+        assert "artifacts" not in (final.result or {})
+        expected_event = "job.failed" if status == JobStatus.FAILED else "job.cancelled"
+        assert expected_event in _event_types(mgr, record.id), (
+            "the terminal event must be emitted post-CAS for every terminal status"
+        )
     finally:
         mgr.shutdown()
 

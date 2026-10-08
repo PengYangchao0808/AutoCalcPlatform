@@ -406,6 +406,14 @@ class JobManager:
         self._reconcile_thread = threading.Thread(
             target=self._reconcile_loop, daemon=True, name="acp-reconciler"
         )
+        # Global terminal side-effect boundary.  Lock order is ALWAYS
+        # ``_side_effect_lock`` BEFORE ``_lock``: terminal side effects
+        # (_persist_terminal / _retry_terminal_side_effects) and the in-place
+        # rerun/edit/continue cleanup (rerun_job / _edit_in_place /
+        # continue_job, which wrap _inplace_requeue_locked and
+        # _reset_work_dir_in_place) take this lock first, so a superseded
+        # attempt can never interleave with the new attempt's cleanup.  No
+        # code path may acquire ``_lock`` and then wait for this lock.
         self._side_effect_lock = threading.Lock()
 
         # Background remote-catalog prefetch (terminal remote jobs).  Worker
@@ -1063,31 +1071,35 @@ class JobManager:
         if record is None:
             return None
 
-        with self._lock:
-            # Re-read under the manager lock so two rapid clicks cannot both
-            # act on the same stale terminal snapshot.
-            outcome = self._inplace_requeue_locked(
-                job_id,
-                mode="rerun",
-                new_spec=None,
-                expected_source_revision=None,
-                project_id=project_id,
-            )
-            if outcome is None:
-                return None
-            record, attempts, old_status, killed, renamed_from = outcome
+        # Shared terminal-side-effect boundary: take _side_effect_lock BEFORE
+        # _lock (documented order) so this cleanup cannot interleave with an
+        # in-flight terminal side effect for the superseded attempt.
+        with self._side_effect_lock:
+            with self._lock:
+                # Re-read under the manager lock so two rapid clicks cannot both
+                # act on the same stale terminal snapshot.
+                outcome = self._inplace_requeue_locked(
+                    job_id,
+                    mode="rerun",
+                    new_spec=None,
+                    expected_source_revision=None,
+                    project_id=project_id,
+                )
+                if outcome is None:
+                    return None
+                record, attempts, old_status, killed, renamed_from = outcome
 
-        self._finish_inplace_requeue(record, renamed_from=renamed_from)
-        self._event_log(record).append(
-            "job.rerun",
-            job_id=job_id,
-            rerun_from=old_status,
-            attempts=attempts,
-            work_dir=record.work_dir,
-            killed_pids=killed,
-            renamed_from=renamed_from,
-        )
-        self._start_submission_thread(job_id, f"acp-rerun-{job_id}")
+            self._finish_inplace_requeue(record, renamed_from=renamed_from)
+            self._event_log(record).append(
+                "job.rerun",
+                job_id=job_id,
+                rerun_from=old_status,
+                attempts=attempts,
+                work_dir=record.work_dir,
+                killed_pids=killed,
+                renamed_from=renamed_from,
+            )
+            self._start_submission_thread(job_id, f"acp-rerun-{job_id}")
         return record
 
     def _inplace_requeue_locked(
@@ -1367,39 +1379,40 @@ class JobManager:
         expected_source_revision: str | None,
         diff_summary: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        with self._lock:
-            outcome = self._inplace_requeue_locked(
-                job_id,
-                mode="edit_recalculate",
-                new_spec=new_spec,
-                expected_source_revision=expected_source_revision,
-            )
-            if outcome is None:
-                raise KeyError(job_id)
-            record, attempts, old_status, killed, renamed_from = outcome
-
-        self._finish_inplace_requeue(record, renamed_from=renamed_from)
-        if self.tasks is not None:
-            try:
-                # Identity columns (molecule/task/remark) may have changed.
-                self.tasks.sync_from_job(record)
-            except Exception:
-                logger.warning(
-                    "Task index identity sync failed for job %s", record.id, exc_info=True
+        with self._side_effect_lock:
+            with self._lock:
+                outcome = self._inplace_requeue_locked(
+                    job_id,
+                    mode="edit_recalculate",
+                    new_spec=new_spec,
+                    expected_source_revision=expected_source_revision,
                 )
-        self._event_log(record).append(
-            "job.edit_recalculate",
-            job_id=job_id,
-            mode="in_place",
-            rerun_from=old_status,
-            attempts=attempts,
-            request_id=record.id,
-            changed_fields=[entry.get("path") for entry in diff_summary],
-            killed_pids=killed,
-            work_dir=record.work_dir,
-            renamed_from=renamed_from,
-        )
-        self._start_submission_thread(job_id, f"acp-edit-{job_id}")
+                if outcome is None:
+                    raise KeyError(job_id)
+                record, attempts, old_status, killed, renamed_from = outcome
+
+            self._finish_inplace_requeue(record, renamed_from=renamed_from)
+            if self.tasks is not None:
+                try:
+                    # Identity columns (molecule/task/remark) may have changed.
+                    self.tasks.sync_from_job(record)
+                except Exception:
+                    logger.warning(
+                        "Task index identity sync failed for job %s", record.id, exc_info=True
+                    )
+            self._event_log(record).append(
+                "job.edit_recalculate",
+                job_id=job_id,
+                mode="in_place",
+                rerun_from=old_status,
+                attempts=attempts,
+                request_id=record.id,
+                changed_fields=[entry.get("path") for entry in diff_summary],
+                killed_pids=killed,
+                work_dir=record.work_dir,
+                renamed_from=renamed_from,
+            )
+            self._start_submission_thread(job_id, f"acp-edit-{job_id}")
         return {
             "job_id": job_id,
             "attempt": attempts,
@@ -2572,6 +2585,16 @@ class JobManager:
         return record
 
     def continue_job(self, job_id: str, *, target_node: str | None = None) -> JobRecord:
+        """Re-enter a FAILED/CANCELLED job from its checkpoint.
+
+        Holds the shared terminal-side-effect boundary (``_side_effect_lock``
+        before ``_lock``) for the whole archive + in-place requeue, so a
+        superseded attempt's retry can never interleave with the new attempt.
+        """
+        with self._side_effect_lock:
+            return self._continue_job_impl(job_id, target_node=target_node)
+
+    def _continue_job_impl(self, job_id: str, *, target_node: str | None = None) -> JobRecord:
         """Re-enter a FAILED/CANCELLED job from its checkpoint (plan §4.4).
 
         Workflow matrix: ``xtbmd_censo_energy``
@@ -5055,13 +5078,10 @@ class JobManager:
                 status = JobStatus.COMPLETED
                 progress = 1.0
                 record.result = result_payload
+                # Capture/provenance is a terminal side effect (local COMPLETED
+                # only): it runs inside the post-CAS boundary below so a stale
+                # CAS never registers anything and a retry is idempotent.
                 record.result = self._collect_result(record)
-                if not is_remote:
-                    self.runner._capture_artifacts(record, Path(record.work_dir))
-                    self.runner._store_provenance(
-                        record,
-                        command_line=record.result.get("command_line", ""),
-                    )
                 result_payload = dict(record.result or {})
             else:
                 status = JobStatus.FAILED
@@ -5096,12 +5116,28 @@ class JobManager:
 
         side_effects_ok = True
         with self._side_effect_lock:
+            stored = self._reread_side_effect_scope(stored)
+            if stored is None:
+                logger.info(
+                    "Terminal side effects for job %s superseded by a newer attempt; skipped",
+                    job_id,
+                )
+                return
             try:
                 self._release_reservation(job_id)
                 self._sync_task_status(stored)
-                if is_remote and self.remote_runner is not None:
-                    stage_events = observation.stage_events if observation is not None else ()
-                    self.remote_runner.apply_terminal_side_effects(stored, event_log, stage_events)
+                if stored.status.is_terminal:
+                    if is_remote and self.remote_runner is not None:
+                        stage_events = (
+                            observation.stage_events if observation is not None else ()
+                        )
+                        self.remote_runner.apply_terminal_side_effects(
+                            stored, event_log, stage_events
+                        )
+                    else:
+                        self._emit_local_terminal_event(stored, event_log)
+                        if stored.status == JobStatus.COMPLETED:
+                            self._capture_local_completion(stored)
                 self._write_job_json(stored)
                 with self._lock:
                     self._cancel_events.pop(job_id, None)
@@ -5124,6 +5160,47 @@ class JobManager:
             with self._side_effect_lock:
                 self._mark_terminal_side_effects_done(stored)
 
+    def _reread_side_effect_scope(self, stored: JobRecord) -> JobRecord | None:
+        """Re-read the row inside the side-effect boundary before writing.
+
+        Returns the fresh row when it is still the same attempt+status the CAS
+        committed, or ``None`` when a rerun/edit/continue superseded it — a
+        stale attempt's side effects must never touch the new attempt's
+        ``job.json``, tasks projection, stage provenance, or cancel event.
+        """
+        fresh = self.store.get(stored.id)
+        if fresh is None:
+            return None
+        if fresh.attempt != stored.attempt or fresh.status != stored.status:
+            return None
+        return fresh
+
+    def _emit_local_terminal_event(self, record: JobRecord, event_log: JobEventLog) -> None:
+        """Emit the local terminal completion event idempotently (post-CAS)."""
+        if record.status == JobStatus.COMPLETED:
+            event_type = "job.completed"
+        elif record.status == JobStatus.CANCELLED:
+            event_type = "job.cancelled"
+        else:
+            event_type = "job.failed"
+        exit_code = record.exit_code
+        if exit_code is None:
+            exit_code = 0 if record.status == JobStatus.COMPLETED else 1
+        event_log.append(
+            event_type,
+            job_id=record.id,
+            exit_code=exit_code,
+            idempotency_key=f"terminal:{record.id}:{record.attempt}:{event_type}",
+        )
+
+    def _capture_local_completion(self, record: JobRecord) -> None:
+        """Local COMPLETED artifact capture + provenance (post-CAS, idempotent)."""
+        self.runner._capture_artifacts(record, Path(record.work_dir))
+        self.runner._store_provenance(
+            record,
+            command_line=(record.result or {}).get("command_line", ""),
+        )
+
     def _mark_terminal_side_effects_done(self, record: JobRecord) -> None:
         result = dict(record.result or {})
         if result.get("terminal_side_effects_done") is True:
@@ -5139,19 +5216,39 @@ class JobManager:
             )
 
     def _retry_terminal_side_effects(self, record: JobRecord) -> None:
-        """Category ②: re-run terminal side effects until the marker persists."""
-        event_log = self._event_log(record)
+        """Category ②: re-run terminal side effects until the marker persists.
+
+        Status/attempt guarded: only the *current* terminal attempt owns its
+        side effects.  A superseded attempt (rerun/edit/continue bumped it)
+        exits without touching the new attempt.  Local COMPLETED also rebuilds
+        artifacts/provenance idempotently.
+        """
         with self._side_effect_lock:
+            fresh = self.store.get(record.id)
+            if (
+                fresh is None
+                or not fresh.status.is_terminal
+                or fresh.attempt != record.attempt
+            ):
+                return
+            event_log = self._event_log(fresh)
             try:
-                if self._is_remote_job(record) and self.remote_runner is not None:
-                    self.remote_runner.apply_terminal_side_effects(record, event_log)
-                self._sync_task_status(record)
-                self._write_job_json(record)
-                self._mark_terminal_side_effects_done(record)
+                self._release_reservation(fresh.id)
+                if self._is_remote_job(fresh) and self.remote_runner is not None:
+                    self.remote_runner.apply_terminal_side_effects(fresh, event_log)
+                else:
+                    self._emit_local_terminal_event(fresh, event_log)
+                    if fresh.status == JobStatus.COMPLETED:
+                        self._capture_local_completion(fresh)
+                self._sync_task_status(fresh)
+                self._write_job_json(fresh)
+                with self._lock:
+                    self._cancel_events.pop(fresh.id, None)
+                self._mark_terminal_side_effects_done(fresh)
             except Exception:
                 logger.warning(
                     "Terminal side-effect retry failed for job %s (will retry)",
-                    record.id,
+                    fresh.id,
                     exc_info=True,
                 )
 

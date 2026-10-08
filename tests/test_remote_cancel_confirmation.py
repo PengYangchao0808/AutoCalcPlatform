@@ -661,3 +661,59 @@ def test_ssh_unavailable_keeps_cancelling_and_never_cleans_dirs(
         assert Path(stored.work_dir).exists(), "directories must not be cleaned"
     finally:
         mgr.shutdown()
+
+
+# --------------------------------------------------------------------- #
+# Cross-attempt isolation: a superseded attempt's terminal retry must not
+# run remote side effects (cleanup / cancel-state teardown) for the new row.
+# --------------------------------------------------------------------- #
+
+
+def test_stale_attempt_retry_skips_remote_side_effects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    mgr = _make_manager(tmp_path, monkeypatch)
+    try:
+        job_id = "stale-remote-retry"
+        _seed_job(mgr, tmp_path, job_id, status=JobStatus.COMPLETED, remote_job_id="9001")
+        stale = mgr.store.get(job_id)
+        assert stale is not None and stale.attempt == 1
+        mgr.store.update_progress(
+            job_id,
+            expected_revision=stale.revision,
+            result={**(stale.result or {}), "terminal_side_effects_done": False},
+        )
+
+        runner = _RunnerSpy(lsf_id="9001")
+        apply_calls: list[int] = []
+        runner.apply_terminal_side_effects = (  # type: ignore[method-assign]
+            lambda record, event_log, stage_events=(): apply_calls.append(record.attempt)
+        )
+        mgr.remote_runner = runner  # type: ignore[assignment]
+
+        before_requeue = mgr.store.get(job_id)
+        assert before_requeue is not None
+        requeued = mgr.store.requeue_with_spec(
+            job_id,
+            new_spec=before_requeue.spec,
+            expected_revision=before_requeue.revision,
+            expected_attempt=1,
+            expected_status=JobStatus.COMPLETED,
+        )
+        assert requeued.attempt == 2 and requeued.status == JobStatus.QUEUED
+
+        cancel_event = threading.Event()
+        mgr._cancel_events[job_id] = cancel_event
+
+        mgr._retry_terminal_side_effects(stale)
+
+        assert apply_calls == [], "stale retry must not run remote side effects"
+        assert mgr._cancel_events.get(job_id) is cancel_event, (
+            "stale retry must not tear down the new attempt's cancel event"
+        )
+        final = mgr.store.get(job_id)
+        assert final is not None and final.attempt == 2
+        assert (final.result or {}).get("terminal_side_effects_done") is not True
+    finally:
+        mgr.shutdown()
+
