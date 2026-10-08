@@ -384,6 +384,7 @@ class TsmodeReport:
     target: dict[str, JsonValue]
     mapping: dict[str, JsonValue]
     resolved_level: dict[str, JsonValue]
+    source_level: dict[str, JsonValue] = field(default_factory=dict)
     attempts: list[dict[str, JsonValue]] = field(default_factory=list)
     execution_status: str = "pending"
     optimization_status: str = "pending"
@@ -404,6 +405,7 @@ class TsmodeReport:
             "target": dict(self.target),
             "mapping": dict(self.mapping),
             "resolved_level": dict(self.resolved_level),
+            "source_level": dict(self.source_level),
             "attempts": [dict(attempt) for attempt in self.attempts],
             "execution_status": self.execution_status,
             "optimization_status": self.optimization_status,

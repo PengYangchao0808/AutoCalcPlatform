@@ -44,11 +44,13 @@ from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.tsmode.contracts import (
     FrequencySourceBundle,
+    SourceLevelOfTheory,
     TargetResolution,
     TsmodeError,
     TsmodeOptimizationSettings,
     TsmodeReport,
     TsmodeRequest,
+    sha256_file,
 )
 from acp.calculations.tsmode.mode_mapping import enforce_launch_gate, resolve_target_mode
 from acp.calculations.tsmode.source import (
@@ -67,6 +69,8 @@ from cccp.qc.interfaces.orca_ts import (
     parse_ts_frequency_map,
     parse_ts_mode_vectors,
 )
+from cccp.qc.interfaces.route_render import orca_keyword_context
+from cccp.qc.method_meta import method_meta
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +116,102 @@ def compute_engine_fingerprint(
     return "fp_" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
 
 
+_LEVEL_RESOURCE_FIELDS: tuple[str, ...] = (
+    "basis",
+    "dispersion",
+    "solvent",
+    "solvent_model",
+    "grid",
+    "scf",
+)
+_ROUTE_NOOP_VALUES: frozenset[str] = frozenset({"none", "normal"})
+_GFN_FAMILIES: frozenset[str] = frozenset({"gfn", "gfnff"})
+
+
+def _level_route_carriers(level: SourceLevelOfTheory) -> list[str]:
+    """Tokens for inherited level fields the ORCA frequency capability drops.
+
+    ``ORCAInterface.frequency`` consumes basis/solvent/solvent_model/
+    scf_convergence but not dispersion/grid (unlike single_point and OptTS);
+    the explicit value is passed verbatim through the sanctioned
+    ``route_extras`` channel so the rendered Frequency input carries the same
+    inherited level as the OptTS input.  Method-inherent values are skipped.
+    Follow-up: forward dispersion/grid through the cccp frequency capability
+    and drop this bridge.
+    """
+    meta = method_meta(level.method) or {}
+    family, _implementation = orca_keyword_context(level.method)
+    carriers: list[str] = []
+    dispersion = (level.dispersion or "").strip()
+    if (
+        dispersion
+        and dispersion.lower() not in _ROUTE_NOOP_VALUES
+        and not meta.get("builtin_dispersion")
+    ):
+        carriers.append(dispersion)
+    grid = (level.grid or "").strip()
+    if grid and grid.lower() not in _ROUTE_NOOP_VALUES and family not in _GFN_FAMILIES:
+        carriers.append(grid)
+    return carriers
+
+
+def _project_source_level(level: SourceLevelOfTheory) -> tuple[str, dict[str, Any]]:
+    """Project the frequency-source level onto one legacy request shape.
+
+    Returns ``(method, resources)``.  ``method`` rides on the top-level
+    ``CalculationRequest.method``; every present level field is emitted under
+    its legacy resource key so ``to_task_request`` can lift it into the typed
+    ``MethodSpec`` (``grid`` into ``integration_grid``, ``scf`` into ``scf``).
+    Absent fields are never emitted (no fabricated default); unknown empty
+    values stay absent and are reported as unconfirmed.
+    """
+    resources: dict[str, Any] = {}
+    for field in _LEVEL_RESOURCE_FIELDS:
+        value = getattr(level, field)
+        if value:
+            resources[field] = value
+    carriers = _level_route_carriers(level)
+    if carriers:
+        resources["route_extras"] = carriers
+    return level.method, resources
+
+
+def _collect_stage_input_evidence(
+    root: Path,
+    snapshot: dict[str, Path],
+    stage_dirs: list[Path],
+) -> list[dict[str, Any]]:
+    """Attach staged source artifacts and rendered backend inputs with digests."""
+    evidence: list[dict[str, Any]] = []
+    for snapshot_path in snapshot.values():
+        path = Path(snapshot_path)
+        if path.is_file():
+            evidence.append(
+                {
+                    "kind": "staged_input",
+                    "path": str(path.relative_to(root)),
+                    "sha256": sha256_file(path),
+                }
+            )
+    for directory in stage_dirs:
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.rglob("*.inp")):
+            evidence.append(
+                {
+                    "kind": "backend_input",
+                    "path": str(path.relative_to(root)),
+                    "sha256": sha256_file(path),
+                }
+            )
+    return evidence
+
+
+def _unconfirmed_level_fields(level: SourceLevelOfTheory) -> list[str]:
+    """Level fields with no recorded value; never silently resolved."""
+    return [field for field in ("method", "basis") if not getattr(level, field)]
+
+
 class TsmodeEngine:
     """Orchestrates the directed TS Mode optimization task."""
 
@@ -142,6 +242,9 @@ class TsmodeEngine:
 
         warnings: list[str] = list(bundle.warnings)
         settings = request.optimization
+        unconfirmed_level = _unconfirmed_level_fields(bundle.level)
+        if unconfirmed_level:
+            warnings.append("level of theory unconfirmed for: " + ", ".join(unconfirmed_level))
 
         # 1. prepare_source — immutable snapshot owned by this task.
         snapshot = snapshot_bundle_files(bundle, input_dir)
@@ -230,6 +333,7 @@ class TsmodeEngine:
                 frequency_status="skipped",
                 frequencies=None,
                 warnings=warnings + ["optimization failed; last valid structure retained in WORK"],
+                artifacts=_collect_stage_input_evidence(root, snapshot, [work_dir / "optimize"]),
             )
             self._publish(root, result_dir, report, optimized_xyz=None, normal_modes=None)
             return TsmodeEngineResult(
@@ -255,6 +359,7 @@ class TsmodeEngine:
             frequency_status="pending",
             frequencies=None,
             warnings=warnings,
+            artifacts=_collect_stage_input_evidence(root, snapshot, [work_dir / "optimize"]),
         )
         self._publish(
             root,
@@ -353,6 +458,9 @@ class TsmodeEngine:
             frequencies=frequencies,
             warnings=warnings,
             validation=validation.to_dict(),
+            artifacts=_collect_stage_input_evidence(
+                root, snapshot, [work_dir / "optimize", work_dir / "frequency"]
+            ),
         )
         normal_modes = self._build_normal_modes(
             bundle, frequency_map, frequency_vectors, frequencies
@@ -386,16 +494,7 @@ class TsmodeEngine:
         target_dir: Path,
     ) -> CalculationResult:
         target_dir.mkdir(parents=True, exist_ok=True)
-        level_kwargs: dict[str, Any] = {}
-        if bundle.level.solvent and bundle.level.solvent_model:
-            level_kwargs["solvent"] = bundle.level.solvent
-            level_kwargs["solvent_model"] = bundle.level.solvent_model
-        if bundle.level.grid:
-            level_kwargs["grid"] = bundle.level.grid
-        if bundle.level.scf:
-            level_kwargs["scf"] = bundle.level.scf
-        if settings.convergence:
-            level_kwargs["opt_level"] = settings.convergence
+        method, level_resources = _project_source_level(bundle.level)
 
         resources: dict[str, Any] = {
             "backend": "orca",
@@ -418,7 +517,9 @@ class TsmodeEngine:
             resources["trust_radius"] = settings.trust_radius
         if settings.max_iterations is not None:
             resources["geom_maxiter"] = settings.max_iterations
-        resources.update(level_kwargs)
+        if settings.convergence:
+            resources["opt_level"] = settings.convergence
+        resources.update(level_resources)
 
         artifact = StructureArtifact(
             path=Path(bundle.hessian_file),
@@ -428,7 +529,7 @@ class TsmodeEngine:
         )
         request = CalculationRequest(
             input_artifact=artifact,
-            method=bundle.level.method,
+            method=method,
             resources=resources,
             workflow="tsmode",
             profile="default",
@@ -442,14 +543,7 @@ class TsmodeEngine:
         target_dir: Path,
     ) -> CalculationResult:
         target_dir.mkdir(parents=True, exist_ok=True)
-        level_kwargs: dict[str, Any] = {}
-        if bundle.level.solvent and bundle.level.solvent_model:
-            level_kwargs["solvent"] = bundle.level.solvent
-            level_kwargs["solvent_model"] = bundle.level.solvent_model
-        if bundle.level.grid:
-            level_kwargs["grid"] = bundle.level.grid
-        if bundle.level.scf:
-            level_kwargs["scf"] = bundle.level.scf
+        method, level_resources = _project_source_level(bundle.level)
 
         resources: dict[str, Any] = {
             "backend": "orca",
@@ -460,7 +554,7 @@ class TsmodeEngine:
             "multiplicity": bundle.multiplicity,
             "output_dir": str(target_dir),
         }
-        resources.update(level_kwargs)
+        resources.update(level_resources)
         artifact = StructureArtifact(
             path=Path(bundle.hessian_file),
             elements=list(bundle.elements),
@@ -469,7 +563,7 @@ class TsmodeEngine:
         )
         request = CalculationRequest(
             input_artifact=artifact,
-            method=bundle.level.method,
+            method=method,
             resources=resources,
             workflow="tsmode",
             profile="default",
@@ -623,6 +717,7 @@ class TsmodeEngine:
         frequencies: list[float] | None,
         warnings: list[str],
         validation: dict[str, Any] | None = None,
+        artifacts: list[dict[str, Any]] | None = None,
     ) -> TsmodeReport:
         imaginary: list[dict[str, Any]] = []
         if frequencies:
@@ -632,6 +727,7 @@ class TsmodeEngine:
                         "frequency_cm1": value,
                     }
                 )
+        level = bundle.level.to_dict()
         return TsmodeReport(
             source={
                 "bundle_id": bundle.bundle_id,
@@ -648,13 +744,15 @@ class TsmodeEngine:
                 "version": resolution.mapping_version,
                 "verified_against_orca": resolution.evidence.get("verified_against_orca"),
             },
-            resolved_level=bundle.level.to_dict(),
+            resolved_level=dict(level),
+            source_level=dict(level),
             attempts=[dict(attempt) for attempt in attempts],
             execution_status=execution_status,
             optimization_status=optimization_status,
             frequency_status=frequency_status,
             imaginary_modes=imaginary,
             validation=validation or {},
+            artifacts=[dict(entry) for entry in (artifacts or [])],
             warnings=list(warnings),
         )
 

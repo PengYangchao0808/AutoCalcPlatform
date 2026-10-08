@@ -183,13 +183,6 @@ def test_contract_1_report_schema_version_and_flat_resolved_level() -> None:
     assert "effective_level" not in payload
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FROZEN contract (1): report must carry a flat source_level sibling next to "
-        "resolved_level. Remove/convert this xfail when todo 3 (R4) lands the sibling."
-    ),
-)
 def test_contract_1_report_carries_flat_source_level_sibling() -> None:
     report = TsmodeReport(
         source={"bundle_id": "b1"},

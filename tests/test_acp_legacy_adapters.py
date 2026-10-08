@@ -416,6 +416,91 @@ def test_task_only_fields_dropped_in_legacy_projection() -> None:
     assert "symbols" not in legacy.metadata
 
 
+def test_level_of_theory_fields_project_into_method_spec() -> None:
+    request = _legacy_request(
+        basis="def2-TZVP",
+        dispersion="D4",
+        solvent="water",
+        solvent_model="cpcm",
+        grid="DEFGRID2",
+        scf="TightSCF",
+    )
+    task_request, _binding = to_task_request(request, "optimize")
+    assert task_request.level.method == "wB97X-D4"
+    assert task_request.level.basis == "def2-TZVP"
+    assert task_request.level.dispersion == "D4"
+    assert task_request.level.solvent == "water"
+    assert task_request.level.solvent_model == "cpcm"
+    assert task_request.level.integration_grid == "DEFGRID2"
+    assert task_request.level.scf == "TightSCF"
+
+
+def test_level_of_theory_round_trip_lossless_no_new_defaults() -> None:
+    request = _legacy_request(
+        basis="def2-TZVP",
+        dispersion="D4",
+        solvent="water",
+        solvent_model="cpcm",
+        grid="DEFGRID2",
+        scf="TightSCF",
+    )
+    task_request, binding = to_task_request(request, "optimize")
+    rebuilt = to_legacy_request(task_request, binding)
+    assert rebuilt == request
+    assert rebuilt.resources["grid"] == "DEFGRID2"
+    assert rebuilt.resources["scf"] == "TightSCF"
+
+
+def test_level_fields_absent_stay_absent_on_round_trip() -> None:
+    request = _legacy_request(basis="def2-TZVP")
+    task_request, binding = to_task_request(request, "optimize")
+    rebuilt = to_legacy_request(task_request, binding)
+    assert rebuilt == request
+    for key in ("dispersion", "solvent", "solvent_model", "grid", "scf"):
+        assert key not in rebuilt.resources, f"adapter fabricated default {key!r}"
+
+
+def test_level_alias_spellings_preserved_on_round_trip() -> None:
+    request = _legacy_request(integration_grid="DEFGRID3", scf_convergence="VeryTight")
+    task_request, binding = to_task_request(request, "optimize")
+    assert task_request.level.integration_grid == "DEFGRID3"
+    assert task_request.level.scf == "VeryTight"
+    rebuilt = to_legacy_request(task_request, binding)
+    assert rebuilt == request
+    assert rebuilt.resources["integration_grid"] == "DEFGRID3"
+    assert rebuilt.resources["scf_convergence"] == "VeryTight"
+    assert "grid" not in rebuilt.resources
+    assert "scf" not in rebuilt.resources
+
+
+def test_level_translation_chain_maps_grid_and_scf() -> None:
+    """MethodSpec typed homes render through the translation chain once."""
+    from cccp.calculation._common import (
+        level_explicit_fields,
+        render_backend_input,
+        resolve_spec,
+    )
+    from cccp.calculation.requests import MethodSpec
+
+    level = MethodSpec(
+        method="PBE0",
+        basis="def2-TZVP",
+        dispersion="D4",
+        solvent="water",
+        solvent_model="cpcm",
+        integration_grid="DEFGRID2",
+        scf="TightSCF",
+    )
+    spec = resolve_spec(level.method, explicit=level_explicit_fields(level))
+    rendered = render_backend_input(spec, method=level.method)
+    assert rendered["basis"] == "def2-TZVP"
+    assert rendered["dispersion"] == "D4"
+    assert rendered["solvent"] == "water"
+    assert rendered["solvent_model"] == "cpcm"
+    assert rendered["grid"] == "DEFGRID2"
+    assert rendered["scf_convergence"] == "TightSCF"
+
+
 def test_singlepoint_stability_check_home() -> None:
     request = _legacy_request(stability_check=True)
     task_request, binding = to_task_request(request, "singlepoint")

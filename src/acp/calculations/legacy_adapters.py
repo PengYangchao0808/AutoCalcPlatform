@@ -111,6 +111,16 @@ _ENVELOPE_RESOURCE_KEYS: tuple[str, ...] = (
     "output_dir",
 )
 
+# Level-of-theory resource keys with typed homes on ``MethodSpec``.  The first
+# accepted name is the legacy emission spelling (``grid`` reads into the typed
+# ``integration_grid`` home); aliases are preserved through
+# ``LegacyBinding.resources_key_names``.
+_LEVEL_PLAIN_KEYS: tuple[str, ...] = ("dispersion", "solvent", "solvent_model")
+_LEVEL_ALIAS_KEYS: dict[str, tuple[str, ...]] = {
+    "integration_grid": ("grid", "integration_grid"),
+    "scf": ("scf", "scf_convergence"),
+}
+
 # Committed legacy result-metadata keys -> typed payload homes.
 _METADATA_ALIASES: dict[str, tuple[str, ...]] = {
     "optimization_status": ("optimization_status",),
@@ -365,6 +375,12 @@ def to_task_request(
         if value is not None:
             envelope_values[canonical] = value
 
+    level_values: dict[str, str | None] = {}
+    for canonical in _LEVEL_PLAIN_KEYS:
+        level_values[canonical] = _as_str(_pop_named(resources, canonical, key_names))
+    for canonical, names in _LEVEL_ALIAS_KEYS.items():
+        level_values[canonical] = _as_str(_pop_alias(resources, names, key_names, canonical))
+
     structure_kind = resources.pop("structure_kind", None)
     if structure_kind is not None:
         raw["structure_kind"] = structure_kind
@@ -459,7 +475,15 @@ def to_task_request(
         structure=structure,
         charge=_as_int(_env("charge")) or 0,
         multiplicity=_as_int(_env("multiplicity")) or 1,
-        level=MethodSpec(method=method_value, basis=_as_str(_env("basis")) or ""),
+        level=MethodSpec(
+            method=method_value,
+            basis=_as_str(_env("basis")) or "",
+            dispersion=level_values["dispersion"],
+            solvent=level_values["solvent"],
+            solvent_model=level_values["solvent_model"],
+            integration_grid=level_values["integration_grid"],
+            scf=level_values["scf"],
+        ),
         backend=_as_str(_env("backend")),
         electronic_state=electronic_state,
         options=options,
@@ -699,6 +723,11 @@ def to_legacy_request(
 
     _emit("backend", task_request.backend)
     _emit("basis", task_request.level.basis or None)
+    _emit("dispersion", task_request.level.dispersion)
+    _emit("solvent", task_request.level.solvent)
+    _emit("solvent_model", task_request.level.solvent_model)
+    _emit("integration_grid", task_request.level.integration_grid)
+    _emit("scf", task_request.level.scf)
     _emit("charge", task_request.charge)
     _emit("multiplicity", task_request.multiplicity)
     _emit("nproc", task_request.resources.nproc)

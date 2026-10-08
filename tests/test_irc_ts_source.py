@@ -137,3 +137,71 @@ def test_irc_reads_remote_ts_evidence_on_demand(tmp_path: Path) -> None:
     resolved = resolve_verified_ts_source(record, "batch_item_001", Fetcher())
     assert resolved.method == "B97-3c"
     assert resolved.job_id == "source-job"
+
+
+def _tsmode_source(tmp_path: Path, level: dict) -> JobRecord:
+    root = tmp_path / "tsmode_src"
+    (root / "RESULT" / "tsmode").mkdir(parents=True)
+    (root / "RESULT" / "tsmode" / "optimized.xyz").write_text(
+        "2\nTS candidate\nH 0 0 0\nH 0 0 0.7\n", encoding="utf-8"
+    )
+    (root / "RESULT" / "tsmode" / "tsmode_report.json").write_text(
+        json.dumps(
+            {
+                "optimization_status": "completed",
+                "frequency_status": "completed",
+                "imaginary_modes": [{"frequency_cm1": -321.5}],
+                "validation": {},
+                "resolved_level": level,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "RESULT" / "result_manifest.json").write_text(
+        json.dumps(
+            {
+                "workflow": "tsmode",
+                "products": [
+                    {
+                        "id": "tsmode_optimized",
+                        "kind": "structure",
+                        "path": "tsmode/optimized.xyz",
+                        "label": "TS Mode optimized",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "INPUT" / "tsmode").mkdir(parents=True)
+    (root / "INPUT" / "tsmode" / "source_bundle.json").write_text(
+        json.dumps({"level": level, "charge": 0, "multiplicity": 1}),
+        encoding="utf-8",
+    )
+    return JobRecord(
+        id="tsmode-job",
+        status=JobStatus.COMPLETED,
+        work_dir=str(root),
+        spec=JobSpec(workflow="tsmode"),
+    )
+
+
+def test_irc_reads_flat_tsmode_resolved_level(tmp_path: Path) -> None:
+    record = _tsmode_source(tmp_path, {"method": "PBE0", "basis": "def2-TZVP"})
+    resolved = resolve_verified_ts_source(record, "tsmode_optimized")
+    assert resolved.method == "PBE0"
+    assert resolved.basis == "def2-TZVP"
+
+
+@pytest.mark.parametrize(
+    "level",
+    [
+        {"method": "PBE0", "basis": "def2-TZVP", "dispersion": "D4"},
+        {"method": "PBE0", "basis": "def2-TZVP", "solvent": "water", "solvent_model": "cpcm"},
+        {"method": "PBE0", "basis": "def2-TZVP", "grid": "DEFGRID2"},
+    ],
+)
+def test_irc_rejects_unsupported_tsmode_level(tmp_path: Path, level: dict) -> None:
+    record = _tsmode_source(tmp_path, level)
+    with pytest.raises(ValueError, match="cannot yet reproduce"):
+        resolve_verified_ts_source(record, "tsmode_optimized")

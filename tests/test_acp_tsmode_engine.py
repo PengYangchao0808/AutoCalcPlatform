@@ -14,6 +14,7 @@ from acp.calculations.contracts import (
 )
 from acp.calculations.tsmode.contracts import (
     MODE_MAPPING_UNSUPPORTED,
+    SourceLevelOfTheory,
     TsmodeError,
     TsmodeOptimizationSettings,
     TsmodeRequest,
@@ -21,7 +22,7 @@ from acp.calculations.tsmode.contracts import (
 from acp.calculations.tsmode.engine import TsmodeEngine, compute_engine_fingerprint
 from acp.calculations.tsmode.source import load_bundle_from_files
 from acp.calculations.tsmode.validation import validate_ts_frequencies
-from tests.tsmode_synthetic import make_consistent_pair
+from tests.tsmode_synthetic import make_consistent_pair, write_out_file
 
 
 def test_tsmode_frequency_validation_counts_weak_imaginary_modes() -> None:
@@ -302,6 +303,80 @@ class TestEngineFailures:
         )
         assert checkpoint["optimization"]["status"] == "completed"
         assert "frequency" not in checkpoint or checkpoint["frequency"]["status"] != "completed"
+
+
+def _read_report(tmp_path):
+    return json.loads((tmp_path / "task" / "RESULT" / "tsmode" / "tsmode_report.json").read_text())
+
+
+def _completed_engine_run(tmp_path, level, monkeypatch):
+    out_path, hess_path, _coords, _freqs, _modes = make_consistent_pair(tmp_path)
+    bundle = load_bundle_from_files(out_path, hess_path, level=level)
+    optimized = np.asarray(bundle.coordinates_angstrom) + 0.02
+    positives = sorted(
+        (mode.frequency_cm1 for mode in bundle.modes if not mode.is_imaginary), reverse=True
+    )
+    final_freqs = {index: freq for index, freq in enumerate(positives)}
+    final_freqs[len(positives)] = -430.0
+    final_vectors = {mode.source_mode_index: np.asarray(mode.vectors) for mode in bundle.modes}
+    freq_log = tmp_path / "final.out"
+    write_out_file(freq_log, optimized, final_freqs, final_vectors)
+
+    monkeypatch.setattr(
+        "acp.calculations.tsmode.engine.run_optimize",
+        lambda req: _ok_optimize_result(optimized),
+    )
+    monkeypatch.setattr(
+        "acp.calculations.tsmode.engine.run_frequency",
+        lambda req: CalculationResult(
+            energy=-100.6,
+            frequencies=list(final_freqs.values()),
+            status="completed",
+            artifacts=[ArtifactRef(path=freq_log, type="log")],
+        ),
+    )
+    TsmodeEngine(config={}).run(_request(), bundle, tmp_path / "task")
+    return bundle
+
+
+class TestLevelReportContract:
+    def test_report_has_flat_resolved_and_source_level(self, tmp_path, monkeypatch):
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4")
+        _completed_engine_run(tmp_path, level, monkeypatch)
+        report = _read_report(tmp_path)
+        assert report["resolved_level"] == {
+            "method": "PBE0",
+            "basis": "def2-TZVP",
+            "dispersion": "D4",
+        }
+        assert report["source_level"] == report["resolved_level"]
+        assert "effective_level" not in report["resolved_level"]
+        assert "effective_level" not in report
+
+    def test_report_attaches_stage_input_digests(self, tmp_path, monkeypatch):
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4")
+        _completed_engine_run(tmp_path, level, monkeypatch)
+        report = _read_report(tmp_path)
+        staged = {Path(entry["path"]).name: entry for entry in report["artifacts"]}
+        expected_inputs = {
+            "source.hess",
+            "source.xyz",
+            "source_modes.json",
+            "source_bundle.json",
+        }
+        assert expected_inputs <= set(staged)
+        assert all(len(entry["sha256"]) == 64 for entry in report["artifacts"])
+        snapshot = json.loads(
+            (tmp_path / "task" / "INPUT" / "tsmode" / "source_bundle.json").read_text()
+        )
+        assert snapshot["level"]["basis"] == "def2-TZVP"
+
+    def test_empty_level_is_explicitly_unconfirmed(self, tmp_path, monkeypatch):
+        level = SourceLevelOfTheory(method="", basis="")
+        _completed_engine_run(tmp_path, level, monkeypatch)
+        report = _read_report(tmp_path)
+        assert report["source_level"]["basis"] == ""
+        assert any("unconfirmed" in warning.lower() for warning in report["warnings"])
 
 
 class TestFingerprint:
