@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import textwrap
+import threading
 import time
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -971,3 +972,334 @@ def test_v2_remote_js_helper_v2_namespace_60s_budget_and_timeout_conversion() ->
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, f"node failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     assert "PASS" in result.stdout
+
+
+# ── Cold-cache remote read acceptance (plan todo 11 / GAP-5 / R6) ────────────
+#
+# Independent R6 acceptance layer over the cold-cache contract (T6 = the
+# endpoint slices above; T15 = cache unit/fence tests in
+# test_acp_api_structure_viewer.py): one fake-fetcher matrix exercised
+# end-to-end through the real v2 API.  The cache starts manifest-only; the
+# node holds structures / frequencies / `.out` / WORK files plus the optional
+# terminal-catalog files so catalog retries pin to one read each — every
+# accounting below is ABSOLUTE (whole call log), not path-scoped.  The task
+# work_dir is snapshotted before/after every matrix and must stay identical.
+
+_R6_JOB = "v2_r6_job"
+# Terminal catalog fetch for workflow "optimize": exactly these optional
+# files, each read once; afterwards every read re-validates them from cache.
+_R6_CATALOG_PATHS = frozenset(
+    {"input.xyz", "RESULT/frame_candidates.json", "RESULT/frequencies/modes.json"}
+)
+_R6_DATA_PATHS = frozenset({"RESULT/simple/optimized.xyz", "RESULT/simple/opt.out"})
+
+
+class _R6NodeFetcher:
+    """Fake node: absolute call accounting, per-path failure, optional gate."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+        self.fail: set[str] = set()
+        self.files: dict[str, bytes] = {}
+        # Single-flight gate: the first reader of ``gate_path`` parks until
+        # ``gate_release`` so sibling requests are forced to pile up on the
+        # per-path lock (a broken dedup would surface as extra calls).
+        self.gate_path: str | None = None
+        self.gate_entered = threading.Event()
+        self.gate_release = threading.Event()
+
+    def read_file(self, record: Any, rel_path: str) -> bytes:
+        self.calls.append(rel_path)
+        if rel_path in self.fail:
+            raise RuntimeError("ssh transport broken")
+        if rel_path == self.gate_path:
+            self.gate_entered.set()
+            self.gate_release.wait(timeout=10.0)
+        if rel_path in self.files:
+            return self.files[rel_path]
+        raise FileNotFoundError(rel_path)
+
+
+def _r6_work_tree(work_dir: Path) -> frozenset[str]:
+    """Snapshot of *work_dir* (directories marked with a trailing ``/``)."""
+    if not work_dir.exists():
+        return frozenset()
+    return frozenset(
+        entry.relative_to(work_dir).as_posix() + ("/" if entry.is_dir() else "")
+        for entry in work_dir.rglob("*")
+    )
+
+
+@pytest.fixture()
+def r6_remote(tmp_path: Path) -> Generator[dict[str, Any], None, None]:
+    """Cold-cache stage: only the manifest is cached; the node holds the rest."""
+    os.environ["ACP_RUN_ROOT"] = str(tmp_path)
+    from acp.api.server import create_app
+
+    with TestClient(create_app(run_root=tmp_path, max_running=1)) as client:
+        manager = client.app.state.job_manager
+        work_dir = tmp_path / "v2_r6_task"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        (work_dir / "keep.txt").write_text("sentinel\n", encoding="utf-8")
+        record = JobRecord(
+            id=_R6_JOB,
+            spec=JobSpec(
+                workflow="optimize",
+                name="v2_r6_task",
+                molecule_name="m",
+                task_name="opt",
+                remark="final",
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            remote_job_id="11",
+            result={"node": "node1", "remote_dir": "/remote/v2_r6_task"},
+        )
+        manager.store.create(record)
+
+        fetcher = _R6NodeFetcher()
+        fetcher.files = {
+            "RESULT/simple/optimized.xyz": b"2\nr6 structure\nH 0 0 0\n",
+            "RESULT/simple/opt.out": b"ORCA r6 output\n",
+            "RESULT/frequencies/modes.json": b'{"modes": []}\n',
+            # Optional terminal-catalog files the node also holds: fetched
+            # once, they pin the catalog so the second-hit assertions can be
+            # absolute (zero extra reads overall) instead of path-scoped.
+            "input.xyz": b"3\ninput\nC 0 0 0\nH 1 0 0\nH 0 1 0\n",
+            "RESULT/frame_candidates.json": b'{"candidates": []}\n',
+            # Node-side WORK tree: remote area=work must never fetch it.
+            "WORK/stage_01/run.out": b"node work\n",
+        }
+        manager._remote_fetcher = fetcher  # type: ignore[attr-defined]
+
+        # Seed EXACTLY the manifest into the controlled cache (cold file cache).
+        cache = manager.structure_cache
+        manifest_path = cache.cache_path(_R6_JOB, "RESULT/result_manifest.json")
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(_v2_remote_manifest(_R6_JOB).to_dict()), encoding="utf-8"
+        )
+        assert cache.get_cached(_R6_JOB, "RESULT/simple/optimized.xyz") is None
+        yield {
+            "client": client,
+            "fetcher": fetcher,
+            "manager": manager,
+            "record": record,
+            "work_dir": work_dir,
+            "manifest_path": manifest_path,
+        }
+
+
+class TestColdCacheRemoteReadAcceptance:
+    """R6 acceptance matrix through the real v2 API (fake fetcher, GAP-5).
+
+    Covers end-to-end: manifest-only warm state -> first download -> second
+    hit with absolute zero extra remote reads -> 4-thread single-flight ->
+    remote-missing 404 vs transport-failure 502 -> traversal rejected
+    pre-SFTP with zero fetcher calls -> declared-scope tree (remote
+    ``area=work`` == ``[]``) -> no work_dir writes anywhere.
+    """
+
+    def test_first_download_second_hit_zero_extra_remote_reads(
+        self, r6_remote: dict[str, Any]
+    ) -> None:
+        client: TestClient = r6_remote["client"]
+        fetcher: _R6NodeFetcher = r6_remote["fetcher"]
+        work_dir: Path = r6_remote["work_dir"]
+        tree_before = _r6_work_tree(work_dir)
+        assert tree_before == {"keep.txt"}, f"unexpected baseline: {tree_before}"
+
+        # (a) Manifest-only cache serves /results with zero geometry reads;
+        #     the terminal catalog pulls exactly its three optional files.
+        results = client.get(f"/api/v2/tasks/{_R6_JOB}/results")
+        assert results.status_code == 200, results.text
+        product_ids = {product["id"] for product in results.json()["products"]}
+        assert {"optimized", "opt_out", "freq_1"} <= product_ids
+        assert "RESULT/simple/optimized.xyz" not in fetcher.calls, (
+            "manifest read must not pull geometry"
+        )
+        assert len(fetcher.calls) == 3, fetcher.calls
+        assert set(fetcher.calls) == _R6_CATALOG_PATHS
+
+        # (b) First downloads: exactly one node read per data file.
+        struct_first = client.get(f"/api/v2/tasks/{_R6_JOB}/structures/optimized")
+        out_first = client.get(f"/api/v2/tasks/{_R6_JOB}/files/RESULT/simple/opt.out")
+        freq_first = client.get(f"/api/v2/tasks/{_R6_JOB}/frequencies/freq_1")
+        assert [r.status_code for r in (struct_first, out_first, freq_first)] == [200, 200, 200]
+        assert b"r6 structure" in struct_first.content
+        assert out_first.content == b"ORCA r6 output\n"
+        assert b'"modes"' in freq_first.content
+        assert fetcher.calls.count("RESULT/simple/optimized.xyz") == 1
+        assert fetcher.calls.count("RESULT/simple/opt.out") == 1
+        assert fetcher.calls.count("RESULT/frequencies/modes.json") == 1
+        first_round = list(fetcher.calls)
+        assert len(first_round) == 5, first_round
+
+        # (c) Second hits: byte-identical responses and ABSOLUTE zero extra
+        #     remote reads — the whole call log must not grow at all.
+        seconds = [
+            client.get(f"/api/v2/tasks/{_R6_JOB}/structures/optimized"),
+            client.get(f"/api/v2/tasks/{_R6_JOB}/files/RESULT/simple/opt.out"),
+            client.get(f"/api/v2/tasks/{_R6_JOB}/frequencies/freq_1"),
+            client.get(f"/api/v2/tasks/{_R6_JOB}/results"),
+        ]
+        assert [r.status_code for r in seconds] == [200, 200, 200, 200], [
+            (r.status_code, r.text) for r in seconds
+        ]
+        assert seconds[0].content == struct_first.content
+        assert seconds[1].content == out_first.content
+        assert seconds[2].content == freq_first.content
+        assert fetcher.calls == first_round, (
+            f"second hit re-read the node: {fetcher.calls[len(first_round) :]}"
+        )
+
+        # (d) Absolute accounting over the whole journey: each path exactly once.
+        assert len(fetcher.calls) == 5, fetcher.calls
+        assert set(fetcher.calls) == _R6_CATALOG_PATHS | _R6_DATA_PATHS
+
+        # (e) The task work_dir is never written.
+        assert _r6_work_tree(work_dir) == tree_before
+        assert (work_dir / "keep.txt").read_text(encoding="utf-8") == "sentinel\n"
+        assert not (work_dir / "RESULT").exists()
+        assert not (work_dir / "WORK").exists()
+
+    def test_concurrent_cold_downloads_single_flight(self, r6_remote: dict[str, Any]) -> None:
+        client: TestClient = r6_remote["client"]
+        fetcher: _R6NodeFetcher = r6_remote["fetcher"]
+        url = f"/api/v2/tasks/{_R6_JOB}/structures/optimized"
+        fetcher.gate_path = "RESULT/simple/optimized.xyz"
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(client.get, url) for _ in range(4)]
+            try:
+                assert fetcher.gate_entered.wait(timeout=10.0), "no fetch reached the node"
+                # Let the three sibling requests pile up on the per-path lock
+                # while the first reader is parked inside the gate.
+                time.sleep(0.3)
+            finally:
+                fetcher.gate_release.set()
+            responses = [future.result(timeout=60) for future in futures]
+
+        assert [r.status_code for r in responses] == [200, 200, 200, 200], [
+            (r.status_code, r.text) for r in responses
+        ]
+        # Exactly one read for the gated structure path...
+        assert fetcher.calls.count("RESULT/simple/optimized.xyz") == 1, fetcher.calls
+        # ...and absolute single-flight overall: catalog 3 + structure 1.
+        assert len(fetcher.calls) == 4, fetcher.calls
+        assert set(fetcher.calls) == _R6_CATALOG_PATHS | {"RESULT/simple/optimized.xyz"}
+
+    def test_remote_missing_404_vs_transport_failure_502(self, r6_remote: dict[str, Any]) -> None:
+        client: TestClient = r6_remote["client"]
+        fetcher: _R6NodeFetcher = r6_remote["fetcher"]
+        manager = r6_remote["manager"]
+        work_dir: Path = r6_remote["work_dir"]
+        tree_before = _r6_work_tree(work_dir)
+
+        missing = client.get(f"/api/v2/tasks/{_R6_JOB}/files/RESULT/simple/nope.out")
+        assert missing.status_code == 404, missing.text
+        assert "File not found" in missing.json()["detail"]
+        assert fetcher.calls.count("RESULT/simple/nope.out") == 1, fetcher.calls
+
+        fetcher.fail.add("RESULT/simple/flaky.out")
+        failed = client.get(f"/api/v2/tasks/{_R6_JOB}/files/RESULT/simple/flaky.out")
+        assert failed.status_code == 502, (
+            f"transport failure conflated with remote-missing: {failed.status_code} {failed.text}"
+        )
+        failed_detail = failed.json()["detail"]
+        assert "remote fetch failed" in failed_detail
+        assert "ssh transport broken" in failed_detail
+        assert fetcher.calls.count("RESULT/simple/flaky.out") == 1, fetcher.calls
+
+        # Never conflated: the outcomes differ, and a failed fetch leaves
+        # no cached bytes behind.
+        assert missing.status_code != failed.status_code
+        assert manager.structure_cache.get_cached(_R6_JOB, "RESULT/simple/flaky.out") is None
+        assert _r6_work_tree(work_dir) == tree_before
+
+    def test_traversal_vectors_rejected_pre_sftp_zero_fetcher_calls(
+        self, r6_remote: dict[str, Any]
+    ) -> None:
+        client: TestClient = r6_remote["client"]
+        fetcher: _R6NodeFetcher = r6_remote["fetcher"]
+        manifest_path: Path = r6_remote["manifest_path"]
+        work_dir: Path = r6_remote["work_dir"]
+        tree_before = _r6_work_tree(work_dir)
+
+        for url_path in (
+            "/api/v2/tasks/{job}/files/RESULT/%2e%2e/%2e%2e/etc/passwd",
+            "/api/v2/tasks/{job}/files/%2e%2e/%2e%2e/etc/passwd",
+            "/api/v2/tasks/{job}/files/RESULT/%5c..%5c..%5cetc%5cpasswd",
+            "/api/v2/tasks/{job}/files/%2fetc%2fpasswd",
+        ):
+            response = client.get(url_path.format(job=_R6_JOB))
+            assert response.status_code == 404, f"{url_path} -> {response.status_code}"
+            assert "outside work directory" in response.json()["detail"], (
+                f"{url_path} bypassed the pre-SFTP normalizer: {response.text}"
+            )
+
+        # Absolute accounting: not one fetcher call — no path-scoped filtering.
+        assert fetcher.calls == [], f"traversal reached the node: {fetcher.calls}"
+
+        # Manifest-product traversal: rejected after normalization, still
+        # before any SFTP read for the evil path.
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        payload["products"].append(
+            {"id": "evil", "label": "evil", "path": "../../etc/passwd", "kind": "structure"}
+        )
+        manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        evil = client.get(f"/api/v2/tasks/{_R6_JOB}/structures/evil")
+        assert evil.status_code == 404, evil.text
+        assert "outside work directory" in evil.json()["detail"]
+        # Absolute: only the legitimate terminal catalog reads happened —
+        # nothing containing "passwd" or ".." ever reached the fetcher.
+        assert len(fetcher.calls) == len(_R6_CATALOG_PATHS), fetcher.calls
+        assert set(fetcher.calls) == _R6_CATALOG_PATHS
+        assert not any("passwd" in call or ".." in call for call in fetcher.calls)
+        assert _r6_work_tree(work_dir) == tree_before
+
+    def test_remote_tree_declared_scope_and_work_always_empty(
+        self, r6_remote: dict[str, Any]
+    ) -> None:
+        client: TestClient = r6_remote["client"]
+        fetcher: _R6NodeFetcher = r6_remote["fetcher"]
+        manager = r6_remote["manager"]
+        work_dir: Path = r6_remote["work_dir"]
+        tree_before = _r6_work_tree(work_dir)
+
+        # Cached strays: one under WORK, one unregistered under RESULT.
+        cache = manager.structure_cache
+        stray_work = cache.cache_path(_R6_JOB, "WORK/stage_01/run.out")
+        stray_work.parent.mkdir(parents=True, exist_ok=True)
+        stray_work.write_text("cached work stray\n", encoding="utf-8")
+        stray_result = cache.cache_path(_R6_JOB, "RESULT/stray.txt")
+        stray_result.parent.mkdir(parents=True, exist_ok=True)
+        stray_result.write_text("not registered\n", encoding="utf-8")
+
+        # Remote area=work: [] with ABSOLUTE zero fetcher calls — the node
+        # holds WORK files, yet none is ever requested.
+        work = client.get(f"/api/v2/tasks/{_R6_JOB}/tree?area=work")
+        assert work.status_code == 200, work.text
+        assert work.json()["entries"] == [], "cached WORK strays leaked into the listing"
+        assert fetcher.calls == [], f"work listing touched the node: {fetcher.calls}"
+
+        # area=result: exactly the declared manifest-products scope.
+        result = client.get(f"/api/v2/tasks/{_R6_JOB}/tree?area=result")
+        assert result.status_code == 200, result.text
+        body = result.json()
+        assert body["area"] == "result"
+        assert body["base"].endswith("RESULT")
+        entries = {entry["path"]: entry for entry in body["entries"]}
+        assert set(entries) == {"simple", "frequencies"}, sorted(entries)
+        assert all(entry["is_dir"] for entry in entries.values())
+        assert "stray.txt" not in entries and "stage_01" not in entries
+
+        # Only manifest-scope catalog reads reached the node; WORK/ never.
+        assert len(fetcher.calls) == len(_R6_CATALOG_PATHS), fetcher.calls
+        assert set(fetcher.calls) == _R6_CATALOG_PATHS
+        assert not any(call.startswith("WORK/") for call in fetcher.calls)
+
+        # Listing never materializes anything in the task dir.
+        assert _r6_work_tree(work_dir) == tree_before
+        assert not (work_dir / "RESULT").exists()
+        assert not (work_dir / "WORK").exists()
