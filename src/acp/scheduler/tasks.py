@@ -463,6 +463,7 @@ class TaskIndex:
         now = _utc_now_iso()
         status_changed = stored["status"] != source.status.value
         stage_changed = (stored["current_stage"] or "") != (source.current_stage or "")
+        progress_changed = stored["progress"] != source.progress
 
         if status_changed or stage_changed:
             terminal = source.status.is_terminal
@@ -473,13 +474,17 @@ class TaskIndex:
                 ca_sql = "completed_at=completed_at"
                 ca_param = ()
             conn.execute(
-                f"UPDATE tasks SET status=?, current_stage=?, "
+                f"UPDATE tasks SET status=?, current_stage=?, progress=?, "
                 f"started_at=COALESCE(started_at,?), "
                 f"{ca_sql}, last_activity_at=?, updated_at=? "
                 f"WHERE task_id=?",
                 (
                     source.status.value,
                     source.current_stage,
+                    # NULL is a real jobs-authoritative value (rerun clears
+                    # jobs.progress); skipping it strands the row in the
+                    # drift set forever (D-T10-1).
+                    source.progress,
                     source.started_at,
                     *ca_param,
                     now,
@@ -489,7 +494,7 @@ class TaskIndex:
             )
             return
 
-        if source.progress is not None and stored["progress"] != source.progress:
+        if progress_changed:
             conn.execute(
                 "UPDATE tasks SET progress=?, updated_at=? WHERE task_id=?",
                 (source.progress, now, job_id),
