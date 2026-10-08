@@ -5,6 +5,21 @@ Fetches required manifest/geometry/frequency files on demand via
 ``<run_root>/.remote_cache/<job_id>/<rel_path>`` (atomic tmp+``os.replace``,
 per-path ``threading.Lock``, permissions inherit run_root).
 
+Two fences keep the cache fresh (todo 15 / IS-5):
+
+* **Attempt fence** — every fetched file gets a persisted sidecar
+  ``<file>.attempt`` recording the job attempt it was fetched for, and the
+  job-level fence file ``.remote_cache/<job_id>.fence`` records the highest
+  attempt observed.  A read for a different attempt is a miss (refetch), a
+  new cache instance over the same root sees the same persisted identity,
+  and a fence bump (in-place rerun) drops entries that carry no attempt
+  identity because they can no longer be proven fresh.
+* **Purge generation fence** — ``.fence`` also carries a purge generation
+  counter.  ``fetch`` captures the generation before touching the node and
+  re-validates it under a per-job lock before ``os.replace``; ``purge_job``
+  bumps it first, so a fetch that began before the purge discards its write
+  while a fetch that begins after the purge proceeds normally.
+
 The flat remote layout (``<remote_task_dir>/<rel_path>``) is always tried
 first.  Only when the flat read raises ``FileNotFoundError`` does a read-only
 one-level nested fallback probe ``<remote_task_dir>/<dir>/<rel_path>``
@@ -42,7 +57,27 @@ class RemotePushError(RuntimeError):
     """A cache-to-remote write-back could not be performed."""
 
 
+def _record_attempt(record: Any) -> int | None:
+    """Return the manager's 1-based attempt number for cache fencing.
+
+    Returns ``None`` for attempt-less records (legacy fakes), which keeps the
+    pre-fence behavior: their entries carry no attempt identity.
+    """
+    from acp.scheduler.job_edit import attempt_number
+
+    try:
+        return int(attempt_number(record))
+    except AttributeError:
+        attempt = getattr(record, "attempt", None)
+        return attempt if isinstance(attempt, int) else None
+
+
 _CACHE_DIR_NAME = ".remote_cache"
+# Job-level fence file (swept-orphan cleanup matches this suffix): persists
+# {"attempt": <int|null>, "generation": <int>} for one job id.
+_FENCE_SUFFIX = ".fence"
+# Per-file attempt sidecar written right next to the cached payload.
+_ATTEMPT_SIDECAR_SUFFIX = ".attempt"
 
 _CATALOG_FETCH_PATHS: dict[str, tuple[str, ...]] = {
     "Confsearch": ("RESULT/confsearch/confsearch_manifest.json",),
@@ -109,6 +144,9 @@ class RemoteStructureCache:
         # calls are never wrapped in ``_master_lock`` (no global serialize).
         self._nested_prefixes: dict[str, str] = {}
         self._discovery_locks: dict[str, threading.Lock] = {}
+        # Purge generation / attempt fence: per-job lock serializing fence
+        # file updates and the payload write's final generation check.
+        self._generation_locks: dict[str, threading.Lock] = {}
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -159,14 +197,170 @@ class RemoteStructureCache:
                 self._discovery_locks[job_id] = lock
             return lock
 
+    def _get_generation_lock(self, job_id: str) -> threading.Lock:
+        """Return the per-job lock serializing fence updates and final writes."""
+        with self._master_lock:
+            lock = self._generation_locks.get(job_id)
+            if lock is None:
+                lock = threading.Lock()
+                self._generation_locks[job_id] = lock
+            return lock
+
+    # ------------------------------------------------------------------
+    # Attempt / purge-generation fence
+    # ------------------------------------------------------------------
+
+    def _fence_path(self, job_id: str) -> Path:
+        """Return the job-level fence file (sibling of the job cache dir)."""
+        job_root = self.cache_path(job_id, ".")
+        return job_root.with_name(job_root.name + _FENCE_SUFFIX)
+
+    def _read_fence(self, job_id: str) -> tuple[int | None, int]:
+        """Return ``(attempt, generation)`` from the fence file.
+
+        Missing or unreadable fence files decode as ``(None, 0)``.
+        """
+        try:
+            payload = json.loads(self._fence_path(job_id).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None, 0
+        if not isinstance(payload, dict):
+            return None, 0
+        attempt = payload.get("attempt")
+        generation = payload.get("generation")
+        return (
+            attempt if isinstance(attempt, int) else None,
+            generation if isinstance(generation, int) else 0,
+        )
+
+    def _write_fence(self, job_id: str, attempt: int | None, generation: int) -> None:
+        """Atomically persist the job fence (callers hold the generation lock)."""
+        path = self._fence_path(job_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"attempt": attempt, "generation": generation}))
+            os.replace(tmp_path, str(path))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    def _read_generation(self, job_id: str) -> int:
+        """Return the persisted purge generation for *job_id* (0 when unset)."""
+        return self._read_fence(job_id)[1]
+
+    @staticmethod
+    def _attempt_sidecar_path(target: Path) -> Path:
+        return Path(str(target) + _ATTEMPT_SIDECAR_SUFFIX)
+
+    def _read_attempt_sidecar(self, target: Path) -> tuple[bool, int | None]:
+        """Return ``(present, attempt)`` for a cached file's sidecar."""
+        try:
+            payload = json.loads(self._attempt_sidecar_path(target).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False, None
+        if not isinstance(payload, dict) or "attempt" not in payload:
+            return False, None
+        attempt = payload.get("attempt")
+        return True, (attempt if isinstance(attempt, int) else None)
+
+    def _write_attempt_sidecar(self, target: Path, attempt: int | None) -> None:
+        """Persist the attempt a cached file was fetched for (atomic)."""
+        sidecar = self._attempt_sidecar_path(target)
+        fd, tmp_path = tempfile.mkstemp(dir=str(sidecar.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"attempt": attempt}))
+            os.replace(tmp_path, str(sidecar))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    def _cache_entry_fresh(self, job_id: str, target: Path, attempt: int | None) -> bool:
+        """True when *target* may satisfy a read for *attempt*."""
+        if not target.is_file():
+            return False
+        present, sidecar_attempt = self._read_attempt_sidecar(target)
+        if present:
+            return sidecar_attempt == attempt
+        # Entry predates attempt fencing (no identity of its own): serve it
+        # only while the job-level fence cannot contradict the read.
+        if attempt is None:
+            return True
+        stored_attempt, _ = self._read_fence(job_id)
+        return stored_attempt is None or stored_attempt == attempt
+
+    def _invalidate_unknown_attempt_entries(self, job_id: str) -> None:
+        """Drop cache files without attempt sidecars after a fence bump.
+
+        Such entries were written before attempt fencing existed (or seeded
+        directly); once the job-level fence advances past them they can never
+        be proven fresh for the new attempt, so they are removed and refetched
+        on demand.  Sidecar'd entries stay — their own identity fences them.
+        """
+        job_dir = self.cache_path(job_id, ".")
+        if not job_dir.is_dir():
+            return
+        removed = 0
+        for entry in sorted(job_dir.rglob("*")):
+            if not entry.is_file():
+                continue
+            if entry.name.endswith(_ATTEMPT_SIDECAR_SUFFIX):
+                continue
+            if self._attempt_sidecar_path(entry).is_file():
+                continue
+            try:
+                entry.unlink()
+            except OSError:
+                logger.debug("Could not drop unfenced cache entry %s", entry, exc_info=True)
+                continue
+            removed += 1
+        if removed:
+            logger.info(
+                "Dropped %d unfenced cache entr(ies) for job %s after attempt fence bump",
+                removed,
+                job_id,
+            )
+
     # ------------------------------------------------------------------
     # Read
     # ------------------------------------------------------------------
 
-    def get_cached(self, job_id: str, rel_path: str) -> Path | None:
-        """Return the cached path if it exists, else ``None``."""
+    def get_cached(
+        self,
+        job_id: str,
+        rel_path: str,
+        *,
+        attempt: int | None = None,
+    ) -> Path | None:
+        """Return the cached path if it exists, else ``None``.
+
+        Args:
+            attempt: When given, only serve an entry whose persisted attempt
+                identity equals *attempt* — a cross-attempt entry is a miss.
+                Without it the entry is validated against the job-level
+                attempt fence (when one exists), so a new attempt's reads
+                never receive another attempt's bytes.
+        """
         target = self.cache_path(job_id, rel_path)
-        return target if target.is_file() else None
+        if not target.is_file():
+            return None
+        present, sidecar_attempt = self._read_attempt_sidecar(target)
+        if attempt is not None:
+            return target if present and sidecar_attempt == attempt else None
+        if not present:
+            return target
+        stored_attempt, _ = self._read_fence(job_id)
+        if stored_attempt is None:
+            return target
+        return target if sidecar_attempt == stored_attempt else None
 
     # ------------------------------------------------------------------
     # Fetch
@@ -196,12 +390,16 @@ class RemoteStructureCache:
         Must NOT write inside the task work_dir.
         """
         job_id = record.id
+        attempt = _record_attempt(record)
         target = self.cache_path(job_id, rel_path)
+        # Purge fence: capture the generation before any waiting/IO so a fetch
+        # that began before purge_job can never repopulate the cache.
+        captured_generation = self._read_generation(job_id)
         cache_key = f"{job_id}:{rel_path}"
         lock = self._get_path_lock(cache_key)
 
         with lock:
-            if not force and target.is_file():
+            if not force and self._cache_entry_fresh(job_id, target, attempt):
                 return target
 
             if self._fetcher_factory is None:
@@ -216,6 +414,28 @@ class RemoteStructureCache:
                 if raise_errors:
                     raise RemotePushError(f"Fetcher unavailable for job {job_id}")
                 return None
+
+            # Establish/advance the attempt fence and re-validate the purge
+            # generation before touching the node.
+            with self._get_generation_lock(job_id):
+                if self._read_generation(job_id) != captured_generation:
+                    logger.debug(
+                        "Cache for job %s purged before fetch of %s; discarding",
+                        job_id,
+                        rel_path,
+                    )
+                    return None
+                if attempt is not None:
+                    stored_attempt, generation = self._read_fence(job_id)
+                    if stored_attempt is None:
+                        self._write_fence(job_id, attempt=attempt, generation=generation)
+                    elif attempt > stored_attempt:
+                        # In-place rerun: sidecar'd entries stay fenced by
+                        # their own identity; entries without attempt identity
+                        # can never be proven fresh for the new attempt.
+                        self._write_fence(job_id, attempt=attempt, generation=generation)
+                        self._invalidate_unknown_attempt_entries(job_id)
+
             try:
                 data = fetcher.read_file(record, rel_path)
             except FileNotFoundError:
@@ -231,36 +451,47 @@ class RemoteStructureCache:
                     raise
                 return None
 
-            target.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
-            try:
-                with os.fdopen(fd, "wb") as f:
-                    f.write(data)
-                os.replace(tmp_path, str(target))
-            except Exception:
+            with self._get_generation_lock(job_id):
+                if self._read_generation(job_id) != captured_generation:
+                    logger.info(
+                        "Discarding fetch of %s/%s: cache purged while fetching",
+                        job_id,
+                        rel_path,
+                    )
+                    return None
+
+                target.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
                 try:
-                    os.unlink(tmp_path)
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(data)
+                    os.replace(tmp_path, str(target))
+                except Exception:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                    raise
+                self._write_attempt_sidecar(target, attempt)
+
+                # Inherit run_root permissions
+                try:
+                    run_root_stat = os.stat(str(self._run_root))
+                    os.chmod(str(target), run_root_stat.st_mode & 0o777)
                 except OSError:
                     pass
-                raise
-
-            # Inherit run_root permissions
-            try:
-                run_root_stat = os.stat(str(self._run_root))
-                os.chmod(str(target), run_root_stat.st_mode & 0o777)
-            except OSError:
-                pass
 
             logger.info("Cached %s/%s -> %s", job_id, rel_path, target)
             return target
 
     @staticmethod
     def _drop_cached(target: Path) -> None:
-        """Remove a stale cached copy after the remote confirmed absence."""
-        try:
-            target.unlink(missing_ok=True)
-        except OSError:
-            logger.debug("Could not drop stale cache file %s", target, exc_info=True)
+        """Remove a stale cached copy and its attempt sidecar after a confirmed remote absence."""
+        for path in (target, Path(str(target) + _ATTEMPT_SIDECAR_SUFFIX)):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                logger.debug("Could not drop stale cache file %s", path, exc_info=True)
 
     def push_paths(self, record: Any, rel_paths: Sequence[str]) -> list[str]:
         """Upload cached files back to the remote job directory.
@@ -488,16 +719,29 @@ class RemoteStructureCache:
     # ------------------------------------------------------------------
 
     def purge_job(self, job_id: str) -> None:
-        """Remove the entire cache directory for *job_id*."""
+        """Remove the entire cache directory for *job_id*.
+
+        Bumps the job's persisted purge generation first: any fetch that began
+        before this purge observes the change and discards its write, while a
+        fetch that begins afterwards proceeds normally.
+        """
         job_dir = self.job_root(job_id)
-        if job_dir.is_dir():
-            shutil.rmtree(job_dir, ignore_errors=True)
+        with self._get_generation_lock(job_id):
+            stored_attempt, generation = self._read_fence(job_id)
+            self._write_fence(job_id, attempt=stored_attempt, generation=generation + 1)
+            removed = job_dir.is_dir()
+            if removed:
+                shutil.rmtree(job_dir, ignore_errors=True)
+        if removed:
             logger.info("Purged cache for job %s", job_id)
 
     def sweep_expired(self, ttl_days: int = 7) -> int:
         """Remove cache entries older than *ttl_days*.
 
-        Returns the number of directories removed.
+        Also removes fence files whose job directory is gone and older than
+        the TTL (purge keeps the generation fence alive for in-flight writes;
+        only stale orphans are collected).  Returns the number of job
+        directories removed.
         """
         if not self._cache_root.is_dir():
             return 0
@@ -520,6 +764,19 @@ class RemoteStructureCache:
                     job_dir.name,
                     (time.time() - mtime) / 86400,
                 )
+
+        for fence in self._cache_root.glob(f"*{_FENCE_SUFFIX}"):
+            if not fence.is_file():
+                continue
+            job_name = fence.name[: -len(_FENCE_SUFFIX)]
+            if (self._cache_root / job_name).is_dir():
+                continue
+            try:
+                if fence.stat().st_mtime >= cutoff:
+                    continue
+                fence.unlink()
+            except OSError:
+                logger.debug("Could not sweep orphan fence file %s", fence, exc_info=True)
 
         return removed
 
