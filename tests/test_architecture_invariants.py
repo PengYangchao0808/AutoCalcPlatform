@@ -248,20 +248,21 @@ def test_new_code_never_writes_s3_s4_manifest() -> None:
 
 def test_legacy_api_mechanism_returns_410(tmp_path, monkeypatch) -> None:
     """Mechanism mutation endpoints must return 410 Gone (read-only)."""
-    # Env must precede import: server.py's module-level create_app() resolves
-    # run_root at import time and would collide with a live server's lock.
+    # Pin the module-level app's run root before importing server.
     monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from fastapi.testclient import TestClient
 
     from acp.api.server import create_app
 
-    client = TestClient(create_app(run_root=tmp_path))
-    for method, url in [
-        ("POST", "/api/v1/mechanism-studies/study-x/promote"),
-        ("POST", "/api/v1/mechanism-studies/study-x/resume"),
-    ]:
-        resp = client.request(method, url, json={})
-        assert resp.status_code == 410, f"{method} {url} returned {resp.status_code}, expected 410"
+    with TestClient(create_app(run_root=tmp_path)) as client:
+        for method, url in [
+            ("POST", "/api/v1/mechanism-studies/study-x/promote"),
+            ("POST", "/api/v1/mechanism-studies/study-x/resume"),
+        ]:
+            resp = client.request(method, url, json={})
+            assert resp.status_code == 410, (
+                f"{method} {url} returned {resp.status_code}, expected 410"
+            )
 
 
 def test_all_new_results_register_result_manifest() -> None:

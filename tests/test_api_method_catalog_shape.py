@@ -12,13 +12,13 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    # Env must precede import: server.py's module-level create_app() resolves
-    # run_root at import time and would collide with a live server's lock.
+    # Pin the module-level app's run root to tmp_path before importing server.
     monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from acp.api.server import create_app
 
     app = create_app(run_root=tmp_path)
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def test_method_catalog_has_both_basis_catalog_versions(client) -> None:
