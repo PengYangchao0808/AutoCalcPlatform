@@ -2130,6 +2130,8 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/workflows/simple.py",
     # acp-legacy-bug-remediation: BUG-5 attempts isolation (0ab3fa9)
     "src/acp/results/structure_migration.py",
+    # todo 15 (runtime-contract): remote result cache attempt/purge freshness fence.
+    "src/acp/results/remote_structure_cache.py",
     # acp-legacy-bug-remediation: BUG-8 public surface split (3c9321a)
     "src/acp/workflows/registry.py",
 )
