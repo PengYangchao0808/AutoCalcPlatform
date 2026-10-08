@@ -204,3 +204,47 @@ def test_sequential_start_stop_start(tmp_path: Path) -> None:
         assert (run_root / ".manager.lock").exists()
         manager.shutdown()
         assert not (run_root / ".manager.lock").exists()
+
+
+def test_shutdown_refuses_late_worker_registration(tmp_path: Path) -> None:
+    run_root = tmp_path / "runs"
+    lock_path = run_root / ".manager.lock"
+    key = resolve_ownership_key(run_root)
+    manager = JobManager(run_root=run_root, poll_interval=30)
+    real_background_threads = manager._background_threads
+    late_result: list[bool] = []
+    calls = {"n": 0}
+
+    def racing_background_threads() -> list[threading.Thread]:
+        snapshot = real_background_threads()
+        if calls["n"] == 0:
+            calls["n"] += 1
+            late_result.append(manager._start_submission_thread("late-job", "acp-late-late-job"))
+        return snapshot
+
+    with patch.object(manager, "_background_threads", racing_background_threads):
+        manager.shutdown()
+
+    assert late_result == [False]
+    assert "late-job" not in manager._submission_threads
+    assert not any(
+        thread.name == "acp-late-late-job" and thread.is_alive() for thread in threading.enumerate()
+    )
+    assert not lock_path.exists()
+    assert key not in _RUN_ROOT_CLAIMS
+
+
+def test_shutdown_refuses_late_catalog_prefetch_worker(tmp_path: Path) -> None:
+    manager = JobManager(run_root=tmp_path / "runs", poll_interval=30)
+    try:
+        assert manager._catalog_prefetch_thread is None
+        with patch.object(manager, "_remote_fetcher", object()):
+            manager.shutdown()
+            manager._queue_catalog_prefetch("late-prefetch")
+        assert manager._catalog_prefetch_thread is None
+        assert not any(
+            thread.name == "acp-catalog-prefetch" and thread.is_alive()
+            for thread in threading.enumerate()
+        )
+    finally:
+        manager.shutdown()

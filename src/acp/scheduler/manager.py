@@ -126,6 +126,11 @@ _CANCEL_ALIVE_LSF: Final[frozenset[str]] = frozenset({"pending", "running", "pau
 # keeps running at the capped (1h) backoff — never unbounded fast retries.
 _ORPHAN_STALL_THRESHOLD: Final[int] = 5
 
+# Upper bound on shutdown join passes. ``_closing`` makes new registrations
+# impossible, so a single pass normally suffices; re-scanning is insurance and
+# the bound only guards against a latent registration bug.
+_SHUTDOWN_JOIN_PASS_LIMIT: Final[int] = 5
+
 
 def _parse_iso_ts(value: object) -> float | None:
     if not isinstance(value, str) or not value:
@@ -314,6 +319,11 @@ class JobManager:
     ):
         self._shutdown_lock = threading.Lock()
         self._shutdown_complete = False
+        # Closing latch: set by ``_stop_background_work`` (under ``self._lock``)
+        # before any worker is signalled or joined. Once set, no new submission
+        # or prefetch worker may register/start, so the join pass is a closed
+        # set — ownership is never released while a worker still runs.
+        self._closing = False
         self.run_root = Path(run_root)
         self.run_root.mkdir(parents=True, exist_ok=True)
         # Ownership guard, two layers: an in-process registry keyed by the
@@ -2944,7 +2954,20 @@ class JobManager:
         while background work still runs (a new manager would then overlap it).
         All stop events are checked promptly by the loops, so this returns fast
         in the normal case.
+
+        The ``self._closing`` latch is set UNDER ``self._lock`` before anything
+        else. ``_start_submission_thread`` and the lazy prefetch spawner take
+        that same lock, so every registration either fully completes (thread
+        started and therefore visible to the join pass) before the latch, or is
+        refused. That makes the joined set closed; the re-scan only exists as
+        insurance against a latent registration bug.
         """
+        lock = getattr(self, "_lock", None)
+        if lock is not None:
+            with lock:
+                self._closing = True
+        else:
+            self._closing = True
         for event_name in (
             "_poll_stop",
             "_shutdown_event",
@@ -2961,12 +2984,24 @@ class JobManager:
             except Exception:
                 logger.debug("Failed to signal catalog prefetch worker", exc_info=True)
         current = threading.current_thread()
-        for thread in self._background_threads():
-            if thread is current or not thread.is_alive():
-                continue
-            thread.join()
-            if thread.is_alive():
-                logger.error("Background thread %s failed to stop", thread.name)
+        for _attempt in range(_SHUTDOWN_JOIN_PASS_LIMIT):
+            pending = [
+                thread
+                for thread in self._background_threads()
+                if thread is not current and thread.is_alive()
+            ]
+            if not pending:
+                break
+            for thread in pending:
+                thread.join()
+        else:
+            alive = [
+                thread.name
+                for thread in self._background_threads()
+                if thread is not current and thread.is_alive()
+            ]
+            if alive:
+                logger.error("Background threads still alive after shutdown: %s", alive)
         prefetch_thread = getattr(self, "_catalog_prefetch_thread", None)
         if prefetch_thread is not None and not prefetch_thread.is_alive():
             self._catalog_prefetch_thread = None
@@ -3035,27 +3070,34 @@ class JobManager:
             logger.warning("Task index status sync failed for job %s", record.id, exc_info=True)
 
     def _start_submission_thread(self, job_id: str, thread_name: str) -> bool:
-        """Start one submission worker unless that job is already dispatching."""
+        """Start one submission worker unless that job is already dispatching.
+
+        Returns ``False`` when the manager is closing or the job is already
+        dispatching. The closing check, duplicate check, bookkeeping, thread
+        registration and ``start()`` all happen under one ``self._lock``
+        acquisition, so shutdown either observes a fully-started worker or the
+        registration is refused — never a half-registered ghost.
+        """
         with self._lock:
+            if self._closing:
+                return False
             if job_id in self._submission_jobs:
                 return False
             self._submission_jobs.add(job_id)
             self._cancel_events.setdefault(job_id, threading.Event())
-        try:
             thread = threading.Thread(
                 target=self._execute_submission,
                 args=(job_id,),
                 daemon=True,
                 name=thread_name,
             )
-            with self._lock:
-                self._submission_threads[job_id] = thread
-            thread.start()
-        except BaseException:
-            with self._lock:
+            self._submission_threads[job_id] = thread
+            try:
+                thread.start()
+            except BaseException:
                 self._submission_jobs.discard(job_id)
                 self._submission_threads.pop(job_id, None)
-            raise
+                raise
         return True
 
     # ------------------------------------------------------------------ #
@@ -4626,12 +4668,16 @@ class JobManager:
         """Enqueue one terminal remote job for background catalog prefetch.
 
         No-op when remote fetching is not configured.  The worker thread is
-        created lazily on the first enqueue and reused afterwards.
+        created lazily on the first enqueue and reused afterwards.  Once the
+        manager is closing no worker is created/registered/started; the queued
+        item is best-effort and may be dropped.
         """
         if self._remote_fetcher is None:
             return
         self._catalog_prefetch_queue.put(job_id)
         with self._lock:
+            if self._closing:
+                return
             thread = self._catalog_prefetch_thread
             if thread is None or not thread.is_alive():
                 thread = threading.Thread(
