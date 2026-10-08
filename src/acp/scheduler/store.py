@@ -991,4 +991,14 @@ def _spec_to_json(spec: JobSpec) -> str:
     return json.dumps(spec.to_dict())
 
 
-__all__ = ["JobStateConflictError", "JobStore"]
+def row_to_record(row: sqlite3.Row) -> JobRecord:
+    """Decode one ``jobs`` row into a :class:`JobRecord`.
+
+    Public companion to :meth:`JobStore.get` for readers that own a
+    connection to the scheduler DB (the task projection projects from the
+    authoritative jobs row without opening a second connection).
+    """
+    return _row_to_record(row)
+
+
+__all__ = ["JobStateConflictError", "JobStore", "row_to_record"]

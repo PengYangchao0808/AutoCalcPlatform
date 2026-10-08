@@ -746,6 +746,115 @@ class TestMoveJobWiring:
             mgr.shutdown()
 
 
+class TestProjectionAuthority:
+    """Todo 5 (R3): jobs is authoritative; tasks is a repairable projection.
+
+    ``sync_job_transition`` must project from the CURRENT jobs row (same DB),
+    never from the passed-in stale ``JobRecord``; the reconcile pass must cover
+    missing rows and converge within the stated scan bound.
+    """
+
+    def _pair(self, tmp_path: Path) -> tuple[JobStore, TaskIndex]:
+        db = tmp_path / "authority.db"
+        migrate(db)
+        return JobStore(db), TaskIndex(db)
+
+    def test_delayed_stale_running_cannot_overwrite_paused(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        spec = _make_spec()
+        paused = JobRecord(id="j1", spec=spec, status=JobStatus.PAUSED, work_dir="/tmp/j1")
+        store.create(paused)
+        idx.sync_from_job(paused)
+        stale = JobRecord(id="j1", spec=spec, status=JobStatus.RUNNING, work_dir="/tmp/j1")
+
+        idx.sync_job_transition(stale)
+
+        assert store.get("j1").status == JobStatus.PAUSED
+        assert idx.get("j1")["status"] == "paused"
+
+    def test_terminal_rerun_replay_cannot_resurrect_completion(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        spec = _make_spec()
+        # attempt 2 is QUEUED after an in-place rerun; the delayed completion
+        # projection from attempt 1 must not resurrect COMPLETED.
+        queued = JobRecord(
+            id="j1", spec=spec, status=JobStatus.QUEUED, work_dir="/tmp/j1", attempt=2
+        )
+        store.create(queued)
+        idx.sync_from_job(queued)
+        stale_done = JobRecord(
+            id="j1",
+            spec=spec,
+            status=JobStatus.COMPLETED,
+            work_dir="/tmp/j1",
+            completed_at="2026-01-01T11:00:00",
+        )
+
+        idx.sync_job_transition(stale_done)
+
+        assert idx.get("j1")["status"] == "queued"
+
+    def test_reconcile_includes_missing_tasks_rows(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        for i in range(3):
+            store.create(
+                JobRecord(
+                    id=f"j{i}",
+                    spec=_make_spec(),
+                    status=JobStatus.COMPLETED,
+                    work_dir=f"/tmp/j{i}",
+                )
+            )
+        assert idx.find_projection_drift(10) == ["j0", "j1", "j2"]
+
+        repaired = idx.reconcile_projection(10)
+
+        assert repaired == 3
+        assert idx.find_projection_drift(10) == []
+        for i in range(3):
+            assert idx.get(f"j{i}")["status"] == "completed"
+
+    def test_drift_larger_than_batch_converges_within_ceil_bound(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        for i in range(5):
+            store.create(
+                JobRecord(
+                    id=f"j{i}",
+                    spec=_make_spec(),
+                    status=JobStatus.COMPLETED,
+                    work_dir=f"/tmp/j{i}",
+                )
+            )
+        batch = 2  # B; N=5 -> ceil(5/2)=3 scans
+        scans = 0
+        while idx.find_projection_drift(batch):
+            idx.reconcile_projection(batch)
+            scans += 1
+            assert scans <= 3, "drift did not converge within ceil(N/B) scans"
+        assert scans == 3
+        assert idx.find_projection_drift(batch) == []
+
+    def test_reconcile_only_updates_owned_projection_columns(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        spec = _make_spec()
+        running = JobRecord(id="j1", spec=spec, status=JobStatus.RUNNING, work_dir="/tmp/j1")
+        store.create(running)
+        idx.sync_from_job(running)
+        idx._run(
+            "UPDATE tasks SET custom_name='keep', name_revision=7, tags='[\"t\"]',"
+            " archived=1, status='completed' WHERE task_id='j1'"
+        )
+
+        idx.reconcile_projection(10)
+
+        row = idx.get("j1")
+        assert row["status"] == "running"
+        assert row["custom_name"] == "keep"
+        assert row["name_revision"] == 7
+        assert row["tags"] == '["t"]'
+        assert row["archived"] == 1
+
+
 class TestMoleculeGroupKey:
     def test_basic(self) -> None:
         from acp.scheduler.naming import molecule_group_key

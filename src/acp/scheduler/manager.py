@@ -73,7 +73,7 @@ from acp.scheduler.runner import (
 )
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStateConflictError, JobStore
-from acp.scheduler.tasks import TaskIndex
+from acp.scheduler.tasks import PROJECTION_RECONCILE_BATCH, TaskIndex
 from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
 
 logger = logging.getLogger(__name__)
@@ -352,6 +352,9 @@ class JobManager:
             self.tasks = TaskIndex(self.store.db_path)
         except Exception:
             logger.warning("Task index disabled (initialization failed)", exc_info=True)
+        #: Batch size B for one task-projection reconcile scan (todo 5):
+        #: N drifted rows converge in <= ceil(N/B) scans.
+        self._task_reconcile_batch = PROJECTION_RECONCILE_BATCH
 
         # Remote execution plumbing.  ``remote_runner`` is created whenever
         # remote *capability* exists (nodes configured) — independent of the
@@ -2265,6 +2268,7 @@ class JobManager:
 
         if record.status == JobStatus.CANCELLED:
             self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
+            self._sync_task_status(record)
             self._write_job_json(record)
             self._event_log(record).append(
                 "job.cancelled", job_id=job_id, attempt=record.attempt
@@ -2327,6 +2331,7 @@ class JobManager:
             self.runner.cancel_local(job_id)
 
         self._event_log(record).append("job.cancelling", job_id=job_id, attempt=record.attempt)
+        self._sync_task_status(record)
         return record
 
     def pause_for_review(self, job_id: str, payload: dict[str, Any]) -> JobRecord:
@@ -2365,6 +2370,7 @@ class JobManager:
         )
         if record is None:
             raise KeyError(f"Unknown job {job_id!r}")
+        self._sync_task_status(record)
         self._write_job_json(record)
         self._event_log(record).append(
             "job.waiting_review",
@@ -2417,6 +2423,7 @@ class JobManager:
             if record is None:
                 raise KeyError(f"Unknown job {job_id!r}")
             self._write_job_json(record)
+        self._sync_task_status(record)
         self._event_log(record).append(
             "job.review_resumed",
             job_id=job_id,
@@ -2501,6 +2508,7 @@ class JobManager:
         if paused is None:
             raise KeyError(f"Unknown job {job_id!r}")
         record = paused
+        self._sync_task_status(record)
         self._write_job_json(record)
         self._event_log(record).append(
             "job.paused", job_id=job_id, mode=mode, attempt=record.attempt
@@ -2578,6 +2586,7 @@ class JobManager:
         if resumed is None:
             raise KeyError(f"Unknown job {job_id!r}")
         record = resumed
+        self._sync_task_status(record)
         self._write_job_json(record)
         self._event_log(record).append(
             "job.resumed", job_id=job_id, mode=mode, attempt=record.attempt
@@ -5283,6 +5292,23 @@ class JobManager:
                     self._retry_terminal_side_effects(record)
                 elif self._pending_orphans(record.result or {}):
                     self._orphan_cancel_pass(record)
+        self._reconcile_task_projection()
+
+    def _reconcile_task_projection(self) -> None:
+        """Repair one bounded batch of jobs/tasks projection drift.
+
+        Pseudocode of the bound: with batch size B per scan, N drifted rows
+        converge within ``ceil(N/B)`` scans — each scan repairs up to B and
+        the repaired rows leave the drift set, so the next scan reaches the
+        next-oldest drift (no starvation). Errors are non-fatal: the next
+        scan retries.
+        """
+        if self.tasks is None:
+            return
+        try:
+            self.tasks.reconcile_projection(self._task_reconcile_batch)
+        except Exception:
+            logger.warning("Task projection reconcile failed", exc_info=True)
 
     def _poll_loop(self) -> None:
         """Background daemon: periodically poll all RUNNING jobs."""
@@ -5389,6 +5415,7 @@ class JobManager:
                     continue
                 record = failed
                 self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
+                self._sync_task_status(record)
                 logger.info(
                     "Swept retired inflight job %s (workflow=%s, was=%s) → FAILED",
                     record.id,
@@ -5540,6 +5567,7 @@ class JobManager:
                     record = completed
                     self._write_job_json(record)
                     self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
+                    self._sync_task_status(record)
                     logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
                     continue
                 self._cleanup_local_orphans(record)

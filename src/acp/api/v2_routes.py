@@ -105,6 +105,8 @@ def _task_summary(record: JobRecord) -> V2TaskSummary:
         project_id=record.project_id or spec.project_id,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        attempt=record.attempt,
+        revision=record.revision,
     )
 
 

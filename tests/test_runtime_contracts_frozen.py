@@ -508,15 +508,6 @@ def test_contract_6_job_record_carries_execution_version_identity() -> None:
     assert "name_revision" not in FROZEN_EXECUTION_VERSION_FIELDS
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "FROZEN contract (6): list+detail must expose the jobs-authoritative "
-        "(job_id, attempt, revision) read-only. Remove/convert this xfail when "
-        "todo 5 freezes the identity (or records the equivalent-identifier proof); "
-        "consumed by todo 14."
-    ),
-)
 def test_contract_6_api_models_expose_execution_version() -> None:
     from acp.api.v1_schemas import V1JobRecordModel
     from acp.api.v2_schemas import V2TaskRowModel

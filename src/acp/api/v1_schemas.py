@@ -324,6 +324,8 @@ class V1JobRecordModel(BaseModel):
     default_name: str = ""
     name_revision: int = 0
     name_updated_at: str | None = None
+    attempt: int = 1
+    revision: int = 0
 
 
 class V1JobCreateRequest(BaseModel):

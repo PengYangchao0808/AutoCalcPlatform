@@ -917,3 +917,131 @@ def test_task_json_carries_resolved_node_id(tmp_path: Path) -> None:
     record = _launch_with_mocked_popen(tmp_path, node_id="comp-01")
     payload = json.loads((Path(record.work_dir) / "task.json").read_text(encoding="utf-8"))
     assert payload["node_id"] == "comp-01"
+
+
+# ---------------------------------------------------------------------------
+# Todo 5 (R3): every lifecycle transition projects the tasks row immediately.
+# ---------------------------------------------------------------------------
+
+
+def _seed_running_job(mgr: JobManager, job_id: str, workflow: str = "fake") -> JobRecord:
+    work_dir = mgr.run_root / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    record = JobRecord(
+        id=job_id,
+        spec=JobSpec(
+            workflow=workflow,
+            name=job_id,
+            molecule_name="CCO",
+            task_name="opt",
+            remark="r",
+        ),
+        status=JobStatus.RUNNING,
+        work_dir=str(work_dir),
+    )
+    mgr.store.create(record)
+    assert mgr.tasks is not None
+    mgr.tasks.sync_from_job(record)
+    return record
+
+
+def test_pause_and_unpause_project_tasks(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, "job-pause")
+        mgr.runner.pause_local.return_value = True
+        mgr.runner.resume_local.return_value = True
+
+        mgr.pause_job(record.id)
+        assert mgr.tasks.get(record.id)["status"] == "paused"
+
+        mgr.unpause_job(record.id)
+        assert mgr.tasks.get(record.id)["status"] == "running"
+    finally:
+        mgr.shutdown()
+
+
+def test_pause_for_review_and_resume_project_tasks(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, "job-review")
+
+        mgr.pause_for_review(record.id, {"decision_id": "d1"})
+        assert mgr.tasks.get(record.id)["status"] == "waiting_review"
+
+        mgr.resume(record.id, {"approved": True})
+        assert mgr.tasks.get(record.id)["status"] == "running"
+    finally:
+        mgr.shutdown()
+
+
+def test_queued_cancel_projects_tasks(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "job-queued"
+        work_dir.mkdir()
+        record = JobRecord(
+            id="job-queued",
+            spec=JobSpec(
+                workflow="Confsearch",
+                name="job-queued",
+                molecule_name="CCO",
+                task_name="opt",
+                remark="r",
+            ),
+            status=JobStatus.QUEUED,
+            work_dir=str(work_dir),
+        )
+        mgr.store.create(record)
+        assert mgr.tasks is not None
+        mgr.tasks.sync_from_job(record)
+
+        mgr.cancel(record.id)
+
+        assert mgr.tasks.get(record.id)["status"] == "cancelled"
+    finally:
+        mgr.shutdown()
+
+
+def test_retired_sweep_projects_tasks(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        _seed_running_job(mgr, "job-retired", workflow="mechanism")
+
+        mgr._sweep_retired_inflight_jobs()
+
+        assert mgr.tasks.get("job-retired")["status"] == "failed"
+    finally:
+        mgr.shutdown()
+
+
+def test_startup_completed_probe_projects_tasks(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "job-probe"
+        work_dir.mkdir()
+        (work_dir / ".exit_code").write_text("0", encoding="utf-8")
+        (work_dir / "state.json").write_text(
+            json.dumps({"stages": {"S1": {"status": "completed"}}}), encoding="utf-8"
+        )
+        record = JobRecord(
+            id="job-probe",
+            spec=JobSpec(
+                workflow="fake",
+                name="job-probe",
+                molecule_name="CCO",
+                task_name="opt",
+                remark="r",
+            ),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+        )
+        mgr.store.create(record)
+        assert mgr.tasks is not None
+        mgr.tasks.sync_from_job(record)
+
+        mgr._requeue_active_on_startup()
+
+        assert mgr.tasks.get("job-probe")["status"] == "completed"
+    finally:
+        mgr.shutdown()

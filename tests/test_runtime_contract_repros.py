@@ -175,16 +175,6 @@ def test_repro_a_resume_keeps_mode_vectors_equal_to_fresh_run(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Reproduction (b): a delayed stale RUNNING sync overwrites the newer PAUSED "
-        "projection (jobs=paused, tasks=running). Desired: tasks projects the current "
-        "jobs row; stale snapshots never overwrite newer states. Owning todos 5/10 "
-        "(R3). Removal rule: convert/remove this xfail when todo 5 lands "
-        "same-transaction jobs-row projection (acceptance in todo 10)."
-    ),
-)
 def test_repro_b_delayed_sync_keeps_tasks_aligned_with_jobs(tmp_path: Path) -> None:
     """Reproduction (b): after new-PAUSED then delayed-old-RUNNING, tasks must stay paused."""
     from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus

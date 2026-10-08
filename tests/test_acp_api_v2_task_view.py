@@ -596,3 +596,76 @@ def test_orphan_task_check_and_purge_endpoints(client: TestClient) -> None:
     ]
 
     assert client.get("/api/v2/tasks/orphans").json() == {"orphans": []}
+
+
+# ── execution-version identity + jobs-authoritative read (todo 5) ─────────
+
+
+def _seed_projected_job(
+    client: TestClient,
+    *,
+    job_id: str,
+    attempt: int,
+    revision: int,
+    project_id: str,
+):
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+
+    manager = client.app.state.job_manager
+    spec = JobSpec(
+        workflow="Confsearch",
+        name=job_id,
+        molecule_name="CCO",
+        task_name="opt",
+        remark="r",
+        project_id=project_id,
+        input={"source": "CCO"},
+    )
+    record = JobRecord(
+        id=job_id,
+        spec=spec,
+        status=JobStatus.QUEUED,
+        work_dir=f"/tmp/{job_id}",
+        project_id=project_id,
+        attempt=attempt,
+        revision=revision,
+    )
+    manager.store.create(record)
+    manager.tasks.sync_from_job(record)
+    return record
+
+
+def test_list_and_detail_serialize_execution_identity(client: TestClient) -> None:
+    from acp.scheduler.jobs import JobStatus
+
+    pid = _default_project_id(client)
+    manager = client.app.state.job_manager
+    _seed_projected_job(client, job_id="exec-id-1", attempt=3, revision=7, project_id=pid)
+
+    detail = client.get("/api/v2/tasks/exec-id-1").json()
+    jobs = manager.store.get("exec-id-1")
+    assert jobs is not None and jobs.status == JobStatus.QUEUED
+    assert detail["attempt"] == jobs.attempt == 3
+    assert detail["revision"] == jobs.revision == 7
+
+    view = client.get(f"/api/v2/task-view?project_id={pid}&group_by=none").json()
+    rows = [j for g in view["groups"] for j in g["jobs"] if j["id"] == "exec-id-1"]
+    assert len(rows) == 1
+    assert rows[0]["attempt"] == jobs.attempt
+    assert rows[0]["revision"] == jobs.revision
+
+
+def test_task_view_status_reads_jobs_authority_when_projection_lags(client: TestClient) -> None:
+    pid = _default_project_id(client)
+    manager = client.app.state.job_manager
+    record = _seed_projected_job(
+        client, job_id="exec-id-2", attempt=1, revision=4, project_id=pid
+    )
+    # A lagging projection: tasks says RUNNING while the jobs row says QUEUED.
+    manager.tasks._run("UPDATE tasks SET status='running' WHERE task_id=?", (record.id,))
+    # Keep the background reconcile from repairing the row mid-assertion.
+    manager.tasks.reconcile_projection = lambda *a, **k: 0  # type: ignore[method-assign]
+
+    view = client.get(f"/api/v2/task-view?project_id={pid}&group_by=none").json()
+    row = next(j for g in view["groups"] for j in g["jobs"] if j["id"] == record.id)
+    assert row["status"] == "queued", "task view must read status from the jobs authority"
