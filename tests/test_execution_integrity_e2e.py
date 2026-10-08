@@ -103,6 +103,9 @@ from tests.test_job_state_transitions import (
 from tests.test_job_state_transitions import (
     _record as _state_record,
 )
+from tests.test_job_state_transitions import (
+    _registry_paths as _state_registry_paths,
+)
 from tests.test_plan_contract_guards import (
     CARDINALITY_ERROR,
     THERMOCHEMISTRY_ERROR,
@@ -1016,3 +1019,191 @@ def test_e2e_d08_rejection_then_d07_blocking(tmp_path: Path) -> None:
     assert manifest.status == "failed"
     blocked_products = {p.id for p in manifest.products if p.id.endswith("_blocked")}
     assert blocked_products == {"step_1_frequency_blocked", "step_2_singlepoint_blocked"}
+
+
+# ====================================================================== #
+# Todo 10 — R2 × R3 acceptance: side-effect isolation, attempt isolation,
+# tasks/jobs consistency under delay, bounded convergence (no sleeps).
+# ====================================================================== #
+
+
+def test_e2e_r2_r3_side_effect_isolation_projection_delay_and_convergence(
+    tmp_path: Path,
+) -> None:
+    """Cross-module acceptance (plan todo 10): terminal side effects (R2,
+    GAP-1) and the jobs/tasks projection (R3, GAP-4) hold together under
+    four deterministic interleavings on one manager — a stale terminal
+    observation racing cancel (zero side effects on CAS rejection), a
+    terminal CAS then immediate rerun (attempt isolation across jobs/
+    job.json/tasks/provenance/cancel events), a delayed old projection
+    after new PAUSED (jobs/tasks consistency under delay), and a
+    sync-failure recovery that converges within the ceil(N/B) scan bound."""
+    mgr = _state_manager(tmp_path)
+    mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+    mgr._start_submission_thread = lambda job_id, name: True  # type: ignore[method-assign]
+    try:
+        # ── (a) stale terminal observation racing cancel → rejected CAS. ──
+        race_id = "e2e-t10-cancel-race"
+        race = _seed_running_job(mgr, tmp_path, race_id)
+        race_results = Path(race.work_dir) / "RESULT"
+        race_results.mkdir(parents=True, exist_ok=True)
+        (race_results / "late.xyz").write_text("late", encoding="utf-8")
+        mgr.tasks.sync_from_job(race)  # type: ignore[union-attr]
+        race_cancel_event = threading.Event()
+        mgr._cancel_events[race.id] = race_cancel_event
+        mgr.runner.cancel_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def cancelling_poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.cancel(race.id)
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = cancelling_poll  # type: ignore[method-assign]
+        mgr._poll_job(race.id)
+
+        final_a = mgr.store.get(race.id)
+        assert final_a is not None
+        assert final_a.status == JobStatus.CANCELLING, "the cancel must win the stale terminal CAS"
+        assert _state_registry_paths(mgr, race.id) == [], (
+            "rejection: zero artifact rows for the dropped terminal observation"
+        )
+        result_a = final_a.result or {}
+        assert "provenance" not in result_a and not result_a.get("terminal_side_effects_done")
+        events_a = _state_event_types(mgr, race.id)
+        assert "job.completed" not in events_a
+        assert "job.poll_dropped_stale" in events_a and "job.cancelling" in events_a
+        task_a = mgr.tasks.get(race.id)
+        assert task_a is not None and task_a["status"] == final_a.status.value, (
+            "jobs/tasks consistency after a rejected CAS"
+        )
+        stored_event = mgr._cancel_events.get(race.id)
+        assert stored_event is race_cancel_event and stored_event.is_set()
+
+        # ── (b) terminal CAS then immediate rerun → attempt isolation. ──
+        rerun_id = "e2e-t10-midflight-rerun"
+        rerun_src = _seed_running_job(mgr, tmp_path, rerun_id)
+        rerun_results = Path(rerun_src.work_dir) / "RESULT"
+        rerun_results.mkdir(parents=True, exist_ok=True)
+        (rerun_results / "a.xyz").write_text("a", encoding="utf-8")
+        mgr.tasks.sync_from_job(rerun_src)  # type: ignore[union-attr]
+
+        real_transition = mgr.store.transition
+        fired = {"n": 0}
+
+        def transitioning(*args: object, **kwargs: object) -> JobRecord:
+            out = real_transition(*args, **kwargs)  # type: ignore[arg-type]
+            if fired["n"] == 0:
+                fired["n"] += 1
+                rerun = mgr.rerun_job(rerun_src.id)
+                assert rerun is not None and rerun.attempt == 2
+            return out
+
+        mgr.store.transition = transitioning  # type: ignore[method-assign]
+
+        def terminal_poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = terminal_poll  # type: ignore[method-assign]
+        mgr._poll_job(rerun_src.id)
+        mgr.store.transition = real_transition  # type: ignore[method-assign]
+        assert fired["n"] == 1
+
+        final_b = mgr.store.get(rerun_src.id)
+        assert final_b is not None
+        assert final_b.attempt == 2 and final_b.status == JobStatus.QUEUED
+        assert _state_registry_paths(mgr, rerun_src.id) == [], (
+            "attempt isolation: the superseded attempt registers zero artifact rows"
+        )
+        result_b = final_b.result or {}
+        assert not result_b.get("terminal_side_effects_done")
+        assert "provenance" not in result_b, "attempt isolation: no provenance from the old attempt"
+        events_b = _state_event_types(mgr, rerun_src.id)
+        assert "job.completed" not in events_b, "attempt isolation: no terminal event"
+        assert "job.rerun" in events_b
+        job_json_b = json.loads((Path(final_b.work_dir) / "job.json").read_text(encoding="utf-8"))
+        assert job_json_b["attempt"] == 2 and job_json_b["status"] == JobStatus.QUEUED.value, (
+            "attempt isolation: job.json belongs to the new attempt"
+        )
+        task_b = mgr.tasks.get(rerun_src.id)
+        assert task_b is not None and task_b["status"] == JobStatus.QUEUED.value, (
+            "attempt isolation: tasks must not carry the old attempt's status"
+        )
+        assert rerun_src.id in mgr._cancel_events, (
+            "attempt isolation: the new attempt's cancel event must survive"
+        )
+
+        # ── (c) delayed old RUNNING projection after new PAUSED. ──
+        delay_id = "e2e-t10-delay"
+        delay = _seed_running_job(mgr, tmp_path, delay_id)
+        mgr.tasks.sync_from_job(delay)  # type: ignore[union-attr]
+        stale_running = mgr.store.get(delay.id)
+        assert stale_running is not None and stale_running.status == JobStatus.RUNNING
+
+        mgr.pause_job(delay.id)
+        assert mgr.store.get(delay.id).status == JobStatus.PAUSED  # type: ignore[union-attr]
+        task_c = mgr.tasks.get(delay.id)
+        assert task_c is not None and task_c["status"] == "paused"
+        db = tmp_path / "acp_jobs.db"
+        before_c = _raw_row(db, delay.id)
+
+        mgr._sync_task_status(stale_running)
+
+        task_c = mgr.tasks.get(delay.id)
+        assert task_c is not None and task_c["status"] == "paused", (
+            "delay: a stale RUNNING projection must not overwrite PAUSED"
+        )
+        assert _raw_row(db, delay.id) == before_c, "delay: projection never writes the jobs row"
+        assert mgr.tasks.find_projection_drift() == []  # type: ignore[union-attr],call-args
+
+        # ── (d) sync-failure recovery → bounded convergence. ──
+        sync_id = "e2e-t10-sync-fail"
+        sync_job = _seed_running_job(mgr, tmp_path, sync_id)
+        mgr.tasks.sync_from_job(sync_job)  # type: ignore[union-attr]
+        real_sync = mgr.tasks.sync_job_transition  # type: ignore[union-attr]
+        sync_fired = {"n": 0}
+
+        def flaky_sync(rec: JobRecord) -> None:
+            if sync_fired["n"] == 0:
+                sync_fired["n"] += 1
+                raise RuntimeError("projection backend down")
+            return real_sync(rec)
+
+        mgr.tasks.sync_job_transition = flaky_sync  # type: ignore[method-assign,union-attr]
+
+        mgr.pause_job(sync_job.id)
+
+        assert sync_fired["n"] == 1
+        assert mgr.store.get(sync_job.id).status == JobStatus.PAUSED, "jobs is authoritative"
+        task_d = mgr.tasks.get(sync_job.id)
+        assert task_d is not None and task_d["status"] == "running", "the drift must be visible"
+
+        # Five more drifted rows (jobs exist, tasks missing) for the batch
+        # bound: N = 6 drifted rows, B = 2 → ceil(6/2) = 3 scans.
+        for i in range(5):
+            mgr.store.create(_state_record(f"e2e-t10-drift-{i}"))
+        mgr._task_reconcile_batch = 2
+        initial_drift = mgr.tasks.find_projection_drift()  # type: ignore[union-attr]
+        assert len(initial_drift) == 6, f"expected 6 drifted rows, got {initial_drift}"
+
+        scans = 0
+        while mgr.tasks.find_projection_drift():  # type: ignore[union-attr]
+            mgr._reconcile_once()
+            scans += 1
+            assert scans <= 3, "drift did not converge within ceil(N/B) scans"
+        assert scans == 3, (
+            f"6 drifted rows with batch B=2 must converge in exactly 3 scans: {scans}"
+        )
+
+        task_d = mgr.tasks.get(sync_job.id)
+        assert task_d is not None and task_d["status"] == "paused", (
+            "recovery: the reconcile pass must repair the sync-failure drift"
+        )
+        for i in range(5):
+            row = mgr.tasks.get(f"e2e-t10-drift-{i}")
+            assert row is not None and row["status"] == JobStatus.QUEUED.value
+        mgr._reconcile_once()
+        assert mgr.tasks.find_projection_drift() == []  # type: ignore[union-attr],call-args
+        "convergence must be stable across passes"
+    finally:
+        mgr.shutdown()

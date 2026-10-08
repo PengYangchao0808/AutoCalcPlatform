@@ -1226,3 +1226,252 @@ def test_pause_on_terminal_raises_without_signal(tmp_path: Path) -> None:
         assert final.revision == record.revision, "rejected pause must not write"
     finally:
         mgr.shutdown()
+
+
+# ====================================================================== #
+# Todo 10 (R2/R3 acceptance): deterministic interleavings — stale terminal
+# observation vs cancel, terminal CAS then immediate rerun (mid-flight
+# seam), delayed old projection after new PAUSED, sync-failure recovery.
+# ====================================================================== #
+
+
+def test_stale_terminal_observation_racing_cancel_registers_zero_side_effects(
+    tmp_path: Path,
+) -> None:
+    """(interleave 1, cancel leg) A stale terminal observation racing a
+    cancel must lose the CAS and register ZERO terminal side effects — no
+    artifact rows, no provenance, no marker, no terminal event — while the
+    cancel's own writes (jobs row, tasks projection, cancel event) survive."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "cancel-race-term")
+        results = Path(record.work_dir) / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "late.xyz").write_text("late", encoding="utf-8")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        cancel_event = threading.Event()
+        mgr._cancel_events[record.id] = cancel_event
+        mgr.runner.cancel_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.cancel(record.id)  # cancel wins between load and CAS
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.CANCELLING, "stale terminal write must lose to cancel"
+        assert final.revision == 1, "only the cancel's CAS may have written the row"
+        assert _registry_paths(mgr, record.id) == [], (
+            "a CAS-rejected terminal observation must register zero artifact rows"
+        )
+        result = final.result or {}
+        assert "artifacts" not in result, "rejected CAS: no captured-artifact payload"
+        assert "provenance" not in result, "rejected CAS: no provenance side effect"
+        assert not result.get("terminal_side_effects_done"), "rejected CAS: no marker"
+        events = _event_types(mgr, record.id)
+        assert "job.completed" not in events, "no terminal event for a rejected CAS"
+        assert "job.cancelling" in events, "the cancel's own event must survive"
+        assert "job.poll_dropped_stale" in events, "the rejection must be audited"
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == JobStatus.CANCELLING.value, (
+            "jobs/tasks must agree after the rejected write"
+        )
+        stored_event = mgr._cancel_events.get(record.id)
+        assert stored_event is cancel_event and stored_event.is_set(), (
+            "the rejected terminal path must not drop or unset the cancel event"
+        )
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_cas_then_immediate_rerun_skips_side_effects_mid_flight(
+    tmp_path: Path,
+) -> None:
+    """(interleave 2, mid-flight seam) The terminal CAS commits and a rerun
+    lands BEFORE the side-effect block: ``_reread_side_effect_scope`` must
+    skip — the superseded attempt registers zero artifact rows/provenance/
+    marker and cannot mutate the new attempt's jobs row, job.json, tasks
+    projection, or cancel event. (T2 covered the retry-after-rerun seam;
+    this covers the CAS→side-effect window itself.)"""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "midflight-rerun")
+        results = Path(record.work_dir) / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "a.xyz").write_text("a", encoding="utf-8")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        mgr._start_submission_thread = lambda job_id, name: True  # type: ignore[method-assign]
+
+        real_transition = mgr.store.transition
+        fired = {"n": 0}
+
+        def transition(*args: object, **kwargs: object) -> JobRecord:
+            out = real_transition(*args, **kwargs)  # type: ignore[arg-type]
+            if fired["n"] == 0:
+                fired["n"] += 1
+                # The rerun lands after the terminal CAS committed but
+                # before _persist_terminal enters the side-effect lock.
+                rerun = mgr.rerun_job(record.id)
+                assert rerun is not None and rerun.attempt == 2
+            return out
+
+        mgr.store.transition = transition  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+        assert fired["n"] == 1, "the interleaved rerun must run inside the terminal CAS"
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.attempt == 2 and final.status == JobStatus.QUEUED
+        assert _registry_paths(mgr, record.id) == [], (
+            "the superseded attempt's side effects must register zero artifact rows"
+        )
+        result = final.result or {}
+        assert not result.get("terminal_side_effects_done"), "no marker for the stale attempt"
+        assert "provenance" not in result, "the stale attempt must not store provenance"
+        assert "job.completed" not in _event_types(mgr, record.id), (
+            "the local terminal event is a side effect: it must not fire post-supersession"
+        )
+        job_json = json.loads((Path(final.work_dir) / "job.json").read_text(encoding="utf-8"))
+        assert job_json["attempt"] == 2, "the stale attempt must not rewrite job.json"
+        assert job_json["status"] == JobStatus.QUEUED.value
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == JobStatus.QUEUED.value, (
+            "the stale attempt must not project the old status onto tasks"
+        )
+        new_event = mgr._cancel_events.get(record.id)
+        assert new_event is not None and not new_event.is_set(), (
+            "the new attempt's cancel event must survive the stale terminal path"
+        )
+    finally:
+        mgr.shutdown()
+
+
+def test_delayed_old_projection_after_new_paused_keeps_tasks_paused(tmp_path: Path) -> None:
+    """(interleave 3) A delayed projection from an old RUNNING snapshot after
+    the job was paused: ``sync_job_transition`` projects from the CURRENT
+    jobs row, so tasks stays PAUSED and the jobs row is never written."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "delay-paused")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        stale_running = mgr.store.get(record.id)
+        assert stale_running is not None and stale_running.status == JobStatus.RUNNING
+
+        mgr.pause_job(record.id)
+        assert mgr.store.get(record.id).status == JobStatus.PAUSED  # type: ignore[union-attr]
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "paused"
+        db = tmp_path / "acp_jobs.db"
+        before = _raw_row(db, record.id)
+
+        # The delayed old RUNNING projection arrives after the new PAUSED.
+        mgr._sync_task_status(stale_running)
+
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "paused", (
+            "a delayed old RUNNING projection must not overwrite PAUSED"
+        )
+        assert _raw_row(db, record.id) == before, "projection must never write the jobs row"
+    finally:
+        mgr.shutdown()
+
+
+def test_delayed_old_completion_projection_after_rerun_cannot_resurrect(tmp_path: Path) -> None:
+    """(interleave 3b) The delayed completion projection of a superseded
+    attempt after an in-place rerun cannot resurrect COMPLETED in tasks."""
+    mgr = _make_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "runs" / "delay-rerun"
+        results = work_dir / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "a.xyz").write_text("a", encoding="utf-8")
+        record = JobRecord(
+            id="delay-rerun",
+            spec=_spec(),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            exit_code=0,
+            progress=1.0,
+            completed_at="2026-01-01T00:00:00+00:00",
+            result={"terminal_side_effects_done": True},
+        )
+        mgr.store.create(record)
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "completed"
+        mgr._start_submission_thread = lambda job_id, name: True  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job(record.id)
+        assert rerun is not None and rerun.attempt == 2
+        db = tmp_path / "acp_jobs.db"
+        before = _raw_row(db, record.id)
+
+        # The delayed old completion projection arrives after attempt 2 queued.
+        mgr._sync_task_status(record)
+
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "queued", (
+            "a delayed old completion projection must not resurrect COMPLETED"
+        )
+        assert _raw_row(db, record.id) == before, "projection must never write the jobs row"
+    finally:
+        mgr.shutdown()
+
+
+def test_sync_failure_recovery_converges_via_reconcile(tmp_path: Path) -> None:
+    """(interleave 4) A failed tasks projection on pause is non-fatal: jobs
+    goes PAUSED while tasks lags, the drift is observable, and one
+    ``_reconcile_once`` pass repairs it — the row leaves the drift set and a
+    second pass is a no-op (convergence, not just eventual retry)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "sync-fail")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+
+        real_sync = mgr.tasks.sync_job_transition  # type: ignore[union-attr]
+        fired = {"n": 0}
+
+        def flaky_sync(rec: JobRecord) -> None:
+            if fired["n"] == 0:
+                fired["n"] += 1
+                raise RuntimeError("projection backend down")
+            return real_sync(rec)
+
+        mgr.tasks.sync_job_transition = flaky_sync  # type: ignore[method-assign,union-attr]
+
+        mgr.pause_job(record.id)  # sync failure must never fail the pause
+
+        assert fired["n"] == 1, "the injected sync failure must fire on the first pause"
+        assert mgr.store.get(record.id).status == JobStatus.PAUSED, "jobs is authoritative"
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "running", (
+            "the projection must visibly lag after the sync failure"
+        )
+        assert mgr.tasks.find_projection_drift() == [record.id]  # type: ignore[union-attr]
+
+        mgr._reconcile_once()
+
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "paused", (
+            "the reconcile pass must repair the drifted projection"
+        )
+        assert mgr.tasks.find_projection_drift() == []  # type: ignore[union-attr],call-args
+        "the repaired row must leave the drift set"
+
+        mgr._reconcile_once()
+        assert mgr.tasks.find_projection_drift() == []  # type: ignore[union-attr],call-args
+        "convergence must be stable across passes"
+    finally:
+        mgr.shutdown()
