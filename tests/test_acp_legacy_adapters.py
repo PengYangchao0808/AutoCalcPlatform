@@ -432,7 +432,7 @@ def test_level_of_theory_fields_project_into_method_spec() -> None:
     assert task_request.level.solvent == "water"
     assert task_request.level.solvent_model == "cpcm"
     assert task_request.level.integration_grid == "DEFGRID2"
-    assert task_request.level.scf == "TightSCF"
+    assert task_request.level.scf == "tight", "canonical token must normalize to keyword domain"
 
 
 def test_level_of_theory_round_trip_lossless_no_new_defaults() -> None:
@@ -473,32 +473,65 @@ def test_level_alias_spellings_preserved_on_round_trip() -> None:
     assert "scf" not in rebuilt.resources
 
 
-def test_level_translation_chain_maps_grid_and_scf() -> None:
-    """MethodSpec typed homes render through the translation chain once."""
+def test_level_translation_chain_maps_grid_and_scf(tmp_path) -> None:
+    """Legacy level -> typed MethodSpec -> rendered OptTS route, once each."""
+    import numpy as np
+
+    from acp.calculations.primitives._common import capability_kwargs
     from cccp.calculation._common import (
         level_explicit_fields,
         render_backend_input,
         resolve_spec,
     )
-    from cccp.calculation.requests import MethodSpec
+    from cccp.qc.interfaces.orca import ORCAInterface
 
-    level = MethodSpec(
-        method="PBE0",
+    request = _legacy_request(
         basis="def2-TZVP",
         dispersion="D4",
         solvent="water",
         solvent_model="cpcm",
-        integration_grid="DEFGRID2",
+        grid="DEFGRID2",
         scf="TightSCF",
     )
-    spec = resolve_spec(level.method, explicit=level_explicit_fields(level))
-    rendered = render_backend_input(spec, method=level.method)
+    task_request, _binding = to_task_request(request, "optimize")
+    level = task_request.level
+    assert level.scf == "tight"
+
+    spec = resolve_spec(level.method or None, explicit=level_explicit_fields(level))
+    rendered = render_backend_input(
+        spec, method=level.method or None, extras=capability_kwargs(request)
+    )
     assert rendered["basis"] == "def2-TZVP"
     assert rendered["dispersion"] == "D4"
     assert rendered["solvent"] == "water"
     assert rendered["solvent_model"] == "cpcm"
     assert rendered["grid"] == "DEFGRID2"
-    assert rendered["scf_convergence"] == "TightSCF"
+    assert rendered["scf_convergence"] == "tight"
+    assert "scf" not in rendered
+
+    interface = ORCAInterface(config={}, method=level.method)
+    captured: list[str] = []
+
+    def fake_run_orca(inp, out, output_callback=None):
+        captured.append(Path(inp).read_text(encoding="utf-8"))
+        Path(out).write_text("", encoding="utf-8")
+        return True
+
+    from unittest.mock import patch
+
+    with patch.object(interface, "_run_orca", fake_run_orca):
+        interface.transition_state_opt(
+            np.zeros((2, 3)),
+            ["H", "H"],
+            output_dir=tmp_path,
+            output_name="ts",
+            initial_hessian="model",
+            recalc_hess=0,
+            **{key: value for key, value in rendered.items() if key != "method"},
+        )
+    route = captured[0].splitlines()[0]
+    assert route.count("TightSCF") == 1, route
+    assert " tight" not in route, route
 
 
 def test_singlepoint_stability_check_home() -> None:

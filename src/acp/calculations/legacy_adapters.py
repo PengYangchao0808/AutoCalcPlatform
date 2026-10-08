@@ -121,6 +121,16 @@ _LEVEL_ALIAS_KEYS: dict[str, tuple[str, ...]] = {
     "scf": ("scf", "scf_convergence"),
 }
 
+#: Canonical ORCA SCF tokens -> the ``scf_convergence`` keyword-domain
+#: spelling.  ``MethodSpec.scf`` feeds that keyword *domain*
+#: (loose/normal/tight/verytight), which rejects a canonical token; unknown
+#: spellings pass through unchanged so the task layer still validates them.
+_SCF_CANONICAL_TO_DOMAIN: dict[str, str] = {
+    "loosescf": "loose",
+    "tightscf": "tight",
+    "verytightscf": "verytight",
+}
+
 # Committed legacy result-metadata keys -> typed payload homes.
 _METADATA_ALIASES: dict[str, tuple[str, ...]] = {
     "optimization_status": ("optimization_status",),
@@ -224,6 +234,13 @@ def _as_int(value: object) -> int | None:
 
 def _as_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _normalize_scf_convergence(value: str | None) -> str | None:
+    """Canonicalize a canonical ORCA SCF token to its keyword-domain spelling."""
+    if not value:
+        return value
+    return _SCF_CANONICAL_TO_DOMAIN.get(value.strip().lower(), value)
 
 
 def _as_bool(value: object) -> bool | None:
@@ -379,7 +396,14 @@ def to_task_request(
     for canonical in _LEVEL_PLAIN_KEYS:
         level_values[canonical] = _as_str(_pop_named(resources, canonical, key_names))
     for canonical, names in _LEVEL_ALIAS_KEYS.items():
-        level_values[canonical] = _as_str(_pop_alias(resources, names, key_names, canonical))
+        original = _as_str(_pop_alias(resources, names, key_names, canonical))
+        level_values[canonical] = (
+            _normalize_scf_convergence(original) if canonical == "scf" else original
+        )
+        if canonical == "scf" and original is not None and original != level_values[canonical]:
+            # Preserve the source spelling on the binding residue so
+            # ``to_legacy_request`` reconstructs the request exactly.
+            raw[key_names[canonical]] = original
 
     structure_kind = resources.pop("structure_kind", None)
     if structure_kind is not None:

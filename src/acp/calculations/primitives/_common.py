@@ -78,6 +78,13 @@ _RESOURCE_KEYS = frozenset(
     }
 )
 
+#: SCF level keys lifted into the typed ``MethodSpec.scf`` home by
+#: ``legacy_adapters.to_task_request``.  The ORCA OptTS capability turns a
+#: residual ``scf`` kwarg into a raw route token (a second, unvalidated
+#: spelling); the typed spec already renders the governed keyword, so keep
+#: these off the passthrough extras.
+_LEVEL_RESOURCE_KEYS = frozenset({"scf", "scf_convergence"})
+
 
 def _electron_count(symbols: tuple[str, ...], charge: int) -> int | None:
     return electron_count(symbols, charge)
@@ -263,7 +270,11 @@ def backend_for_request(request: CalculationRequest, name: str) -> Any:
 
 def capability_kwargs(request: CalculationRequest) -> dict[str, Any]:
     """Build capability keyword arguments from request resources."""
-    kwargs = {key: value for key, value in request.resources.items() if key not in _RESOURCE_KEYS}
+    kwargs = {
+        key: value
+        for key, value in request.resources.items()
+        if key not in _RESOURCE_KEYS and key not in _LEVEL_RESOURCE_KEYS
+    }
     if request.method:
         kwargs["method"] = request.method
     return kwargs

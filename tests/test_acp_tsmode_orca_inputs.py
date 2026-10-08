@@ -243,6 +243,10 @@ def _tsmode_request():
     )
 
 
+def _route_lines(captured: list[str]) -> list[str]:
+    return [line for text in captured for line in text.splitlines() if line.startswith("!")]
+
+
 def _run_capture(tmp_path, monkeypatch, level, *, config=None, fail_first=False):
     from acp.calculations.tsmode.engine import TsmodeEngine
     from tests.tsmode_synthetic import write_out_file
@@ -328,3 +332,59 @@ class TestSourceLevelRenderedIntoOrcaInput:
             assert "D4" not in text, text
             assert "D3BJ" not in text, text
             assert "def2-" not in text.lower(), text
+
+    def test_scf_canonical_token_completes_and_renders_once(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(
+            method="PBE0", basis="def2-TZVP", dispersion="D4", scf="TightSCF"
+        )
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "completed", result.report.attempts
+        routes = _route_lines(captured)
+        assert len(routes) == 2, routes
+        for route in routes:
+            assert route.count("TightSCF") == 1, route
+            assert " tight" not in route, route
+
+    def test_scf_domain_token_completes_and_renders_once(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4", scf="tight")
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "completed", result.report.attempts
+        routes = _route_lines(captured)
+        assert len(routes) == 2, routes
+        for route in routes:
+            assert route.count("TightSCF") == 1, route
+            assert " tight" not in route, route
+
+    def test_scf_canonical_token_rescue_renders_once(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(
+            method="PBE0", basis="def2-TZVP", dispersion="D4", scf="TightSCF"
+        )
+        result, captured = _run_capture(tmp_path, monkeypatch, level, fail_first=True)
+
+        assert result.workflow_result.status == "completed", result.report.attempts
+        routes = _route_lines(captured)
+        assert len(routes) >= 3, routes
+        for route in routes:
+            assert route.count("TightSCF") == 1, route
+            assert " tight" not in route, route
+
+    def test_unknown_scf_token_is_not_silently_dropped(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", scf="BogusSCF")
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "failed"
+        assert captured == []
+        errors = " ".join(
+            str(error) for attempt in result.report.attempts for error in attempt.get("errors", [])
+        )
+        assert "BogusSCF" in errors, errors
