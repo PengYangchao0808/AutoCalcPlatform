@@ -21,6 +21,7 @@ import queue
 import random
 import shutil
 import socket
+import sqlite3
 import threading
 import time
 import uuid
@@ -5307,7 +5308,7 @@ class JobManager:
             return
         try:
             self.tasks.reconcile_projection(self._task_reconcile_batch)
-        except Exception:
+        except (sqlite3.Error, OSError, ValueError, KeyError, TypeError):
             logger.warning("Task projection reconcile failed", exc_info=True)
 
     def _poll_loop(self) -> None:
