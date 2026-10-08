@@ -70,8 +70,9 @@ def test_manager_lock_rejects_live_foreign_owner(tmp_path: Path) -> None:
     run_root.mkdir()
     mgr = JobManager(run_root=run_root, poll_interval=30)
     try:
-        mgr2 = JobManager(run_root=run_root, poll_interval=30)
-        mgr2.shutdown()
+        # Same-process re-entry must be refused, never silently stolen.
+        with pytest.raises(RuntimeError, match="already owned"):
+            JobManager(run_root=run_root, poll_interval=30)
     finally:
         mgr.shutdown()
 

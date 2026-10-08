@@ -161,14 +161,19 @@ def create_app(
     max_running: int | None = None,
     poll_interval: int | None = None,
 ) -> FastAPI:
-    """Build the FastAPI app with a scheduler bound to ``run_root``.
+    """Build the FastAPI app with a lifespan-owned scheduler bound to ``run_root``.
+
+    The returned app is SCHEDULER-LESS: no ``JobManager`` is constructed, no
+    threads start, and no run_root ownership is claimed.  The manager is built
+    on lifespan startup (so a second concurrent startup for the same resolved
+    run_root is refused) and shut down on lifespan exit (stopping all background
+    work before releasing ownership).
 
     Reads ``ACP_RUN_ROOT`` / ``ACP_HOST`` / ``ACP_PORT`` / ``ACP_MAX_RUNNING`` /
     ``ACP_POLL_INTERVAL`` env vars (set by ``acp run serve``) so the
     configuration survives uvicorn's module re-import under ``--reload``.
     """
     from acp.core.paths import check_run_root_safety, resolve_run_root
-    from acp.scheduler.manager import JobManager
 
     run_root_path = resolve_run_root(run_root or os.environ.get("ACP_RUN_ROOT"))
     eff_host = host or os.environ.get("ACP_HOST", "127.0.0.1")
@@ -187,25 +192,27 @@ def create_app(
     _apply_execution_mode_override(remote_config)
     local_retention = _load_local_retention_config()
     local_interval = _local_cleanup_interval_hours()
-
-    manager = JobManager(
-        run_root=run_root_path,
-        max_running=eff_max,
-        poll_interval=eff_poll,
-        remote_config=remote_config,
-        local_retention_config=local_retention,
-        local_cleanup_interval_hours=local_interval,
-        local_max_jobs=_load_local_max_jobs(),
-    )
+    local_max_jobs = _load_local_max_jobs()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.job_manager = manager
-        app.state.db_path = str(manager.store.db_path)
-        app.state.host = eff_host
-        app.state.port = eff_port
-        app.state.run_root = str(run_root_path)
+        from acp.scheduler.manager import JobManager
+
+        manager = JobManager(
+            run_root=run_root_path,
+            max_running=eff_max,
+            poll_interval=eff_poll,
+            remote_config=remote_config,
+            local_retention_config=local_retention,
+            local_cleanup_interval_hours=local_interval,
+            local_max_jobs=local_max_jobs,
+        )
         try:
+            app.state.job_manager = manager
+            app.state.db_path = str(manager.store.db_path)
+            app.state.host = eff_host
+            app.state.port = eff_port
+            app.state.run_root = str(run_root_path)
             yield
         finally:
             manager.shutdown()

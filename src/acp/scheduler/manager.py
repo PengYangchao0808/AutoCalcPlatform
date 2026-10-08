@@ -12,6 +12,7 @@ one persisted batch that can execute at once.
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import math
@@ -22,6 +23,7 @@ import shutil
 import socket
 import threading
 import time
+import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -246,9 +248,58 @@ def _fingerprint_hint(payload: JsonValue) -> str | None:
     return None
 
 
+class _RunRootClaim:
+    """In-process ownership record for one resolved ``run_root``.
+
+    ``initialized`` flips True only after the owning :class:`JobManager`
+    finishes construction; until then the claim blocks concurrent same-root
+    entries but is not yet a *live* owner for same-PID stale-lock detection.
+    """
+
+    __slots__ = ("key", "manager", "initialized")
+
+    def __init__(self, key: str, manager: JobManager) -> None:
+        self.key = key
+        self.manager = manager
+        self.initialized = False
+
+
+#: Process-wide run_root ownership registry (resolved path -> claim).  A second
+#: concurrent lifespan entry / JobManager for the same resolved run_root is
+#: refused even before either one touches the file lock.
+_RUN_ROOT_CLAIMS: dict[str, _RunRootClaim] = {}
+_RUN_ROOT_CLAIMS_LOCK = threading.Lock()
+
+
+def resolve_ownership_key(run_root: Path | str) -> str:
+    """Canonical ownership key: relative paths and symlink aliases collapse."""
+    return str(Path(run_root).resolve())
+
+
+def _release_ownership_on_init_failure(init: Callable[..., None]) -> Callable[..., None]:
+    """Release ownership when a ``JobManager`` constructor raises mid-init.
+
+    The run_root claim is taken before initialization; a construction failure
+    (lock held by a peer, store/index error, thread-start error) must release
+    the claim, any acquired file lock and any started workers so that an
+    immediate retry starts clean and leaves no residue.
+    """
+
+    @functools.wraps(init)
+    def _wrapped(self: JobManager, *args: Any, **kwargs: Any) -> None:
+        try:
+            init(self, *args, **kwargs)
+        except BaseException:
+            self._rollback_failed_init()
+            raise
+
+    return _wrapped
+
+
 class JobManager:
     """Central job orchestrator backed by SQLite + background poller."""
 
+    @_release_ownership_on_init_failure
     def __init__(
         self,
         run_root: Path | str,
@@ -261,13 +312,19 @@ class JobManager:
         local_cleanup_interval_hours: int = 6,
         local_max_jobs: int = 4,
     ):
+        self._shutdown_lock = threading.Lock()
+        self._shutdown_complete = False
         self.run_root = Path(run_root)
         self.run_root.mkdir(parents=True, exist_ok=True)
-        # Single-instance guard (2026-09-05 incident): a second server
-        # process constructing a JobManager against the same run_root used
-        # to run restart-recovery below and kill the first instance's
-        # healthy RUNNING jobs.  Refuse to boot when a live ACP owner exists.
+        # Ownership guard, two layers: an in-process registry keyed by the
+        # RESOLVED run_root (refuses a second concurrent manager in this
+        # process) and the cross-process ``.manager.lock`` file (refuses a
+        # foreign ACP).  The registry claim is taken BEFORE initialization and
+        # released by ``_rollback_failed_init`` on any construction error.
+        self._ownership_key = resolve_ownership_key(self.run_root)
         self._manager_lock_path: Path | None = None
+        self._manager_lock_token: str | None = None
+        self._claim_run_root()
         self._acquire_instance_lock()
         logger.info("JobManager booted: pid=%s run_root=%s", os.getpid(), self.run_root)
         self.store = store or JobStore(self.run_root / "acp_jobs.db")
@@ -321,6 +378,8 @@ class JobManager:
         # the cluster/local system.  A background poller tracks status.
         self._cancel_events: dict[str, threading.Event] = {}
         self._submission_jobs: set[str] = set()
+        self._submission_threads: dict[str, threading.Thread] = {}
+        self._shutdown_event = threading.Event()
         self._poll_failures: dict[str, int] = {}
         # job_id -> monotonic timestamp of the last poll-path submission
         # reconcile (rate limiter; the reconcile loop is unthrottled).
@@ -363,19 +422,97 @@ class JobManager:
         self._queue_startup_catalog_prefetch()
         self._poll_thread.start()
         self._reconcile_thread.start()
+        self._activate_run_root()
 
     # ------------------------------------------------------------------ #
     # Single-instance guard (run_root ownership)
     # ------------------------------------------------------------------ #
 
+    def _claim_run_root(self) -> None:
+        """Atomically reserve this resolved run_root in the in-process registry.
+
+        Raises when another manager (initializing or live) already holds the
+        same resolved run_root, so a concurrent second lifespan entry is
+        refused before either one touches the cross-process file lock.
+        """
+        key = self._ownership_key
+        with _RUN_ROOT_CLAIMS_LOCK:
+            existing = _RUN_ROOT_CLAIMS.get(key)
+            if existing is not None:
+                holder = existing.manager
+                holder_pid = os.getpid() if holder is not None else None
+                raise RuntimeError(
+                    f"run_root '{self.run_root}' is already owned by another ACP "
+                    f"JobManager in this process (pid={holder_pid}); refusing to "
+                    "start a second instance"
+                ) from None
+            _RUN_ROOT_CLAIMS[key] = _RunRootClaim(key=key, manager=self)
+
+    def _activate_run_root(self) -> None:
+        """Mark this manager's registry claim live (construction succeeded)."""
+        key = self._ownership_key
+        with _RUN_ROOT_CLAIMS_LOCK:
+            claim = _RUN_ROOT_CLAIMS.get(key)
+            if claim is not None and claim.manager is self:
+                claim.initialized = True
+
+    def _release_run_root_claim(self) -> None:
+        """Drop this manager's in-process registry claim (idempotent)."""
+        key = getattr(self, "_ownership_key", None)
+        if key is None:
+            return
+        with _RUN_ROOT_CLAIMS_LOCK:
+            claim = _RUN_ROOT_CLAIMS.get(key)
+            if claim is not None and claim.manager is self:
+                del _RUN_ROOT_CLAIMS[key]
+
+    def _release_manager_lock(self) -> None:
+        """Unlink the file lock only while it still belongs to this manager."""
+        lock_path = getattr(self, "_manager_lock_path", None)
+        if lock_path is None:
+            return
+        if self._manager_lock_belongs_to_me(lock_path):
+            try:
+                lock_path.unlink(missing_ok=True)
+            except OSError:
+                logger.debug("Failed to remove manager lock", exc_info=True)
+        else:
+            logger.debug("Manager lock %s no longer owned; leaving in place", lock_path)
+        self._manager_lock_path = None
+
+    def _manager_lock_belongs_to_me(self, lock_path: Path) -> bool:
+        token = getattr(self, "_manager_lock_token", None)
+        try:
+            payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return (
+            isinstance(payload, dict)
+            and payload.get("pid") == os.getpid()
+            and payload.get("token") == token
+        )
+
+    def _rollback_failed_init(self) -> None:
+        """Release claim/lock/workers after a failed construction (no residue)."""
+        try:
+            self._stop_background_work()
+        except Exception:
+            logger.exception("Error stopping background work during init rollback")
+        try:
+            self._release_manager_lock()
+        except Exception:
+            logger.debug("Error releasing manager lock during init rollback", exc_info=True)
+        self._release_run_root_claim()
+
     def _acquire_instance_lock(self) -> None:
         """Claim exclusive run_root ownership for this server process.
 
         A leftover lock is stolen when its recorded owner is dead, unreadable,
-        or a non-ACP process (PID recycling); a lock recorded under this very
-        PID is stale debris from an un-shutdown manager (tests, double init).
-        Only a *live foreign ACP process* blocks startup — that peer's
-        restart-recovery must never run against our RUNNING jobs.
+        or a non-ACP process (PID recycling).  A lock recorded under this very
+        PID is stale ONLY when the in-process registry holds no live owner for
+        the resolved run_root — otherwise it is a genuinely live same-process
+        owner and a second instance is refused.  Only a *live foreign ACP
+        process* or a live same-process owner blocks startup.
         """
         lock_path = self.run_root / _MANAGER_LOCK_NAME
         for _attempt in range(3):
@@ -397,11 +534,13 @@ class JobManager:
                 )
                 lock_path.unlink(missing_ok=True)
                 continue
+            self._manager_lock_token = uuid.uuid4().hex
             payload = {
                 "pid": os.getpid(),
                 "cmdline": read_cmdline(os.getpid()),
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
                 "run_root": str(self.run_root),
+                "token": self._manager_lock_token,
             }
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, indent=2)
@@ -418,14 +557,18 @@ class JobManager:
         owner = payload.get("pid") if isinstance(payload, dict) else None
         return owner if isinstance(owner, int) and owner > 0 else None
 
-    @staticmethod
-    def _owner_is_live_acp(owner_pid: int) -> bool:
-        if owner_pid == os.getpid():
-            return False
-        if not pid_is_alive(owner_pid):
-            return False
-        cmdline = read_cmdline(owner_pid).lower()
-        return "acp" in cmdline or "uvicorn" in cmdline
+    def _owner_is_live_acp(self, owner_pid: int) -> bool:
+        if owner_pid != os.getpid():
+            if not pid_is_alive(owner_pid):
+                return False
+            cmdline = read_cmdline(owner_pid).lower()
+            return "acp" in cmdline or "uvicorn" in cmdline
+        # Same PID: live only while the in-process registry still holds an
+        # *initialized* owner for this resolved run_root.  No live owner means
+        # the lock is stale debris from a manager that never shut down.
+        with _RUN_ROOT_CLAIMS_LOCK:
+            claim = _RUN_ROOT_CLAIMS.get(self._ownership_key)
+        return bool(claim is not None and claim.initialized and claim.manager is not None)
 
     def _is_remote_enabled(self) -> bool:
         return self._remote_config is not None and self._remote_config.is_remote
@@ -2771,38 +2914,84 @@ class JobManager:
         record = self.store.get(job_id)
         return Path(record.work_dir) if record else None
 
-    def shutdown(self) -> None:
-        if self._manager_lock_path is not None:
+    def _background_threads(self) -> list[threading.Thread]:
+        """Every background worker owned by this manager (running or not)."""
+        threads: list[threading.Thread] = []
+        for name in (
+            "_poll_thread",
+            "_reconcile_thread",
+            "_cleanup_thread",
+            "_release_gc_thread",
+            "_catalog_prefetch_thread",
+        ):
+            thread = getattr(self, name, None)
+            if isinstance(thread, threading.Thread):
+                threads.append(thread)
+        submission_threads = getattr(self, "_submission_threads", None)
+        if submission_threads is not None:
+            lock = getattr(self, "_lock", None)
+            if lock is not None:
+                with lock:
+                    threads.extend(submission_threads.values())
+            else:
+                threads.extend(submission_threads.values())
+        return threads
+
+    def _stop_background_work(self) -> None:
+        """Signal every worker to stop, then join all of them to completion.
+
+        Joining blocks until each worker exits: ownership must never be released
+        while background work still runs (a new manager would then overlap it).
+        All stop events are checked promptly by the loops, so this returns fast
+        in the normal case.
+        """
+        for event_name in (
+            "_poll_stop",
+            "_shutdown_event",
+            "_cleanup_stop_event",
+            "_release_gc_stop",
+        ):
+            event = getattr(self, event_name, None)
+            if event is not None:
+                event.set()
+        prefetch_queue = getattr(self, "_catalog_prefetch_queue", None)
+        if prefetch_queue is not None:
             try:
-                self._manager_lock_path.unlink(missing_ok=True)
-            except OSError:
-                logger.debug("Failed to remove manager lock", exc_info=True)
-            self._manager_lock_path = None
-        if self._cleanup_stop_event is not None and self._cleanup_thread is not None:
-            self._cleanup_stop_event.set()
-            self._cleanup_thread.join(timeout=10)
-        self._release_gc_stop.set()
-        self._poll_stop.set()
-        if self._poll_thread.is_alive():
-            self._poll_thread.join(timeout=10)
-        if self._reconcile_thread.is_alive():
-            self._reconcile_thread.join(timeout=10)
-        prefetch_thread = self._catalog_prefetch_thread
-        if prefetch_thread is not None:
-            self._catalog_prefetch_queue.put(None)
-            prefetch_thread.join(timeout=5)
-            if not prefetch_thread.is_alive():
-                self._catalog_prefetch_thread = None
-        with self._lock:
-            for ev in self._cancel_events.values():
-                ev.set()
-            self._cancel_events.clear()
-        for ssh_pool in (self._runner_ssh_pool, self._fetcher_ssh_pool):
-            if ssh_pool is not None:
-                try:
-                    ssh_pool.close()
-                except Exception:
-                    logger.debug("Error closing SSH connection pool", exc_info=True)
+                prefetch_queue.put(None)
+            except Exception:
+                logger.debug("Failed to signal catalog prefetch worker", exc_info=True)
+        current = threading.current_thread()
+        for thread in self._background_threads():
+            if thread is current or not thread.is_alive():
+                continue
+            thread.join()
+            if thread.is_alive():
+                logger.error("Background thread %s failed to stop", thread.name)
+        prefetch_thread = getattr(self, "_catalog_prefetch_thread", None)
+        if prefetch_thread is not None and not prefetch_thread.is_alive():
+            self._catalog_prefetch_thread = None
+
+    def shutdown(self) -> None:
+        with self._shutdown_lock:
+            if self._shutdown_complete:
+                return
+            # 1. Stop and join every background worker BEFORE releasing ownership.
+            self._stop_background_work()
+            # 2. Only now release the in-process registry entry and file lock.
+            self._release_manager_lock()
+            self._release_run_root_claim()
+            # 3. Cancel any remaining job signals / close pools (ownership-neutral).
+            with self._lock:
+                for ev in self._cancel_events.values():
+                    ev.set()
+                self._cancel_events.clear()
+            for ssh_pool in (self._runner_ssh_pool, self._fetcher_ssh_pool):
+                if ssh_pool is not None:
+                    try:
+                        ssh_pool.close()
+                    except Exception:
+                        logger.debug("Error closing SSH connection pool", exc_info=True)
+            self._shutdown_complete = True
 
     def _event_log(self, record: JobRecord) -> JobEventLog:
         return JobEventLog(runtime_file(record.work_dir, "events.jsonl"))
@@ -2853,15 +3042,19 @@ class JobManager:
             self._submission_jobs.add(job_id)
             self._cancel_events.setdefault(job_id, threading.Event())
         try:
-            threading.Thread(
+            thread = threading.Thread(
                 target=self._execute_submission,
                 args=(job_id,),
                 daemon=True,
                 name=thread_name,
-            ).start()
+            )
+            with self._lock:
+                self._submission_threads[job_id] = thread
+            thread.start()
         except BaseException:
             with self._lock:
                 self._submission_jobs.discard(job_id)
+                self._submission_threads.pop(job_id, None)
             raise
         return True
 
@@ -2875,6 +3068,7 @@ class JobManager:
         finally:
             with self._lock:
                 self._submission_jobs.discard(job_id)
+                self._submission_threads.pop(job_id, None)
 
     def _execute_submission_impl(self, job_id: str) -> None:
         """Background thread: submit job then immediately poll once.
@@ -2967,7 +3161,10 @@ class JobManager:
                     message=str(exc),
                     attempt=record.attempt,
                 )
-                time.sleep(retry_delay)
+                if self._shutdown_event.wait(retry_delay):
+                    # Server is shutting down: leave the job durable for
+                    # restart recovery instead of cancelling it.
+                    return
             except Exception as exc:
                 logger.exception("Submission failed for job %s", job_id)
                 record = self.store.get(job_id)
