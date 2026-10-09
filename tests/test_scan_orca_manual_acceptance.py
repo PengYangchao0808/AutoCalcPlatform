@@ -82,9 +82,15 @@ def _run_cli(args: list[str], *, timeout_s: float, tmp_path: Path) -> dict[str, 
     so a hung run cannot outlive the budget probe.  ``~/.cccp.yaml``
     production resolution (ORCA path) is deliberately preserved — HOME is
     untouched — while ``ACP_RUN_ROOT`` is pinned to the test's tmp dir.
+    ``tests.conftest`` sets ``ACP_DISABLE_MPI_SNIFF=1`` for mock-subprocess
+    isolation; that escape hatch is dropped here because a real ORCA child
+    must resolve the OpenMPI runtime through the production login-shell
+    sniff (otherwise conda's ABI-incompatible ``mpiexec.hydra`` wins and
+    every scan point fails).  Mirrors ``tests/test_pes_e2e_propylene.py``.
     """
     cmd = [sys.executable, "-m", "acp.cli", *args]
     env = dict(os.environ)
+    env.pop("ACP_DISABLE_MPI_SNIFF", None)
     env["ACP_RUN_ROOT"] = str(tmp_path / "run_root")
     start = time.monotonic()
     timed_out = False

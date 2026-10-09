@@ -354,3 +354,25 @@ def test_cancel_queued_job(client: TestClient) -> None:
                 break
             time.sleep(0.5)
         c.post(f"/api/jobs/{blocker_id}/cancel")
+
+
+def test_scan_submit_missing_coordinate_rejected_422(client: TestClient) -> None:
+    """NEW-2: scan coordinates outside ``input``/``method`` fail synchronously.
+
+    Previously the submission thread raised ``scan job requires at least one
+    coordinate`` after the API had already returned 201; the boundary check
+    now rejects it up front with 422.
+    """
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "scan",
+            "input": {"source_type": "smiles", "source": "CCO", "charge": 0, "multiplicity": 1},
+            "method": {"method": "r2SCAN-3c", "basis": ""},
+            "resources": {"nproc": 4, "mem": "8GB"},
+            "molecule_name": "test_scan_missing_coord",
+            "execution_mode": "local",
+        },
+    )
+    assert response.status_code == 422
+    assert "coordinate" in response.text
