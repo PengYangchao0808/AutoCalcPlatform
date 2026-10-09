@@ -13747,6 +13747,100 @@ def test_scan_wizard_state_hydration_and_switch_away_lock() -> None:
     assert "function scanWizardEnsureListeners()" in html
 
 
+# ── Executed scan submission: real wizard body -> real v1 -> runner argv ─
+# (todo 13 / GAP-8 acceptance).  Reuses T9's node captured-body helper and
+# fake-scheduler seam from tests/test_scan_workflow.py; production code is
+# never touched and no live scan process can spawn.
+
+
+def test_executed_wizard_body_reaches_v1_validation_and_runner_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run the page's REAL builder output through real v1 + fake scheduler.
+
+    The node harness executes ``buildScanWizardBodyParts`` from the shipped
+    HTML (1-based fields -> 0-based wire, distinct values so the chain is
+    proven to carry data, not constants); the resulting ``/api/v1/jobs``
+    body is posted through the real FastAPI route (real
+    ``_validate_scan_submission``), the scheduler seam captures the JobSpec
+    instead of queueing, and the real ``JobRunner._build_cmd`` must emit
+    ``--coordinate <a,b,start,end>`` and ``--scan-points <n>``.
+    """
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from acp.scheduler.runner import JobRunner
+    from tests.test_scan_workflow import (
+        XYZ_TRIATOMIC,
+        _fake_scheduler,
+        _run_wizard_builder_in_node,
+    )
+
+    built = _run_wizard_builder_in_node(
+        [
+            {
+                "name": "accepted",
+                "fields": {
+                    "atomA": "2",
+                    "atomB": "3",
+                    "start": "1.5",
+                    "end": "2.5",
+                    "points": "7",
+                },
+                "structure": {"xyz": XYZ_TRIATOMIC},
+            }
+        ]
+    )[0]["result"]
+    assert built["ok"] is True, built
+    # Captured builder output: 1-based display fields became the 0-based wire form.
+    assert built["input"]["scan_coordinates"] == ["1,2,1.5,2.5"]
+    assert built["method"]["scan_points"] == 7
+
+    body = {
+        "workflow": "scan",
+        "molecule_name": "wizard_scan",
+        "input": {
+            "source_type": "xyz_text",
+            "source": XYZ_TRIATOMIC,
+            "charge": 0,
+            "multiplicity": 1,
+            "scan_coordinates": built["input"]["scan_coordinates"],
+        },
+        "method": {
+            "schema_id": "dft_scan",
+            "profile_id": "default",
+            "scan_points": built["method"]["scan_points"],
+            "levels": {"scan": dict(built["mirror"], engine="orca", functional="r2SCAN-3c")},
+        },
+        "resources": {"nproc": 4, "mem": "8GB"},
+        "execution_mode": "local",
+    }
+
+    os.environ["ACP_RUN_ROOT"] = str(tmp_path)
+    from acp.api.server import create_app
+
+    captured: list = []
+    with TestClient(create_app(run_root=tmp_path, max_running=1)) as client:
+        _fake_scheduler(monkeypatch, captured)
+        response = client.post("/api/v1/jobs", json=body)
+        assert response.status_code == 201, response.text
+
+    # Fake scheduler: exactly one JobSpec captured, nothing queued for real work.
+    assert len(captured) == 1
+    spec = captured[0]
+    assert spec.workflow == "scan"
+    assert spec.input["scan_coordinates"] == ["1,2,1.5,2.5"]
+    assert spec.method["scan_points"] == 7
+
+    # Real runner argv builder (pure — spawns nothing).
+    cmd = JobRunner(python_executable="python")._build_cmd(spec, tmp_path, input_path="input.xyz")
+    coordinate_at = cmd.index("--coordinate")
+    assert cmd[coordinate_at + 1] == "1,2,1.5,2.5"
+    points_at = cmd.index("--scan-points")
+    assert cmd[points_at + 1] == "7"
+
+
 # ---------------------------------------------------------------------------
 # Queue-row freshness / detail-cache coherence (todo 14 / GAP-9) — static
 # pins supplementary to the executed browser suite

@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.nodes import NodeRegistry
 from acp.storage.manifest import ResultManifest
+from tests.test_scan_workflow import _fake_scheduler, _wizard_body
 
 
 def make_client(tmp_path: Path, max_running: int = 2) -> TestClient:
@@ -1303,3 +1304,137 @@ class TestColdCacheRemoteReadAcceptance:
         assert _r6_work_tree(work_dir) == tree_before
         assert not (work_dir / "RESULT").exists()
         assert not (work_dir / "WORK").exists()
+
+
+# ── Scan submission acceptance through the real v1/v2 paths (todo 13 / GAP-8) ──
+# Wizard-shaped bodies + the fake-scheduler seam are reused from
+# tests/test_scan_workflow.py (T9).  Every test below fakes the scheduler
+# and mocks the runner: a live `acp run scan` process must never spawn.
+
+
+def _scan_batch_item(body: dict[str, Any], molecule_name: str) -> dict[str, Any]:
+    return {
+        "molecule_name": molecule_name,
+        "task_name": "scan",
+        "workflow": body["workflow"],
+        "input": body["input"],
+        "method": body["method"],
+        "resources": body["resources"],
+        "execution_mode": body["execution_mode"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("coordinate", "points", "match"),
+    [
+        (None, 21, "coordinate"),
+        ([], 21, "coordinate"),
+        ("1,1,1.0,3.0", 21, "different atoms"),
+        ("-1,2,1.0,3.0", 21, "0-based"),
+        ("0,3,1.0,3.0", 21, "out of range"),
+        ("0,1,nan,3.0", 21, "finite"),
+        ("0,1,1.0,3.0", 1, "scan_points"),
+    ],
+)
+def test_scan_invalid_matrix_rejected_by_v1_and_v2(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    coordinate: object,
+    points: object,
+    match: str,
+) -> None:
+    """empty / duplicate / negative / out-of-range / non-finite / points<2.
+
+    v1: synchronous 422 with nothing queued; v2 batch: the same invalid
+    item lands in per-item ``failed[]`` while the HTTP status stays 201.
+    """
+    captured: list = []
+    _fake_scheduler(monkeypatch, captured)
+    body = _wizard_body(coordinate=coordinate, points=points)
+
+    v1 = client.post("/api/v1/jobs", json=body)
+    assert v1.status_code == 422, v1.text
+    assert match in v1.text
+
+    v2 = client.post("/api/v2/tasks/batch", json={"tasks": [_scan_batch_item(body, "bad_scan")]})
+    assert v2.status_code == 201, v2.text
+    batch = v2.json()
+    assert batch["created"] == []
+    assert len(batch["failed"]) == 1
+    assert batch["failed"][0]["molecule_name"] == "bad_scan"
+    assert match in batch["failed"][0]["error"]
+
+    assert captured == [], "an invalid scan must never reach the scheduler"
+
+
+def test_v2_batch_scan_item_compatibility_per_item(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """One invalid scan item fails alone; the valid item still reaches argv."""
+    from acp.scheduler.runner import JobRunner
+
+    captured: list = []
+    _fake_scheduler(monkeypatch, captured)
+    good = _wizard_body()
+    bad = _wizard_body(coordinate="0,0,1.0,3.0")
+    response = client.post(
+        "/api/v2/tasks/batch",
+        json={
+            "tasks": [
+                _scan_batch_item(good, "good_scan"),
+                _scan_batch_item(bad, "bad_scan"),
+            ]
+        },
+    )
+    assert response.status_code == 201, response.text
+    batch = response.json()
+    assert [item["molecule_name"] for item in batch["created"]] == ["good_scan"]
+    assert len(batch["failed"]) == 1
+    assert batch["failed"][0]["molecule_name"] == "bad_scan"
+    assert "different atoms" in batch["failed"][0]["error"]
+
+    # Compatibility: only the valid item was captured, and its JobSpec
+    # compiles into the real runner argv.
+    assert len(captured) == 1
+    cmd = JobRunner(python_executable="python")._build_cmd(
+        captured[0], tmp_path, input_path="input.xyz"
+    )
+    assert cmd[cmd.index("--coordinate") + 1] == "0,1,1.0,3.0"
+    assert cmd[cmd.index("--scan-points") + 1] == "21"
+
+
+def test_no_live_scan_execution_submission_stays_in_process(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """fake scheduler + mocked runner: no live scan process can spawn.
+
+    The accepted submission only ever produces an in-memory JobSpec and a
+    pure argv — any reach for the runner execution seams (``run`` /
+    ``_prepare_and_launch``) or ``subprocess.Popen`` trips this test, so
+    real QC can never run inside this acceptance suite.
+    """
+    import acp.scheduler.runner as runner_module
+    from acp.scheduler.runner import JobRunner
+
+    captured: list = []
+    _fake_scheduler(monkeypatch, captured)
+    tripwires: list[str] = []
+
+    def _blocked(*_args: object, **_kwargs: object) -> None:
+        tripwires.append("live-execution")
+        raise AssertionError("live scan execution attempted inside the test")
+
+    monkeypatch.setattr(JobRunner, "run", _blocked)
+    monkeypatch.setattr(JobRunner, "_prepare_and_launch", _blocked)
+    monkeypatch.setattr(runner_module.subprocess, "Popen", _blocked)
+
+    response = client.post("/api/v1/jobs", json=_wizard_body())
+    assert response.status_code == 201, response.text
+    assert len(captured) == 1
+
+    cmd = JobRunner(python_executable="python")._build_cmd(
+        captured[0], tmp_path, input_path="input.xyz"
+    )
+    assert cmd[cmd.index("--coordinate") + 1] == "0,1,1.0,3.0"
+    assert cmd[cmd.index("--scan-points") + 1] == "21"
+    assert tripwires == [], f"execution seam reached: {tripwires}"
