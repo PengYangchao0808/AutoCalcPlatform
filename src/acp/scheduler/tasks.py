@@ -217,6 +217,14 @@ class TaskIndex:
     Mirrors the :class:`~acp.scheduler.jobs.JobStore` connection pattern
     (per-call connections guarded by a lock); a shared connection may be
     supplied instead of a path.
+
+    Lock discipline: ``_lock`` is a **non-reentrant** :class:`threading.Lock`.
+    Any helper called while it is held must use the caller's already-open
+    connection and must never call ``query_rows``/``_run``/``upsert``/
+    ``_query``/``writer_connection`` (or anything else that acquires the lock).
+    ``_project_transition``/``_payload_from_record`` therefore receive the
+    held ``conn`` explicitly; re-entering the lock in the same thread is a
+    permanent self-deadlock.
     """
 
     def __init__(self, conn_or_path: sqlite3.Connection | Path | str):
@@ -359,7 +367,20 @@ class TaskIndex:
     # JobRecord mirroring
     # ------------------------------------------------------------------ #
 
-    def _payload_from_record(self, record: JobRecord, layout_version: int = 2) -> dict[str, Any]:
+    def _payload_from_record(
+        self,
+        record: JobRecord,
+        layout_version: int = 2,
+        conn: sqlite3.Connection | None = None,
+    ) -> dict[str, Any]:
+        """Build the projection payload for *record*.
+
+        When *conn* is supplied the caller already holds ``self._lock`` and an
+        open connection (the ``sync_job_transition``/``reconcile_projection``
+        path); the alias-aware ``molecule_key`` is then resolved through that
+        connection so no lock-taking helper is re-entered. ``_lock`` is
+        non-reentrant — see the :class:`TaskIndex` lock-discipline note.
+        """
         remote = bool(record.remote_job_id)
         result = record.result if isinstance(record.result, dict) else {}
         node = result.get("node") or result.get("execution_target")
@@ -395,9 +416,10 @@ class TaskIndex:
             "layout_version": layout_version,
             "created_at": record.created_at,
             "updated_at": record.updated_at,
-            "molecule_key": self.compute_molecule_key(
-                project_id,
-                record.spec.molecule_name,
+            "molecule_key": (
+                self._molecule_key_with_conn(conn, project_id, record.spec.molecule_name)
+                if conn is not None
+                else self.compute_molecule_key(project_id, record.spec.molecule_name)
             ),
             "tags": tags_json,
             "archived": 0,
@@ -457,7 +479,9 @@ class TaskIndex:
             (job_id,),
         ).fetchone()
         if stored is None:
-            self._upsert_conn(conn, self._payload_from_record(source))
+            # Lock discipline: pass the held ``conn`` so the payload's
+            # molecule_key resolution never re-acquires ``self._lock``.
+            self._upsert_conn(conn, self._payload_from_record(source, conn=conn))
             return
 
         now = _utc_now_iso()
@@ -817,6 +841,26 @@ class TaskIndex:
     # ------------------------------------------------------------------ #
     # Molecule key resolution (alias-aware)
     # ------------------------------------------------------------------ #
+
+    def _molecule_key_with_conn(
+        self,
+        conn: sqlite3.Connection,
+        project_id: str | None,
+        molecule_name: str,
+    ) -> str:
+        """Resolve ``molecule_key`` through an already-open connection.
+
+        Lock discipline: the caller holds ``self._lock``, so this must not call
+        any method that re-acquires it. ``resolve_molecule_key`` accepts a raw
+        connection for exactly this purpose (the same path migrations use).
+        """
+        if not project_id:
+            from acp.scheduler.naming import molecule_group_key
+
+            return molecule_group_key(molecule_name)
+        from acp.scheduler.molecule_groups import resolve_molecule_key
+
+        return resolve_molecule_key(conn, project_id, molecule_name)
 
     def compute_molecule_key(self, project_id: str | None, molecule_name: str) -> str:
         """Resolve *molecule_name* to the effective ``molecule_key``.

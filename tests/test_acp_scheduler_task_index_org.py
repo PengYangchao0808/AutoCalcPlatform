@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -1011,6 +1013,85 @@ class TestRerunProgressProjection:
             assert mgr.store.get(done.id).progress is None, "jobs row must never be written"
         finally:
             mgr.shutdown()
+
+
+class TestProjectionLockDiscipline:
+    """F3 regression: the projection must not re-enter ``TaskIndex._lock``.
+
+    ``sync_job_transition`` / ``reconcile_projection`` hold the non-reentrant
+    ``_lock`` while projecting; the missing-tasks-row branch builds a payload
+    whose ``molecule_key`` resolution used to call ``query_rows`` (which takes
+    the same lock) in the same thread -> deterministic self-deadlock whenever a
+    jobs row with a non-empty ``project_id``/``molecule_name`` had no tasks row
+    (exactly the drift the reconciler exists to repair).
+    """
+
+    def _pair(self, tmp_path: Path) -> tuple[JobStore, TaskIndex]:
+        db = tmp_path / "lock_discipline.db"
+        migrate(db)
+        return JobStore(db), TaskIndex(db)
+
+    @staticmethod
+    def _run_bounded(fn: Callable[[], None]) -> bool:
+        """Run *fn* in a daemon thread; True iff it finished within the bound.
+
+        No sleeps: the thread+join timeout keeps a red run from hanging the
+        suite — on the pre-fix code the worker blocks on its own lock, the
+        join times out, and the assertion fails instead of deadlocking pytest.
+        """
+        done = threading.Event()
+
+        def target() -> None:
+            fn()
+            done.set()
+
+        worker = threading.Thread(target=target, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        return done.is_set() and not worker.is_alive()
+
+    def test_sync_job_transition_missing_row_does_not_deadlock(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        record = _make_record(
+            job_id="j1",
+            status=JobStatus.COMPLETED,
+            project_id="default",
+            spec=_make_spec(molecule_name="CCO"),
+        )
+        store.create(record)
+        assert idx.get("j1") is None, "precondition: tasks row is missing"
+
+        assert self._run_bounded(lambda: idx.sync_job_transition(record)), (
+            "sync_job_transition self-deadlocked on a jobs row with no tasks row (F3)"
+        )
+        row = idx.get("j1")
+        assert row is not None
+        assert row["molecule_key"] == "CCO"
+        assert row["project_id"] == "default"
+
+    def test_reconcile_projection_repairs_missing_row_without_deadlock(
+        self, tmp_path: Path
+    ) -> None:
+        store, idx = self._pair(tmp_path)
+        for i in range(2):
+            store.create(
+                JobRecord(
+                    id=f"j{i}",
+                    spec=_make_spec(molecule_name="CCO"),
+                    status=JobStatus.COMPLETED,
+                    work_dir=f"/tmp/j{i}",
+                    project_id="default",
+                )
+            )
+        assert idx.find_projection_drift(10) == ["j0", "j1"]
+
+        assert self._run_bounded(lambda: idx.reconcile_projection(10)), (
+            "reconcile_projection self-deadlocked repairing a missing tasks row (F3)"
+        )
+        assert idx.find_projection_drift(10) == []
+        row = idx.get("j0")
+        assert row is not None
+        assert row["molecule_key"] == "CCO"
 
 
 class TestMoleculeGroupKey:
