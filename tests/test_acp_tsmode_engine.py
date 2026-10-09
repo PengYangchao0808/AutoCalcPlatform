@@ -660,18 +660,87 @@ class TestCheckpointV2Credentials:
         assert second["modes"] == first["modes"]
 
     def test_wrapper_write_failure_recovers_with_zero_qc(self, tmp_path, monkeypatch):
-        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
-        task_root = tmp_path / "task"
-        engine = TsmodeEngine(config={})
-        engine.run(_request(), bundle, task_root)
-        assert not (task_root / "WORK" / "tsmode" / "frequency" / "normal_modes.json").exists()
+        """Real-wrapper injection: the frequency stage runs through
+        ``acp.calculations.primitives.frequency`` (fake backend at the
+        ``backend_for_request`` seam) and the wrapper's ``normal_modes.json``
+        write fails because the shadow path is a directory.  The run must
+        still complete from the log parse, and the resume must cost ZERO QC.
+        """
+        import acp.calculations.primitives.frequency as frequency_module
+        import acp.calculations.tsmode.engine as engine_module
+        import acp.results.frequencies as frequencies_product_module
+        from cccp.qc.interfaces.base import QCResult
 
-        engine.run(_request(), bundle, task_root)
-        assert calls == {"optimize": 1, "frequency": 1}
+        out_path, hess_path, _coords, freqs_by_native, modes_by_native = make_consistent_pair(
+            tmp_path
+        )
+        bundle = load_bundle_from_files(out_path, hess_path)
+        optimized = np.asarray(bundle.coordinates_angstrom) + 0.02
+        freq_log = tmp_path / "freq_final.out"
+        write_out_file(freq_log, optimized, freqs_by_native, modes_by_native)
+        frequencies = [freqs_by_native[index] for index in sorted(freqs_by_native)]
+
+        optimize_calls = {"n": 0}
+        backend_calls: list[tuple[str, str]] = []
+        build_calls = {"n": 0}
+        real_build = frequencies_product_module.build_normal_modes_product
+
+        def counting_build(*args, **kwargs):
+            build_calls["n"] += 1
+            return real_build(*args, **kwargs)
+
+        def fake_optimize(req):
+            optimize_calls["n"] += 1
+            return _ok_optimize_result(optimized)
+
+        class FakeFrequencyBackend:
+            name = "fake"
+
+            def frequency(
+                self, coordinates, symbols, charge=0, multiplicity=1, output_dir=None, **kwargs
+            ):
+                backend_calls.append(("fake", "frequency"))
+                return QCResult(
+                    success=True,
+                    energy=-100.6,
+                    coordinates=np.asarray(coordinates, dtype=float),
+                    symbols=list(symbols),
+                    frequencies=list(frequencies),
+                    freq_log_file=freq_log,
+                    log_file=freq_log,
+                )
+
+        monkeypatch.setattr(
+            frequencies_product_module, "build_normal_modes_product", counting_build
+        )
+        monkeypatch.setattr(engine_module, "run_optimize", fake_optimize)
+        monkeypatch.setattr(
+            frequency_module, "backend_for_request", lambda req, name: FakeFrequencyBackend()
+        )
+
+        task_root = tmp_path / "task"
+        shadow = task_root / "WORK" / "tsmode" / "frequency" / "normal_modes.json"
+        shadow.parent.mkdir(parents=True, exist_ok=True)
+        shadow.mkdir()  # write-failure injection: the target is a directory
+
+        engine = TsmodeEngine(config={})
+        result = engine.run(_request(), bundle, task_root)
+        assert result.workflow_result.status == "completed"
+        assert optimize_calls["n"] == 1
+        assert backend_calls == [("fake", "frequency")]
+        assert build_calls["n"] == 1, "wrapper product build/write was never attempted"
+        assert shadow.is_dir(), "wrapper write must have failed (path still a directory)"
         normal_modes = json.loads(
             (task_root / "RESULT" / "tsmode" / "normal_modes.json").read_text(encoding="utf-8")
         )
+        assert len(normal_modes["modes"]) == 9
         assert all(mode["vectors"] for mode in normal_modes["modes"])
+
+        resumed = engine.run(_request(), bundle, task_root)
+        assert resumed.workflow_result.status == "completed"
+        assert optimize_calls["n"] == 1, "resume re-ran optimize"
+        assert backend_calls == [("fake", "frequency")], "resume re-ran the frequency backend"
+        assert build_calls["n"] == 1, "resume re-entered the frequency wrapper"
 
     def test_final_publish_failure_recovers_with_zero_qc(self, tmp_path, monkeypatch):
         bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
@@ -702,3 +771,139 @@ class TestCheckpointV2Credentials:
         monkeypatch.setattr(TsmodeEngine, "_publish", real_publish)
         engine.run(_request(), bundle, task_root)
         assert calls == {"optimize": 1, "frequency": 1}, "publish-only retry re-ran QC"
+
+    def test_resumed_normal_modes_equal_fresh_run_control(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, _freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        resumed_root = tmp_path / "resumed_task"
+        control_root = tmp_path / "control_task"
+        engine = TsmodeEngine(config={})
+
+        engine.run(_request(), bundle, resumed_root)
+        engine.run(_request(), bundle, resumed_root)  # pure resume: zero QC
+        assert calls == {"optimize": 1, "frequency": 1}
+        resumed = json.loads(
+            (resumed_root / "RESULT" / "tsmode" / "normal_modes.json").read_text(encoding="utf-8")
+        )
+
+        engine.run(_request(), bundle, control_root)  # fresh-run control
+        assert calls == {"optimize": 2, "frequency": 2}
+        control = json.loads(
+            (control_root / "RESULT" / "tsmode" / "normal_modes.json").read_text(encoding="utf-8")
+        )
+
+        assert resumed["modes"], "resumed product must be non-empty"
+        assert all(mode["vectors"] for mode in resumed["modes"]), (
+            "resumed product must carry non-empty vectors for every mode"
+        )
+        assert resumed["modes"] == control["modes"], (
+            "resumed normal_modes vectors must be value-equal to a fresh-run control"
+        )
+        assert resumed["atom_count"] == control["atom_count"]
+        assert resumed["schema_version"] == control["schema_version"]
+
+    def test_expected_mode_set_frozen_and_missing_entry_invalidates(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+        payload = _read_checkpoint(task_root)
+        expected = payload["frequency_credential"]["expected_mode_indices"]
+        assert expected == sorted(freqs), "expected native mode set must be frozen completely"
+
+        removed = payload["frequency_credential"]["modes"].pop(0)
+        assert removed["mode_index"] in expected
+        assert payload["frequency_credential"]["modes"], (
+            "credential must stay non-empty yet still be rejected as incomplete"
+        )
+        _write_checkpoint(task_root, payload)
+
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 2}, "missing required mode kept stale science"
+        warnings = _read_report(tmp_path)["warnings"]
+        assert any("mode_data_incomplete" in warning for warning in warnings), (
+            "invalidation reason must be observable in the report"
+        )
+        restored = _read_checkpoint(task_root)["frequency_credential"]
+        assert {mode["mode_index"] for mode in restored["modes"]} == set(expected)
+
+    def test_incomplete_wrapper_product_not_adopted_over_complete_log(self, tmp_path, monkeypatch):
+        bundle, optimized, log_path, freqs, modes, calls = _credential_harness(
+            tmp_path, monkeypatch
+        )
+        dropped = sorted(freqs)[0]
+        wrapper_path = tmp_path / "wrapper_normal_modes.json"
+        wrapper_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "normal_modes_v1",
+                    "modes": [
+                        {
+                            "mode_index": index,
+                            "frequency_cm1": freqs[index],
+                            "vectors": [[0.1, 0.2, 0.3] for _ in range(bundle.n_atoms)],
+                        }
+                        for index in sorted(freqs)
+                        if index != dropped
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        import acp.calculations.tsmode.engine as engine_module
+
+        def fake_frequency_with_wrapper(req):
+            calls["frequency"] += 1
+            write_out_file(log_path, optimized, freqs, modes)
+            return CalculationResult(
+                energy=-100.6,
+                frequencies=[freqs[index] for index in sorted(freqs)],
+                status="completed",
+                artifacts=[
+                    ArtifactRef(path=log_path, type="log"),
+                    ArtifactRef(path=wrapper_path, type="normal_modes"),
+                ],
+            )
+
+        monkeypatch.setattr(engine_module, "run_frequency", fake_frequency_with_wrapper)
+
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+        report = _read_report(tmp_path)
+        assert report["frequency_status"] == "completed", (
+            "complete log must win over the non-empty but incomplete wrapper product"
+        )
+
+        published = json.loads(
+            (task_root / "RESULT" / "tsmode" / "normal_modes.json").read_text(encoding="utf-8")
+        )
+        published_indices = {mode["mode_index"] for mode in published["modes"]}
+        assert published_indices == set(freqs), "incomplete wrapper mode leaked into the product"
+        dropped_entry = next(m for m in published["modes"] if m["mode_index"] == dropped)
+        assert dropped_entry["vectors"], "mode missing from the wrapper must come from the log"
+        expected = _read_checkpoint(task_root)["frequency_credential"]["expected_mode_indices"]
+        assert expected == sorted(freqs)
+
+    def test_truncated_result_product_rebuilt_from_credential(self, tmp_path, monkeypatch):
+        bundle, _opt, _log, freqs, _modes, calls = _credential_harness(tmp_path, monkeypatch)
+        task_root = tmp_path / "task"
+        engine = TsmodeEngine(config={})
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}
+
+        normal_modes_path = task_root / "RESULT" / "tsmode" / "normal_modes.json"
+        product = json.loads(normal_modes_path.read_text(encoding="utf-8"))
+        assert len(product["modes"]) == len(freqs)
+        product["modes"].pop()
+        normal_modes_path.write_text(json.dumps(product), encoding="utf-8")
+        assert len(product["modes"]) == len(freqs) - 1
+
+        engine.run(_request(), bundle, task_root)
+        assert calls == {"optimize": 1, "frequency": 1}, "truncated product rebuild re-ran QC"
+        rebuilt = json.loads(normal_modes_path.read_text(encoding="utf-8"))
+        assert {mode["mode_index"] for mode in rebuilt["modes"]} == set(freqs)
+        assert all(mode["vectors"] for mode in rebuilt["modes"])
