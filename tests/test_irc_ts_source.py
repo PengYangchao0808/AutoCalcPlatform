@@ -199,9 +199,65 @@ def test_irc_reads_flat_tsmode_resolved_level(tmp_path: Path) -> None:
         {"method": "PBE0", "basis": "def2-TZVP", "dispersion": "D4"},
         {"method": "PBE0", "basis": "def2-TZVP", "solvent": "water", "solvent_model": "cpcm"},
         {"method": "PBE0", "basis": "def2-TZVP", "grid": "DEFGRID2"},
+        # single-key shapes must be rejected too — the gate is per-key, not per-combo
+        {"method": "PBE0", "basis": "def2-TZVP", "dispersion": "D3BJ"},
+        {"method": "PBE0", "basis": "def2-TZVP", "solvent": "water"},
+        {"method": "PBE0", "basis": "def2-TZVP", "solvent_model": "cpcm"},
     ],
 )
 def test_irc_rejects_unsupported_tsmode_level(tmp_path: Path, level: dict) -> None:
     record = _tsmode_source(tmp_path, level)
     with pytest.raises(ValueError, match="cannot yet reproduce"):
+        resolve_verified_ts_source(record, "tsmode_optimized")
+
+
+def _tsmode_manager(record: JobRecord) -> JobManager:
+    manager = JobManager.__new__(JobManager)
+    manager.store = type("Store", (), {"get": lambda self, job_id: record})()
+    return manager
+
+
+def test_manager_builds_irc_spec_from_flat_tsmode_level(tmp_path: Path) -> None:
+    """Consumer chain: flat resolved_level → resolve → manager IRC spec."""
+    record = _tsmode_source(tmp_path, {"method": "PBE0", "basis": "def2-TZVP"})
+    manager = _tsmode_manager(record)
+    spec = manager._verified_irc_spec(JobSpec(
+        workflow="irc",
+        input={"source_job_id": record.id, "source_product_id": "tsmode_optimized"},
+        method={"maxpoints": 55, "step": 0.05},
+    ))
+    assert spec.method == {
+        "method": "PBE0", "basis": "def2-TZVP", "maxpoints": 55, "step": 0.05,
+    }
+    assert spec.input["charge"] == 0
+    assert spec.input["multiplicity"] == 1
+    assert spec.input["input_role"] == "transition_state"
+    resolved = resolve_verified_ts_source(record, "tsmode_optimized")
+    assert spec.input["ts_source"]["geometry_sha256"] == resolved.geometry_sha256
+    assert spec.input["source"] == "2\nTS candidate\nH 0 0 0\nH 0 0 0.7\n"
+
+
+def test_manager_rejects_unsupported_tsmode_level(tmp_path: Path) -> None:
+    """Unsupported D4 level is rejected before any IRC spec is built."""
+    record = _tsmode_source(
+        tmp_path, {"method": "PBE0", "basis": "def2-TZVP", "dispersion": "D4"}
+    )
+    manager = _tsmode_manager(record)
+    with pytest.raises(ValueError, match="cannot yet reproduce"):
+        manager._verified_irc_spec(JobSpec(
+            workflow="irc",
+            input={"source_job_id": record.id, "source_product_id": "tsmode_optimized"},
+            method={},
+        ))
+
+
+def test_irc_rejects_tsmode_report_bundle_level_mismatch(tmp_path: Path) -> None:
+    """Report flat resolved_level must agree with the source bundle level."""
+    level = {"method": "PBE0", "basis": "def2-TZVP"}
+    record = _tsmode_source(tmp_path, level)
+    bundle_path = Path(record.work_dir) / "INPUT" / "tsmode" / "source_bundle.json"
+    bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle["level"] = {"method": "PBE0", "basis": "def2-SVP"}
+    bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+    with pytest.raises(ValueError, match="disagree"):
         resolve_verified_ts_source(record, "tsmode_optimized")
