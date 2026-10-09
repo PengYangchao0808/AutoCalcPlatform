@@ -143,6 +143,7 @@ def register_final_report(mol_dir: Path, report_path: Path, xyz_path: Path) -> N
         "Refined conformers (XYZ)",
         f"confsearch/{XYZ_NAME}",
         ProductKind.STRUCTURE,
+        metadata={"auto_reusable": False},
     )
     manifest.write(result_dir)
 

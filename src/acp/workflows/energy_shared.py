@@ -130,6 +130,7 @@ def write_v2_manifest(
             label=str(item.get("label") or item["path"]),
             path=str(item["path"]),
             kind=str(item.get("kind") or "file"),
+            metadata=item.get("metadata"),
         )
     manifest.write(TaskStorage(mol_dir).result_dir())
 
@@ -1281,6 +1282,7 @@ def write_final_outputs(
                 "label": "Ranked conformers (XYZ)",
                 "path": "structures/all_conformers.xyz",
                 "kind": "structure",
+                "metadata": {"auto_reusable": False},
             },
             {
                 "id": "ensemble_thermo",

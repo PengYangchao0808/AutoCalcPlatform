@@ -1165,6 +1165,7 @@ class JobManager:
         from acp.scheduler.job_edit import resolve_previous_outputs
         from acp.results.structure_snapshots import preserve_outputs
         read_root = Path(record.work_dir)
+        skipped_collections: list[dict[str, Any]] = []
         from acp.scheduler.structure_sources import StructureSourceService
         if StructureSourceService._is_remote(record):
             cached_root = self.structure_cache.fetch_catalog(record, record.spec.workflow)
@@ -1182,10 +1183,12 @@ class JobManager:
             else:
                 self.structure_cache.fetch_reusable_geometries(record, cached_root)
                 previous_outputs = resolve_previous_outputs(cached_root, job_id=record.id,
-                    project_id=current_project, attempt=attempt_number(record), strict=True)
+                    project_id=current_project, attempt=attempt_number(record), strict=True,
+                    skipped=skipped_collections)
         else:
             previous_outputs = resolve_previous_outputs(read_root, job_id=record.id,
-                project_id=current_project, attempt=attempt_number(record), strict=True)
+                project_id=current_project, attempt=attempt_number(record), strict=True,
+                skipped=skipped_collections)
         preserved_outputs = preserve_outputs(self.run_root, Path(record.work_dir), previous_outputs,
             job_id=record.id, attempt=attempt_number(record), input_spec=record.spec.input)
 
@@ -1217,6 +1220,7 @@ class JobManager:
                 "completed_at": record.completed_at,
                 "exit_code": record.exit_code,
                 "previous_outputs": preserved_outputs,
+                "skipped_collections": skipped_collections,
                 "error": record.error,
             }
         )

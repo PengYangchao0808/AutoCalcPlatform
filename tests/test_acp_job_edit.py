@@ -1464,3 +1464,91 @@ def test_fake_rerun_and_edit_reuse_task_dir_without_sibling(tmp_path: Path) -> N
         assert (work_dir / "state.json").is_file()
     finally:
         manager.shutdown()
+
+
+def _confsearch_collection_record(
+    manager: JobManager, job_id: str, work_dir: Path, *, result: dict[str, Any] | None = None
+) -> JobRecord:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "input.xyz").write_text(XYZ_COOH, encoding="utf-8")
+    record = JobRecord(
+        id=job_id,
+        spec=_spec("Confsearch"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+        project_id=manager.default_project_id,
+        group_id=job_id,
+        result=result,
+    )
+    manager.store.create(record)
+    return manager.store.get(job_id)  # type: ignore[return-value]
+
+
+def _write_collection_manifest(result_dir: Path) -> None:
+    from acp.storage.manifest import ResultManifest
+
+    result_dir.mkdir(parents=True, exist_ok=True)
+    (result_dir / "all_conformers.xyz").write_text(f"{XYZ_COOH}\n{XYZ_COOH}", encoding="utf-8")
+    (result_dir / "best.xyz").write_text(XYZ_COOH, encoding="utf-8")
+    manifest = ResultManifest(workflow="Confsearch", status="completed")
+    manifest.add_product(
+        "all_conformers", "Ranked conformers (XYZ)", "all_conformers.xyz", "structure"
+    )
+    manifest.add_product("rank1", "Rank 1", "best.xyz", "structure")
+    manifest.write(result_dir)
+
+
+def test_inplace_rerun_audits_skipped_collections(tmp_path: Path) -> None:
+    """todo 8 (GAP-7): collection products are skipped without raising, audited."""
+    manager = _make_manager(tmp_path)
+    try:
+        work_dir = manager.run_root / "default" / "recalc_collections"
+        record = _confsearch_collection_record(manager, "recalc_collections", work_dir)
+        _write_collection_manifest(work_dir / "RESULT")
+
+        assert manager.rerun_job(record.id) is not None
+        updated = manager.get(record.id)
+        skipped = updated.result["attempt_history"][-1]["skipped_collections"]
+        assert any(row["id"] == "all_conformers" and row["reason"] for row in skipped)
+
+        refs = json.loads(
+            (work_dir / ".structure_history" / "sources.json").read_text(encoding="utf-8")
+        )
+        assert all(ref["entry_id"] != "all_conformers" for ref in refs)
+        assert any(ref["entry_id"] == "rank1" for ref in refs)
+    finally:
+        manager.shutdown()
+
+
+def test_inplace_rerun_remote_audits_skipped_collections(tmp_path: Path) -> None:
+    """The remote cache root resolves through the same collection policy."""
+    from acp.scheduler.structure_sources import StructureSourceService
+
+    manager = _make_manager(tmp_path)
+    try:
+        work_dir = manager.run_root / "default" / "remote_recalc"
+        record = _confsearch_collection_record(
+            manager,
+            "remote_recalc",
+            work_dir,
+            result={"execution_kind": "remote", "lsf_job_id": "42"},
+        )
+        assert StructureSourceService._is_remote(record)
+        cached_root = tmp_path / "cache" / "remote_recalc"
+        _write_collection_manifest(cached_root / "RESULT")
+
+        class _FakeCache:
+            def fetch_catalog(self, _record: JobRecord, _workflow: str) -> Path:
+                return cached_root
+
+            def fetch_reusable_geometries(self, _record: JobRecord, _root: Path) -> None:
+                return None
+
+        manager._remote_structure_cache = _FakeCache()  # type: ignore[assignment]
+
+        assert manager.rerun_job(record.id) is not None
+        updated = manager.get(record.id)
+        skipped = updated.result["attempt_history"][-1]["skipped_collections"]
+        assert any(row["id"] == "all_conformers" for row in skipped)
+    finally:
+        manager.shutdown()

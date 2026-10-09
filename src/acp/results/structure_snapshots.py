@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any
-from acp.results.structure_policy import single_geometry
+from acp.results.structure_policy import collection_product, single_geometry
 from acp.results.frame_candidate_store import atomic_write_text
 
 
@@ -29,6 +29,8 @@ def preserve_outputs(run_root: Path, work_dir: Path, outputs: list[dict[str, Any
         if input_text and single_geometry(input_text) is not None:
             atomic_write_text(history / f"input_{attempt}_item_{index}.xyz", input_text)
     for output in outputs:
+        if collection_product(output) is not None:
+            continue
         text = output.get("xyz_text") or ""
         geometry = single_geometry(text)
         if geometry is None:

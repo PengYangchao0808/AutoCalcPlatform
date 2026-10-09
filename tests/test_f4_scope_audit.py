@@ -2136,6 +2136,10 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/results/frequencies.py",
     # acp-legacy-bug-remediation: BUG-8 public surface split (3c9321a)
     "src/acp/workflows/registry.py",
+    # todo 8 (runtime-contract): collection policy / recalc audit stations.
+    "src/acp/results/structure_policy.py",
+    "src/acp/results/structure_snapshots.py",
+    "src/acp/confsearch/report.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {

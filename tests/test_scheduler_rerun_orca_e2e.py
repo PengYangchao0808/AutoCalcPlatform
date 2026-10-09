@@ -137,3 +137,53 @@ def test_singlepoint_rerun_and_edit_keep_result_manifest_in_place(
         _assert_result_in_place(work_dir)
     finally:
         manager.shutdown()
+
+
+def test_rerun_skips_collection_products_and_records_audit(tmp_path: Path) -> None:
+    """todo 8 (GAP-7): multi-frame collections never abort an in-place rerun.
+
+    Runs the production manager path without ORCA: the collection product is
+    skipped (not raised on), the single product is preserved, and the skip is
+    recorded in ``attempt_history``.
+    """
+    from acp.storage.manifest import ResultManifest
+
+    manager = JobManager(run_root=tmp_path / "runs", poll_interval=30)
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    try:
+        work_dir = manager.run_root / "default" / "recalc_collections_e2e"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        (work_dir / "input.xyz").write_text(_WATER_XYZ, encoding="utf-8")
+        record = JobRecord(
+            id="recalc_collections_e2e",
+            spec=JobSpec(
+                workflow="Confsearch", name="recalc_collections_e2e", input={"source": "CCO"}
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            project_id=manager.default_project_id,
+            group_id="recalc_collections_e2e",
+        )
+        manager.store.create(record)
+
+        result_dir = work_dir / "RESULT"
+        result_dir.mkdir()
+        (result_dir / "all_conformers.xyz").write_text(
+            f"{_WATER_XYZ}\n{_WATER_XYZ}", encoding="utf-8"
+        )
+        (result_dir / "best.xyz").write_text(_WATER_XYZ, encoding="utf-8")
+        manifest = ResultManifest(workflow="Confsearch", status="completed")
+        manifest.add_product(
+            "all_conformers", "Ranked conformers (XYZ)", "all_conformers.xyz", "structure"
+        )
+        manifest.add_product("rank1", "Rank 1", "best.xyz", "structure")
+        manifest.write(result_dir)
+
+        assert manager.rerun_job(record.id) is not None
+        updated = manager.get(record.id)
+        skipped = updated.result["attempt_history"][-1]["skipped_collections"]
+        assert [row["id"] for row in skipped] == ["all_conformers"]
+        assert Path(updated.work_dir) == work_dir
+        assert not (work_dir.parent / f"{work_dir.name}_1").exists()
+    finally:
+        manager.shutdown()

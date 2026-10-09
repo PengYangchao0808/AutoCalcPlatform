@@ -129,3 +129,172 @@ def test_strict_snapshot_resolution_blocks_corrupt_manifest(tmp_path):
     (result / "result_manifest.json").write_text("corrupt", encoding="utf-8")
     with pytest.raises(ValueError, match="清单"):
         resolve_previous_outputs(tmp_path, strict=True)
+
+
+# ---------------------------------------------------------------------------
+# todo 8 (GAP-7): unified collection policy for recalc with retained audit.
+# ---------------------------------------------------------------------------
+
+ENSEMBLE = XYZ + XYZ  # two complete frames = a trajectory, never a single geometry
+
+
+def test_collection_product_recognizes_both_collection_policies():
+    """One policy: historical no-metadata ids + new writer auto_reusable=False."""
+    from acp.results.structure_policy import collection_product
+
+    assert collection_product({"id": "all_conformers", "kind": "structure"})
+    assert collection_product({"id": "confsearch_final_conformers", "kind": "structure"})
+    assert collection_product(
+        {"id": "ensemble", "kind": "structure", "metadata": {"auto_reusable": False}}
+    )
+    # A genuine single-frame product is never a collection.
+    assert collection_product({"id": "global_min", "kind": "structure"}) is None
+    assert collection_product({"id": "confsearch_conf_001", "kind": "structure"}) is None
+
+
+def test_reusable_product_excludes_collections():
+    """Structure-source indexing and remote prefetch consume ``reusable_product``."""
+    assert not reusable_product({"id": "all_conformers", "kind": "structure"})
+    assert not reusable_product({"id": "confsearch_final_conformers", "kind": "structure"})
+    assert not reusable_product(
+        {"id": "ensemble", "kind": "xyz", "metadata": {"auto_reusable": False}}
+    )
+    assert reusable_product({"id": "rank1", "kind": "structure"})
+
+
+def test_resolve_previous_outputs_skips_collections_with_audit(tmp_path):
+    """Both historical collection ids are skipped (strict) and audited."""
+    result = tmp_path / "RESULT"
+    result.mkdir()
+    (result / "all_conformers.xyz").write_text(ENSEMBLE, encoding="utf-8")
+    (result / "final_conformers.xyz").write_text(ENSEMBLE, encoding="utf-8")
+    (result / "best.xyz").write_text(XYZ, encoding="utf-8")
+    manifest = ResultManifest(workflow="Confsearch")
+    manifest.add_product(
+        "all_conformers", "Ranked conformers (XYZ)", "all_conformers.xyz", "structure"
+    )
+    manifest.add_product(
+        "confsearch_final_conformers",
+        "Refined conformers (XYZ)",
+        "final_conformers.xyz",
+        "structure",
+    )
+    manifest.add_product("rank1", "Rank 1", "best.xyz", "structure")
+    manifest.write(result)
+    skipped: list[dict] = []
+    outputs = resolve_previous_outputs(tmp_path, job_id="j", strict=True, skipped=skipped)
+    assert [o["entry_id"] for o in outputs] == ["rank1"]
+    by_id = {row["id"]: row for row in skipped}
+    assert set(by_id) == {"all_conformers", "confsearch_final_conformers"}
+    for row in skipped:
+        assert row["path"]
+        assert row["reason"]
+
+
+def test_resolve_previous_outputs_records_marked_collection(tmp_path):
+    """The new writer semantics (auto_reusable=False) is skipped with audit."""
+    result = tmp_path / "RESULT"
+    result.mkdir()
+    (result / "ensemble.xyz").write_text(ENSEMBLE, encoding="utf-8")
+    (result / "best.xyz").write_text(XYZ, encoding="utf-8")
+    manifest = ResultManifest(workflow="energy")
+    manifest.add_product(
+        "ensemble", "Ensemble", "ensemble.xyz", "structure", metadata={"auto_reusable": False}
+    )
+    manifest.add_product("global_min", "Global minimum", "best.xyz", "structure")
+    manifest.write(result)
+    skipped: list[dict] = []
+    outputs = resolve_previous_outputs(tmp_path, job_id="j", strict=True, skipped=skipped)
+    assert [o["entry_id"] for o in outputs] == ["global_min"]
+    assert [row["id"] for row in skipped] == ["ensemble"]
+
+
+def test_resolve_previous_outputs_collection_only_strict_does_not_raise(tmp_path):
+    """A collection-only job must not abort a strict destructive rerun."""
+    result = tmp_path / "RESULT"
+    result.mkdir()
+    (result / "all_conformers.xyz").write_text(ENSEMBLE, encoding="utf-8")
+    manifest = ResultManifest(workflow="Confsearch")
+    manifest.add_product(
+        "all_conformers", "Ranked conformers (XYZ)", "all_conformers.xyz", "structure"
+    )
+    manifest.write(result)
+    skipped: list[dict] = []
+    outputs = resolve_previous_outputs(tmp_path, job_id="j", strict=True, skipped=skipped)
+    assert outputs == []
+    assert [row["id"] for row in skipped] == ["all_conformers"]
+
+
+def test_resolve_previous_outputs_corrupt_single_still_blocks(tmp_path):
+    """The collection skip must NOT weaken the corrupt-single-frame guard."""
+    result = tmp_path / "RESULT"
+    result.mkdir()
+    (result / "broken.xyz").write_text("2\nshort\nH 0 0 0\n", encoding="utf-8")
+    manifest = ResultManifest(workflow="Confsearch")
+    manifest.add_product("rank1", "Rank 1", "broken.xyz", "structure")
+    manifest.write(result)
+    with pytest.raises(ValueError, match="单帧"):
+        resolve_previous_outputs(tmp_path, job_id="j", strict=True)
+
+
+def test_preserve_outputs_never_snapshots_collections(tmp_path):
+    """Even if a collection row reaches preserve_outputs, it is filtered, not raised."""
+    task = tmp_path / "task"
+    task.mkdir()
+    refs = preserve_outputs(
+        tmp_path,
+        task,
+        [
+            {
+                "entry_id": "all_conformers",
+                "product_id": "all_conformers",
+                "path": "RESULT/all_conformers.xyz",
+                "xyz_text": ENSEMBLE,
+            },
+            {
+                "entry_id": "ensemble",
+                "product_id": "ensemble",
+                "auto_reusable": False,
+                "path": "RESULT/ensemble.xyz",
+                "xyz_text": ENSEMBLE,
+            },
+            {
+                "entry_id": "rank1",
+                "product_id": "rank1",
+                "path": "RESULT/best.xyz",
+                "xyz_text": XYZ,
+            },
+        ],
+        job_id="j",
+        attempt=1,
+        input_spec={},
+    )
+    assert [ref["entry_id"] for ref in refs] == ["rank1"]
+
+
+def test_remote_prefetch_uses_collection_policy(tmp_path):
+    """Remote reusable-geometry prefetch must use the same collection policy."""
+    from acp.results.remote_structure_cache import RemoteStructureCache
+
+    cached = tmp_path / "cached"
+    result = cached / "RESULT"
+    result.mkdir(parents=True)
+    (result / "all_conformers.xyz").write_text(ENSEMBLE, encoding="utf-8")
+    (result / "best.xyz").write_text(XYZ, encoding="utf-8")
+    manifest = ResultManifest(workflow="Confsearch")
+    manifest.add_product(
+        "all_conformers", "Ranked conformers (XYZ)", "all_conformers.xyz", "structure"
+    )
+    manifest.add_product("rank1", "Rank 1", "best.xyz", "structure")
+    manifest.write(result)
+
+    cache = RemoteStructureCache(tmp_path / "remote_cache")
+    requested: list[str] = []
+
+    def fake_fetch(record, rel_path, raise_errors=False):  # noqa: ANN001, ANN202
+        requested.append(rel_path)
+        return cached / rel_path
+
+    cache.fetch = fake_fetch  # type: ignore[method-assign]
+    cache.fetch_reusable_geometries(object(), cached)
+    assert requested == ["RESULT/best.xyz"]

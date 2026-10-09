@@ -7,6 +7,8 @@ from typing import Any
 
 POLICY_VERSION = 1
 STRUCTURE_KINDS = frozenset({"structure", "xyz", "irc_endpoint"})
+# Historical multi-frame products that predate the ``auto_reusable`` marker.
+COLLECTION_PRODUCT_IDS = frozenset({"all_conformers", "confsearch_final_conformers"})
 _ELEMENTS = frozenset("H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og".split())
 
 def single_geometry(text: str) -> dict[str, Any] | None:
@@ -31,13 +33,36 @@ def single_geometry(text: str) -> dict[str, Any] | None:
     except (ValueError, IndexError, TypeError):
         return None
 
+def collection_product(product: dict[str, Any]) -> str | None:
+    """Return the skip reason when *product* is a multi-frame collection.
+
+    The single policy covers historical no-metadata collections (id convention)
+    and the new writer semantics (``metadata.auto_reusable is False``).  It is
+    deliberately *not* derived from a ``single_geometry()`` failure: a corrupt
+    declared single-frame product must still block a destructive recalc.
+    Accepts both manifest products (``id`` + ``metadata``) and the flattened
+    ``resolve_previous_outputs`` output projection.
+    """
+    metadata = product.get("metadata")
+    auto_reusable = product.get("auto_reusable")
+    if auto_reusable is None and isinstance(metadata, dict):
+        auto_reusable = metadata.get("auto_reusable")
+    if auto_reusable is False:
+        return "marked collection (auto_reusable=false)"
+    identity = str(
+        product.get("id") or product.get("product_id") or product.get("entry_id") or ""
+    ).strip().lower()
+    if identity in COLLECTION_PRODUCT_IDS:
+        return "historical conformer collection"
+    return None
+
 def reusable_product(product: dict[str, Any]) -> bool:
-    """Apply explicit stage facts and exclude known historical collections."""
+    """Apply explicit stage facts and exclude known collections."""
     if product.get("kind") not in STRUCTURE_KINDS:
         return False
-    metadata = product.get("metadata") or {}
-    if metadata.get("auto_reusable") is False:
+    if collection_product(product) is not None:
         return False
+    metadata = product.get("metadata") or {}
     if metadata.get("selection_source") == "manual_frame":
         return True
     if metadata.get("optimization_status") in {"failed", "unconverged", "unknown"}:
@@ -49,7 +74,14 @@ def reusable_product(product: dict[str, Any]) -> bool:
         return False
     return True
 
-__all__ = ["POLICY_VERSION", "STRUCTURE_KINDS", "single_geometry", "reusable_product"]
+__all__ = [
+    "COLLECTION_PRODUCT_IDS",
+    "POLICY_VERSION",
+    "STRUCTURE_KINDS",
+    "collection_product",
+    "single_geometry",
+    "reusable_product",
+]
 
 # Display priorities do not relax any workflow submission gate.
 WORKFLOW_SOURCE_ROLES = {
