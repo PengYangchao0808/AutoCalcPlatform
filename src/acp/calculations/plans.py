@@ -96,7 +96,14 @@ def build_simple_plan(kind: StepKind | str, request: CalculationRequest) -> Calc
 
 
 def build_batch_plan(items: Sequence[_BatchItem], profile: str) -> CalculationPlan:
-    """Create a BatchOptimize plan for one of the four supported profiles."""
+    """Create a BatchOptimize plan for one of the four supported profiles.
+
+    The multi-item form is intentional: it is consumed by
+    ``BatchOptimizeEngine`` (item-level isolation), never through
+    ``validate_plan``/``CalculationPlanExecutor``.  This plan is NOT
+    legal input for ``CalculationPlanExecutor`` — ``validate_plan``
+    rejects anything but exactly one item.
+    """
     batch_items = list(items)
     if not batch_items:
         message = "batch plan requires at least one item"

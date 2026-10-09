@@ -1,0 +1,97 @@
+{
+  "datasets": [
+    {
+      "dataset_id": "boundary-selftest-v1",
+      "distribution": {
+        "balanced_by_construction": false,
+        "note": "not balanced by construction; boundary cases are enumerated hard cases, never a realistic prevalence and never model-performance evidence"
+      },
+      "hash": "b58fe6a8ba1ede73ed6835949c43d797c959670124561b753f45f974c49eb839",
+      "items": [
+        {
+          "boundary": {
+            "deferred_to": "follow-up plan: acp-nmr-boundary-campaign (not yet opened)",
+            "kind": "charged",
+            "reason": "zwitterionic species need a charged-molecule protocol that is not validated in this work plan",
+            "status": "deferred"
+          },
+          "candidates": [
+            {
+              "candidate_id": "zwitterion-unavailable",
+              "dp4_probability": null,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {},
+              "status": "unavailable"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 43.0,
+                "signal_id": "C1"
+              }
+            ],
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 3.55,
+                "signal_id": "H1"
+              }
+            ]
+          },
+          "item_id": "boundary-charged-zwitterion",
+          "molecule_id": "glycine-zwitterion",
+          "true_structure_candidate_id": null,
+          "true_structure_present": false
+        },
+        {
+          "boundary": {
+            "deferred_to": null,
+            "kind": "strong_overlap",
+            "reason": "overlap uncertainty is exercised by the todo-44/48 proton fixtures",
+            "status": "covered"
+          },
+          "candidates": [
+            {
+              "candidate_id": "overlap-selftest-candidate",
+              "dp4_probability": 0.5,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 3.3,
+                    "signal_id": "H1"
+                  }
+                ]
+              },
+              "status": "valid"
+            }
+          ],
+          "experimental": {
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 3.32,
+                "signal_id": "H1"
+              }
+            ]
+          },
+          "item_id": "boundary-strong-overlap",
+          "molecule_id": "overlap-selftest",
+          "true_structure_candidate_id": null,
+          "true_structure_present": false
+        }
+      ],
+      "layer": "boundary",
+      "license": "CC0-1.0 (synthetic test data authored in this repository)",
+      "source": "authored in-repo for tests/benchmark/nmr (synthetic; no external data)",
+      "title": "Synthetic boundary self-test (one deferred case, one covered case)",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "acp-nmr-benchmark-dataset-manifest-v1"
+}

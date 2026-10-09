@@ -17,11 +17,11 @@ import logging
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from acp.backends.registry import get_backend
+from acp.calculations.legacy_adapters import pes2ts_xtb_path_to_task_request
 from acp.calculations.pes.outputs import PES_PROFILE_RELATIVE_PATH, copy_xyz_atomic
 from acp.calculations.pes.path_analysis import (
     PathProfile,
@@ -31,6 +31,14 @@ from acp.calculations.pes.path_analysis import (
 from acp.core.workflow import WorkflowResult
 from acp.storage.manifest import ProductKind, ResultManifest
 from acp.workflows._helpers import write_result_summary
+from cccp.calculation.context import TaskContext
+from cccp.calculation.errors import (
+    BackendUnavailableError,
+    TaskInputError,
+    UnsupportedCapabilityError,
+)
+from cccp.calculation.tasks.xtb_path_search import run_xtb_path_search as run_xtb_path_task
+from cccp.software import SoftwareNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -318,14 +326,16 @@ def _sha256_file(path: Path) -> str | None:
         return None
 
 
-def _executable_provenance(backend: Any) -> dict[str, Any]:
+def _executable_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
     """Best-effort xTB executable provenance (path + sha256 + version line)."""
-    interface = getattr(backend, "_path_interface", None)
-    executable = getattr(interface, "executable", None)
-    if executable is None:
-        from cccp.software import resolve_executable
+    from cccp.software import detect_version, resolve_executable
 
-        executable = resolve_executable("xtb")
+    executables = config.get("executables") if isinstance(config, Mapping) else None
+    entry = executables.get("xtb") if isinstance(executables, Mapping) else None
+    configured = entry.get("path") if isinstance(entry, Mapping) else None
+    executable = resolve_executable(
+        "xtb", configured if isinstance(configured, str) and configured else None
+    )
     provenance: dict[str, Any] = {
         "xtb_executable": str(executable) if executable else None,
         "xtb_executable_sha256": None,
@@ -334,8 +344,6 @@ def _executable_provenance(backend: Any) -> dict[str, Any]:
     if executable is not None:
         executable_path = Path(executable)
         provenance["xtb_executable_sha256"] = _sha256_file(executable_path)
-        from cccp.software import detect_version
-
         provenance["xtb_version"] = detect_version("xtb", executable_path)
     return provenance
 
@@ -461,11 +469,37 @@ def _profile_payload(
 # ── persistence ─────────────────────────────────────────────────────────
 
 
+def _task_frame_paths(run_dir: Path, count: int) -> list[Path]:
+    frame_dir = run_dir / "path_frames"
+    paths: list[Path] = []
+    for index in range(count):
+        path = frame_dir / (XTB_PATH_FRAME_PATTERN % index)
+        if path.is_file():
+            paths.append(path)
+    return paths
+
+
+def _task_trajectory_path(payload: Any, run_dir: Path) -> Path | None:
+    ref = getattr(payload, "trajectory_ref", None)
+    raw_path = getattr(ref, "path", None)
+    if raw_path is not None:
+        candidate = Path(str(raw_path))
+        if candidate.is_file():
+            return candidate
+    for name in ("xtbpath.xyz", "xtbpath.txt"):
+        candidate = run_dir / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _persist_xtb_path_outputs(
     *,
     output_root: Path,
     request: XtbPathRequest,
-    result: Any,
+    frame_paths: list[Path],
+    energies_hartree: list[float | None],
+    trajectory_file: Path | None,
     product_xyz: Path,
     provenance: dict[str, Any],
 ) -> tuple[Path, Path, Path]:
@@ -483,13 +517,14 @@ def _persist_xtb_path_outputs(
     frames_dir = pes_dir / "path_frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
 
-    frame_paths: list[Path] = []
-    for index, source_path in enumerate(result.frame_paths):
+    targets: list[Path] = []
+    for index, source_path in enumerate(frame_paths):
         target = frames_dir / (XTB_PATH_FRAME_PATTERN % index)
         copy_xyz_atomic(Path(source_path), target)
-        frame_paths.append(target)
+        targets.append(target)
+    frame_paths = targets
 
-    trajectory_source = Path(result.trajectory_file) if result.trajectory_file else None
+    trajectory_source = Path(trajectory_file) if trajectory_file else None
     if trajectory_source is None or not trajectory_source.is_file():
         raise XtbPathSearchError(
             code=XTB_PATH_E_OUTPUT,
@@ -498,9 +533,10 @@ def _persist_xtb_path_outputs(
     trajectory_target = pes_dir / XTB_PATH_TRAJECTORY_NAME
     copy_xyz_atomic(trajectory_source, trajectory_target)
 
-    energies_hartree: list[float | None] = [None] * len(frame_paths)
-    for index, value in enumerate(list(result.energies_hartree)[: len(frame_paths)]):
-        energies_hartree[index] = None if value is None else float(value)
+    energies: list[float | None] = [None] * len(frame_paths)
+    for index, value in enumerate(list(energies_hartree)[: len(frame_paths)]):
+        energies[index] = None if value is None else float(value)
+    energies_hartree = energies
 
     profile = build_xtb_path_profile(
         frame_paths=frame_paths,
@@ -653,38 +689,44 @@ def run_xtb_path_search(
 
     if progress_reporter is not None:
         progress_reporter.start_stage("run_path_search")
-    backend = get_backend("xtb")(cfg)
-    if not backend.is_available():
-        message = "xTB backend is not available; configure executables.xtb.path or install xtb"
+    task_request, _binding = pes2ts_xtb_path_to_task_request(request)
+    task_request = replace(task_request, output_dir=run_dir)
+    try:
+        task_result = run_xtb_path_task(
+            task_request,
+            context=TaskContext(config=cfg, workdir=run_dir),
+        )
+    except (BackendUnavailableError, UnsupportedCapabilityError, SoftwareNotFoundError) as error:
+        message = f"xTB backend is unavailable: {error}"
         if progress_reporter is not None:
             progress_reporter.fail_stage("run_path_search", message)
-        raise XtbPathSearchError(code=XTB_PATH_E_XTB, message=message)
+        raise XtbPathSearchError(code=XTB_PATH_E_XTB, message=message) from error
+    except TaskInputError as error:
+        if progress_reporter is not None:
+            progress_reporter.fail_stage("run_path_search", str(error))
+        raise XtbPathInputError(f"[{XTB_PATH_E_RECIPE}] {error}") from error
 
-    result = backend.path_search(
-        start_xyz,
-        end_xyz,
-        run_dir,
-        charge=request.charge,
-        multiplicity=request.multiplicity,
-        uhf=request.uhf,
-        gfn_level=request.gfn_level,
-        timeout=request.timeout_seconds,
-        path_inp_text=request.path_inp_text,
-        extra_args=list(request.extra_args),
-        seed=request.seed,
-    )
+    payload = getattr(task_result, "payload", None)
+    task_frames = list(getattr(payload, "frames", ()) or ())
+    frame_paths = _task_frame_paths(run_dir, len(task_frames))
+    energies_hartree: list[float | None] = [
+        float(frame.energy_hartree) if frame.energy_hartree is not None else None
+        for frame in task_frames
+    ]
+    trajectory_file = _task_trajectory_path(payload, run_dir)
     if progress_reporter is not None:
-        if result.success:
+        if task_result.status == "completed" and frame_paths:
             progress_reporter.complete_stage("run_path_search")
         else:
             progress_reporter.fail_stage(
-                "run_path_search", str(result.error_message or "xTB path search failed")
+                "run_path_search",
+                "; ".join(task_result.errors) or "xTB path search failed",
             )
 
-    if not result.success or not result.frame_paths:
+    if task_result.status != "completed" or not frame_paths:
         raise XtbPathSearchError(
             code=XTB_PATH_E_XTB,
-            message=str(result.error_message or "xTB path search failed without frames"),
+            message="; ".join(task_result.errors) or "xTB path search failed without frames",
         )
 
     provenance: dict[str, Any] = {
@@ -695,7 +737,7 @@ def run_xtb_path_search(
         "plan_sha256": request.plan_sha256,
         "path_inp_sha256": _sha256_text(request.path_inp_text),
         "run_dir": str(run_dir),
-        **_executable_provenance(backend),
+        **_executable_provenance(cfg),
     }
 
     if progress_reporter is not None:
@@ -703,7 +745,9 @@ def run_xtb_path_search(
     profile_path, manifest_path, trajectory_path = _persist_xtb_path_outputs(
         output_root=output_root,
         request=request,
-        result=result,
+        frame_paths=frame_paths,
+        energies_hartree=energies_hartree,
+        trajectory_file=trajectory_file,
         product_xyz=end_xyz,
         provenance=provenance,
     )
@@ -718,7 +762,7 @@ def run_xtb_path_search(
             "workflow": XTB_PATH_WORKFLOW,
             "reaction_id": request.reaction_id,
             "request_sha256": request.request_sha256,
-            "frames_count": len(result.frame_paths),
+            "frames_count": len(frame_paths),
             "pes_profile_path": str(profile_path),
             "result_manifest_path": str(manifest_path),
             "trajectory_path": str(trajectory_path),

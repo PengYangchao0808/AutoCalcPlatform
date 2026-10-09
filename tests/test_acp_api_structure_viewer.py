@@ -2592,3 +2592,373 @@ class TestInvalidProductJsonConsistency:
         assert ep_body["source"] == "historical_projection"
         assert cat_vib["imaginary_count"] == ep_body["imaginary_count"]
         assert cat_vib["imaginary_count"] == 2
+
+
+# ── v2 remote reads via the manager-owned cache singleton (todo 6 / R6) ─────
+
+
+class TestV2RemoteReadsSharedCache:
+    """v2 structure downloads (R6) share the manager cache singleton.
+
+    Cold-cache contract: only the manifest is seeded into the injected
+    manager singleton; the node holds the structure bytes; the task work_dir
+    has no RESULT tree and must stay untouched.
+    """
+
+    _JOB = "v2sv_remote"
+
+    def _seed_remote(self, client: TestClient, tmp_path: Path) -> Path:
+        manager = client.app.state.job_manager
+        work_dir = tmp_path / "v2sv_remote_task"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id=self._JOB,
+            spec=JobSpec(
+                workflow="optimize",
+                name="v2sv_remote_task",
+                molecule_name="m",
+                task_name="opt",
+                remark="final",
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            remote_job_id="9",
+            result={"node": "node1", "remote_dir": "/remote/v2sv_remote_task"},
+        )
+        manager.store.create(record)
+        return work_dir
+
+    def _seed_manifest(self, manager: Any) -> None:
+        from acp.storage.manifest import ResultManifest
+
+        manifest = ResultManifest(task_id=self._JOB, workflow="optimize", status="completed")
+        manifest.add_product(
+            id="optimized",
+            label="optimized structure",
+            path="simple/optimized.xyz",
+            kind="structure",
+        )
+        manifest_path = manager.structure_cache.cache_path(self._JOB, "RESULT/result_manifest.json")
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest.to_dict()), encoding="utf-8")
+
+    def test_v2_structure_download_populates_manager_singleton(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """The injected manager singleton receives the bytes; no second cache root."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        work_dir = self._seed_remote(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+        content = b"2\nshared singleton structure\nH 0 0 0\n"
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if filename == "RESULT/simple/optimized.xyz":
+                    return content
+                raise FileNotFoundError(filename)
+
+        injected = RemoteStructureCache(
+            manager.run_root, fetcher_factory=lambda _jid: FakeFetcher()
+        )
+        manager._remote_structure_cache = injected  # type: ignore[attr-defined]
+        self._seed_manifest(manager)
+        assert manager.structure_cache is injected
+
+        response = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert response.status_code == 200, response.text
+        assert response.content == content
+
+        # The manager-owned singleton got populated (not a private second cache).
+        assert injected.get_cached(self._JOB, "RESULT/simple/optimized.xyz") is not None
+        assert manager.structure_cache is injected
+        # One on-disk controlled cache under run_root/.remote_cache shared by
+        # any instance rooted at the same run_root.
+        assert (
+            RemoteStructureCache(manager.run_root).get_cached(
+                self._JOB, "RESULT/simple/optimized.xyz"
+            )
+            is not None
+        )
+        # work_dir never written.
+        assert not (work_dir / "RESULT").exists()
+
+    def test_v2_structure_download_never_writes_task_dir(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """On-demand remote fetch serves from the cache; work_dir stays byte-identical."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        work_dir = self._seed_remote(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                return b"3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        manager._remote_structure_cache = RemoteStructureCache(  # type: ignore[attr-defined]
+            manager.run_root, fetcher_factory=lambda _jid: FakeFetcher()
+        )
+        self._seed_manifest(manager)
+        before = set(work_dir.rglob("*"))
+
+        response = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert response.status_code == 200, response.text
+
+        assert set(work_dir.rglob("*")) == before
+        assert not (work_dir / "RESULT").exists()
+
+    def test_v2_structure_missing_is_404_and_transport_failure_is_502(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """remote-missing (node says no such file) vs connection failure differ."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        self._seed_remote(sv_client, tmp_path)
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def __init__(self) -> None:
+                self.transport_down = False
+
+            def read_file(self, record: Any, filename: str) -> bytes:
+                if self.transport_down:
+                    raise RuntimeError("ssh transport broken")
+                raise FileNotFoundError(filename)
+
+        fetcher = FakeFetcher()
+        manager._remote_structure_cache = RemoteStructureCache(  # type: ignore[attr-defined]
+            manager.run_root, fetcher_factory=lambda _jid: fetcher
+        )
+        self._seed_manifest(manager)
+
+        missing = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert missing.status_code == 404, (
+            f"remote-missing must stay 404: {missing.status_code} {missing.text}"
+        )
+
+        fetcher.transport_down = True
+        failed = sv_client.get(f"/api/v2/tasks/{self._JOB}/structures/optimized")
+        assert failed.status_code == 502, (
+            f"connection failure must not read as missing: {failed.status_code} {failed.text}"
+        )
+        assert "remote fetch failed" in failed.json()["detail"]
+
+
+# ── Attempt fence + purge generation fence (todo 15 / R6) ───────────────────
+
+
+class TestRemoteCacheAttemptAndPurgeFence:
+    """Attempt-aware cache identity + purge write fence (followup probe).
+
+    Mirrors ``.omo/evidence/acp-runtime-contract-remediation/followup-review/probe.py``:
+    a fake node serves per-attempt bytes.  A cached entry fetched for one
+    attempt must never satisfy a read for another attempt (including across
+    new cache instances over the same root), and an in-flight fetch racing
+    ``purge_job`` must not resurrect purged content.
+    """
+
+    JOB = "fence_job"
+    MANIFEST = "RESULT/result_manifest.json"
+    GEOMETRY = "RESULT/simple/optimized.xyz"
+    XYZ = {
+        1: b"1\nattempt 1\nH 0.0 0.0 0.0\n",
+        2: b"1\nattempt 2\nH 1.0 0.0 0.0\n",
+    }
+
+    @classmethod
+    def _record(cls, attempt: int) -> Any:
+        import types
+
+        return types.SimpleNamespace(
+            id=cls.JOB,
+            attempt=attempt,
+            result={"node": "fake_node", "remote_dir": "/fake/project/task"},
+        )
+
+    class _AttemptFetcher:
+        """Attempt-aware fake node; counts remote reads per (attempt, rel)."""
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, str]] = []
+
+        def read_file(self, record: Any, rel_path: str) -> bytes:
+            attempt = int(getattr(record, "attempt", 0))
+            self.calls.append((attempt, rel_path))
+            spec = TestRemoteCacheAttemptAndPurgeFence
+            if rel_path == spec.GEOMETRY:
+                return spec.XYZ[attempt]
+            if rel_path == spec.MANIFEST:
+                return json.dumps(
+                    {
+                        "attempt": attempt,
+                        "workflow": "frequency",
+                        "products": [
+                            {
+                                "kind": "structure",
+                                "id": "optimized",
+                                "path": "simple/optimized.xyz",
+                            }
+                        ],
+                    }
+                ).encode()
+            raise FileNotFoundError(rel_path)
+
+    def test_attempt_2_read_never_serves_attempt_1_bytes(self, tmp_path: Path) -> None:
+        """(a) Cross-attempt reads miss and refetch; same-attempt reads hit."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        fetcher = self._AttemptFetcher()
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda _jid: fetcher)
+        rec1, rec2 = self._record(1), self._record(2)
+
+        cache.fetch(rec1, self.MANIFEST)
+        cache.fetch(rec1, self.GEOMETRY)
+        cached_attempt1 = cache.get_cached(self.JOB, self.MANIFEST, attempt=1)
+        assert cached_attempt1 is not None
+        assert json.loads(cached_attempt1.read_text())["attempt"] == 1
+
+        # Attempt-2 reads must NOT return attempt-1 bytes: they miss...
+        assert cache.get_cached(self.JOB, self.MANIFEST, attempt=2) is None
+        assert cache.get_cached(self.JOB, self.GEOMETRY, attempt=2) is None
+
+        # ...and refetch from the node, serving attempt-2 content.
+        manifest = cache.fetch(rec2, self.MANIFEST)
+        assert manifest is not None
+        assert json.loads(manifest.read_text())["attempt"] == 2
+        # The attempt-2 manifest fetch fenced the whole job for the unfenced
+        # get_cached() path: the attempt-1 geometry must no longer be served.
+        assert cache.get_cached(self.JOB, self.GEOMETRY) is None
+
+        geometry = cache.fetch(rec2, self.GEOMETRY)
+        assert geometry is not None
+        assert geometry.read_bytes() == self.XYZ[2]
+        assert cache.get_cached(self.JOB, self.GEOMETRY) == geometry
+        assert cache.get_cached(self.JOB, self.GEOMETRY, attempt=2) == geometry
+        assert json.loads(cache.get_cached(self.JOB, self.MANIFEST).read_text())["attempt"] == 2
+
+        # The node was consulted for attempt 2, exactly once per path.
+        assert (2, self.MANIFEST) in fetcher.calls
+        assert (2, self.GEOMETRY) in fetcher.calls
+        assert fetcher.calls.count((1, self.MANIFEST)) == 1
+        assert fetcher.calls.count((2, self.MANIFEST)) == 1
+
+    def test_purge_job_fences_inflight_fetch(self, tmp_path: Path) -> None:
+        """(b) A fetch that began before purge_job cannot repopulate the cache."""
+        import threading
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        entered = threading.Event()
+        release = threading.Event()
+
+        class BlockingFetcher(self._AttemptFetcher):
+            def read_file(self, record: Any, rel_path: str) -> bytes:
+                if int(getattr(record, "attempt", 0)) == 1 and rel_path == geometry_rel:
+                    entered.set()
+                    if not release.wait(timeout=5):
+                        raise TimeoutError("release was not signaled")
+                return super().read_file(record, rel_path)
+
+        geometry_rel = self.GEOMETRY
+        blocking = BlockingFetcher()
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda _jid: blocking)
+        cache.fetch(self._record(1), self.MANIFEST)
+
+        outcome: list[Any] = []
+        worker = threading.Thread(
+            target=lambda: outcome.append(cache.fetch(self._record(1), self.GEOMETRY))
+        )
+        worker.start()
+        try:
+            assert entered.wait(timeout=5), "in-flight fetch did not start"
+            cache.purge_job(self.JOB)
+        finally:
+            release.set()
+            worker.join(timeout=5)
+        assert not worker.is_alive(), "worker did not finish"
+
+        # The pre-purge fetch must be discarded: nothing is resurrected.
+        assert outcome == [None]
+        assert cache.get_cached(self.JOB, self.GEOMETRY) is None
+        assert not cache.cache_path(self.JOB, self.GEOMETRY).exists()
+        assert cache.get_cached(self.JOB, self.MANIFEST) is None
+
+        # A fetch that begins AFTER the purge proceeds normally: fresh bytes.
+        fresh = cache.fetch(self._record(2), self.GEOMETRY)
+        assert fresh is not None
+        assert fresh.read_bytes() == self.XYZ[2]
+        assert (2, self.GEOMETRY) in blocking.calls
+
+    def test_same_attempt_repeat_read_is_cache_hit(self, tmp_path: Path) -> None:
+        """(c) Same-attempt repeat read: one remote read, then pure cache hits."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        fetcher = self._AttemptFetcher()
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda _jid: fetcher)
+        rec = self._record(1)
+
+        first = cache.fetch(rec, self.MANIFEST)
+        second = cache.fetch(rec, self.MANIFEST)
+        assert first is not None and second is not None
+        assert first == second
+        assert fetcher.calls.count((1, self.MANIFEST)) == 1
+
+        cached = cache.get_cached(self.JOB, self.MANIFEST)
+        assert cached == first
+        assert json.loads(cached.read_text())["attempt"] == 1
+
+    def test_new_cache_instance_does_not_serve_stale_cross_attempt(self, tmp_path: Path) -> None:
+        """(d) Attempt identity is persisted: a fresh instance refetches too."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        fetcher = self._AttemptFetcher()
+        rec1, rec2 = self._record(1), self._record(2)
+        first = RemoteStructureCache(tmp_path, fetcher_factory=lambda _jid: fetcher)
+        first.fetch(rec1, self.MANIFEST)
+        first.fetch(rec1, self.GEOMETRY)
+
+        second = RemoteStructureCache(tmp_path, fetcher_factory=lambda _jid: fetcher)
+        assert second.get_cached(self.JOB, self.MANIFEST, attempt=2) is None
+
+        manifest = second.fetch(rec2, self.MANIFEST)
+        assert manifest is not None
+        assert json.loads(manifest.read_text())["attempt"] == 2
+
+        assert second.get_cached(self.JOB, self.GEOMETRY, attempt=2) is None
+        assert second.get_cached(self.JOB, self.GEOMETRY) is None
+        geometry = second.fetch(rec2, self.GEOMETRY)
+        assert geometry is not None
+        assert geometry.read_bytes() == self.XYZ[2]
+        assert (2, self.GEOMETRY) in fetcher.calls
+
+    def test_concurrent_cold_fetches_perform_one_remote_read(self, tmp_path: Path) -> None:
+        """(e) Per-path dedup: N concurrent cold fetchers, exactly one node read."""
+        import threading
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        fetcher = self._AttemptFetcher()
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda _jid: fetcher)
+        rec = self._record(1)
+        workers = 6
+        barrier = threading.Barrier(workers, timeout=10)
+        results: list[Any] = []
+        results_lock = threading.Lock()
+
+        def worker() -> None:
+            barrier.wait()
+            path = cache.fetch(rec, self.GEOMETRY)
+            with results_lock:
+                results.append(path)
+
+        threads = [threading.Thread(target=worker) for _ in range(workers)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+
+        assert all(not thread.is_alive() for thread in threads), "fetch worker hung"
+        assert len(results) == workers
+        assert all(path is not None for path in results)
+        assert fetcher.calls.count((1, self.GEOMETRY)) == 1

@@ -27,6 +27,14 @@ dependencies = [
     "pyyaml>=6.0",
     "scipy>=1.10",
     "matplotlib>=3.7",
+    # XLSX report writer (acp.nmr.report.write_xlsx_report). Declared as a
+    # CORE dep (not the `nmr` extra): `acp run nmr` is an active workflow
+    # that always writes nmr_assignment.xlsx, and the writer's import guard
+    # is pragma'd "openpyxl is in deps" — with openpyxl mandatory the
+    # missing-openpyxl skip path is unreachable in supported installs, so
+    # XLSX can never be silently skipped without a capability declaration.
+    # Pure-python, no compiled wheels — safe on slim compute nodes too.
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -67,6 +75,16 @@ acp = "acp.cli:main"
 where = ["src"]
 include = ["cccp*", "acp*"]
 
+# Ship non-.py package data. `acp/nmr/models/` is a DATA DIRECTORY (no
+# __init__.py — see src/acp/nmr/AGENTS.md): DP5/FCHL binary artifacts
+# (atomic_reps.gz, frag_reps.gz, *.p, tms_references.txt, LICENSE-DP5,
+# NOTICE.md) loaded at runtime via acp.nmr.fchl / error_model. Without this
+# entry setuptools only packs *.py and wheels silently lose ~64MB of model
+# assets (wheel check: `atomic_reps.gz` must appear in the namelist —
+# locked by tests/test_packaging_assets.py).
+[tool.setuptools.package-data]
+"acp.nmr" = ["models/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -81,6 +99,7 @@ markers = [
     "requires_xtb: marks tests that need xTB installed",
     "requires_isostat: marks tests that need ISOSTAT installed",
     "requires_shermo: marks tests that need Shermo installed",
+    "requires_censo: marks tests that need CENSO installed",
 ]
 
 [tool.ruff]

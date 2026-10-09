@@ -1,0 +1,54 @@
+{
+  "artifacts": [
+    {
+      "path": "WORK/08_CASSCF/casscf.log",
+      "sha256": "45edcc8e2693edcb43ed2fca043e942f74d2ae1fe32ea5d19f3f0aa454610464",
+      "source": "fixture",
+      "type": "log"
+    },
+    {
+      "path": "WORK/08_CASSCF/active_space.json",
+      "sha256": "04e534ccc877b0dd1a7ea92a194e99514d2c48ebfeefc10c1bcb6e546ad310ae",
+      "source": "fixture",
+      "type": "active_space"
+    }
+  ],
+  "attempt": null,
+  "code_release": "0.1.3",
+  "config_digest": null,
+  "coords": null,
+  "dependency_artifacts": [],
+  "energy": -108.5,
+  "errors": [],
+  "frequencies": [],
+  "index": 0,
+  "job_id": null,
+  "kind": "casscf",
+  "metadata": {
+    "casscf": {
+      "casscf_energy_hartree": -108.5,
+      "converged": false
+    },
+    "multireference": {
+      "active_electrons": 2,
+      "active_orbitals": 2,
+      "casscf_energy_hartree": -108.5,
+      "converged": false,
+      "multiplicity": 1,
+      "natural_occupations": [
+        1.7,
+        0.3
+      ],
+      "nroots": 1
+    }
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "step_id": "step_0_casscf",
+  "step_identity": "v2:e44db28af6a80fd6dd2ce02da422db4b",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ]
+}

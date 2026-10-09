@@ -31,6 +31,7 @@ from acp.scheduler.nodes import (
     validate_execution_request,
     validate_submission_target,
 )
+from acp.scheduler.remote.runner import RemotePollObservation
 from acp.scheduler.store import JobStore
 
 try:
@@ -351,7 +352,10 @@ class _FlakyRemoteRunner:
         self.calls += 1
         if self.calls <= self.fail_times:
             raise ConnectionError("SSH transport down")
-        return True, 0
+        return RemotePollObservation(terminal=True, exit_code=0)
+
+    def apply_terminal_side_effects(self, record, event_log, stage_events=()) -> None:
+        pass
 
 
 def test_remote_poll_transport_failure_keeps_status(tmp_path: Path) -> None:
@@ -1078,20 +1082,41 @@ class _FakeRemoteRunner:
         self.error = error
         self.lsf_status = lsf_status
 
-    def submit_remote(self, record, event_log, target_node=None) -> str:
+    def submit_remote(
+        self,
+        record,
+        event_log,
+        target_node=None,
+        *,
+        remote_job_dir=None,
+        on_submitted=None,
+        submission_id=None,
+        on_code_release_bound=None,  # protocol double: no real release to bind
+    ) -> str:
         if self.error is not None:
             raise self.error
+        if on_submitted is not None:
+            on_submitted(self.lsf_id)
         return self.lsf_id
 
+    def reconcile_submission(self, record) -> str:
+        return "found" if record.remote_job_id else "unknown"
+
     def poll_remote(self, record, event_log, cancel_event):
-        # Mirrors RemoteJobRunner.poll_remote: the record flips to RUNNING
-        # exactly when bjobs reports the LSF RUN state.
+        # Mirrors RemoteJobRunner.poll_remote: the LSF RUN state is reported
+        # as an observation; the manager persists PENDING→RUNNING itself.
+        observed = None
         if self.lsf_status == "running" and record.status in (
             JobStatus.PENDING,
             JobStatus.PAUSED,
         ):
-            record.status = JobStatus.RUNNING
-        return (False, None)
+            observed = JobStatus.RUNNING
+        return RemotePollObservation(
+            terminal=False, lsf_status=self.lsf_status, observed_status=observed
+        )
+
+    def apply_terminal_side_effects(self, record, event_log, stage_events=()) -> None:
+        pass
 
 
 def _manager_for_remote_submit(

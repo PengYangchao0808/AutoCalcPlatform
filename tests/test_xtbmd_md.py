@@ -11,11 +11,13 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from acp.backends.base import QCResult
 from acp.chem.embedding import enumerate_embeddings
 from acp.workflows.xtbmd_md import run_md_replicas
+from cccp.utils.file_io import read_xyz_multiframe
 
 
 def _write_single_frame(path: Path, comment: str = "input") -> None:
@@ -93,7 +95,7 @@ def _mock_backend(write_traj: bool = True) -> MagicMock:
 
 
 def _backend_factory(backend: MagicMock) -> Any:
-    """Return a ``get_backend("molclus")``-style factory recording the
+    """Return a ``MolclusBackend``-style factory recording the
     constructor kwargs it was called with."""
 
     def factory(config: dict[str, object], **kwargs: object) -> MagicMock:
@@ -101,6 +103,11 @@ def _backend_factory(backend: MagicMock) -> Any:
         return backend
 
     return factory
+
+
+def _geometry(path: Path) -> Any:
+    coords, _ = read_xyz_multiframe(Path(path))
+    return coords
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +120,7 @@ def test_single_replica_uses_primary_xyz_and_base_seed(tmp_path: Path) -> None:
     _write_single_frame(primary)
     backend = _mock_backend()
 
-    with patch("acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)):
+    with patch("acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)):
         result = run_md_replicas(
             "CCO",
             primary,
@@ -127,12 +134,15 @@ def test_single_replica_uses_primary_xyz_and_base_seed(tmp_path: Path) -> None:
     assert result.success is True
     assert backend.run_md.call_count == 1
     call = backend.run_md.call_args
-    assert call.args[0] == primary  # single replica: primary embedding as-is
+    # single replica: the primary embedding is the start geometry (reached the
+    # backend as the task-core materialised md_input.xyz)
+    assert np.allclose(_geometry(call.args[0]), _geometry(primary))
+    assert Path(call.args[0]).parent.name.startswith("replica_")
     assert call.kwargs["seed"] == 42
     assert call.kwargs["md_method"] == "gfnff"
     assert call.kwargs["temperature"] == 400.0
     assert call.kwargs["time_ps"] == 100.0
-    assert call.kwargs["solvent"] is None
+    assert call.kwargs.get("solvent") is None
 
     assert result.metadata["md_seed"] == 42
     assert result.metadata["md_seeds"] == 1
@@ -152,7 +162,7 @@ def test_multi_replica_seeds_increment_and_starts_differ(tmp_path: Path) -> None
     _write_single_frame(primary)
     backend = _mock_backend()
 
-    with patch("acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)):
+    with patch("acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)):
         result = run_md_replicas(
             "CCO",
             primary,
@@ -173,9 +183,12 @@ def test_multi_replica_seeds_increment_and_starts_differ(tmp_path: Path) -> None
         assert Path(start_file).parent.name.startswith("replica_")
 
     # v1.3: replicas start from distinct RDKit embeddings of the original
-    # molecule — the embedded XYZ blocks differ.
-    blocks = [Path(path).read_text(encoding="utf-8") for path in start_files]
-    assert len(set(blocks)) == 3, "multi-start conformations must differ"
+    # molecule — the start geometries handed to the backend differ.
+    geometries = [_geometry(path) for path in start_files]
+    distinct = {
+        tuple(np.asarray(geometry, dtype=np.float64).ravel().tolist()) for geometry in geometries
+    }
+    assert len(distinct) == 3, "multi-start conformations must differ"
 
     # Merged trajectory frame count = sum of per-replica frame counts.
     assert result.metadata["start_conf_index"] == [0, 1, 2]
@@ -194,7 +207,7 @@ def test_multi_replica_merge_preserves_titles(tmp_path: Path) -> None:
     _write_single_frame(primary)
     backend = _mock_backend()
 
-    with patch("acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)):
+    with patch("acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)):
         result = run_md_replicas(
             "CCO",
             primary,
@@ -225,7 +238,7 @@ def test_multi_replica_failure_fails_fast(tmp_path: Path) -> None:
 
     backend.run_md.side_effect = _run_md
 
-    with patch("acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)):
+    with patch("acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)):
         result = run_md_replicas(
             "CCO",
             primary,
@@ -250,8 +263,8 @@ def test_run_md_replicas_forwards_timeout_to_backend(tmp_path: Path) -> None:
     backend = _mock_backend()
 
     with patch(
-        "acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)
-    ) as mock_get:
+        "acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)
+    ) as mock_ctor:
         result = run_md_replicas(
             "CCO",
             primary,
@@ -260,7 +273,7 @@ def test_run_md_replicas_forwards_timeout_to_backend(tmp_path: Path) -> None:
         )
 
     assert result.success is True
-    mock_get.assert_called_once_with("molclus")
+    mock_ctor.assert_called_once_with({}, timeout=3600)
     assert backend.ctor_kwargs == {"timeout": 3600}
 
 
@@ -270,7 +283,7 @@ def test_run_md_replicas_default_no_timeout_kwarg(tmp_path: Path) -> None:
     backend = _mock_backend()
 
     with patch(
-        "acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)
+        "acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)
     ):
         result = run_md_replicas("CCO", primary, output_dir=tmp_path / "out")
 
@@ -307,7 +320,7 @@ def test_run_md_replicas_zero_timeout_means_backend_default(tmp_path: Path) -> N
     backend = _mock_backend()
 
     with patch(
-        "acp.workflows.xtbmd_md.get_backend", return_value=_backend_factory(backend)
+        "acp.workflows.xtbmd_md.MolclusBackend", side_effect=_backend_factory(backend)
     ):
         result = run_md_replicas(
             "CCO",

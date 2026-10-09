@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.remote.runner import RemotePollObservation
 
 MANIFEST = {
     "schema_version": "confsearch_v1",
@@ -57,8 +58,13 @@ class FakeFetcher:
 
 
 class TerminalRemoteRunner:
-    def poll_remote(self, record: Any, event_log: Any, cancel_event: Any) -> tuple[bool, int]:
-        return True, 0
+    def poll_remote(self, record: Any, event_log: Any, cancel_event: Any) -> RemotePollObservation:
+        return RemotePollObservation(terminal=True, exit_code=0)
+
+    def apply_terminal_side_effects(
+        self, record: Any, event_log: Any, stage_events: Any = ()
+    ) -> None:
+        pass
 
 
 def _seed_remote_job(
@@ -203,3 +209,87 @@ def test_frontend_assets_revalidate(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     assert response.status_code == 200
     assert "no-cache" in response.headers.get("cache-control", "")
+
+
+def test_v2_reads_after_terminal_prefetch_fetch_on_demand_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Terminal prefetch warms the singleton cache; v2 reads consume it (todo 6).
+
+    The manifest arrives via the backend-owned prefetch (no browser
+    ``?fetch=1``), ``/api/v2/results`` serves it from the cache, and a
+    structure still cold on the node is fetched on demand exactly once —
+    repeat downloads hit the same manager-owned singleton cache.
+    """
+    from acp.api.server import create_app
+    from acp.storage.manifest import ResultManifest
+
+    manifest = ResultManifest(task_id="pv2_remote", workflow="optimize", status="completed")
+    manifest.add_product(
+        id="optimized",
+        label="optimized structure",
+        path="simple/optimized.xyz",
+        kind="structure",
+    )
+
+    class OptimizeFetcher:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def read_file(self, record: Any, filename: str) -> bytes:
+            self.calls.append((str(record.id), filename))
+            if filename == "RESULT/result_manifest.json":
+                return json.dumps(manifest.to_dict()).encode("utf-8")
+            if filename == "RESULT/simple/optimized.xyz":
+                return b"2\nprefetched structure\nH 0 0 0\n"
+            raise FileNotFoundError(filename)
+
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
+    with TestClient(create_app(run_root=tmp_path, max_running=1)) as client:
+        mgr = client.app.state.job_manager
+        work_dir = tmp_path / "pv2_task"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id="pv2_remote",
+            spec=JobSpec(workflow="optimize", name="pv2_task"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            remote_job_id="11",
+            result={"node": "node1", "remote_dir": "/remote/pv2_task"},
+        )
+        mgr.store.create(record)
+        fetcher = OptimizeFetcher()
+        mgr._remote_fetcher = fetcher  # type: ignore[attr-defined]
+
+        mgr._prefetch_remote_catalog("pv2_remote")
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if mgr.structure_cache.get_cached("pv2_remote", "RESULT/result_manifest.json"):
+                break
+            time.sleep(0.02)
+        assert mgr.structure_cache.get_cached("pv2_remote", "RESULT/result_manifest.json")
+
+        # /results served from the prefetched cache — no frontend retry needed.
+        results = client.get("/api/v2/tasks/pv2_remote/results")
+        assert results.status_code == 200, results.text
+        assert "optimized" in {product["id"] for product in results.json()["products"]}
+
+        # The structure stays cold until a v2 download triggers the fetch.
+        assert mgr.structure_cache.get_cached("pv2_remote", "RESULT/simple/optimized.xyz") is None
+
+        def structure_fetches() -> int:
+            return sum(
+                1
+                for _job_id, filename in fetcher.calls
+                if filename == "RESULT/simple/optimized.xyz"
+            )
+
+        first = client.get("/api/v2/tasks/pv2_remote/structures/optimized")
+        assert first.status_code == 200, first.text
+        assert b"prefetched structure" in first.content
+        assert structure_fetches() == 1
+
+        second = client.get("/api/v2/tasks/pv2_remote/structures/optimized")
+        assert second.status_code == 200
+        assert structure_fetches() == 1, "repeat download re-fetched the node"
+        assert not (work_dir / "RESULT").exists()

@@ -152,7 +152,11 @@ def test_active_workflows_not_swept(tmp_path: Path) -> None:
     try:
         active = store.get("job-active")
         assert active is not None
-        assert active.status == JobStatus.QUEUED
+        # Startup dispatch may legitimately move a QUEUED job to STARTING; the
+        # retired-inflight sweep must never touch an active (non-retired)
+        # workflow.  Assert the sweep outcome, not the transient dispatch state.
+        assert active.status != JobStatus.FAILED
+        assert active.error != _RETIRED_INFLIGHT_REASON
     finally:
         mgr.shutdown()
 

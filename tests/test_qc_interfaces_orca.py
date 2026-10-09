@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import io
-import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,12 +19,13 @@ from cccp.qc.interfaces.orca import (
     _parse_frequencies,
 )
 from cccp.qc.keyword_registry import KeywordValueError
-from tests.conftest import requires_orca
+from tests.conftest import RealQCSnapshot, requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
 
 REAL_FREQ_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "orca_optfreq_real_sections.txt"
+REAL_NMR_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "orca_nmr_giao_real_sections.txt"
 
 ORCA_OPT_OUTPUT = """FINAL SINGLE POINT ENERGY      -200.654321
 CARTESIAN COORDINATES (ANGSTROEM)
@@ -130,10 +131,26 @@ def test_orca_optimize_parses_mocked_run_into_qcresult(
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_orca
-def test_orca_binary_smoke_check(sample_config: dict[str, object]) -> None:
-    interface = ORCAInterface(sample_config)
+def test_orca_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Gate and body must resolve ORCA through the SAME production path.
 
-    assert shutil.which(str(interface.exe_path)) is not None
+    ``sample_config`` carries the bare name ``orca``, so the old
+    ``shutil.which(str(interface.exe_path))`` probe matched whatever sat on
+    ``PATH`` — including the 40.3 Python-script ``/usr/bin/orca`` decoy —
+    instead of the configured production binary (BUG-4).  The body therefore
+    builds the interface from the conftest snapshot config (``load_config``
+    at collection) and asserts its ``resolve_executable`` result is verbatim
+    the path the ``requires_orca`` gate opened on.
+    """
+    interface = ORCAInterface(real_qc_snapshot.config)
+    gate_path = real_qc_binary_path("orca")
+
+    assert gate_path is not None
+    assert interface.executable == gate_path
+    assert gate_path.is_file()
 
 
 def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(
@@ -281,6 +298,34 @@ CHEMICAL SHIELDING SUMMARY (ppm)
     assert parsed[0]["symbol"] == "C"
     assert parsed[0]["isotropic"] == pytest.approx(140.230)
     assert parsed[1]["symbol"] == "H"
+
+
+def test_nmr_shielding_parser_orca6_real_summary_allows_inactive_atom_gap() -> None:
+    """Real ORCA 6.1.1 summary rows (index symbol iso anisotropy) parse.
+
+    ORCA 6 replaced the element-number column with the element symbol and
+    appended anisotropy.  Ethanol's oxygen is outside the NMR-active set, so
+    its index is absent: the parsed indices are intentionally non-contiguous
+    and validation is per-index symbol identity, not 0..N-1 contiguity.
+    """
+    expected = ["C", "C", "O", "H", "H", "H", "H", "H", "H"]
+    parsed = NmrShieldingParser.parse(REAL_NMR_FIXTURE, expected_symbols=expected)
+    assert set(parsed) == {0, 1, 3, 4, 5, 6, 7, 8}
+    assert parsed[0]["symbol"] == "C"
+    assert parsed[0]["isotropic"] == pytest.approx(184.706)
+    assert parsed[0]["anisotropy"] == pytest.approx(21.749)
+    assert parsed[1]["isotropic"] == pytest.approx(147.611)
+    assert parsed[1]["anisotropy"] == pytest.approx(55.441)
+    assert parsed[8]["symbol"] == "H"
+    assert parsed[8]["isotropic"] == pytest.approx(32.318)
+    assert parsed[8]["anisotropy"] == pytest.approx(21.840)
+
+
+def test_nmr_shielding_parser_orca6_real_summary_rejects_symbol_mismatch() -> None:
+    """Per-index symbol identity still rejects a mis-ordered expectation."""
+    expected = ["H", "C", "O", "H", "H", "H", "H", "H", "H"]
+    with pytest.raises(ValueError, match="do not match expected"):
+        NmrShieldingParser.parse(REAL_NMR_FIXTURE, expected_symbols=expected)
 
 
 def test_resolve_nmr_nuclei_unsupported_falls_back_to_molecule(
@@ -584,9 +629,42 @@ def test_nmr_gfn_rejected_by_default_with_actionable_message(tmp_path: Path) -> 
 def test_nmr_dft_implicit_basis_unchanged(tmp_path: Path) -> None:
     interface = _bare_nmr_interface("mPW1PW91")
     interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
+    text = (tmp_path / "nmr.inp").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    # T16: ORCA >= 6 rejects the legacy keyword — the emitted simple-input
+    # line carries the ORCA-native token + provenance comment (requested
+    # level itself unchanged); no `!`-line may spell mPW1PW91.
+    assert lines[0] == "# functional alias: requested=mPW1PW91 executed=mPW1PW"
+    assert lines[1] == "! mPW1PW 6-311G(d) TightSCF"
+    assert all(not (line.startswith("!") and "mPW1PW91" in line) for line in lines)
+    # ORCA >= 6 resolves `%eprnmr` nuclear selections against the already
+    # parsed geometry: the coordinate block must precede the eprnmr block,
+    # otherwise ORCA aborts with "nuclear properties are requested but no
+    # coordinates have been read".
+    assert text.index("* xyz 0 1") < text.index("%eprnmr")
+    assert "%eprnmr" in text
+
+
+@pytest.mark.parametrize("requested", ["mPW1PW91", "MPW1PW91", "mpw1pw91"])
+def test_nmr_functional_alias_is_case_insensitive(tmp_path: Path, requested: str) -> None:
+    """T16: every spelling of the Goodman functional aliases to mPW1PW."""
+    interface = _bare_nmr_interface(requested)
+    interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
     lines = (tmp_path / "nmr.inp").read_text(encoding="utf-8").splitlines()
-    assert lines[0] == "! mPW1PW91 6-311G(d) TightSCF"
-    assert lines[1] == "%eprnmr"
+    assert lines[0] == f"# functional alias: requested={requested} executed=mPW1PW"
+    assert lines[1].startswith("! mPW1PW ")
+    assert all(not (line.startswith("!") and "PW91" in line) for line in lines)
+
+
+def test_nmr_non_aliased_method_input_unchanged(tmp_path: Path) -> None:
+    """T16: a method without an alias renders exactly as before — no alias
+    comment, no native-token swap."""
+    interface = _bare_nmr_interface("B3LYP")
+    interface._write_nmr_input(tmp_path / "nmr.inp", COORDINATES, SYMBOLS, 0, 1)
+    lines = (tmp_path / "nmr.inp").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "! B3LYP 6-311G(d) TightSCF"
+    assert all(not line.startswith("# functional alias") for line in lines)
+    assert not any("mPW1PW" in line for line in lines)
 
 
 def test_nmr_gfn_allow_switch_no_implicit_basis_and_alpb_solvent(
@@ -628,4 +706,3 @@ def test_nmr_gfn_allow_switch_rejects_cpcm_smd(
                 solvent_model=model,
             )
     assert not (tmp_path / "nmr.inp").exists()
-

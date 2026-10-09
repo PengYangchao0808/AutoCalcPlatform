@@ -97,11 +97,24 @@ class JobEventLog:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    def append(self, event_type: str, **data: Any) -> None:
+    def append(self, event_type: str, *, idempotency_key: str | None = None, **data: Any) -> None:
+        """Append one event; keyword-only ``idempotency_key`` dedupes replays.
+
+        When a key is given and an event carrying it already exists in the
+        file, the append is a no-op — retryable terminal side effects can
+        re-emit safely after a crash-before-marker.
+        """
+        if idempotency_key is not None and self._has_idempotency_key(idempotency_key):
+            return
         record: dict[str, Any] = {"type": event_type, "timestamp": _utc_now_iso()}
         record.update(data)
+        if idempotency_key is not None:
+            record["idempotency_key"] = idempotency_key
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, default=str) + "\n")
+
+    def _has_idempotency_key(self, key: str) -> bool:
+        return any(event.get("idempotency_key") == key for event in self.read_all())
 
     def count(self) -> int:
         """Count newline-terminated event slots without decoding the file."""

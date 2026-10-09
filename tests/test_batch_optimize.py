@@ -28,7 +28,6 @@ from acp.calculations.batch.models import (
     parse_tag_comment,
 )
 from acp.calculations.batch.options import BatchMethodOptions
-from acp.calculations.checkpoint import CheckpointMismatchError
 from acp.calculations.contracts import CalculationResult, StepKind, StructureRole
 from tests.conftest import FakeBackend, FakeBackendCall
 
@@ -878,21 +877,40 @@ def test_four_profiles_have_correct_steps() -> None:
 
 def test_reject_irc_in_request() -> None:
     """IRC is not a StepKind; plans with unsupported step kinds are rejected."""
-    from acp.calculations.contracts import CalculationPlan, CalculationStep, validate_plan
+    from acp.calculations.contracts import (
+        CalculationPlan,
+        CalculationStep,
+        StructureArtifact,
+        validate_plan,
+    )
+
+    item = StructureArtifact(path=Path("input/mol.xyz"), elements=["H"], source="test")
 
     plan = CalculationPlan(
         workflow="BatchOptimize",
         profile="opt_freq",
-        items=[],
+        items=[item],
         steps=[CalculationStep(kind="optimize")],
     )
     errors = validate_plan(plan)
     assert errors == []
 
-    bad_plan = CalculationPlan(
+    empty_plan = CalculationPlan(
         workflow="BatchOptimize",
         profile="opt_freq",
         items=[],
+        steps=[CalculationStep(kind="optimize")],
+    )
+    errors = validate_plan(empty_plan)
+    assert errors == [
+        "calculation plans support exactly one input item; "
+        "submit multiple structures via BatchOptimize"
+    ]
+
+    bad_plan = CalculationPlan(
+        workflow="BatchOptimize",
+        profile="opt_freq",
+        items=[item],
         steps=[{"kind": "irc"}],
     )
     errors = validate_plan(bad_plan)
@@ -965,7 +983,7 @@ def test_mixed_ts_int_opt_freq_sp_thermo(
 
     engine = BatchOptimizeEngine(work_root=work_root, result_root=result_root)
 
-    with patch("acp.calculations.primitives.thermochemistry.run_shermo") as mock_shermo:
+    with patch("cccp.qc.shermo_adapter.run_shermo") as mock_shermo:
         mock_shermo.return_value = {"g_sum": -1.2, "h_sum": -1.1, "s_sum": 0.01}
 
         outcome = engine.run(
@@ -1136,6 +1154,7 @@ def test_fingerprint_change_rejects_old_checkpoint(
     fake_backend: object,
     batch_items_ts_int: list[BatchStructureItem],
 ) -> None:
+    """D06: a fingerprint change causes full batch re-execution (no raise)."""
     from tests.conftest import FakeBackend
 
     assert isinstance(fake_backend, FakeBackend)
@@ -1146,10 +1165,14 @@ def test_fingerprint_change_rejects_old_checkpoint(
     engine.run(batch_items_ts_int, profile="opt_only", charge=0)
     calls_after_first = len(fake_backend.calls)
 
-    with pytest.raises(CheckpointMismatchError):
-        engine.run(batch_items_ts_int, profile="opt_freq", charge=0)
+    fake_backend.set_result(
+        "frequency",
+        QCResult(success=True, frequencies=[-120.0, 350.0], has_frequencies=True),
+    )
+    outcome = engine.run(batch_items_ts_int, profile="opt_freq", charge=0)
 
-    assert len(fake_backend.calls) == calls_after_first
+    assert all(record.status == "completed" for record in outcome.items)
+    assert len(fake_backend.calls) > calls_after_first
 
 
 # ── profile mismatch triggers full re-run ────────────────────────────────
@@ -2143,7 +2166,7 @@ class TestEnginePerRoleSpThermo:
             xyz="2\nTAG: INT\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
             candidate_id="int_001",
         )
-        with patch("acp.calculations.primitives.thermochemistry.run_shermo") as mock_shermo:
+        with patch("cccp.qc.shermo_adapter.run_shermo") as mock_shermo:
             mock_shermo.return_value = {"g_sum": -1.0, "h_sum": -0.9, "s_sum": 0.01}
             engine.run([item], profile="opt_freq_sp_thermo", charge=0, methods=methods)
             assert mock_shermo.call_count == 1

@@ -340,6 +340,22 @@ def test_self_corrupt_returns_empty(client: TestClient) -> None:
 
 # ── FIX 5: diamond-duplicate → A appears exactly once ─────────────────
 
+# Ethanol geometry used by the scan item: the shared submission-boundary
+# validator requires a confirmed structure so scan atom indices can be
+# range-checked (validate_scan_submission).
+_ETHANOL_XYZ = (
+    "9\nethanol\n"
+    "C  1.1656 -0.4067  0.0000\n"
+    "C  0.0000  0.5525  0.0000\n"
+    "O -1.1656 -0.2277  0.0000\n"
+    "H  1.9863  0.3100  0.0000\n"
+    "H  1.2398 -1.0364  0.8854\n"
+    "H  1.2398 -1.0364 -0.8854\n"
+    "H -0.0618  1.1914  0.8854\n"
+    "H -0.0618  1.1914 -0.8854\n"
+    "H -1.9268  0.3476  0.0000\n"
+)
+
 
 def test_diamond_dedup(client: TestClient) -> None:
     pid = _default_project_id(client)
@@ -368,7 +384,12 @@ def test_diamond_dedup(client: TestClient) -> None:
                 "molecule_name": "ethanol",
                 "task_name": "scan",
                 "workflow": "scan",
-                "input": {"source": "CCO"},
+                "input": {
+                    "source_type": "xyz_text",
+                    "source": _ETHANOL_XYZ,
+                    "scan_coordinates": ["0,1,1.0,3.0"],
+                },
+                "method": {"schema_id": "dft_scan", "scan_points": 21},
             },
         ],
         project_id=pid,

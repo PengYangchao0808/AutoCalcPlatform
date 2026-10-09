@@ -159,8 +159,17 @@ def normalize_for_compare(*sections: Any) -> str:
 
 
 def attempt_number(record: JobRecord) -> int:
-    """1-based attempt number tracked in ``record.result['attempts']``."""
-    return int((record.result or {}).get("attempts") or 1)
+    """1-based attempt number; the ``jobs.attempt`` column is authoritative.
+
+    Falls back to the legacy ``result['attempts']`` counter only while the
+    column still sits at its untouched default (pre-migration rows and
+    in-memory records).
+    """
+    column = int(record.attempt or 1)
+    if column > 1:
+        return column
+    legacy = int((record.result or {}).get("attempts") or 1)
+    return max(column, legacy)
 
 
 def compute_source_revision(record: JobRecord) -> str:
@@ -504,10 +513,18 @@ def project_original_structure_items(record: JobRecord) -> list[dict[str, Any]]:
 def resolve_previous_outputs(
     work_dir: Path | str, *, job_id: str = "", project_id: str | None = None,
     attempt: int = 0, strict: bool = False,
+    skipped: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Project every reusable single geometry with stable provenance."""
+    """Project every reusable single geometry with stable provenance.
+
+    ``skipped`` is an optional out-parameter: when supplied, multi-frame
+    collection products (historical ``all_conformers`` /
+    ``confsearch_final_conformers`` ids and the new ``auto_reusable=false``
+    marker) are appended as ``{"id", "path", "reason"}`` instead of aborting a
+    strict recalc.  Callers that only need the reusable list are unaffected.
+    """
     from acp.results.manifest import load_result_manifest
-    from acp.results.structure_policy import reusable_product, single_geometry
+    from acp.results.structure_policy import collection_product, reusable_product, single_geometry
     from acp.scheduler.files import resolve_safe
     from acp.scheduler.structure_source_store import source_uid_for
 
@@ -542,6 +559,13 @@ def resolve_previous_outputs(
         if manifest.workflow in {"frequency", "singlepoint"}:
             continue
         if manifest.workflow in {"scan", "PESsearch"} and product.metadata.get("selection_source") not in {"manual", "manual_frame"}:
+            continue
+        collection_reason = collection_product(product.to_dict())
+        if collection_reason is not None:
+            if skipped is not None:
+                skipped.append({
+                    "id": product.id, "path": product.path, "reason": collection_reason,
+                })
             continue
         if not reusable_product(product.to_dict()):
             continue
@@ -602,9 +626,10 @@ def effective_config_info(record: JobRecord) -> dict[str, Any]:
 
     * ``snapshot``   — effective_config.json exists in the work dir.
     * ``recomputed`` — no snapshot; the effective config was recomputed from
-      the submitted method dict (BatchOptimize only).
-    * ``unavailable``— neither is available (non-batch workflows without a
-      snapshot; the draft hydrates from the spec alone).
+      the submitted method dict (BatchOptimize, and nmr via the T17 resolver
+      — todo 25 syncs functional/basis/solvent_model/ewin/max_conformers).
+    * ``unavailable``— neither is available (other non-batch workflows
+      without a snapshot; the draft hydrates from the spec alone).
     """
     work_dir = Path(record.work_dir) if record.work_dir else None
     if work_dir is not None:
@@ -632,7 +657,33 @@ def effective_config_info(record: JobRecord) -> dict[str, Any]:
             return {"status": "recomputed", "source": "spec.method", "config": recomputed}
         except Exception:  # noqa: BLE001 - degrade to unavailable, never block the draft
             logger.debug("effective-config recompute failed", exc_info=True)
+    if record.spec.workflow == "nmr":
+        config, _problem = _resolve_nmr_effective_config(record)
+        if config is not None:
+            return {"status": "recomputed", "source": "spec.method", "config": config}
     return {"status": "unavailable", "source": None, "config": None}
+
+
+def _resolve_nmr_effective_config(record: JobRecord) -> tuple[dict[str, Any] | None, str | None]:
+    """Resolve the nmr method payload through the T17 resolver (todo 25).
+
+    Returns ``(config_dict, None)`` on success or ``(None, problem)`` when
+    the payload is rejected (e.g. a method outside the NMR/GIAO metadata).
+    Rejection degrades the draft's effective-config block to ``unavailable``
+    and is surfaced as a note by :func:`build_edit_draft` — the review/view
+    semantics of the draft itself never change.
+    """
+    from acp.nmr.method_config import resolve_nmr_method
+    from acp.scheduler.jobs import nmr_flag_config
+
+    method = record.spec.method if isinstance(record.spec.method, dict) else {}
+    try:
+        # NmrMethodConfigError is a ValueError; OSError covers config reads.
+        resolved = resolve_nmr_method(dict(method), nmr_flag_config(record.spec.config_path))
+    except (ValueError, OSError) as exc:
+        logger.debug("nmr effective-config resolve failed", exc_info=True)
+        return None, str(exc)
+    return resolved.to_dict(), None
 
 
 def _missing_fields(record: JobRecord) -> list[str]:
@@ -722,6 +773,13 @@ def build_edit_draft(
     notes: list[str] = []
     if not editable and edit_status.get("migration_hint"):
         notes.append(f"迁移建议：{edit_status['migration_hint']}")
+    if editable and spec.workflow == "nmr":
+        # todo 25: unregistered/invalid method fields are rejected by the
+        # resolver — surface the reason at draft time (hint only; the
+        # review/view and submission semantics are unchanged).
+        _config, problem = _resolve_nmr_effective_config(record)
+        if problem:
+            notes.append(f"NMR 方法参数未通过编辑校验（提交前请修正）：{problem}")
     return {
         "job_id": record.id,
         "workflow": spec.workflow,

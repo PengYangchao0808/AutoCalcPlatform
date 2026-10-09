@@ -5,6 +5,23 @@ Protocols
 Conformer search protocol definitions.
 
 Author: QCcalc Team (adapted from RPH)
+
+DEPRECATED — legacy cccp API (marked 2026-10-05, plan todo 30; no removal scheduled).
+
+Usage evidence (verified by grep at repo HEAD 66222f7):
+    - No ACP production callers: ``src/acp`` imports none of this module's
+      symbols (``ProtocolSpec`` / ``FunnelPolicy`` / ``HandoffPolicy`` /
+      ``resolve_protocol_spec`` / ``validate_protocol_methods``).
+    - In-repo consumers are re-export only (``cccp/core/__init__.py``) plus a
+      type-hint import in the dormant ``cccp/pipeline/executor.py``.
+    - Direct callers are tests only (``tests/test_protocol_levels.py``,
+      ``tests/test_cccp_isolation.py``).
+
+Support scope: all exports stay (external users cannot be confirmed). The
+conformer-search pipeline this module served is dormant; new protocol work
+belongs in ``acp/confsearch`` + ``acp/backends``. Exception:
+``_get_default_protocol_config()`` remains the authoritative protocol-config
+source (root AGENTS.md anti-pattern #4 — YAML ``protocols`` node unreachable).
 """
 
 from __future__ import annotations
@@ -278,7 +295,7 @@ def resolve_protocol_spec(
     opt_recalc_hess_raw = opt_level.get("recalc_hess")
     opt_recalc_hess: object = None
     if opt_recalc_hess_raw is not None:
-        from acp.chem.composition import normalize_recalc_hess as _normalize
+        from cccp.qc.hessian_policy import normalize_recalc_hess as _normalize
 
         opt_recalc_hess = _normalize(opt_recalc_hess_raw)
 

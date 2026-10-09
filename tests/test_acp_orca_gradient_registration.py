@@ -15,7 +15,7 @@ from unittest.mock import patch
 from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 from acp.core.workflow import WorkflowResult
 from acp.scheduler.job_edit import EDIT_ACTIVE_WORKFLOWS, audit_workflow_edit_coverage
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+from acp.scheduler.jobs import PUBLIC_WORKFLOWS, SUPPORTED_WORKFLOWS
 from acp.workflows.orca_gradient import (
     ORCA_GRADIENT_STAGES,
     ORCA_GRADIENT_WORKFLOW,
@@ -41,8 +41,9 @@ def test_catalog_entry_is_active_orca_workflow() -> None:
 
 
 def test_supported_workflows_derives_orca_gradient() -> None:
-    assert _WORKFLOW_ID in SUPPORTED_WORKFLOWS
+    assert _WORKFLOW_ID in PUBLIC_WORKFLOWS
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
+    assert PUBLIC_WORKFLOWS == active_ids
     assert SUPPORTED_WORKFLOWS == active_ids + ("fake",)
 
 

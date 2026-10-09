@@ -2,6 +2,11 @@
 
 Each of the ten scientific capabilities is mapped to a live, collectable test function.
 
+> **Sync status (todo 32, 2026-10-05)**: every row verified against `pytest --collect-only` via
+> `tests/test_architecture_invariants.py::test_capability_evidence_table` (green at HEAD `66222f7`).
+> Execution stations post-migration: task cores in `src/cccp/calculation/tasks/`, capability
+> adapters in `src/cccp/backends/`; ACP `calculations/primitives` / `backends` are compat shims.
+
 | # | 能力 | 测试文件 | 测试函数 (node id) |
 |---|------|----------|-------------------|
 | 1 | PES坐标/路径选择 | tests/test_pes_search.py | tests/test_pes_search.py::TestPesContracts::test_scan_coordinate_roundtrip |

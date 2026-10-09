@@ -225,13 +225,9 @@ def query_project_tasks(
     Returns:
         A dict with keys: groups, facets, total, truncated, counts, query.
     """
-    where_clauses, params, tag_python_fallback = _build_where_clauses(q)
-
-    # --- search (case-insensitive, LIKE with escaping) ---
     search_clauses: list[str] = []
     if q.search.strip():
         escaped = _escape_like(q.search.strip())
-        pattern = f"%{escaped}%"
         for col in (
             "t.molecule_name",
             "t.task_name",
@@ -240,12 +236,7 @@ def query_project_tasks(
             "t.custom_name",
         ):
             search_clauses.append(f"LOWER({col}) LIKE ? ESCAPE '\\'")
-            params.append(pattern.lower())
-
-    where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-    base_sql = f"FROM tasks t WHERE {where_sql}"
-    if search_clauses:
-        base_sql += f" AND ({' OR '.join(search_clauses)})"
+        search_pattern = f"%{escaped}%"
 
     with index._lock:
         conn = index._connect()
@@ -255,8 +246,28 @@ def query_project_tasks(
 
             # Ghost guard (active only when the jobs table exists): residual
             # task rows whose jobs record was deleted must not render or
-            # count anywhere in the view.
+            # count anywhere in the view. The same join supplies the
+            # jobs-authoritative status + execution identity (todo 5) so
+            # list/filter/archive/stats cannot disagree with jobs because only
+            # the display was fixed.
             require_job_row = jobs_table_exists(conn)
+            join_sql = " LEFT JOIN jobs jj ON jj.id = t.job_id" if require_job_row else ""
+            status_expr = "COALESCE(jj.status, t.status)" if require_job_row else "t.status"
+            exec_cols = (
+                ", jj.attempt AS attempt, jj.revision AS revision" if require_job_row else ""
+            )
+
+            where_clauses, params, tag_python_fallback = _build_where_clauses(
+                q, status_expr=status_expr
+            )
+            if search_clauses:
+                for _col in search_clauses:
+                    params.append(search_pattern.lower())
+
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            base_sql = f"FROM tasks t{join_sql} WHERE {where_sql}"
+            if search_clauses:
+                base_sql += f" AND ({' OR '.join(search_clauses)})"
             if require_job_row:
                 base_sql += f" AND {_ORPHAN_GUARD_SQL}"
 
@@ -266,7 +277,8 @@ def query_project_tasks(
             total: int = total_row["cnt"] if total_row else 0
 
             counts_sql = (
-                f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt {base_sql} GROUP BY t.status"
+                f"SELECT {status_expr} AS status, COUNT(DISTINCT t.task_id) as cnt "
+                f"{base_sql} GROUP BY {status_expr}"
             )
             counts_rows = conn.execute(counts_sql, params).fetchall()
             counts: dict[str, int] = {s.value: 0 for s in _JobStatus}
@@ -276,15 +288,18 @@ def query_project_tasks(
             sort_sql = _SORT_SQL[q.sort] + ", t.task_id ASC"
             if q.running_first:
                 active_values = ", ".join(f"'{s}'" for s in sorted(_ACTIVE_STATUSES))
-                sort_sql = f"CASE WHEN t.status IN ({active_values}) THEN 0 ELSE 1 END, " + sort_sql
+                sort_sql = (
+                    f"CASE WHEN {status_expr} IN ({active_values}) THEN 0 ELSE 1 END, " + sort_sql
+                )
             fetch_sql = (
                 f"SELECT t.task_id, t.job_id, t.project_id, t.molecule_name, t.task_name, "
-                f"t.remark, t.display_name, t.workflow, t.task_dir_name, t.status, "
+                f"t.remark, t.display_name, t.workflow, t.task_dir_name, "
+                f"{status_expr} AS status, "
                 f"t.node_id, t.node_path, t.input_hash, t.result_manifest_path, "
                 f"t.current_stage, t.storage_mode, t.layout_version, t.created_at, "
                 f"t.updated_at, t.molecule_key, t.tags, t.archived, t.batch_id, "
                 f"t.last_activity_at, t.started_at, t.completed_at, t.group_id, t.progress, "
-                f"t.custom_name, t.name_revision, t.name_updated_at "
+                f"t.custom_name, t.name_revision, t.name_updated_at{exec_cols} "
                 f"{base_sql} ORDER BY {sort_sql}"
             )
             # Apply the cap in SQLite, before materialising rows. Without
@@ -540,10 +555,13 @@ def _build_tag_groups(
 
 def _build_where_clauses(
     q: TaskViewQuery,
+    *,
+    status_expr: str = "t.status",
 ) -> tuple[list[str], list[Any], bool]:
     """Build WHERE clauses for the given query.
 
-    Returns (clauses, params, tag_python_fallback).
+    Returns (clauses, params, tag_python_fallback).  ``status_expr`` is the
+    jobs-authoritative status expression when the jobs table is joined.
     """
     clauses: list[str] = []
     params: list[Any] = []
@@ -560,7 +578,7 @@ def _build_where_clauses(
 
     if q.statuses:
         placeholders = ", ".join("?" for _ in q.statuses)
-        clauses.append(f"t.status IN ({placeholders})")
+        clauses.append(f"{status_expr} IN ({placeholders})")
         params.extend(q.statuses)
 
     if q.workflows:
@@ -623,14 +641,17 @@ def _build_facets(
     elif q.archived == ArchivedFilter.only:
         clauses.append("t.archived = 1")
     where = " AND ".join(clauses) if clauses else "1=1"
-    base = f"FROM tasks t WHERE {where}"
+    join_sql = " LEFT JOIN jobs jj ON jj.id = t.job_id" if require_job_row else ""
+    base = f"FROM tasks t{join_sql} WHERE {where}"
     if require_job_row:
         base += f" AND {_ORPHAN_GUARD_SQL}"
+    status_expr = "COALESCE(jj.status, t.status)" if require_job_row else "t.status"
 
     facets: dict[str, Any] = {}
 
     rows = conn.execute(
-        f"SELECT t.status, COUNT(DISTINCT t.task_id) as cnt {base} GROUP BY t.status",
+        f"SELECT {status_expr} AS status, COUNT(DISTINCT t.task_id) as cnt "
+        f"{base} GROUP BY {status_expr}",
         params,
     ).fetchall()
     facets["statuses"] = {row["status"]: row["cnt"] for row in rows}
@@ -710,6 +731,8 @@ def _row_to_task(
     return {
         "id": row["task_id"],
         "status": row["status"],
+        "attempt": row.get("attempt", 1),
+        "revision": row.get("revision", 0),
         "group_id": row.get("group_id"),
         "project_id": project_id,
         "project_name": project_names.get(project_id, ""),

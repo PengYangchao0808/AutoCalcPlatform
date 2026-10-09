@@ -1,131 +1,74 @@
-# pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnnecessaryComparison=false
-"""Geometry optimization primitive with a backend-independent rescue chain."""
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
+"""Geometry optimization — ACP compat wrapper (plan todo 18).
+
+The task core lives in :mod:`cccp.calculation.tasks.optimize` (cleaned typed
+options contract, internal rescue chain, stdlib trajectory recorder, failure
+classification).  This module is the ACP-side compat surface: legacy
+``CalculationRequest`` → typed ``TaskRequest`` conversion, the legacy backend
+registry seam, the ``ProgressReporter`` → ``TaskProgressSink`` adapter (UI
+metric fields are ACP-only), trajectory ``item_id`` injection (platform
+identity), and the legacy ``CalculationResult`` envelope mapping.
+``run_optimize`` is a pure forwarder (the dual-root uniqueness guard
+classifies it as a shim).
+"""
 
 from __future__ import annotations
 
 import logging
-import shutil
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
-import numpy as np
-from typing_extensions import assert_never
-
-from acp.backends.base import QCResult
-from acp.calculations.contracts import (
-    ArtifactRef,
-    CalculationRequest,
-    CalculationResult,
-    JsonValue,
-    StructureRole,
-)
-from acp.calculations.progress import LiveMetric, ProgressReporter
-
-from ._common import (
-    CalculationInputs,
-    artifacts_from_qc,
+from acp.calculations.contracts import CalculationRequest, CalculationResult
+from acp.calculations.legacy_adapters import to_legacy_result, to_task_request
+from acp.calculations.primitives._common import (
     backend_for_request,
     backend_name,
-    call_capability,
     capability_kwargs,
-    electronic_state_result_metadata,
-    error_text,
-    load_inputs,
     output_dir,
-    result_from_qc,
-    write_state_artifacts,
 )
-from .optimization_trajectory import (
-    OptimizationTrajectoryRecorder,
-    finalize_optimization_trajectory,
+from acp.calculations.progress import LiveMetric, ProgressReporter
+from cccp import calculation as _cccp_calculation
+from cccp.calculation.context import TaskContext
+from cccp.calculation.optimization_trajectory import finalize_optimization_trajectory
+from cccp.calculation.progress import ProgressEvent, ProgressEventKind
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import TaskResult
+from cccp.calculation.tasks.optimize import (
+    _FAILURE_TYPES as _FAILURE_TYPES,
+)
+from cccp.calculation.tasks.optimize import (
+    _RESCUE_DESCRIPTIONS as _RESCUE_DESCRIPTIONS,
+)
+from cccp.calculation.tasks.optimize import (
+    _RESCUE_MATRIX as _RESCUE_MATRIX,
+)
+from cccp.calculation.tasks.optimize import (
+    CALCALL_OPT,
+    FAILURE_EXIT,
+    FRESH_HESSIAN_MODE_MONITOR,
+    FRESH_HESSIAN_RESTART,
+    IRC_MIDPOINT_RECOVERY,
+    MODE_DISPLACEMENT,
+    SADDLE_BREAK,
+    SCF_DAMP_SHIFT,
+    SCF_INCREASE_MAXITER,
+    SCF_SLOWCONV,
+    SCF_SOSCF,
+    TIGHT_OPT_CALCHESS,
+    TS_MODE_DIRECTED,
+    RescueAction,
+    RescuePlan,
+    _rescue_kwargs,
+    build_rescue_plan,
+    derive_failure_type,
+)
+from cccp.calculation.tasks.optimize import (
+    _inject_gbw_continuation as _inject_gbw_continuation,
 )
 
-FRESH_HESSIAN_RESTART = "fresh_hessian_restart"
-FRESH_HESSIAN_MODE_MONITOR = "fresh_hessian_mode_monitor"
-TS_MODE_DIRECTED = "ts_mode_directed"
-MODE_DISPLACEMENT = "mode_displacement"
-SADDLE_BREAK = "saddle_break"
-CALCALL_OPT = "calcall_opt"
-TIGHT_OPT_CALCHESS = "tight_opt_calchess"
-IRC_MIDPOINT_RECOVERY = "irc_midpoint_recovery"
-SCF_INCREASE_MAXITER = "scf_increase_maxiter"
-SCF_SLOWCONV = "scf_slowconv"
-SCF_SOSCF = "scf_soscf"
-SCF_DAMP_SHIFT = "scf_damp_shift"
-
-FAILURE_EXIT: Final[frozenset[str]] = frozenset({"crash_timeout", "memory_failure"})
-_STRUCTURE_KINDS: Final[frozenset[str]] = frozenset(
-    {"ts", "intermediate", "minimum", "precursor", "product"}
-)
-_FAILURE_TYPES: Final[frozenset[str]] = frozenset(
-    {
-        "geometry_not_converged",
-        "higher_order_saddle",
-        "ts_no_imaginary",
-        "minimum_with_imaginary",
-        "scf_failure",
-        "crash_timeout",
-        "collapsed_to_product",
-        "memory_failure",
-    }
-)
-
-_RESCUE_MATRIX: Final[dict[tuple[str, str], tuple[str, ...]]] = {
-    ("geometry_not_converged", "ts"): (
-        FRESH_HESSIAN_RESTART,
-        TS_MODE_DIRECTED,
-        CALCALL_OPT,
-    ),
-    ("geometry_not_converged", "intermediate"): (FRESH_HESSIAN_RESTART, CALCALL_OPT),
-    ("geometry_not_converged", "minimum"): (FRESH_HESSIAN_RESTART, CALCALL_OPT),
-    ("higher_order_saddle", "ts"): (SADDLE_BREAK, TS_MODE_DIRECTED, CALCALL_OPT),
-    ("ts_no_imaginary", "ts"): (
-        FRESH_HESSIAN_MODE_MONITOR,
-        TS_MODE_DIRECTED,
-        CALCALL_OPT,
-    ),
-    ("minimum_with_imaginary", "intermediate"): (MODE_DISPLACEMENT,),
-    ("minimum_with_imaginary", "minimum"): (MODE_DISPLACEMENT,),
-    ("collapsed_to_product", "intermediate"): (IRC_MIDPOINT_RECOVERY,),
-    ("scf_failure", "ts"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
-    (
-        "scf_failure",
-        "intermediate",
-    ): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
-    ("scf_failure", "minimum"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
-    ("scf_failure", "precursor"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
-    ("scf_failure", "product"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
-    ("memory_failure", "ts"): (),
-    ("memory_failure", "intermediate"): (),
-    ("memory_failure", "minimum"): (),
-    ("memory_failure", "precursor"): (),
-    ("memory_failure", "product"): (),
-    ("crash_timeout", "ts"): (),
-    ("crash_timeout", "intermediate"): (),
-    ("crash_timeout", "minimum"): (),
-    ("crash_timeout", "precursor"): (),
-    ("crash_timeout", "product"): (),
-}
-
-_RESCUE_DESCRIPTIONS: Final[dict[str, str]] = {
-    FRESH_HESSIAN_RESTART: "restart with CalcHess + RecalcHess=5",
-    FRESH_HESSIAN_MODE_MONITOR: "restart with fresh Hessian while monitoring the target mode",
-    TS_MODE_DIRECTED: "re-run with TS_Mode targeting the lowest imaginary mode",
-    CALCALL_OPT: "re-run with RecalcHess=1 (CalcAll semantics)",
-    SADDLE_BREAK: "displace along the second imaginary mode to break the saddle",
-    MODE_DISPLACEMENT: "displace ±0.30 Å along the imaginary mode",
-    TIGHT_OPT_CALCHESS: "tight optimization with calculated Hessian",
-    IRC_MIDPOINT_RECOVERY: "re-seed from the IRC midpoint (collapsed INT recovery)",
-    SCF_INCREASE_MAXITER: "increase SCF MaxIter to 500",
-    SCF_SLOWCONV: "increase SCF MaxIter to 500 with SlowConv strategy",
-    SCF_SOSCF: "increase SCF MaxIter to 500 with SOSCF strategy",
-    SCF_DAMP_SHIFT: "SOSCF with damping and level shift",
-}
-_BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 logger = logging.getLogger(__name__)
 
 _OPTIMIZATION_PROGRESS_REPORTER: ContextVar[ProgressReporter | None] = ContextVar(
@@ -143,120 +86,44 @@ def optimization_progress_context(reporter: ProgressReporter | None) -> Iterator
         _OPTIMIZATION_PROGRESS_REPORTER.reset(token)
 
 
-@dataclass(frozen=True, slots=True)
-class RescueAction:
-    """One ordered optimization rescue action."""
+class _ReporterSink:
+    """Map scientific cycle events onto ACP live metrics (UI fields stay ACP)."""
 
-    strategy: str
-    description: str
-    index: int
+    def __init__(self, reporter: ProgressReporter) -> None:
+        self._reporter = reporter
 
-
-@dataclass(frozen=True, slots=True)
-class RescuePlan:
-    """Ordered rescue actions and terminal state for one failed optimization."""
-
-    failure_type: str
-    structure_kind: str
-    actions: tuple[RescueAction, ...]
-    terminal: bool
-
-
-_TARGET_PRESERVING_STRATEGIES: Final[frozenset[str]] = frozenset(
-    {
-        SCF_INCREASE_MAXITER,
-        SCF_SLOWCONV,
-        SCF_SOSCF,
-        SCF_DAMP_SHIFT,
-    }
-)
-
-
-def _explicit_ts_target(kwargs: Mapping[str, Any]) -> int | None:
-    """Return an explicitly requested TS mode index, if any.
-
-    ``ts_mode`` as ``bool`` is the legacy "follow the lowest mode" rescue;
-    a non-bool ``int >= 0`` is an explicit, mapped target (tsmode flow)
-    that rescues must never silently override (plan §10.1).
-    """
-    value = kwargs.get("ts_mode")
-    if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
-        return None
-    return int(value)
-
-
-def build_rescue_plan(
-    failure_type: str,
-    structure_kind: str,
-    *,
-    explicit_ts_target: int | None = None,
-) -> RescuePlan:
-    """Build the migrated eight-strategy rescue plan for one failure cell.
-
-    When *explicit_ts_target* is set (a mapped TS Mode target), every
-    strategy that would restart from a different geometry/Hessian or
-    override ``TS_Mode`` is dropped: only SCF-recovery actions keep the
-    target binding intact, and the plan is terminal otherwise (plan §10.1
-    — "不能确定目标时停止并报告，不自动回到最低模式").
-    """
-    strategies = _RESCUE_MATRIX.get((failure_type, structure_kind), ())
-    if explicit_ts_target is not None:
-        strategies = tuple(
-            strategy for strategy in strategies if strategy in _TARGET_PRESERVING_STRATEGIES
+    def emit(self, event: ProgressEvent) -> None:
+        if (
+            event.kind is not ProgressEventKind.METRIC
+            or event.metric != "cycle"
+            or event.value is None
+        ):
+            return
+        cycle = int(event.value)
+        status = event.message or "running"
+        convergence = {
+            "running": "running",
+            "converged": "converged",
+            "failed": "failed",
+        }.get(status, "running")
+        self._reporter.update_live_metrics(
+            [
+                LiveMetric(
+                    key="opt_step",
+                    label_key="live.opt_step",
+                    value=f"Step {cycle}",
+                    kind="iteration",
+                    priority=100,
+                ),
+                LiveMetric(
+                    key="opt_convergence",
+                    label_key="live.opt_convergence",
+                    value=convergence,
+                    kind="status",
+                    priority=90,
+                ),
+            ]
         )
-    terminal = failure_type in FAILURE_EXIT or not strategies
-    actions = tuple(
-        RescueAction(
-            strategy=strategy,
-            description=_RESCUE_DESCRIPTIONS[strategy],
-            index=index,
-        )
-        for index, strategy in enumerate(strategies)
-    )
-    return RescuePlan(
-        failure_type=failure_type,
-        structure_kind=structure_kind,
-        actions=actions,
-        terminal=terminal,
-    )
-
-
-def _finalize_trajectory(target_dir: Path | None, selected_backend: str, item_id: str) -> None:
-    """Best-effort terminal trajectory rebuild; never fails the calculation."""
-    if target_dir is None or selected_backend != "orca":
-        return
-    try:
-        finalize_optimization_trajectory(target_dir, item_id=item_id)
-    except Exception:  # noqa: BLE001
-        logger.debug(
-            "Could not finalize optimization trajectory: %s", target_dir, exc_info=True
-        )
-
-
-def _inject_gbw_continuation(
-    source_dir: Path | None,
-    target_dir: Path | None,
-    kwargs: dict[str, Any],
-) -> None:
-    """Copy .gbw from a failed attempt into a rescue attempt directory.
-
-    Sets ``mo_read_path`` in *kwargs* so the ORCAInterface renders a
-    ``%moinp`` block and ``Moread`` route keyword, enabling orbital
-    inheritance across rescue attempts.
-    """
-    if source_dir is None or target_dir is None:
-        return
-    source_dir = Path(source_dir)
-    target_dir = Path(target_dir)
-    if not source_dir.is_dir():
-        return
-    gbw_files = list(source_dir.glob("*.gbw"))
-    if not gbw_files:
-        return
-    target_dir.mkdir(parents=True, exist_ok=True)
-    dest = target_dir / gbw_files[0].name
-    shutil.copy2(gbw_files[0], dest)
-    kwargs.setdefault("mo_read_path", str(dest))
 
 
 def run_optimize(
@@ -265,308 +132,96 @@ def run_optimize(
     progress_reporter: ProgressReporter | None = None,
 ) -> CalculationResult:
     """Optimize a structure and retry recoverable backend failures."""
+    return execute_optimize(req, progress_reporter=progress_reporter)
+
+
+def execute_optimize(
+    req: CalculationRequest,
+    *,
+    progress_reporter: ProgressReporter | None = None,
+) -> CalculationResult:
+    """ACP compat wrapper: cccp task core + legacy envelope mapping.
+
+    Verbatim legacy capability kwargs (``opt_level``, ``scf_maxiter``, …) ride
+    along as ``capability_extras`` (translation cleanup: plan todo 25); the
+    ``trajectory_item_id`` platform identity is injected into the finalized
+    trajectory here (the task only knows local product paths).
+    """
     if progress_reporter is None:
         progress_reporter = _OPTIMIZATION_PROGRESS_REPORTER.get()
-    inputs = load_inputs(req)
+    task_request, binding = to_task_request(req, TaskKind.OPTIMIZE)
     selected_backend = backend_name(req)
     backend = backend_for_request(req, selected_backend)
-    structure_kind = _structure_kind(req)
-    capability = "transition_state_opt" if structure_kind == "ts" else "optimize"
+    sink = _ReporterSink(progress_reporter) if progress_reporter is not None else None
+    context = TaskContext(
+        config=binding.config,
+        workdir=binding.artifact_root,
+        backend=backend,
+        capability_extras=capability_kwargs(req),
+        progress=sink,
+    )
+    task_result = _cccp_calculation.run_optimize(task_request, context=context)
     target_dir = output_dir(req)
-    base_kwargs = capability_kwargs(req)
-    all_artifacts: list[ArtifactRef] = []
-    errors: list[str] = []
-    trajectory_item_id = str(req.resources.get("trajectory_item_id") or "")
+    if target_dir is not None:
+        _finalize_trajectory(target_dir, selected_backend, binding.trajectory_item_id or "")
+    return _legacy_result(task_result, binding)
 
-    qc_result, failure = _run_attempt(
-        backend,
-        capability,
-        inputs,
-        target_dir,
-        base_kwargs,
-        selected_backend=selected_backend,
-        trajectory_item_id=trajectory_item_id,
-        progress_reporter=progress_reporter,
-    )
-    if _successful_geometry(qc_result):
-        _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
-        if qc_result is not None:
-            all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
-        state_metadata, state_errors, forced_status = _state_outcome(inputs, qc_result)
-        all_artifacts.extend(
-            write_state_artifacts(inputs, qc_result, target_dir, selected_backend)
-        )
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            errors + state_errors,
-            all_artifacts,
-            {"optimization_status": "converged", "electronic_state": state_metadata},
-            status=forced_status,
-        )
 
-    if qc_result is not None:
-        all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
-    first_failure = failure or _qc_failure_message(qc_result, capability)
-    errors.append(f"{capability}: {first_failure}")
-    failure_type = _failure_type(req, first_failure)
-    explicit_target = _explicit_ts_target(base_kwargs)
-    plan = build_rescue_plan(
-        failure_type, structure_kind, explicit_ts_target=explicit_target
-    )
-    rescue_metadata = _plan_metadata(plan)
-    if explicit_target is not None:
-        rescue_metadata["tsmode_explicit_target"] = explicit_target
-        rescue_metadata["tsmode_target_preserved"] = True
-
-    rescue_enabled = req.resources.get("opt_rescue_policy", "adaptive") != "off"
-    max_rescue = int(req.resources.get("opt_max_rescue", 2))
-
-    if not rescue_enabled or not plan.actions:
-        rescue_metadata["rescue_attempts"] = 0
-        _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            errors,
-            all_artifacts,
-            rescue_metadata,
-            status="failed",
-        )
-
-    last_attempt_dir = target_dir
-    for action in plan.actions[:max_rescue]:
-        attempt_kwargs = dict(base_kwargs)
-        attempt_kwargs.update(_rescue_kwargs(action.strategy))
-        attempt_dir = (
-            target_dir / f"rescue_{action.index:02d}_{action.strategy}"
-            if target_dir is not None
-            else None
-        )
-        _inject_gbw_continuation(last_attempt_dir, attempt_dir, attempt_kwargs)
-        qc_result, failure = _run_attempt(
-            backend,
-            capability,
-            inputs,
-            attempt_dir,
-            attempt_kwargs,
-            selected_backend=selected_backend,
-            trajectory_item_id=trajectory_item_id,
-            progress_reporter=progress_reporter,
-        )
-        last_attempt_dir = attempt_dir
-        if qc_result is not None:
-            all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
-        if _successful_geometry(qc_result):
-            _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
-            rescue_metadata["rescue_attempts"] = action.index + 1
-            state_metadata, state_errors, forced_status = _state_outcome(inputs, qc_result)
-            all_artifacts.extend(
-                write_state_artifacts(inputs, qc_result, target_dir, selected_backend)
-            )
-            rescue_metadata["optimization_status"] = "converged"
-            if state_metadata:
-                rescue_metadata["electronic_state"] = state_metadata
-            return result_from_qc(
-                req,
-                selected_backend,
-                qc_result,
-                errors + state_errors,
-                all_artifacts,
-                rescue_metadata,
-                status=forced_status,
-            )
-        failure_message = failure or _qc_failure_message(qc_result, capability)
-        errors.append(f"{action.strategy}: {failure_message}")
-
-    rescue_metadata["rescue_attempts"] = len(plan.actions)
-    _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
-    return result_from_qc(
-        req,
-        selected_backend,
-        qc_result,
-        errors,
-        all_artifacts,
-        rescue_metadata,
-        status="failed",
+def _legacy_result(task_result: TaskResult, binding: Any) -> CalculationResult:
+    """Map one typed ``TaskResult`` back to the legacy envelope (lossless)."""
+    legacy = to_legacy_result(task_result, binding)
+    if not task_result.metadata:
+        return legacy
+    metadata = dict(task_result.metadata)
+    metadata.update(legacy.metadata)
+    return CalculationResult(
+        energy=legacy.energy,
+        coords=legacy.coords,
+        frequencies=legacy.frequencies,
+        artifacts=legacy.artifacts,
+        status=legacy.status,
+        errors=legacy.errors,
+        provenance=legacy.provenance,
+        metadata=metadata,
     )
 
 
-def _state_outcome(
-    inputs: CalculationInputs,
-    qc_result: QCResult | None,
-) -> tuple[dict[str, JsonValue], list[str], str | None]:
-    """Electronic-state metadata, gate errors, and forced status (§10.3)."""
-    return electronic_state_result_metadata(inputs, qc_result)
-
-
-def _structure_kind(request: CalculationRequest) -> str:
-    raw_kind = request.resources.get("structure_kind")
-    if isinstance(raw_kind, str) and raw_kind in _STRUCTURE_KINDS:
-        return raw_kind
-    match request.input_artifact.role:
-        case StructureRole.TRANSITION_STATE:
-            return "ts"
-        case StructureRole.MINIMUM:
-            return "minimum"
-        case unreachable:
-            assert_never(unreachable)
-
-
-def _run_attempt(
-    backend: Any,
-    capability: str,
-    inputs: CalculationInputs,
-    target_dir: Path | None,
-    kwargs: dict[str, Any],
-    *,
-    selected_backend: str,
-    trajectory_item_id: str = "",
-    progress_reporter: ProgressReporter | None = None,
-) -> tuple[QCResult | None, str | None]:
-    recorder = None
-    attempt_kwargs = dict(kwargs)
-    if selected_backend == "orca" and target_dir is not None:
-        if progress_reporter is not None:
-            reporter = progress_reporter
-
-            def publish_cycle(cycle: int, status: str) -> None:
-                convergence = {
-                    "running": "running",
-                    "converged": "converged",
-                    "failed": "failed",
-                }.get(status, "running")
-                reporter.update_live_metrics(
-                    [
-                        LiveMetric(
-                            key="opt_step",
-                            label_key="live.opt_step",
-                            value=f"Step {cycle}",
-                            kind="iteration",
-                            priority=100,
-                        ),
-                        LiveMetric(
-                            key="opt_convergence",
-                            label_key="live.opt_convergence",
-                            value=convergence,
-                            kind="status",
-                            priority=90,
-                        ),
-                    ]
-                )
-
-            recorder = OptimizationTrajectoryRecorder(
-                target_dir,
-                item_id=trajectory_item_id or target_dir.parent.name,
-                on_cycle=publish_cycle,
-            )
-        else:
-            recorder = OptimizationTrajectoryRecorder(
-                target_dir,
-                item_id=trajectory_item_id or target_dir.parent.name,
-            )
-        attempt_kwargs["output_callback"] = recorder.feed_line
+def _finalize_trajectory(target_dir: Path | None, selected_backend: str, item_id: str) -> None:
+    """ACP-side terminal trajectory rebuild with platform identity injection."""
+    if target_dir is None or selected_backend != "orca":
+        return
     try:
-        result = call_capability(backend, capability, inputs, target_dir, attempt_kwargs)
-        if recorder is not None:
-            recorder.finish(
-                converged=bool(result.success),
-                status="completed" if result.success else "failed",
-            )
-        return result, None
-    except _BACKEND_FAILURES as error:
-        if recorder is not None:
-            recorder.finish(converged=False, status="failed")
-        return None, error_text(error)
-
-
-def _successful_geometry(result: QCResult | None) -> bool:
-    return result is not None and result.success and result.coordinates is not None
-
-
-def _qc_failure_message(result: QCResult | None, capability: str) -> str:
-    if result is not None and result.error_message:
-        return result.error_message
-    if result is not None and result.success:
-        return f"{capability} returned no converged coordinates"
-    return f"{capability} failed"
+        finalize_optimization_trajectory(target_dir, item_id=item_id)
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not finalize optimization trajectory: %s", target_dir, exc_info=True)
 
 
 def _failure_type(request: CalculationRequest, message: str) -> str:
-    override = request.resources.get("failure_type")
-    if isinstance(override, str) and override in _FAILURE_TYPES:
-        return override
-    normalized = message.lower()
-    if "[scf_failure]" in normalized:
-        return "scf_failure"
-    if "[geometry_not_converged]" in normalized:
-        return "geometry_not_converged"
-    if "[memory_failure]" in normalized:
-        return "memory_failure"
-    if "[crash_timeout]" in normalized:
-        return "crash_timeout"
-    if "scf" in normalized:
-        return "scf_failure"
-    if "timeout" in normalized or "timed out" in normalized or "time out" in normalized:
-        return "crash_timeout"
-    if "higher order" in normalized or "multiple imaginary" in normalized:
-        return "higher_order_saddle"
-    if "no imaginary" in normalized or "no negative" in normalized:
-        return "ts_no_imaginary"
-    if "imaginary" in normalized:
-        return "minimum_with_imaginary"
-    if "collapsed" in normalized:
-        return "collapsed_to_product"
-    return "geometry_not_converged"
-
-
-def _rescue_kwargs(strategy: str) -> dict[str, JsonValue]:
-    if strategy in {FRESH_HESSIAN_RESTART, FRESH_HESSIAN_MODE_MONITOR}:
-        return {"initial_hessian": "calculate", "recalc_hess": 5}
-    if strategy == TS_MODE_DIRECTED:
-        return {"ts_mode": True, "trust_radius": 0.15}
-    if strategy == CALCALL_OPT:
-        return {"recalc_hess": 1}
-    if strategy in {SADDLE_BREAK, MODE_DISPLACEMENT}:
-        return {"mode_displacement": 0.30}
-    if strategy == TIGHT_OPT_CALCHESS:
-        return {"opt_level": "tight", "initial_hessian": "calculate"}
-    if strategy == IRC_MIDPOINT_RECOVERY:
-        return {"rescue_metadata": {"irc_midpoint_reseed": True}}
-    if strategy == SCF_INCREASE_MAXITER:
-        return {"scf_maxiter": 500}
-    if strategy == SCF_SLOWCONV:
-        return {"scf_maxiter": 500, "scf_strategy": "slowconv"}
-    if strategy == SCF_SOSCF:
-        return {"scf_maxiter": 500, "scf_strategy": "soscf"}
-    if strategy == SCF_DAMP_SHIFT:
-        return {
-            "scf_maxiter": 500,
-            "scf_strategy": "soscf",
-            "scf_damp": True,
-            "scf_damp_fac": 0.50,
-            "scf_shift": True,
-            "scf_shift_fac": 0.30,
-        }
-    return {}
-
-
-def _plan_metadata(plan: RescuePlan) -> dict[str, JsonValue]:
-    return {
-        "rescue_failure_type": plan.failure_type,
-        "rescue_structure_kind": plan.structure_kind,
-        "rescue_actions": [action.strategy for action in plan.actions],
-        "rescue_terminal": plan.terminal,
-    }
+    """Legacy failure-classification entry (override/derive, adapter only)."""
+    raw = request.resources.get("failure_type")
+    return derive_failure_type(message, override=raw if isinstance(raw, str) else None)
 
 
 __all__ = [
+    "CALCALL_OPT",
     "FAILURE_EXIT",
+    "FRESH_HESSIAN_MODE_MONITOR",
+    "FRESH_HESSIAN_RESTART",
+    "IRC_MIDPOINT_RECOVERY",
+    "MODE_DISPLACEMENT",
     "RescueAction",
     "RescuePlan",
+    "SADDLE_BREAK",
+    "SCF_DAMP_SHIFT",
+    "SCF_INCREASE_MAXITER",
+    "SCF_SLOWCONV",
+    "SCF_SOSCF",
+    "TIGHT_OPT_CALCHESS",
+    "TS_MODE_DIRECTED",
+    "_failure_type",
+    "_rescue_kwargs",
     "build_rescue_plan",
+    "execute_optimize",
     "optimization_progress_context",
     "run_optimize",
 ]

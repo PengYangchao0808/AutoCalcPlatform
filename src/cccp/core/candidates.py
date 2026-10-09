@@ -1,10 +1,28 @@
 """
 Candidates
-=========
+==========
 
 Conformer candidate representation and operations.
 
 Author: QCcalc Team (adapted from RPH)
+
+DEPRECATED — legacy cccp API (marked 2026-10-05, plan todo 30; no removal scheduled).
+
+Usage evidence (verified by grep at repo HEAD 66222f7):
+    - No direct ACP production use. Sole ACP touchpoint is the legacy
+      compatibility bridge in ``acp/core/models.py`` (lazy imports at lines
+      22/144/222/347 inside ``to_conformer_candidate`` /
+      ``from_conformer_candidate`` / ``to_candidate_set`` /
+      ``from_candidate_set`` converters); callers of that bridge are tests
+      only (``tests/test_acp_core_models.py``).
+    - Direct API consumers are tests only (``tests/test_conformer_search.py``,
+      ``tests/test_acp_core_models.py``) plus the ``cccp/core/__init__.py``
+      re-export.
+
+Support scope: all exports stay (external users cannot be confirmed). New
+code should use ``acp.core.models`` (``Structure`` / ``StructureRecord`` /
+``StructureEnsemble``); this module is kept as the legacy data contract the
+bridge converts to/from.
 """
 
 from dataclasses import dataclass, field

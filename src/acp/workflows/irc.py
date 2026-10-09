@@ -14,6 +14,7 @@ from pathlib import Path
 from acp.calculations.batch.models import parse_tag_comment
 from acp.calculations.checkpoint import write_checkpoint
 from acp.calculations.contracts import Checkpoint, JsonValue, StructureArtifact, StructureRole
+from acp.calculations.identity import IDENTITY_SCHEMA
 from acp.calculations.plans import build_irc_request
 from acp.calculations.primitives.irc import run_irc
 from acp.calculations.progress import ProgressReporter
@@ -263,7 +264,8 @@ def _write_irc_checkpoint(
                 }
             ],
             items_state={},
-            attempts=0,
+            resume_count=0,
+            identity_schema=IDENTITY_SCHEMA,
         ),
     )
 

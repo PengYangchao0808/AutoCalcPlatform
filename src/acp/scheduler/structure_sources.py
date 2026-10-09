@@ -33,7 +33,7 @@ from acp.confsearch.manifest import (
 from acp.intake import parse_xyz_text
 from acp.results.structure_policy import STRUCTURE_KINDS, reusable_product, single_geometry
 from acp.scheduler.artifacts import compute_checksum
-from acp.scheduler.files import resolve_safe
+from acp.scheduler.files import is_archived_attempt_path, resolve_safe
 from acp.scheduler.jobs import JobRecord, JobStatus
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
 
@@ -729,7 +729,7 @@ class StructureSourceService:
             (_RESULT_SUMMARY_FILENAME, _select_structure_products),
         ):
             try:
-                candidates = list(root.rglob(filename))
+                candidates = [c for c in root.rglob(filename) if not is_archived_attempt_path(c)]
             except OSError:
                 continue
             for listing_path in sorted(candidates):
@@ -784,7 +784,9 @@ class StructureSourceService:
             return []
         for filename, selector in selectors:
             try:
-                listing_paths = sorted(root.rglob(filename))
+                listing_paths = sorted(
+                    c for c in root.rglob(filename) if not is_archived_attempt_path(c)
+                )
             except OSError:
                 continue
             for listing_path in listing_paths:

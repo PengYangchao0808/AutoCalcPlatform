@@ -15,7 +15,7 @@ from acp.scheduler.artifacts import (
     compute_checksum,
     infer_artifact_type,
 )
-from acp.scheduler.jobs import JobSpec, JobStatus
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
 
 
@@ -112,6 +112,45 @@ def test_extension_type_mapping() -> None:
     assert infer_artifact_type(Path("output.log")) == "output_log"
     assert infer_artifact_type(Path("table.csv")) == "csv"
     assert infer_artifact_type(Path("input_preview.xyz")) == "xyz"
+
+
+def test_capture_artifacts_rebuilds_result_from_full_registry(tmp_path: Path) -> None:
+    """Re-capture is idempotent: already-registered files are skipped AND the
+    job result carries the full registry, not only the newly added rows."""
+    mgr = JobManager(run_root=tmp_path, max_running=1)
+    try:
+        work_dir = tmp_path / "runs" / "cap"
+        stage = work_dir / "RESULT"
+        stage.mkdir(parents=True)
+        (stage / "one.xyz").write_text("one", encoding="utf-8")
+        record = JobRecord(
+            id="cap",
+            spec=JobSpec(workflow="fake", name="cap"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            exit_code=0,
+        )
+
+        mgr.runner._capture_artifacts(record, work_dir)
+        assert {entry["file_path"] for entry in record.result["artifacts"]} == {
+            "RESULT/one.xyz"
+        }
+
+        (stage / "two.log").write_text("two", encoding="utf-8")
+        mgr.runner._capture_artifacts(record, work_dir)
+        assert {entry["file_path"] for entry in record.result["artifacts"]} == {
+            "RESULT/one.xyz",
+            "RESULT/two.log",
+        }
+
+        registry = ArtifactRegistry(mgr.store.db_path)
+        rows = registry.list_by_job("cap")
+        assert len(rows) == 2, "re-capture must not duplicate already-registered files"
+
+        mgr.runner._capture_artifacts(record, work_dir)
+        assert len(registry.list_by_job("cap")) == 2
+    finally:
+        mgr.shutdown()
 
 
 def test_fake_job_produces_artifacts(tmp_path: Path) -> None:

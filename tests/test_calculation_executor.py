@@ -4,25 +4,33 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
+import pytest
 
+import acp.calculations.executor as executor_module
 from acp.backends.base import QCResult
+from acp.calculations import result_publication
 from acp.calculations.contracts import (
+    ArtifactRef,
     CalculationPlan,
     CalculationRequest,
+    CalculationResult,
     CalculationStep,
     JsonValue,
     StepKind,
     StructureArtifact,
     StructureRole,
 )
-from acp.calculations.executor import CalculationPlanExecutor
+from acp.calculations.executor import CalculationPlanExecutor, _run_thermochemistry
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
-from acp.storage.manifest import ResultManifest
+from acp.storage.manifest import ProductKind, ResultManifest
+from cccp import calculation as cccp_calculation
 from tests.conftest import FakeBackend
 
 
@@ -274,68 +282,81 @@ def test_three_step_plan(fake_backend: FakeBackend, tmp_path: Path) -> None:
     assert fake_backend.calls[2].method == "single_point"
 
 
-def test_step2_failure_isolated(fake_backend: FakeBackend, tmp_path: Path) -> None:
-    """Step 2 (frequency) raises → step_states[1] failed, step 0 preserved, resume possible."""
-    # Given: optimize succeeds, frequency raises, singlepoint succeeds.
-    coordinates = np.array([[0.5, 0.5, 0.5]], dtype=float)
-    fake_backend.set_result(
-        "optimize",
-        QCResult(
-            success=True,
-            energy=-40.0,
-            coordinates=coordinates,
-            symbols=["C"],
-            converged=True,
-        ),
-    )
-    fake_backend.fail_next("frequency", RuntimeError("frequency exploded"))
-    fake_backend.set_result("single_point", energy=-40.5, success=True)
+def test_step2_failure_isolated(tmp_path: Path) -> None:
+    """D07 default policy: a failed OPT blocks FREQ/SP (primitives never run).
 
+    Failure isolation now means: the original OPT failure is preserved in
+    ``errors`` while its dependents become ``blocked`` (not silently executed
+    on invalid geometry), and a resume re-attempts only the failed step.
+    """
+    # Given: optimize fails; frequency/singlepoint must never be invoked.
     plan = _plan_with_item(tmp_path)
     executor = CalculationPlanExecutor()
+    opt_calls: list[object] = []
+    freq_spy = Mock(return_value=CalculationResult(frequencies=[350.0]))
+    sp_spy = Mock(return_value=CalculationResult(energy=-40.5))
 
-    # When: the executor runs the plan.
-    result = executor.execute(plan, task_root=tmp_path)
+    def failing_opt(request: object) -> CalculationResult:
+        opt_calls.append(request)
+        return CalculationResult(status="failed", errors=["optimize exploded"])
 
-    # Then: the overall result is failed.
-    assert result.is_failed
-    assert len(result.step_states) == 3
+    dispatch = {
+        StepKind.OPTIMIZE: failing_opt,
+        StepKind.FREQUENCY: freq_spy,
+        StepKind.SINGLEPOINT: sp_spy,
+    }
 
-    # And: step 0 (optimize) completed successfully.
-    assert result.step_states[0].status == "completed"
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, dispatch):
+        # When: the executor runs the plan.
+        result = executor.execute(plan, task_root=tmp_path)
 
-    # And: step 1 (frequency) failed with the expected error.
-    assert result.step_states[1].status == "failed"
-    assert "frequency exploded" in result.step_states[1].error
+        # Then: the overall result is failed with the original OPT error.
+        assert result.is_failed
+        assert len(result.step_states) == 3
+        assert [state.status for state in result.step_states] == [
+            "failed",
+            "blocked",
+            "blocked",
+        ]
+        assert "optimize exploded" in result.errors[0]
+        assert result.blocked_reasons == [
+            {"index": 1, "reason": "upstream_failed"},
+            {"index": 2, "reason": "upstream_failed"},
+        ]
 
-    # And: step 2 (singlepoint) still ran (failure isolation).
-    assert result.step_states[2].status == "completed"
+        # And: the dependents' primitives were never invoked (spy = 0).
+        assert freq_spy.call_count == 0
+        assert sp_spy.call_count == 0
 
-    # And: the checkpoint recorded the failure.
-    cp_path = tmp_path / "WORK" / "00_RUNTIME" / "checkpoint.json"
-    cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
-    assert cp_data["step_states"][1]["status"] == "failed"
+        # And: the checkpoint records the failure and the blocked reasons.
+        cp_path = tmp_path / "WORK" / "00_RUNTIME" / "checkpoint.json"
+        cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
+        assert cp_data["step_states"][1]["status"] == "blocked"
+        assert cp_data["step_states"][1]["blocked_reason"] == "upstream_failed"
 
-    # And: the result manifest reports failed.
-    manifest = ResultManifest.read(tmp_path / "RESULT")
-    assert manifest.status == "failed"
+        # And: the result manifest reports failed.
+        manifest = ResultManifest.read(tmp_path / "RESULT")
+        assert manifest.status == "failed"
 
-    # And: the optimize step artifacts are preserved.
-    assert (tmp_path / "WORK" / "03_OPT").is_dir()
+        # And: the optimize step artifacts are preserved.
+        assert (tmp_path / "WORK" / "03_OPT").is_dir()
 
-    # And: resume is possible — re-running skips the completed steps.
-    # Re-queue the failure so step 1 fails again on resume.
-    fake_backend.fail_next("frequency", RuntimeError("frequency exploded"))
-    executor2 = CalculationPlanExecutor()
-    result2 = executor2.execute(plan, task_root=tmp_path)
-    # Steps 0 and 2 were completed; step 1 still fails.
-    assert result2.step_states[0].status == "skipped"
-    assert result2.step_states[1].status == "failed"
-    assert result2.step_states[2].status == "skipped"
+        # And: resume re-attempts the failed OPT only; FREQ/SP stay blocked
+        # and their primitives are still not invoked.
+        result2 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+        assert result2.step_states[0].status == "failed"
+        assert result2.step_states[1].status == "blocked"
+        assert result2.step_states[2].status == "blocked"
+        assert len(opt_calls) == 2
+        assert freq_spy.call_count == 0
+        assert sp_spy.call_count == 0
+        cp_data = json.loads(cp_path.read_text(encoding="utf-8"))
+        assert cp_data["step_states"][0]["status"] == "failed"
+        assert cp_data["step_states"][1]["status"] == "blocked"
 
 
 def test_resume_after_interrupt_skips_completed(fake_backend: FakeBackend, tmp_path: Path) -> None:
-    """Resume from checkpoint skips steps already marked completed."""
+    """Resume from checkpoint skips execution of steps already completed."""
     # Given: all steps succeed.
     coordinates = np.array([[0.5, 0.5, 0.5]], dtype=float)
     fake_backend.set_result(
@@ -365,8 +386,605 @@ def test_resume_after_interrupt_skips_completed(fake_backend: FakeBackend, tmp_p
     # When: the executor runs again (simulating restart).
     result2 = executor.execute(plan, task_root=tmp_path)
 
-    # Then: all steps are skipped (no new backend calls).
+    # Then: all steps keep completed status without re-execution.
     assert result2.is_completed
     for state in result2.step_states:
-        assert state.status == "skipped"
+        assert state.status == "completed"
+        assert state.executed_this_run is False
     assert len(fake_backend.calls) == calls_after_first  # no new calls
+
+
+# ── T23 dispatch probe + publication-recovery fault injection ────────────
+
+
+def _singlepoint_plan(task_root: Path) -> CalculationPlan:
+    return CalculationPlan(
+        workflow="test",
+        profile="r2SCAN-3c",
+        items=[
+            StructureArtifact(
+                path=_make_input_xyz(task_root),
+                elements=["C"],
+                source="test",
+            )
+        ],
+        steps=[CalculationStep(kind=StepKind.SINGLEPOINT)],
+    )
+
+
+def test_executor_dispatch_reaches_cccp_task(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a single-step plan and a spy on the cccp task function.
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    calls: list[object] = []
+    real_run_singlepoint = cccp_calculation.run_singlepoint
+
+    def spy(task_request: object, **kwargs: object) -> object:
+        calls.append(task_request)
+        return real_run_singlepoint(task_request, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cccp_calculation, "run_singlepoint", spy)
+
+    # When: the executor runs the plan step.
+    result = CalculationPlanExecutor().execute(_singlepoint_plan(tmp_path), task_root=tmp_path)
+
+    # Then: the call path reached cccp.calculation.run_singlepoint exactly once.
+    assert result.is_completed
+    assert len(calls) == 1, "executor dispatch must reach cccp.calculation.run_singlepoint"
+
+
+def test_thermochemistry_dispatch_reaches_cccp_task_with_legacy_output_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a spy on the cccp thermochemistry task and a fake Shermo runner.
+    freq_log = tmp_path / "frequency.log"
+    freq_log.write_text("frequency output", encoding="utf-8")
+    calls: list[object] = []
+    shermo_kwargs: dict[str, object] = {}
+    real_run_thermochemistry = cccp_calculation.run_thermochemistry
+
+    def spy(task_request: object, **kwargs: object) -> object:
+        calls.append(task_request)
+        return real_run_thermochemistry(task_request, **kwargs)  # type: ignore[arg-type]
+
+    def fake_run_shermo(**kwargs: object) -> dict[str, float]:
+        shermo_kwargs.update(kwargs)
+        return {"g_sum": -1.2, "h_sum": -1.1, "s_sum": 0.01}
+
+    monkeypatch.setattr(cccp_calculation, "run_thermochemistry", spy)
+    monkeypatch.setattr("cccp.qc.shermo_adapter.run_shermo", fake_run_shermo)
+    request = CalculationRequest(
+        input_artifact=StructureArtifact(
+            path=tmp_path / "input.xyz",
+            elements=["C"],
+            source="test",
+        ),
+        method="",
+        resources={
+            "output_dir": str(tmp_path),
+            "freq_log_path": str(freq_log),
+            "sp_energy_hartree": -10.2,
+            "temperature": 298.15,
+            "pressure": 1.0,
+        },
+    )
+
+    # When: the executor thermochemistry dispatch runs.
+    result = _run_thermochemistry(request)
+
+    # Then: the call path reached cccp.calculation.run_thermochemistry and the
+    # legacy Shermo.sum output filename survived the rewire.
+    assert result.status == "completed"
+    assert len(calls) == 1, "dispatch must reach cccp.calculation.run_thermochemistry"
+    assert shermo_kwargs.get("output_file") == tmp_path / "Shermo.sum"
+
+
+def test_executor_recovery_retries_publish_only(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a single-step plan whose publication fails once after the
+    # scientific result is already persisted.
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    real_register = result_publication.register_result_manifest
+    state = {"failures": 1}
+
+    def flaky_register(result_dir, manifest):  # type: ignore[no-untyped-def]
+        if state["failures"]:
+            state["failures"] -= 1
+            raise OSError("injected manifest write failure")
+        return real_register(result_dir, manifest)
+
+    monkeypatch.setattr(result_publication, "register_result_manifest", flaky_register)
+    plan = _singlepoint_plan(tmp_path)
+
+    # When: the first run hits the injected publish failure.
+    result1 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    # Then: the step failed but the scientific result survived (contract ①).
+    assert result1.is_failed
+    step_dir = tmp_path / "WORK" / "05_SP"
+    assert result_publication.load_scientific_result(step_dir) is not None
+    qc_calls_after_first = len(fake_backend.calls)
+    assert qc_calls_after_first == 1
+
+    # When: the executor runs again (recovery).
+    result2 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    # Then: only publication is retried — QC is not re-invoked (contract:
+    # stored scientific result + publish failure → recovery retries publish
+    # only, QC count unchanged) and publication completes.
+    assert result2.is_completed
+    assert len(fake_backend.calls) == qc_calls_after_first
+    state_loaded = result_publication.load_publication_state(step_dir)
+    assert state_loaded is not None and state_loaded.complete is True
+
+
+# ── CASSCF completion gating + conservative recovery (T10/D5) ──────────────
+
+_CASSCF_STEP_SPEC: dict[str, JsonValue] = {
+    "method": "casscf",
+    "backend": "orca",
+    "casscf": {"active_electrons": 2, "active_orbitals": 2},
+}
+
+_CASSCF_CONVERGED_METADATA: dict[str, JsonValue] = {
+    "casscf": {
+        "casscf_energy_hartree": -109.0,
+        "natural_occupations": [1.9, 0.1],
+        "nevpt2_roots": [],
+        "converged": True,
+    }
+}
+
+_CASSCF_NOT_CONVERGED_METADATA: dict[str, JsonValue] = {
+    "casscf": {
+        "casscf_energy_hartree": -109.0,
+        "natural_occupations": [1.6, 0.4],
+        "nevpt2_roots": [],
+        "converged": False,
+    }
+}
+
+
+def _casscf_plan(task_root: Path, *, with_dependent: bool = False) -> CalculationPlan:
+    """A CAS plan (optionally followed by a dependent singlepoint step)."""
+    task_root.mkdir(parents=True, exist_ok=True)
+    steps = [CalculationStep(kind=StepKind.CASSCF, spec=dict(_CASSCF_STEP_SPEC))]
+    if with_dependent:
+        steps.append(CalculationStep(kind=StepKind.SINGLEPOINT, spec={"method": "r2SCAN-3c"}))
+    return CalculationPlan(
+        workflow="casscf",
+        profile="default",
+        items=[
+            StructureArtifact(path=_make_input_xyz(task_root), elements=["C"], source="test"),
+        ],
+        steps=steps,
+    )
+
+
+def _casscf_recompute_dispatch(calls: dict[str, int]) -> dict[StepKind, object]:
+    def recompute(request: object) -> CalculationResult:
+        calls["casscf"] = calls.get("casscf", 0) + 1
+        return CalculationResult(
+            energy=-108.5,
+            metadata={"multireference": {"converged": True}},
+        )
+
+    return {StepKind.CASSCF: recompute}
+
+
+def test_casscf_not_converged_fails_and_blocks_dependents(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """(b) backend success + parsed converged=false → failed + blocked + not completed."""
+    fake_backend.set_result(
+        "casscf",
+        QCResult(
+            success=True,
+            energy=-109.14691549,
+            symbols=["C"],
+            converged=False,
+            metadata=dict(_CASSCF_NOT_CONVERGED_METADATA),
+        ),
+    )
+    task_root = tmp_path / "task"
+    plan = _casscf_plan(task_root, with_dependent=True)
+    sp_spy = Mock(return_value=CalculationResult(energy=-40.5))
+
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, {StepKind.SINGLEPOINT: sp_spy}):
+        result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert result.is_failed
+    assert [state.status for state in result.step_states] == ["failed", "blocked"]
+    assert result.blocked_reasons == [{"index": 1, "reason": "upstream_failed"}]
+    assert sp_spy.call_count == 0, "dependent steps must not run after a CAS failure"
+    assert len(fake_backend.calls) == 1, "only the necessary CAS invocation happened"
+
+    cas_state = result.step_states[0]
+    assert cas_state.result is not None
+    assert cas_state.result.energy == pytest.approx(-109.14691549)
+    assert cas_state.result.metadata["multireference"]["converged"] is False
+    assert (task_root / "WORK" / "08_CASSCF" / "active_space.json").is_file()
+    assert ResultManifest.read(task_root / "RESULT").status == "failed"
+
+
+def test_casscf_step_result_adoption_refuses_false_convergence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """(c1) a stored completed receipt with converged=false is never adopted."""
+    from acp.calculations.checkpoint import write_checkpoint
+    from acp.calculations.contracts import Checkpoint
+    from acp.calculations.identity import compute_identity
+    from acp.calculations.step_result import STEP_RESULT_SCHEMA_VERSION, write_step_result
+
+    task_root = tmp_path / "task"
+    plan = _casscf_plan(task_root)
+    identity = compute_identity(plan)
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    step_dir.mkdir(parents=True)
+    receipt = CalculationResult(
+        status="completed",
+        energy=-108.5,
+        metadata={"multireference": {"converged": False, "casscf_energy_hartree": -108.5}},
+    )
+    payload = receipt.to_step_result_dict(root=task_root)
+    payload.update(
+        {
+            "schema_version": STEP_RESULT_SCHEMA_VERSION,
+            "step_identity": identity.step_identities[0],
+            "step_id": executor_module._step_id(0, StepKind.CASSCF),
+            "index": 0,
+            "kind": "casscf",
+            "symbols": ["C"],
+            "job_id": None,
+            "attempt": None,
+            "code_release": "",
+            "config_digest": None,
+            "dependency_artifacts": [],
+        }
+    )
+    digest = write_step_result(step_dir / "step_result.json", payload)
+    write_checkpoint(
+        task_root / "WORK" / "00_RUNTIME",
+        Checkpoint(
+            task_id="t11_c1",
+            workflow="casscf",
+            plan_fingerprint=identity.plan_identity,
+            step_states=[
+                {
+                    "index": 0,
+                    "kind": "casscf",
+                    "status": "completed",
+                    "error": "",
+                    "energy": -108.5,
+                    "executed_this_run": False,
+                    "last_executed_attempt": 1,
+                    "result_ref": {
+                        "path": "WORK/08_CASSCF/step_result.json",
+                        "sha256": digest,
+                    },
+                    "reused_from_attempt": None,
+                }
+            ],
+            items_state={},
+            resume_count=0,
+            identity_schema=2,
+        ),
+    )
+    monkeypatch.setattr(executor_module, "current_config_digest", lambda: None)
+
+    calls: dict[str, int] = {}
+    with caplog.at_level(logging.INFO):
+        with patch.dict(executor_module._PRIMITIVE_DISPATCH, _casscf_recompute_dispatch(calls)):
+            result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert "recovery.step_not_adopted" in caplog.text
+    assert "cas_not_converged" in caplog.text
+    assert calls.get("casscf", 0) == 1, "refused adoption must conservatively recompute once"
+    assert result.is_completed
+    state = result.step_states[0]
+    assert state.executed_this_run is True
+    assert state.reused_from_attempt is None
+
+
+def test_casscf_scientific_record_entry_refuses_false_convergence(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """(c2) the publish-retry entry must not restore converged=false records."""
+    from acp.calculations.identity import compute_identity
+
+    task_root = tmp_path / "task"
+    plan = _casscf_plan(task_root)
+    identity = compute_identity(plan)
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    step_dir.mkdir(parents=True)
+    log_path = step_dir / "casscf.log"
+    log_path.write_text("CAS-SCF did not converge\n", encoding="utf-8")
+    science = CalculationResult(
+        status="completed",
+        energy=-108.5,
+        artifacts=[ArtifactRef(path=log_path, type="log", source="test")],
+        metadata={"multireference": {"converged": False}},
+    )
+    record = executor_module._step_scientific_record(
+        science,
+        result_id=executor_module._step_result_id(identity.plan_identity, 0, StepKind.CASSCF),
+        kind=StepKind.CASSCF,
+        result_dir=step_dir,
+    )
+    result_publication.save_scientific_result(step_dir, record)
+
+    calls: dict[str, int] = {}
+    with caplog.at_level(logging.INFO):
+        with patch.dict(executor_module._PRIMITIVE_DISPATCH, _casscf_recompute_dispatch(calls)):
+            result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert "recovery.scientific_result_not_reusable" in caplog.text
+    assert "cas_not_converged" in caplog.text
+    assert calls.get("casscf", 0) == 1, "only the necessary recompute executes QC"
+    assert result.is_completed
+    assert result.step_states[0].executed_this_run is True
+
+
+def _run_casscf_with_flaky_publish(
+    fake_backend: FakeBackend,
+    task_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> int:
+    """Execute one CAS plan once with an injected publish failure; QC count."""
+    real_register = result_publication.register_result_manifest
+    state = {"failures": 1}
+
+    def flaky_register(result_dir, manifest):  # type: ignore[no-untyped-def]
+        if state["failures"]:
+            state["failures"] -= 1
+            raise OSError("injected manifest write failure")
+        return real_register(result_dir, manifest)
+
+    monkeypatch.setattr(result_publication, "register_result_manifest", flaky_register)
+    plan = _casscf_plan(task_root)
+    first = CalculationPlanExecutor().execute(plan, task_root=task_root)
+    assert first.is_failed
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    assert result_publication.load_scientific_result(step_dir) is not None
+    return len(fake_backend.calls)
+
+
+def test_casscf_publish_retry_adopts_receipt_without_qc(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """(d) true-converged publish-only retry: QC invocation count unchanged."""
+    fake_backend.set_result(
+        "casscf",
+        QCResult(
+            success=True,
+            energy=-109.14691549,
+            symbols=["C"],
+            converged=True,
+            metadata=dict(_CASSCF_CONVERGED_METADATA),
+        ),
+    )
+    task_root = tmp_path / "task"
+    qc_after_first = _run_casscf_with_flaky_publish(fake_backend, task_root, monkeypatch)
+    assert qc_after_first == 1
+
+    result = CalculationPlanExecutor().execute(_casscf_plan(task_root), task_root=task_root)
+
+    assert result.is_completed
+    assert len(fake_backend.calls) == qc_after_first, "publish retry must not re-run QC"
+    state = result.step_states[0]
+    assert state.status == "completed"
+    assert state.executed_this_run is False
+    publication = result_publication.load_publication_state(task_root / "WORK" / "08_CASSCF")
+    assert publication is not None and publication.complete is True
+
+
+def test_casscf_record_publish_retry_restores_without_qc(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """(d, entry ii) a converged record restores completed without QC."""
+    fake_backend.set_result(
+        "casscf",
+        QCResult(
+            success=True,
+            energy=-109.14691549,
+            symbols=["C"],
+            converged=True,
+            metadata=dict(_CASSCF_CONVERGED_METADATA),
+        ),
+    )
+    task_root = tmp_path / "task"
+    qc_after_first = _run_casscf_with_flaky_publish(fake_backend, task_root, monkeypatch)
+    assert qc_after_first == 1
+
+    # Remove the receipt so only the WORK-layer scientific record remains
+    # (the legacy publication-only branch reaches entry (ii)).
+    step_dir = task_root / "WORK" / "08_CASSCF"
+    (step_dir / "step_result.json").unlink()
+    cp_path = task_root / "WORK" / "00_RUNTIME" / "checkpoint.json"
+    cp_payload = json.loads(cp_path.read_text(encoding="utf-8"))
+    cp_payload["step_states"][0]["status"] = "pending"
+    cp_payload["step_states"][0]["result_ref"] = None
+    cp_path.write_text(json.dumps(cp_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = CalculationPlanExecutor().execute(_casscf_plan(task_root), task_root=task_root)
+
+    assert result.is_completed
+    assert len(fake_backend.calls) == qc_after_first, (
+        "the scientific-record publish-retry entry must not re-run QC"
+    )
+    publication = result_publication.load_publication_state(step_dir)
+    assert publication is not None and publication.complete is True
+    assert step_dir.joinpath("step_result.json").is_file(), "receipt re-materialised"
+
+
+# ── T11/D6: real RESULT/energy product files ───────────────────────────────
+
+_ENERGY_PRODUCING_KINDS = (
+    StepKind.SINGLEPOINT,
+    StepKind.OPTIMIZE,
+    StepKind.FREQUENCY,
+    StepKind.SCAN,
+    StepKind.CASSCF,
+)
+
+
+def _single_step_plan(task_root: Path, kind: StepKind) -> CalculationPlan:
+    return CalculationPlan(
+        workflow="test",
+        profile="r2SCAN-3c",
+        items=[
+            StructureArtifact(
+                path=_make_input_xyz(task_root),
+                elements=["C"],
+                source="test",
+            )
+        ],
+        steps=[CalculationStep(kind=kind)],
+    )
+
+
+@pytest.mark.parametrize("kind", _ENERGY_PRODUCING_KINDS)
+def test_energy_product_publishes_real_file(kind: StepKind, tmp_path: Path) -> None:
+    """(a) each energy-producing step kind publishes a readable RESULT file."""
+    task_root = tmp_path
+    expected_energy = -76.4
+    calls: dict[str, int] = {}
+
+    def dispatch(request: object) -> CalculationResult:
+        calls["n"] = calls.get("n", 0) + 1
+        return CalculationResult(status="completed", energy=expected_energy)
+
+    plan = _single_step_plan(task_root, kind)
+    with patch.dict(executor_module._PRIMITIVE_DISPATCH, {kind: dispatch}):
+        result = CalculationPlanExecutor().execute(plan, task_root=task_root)
+
+    assert result.is_completed, f"{kind.value} step did not complete"
+    assert calls["n"] == 1
+
+    product_id = f"step_0_{kind.value}"
+    manifest = ResultManifest.read(task_root / "RESULT")
+    matches = [p for p in manifest.products if p.id == f"{product_id}_energy"]
+    assert len(matches) == 1
+    product = matches[0]
+    assert product.kind is ProductKind.ENERGY_REPORT
+    assert product.path == f"energy/{product_id}.json"
+    assert product.metadata.get("energy_hartree") == expected_energy
+
+    energy_path = task_root / "RESULT" / product.path
+    assert energy_path.is_file()
+    payload = json.loads(energy_path.read_text(encoding="utf-8"))
+    assert payload["energy"] == expected_energy
+    assert payload["energy_hartree"] == expected_energy
+    assert payload["unit"] == "hartree"
+    assert payload["step_id"] == product_id
+    assert payload["step_kind"] == kind.value
+    assert payload["method"] == "r2SCAN-3c"
+
+
+def test_energy_product_id_stable_and_value_matches_scientific_record(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """(b) frozen energy product id; published value equals the scientific record."""
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    plan = _singlepoint_plan(tmp_path)
+
+    result = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    assert result.is_completed
+    manifest = ResultManifest.read(tmp_path / "RESULT")
+    energy_products = [p for p in manifest.products if p.kind is ProductKind.ENERGY_REPORT]
+    assert [p.id for p in energy_products] == ["step_0_singlepoint_energy"]
+    assert energy_products[0].path == "energy/step_0_singlepoint.json"
+    for product in manifest.products:
+        if product.kind is ProductKind.ENERGY_REPORT:
+            assert product.path.startswith("energy/"), (
+                f"energy product {product.id} must not carry a WORK path"
+            )
+
+    published = json.loads(
+        (tmp_path / "RESULT" / "energy" / "step_0_singlepoint.json").read_text(encoding="utf-8")
+    )
+    scientific = json.loads(
+        (tmp_path / "WORK" / "05_SP" / "scientific_result.json").read_text(encoding="utf-8")
+    )
+    assert published["energy"] == scientific["summary"]["energy_hartree"] == -40.5
+
+
+def test_energy_publish_interrupted_resume_republishes_only(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """(c) interrupted energy publication → resume re-publishes, QC count flat."""
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-40.5))
+    plan = _singlepoint_plan(tmp_path)
+    energy_file = tmp_path / "RESULT" / "energy" / "step_0_singlepoint.json"
+
+    import acp.results.frame_candidate_store as frame_candidate_store
+
+    real_write = frame_candidate_store.atomic_write_text
+    active = {"on": True}
+
+    def flaky_write(path: Path, text: str) -> None:
+        if active["on"] and Path(path).parent.name == "energy":
+            raise OSError("injected energy publish failure")
+        real_write(path, text)
+
+    monkeypatch.setattr(frame_candidate_store, "atomic_write_text", flaky_write)
+
+    result1 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+    assert result1.is_completed
+    assert not energy_file.exists(), "interrupted publication must leave no energy file"
+    assert len(fake_backend.calls) == 1
+
+    active["on"] = False
+    result2 = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+
+    assert result2.is_completed
+    assert len(fake_backend.calls) == 1, "publish-only retry must not re-run QC"
+    assert energy_file.is_file()
+    payload = json.loads(energy_file.read_text(encoding="utf-8"))
+    assert payload["energy"] == -40.5
+    assert payload["unit"] == "hartree"
+
+
+def test_old_empty_path_energy_manifest_reads(tmp_path: Path) -> None:
+    """(d) a legacy manifest with ``path: ""`` energy products reads without error."""
+    result_dir = tmp_path / "RESULT"
+    result_dir.mkdir()
+    legacy = {
+        "version": 2,
+        "task_id": "legacy",
+        "workflow": "optimize",
+        "status": "failed",
+        "products": [
+            {
+                "id": "step_0_singlepoint_energy",
+                "label": "singlepoint (step 0) — energy",
+                "path": "",
+                "kind": "energy_report",
+            }
+        ],
+    }
+    (result_dir / "result_manifest.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+    loaded = ResultManifest.read(result_dir)
+
+    assert loaded.to_dict() == legacy
+    assert loaded.products[0].path == ""

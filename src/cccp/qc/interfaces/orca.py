@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from cccp.qc.hessian_policy import resolve_recalc_hess
 from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
 from cccp.qc.interfaces.constraints import (
     CoordinateConstraint,
@@ -58,6 +59,8 @@ from cccp.qc.keyword_registry import (
     resolve,
     resolve_implementation,
 )
+from cccp.qc.method_meta import method_meta
+from cccp.qc.translation import render_opt_geom_lines
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
@@ -128,24 +131,22 @@ def classify_orca_failure(output_path: Path) -> str:
 def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
     """Look up ``METHOD_META`` for *method* (case-insensitive).
 
-    Returns ``None`` if ``acp.catalog`` is unavailable or *method* is not
-    declared. Imported lazily so that ``cccp`` has no
-    import-time dependency on the ``acp`` package.
+    The metadata lives in ``cccp.qc.method_meta`` (single source of truth
+    for calculation semantics; plan todo 7 / delta D5) — no ``acp``
+    dependency, so isolated and integrated environments resolve identical
+    defaults (DLPNO aux blocks included).
     """
     if not method:
         return None
-    try:
-        from acp.catalog import METHOD_META, _case_insensitive_get
-    except ImportError:
-        return None
-    return _case_insensitive_get(METHOD_META, method)
+    return method_meta(method)
 
 
-# --- Hessian resolver (lazy import + module-level cache) -------------------
-# ``cccp`` must not import ``acp.chem`` at module load time
-# (reverse-dependency). The resolver is pulled in on first use and cached
-# so conformer-batch invocations do not re-import per frame. Mirrors the
-# existing ``_resolve_method_meta`` pattern.
+# --- Hessian resolver (module-level cache) ---------------------------------
+# The Hessian policy implementation lives in ``cccp.qc.hessian_policy``
+# (in-package, no reverse dependency) and is imported at module top; the
+# previous lazy ``acp`` import is gone.  The module-level cache keeps
+# ``_get_resolver`` the single access point with a stable callable identity
+# (tests assert cached-identity semantics).
 _RESOLVER = None
 
 
@@ -153,9 +154,7 @@ def _get_resolver():
     """Return the cached ``resolve_recalc_hess`` callable."""
     global _RESOLVER
     if _RESOLVER is None:
-        from acp.chem.composition import resolve_recalc_hess as _resolver
-
-        _RESOLVER = _resolver
+        _RESOLVER = resolve_recalc_hess
     return _RESOLVER
 
 
@@ -164,7 +163,7 @@ def _resolve_recalc_hess_lazy(
     configured: object,
     symbols: list[str] | None,
 ):
-    """Thin wrapper around the ACP resolver; preserves lazy semantics."""
+    """Thin wrapper around the cccp resolver; preserves cached access."""
     return _get_resolver()(
         explicit=explicit,
         configured=configured,
@@ -218,6 +217,13 @@ _NMR_TENSOR_COMP_RE = re.compile(r"([XYZ]{2})\s*=\s*([-+]?\d+\.\d+)")
 #   Nucleus   Element   Isotropic(ppm)
 #      0         6 C       45.230
 _NMR_SUMMARY_ROW_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s*([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s*$")
+# ORCA 6.x summary table variant — the element-number column is replaced by
+# the element symbol and anisotropy is appended:
+#   Nucleus  Element    Isotropic     Anisotropy
+#       0       C          184.706         21.749
+_NMR_SUMMARY_ROW_ORCA6_RE = re.compile(
+    r"^\s*(\d+)\s+([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s+([-+]?\d+\.\d+)\s*$"
+)
 _NMR_TENSOR_HEADER = "NMR SHIELDING TENSOR"
 _NMR_SUMMARY_HEADER = "CHEMICAL SHIELDING SUMMARY"
 _NMR_SHIELDING_HEADERS = (_NMR_TENSOR_HEADER, _NMR_SUMMARY_HEADER)
@@ -332,8 +338,9 @@ class NmrShieldingParser:
 
         result: dict[int, dict[str, Any]] = {}
         for line in lines[start:]:
-            m = _NMR_SUMMARY_ROW_RE.match(line)
-            if not m:
+            m5 = _NMR_SUMMARY_ROW_RE.match(line)
+            m6 = _NMR_SUMMARY_ROW_ORCA6_RE.match(line)
+            if m5 is None and m6 is None:
                 stripped = line.strip()
                 if not stripped or stripped.startswith("-"):
                     continue
@@ -344,18 +351,30 @@ class NmrShieldingParser:
                 if result:
                     break  # already collected rows → left the table
                 continue  # haven't seen data yet → keep scanning
-            # group layout: <nucleus#> <element_num> <element_sym> <iso>
-            # ORCA 5.x summary table Nucleus column is 0-based (starts at 0),
-            # unlike the TENSOR block's "Nucleus N El:" which is 1-based.
-            # Real ORCA 5.x output example (confirmed by ORCA manual §9.10):
-            #   Nucleus   Element   Isotropic(ppm)
-            #      0         6 C       45.230
-            atom_idx = int(m.group(1))  # 0-based, no -1
+            if m5 is not None:
+                # ORCA 5.x layout: <nucleus#> <element_num> <element_sym> <iso>
+                # ORCA 5.x summary table Nucleus column is 0-based (starts at 0),
+                # unlike the TENSOR block's "Nucleus N El:" which is 1-based.
+                # Real ORCA 5.x output example (confirmed by ORCA manual §9.10):
+                #   Nucleus   Element   Isotropic(ppm)
+                #      0         6 C       45.230
+                atom_idx = int(m5.group(1))  # 0-based, no -1
+                symbol = _normalize_nmr_symbol(m5.group(3))
+                isotropic = float(m5.group(4))
+                anisotropy: float | None = None
+            else:
+                if m6 is None:  # pragma: no cover - guard above
+                    continue
+                # ORCA 6.x layout: <nucleus#> <element_sym> <iso> <anisotropy>
+                atom_idx = int(m6.group(1))
+                symbol = _normalize_nmr_symbol(m6.group(2))
+                isotropic = float(m6.group(3))
+                anisotropy = float(m6.group(4))
             result[atom_idx] = {
                 "atom_index": atom_idx,
-                "symbol": _normalize_nmr_symbol(m.group(3)),
-                "isotropic": float(m.group(4)),
-                "anisotropy": None,
+                "symbol": symbol,
+                "isotropic": isotropic,
+                "anisotropy": anisotropy,
                 "tensor_components": {},
             }
         return result
@@ -367,13 +386,15 @@ class NmrShieldingParser:
     ) -> None:
         expected = [_normalize_nmr_symbol(s) for s in expected_symbols]
         indices = sorted(shieldings)
-        if indices != list(range(len(expected))):
+        out_of_range = [index for index in indices if index < 0 or index >= len(expected)]
+        if out_of_range:
+            raise ValueError(f"Parsed shielding atom indices outside the molecule: {out_of_range}")
+        parsed = [shieldings[index]["symbol"] for index in indices]
+        expected_at_indices = [expected[index] for index in indices]
+        if parsed != expected_at_indices:
             raise ValueError(
-                f"Parsed shielding atom indices do not form a contiguous 0..N-1 sequence: {indices}"
+                f"Parsed shielding symbols {parsed} do not match expected {expected_at_indices}"
             )
-        parsed = [shieldings[i]["symbol"] for i in indices]
-        if parsed != expected:
-            raise ValueError(f"Parsed shielding symbols {parsed} do not match expected {expected}")
 
 
 def _normalize_nmr_symbol(symbol: str) -> str:
@@ -606,12 +627,8 @@ def scf_route_extras(scf_options: dict | None) -> list[str]:
 # ── Spin diagnostics parsing (design doc §10.3, §12.1) ──────────────────
 
 _SPIN_CONTAMINATION_HEADER = "UHF SPIN CONTAMINATION"
-_S2_EXPECTATION_RE = re.compile(
-    r"Expectation value of <S\*\*2>\s*:\s*([-+]?\d+\.\d+)"
-)
-_S2_IDEAL_RE = re.compile(
-    r"Ideal value S\*\(S\+1\) for S=([-+]?\d+\.\d+)\s*:\s*([-+]?\d+\.\d+)"
-)
+_S2_EXPECTATION_RE = re.compile(r"Expectation value of <S\*\*2>\s*:\s*([-+]?\d+\.\d+)")
+_S2_IDEAL_RE = re.compile(r"Ideal value S\*\(S\+1\) for S=([-+]?\d+\.\d+)\s*:\s*([-+]?\d+\.\d+)")
 _MULLIKEN_SPIN_HEADER = "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS"
 _LOEWDIN_SPIN_HEADER = "LOEWDIN ATOMIC CHARGES AND SPIN POPULATIONS"
 _ATOMIC_POPULATION_ROW_RE = re.compile(
@@ -697,20 +714,23 @@ def _with_spin_metadata(metadata: dict[str, Any] | None, output_file: Path) -> d
 # ── CASSCF / NEVPT2 parsing (design doc §11, §12.1) ─────────────────────
 
 _FINAL_ENERGY_RE = re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)")
-_NATURAL_OCCUPATION_RE = re.compile(
-    r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE
-)
+_NATURAL_OCCUPATION_RE = re.compile(r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE)
 _NATURAL_OCCUPATION_HEADER_RE = re.compile(
     r"Natural Orbital Occupation Numbers\s*?:?", re.IGNORECASE
 )
 _ORBITAL_OPT_CONVERGED_MARKER = "ORBITAL OPTIMIZATION HAS CONVERGED"
 _NEVPT2_ROOT_HEADER_RE = re.compile(r"MULT\s+(\d+)\s*,\s*ROOT\s+(\d+)")
-_NEVPT2_TOTAL_CORRECTION_RE = re.compile(
-    r"Total Energy Correction\s*:\s*dE\s*=\s*([-+]?\d+\.\d+)"
-)
+_NEVPT2_TOTAL_CORRECTION_RE = re.compile(r"Total Energy Correction\s*:\s*dE\s*=\s*([-+]?\d+\.\d+)")
 _NEVPT2_ZERO_ORDER_RE = re.compile(r"Zero Order Energy\s*:\s*E0\s*=\s*([-+]?\d+\.\d+)")
 _NEVPT2_TOTAL_RE = re.compile(r"Total Energy \(E0\+dE\)\s*:\s*E\s*=\s*([-+]?\d+\.\d+)")
-_CASSCF_RESULTS_HEADER = "CAS-SCF RESULTS"
+_CAS_ENERGY_CONVERGED_RE = re.compile(r"THE\s+CAS-SCF\s+ENERGY\s+HAS\s+CONVERGED")
+_CAS_GRADIENT_CONVERGED_RE = re.compile(r"THE\s+CAS-SCF\s+GRADIENT\s+HAS\s+CONVERGED")
+_CAS_RESULTS_SECTION_RE = re.compile(r"(?:CAS-SCF|CASSCF)\s+RESULTS")
+_FINAL_CASSCF_ENERGY_RE = re.compile(r"Final CASSCF energy\s*:\s*([-+]?\d+\.\d+)")
+_N_OCC_LINE_RE = re.compile(r"^\s*N\(occ\)=\s*((?:[-+]?\d+\.\d+\s*)+)\s*$", re.MULTILINE)
+_CAS_ROOT_LINE_RE = re.compile(r"^\s*ROOT\s+(\d+):\s*E=\s*([-+]?\d+\.\d+)")
+_CAS_MULT_IN_LINE_RE = re.compile(r"MULT\s*=\s*(\d+)")
+_CASSCF_JOB_BOUNDARY_RE = re.compile(r"ORCA TERMINATED NORMALLY|Program Version \d")
 _CASSCF_ROOT_ENERGY_RE = re.compile(
     r"^\s*(?:Mult|MULT)\s+(\d+)\s*,\s*(?:Root|ROOT)\s+(\d+).*?([-+]?\d+\.\d{4,})",
 )
@@ -728,6 +748,38 @@ def _parse_natural_occupations(text: str) -> list[float]:
         if len(occupations) >= 500:
             break
     return [value for _, value in sorted(occupations)]
+
+
+def _last_cas_convergence_marker_end(text: str) -> int | None:
+    """End offset of the last CAS convergence marker, or ``None``.
+
+    Recognizes the ORCA 6.1.1 ``THE CAS-SCF ENERGY/GRADIENT HAS CONVERGED``
+    marker lines (variable whitespace) and the legacy
+    ``ORBITAL OPTIMIZATION HAS CONVERGED`` marker.  Plain SCF convergence
+    (``THE SCF HAS CONVERGED``) is deliberately NOT a CAS marker.
+    """
+    ends = [m.end() for m in _CAS_ENERGY_CONVERGED_RE.finditer(text)]
+    ends += [m.end() for m in _CAS_GRADIENT_CONVERGED_RE.finditer(text)]
+    legacy = text.find(_ORBITAL_OPT_CONVERGED_MARKER)
+    if legacy >= 0:
+        ends.append(legacy + len(_ORBITAL_OPT_CONVERGED_MARKER))
+    return max(ends) if ends else None
+
+
+def _parse_active_occupations(text: str) -> list[float]:
+    """Active-space occupations (never inactive/virtual ``OCC`` table entries).
+
+    Prefers the LAST ``N(occ)= v1 v2 ...`` print occurring after the final
+    CAS convergence marker (ORCA 6.1.x CAS-SCF iteration output — the line
+    lists active orbitals only); otherwise falls back to the explicit
+    ``Natural Orbital Occupation Numbers`` listing (older format).
+    """
+    marker_end = _last_cas_convergence_marker_end(text)
+    if marker_end is not None:
+        matches = list(_N_OCC_LINE_RE.finditer(text, marker_end))
+        if matches:
+            return [float(value) for value in matches[-1].group(1).split()]
+    return _parse_natural_occupations(text)
 
 
 def _parse_nevpt2_roots(text: str) -> list[dict[str, Any]]:
@@ -756,12 +808,16 @@ def _parse_nevpt2_roots(text: str) -> list[dict[str, Any]]:
 
 
 def _parse_casscf_root_energies(text: str) -> list[dict[str, Any]]:
-    """Best-effort per-root energies from the ``CAS-SCF RESULTS`` section."""
-    sections = text.split(_CASSCF_RESULTS_HEADER)
+    """Per-root energies from the last ``CAS-SCF RESULTS``/``CASSCF RESULTS`` section."""
+    sections = _CAS_RESULTS_SECTION_RE.split(text)
     if len(sections) < 2:
         return []
     roots: list[dict[str, Any]] = []
+    multiplicity: int | None = None
     for line in sections[-1].splitlines():
+        mult_match = _CAS_MULT_IN_LINE_RE.search(line)
+        if mult_match:
+            multiplicity = int(mult_match.group(1))
         match = _CASSCF_ROOT_ENERGY_RE.match(line)
         if match:
             roots.append(
@@ -771,7 +827,64 @@ def _parse_casscf_root_energies(text: str) -> list[dict[str, Any]]:
                     "casscf_energy_hartree": float(match.group(3)),
                 }
             )
+            continue
+        root_match = _CAS_ROOT_LINE_RE.match(line)
+        if root_match:
+            roots.append(
+                {
+                    "multiplicity": multiplicity if multiplicity is not None else 1,
+                    "root": int(root_match.group(1)),
+                    "casscf_energy_hartree": float(root_match.group(2)),
+                }
+            )
     return roots
+
+
+def _final_cas_results_present(text: str, casscf_roots: list[dict[str, Any]]) -> bool:
+    """True when the last CAS results section carries final converged facts.
+
+    A convergence marker alone (e.g. an energy marker on a truncated log)
+    does not prove completion — the results section must hold a
+    ``Final CASSCF energy`` line or parsed per-root energies.
+    """
+    sections = list(_CAS_RESULTS_SECTION_RE.finditer(text))
+    if not sections:
+        return False
+    tail = text[sections[-1].end() :]
+    return bool(_FINAL_CASSCF_ENERGY_RE.search(tail)) or bool(casscf_roots)
+
+
+def _casscf_job_blocks(text: str) -> list[str]:
+    """Split a multi-job log at ORCA job boundaries (banner / termination)."""
+    blocks = [block for block in _CASSCF_JOB_BOUNDARY_RE.split(text) if block.strip()]
+    return blocks or [text]
+
+
+def _casscf_bound_energy(text: str) -> float | None:
+    """CAS energy bound to the last CAS-bearing job block.
+
+    The block must show CAS evidence (convergence marker or CAS results
+    section); ``FINAL SINGLE POINT ENERGY`` occurrences after the block's
+    ``NEVPT2 Results`` correlation region are excluded so an unrelated
+    later method never masquerades as the CAS energy.  Falls back to the
+    section's ``Final CASSCF energy`` line, then to the ROOT 0 energy.
+    """
+    for block in reversed(_casscf_job_blocks(text)):
+        has_marker = _last_cas_convergence_marker_end(block) is not None
+        if not has_marker and not _CAS_RESULTS_SECTION_RE.search(block):
+            continue
+        cas_region = block.split("NEVPT2 Results")[0]
+        matches = _FINAL_ENERGY_RE.findall(cas_region)
+        if matches:
+            return float(matches[-1])
+        final_match = _FINAL_CASSCF_ENERGY_RE.search(block)
+        if final_match:
+            return float(final_match.group(1))
+        roots = _parse_casscf_root_energies(block)
+        if roots:
+            ground = next((r for r in roots if r["root"] == 0), roots[0])
+            return float(ground["casscf_energy_hartree"])
+    return None
 
 
 def parse_casscf_output(output_file: Path) -> dict[str, Any]:
@@ -797,15 +910,13 @@ def parse_casscf_output(output_file: Path) -> dict[str, Any]:
         logger.warning("Could not read CASSCF output %s: %s", output_file, exc)
         return result
 
-    energy_matches = _FINAL_ENERGY_RE.findall(text)
-    if energy_matches:
-        result["casscf_energy"] = float(energy_matches[-1])
-    result["converged"] = (
-        _ORBITAL_OPT_CONVERGED_MARKER in text or "THE SCF HAS CONVERGED" in text
-    )
-    result["natural_occupations"] = _parse_natural_occupations(text)
+    casscf_roots = _parse_casscf_root_energies(text)
+    has_marker = _last_cas_convergence_marker_end(text) is not None
+    result["casscf_energy"] = _casscf_bound_energy(text)
+    result["converged"] = has_marker and _final_cas_results_present(text, casscf_roots)
+    result["natural_occupations"] = _parse_active_occupations(text)
     result["nevpt2_roots"] = _parse_nevpt2_roots(text)
-    result["casscf_roots"] = _parse_casscf_root_energies(text)
+    result["casscf_roots"] = casscf_roots
     return result
 
 
@@ -1238,6 +1349,12 @@ class ORCAInterface(QCInterfaceBase):
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
+        Input-construction half of the input boundary (F7): a PURE renderer
+        — no filesystem or process access.  ``_write_input`` persists the
+        rendered text and the xyz body; ``_run_orca`` owns the process call.
+        The ``%geom`` body is rendered by the shared translation-layer
+        function :func:`cccp.qc.translation.render_opt_geom_lines`.
+
         Args:
             calc_type: Calculation type
             method: Override method (uses self.method if None)
@@ -1502,16 +1619,15 @@ class ORCAInterface(QCInterfaceBase):
                 symbols=symbols,
             )
             blocks.append("%geom")
-            if initial_hessian == "calculate":
-                blocks.append("  Calc_Hess true")
-            if resolution.interval > 0:
-                blocks.append(f"  Recalc_Hess {resolution.interval}")
-            if trust_radius is not None:
-                blocks.append(f"  Trust {float(trust_radius):g}")
-            if geom_maxiter is not None and geom_maxiter > 0:
-                blocks.append(f"  MaxIter {int(geom_maxiter)}")
-            if geom_extra_lines:
-                blocks.extend(str(line) for line in geom_extra_lines if line)
+            blocks.extend(
+                render_opt_geom_lines(
+                    initial_hessian=initial_hessian,
+                    recalc_hess_interval=resolution.interval,
+                    trust_radius=trust_radius,
+                    max_cycles=geom_maxiter,
+                    extra_lines=geom_extra_lines,
+                )
+            )
             blocks.append("end")
 
             if resolution.reason == "auto" and resolution.enabled:
@@ -1591,7 +1707,12 @@ class ORCAInterface(QCInterfaceBase):
         grid: str | None = None,
         dispersion: str | None = None,
     ):
-        """Write ORCA input file."""
+        """Write ORCA input file.
+
+        Write half of the input boundary (F7): delegates rendering to
+        :meth:`_build_input_blocks` and only assembles the xyz body,
+        persists the file, and records the Hessian resolution.
+        """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
 
@@ -2159,12 +2280,16 @@ class ORCAInterface(QCInterfaceBase):
                 message=str(exc),
             )
         if not success:
+            maxiter = geom_maxiter if geom_maxiter is not None else "ORCA default"
             return RelaxedScanResult(
                 points=[],
                 input_xyz=input_xyz,
                 scan_dir=output_dir,
                 success=False,
-                message="ORCA relaxed scan failed",
+                message=(
+                    f"ORCA relaxed scan failed (per-point geometry MaxIter={maxiter}); "
+                    "if a scan point did not converge, raise --geom-maxiter"
+                ),
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
@@ -3375,28 +3500,26 @@ class ORCAInterface(QCInterfaceBase):
             trajectory_files=discover_irc_trajectory_files(output_dir, stem=output_name) or None,
         )
 
-    def _write_nmr_input(
+    def _build_nmr_input_lines(
         self,
-        input_file: Path,
-        coordinates: np.ndarray,
         symbols: list[str],
-        charge: int = 0,
-        multiplicity: int = 1,
         method: str = None,
         basis: str = None,
         solvent: str = None,
         solvent_model: str = None,
         nuclei: list[str] | None = None,
-    ) -> None:
-        """Write an ORCA GIAO NMR input with a ``%eprnmr`` block.
+    ) -> list[str]:
+        """Construct the NMR input line list — pure render, no I/O (F7).
 
-        Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
-        when neither the override nor the instance default is set to an NMR
-        level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
-        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
-        the GFN family follows the shared ALPB-only rule
-        (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
+        Input-construction half of the ``_write_nmr_input`` boundary: GFN+NMR
+        policy gate, level defaults, route line, solvent token, ``%eprnmr``
+        and resource blocks.  Persistence and the xyz body belong to
+        :meth:`_write_nmr_input`.
         """
+        # Emission-layer alias only (T16): local import keeps the module
+        # top untouched (Amendment L confines orca.py edits to these bodies).
+        from cccp.qc.keyword_registry import orca_native_functional
+
         _method = method if method is not None else self.method
         if not _method:
             _method = "mPW1PW91"
@@ -3445,9 +3568,23 @@ class ORCAInterface(QCInterfaceBase):
 
         target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
 
-        lines: list[str] = [
-            render_route_line([_method, RouteKeyword("basis", _basis), "TightSCF"], method=_method)
-        ]
+        # T16: ORCA >= 6 rejects the legacy Goodman functional keyword
+        # ("UNRECOGNIZED OR DUPLICATED KEYWORD(S) … MPW1PW91") and exposes
+        # the same functional as mPW1PW — alias ONLY the emitted
+        # simple-input token; the requested level name stays intact
+        # everywhere else (METHOD_META, error-model binding, receipts).
+        # Not silent: the input carries an alias comment and the NMR
+        # workflow records requested+executed (ShieldingSegment).
+        _emitted_method = orca_native_functional(_method)
+        lines: list[str] = []
+        if _emitted_method != _method:
+            lines.append(f"# functional alias: requested={_method} executed={_emitted_method}")
+        lines.append(
+            render_route_line(
+                [_emitted_method, RouteKeyword("basis", _basis), "TightSCF"],
+                method=_method,
+            )
+        )
         if _gfn_nmr:
             # GFN solvent rule (T7): ALPB-only under ORCA (PLATFORM POLICY),
             # same shared rule as every other !-line site.
@@ -3468,12 +3605,68 @@ class ORCAInterface(QCInterfaceBase):
 
         lines.append(f"%maxcore {self.maxcore}")
         lines.append(f"%pal nprocs {self.nproc} end")
+        return lines
+
+    def _write_nmr_input(
+        self,
+        input_file: Path,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        method: str = None,
+        basis: str = None,
+        solvent: str = None,
+        solvent_model: str = None,
+        nuclei: list[str] | None = None,
+    ) -> None:
+        """Write an ORCA GIAO NMR input with a ``%eprnmr`` block.
+
+        Write half of the NMR boundary (F7): construction is delegated to
+        :meth:`_build_nmr_input_lines`; this method only assembles the xyz
+        body and persists the file.
+
+        Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
+        when neither the override nor the instance default is set to an NMR
+        level.  When the requested functional carries an ORCA-native alias
+        (T16: ``mPW1PW91`` → ``mPW1PW``, rejected by ORCA >= 6 otherwise),
+        the route line emits the native keyword plus a
+        ``# functional alias: requested=… executed=…`` provenance comment —
+        the requested level itself is unchanged.
+        Solvent is emitted as the standalone ``CPCM(<name>)`` /
+        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention for DFT;
+        the GFN family follows the shared ALPB-only rule
+        (:func:`cccp.qc.interfaces.route_render.orca_gfn_solvent_token`).
+        """
+        lines = self._build_nmr_input_lines(
+            symbols,
+            method=method,
+            basis=basis,
+            solvent=solvent,
+            solvent_model=solvent_model,
+            nuclei=nuclei,
+        )
+
+        # ORCA >= 6 resolves %eprnmr nuclear selections against the geometry
+        # parsed so far and aborts when the block precedes the coordinates
+        # ("nuclear properties are requested but no coordinates have been
+        # read").  Move the rendered eprnmr block after the xyz body.
+        eprnmr_lines: list[str] = []
+        if "%eprnmr" in lines:
+            start = lines.index("%eprnmr")
+            end = start + 1
+            while end < len(lines) and lines[end].strip() != "end":
+                end += 1
+            eprnmr_lines = lines[start : end + 1]
+            del lines[start : end + 1]
 
         body = "\n".join(lines) + "\n"
         body += f"\n* xyz {charge} {multiplicity}\n"
         for symbol, coord in zip(symbols, coordinates):
             body += f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n"
         body += "*\n"
+        if eprnmr_lines:
+            body += "\n" + "\n".join(eprnmr_lines) + "\n"
 
         ensure_dir(input_file.parent)
         input_file.write_text(body, encoding="utf-8")

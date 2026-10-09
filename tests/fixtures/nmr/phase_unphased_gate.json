@@ -1,0 +1,61 @@
+{
+  "acquisition": {
+    "carrier_ppm": 4.0,
+    "dspfvs": 0,
+    "frequency_mhz": 400.13,
+    "group_delay_points": 0.0,
+    "nucleus": "1H",
+    "point_count": 4096,
+    "pulse_program": "zg30",
+    "solvent": "CDCl3",
+    "source_dir": "phase_unphased_gate",
+    "spectral_width_hz": 3201.04,
+    "spectrometer": "Bruker",
+    "spectrometer_reference": 4.0,
+    "temperature_k": 298.0
+  },
+  "assessment": {
+    "reasons": [
+      "phase_failed"
+    ],
+    "status": "failed"
+  },
+  "element": "H",
+  "lines": [],
+  "noise": 0.00015,
+  "nucleus": "1H",
+  "peaks": [
+    {
+      "atom_label": null,
+      "element": "H",
+      "index": 0,
+      "label_candidates": null,
+      "multiplicity": 1,
+      "shift_ppm": 3.8
+    }
+  ],
+  "processing": {
+    "apodization": "exponential",
+    "applied_shift_ppm": null,
+    "baseline_method": "morphological_grey_opening",
+    "baseline_window_fraction": 0.02,
+    "digital_filter_compensation": "none",
+    "gb": null,
+    "lb_hz": 0.3,
+    "phase_method": "unphased",
+    "phase_p0_deg": null,
+    "phase_p1_deg": null,
+    "reference_method": "spectrometer_sr",
+    "reference_ppm": null,
+    "sb": null,
+    "zero_fill_factor": 2.0,
+    "zero_fill_points": 8192
+  },
+  "quality": {
+    "baseline_rms": 0.0002,
+    "linewidth_hz": 1.8,
+    "snr": 42.0
+  },
+  "reference_shift": null,
+  "source_dir": "phase_unphased_gate"
+}

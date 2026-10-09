@@ -1,0 +1,31 @@
+{
+  "artifacts": [
+    {
+      "path": "WORK/05_SP/sp_output.log",
+      "sha256": "c8f57017526a2f7258b9a2aed2d820b3e165e963812d0c93326e24450eac48fb",
+      "source": "fixture",
+      "type": "output"
+    }
+  ],
+  "attempt": null,
+  "code_release": "0.1.3",
+  "config_digest": null,
+  "coords": null,
+  "dependency_artifacts": [],
+  "energy": -100.5,
+  "errors": [],
+  "frequencies": [],
+  "index": 0,
+  "job_id": null,
+  "kind": "singlepoint",
+  "metadata": {},
+  "schema_version": 1,
+  "status": "completed",
+  "step_id": "step_0_singlepoint",
+  "step_identity": "v2:24935007c2f712aab6ef8d694cfd40c0",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ]
+}

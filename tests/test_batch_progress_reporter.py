@@ -51,18 +51,14 @@ def test_batch_reporter_tracks_three_items_and_profile_steps(
         observe("single_point")
         return CalculationResult(coords=[[0.0, 0.0, 0.0]], energy=-1.0)
 
-    class FakeThermochemistryCalculator:
-        def __init__(self, **_kwargs) -> None:
-            pass
-
-        def compute(self, **_kwargs) -> CalculationResult:
-            observe("thermochemistry")
-            return CalculationResult()
+    def fake_thermochemistry(_request: CalculationRequest) -> CalculationResult:
+        observe("thermochemistry")
+        return CalculationResult()
 
     monkeypatch.setattr(batch_engine, "run_optimize", fake_optimize)
     monkeypatch.setattr(batch_engine, "run_frequency", fake_frequency)
     monkeypatch.setattr(batch_engine, "run_singlepoint", fake_singlepoint)
-    monkeypatch.setattr(batch_engine, "ThermochemistryCalculator", FakeThermochemistryCalculator)
+    monkeypatch.setattr(batch_engine, "execute_thermochemistry", fake_thermochemistry)
 
     reporter = ProgressReporter(
         tmp_path,

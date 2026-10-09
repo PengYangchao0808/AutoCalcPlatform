@@ -8,9 +8,16 @@ solvent / CREST-ewin resolvers.  These were originally private functions in
 workflows (and kept as private-name aliases in the origin modules so existing
 importers keep working, behaviour unchanged).
 
-The module has no dependency on ``acp.workflows.energy`` or
-``acp.workflows.ensemble`` (no import cycle): it only imports shared lower
-layers (backends, core models, ensemble_thermo, cccp interfaces).
+T08b: also the shared home of the per-stage solvent-model split
+(:func:`resolve_sampling_solvent` — moved from ``workflows/nmr.py`` so the
+retired Confsearch engines and the NMR workflow reuse ONE rule without an
+import cycle; ``nmr.py`` keeps private-name aliases) and the engine-facing
+composition :func:`resolve_stage_solvent_models` (sampling vs CENSO/DFT).
+
+The module has no dependency on ``acp.workflows.energy``,
+``acp.workflows.ensemble`` or ``acp.workflows.nmr`` (no import cycle): it
+only imports shared lower layers (backends, core models, ensemble_thermo,
+cccp interfaces).
 """
 
 from __future__ import annotations
@@ -18,14 +25,15 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Mapping
+from dataclasses import dataclass
 from importlib import import_module  # noqa: F401 — used by retired workflows
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 
 from acp.backends.censo_backend import CensoConformerRecord, CensoRunResult
-from acp.backends.registry import get_backend
 from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, StructureRecord
 from acp.storage.layout import TaskStorage
@@ -39,9 +47,31 @@ from acp.workflows.ensemble_thermo import (
     s_mix_kcal_per_mol_kelvin,
     t_s_mix_kcal_per_mol,
 )
-from cccp.qc.runners import run_shermo
+from cccp.backends.crest import CrestBackend
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import (
+    ConformerSearchOptions,
+    MethodSpec,
+    OptimizeOptions,
+    RescueSpec,
+    StructureInput,
+    TaskKind,
+    TaskRequest,
+    TaskResources,
+    ThermochemistryOptions,
+)
+from cccp.calculation.results import ConformerSearchPayload, TaskResult
+from cccp.calculation.tasks.censo_refine import run_censo_refine
+from cccp.calculation.tasks.conformer_search import run_conformer_search
+from cccp.calculation.tasks.frequency import run_frequency
+from cccp.calculation.tasks.optimize import run_optimize
+from cccp.calculation.tasks.singlepoint import run_singlepoint
+from cccp.calculation.tasks.thermochemistry import run_thermochemistry
+from cccp.qc.interfaces.censo import CensoInterface, part_index
+from cccp.qc.translation import render_censo_template_lines
 from cccp.software import get_configured_path
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz
+from cccp.utils.solvent_map import LEGAL_SOLVENT_MODELS, SolventValueError
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +130,7 @@ def write_v2_manifest(
             label=str(item.get("label") or item["path"]),
             path=str(item["path"]),
             kind=str(item.get("kind") or "file"),
+            metadata=item.get("metadata"),
         )
     manifest.write(TaskStorage(mol_dir).result_dir())
 
@@ -256,8 +287,8 @@ def resolve_levels(
         refinement_overrides["basis"] = str(refinement_sp["basis"]).lower()
 
     screening_extras = _base_route_extras(screening_sp)
-    screening_template_lines = ["! " + " ".join(screening_extras)] if screening_extras else []
-    refinement_template_lines = ["! " + " ".join(sp_route_extras)] if sp_route_extras else []
+    screening_template_lines = render_censo_template_lines(screening_extras)
+    refinement_template_lines = render_censo_template_lines(sp_route_extras)
 
     # Workflow-global solvent fallback derived from levels (UI wizard path):
     # refinement_sp takes precedence over dft_opt.
@@ -342,6 +373,247 @@ def conformer_tag(source: str | None, index: int) -> str:
     return cleaned if cleaned and cleaned != "rank1" else f"conf_{index:03d}"
 
 
+# ---------------------------------------------------------------------------
+# cccp task-core adapters (todo 26a): CREST / CENSO / ORCA / Shermo seams
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _TaskQcView:
+    """QCResult-like projection of one ``TaskResult`` (legacy handoff view)."""
+
+    success: bool
+    error_message: str | None
+    coordinates: Any
+    symbols: list[str] | None
+    log_file: Path | None
+    energy: float | None
+
+
+def _task_log_file(result: TaskResult, *, prefer_freq_log: bool = False) -> Path | None:
+    """Return the log artifact path (freq results prefer ``frequency_log``)."""
+    by_type = {artifact.type: Path(artifact.path) for artifact in result.artifacts}
+    if prefer_freq_log:
+        return by_type.get("frequency_log") or by_type.get("log")
+    return by_type.get("log") or by_type.get("frequency_log")
+
+
+def _task_qc_view(result: TaskResult, *, prefer_freq_log: bool = False) -> _TaskQcView:
+    """Map one typed ``TaskResult`` onto the legacy QCResult view."""
+    coordinates = (
+        np.asarray(result.coordinates, dtype=float) if result.coordinates is not None else None
+    )
+    symbols = list(result.symbols) if result.symbols is not None else None
+    return _TaskQcView(
+        success=result.status == "completed",
+        error_message="; ".join(result.errors) or None,
+        coordinates=coordinates,
+        symbols=symbols,
+        log_file=_task_log_file(result, prefer_freq_log=prefer_freq_log),
+        energy=result.energy_hartree,
+    )
+
+
+def crest_search_via_task(
+    cfg: dict[str, Any],
+    input_xyz: Path,
+    output_dir: Path,
+    *,
+    charge: int,
+    multiplicity: int,
+    energy_window: float,
+    output_name: str,
+    gfn_level: int = 2,
+    solvent: str | None = None,
+    solvent_model: str | None = "none",
+) -> Path:
+    """Run one CREST conformer search via ``run_conformer_search`` (D1).
+
+    The task core builds its backend without constructor kwargs, so the
+    legacy ``gfn_level``/``solvent``/``solvent_model`` ride through the
+    sanctioned ``TaskContext.backend`` runtime seam.  Returns the ensemble
+    XYZ path from the payload artifact; raises ``RuntimeError`` on failure
+    (the legacy ``CrestBackend.search`` contract).
+    """
+    crest = CrestBackend(
+        config=cfg,
+        gfn_level=gfn_level,
+        solvent=solvent,
+        solvent_model=solvent_model,
+    )
+    result = run_conformer_search(
+        TaskRequest(
+            task=TaskKind.CONFORMER_SEARCH,
+            structure=StructureInput(path=Path(input_xyz)),
+            charge=charge,
+            multiplicity=multiplicity,
+            output_dir=Path(output_dir),
+            options=ConformerSearchOptions(energy_window=energy_window),
+        ),
+        context=TaskContext(
+            backend=crest,
+            config=cfg,
+            capability_extras={"output_name": output_name},
+        ),
+    )
+    payload = result.payload
+    ensemble_ref = payload.ensemble_ref if isinstance(payload, ConformerSearchPayload) else None
+    if result.status != "completed" or ensemble_ref is None:
+        detail = "; ".join(result.errors) or "no CREST ensemble produced"
+        raise RuntimeError(f"CREST search failed: {detail}")
+    return Path(ensemble_ref.path)
+
+
+def _part_template_tokens(part_templates: dict[str, list[str]] | None) -> dict[str, list[str]]:
+    """Rendered CENSO template lines → raw per-part route keywords (D2).
+
+    ``render_censo_template_lines`` assembles ``["! k1 k2 …"]`` from literal
+    keywords, so stripping the leading ``"! "`` and splitting recovers the
+    raw tokens; re-rendering them by the translation layer is idempotent for
+    these literal tokens.
+    """
+    extras: dict[str, list[str]] = {}
+    for part, lines in (part_templates or {}).items():
+        tokens: list[str] = []
+        for line in lines or ():
+            text = str(line)
+            if text.startswith("! "):
+                text = text[len("! ") :]
+            tokens.extend(text.split())
+        if tokens:
+            extras[str(part)] = tokens
+    return extras
+
+
+def censo_refine_via_task(
+    cfg: dict[str, Any],
+    ensemble_xyz: Path,
+    run_dir: Path,
+    *,
+    preset: str,
+    charge: int,
+    multiplicity: int,
+    temperature: float | None = None,
+    solvent: str | None = None,
+    solvent_model: str | None = None,
+    nproc: int | None = None,
+    include_refinement: bool | None = None,
+    nconf: int | None = None,
+    part_overrides: dict[str, dict[str, Any]] | None = None,
+    part_templates: dict[str, list[str]] | None = None,
+    keep_all: bool | None = None,
+) -> CensoRunResult:
+    """Run one CENSO refinement via ``run_censo_refine`` (D2).
+
+    Legacy capability kwargs ride in ``capability_extras`` verbatim except
+    pre-rendered ``part_templates`` (rejected by the task): raw per-part
+    tokens go under ``part_template_extras`` and are re-rendered by the
+    translation layer.  The legacy ``CensoRunResult`` data contract
+    (gsolv/grrho/coordinates preserved) is reconstructed from the
+    final-part ``<idx>_<FINAL_PART>.json``/``.xyz`` artifacts (the
+    ``censo_refine`` naming convention); missing artifacts raise
+    ``RuntimeError`` like the legacy backend did.
+    """
+    extras: dict[str, Any] = {"preset": preset}
+    for key, value in (
+        ("temperature", temperature),
+        ("solvent", solvent),
+        ("solvent_model", solvent_model),
+        ("include_refinement", include_refinement),
+        ("nconf", nconf),
+        ("keep_all", keep_all),
+    ):
+        if value is not None:
+            extras[key] = value
+    if part_overrides:
+        extras["part_overrides"] = part_overrides
+    template_extras = _part_template_tokens(part_templates)
+    if template_extras:
+        extras["part_template_extras"] = template_extras
+
+    run_dir = Path(run_dir)
+    result = run_censo_refine(
+        TaskRequest(
+            task=TaskKind.CENSO_REFINE,
+            structure=StructureInput(path=Path(ensemble_xyz)),
+            charge=charge,
+            multiplicity=multiplicity,
+            resources=TaskResources(nproc=nproc),
+            output_dir=run_dir,
+        ),
+        context=TaskContext(config=cfg, capability_extras=extras),
+    )
+    metadata = result.metadata or {}
+    final_part = str(metadata.get("final_part") or "")
+    json_path = run_dir / f"{part_index(final_part)}_{final_part.upper()}.json"
+    xyz_path = run_dir / f"{part_index(final_part)}_{final_part.upper()}.xyz"
+    if not json_path.is_file() or not xyz_path.is_file():
+        detail = "; ".join(result.errors) or (
+            f"missing CENSO artifacts {json_path.name}/{xyz_path.name}"
+        )
+        raise RuntimeError(f"CENSO refine failed: {detail}")
+    records = CensoInterface({}).parse_censo_json(json_path, xyz_path)
+    if not records:
+        detail = "; ".join(result.errors) or "no conformer records parsed"
+        raise RuntimeError(f"CENSO refine failed: {detail}")
+    run_result = CensoRunResult(
+        preset=str(metadata.get("preset") or preset or "censo-light"),
+        records=list(records),
+        final_part=final_part,
+        work_dir=run_dir,
+        temperature=float(metadata.get("temperature_k") or temperature or 298.15),
+    )
+    run_result.sort_by_gtot()
+    return run_result
+
+
+def shermo_via_task(
+    cfg: dict[str, Any],
+    *,
+    freq_log: str,
+    sp_energy: float,
+    thermo_dir: Path,
+    output_file: str,
+    shermo_bin: str,
+    temperature_k: float,
+    pressure_atm: float,
+    scl_zpe: float | None,
+    ilowfreq: int | None,
+    imagreal: int | None,
+    conc: float | None,
+) -> dict[str, Any] | None:
+    """Run Shermo thermochemistry via ``run_thermochemistry`` (D4).
+
+    Returns the legacy value dict (``g_sum``/``h_sum``/``u_sum``/
+    ``s_total``/``g_conc``) or ``None`` on failure so the caller's
+    ``if not raw_shermo: raise`` path fires unchanged.
+    """
+    result = run_thermochemistry(
+        TaskRequest(
+            task=TaskKind.THERMOCHEMISTRY,
+            options=ThermochemistryOptions(
+                freq_log_path=Path(freq_log),
+                sp_energy_hartree=sp_energy,
+                temperature_k=temperature_k,
+                pressure_atm=pressure_atm,
+                scl_zpe=scl_zpe,
+                ilowfreq=ilowfreq,
+                imagreal=imagreal,
+                conc=conc,
+            ),
+            output_dir=Path(thermo_dir),
+        ),
+        context=TaskContext(
+            config=cfg,
+            capability_extras={"output_file": str(output_file), "shermo_bin": shermo_bin},
+        ),
+    )
+    if result.status != "completed":
+        return None
+    metadata = result.metadata or {}
+    return {key: metadata.get(key) for key in ("g_sum", "h_sum", "u_sum", "s_total", "g_conc")}
+
+
 def run_rank1_handoff(
     cfg: dict[str, Any],
     coordinates: np.ndarray[Any, Any],
@@ -379,9 +651,7 @@ def run_rank1_handoff(
         if resolved.get("opt_solvent")
         else (solvent_model if solvent else "none")
     ) or "none"
-
-    orca: Any = get_backend("orca")(
-        cfg,
+    opt_level = MethodSpec(
         method=resolved["opt_method"],
         basis=resolved["opt_basis"] or "def2-TZVPP",
         solvent=opt_solvent,
@@ -398,24 +668,37 @@ def run_rank1_handoff(
     else:
         logger.info("  [opt] geometry optimization (%s)", resolved["opt_method"])
 
-        opt_result = orca.optimize(
-            coordinates,
-            symbols,
-            charge=charge,
-            multiplicity=multiplicity,
-            output_dir=work_dir,
-            output_name=f"{tag}_opt",
-            method=resolved["opt_method"],
-            basis=resolved["opt_basis"],
-            route_extras=resolved.get("opt_route_extras"),
-            geom_maxiter=resolved.get("opt_geom_maxiter"),
-            recalc_hess=resolved.get("opt_recalc_hess"),
+        opt_result = run_optimize(
+            TaskRequest(
+                task=TaskKind.OPTIMIZE,
+                structure=StructureInput(
+                    coordinates=np.asarray(coordinates, dtype=float),
+                    symbols=list(symbols),
+                ),
+                charge=charge,
+                multiplicity=multiplicity,
+                level=opt_level,
+                backend="orca",
+                options=OptimizeOptions(rescue=RescueSpec(policy="off")),
+                output_dir=work_dir,
+            ),
+            context=TaskContext(
+                config=cfg,
+                workdir=work_dir,
+                capability_extras={
+                    "output_name": f"{tag}_opt",
+                    "route_extras": resolved.get("opt_route_extras"),
+                    "geom_maxiter": resolved.get("opt_geom_maxiter"),
+                    "recalc_hess": resolved.get("opt_recalc_hess"),
+                },
+            ),
         )
-        if not opt_result.success:
-            raise RuntimeError(f"rank1 geometry optimization failed: {opt_result.error_message}")
-        opt_coords = opt_result.coordinates
-        opt_symbols = opt_result.symbols or symbols
-        opt_log = str(opt_result.log_file) if opt_result.log_file else None
+        opt_view = _task_qc_view(opt_result)
+        if not opt_view.success:
+            raise RuntimeError(f"rank1 geometry optimization failed: {opt_view.error_message}")
+        opt_coords = opt_view.coordinates
+        opt_symbols = opt_view.symbols or symbols
+        opt_log = str(opt_view.log_file) if opt_view.log_file else None
         sp_energy = None
         sp_log = None
 
@@ -425,19 +708,31 @@ def run_rank1_handoff(
         resolved["opt_method"],
     )
     freq_dir = _handoff_stage_dir(work_dir, "04_FREQ", "ORCA")
-    freq_result = orca.frequency(
-        opt_coords,
-        opt_symbols,
-        charge=charge,
-        multiplicity=multiplicity,
-        output_dir=freq_dir,
-        output_name=f"{tag}_freq",
-        method=resolved["opt_method"],
-        basis=resolved["opt_basis"],
-        route_extras=resolved.get("opt_freq_route_extras"),
+    freq_result = run_frequency(
+        TaskRequest(
+            task=TaskKind.FREQUENCY,
+            structure=StructureInput(
+                coordinates=np.asarray(opt_coords, dtype=float),
+                symbols=list(opt_symbols),
+            ),
+            charge=charge,
+            multiplicity=multiplicity,
+            level=opt_level,
+            backend="orca",
+            output_dir=freq_dir,
+        ),
+        context=TaskContext(
+            config=cfg,
+            workdir=freq_dir,
+            capability_extras={
+                "output_name": f"{tag}_freq",
+                "route_extras": resolved.get("opt_freq_route_extras"),
+            },
+        ),
     )
-    if not freq_result.success:
-        raise RuntimeError(f"rank1 frequency calculation failed: {freq_result.error_message}")
+    freq_view = _task_qc_view(freq_result, prefer_freq_log=True)
+    if not freq_view.success:
+        raise RuntimeError(f"rank1 frequency calculation failed: {freq_view.error_message}")
 
     if not skip_opt_sp:
         logger.info(
@@ -451,35 +746,39 @@ def run_rank1_handoff(
             if resolved.get("sp_solvent")
             else (solvent_model if solvent else "none")
         ) or "none"
-        if (sp_solvent, sp_solvent_model if sp_solvent else "none") == (
-            opt_solvent,
-            opt_solvent_model if opt_solvent else "none",
-        ):
-            sp_orca = orca
-        else:
-            sp_orca: Any = get_backend("orca")(
-                cfg,
-                method=resolved["sp_method"],
-                basis=resolved["sp_basis"],
-                solvent=sp_solvent,
-                solvent_model=sp_solvent_model if sp_solvent else "none",
-            )
         sp_dir = _handoff_stage_dir(work_dir, "05_SP", "ORCA")
-        sp_result = sp_orca.single_point(
-            opt_coords,
-            opt_symbols,
-            charge=charge,
-            multiplicity=multiplicity,
-            output_dir=sp_dir,
-            output_name=f"{tag}_sp",
-            method=resolved["sp_method"],
-            basis=resolved["sp_basis"],
-            route_extras=resolved.get("sp_route_extras"),
+        sp_result = run_singlepoint(
+            TaskRequest(
+                task=TaskKind.SINGLEPOINT,
+                structure=StructureInput(
+                    coordinates=np.asarray(opt_coords, dtype=float),
+                    symbols=list(opt_symbols),
+                ),
+                charge=charge,
+                multiplicity=multiplicity,
+                level=MethodSpec(
+                    method=resolved["sp_method"],
+                    basis=resolved["sp_basis"] or "def2-TZVPP",
+                    solvent=sp_solvent,
+                    solvent_model=sp_solvent_model if sp_solvent else "none",
+                ),
+                backend="orca",
+                output_dir=sp_dir,
+            ),
+            context=TaskContext(
+                config=cfg,
+                workdir=sp_dir,
+                capability_extras={
+                    "output_name": f"{tag}_sp",
+                    "route_extras": resolved.get("sp_route_extras"),
+                },
+            ),
         )
-        if not sp_result.success:
-            raise RuntimeError(f"rank1 single-point failed: {sp_result.error_message}")
-        sp_energy = sp_result.energy
-        sp_log = str(sp_result.log_file) if sp_result.log_file else None
+        sp_view = _task_qc_view(sp_result)
+        if not sp_view.success:
+            raise RuntimeError(f"rank1 single-point failed: {sp_view.error_message}")
+        sp_energy = sp_view.energy
+        sp_log = str(sp_view.log_file) if sp_view.log_file else None
 
     if sp_energy is None:
         raise RuntimeError("No electronic energy available for Shermo handoff")
@@ -487,10 +786,11 @@ def run_rank1_handoff(
     thermo_dir = _handoff_stage_dir(work_dir, "06_THERMO", "Shermo")
     logger.info("  [thermo] thermodynamic correction")
     standard_state = _resolve_standard_state(cfg)
-    raw_shermo = run_shermo(
-        freq_output=str(freq_result.log_file),
+    raw_shermo = shermo_via_task(
+        cfg,
+        freq_log=str(freq_view.log_file),
         sp_energy=sp_energy,
-        output_dir=str(thermo_dir),
+        thermo_dir=thermo_dir,
         output_file=str(thermo_dir / f"{tag}_Shermo.sum"),
         shermo_bin=get_configured_path(cfg, "shermo"),
         temperature_k=resolved["temperature_k"],
@@ -982,6 +1282,7 @@ def write_final_outputs(
                 "label": "Ranked conformers (XYZ)",
                 "path": "structures/all_conformers.xyz",
                 "kind": "structure",
+                "metadata": {"auto_reusable": False},
             },
             {
                 "id": "ensemble_thermo",
@@ -1173,7 +1474,145 @@ def resolve_crest_ewin(
     return value if value > 0 else 6.0
 
 
+# ---------------------------------------------------------------------------
+# Per-stage solvent-model resolution (todo 8 → moved here by todo 9/T08b)
+# ---------------------------------------------------------------------------
+
+#: Dedicated sampling-segment solvent-model key (section ``nmr``).
+#: Intentionally ABSENT from ``cccp.config._get_default_config()`` and
+#: ``config/defaults.yaml``: absence itself is the signal (see
+#: :func:`resolve_sampling_solvent`).
+SAMPLING_SOLVENT_CONFIG_KEY: Final = "sampling_solvent_model"
+#: Sampling model applied when the key is absent but a solvent name is present.
+SAMPLING_DEFAULT_SOLVENT_MODEL: Final = "alpb"
+
+
+@dataclass(frozen=True)
+class SamplingSolventReceipt:
+    """Effective-parameters receipt for the sampling (CREST/xTB) segment.
+
+    ``defaulted`` is ``True`` ONLY when the dedicated key was absent and a
+    solvent name was present, so ACP chose ALPB rather than the user. An
+    explicit ``none``/``alpb``/``gbsa`` is never ``defaulted`` — a recorded
+    default must never masquerade as a user statement.
+    """
+
+    solvent: str | None
+    solvent_model: str
+    defaulted: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "solvent": self.solvent,
+            "solvent_model": self.solvent_model,
+            "defaulted": self.defaulted,
+        }
+
+
+def resolve_sampling_solvent(
+    cfg: Mapping[str, Any],
+    solvent: str | None,
+) -> SamplingSolventReceipt:
+    """Resolve the sampling (CREST/xTB) solvent model for one candidate run.
+
+    Reads ONLY the dedicated :data:`SAMPLING_SOLVENT_CONFIG_KEY` key — the
+    legacy ``theory.preoptimization.solvent_model`` / ``censo.solvent_model``
+    keys keep their CENSO/DFT semantics and are deliberately not consulted
+    here (todo 8). The model vocabulary is validated against the single source
+    :data:`cccp.utils.solvent_map.LEGAL_SOLVENT_MODELS`, so a CREST/xTB
+    sampling stage can only ever receive a legal model.
+
+    Three-state semantics:
+
+    * key ABSENT + solvent name present → ``alpb`` (``defaulted=True``);
+    * key ABSENT + no solvent → ``none`` (gas phase, no flags emitted);
+    * key explicitly ``none`` → gas phase (``defaulted=False``);
+    * key explicitly ``alpb``/``gbsa`` → used as given.
+
+    Moved from ``workflows/nmr.py`` (T08b) so the retired Confsearch engines
+    (ensemble/energy/xtbmd_censo_energy) and the NMR workflow share ONE rule;
+    ``nmr.py`` re-exports it under its historical private names.
+
+    Raises:
+        SolventValueError: the key carries a value outside
+            :data:`LEGAL_SOLVENT_MODELS`.
+    """
+    nmr_section = cfg.get("nmr")
+    raw = nmr_section.get(SAMPLING_SOLVENT_CONFIG_KEY) if isinstance(nmr_section, Mapping) else None
+    name = solvent if solvent else None
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        # Absence (or an empty/whitespace value) is the signal — never read as
+        # an explicit statement. A named solvent defaults to ALPB; otherwise
+        # the sampling segment runs gas phase.
+        if name is None:
+            return SamplingSolventReceipt(solvent=None, solvent_model="none", defaulted=False)
+        return SamplingSolventReceipt(
+            solvent=name, solvent_model=SAMPLING_DEFAULT_SOLVENT_MODEL, defaulted=True
+        )
+    model = str(raw).strip().lower()
+    if model not in LEGAL_SOLVENT_MODELS:
+        raise SolventValueError(
+            f"Unknown xTB solvent model {raw!r} for nmr.{SAMPLING_SOLVENT_CONFIG_KEY}; "
+            f"legal solvent models: {', '.join(sorted(LEGAL_SOLVENT_MODELS))}"
+        )
+    return SamplingSolventReceipt(solvent=name, solvent_model=model, defaulted=False)
+
+
+@dataclass(frozen=True)
+class StageSolventModels:
+    """Effective solvent models of one run, split by science stage.
+
+    ``sampling`` is the CREST/xTB segment (legal models only: ``alpb`` /
+    ``gbsa`` / ``none``); ``dft_model`` is the CENSO/ORCA DFT segment where
+    the historical ``none → smd`` fallback is legal. The solvent *name*
+    (``solvent``) is shared — only the model is stage-split.
+    """
+
+    solvent: str | None
+    dft_model: str
+    sampling: SamplingSolventReceipt
+
+
+def resolve_stage_solvent_models(
+    cfg: Mapping[str, Any],
+    solvent: str | None,
+    *,
+    dft_model_override: str | None = None,
+) -> StageSolventModels:
+    """Split one run's solvent into sampling (CREST/xTB) and DFT models.
+
+    The DFT side keeps the legacy contract (``resolve_solvent_config``
+    precedence, then *dft_model_override* from UI wizard levels, then the
+    historical ``none → smd`` fallback when a solvent name is present — SMD
+    is legal for CENSO/ORCA). The sampling side resolves through the
+    dedicated-key rule of :func:`resolve_sampling_solvent`, so a CREST/xTB
+    stage NEVER receives SMD/CPCM: absence defaults to ALPB (receipt
+    ``defaulted=True``) and an unknown dedicated-key value raises
+    ``SolventValueError`` (strict failure).
+    """
+    name, legacy_model = resolve_solvent_config(dict(cfg), solvent)
+    if name and dft_model_override:
+        legacy_model = dft_model_override
+    dft_model = legacy_model or "none"
+    if name and dft_model == "none":
+        logger.info(
+            "Solvent %r has no configured DFT model — defaulting to SMD for the "
+            "CENSO/DFT stage (the CREST/xTB sampling stage resolves separately).",
+            name,
+        )
+        dft_model = "smd"
+    return StageSolventModels(
+        solvent=name,
+        dft_model=dft_model,
+        sampling=resolve_sampling_solvent(cfg, solvent),
+    )
+
+
 __all__ = [
+    "SAMPLING_SOLVENT_CONFIG_KEY",
+    "SAMPLING_DEFAULT_SOLVENT_MODEL",
+    "SamplingSolventReceipt",
+    "StageSolventModels",
     "boltzmann_weights",
     "build_ensemble_summary",
     "build_result_ensemble",
@@ -1181,7 +1620,9 @@ __all__ = [
     "conformer_tag",
     "resolve_crest_ewin",
     "resolve_levels",
+    "resolve_sampling_solvent",
     "resolve_solvent_config",
+    "resolve_stage_solvent_models",
     "run_rank1_handoff",
     "select_cumulative_boltzmann",
     "write_final_outputs",

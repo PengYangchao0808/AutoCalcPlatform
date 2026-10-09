@@ -1,7 +1,7 @@
 """``xtb-md`` protocol (§3.2.2): GFN-FF/xTB MD → GFN1 opt → dedup → Boltzmann.
 
 Pure xTB — no CENSO, no ORCA. Reuses the xtbmd sampling layer
-(``run_md_replicas`` / ``_batch_opt_frames`` / ISOSTAT backend /
+(``run_md_replicas`` / ``_batch_opt_frames`` / ``_isostat_cluster_via_task`` /
 ``_filter_energy_window``) as the shared sampling base (plan §3.2.2/§14)
 without the CENSO/DFT tail that ``xtbmd-censo`` adds.
 """
@@ -29,13 +29,12 @@ def _write_embed_xyz(path: Path, symbols: list[str], coords: Any, safe_name: str
 
 def run_xtb_md(request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolOutcome:
     """GFN-FF/xTB MD → GFN1 batch opt → ISOSTAT dedup → xTB ranking → Boltzmann."""
-    from acp.backends.isostat_backend import IsostatBackend
-    from acp.backends.registry import get_backend
     from acp.io.structures import StructureReader
     from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
     from acp.workflows.xtbmd_censo_energy import (  # noqa: F401 — retired, lazy
         _batch_opt_frames,
         _filter_energy_window,
+        _isostat_cluster_via_task,
     )
     from acp.workflows.xtbmd_md import run_md_replicas
     from cccp.config import load_config
@@ -123,10 +122,10 @@ def run_xtb_md(request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolO
     # ── ISOSTAT dedup (shared layer) ───────────────────────────────────
     isostat_dir = v2_stage_dir(mol_dir, "02_SEARCH", "ISOSTAT")
     isostat_dir.mkdir(parents=True, exist_ok=True)
-    isostat_backend = cast(IsostatBackend, get_backend("isostat")(cfg))
-    isostat_result = isostat_backend.cluster(
+    isostat_result = _isostat_cluster_via_task(
+        cfg,
         isomers_xyz,
-        output_dir=isostat_dir,
+        isostat_dir,
         edis=float(md.get("edis", 0.5)),
         gdis=float(md.get("gdis", 0.25)),
         temperature=temperature_k,

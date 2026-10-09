@@ -360,7 +360,10 @@ def test_v1_job_rerun_requeues_original_task(client: TestClient) -> None:
     second = _wait_for_terminal_job(client, job_id)
     assert second["id"] == job_id
     assert second["work_dir"] == work_dir
-    assert second["result"]["attempts"] == 2
+    history = second["result"].get("attempt_history") or []
+    assert history, "in-place rerun must archive the previous attempt"
+    assert history[-1]["attempt"] == 1, "attempt_history must record the first attempt"
+    assert "attempts" not in second["result"], "legacy result['attempts'] is retired"
 
     jobs = client.get("/api/v1/jobs?limit=100")
     assert jobs.status_code == 200
@@ -2483,3 +2486,210 @@ def test_v1_job_node_id_falls_back_to_spec_target_node(
     response = client.get(f"/api/v1/jobs/{job_id}")
     assert response.status_code == 200
     assert response.json()["node_id"] == "comp-02"
+
+
+# ---------------------------------------------------------------------- #
+# Remote/local NMR report retrieval contract (todo 23, gap G13)
+#
+# UNWRAP CONTRACT: `GET .../remote-files/<path>/preview?mode=report`
+# returns RemoteFilePreviewResponse with
+#   content = {"type": "json_report", "file_path": <path>, "report": <doc>}
+# The frontend NMR reader (fetchNmrReportJson) unwraps content["report"].
+# Nulls inside the document survive verbatim (never coerced to 0) so the
+# panel renders them as an em dash.
+# ---------------------------------------------------------------------- #
+
+_NMR_REPORT_WITH_NULLS: dict[str, object] = {
+    "summary": {
+        "winner": {"index": 0, "label": "cand_A", "dp4": None, "dp5": None},
+        "nuclei": ["13C", "1H"],
+        "n_candidates": 1,
+    },
+    "candidates": [
+        {
+            "index": 0,
+            "label": "cand_A",
+            "dp4_probability": None,
+            "dp5_probability": None,
+            "n_conformers": 2,
+            "assignment": [],
+            "regression": {"13C": {"slope": None, "r_squared": None, "mae": None}},
+            "conformers": [
+                {"id": 1, "boltzmann_weight": 0.5},
+                {"id": 2, "boltzmann_weight": None},
+            ],
+        }
+    ],
+}
+
+
+class _FakeRemoteFetcher:
+    """Duck-type of RemoteResultFetcher covering the preview read path."""
+
+    def __init__(self, files: dict[str, bytes]) -> None:
+        self.files = files
+
+    def is_remote_job(self, record: JobRecord) -> bool:
+        result = record.result or {}
+        return bool(result.get("node") and result.get("remote_dir"))
+
+    def file_stat(self, record: JobRecord, filename: str):
+        from acp.scheduler.remote.sftp import RemoteFileInfo
+
+        data = self._data(filename)
+        return RemoteFileInfo(
+            name=filename.rsplit("/", 1)[-1],
+            size=len(data),
+            mtime=0.0,
+            is_dir=False,
+        )
+
+    def read_file(self, record: JobRecord, filename: str) -> bytes:
+        return self._data(filename)
+
+    def _data(self, filename: str) -> bytes:
+        if filename not in self.files:
+            raise FileNotFoundError(filename)
+        return self.files[filename]
+
+
+def _seed_remote_nmr_job(client: TestClient, tmp_path: Path, job_id: str) -> None:
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="nmr", name="remote-nmr"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / job_id),
+            result={
+                "node": "comp-01",
+                "remote_dir": f"/scratch/qc/acp/{job_id}",
+            },
+        ),
+    )
+
+
+def test_v1_remote_preview_report_mode_returns_json_report_envelope(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """mode=report wraps the parsed document in the json_report envelope.
+
+    The frontend fetchNmrReportJson unwraps ``content["report"]`` — the
+    payload must be the renderable report with nulls preserved (never 0).
+    """
+    job_id = "remote-nmr-report-1"
+    _seed_remote_nmr_job(client, tmp_path, job_id)
+    manager = client.app.state.job_manager
+    report_bytes = json.dumps(_NMR_REPORT_WITH_NULLS).encode("utf-8")
+    monkeypatch.setattr(
+        manager,
+        "_remote_fetcher",
+        _FakeRemoteFetcher({"reports/nmr_report.json": report_bytes}),
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{job_id}/remote-files/reports/nmr_report.json/preview",
+        params={"mode": "report"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "report"
+    assert body["path"] == "reports/nmr_report.json"
+
+    # deterministic unwrap contract (documented in _parse_remote_report)
+    content = body["content"]
+    assert content["type"] == "json_report"
+    assert content["file_path"] == "reports/nmr_report.json"
+    report = content["report"]
+
+    assert report["summary"]["winner"]["dp4"] is None
+    assert report["summary"]["winner"]["dp5"] is None
+    candidate = report["candidates"][0]
+    assert candidate["dp4_probability"] is None
+    assert candidate["dp5_probability"] is None
+    assert candidate["regression"]["13C"] == {"slope": None, "r_squared": None, "mae": None}
+    assert candidate["conformers"][1]["boltzmann_weight"] is None
+    assert candidate["conformers"][0]["boltzmann_weight"] == 0.5
+
+
+def test_v1_remote_preview_report_mode_unwraps_legacy_root_path(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The legacy root nmr_report.json yields the same unwrap contract."""
+    job_id = "remote-nmr-report-2"
+    _seed_remote_nmr_job(client, tmp_path, job_id)
+    manager = client.app.state.job_manager
+    monkeypatch.setattr(
+        manager,
+        "_remote_fetcher",
+        _FakeRemoteFetcher({"nmr_report.json": json.dumps(_NMR_REPORT_WITH_NULLS).encode("utf-8")}),
+    )
+
+    response = client.get(
+        f"/api/v1/jobs/{job_id}/remote-files/nmr_report.json/preview",
+        params={"mode": "report"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["content"]["type"] == "json_report"
+    assert body["content"]["report"]["candidates"][0]["dp4_probability"] is None
+
+
+def test_v1_remote_preview_report_mode_missing_file_404(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing report path 404s so the frontend can probe the next spelling."""
+    job_id = "remote-nmr-report-3"
+    _seed_remote_nmr_job(client, tmp_path, job_id)
+    manager = client.app.state.job_manager
+    monkeypatch.setattr(manager, "_remote_fetcher", _FakeRemoteFetcher({}))
+
+    response = client.get(
+        f"/api/v1/jobs/{job_id}/remote-files/reports/nmr_report.json/preview",
+        params={"mode": "report"},
+    )
+    assert response.status_code == 404
+
+
+def test_v1_job_files_serves_nmr_report_new_layout(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    """Local jobs serve the todo-22 layout via the work_dir-rooted file API.
+
+    The report physically lives at ``RESULT/reports/nmr_report.json``; the
+    legacy root ``nmr_report.json`` stays readable for old jobs.
+    """
+    job_id = "local-nmr-report-1"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="nmr", name="local-nmr"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / job_id),
+        ),
+    )
+    work_dir = tmp_path / job_id
+    (work_dir / "RESULT" / "reports").mkdir(parents=True)
+    (work_dir / "RESULT" / "reports" / "nmr_report.json").write_text(
+        json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8"
+    )
+    (work_dir / "nmr_report.json").write_text(
+        json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8"
+    )
+
+    new_layout = client.get(f"/api/v1/jobs/{job_id}/files/RESULT/reports/nmr_report.json")
+    assert new_layout.status_code == 200
+    report = json.loads(new_layout.text)
+    assert report["candidates"][0]["dp4_probability"] is None
+
+    legacy = client.get(f"/api/v1/jobs/{job_id}/files/nmr_report.json")
+    assert legacy.status_code == 200
+    assert json.loads(legacy.text)["candidates"][0]["dp4_probability"] is None

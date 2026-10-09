@@ -27,7 +27,8 @@ forwarded to :func:`policy_from_config`.  Recognised flat keys include
 ``int_plateau``, ``admission``) are accepted as well.
 
 Key migration changes vs bond_scan.py:
-- Uses ``get_backend("orca").relaxed_scan`` (not ``ORCAInterface`` directly)
+- Relaxed scan execution goes through the cccp relaxed-scan task core
+  (``cccp.calculation.tasks.scan.run_scan``) — see docs/ACP_PES_Task_Alignment.md
 - Uses generic naming (PesScanRequest, no orchestrator identifiers)
 - Single-point delegation via BatchSinglePointExecutor (todo 31)
 - Result manifest via ``acp.storage.manifest.ResultManifest``
@@ -37,6 +38,7 @@ Key migration changes vs bond_scan.py:
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from dataclasses import replace
@@ -45,8 +47,6 @@ from typing import Any, TypeGuard
 
 import numpy as np
 
-import acp.backends
-from acp.backends.base import RelaxedScanCalculator
 from acp.calculations.batch.singlepoint import BatchSinglePointExecutor
 from acp.calculations.levels import (
     CalculationLevel,
@@ -89,8 +89,19 @@ from acp.calculations.pes.path_selection import (
 from acp.calculations.pes.scan_snapshot import PesScanSnapshotWriter
 from acp.calculations.progress import LiveMetric, ProgressReporter
 from acp.storage.layout import TaskStorage
+from cccp.calculation._common import backend_for_request
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import (
+    MethodSpec,
+    ScanCoordinateSpec,
+    ScanOptions,
+    StructureInput,
+    TaskKind,
+    TaskRequest,
+)
+from cccp.calculation.tasks.scan import run_scan
 from cccp.qc.interfaces.constraints import ConstraintKind, CoordinateSpec, ReactionCoordinatePlan
-from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
+from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.utils.constants import HARTREE_TO_KCAL
 from cccp.utils.file_io import read_xyz, write_xyz
 from cccp.utils.geometry_tools import GeometryUtils
@@ -639,21 +650,22 @@ def _run_relaxed_scan_backend(
     optimizer_level: CalculationLevel | None = None,
     path_plan: dict[str, Any] | None = None,
 ) -> RelaxedScanResult:
-    """Execute the relaxed scan via ``get_backend("orca").relaxed_scan``.
+    """Execute the relaxed scan through the cccp relaxed-scan task core.
 
-    This is the fixed path — bond_scan.py:724 called ORCAInterface directly;
-    this module resolves and validates the backend capability first.
+    ``run_scan`` owns request validation, plan compilation (the raw
+    ``scan_plan`` mapping keeps every ``path_plan`` feature), error
+    classification and result normalization; the backend instance travels
+    as the ``TaskContext`` runtime seam (same contract as
+    ``batch/_singlepoint_execution`` and ``primitives/scan.py``).  The typed
+    ``TaskResult`` is folded back into a ``RelaxedScanResult`` so frame
+    extraction, path analysis and candidate selection keep their input
+    contract unchanged (see docs/ACP_PES_Task_Alignment.md).
 
     The per-point optimization level is canonicalised once (shared model,
     ``acp.calculations.levels``) and every layer of the level — method,
     basis, dispersion, solvent, grid, SCF, geometry convergence, retry
-    policy — is forwarded to the backend as named kwargs (G3/G4/G6 fixes:
-    previously only ``method`` reached the interface).
+    policy — reaches the backend as named capability kwargs.
     """
-    backend_ref = acp.backends.get_backend(protocol.scan_driver.software)
-    backend = backend_ref(cfg) if isinstance(backend_ref, type) else backend_ref
-    if not isinstance(backend, RelaxedScanCalculator):
-        raise TypeError(f"Backend {protocol.scan_driver.software!r} does not support relaxed scans")
     scan_coordinates = tuple(coordinates or ((coordinate,) if coordinate is not None else ()))
     if not scan_coordinates:
         raise ValueError("at least one scan coordinate is required")
@@ -675,40 +687,178 @@ def _run_relaxed_scan_backend(
     route_extras: list[str] = []
     if level.ri_approximation and level.ri_approximation.lower() != "none":
         route_extras.append(level.ri_approximation)
-    result = backend.relaxed_scan(
-        coords,
-        symbols,
-        output_dir=scan_dir,
-        plan=plan,
+
+    collected: dict[int, RelaxedScanPoint] = {}
+
+    def _collect(point: Any) -> None:
+        try:
+            collected[int(point.frame_index)] = point
+        except (AttributeError, TypeError, ValueError):
+            pass
+        if point_callback is not None:
+            point_callback(point)
+
+    software = str(protocol.scan_driver.software)
+    request = TaskRequest(
+        task=TaskKind.SCAN,
+        structure=StructureInput(
+            coordinates=tuple(tuple(float(c) for c in row) for row in coords),
+            symbols=tuple(str(s) for s in symbols),
+        ),
         charge=charge,
         multiplicity=multiplicity,
-        method=level.method,
-        basis=level.basis,
-        solvent=level.solvent,
-        solvent_model=level.solvent_model,
-        route_extras=route_extras or None,
-        nprocs=nproc,
-        use_scants=bool(protocol.scan_driver.use_scants),
-        full_scan=bool(protocol.scan_driver.full_scan),
-        geom_maxiter=int(
-            protocol.scan_optimizer.max_iterations or protocol.scan_driver.max_iterations
+        level=MethodSpec(method=level.method, basis=level.basis),
+        backend=software,
+        options=ScanOptions(
+            coordinates=tuple(
+                ScanCoordinateSpec(
+                    atoms=tuple(int(a) for a in item.atoms),
+                    kind=item.kind,
+                    start=item.start,
+                    end=item.end,
+                    atom_index_base=0,
+                )
+                for item in scan_coordinates
+            ),
+            points=scan_coordinates[0].n_points,
         ),
-        opt_level=protocol.scan_optimizer.convergence,
-        grid=level.grid,
-        scf_convergence=level.scf_convergence,
-        scf_maxiter=level.scf_max_iterations,
-        aux_j_basis=level.aux_j_basis,
-        aux_c_basis=level.aux_c_basis,
-        dispersion=level.dispersion,
-        retry_count=int(protocol.scan_optimizer.retry_count),
-        retry_strategy=protocol.scan_optimizer.retry_strategy,
-        failure_policy=protocol.scan_driver.failure_policy,
-        reuse_previous_geometry=bool(protocol.scan_driver.reuse_previous_geometry),
-        point_callback=point_callback,
+        output_dir=scan_dir,
     )
-    if not isinstance(result, RelaxedScanResult):
-        raise TypeError("Relaxed-scan backend returned an invalid result")
-    return result
+    task_result = run_scan(
+        request,
+        context=TaskContext(
+            config=cfg,
+            workdir=scan_dir,
+            backend=backend_for_request(software, config=cfg),
+            capability_extras={
+                "scan_plan": plan.to_dict(),
+                "method": level.method,
+                "basis": level.basis,
+                "solvent": level.solvent,
+                "solvent_model": level.solvent_model,
+                "route_extras": route_extras or None,
+                "nprocs": nproc,
+                "use_scants": bool(protocol.scan_driver.use_scants),
+                "full_scan": bool(protocol.scan_driver.full_scan),
+                "geom_maxiter": int(
+                    protocol.scan_optimizer.max_iterations or protocol.scan_driver.max_iterations
+                ),
+                "opt_level": protocol.scan_optimizer.convergence,
+                "grid": level.grid,
+                "scf_convergence": level.scf_convergence,
+                "scf_maxiter": level.scf_max_iterations,
+                "aux_j_basis": level.aux_j_basis,
+                "aux_c_basis": level.aux_c_basis,
+                "dispersion": level.dispersion,
+                "retry_count": int(protocol.scan_optimizer.retry_count),
+                "retry_strategy": protocol.scan_optimizer.retry_strategy,
+                "failure_policy": protocol.scan_driver.failure_policy,
+                "reuse_previous_geometry": bool(protocol.scan_driver.reuse_previous_geometry),
+                "point_callback": _collect,
+            },
+        ),
+    )
+    return _relaxed_scan_result_from_task(
+        task_result,
+        plan_points=int(plan.points),
+        scan_dir=scan_dir,
+        collected=collected,
+    )
+
+
+def _read_scan_profile(scan_dir: Path) -> dict[int, dict[str, Any]]:
+    """Return the task-level per-frame ledger (``scan_profile.json``) by index."""
+    path = scan_dir / "scan_profile.json"
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    raw_frames = payload.get("frames") if isinstance(payload, dict) else None
+    entries: dict[int, dict[str, Any]] = {}
+    for entry in raw_frames or ():
+        if isinstance(entry, dict) and entry.get("index") is not None:
+            try:
+                entries[int(entry["index"])] = entry
+            except (TypeError, ValueError):
+                continue
+    return entries
+
+
+def _relaxed_scan_result_from_task(
+    task_result: Any,
+    *,
+    plan_points: int,
+    scan_dir: Path,
+    collected: dict[int, RelaxedScanPoint],
+) -> RelaxedScanResult:
+    """Fold one scan ``TaskResult`` back into the ``RelaxedScanResult`` contract.
+
+    Points captured through ``point_callback`` keep full fidelity
+    (coordinates, per-point metadata such as retry history / frame role);
+    remaining frames are rebuilt from the task artifacts
+    (``scan_profile.json`` ledger + ``scan_frame_%03d.xyz`` geometries), which
+    yields empty point metadata exactly like native scans report.
+
+    ``success`` restores the legacy "the scan ran to completion" flag that
+    ``TaskResult.complete`` (every frame usable) is stricter than: a
+    fully-recorded frame set whose only error is run_scan's generic
+    empty-message fallback marks a ``mark_failed_continue`` run whose failed
+    frames stay available for extraction, exactly like the raw
+    ``RelaxedScanResult.success`` did.
+    """
+    payload = getattr(task_result, "payload", None)
+    frames = list(getattr(payload, "frames", ()) or ())
+    metadata = getattr(task_result, "metadata", None) or {}
+    frame_count = int(metadata.get("frame_count") or len(frames))
+    profile = _read_scan_profile(scan_dir)
+    points: list[RelaxedScanPoint] = []
+    for index in range(frame_count):
+        raw = collected.get(index)
+        if raw is not None:
+            points.append(raw)
+            continue
+        entry = profile.get(index) or {}
+        frame_coords: Any = None
+        frame_symbols: list[str] | None = None
+        frame_path = scan_dir / f"scan_frame_{index:03d}.xyz"
+        if frame_path.is_file():
+            try:
+                frame_coords, frame_symbols = read_xyz(frame_path)
+            except (OSError, TypeError, ValueError):
+                frame_coords, frame_symbols = None, None
+        energy = entry.get("energy_hartree")
+        points.append(
+            RelaxedScanPoint(
+                frame_index=index,
+                progress=float(entry.get("progress", index / max(plan_points - 1, 1))),
+                coordinates=frame_coords,
+                symbols=frame_symbols,
+                energy_hartree=float(energy) if isinstance(energy, (int, float)) else None,
+                success=bool(entry.get("success", False)),
+                coordinate_values=dict(entry.get("coordinate_values") or {}),
+            )
+        )
+    errors = tuple(str(item) for item in (getattr(task_result, "errors", ()) or ()))
+    completed = getattr(task_result, "status", "") == "completed"
+    if completed:
+        return RelaxedScanResult(
+            points=points,
+            input_xyz=scan_dir / "input.xyz",
+            scan_dir=scan_dir,
+            success=True,
+            message="",
+        )
+    generic_fallback_only = errors == ("relaxed scan failed",)
+    success = frame_count == plan_points and generic_fallback_only
+    return RelaxedScanResult(
+        points=points,
+        input_xyz=scan_dir / "input.xyz",
+        scan_dir=scan_dir,
+        success=success,
+        message=errors[0] if errors else "relaxed scan failed",
+    )
 
 
 # ── frame extraction ───────────────────────────────────────────────────

@@ -9,92 +9,164 @@ canonical rank per atom; atoms sharing a rank are symmetry-equivalent.
 
 The module also accepts explicit equivalence groups from the experimental
 input (``EQ:`` lines) — these take precedence when present.
+
+G01 contract: without a bonded molecular graph atoms are NEVER merged —
+each atom stays a singleton group with basis ``"unknown"`` (surfaced via
+``EquivalenceResult.equivalence_unknown``); strict mode raises
+:class:`EquivalenceError` instead.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from acp.nmr.models import normalize_symbol
+from acp.nmr.models import (
+    EQ_BASIS_EXPLICIT,
+    EQ_BASIS_TOPOLOGY,
+    EQ_BASIS_UNKNOWN,
+    SIGNAL_GROUP_BASES,
+    normalize_symbol,
+)
 
 if TYPE_CHECKING:
     from rdkit import Chem
 
 logger = logging.getLogger(__name__)
 
+# Closed, JSON-serializable vocabulary for group equivalence bases —
+# defined once in acp.nmr.models (the leaf module) and re-exported here so
+# SignalGroup validation and equivalence detection cannot drift apart.
+_EQ_BASIS_VALUES = frozenset(SIGNAL_GROUP_BASES)
 
-def _mol_from_symbols(symbols: list[str]) -> Chem.Mol:
-    """Build a minimal RDKit :class:`Mol` from element symbols only.
 
-    The NMR workflow already has optimized 3D coordinates, but RDKit's
-    symmetry ranking only needs the connectivity. We build a single-atom
-    graph per element and add zero-order bonds; canonical ranking then
-    collapses only atoms of identical element + environment. Because we
-    lack connectivity, we use the element-only graph: atoms of the same
-    element collapse into one equivalence group.
+class EquivalenceError(ValueError):
+    """Strict mode: equivalence cannot be established without a molecular graph."""
 
-    This is intentionally conservative — for real connectivity-driven
-    equivalence (e.g. distinguishing two inequivalent CH3 groups) supply
-    ``EQ:`` groups in the experimental input or pass a bonded RDKit Mol.
+
+@dataclass(frozen=True)
+class EquivalenceGroup:
+    """Atom-index group with its serializable equivalence basis."""
+
+    indices: tuple[int, ...]
+    basis: str
+
+    def __post_init__(self) -> None:
+        if self.basis not in _EQ_BASIS_VALUES:
+            raise ValueError(f"unknown equivalence basis {self.basis!r}")
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.indices)
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __contains__(self, item: object) -> bool:
+        return item in self.indices
+
+    def __getitem__(self, item: int | slice) -> tuple[int, ...]:
+        return self.indices[item]
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable provenance record (report evidence)."""
+        return {"indices": list(self.indices), "basis": self.basis}
+
+
+@dataclass(frozen=True)
+class EquivalenceResult:
+    """Partition of atoms into groups, each carrying its equivalence basis.
+
+    Iterates as plain groups so existing consumers keep working.
     """
-    from rdkit import Chem
 
-    mol = Chem.RWMol()
-    for symbol in symbols:
-        sym = normalize_symbol(symbol)
-        try:
-            atomic_num = Chem.GetPeriodicTable().GetAtomicNumber(sym)
-        except (RuntimeError, ValueError, AttributeError):
-            atomic_num = 0
-        atom = Chem.Atom(atomic_num if atomic_num > 0 else 0)
-        mol.AddAtom(atom)
-    return mol.GetMol()
+    groups: tuple[EquivalenceGroup, ...]
+
+    def __iter__(self) -> Iterator[EquivalenceGroup]:
+        return iter(self.groups)
+
+    def __len__(self) -> int:
+        return len(self.groups)
+
+    def __getitem__(self, item: int) -> EquivalenceGroup:
+        return self.groups[item]
+
+    @property
+    def equivalence_unknown(self) -> bool:
+        """True when any group is not justified by a molecular graph."""
+        return any(g.basis == EQ_BASIS_UNKNOWN for g in self.groups)
+
+    @property
+    def basis(self) -> str:
+        """Overall basis: one shared value, ``"mixed"``, or ``"empty"``."""
+        distinct = {g.basis for g in self.groups}
+        if not distinct:
+            return "empty"
+        if len(distinct) == 1:
+            return next(iter(distinct))
+        return "mixed"
+
+    @classmethod
+    def singletons(cls, n_atoms: int, basis: str) -> EquivalenceResult:
+        """One single-atom group per atom, all carrying *basis*."""
+        return cls(tuple(EquivalenceGroup((i,), basis) for i in range(n_atoms)))
 
 
 def detect_equivalence_groups(
-    symbols: list[str],
+    symbols: Sequence[str],
     mol: Chem.Mol | None = None,
-) -> list[list[int]]:
+    *,
+    strict: bool = False,
+) -> EquivalenceResult:
     """Return symmetry-equivalent atom-index groups (0-based).
 
-    When *mol* is provided with full connectivity, RDKit's
-    :func:`CanonicalRankAtoms` derives true topological equivalence.
-    Otherwise a fallback groups atoms by element only (a coarse
-    over-approximation suitable for the simplest symmetric molecules).
+    A bonded *mol* yields true topological equivalence (RDKit
+    :func:`CanonicalRankAtoms`, ``breakTies=False``) with basis
+    ``"topology"``. Without a graph — or when ranking fails — every atom
+    becomes a singleton with basis ``"unknown"`` and
+    ``result.equivalence_unknown`` is True: same-element atoms are never
+    merged without proof of equivalence (G01).
 
     Args:
         symbols: Element symbols (length N).
         mol: Optional RDKit :class:`Mol` with the same atom ordering.
+        strict: Reject instead of degrading when no topology is usable.
 
     Returns:
-        List of equivalence groups (each a list of 0-based atom indices).
-        Singletons are included (every atom belongs to exactly one group).
+        :class:`EquivalenceResult` — iterates as groups; singletons are
+        included (every atom belongs to exactly one group).
+
+    Raises:
+        EquivalenceError: *strict* and no usable molecular topology.
     """
     n_atoms = len(symbols)
     if n_atoms == 0:
-        return []
-
+        return EquivalenceResult(())
     if mol is None:
-        mol = _mol_from_symbols(symbols)
+        return _degraded(
+            n_atoms,
+            strict,
+            "no bonded molecular graph; strict_equivalence refuses to merge atoms",
+        )
+    if mol.GetNumAtoms() != n_atoms:
+        return _degraded(
+            n_atoms,
+            strict,
+            f"molecular graph has {mol.GetNumAtoms()} atoms but {n_atoms} symbols",
+        )
 
     try:
         from rdkit import Chem
     except ImportError:  # pragma: no cover - rdkit is a hard dependency
-        logger.warning("RDKit unavailable; falling back to element-only equivalence")
-        return _element_groups(symbols)
+        return _degraded(n_atoms, strict, "RDKit unavailable")
 
-    # CanonicalRankAtoms requires a sanitized, bonded molecule. When we
-    # only have element symbols (no connectivity) the call either raises
-    # or dumps a pre-condition violation to stderr; the element-only
-    # fallback is the correct coarse approximation either way.
     try:
         mol.UpdatePropertyCache(strict=False)
-        Chem.GetSymmSSSR(mol)  # populate ring info; no-op on unbonded mol
+        Chem.GetSymmSSSR(mol)  # populate ring info
         ranks = Chem.CanonicalRankAtoms(mol, breakTies=False)
-    except Exception as exc:
-        logger.debug("CanonicalRankAtoms unavailable (%s); using element groups", exc)
-        return _element_groups(symbols)
+    except (RuntimeError, ValueError) as exc:
+        return _degraded(n_atoms, strict, f"canonical ranking failed: {exc}")
 
     by_rank: dict[int, list[int]] = {}
     for atom_idx, rank in enumerate(ranks):
@@ -102,56 +174,73 @@ def detect_equivalence_groups(
         by_rank.setdefault(rank_int, []).append(atom_idx)
 
     # split ranks by element so H and C never merge
-    groups: list[list[int]] = []
+    groups: list[EquivalenceGroup] = []
     for rank_group in by_rank.values():
         by_elem: dict[str, list[int]] = {}
         for atom_idx in rank_group:
             sym = normalize_symbol(symbols[atom_idx])
             by_elem.setdefault(sym, []).append(atom_idx)
-        groups.extend(by_elem.values())
-    return groups
+        for indices in by_elem.values():
+            groups.append(EquivalenceGroup(tuple(indices), EQ_BASIS_TOPOLOGY))
+    return EquivalenceResult(tuple(groups))
 
 
-def _element_groups(symbols: list[str]) -> list[list[int]]:
-    """Fallback: group atoms strictly by element."""
-    by_elem: dict[str, list[int]] = {}
-    for atom_idx, symbol in enumerate(symbols):
-        by_elem.setdefault(normalize_symbol(symbol), []).append(atom_idx)
-    return list(by_elem.values())
+def _degraded(n_atoms: int, strict: bool, reason: str) -> EquivalenceResult:
+    """Singletons with unknown basis, or the strict-mode rejection."""
+    if strict:
+        raise EquivalenceError(reason)
+    logger.debug("equivalence degraded to singletons: %s", reason)
+    return EquivalenceResult.singletons(n_atoms, EQ_BASIS_UNKNOWN)
 
 
 def merge_explicit_and_detected(
-    explicit: list[list[str]],
-    detected: list[list[int]],
-    symbols: list[str],
-) -> list[list[int]]:
+    explicit: Sequence[Sequence[str]],
+    detected: EquivalenceResult | Sequence[Sequence[int]],
+    symbols: Sequence[str],
+) -> EquivalenceResult:
     """Merge explicit ``EQ:`` groups (atom labels) with detected groups.
 
-    Explicit groups from the experimental input take precedence: atoms in
-    an explicit group are removed from detected groups, and detected groups
-    that collapse to a single atom (or empty) are dropped.
+    Explicit groups from the experimental input take precedence: their
+    atoms are claimed out of the detected groups, and every remaining
+    atom keeps its detected basis. Atoms the explicit groups do not
+    cover are never re-merged by element (G01 partial-EQ failure mode).
+    Plain-sequence *detected* inputs are treated as basis ``"unknown"`` —
+    provenance is never over-claimed.
     """
     if not explicit:
-        return detected
+        return _as_result(detected)
 
-    label_to_idx = _build_label_index(symbols)
+    label_to_idx = _build_label_index(list(symbols))
     claimed: set[int] = set()
-    merged: list[list[int]] = []
+    merged: list[EquivalenceGroup] = []
 
     for group in explicit:
         idx_group = [label_to_idx[label] for label in group if label in label_to_idx]
-        idx_group = [i for i in idx_group if i is not None]
         if idx_group:
-            merged.append(idx_group)
+            merged.append(EquivalenceGroup(tuple(idx_group), EQ_BASIS_EXPLICIT))
             claimed.update(idx_group)
 
-    for det in detected:
-        remaining = [i for i in det if i not in claimed]
-        if len(remaining) > 1:
-            merged.append(remaining)
-        elif len(remaining) == 1:
-            merged.append(remaining)
-    return merged
+    for det in _iter_groups(detected):
+        remaining = tuple(i for i in det if i not in claimed)
+        if remaining:
+            merged.append(EquivalenceGroup(remaining, det.basis))
+    return EquivalenceResult(tuple(merged))
+
+
+def _as_result(detected: EquivalenceResult | Sequence[Sequence[int]]) -> EquivalenceResult:
+    if isinstance(detected, EquivalenceResult):
+        return detected
+    return EquivalenceResult(tuple(_iter_groups(detected)))
+
+
+def _iter_groups(
+    detected: EquivalenceResult | Sequence[Sequence[int]],
+) -> Iterator[EquivalenceGroup]:
+    if isinstance(detected, EquivalenceResult):
+        yield from detected.groups
+        return
+    for group in detected:
+        yield EquivalenceGroup(tuple(int(i) for i in group), EQ_BASIS_UNKNOWN)
 
 
 def _build_label_index(symbols: list[str]) -> dict[str, int]:
@@ -187,6 +276,12 @@ def build_all_labels(symbols: list[str]) -> list[str]:
 
 
 __all__ = [
+    "EQ_BASIS_EXPLICIT",
+    "EQ_BASIS_TOPOLOGY",
+    "EQ_BASIS_UNKNOWN",
+    "EquivalenceError",
+    "EquivalenceGroup",
+    "EquivalenceResult",
     "detect_equivalence_groups",
     "merge_explicit_and_detected",
     "build_label_for_atom",

@@ -1,0 +1,12 @@
+{
+  "active_electrons": 2,
+  "active_orbitals": 2,
+  "casscf_energy_hartree": -108.5,
+  "converged": false,
+  "multiplicity": 1,
+  "natural_occupations": [
+    1.7,
+    0.3
+  ],
+  "nroots": 1
+}

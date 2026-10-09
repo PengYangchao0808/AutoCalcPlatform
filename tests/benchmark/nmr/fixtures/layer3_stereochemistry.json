@@ -1,0 +1,148 @@
+{
+  "datasets": [
+    {
+      "dataset_id": "stereochemistry-selftest-v1",
+      "distribution": {
+        "balanced_by_construction": true,
+        "note": "balanced by construction for the loader self-test only; NOT a realistic prevalence and never model-performance evidence"
+      },
+      "external_reference": {
+        "citation": "self-test citation placeholder; see RUNBOOK.md for the real reference index (gap section 12.2)",
+        "reported_accuracy": null,
+        "reported_accuracy_note": "Original authors' reported numbers must never be quoted as ACP accuracy; this self-test declares null"
+      },
+      "hash": "def9d8a87ac2b8a2f1084d97c93f9acda5a46b3073afad8c984ccada006db96e",
+      "items": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "stereo-e",
+              "dp4_probability": 0.8,
+              "dp5_probability": null,
+              "is_true_structure": true,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 128.9,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 130.0,
+                    "signal_id": "C2"
+                  }
+                ]
+              },
+              "source": "synthetic self-test candidate authored in-repo",
+              "status": "valid",
+              "stereoisomer_label": "E"
+            },
+            {
+              "candidate_id": "stereo-z",
+              "dp4_probability": 0.2,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 126.0,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 132.5,
+                    "signal_id": "C2"
+                  }
+                ]
+              },
+              "source": "synthetic self-test candidate authored in-repo",
+              "status": "valid",
+              "stereoisomer_label": "Z"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 128.5,
+                "signal_id": "C1"
+              },
+              {
+                "atom_label": "C2",
+                "observed_ppm": 130.2,
+                "signal_id": "C2"
+              }
+            ]
+          },
+          "item_id": "stereo-e-item",
+          "molecule_id": "stilbene-selftest",
+          "true_stereoisomer_label": "E",
+          "true_structure_candidate_id": "stereo-e",
+          "true_structure_present": true
+        },
+        {
+          "candidates": [
+            {
+              "candidate_id": "unknown-r",
+              "dp4_probability": 0.5,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 45.3,
+                    "signal_id": "C1"
+                  }
+                ]
+              },
+              "source": "synthetic self-test candidate authored in-repo",
+              "status": "valid",
+              "stereoisomer_label": "R"
+            },
+            {
+              "candidate_id": "unknown-s",
+              "dp4_probability": 0.5,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 44.7,
+                    "signal_id": "C1"
+                  }
+                ]
+              },
+              "source": "synthetic self-test candidate authored in-repo",
+              "status": "valid",
+              "stereoisomer_label": "S"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 45.0,
+                "signal_id": "C1"
+              }
+            ]
+          },
+          "item_id": "stereo-unknown-item",
+          "molecule_id": "unknown-selftest",
+          "true_stereoisomer_label": null,
+          "true_structure_candidate_id": null,
+          "true_structure_present": false
+        }
+      ],
+      "layer": "stereochemistry",
+      "license": "CC0-1.0 (synthetic test data authored in this repository)",
+      "source": "authored in-repo for tests/benchmark/nmr (synthetic; no external data)",
+      "title": "Synthetic stereochemistry self-test (2 items, labels only)",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "acp-nmr-benchmark-dataset-manifest-v1"
+}

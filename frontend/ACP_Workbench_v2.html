@@ -1010,6 +1010,7 @@ body.resizing-v canvas {
 #job-modal[data-create-step="2"] .tiw-left > .parse-errors,
 #job-modal[data-create-step="2"] .tiw-left > #nmr-experiment-panel,
 #job-modal[data-create-step="2"] .tiw-left > #nmr-enumerate-row,
+#job-modal[data-create-step="2"] .tiw-left > #scan-wizard-panel,
 #job-modal[data-create-step="2"] .tiw-left > .create-review,
 #job-modal[data-create-step="2"] .tiw-right > .preview-right,
 #job-modal[data-create-step="2"] .tiw-right > .tiw-info-panel,
@@ -1026,6 +1027,7 @@ body.resizing-v canvas {
 #job-modal[data-create-step="3"] .tiw-left > .parse-errors,
 #job-modal[data-create-step="3"] .tiw-left > #nmr-experiment-panel,
 #job-modal[data-create-step="3"] .tiw-left > #nmr-enumerate-row,
+#job-modal[data-create-step="3"] .tiw-left > #scan-wizard-panel,
 #job-modal[data-create-step="3"] .tiw-left > .config-cards-row,
 #job-modal[data-create-step="3"] .tiw-left > .config-detail-row,
 #job-modal[data-create-step="3"] .tiw-left > .task-info-details,
@@ -3835,6 +3837,26 @@ option, optgroup {
 .nmr-table td { padding: 5px 8px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
 .nmr-resid { font-variant-numeric: tabular-nums; }
 .nmr-note { font-size: 10px; color: var(--amber); margin-top: 6px; }
+.nmr-structure { margin-top: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.02); }
+.nmr-structure-viewer { position: relative; width: 100%; height: 150px; background: radial-gradient(circle at 50% 40%, rgba(78, 161, 255, 0.12), transparent 58%), #0b1118; }
+.nmr-structure-viewer.empty { display: grid; place-items: center; padding: 10px; color: var(--text-tertiary); font-size: 10px; text-align: center; }
+.nmr-atom-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-top: 1px solid var(--border-subtle); }
+.nmr-atom-chip { font-size: 10px; padding: 2px 7px; border: 1px solid var(--border-default); border-radius: 999px; cursor: pointer; color: var(--text-secondary); }
+.nmr-atom-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+.nmr-atom-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(78, 161, 255, 0.12); }
+.nmr-atom-chip.related { border-color: var(--amber); color: var(--amber); }
+.nmr-quality { margin-top: 6px; display: grid; gap: 2px; }
+.nmr-quality-line { font-size: 10px; color: var(--text-tertiary); }
+.nmr-quality-calibrated { color: var(--accent); }
+.nmr-quality-risk { color: var(--amber); }
+.nmr-quality-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-top: 8px; }
+.nmr-linkage-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.nmr-linkage-hint { font-size: 10px; color: var(--text-tertiary); }
+.nmr-assign-row { cursor: pointer; }
+.nmr-assign-row.active, .nmr-peak-row.active { background: rgba(78, 161, 255, 0.14); }
+.nmr-assign-row.related, .nmr-peak-row.related { background: rgba(255, 196, 0, 0.10); }
+.nmr-peak-row { cursor: pointer; }
+.nmr-peak-conflict { color: var(--amber); font-weight: 600; }
 
 
 .config-cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -5274,6 +5296,45 @@ option, optgroup {
             </div>
           </div>
         </div>
+        <!-- Scan coordinate panel (distance-only first phase). Visible only
+             for the scan workflow. Atom indices are entered 1-based and
+             converted to the 0-based wire form exactly once at submit,
+             bound to each final submitted structure's atom order. -->
+        <div id="scan-wizard-panel" style="display:none; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 12px; margin-top: 4px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong data-i18n="modal.scan_coord">扫描坐标（键长）</strong>
+            <span style="font-size: 11px; color: var(--text-tertiary);" id="scan-wiz-status"></span>
+          </div>
+          <div class="form-row" style="margin-top:0;">
+            <div>
+              <label data-i18n="modal.scan_atom_1">原子 1</label>
+              <input class="modal-input" id="scan-wiz-atom-1" type="number" step="1" min="1"
+                placeholder="1" data-i18n-placeholder="modal.scan_atom_ph">
+            </div>
+            <div>
+              <label data-i18n="modal.scan_atom_2">原子 2</label>
+              <input class="modal-input" id="scan-wiz-atom-2" type="number" step="1" min="1"
+                placeholder="2" data-i18n-placeholder="modal.scan_atom_ph">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label data-i18n="modal.scan_start">起始值 (Å)</label>
+              <input class="modal-input" id="scan-wiz-start" type="number" step="any" value="1.0">
+            </div>
+            <div>
+              <label data-i18n="modal.scan_end">终止值 (Å)</label>
+              <input class="modal-input" id="scan-wiz-end" type="number" step="any" value="3.0">
+            </div>
+            <div>
+              <label data-i18n="modal.scan_points">扫描点数</label>
+              <input class="modal-input" id="scan-wiz-points" type="number" step="1" min="2" value="21">
+            </div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">
+            <span data-i18n="modal.scan_hint">原子序号按结构 1-based 显示；提交时转换为 0-based，并对每个最终提交的结构重新校验。</span>
+          </div>
+        </div>
         <!-- Step 2/3 content: config-cards, task-info, create-review live inside
              the tiw-grid frame so all steps share the same visual layout (plan §8). -->
         <div class="config-cards-row">
@@ -6429,6 +6490,14 @@ let deleteJobId = "";
 // Q9: job-detail cache (GET /jobs/{id}/detail projection) + queue-op state.
 let jobDetailCache = {};              // jobId -> {job, stages, artifacts_summary, error_detail, disk_state, recovery, legacy?}
 let jobDetailEndpointMissing = false; // /detail 404s while /jobs/{id} works → legacy server; stop retrying /detail
+// GAP-9 (T13): detail freshness.  Each jobId carries a request generation;
+// a response is accepted only when the generation captured at request start
+// is still current, so a late response from before a row action / rerun can
+// never overwrite newer state.  jobDetailCacheRevision bumps on every cache
+// mutation (add / drop / recovery change) so queue rows re-render when the
+// recovery matrix changes without the list rows changing.
+let jobDetailGenerations = {};
+let jobDetailCacheRevision = 0;
 let detailActionMessage = { jobId: "", kind: "", text: "", at: 0 }; // transient feedback inside the info panel
 let queueSelectedJobs = new Set();    // Q10: batch purge multi-select (job ids)
 let nodesCache = [];
@@ -6662,6 +6731,41 @@ const I18N = {
     "nmr.col_residual": "残差",
     "nmr.col_id": "编号",
     "nmr.col_weight": "权重",
+    "nmr.col_obs": "观测",
+    "nmr.col_nucleus": "核种",
+    "nmr.col_claims": "归属",
+    "nmr.legacy_note": "历史报告：schema v1，验证状态未知",
+    "nmr.linkage.hint": "点击/悬停 结构原子、归属行或实验峰，联动高亮其他两个面板",
+    "nmr.linkage.clear": "清除联动",
+    "nmr.structure.title": "候选结构",
+    "nmr.structure.loading": "正在加载候选结构…",
+    "nmr.structure.unavailable": "无可用结构几何（缺少 input.xyz）",
+    "nmr.atoms.title": "结构原子",
+    "nmr.atoms.hint": "点击原子联动归属行与实验峰",
+    "nmr.atoms.no_atoms": "无原子数据",
+    "nmr.quality.title": "候选质量",
+    "nmr.quality.evidence": "证据状态",
+    "nmr.quality.coverage": "信号覆盖",
+    "nmr.quality.calibrated": "经校准概率",
+    "nmr.quality.risk": "风险指标",
+    "nmr.quality.risk_note": "风险指标不是经校准概率，仅用于定位可疑信号原子",
+    "nmr.quality.status.valid": "有效",
+    "nmr.quality.status.invalid": "无效",
+    "nmr.quality.status.evidence_insufficient": "证据不足",
+    "nmr.quality.status.unavailable": "不可用",
+    "nmr.quality.status.not_applicable": "不适用",
+    "nmr.quality.status.placeholder": "占位模型",
+    "nmr.quality.calibration.weighted": "已加权校准",
+    "nmr.quality.calibration.unweighted": "未加权校准",
+    "nmr.quality.calibration.out_of_domain": "域外样本",
+    "nmr.quality.max_z": "最大 |z|",
+    "nmr.quality.ood_atoms": "域外原子",
+    "nmr.quality.loo_flips": "移一信号翻转",
+    "nmr.quality.no_diagnostics": "无诊断数据",
+    "nmr.peaks.title": "实验峰",
+    "nmr.peaks.no_data": "无实验峰数据",
+    "nmr.peaks.conflict": "冲突",
+    "nmr.peaks.summary": "峰 {n} · 冲突 {conflicts} · 获胜翻转 {flips}",
     "files.empty": "选择任务以查看文件",
     "files.too_large": "文件过大，无法直接加载",
     "files.download": "下载文件",
@@ -6975,6 +7079,25 @@ const I18N = {
     "modal.submit": "提交",
     "modal.required_smiles": "请输入 SMILES",
     "modal.submit_failed": "提交失败: {message}",
+    "modal.scan_coord": "扫描坐标（键长）",
+    "modal.scan_atom_1": "原子 1",
+    "modal.scan_atom_2": "原子 2",
+    "modal.scan_atom_ph": "1-based 序号",
+    "modal.scan_start": "起始值 (Å)",
+    "modal.scan_end": "终止值 (Å)",
+    "modal.scan_points": "扫描点数",
+    "modal.scan_hint": "原子序号按结构 1-based 显示；提交时转换为 0-based，并对每个最终提交的结构重新校验。",
+    "modal.scan_invalid": "扫描参数无效",
+    "modal.scan_err_fields_required": "请填写全部扫描参数（原子 1 / 原子 2 / 起始值 / 终止值 / 点数）",
+    "modal.scan_err_atom_not_integer": "原子序号必须是整数",
+    "modal.scan_err_atom_not_positive": "原子序号必须是 1 或更大（1-based）",
+    "modal.scan_err_atoms_not_distinct": "原子 1 和原子 2 必须是不同原子",
+    "modal.scan_err_atom_out_of_range": "原子序号超出当前结构的原子数范围",
+    "modal.scan_err_range_not_finite": "起始值和终止值必须是有限数值",
+    "modal.scan_err_range_not_positive": "键长起始值和终止值必须大于 0",
+    "modal.scan_err_range_equal": "起始值和终止值不能相同",
+    "modal.scan_err_points_invalid": "扫描点数必须是不小于 2 的整数",
+    "modal.scan_err_no_confirmed_structure": "没有已确认的结构（原子数未知），无法校验原子选择",
     "modal.nmr_experiment": "实验谱（NMR）",
     "modal.stage_need_source": "需要源任务 Job ID",
     "modal.stage_bad_plan": "反应坐标计划不是合法 JSON",
@@ -8212,6 +8335,41 @@ const I18N = {
     "nmr.col_residual": "Residual",
     "nmr.col_id": "ID",
     "nmr.col_weight": "Weight",
+    "nmr.col_obs": "Obs",
+    "nmr.col_nucleus": "Nucleus",
+    "nmr.col_claims": "Claims",
+    "nmr.legacy_note": "Legacy report: schema v1, validation status unknown",
+    "nmr.linkage.hint": "Click/hover an atom, assignment row, or peak to highlight the linked entries",
+    "nmr.linkage.clear": "Clear highlights",
+    "nmr.structure.title": "Candidate structure",
+    "nmr.structure.loading": "Loading candidate structure…",
+    "nmr.structure.unavailable": "Structure geometry unavailable (missing input.xyz)",
+    "nmr.atoms.title": "Structure atoms",
+    "nmr.atoms.hint": "Click an atom to link its assignment rows and peaks",
+    "nmr.atoms.no_atoms": "No atom data",
+    "nmr.quality.title": "Candidate quality",
+    "nmr.quality.evidence": "Evidence status",
+    "nmr.quality.coverage": "Signal coverage",
+    "nmr.quality.calibrated": "Calibrated probability",
+    "nmr.quality.risk": "Risk indicators",
+    "nmr.quality.risk_note": "Risk indicators are not calibrated probabilities; use them to locate suspicious signal atoms",
+    "nmr.quality.status.valid": "valid",
+    "nmr.quality.status.invalid": "invalid",
+    "nmr.quality.status.evidence_insufficient": "evidence insufficient",
+    "nmr.quality.status.unavailable": "unavailable",
+    "nmr.quality.status.not_applicable": "not applicable",
+    "nmr.quality.status.placeholder": "placeholder model",
+    "nmr.quality.calibration.weighted": "weighted calibration",
+    "nmr.quality.calibration.unweighted": "unweighted calibration",
+    "nmr.quality.calibration.out_of_domain": "out of domain",
+    "nmr.quality.max_z": "Max |z|",
+    "nmr.quality.ood_atoms": "Out-of-domain atoms",
+    "nmr.quality.loo_flips": "Leave-one-signal flips",
+    "nmr.quality.no_diagnostics": "No diagnostics",
+    "nmr.peaks.title": "Experimental peaks",
+    "nmr.peaks.no_data": "No experimental peak data",
+    "nmr.peaks.conflict": "Conflict",
+    "nmr.peaks.summary": "{n} peaks · {conflicts} conflicts · {flips} winner flips",
     "files.empty": "Select a job to inspect files",
     "files.no_task": "No task selected",
     "files.too_large": "File too large to preview",
@@ -8526,6 +8684,25 @@ const I18N = {
     "modal.submit": "Submit",
     "modal.required_smiles": "Please enter a SMILES string",
     "modal.submit_failed": "Submit failed: {message}",
+    "modal.scan_coord": "Scan Coordinate (Distance)",
+    "modal.scan_atom_1": "Atom 1",
+    "modal.scan_atom_2": "Atom 2",
+    "modal.scan_atom_ph": "1-based index",
+    "modal.scan_start": "Start (Å)",
+    "modal.scan_end": "End (Å)",
+    "modal.scan_points": "Scan Points",
+    "modal.scan_hint": "Atom indices are shown 1-based; they convert to 0-based exactly once at submit and are re-validated against every final submitted structure.",
+    "modal.scan_invalid": "Invalid scan parameters",
+    "modal.scan_err_fields_required": "Fill in all scan parameters (atom 1 / atom 2 / start / end / points)",
+    "modal.scan_err_atom_not_integer": "Atom indices must be integers",
+    "modal.scan_err_atom_not_positive": "Atom indices must be 1 or greater (1-based)",
+    "modal.scan_err_atoms_not_distinct": "Atom 1 and atom 2 must be different atoms",
+    "modal.scan_err_atom_out_of_range": "Atom index is out of range for the current structure",
+    "modal.scan_err_range_not_finite": "Start and end must be finite numbers",
+    "modal.scan_err_range_not_positive": "Start and end distances must be greater than 0",
+    "modal.scan_err_range_equal": "Start and end values must differ",
+    "modal.scan_err_points_invalid": "Scan points must be an integer >= 2",
+    "modal.scan_err_no_confirmed_structure": "No confirmed structure (atom count unknown) - the atom selection cannot be verified",
     "modal.nmr_experiment": "Experimental spectrum (NMR)",
     "modal.stage_need_source": "A source job ID is required",
     "modal.stage_bad_plan": "Reaction coordinate plan is not valid JSON",
@@ -10022,10 +10199,21 @@ function apiRemote(path, opts) {
 
 // T4: v2 API helper — same error handling as api(), fetches "/api/v2" + path.
 // api() and API_BASE are NOT changed (40+ v1 call sites depend on them).
+// opts.timeoutMs overrides the 8s local default; apiRequest converts an own
+// timeout into a localized Error, never a raw AbortError (root ANTI #28).
 async function apiV2(path, opts) {
   var result = await apiRequest("/api/v2" + path, opts);
   if (opts && opts.method && opts.method !== "GET") invalidateTaskViewMetadata();
   return result;
+}
+
+// T6 (R6): version-aware remote wrapper for v2 reads that may trigger a
+// server-side on-demand remote fetch (/results, /tree, /files/*,
+// /structures/*, /frequencies/*). Keeps the /api/v2 namespace — never routed
+// through the v1-pinned apiRemote() — and shares apiRequest's error
+// conversion with the 60s remote budget (root ANTI #28).
+function apiV2Remote(path, opts) {
+  return apiV2(path, Object.assign({}, opts || {}, { timeoutMs: API_REMOTE_TIMEOUT_MS }));
 }
 
 function t(key, vars) {
@@ -16143,6 +16331,7 @@ async function submitDeleteJobModal() {
       method: "DELETE"
     });
     resetMechanismCachesForJob(deleteJobId);
+    invalidateJobDetail(deleteJobId);
     closeDeleteJobModal();
     selectedJobId = "";
     lastSelectedJob = null;
@@ -16169,7 +16358,7 @@ async function cancelJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" });
     resetMechanismCachesForJob(jobId);
-    await refreshJobs();
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     window.alert((t("job.cancel_failed") || "取消失败") + ": " + e.message);
   }
@@ -16184,8 +16373,7 @@ async function pauseJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/pause", { method: "POST" });
     setDetailActionMessage(jobId, t("job.pause_ok"), "ok");
-    await refreshJobs();
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.pause_failed", { message: describeJobOpError(e) }), "err");
   }
@@ -16196,8 +16384,7 @@ async function unpauseJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/unpause", { method: "POST" });
     setDetailActionMessage(jobId, t("job.resume_ok"), "ok");
-    await refreshJobs();
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.resume_failed", { message: describeJobOpError(e) }), "err");
   }
@@ -16244,8 +16431,7 @@ async function continueJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/continue", opts);
     setDetailActionMessage(jobId, t("job.continue_ok"), "ok");
-    await refreshJobs();
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.continue_failed", { message: translateNodeError(e) || describeJobOpError(e) }), "err");
   }
@@ -16258,9 +16444,8 @@ async function rerunJob(jobId, button) {
   if (button) button.disabled = true;
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/rerun", { method: "POST" });
-    await refreshJobs();
     setDetailActionMessage(jobId, t("job.rerun_ok"), "ok");
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.rerun_failed", { message: describeJobOpError(e) }), "err");
   } finally {
@@ -16327,6 +16512,7 @@ async function _batchOp(op, payload) {
     } else {
       appendLogLine("done", t("queue.view.batch_op_success", { count: ok }));
     }
+    ids.forEach(function(id) { invalidateJobDetail(id); });
     await refreshJobs();
   } catch (e) {
     appendLogLine("stderr", "batch-ops " + op + " failed: " + (e.message || e));
@@ -17072,6 +17258,7 @@ async function submitPurgeModal() {
     closePurgeModal();
     queueSelectedJobs.clear();
     updateQueueBatchBar();
+    ids.forEach(function(id) { invalidateJobDetail(id); });
     if (selectedJobId && ids.indexOf(String(selectedJobId)) !== -1) clearStaleJobSelection();
     const report = summarizePurgeReport(resp, ids);
     if (report.failCount) window.alert(report.text);
@@ -17109,13 +17296,18 @@ function appendQueueInlineActions(actions, job) {
   // Rename button — always available, shown on hover/focus-within via CSS
   actions.appendChild(makeQueueIconButton("\u270e", t("queue.rename"), "btn-rename-task", function() { openTaskRenameModal(job); }));
   const recovery = resolveJobRecovery(job);
-  if (recovery.can_pause) {
+  // GAP-9: terminal rows never show active-only actions (pause/resume/cancel)
+  // — the floor matches server _compute_recovery (active flags only for
+  // active statuses) and only diverges from a stale cache.  A fresh server
+  // recovery still decides rerun/continue/purge capability.
+  const activeOnly = !isTerminalJobStatus(status);
+  if (activeOnly && recovery.can_pause) {
     actions.appendChild(makeQueueIconButton("‖", t("job.pause"), "warn", function() { pauseJob(jobId); }));
   }
-  if (recovery.can_unpause) {
+  if (activeOnly && recovery.can_unpause) {
     actions.appendChild(makeQueueIconButton("▶", t("job.resume"), "", function() { unpauseJob(jobId); }));
   }
-  if (status === "running" && recovery.can_cancel) {
+  if (activeOnly && status === "running" && recovery.can_cancel) {
     actions.appendChild(makeQueueIconButton("✕", t("job.cancel"), "danger", function() { cancelJob(jobId); }));
   }
   if (recovery.can_continue) {
@@ -17277,6 +17469,8 @@ function _applyRenameResult(job, result) {
 
 function _refreshAfterRename(job) {
   var jobId = String(job.id || job.job_id || "");
+  invalidateJobDetail(jobId);
+  fetchJobDetail(jobId).catch(function() { /* status defaults carry the row until refetched */ });
   // Update detail panel title if this job is selected
   var vTaskName = document.getElementById("v-task-name");
   if (vTaskName && String(selectedJobId) === jobId) {
@@ -17497,7 +17691,11 @@ async function refreshJobs() {
       });
     }
     jobsCache = flat;
-    var renderKey = JSON.stringify([queryKey, taskViewOffset, body.groups, body.counts, currentLang]);
+    // GAP-9: drop cached details that disagree with the fresh rows (status /
+    // attempt / revision) before the render key is computed — the bumped
+    // cache revision makes recovery-only changes re-render too.
+    pruneJobDetailCacheAgainstList();
+    var renderKey = JSON.stringify([queryKey, taskViewOffset, body.groups, body.counts, currentLang, jobDetailCacheRevision]);
     if (renderKey !== taskQueueRenderKey) {
       taskQueueRenderKey = renderKey;
       renderQueue(body.counts || {});
@@ -17942,7 +18140,9 @@ function buildQueueRow(job) {
     var occurrence = queueRowRenderContext.occurrences[id] || 0;
     queueRowRenderContext.occurrences[id] = occurrence + 1;
     cacheKey = id + ":" + occurrence;
-    signature = JSON.stringify([job, currentLang]);
+    // GAP-9: the recovery matrix lives outside the row payload — include it
+    // in the signature so recovery-only changes rebuild the row buttons.
+    signature = JSON.stringify([job, currentLang, getJobRecovery(job)]);
     var cached = queueRowRenderContext.previous.get(cacheKey);
     if (cached && cached.signature === signature) {
       cached.node.classList.toggle("active", id === String(selectedJobId));
@@ -18758,6 +18958,71 @@ function getJobDetail(jobId) {
   return jobDetailCache[String(jobId || "")] || null;
 }
 
+// GAP-9: frozen execution-version identity from task 5 — jobs-authoritative
+// (job_id, attempt, revision) exposed by both the list and detail payloads.
+// name_revision is organization naming only and must NEVER participate here.
+function jobExecutionIdentity(job) {
+  if (!job) return "";
+  var id = String(job.id || job.job_id || "");
+  var attempt = (typeof job.attempt === "number" && isFinite(job.attempt)) ? String(job.attempt) : "";
+  var revision = (typeof job.revision === "number" && isFinite(job.revision)) ? String(job.revision) : "";
+  return id + "\u0000" + attempt + "\u0000" + revision;
+}
+
+function findJobRowInCache(jobId) {
+  const key = String(jobId || "");
+  if (!key) return null;
+  for (var i = 0; i < jobsCache.length; i += 1) {
+    if (String(jobsCache[i].id || jobsCache[i].job_id || "") === key) return jobsCache[i];
+  }
+  return null;
+}
+
+// True when a cached detail disagrees with the current list row on status or
+// on the execution-version identity (same status but a different attempt /
+// revision — e.g. a rerun completed between two polls).
+function jobDetailCacheStaleFor(detail, row) {
+  if (!detail || !isPlainObject(detail.job) || !row) return false;
+  if (String(detail.job.status || "").toLowerCase() !== String(row.status || "").toLowerCase()) return true;
+  return jobExecutionIdentity(detail.job) !== jobExecutionIdentity(row);
+}
+
+// Drop any cached detail whose status/attempt/revision disagrees with the
+// fresh list row.  Rows absent from the current view (filtered out) are left
+// alone — they cannot be compared.  Never refetches: poll ticks stay free of
+// per-row detail requests; only user actions refetch (bounded at one each).
+function pruneJobDetailCacheAgainstList() {
+  var changed = false;
+  Object.keys(jobDetailCache).forEach(function(key) {
+    var row = findJobRowInCache(key);
+    if (row && jobDetailCacheStaleFor(jobDetailCache[key], row)) {
+      delete jobDetailCache[key];
+      changed = true;
+    }
+  });
+  if (changed) jobDetailCacheRevision += 1;
+}
+
+// The recovery matrix lives outside the list rows: any cache mutation that
+// can change resolveJobRecovery() output must re-render the queue rows.
+function renderQueueRowsForRecoveryChange() {
+  var counts = (taskViewCache && taskViewCache.counts) || (lastStatus && lastStatus.queue) || {};
+  renderQueue(counts);
+}
+
+// GAP-9: called by EVERY row action and batch operation (not only for the
+// selected job).  Bumps the request generation so in-flight detail responses
+// started before the action are rejected as late, and drops the cached entry.
+function invalidateJobDetail(jobId) {
+  var key = String(jobId || "");
+  if (!key) return;
+  jobDetailGenerations[key] = (jobDetailGenerations[key] || 0) + 1;
+  if (jobDetailCache[key]) {
+    delete jobDetailCache[key];
+    jobDetailCacheRevision += 1;
+  }
+}
+
 function getJobRecovery(job) {
   const id = job && (job.id || job.job_id) ? String(job.id || job.job_id) : "";
   const detail = getJobDetail(id);
@@ -18767,10 +19032,15 @@ function getJobRecovery(job) {
 
 // Status-based fallback mirroring the plan §4.4 matrix for when the server
 // provides no recovery object (older backend / legacy /jobs/{id} path).
+function isTerminalJobStatus(status) {
+  const s = String(status || "").toLowerCase();
+  return s === "completed" || s === "failed" || s === "cancelled";
+}
+
 function computeDefaultRecovery(job) {
   const status = String(job && job.status || "").toLowerCase();
   const workflow = job && job.spec && job.spec.workflow ? String(job.spec.workflow) : "";
-  const terminal = status === "completed" || status === "failed" || status === "cancelled";
+  const terminal = isTerminalJobStatus(status);
   const continuable = (workflow === "mechanism" || workflow === "xtbmd_censo_energy") &&
     (status === "failed" || status === "cancelled");
   return {
@@ -18800,31 +19070,65 @@ function resolveJobRecovery(job) {
   return merged;
 }
 
+function _acceptJobDetail(key, payload, generation) {
+  if ((jobDetailGenerations[key] || 0) !== generation) return null;
+  const row = findJobRowInCache(key);
+  if (row && jobDetailCacheStaleFor(payload, row)) return null;
+  const prev = jobDetailCache[key];
+  jobDetailCache[key] = payload;
+  const prevRec = prev && isPlainObject(prev.recovery) ? JSON.stringify(prev.recovery) : "";
+  const nextRec = isPlainObject(payload.recovery) ? JSON.stringify(payload.recovery) : "";
+  if (prevRec !== nextRec) {
+    jobDetailCacheRevision += 1;
+    renderQueueRowsForRecoveryChange();
+  }
+  return payload;
+}
+
 // Fetch the rich detail projection; on 404/405 (endpoint missing but job
 // alive) pin jobDetailEndpointMissing and wrap the legacy record instead.
 // Throws only when the job itself cannot be fetched (deleted / offline).
+// GAP-9: returns null when the response belongs to an older request
+// generation (late response released after a row action / rerun) or when it
+// disagrees with the current list row — stale data is dropped, never cached
+// and never returned to callers.
 async function fetchJobDetail(jobId) {
   if (!jobId) return null;
   const key = String(jobId);
+  const generation = jobDetailGenerations[key] || 0;
+  const staleNow = function() { return (jobDetailGenerations[key] || 0) !== generation; };
   let detail = null;
   let detailErr = "";
   if (!jobDetailEndpointMissing) {
     try {
-      const resp = await api("/jobs/" + encodeURIComponent(jobId) + "/detail");
+      const resp = await api("/jobs/" + encodeURIComponent(key) + "/detail");
       if (resp && isPlainObject(resp.job)) detail = resp;
     } catch (e) {
       detailErr = String(e && e.message || "");
     }
+    if (staleNow()) return null;
+    if (detail) return _acceptJobDetail(key, detail, generation);
   }
-  if (detail) {
-    jobDetailCache[key] = detail;
-    return detail;
-  }
-  const job = await api("/jobs/" + encodeURIComponent(jobId));
+  const job = await api("/jobs/" + encodeURIComponent(key));
+  if (staleNow()) return null;
   if (detailErr && /not found|http 404|http 405/i.test(detailErr)) jobDetailEndpointMissing = true;
   const legacy = { job: job, stages: null, artifacts_summary: null, error_detail: null, disk_state: null, recovery: null, legacy: true };
-  jobDetailCache[key] = legacy;
-  return legacy;
+  return _acceptJobDetail(key, legacy, generation);
+}
+
+// GAP-9: shared post-action refresh for row actions.  Invalidates the acted
+// job's cached detail (also for unselected rows), refreshes the list, then
+// refetches exactly ONE fresh detail so the server recovery matrix keeps
+// deciding capability.  Poll ticks never call this — per-poll detail stays
+// bounded (only the acted job is fetched, once per user action).
+async function refreshJobDetailAfterAction(jobId) {
+  invalidateJobDetail(jobId);
+  await refreshJobs();
+  if (String(selectedJobId || "") === String(jobId)) {
+    await refreshSelectedJobDetail({ force: true });
+  } else {
+    try { await fetchJobDetail(jobId); } catch (e) { /* row falls back to status defaults until refetched */ }
+  }
 }
 
 // R3 fix: refetch the selected job's detail on poll ticks / SSE terminal
@@ -19504,11 +19808,14 @@ async function openDetailDrawer(job) {
   }
   // ── Action bar ──
   var recovery = resolveJobRecovery(job);
+  // GAP-9 floor (queue-row parity): terminal rows never show active-only
+  // actions; a fresh server recovery still decides rerun/continue capability.
+  var activeOnly = !isTerminalJobStatus(job && job.status);
   var drawerActions = document.createElement("div");
   drawerActions.className = "info-actions-grouped";
   var drawerRunGroup = document.createElement("div");
   drawerRunGroup.className = "action-group";
-  if (recovery.can_pause) {
+  if (activeOnly && recovery.can_pause) {
     var dPauseBtn = document.createElement("button");
     dPauseBtn.className = "btn";
     dPauseBtn.textContent = t("job.pause");
@@ -19516,7 +19823,7 @@ async function openDetailDrawer(job) {
     dPauseBtn.addEventListener("click", function() { pauseJob(jobId); });
     drawerRunGroup.appendChild(dPauseBtn);
   }
-  if (recovery.can_unpause) {
+  if (activeOnly && recovery.can_unpause) {
     var dResumeBtn = document.createElement("button");
     dResumeBtn.className = "btn";
     dResumeBtn.textContent = t("job.resume");
@@ -19524,7 +19831,7 @@ async function openDetailDrawer(job) {
     dResumeBtn.addEventListener("click", function() { unpauseJob(jobId); });
     drawerRunGroup.appendChild(dResumeBtn);
   }
-  if (recovery.can_cancel) {
+  if (activeOnly && recovery.can_cancel) {
     var dCancelBtn = document.createElement("button");
     dCancelBtn.className = "btn";
     dCancelBtn.textContent = t("job.cancel");
@@ -23069,9 +23376,12 @@ async function selectJob(jobId) {
   renderMechanismPlaceholder();
   // Q9: rich detail projection (stages/artifacts/error_detail/recovery);
   // fetchJobDetail transparently falls back to the legacy record on older
-  // servers and throws only when the job itself cannot be fetched.
+  // servers and throws only when the job itself cannot be fetched.  GAP-9:
+  // it also returns null when the response was rejected as late/stale — the
+  // list row carries the panel until a fresh detail arrives.
   const detail = await fetchJobDetail(jobId);
-  const job = detail.job;
+  const job = (detail && detail.job) || findJobRowInCache(jobId);
+  if (!job) return;
   lastRemoteNode = jobRemoteNodeName(job);
   selectedJobIsRemote = !!lastRemoteNode;
   let filesResp;
@@ -23201,16 +23511,26 @@ let reactionDefinition = null;
 
 // ── NMR report viewer (DevDoc §7 / §11.1, P2) ──────────────────────────
 // Renders nmr_report.json for the selected nmr job: winner card, candidate
-// ranking (DP4/DP5 bars), per-candidate assignment tables, and conformer
-// detail rows. Fetches the report via the existing job-files content API so
-// no new backend endpoint is required.
+// ranking (DP4/DP5 bars), per-candidate structure/quality/assignment tables,
+// the experimental-peak ledger, and conformer detail rows. Fetches the report
+// via the existing job-files content API so no new backend endpoint is
+// required.
+//
+// T40: the panel links three surfaces — structure atoms (3D pick + chips),
+// assignment rows, and experimental peaks — through one selection state
+// (nmrPanelState) applied by nmrPanelApplySelection(). Structure geometry is
+// read from the conformer stage's input.xyz through the existing files
+// endpoints; viewer loading/framing reuses the shared structure-viewer
+// conventions (registerCanvasLoader + sharedLoadGeometry +
+// scheduleViewerFraming). This panel never hand-rolls a trajectory/view
+// projection (root AGENTS ANTI-PATTERN 21).
 
 async function refreshNmrReport(job) {
   var panel = document.getElementById("nmr-report-panel");
   var body = document.getElementById("nmr-report-body");
   if (!panel || !body) return;
   var wf = job && job.spec && job.spec.workflow;
-  if (wf !== "nmr") { panel.style.display = "none"; body.innerHTML = ""; return; }
+  if (wf !== "nmr") { panel.style.display = "none"; body.innerHTML = ""; nmrPanelDispose(); return; }
   panel.style.display = "block";
   body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.loading") || "Loading…") + '</span>';
   try {
@@ -23219,16 +23539,30 @@ async function refreshNmrReport(job) {
       body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.no_report") || "No nmr_report.json yet") + '</span>';
       return;
     }
+    var token = nmrPanelDispose();
     body.innerHTML = "";
     body.appendChild(renderNmrWinner(report));
+    if (report.schema_version == null) {
+      // T24 contract: absent schema_version = historical v1 report whose
+      // validation status is unknown — render the explicit note, never an
+      // implicit upgrade.
+      var legacyNote = document.createElement("div");
+      legacyNote.className = "nmr-note";
+      legacyNote.textContent = t("nmr.legacy_note");
+      body.appendChild(legacyNote);
+    }
+    body.appendChild(renderNmrPeaks(report));
     var candidates = report.candidates || [];
-    candidates.forEach(function(cand) { body.appendChild(renderNmrCandidate(cand, report)); });
+    candidates.forEach(function(cand, ordinal) {
+      body.appendChild(renderNmrCandidate(cand, report, ordinal));
+    });
     if (report.note) {
       var note = document.createElement("div");
       note.className = "nmr-note";
       note.textContent = report.note;
       body.appendChild(note);
     }
+    nmrLoadStructureViewers(job, candidates, token);
   } catch (e) {
     console.error("NMR report render failed:", e);
     body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.error") || "Failed to load report") + '</span>';
@@ -23251,18 +23585,77 @@ async function refreshS2Report(job) {
   }
 }
 
+// Unified NMR report reader (todo 23): one service for LOCAL and REMOTE jobs.
+// Probe order (first hit wins):
+//   1. reports/nmr_report.json        — the todo-22 result-manifest spelling
+//   2. RESULT/reports/nmr_report.json — the same file work_dir-rooted, which is
+//      what /jobs/{id}/files/{path} and the remote fetcher actually serve
+//   3. nmr_report.json                — legacy root layout
+// Remote unwrap contract (see acp.api.v1_routes._parse_remote_report):
+// .../remote-files/<path>/preview?mode=report returns content = the envelope
+// {type: "json_report", file_path, report} and the reader unwraps content.report;
+// a plain string content (mode=text envelope) is tolerated and JSON-parsed.
+var NMR_REPORT_PATHS = [
+  "reports/nmr_report.json",
+  "RESULT/reports/nmr_report.json",
+  "nmr_report.json",
+];
+
 async function fetchNmrReportJson(job) {
-  var jobId = job.id;
-  var path = "nmr_report.json";
-  var url;
-  if (jobRemoteNodeName(job)) {
-    url = "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encodeURIComponent(path) + "/preview";
-  } else {
-    url = "/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(path);
+  for (var i = 0; i < NMR_REPORT_PATHS.length; i++) {
+    var report = await fetchNmrReportFromPath(job, NMR_REPORT_PATHS[i]);
+    if (report) return report;
   }
-  var resp = jobRemoteNodeName(job) ? await apiRemote(url) : await api(url);
+  return null;
+}
+
+async function fetchNmrReportFromPath(job, path) {
+  var jobId = job.id;
+  var remote = !!jobRemoteNodeName(job);
+  var encoded = path.split("/").map(encodeURIComponent).join("/");
+  var url = remote
+    ? "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encoded + "/preview?mode=report"
+    : "/jobs/" + encodeURIComponent(jobId) + "/files/" + encoded;
+  var resp;
+  try {
+    resp = jobRemoteNodeName(job) ? await apiRemote(url) : await api(url);
+  } catch (e) {
+    return null;
+  }
+  return remote ? unwrapNmrPreviewReport(resp) : unwrapNmrFileReport(resp);
+}
+
+function unwrapNmrFileReport(resp) {
   if (typeof resp === "string") { try { resp = JSON.parse(resp); } catch (e) { return null; } }
   return resp && typeof resp === "object" ? resp : null;
+}
+
+function unwrapNmrPreviewReport(resp) {
+  if (typeof resp === "string") { try { resp = JSON.parse(resp); } catch (e) { return null; } }
+  if (!resp || typeof resp !== "object") return null;
+  var content = resp.content;
+  if (typeof content === "string") { try { content = JSON.parse(content); } catch (e) { return null; } }
+  if (!content || typeof content !== "object") return null;
+  if (content.type === "json_report") {
+    return (content.report && typeof content.report === "object") ? content.report : null;
+  }
+  if (content.type === "unknown_report") return null;
+  return content;
+}
+
+// Null-display contract (gap G13): missing and non-finite numerics render the
+// em dash held by NMR_NULL_DISPLAY — never as 0. Winner probabilities,
+// regression values and boltzmann weights all route through these helpers.
+var NMR_NULL_DISPLAY = "—";
+function nmrDisplayNumber(value, digits) {
+  if (value == null) return NMR_NULL_DISPLAY;
+  var n = Number(value);
+  return isFinite(n) ? n.toFixed(digits) : NMR_NULL_DISPLAY;
+}
+function nmrProbability(value) {
+  if (value == null) return null;
+  var n = Number(value);
+  return isFinite(n) ? n : null;
 }
 
 function renderNmrWinner(report) {
@@ -23281,7 +23674,7 @@ function renderNmrWinner(report) {
   if (winner) {
     var probs = document.createElement("div");
     probs.className = "nmr-winner-probs";
-    probs.textContent = "DP4 = " + Number(winner.dp4).toFixed(3) + "   ·   DP5 = " + Number(winner.dp5).toFixed(3);
+    probs.textContent = "DP4 = " + nmrDisplayNumber(winner.dp4, 3) + "   ·   DP5 = " + nmrDisplayNumber(winner.dp5, 3);
     wrap.appendChild(probs);
   }
   var nuclei = (summary.nuclei || []).join(", ");
@@ -23294,11 +23687,12 @@ function renderNmrWinner(report) {
   return wrap;
 }
 
-function renderNmrCandidate(cand, report) {
+function renderNmrCandidate(cand, report, ordinal) {
   var wrap = document.createElement("div");
   var summary = report.summary || {};
   var isWinner = summary.winner && String(summary.winner.index) === String(cand.index);
   wrap.className = "nmr-cand" + (isWinner ? " winner" : "");
+  wrap.setAttribute("data-nmr-candidate", String(cand.index));
   var head = document.createElement("div");
   head.className = "nmr-cand-head";
   var name = document.createElement("span");
@@ -23311,9 +23705,9 @@ function renderNmrCandidate(cand, report) {
   head.appendChild(meta);
   wrap.appendChild(head);
 
-  // DP4 / DP5 probability bars
-  var dp4 = Number(cand.dp4_probability) || 0;
-  var dp5 = Number(cand.dp5_probability) || 0;
+  // DP4 / DP5 probability bars (null probability → no bar, em dash value)
+  var dp4 = nmrProbability(cand.dp4_probability);
+  var dp5 = nmrProbability(cand.dp5_probability);
   [["DP4", dp4, ""], ["DP5", dp5, "dp5"]].forEach(function(pair) {
     var row = document.createElement("div");
     row.className = "nmr-prob-row";
@@ -23325,15 +23719,21 @@ function renderNmrCandidate(cand, report) {
     barWrap.className = "nmr-prob-bar-wrap";
     var bar = document.createElement("span");
     bar.className = "nmr-prob-bar" + (pair[2] ? " " + pair[2] : "");
-    bar.style.width = Math.min(100, Math.max(0, pair[1] * 100)) + "%";
+    bar.style.width = (pair[1] == null ? 0 : Math.min(100, Math.max(0, pair[1] * 100))) + "%";
     barWrap.appendChild(bar);
     row.appendChild(barWrap);
     var val = document.createElement("span");
     val.className = "nmr-prob-val";
-    val.textContent = pair[1].toFixed(3);
+    val.textContent = pair[1] == null ? NMR_NULL_DISPLAY : pair[1].toFixed(3);
     row.appendChild(val);
     wrap.appendChild(row);
   });
+
+  // Per-candidate quality: evidence/coverage, calibrated probability state
+  // (cand.probability) and T39 risk indicators (cand.diagnostics) rendered
+  // as two visually distinct, clearly labelled lines.
+  wrap.appendChild(renderNmrCandidateQuality(cand, report));
+  wrap.appendChild(renderNmrStructure(cand, ordinal));
 
   // toggle: assignment table vs conformer details
   var actions = document.createElement("div");
@@ -23355,10 +23755,12 @@ function renderNmrCandidate(cand, report) {
   btnAssign.addEventListener("click", function() {
     btnAssign.classList.add("active"); btnConf.classList.remove("active");
     detailWrap.innerHTML = ""; renderNmrAssignTable(detailWrap, cand);
+    nmrPanelApplySelection();
   });
   btnConf.addEventListener("click", function() {
     btnConf.classList.add("active"); btnAssign.classList.remove("active");
     detailWrap.innerHTML = ""; renderNmrConformerTable(detailWrap, cand);
+    nmrPanelApplySelection();
   });
   return wrap;
 }
@@ -23370,7 +23772,7 @@ function renderNmrAssignTable(container, cand) {
   table.className = "nmr-table";
   var thead = document.createElement("thead");
   var tr = document.createElement("tr");
-  ["atom", "element", "exp_ppm", "calc_ppm", "residual"].forEach(function(h) {
+  ["atom", "element", "exp_ppm", "calc_ppm", "residual", "obs"].forEach(function(h) {
     var th = document.createElement("th");
     th.textContent = t("nmr.col_" + h) || h;
     tr.appendChild(th);
@@ -23380,12 +23782,19 @@ function renderNmrAssignTable(container, cand) {
   var tbody = document.createElement("tbody");
   assigns.forEach(function(a) {
     var row = document.createElement("tr");
-    [a.atom, a.element, a.exp_ppm, a.calc_ppm, a.residual].forEach(function(v) {
+    row.className = "nmr-assign-row";
+    row.setAttribute("data-nmr-assign-row", "");
+    row.setAttribute("data-nmr-candidate", String(cand.index));
+    if (a.atom != null) row.setAttribute("data-nmr-atom", String(a.atom));
+    if (a.observation_id != null) row.setAttribute("data-nmr-observation", String(a.observation_id));
+    [a.atom, a.element, a.exp_ppm, a.calc_ppm, a.residual, a.observation_id].forEach(function(v) {
       var td = document.createElement("td");
       if (typeof v === "number") td.className = "nmr-resid";
-      td.textContent = (typeof v === "number" && isFinite(v)) ? Number(v).toFixed(3) : (v == null ? "—" : String(v));
+      td.textContent = (typeof v === "number") ? nmrDisplayNumber(v, 3) : (v == null ? NMR_NULL_DISPLAY : String(v));
       row.appendChild(td);
     });
+    row.addEventListener("mouseenter", function() { nmrSelectLink(a.atom, a.observation_id, cand.index); });
+    row.addEventListener("click", function() { nmrSelectLink(a.atom, a.observation_id, cand.index); });
     tbody.appendChild(row);
   });
   table.appendChild(tbody);
@@ -23398,7 +23807,7 @@ function renderNmrAssignTable(container, cand) {
     regLine.style.marginTop = "6px";
     regLine.textContent = nuclei.map(function(n) {
       var r = reg[n] || {};
-      return n + ": slope=" + Number(r.slope).toFixed(3) + ", R²=" + Number(r.r_squared).toFixed(3) + ", MAE=" + Number(r.mae).toFixed(3);
+      return n + ": slope=" + nmrDisplayNumber(r.slope, 3) + ", R²=" + nmrDisplayNumber(r.r_squared, 3) + ", MAE=" + nmrDisplayNumber(r.mae, 3);
     }).join("   ·   ");
     container.appendChild(regLine);
   }
@@ -23426,12 +23835,520 @@ function renderNmrConformerTable(container, cand) {
     row.appendChild(tdId);
     var tdW = document.createElement("td");
     tdW.className = "nmr-resid";
-    tdW.textContent = Number(c.boltzmann_weight).toFixed(4);
+    tdW.textContent = nmrDisplayNumber(c.boltzmann_weight, 4);
     row.appendChild(tdW);
     tbody.appendChild(row);
   });
   table.appendChild(tbody);
   container.appendChild(table);
+}
+
+// ── T40 linkage engine: structure atoms ↔ assignment rows ↔ peaks ──────
+// One selection state (nmrPanelState) drives all three surfaces. Structure
+// geometry is read-only from the conformer stage's input.xyz through the
+// existing files endpoints; viewer loading/framing goes through the shared
+// structure-viewer conventions (registerCanvasLoader + sharedLoadGeometry +
+// scheduleViewerFraming). Risk indicators (diagnostics) and calibrated
+// probabilities (probability) are rendered by separate helpers and never
+// mixed.
+
+//: WebGL contexts are a scarce browser resource; candidates beyond this cap
+//: keep the atom-chip surface without a 3D canvas.
+var NMR_STRUCTURE_VIEWER_LIMIT = 8;
+
+var nmrPanelState = {
+  token: 0,
+  selectedAtom: null,
+  selectedObservation: null,
+  selectedCandidate: null,
+  loadingCandidate: null,
+  highlightAtoms: {},
+  viewers: {},
+};
+
+if (window.ACPStructureViewer && typeof window.ACPStructureViewer.registerCanvasLoader === "function") {
+  window.ACPStructureViewer.registerCanvasLoader("nmr-structure", function(xyzText, styleSpec) {
+    var info = nmrPanelState.viewers[nmrPanelState.loadingCandidate];
+    if (!info || !info.viewer) return false;
+    try { info.viewer.removeAllModels(); } catch (e) {}
+    info.viewer.addModel(xyzText, "xyz");
+    info.viewer.setStyle({}, styleSpec);
+    return true;
+  });
+}
+
+function nmrPanelDispose() {
+  nmrPanelState.token += 1;
+  Object.keys(nmrPanelState.viewers).forEach(function(key) {
+    var info = nmrPanelState.viewers[key];
+    if (info && info.framing) disposeViewerFraming(info.framing);
+    if (info && info.viewer) { try { info.viewer.clear(); } catch (e) {} }
+  });
+  nmrPanelState.viewers = {};
+  nmrPanelState.selectedAtom = null;
+  nmrPanelState.selectedObservation = null;
+  nmrPanelState.selectedCandidate = null;
+  nmrPanelState.highlightAtoms = {};
+  return nmrPanelState.token;
+}
+
+function nmrSelectLink(atomLabel, observationId, candIndex) {
+  nmrPanelState.selectedAtom = (atomLabel == null || atomLabel === "") ? null : String(atomLabel);
+  nmrPanelState.selectedObservation = (observationId == null || observationId === "") ? null : String(observationId);
+  nmrPanelState.selectedCandidate = candIndex == null ? null : candIndex;
+  nmrPanelApplySelection();
+}
+
+function nmrSelectAtom(atomLabel, candIndex) {
+  nmrSelectLink(atomLabel, null, candIndex);
+}
+
+function nmrSelectObservation(observationId) {
+  nmrSelectLink(null, observationId, null);
+}
+
+function nmrClearLinkage() {
+  nmrSelectLink(null, null, null);
+}
+
+function nmrPanelApplySelection() {
+  var root = document.getElementById("nmr-report-body");
+  if (!root) return;
+  var atom = nmrPanelState.selectedAtom;
+  var obs = nmrPanelState.selectedObservation;
+  var relatedAtoms = {};
+  if (atom != null) relatedAtoms[atom] = true;
+  root.querySelectorAll("[data-nmr-observation]").forEach(function(el) {
+    if (obs == null || el.getAttribute("data-nmr-observation") !== obs) return;
+    (el.getAttribute("data-nmr-claim-atoms") || "").split(",").forEach(function(label) {
+      if (label) relatedAtoms[label] = true;
+    });
+    var own = el.getAttribute("data-nmr-atom");
+    if (own) relatedAtoms[own] = true;
+  });
+  root.querySelectorAll("[data-nmr-atom]").forEach(function(el) {
+    var label = el.getAttribute("data-nmr-atom") || "";
+    var direct = atom != null && label === atom;
+    el.classList.toggle("active", direct);
+    el.classList.toggle("related", !direct && relatedAtoms[label] === true);
+  });
+  root.querySelectorAll("[data-nmr-observation]").forEach(function(el) {
+    var obsHit = obs != null && el.getAttribute("data-nmr-observation") === obs;
+    var label = el.getAttribute("data-nmr-atom");
+    var atomHit = label != null && atom != null && label === atom;
+    var claimHit = false;
+    if (!obsHit && !atomHit && atom != null) {
+      (el.getAttribute("data-nmr-claim-atoms") || "").split(",").forEach(function(c) {
+        if (c === atom) claimHit = true;
+      });
+    }
+    el.classList.toggle("active", obsHit || atomHit);
+    el.classList.toggle("related", !obsHit && !atomHit && claimHit);
+  });
+  nmrHighlightAtoms(relatedAtoms, atom);
+}
+
+function nmrHighlightAtoms(relatedAtoms, activeAtom) {
+  nmrPanelState.highlightAtoms = relatedAtoms || {};
+  Object.keys(nmrPanelState.viewers).forEach(function(key) {
+    var info = nmrPanelState.viewers[key];
+    if (!info || !info.viewer) return;
+    try { info.viewer.removeAllShapes(); } catch (e) { return; }
+    var labels = info.labels || [];
+    var atoms = info.atoms || [];
+    labels.forEach(function(label, index) {
+      if (relatedAtoms[label] !== true || !atoms[index]) return;
+      var highlight = activeAtom != null && label === activeAtom;
+      try {
+        info.viewer.addSphere({
+          center: { x: atoms[index].x, y: atoms[index].y, z: atoms[index].z },
+          radius: 0.38,
+          color: highlight ? "#4ea1ff" : "#f5a623",
+          opacity: 0.85
+        });
+      } catch (e) {}
+    });
+    try { info.viewer.render(); } catch (e) {}
+  });
+}
+
+function nmrAtomLabelsFromSymbols(symbols) {
+  var counters = {};
+  var labels = [];
+  (symbols || []).forEach(function(symbol) {
+    var sym = String(symbol == null ? "" : symbol);
+    if (!counters[sym]) counters[sym] = 0;
+    counters[sym] += 1;
+    labels.push(sym + counters[sym]);
+  });
+  return labels;
+}
+
+function nmrCandidateAtomLabels(cand) {
+  var seen = {};
+  var labels = [];
+  function push(label) {
+    if (label == null || label === "") return;
+    var key = String(label);
+    if (seen[key]) return;
+    seen[key] = true;
+    labels.push(key);
+  }
+  (cand.assignment || []).forEach(function(a) { if (a) push(a.atom); });
+  var diag = cand.diagnostics || {};
+  (diag.atom_support || []).forEach(function(rec) { if (rec) push(rec.atom_label); });
+  (diag.signals || []).forEach(function(rec) { if (rec) push(rec.atom_label); });
+  return labels;
+}
+
+//: Risk indicators ONLY (T39 diagnostics namespace): finite |z| maximum,
+//: out-of-domain atom-support count, and per-candidate leave-one-signal
+//: winner flips. Calibrated probabilities live in cand.probability and are
+//: rendered elsewhere — never here.
+function nmrRiskSummary(diagnostics) {
+  var diag = diagnostics || {};
+  var signals = diag.signals || [];
+  var maxAbsZ = null;
+  signals.forEach(function(record) {
+    if (!record || record.z_score == null) return;
+    var z = Number(record.z_score);
+    if (!isFinite(z)) return;
+    var abs = Math.abs(z);
+    if (maxAbsZ == null || abs > maxAbsZ) maxAbsZ = abs;
+  });
+  var oodAtoms = 0;
+  (diag.atom_support || []).forEach(function(record) {
+    if (record && record.out_of_domain === true) oodAtoms += 1;
+  });
+  var looFlips = 0;
+  (diag.leave_one_signal_out || []).forEach(function(record) {
+    if (record && record.winner_changed === true) looFlips += 1;
+  });
+  return { nSignals: signals.length, maxAbsZ: maxAbsZ, oodAtoms: oodAtoms, looFlips: looFlips };
+}
+
+function nmrPeakClaims(report) {
+  var diag = report && report.diagnostics;
+  var claims = (diag && diag.conflict_matrix && diag.conflict_matrix.claims) || [];
+  var rows = [];
+  claims.forEach(function(claim) {
+    if (!claim || claim.observation_id == null) return;
+    rows.push({
+      observation_id: String(claim.observation_id),
+      nucleus: claim.nucleus == null ? "" : String(claim.nucleus),
+      exp_ppm: claim.exp_ppm,
+      atom_labels: (claim.atom_labels || []).slice(),
+      candidate_indices: (claim.candidate_indices || []).slice(),
+      n_claims: claim.n_claims,
+      conflict: claim.conflict === true
+    });
+  });
+  if (!rows.length) rows = nmrPeakClaimsFromAssignments(report);
+  return rows;
+}
+
+function nmrPeakClaimsFromAssignments(report) {
+  var byId = {};
+  var order = [];
+  ((report && report.candidates) || []).forEach(function(cand) {
+    ((cand && cand.assignment) || []).forEach(function(a) {
+      if (!a || a.observation_id == null) return;
+      var id = String(a.observation_id);
+      if (!byId[id]) {
+        byId[id] = {
+          observation_id: id,
+          nucleus: a.element == null ? "" : String(a.element),
+          exp_ppm: a.exp_ppm,
+          atom_labels: [],
+          candidate_indices: [],
+          n_claims: 0,
+          conflict: false
+        };
+        order.push(id);
+      }
+      var row = byId[id];
+      if (row.atom_labels.indexOf(a.atom) < 0) row.atom_labels.push(a.atom);
+      if (row.candidate_indices.indexOf(cand.index) < 0) row.candidate_indices.push(cand.index);
+    });
+  });
+  order.forEach(function(id) { byId[id].n_claims = byId[id].atom_labels.length; });
+  return order.map(function(id) { return byId[id]; });
+}
+
+function nmrI18nLabel(prefix, value) {
+  var raw = String(value == null ? "" : value).trim().toLowerCase();
+  if (!raw) return NMR_NULL_DISPLAY;
+  var key = prefix + raw;
+  var label = t(key);
+  return label === key ? raw : label;
+}
+
+function renderNmrCandidateQuality(cand, report) {
+  var wrap = document.createElement("div");
+  wrap.className = "nmr-quality";
+  var coverage = cand.coverage || {};
+  var evidence = cand.evidence || {};
+  var status = cand.analysis_status != null ? cand.analysis_status : evidence.status;
+  var head = document.createElement("div");
+  head.className = "nmr-quality-head";
+  head.textContent = t("nmr.quality.title");
+  wrap.appendChild(head);
+  var evidenceLine = document.createElement("div");
+  evidenceLine.className = "nmr-quality-line";
+  evidenceLine.textContent = t("nmr.quality.evidence") + ": " + nmrI18nLabel("nmr.quality.status.", status)
+    + "   ·   " + t("nmr.quality.coverage") + ": "
+    + nmrDisplayNumber(coverage.matched_signals, 0) + " / " + nmrDisplayNumber(coverage.expected_signals, 0);
+  wrap.appendChild(evidenceLine);
+  var prob = cand.probability || {};
+  var dp4 = prob.dp4 || {};
+  var dp5 = prob.dp5 || {};
+  var calibrated = document.createElement("div");
+  calibrated.className = "nmr-quality-line nmr-quality-calibrated";
+  calibrated.textContent = t("nmr.quality.calibrated") + ": DP4 " + nmrI18nLabel("nmr.quality.status.", dp4.status)
+    + " (" + nmrI18nLabel("nmr.quality.calibration.", dp4.calibration_status) + ")"
+    + "   ·   DP5 " + nmrI18nLabel("nmr.quality.status.", dp5.status)
+    + " (" + nmrI18nLabel("nmr.quality.calibration.", dp5.calibration_status) + ")";
+  wrap.appendChild(calibrated);
+  var risk = nmrRiskSummary(cand.diagnostics);
+  var riskLine = document.createElement("div");
+  riskLine.className = "nmr-quality-line nmr-quality-risk";
+  riskLine.title = t("nmr.quality.risk_note");
+  riskLine.textContent = t("nmr.quality.risk") + ": "
+    + t("nmr.quality.max_z") + " " + (risk.maxAbsZ == null ? NMR_NULL_DISPLAY : risk.maxAbsZ.toFixed(2))
+    + "   ·   " + t("nmr.quality.ood_atoms") + " " + String(risk.oodAtoms)
+    + "   ·   " + t("nmr.quality.loo_flips") + " " + String(risk.looFlips)
+    + (risk.nSignals ? "" : "   ·   " + t("nmr.quality.no_diagnostics"));
+  wrap.appendChild(riskLine);
+  return wrap;
+}
+
+function renderNmrStructure(cand, ordinal) {
+  var wrap = document.createElement("div");
+  wrap.className = "nmr-structure";
+  if (ordinal < NMR_STRUCTURE_VIEWER_LIMIT) {
+    var viewer = document.createElement("div");
+    viewer.className = "nmr-structure-viewer empty";
+    viewer.setAttribute("data-nmr-structure-viewer", String(cand.index));
+    viewer.textContent = t("nmr.structure.loading");
+    wrap.appendChild(viewer);
+  }
+  var chips = document.createElement("div");
+  chips.className = "nmr-atom-chips";
+  chips.title = t("nmr.atoms.hint");
+  var labels = nmrCandidateAtomLabels(cand);
+  if (!labels.length) {
+    var empty = document.createElement("span");
+    empty.className = "nmr-cand-meta";
+    empty.textContent = t("nmr.atoms.no_atoms");
+    chips.appendChild(empty);
+  }
+  labels.forEach(function(label) {
+    var chip = document.createElement("span");
+    chip.className = "nmr-atom-chip";
+    chip.setAttribute("data-nmr-atom", label);
+    chip.setAttribute("data-nmr-candidate", String(cand.index));
+    chip.textContent = label;
+    chip.addEventListener("mouseenter", function() { nmrSelectAtom(label, cand.index); });
+    chip.addEventListener("click", function() { nmrSelectAtom(label, cand.index); });
+    chips.appendChild(chip);
+  });
+  wrap.appendChild(chips);
+  return wrap;
+}
+
+function renderNmrPeaks(report) {
+  var wrap = document.createElement("div");
+  wrap.className = "nmr-peaks";
+  var head = document.createElement("div");
+  head.className = "nmr-linkage-bar";
+  var title = document.createElement("span");
+  title.className = "nmr-quality-head";
+  title.textContent = t("nmr.peaks.title");
+  head.appendChild(title);
+  var clearBtn = document.createElement("button");
+  clearBtn.className = "nmr-btn";
+  clearBtn.setAttribute("data-nmr-linkage-clear", "");
+  clearBtn.textContent = t("nmr.linkage.clear");
+  clearBtn.addEventListener("click", function() { nmrClearLinkage(); });
+  head.appendChild(clearBtn);
+  wrap.appendChild(head);
+  var hint = document.createElement("div");
+  hint.className = "nmr-linkage-hint";
+  hint.textContent = t("nmr.linkage.hint");
+  wrap.appendChild(hint);
+  var rows = nmrPeakClaims(report);
+  if (!rows.length) {
+    var empty = document.createElement("div");
+    empty.className = "nmr-empty";
+    empty.textContent = t("nmr.peaks.no_data");
+    wrap.appendChild(empty);
+    return wrap;
+  }
+  var conflicts = 0;
+  rows.forEach(function(row) { if (row.conflict) conflicts += 1; });
+  var flips = 0;
+  var reportDiag = report && report.diagnostics;
+  if (reportDiag && reportDiag.leave_one_signal_out && reportDiag.leave_one_signal_out.n_winner_flips != null) {
+    flips = Number(reportDiag.leave_one_signal_out.n_winner_flips);
+    if (!isFinite(flips)) flips = 0;
+  }
+  var summary = document.createElement("div");
+  summary.className = "nmr-cand-meta";
+  summary.textContent = t("nmr.peaks.summary", { n: rows.length, conflicts: conflicts, flips: flips });
+  wrap.appendChild(summary);
+  var tableWrap = document.createElement("div");
+  tableWrap.className = "nmr-table-wrap";
+  var table = document.createElement("table");
+  table.className = "nmr-table";
+  var thead = document.createElement("thead");
+  var headRow = document.createElement("tr");
+  ["obs", "nucleus", "exp_ppm", "claims"].forEach(function(h) {
+    var th = document.createElement("th");
+    th.textContent = t("nmr.col_" + h);
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  var tbody = document.createElement("tbody");
+  rows.forEach(function(row) {
+    var tr = document.createElement("tr");
+    tr.className = "nmr-peak-row";
+    tr.setAttribute("data-nmr-peak-row", "");
+    tr.setAttribute("data-nmr-observation", row.observation_id);
+    tr.setAttribute("data-nmr-claim-atoms", row.atom_labels.join(","));
+    var tdObs = document.createElement("td");
+    tdObs.textContent = row.observation_id;
+    tr.appendChild(tdObs);
+    var tdNucleus = document.createElement("td");
+    tdNucleus.textContent = row.nucleus;
+    tr.appendChild(tdNucleus);
+    var tdPpm = document.createElement("td");
+    tdPpm.className = "nmr-resid";
+    tdPpm.textContent = nmrDisplayNumber(row.exp_ppm, 3);
+    tr.appendChild(tdPpm);
+    var tdClaims = document.createElement("td");
+    tdClaims.textContent = row.atom_labels.join(", ");
+    if (row.conflict) {
+      var badge = document.createElement("span");
+      badge.className = "nmr-peak-conflict";
+      badge.textContent = " " + t("nmr.peaks.conflict");
+      tdClaims.appendChild(badge);
+    }
+    tr.appendChild(tdClaims);
+    tr.addEventListener("mouseenter", function() { nmrSelectObservation(row.observation_id); });
+    tr.addEventListener("click", function() { nmrSelectObservation(row.observation_id); });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+  wrap.appendChild(tableWrap);
+  return wrap;
+}
+
+function nmrEnsureViewer(candIndex, container) {
+  var info = nmrPanelState.viewers[candIndex];
+  if (info && info.viewer && info.container === container && container.querySelector("canvas")) return info;
+  if (typeof $3Dmol === "undefined") return null;
+  container.innerHTML = "";
+  var viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
+  info = {
+    container: container,
+    viewer: viewer,
+    framing: { epoch: 0, pending: false, settled: false, observer: null },
+    labels: [],
+    atoms: []
+  };
+  nmrPanelState.viewers[candIndex] = info;
+  (function(index) {
+    viewer.setClickable({}, true, function(atom) {
+      var current = nmrPanelState.viewers[index];
+      if (!current || !current.labels) return;
+      var label = current.labels[atom.index];
+      if (label) nmrSelectAtom(label, index);
+    });
+  })(candIndex);
+  return info;
+}
+
+async function nmrFetchCandidateGeometry(job, cand) {
+  var paths = [];
+  if (cand && cand.label) {
+    paths.push("WORK/02_SEARCH/" + String(cand.label) + "/conformers/input.xyz");
+  }
+  paths.push("input.xyz");
+  for (var i = 0; i < paths.length; i++) {
+    var xyz = await nmrFetchGeometryFromPath(job, paths[i]);
+    if (xyz) return xyz;
+  }
+  return null;
+}
+
+async function nmrFetchGeometryFromPath(job, path) {
+  var jobId = job.id;
+  var remote = !!jobRemoteNodeName(job);
+  var encoded = path.split("/").map(encodeURIComponent).join("/");
+  var url = remote
+    ? "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encoded + "/preview?mode=structure"
+    : "/jobs/" + encodeURIComponent(jobId) + "/files/" + encoded;
+  var resp;
+  try {
+    resp = remote ? await apiRemote(url) : await api(url);
+  } catch (e) {
+    return null;
+  }
+  return nmrGeometryText(resp, remote);
+}
+
+function nmrGeometryText(resp, remote) {
+  if (typeof resp === "string") return resp;
+  if (!resp || typeof resp !== "object") return null;
+  if (remote) return typeof resp.content === "string" ? resp.content : null;
+  return typeof resp.xyz === "string" ? resp.xyz : null;
+}
+
+async function nmrLoadStructureViewers(job, candidates, token) {
+  for (var i = 0; i < candidates.length; i++) {
+    if (token !== nmrPanelState.token) return;
+    await nmrLoadCandidateGeometry(job, candidates[i], token);
+  }
+}
+
+async function nmrLoadCandidateGeometry(job, cand, token) {
+  var container = document.querySelector('[data-nmr-structure-viewer="' + cand.index + '"]');
+  if (!container) return;
+  var xyz = await nmrFetchCandidateGeometry(job, cand);
+  if (token !== nmrPanelState.token || !container.isConnected) return;
+  var info = null;
+  try { info = nmrEnsureViewer(cand.index, container); } catch (e) { info = null; }
+  if (!xyz || !info) {
+    container.className = "nmr-structure-viewer empty";
+    container.textContent = t("nmr.structure.unavailable");
+    return;
+  }
+  nmrPanelState.loadingCandidate = cand.index;
+  var sv = window.ACPStructureViewer;
+  var result = null;
+  try {
+    result = (sv && typeof sv.sharedLoadGeometry === "function")
+      ? sv.sharedLoadGeometry(xyz, { canvasId: "nmr-structure", source: "nmr_report" })
+      : null;
+  } catch (e) {
+    result = null;
+  }
+  nmrPanelState.loadingCandidate = null;
+  if (!result || !result.loaded) {
+    container.className = "nmr-structure-viewer empty";
+    container.textContent = t("nmr.structure.unavailable");
+    return;
+  }
+  var model = null;
+  try { model = info.viewer.getModel(); } catch (e) { model = null; }
+  info.atoms = model ? model.selectedAtoms({}) : [];
+  info.labels = nmrAtomLabelsFromSymbols(info.atoms.map(function(atom) { return atom.elem; }));
+  container.className = "nmr-structure-viewer";
+  container.textContent = "";
+  scheduleViewerFraming(container, info.framing, function() { return info.viewer; });
+  nmrPanelApplySelection();
 }
 
 
@@ -26763,6 +27680,188 @@ async function previewStructureSource(sourceId, sourceUid) {
   }
 }
 
+// --- Scan wizard coordinate fields (distance-only first phase) -------------
+// Atom indices are entered 1-based for display and converted to the 0-based
+// wire form EXACTLY ONCE — the single conversion site is marked
+// "scan-index-base-convert" inside buildScanWizardBodyParts.  The builder is
+// pure (no DOM) so tests can execute it against real structures.
+
+function scanWizardCountAtoms(xyzText) {
+  if (typeof xyzText !== "string") return null;
+  var lines = xyzText.split(/\r?\n/);
+  if (!lines.length || !String(lines[0]).trim()) return null;
+  var declared = Number(String(lines[0]).trim());
+  if (Number.isInteger(declared) && declared > 0) return declared;
+  var count = 0;
+  for (var i = 0; i < lines.length; i++) {
+    var parts = String(lines[i]).trim().split(/\s+/);
+    if (parts.length >= 4 && isFinite(Number(parts[1])) && isFinite(Number(parts[2])) &&
+        isFinite(Number(parts[3]))) count++;
+  }
+  return count > 0 ? count : null;
+}
+
+function buildScanWizardBodyParts(fields, structureEntry) {
+  function fail(code) { return { ok: false, code: code }; }
+  var entry = structureEntry || {};
+  var xyz = entry.xyz || entry.xyz_text || "";
+  var atomCount = scanWizardCountAtoms(xyz);
+  if (!atomCount) return fail("no_confirmed_structure");
+  function raw(name) {
+    var value = fields && fields[name];
+    return String(value === undefined || value === null ? "" : value).trim();
+  }
+  var rawA = raw("atomA");
+  var rawB = raw("atomB");
+  var rawStart = raw("start");
+  var rawEnd = raw("end");
+  var rawPoints = raw("points");
+  if (!rawA || !rawB || !rawStart || !rawEnd || !rawPoints) return fail("fields_required");
+  if (!/^[+-]?\d+$/.test(rawA) || !/^[+-]?\d+$/.test(rawB)) return fail("atom_not_integer");
+  var atomA = parseInt(rawA, 10);
+  var atomB = parseInt(rawB, 10);
+  if (atomA < 1 || atomB < 1) return fail("atom_not_positive");
+  if (atomA === atomB) return fail("atoms_not_distinct");
+  if (atomA > atomCount || atomB > atomCount) return fail("atom_out_of_range");
+  var start = Number(rawStart);
+  var end = Number(rawEnd);
+  if (!isFinite(start) || !isFinite(end)) return fail("range_not_finite");
+  if (start <= 0 || end <= 0) return fail("range_not_positive");
+  if (start === end) return fail("range_equal");
+  if (!/^[+-]?\d+$/.test(rawPoints)) return fail("points_invalid");
+  var points = parseInt(rawPoints, 10);
+  if (points < 2) return fail("points_invalid");
+  // scan-index-base-convert: the ONLY 1-based -> 0-based conversion site.
+  var atom0 = atomA - 1;
+  var atom1 = atomB - 1;
+  return {
+    ok: true,
+    atomCount: atomCount,
+    input: {
+      scan_coordinates: [String(atom0) + "," + String(atom1) + "," + rawStart + "," + rawEnd]
+    },
+    method: { scan_points: points },
+    mirror: {
+      scan_coordinate_atoms: [atomA, atomB],
+      scan_coordinate_start: start,
+      scan_coordinate_end: end,
+      scan_coordinate_points: points
+    }
+  };
+}
+
+function scanWizardErrorMessage(code) {
+  return t("modal.scan_err_" + code) || String(code || "invalid");
+}
+
+var scanWizardUserDirty = false;
+
+function scanWizardFieldValues() {
+  function val(id) {
+    var el = document.getElementById(id);
+    return el ? el.value : "";
+  }
+  return {
+    atomA: val("scan-wiz-atom-1"),
+    atomB: val("scan-wiz-atom-2"),
+    start: val("scan-wiz-start"),
+    end: val("scan-wiz-end"),
+    points: val("scan-wiz-points")
+  };
+}
+
+function scanWizardSetStatus(message) {
+  var el = document.getElementById("scan-wiz-status");
+  if (el) el.textContent = message || "";
+}
+
+function scanWizardClear() {
+  var atoms = ["scan-wiz-atom-1", "scan-wiz-atom-2"];
+  for (var i = 0; i < atoms.length; i++) {
+    var el = document.getElementById(atoms[i]);
+    if (el) el.value = "";
+  }
+  var defaults = { "scan-wiz-start": "1.0", "scan-wiz-end": "3.0", "scan-wiz-points": "21" };
+  Object.keys(defaults).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = defaults[id];
+  });
+  scanWizardUserDirty = false;
+  scanWizardSetStatus("");
+}
+
+function scanWizardSyncFromMethodState() {
+  if (scanWizardUserDirty) return;
+  var scan = (wizardState && wizardState.method && wizardState.method.stages || {}).scan || {};
+  var atoms = scan.scan_coordinate_atoms;
+  if (Array.isArray(atoms) && atoms.length === 2) {
+    var a1 = document.getElementById("scan-wiz-atom-1");
+    var a2 = document.getElementById("scan-wiz-atom-2");
+    if (a1) a1.value = String(atoms[0]);
+    if (a2) a2.value = String(atoms[1]);
+  }
+  var map = {
+    "scan-wiz-start": scan.scan_coordinate_start,
+    "scan-wiz-end": scan.scan_coordinate_end,
+    "scan-wiz-points": scan.scan_coordinate_points
+  };
+  Object.keys(map).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && map[id] !== undefined && map[id] !== null && map[id] !== "") {
+      el.value = String(map[id]);
+    }
+  });
+}
+
+function scanWizardCurrentStructure() {
+  if (typeof wizardStructures === "undefined" || !wizardStructures || !wizardStructures.length) return null;
+  return wizardStructures[wizardSelectedStructureIndex] || wizardStructures[0] || null;
+}
+
+function refreshScanWizardStatus() {
+  var panel = document.getElementById("scan-wizard-panel");
+  if (!panel || panel.style.display === "none") { scanWizardSetStatus(""); return; }
+  var fields = scanWizardFieldValues();
+  var filled = ["atomA", "atomB", "start", "end", "points"].every(function(key) {
+    return String(fields[key]).trim() !== "";
+  });
+  if (!filled) { scanWizardSetStatus(""); return; }
+  var result = buildScanWizardBodyParts(fields, scanWizardCurrentStructure());
+  scanWizardSetStatus(result.ok ? "" : scanWizardErrorMessage(result.code));
+}
+
+function scanWizardEnsureListeners() {
+  var ids = ["scan-wiz-atom-1", "scan-wiz-atom-2", "scan-wiz-start", "scan-wiz-end", "scan-wiz-points"];
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el || el._scanWizBound) return;
+    el._scanWizBound = true;
+    el.addEventListener("input", function() {
+      scanWizardUserDirty = true;
+      var scanLevel = wizardState && wizardState.method && wizardState.method.stages &&
+        wizardState.method.stages.scan;
+      if (scanLevel) {
+        var fields = scanWizardFieldValues();
+        var textA = String(fields.atomA).trim();
+        var textB = String(fields.atomB).trim();
+        if (/^[+-]?\d+$/.test(textA) && /^[+-]?\d+$/.test(textB)) {
+          scanLevel.scan_coordinate_atoms = [parseInt(textA, 10), parseInt(textB, 10)];
+        }
+        if (String(fields.start).trim() !== "" && isFinite(Number(fields.start))) {
+          scanLevel.scan_coordinate_start = Number(fields.start);
+        }
+        if (String(fields.end).trim() !== "" && isFinite(Number(fields.end))) {
+          scanLevel.scan_coordinate_end = Number(fields.end);
+        }
+        if (/^[+-]?\d+$/.test(String(fields.points).trim())) {
+          scanLevel.scan_coordinate_points = parseInt(String(fields.points).trim(), 10);
+        }
+      }
+      refreshScanWizardStatus();
+    });
+  });
+}
+
 function updateInputModeVisibility() {
   updatePESSelectionVisibility();
   // NMR experiment panel: visible only for the nmr workflow (DevDoc §11.1).
@@ -26770,6 +27869,20 @@ function updateInputModeVisibility() {
   if (nmrPanel) {
     var isNmr = wizardState && wizardState.workflow && wizardState.workflow.id === "nmr";
     nmrPanel.style.display = isNmr ? "block" : "none";
+  }
+  // Scan coordinate panel: visible only for the scan workflow; switching
+  // away from scan drops the scan parameters so they can never ride along
+  // into another workflow's submission or draft.
+  var scanPanel = document.getElementById("scan-wizard-panel");
+  if (scanPanel) {
+    var isScan = wizardState && wizardState.workflow && wizardState.workflow.id === "scan";
+    scanPanel.style.display = isScan ? "block" : "none";
+    if (isScan) {
+      scanWizardEnsureListeners();
+      refreshScanWizardStatus();
+    } else {
+      scanWizardClear();
+    }
   }
   // NMR enumerate row (P2): only for nmr, and only meaningful with a single
   // candidate. Explicit multi-candidate input and enumeration are mutually
@@ -27006,6 +28119,8 @@ function refreshIrcSourceSummary() {
 
 function updateConfigCards() {
   ensureWizardWorkflowValid();
+  scanWizardSyncFromMethodState();
+  refreshScanWizardStatus();
   syncBatchOptimizeProfileSummary();
   scheduleNodeMatchingRefresh();
   var wfTitle = document.getElementById("workflow-card-title");
@@ -27206,6 +28321,10 @@ function applyPendingNewTask() {
   if (!pending) return;
   window._pendingNewTask = null;
   window._mechProjectId = pending.projectId || "";
+  // Fresh context for a pending job/editor hydrate: drop any scan fields
+  // left over from a previous session; hydration refills them from the
+  // draft's method stages via scanWizardSyncFromMethodState().
+  scanWizardClear();
   // Resolve through the catalog so an invalid/stale pending workflow id
   // (e.g. a retired entry) self-heals to the current default instead of
   // rendering a legacy schema.
@@ -27885,6 +29004,7 @@ async function openWorkflowConfig() {
           }
           configureStageSourcePanel(wf.id);
           updateS2InlineVisibility();
+          updateInputModeVisibility();
         });
       }
       grid.appendChild(opt);
@@ -30956,8 +32076,25 @@ async function submitJobModal() {
     var s = wizardStructures[i];
     var moleculeName = String(s.name || ("mol_" + (i + 1))).trim() || ("mol_" + (i + 1));
 
+    // Scan: validate the coordinate fields against THIS structure (the
+    // final submitted atom order — a preview atom_count never stands in
+    // for another input) before any body is queued for submission.
+    var scanParts = null;
+    if (workflow === "scan") {
+      scanParts = buildScanWizardBodyParts(scanWizardFieldValues(), s);
+      if (!scanParts.ok) {
+        var scanMsg = (t("modal.scan_invalid") || "Invalid scan parameters") +
+          " (" + moleculeName + "): " + scanWizardErrorMessage(scanParts.code);
+        scanWizardSetStatus(scanMsg);
+        window.alert(scanMsg);
+        return;
+      }
+    }
+
     var inputPayload;
-    if (s.source_type === "smiles" && s.smiles) {
+    if (scanParts) {
+      inputPayload = { source_type: "xyz_text", source: String(s.xyz || s.xyz_text || "") };
+    } else if (s.source_type === "smiles" && s.smiles) {
       inputPayload = { source_type: "smiles", source: s.smiles };
     } else if (s.normalized_path) {
       inputPayload = { source_type: "structure_asset", asset_id: s.asset_id, source: s.normalized_path };
@@ -30997,6 +32134,15 @@ async function submitJobModal() {
       methodPayload = { maxpoints: ircSettings.maxpoints || 100, step: ircSettings.step || 0.1 };
     }
     if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
+    if (scanParts) {
+      // 0-based wire coordinates (converted exactly once in the builder) +
+      // the 1-based display mirror kept in the scan level for edit-draft
+      // hydration round-trips.
+      inputPayload.scan_coordinates = scanParts.input.scan_coordinates;
+      methodPayload.scan_points = scanParts.method.scan_points;
+      methodPayload.levels = methodPayload.levels || {};
+      methodPayload.levels.scan = Object.assign({}, methodPayload.levels.scan || {}, scanParts.mirror);
+    }
     if (workflow === "BatchOptimize") {
       applyBatchOptimizeMethodFields(methodPayload);
     }

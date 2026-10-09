@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from acp.nmr.models import normalize_symbol
+from acp.nmr.structure_map import NmrStructureMap, StructureMapError
 
 logger = logging.getLogger(__name__)
 
@@ -349,23 +350,17 @@ def _resolve_stereocenter_labels(labels: list[str], mol: Any, Chem: Any) -> set[
     """Resolve atom labels (``"C5"``/``"C 5"``) to heavy-atom indices.
 
     Labels follow the NMR-package convention: prefix = element, trailing
-    number = 1-based index among atoms of that element in the **heavy-atom**
-    mol (implicit-H SMILES / SDF). Returns an empty set when *labels* is
+    number = 1-based index among atoms of that element (per-element scheme
+    of :class:`NmrStructureMap`, counted over the mol's own source order).
+    H atoms never contribute counters to non-H element ordinals, so map
+    resolution equals heavy-atom semantics for stereocenter labels (one
+    resolution semantics per G03). Returns an empty set when *labels* is
     empty (= no filter / enumerate everything).
     """
     if not labels:
         return set()
 
-    # build per-element 1-based counters over heavy atoms only
-    counters: dict[str, int] = {}
-    label_to_idx: dict[str, int] = {}
-    for atom in mol.GetAtoms():
-        sym = normalize_symbol(atom.GetSymbol())
-        if sym.lower() == "h":
-            continue  # enumeration mol keeps implicit H; ignore explicit H too
-        counters[sym] = counters.get(sym, 0) + 1
-        label_to_idx[f"{sym}{counters[sym]}"] = atom.GetIdx()
-        label_to_idx[f"{sym} {counters[sym]}"] = atom.GetIdx()
+    structure_map = NmrStructureMap.from_mol(mol)
 
     resolved: set[int] = set()
     unknown: list[str] = []
@@ -375,9 +370,9 @@ def _resolve_stereocenter_labels(labels: list[str], mol: Any, Chem: Any) -> set[
             continue
         # tolerate "C5" / "C 5" / "c5"
         norm = normalize_symbol(token[0]) + token[1:].strip()
-        if norm in label_to_idx:
-            resolved.add(label_to_idx[norm])
-        else:
+        try:
+            resolved.add(structure_map.source_index_for_label(norm))
+        except StructureMapError:
             unknown.append(token)
     if unknown:
         logger.warning(

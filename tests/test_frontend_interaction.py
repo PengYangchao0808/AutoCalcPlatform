@@ -656,3 +656,871 @@ class TestMethodFamilyGatingBrowser:
             {"modal": warn_text, "summary": summary_text, "dialogs": dialogs},
         )
         _shot(page, "flow5-02-warnings-in-summary.png")
+
+
+# ---------------------------------------------------------------------------
+# Scan wizard (GAP-8): fields, 1-based->0-based once, real submission body
+# ---------------------------------------------------------------------------
+
+_SCAN_XYZ = "3\ntriatomic\nO 0.0 0.0 0.0\nC 1.2 0.0 0.0\nH 2.0 0.0 0.0\n"
+
+
+def _pick_workflow(page: Page, title_pattern: str) -> None:
+    """Pick a workflow by its rendered title in the workflow picker."""
+    page.click("#btn-config-workflow")
+    page.wait_for_selector("#workflow-config-modal", state="visible")
+    title = page.locator(".workflow-option-title", has_text=re.compile(rf"^{title_pattern}$"))
+    title.first.locator("xpath=..").click()
+    page.click("#wf-config-ok")
+    page.wait_for_selector("#workflow-config-modal", state="hidden")
+
+
+def _back_to_structure_step(page: Page) -> None:
+    """Step back to the structure step via the modal back button."""
+    page.click("#modal-back")
+    page.wait_for_selector('#job-modal[data-create-step="1"]', state="attached")
+
+
+def _fill_scan_fields(page: Page, atom_a: str, atom_b: str) -> None:
+    page.fill("#scan-wiz-atom-1", atom_a)
+    page.fill("#scan-wiz-atom-2", atom_b)
+
+
+@pytest.mark.slow
+class TestScanWizardBrowser:
+    """Todo 9 browser acceptance: the scan wizard on the real submit path."""
+
+    def _open_scan_step_one(self, page: Page) -> None:
+        _wait_wizard_open(page)
+        page.click('.input-mode-tab[data-input-mode="structure"]')
+        page.fill("#modal-structure-input", _SCAN_XYZ)
+        page.wait_for_function("wizardStructures.length > 0", timeout=20_000)
+        page.click("#modal-submit")  # next step -> 2
+        page.wait_for_selector('#job-modal[data-create-step="2"]', state="attached")
+        _pick_workflow(page, r"Relaxed Scan")
+        _back_to_structure_step(page)
+        page.wait_for_selector("#scan-wizard-panel", state="visible")
+
+    def test_scan_wizard_submit_posts_real_body_with_0_based_coordinate(self, page: Page) -> None:
+        captured: list[dict] = []
+
+        def _handler(route) -> None:  # noqa: ANN001 - playwright route
+            request = route.request
+            if request.method == "POST":
+                captured.append(json.loads(request.post_data or "{}"))
+            route.fulfill(
+                status=201,
+                content_type="application/json",
+                body=json.dumps(
+                    {"job_id": "scan_browser_001", "status": "queued", "workflow": "scan"}
+                ),
+            )
+
+        page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
+        self._open_scan_step_one(page)
+        _fill_scan_fields(page, "1", "2")
+        page.fill("#scan-wiz-start", "1.0")
+        page.fill("#scan-wiz-end", "3.0")
+        page.fill("#scan-wiz-points", "21")
+        page.click("#modal-submit")  # step 1 -> 2
+        page.click("#modal-submit")  # step 2 -> 3
+        dialogs: list[str] = []
+        page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        page.click("#modal-submit")  # submit
+        page.wait_for_timeout(1500)
+
+        assert not dialogs, f"valid submit must not alert: {dialogs}"
+        assert len(captured) == 1, captured
+        body = captured[0]
+        _evidence("flow6-scan-wizard-body.json", body)
+        assert body["workflow"] == "scan"
+        assert body["input"]["source_type"] == "xyz_text"
+        # 1-based display (1,2) converted to 0-based exactly once at submit.
+        assert body["input"]["scan_coordinates"] == ["0,1,1.0,3.0"]
+        assert body["method"]["scan_points"] == 21
+        assert body["method"]["levels"]["scan"]["scan_coordinate_atoms"] == [1, 2]
+        _shot(page, "flow6-scan-wizard-submitted.png")
+
+    def test_scan_wizard_rejects_out_of_range_atom_without_submitting(self, page: Page) -> None:
+        captured: list[dict] = []
+
+        def _handler(route) -> None:  # noqa: ANN001 - playwright route
+            request = route.request
+            if request.method == "POST":
+                captured.append(json.loads(request.post_data or "{}"))
+            route.fulfill(
+                status=201,
+                content_type="application/json",
+                body=json.dumps(
+                    {"job_id": "scan_browser_002", "status": "queued", "workflow": "scan"}
+                ),
+            )
+
+        page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
+        self._open_scan_step_one(page)
+        _fill_scan_fields(page, "1", "99")
+        dialogs: list[str] = []
+        page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        page.click("#modal-submit")
+        page.click("#modal-submit")
+        page.click("#modal-submit")
+        page.wait_for_timeout(1500)
+
+        assert captured == [], "invalid scan fields must never reach the API"
+        assert dialogs, "invalid scan fields must produce a clear validation result"
+        status_text = page.evaluate("document.getElementById('scan-wiz-status').textContent")
+        assert "99" in status_text or any(
+            "range" in d.lower() or "out of" in d.lower() or "invalid" in d.lower() for d in dialogs
+        ), dialogs
+        _evidence("flow7-scan-wizard-rejected.json", {"dialogs": dialogs, "posted": captured})
+
+    def test_scan_wizard_switch_away_drops_scan_fields(self, page: Page) -> None:
+        self._open_scan_step_one(page)
+        _fill_scan_fields(page, "1", "2")
+        page.click("#modal-submit")  # step 1 -> 2
+        _pick_workflow(page, r"Geometry Optimization")
+        _back_to_structure_step(page)
+        page.wait_for_timeout(300)
+        panel_display = page.evaluate("document.getElementById('scan-wizard-panel').style.display")
+        atom_a = page.evaluate("document.getElementById('scan-wiz-atom-1').value")
+        assert panel_display == "none", panel_display
+        assert atom_a == "", f"scan atom fields must clear on switch-away, got {atom_a!r}"
+        _evidence("flow8-scan-switch-away.json", {"panel": panel_display, "atomA": atom_a})
+
+    def test_scan_draft_restore_round_trips_fields(self, page: Page) -> None:
+        _wait_wizard_open(page)
+        snapshot = {
+            "structures": [],
+            "selectedIndex": 0,
+            "activeTab": "task",
+            "step": 1,
+            "fields": {
+                "scan-wiz-atom-1": {"value": "2"},
+                "scan-wiz-atom-2": {"value": "3"},
+                "scan-wiz-start": {"value": "1.5"},
+                "scan-wiz-end": {"value": "2.5"},
+                "scan-wiz-points": {"value": "7"},
+            },
+            "workflowState": {
+                "workflow": {"id": "scan", "label": "Relaxed Scan", "schema_id": "dft_scan"},
+                "method": {
+                    "profile_id": "default",
+                    "profile_label": "default",
+                    "stages": {
+                        "scan": {
+                            "engine": "orca",
+                            "scan_coordinate_atoms": [2, 3],
+                            "scan_coordinate_start": 1.5,
+                            "scan_coordinate_end": 2.5,
+                            "scan_coordinate_points": 7,
+                        }
+                    },
+                },
+            },
+        }
+        created = page.evaluate(
+            """async (args) => {
+                const resp = await fetch("/api/v1/drafts", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        name: args.name, project_id: "",
+                        workflow: "scan", snapshot: args.snapshot,
+                    }),
+                });
+                return await resp.json();
+            }""",
+            {"name": "scan-wizard-draft", "snapshot": snapshot},
+        )
+        assert created.get("draft_id"), created
+        page.click("#wizard-drafts-open")
+        page.wait_for_selector("#wizard-drafts-modal", state="visible")
+        row = page.locator("#wizard-drafts-list > div").filter(has_text="scan-wizard-draft")
+        row.locator("button.btn.primary").click()
+        page.wait_for_timeout(1500)
+
+        values = page.evaluate(
+            """() => ({
+                atomA: document.getElementById("scan-wiz-atom-1").value,
+                atomB: document.getElementById("scan-wiz-atom-2").value,
+                start: document.getElementById("scan-wiz-start").value,
+                end: document.getElementById("scan-wiz-end").value,
+                points: document.getElementById("scan-wiz-points").value,
+            })"""
+        )
+        _evidence("flow9-scan-draft-restore.json", values)
+        assert values["atomA"] == "2", values
+        assert values["atomB"] == "3", values
+        assert values["start"] in ("1.5", "1.50"), values
+        assert values["end"] in ("2.5", "2.50"), values
+        assert values["points"] == "7", values
+
+    def test_scan_edit_hydration_fills_fields_from_stage_mirror(self, page: Page) -> None:
+        _wait_wizard_open(page)
+        values = page.evaluate(
+            """() => {
+                scanWizardClear();
+                scanWizardUserDirty = false;
+                wizardState.workflow = {id: "scan", label: "Relaxed Scan", schema_id: "dft_scan"};
+                wizardState.method.stages = {
+                    scan: {
+                        engine: "orca",
+                        scan_coordinate_atoms: [2, 3],
+                        scan_coordinate_start: 1.25,
+                        scan_coordinate_end: 2.75,
+                        scan_coordinate_points: 9,
+                    }
+                };
+                updateConfigCards();
+                return {
+                    atomA: document.getElementById("scan-wiz-atom-1").value,
+                    atomB: document.getElementById("scan-wiz-atom-2").value,
+                    start: document.getElementById("scan-wiz-start").value,
+                    end: document.getElementById("scan-wiz-end").value,
+                    points: document.getElementById("scan-wiz-points").value,
+                };
+            }"""
+        )
+        _evidence("flow10-scan-edit-hydration.json", values)
+        assert values["atomA"] == "2", values
+        assert values["atomB"] == "3", values
+        assert values["start"] == "1.25", values
+        assert values["end"] == "2.75", values
+        assert values["points"] == "9", values
+
+
+# ---------------------------------------------------------------------------
+# Queue-row freshness under latency and re-render recovery (todo 14 / GAP-9)
+#
+# Every response body served to the browser is built through the REAL
+# response models (``V2TaskViewResponse`` / ``V1JobDetailResponse`` /
+# ``V1JobRecordModel`` / ``JobRecovery``) and round-trip validated, so the
+# page only ever sees fields the real API serializes — never invented ones.
+# Execution-version identity is the frozen ``(job_id, attempt, revision)``
+# from todo 5 (``name_revision`` is organization naming, NOT identity).
+# ---------------------------------------------------------------------------
+
+_PAUSE_GLYPH = "\u2016"  # ‖
+_RESUME_GLYPH = "\u25b6"  # ▶
+_CANCEL_GLYPH = "\u2715"  # ✕
+_CONTINUE_GLYPH = "\u23f5"  # ⏵
+_RERUN_GLYPH = "\u21bb"  # ↻
+
+_ROW_BUTTONS_JS = """(jobId) => {
+  const row = document.querySelector('#queue-list .queue-row[data-job-id="' + jobId + '"]');
+  if (!row) return null;
+  return Array.from(row.querySelectorAll('.queue-row-actions button')).map(
+    (b) => b.textContent.trim());
+}"""
+
+
+def _row_sel(job_id: str, tail: str) -> str:
+    return f'#queue-list .queue-row[data-job-id="{job_id}"] .queue-row-actions {tail}'
+
+
+def _dump(model: Any) -> dict:
+    return json.loads(model.model_dump_json())
+
+
+def _task_row(job_id: str, status: str, **over: Any) -> dict:
+    """One ``V2TaskRowModel`` dump mirroring ``task_views._row_to_task``."""
+    from acp.api.v2_schemas import V2TaskRowModel
+
+    workflow = str(over.pop("workflow", "optimize"))
+    payload: dict = {
+        "id": job_id,
+        "status": status,
+        "attempt": 1,
+        "revision": 0,
+        "group_id": None,
+        "project_id": "",
+        "project_name": "",
+        "created_at": "2026-10-09T00:00:00Z",
+        "updated_at": "2026-10-09T00:00:00Z",
+        "molecule_name": "Mol",
+        "task_name": "t1",
+        "remark": "",
+        "display_name": "Mol_t1_" + job_id,
+        "task_dir_name": "Mol_t1_" + job_id,
+        "workflow": workflow,
+        "tags": [],
+        "archived": False,
+        "batch_id": None,
+        "spec": {
+            "workflow": workflow,
+            "molecule_name": "Mol",
+            "task_name": "t1",
+            "remark": "",
+            "tags": [],
+        },
+    }
+    payload.update(over)
+    body = _dump(V2TaskRowModel.model_validate(payload))
+    V2TaskRowModel.model_validate(body)  # real-API serialization gate
+    return body
+
+
+def _v1_record(job_id: str, status: str, **over: Any) -> dict:
+    """One ``V1JobRecordModel`` dump — the shape ``GET /jobs/{id}`` serves."""
+    from acp.api.v1_schemas import V1JobRecordModel
+
+    workflow = str(over.pop("workflow", "optimize"))
+    payload: dict = {
+        "id": job_id,
+        "status": status,
+        "attempt": 1,
+        "revision": 0,
+        "work_dir": "/tmp/acp_t14/" + job_id,
+        "spec": {"workflow": workflow, "name": job_id, "task_name": "t1"},
+        "created_at": "2026-10-09T00:00:00Z",
+        "updated_at": "2026-10-09T00:00:00Z",
+    }
+    payload.update(over)
+    body = _dump(V1JobRecordModel.model_validate(payload))
+    V1JobRecordModel.model_validate(body)
+    return body
+
+
+def _detail_body(record: dict, recovery: dict) -> dict:
+    """One ``V1JobDetailResponse`` dump — the shape ``GET /jobs/{id}/detail`` serves."""
+    from acp.api.v1_schemas import JobRecovery, V1JobDetailResponse, V1JobRecordModel
+
+    body = _dump(
+        V1JobDetailResponse(
+            job=V1JobRecordModel.model_validate(record),
+            recovery=JobRecovery.model_validate(recovery),
+        )
+    )
+    V1JobDetailResponse.model_validate(body)
+    return body
+
+
+def _task_view_body(rows: list[dict]) -> dict:
+    """One ``V2TaskViewResponse`` dump — the shape ``GET /api/v2/task-view`` serves."""
+    from acp.api.v2_schemas import (
+        V2TaskRowModel,
+        V2TaskViewGroupModel,
+        V2TaskViewResponse,
+    )
+
+    jobs = [V2TaskRowModel.model_validate(r) for r in rows]
+    counts: dict = {}
+    for j in jobs:
+        counts[j.status] = counts.get(j.status, 0) + 1
+    body = _dump(
+        V2TaskViewResponse(
+            groups=[
+                V2TaskViewGroupModel(
+                    key="__singles__",
+                    display_name="Singles",
+                    count=len(jobs),
+                    jobs=jobs,
+                )
+            ],
+            counts=counts,
+            total=len(jobs),
+        )
+    )
+    V2TaskViewResponse.model_validate(body)
+    return body
+
+
+class _QueueApiSim:
+    """Route-backed simulation of the real v1/v2 task APIs for queue tests.
+
+    Mutations (pause/unpause/rerun/cancel/batch) are performed by the route
+    handlers the same way the real manager would (attempt bumps only on
+    rerun, ``revision`` bumps on transitions); everything the browser reads
+    is re-serialized through the real response models on every request.
+    """
+
+    def __init__(self, page: Page) -> None:
+        self.page = page
+        self.rows: dict[str, dict] = {}
+        self.recoveries: dict[str, dict] = {}
+        self.detail_log: list[str] = []
+        self.calls: dict = {"pause": 0, "unpause": 0, "rerun": 0, "cancel": 0, "batch": 0}
+        self._hold_body: dict | None = None
+        self._held: list = []
+        self._install()
+
+    # -- state helpers (server-side actors) --------------------------------
+    def add_job(self, job_id: str, status: str, **over: Any) -> None:
+        self.rows[job_id] = _task_row(job_id, status, **over)
+        self.recoveries.setdefault(job_id, self._default_recovery(status))
+
+    @staticmethod
+    def _default_recovery(status: str) -> dict:
+        return {
+            "can_pause": status == "running",
+            "can_unpause": status == "paused",
+            "can_continue": False,
+            "continue_mode": "",
+            "continue_notes": "",
+            "can_rerun": status in ("completed", "failed", "cancelled"),
+            "can_purge": True,
+            "can_cancel": status
+            in (
+                "queued",
+                "starting",
+                "running",
+                "cancelling",
+                "pending",
+                "waiting_review",
+                "paused",
+            ),
+        }
+
+    def set_recovery(self, job_id: str, recovery: dict) -> None:
+        self.recoveries[job_id] = recovery
+
+    def set_state(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        attempt: int | None = None,
+        revision: int | None = None,
+    ) -> None:
+        row = self.rows[job_id]
+        row["status"] = status
+        if attempt is not None:
+            row["attempt"] = attempt
+        if revision is not None:
+            row["revision"] = revision
+        row["updated_at"] = "2026-10-09T00:00:01Z"
+        self.recoveries[job_id] = self._default_recovery(status)
+
+    def rerun_completed(self, job_id: str) -> None:
+        """Terminal -> in-place rerun finished: attempt+1, revision bumped."""
+        row = self.rows[job_id]
+        row["revision"] = int(row["revision"]) + 1
+        row["status"] = "completed"
+        row["attempt"] = int(row["attempt"]) + 1
+        row["revision"] = int(row["revision"]) + 1
+        row["status"] = "queued"
+        row["updated_at"] = "2026-10-09T00:00:01Z"
+        self.recoveries[job_id] = self._default_recovery("queued")
+
+    # -- delayed-response controls ----------------------------------------
+    def hold_detail(self, body: dict) -> None:
+        """Park the NEXT /detail request; release with :meth:`release_held`."""
+        self._hold_body = body
+
+    @property
+    def pending_held(self) -> int:
+        return len(self._held)
+
+    def release_held(self) -> None:
+        held, self._held = self._held, []
+        for route, body in held:
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(body),
+            )
+
+    # -- routing -----------------------------------------------------------
+    def _install(self) -> None:
+        import re
+
+        page = self.page
+        # Catch-all FIRST — playwright checks routes in reverse registration
+        # order, so the specific handlers registered below always win.
+        page.route(re.compile(r".*/api/.*"), self._on_catchall)
+        page.route(re.compile(r".*/api/v1/status$"), self._on_status)
+        page.route(re.compile(r".*/api/v2/task-view(\?.*)?$"), self._on_task_view)
+        page.route(re.compile(r".*/api/v2/tasks/batch-ops$"), self._on_batch_ops)
+        page.route(re.compile(r".*/api/v1/jobs/[^/]+/detail$"), self._on_detail)
+        page.route(re.compile(r".*/api/v1/jobs/[^/]+/summary$"), self._on_summary)
+        page.route(
+            re.compile(r".*/api/v1/jobs/[^/]+/(pause|unpause|rerun|cancel)$"),
+            self._on_action,
+        )
+        page.route(re.compile(r".*/api/v1/jobs/[^/]+$"), self._on_job)
+
+    @staticmethod
+    def _job_id(url: str) -> str:
+        m = re.search(r"/jobs/([^/]+)", url)
+        return m.group(1) if m else ""
+
+    def _record(self, job_id: str) -> dict:
+        row = self.rows[job_id]
+        return _v1_record(
+            job_id,
+            row["status"],
+            attempt=row["attempt"],
+            revision=row["revision"],
+            workflow=row["workflow"],
+            updated_at=row["updated_at"],
+        )
+
+    def _detail(self, job_id: str) -> dict:
+        return _detail_body(self._record(job_id), self.recoveries[job_id])
+
+    def _on_catchall(self, route) -> None:  # noqa: ANN001 - playwright route
+        route.fulfill(status=200, content_type="application/json", body="{}")
+
+    def _on_status(self, route) -> None:  # noqa: ANN001
+        counts: dict = {}
+        for row in self.rows.values():
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"host": "127.0.0.1", "port": 8765, "queue": counts}),
+        )
+
+    def _on_task_view(self, route) -> None:  # noqa: ANN001
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(_task_view_body(list(self.rows.values()))),
+        )
+
+    def _on_detail(self, route) -> None:  # noqa: ANN001
+        job_id = self._job_id(route.request.url)
+        self.detail_log.append(job_id)
+        if self._hold_body is not None:
+            self._held.append((route, self._hold_body))
+            self._hold_body = None
+            return
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(self._detail(job_id)),
+        )
+
+    def _on_summary(self, route) -> None:  # noqa: ANN001
+        job_id = self._job_id(route.request.url)
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(self._record(job_id)),
+        )
+
+    def _on_job(self, route) -> None:  # noqa: ANN001
+        job_id = self._job_id(route.request.url)
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(self._record(job_id)),
+        )
+
+    def _on_action(self, route) -> None:  # noqa: ANN001
+        job_id = self._job_id(route.request.url)
+        action = route.request.url.rsplit("/", 1)[-1]
+        row = self.rows[job_id]
+        if action == "pause":
+            self.calls["pause"] += 1
+            self.set_state(job_id, "paused", revision=int(row["revision"]) + 1)
+        elif action == "unpause":
+            self.calls["unpause"] += 1
+            self.set_state(job_id, "running", revision=int(row["revision"]) + 1)
+        elif action == "rerun":
+            self.calls["rerun"] += 1
+            self.set_state(
+                job_id,
+                "queued",
+                attempt=int(row["attempt"]) + 1,
+                revision=int(row["revision"]) + 1,
+            )
+        elif action == "cancel":
+            self.calls["cancel"] += 1
+            self.set_state(job_id, "cancelled", revision=int(row["revision"]) + 1)
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(self._record(job_id)),
+        )
+
+    def _on_batch_ops(self, route) -> None:  # noqa: ANN001
+        self.calls["batch"] += 1
+        payload = json.loads(route.request.post_data or "{}")
+        results = []
+        for job_id in payload.get("task_ids", []):
+            if job_id in self.rows:
+                self.rows[job_id]["tags"] = ["t14"]
+                self.rows[job_id]["updated_at"] = "2026-10-09T00:00:02Z"
+            results.append({"task_id": job_id, "ok": True})
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"results": results}),
+        )
+
+
+def _wait_for(page: Page, cond: Any, timeout: float = 8.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return
+        page.evaluate("() => 1")
+        time.sleep(0.05)
+    raise AssertionError("condition not met within timeout")
+
+
+@pytest.mark.slow
+class TestQueueRowFreshnessBrowser:
+    """Todo 14 (GAP-9) executed acceptance: queue rows stay fresh under
+    latency; delayed old detail responses can never override newer state;
+    recovery changes re-render rows; detail requests stay bounded per poll."""
+
+    def _boot(self, page: Page) -> _QueueApiSim:
+        return _QueueApiSim(page)
+
+    @staticmethod
+    def _render(page: Page) -> None:
+        page.evaluate("() => refreshJobs()")
+        page.wait_for_selector("#queue-list .queue-row", timeout=10_000)
+
+    def test_completed_row_drops_stale_active_actions_and_offers_rerun_menu(
+        self, page: Page
+    ) -> None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        self._render(page)
+        # Natural cache population: the real detail fetch while J1 is RUNNING.
+        page.evaluate("() => fetchJobDetail('J1')")
+        assert page.evaluate("() => !!getJobDetail('J1')")
+        # Server-side completion (revision bumps like the real CAS).
+        sim.set_state("J1", "completed", revision=2)
+        page.evaluate("() => refreshJobs()")  # the poll observing the change
+        ops = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert ops is not None
+        assert _RERUN_GLYPH in ops, f"terminal row must offer rerun: {ops}"
+        for active in (_PAUSE_GLYPH, _RESUME_GLYPH, _CANCEL_GLYPH):
+            assert active not in ops, f"terminal row shows active-only action {active!r}: {ops}"
+        # Stale RUNNING detail must be dropped (status disagrees with the list).
+        assert page.evaluate("() => getJobDetail('J1')") is None
+        # Terminal rerun menu: 3 real actions, rerun_direct enabled.
+        page.click(_row_sel("J1", f'button:has-text("{_RERUN_GLYPH}")'))
+        page.wait_for_selector(".rerun-action-menu", state="visible", timeout=5_000)
+        items = page.eval_on_selector_all(
+            ".rerun-action-menu [role=menuitem]",
+            "els => els.map((e) => ({ text: e.textContent.trim(), disabled: e.disabled }))",
+        )
+        assert len(items) == 3, items
+        assert not items[0]["disabled"], items
+        _evidence("t14-terminal-row-rerun-menu.json", {"ops": ops, "menu": items})
+
+    def test_unselected_row_pause_then_resume_reflects_fresh_state(self, page: Page) -> None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        sim.add_job("J2", "running", attempt=1, revision=1)
+        self._render(page)
+        page.evaluate("() => fetchJobDetail('J1')")  # cache primed for an unselected row
+        assert page.evaluate("() => String(selectedJobId)") == ""
+        # Real row button click (stopPropagation keeps the row unselected).
+        page.click(_row_sel("J1", "button.mini-btn.warn"))
+        _wait_for(page, lambda: sim.calls["pause"] >= 1)
+        page.wait_for_timeout(400)  # let the action chain land
+        page.evaluate("() => refreshJobs()")
+        ops = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert _RESUME_GLYPH in ops, f"paused unselected row must offer resume: {ops}"
+        assert _PAUSE_GLYPH not in ops, f"paused row must not keep pause: {ops}"
+        assert page.evaluate("() => String(selectedJobId)") == ""
+        page.click(_row_sel("J1", f'button:has-text("{_RESUME_GLYPH}")'))
+        _wait_for(page, lambda: sim.calls["unpause"] >= 1)
+        page.wait_for_timeout(400)
+        page.evaluate("() => refreshJobs()")
+        ops = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert _PAUSE_GLYPH in ops, f"resumed row must offer pause again: {ops}"
+        _evidence("t14-unselected-pause-resume.json", {"ops": ops, "calls": sim.calls})
+
+    def test_delayed_detail_response_cannot_override_newer_state(self, page: Page) -> None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        self._render(page)
+        stale = _detail_body(
+            _v1_record("J1", "running", attempt=1, revision=1),
+            {
+                "can_pause": True,
+                "can_unpause": False,
+                "can_continue": False,
+                "can_rerun": False,
+                "can_purge": True,
+                "can_cancel": True,
+            },
+        )
+        sim.hold_detail(stale)
+        page.evaluate("() => { window.__late = fetchJobDetail('J1'); }")
+        _wait_for(page, lambda: sim.pending_held >= 1)
+        # Newer state wins while the old response is still in flight: the real
+        # pause action invalidates + refetches (fresh paused recovery).
+        page.evaluate("() => pauseJob('J1')")
+        _wait_for(page, lambda: sim.calls["pause"] >= 1)
+        page.wait_for_timeout(300)
+        # The OLD RUNNING response is released late — it must be dropped.
+        sim.release_held()
+        late = page.evaluate("() => window.__late.then((d) => d)")
+        assert late is None, f"late old-generation detail must be dropped, got: {late}"
+        cached = page.evaluate(
+            """() => {
+            const d = getJobDetail('J1');
+            return d ? { st: d.job.status, pause: !!(d.recovery && d.recovery.can_pause) } : null;
+        }"""
+        )
+        assert cached is None or cached["pause"] is False, cached
+        page.evaluate("() => refreshJobs()")
+        ops = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert _RESUME_GLYPH in ops and _PAUSE_GLYPH not in ops, ops
+        _evidence(
+            "t14-delayed-response-dropped.json",
+            {"late": late, "cached": cached, "ops": ops},
+        )
+
+    def test_rerun_between_polls_drops_old_attempt_detail_and_re_renders(self, page: Page) -> None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=3)
+        self._render(page)
+        page.evaluate(
+            """() => {
+            const row = document.querySelector('#queue-list .queue-row[data-job-id="J1"]');
+            row.dataset.t14Mark = 'pre';
+        }"""
+        )
+        # The old attempt's detail response (attempt 1, RUNNING) is delayed.
+        stale = _detail_body(
+            _v1_record("J1", "running", attempt=1, revision=3),
+            {
+                "can_pause": True,
+                "can_unpause": False,
+                "can_continue": False,
+                "can_rerun": False,
+                "can_purge": True,
+                "can_cancel": True,
+            },
+        )
+        sim.hold_detail(stale)
+        page.evaluate("() => { window.__late = fetchJobDetail('J1'); }")
+        _wait_for(page, lambda: sim.pending_held >= 1)
+        # Between two RUNNING polls a rerun completes (terminal -> attempt 2).
+        sim.rerun_completed("J1")
+        page.evaluate("() => refreshJobs()")  # the next poll observes attempt 2
+        info = page.evaluate(
+            """() => {
+            const row = document.querySelector('#queue-list .queue-row[data-job-id="J1"]');
+            const j = jobsCache.find((e) => String(e.id) === 'J1');
+            return { mark: row ? row.dataset.t14Mark : null, attempt: j && j.attempt,
+                     revision: j && j.revision, status: j && j.status };
+        }"""
+        )
+        assert info["attempt"] == 2 and info["status"] == "queued", info
+        assert info["mark"] is None, f"row must re-render on attempt change: {info}"
+        # Old attempt's delayed detail response released AFTER the rerun.
+        sim.release_held()
+        late = page.evaluate("() => window.__late.then((d) => d)")
+        assert late is None, f"old-attempt detail must be dropped, got: {late}"
+        assert page.evaluate("() => getJobDetail('J1')") is None
+        page.evaluate("() => refreshJobs()")
+        ops = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        for active in (_PAUSE_GLYPH, _RESUME_GLYPH, _CANCEL_GLYPH, _RERUN_GLYPH):
+            assert active not in ops, f"queued attempt-2 row shows stale action {active!r}: {ops}"
+        _evidence(
+            "t14-rerun-between-polls.json",
+            {"info": info, "late": late, "ops": ops},
+        )
+
+    def test_fresh_server_recovery_re_render_decides_capability(self, page: Page) -> None:
+        sim = self._boot(page)
+        # mechanism + failed: the status DEFAULT offers continue, but the
+        # server recovery (work_dir gone -> can_continue=False) must win and
+        # the row must re-render when it arrives.
+        sim.add_job("J1", "failed", workflow="mechanism", attempt=1, revision=2)
+        sim.set_recovery(
+            "J1",
+            {
+                "can_pause": False,
+                "can_unpause": False,
+                "can_continue": False,
+                "continue_mode": "",
+                "continue_notes": "",
+                "can_rerun": True,
+                "can_purge": True,
+                "can_cancel": False,
+            },
+        )
+        self._render(page)
+        ops_before = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert _CONTINUE_GLYPH in ops_before, f"status default offers continue: {ops_before}"
+        page.evaluate("() => fetchJobDetail('J1')")  # fresh server recovery arrives
+        ops_after = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert _CONTINUE_GLYPH not in ops_after, (
+            f"row must re-render and adopt the server's can_continue=False: {ops_after}"
+        )
+        assert _RERUN_GLYPH in ops_after, ops_after
+        _evidence(
+            "t14-recovery-change-re-render.json",
+            {"before": ops_before, "after": ops_after},
+        )
+
+    def test_detail_requests_bounded_per_poll(self, page: Page) -> None:
+        sim = self._boot(page)
+        statuses = [
+            "running",
+            "queued",
+            "completed",
+            "failed",
+            "paused",
+            "completed",
+            "running",
+            "queued",
+        ]
+        for i, status in enumerate(statuses):
+            sim.add_job(f"J{i}", status, attempt=1, revision=1)
+        self._render(page)
+        # Prime two caches so a naive "refetch dropped rows" implementation
+        # would have something to refetch on every poll.
+        page.evaluate("() => fetchJobDetail('J0')")
+        page.evaluate("() => fetchJobDetail('J1')")
+        base = len(sim.detail_log)
+        for _ in range(3):  # three poll ticks over 8 visible rows
+            page.evaluate("() => refreshJobs()")
+            page.evaluate("() => refreshSelectedJobSummary()")
+        assert len(sim.detail_log) - base == 0, (
+            f"poll ticks must not fetch detail per row: {sim.detail_log[base:]}"
+        )
+        # Cache drops caused by identity/status changes must NOT trigger
+        # per-row refetches on subsequent polls either.
+        sim.set_state("J0", "completed", revision=2)
+        sim.set_state("J1", "completed", revision=2)
+        for _ in range(2):
+            page.evaluate("() => refreshJobs()")
+        assert len(sim.detail_log) - base == 0, sim.detail_log[base:]
+        # A row action may fetch at most one detail (the acted job).
+        page.evaluate("() => pauseJob('J6')")
+        _wait_for(page, lambda: sim.calls["pause"] >= 1)
+        page.wait_for_timeout(300)
+        assert len(sim.detail_log) - base <= 1, (
+            f"one action -> at most one detail fetch: {sim.detail_log[base:]}"
+        )
+        # The selected-job summary lane never grows the detail count.
+        page.evaluate("() => { selectedJobId = 'J6'; }")
+        page.evaluate("() => refreshSelectedJobSummary()")
+        assert len(sim.detail_log) - base <= 1, sim.detail_log[base:]
+        _evidence(
+            "t14-detail-request-bound.json",
+            {"detail_log": sim.detail_log, "base": base, "calls": sim.calls},
+        )
+
+    def test_batch_ops_invalidate_all_selected_row_caches(self, page: Page) -> None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        sim.add_job("J2", "running", attempt=1, revision=1)
+        self._render(page)
+        page.evaluate("() => fetchJobDetail('J1')")
+        page.evaluate("() => fetchJobDetail('J2')")
+        page.check('#queue-list .queue-row[data-job-id="J1"] .queue-check')
+        page.check('#queue-list .queue-row[data-job-id="J2"] .queue-check')
+        page.evaluate("() => _batchOp('add_tags', { tags: ['t14'] })")
+        _wait_for(page, lambda: sim.calls["batch"] >= 1)
+        page.wait_for_timeout(300)
+        page.evaluate("() => refreshJobs()")
+        cache_state = page.evaluate(
+            "() => ({ j1: !!getJobDetail('J1'), j2: !!getJobDetail('J2') })"
+        )
+        assert cache_state == {"j1": False, "j2": False}, (
+            f"batch ops must invalidate every selected row's detail cache: {cache_state}"
+        )
+        _evidence("t14-batch-op-invalidation.json", cache_state)

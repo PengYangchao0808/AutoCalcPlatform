@@ -1,15 +1,28 @@
 from __future__ import annotations
 
+import ast
+import re
+import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 import pytest
 
-from scripts.check_grep_gates import classify_text
+from scripts.check_grep_gates import (
+    ARCHITECTURE_ALLOWLIST,
+    ARCHITECTURE_SUITE_GATES,
+    ARCHITECTURE_SUITE_NAME,
+    HISTORICAL_GATE_NAMES,
+    classify_text,
+    run_suite,
+)
 
 SCRIPT: Final[Path] = Path(__file__).parents[1] / "scripts" / "check_grep_gates.py"
+SRC_ROOT: Final[Path] = Path(__file__).parents[1] / "src"
+
 EXPECTED_GATE_NAMES: Final[tuple[str, ...]] = (
     "compat_no_writers",
     "wave2_optfreq",
@@ -43,6 +56,12 @@ EXPECTED_GATE_NAMES: Final[tuple[str, ...]] = (
     "unique_run_scan",
     "unique_run_irc",
     "calculations_no_mechanism_terms",
+    "cccp_imports_acp",
+    "workflow_executes_qc",
+    "workflow_route_assembly",
+    "backend_imports_task_module",
+    "compat_forwarders_are_pure",
+    "legacy_batch_quarantine",
 )
 WAVE6_SCHEDULER_SYMBOLS: Final[tuple[str, ...]] = (
     "BOND_SCAN_STAGES",
@@ -119,7 +138,7 @@ def test_list_gates_matches_authoritative_names() -> None:
 
     names = tuple(result.stdout.splitlines())
     assert result.returncode == 0
-    assert len(names) == 32
+    assert len(names) == 38
     assert names == EXPECTED_GATE_NAMES
 
 
@@ -307,3 +326,803 @@ def test_cli_prints_both_sections_and_blocks_a_zero_gate(tmp_path: Path) -> None
     assert "ALLOWED:" in result.stdout
     assert "BLOCKING:" in result.stdout
     assert "run_shermo()" in result.stdout
+
+
+# ── architecture-remediation suite (todo 4) ────────────────────────────────
+
+WAVE0_ALLOWLIST_BASELINE: Final[frozenset[tuple[str, str, str]]] = frozenset(
+    {
+        ("cccp_imports_acp", "src/cccp/core/protocols.py", "from acp"),
+        ("cccp_imports_acp", "src/cccp/qc/interfaces/orca.py", "from acp"),
+        ("final_shermo", "src/acp/scheduler/capabilities.py", "run_shermo"),
+        (
+            "legacy_batch_quarantine",
+            "src/acp/calculations/batch/_singlepoint_execution.py",
+            "acp.backends.batch",
+        ),
+        (
+            "legacy_batch_quarantine",
+            "src/acp/calculations/batch/_singlepoint_execution.py",
+            "batch_single_point",
+        ),
+        ("unique_run_scan", "src/acp/workflows/simple.py", "run_scan"),
+        ("workflow_executes_qc", "src/acp/calculations/batch/singlepoint.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/calculations/pes/scan.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/calculations/primitives/_common.py", "get_backend"),
+        (
+            "workflow_executes_qc",
+            "src/acp/calculations/primitives/thermochemistry.py",
+            "run_shermo",
+        ),
+        ("workflow_executes_qc", "src/acp/confsearch/protocols/xtb_md.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/energy.py", "CensoBackend"),
+        ("workflow_executes_qc", "src/acp/workflows/energy.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/energy_shared.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/energy_shared.py", "run_shermo"),
+        ("workflow_executes_qc", "src/acp/workflows/ensemble.py", "CensoBackend"),
+        ("workflow_executes_qc", "src/acp/workflows/ensemble.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/nmr.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/orca_gradient.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/xtbmd_censo_energy.py", "CensoBackend"),
+        ("workflow_executes_qc", "src/acp/workflows/xtbmd_censo_energy.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/xtbmd_md.py", "get_backend"),
+        ("workflow_executes_qc", "src/acp/workflows/xtb_path.py", "get_backend"),
+        ("workflow_route_assembly", "src/acp/confsearch/shared/helpers.py", '"! "'),
+        ("workflow_route_assembly", "src/acp/workflows/energy_shared.py", '"! "'),
+    }
+)
+ALLOWLIST_COUNT_PIN: Final[int] = 0
+CAPABILITY_MODULE_FILES: Final[tuple[str, ...]] = (
+    "src/acp/backends/matrix.py",
+    "src/acp/backends/base.py",
+    "src/acp/backends/capabilities.py",
+    "src/acp/backends/registry.py",
+    "src/acp/backends/orca.py",
+    "src/acp/backends/crest.py",
+    "src/acp/backends/xtb.py",
+    "src/acp/backends/censo_backend.py",
+    "src/acp/backends/isostat_backend.py",
+    "src/acp/backends/molclus_backend.py",
+    "src/acp/backends/external_backend.py",
+    "src/acp/backends/external.py",
+    "src/cccp/backends/",
+)
+PURE_CCCP_CALCULATION_SURFACE: Final[tuple[str, ...]] = (
+    "cccp.calculation.errors",
+    "cccp.calculation.contracts",
+)
+WORKFLOW_PROBE_SCOPES: Final[tuple[str, ...]] = (
+    "src/acp/workflows/",
+    "src/acp/confsearch/",
+    "src/acp/nmr/",
+    "src/acp/calculations/",
+)
+WORKFLOW_PROBE_CALLS: Final[frozenset[str]] = frozenset(
+    {"get_backend", "require_backend", "run_shermo", "CensoBackend"}
+)
+
+
+@dataclass(frozen=True)
+class DependencyRule:
+    scope: tuple[str, ...]
+    forbidden_prefixes: tuple[str, ...] = ()
+    forbidden_exceptions: tuple[str, ...] = ()
+    allowed_prefixes: tuple[str, ...] = ()
+
+
+DEPENDENCY_RULES: Final[tuple[DependencyRule, ...]] = (
+    DependencyRule(scope=("src/cccp/",), forbidden_prefixes=("acp",)),
+    DependencyRule(
+        scope=CAPABILITY_MODULE_FILES,
+        forbidden_prefixes=("cccp.calculation",),
+        forbidden_exceptions=PURE_CCCP_CALCULATION_SURFACE,
+    ),
+    DependencyRule(
+        scope=("src/acp/backends/__init__.py",),
+        allowed_prefixes=(
+            "acp.backends",
+            "cccp.backends",
+            "typing",
+            "collections.abc",
+            "__future__",
+        ),
+    ),
+)
+
+
+def _has_blocking(gate_name: str, relative_path: str, text: str) -> bool:
+    return any(not finding.allowed for finding in classify_text(gate_name, relative_path, text))
+
+
+def _module_package(module_path: str) -> str:
+    rel = module_path.replace("\\", "/").removeprefix("src/").removesuffix(".py")
+    if rel.endswith("/__init__"):
+        rel = rel[: -len("/__init__")]
+    elif "/" in rel:
+        rel = rel.rsplit("/", 1)[0]
+    else:
+        rel = ""
+    return rel.replace("/", ".")
+
+
+def _resolved_imports(module_path: str, source: str) -> frozenset[str]:
+    package = _module_package(module_path)
+    tree = ast.parse(source)
+    resolved: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level > 0:
+                parts = package.split(".") if package else []
+                prefix = ".".join(parts[: len(parts) - (node.level - 1)])
+                target = f"{prefix}.{node.module}" if node.module else prefix
+            else:
+                target = node.module or ""
+            resolved.add(target)
+        elif isinstance(node, ast.Import):
+            resolved.update(alias.name for alias in node.names)
+    return frozenset(resolved)
+
+
+def _dependency_violations(rule: DependencyRule, module_path: str, source: str) -> frozenset[str]:
+    def _matches_module(target: str, prefix: str) -> bool:
+        return target == prefix or target.startswith(f"{prefix}.")
+
+    def _matches_scope(path: str, scope: str) -> bool:
+        normalized = scope.rstrip("/")
+        return path == normalized or path.startswith(f"{normalized}/")
+
+    if not any(_matches_scope(module_path, scope) for scope in rule.scope):
+        return frozenset()
+    bad: set[str] = set()
+    for target in _resolved_imports(module_path, source):
+        if rule.allowed_prefixes and not any(
+            _matches_module(target, prefix) for prefix in rule.allowed_prefixes
+        ):
+            bad.add(target)
+        if any(_matches_module(target, prefix) for prefix in rule.forbidden_prefixes) and (
+            target not in rule.forbidden_exceptions
+        ):
+            bad.add(target)
+    return frozenset(bad)
+
+
+def _workflow_call_probe(source: str) -> frozenset[str]:
+    tree = ast.parse(source)
+    hits: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+            if name is not None and name in WORKFLOW_PROBE_CALLS:
+                hits.add(name)
+    return frozenset(hits)
+
+
+@dataclass(frozen=True)
+class InjectionCase:
+    name: str
+    gate: str
+    module: str
+    symbol: str
+    target: str
+    snippet: str
+    create: bool = False
+
+
+INJECTION_CASES: Final[tuple[InjectionCase, ...]] = (
+    InjectionCase(
+        "reverse_import",
+        "cccp_imports_acp",
+        "src/cccp/_neg_inject.py",
+        "from acp",
+        "src/cccp/_neg_inject.py",
+        "from acp import chem\n",
+        create=True,
+    ),
+    InjectionCase(
+        "second_qc_path",
+        "workflow_executes_qc",
+        "src/acp/workflows/simple.py",
+        "get_backend",
+        "src/acp/workflows/simple.py",
+        '\n_probe_backend = get_backend("orca")\n',
+    ),
+    InjectionCase(
+        "route_concatenation",
+        "workflow_route_assembly",
+        "src/acp/workflows/simple.py",
+        '"! "',
+        "src/acp/workflows/simple.py",
+        '\n_probe_route_lines = ["! " + extra]\n',
+    ),
+    InjectionCase(
+        "backend_to_task_call",
+        "backend_imports_task_module",
+        "src/acp/backends/base.py",
+        "cccp.calculation.tasks",
+        "src/acp/backends/base.py",
+        "\nfrom cccp.calculation.tasks import run_singlepoint\n",
+    ),
+    InjectionCase(
+        "forwarder_default_table",
+        "compat_forwarders_are_pure",
+        "src/acp/backends/__init__.py",
+        "DEFAULT_GRID",
+        "src/acp/backends/__init__.py",
+        '\nDEFAULT_GRID = {"grid": "defgrid2"}\n',
+    ),
+    InjectionCase(
+        "forwarder_qc_call",
+        "compat_forwarders_are_pure",
+        "src/acp/backends/__init__.py",
+        "get_backend",
+        "src/acp/backends/__init__.py",
+        "\n_probe_orca = get_backend('orca')\n",
+    ),
+    InjectionCase(
+        "legacy_batch_root_alias_import",
+        "legacy_batch_quarantine",
+        "src/acp/calculations/batch/engine.py",
+        "acp.backends.batch",
+        "src/acp/calculations/batch/engine.py",
+        "\nfrom acp.backends import batch\n",
+    ),
+    InjectionCase(
+        "legacy_batch_import_alias",
+        "legacy_batch_quarantine",
+        "src/acp/calculations/batch/engine.py",
+        "acp.backends.batch",
+        "src/acp/calculations/batch/engine.py",
+        "\nimport acp.backends.batch as batch_backend\n",
+    ),
+    InjectionCase(
+        "legacy_batch_multiline_import",
+        "legacy_batch_quarantine",
+        "src/acp/calculations/batch/engine.py",
+        "acp.backends.batch",
+        "src/acp/calculations/batch/engine.py",
+        "\nfrom acp.backends import (\n    batch,\n)\n",
+    ),
+    InjectionCase(
+        "legacy_batch_root_alias_attr_call",
+        "legacy_batch_quarantine",
+        "src/acp/calculations/batch/engine.py",
+        "batch_single_point",
+        "src/acp/calculations/batch/engine.py",
+        "\nimport acp.backends as backends\n_probe_batch = backends.batch_single_point(1, 2)\n",
+    ),
+    InjectionCase(
+        "unique_run_scan_second_impl",
+        "unique_run_scan",
+        "src/acp/calculations/batch/engine.py",
+        "run_scan",
+        "src/acp/calculations/batch/engine.py",
+        "\ndef run_scan(items):\n    return items\n",
+    ),
+    InjectionCase(
+        "unique_run_irc_second_impl",
+        "unique_run_irc",
+        "src/acp/calculations/pes/scan.py",
+        "run_irc",
+        "src/acp/calculations/pes/scan.py",
+        "\ndef run_irc(items):\n    return items\n",
+    ),
+    InjectionCase(
+        "final_shermo_real_call",
+        "final_shermo",
+        "src/acp/scheduler/capabilities.py",
+        "run_shermo",
+        "src/acp/scheduler/capabilities.py",
+        "\n_probe_shermo = run_shermo(log_file, output_dir)\n",
+    ),
+    InjectionCase(
+        "wave2_shermo_external_cccp_position",
+        "wave2_shermo_external",
+        "src/cccp/backends/external_backend.py",
+        "run_shermo",
+        "src/cccp/backends/external_backend.py",
+        "\n_probe_shermo = run_shermo(log_file, output_dir)\n",
+    ),
+)
+
+
+def _run_suite(root: Path | None = None) -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, str(SCRIPT), "--suite", "architecture-remediation"]
+    if root is not None:
+        command += ["--root", str(root)]
+    return subprocess.run(command, capture_output=True, text=True, check=False)
+
+
+def _stale_entries(output: str) -> set[tuple[str, str, str]]:
+    entries: set[tuple[str, str, str]] = set()
+    in_section = False
+    for line in output.splitlines():
+        if line.startswith("STALE ALLOWLIST ENTRIES"):
+            in_section = True
+            continue
+        if not in_section:
+            continue
+        if line.startswith("HISTORICAL GATES") or line.startswith("=="):
+            break
+        parts = tuple(line.split("|"))
+        if len(parts) == 3:
+            entries.add(parts)  # type: ignore[arg-type]
+    return entries
+
+
+def _copy_src_tree(tmp_path: Path) -> Path:
+    destination = tmp_path / "repo"
+    shutil.copytree(SRC_ROOT, destination / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    return destination
+
+
+def test_suite_gate_membership_is_disjoint_from_historical() -> None:
+    assert set(ARCHITECTURE_SUITE_GATES) <= set(EXPECTED_GATE_NAMES)
+    assert set(HISTORICAL_GATE_NAMES) == set(EXPECTED_GATE_NAMES) - set(ARCHITECTURE_SUITE_GATES)
+    assert {
+        "backend_imports_task_module",
+        "compat_forwarders_are_pure",
+        "legacy_batch_quarantine",
+    } <= set(ARCHITECTURE_SUITE_GATES)
+    assert "calculations_no_mechanism_terms" in HISTORICAL_GATE_NAMES
+
+
+def test_suite_exits_zero_on_current_tree() -> None:
+    result = _run_suite()
+    assert _stale_entries(result.stdout) == frozenset(), result.stdout
+    assert "blocking findings: 0" in result.stdout
+    assert "stale allowlist entries: 0" in result.stdout
+    assert "HISTORICAL GATES" in result.stdout
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_suite_zero_control_on_temp_copy(tmp_path: Path) -> None:
+    result = _run_suite(_copy_src_tree(tmp_path))
+    assert "blocking findings: 0" in result.stdout, result.stdout + result.stderr
+    assert _stale_entries(result.stdout) == frozenset(), result.stdout
+
+
+def test_suite_ignores_workflow_same_name_wrappers(tmp_path: Path) -> None:
+    root = _copy_src_tree(tmp_path)
+    _ = (root / "src/acp/workflows/_neg_wrapper.py").write_text(
+        "def run_scan(items, profile=None):\n    return items\n"
+        "\ndef run_irc(request):\n    return request\n",
+        encoding="utf-8",
+    )
+
+    result = _run_suite(root)
+
+    assert "blocking findings: 0" in result.stdout, result.stdout + result.stderr
+    assert _stale_entries(result.stdout) == frozenset(), result.stdout
+
+
+@pytest.mark.parametrize("case", INJECTION_CASES, ids=lambda case: case.name)
+def test_suite_fails_when_violation_injected(case: InjectionCase, tmp_path: Path) -> None:
+    root = _copy_src_tree(tmp_path)
+    target = root / case.target
+    if case.create:
+        _ = target.write_text(case.snippet, encoding="utf-8")
+    else:
+        _ = target.write_text(target.read_text(encoding="utf-8") + case.snippet, encoding="utf-8")
+
+    result = _run_suite(root)
+
+    assert result.returncode == 1, f"injection {case.name} not detected:\n{result.stdout}"
+    assert f"[{case.gate}|{case.module}|{case.symbol}]" in result.stdout
+
+
+def test_suite_flags_stale_allowlist_entries_when_violation_disappears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _copy_src_tree(tmp_path)
+    executor_key = ("workflow_executes_qc", "src/acp/calculations/executor.py", "get_backend")
+    monkeypatch.setattr("scripts.check_grep_gates.ARCHITECTURE_ALLOWLIST", (executor_key,))
+    monkeypatch.setattr(
+        "scripts.check_grep_gates.ALLOWLIST_TRIPLES", frozenset({executor_key})
+    )
+
+    exit_code = run_suite(ARCHITECTURE_SUITE_NAME, root)
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1, captured
+    assert _stale_entries(captured) == {executor_key}
+    assert "stale allowlist entries: 1" in captured
+    assert "workflow_executes_qc|src/acp/calculations/executor.py" in captured
+
+
+def test_allowlist_only_shrinks_from_wave0_baseline() -> None:
+    assert set(ARCHITECTURE_ALLOWLIST) <= set(WAVE0_ALLOWLIST_BASELINE)
+
+
+def test_allowlist_count_is_pinned() -> None:
+    assert len(ARCHITECTURE_ALLOWLIST) == ALLOWLIST_COUNT_PIN
+    assert len(set(ARCHITECTURE_ALLOWLIST)) == len(ARCHITECTURE_ALLOWLIST)
+    assert not any(rule == "legacy_batch_quarantine" for rule, _m, _s in ARCHITECTURE_ALLOWLIST), (
+        "legacy_batch_quarantine allowlist must stay empty since todo 17"
+    )
+
+
+@pytest.mark.parametrize(
+    ("gate_name", "relative_path", "text", "expected"),
+    (
+        (
+            "unique_run_scan",
+            "src/acp/calculations/primitives/scan.py",
+            "def run_scan(req):\n    return req\n",
+            True,
+        ),
+        (
+            "unique_run_scan",
+            "src/cccp/calculation/tasks/scan.py",
+            "def run_scan(req):\n    return req\n",
+            False,
+        ),
+        (
+            "unique_run_scan",
+            "src/acp/calculations/batch/engine.py",
+            "def run_scan(req):\n    return req\n",
+            True,
+        ),
+        (
+            "unique_run_scan",
+            "src/cccp/calculation/batch.py",
+            "def run_scan(req):\n    return req\n",
+            True,
+        ),
+        (
+            "unique_run_irc",
+            "src/acp/calculations/primitives/irc.py",
+            "def run_irc(req):\n    return req\n",
+            True,
+        ),
+        (
+            "unique_run_irc",
+            "src/cccp/calculation/tasks/irc.py",
+            "def run_irc(req):\n    return req\n",
+            False,
+        ),
+        (
+            "unique_run_irc",
+            "src/acp/calculations/pes/scan.py",
+            "def run_irc(req):\n    return req\n",
+            True,
+        ),
+    ),
+)
+def test_unique_run_gates_allow_only_cccp_task_and_flag_second_implementations(
+    gate_name: str, relative_path: str, text: str, expected: bool
+) -> None:
+    assert _has_blocking(gate_name, relative_path, text) is expected
+
+
+@pytest.mark.parametrize(
+    ("gate_name", "relative_path", "text"),
+    (
+        (
+            "unique_run_scan",
+            "src/acp/workflows/simple.py",
+            "def run_scan(items, profile=None):\n    return _run_scan(items)\n",
+        ),
+        (
+            "unique_run_irc",
+            "src/acp/workflows/irc.py",
+            "def run_irc(request):\n    return _run_irc(request)\n",
+        ),
+    ),
+)
+def test_unique_run_gates_do_not_flag_workflow_same_name_wrappers(
+    gate_name: str, relative_path: str, text: str
+) -> None:
+    assert _statuses(gate_name, relative_path, text) == ()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("#: energy_shared.py:489 ``run_shermo``).", False),
+        ("#: ``run_shermo``).", False),
+        ("# see run_shermo docs", False),
+        ("_probe_shermo = run_shermo(log_file, output_dir)", True),
+    ),
+)
+def test_final_shermo_ignores_comment_lines_but_blocks_real_calls(
+    text: str, expected: bool
+) -> None:
+    assert _has_blocking("final_shermo", "src/acp/scheduler/capabilities.py", text) is expected
+
+
+COMPAT_SHIM_MODULES: Final[tuple[str, ...]] = (
+    "src/acp/backends/__init__.py",
+    "src/acp/chem/composition.py",
+    "src/acp/core/registry.py",
+)
+
+
+def test_compat_shim_modules_pass_pure_forwarder_gate() -> None:
+    for module_path in COMPAT_SHIM_MODULES:
+        source = (SRC_ROOT.parent / module_path).read_text(encoding="utf-8", errors="replace")
+        assert not _has_blocking("compat_forwarders_are_pure", module_path, source), module_path
+
+
+def test_relocated_types_are_identity_reexports() -> None:
+    from acp import backends as acp_backends
+    from acp.calculations import contracts as acp_contracts
+    from acp.chem import composition as acp_composition
+    from acp.core import registry as acp_registry
+    from cccp import backends as cccp_backends
+    from cccp.calculation import contracts as cccp_contracts
+    from cccp.core import registry as cccp_registry
+    from cccp.qc import hessian_policy
+
+    assert acp_contracts.StructureRole is cccp_contracts.StructureRole
+    assert acp_contracts.ElectronicStateSpec is cccp_contracts.ElectronicStateSpec
+    assert acp_composition.LIGHT_ELEMENTS is hessian_policy.LIGHT_ELEMENTS
+    assert acp_composition.resolve_recalc_hess is hessian_policy.resolve_recalc_hess
+    assert acp_registry.Registry is cccp_registry.Registry
+    assert acp_backends.QCBackend is cccp_backends.QCBackend
+    assert acp_backends.get_backend is cccp_backends.get_backend
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "text", "expected"),
+    (
+        ("src/cccp/core/protocols.py", "from acp.chem.composition import x", True),
+        ("src/cccp/core/protocols.py", "import acp.catalog", True),
+        ("src/cccp/qc/interfaces/orca.py", "    from acp.catalog import METHOD_META", True),
+        ("src/cccp/core/protocols.py", "if TYPE_CHECKING:\n    from acp import chem", True),
+        ("src/cccp/core/protocols.py", "# from acp import chem", False),
+        ("src/cccp/core/protocols.py", "from cccp.utils import geometry", False),
+    ),
+)
+def test_cccp_imports_acp_covers_lazy_and_type_checking_forms(
+    relative_path: str, text: str, expected: bool
+) -> None:
+    assert _has_blocking("cccp_imports_acp", relative_path, text) is expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        'backend = get_backend("orca")',
+        "cls = require_backend('orca')",
+        "raw = run_shermo(input_file, output_dir)",
+        "backend = CensoBackend(cfg)",
+        "# primitives resolve backends internally via get_backend().",
+    ),
+)
+def test_workflow_executes_qc_blocks_all_four_execution_tokens(text: str) -> None:
+    assert _has_blocking("workflow_executes_qc", "src/acp/workflows/example.py", text)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ('lines = ["! " + " ".join(extras)]', True),
+        ('route = ["! " + x] if x else []', True),
+        ('route = ["! D4"]', False),
+    ),
+)
+def test_workflow_route_assembly_blocks_concatenated_routes(text: str, expected: bool) -> None:
+    assert _has_blocking("workflow_route_assembly", "src/acp/workflows/example.py", text) is expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    (
+        ("from cccp.calculation.errors import CalculationSpec", False),
+        ("from cccp.calculation.contracts import ResolvedSpec", False),
+        ("from cccp.calculation import errors", False),
+        ("from cccp.calculation import contracts", False),
+        ("import cccp.calculation.errors", False),
+        ("from cccp.calculation.tasks import run_singlepoint", True),
+        ("import cccp.calculation.tasks as t", True),
+        ("from cccp.calculation import run_singlepoint", True),
+        ("from cccp.calculation.executor import CalculationPlanExecutor", True),
+        ("result = run_thermochemistry(spec)", True),
+        ("result = run_optimize(spec)", True),
+    ),
+)
+def test_backend_imports_task_module_whitelists_only_pure_types(
+    text: str, expected: bool
+) -> None:
+    assert _has_blocking("backend_imports_task_module", "src/acp/backends/base.py", text) is expected
+
+
+def test_compat_forwarders_allow_reexports_and_pure_delegation() -> None:
+    pure = (
+        '"""Quantum chemistry backend abstraction layer."""\n'
+        "from acp.backends.base import QCBackend\n"
+        "from acp.backends.registry import get_backend, require_backend\n"
+        'from .batch import batch_single_point\n'
+        '__all__ = ["QCBackend", "get_backend", "require_backend", "batch_single_point"]\n'
+    )
+    assert not _has_blocking("compat_forwarders_are_pure", "src/acp/backends/__init__.py", pure)
+    delegation = (
+        "from acp.backends.registry import get_backend as _get_backend\n"
+        "def get_backend(*args, **kwargs):\n"
+        "    return _get_backend(*args, **kwargs)\n"
+    )
+    assert not _has_blocking("compat_forwarders_are_pure", "src/acp/backends/__init__.py", delegation)
+    attribute_delegation = (
+        "from acp.backends import registry as _registry\n"
+        "def require_backend(*args, **kwargs):\n"
+        "    return _registry.require_backend(*args, **kwargs)\n"
+    )
+    assert not _has_blocking(
+        "compat_forwarders_are_pure", "src/acp/backends/__init__.py", attribute_delegation
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        'DEFAULT_GRID = {"grid": "defgrid2"}\n',
+        "import subprocess\n",
+        "from subprocess import run\n",
+        'def acquire():\n    return get_backend("orca")\n',
+        'result = get_backend("orca")\n',
+        'result = run_shermo(input_file, output_dir)\n',
+        'def run_all():\n    orca = get_backend("orca")\n    return orca\n',
+    ),
+)
+def test_compat_forwarders_forbid_defaults_subprocess_and_qc_calls(text: str) -> None:
+    assert _has_blocking("compat_forwarders_are_pure", "src/acp/backends/__init__.py", text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "from acp.backends import batch\n",
+        "from acp.backends import batch as batch_backend\n",
+        "import acp.backends.batch as batch_backend\n",
+        "from acp.backends.batch import batch_single_point\n",
+        "from acp.backends import (\n    batch,\n)\n",
+        "import acp.backends as backends\nresult = backends.batch_single_point(1, 2)\n",
+    ),
+)
+def test_legacy_batch_quarantine_covers_aliases_multiline_and_root_attr_calls(text: str) -> None:
+    assert _has_blocking("legacy_batch_quarantine", "src/acp/calculations/batch/engine.py", text)
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "text"),
+    (
+        ("src/acp/calculations/batch/engine.py", "from acp.backends import batch_process_thermo\n"),
+        ("src/acp/calculations/batch/engine.py", "from acp.backends import BatchSpResult\n"),
+        ("src/acp/backends/batch.py", "from acp.backends import batch\n"),
+        ("src/acp/backends/__init__.py", "from acp.backends import batch as batch_backend\n"),
+        ("src/acp/calculations/batch/engine.py", "from acp.backends.registry import get_backend\n"),
+    ),
+)
+def test_legacy_batch_quarantine_false_positive_guards(relative_path: str, text: str) -> None:
+    assert not _has_blocking("legacy_batch_quarantine", relative_path, text)
+
+
+WAVE0_DEPENDENCY_EXCEPTIONS: Final[frozenset[tuple[str, str]]] = frozenset()
+WAVE0_DEPENDENCY_COUNT_PIN: Final[int] = 0
+
+
+def test_module_allowed_dependency_table_on_current_tree() -> None:
+    violations: set[tuple[str, str]] = set()
+    for path in sorted(SRC_ROOT.rglob("*.py")):
+        module_path = path.relative_to(SRC_ROOT.parent).as_posix()
+        source = path.read_text(encoding="utf-8", errors="replace")
+        for rule in DEPENDENCY_RULES:
+            for target in _dependency_violations(rule, module_path, source):
+                violations.add((module_path, target))
+    assert violations <= set(WAVE0_DEPENDENCY_EXCEPTIONS), sorted(violations)
+    assert len(violations) == WAVE0_DEPENDENCY_COUNT_PIN
+
+
+@pytest.mark.parametrize(
+    ("module_path", "text", "expected_bad"),
+    (
+        ("src/cccp/core/protocols.py", "from acp.chem.composition import x", {"acp.chem.composition"}),
+        (
+            "src/cccp/core/protocols.py",
+            "if TYPE_CHECKING:\n    from acp import chem",
+            {"acp"},
+        ),
+        (
+            "src/acp/backends/base.py",
+            "from cccp.calculation.tasks import run_singlepoint",
+            {"cccp.calculation.tasks"},
+        ),
+        (
+            "src/acp/backends/base.py",
+            "import cccp.calculation",
+            {"cccp.calculation"},
+        ),
+        ("src/acp/backends/base.py", "from cccp.calculation.errors import X", set()),
+        ("src/acp/backends/base.py", "from cccp.calculation.contracts import Y", set()),
+    ),
+)
+def test_module_allowed_dependency_table_detects_injected_violations(
+    module_path: str, text: str, expected_bad: set[str]
+) -> None:
+    bad: set[str] = set()
+    for rule in DEPENDENCY_RULES:
+        bad |= _dependency_violations(rule, module_path, text)
+    assert bad == expected_bad
+
+
+def test_module_allowed_dependency_table_rejects_forwarder_non_reexport_imports() -> None:
+    bad: set[str] = set()
+    for rule in DEPENDENCY_RULES:
+        bad |= _dependency_violations(
+            rule, "src/acp/backends/__init__.py", "import subprocess\n"
+        )
+    assert bad == {"subprocess"}
+
+
+def test_workflow_call_probes_are_covered_by_allowlist() -> None:
+    allowlisted = {
+        (module, symbol)
+        for rule, module, symbol in ARCHITECTURE_ALLOWLIST
+        if rule == "workflow_executes_qc"
+    }
+    uncovered: list[str] = []
+    for scope in WORKFLOW_PROBE_SCOPES:
+        for path in sorted((SRC_ROOT.parent / scope).rglob("*.py")):
+            module_path = path.relative_to(SRC_ROOT.parent).as_posix()
+            for symbol in _workflow_call_probe(path.read_text(encoding="utf-8", errors="replace")):
+                if (module_path, symbol) not in allowlisted:
+                    uncovered.append(f"{module_path}: {symbol}")
+    assert uncovered == []
+
+
+def test_workflow_call_probe_detects_injected_second_path() -> None:
+    probe = _workflow_call_probe('_probe = get_backend("orca")\n')
+    assert probe == frozenset({"get_backend"})
+    assert ("src/acp/workflows/simple.py", "get_backend") not in {
+        (module, symbol) for _rule, module, symbol in ARCHITECTURE_ALLOWLIST
+    }
+
+
+def test_cccp_qc_interfaces_eager_import_surface_has_no_acp_side_effects() -> None:
+    probe = (
+        "import sys\n"
+        "class _Blocker:\n"
+        "    def find_spec(self, name, path=None, target=None):\n"
+        '        if name == "acp" or name.startswith("acp."):\n'
+        '            raise ImportError(f"acp import blocked: {name}")\n'
+        "        return None\n"
+        "sys.meta_path.insert(0, _Blocker())\n"
+        "import cccp.qc.interfaces\n"
+        'assert "acp" not in sys.modules\n'
+        'assert "cccp.qc.interfaces.orca" in sys.modules\n'
+        'print("EAGER_OK")\n'
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "EAGER_OK" in result.stdout
+
+
+def test_cccp_calculation_pure_type_modules_stay_pure_when_present() -> None:
+    forbidden = ("acp", "cccp.qc.interfaces", "cccp.qc.runners", "cccp.backends", "cccp.calculation.tasks")
+
+    def _violations(path: Path) -> list[str]:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        bad: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module is not None:
+                targets = [node.module]
+            elif isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            else:
+                continue
+            for target in targets:
+                if any(target == prefix or target.startswith(f"{prefix}.") for prefix in forbidden):
+                    bad.append(target)
+                if target.startswith("cccp.calculation.") and target not in PURE_CCCP_CALCULATION_SURFACE:
+                    bad.append(target)
+        return bad
+
+    for name in ("errors.py", "contracts.py"):
+        path = SRC_ROOT / "cccp" / "calculation" / name
+        if not path.exists():
+            continue
+        assert _violations(path) == []

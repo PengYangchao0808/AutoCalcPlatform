@@ -152,8 +152,10 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         (
             "scan",
             "Relaxed Scan",
-            "Run an ORCA relaxed internal-coordinate scan",
-            "Examples:\n  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out",
+            "Run an ORCA relaxed internal-coordinate scan (no ScanTS unless --scants)",
+            "Examples:\n"
+            "  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out\n"
+            "  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --scants --output ./out",
         ),
     ]:
         p = run_sub.add_parser(
@@ -167,16 +169,25 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         help="Run an independent IRC from a transition-state structure",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Examples:\n"
-            "  acp run irc --input ts.xyz --input-role transition_state\n"
-            "  acp run irc --input ts.xyz --direction forward --output ./out"
+            "Examples (one of --ts-provenance FILE / --ts-provenance-json INLINE\n"
+            "is required; file paths go to --ts-provenance, --ts-provenance-json\n"
+            "is reserved for scheduler-supplied inline JSON):\n"
+            "  acp run irc --input ts.xyz --input-role transition_state \\\n"
+            "      --ts-provenance prov.json\n"
+            "  acp run irc --input ts.xyz --direction forward --output ./out \\\n"
+            "      --ts-provenance prov.json"
         ),
     )
     p.set_defaults(workflow="irc")
     p.add_argument("--input", "-i", required=True, help="Verified transition-state XYZ snapshot")
     proof = p.add_mutually_exclusive_group(required=True)
-    proof.add_argument("--ts-provenance", help="Verified upstream TS result provenance file")
-    proof.add_argument("--ts-provenance-json", help="Scheduler supplied TS provenance JSON")
+    proof.add_argument(
+        "--ts-provenance", help="Verified upstream TS provenance FILE (irc_ts_source_v1 JSON)"
+    )
+    proof.add_argument(
+        "--ts-provenance-json",
+        help="Scheduler-supplied TS provenance as INLINE JSON text (not a file path)",
+    )
     p.add_argument("--input-role", choices=["transition_state"], help="Explicit input role")
     p.add_argument(
         "--direction",
@@ -188,7 +199,15 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
     p.add_argument("--method", default="", help="Inherited TS method (scheduler supplied)")
     p.add_argument("--basis", default="", help="Basis set (default: empty)")
     p.add_argument("--maxpoints", "--max-points", dest="maxpoints", type=int, default=100)
-    p.add_argument("--step", type=float, default=0.1, help="IRC step size (default: 0.1)")
+    p.add_argument(
+        "--step",
+        type=float,
+        default=0.1,
+        help=(
+            "Accepted for compatibility only: never reaches the ORCA %%irc block "
+            "(no effect on the run; an unused-kwarg warning is logged)"
+        ),
+    )
     p.add_argument("--charge", type=int, default=None)
     p.add_argument("--multiplicity", type=int, default=None)
     p.add_argument("--name", type=str, help="Task name")
@@ -369,12 +388,14 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             "--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS
         )
 
-    if wf == "optimize":
+    if wf in ("optimize", "scan"):
         parser.add_argument(
             "--geom-maxiter",
             type=int,
             help="Max geometry iterations (maps to MaxIter in %%geom block)",
         )
+
+    if wf == "optimize":
         parser.add_argument(
             "--opt-convergence",
             default="Tight",
@@ -421,6 +442,16 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             type=int,
             default=21,
             help="Number of scan frames including both endpoints (default: 21)",
+        )
+        parser.add_argument(
+            "--scants",
+            action="store_true",
+            default=False,
+            help=(
+                "Use the ORCA ScanTS route (transition-state-oriented scans). "
+                "Off by default; unavailable for synchronous multi-coordinate "
+                "or explicit-grid scans."
+            ),
         )
 
 
@@ -514,7 +545,11 @@ Examples:
         "--refinement-policy",
         default="screen",
         choices=["screen", "rank1", "cumulative-99", "all"],
-        help="Fine-refinement scope (default: screen)",
+        help=(
+            "Fine-refinement scope (default: screen). Pure-xTB protocols "
+            "(xtb-crest/xtb-md) run no DFT refinement under ANY policy; screen "
+            "selects zero refinement candidates everywhere (selection returns [])."
+        ),
     )
     conf.add_argument(
         "--backend",
@@ -795,7 +830,9 @@ dE/dX in Hartree/bohr (not forces).
             "(or an inline JSON string)"
         ),
     )
-    orca_gradient.add_argument("--output", "-o", default="./orca_gradient_out", help="Output directory")
+    orca_gradient.add_argument(
+        "--output", "-o", default="./orca_gradient_out", help="Output directory"
+    )
     orca_gradient.add_argument("--nproc", type=int, help="Number of CPU cores")
     orca_gradient.add_argument(
         "--mem",
@@ -2011,7 +2048,11 @@ def _handle_orca_gradient(args: argparse.Namespace) -> int:
         return 1
     logger.info("OrcaGradient completed")
     logger.info("  Energy      : %s Eh", result.metadata.get("energy_hartree", "N/A"))
-    logger.info("  Gradient    : %s (%s)", result.metadata.get("gradient_source", "N/A"), result.metadata.get("gradient_unit", "N/A"))
+    logger.info(
+        "  Gradient    : %s (%s)",
+        result.metadata.get("gradient_source", "N/A"),
+        result.metadata.get("gradient_unit", "N/A"),
+    )
     logger.info("  Manifest    : %s", result.metadata.get("result_manifest_path", "N/A"))
     reporter.complete()
     if getattr(args, "register", False):
@@ -2471,9 +2512,23 @@ Spectrum file format (DevDoc §6.2):
         help="Solvent name (applied to both conformer generation and GIAO NMR)",
     )
     nmr.add_argument(
+        "--solvent-model",
+        type=str.lower,
+        help=(
+            "ORCA solvation model for the GIAO level: none | cpcm | smd "
+            "(none = gas phase; default: cpcm). Validated by "
+            "acp.nmr.method_config.resolve_nmr_method."
+        ),
+    )
+    nmr.add_argument(
         "--ewin",
         type=float,
         help="CREST energy window in kcal/mol (default: 6.0)",
+    )
+    nmr.add_argument(
+        "--max-conformers",
+        type=int,
+        help="Maximum conformers retained per candidate (default: 10)",
     )
     nmr.add_argument(
         "--boltzmann-temp",
@@ -3110,7 +3165,10 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
         return 1
     if result.status == "completed":
         logger.info("Single-point calculation completed")
-        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        logger.info(
+            "  Energy: %s Hartree",
+            result.metadata.get("energy") or result.metadata.get("sp_energy") or "N/A",
+        )
         reporter.complete()
         return 0
     logger.error("Single-point calculation failed: %s", result.error)
@@ -3200,21 +3258,33 @@ def _handle_scan(args: argparse.Namespace) -> int:
     from acp.calculations.primitives.scan import ScanCoordinateError
     from acp.calculations.progress import ProgressReporter
     from acp.storage.layout import TaskStorage
-    from acp.workflows.simple import _calc_subdir, _check_input, _resolve_output_dir, run_scan
+    from acp.workflows.simple import (
+        _calc_subdir,
+        _resolve_output_dir,
+        prepare_scan_input,
+        run_scan,
+    )
 
     setup_logging(args.log_level)
     reporter = ProgressReporter(Path(args.output), job_name="scan", stages=["scan"])
     try:
-        _check_input(args.input)
+        input_plan = prepare_scan_input(
+            args.input,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=args.name,
+        )
         cfg = _build_config(args)
         output_root = _resolve_output_dir(Path(args.output))
         calc_dir = _calc_subdir(output_root, args.name, args.input, "scan")
         storage = TaskStorage(calc_dir)
         storage.ensure_layout(stages=["07_PATH"], categories=["structures", "trajectories"])
+        input_path = input_plan.materialize(storage)
 
         method_kwargs = _build_simple_method_kwargs(args)
         method_kwargs.pop("method", None)
         resources: dict[str, Any] = dict(method_kwargs)
+        resources.setdefault("geom_maxiter", 200)
         resources.update(
             {
                 "backend": "orca",
@@ -3223,18 +3293,24 @@ def _handle_scan(args: argparse.Namespace) -> int:
                 "result_dir": str(storage.result_dir()),
                 "scan_coordinates": list(args.coordinate),
                 "scan_points": args.scan_points,
+                "use_scants": bool(args.scants),
             }
         )
-        if args.charge is not None:
-            resources["charge"] = args.charge
-        if args.multiplicity is not None:
-            resources["multiplicity"] = args.multiplicity
+        effective_charge = args.charge if args.charge is not None else input_plan.charge
+        effective_multiplicity = (
+            args.multiplicity if args.multiplicity is not None else input_plan.multiplicity
+        )
+        if effective_charge is not None:
+            resources["charge"] = effective_charge
+        if effective_multiplicity is not None:
+            resources["multiplicity"] = effective_multiplicity
 
         result = run_scan(
             CalculationRequest(
                 input_artifact=StructureArtifact(
-                    path=Path(args.input),
-                    source="cli",
+                    path=input_path,
+                    elements=list(input_plan.symbols),
+                    source="smiles" if input_plan.is_smiles else "cli",
                 ),
                 method=args.method,
                 resources=resources,
@@ -3653,6 +3729,7 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         logger.info("Configuration saved to: %s", args.save_config)
 
     from acp.calculations.progress import ProgressReporter
+    from acp.nmr.method_config import NmrMethodConfigError, resolve_nmr_method
     from acp.workflows.nmr import NMR_STAGES, run_nmr_analysis
 
     reporter = ProgressReporter(
@@ -3661,25 +3738,49 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         stages=list(NMR_STAGES),
     )
 
+    # G06: CLI flags → typed method payload → resolve_nmr_method so catalog
+    # functional/basis/solvent_model/nuclei all flow to the analysis call.
+    method: dict[str, Any] = {
+        "nmr_method": args.nmr_method,
+        "nmr_basis": args.nmr_basis,
+        "solvent": args.solvent,
+        "solvent_model": args.solvent_model,
+        "nuclei": nuclei,
+        "boltzmann_temp": args.boltzmann_temp,
+        "tms_shielding_h": args.tms_1h,
+        "tms_shielding_c": args.tms_13c,
+        "ewin": args.ewin,
+        "max_conformers": args.max_conformers,
+        "error_model": args.error_model,
+        "conformer_preset": args.preset,
+    }
+    try:
+        resolved = resolve_nmr_method(method, cfg)
+    except NmrMethodConfigError as exc:
+        logger.error("NMR method resolution failed: %s", exc)
+        return 1
+
     try:
         result = run_nmr_analysis(
             input_sources=args.input,
             spectrum=args.spectrum,
             output_dir=str(output_dir),
             config=cfg,
-            nuclei=nuclei,
-            nmr_method=args.nmr_method,
-            nmr_basis=args.nmr_basis,
-            solvent=args.solvent,
+            nuclei=list(resolved.nuclei),
+            nmr_method=resolved.nmr_method,
+            nmr_basis=resolved.nmr_basis,
+            solvent=resolved.solvent,
+            solvent_model=resolved.solvent_model,
             charge=args.charge,
             multiplicity=args.multiplicity,
             nproc=args.nproc,
-            boltzmann_temp=args.boltzmann_temp,
-            tms_1h=args.tms_1h,
-            tms_13c=args.tms_13c,
-            error_model=args.error_model,
-            conformer_preset=args.preset,
-            ewin=args.ewin,
+            boltzmann_temp=resolved.boltzmann_temp,
+            tms_1h=resolved.tms_1h,
+            tms_13c=resolved.tms_13c,
+            error_model=resolved.error_model,
+            conformer_preset=resolved.conformer_preset,
+            ewin=resolved.ewin,
+            max_conformers=resolved.max_conformers,
             enumerate_stereoisomers=bool(args.enumerate),
             stereocenters=args.stereocenters,
             bruker=args.bruker,
@@ -3700,12 +3801,14 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         logger.info("NMR + DP4/DP5 workflow completed successfully")
         winner = meta.get("winner")
         if winner:
+            dp4 = winner.get("dp4")
+            dp5 = winner.get("dp5")
             logger.info(
-                "  Winner: candidate %s (%s) — DP4=%.3f, DP5=%.3f",
+                "  Winner: candidate %s (%s) — DP4=%s, DP5=%s",
                 winner.get("index"),
                 winner.get("label"),
-                float(winner.get("dp4", 0.0)),
-                float(winner.get("dp5", 0.0)),
+                f"{float(dp4):.3f}" if dp4 is not None else "N/A",
+                f"{float(dp5):.3f}" if dp5 is not None else "N/A",
             )
         logger.info("  Candidates        : %s", meta.get("n_candidates", "N/A"))
         logger.info("  Report JSON       : %s", meta.get("report_json", "N/A"))

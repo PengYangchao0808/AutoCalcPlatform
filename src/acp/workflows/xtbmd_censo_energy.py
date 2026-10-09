@@ -42,20 +42,20 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from acp.backends.censo_backend import CensoBackend
-from acp.backends.registry import get_backend
 from acp.core.models import HARTREE_TO_KCAL, StructureEnsemble
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
 from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
 from acp.workflows.energy_shared import (
+    _task_qc_view,
     build_result_ensemble,
     censo_record_to_candidate,
+    censo_refine_via_task,
     conformer_tag,
     resolve_crest_ewin,
     resolve_levels,
-    resolve_solvent_config,
+    resolve_stage_solvent_models,
     run_rank1_handoff,
     select_cumulative_boltzmann,
     v2_stage_dir,
@@ -64,6 +64,18 @@ from acp.workflows.energy_shared import (
 )
 from acp.workflows.ensemble_thermo import ensemble_total_gibbs
 from acp.workflows.xtbmd_md import run_md_replicas
+from cccp.backends.isostat_backend import IsostatBackend
+from cccp.backends.xtb import XTBBackend
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import (
+    OptimizeOptions,
+    RescueSpec,
+    StructureInput,
+    TaskKind,
+    TaskRequest,
+)
+from cccp.calculation.tasks.clustering import run_clustering
+from cccp.calculation.tasks.optimize import run_optimize
 from cccp.config import load_config
 from cccp.utils.constants import ELEMENT_MASS
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz_multiframe
@@ -387,6 +399,60 @@ def _geometric_precheck(
     return warnings
 
 
+@dataclass(frozen=True)
+class _IsostatView:
+    """Legacy ``QCResult`` view over one ``run_clustering`` task result."""
+
+    success: bool
+    output_file: Path | None
+    error_message: str | None
+
+
+def _isostat_cluster_via_task(
+    cfg: dict[str, Any],
+    ensemble_xyz: Path,
+    output_dir: Path,
+    *,
+    edis: float,
+    gdis: float,
+    temperature: float,
+    nthreads: int = 1,
+) -> _IsostatView:
+    """Cluster one ensemble through the ``run_clustering`` task core (D1).
+
+    ``IsostatBackend`` rides the sanctioned ``TaskContext.backend`` seam with
+    the legacy constructor shape.  The view keeps the callers' QCResult branch
+    contract: a produced ``cluster.xyz`` — even frame-less (zero clusters) —
+    reads as success, so the callers' frame-count guards surface the real
+    error instead of the generic failure branch.
+    """
+    result = run_clustering(
+        TaskRequest(
+            task=TaskKind.CLUSTERING,
+            structure=StructureInput(path=Path(ensemble_xyz)),
+            output_dir=Path(output_dir),
+        ),
+        context=TaskContext(
+            config=cfg,
+            backend=IsostatBackend(cfg),
+            capability_extras={
+                "edis": edis,
+                "gdis": gdis,
+                "temperature": temperature,
+                "nthreads": nthreads,
+            },
+        ),
+    )
+    clustered = next((a for a in result.artifacts if a.type == "clustered"), None)
+    output_file = Path(clustered.path) if clustered is not None else None
+    message = "; ".join(result.errors) or None
+    if result.status == "completed":
+        return _IsostatView(True, output_file, None)
+    if output_file is not None and output_file.is_file() and result.payload is None:
+        return _IsostatView(True, output_file, message)
+    return _IsostatView(False, output_file, message)
+
+
 def _conv_check_diagnostic(
     frames: list[NDArray[np.float64]],
     symbols: list[str],
@@ -450,9 +516,10 @@ def _conv_check_diagnostic(
             half_xyz, np.vstack([frames[i] for i in indices]), symbols, energies=energies_half
         )
         output_dir = conv_dir / label
-        result = get_backend("isostat")(cfg).cluster(
+        result = _isostat_cluster_via_task(
+            cfg,
             half_xyz,
-            output_dir=output_dir,
+            output_dir,
             edis=edis,
             gdis=gdis,
             temperature=temperature_k,
@@ -611,7 +678,8 @@ def _batch_opt_frames(
         temperature_k: Temperature for the novelty Boltzmann weights.
         work_dir: Stage working directory (``frame_%04d/`` subdirectories,
             ``isomers.xyz``, sidecar, ``conv_check/``).
-        cfg: Merged config dict for ``get_backend(...)``.
+        cfg: Merged config dict for the ``XTBBackend``/``IsostatBackend``
+            constructors and the task-core contexts.
 
     Returns:
         :class:`BatchOptResult` with the output paths and all frame/diagnostic
@@ -700,28 +768,42 @@ def _batch_opt_frames(
         frame_dir = work / f"frame_{i:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
         try:
-            backend = get_backend("xtb")(
-                cfg,
-                gfn_level=gfn_level,
-                nproc=1,
-                solvent=solvent,
-                solvent_model=solvent_model,
-            )
-            result = backend.optimize(
-                frames[selected_frames_idx[i]],
-                symbols,
-                charge=charge,
-                multiplicity=multiplicity,
-                output_dir=frame_dir,
-                opt_level=opt_level,
-                timeout=opt_timeout if opt_timeout > 0 else None,
+            opt_result = run_optimize(
+                TaskRequest(
+                    task=TaskKind.OPTIMIZE,
+                    structure=StructureInput(
+                        coordinates=np.asarray(frames[selected_frames_idx[i]], dtype=float),
+                        symbols=list(symbols),
+                    ),
+                    charge=charge,
+                    multiplicity=multiplicity,
+                    backend="xtb",
+                    options=OptimizeOptions(rescue=RescueSpec(policy="off")),
+                    output_dir=frame_dir,
+                ),
+                context=TaskContext(
+                    config=cfg,
+                    workdir=frame_dir,
+                    backend=XTBBackend(
+                        cfg,
+                        gfn_level=gfn_level,
+                        nproc=1,
+                        solvent=solvent,
+                        solvent_model=solvent_model,
+                    ),
+                    capability_extras={
+                        "opt_level": opt_level,
+                        "timeout": opt_timeout if opt_timeout > 0 else None,
+                    },
+                ),
             )
         except Exception as exc:
-            # A raised backend (as opposed to a failed QCResult) must not kill
+            # A raised backend (as opposed to a failed result) must not kill
             # the whole batch — it is isolated as one failed frame and the
             # success-rate fail-fast below decides the stage outcome.
             logger.warning("frame %d raised: %s", selected_frames_idx[i], exc)
             return i, "failed", None, f"frame {i} raised: {exc}", None
+        result = _task_qc_view(opt_result)
         status, energy, reason = _classify_frame_result(i, result)
         coords = (
             np.asarray(result.coordinates, dtype=np.float64)
@@ -1362,15 +1444,7 @@ def run_xtbmd_censo_energy(
     )
 
     # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
-    # The resolved solvent is applied consistently to MD, batch opt, ISOSTAT
-    # and CENSO (doc §4 E6).
     effective_solvent_arg = solvent if solvent is not None else resolved["levels_solvent"]
-    censo_solvent, solvent_model = resolve_solvent_config(cfg, effective_solvent_arg)
-    if censo_solvent and resolved["levels_solvent_model"]:
-        solvent_model = resolved["levels_solvent_model"]
-    _solvent_model = solvent_model if solvent_model else "none"
-    if censo_solvent and _solvent_model == "none":
-        _solvent_model = "smd"
 
     safe_nproc: int | None = None
     if nproc is not None and nproc > 0:
@@ -1390,6 +1464,20 @@ def run_xtbmd_censo_energy(
     stages_completed: list[str] = ["embed"]
 
     try:
+        # T08b: stage-split solvent models — the solvent NAME stays one run-
+        # wide value, but xTB stages (MD, batch opt) only ever receive legal
+        # sampling models (dedicated key → default ALPB) while CENSO/ORCA
+        # keep the DFT model (historical ``none → smd`` fallback, legal
+        # there). Inside the guard so an unknown dedicated-key model fails
+        # like a backend rejection.
+        stage_solvent = resolve_stage_solvent_models(
+            cfg,
+            effective_solvent_arg,
+            dft_model_override=resolved["levels_solvent_model"],
+        )
+        censo_solvent = stage_solvent.solvent
+        _solvent_model = stage_solvent.dft_model
+        sampling = stage_solvent.sampling
         # ------------------------------------------------------------------ MD --
         xtbmd_dir = v2_stage_dir(mol_dir, "02_SEARCH", "xTB")
         embed_xyz = v2_stage_dir(mol_dir, "01_PREPARE") / "embed.xyz"
@@ -1415,8 +1503,8 @@ def run_xtbmd_censo_energy(
             # change must invalidate the cached trajectory too (embed.xyz is
             # rewritten before the fingerprint check).
             "embed_xyz_sha256": _file_sha256(embed_xyz),
-            "solvent": censo_solvent,
-            "solvent_model": _solvent_model,
+            "solvent": sampling.solvent,
+            "solvent_model": sampling.solvent_model,
             "charge": structure.charge,
             "multiplicity": structure.multiplicity,
             "input_source": input_source,
@@ -1445,8 +1533,8 @@ def run_xtbmd_censo_energy(
                 hmass=md_hmass,
                 shake=md_shake,
                 nvt=md_nvt,
-                solvent=censo_solvent,
-                solvent_model=_solvent_model,
+                solvent=sampling.solvent,
+                solvent_model=sampling.solvent_model,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
                 output_dir=xtbmd_dir,
@@ -1488,8 +1576,8 @@ def run_xtbmd_censo_energy(
             "opt_level": opt_level,
             "charge": structure.charge,
             "multiplicity": structure.multiplicity,
-            "solvent": censo_solvent,
-            "solvent_model": _solvent_model,
+            "solvent": sampling.solvent,
+            "solvent_model": sampling.solvent_model,
             "max_frames": max_frames,
             "opt_timeout": opt_timeout,
             "conv_check": conv_check,
@@ -1516,8 +1604,8 @@ def run_xtbmd_censo_energy(
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
                 nproc=batch_nproc,
-                solvent=censo_solvent,
-                solvent_model=_solvent_model,
+                solvent=sampling.solvent,
+                solvent_model=sampling.solvent_model,
                 max_frames=max_frames,
                 opt_timeout=opt_timeout,
                 keep_frames=keep_frames,
@@ -1571,9 +1659,10 @@ def run_xtbmd_censo_energy(
         )
         if isostat_summary is None:
             state.set_stage("isostat")
-            isostat_result = get_backend("isostat")(cfg).cluster(
+            isostat_result = _isostat_cluster_via_task(
+                cfg,
                 isomers_xyz,
-                output_dir=isostat_dir,
+                isostat_dir,
                 edis=edis,
                 gdis=gdis,
                 temperature=temperature_k,
@@ -1740,7 +1829,6 @@ def run_xtbmd_censo_energy(
         else:
             # All remaining paths invoke CENSO
             censo_dir = v2_stage_dir(mol_dir, "02_SEARCH", "CENSO")
-            backend = CensoBackend(cfg)
 
             part_overrides: dict[str, dict[str, Any]] = {}
             if resolved["screening_overrides"]:
@@ -1763,7 +1851,8 @@ def run_xtbmd_censo_energy(
                 censo_overrides = {k: v for k, v in part_overrides.items() if k == "screening"}
                 censo_templates = {k: v for k, v in part_templates.items() if k == "screening"}
                 state.set_stage("censo")
-                censo_result = backend.refine_ensemble(
+                censo_result = censo_refine_via_task(
+                    cfg,
                     ensemble_xyz,
                     censo_dir,
                     preset=preset,
@@ -1868,7 +1957,8 @@ def run_xtbmd_censo_energy(
                             threshold * 100,
                         )
                 state.set_stage("censo")
-                censo_result = backend.refine_ensemble(
+                censo_result = censo_refine_via_task(
+                    cfg,
                     ensemble_xyz,
                     censo_dir,
                     preset=preset,
@@ -1929,7 +2019,8 @@ def run_xtbmd_censo_energy(
                 # censo-default: full Part0–Part3 + same-level freq + Shermo
                 logger.info("censo-default: full CENSO Part0–Part3 funnel")
                 state.set_stage("censo")
-                censo_result = backend.refine_ensemble(
+                censo_result = censo_refine_via_task(
+                    cfg,
                     ensemble_xyz,
                     censo_dir,
                     preset=preset,

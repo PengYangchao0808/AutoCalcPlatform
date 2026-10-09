@@ -1,0 +1,395 @@
+{
+  "datasets": [
+    {
+      "dataset_id": "synthetic-harness-selftest-v1",
+      "distribution": {
+        "balanced_by_construction": true,
+        "note": "balanced by construction for the Brier/log-loss exercise; NOT a realistic prevalence - never quote these numbers as model performance"
+      },
+      "hash": "272c0f131326b6a42a4b42a3a3ef3220fd67870c1612a4487aebe5e2b76895d2",
+      "items": [
+        {
+          "candidates": [
+            {
+              "candidate_id": "ethanol-true",
+              "dp4_probability": 0.85,
+              "dp5_probability": 0.88,
+              "is_true_structure": true,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 18.06,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 57.93,
+                    "signal_id": "C2"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 1.21,
+                    "signal_id": "H1"
+                  },
+                  {
+                    "atom_label": "H2",
+                    "predicted_ppm": 3.62,
+                    "signal_id": "H2"
+                  }
+                ]
+              },
+              "status": "valid"
+            },
+            {
+              "candidate_id": "ethanol-decoy",
+              "dp4_probability": 0.1,
+              "dp5_probability": 0.07,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 30.0,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 20.0,
+                    "signal_id": "C2"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 2.5,
+                    "signal_id": "H1"
+                  },
+                  {
+                    "atom_label": "H2",
+                    "predicted_ppm": 1.0,
+                    "signal_id": "H2"
+                  }
+                ]
+              },
+              "status": "valid"
+            },
+            {
+              "candidate_id": "ethanol-nodp5",
+              "dp4_probability": 0.05,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 40.0,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 25.0,
+                    "signal_id": "C2"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 0.5,
+                    "signal_id": "H1"
+                  },
+                  {
+                    "atom_label": "H2",
+                    "predicted_ppm": 4.5,
+                    "signal_id": "H2"
+                  }
+                ]
+              },
+              "status": "valid"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 18.0,
+                "signal_id": "C1"
+              },
+              {
+                "atom_label": "C2",
+                "observed_ppm": 58.0,
+                "signal_id": "C2"
+              }
+            ],
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 1.2,
+                "signal_id": "H1"
+              },
+              {
+                "atom_label": "H2",
+                "observed_ppm": 3.6,
+                "signal_id": "H2"
+              }
+            ]
+          },
+          "item_id": "ethanol-item",
+          "molecule_id": "ethanol",
+          "spectra_fixture_id": "phase_deviation_proton",
+          "true_structure_candidate_id": "ethanol-true",
+          "true_structure_present": true
+        },
+        {
+          "candidates": [
+            {
+              "candidate_id": "propanol-true",
+              "dp4_probability": 0.78,
+              "dp5_probability": 0.81,
+              "is_true_structure": true,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 10.08,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 24.94,
+                    "signal_id": "C2"
+                  },
+                  {
+                    "atom_label": "C3",
+                    "predicted_ppm": 63.91,
+                    "signal_id": "C3"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 0.91,
+                    "signal_id": "H1"
+                  },
+                  {
+                    "atom_label": "H2",
+                    "predicted_ppm": 1.52,
+                    "signal_id": "H2"
+                  },
+                  {
+                    "atom_label": "H3",
+                    "predicted_ppm": 3.58,
+                    "signal_id": "H3"
+                  }
+                ]
+              },
+              "status": "valid"
+            },
+            {
+              "candidate_id": "propanol-decoy",
+              "dp4_probability": 0.22,
+              "dp5_probability": 0.19,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 30.0,
+                    "signal_id": "C1"
+                  },
+                  {
+                    "atom_label": "C2",
+                    "predicted_ppm": 40.0,
+                    "signal_id": "C2"
+                  },
+                  {
+                    "atom_label": "C3",
+                    "predicted_ppm": 20.0,
+                    "signal_id": "C3"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 3.0,
+                    "signal_id": "H1"
+                  },
+                  {
+                    "atom_label": "H2",
+                    "predicted_ppm": 2.0,
+                    "signal_id": "H2"
+                  },
+                  {
+                    "atom_label": "H3",
+                    "predicted_ppm": 1.0,
+                    "signal_id": "H3"
+                  }
+                ]
+              },
+              "status": "valid"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 10.0,
+                "signal_id": "C1"
+              },
+              {
+                "atom_label": "C2",
+                "observed_ppm": 25.0,
+                "signal_id": "C2"
+              },
+              {
+                "atom_label": "C3",
+                "observed_ppm": 64.0,
+                "signal_id": "C3"
+              }
+            ],
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 0.9,
+                "signal_id": "H1"
+              },
+              {
+                "atom_label": "H2",
+                "observed_ppm": 1.5,
+                "signal_id": "H2"
+              },
+              {
+                "atom_label": "H3",
+                "observed_ppm": 3.6,
+                "signal_id": "H3"
+              }
+            ]
+          },
+          "item_id": "propanol-item",
+          "molecule_id": "propanol",
+          "spectra_fixture_id": "solvent_large_carbon",
+          "true_structure_candidate_id": "propanol-true",
+          "true_structure_present": true
+        },
+        {
+          "candidates": [
+            {
+              "candidate_id": "tol-a",
+              "dp4_probability": 0.62,
+              "dp5_probability": 0.55,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 22.0,
+                    "signal_id": "C1"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 2.4,
+                    "signal_id": "H1"
+                  }
+                ]
+              },
+              "status": "valid"
+            },
+            {
+              "candidate_id": "tol-b",
+              "dp4_probability": 0.38,
+              "dp5_probability": 0.45,
+              "is_true_structure": false,
+              "signals": {
+                "13C": [
+                  {
+                    "atom_label": "C1",
+                    "predicted_ppm": 20.0,
+                    "signal_id": "C1"
+                  }
+                ],
+                "1H": [
+                  {
+                    "atom_label": "H1",
+                    "predicted_ppm": 2.3,
+                    "signal_id": "H1"
+                  }
+                ]
+              },
+              "status": "valid"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 21.4,
+                "signal_id": "C1"
+              }
+            ],
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 2.36,
+                "signal_id": "H1"
+              }
+            ]
+          },
+          "item_id": "toluene-absent-confident",
+          "molecule_id": "toluene",
+          "true_structure_candidate_id": null,
+          "true_structure_present": false
+        },
+        {
+          "candidates": [
+            {
+              "candidate_id": "tol-c",
+              "dp4_probability": null,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {},
+              "status": "invalid"
+            },
+            {
+              "candidate_id": "tol-d",
+              "dp4_probability": null,
+              "dp5_probability": null,
+              "is_true_structure": false,
+              "signals": {},
+              "status": "evidence_insufficient"
+            }
+          ],
+          "experimental": {
+            "13C": [
+              {
+                "atom_label": "C1",
+                "observed_ppm": 21.4,
+                "signal_id": "C1"
+              }
+            ],
+            "1H": [
+              {
+                "atom_label": "H1",
+                "observed_ppm": 2.36,
+                "signal_id": "H1"
+              }
+            ]
+          },
+          "item_id": "toluene-absent-refused",
+          "molecule_id": "toluene",
+          "true_structure_candidate_id": null,
+          "true_structure_present": false
+        }
+      ],
+      "layer": "synthetic",
+      "license": "CC0-1.0 (synthetic test data authored in this repository)",
+      "source": "authored in-repo for tests/benchmark/nmr; no QC, no real spectra",
+      "title": "Synthetic harness self-test (3 molecules, 4 items, 9 candidates)",
+      "version": "1.0.0"
+    }
+  ],
+  "schema": "acp-nmr-benchmark-dataset-manifest-v1"
+}

@@ -245,6 +245,7 @@ def test_relaxed_scan_writes_scants_input_and_parses_output(
         output_name="scan_case",
         solvent="acetone",
         solvent_model="ALPB",
+        geom_maxiter=200,
     )
 
     input_text = (tmp_path / "scan_case.inp").read_text(encoding="utf-8")
@@ -266,6 +267,53 @@ def test_relaxed_scan_writes_scants_input_and_parses_output(
     assert "ALPB(Acetone)" in input_text
     assert "%cpcm" not in input_text
     assert "B 0 1 = 1.50000000, 3.40000000, 3" in input_text
+    geom_section = input_text[input_text.index("%geom") :].split("\nend\n", 1)[0]
+    assert "MaxIter 200" in geom_section
+
+
+def test_relaxed_scan_failure_message_advises_geom_maxiter(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    monkeypatch.setattr(interface, "_run_orca", lambda *args, **kwargs: False)
+
+    result = interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_fail",
+        geom_maxiter=200,
+    )
+
+    assert result.success is False
+    assert "MaxIter=200" in result.message
+    assert "--geom-maxiter" in result.message
+
+
+def test_relaxed_scan_failure_message_reports_orca_default(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    monkeypatch.setattr(interface, "_run_orca", lambda *args, **kwargs: False)
+
+    result = interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_fail_default",
+    )
+
+    assert result.success is False
+    assert "MaxIter=ORCA default" in result.message
+    assert "--geom-maxiter" in result.message
 
 
 # ── T7: GFN solvent semantics on the scan path (ALPB-only under ORCA) ──────

@@ -15,9 +15,11 @@ Run with: PYTHONPATH=src python3 tests/test_remote_phase2.py
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import posixpath
+import shlex
 import stat
 import tempfile
 import threading
@@ -32,6 +34,7 @@ from acp.scheduler.remote.monitor import RemoteJobMonitor
 from acp.scheduler.remote.runner import (
     RemoteJobRunner,
     RemoteNodeUnavailableError,
+    RemoteSubmissionRejected,
 )
 from acp.scheduler.remote.script_gen import (
     LSFScriptSpec,
@@ -134,6 +137,48 @@ class FakeSFTP:
 
     def mkdir(self, path):
         self.dirs.add(path)
+
+    def rename(self, src, dst):
+        if dst in self.files or dst in self.dirs:
+            raise OSError(f"[Errno 17] File exists: {dst}")
+        if src in self.files:
+            self.files[dst] = self.files.pop(src)
+            if src in self.attrs:
+                self.attrs[dst] = self.attrs.pop(src)
+        elif src in self.dirs:
+            self.dirs.discard(src)
+            self.dirs.add(dst)
+            for key in list(self.files):
+                if key.startswith(src + "/"):
+                    self.files[dst + key[len(src) :]] = self.files.pop(key)
+            for key in list(self.attrs):
+                if key.startswith(src + "/"):
+                    self.attrs[dst + key[len(src) :]] = self.attrs.pop(key)
+        else:
+            raise FileNotFoundError(src)
+
+    def listdir_attr(self, path):
+        prefix = path.rstrip("/") + "/" if path != "/" else "/"
+        seen: dict[str, MagicMock] = {}
+        for fpath in set(self.files) | self.dirs:
+            if not fpath.startswith(prefix):
+                continue
+            rest = fpath[len(prefix) :]
+            if not rest:
+                continue
+            name = rest.split("/", 1)[0]
+            if name in seen:
+                continue
+            attr = MagicMock()
+            attr.filename = name
+            attr.st_size = len(self.files.get(fpath, b""))
+            attr.st_mtime = 0.0
+            is_dir = "/" in rest or fpath in self.dirs
+            attr.st_mode = stat.S_IFDIR if is_dir else stat.S_IFREG
+            seen[name] = attr
+        if not seen and path not in self.dirs:
+            raise FileNotFoundError(path)
+        return list(seen.values())
 
     def remove(self, path):
         self.files.pop(path, None)
@@ -391,7 +436,11 @@ def test_build_lsf_script_spec_integration():
     lsf_spec, cli_cmd = build_lsf_script_spec(
         spec, "job_001", node, queue="normal", walltime="48:00"
     )
-    assert lsf_spec.job_name == "acp_job_001"
+    from acp.scheduler.remote.submission import submission_id_for
+
+    # `-J` carries the attempt-digested submission id (plan todo 5), not
+    # the raw job id.
+    assert lsf_spec.job_name == f"acp_{submission_id_for('job_001', 1)}"
     assert lsf_spec.nproc == 4
     assert lsf_spec.mem_mb_per_core == 2048  # 8192 / 4
     assert lsf_spec.remote_job_dir == "/scratch/test/acp_jobs/job_001"
@@ -1176,7 +1225,7 @@ def test_poll_remote_terminal_without_exit_code_finalizes_failed():
     runner._monitor.tail_stderr.return_value = ("", 0)
     runner._monitor.find_remote_state_json.return_value = None
     # Bypass the 30s grace wait inside _wait_exit_code.
-    runner._wait_exit_code = lambda n, d, timeout=30: None
+    runner._wait_exit_code = lambda n, d, timeout=30, attempt=None: None
 
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "tojob"
@@ -1197,15 +1246,25 @@ def test_poll_remote_terminal_without_exit_code_finalizes_failed():
             "seen_stages": set(),
         }
 
-        is_terminal, exit_code = runner.poll_remote(record, event_log, cancel)
+        observation = runner.poll_remote(record, event_log, cancel)
 
-        assert is_terminal is True
-        assert exit_code != 0
+        assert observation.terminal is True
+        assert observation.exit_code is not None and observation.exit_code != 0
+        exit_code = observation.exit_code
         assert record.exit_code == exit_code
         assert record.error is not None and "without writing .exit_code" in record.error
+        assert observation.final_state is not None
+        events = [e["type"] for e in event_log.read_all()]
+        # Terminal events and poll-state teardown are deferred until the
+        # manager's terminal CAS succeeds.
+        assert "job.failed" not in events
+        assert "remote.no_exit_code" in events
+        assert "tojob" in runner._job_states
+
+        runner.apply_terminal_side_effects(record, event_log)
+
         events = [e["type"] for e in event_log.read_all()]
         assert "job.failed" in events
-        assert "remote.no_exit_code" in events
         # Poll state must be torn down so the manager stops polling.
         assert "tojob" not in runner._job_states
 
@@ -1223,7 +1282,7 @@ def test_poll_remote_done_without_exit_code_finalizes_completed():
     runner._monitor.tail_stdout.return_value = ("", 0)
     runner._monitor.tail_stderr.return_value = ("", 0)
     runner._monitor.find_remote_state_json.return_value = None
-    runner._wait_exit_code = lambda n, d, timeout=30: None
+    runner._wait_exit_code = lambda n, d, timeout=30, attempt=None: None
 
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "donejob"
@@ -1244,11 +1303,17 @@ def test_poll_remote_done_without_exit_code_finalizes_completed():
             "seen_stages": set(),
         }
 
-        is_terminal, exit_code = runner.poll_remote(record, event_log, cancel)
+        observation = runner.poll_remote(record, event_log, cancel)
 
-        assert is_terminal is True
-        assert exit_code == 0
+        assert observation.terminal is True
+        assert observation.exit_code == 0
         assert record.error is None
+        assert "donejob" in runner._job_states
+
+        runner.apply_terminal_side_effects(record, event_log)
+
+        events = [e["type"] for e in event_log.read_all()]
+        assert "job.completed" in events
         assert "donejob" not in runner._job_states
 
     print("  [OK] done-without-exit-code: finalised COMPLETED (exit=0)")
@@ -1304,9 +1369,14 @@ def test_observe_remote_state_mirrors_state_json_to_work_dir():
 
 # submit.lsf captured from the PRE-change runner (node.queue=None,
 # cluster queue="normal").  Locks the compatibility red line: a node
-# without a queue override must produce a byte-identical script.
+# without a queue override must produce a byte-identical script apart
+# from the `-J` line (LSF job name is now the attempt-digested
+# submission id, plan todo 5) and the PYTHONPATH line (D03, todo 8:
+# the queue scenario submits against a VERIFIED pinned release, so the
+# script points at the immutable snapshot releases/<id>/src instead of
+# the shared directory).
 _PRECHANGE_NORMAL_QUEUE_SCRIPT = """#!/bin/bash
-#BSUB -J acp_queuejob
+#BSUB -J acp_<submission_id>
 #BSUB -q normal
 #BSUB -n 4
 #BSUB -M 8601600
@@ -1317,15 +1387,51 @@ _acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }
 trap 'exit $?' USR2 TERM INT HUP
 trap _acp_record_exit EXIT
 
-export PYTHONPATH="/home/test/acp_code/src:$PYTHONPATH"
+export PYTHONPATH="/home/test/acp_code/releases/0d0e0fa11ce00001/src:$PYTHONPATH"
 cd "/scratch/test/acp_jobs/mol_ensemble"
 python3.13 -m acp.cli run ensemble --input input.xyz --output . --nproc 4
 echo $? > .exit_code
 """
 
+# Verified pinned release seeded into the fake node for the queue
+# scenarios (auto_sync=False requires an existing verified release).
+_QUEUE_PINNED_RELEASE_ID = "0d0e0fa11ce00001"
+_QUEUE_PINNED_FILES = {"src/acp/__init__.py": b'"""pinned"""\n'}
+
+
+def _seed_queue_pinned_release(sftp: FakeSFTP, node: RemoteNode, release_id: str) -> None:
+    """Publish ``releases/<id>`` with a ``.complete`` marker matching the files."""
+    root = posixpath.join(node.remote_code_dir, "releases", release_id)
+    manifest = {
+        rel: {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
+        for rel, data in _QUEUE_PINNED_FILES.items()
+    }
+    marker = json.dumps(
+        {
+            "schema_version": 1,
+            "release_id": release_id,
+            "files": manifest,
+            "requirements_sha256": "",
+            "defaults_sha256": "",
+            "git_commit": None,
+            "dirty": True,
+        },
+        sort_keys=True,
+        indent=2,
+    )
+    for rel, data in _QUEUE_PINNED_FILES.items():
+        sftp.files[posixpath.join(root, rel)] = data
+    sftp.files[posixpath.join(root, ".complete")] = marker.encode("utf-8")
+    sftp.dirs.add(root)
+
 
 def _submit_and_capture_script(node: RemoteNode, config: RemoteExecutionConfig) -> str:
     """Run the real submit path against the fakes, return uploaded submit.lsf text.
+
+    The node is pinned to a verified release (D03): ``auto_sync=False``
+    never falls back to the shared directory — it selects an existing
+    verified snapshot, so the captured script's PYTHONPATH points at
+    ``releases/<id>/src``.
 
     Args:
         node: The single configured remote node (may carry a queue override).
@@ -1337,10 +1443,18 @@ def _submit_and_capture_script(node: RemoteNode, config: RemoteExecutionConfig) 
     pool = SSHConnectionPool()
     sftp = FakeSFTP()
     client = FakeSSHClient(sftp)
+    node.pinned_release = _QUEUE_PINNED_RELEASE_ID
+    _seed_queue_pinned_release(sftp, node, _QUEUE_PINNED_RELEASE_ID)
 
     def cmd_handler(cmd):
         if "bsub" in cmd and "<" in cmd:
             return (0, "Job <54321> is submitted to queue <normal>.\n", "")
+        parts = shlex.split(cmd)
+        if parts and parts[0] == "sha256sum":
+            blob = sftp.files.get(parts[1])
+            if blob is None:
+                return (1, "", f"sha256sum: {parts[1]}: No such file or directory")
+            return (0, f"{hashlib.sha256(blob).hexdigest()}  {parts[1]}\n", "")
         return (0, "", "")
 
     client.cmd_handler = cmd_handler
@@ -1386,13 +1500,21 @@ def test_runner_node_queue_none_falls_back_to_config_queue():
     print("  [OK] runner: node.queue=None falls back to config.queue")
 
 
-def test_runner_node_queue_none_script_byte_identical_to_prechange():
-    """node.queue=None + default cluster queue → byte-identical to pre-change output."""
+def test_runner_node_queue_none_script_matches_expected_with_submission_name():
+    """node.queue=None + default cluster queue → expected script, byte-identical
+    except the approved ``-J acp_<submission_id>`` name change (plan todo 5)
+    and the PYTHONPATH line now pointing at the verified pinned release
+    ``releases/<id>/src`` (plan todo 8 — the queue scenario binds a release)."""
+    from acp.scheduler.remote.submission import submission_id_for
+
     node = make_node()
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
     script = _submit_and_capture_script(node, config)
-    assert script == _PRECHANGE_NORMAL_QUEUE_SCRIPT
-    print("  [OK] runner: queue=None script byte-identical to pre-change fixture")
+    expected = _PRECHANGE_NORMAL_QUEUE_SCRIPT.replace(
+        "acp_<submission_id>", f"acp_{submission_id_for('queuejob', 1)}"
+    )
+    assert script == expected
+    print("  [OK] runner: queue=None script matches expected fixture (submission-id -J)")
 
 
 # ====================================================================== #
@@ -1471,9 +1593,9 @@ def test_submit_remote_uploads_scheduler_markers_before_bsub():
         runner = RemoteJobRunner(pool, config, stager=FileStager(pool), poll_interval=0)
         original_submit_lsf = runner._submit_lsf
 
-        def snapshot_submit_lsf(n, script_path, remote_root):
+        def snapshot_submit_lsf(n, script_path, remote_root, **kwargs):
             snapshots["at_bsub"] = set(sftp.files)
-            return original_submit_lsf(n, script_path, remote_root)
+            return original_submit_lsf(n, script_path, remote_root, **kwargs)
 
         runner._submit_lsf = snapshot_submit_lsf  # type: ignore[assignment]
         with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
@@ -1538,9 +1660,10 @@ def test_uploaded_markers_make_confsearch_output_root_flat():
     print("  [OK] markers: uploaded bytes make resolve_task_output_root flat (Confsearch sites)")
 
 
-def test_submit_remote_marker_upload_failure_cleans_remote_dir():
-    """A marker upload failure fails the submission visibly and the except
-    branch cleans up the remote job dir — never a silent nested-layout task."""
+def test_submit_remote_marker_upload_failure_keeps_remote_dir():
+    """A marker upload failure is a RemoteSubmissionRejected: the submission
+    raises and bsub never runs — and the directory is NEVER deleted
+    (contract A, plan todo 5; retention reclaims it)."""
     node = make_node()
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
     pool = SSHConnectionPool()
@@ -1565,6 +1688,14 @@ def test_submit_remote_marker_upload_failure_cleans_remote_dir():
         return original_upload(n, local_path, remote_path)
 
     stager.upload_file = failing_upload  # type: ignore[assignment]
+    removed: list[str] = []
+    original_remove = stager.remove_remote_dir
+
+    def spy_remove(n, remote_path):
+        removed.append(str(remote_path))
+        return original_remove(n, remote_path)
+
+    stager.remove_remote_dir = spy_remove  # type: ignore[assignment]
 
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "markfail"
@@ -1578,7 +1709,7 @@ def test_submit_remote_marker_upload_failure_cleans_remote_dir():
         with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
             try:
                 runner.submit_remote(record, event_log)
-            except OSError:
+            except RemoteSubmissionRejected:
                 raised = True
 
         assert raised, "marker upload failure must propagate out of submit_remote"
@@ -1589,13 +1720,15 @@ def test_submit_remote_marker_upload_failure_cleans_remote_dir():
         assert "remote.markers_uploaded" not in event_types
         assert "remote.submitted" not in event_types
         cleanup_events = [e for e in events if e["type"] == "remote.cleanup"]
-        assert cleanup_events, "_cleanup_remote_dir must be invoked on marker upload failure"
-        assert cleanup_events[0]["remote_dir"] == posixpath.join(
-            node.remote_work_dir, spec.task_dir_name()
+        assert not cleanup_events, "rejection must never trigger directory cleanup"
+        assert removed == [], "remove_remote_dir must never run on a rejection"
+        remote_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
+        assert posixpath.join(remote_dir, "job.json") in sftp.files, (
+            "the (partially built) directory must be kept for retention"
         )
 
     pool.close()
-    print("  [OK] marker upload failure: submission raises, remote dir cleaned, bsub skipped")
+    print("  [OK] marker upload failure: rejection raises, remote dir kept, bsub skipped")
 
 
 # ====================================================================== #
@@ -1677,11 +1810,11 @@ def main():
         # per-node queue override (T7)
         test_runner_node_queue_override_emits_bsub_queue,
         test_runner_node_queue_none_falls_back_to_config_queue,
-        test_runner_node_queue_none_script_byte_identical_to_prechange,
+        test_runner_node_queue_none_script_matches_expected_with_submission_name,
         # scheduler-context markers before bsub (remote pending-fetch fix)
         test_submit_remote_uploads_scheduler_markers_before_bsub,
         test_uploaded_markers_make_confsearch_output_root_flat,
-        test_submit_remote_marker_upload_failure_cleans_remote_dir,
+        test_submit_remote_marker_upload_failure_keeps_remote_dir,
         # config
         test_remote_config_queue_walltime,
     ]

@@ -172,13 +172,6 @@ class _BackendHarness:
         (target / "cluster.xyz").write_text("\n".join(block), encoding="utf-8")
         return QCResult(success=True, converged=True, output_file=target / "cluster.xyz")
 
-    def factory(self, name: str) -> Any:
-        if name == "xtb":
-            return self._xtb_factory
-        if name == "isostat":
-            return self._isostat_factory
-        raise KeyError(name)
-
 
 def _run(
     traj: Path,
@@ -186,7 +179,13 @@ def _run(
     harness: _BackendHarness,
     **kwargs: object,
 ) -> BatchOptResult:
-    with patch("acp.workflows.xtbmd_censo_energy.get_backend", side_effect=harness.factory):
+    with (
+        patch("acp.workflows.xtbmd_censo_energy.XTBBackend", side_effect=harness._xtb_factory),
+        patch(
+            "acp.workflows.xtbmd_censo_energy.IsostatBackend",
+            side_effect=harness._isostat_factory,
+        ),
+    ):
         return _batch_opt_frames(traj, work_dir=tmp_path / "work", cfg={}, **kwargs)
 
 
@@ -355,7 +354,7 @@ def test_opt_timeout_zero_passes_none(tmp_path: Path) -> None:
     harness = _BackendHarness()
     _run(traj, tmp_path, harness, opt_timeout=0)
 
-    assert harness.xtb_calls[0]["timeout"] is None
+    assert harness.xtb_calls[0].get("timeout") is None
 
 
 def test_failed_frames_skipped_and_counted(tmp_path: Path) -> None:
@@ -850,21 +849,17 @@ class _WorkflowHarness:
 
     # -- CENSO ------------------------------------------------------------
 
-    def fake_censo_factory(self, config: dict[str, object], **kwargs: object) -> MagicMock:
-        backend = MagicMock()
-        backend.refine_ensemble.side_effect = self._refine_ensemble
-        return backend
-
-    def _refine_ensemble(
+    def fake_censo_refine(
         self,
+        cfg: dict[str, Any],
         ensemble_xyz: Path,
-        output_dir: Path,
+        run_dir: Path,
         **kwargs: Any,
     ) -> CensoRunResult:
         self.calls["censo"] += 1
         self.censo_kwargs = {
             "ensemble_xyz": ensemble_xyz,
-            "output_dir": output_dir,
+            "output_dir": run_dir,
             **kwargs,
         }
         _, _, frames = _read_trajectory(ensemble_xyz)
@@ -886,7 +881,7 @@ class _WorkflowHarness:
             preset=str(kwargs.get("preset", "censo-light")),
             records=records,
             final_part="screening",
-            work_dir=Path(output_dir),
+            work_dir=Path(run_dir),
             temperature=kwargs.get("temperature", 298.15),
         )
         result.sort_by_gtot()
@@ -928,11 +923,6 @@ class _WorkflowHarness:
             "source": source,
         }
 
-    def factory(self, name: str) -> Any:
-        if name == "isostat":
-            return self.fake_isostat_factory
-        raise KeyError(name)
-
 
 def _run_workflow(
     harness: _WorkflowHarness,
@@ -950,12 +940,12 @@ def _run_workflow(
             side_effect=harness.fake_batch_opt,
         ),
         patch(
-            "acp.workflows.xtbmd_censo_energy.get_backend",
-            side_effect=harness.factory,
+            "acp.workflows.xtbmd_censo_energy.IsostatBackend",
+            side_effect=harness.fake_isostat_factory,
         ),
         patch(
-            "acp.workflows.xtbmd_censo_energy.CensoBackend",
-            side_effect=harness.fake_censo_factory,
+            "acp.workflows.xtbmd_censo_energy.censo_refine_via_task",
+            side_effect=harness.fake_censo_refine,
         ),
         patch(
             "acp.workflows.xtbmd_censo_energy.run_rank1_handoff",
@@ -1065,14 +1055,46 @@ def test_workflow_parameter_passthrough(tmp_path: Path, _wf_sample_config: dict[
 
 
 def test_workflow_solvent_consistency(tmp_path: Path, _wf_sample_config: dict[str, Any]) -> None:
+    """T08b stage split: xTB stages (MD/batch opt) get ONLY legal models.
+
+    The historical ``none → smd`` fallback is DFT-only — SMD is illegal for
+    xTB and would raise ``SolventValueError`` at arg-build time, so the
+    sampling segment defaults to ALPB while CENSO keeps SMD.
+    """
     harness = _WorkflowHarness()
     _run_workflow(harness, tmp_path, _wf_sample_config, solvent="water")
 
     assert harness.md_kwargs["solvent"] == "water"
-    assert harness.md_kwargs["solvent_model"] == "smd"
+    assert harness.md_kwargs["solvent_model"] == "alpb"
     assert harness.batch_kwargs["solvent"] == "water"
-    assert harness.batch_kwargs["solvent_model"] == "smd"
+    assert harness.batch_kwargs["solvent_model"] == "alpb"
     assert harness.censo_kwargs["solvent"] == "water"
+    assert harness.censo_kwargs["solvent_model"] == "smd"
+
+
+def test_workflow_sampling_solvent_model_explicit_gbsa(
+    tmp_path: Path, _wf_sample_config: dict[str, Any]
+) -> None:
+    """An explicit dedicated key wins for the xTB stages (never defaulted)."""
+    config = {**_wf_sample_config, "nmr": {"sampling_solvent_model": "gbsa"}}
+    harness = _WorkflowHarness()
+    _run_workflow(harness, tmp_path, config, solvent="water")
+
+    assert harness.md_kwargs["solvent_model"] == "gbsa"
+    assert harness.batch_kwargs["solvent_model"] == "gbsa"
+    assert harness.censo_kwargs["solvent_model"] == "smd"
+
+
+def test_workflow_sampling_solvent_model_explicit_none_is_gas(
+    tmp_path: Path, _wf_sample_config: dict[str, Any]
+) -> None:
+    """Explicit ``none`` keeps the xTB stages gas phase even with a solvent."""
+    config = {**_wf_sample_config, "nmr": {"sampling_solvent_model": "none"}}
+    harness = _WorkflowHarness()
+    _run_workflow(harness, tmp_path, config, solvent="water")
+
+    assert harness.md_kwargs["solvent_model"] == "none"
+    assert harness.batch_kwargs["solvent_model"] == "none"
     assert harness.censo_kwargs["solvent_model"] == "smd"
 
 

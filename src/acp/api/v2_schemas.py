@@ -78,6 +78,8 @@ class V2TaskSummary(BaseModel):
     default_name: str = ""
     name_revision: int = 0
     name_updated_at: str | None = None
+    attempt: int = 1
+    revision: int = 0
 
 
 class V2TaskDetail(V2TaskSummary):
@@ -183,6 +185,8 @@ class V2TaskRowModel(BaseModel):
     default_name: str = ""
     name_revision: int = 0
     name_updated_at: str | None = None
+    attempt: int = 1
+    revision: int = 0
     # Active-row enrichment fields (populated only for active-status rows)
     stage_index: int | None = None
     stage_total: int | None = None

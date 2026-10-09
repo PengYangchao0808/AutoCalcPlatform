@@ -1488,3 +1488,128 @@ def test_persist_pes_outputs_writes_strict_json_for_nan_frames(tmp_path: Path) -
     assert frame["actual_coordinates"] == {"distance": None}
     assert frame["residuals"] == {"distance": None}
     assert payload["quality"]["max_constraint_residual"] is None
+
+
+def test_sp_request_three_path_consistency(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """同一 SP 请求经 普通/批量/PES 三路径：校验、有效参数、错误分类、结果归一化一致。"""
+    from cccp.calculation._common import classify_failure
+    from cccp.calculation.context import TaskContext
+    from cccp.calculation.requests import MethodSpec, StructureInput, TaskKind, TaskRequest
+    from cccp.calculation.tasks.singlepoint import run_singlepoint as run_sp_task
+
+    method, basis = "wB97X-D4", "def2-SVP"
+    xyz = tmp_path / "sp_geom.xyz"
+    xyz.write_text("2\nsp\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74\n", encoding="utf-8")
+
+    def _normal(path: Path = xyz):
+        request = TaskRequest(
+            task=TaskKind.SINGLEPOINT,
+            structure=StructureInput(path=path),
+            charge=0,
+            multiplicity=1,
+            level=MethodSpec(method=method, basis=basis),
+            output_dir=tmp_path / "normal",
+        )
+        return run_sp_task(request, context=TaskContext(config={}, backend=fake_backend))
+
+    def _batch(path: Path = xyz):
+        return BatchSinglePointExecutor(
+            frames=[path],
+            method=method,
+            basis=basis,
+            charge=0,
+            multiplicity=1,
+            frame_ids=["frame_000"],
+            output_dir=tmp_path / "batch",
+            backend_factory=lambda name: fake_backend,
+            cache=False,
+        ).run()["frame_000"]
+
+    def _pes(path: Path = xyz):
+        scan_dir = tmp_path / "pes"
+        scan_dir.mkdir(parents=True, exist_ok=True)
+        frame_file = scan_dir / "frame_000.xyz"
+        frame_file.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        frames = [
+            ScanFrame(
+                index=0,
+                target_coordinate=1.0,
+                actual_coordinate=1.0,
+                geometry_path="frame_000.xyz",
+            )
+        ]
+        _run_single_points(
+            frames,
+            charge=0,
+            multiplicity=1,
+            sp_spec=SinglePointSpec(
+                enabled=True,
+                software="orca",
+                method=method,
+                basis=basis,
+                resume=False,
+            ),
+            scan_dir=scan_dir,
+            cfg={},
+        )
+        return frames[0]
+
+    def _effective(call: Any) -> dict[str, Any]:
+        # output_name is per-frame isolation naming; None/""/"none" are
+        # OFF-tokens proven render-identical to absent (see alignment doc §4).
+        return {
+            key: value
+            for key, value in call.kwargs.items()
+            if key not in ("output_dir", "output_name") and value not in (None, "", "none")
+        }
+
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-2.5))
+    normal = _normal()
+    normal_call = fake_backend.calls[-1]
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-2.5))
+    batch = _batch()
+    batch_call = fake_backend.calls[-1]
+    fake_backend.set_result("single_point", QCResult(success=True, energy=-2.5))
+    frame = _pes()
+    pes_call = fake_backend.calls[-1]
+
+    assert _effective(normal_call) == _effective(batch_call) == _effective(pes_call)
+    assert _effective(normal_call)["method"] == method
+    assert _effective(normal_call)["basis"] == basis
+    assert normal.status == "completed"
+    assert normal.energy_hartree == -2.5
+    assert batch.status == "completed"
+    assert batch.energy_hartree == -2.5
+    assert frame.single_point_status == "completed"
+    assert frame.single_point_energy_hartree == -2.5
+
+    fake_backend.set_results("single_point", [RuntimeError("scf boom")])
+    normal_err = _normal()
+    assert normal_err.status == "failed"
+    assert normal_err.energy_hartree is None
+    assert "scf boom" in normal_err.errors[0]
+    assert normal_err.error_kind == classify_failure(raised=RuntimeError("scf boom"))
+
+    fake_backend.set_results("single_point", [RuntimeError("scf boom")])
+    batch_err = _batch()
+    assert batch_err.status == "failed"
+    assert batch_err.energy_hartree is None
+    assert "scf boom" in (batch_err.error_message or "")
+
+    fake_backend.set_results("single_point", [RuntimeError("scf boom")])
+    pes_err = _pes()
+    assert pes_err.single_point_status == "failed"
+    assert pes_err.single_point_energy_hartree is None
+
+    bad = tmp_path / "bad.xyz"
+    bad.write_text("not an xyz\n", encoding="utf-8")
+    with pytest.raises((OSError, TypeError, ValueError)):
+        _ = _normal(bad)
+    bad_batch = _batch(bad)
+    assert bad_batch.status == "failed"
+    assert bad_batch.error_message
+    bad_pes = _pes(bad)
+    assert bad_pes.single_point_status == "failed"

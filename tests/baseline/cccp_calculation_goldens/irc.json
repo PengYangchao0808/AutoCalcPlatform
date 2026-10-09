@@ -1,0 +1,58 @@
+{
+  "both_requested_reverse_maxiter": {
+    "artifacts": [
+      {
+        "name": "irc_forward.xyz",
+        "type": "structure"
+      }
+    ],
+    "errors": [],
+    "metadata": {
+      "direction_status": {
+        "forward": "completed",
+        "reverse": "max_iterations"
+      },
+      "directions": [
+        "forward",
+        "reverse"
+      ],
+      "endpoint_count": 1,
+      "endpoints": {
+        "forward": "<TMP>/irc_work/end_f.xyz"
+      },
+      "forward_endpoint": "<TMP>/irc_work/end_f.xyz"
+    },
+    "status": "completed"
+  },
+  "completed_direction_semantics": {
+    "backend_failure": [
+      "forward"
+    ],
+    "one_direction_maxiter": [
+      "forward"
+    ]
+  },
+  "description": "IRC direction resolution + one-way failure semantics",
+  "direction_resolution": {
+    "both": "both",
+    "empty_falls_back": "both",
+    "forward_only": "forward",
+    "reverse_only": "reverse"
+  },
+  "forward_only_failure": {
+    "artifacts": [],
+    "errors": [
+      "IRC forward direction failed to converge"
+    ],
+    "metadata": {
+      "direction_status": {
+        "forward": "failed"
+      },
+      "directions": [
+        "forward"
+      ],
+      "endpoint_count": 0
+    },
+    "status": "failed"
+  }
+}

@@ -1,0 +1,1477 @@
+# pyright: reportAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false
+"""CAS state transitions, narrow progress updates, and jobs revision/attempt columns."""
+
+from __future__ import annotations
+
+import ast
+import json
+import sqlite3
+import threading
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+import acp.scheduler.manager as manager_module
+from acp.scheduler import migrations as migrations_module
+from acp.scheduler.artifacts import ArtifactRegistry
+from acp.scheduler.job_edit import attempt_number, compute_source_revision
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+from acp.scheduler.manager import JobManager
+from acp.scheduler.migrations import migrate
+from acp.scheduler.remote.runner import RemoteJobRunner
+from acp.scheduler.store import JobStateConflictError, JobStore
+
+
+def _spec(name: str = "t") -> JobSpec:
+    return JobSpec(workflow="fake", name=name, input={"source": "CCO"})
+
+
+def _record(job_id: str, **overrides: object) -> JobRecord:
+    kwargs: dict[str, object] = {
+        "spec": _spec(),
+        "status": JobStatus.QUEUED,
+        "work_dir": f"/tmp/{job_id}",
+    }
+    kwargs.update(overrides)
+    return JobRecord(id=job_id, **kwargs)  # pyright: ignore[reportArgumentType]
+
+
+def _raw_row(db: Path, job_id: str) -> dict[str, object]:
+    conn = sqlite3.connect(str(db))
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        assert row is not None, f"row {job_id} missing"
+        return {key: row[key] for key in row.keys()}
+    finally:
+        conn.close()
+
+
+def _insert_legacy_row(
+    db: Path, job_id: str, *, result_json: str | None, spec: dict[str, object] | None = None
+) -> None:
+    conn = sqlite3.connect(str(db))
+    try:
+        conn.execute(
+            "INSERT INTO jobs (id, workflow, name, status, work_dir, spec_json, "
+            "created_at, updated_at, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                job_id,
+                "fake",
+                "legacy",
+                "completed",
+                f"/tmp/{job_id}",
+                json.dumps(spec if spec is not None else {"workflow": "fake", "name": "legacy"}),
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+                result_json,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_transition_bumps_revision_monotonically(tmp_path: Path) -> None:
+    db = tmp_path / "cas.db"
+    store = JobStore(db)
+    store.create(_record("cas-1"))
+    assert store.get("cas-1") is not None
+    assert store.get("cas-1").revision == 0  # pyright: ignore[reportAttributeAccessIssue]
+
+    first = store.transition(
+        "cas-1", expected_status=JobStatus.QUEUED, expected_revision=0, status=JobStatus.RUNNING
+    )
+    assert first.revision == 1
+    assert first.status == JobStatus.RUNNING
+
+    second = store.transition(
+        "cas-1",
+        expected_status=JobStatus.RUNNING,
+        expected_revision=1,
+        status=JobStatus.PAUSED,
+        progress=0.5,
+    )
+    assert second.revision == 2
+    got = store.get("cas-1")
+    assert got is not None
+    assert got.revision == 2
+    assert got.status == JobStatus.PAUSED
+    assert got.progress == 0.5
+
+
+def test_stale_transition_conflict_leaves_row_unchanged(tmp_path: Path) -> None:
+    db = tmp_path / "stale.db"
+    store = JobStore(db)
+    store.create(_record("stale-1"))
+    store.transition(
+        "stale-1", expected_status=JobStatus.QUEUED, expected_revision=0, status=JobStatus.RUNNING
+    )
+    before = _raw_row(db, "stale-1")
+
+    with pytest.raises(JobStateConflictError) as excinfo:
+        store.transition(
+            "stale-1",
+            expected_status=JobStatus.RUNNING,
+            expected_revision=0,
+            status=JobStatus.CANCELLED,
+        )
+    err = excinfo.value
+    assert err.job_id == "stale-1"
+    assert err.expected["revision"] == 0
+    assert err.actual is not None
+    assert err.actual["revision"] == 1
+    assert err.actual["status"] == "running"
+
+    after = _raw_row(db, "stale-1")
+    assert after == before, "conflicting transition must not modify the row"
+    assert after["revision"] == 1, "revision must not bump on conflict"
+
+
+def test_transition_rejects_spec_and_unknown_fields(tmp_path: Path) -> None:
+    db = tmp_path / "spec.db"
+    store = JobStore(db)
+    store.create(_record("s1"))
+    before_spec = _raw_row(db, "s1")["spec_json"]
+
+    with pytest.raises(ValueError):
+        store.transition("s1", expected_status=None, expected_revision=0, spec=_spec(name="hacked"))
+    with pytest.raises(ValueError):
+        store.transition("s1", expected_status=None, expected_revision=0, spec_json="{}")
+    with pytest.raises(ValueError):
+        store.transition("s1", expected_status=None, expected_revision=0, attempt=99)
+
+    after = _raw_row(db, "s1")
+    assert after["spec_json"] == before_spec, "transition must never write spec"
+    assert after["revision"] == 0
+    assert after["attempt"] == 1
+
+
+def test_update_progress_narrow_preserves_state(tmp_path: Path) -> None:
+    db = tmp_path / "prog.db"
+    store = JobStore(db)
+    store.create(
+        _record(
+            "p1",
+            status=JobStatus.RUNNING,
+            progress=0.1,
+            result={"state": {"stage": 1}},
+        )
+    )
+    before = _raw_row(db, "p1")
+
+    out = store.update_progress("p1", expected_revision=0, progress=0.42, current_stage="opt")
+    after = _raw_row(db, "p1")
+    assert after["status"] == before["status"], "progress update must not touch status"
+    assert after["spec_json"] == before["spec_json"], "progress update must not touch spec"
+    assert after["result_json"] == before["result_json"], "result must stay byte-identical"
+    assert out.progress == 0.42
+    assert out.current_stage == "opt"
+    assert out.status == JobStatus.RUNNING
+    assert out.revision == 1
+
+    out2 = store.update_progress("p1", expected_revision=1, result={"state": {"stage": 2}})
+    after2 = _raw_row(db, "p1")
+    assert after2["result_json"] != before["result_json"], "explicit result must be written"
+    assert after2["status"] == before["status"]
+    assert after2["spec_json"] == before["spec_json"]
+    assert out2.revision == 2
+
+    with pytest.raises(JobStateConflictError):
+        store.update_progress("p1", expected_revision=1, progress=0.99)
+    assert _raw_row(db, "p1")["revision"] == 2, "conflict must not bump revision"
+
+
+def test_concurrent_transition_single_winner(tmp_path: Path) -> None:
+    db = tmp_path / "race.db"
+    store_a = JobStore(db)
+    store_b = JobStore(db)
+    store_a.create(_record("race-1"))
+    barrier = threading.Barrier(2, timeout=10)
+    outcome: dict[str, object] = {}
+
+    def run(store: JobStore, key: str, status: JobStatus) -> None:
+        barrier.wait()
+        try:
+            outcome[key] = store.transition(
+                "race-1", expected_status=JobStatus.QUEUED, expected_revision=0, status=status
+            )
+        except JobStateConflictError as exc:
+            outcome[key] = exc
+
+    t1 = threading.Thread(target=run, args=(store_a, "a", JobStatus.RUNNING))
+    t2 = threading.Thread(target=run, args=(store_b, "b", JobStatus.PAUSED))
+    t1.start()
+    t2.start()
+    t1.join(timeout=30)
+    t2.join(timeout=30)
+    assert not t1.is_alive() and not t2.is_alive()
+    assert len(outcome) == 2
+
+    winners = [value for value in outcome.values() if isinstance(value, JobRecord)]
+    conflicts = [value for value in outcome.values() if isinstance(value, JobStateConflictError)]
+    assert len(winners) == 1, "exactly one transition must win the CAS"
+    assert len(conflicts) == 1, "the loser must raise JobStateConflictError"
+
+    final = store_a.get("race-1")
+    assert final is not None
+    assert final.revision == 1
+    assert final.status == winners[0].status, "DB must equal the winner's write"
+    assert _raw_row(db, "race-1")["status"] == final.status.value
+
+
+def test_requeue_with_spec_attempt_and_source_revision(tmp_path: Path) -> None:
+    db = tmp_path / "rq.db"
+    store = JobStore(db)
+    store.create(
+        _record(
+            "rq-1",
+            status=JobStatus.FAILED,
+            error="boom",
+            pid=42,
+            started_at="2026-01-01T00:00:00+00:00",
+            completed_at="2026-01-01T00:01:00+00:00",
+            current_stage="sp",
+            progress=0.9,
+            exit_code=2,
+            remote_job_id="123",
+            result={"attempts": 1, "remote": {"node": "n1"}},
+        )
+    )
+    before_revision = compute_source_revision(store.get("rq-1"))  # pyright: ignore[reportArgumentType]
+    new_spec = _spec(name="t2")
+
+    out = store.requeue_with_spec(
+        "rq-1",
+        new_spec=new_spec,
+        expected_revision=0,
+        expected_attempt=1,
+        expected_status=JobStatus.FAILED,
+    )
+    assert out.status == JobStatus.QUEUED
+    assert out.attempt == 2, "attempt must increment 1-based"
+    assert out.revision == 1
+    assert out.spec.name == "t2"
+    assert (
+        out.started_at,
+        out.completed_at,
+        out.current_stage,
+        out.progress,
+        out.error,
+        out.pid,
+        out.exit_code,
+        out.remote_job_id,
+    ) == (None, None, None, None, None, None, None, None), "runtime fields must clear"
+    assert out.result == {"attempts": 1, "remote": {"node": "n1"}}, "result_json stays unless passed"
+    assert json.loads(str(_raw_row(db, "rq-1")["spec_json"])) == new_spec.to_dict()
+
+    reread = store.get("rq-1")
+    assert reread is not None
+    assert attempt_number(reread) == 2
+    assert attempt_number(reread) == attempt_number(out)
+    assert compute_source_revision(reread) == compute_source_revision(out)
+    assert compute_source_revision(reread) != before_revision
+
+    with pytest.raises(JobStateConflictError):
+        store.requeue_with_spec(
+            "rq-1",
+            new_spec=new_spec,
+            expected_revision=1,
+            expected_attempt=1,
+            expected_status=JobStatus.QUEUED,
+        )
+    with pytest.raises(ValueError):
+        store.requeue_with_spec(
+            "rq-1",
+            new_spec=new_spec,
+            expected_revision=1,
+            expected_attempt=2,
+            expected_status=JobStatus.QUEUED,
+            status=JobStatus.RUNNING,
+        )
+    with pytest.raises(TypeError):
+        store.requeue_with_spec(
+            "rq-1",
+            new_spec={"workflow": "fake"},  # pyright: ignore[reportArgumentType]
+            expected_revision=1,
+            expected_attempt=2,
+            expected_status=JobStatus.QUEUED,
+        )
+    final = store.get("rq-1")
+    assert final is not None
+    assert final.attempt == 2
+    assert final.status == JobStatus.QUEUED
+
+
+def test_fresh_db_has_revision_attempt_columns(tmp_path: Path) -> None:
+    db = tmp_path / "fresh.db"
+    JobStore(db)
+    conn = sqlite3.connect(str(db))
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    finally:
+        conn.close()
+    assert "revision" in columns, "fresh jobs table must carry revision"
+    assert "attempt" in columns, "fresh jobs table must carry attempt"
+
+
+def test_legacy_insert_without_new_columns_reads_default(tmp_path: Path) -> None:
+    db = tmp_path / "legacy_default.db"
+    store = JobStore(db)
+    _insert_legacy_row(db, "legacy-1", result_json=None)
+    rec = store.get("legacy-1")
+    assert rec is not None
+    assert rec.attempt == 1, "legacy INSERT without attempt must read 1"
+    assert rec.revision == 0
+    assert attempt_number(rec) == 1
+
+
+def test_migration_backfills_legacy_attempts(tmp_path: Path) -> None:
+    db = tmp_path / "backfill.db"
+    pre020 = [m for m in migrations_module._MIGRATIONS if m["id"] != "020"]
+    with patch.object(migrations_module, "_MIGRATIONS", pre020):
+        JobStore(db)
+
+    _insert_legacy_row(db, "legacy-3", result_json=json.dumps({"attempts": 3}))
+    _insert_legacy_row(db, "legacy-bad", result_json="{not json")
+    _insert_legacy_row(db, "legacy-none", result_json=json.dumps({}))
+
+    migrate(db)
+    store = JobStore(db)
+    assert store.get("legacy-3") is not None
+    assert store.get("legacy-3").attempt == 3, "backfill must read result attempts=3"
+    assert _raw_row(db, "legacy-bad")["attempt"] == 1, "invalid JSON must fall back to 1"
+    assert store.get("legacy-none") is not None
+    assert store.get("legacy-none").attempt == 1, "missing attempts must fall back to 1"
+
+
+def test_attempt_number_column_authoritative() -> None:
+    rec = _record("an-1")
+    assert rec.attempt == 1
+    assert attempt_number(rec) == 1
+    rec.result = {"attempts": 3}
+    assert attempt_number(rec) == 3, "column at default defers to legacy result"
+    rec.attempt = 2
+    assert attempt_number(rec) == 2, "column beyond default is authoritative"
+    rec2 = _record("an-2")
+    rec2.result = {"attempts": 0}
+    assert attempt_number(rec2) == 1
+
+
+# ====================================================================== #
+# Todo 2: poll split — CAS state transitions, narrow progress writes,
+# terminal-persist-first + idempotent side effects, reconcile loop.
+# ====================================================================== #
+
+
+def _make_manager(tmp_path: Path) -> JobManager:
+    return JobManager(run_root=tmp_path, poll_interval=30)
+
+
+def _seed_running_job(
+    mgr: JobManager, tmp_path: Path, job_id: str, **overrides: object
+) -> JobRecord:
+    work_dir = tmp_path / "runs" / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    kwargs: dict[str, object] = {
+        "spec": _spec(),
+        "status": JobStatus.RUNNING,
+        "work_dir": str(work_dir),
+    }
+    kwargs.update(overrides)
+    record = JobRecord(id=job_id, **kwargs)  # pyright: ignore[reportArgumentType]
+    mgr.store.create(record)
+    return record
+
+
+def _remote_runner(lsf_status: str) -> RemoteJobRunner:
+    """Real RemoteJobRunner with a mocked monitor (see _poll_remote_runner)."""
+    monitor = MagicMock()
+    monitor.get_exit_code.return_value = None
+    monitor.get_lsf_status.return_value = lsf_status
+    monitor.find_remote_state_json.return_value = None
+    monitor.tail_stdout.return_value = ("", 0)
+    monitor.tail_stderr.return_value = ("", 0)
+    runner = RemoteJobRunner(
+        ssh_pool=MagicMock(),
+        remote_config=MagicMock(),
+        stager=MagicMock(),
+        monitor=monitor,
+        code_syncer=MagicMock(),
+        poll_interval=0,
+    )
+    return runner
+
+
+def _seed_job_state(runner: RemoteJobRunner, job_id: str) -> None:
+    runner._job_states[job_id] = {
+        "node": MagicMock(),
+        "remote_job_dir": f"/scratch/acp/{job_id}",
+        "lsf_job_id": "777",
+        "stdout_offset": 0,
+        "stderr_offset": 0,
+        "poll_cycle": 0,
+        "seen_stages": set(),
+    }
+
+
+def _event_types(mgr: JobManager, job_id: str) -> list[str]:
+    log = mgr.event_log(job_id)
+    return [] if log is None else [e["type"] for e in log.read_all()]
+
+
+def test_stale_poll_cannot_override_pause(tmp_path: Path) -> None:
+    """Probe lifecycle (fixed): a poll that reads RUNNING but pauses
+    mid-flight must drop its stale observation — DB stays PAUSED and the
+    drop is audited with ``job.poll_dropped_stale``."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "race")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        seen: list[str] = []
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.pause_job(record.id)
+            seen.append(mgr.store.get(record.id).status.value)  # type: ignore[union-attr]
+            stale_record.progress = 0.55
+            stale_record.current_stage = "sampling"
+            return (False, None)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert seen == [JobStatus.PAUSED.value], "pause must win during the poll"
+        assert final.status == JobStatus.PAUSED, "stale poll must not resurrect RUNNING"
+        assert final.progress != 0.55, "stale progress observation must be dropped"
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+        assert "job.paused" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_not_resurrected(tmp_path: Path) -> None:
+    """Concurrent terminal poll vs pause: the first writer wins — a terminal
+    observation loaded before a pause must not persist COMPLETED nor run
+    terminal side effects."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "term-race")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.pause_job(record.id)
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.PAUSED, "terminal observation must lose to pause"
+        assert final.completed_at is None, "no terminal timestamps on the losing writer"
+        assert not (final.result or {}).get("terminal_side_effects_done"), (
+            "side effects must not run for a dropped terminal observation"
+        )
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_progress_update_preserves_status_spec_result(tmp_path: Path) -> None:
+    """A non-terminal poll persists through the narrow progress API: status,
+    spec_json and result_json stay byte-identical, revision bumps."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr, tmp_path, "prog-keep", progress=0.1, result={"state": {"stage": 1}}
+        )
+        before = _raw_row(tmp_path / "acp_jobs.db", record.id)
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            stale_record.progress = 0.42
+            stale_record.current_stage = "opt"
+            return (False, None)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        after = _raw_row(tmp_path / "acp_jobs.db", record.id)
+        assert after["status"] == before["status"] == JobStatus.RUNNING.value
+        assert after["spec_json"] == before["spec_json"], "progress writes never touch spec"
+        assert after["result_json"] == before["result_json"], "result must stay byte-identical"
+        assert after["progress"] == 0.42
+        assert after["current_stage"] == "opt"
+        assert after["revision"] != before["revision"], "narrow write must bump revision"
+    finally:
+        mgr.shutdown()
+
+
+def test_pending_transitions_to_running(tmp_path: Path) -> None:
+    """LSF ``status=running`` observed by a real poll_remote drives the legal
+    PENDING→RUNNING state transition through store.transition."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "pend-run",
+            status=JobStatus.PENDING,
+            remote_job_id="777",
+            result={"node": "n1", "remote_dir": "/scratch/acp/pend-run"},
+        )
+        runner = _remote_runner("running")
+        _seed_job_state(runner, record.id)
+        mgr.remote_runner = runner  # type: ignore[assignment]
+
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.RUNNING, "PENDING→RUNNING must persist"
+        assert final.revision >= 1
+        assert record.status == JobStatus.PENDING, "poll must not mutate the loaded record"
+        assert "remote.lsf_status" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_side_effects_retry(tmp_path: Path) -> None:
+    """Terminal side effects are retried by the reconcile pass until the
+    ``terminal_side_effects_done`` marker persists; the terminal event's
+    stable idempotency key prevents duplicates across retries."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "term-retry",
+            status=JobStatus.COMPLETED,
+            exit_code=0,
+            progress=1.0,
+            completed_at="2026-01-01T00:00:00+00:00",
+            remote_job_id="555",
+            result={"node": "n1", "terminal_side_effects_done": False},
+        )
+        runner = _remote_runner("done")
+        mgr.remote_runner = runner  # type: ignore[assignment]
+
+        real_sync = mgr._sync_task_status
+        calls = {"n": 0}
+
+        def flaky_sync(rec: JobRecord) -> None:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("sync backend down")
+            real_sync(rec)
+
+        mgr._sync_task_status = flaky_sync  # type: ignore[method-assign]
+
+        # First reconcile: side effects start, terminal event emitted, then a
+        # side effect fails — marker must NOT be set (retryable).
+        mgr._reconcile_once()
+        marker = (mgr.store.get(record.id).result or {}).get("terminal_side_effects_done")  # type: ignore[union-attr]
+        assert marker is False, "failed side effects must leave the job retryable"
+        terminal_events = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
+        assert len(terminal_events) == 1
+
+        # Second reconcile: side effects complete, marker persists.
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert (final.result or {}).get("terminal_side_effects_done") is True
+
+        # Third reconcile: marker set → category no longer matches.
+        mgr._reconcile_once()
+        terminal_events = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
+        assert len(terminal_events) == 1, "idempotency key must prevent duplicate events"
+    finally:
+        mgr.shutdown()
+
+
+# ====================================================================== #
+# Todo 2 (R2): CAS-post terminal side effects — cross-attempt isolation,
+# idempotent persistence, failure-injection convergence.
+# ====================================================================== #
+
+
+def _seed_local_terminal_with_results(
+    mgr: JobManager,
+    tmp_path: Path,
+    job_id: str,
+    *,
+    status: JobStatus = JobStatus.COMPLETED,
+    files: tuple[str, ...] = ("a.xyz", "b.log"),
+    exit_code: int | None = 0,
+) -> JobRecord:
+    """Seed a local terminal row whose side effects still owe (marker False)."""
+    work_dir = tmp_path / "runs" / job_id
+    result_dir = work_dir / "RESULT"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    for name in files:
+        (result_dir / name).write_text(name, encoding="utf-8")
+    record = JobRecord(
+        id=job_id,
+        spec=_spec(),
+        status=status,
+        work_dir=str(work_dir),
+        exit_code=exit_code,
+        progress=1.0,
+        completed_at="2026-01-01T00:00:00+00:00",
+        result={"terminal_side_effects_done": False},
+    )
+    mgr.store.create(record)
+    return record
+
+
+def _registry_paths(mgr: JobManager, job_id: str) -> list[str]:
+    registry = ArtifactRegistry(mgr.store.db_path)
+    return [artifact.file_path for artifact in registry.list_by_job(job_id)]
+
+
+def test_stale_terminal_cas_registers_zero_side_effects(tmp_path: Path) -> None:
+    """(a) A terminal CAS rejected as stale must register ZERO terminal side
+    effects — no artifact capture, no marker, no completion event."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "stale-term")
+        results = Path(record.work_dir) / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "late.xyz").write_text("late", encoding="utf-8")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.pause_job(record.id)  # pause wins between load and CAS
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.PAUSED, "stale terminal write must lose to pause"
+        assert _registry_paths(mgr, record.id) == [], (
+            "capture is a terminal side effect: a stale CAS must register none"
+        )
+        assert "artifacts" not in (final.result or {})
+        assert not (final.result or {}).get("terminal_side_effects_done")
+        assert "job.completed" not in _event_types(mgr, record.id)
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+@pytest.mark.parametrize(
+    "injection", ["after_first_artifact", "after_provenance", "before_marker"]
+)
+def test_terminal_side_effect_failure_injection_converges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, injection: str
+) -> None:
+    """(b) A failure after the first artifact insert / after provenance /
+    before the marker leaves the marker retryable; the next reconcile pass
+    converges to a consistent registry + result + provenance with no
+    duplicate artifact rows."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_local_terminal_with_results(mgr, tmp_path, f"inject-{injection}")
+        state = {"fired": False}
+
+        if injection == "after_first_artifact":
+            from acp.scheduler import artifacts as artifacts_module
+
+            real_register = artifacts_module.ArtifactRegistry.register
+            calls = {"n": 0}
+
+            def flaky_register(self: ArtifactRegistry, artifact: object) -> None:
+                calls["n"] += 1
+                if calls["n"] == 2 and not state["fired"]:
+                    state["fired"] = True
+                    raise RuntimeError("injected failure after first artifact insert")
+                return real_register(self, artifact)  # type: ignore[arg-type]
+
+            monkeypatch.setattr(
+                artifacts_module.ArtifactRegistry, "register", flaky_register
+            )
+        elif injection == "after_provenance":
+            real_store = mgr.runner._store_provenance
+
+            def flaky_provenance(rec: JobRecord, command_line: str = "") -> None:
+                if not state["fired"]:
+                    state["fired"] = True
+                    raise RuntimeError("injected failure after provenance")
+                return real_store(rec, command_line)
+
+            monkeypatch.setattr(mgr.runner, "_store_provenance", flaky_provenance)
+        else:  # before_marker
+            real_write = mgr._write_job_json
+
+            def flaky_write(rec: JobRecord) -> None:
+                if not state["fired"]:
+                    state["fired"] = True
+                    raise RuntimeError("injected failure before marker")
+                return real_write(rec)
+
+            monkeypatch.setattr(mgr, "_write_job_json", flaky_write)
+
+        mgr._reconcile_once()
+        assert state["fired"], "the injected failure must fire on the first pass"
+        mid = mgr.store.get(record.id)
+        assert mid is not None
+        assert (mid.result or {}).get("terminal_side_effects_done") is False, (
+            "a partial side-effect pass must stay retryable (marker not set)"
+        )
+
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert (final.result or {}).get("terminal_side_effects_done") is True
+        paths = _registry_paths(mgr, record.id)
+        assert len(paths) == 2 and len(set(paths)) == 2, "no duplicate artifact rows"
+        assert {entry["file_path"] for entry in final.result["artifacts"]} == set(paths), (
+            "result.artifacts must be rebuilt from the full registry, not just new rows"
+        )
+        assert final.result.get("provenance") is not None, "provenance must converge"
+        completed = [e for e in _event_types(mgr, record.id) if e == "job.completed"]
+        assert len(completed) == 1, "terminal event idempotency key must prevent duplicates"
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_cas_then_rerun_isolates_old_attempt(tmp_path: Path) -> None:
+    """(c) A terminal CAS followed immediately by a rerun: the superseded
+    attempt's retry exits without touching the new attempt's job.json, tasks
+    row, artifacts, or cancel event."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_local_terminal_with_results(mgr, tmp_path, "iso-attempt")
+        old = mgr.store.get(record.id)
+        assert old is not None and old.attempt == 1
+
+        submissions: list[str] = []
+        mgr._execute_submission = lambda job_id: submissions.append(job_id)  # type: ignore[method-assign]
+        rerun = mgr.rerun_job(record.id)
+        assert rerun is not None
+        assert rerun.attempt == 2 and rerun.status == JobStatus.QUEUED
+        # A new-attempt output appears after the rerun cleaned the directory.
+        new_results = Path(rerun.work_dir) / "RESULT"
+        new_results.mkdir(parents=True, exist_ok=True)
+        (new_results / "new_attempt.xyz").write_text("new", encoding="utf-8")
+
+        cancel_event = threading.Event()
+        mgr._cancel_events[record.id] = cancel_event
+
+        mgr._retry_terminal_side_effects(old)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.attempt == 2 and final.status == JobStatus.QUEUED
+        assert _registry_paths(mgr, record.id) == [], (
+            "a stale attempt's retry must not capture for the new attempt"
+        )
+        assert (final.result or {}).get("terminal_side_effects_done") is not True
+        assert mgr._cancel_events.get(record.id) is cancel_event, (
+            "a stale attempt's retry must not drop the new attempt's cancel event"
+        )
+        job_json = json.loads(
+            (Path(final.work_dir) / "job.json").read_text(encoding="utf-8")
+        )
+        assert job_json["attempt"] == 2, "stale retry must not rewrite job.json"
+        assert job_json["status"] == JobStatus.QUEUED.value
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None
+        assert task_row["status"] == JobStatus.QUEUED.value, (
+            "stale retry must not project the old attempt's status onto tasks"
+        )
+    finally:
+        mgr.shutdown()
+
+
+@pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
+def test_non_completed_terminal_reconcile_registers_zero_artifacts(
+    tmp_path: Path, status: JobStatus
+) -> None:
+    """(d) FAILED/CANCELLED rows register zero artifact rows after one
+    reconcile pass (capture is local-COMPLETED only)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        exit_code = 1 if status == JobStatus.FAILED else 130
+        record = _seed_local_terminal_with_results(
+            mgr, tmp_path, f"nocap-{status.value}", status=status, exit_code=exit_code
+        )
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert (final.result or {}).get("terminal_side_effects_done") is True
+        assert _registry_paths(mgr, record.id) == [], "non-COMPLETED must never capture"
+        assert "artifacts" not in (final.result or {})
+        expected_event = "job.failed" if status == JobStatus.FAILED else "job.cancelled"
+        assert expected_event in _event_types(mgr, record.id), (
+            "the terminal event must be emitted post-CAS for every terminal status"
+        )
+    finally:
+        mgr.shutdown()
+
+
+def test_starting_unconfirmed_picked_by_reconcile(tmp_path: Path) -> None:
+    """STARTING + submit_state=unconfirmed is owned by the reconcile loop —
+    the regular poll scan never touches (misjudges) it, and reconcile
+    converges it to PENDING once the submission is recoverable."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "start-unconf",
+            status=JobStatus.STARTING,
+            remote_job_id="999",
+            result={
+                "execution_kind": "remote",
+                "node": "n1",
+                "remote_dir": "/scratch/acp/start-unconf",
+                "remote": {"submit_state": "unconfirmed", "node": "n1"},
+            },
+        )
+
+        # Regular poll must not touch a STARTING job (not in the scan set).
+        mgr._poll_job(record.id)
+        assert mgr.store.get(record.id).status == JobStatus.STARTING  # type: ignore[union-attr]
+
+        class _Recoverable:
+            def __init__(self) -> None:
+                self.recover_calls = 0
+
+            def recover_job_state(self, rec: JobRecord) -> bool:
+                self.recover_calls += 1
+                return True
+
+            def apply_terminal_side_effects(
+                self, rec: JobRecord, event_log, stage_events=()
+            ) -> None:
+                raise AssertionError("not used")
+
+        fake = _Recoverable()
+        mgr.remote_runner = fake  # type: ignore[assignment]
+
+        mgr._reconcile_once()
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.PENDING, "reconcile must converge STARTING→PENDING"
+        assert fake.recover_calls == 1
+
+        # Category no longer matches — reconcile does not pick it again.
+        mgr._reconcile_once()
+        assert fake.recover_calls == 1
+        assert mgr.store.get(record.id).status == JobStatus.PENDING  # type: ignore[union-attr]
+    finally:
+        mgr.shutdown()
+
+
+# ====================================================================== #
+# Todo 3: every manager control write is CAS-conditional — permanent guard
+# against reintroducing whole-row store.update() calls in manager.py.
+# ====================================================================== #
+
+
+def _whole_row_update_lines(source: str) -> list[int]:
+    """1-based line numbers of ``<x>.store.update(...)`` whole-row writes.
+
+    Narrow conditional APIs (``update_progress`` / ``transition`` /
+    ``requeue_with_spec`` / ``update_work_dir_and_name``) are distinct
+    attribute names and are never flagged.
+    """
+    tree = ast.parse(source)
+    hits: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "update":
+            continue
+        value = node.func.value
+        if isinstance(value, ast.Attribute) and value.attr == "store":
+            hits.append(node.lineno)
+    return sorted(hits)
+
+
+def test_manager_has_no_whole_row_update(tmp_path: Path) -> None:
+    """manager.py must contain zero ``self.store.update(...)`` call sites.
+
+    All control writes go through the conditional store APIs; this guard is
+    the permanent tripwire (plan todo 3 / Metis M7) — implemented in this
+    plan's own test module rather than the shared ``check_grep_gates.py``.
+    """
+    manager_path = Path(manager_module.__file__)
+    source = manager_path.read_text(encoding="utf-8")
+    hits = _whole_row_update_lines(source)
+    assert hits == [], (
+        "manager.py must not perform whole-row store.update() writes — route "
+        "them through transition()/update_progress()/requeue_with_spec() "
+        f"(whole-row calls found at lines: {hits})"
+    )
+
+    # Negative self-check: scan an injected temporary copy (manager.py itself
+    # is never modified) and require the scanner to flag the whole-row call.
+    injected_path = tmp_path / "manager_injected.py"
+    injected_path.write_text(
+        source
+        + "\n\n"
+        + "def _injected_whole_row_write(manager, record):\n"
+        + "    manager.store.update(record)\n",
+        encoding="utf-8",
+    )
+    injected_hits = _whole_row_update_lines(
+        injected_path.read_text(encoding="utf-8")
+    )
+    assert injected_hits, "scanner must flag an injected whole-row store.update() call"
+
+
+# ====================================================================== #
+# Todo 3: barrier/sequenced interleavings + attempt isolation + contract B
+# (storage identity + receipt archiving).
+# ====================================================================== #
+
+
+def test_interleave_poll_vs_pause_barrier(tmp_path: Path) -> None:
+    """Barrier race [poll vs pause]: whichever writer lands first, the job
+    ends PAUSED — a stale poll observation can never win the pause."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "barrier-poll-pause")
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        barrier = threading.Barrier(2, timeout=10)
+        seen: dict[str, object] = {}
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            barrier.wait()
+            stale_record.progress = 0.55
+            stale_record.current_stage = "late"
+            return (False, None)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+
+        def do_poll() -> None:
+            mgr._poll_job(record.id)
+
+        def do_pause() -> None:
+            barrier.wait()
+            seen["pause"] = mgr.pause_job(record.id).status
+
+        t_poll = threading.Thread(target=do_poll)
+        t_pause = threading.Thread(target=do_pause)
+        t_poll.start()
+        t_pause.start()
+        t_poll.join(timeout=30)
+        t_pause.join(timeout=30)
+        assert not t_poll.is_alive() and not t_pause.is_alive()
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert seen["pause"] == JobStatus.PAUSED, "pause must report PAUSED"
+        assert final.status == JobStatus.PAUSED, "pause must win regardless of interleaving"
+        assert final.revision >= 1
+        assert "job.paused" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_interleave_cancel_vs_unpause_barrier(tmp_path: Path) -> None:
+    """Barrier race [cancel vs unpause]: cancel always ends CANCELLING —
+    an unpause racing a cancel can never leave the job RUNNING."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "barrier-cancel-unpause", status=JobStatus.PAUSED)
+        barrier = threading.Barrier(2, timeout=10)
+
+        def _resume(job_id: str) -> bool:
+            barrier.wait()
+            return True
+
+        mgr.runner.resume_local = _resume  # type: ignore[method-assign]
+        mgr.runner.cancel_local = lambda job_id: True  # type: ignore[method-assign]
+        seen: dict[str, object] = {}
+
+        def do_unpause() -> None:
+            try:
+                seen["unpause"] = mgr.unpause_job(record.id).status
+            except ValueError as exc:
+                seen["unpause"] = f"rejected: {exc}"
+
+        def do_cancel() -> None:
+            barrier.wait()
+            result = mgr.cancel(record.id)
+            seen["cancel"] = None if result is None else result.status
+
+        t_unpause = threading.Thread(target=do_unpause)
+        t_cancel = threading.Thread(target=do_cancel)
+        t_unpause.start()
+        t_cancel.start()
+        t_unpause.join(timeout=30)
+        t_cancel.join(timeout=30)
+        assert not t_unpause.is_alive() and not t_cancel.is_alive()
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.CANCELLING, "cancel must beat the racing unpause"
+        assert seen["cancel"] == JobStatus.CANCELLING
+        assert "job.cancelling" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_interleave_terminal_vs_old_poll(tmp_path: Path) -> None:
+    """Sequenced [terminal vs old poll]: a terminal state committed while an
+    older observation is in flight is preserved; the stale write is dropped."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "barrier-terminal-poll")
+        terminal_committed = threading.Event()
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            committed = mgr.store.transition(
+                record.id,
+                expected_status=JobStatus.RUNNING,
+                expected_revision=stale_record.revision,
+                expected_attempt=stale_record.attempt,
+                status=JobStatus.COMPLETED,
+                exit_code=0,
+                progress=1.0,
+                completed_at="2026-01-01T00:00:00+00:00",
+            )
+            terminal_committed.set()
+            assert committed.status == JobStatus.COMPLETED
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+        assert terminal_committed.is_set()
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.COMPLETED, "terminal state must survive the old poll"
+        assert final.completed_at == "2026-01-01T00:00:00+00:00"
+        assert final.exit_code == 0
+        assert not (final.result or {}).get("terminal_side_effects_done"), (
+            "the dropped stale write must not run terminal side effects"
+        )
+        assert "job.poll_dropped_stale" in _event_types(mgr, record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_interleave_old_attempt_continue_vs_new_attempt_terminal(tmp_path: Path) -> None:
+    """[old attempt continue vs new attempt terminal]: replaying attempt=1
+    writes against an attempt=2 terminal row conflicts and drops — the new
+    attempt's row stays byte-identical."""
+    db = tmp_path / "acp_jobs.db"
+    mgr = _make_manager(tmp_path)
+    try:
+        mgr.store.create(_record("iso-1", status=JobStatus.FAILED, error="boom"))
+        old = mgr.store.get("iso-1")
+        assert old is not None and old.attempt == 1
+
+        updated = mgr.store.requeue_with_spec(
+            "iso-1",
+            new_spec=old.spec,
+            expected_revision=old.revision,
+            expected_attempt=1,
+            expected_status=JobStatus.FAILED,
+        )
+        mgr.store.transition(
+            "iso-1",
+            expected_status=JobStatus.QUEUED,
+            expected_revision=updated.revision,
+            expected_attempt=2,
+            status=JobStatus.CANCELLED,
+            completed_at="2026-01-02T00:00:00+00:00",
+        )
+        before = _raw_row(db, "iso-1")
+        assert before["attempt"] == 2
+
+        with pytest.raises(JobStateConflictError):
+            mgr._requeue_record_cas(
+                "iso-1",
+                new_spec=old.spec,
+                expected=old,
+                expected_status=(JobStatus.FAILED, JobStatus.CANCELLED),
+                result={"continued_from": "failed"},
+            )
+        with pytest.raises(JobStateConflictError):
+            mgr._cas_write(
+                old,
+                expected_status=JobStatus.FAILED,
+                status=JobStatus.RUNNING,
+            )
+    finally:
+        mgr.shutdown()
+
+    after = _raw_row(db, "iso-1")
+    assert after == before, "an old-attempt replay must never modify the new attempt's row"
+
+
+def test_requeue_preserves_storage_identity_and_archives_receipts(tmp_path: Path) -> None:
+    """Contract B: rerun keeps the persisted storage identity and archives the
+    closed attempt's checkpoint/step output/RESULT/run receipts under
+    ``WORK/00_RUNTIME/attempts/<n>/`` (recoverable, never deleted)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "runs" / "ident"
+        _seed_job_for_transitions(
+            mgr,
+            work_dir,
+            "ident",
+            status=JobStatus.FAILED,
+            result={
+                "attempts": 1,
+                "remote": {"node": "n1", "submit_state": "done", "lsf_job_id": "7"},
+                "remote_dir": "/scratch/acp/ident",
+            },
+        )
+        checkpoint = {"task_id": "ident", "workflow": "fake", "plan_fingerprint": "abc"}
+        runtime = work_dir / "WORK" / "00_RUNTIME"
+        runtime.mkdir(parents=True)
+        (runtime / "checkpoint.json").write_text(json.dumps(checkpoint), encoding="utf-8")
+        search = work_dir / "WORK" / "02_SEARCH"
+        search.mkdir(parents=True)
+        (search / "step.out").write_text("old-step", encoding="utf-8")
+        result_dir = work_dir / "RESULT"
+        result_dir.mkdir(parents=True)
+        (result_dir / "result.json").write_text("{}", encoding="utf-8")
+        (work_dir / ".exit_code").write_text("1", encoding="utf-8")
+        (work_dir / "state.json").write_text("{}", encoding="utf-8")
+        submissions: list[str] = []
+        mgr._execute_submission = lambda job_id: submissions.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("ident")
+        assert rerun is not None
+        assert rerun.attempt == 2
+        assert rerun.result is not None
+        assert rerun.result["remote"] == {"node": "n1"}, (
+            "storage identity survives; submission fields are cleared"
+        )
+        assert rerun.result["remote_dir"] == "/scratch/acp/ident"
+        assert "attempts" not in rerun.result, "jobs.attempt is the single counter"
+
+        archive = work_dir / "WORK" / "00_RUNTIME" / "attempts" / "1"
+        archived_checkpoint = archive / "WORK" / "00_RUNTIME" / "checkpoint.json"
+        assert json.loads(archived_checkpoint.read_text(encoding="utf-8")) == checkpoint
+        archived_step = archive / "WORK" / "02_SEARCH" / "step.out"
+        assert archived_step.read_text(encoding="utf-8") == "old-step"
+        assert (archive / "RESULT" / "result.json").is_file()
+        assert (archive / ".exit_code").read_text(encoding="utf-8") == "1"
+        assert (archive / "state.json").is_file()
+        assert not (work_dir / ".exit_code").exists(), "receipts live only in the archive"
+        assert submissions == ["ident"]
+    finally:
+        mgr.shutdown()
+
+
+def test_manager_control_writes_carry_attempt_in_events(tmp_path: Path) -> None:
+    """Migrated control events expose ``attempt`` (audit trail requirement)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "evt-attempt", status=JobStatus.RUNNING)
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        mgr.runner.resume_local = lambda job_id: True  # type: ignore[method-assign]
+        mgr.pause_job(record.id)
+        mgr.unpause_job(record.id)
+        events = {e["type"]: e for e in mgr.event_log(record.id).read_all()}  # type: ignore[union-attr]
+        assert events["job.paused"]["attempt"] == 1
+        assert events["job.resumed"]["attempt"] == 1
+    finally:
+        mgr.shutdown()
+
+
+def _seed_job_for_transitions(
+    mgr: JobManager, work_dir: Path, job_id: str, **overrides: object
+) -> JobRecord:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    kwargs: dict[str, object] = {
+        "spec": _spec(),
+        "status": JobStatus.FAILED,
+        "work_dir": str(work_dir),
+    }
+    kwargs.update(overrides)
+    record = JobRecord(id=job_id, **kwargs)  # pyright: ignore[reportArgumentType]
+    mgr.store.create(record)
+    return record
+
+
+def test_pause_on_terminal_raises_without_signal(tmp_path: Path) -> None:
+    """Entry-time pause on a terminal job keeps the historical ValueError/409
+    contract and must not signal the runner or mutate the record."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(
+            mgr,
+            tmp_path,
+            "term-pause",
+            status=JobStatus.COMPLETED,
+            exit_code=0,
+            completed_at="2026-01-01T00:00:00+00:00",
+        )
+        signals: list[str] = []
+        mgr.runner.pause_local = lambda job_id: signals.append(job_id) or True  # type: ignore[method-assign]
+
+        with pytest.raises(ValueError, match="requires RUNNING status"):
+            mgr.pause_job(record.id)
+
+        assert signals == [], "terminal entry must never signal the runner"
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.COMPLETED
+        assert final.revision == record.revision, "rejected pause must not write"
+    finally:
+        mgr.shutdown()
+
+
+# ====================================================================== #
+# Todo 10 (R2/R3 acceptance): deterministic interleavings — stale terminal
+# observation vs cancel, terminal CAS then immediate rerun (mid-flight
+# seam), delayed old projection after new PAUSED, sync-failure recovery.
+# ====================================================================== #
+
+
+def test_stale_terminal_observation_racing_cancel_registers_zero_side_effects(
+    tmp_path: Path,
+) -> None:
+    """(interleave 1, cancel leg) A stale terminal observation racing a
+    cancel must lose the CAS and register ZERO terminal side effects — no
+    artifact rows, no provenance, no marker, no terminal event — while the
+    cancel's own writes (jobs row, tasks projection, cancel event) survive."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "cancel-race-term")
+        results = Path(record.work_dir) / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "late.xyz").write_text("late", encoding="utf-8")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        cancel_event = threading.Event()
+        mgr._cancel_events[record.id] = cancel_event
+        mgr.runner.cancel_local = lambda job_id: True  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            mgr.cancel(record.id)  # cancel wins between load and CAS
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.status == JobStatus.CANCELLING, "stale terminal write must lose to cancel"
+        assert final.revision == 1, "only the cancel's CAS may have written the row"
+        assert _registry_paths(mgr, record.id) == [], (
+            "a CAS-rejected terminal observation must register zero artifact rows"
+        )
+        result = final.result or {}
+        assert "artifacts" not in result, "rejected CAS: no captured-artifact payload"
+        assert "provenance" not in result, "rejected CAS: no provenance side effect"
+        assert not result.get("terminal_side_effects_done"), "rejected CAS: no marker"
+        events = _event_types(mgr, record.id)
+        assert "job.completed" not in events, "no terminal event for a rejected CAS"
+        assert "job.cancelling" in events, "the cancel's own event must survive"
+        assert "job.poll_dropped_stale" in events, "the rejection must be audited"
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == JobStatus.CANCELLING.value, (
+            "jobs/tasks must agree after the rejected write"
+        )
+        stored_event = mgr._cancel_events.get(record.id)
+        assert stored_event is cancel_event and stored_event.is_set(), (
+            "the rejected terminal path must not drop or unset the cancel event"
+        )
+    finally:
+        mgr.shutdown()
+
+
+def test_terminal_cas_then_immediate_rerun_skips_side_effects_mid_flight(
+    tmp_path: Path,
+) -> None:
+    """(interleave 2, mid-flight seam) The terminal CAS commits and a rerun
+    lands BEFORE the side-effect block: ``_reread_side_effect_scope`` must
+    skip — the superseded attempt registers zero artifact rows/provenance/
+    marker and cannot mutate the new attempt's jobs row, job.json, tasks
+    projection, or cancel event. (T2 covered the retry-after-rerun seam;
+    this covers the CAS→side-effect window itself.)"""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "midflight-rerun")
+        results = Path(record.work_dir) / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "a.xyz").write_text("a", encoding="utf-8")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        mgr._start_submission_thread = lambda job_id, name: True  # type: ignore[method-assign]
+
+        real_transition = mgr.store.transition
+        fired = {"n": 0}
+
+        def transition(*args: object, **kwargs: object) -> JobRecord:
+            out = real_transition(*args, **kwargs)  # type: ignore[arg-type]
+            if fired["n"] == 0:
+                fired["n"] += 1
+                # The rerun lands after the terminal CAS committed but
+                # before _persist_terminal enters the side-effect lock.
+                rerun = mgr.rerun_job(record.id)
+                assert rerun is not None and rerun.attempt == 2
+            return out
+
+        mgr.store.transition = transition  # type: ignore[method-assign]
+
+        def poll(stale_record: JobRecord) -> tuple[bool, int | None]:
+            stale_record.exit_code = 0
+            return (True, 0)
+
+        mgr.runner.poll = poll  # type: ignore[method-assign]
+        mgr._poll_job(record.id)
+        assert fired["n"] == 1, "the interleaved rerun must run inside the terminal CAS"
+
+        final = mgr.store.get(record.id)
+        assert final is not None
+        assert final.attempt == 2 and final.status == JobStatus.QUEUED
+        assert _registry_paths(mgr, record.id) == [], (
+            "the superseded attempt's side effects must register zero artifact rows"
+        )
+        result = final.result or {}
+        assert not result.get("terminal_side_effects_done"), "no marker for the stale attempt"
+        assert "provenance" not in result, "the stale attempt must not store provenance"
+        assert "job.completed" not in _event_types(mgr, record.id), (
+            "the local terminal event is a side effect: it must not fire post-supersession"
+        )
+        job_json = json.loads((Path(final.work_dir) / "job.json").read_text(encoding="utf-8"))
+        assert job_json["attempt"] == 2, "the stale attempt must not rewrite job.json"
+        assert job_json["status"] == JobStatus.QUEUED.value
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == JobStatus.QUEUED.value, (
+            "the stale attempt must not project the old status onto tasks"
+        )
+        new_event = mgr._cancel_events.get(record.id)
+        assert new_event is not None and not new_event.is_set(), (
+            "the new attempt's cancel event must survive the stale terminal path"
+        )
+    finally:
+        mgr.shutdown()
+
+
+def test_delayed_old_projection_after_new_paused_keeps_tasks_paused(tmp_path: Path) -> None:
+    """(interleave 3) A delayed projection from an old RUNNING snapshot after
+    the job was paused: ``sync_job_transition`` projects from the CURRENT
+    jobs row, so tasks stays PAUSED and the jobs row is never written."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "delay-paused")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+        stale_running = mgr.store.get(record.id)
+        assert stale_running is not None and stale_running.status == JobStatus.RUNNING
+
+        mgr.pause_job(record.id)
+        assert mgr.store.get(record.id).status == JobStatus.PAUSED  # type: ignore[union-attr]
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "paused"
+        db = tmp_path / "acp_jobs.db"
+        before = _raw_row(db, record.id)
+
+        # The delayed old RUNNING projection arrives after the new PAUSED.
+        mgr._sync_task_status(stale_running)
+
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "paused", (
+            "a delayed old RUNNING projection must not overwrite PAUSED"
+        )
+        assert _raw_row(db, record.id) == before, "projection must never write the jobs row"
+    finally:
+        mgr.shutdown()
+
+
+def test_delayed_old_completion_projection_after_rerun_cannot_resurrect(tmp_path: Path) -> None:
+    """(interleave 3b) The delayed completion projection of a superseded
+    attempt after an in-place rerun cannot resurrect COMPLETED in tasks."""
+    mgr = _make_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "runs" / "delay-rerun"
+        results = work_dir / "RESULT"
+        results.mkdir(parents=True, exist_ok=True)
+        (results / "a.xyz").write_text("a", encoding="utf-8")
+        record = JobRecord(
+            id="delay-rerun",
+            spec=_spec(),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            exit_code=0,
+            progress=1.0,
+            completed_at="2026-01-01T00:00:00+00:00",
+            result={"terminal_side_effects_done": True},
+        )
+        mgr.store.create(record)
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "completed"
+        mgr._start_submission_thread = lambda job_id, name: True  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job(record.id)
+        assert rerun is not None and rerun.attempt == 2
+        db = tmp_path / "acp_jobs.db"
+        before = _raw_row(db, record.id)
+
+        # The delayed old completion projection arrives after attempt 2 queued.
+        mgr._sync_task_status(record)
+
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "queued", (
+            "a delayed old completion projection must not resurrect COMPLETED"
+        )
+        assert _raw_row(db, record.id) == before, "projection must never write the jobs row"
+    finally:
+        mgr.shutdown()
+
+
+def test_sync_failure_recovery_converges_via_reconcile(tmp_path: Path) -> None:
+    """(interleave 4) A failed tasks projection on pause is non-fatal: jobs
+    goes PAUSED while tasks lags, the drift is observable, and one
+    ``_reconcile_once`` pass repairs it — the row leaves the drift set and a
+    second pass is a no-op (convergence, not just eventual retry)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        record = _seed_running_job(mgr, tmp_path, "sync-fail")
+        mgr.tasks.sync_from_job(record)  # type: ignore[union-attr]
+        mgr.runner.pause_local = lambda job_id: True  # type: ignore[method-assign]
+
+        real_sync = mgr.tasks.sync_job_transition  # type: ignore[union-attr]
+        fired = {"n": 0}
+
+        def flaky_sync(rec: JobRecord) -> None:
+            if fired["n"] == 0:
+                fired["n"] += 1
+                raise RuntimeError("projection backend down")
+            return real_sync(rec)
+
+        mgr.tasks.sync_job_transition = flaky_sync  # type: ignore[method-assign,union-attr]
+
+        mgr.pause_job(record.id)  # sync failure must never fail the pause
+
+        assert fired["n"] == 1, "the injected sync failure must fire on the first pause"
+        assert mgr.store.get(record.id).status == JobStatus.PAUSED, "jobs is authoritative"
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "running", (
+            "the projection must visibly lag after the sync failure"
+        )
+        assert mgr.tasks.find_projection_drift() == [record.id]  # type: ignore[union-attr]
+
+        mgr._reconcile_once()
+
+        task_row = mgr.tasks.get(record.id) if mgr.tasks is not None else None
+        assert task_row is not None and task_row["status"] == "paused", (
+            "the reconcile pass must repair the drifted projection"
+        )
+        assert mgr.tasks.find_projection_drift() == []  # type: ignore[union-attr],call-args
+        "the repaired row must leave the drift set"
+
+        mgr._reconcile_once()
+        assert mgr.tasks.find_projection_drift() == []  # type: ignore[union-attr],call-args
+        "convergence must be stable across passes"
+    finally:
+        mgr.shutdown()

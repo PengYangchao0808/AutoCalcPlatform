@@ -82,12 +82,12 @@ def _make_job_dir(
 
 def _set_record_work_dir_and_store(
     store: JobStore, run_root: Path, record: JobRecord, project_id: str, job_id: str
-) -> JobRecord:
+) -> Path:
     job_dir = run_root / project_id / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     record.work_dir = str(job_dir)
     store.create(record)
-    return record
+    return job_dir
 
 
 # ====================================================================== #
@@ -238,12 +238,38 @@ def test_cleanup_cancelled_uses_cancelled_window(run_root: Path, store: JobStore
     assert len(report.work_dirs_removed) == 1
 
 
-def test_cleanup_orphan_dir_falls_back_to_completed(run_root: Path, store: JobStore):
-    # Directory exists but no DB record → treated as orphan, completed window.
-    _make_job_dir(run_root, "uncategorized", "orphan_job", size_bytes=200, age_days=35)
+def test_cleanup_orphan_dir_without_ownership_evidence_kept(run_root: Path, store: JobStore):
+    # Orphan (no DB row) but no task.json ownership evidence → kept,
+    # even when older than the completed window (todo 9 orphan policy).
+    orphan = _make_job_dir(run_root, "uncategorized", "orphan_job", size_bytes=200, age_days=35)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert orphan.exists()
+
+
+def test_cleanup_orphan_dir_with_ownership_needs_longer_window(run_root: Path, store: JobStore):
+    # Orphan WITH task.json: shorter than the 3× orphan window → kept.
+    orphan = _make_job_dir(run_root, "uncategorized", "orphan_recent", size_bytes=200, age_days=0)
+    (orphan / "task.json").write_text("{}", encoding="utf-8")
+    ts = time.time() - 35 * 86400
+    os.utime(orphan, (ts, ts))
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert orphan.exists()
+
+
+def test_cleanup_orphan_dir_removed_after_triple_window(run_root: Path, store: JobStore):
+    # Orphan WITH task.json and age > 3 × completed_days → removed.
+    orphan = _make_job_dir(run_root, "uncategorized", "orphan_old", size_bytes=200, age_days=0)
+    (orphan / "task.json").write_text("{}", encoding="utf-8")
+    ts = time.time() - 95 * 86400
+    os.utime(orphan, (ts, ts))
     cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
     report = cleanup.cleanup_old_work_dirs()
     assert len(report.work_dirs_removed) == 1
+    assert not orphan.exists()
 
 
 def test_cleanup_restart_failed_uses_short_window(run_root: Path, store: JobStore):
@@ -339,6 +365,215 @@ def test_cleanup_report_to_dict(run_root: Path, store: JobStore):
     assert d["work_dirs_removed_count"] == 1
     assert "freed_human" in d
     assert d["ok"] is True
+
+
+# ====================================================================== #
+# Retention gate (D03 todo 9): DB lifecycle drives every deletion
+# ====================================================================== #
+
+
+def _gated_record(
+    job_id: str,
+    status: JobStatus,
+    *,
+    age_days: float,
+    submit_state: str | None = None,
+    cancel_state: str | None = None,
+) -> JobRecord:
+    """Terminal-or-not record with ``result["remote"]`` gate fields."""
+    from datetime import datetime, timezone
+
+    rec = _make_record(job_id, status=status)
+    if status.is_terminal:
+        rec.completed_at = datetime.fromtimestamp(
+            time.time() - age_days * 86400, tz=timezone.utc
+        ).isoformat()
+    remote: dict = {}
+    if submit_state is not None:
+        remote["submit_state"] = submit_state
+    if cancel_state is not None:
+        remote["cancel_state"] = cancel_state
+    rec.result = {"remote": remote} if remote else {}
+    return rec
+
+
+def test_is_deletion_eligible_pins_exact_gate():
+    from acp.scheduler.jobs import is_deletion_eligible
+
+    for terminal in ("completed", "failed", "cancelled"):
+        assert is_deletion_eligible(terminal, None, None) is True
+        assert is_deletion_eligible(terminal, "submitted", "confirmed") is True
+        assert is_deletion_eligible(terminal, "intent", None) is False
+        assert is_deletion_eligible(terminal, "unconfirmed", None) is False
+        assert is_deletion_eligible(terminal, None, "unconfirmed") is False
+        assert is_deletion_eligible(terminal, None, "requested") is False
+        assert is_deletion_eligible(terminal, None, "sent") is False
+    for non_terminal in ("queued", "running", "paused", "waiting_review", "cancelling", None):
+        assert is_deletion_eligible(non_terminal, None, None) is False
+
+
+def test_cleanup_keeps_running_dir_over_age_with_fresh_logs(run_root: Path, store: JobStore):
+    # r16 P1: over-aged dir, logs actively updated, job still RUNNING.
+    rec = _gated_record("job_running", JobStatus.RUNNING, age_days=400)
+    job_dir = _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_running")
+    log = job_dir / "WORK" / "ORCA" / "orca.out"
+    log.parent.mkdir(parents=True)
+    log.write_text("SCF RUN\n", encoding="utf-8")
+    ts = time.time() - 400 * 86400
+    os.utime(job_dir, (ts, ts))
+    # The log itself keeps being appended (fresh mtime) while the dir mtime is stale.
+    os.utime(log, None)
+
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert job_dir.exists()
+
+
+def test_cleanup_keeps_paused_dir_over_age(run_root: Path, store: JobStore):
+    rec = _gated_record("job_paused", JobStatus.PAUSED, age_days=400)
+    job_dir = _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_paused")
+    _make_job_dir(run_root, "uncategorized", "job_paused", age_days=400)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert job_dir.exists()
+
+
+def test_cleanup_keeps_waiting_review_dir_over_age(run_root: Path, store: JobStore):
+    rec = _gated_record("job_wr", JobStatus.WAITING_REVIEW, age_days=400)
+    job_dir = _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_wr")
+    _make_job_dir(run_root, "uncategorized", "job_wr", age_days=400)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert job_dir.exists()
+
+
+def test_cleanup_keeps_pending_submission_dir(run_root: Path, store: JobStore):
+    # Terminal row, but submission outcome not settled → keep.
+    for suffix, state in (("intent", "intent"), ("unconf", "unconfirmed")):
+        rec = _gated_record(
+            f"job_pending_{suffix}", JobStatus.COMPLETED, age_days=400, submit_state=state
+        )
+        _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", rec.id)
+        _make_job_dir(run_root, "uncategorized", rec.id, age_days=400)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert (run_root / "uncategorized" / "job_pending_intent").exists()
+    assert (run_root / "uncategorized" / "job_pending_unconf").exists()
+
+
+def test_cleanup_keeps_unconfirmed_cancel_dir(run_root: Path, store: JobStore):
+    rec = _gated_record(
+        "job_cancel_unconf", JobStatus.CANCELLED, age_days=400, cancel_state="unconfirmed"
+    )
+    _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_cancel_unconf")
+    _make_job_dir(run_root, "uncategorized", "job_cancel_unconf", age_days=400)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(cancelled_days=10))
+    report = cleanup.cleanup_old_work_dirs()
+    assert report.work_dirs_removed == []
+    assert (run_root / "uncategorized" / "job_cancel_unconf").exists()
+
+
+def test_cleanup_removes_confirmed_cancel_dir(run_root: Path, store: JobStore):
+    rec = _gated_record(
+        "job_cancel_conf", JobStatus.CANCELLED, age_days=400, cancel_state="confirmed"
+    )
+    _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_cancel_conf")
+    _make_job_dir(run_root, "uncategorized", "job_cancel_conf", age_days=400)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(cancelled_days=10))
+    report = cleanup.cleanup_old_work_dirs()
+    assert len(report.work_dirs_removed) == 1
+
+
+def test_cleanup_cancels_deletion_after_attempt_bump(run_root: Path, store: JobStore):
+    # In-place requeue landed between eligibility snapshot and deletion:
+    # the row now reports a newer attempt → deletion cancelled.
+    import dataclasses
+
+    rec = _gated_record("job_requeue", JobStatus.FAILED, age_days=400)
+    job_dir = _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_requeue")
+    _make_job_dir(run_root, "uncategorized", "job_requeue", age_days=400)
+
+    real_get = store.get
+
+    def bumped_get(job_id):
+        fresh = real_get(job_id)
+        return dataclasses.replace(fresh, attempt=fresh.attempt + 1) if fresh else None
+
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(failed_days=90))
+    store.get = bumped_get  # type: ignore[method-assign]
+    try:
+        report = cleanup.cleanup_old_work_dirs()
+    finally:
+        store.get = real_get  # type: ignore[method-assign]
+    assert report.work_dirs_removed == []
+    assert job_dir.exists()
+
+
+def test_cleanup_negative_injection_bypassing_gate_deletes_running_dir(
+    monkeypatch, run_root: Path, store: JobStore
+):
+    # Negative injection (todo 9 D): with the submit/cancel gate bypassed
+    # the over-aged RUNNING dir WOULD be deleted — proving the keep
+    # assertions above are enforced BY is_deletion_eligible.  If the sweep
+    # ever stops consulting the gate, this test turns red.
+    import acp.scheduler.local_cleanup as lc_mod
+
+    rec = _gated_record("job_inject", JobStatus.RUNNING, age_days=400)
+    job_dir = _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_inject")
+    _make_job_dir(run_root, "uncategorized", "job_inject", age_days=400)
+
+    monkeypatch.setattr(lc_mod, "is_deletion_eligible", lambda *a, **k: True)
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.cleanup_old_work_dirs()
+    assert len(report.work_dirs_removed) == 1
+    assert not job_dir.exists()
+
+
+def test_pre_submit_housekeeping_never_calls_rmtree(monkeypatch, run_root: Path, store: JobStore):
+    # Branch (B): pre_submit is a deletion-free survey — shutil.rmtree spy
+    # must stay 0 even for an otherwise-eligible over-aged dir.
+    rec = _gated_record("job_presubmit", JobStatus.COMPLETED, age_days=400)
+    job_dir = _set_record_work_dir_and_store(store, run_root, rec, "uncategorized", "job_presubmit")
+    _make_job_dir(run_root, "uncategorized", "job_presubmit", age_days=400)
+
+    import acp.scheduler.local_cleanup as lc_mod
+
+    calls = {"n": 0}
+    real_rmtree = lc_mod.shutil.rmtree
+
+    def spy(path, *args, **kwargs):
+        calls["n"] += 1
+        return real_rmtree(path, *args, **kwargs)
+
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    monkeypatch.setattr(cleanup, "check_disk_usage", lambda: 92)
+    monkeypatch.setattr(lc_mod.shutil, "rmtree", spy)
+    decision = cleanup.pre_submit_housekeeping()
+    assert calls["n"] == 0, "pre_submit path must never delete task dirs"
+    assert job_dir.exists()
+    assert decision.cleanup is not None
+
+
+def test_full_cleanup_keeps_non_terminal_dirs(run_root: Path, store: JobStore):
+    # r16 P1 across the full_cleanup surface (manager background + API 'all').
+    running = _gated_record("fc_running", JobStatus.RUNNING, age_days=400)
+    _set_record_work_dir_and_store(store, run_root, running, "uncategorized", "fc_running")
+    _make_job_dir(run_root, "uncategorized", "fc_running", age_days=400)
+    pending = _gated_record(
+        "fc_pending", JobStatus.COMPLETED, age_days=400, submit_state="unconfirmed"
+    )
+    _set_record_work_dir_and_store(store, run_root, pending, "uncategorized", "fc_pending")
+    _make_job_dir(run_root, "uncategorized", "fc_pending", age_days=400)
+
+    cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
+    report = cleanup.full_cleanup()
+    assert report.work_dirs_removed == []
+    assert (run_root / "uncategorized" / "fc_running").exists()
+    assert (run_root / "uncategorized" / "fc_pending").exists()
 
 
 # ====================================================================== #
@@ -455,36 +690,50 @@ def test_housekeeping_low_disk_noop(run_root: Path, store: JobStore):
 
 def test_housekeeping_high_disk_triggers_cleanup(monkeypatch, run_root: Path, store: JobStore):
     cleanup = LocalCleanup(run_root, store, policy=RetentionPolicy(completed_days=30))
-    calls = {"cleanup": 0}
+    calls: list[dict] = []
 
-    def fake_sweep(dry_run=False, max_dirs_per_sweep=None):
-        calls["cleanup"] += 1
+    def fake_sweep(**kwargs):
+        calls.append(dict(kwargs))
         return LocalCleanupReport()
 
     monkeypatch.setattr(cleanup, "check_disk_usage", lambda: 92)
     monkeypatch.setattr(cleanup, "cleanup_old_work_dirs", fake_sweep)
     decision = cleanup.pre_submit_housekeeping()
     assert decision.should_skip is False
-    assert calls["cleanup"] == 1
+    assert len(calls) == 1
+    # Branch (B): the submission path requests a DELETION-FREE survey.
+    assert calls[0].get("allow_task_dir_deletion") is False
     assert decision.cleanup is not None
 
 
 def test_housekeeping_skip_threshold_rejects(monkeypatch, run_root: Path, store: JobStore):
     cleanup = LocalCleanup(run_root, store)
+    flags: list[bool | None] = []
     monkeypatch.setattr(cleanup, "check_disk_usage", lambda: 96)
-    monkeypatch.setattr(cleanup, "cleanup_old_work_dirs", lambda **kw: LocalCleanupReport())
+    monkeypatch.setattr(
+        cleanup,
+        "cleanup_old_work_dirs",
+        lambda **kw: (flags.append(kw.get("allow_task_dir_deletion")), LocalCleanupReport())[1],
+    )
     decision = cleanup.pre_submit_housekeeping()
     assert decision.should_skip is True
     assert "skip threshold" in decision.reason
+    assert flags == [False]
 
 
 def test_housekeeping_high_disk_no_cleanup_possible(monkeypatch, run_root: Path, store: JobStore):
     cleanup = LocalCleanup(run_root, store)
-    # before=92 triggers cleanup, but after stays 96 → still rejected.
+    flags: list[bool | None] = []
+    # before=96 triggers the survey, but after stays 96 → still rejected.
     monkeypatch.setattr(cleanup, "check_disk_usage", lambda: 96)
-    monkeypatch.setattr(cleanup, "cleanup_old_work_dirs", lambda **kw: LocalCleanupReport())
+    monkeypatch.setattr(
+        cleanup,
+        "cleanup_old_work_dirs",
+        lambda **kw: (flags.append(kw.get("allow_task_dir_deletion")), LocalCleanupReport())[1],
+    )
     decision = cleanup.pre_submit_housekeeping()
     assert decision.should_skip is True
+    assert flags == [False]
 
 
 def test_housekeeping_disk_query_fail_open(monkeypatch, run_root: Path, store: JobStore):
@@ -504,24 +753,32 @@ def test_housekeeping_after_probe_failure_conservative(
     monkeypatch, run_root: Path, store: JobStore
 ):
     cleanup = LocalCleanup(run_root, store)
-    # before=96 triggers cleanup; after-probe fails (0) → conservative
+    # before=96 triggers the survey; after-probe fails (0) → conservative
     # fallback keeps 96 → should_skip.
+    flags: list[bool | None] = []
     seq = iter([96, 0])
 
     def fake():
         return next(seq)
 
     monkeypatch.setattr(cleanup, "check_disk_usage", fake)
-    monkeypatch.setattr(cleanup, "cleanup_old_work_dirs", lambda **kw: LocalCleanupReport())
+    monkeypatch.setattr(
+        cleanup,
+        "cleanup_old_work_dirs",
+        lambda **kw: (flags.append(kw.get("allow_task_dir_deletion")), LocalCleanupReport())[1],
+    )
     decision = cleanup.pre_submit_housekeeping()
     assert decision.should_skip is True
     assert decision.disk_usage_after == 96  # fell back to before
+    assert flags == [False]
 
 
 def test_housekeeping_cleanup_crash_recorded(monkeypatch, run_root: Path, store: JobStore):
     cleanup = LocalCleanup(run_root, store)
+    flags: list[bool | None] = []
 
     def boom(**kw):
+        flags.append(kw.get("allow_task_dir_deletion"))
         raise RuntimeError("sweep exploded")
 
     monkeypatch.setattr(cleanup, "check_disk_usage", lambda: 92)
@@ -530,6 +787,7 @@ def test_housekeeping_cleanup_crash_recorded(monkeypatch, run_root: Path, store:
     # Crash captured, not raised; cleanup is non-None with error recorded.
     assert decision.cleanup is not None
     assert any("sweep exploded" in e for e in decision.cleanup.errors)
+    assert flags == [False]
 
 
 def test_housekeeping_decision_to_dict(run_root: Path, store: JobStore):
@@ -765,6 +1023,28 @@ def test_api_cleanup_dry_run(run_root: Path):
         data = resp.json()
         assert data["dry_run"] is True
         assert "freed_human" in data
+
+
+def test_api_cleanup_keeps_non_terminal_dirs(run_root: Path):
+    # r16 P1 on the API surface: the maintenance endpoint must not delete
+    # an over-aged RUNNING job's dir (nor a pending-submission dir).
+    from fastapi.testclient import TestClient
+
+    app, mgr = _build_test_app(run_root)
+    running = _gated_record("api_running", JobStatus.RUNNING, age_days=400)
+    _set_record_work_dir_and_store(mgr.store, run_root, running, "uncategorized", "api_running")
+    _make_job_dir(run_root, "uncategorized", "api_running", age_days=400)
+    pending = _gated_record("api_pending", JobStatus.COMPLETED, age_days=400, submit_state="intent")
+    _set_record_work_dir_and_store(mgr.store, run_root, pending, "uncategorized", "api_pending")
+    _make_job_dir(run_root, "uncategorized", "api_pending", age_days=400)
+
+    with TestClient(app) as client:
+        resp = client.post("/api/v1/maintenance/cleanup?scope=work_dirs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["work_dirs_removed"] == 0
+    assert (run_root / "uncategorized" / "api_running").exists()
+    assert (run_root / "uncategorized" / "api_pending").exists()
 
 
 def test_api_cleanup_scope_work_dirs(run_root: Path):

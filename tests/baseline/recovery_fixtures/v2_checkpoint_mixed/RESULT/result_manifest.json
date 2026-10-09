@@ -1,0 +1,26 @@
+{
+  "products": [
+    {
+      "id": "step_0_singlepoint_output",
+      "kind": "energy_report",
+      "label": "singlepoint (step 0) \u2014 output",
+      "metadata": {
+        "optimization_status": "unknown",
+        "policy_version": 1,
+        "stage_id": "step_0_singlepoint",
+        "stage_status": "completed"
+      },
+      "path": "WORK/05_SP/sp_output.log"
+    },
+    {
+      "id": "step_0_singlepoint_energy",
+      "kind": "energy_report",
+      "label": "singlepoint (step 0) \u2014 energy",
+      "path": ""
+    }
+  ],
+  "status": "failed",
+  "task_id": "fixture_recovery_v2",
+  "version": 2,
+  "workflow": "optimize"
+}

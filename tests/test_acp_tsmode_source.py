@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -12,6 +14,7 @@ from acp.calculations.tsmode.contracts import (
     TsmodeError,
 )
 from acp.calculations.tsmode.source import (
+    build_external_subspace,
     compute_hessian_modes,
     kabsch_rmsd,
     load_bundle_from_files,
@@ -27,6 +30,19 @@ from tests.tsmode_synthetic import (
     make_consistent_pair,
     write_hess_file,
 )
+
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "qc" / "orca61"
+# sha256 of tests/fixtures/qc/orca61/ts_opt.hess (README, frozen 2026-10-06).
+TS_OPT_HESS_SHA256 = "7dd266577567c38bb2419aa5293a10cfe0e77d99ab8acdf4eaf9510874501334"
+
+# Directly constructed controlled LINEAR HCN (H–C≡N along x, Å) — never
+# generated through tests/tsmode_synthetic.py, whose fixtures are built with
+# the same build_external_subspace under test (self-masking).
+LINEAR_HCN_COORDS = np.array([[0.0, 0.0, 0.0], [1.06, 0.0, 0.0], [2.20, 0.0, 0.0]])
+LINEAR_HCN_MASSES = np.array([1.008, 12.011, 14.007])
+# Nonlinear control: water (bent, Å).
+WATER_COORDS = np.array([[0.0, 0.0, 0.0], [0.7572, 0.5864, 0.0], [-0.7572, 0.5864, 0.0]])
+WATER_MASSES = np.array([15.999, 1.008, 1.008])
 
 
 @pytest.fixture()
@@ -173,9 +189,7 @@ class TestBundleLoading:
 
     def test_explicit_charge_multiplicity_win(self, consistent_pair):
         out_path, hess_path, _c, _f, _m = consistent_pair
-        bundle = load_bundle_from_files(
-            out_path, hess_path, charge=2, multiplicity=3
-        )
+        bundle = load_bundle_from_files(out_path, hess_path, charge=2, multiplicity=3)
         assert bundle.charge == 2
         assert bundle.multiplicity == 3
 
@@ -196,6 +210,104 @@ class TestHessianModes:
         assert kabsch_rmsd(coords, coords.copy()) == pytest.approx(0.0, abs=1e-12)
 
 
+class TestExternalSubspaceRank:
+    def test_linear_hcn_keeps_five_columns(self):
+        external = build_external_subspace(LINEAR_HCN_COORDS, np.sqrt(LINEAR_HCN_MASSES))
+        assert external.shape == (9, 5)
+        gram = external.T @ external
+        assert np.allclose(gram, np.eye(5), atol=1e-12)
+
+    def test_water_keeps_six_columns(self):
+        external = build_external_subspace(WATER_COORDS, np.sqrt(WATER_MASSES))
+        assert external.shape == (9, 6)
+        gram = external.T @ external
+        assert np.allclose(gram, np.eye(6), atol=1e-12)
+
+    def test_linear_zero_mode_removal_is_five(self):
+        # Any SPD Cartesian Hessian: after projection only the projector
+        # kernel is near-zero, so the removal count equals the external rank.
+        modes = compute_hessian_modes(np.eye(9) * 0.1, LINEAR_HCN_MASSES, LINEAR_HCN_COORDS)
+        assert modes.n_zero_modes_removed == 5
+        assert len(modes.frequencies_cm1) == 9 - 5
+
+    def test_nonlinear_zero_mode_removal_is_six(self):
+        modes = compute_hessian_modes(np.eye(9) * 0.1, WATER_MASSES, WATER_COORDS)
+        assert modes.n_zero_modes_removed == 6
+        assert len(modes.frequencies_cm1) == 9 - 6
+
+
+def _perturb_last_output_geometry(text: str, delta_angstrom: float) -> str:
+    lines = text.splitlines()
+    header = max(
+        index for index, line in enumerate(lines) if "CARTESIAN COORDINATES (ANGSTROEM)" in line
+    )
+    for index in range(header + 1, len(lines)):
+        tokens = lines[index].split()
+        if len(tokens) < 4:
+            continue
+        try:
+            float(tokens[-1])
+            float(tokens[-2])
+            float(tokens[-3])
+        except ValueError:
+            continue
+        # Both ORCA row forms ("0 C x y z" and "C x y z") keep y at -2.
+        tokens[-2] = f"{float(tokens[-2]) + delta_angstrom:.10f}"
+        lines[index] = " ".join(tokens)
+        return "\n".join(lines) + "\n"
+    raise AssertionError("no cartesian geometry row found after header")
+
+
+class TestRealTsOptFixture:
+    """(c) re-verification against the frozen ORCA 6.1.1 bundle (T02)."""
+
+    def _load(self, tmp_path, *, out_text=None, with_geometry=True):
+        out_path = tmp_path / "ts_opt.out"
+        if out_text is None:
+            out_text = (FIXTURE_DIR / "ts_opt.out").read_text(encoding="utf-8", errors="replace")
+        out_path.write_text(out_text, encoding="utf-8")
+        return load_bundle_from_files(
+            out_path,
+            FIXTURE_DIR / "ts_opt.hess",
+            geometry_path=FIXTURE_DIR / "ts_opt.xyz" if with_geometry else None,
+        )
+
+    def test_bohr_units_atom_order_and_xyz_rmsd(self, tmp_path):
+        bundle = self._load(tmp_path)
+        # Atom ordering: Hessian $atoms order == output order == xyz order
+        # (a mismatch raises during load; assert the resolved order itself).
+        assert bundle.elements == ["C", "N", "H"]
+        # Unit discrimination stays on the documented Bohr interpretation —
+        # no fallback warning, and the Å rendering matches the frozen xyz.
+        assert not [w for w in bundle.warnings if "unit" in w]
+        coords = np.asarray(bundle.coordinates_angstrom, dtype=np.float64)
+        xyz = np.loadtxt(FIXTURE_DIR / "ts_opt.xyz", skiprows=2, usecols=(1, 2, 3))
+        # Literal 0.05 Å gate (NOT the module constant): a relaxation of
+        # _GEOMETRY_RMSD_TOLERANCE_A must not silently relax this assertion.
+        assert kabsch_rmsd(coords, xyz) < 0.05
+        # Bohr→Å conversion applied: raw-Bohr numbers interpreted as Å would
+        # not match the xyz at the 0.05 Å gate.
+        assert coords.max() > 1.0
+        assert bundle.masses_amu[0] == pytest.approx(12.0, rel=0.01)
+        assert bundle.hessian_sha256 == TS_OPT_HESS_SHA256
+
+    def test_zero_mode_index_rejected(self, tmp_path):
+        from acp.calculations.tsmode.contracts import TARGET_MODE_INVALID
+        from acp.calculations.tsmode.mode_mapping import resolve_target_mode
+
+        bundle = self._load(tmp_path)
+        with pytest.raises(TsmodeError) as excinfo:
+            resolve_target_mode(bundle, 0)
+        assert excinfo.value.error_code == TARGET_MODE_INVALID
+
+    def test_half_angstrom_perturbation_rejected(self, tmp_path):
+        text = (FIXTURE_DIR / "ts_opt.out").read_text(encoding="utf-8", errors="replace")
+        perturbed = _perturb_last_output_geometry(text, 0.5)
+        with pytest.raises(TsmodeError) as excinfo:
+            self._load(tmp_path, out_text=perturbed)
+        assert excinfo.value.error_code == SOURCE_GEOMETRY_MISMATCH
+
+
 class TestSnapshot:
     def test_snapshot_roundtrip_and_hash_verification(self, tmp_path, consistent_pair):
         out_path, hess_path, _c, _f, _m = consistent_pair
@@ -203,6 +315,8 @@ class TestSnapshot:
         snapshot_dir = tmp_path / "INPUT" / "tsmode"
         files = snapshot_bundle_files(bundle, snapshot_dir)
         assert files["hessian"].name == "source.hess"
+        # Raw-byte staging: snapshot copy is byte-identical to the source.
+        assert files["hessian"].read_bytes() == Path(bundle.hessian_file).read_bytes()
         assert (snapshot_dir / "source.xyz").is_file()
         assert (snapshot_dir / "source_modes.json").is_file()
         assert (snapshot_dir / "source_bundle.json").is_file()

@@ -1,36 +1,44 @@
-"""Quantum chemistry backend abstraction layer."""
+"""Quantum chemistry backend abstraction layer.
 
-# pyright: reportMissingImports=false, reportUnknownVariableType=false
+Compat re-export (plan todo 12): implementations live in :mod:`cccp.backends`;
+this package preserves the historical ``acp.backends`` import surface with
+``A is B`` identity.  ``batch`` is the quarantined legacy backend-direct
+batch entry (sanctioned legacy surface, not a production path — see the
+``legacy_batch_quarantine`` gate).
+"""
 
-from acp.backends.base import (
+from __future__ import annotations
+
+from cccp.backends import (
+    BackendCapabilityStatus,
+    BackendRegistry,
+    CAPABILITY_MATRIX,
+    CensoBackend,
     ClusteringTool,
     ConformerSearcher,
+    CrestBackend,
+    ExternalBackend,
     FrequencyCalculator,
     GeometryOptimizer,
+    IsostatBackend,
+    MolclusBackend,
+    ORCABackend,
     QCBackend,
     QCResult,
     RelaxedScanCalculator,
     SinglePointCalculator,
-    ThermoCalculator,
     TSMechanismCalculator,
-)
-from acp.backends.capabilities import (
-    CAPABILITY_MATRIX,
-    BackendCapabilityStatus,
+    ThermoCalculator,
+    XTBBackend,
     backend_status,
+    batch_process_thermo,
+    get_backend,
     list_backends,
     list_capabilities,
+    register_backend,
+    require_backend,
     supports,
 )
-from acp.backends.censo_backend import CensoBackend
-from acp.backends.crest import CrestBackend
-from acp.backends.external import batch_process_thermo
-from acp.backends.external_backend import ExternalBackend
-from acp.backends.isostat_backend import IsostatBackend
-from acp.backends.molclus_backend import MolclusBackend
-from acp.backends.orca import ORCABackend
-from acp.backends.registry import BackendRegistry, get_backend, register_backend, require_backend
-from acp.backends.xtb import XTBBackend
 
 from .batch import BatchSpFrameResult, BatchSpResult, batch_single_point
 

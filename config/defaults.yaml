@@ -88,6 +88,11 @@ nmr:
   temperature_k: 298.15
   energy_window_kcal: 3.0
   max_conformers: 10
+  # sampling_solvent_model: intentionally has NO default here (nor in
+  # cccp.config._get_default_config()). Absence is the signal: with a solvent
+  # name and no key, the CREST/xTB sampling segment defaults to ALPB
+  # (receipt defaulted=true); key "none" forces gas-phase sampling; explicit
+  # "alpb"/"gbsa" are used as given. Do NOT add a default value.
   references:
     "1H": null
     "13C": null

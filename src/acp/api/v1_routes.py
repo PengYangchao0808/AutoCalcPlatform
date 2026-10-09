@@ -206,7 +206,7 @@ from acp.scheduler.capabilities import (
     matches_capabilities,
 )
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.files import build_manifest, resolve_safe
+from acp.scheduler.files import build_manifest, is_archived_attempt_path, resolve_safe
 from acp.scheduler.job_edit import (
     EditConflictError,
     EditValidationError,
@@ -220,7 +220,14 @@ from acp.scheduler.job_edit import (
     input_structure_changed,
     workflow_edit_status,
 )
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    ALL_WORKFLOWS,
+    PUBLIC_WORKFLOWS,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+    validate_scan_submission,
+)
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
@@ -2171,15 +2178,37 @@ def preview_irc_ts_source(request: Request, source_id: str = Query(...)) -> dict
     return source.provenance()
 
 
+def _validate_scan_submission(
+    workflow: str, method: dict[str, Any], inp: dict[str, Any]
+) -> None:
+    """Reject invalid ``scan`` submissions with a synchronous 422.
+
+    ``scan_method_flags`` is the single coordinate contract the local/remote
+    runner consumes; validating at the API boundary turns the previous
+    201-then-async-failure ("scan job requires at least one coordinate") into
+    an immediate client error (NEW-2).  The shared
+    ``validate_scan_submission`` boundary validator completes the same
+    check for v1 and v2 (indices/finite range/points).  No-op for other
+    workflows.
+    """
+    if workflow != "scan":
+        return
+    try:
+        validate_scan_submission(workflow, method, inp)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
-    if req.workflow not in SUPPORTED_WORKFLOWS:
+    if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    _validate_scan_submission(req.workflow, req.method, req.input)
     if req.workflow == "irc":
         req.input = _resolve_irc_source_reference(req.input, manager)
     if req.workflow == "BatchOptimize":
@@ -3481,7 +3510,7 @@ def _discover_frequency_sources(work_dir: Path, job_id: str) -> list[FrequencySo
     # 1) Walk WORK/ for .out files with vibrational frequencies
     work = work_dir / "WORK"
     if work.is_dir():
-        for out_file in sorted(work.rglob("*.out")):
+        for out_file in sorted(p for p in work.rglob("*.out") if not is_archived_attempt_path(p)):
             try:
                 head = out_file.read_text(encoding="utf-8", errors="replace")[:8192]
             except OSError:
@@ -4821,6 +4850,18 @@ def _compute_recovery(record: JobRecord, disk_state: JobDiskState) -> JobRecover
         notes = "该工作流不支持断点续算，请使用重算"
     else:
         notes = ""
+    remote_meta = record.result.get("remote") if isinstance(record.result, dict) else None
+    remote_meta = remote_meta if isinstance(remote_meta, dict) else {}
+    submit_state = remote_meta.get("submit_state")
+    cancel_state = remote_meta.get("cancel_state")
+    if submit_state in ("intent", "unconfirmed"):
+        reconcile_action = "reconcile_submission_pending"
+    elif submit_state == "aborted_before_bsub":
+        reconcile_action = "confirm_cancelled_from_aborted_submission"
+    elif submit_state == "not_accepted":
+        reconcile_action = "retention_reclaims_directory"
+    else:
+        reconcile_action = ""
     return JobRecovery(
         can_pause=status == JobStatus.RUNNING,
         can_unpause=status == JobStatus.PAUSED,
@@ -4830,6 +4871,9 @@ def _compute_recovery(record: JobRecord, disk_state: JobDiskState) -> JobRecover
         can_rerun=status.is_terminal,
         can_purge=True,
         can_cancel=status.is_active,
+        submit_state=submit_state if isinstance(submit_state, str) else None,
+        cancel_state=cancel_state if isinstance(cancel_state, str) else None,
+        reconcile_action=reconcile_action,
     )
 
 
@@ -5260,6 +5304,7 @@ def _edited_spec_diff(record: JobRecord, spec: JobSpec) -> list[dict[str, Any]]:
 
 
 def _validate_edited_execution(spec: JobSpec, manager: JobManager) -> None:
+    _validate_scan_submission(spec.workflow, spec.method, spec.input)
     try:
         validate_execution_request(spec)
     except ExecutionTargetError as exc:
@@ -5990,7 +6035,10 @@ def preview_remote_file(
     *mode=auto* chooses the preview type based on the file extension:
     ``.xyz/.sdf/.mol`` -> ``structure``, text extensions -> ``tail`` for
     ``.log/.out`` and ``text`` otherwise, and ``report`` is not selected
-    automatically because it requires a known report file name.
+    automatically because it requires a known report file name.  Report
+    consumers (e.g. the NMR panel) request ``mode=report`` explicitly and
+    unwrap ``content["report"]`` — see ``_parse_remote_report`` for the
+    deterministic unwrap contract.
 
     Files larger than the online preview limit are automatically downgraded
     to ``tail`` mode and marked with ``truncated=true``.
@@ -6070,6 +6118,14 @@ def _parse_remote_report(
 
     Generic JSON reports are returned under a ``json_report`` envelope.
     Other files are returned as plain text wrapped in a generic envelope.
+
+    Deterministic unwrap contract (frontend ``fetchNmrReportJson``, todo 23):
+    ``mode=report`` responses carry the parsed document at
+    ``content["report"]`` whenever ``content["type"] == "json_report"`` and
+    report consumers unwrap exactly that key.  Values inside the document
+    dict are serialized verbatim — nulls survive (the preview model dumps
+    with ``exclude_none`` at the field level only), so missing numbers render
+    as an em dash upstream and are never coerced to 0.
     """
     import json
 
@@ -7166,10 +7222,10 @@ def node_matching(
     except ValidationError as exc:
         first_error = exc.errors()[0] if exc.errors() else {}
         raise HTTPException(status_code=400, detail=first_error.get("msg", str(exc))) from exc
-    if req.workflow not in SUPPORTED_WORKFLOWS:
+    if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     manager = _manager(request)
     try:

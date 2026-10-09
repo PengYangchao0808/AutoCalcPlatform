@@ -6773,8 +6773,11 @@ def test_shared_geometry_loader_contract() -> None:
     assert 'id="energy-structure-viewer"' in html
     assert "function energyGraphDestroyViewer()" in html
 
-    # No new viewer instances: code-level createViewer count is unchanged (7)
-    assert html.count("$3Dmol.createViewer") == 7, "viewer instance count changed"
+    # Viewer-instance budget pin: the only instance beyond the Phase-D set is
+    # the NMR candidate structure canvas, which must route through the shared
+    # loader (registerCanvasLoader/sharedLoadGeometry + scheduleViewerFraming).
+    # Adding another instance requires a deliberate update here.
+    assert html.count("$3Dmol.createViewer") == 8, "viewer instance count changed"
 
     # reaction/preview/s2scan viewers untouched
     assert "reactionViewer = $3Dmol.createViewer" in html
@@ -12417,11 +12420,11 @@ def test_picker_set_source_group_exists() -> None:
         "setSourceGroup must be in the picker instance return object"
 
 
-def test_wizard_create_viewer_count_still_seven() -> None:
-    """$3Dmol.createViewer count in the HTML is STILL exactly 7 (no new viewer)."""
+def test_wizard_create_viewer_count_pinned() -> None:
+    """$3Dmol.createViewer count in the HTML is pinned at 8 viewer instances."""
     html = FRONTEND.read_text(encoding="utf-8")
     count = html.count("$3Dmol.createViewer")
-    assert count == 7, f"Expected exactly 7 $3Dmol.createViewer calls, found {count}"
+    assert count == 8, f"Expected exactly 8 $3Dmol.createViewer calls, found {count}"
 
 
 def test_wizard_no_batch_management_in_step1() -> None:
@@ -12517,10 +12520,10 @@ class TestTaskInputWorkspace:
             assert not only_zh, f"{prefix} keys in zh-CN but not en-US: {sorted(only_zh)}"
             assert not only_en, f"{prefix} keys in en-US but not zh-CN: {sorted(only_en)}"
 
-    def test_create_viewer_count_still_seven(self) -> None:
+    def test_create_viewer_count_pinned(self) -> None:
         html = self._html()
         count = html.count("$3Dmol.createViewer")
-        assert count == 7, f"Expected exactly 7 $3Dmol.createViewer calls, found {count}"
+        assert count == 8, f"Expected exactly 8 $3Dmol.createViewer calls, found {count}"
 
     def test_candidate_api_preserved_and_used(self) -> None:
         html = self._html()
@@ -13349,3 +13352,572 @@ def test_validate_method_warnings_rendered_in_modal_and_summary() -> None:
     # The wizard summary (renderMethodDetail) appends the same warnings.
     assert "(wizardState.method && wizardState.method.warnings) || []" in html
     assert 'warnItem.className = "method-detail-warning"' in html
+
+
+# ---------------------------------------------------------------------------
+# T23 — unified NMR report retrieval + null rendering (gap G13)
+# ---------------------------------------------------------------------------
+
+
+def _nmr_panel_region(html: str) -> str:
+    start = html.index("// ── NMR report viewer")
+    end = html.index("// ── CatalogUtils", start)
+    return html[start:end]
+
+
+def test_nmr_report_reader_unified_local_remote() -> None:
+    """fetchNmrReportJson probes the todo-22 layout first and unwraps remote previews."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    assert "NMR_REPORT_PATHS" in region
+    new_layout = region.index('"reports/nmr_report.json"')
+    disk_layout = region.index('"RESULT/reports/nmr_report.json"')
+    legacy_root = region.index('"nmr_report.json"')
+    assert new_layout < disk_layout < legacy_root, (
+        "probe order: manifest spelling, then disk path, then legacy root"
+    )
+
+    assert "fetchNmrReportFromPath" in region
+    assert "unwrapNmrPreviewReport" in region
+    assert "unwrapNmrFileReport" in region
+
+    assert "?mode=report" in region, "remote reads must use the deterministic report mode"
+    assert "apiRemote(" in region
+    assert 'content.type === "json_report"' in region
+    assert "content.report" in region
+
+
+def test_nmr_null_render_em_dash_not_zero() -> None:
+    """Missing winner/regression/boltzmann numerics render an em dash, never 0."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    assert "nmrDisplayNumber" in region
+    assert "nmrProbability" in region
+    assert 'NMR_NULL_DISPLAY = "—"' in region
+
+    assert "Number(cand.dp4_probability) || 0" not in region
+    assert "Number(cand.dp5_probability) || 0" not in region
+    assert "Number(winner.dp4).toFixed" not in region
+    assert "Number(r.slope).toFixed" not in region
+    assert "Number(c.boltzmann_weight).toFixed" not in region
+
+    assert "|| 0" not in region, "NMR panel must not coerce null to 0"
+    assert "?? 0" not in region, "NMR panel must not coerce null to 0"
+    assert "NaN" not in region.replace("isFinite", ""), "null/NaN must never print as NaN"
+
+
+# ---------------------------------------------------------------------------
+# T40 — NMR panel: structure atom ↔ assignment row ↔ experimental peak linkage
+# ---------------------------------------------------------------------------
+
+_NMR_I18N_KEY_RE = re.compile(r'"(nmr\.[^"]+)":')
+
+#: Every user-facing string added by T40 must exist in BOTH locales.
+_NMR_REQUIRED_T40_KEYS = {
+    "nmr.legacy_note",
+    "nmr.linkage.hint",
+    "nmr.linkage.clear",
+    "nmr.structure.title",
+    "nmr.structure.loading",
+    "nmr.structure.unavailable",
+    "nmr.atoms.title",
+    "nmr.atoms.hint",
+    "nmr.atoms.no_atoms",
+    "nmr.quality.title",
+    "nmr.quality.evidence",
+    "nmr.quality.coverage",
+    "nmr.quality.calibrated",
+    "nmr.quality.risk",
+    "nmr.quality.risk_note",
+    "nmr.quality.status.valid",
+    "nmr.quality.status.invalid",
+    "nmr.quality.status.evidence_insufficient",
+    "nmr.quality.status.unavailable",
+    "nmr.quality.status.not_applicable",
+    "nmr.quality.status.placeholder",
+    "nmr.quality.calibration.weighted",
+    "nmr.quality.calibration.unweighted",
+    "nmr.quality.calibration.out_of_domain",
+    "nmr.quality.max_z",
+    "nmr.quality.ood_atoms",
+    "nmr.quality.loo_flips",
+    "nmr.quality.no_diagnostics",
+    "nmr.peaks.title",
+    "nmr.peaks.no_data",
+    "nmr.peaks.conflict",
+    "nmr.peaks.summary",
+    "nmr.col_obs",
+    "nmr.col_nucleus",
+    "nmr.col_claims",
+}
+
+
+def _extract_nmr_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract nmr.* i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_NMR_I18N_KEY_RE.findall(m.group(1)))
+
+
+def test_nmr_panel_linkage_hooks_present() -> None:
+    """T40: atom chips/3D atoms ↔ assignment rows ↔ experimental peaks linked.
+
+    The three surfaces share one selection state + one applier, exposed through
+    stable data attributes.  The structure surface reuses the shared
+    structure-viewer conventions (``registerCanvasLoader`` +
+    ``sharedLoadGeometry`` + ``scheduleViewerFraming``) instead of inventing a
+    parallel framing mechanism, and the panel never hand-rolls a trajectory /
+    view projection (root AGENTS ANTI-PATTERN 21).
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    # Shared linkage state + single selection applier.
+    assert "var nmrPanelState = {" in region
+    assert "selectedAtom:" in region
+    assert "selectedObservation:" in region
+    assert "function nmrSelectLink(" in region
+    assert "function nmrSelectAtom(" in region
+    assert "function nmrSelectObservation(" in region
+    assert "function nmrPanelApplySelection(" in region
+
+    # Stable hooks on all three surfaces: structure atoms (chips + 3D pick),
+    # assignment rows, experimental peak rows.
+    for hook in (
+        "data-nmr-atom",
+        "data-nmr-observation",
+        "data-nmr-candidate",
+        "data-nmr-assign-row",
+        "data-nmr-peak-row",
+        "data-nmr-structure-viewer",
+        "data-nmr-claim-atoms",
+        "data-nmr-linkage-clear",
+    ):
+        assert hook in region, f"missing linkage hook {hook!r}"
+
+    # Structure surface reuses the structure-viewer load/framing convention.
+    assert 'registerCanvasLoader("nmr-structure"' in region
+    assert "sharedLoadGeometry(" in region
+    assert "scheduleViewerFraming(" in region
+    assert ".center({}, 0)" not in region, "framing must use scheduleViewerFraming"
+    assert ".zoomTo({}, 0)" not in region, "framing must use scheduleViewerFraming"
+
+    # Geometry probing stays read-only through the existing file endpoints.
+    assert "function nmrFetchCandidateGeometry(" in region
+    assert "conformers/input.xyz" in region
+
+    # Frames contract (ANTI-PATTERN 21): no hand-rolled projection payload.
+    assert "view_type" not in region
+    assert "series:" not in region
+
+
+def test_nmr_panel_quality_and_risk_namespaces_separated() -> None:
+    """T40: per-candidate quality surfaces T39 risk indicators without mixing
+    them into the calibrated probability namespace, and legacy reports render
+    the T24 note (schema_version absent)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    assert "function renderNmrCandidateQuality(" in region
+    assert "function renderNmrPeaks(" in region
+    assert "function nmrRiskSummary(" in region
+    assert 't("nmr.quality.calibrated")' in region
+    assert 't("nmr.quality.risk")' in region
+    assert 't("nmr.quality.risk_note")' in region
+
+    # Risk summary reads the diagnostics (risk) namespace ONLY.
+    risk = region.split("function nmrRiskSummary(", 1)[1].split("\nfunction ", 1)[0]
+    assert "signals" in risk
+    assert "atom_support" in risk
+    assert "leave_one_signal_out" in risk
+    assert "probability" not in risk, "risk summary must not touch calibrated probability"
+    assert "dp4_probability" not in risk
+
+    # The calibrated line reads cand.probability typed state.
+    quality = region.split("function renderNmrCandidateQuality(", 1)[1].split("\nfunction ", 1)[0]
+    assert "cand.probability" in quality
+    assert "nmrRiskSummary(" in quality
+
+    # T24 handoff: legacy reports (no schema_version) render the explicit note.
+    assert "report.schema_version == null" in region
+    assert 't("nmr.legacy_note")' in region
+
+
+def test_nmr_i18n_keys_complete_across_locales() -> None:
+    """T40: every new nmr.* key exists in both zh-CN and en-US, paired."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    zh_keys = _extract_nmr_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_nmr_keys(html, _EN_BLOCK_RE)
+
+    assert zh_keys, "No nmr.* keys found in zh-CN block"
+    assert en_keys, "No nmr.* keys found in en-US block"
+    missing = _NMR_REQUIRED_T40_KEYS - zh_keys
+    assert not missing, f"T40 keys missing from zh-CN: {sorted(missing)}"
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"Keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"Keys in en-US but missing from zh-CN: {sorted(only_en)}"
+
+
+def test_nmr_panel_pure_helpers_behavior() -> None:
+    """T40: the derived risk summary and label/claim helpers are correct.
+
+    Behavior lock (node, source-extracted like the PES revision test): risk
+    summary takes max |z| over finite z-scores only, counts out-of-domain atom
+    support records and winner flips; labels follow the server's
+    ``element+per-element-count`` convention; claim aggregation dedupes atoms
+    and candidate indices per observation id.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    region = _nmr_panel_region(html)
+
+    def fn_source(name: str) -> str:
+        body = region.split(f"function {name}(", 1)[1].split("\nfunction ", 1)[0]
+        return f"function {name}(" + body
+
+    script = "\n".join(
+        (
+            fn_source("nmrRiskSummary"),
+            fn_source("nmrAtomLabelsFromSymbols"),
+            fn_source("nmrPeakClaimsFromAssignments"),
+        )
+    ) + textwrap.dedent(
+        """
+        var diagnostics = {
+          signals: [
+            { z_score: 1.25 }, { z_score: -3.5 }, { z_score: null }, { z_score: "bad" }
+          ],
+          atom_support: [
+            { atom_label: "C1", out_of_domain: true },
+            { atom_label: "C2", out_of_domain: false }
+          ],
+          leave_one_signal_out: [
+            { winner_changed: true }, { winner_changed: false }
+          ]
+        };
+        var risk = nmrRiskSummary(diagnostics);
+        var labels = nmrAtomLabelsFromSymbols(["C", "C", "H", "H", "H"]);
+        var claims = nmrPeakClaimsFromAssignments({ candidates: [
+          { index: 0, assignment: [
+            { atom: "C1", element: "C", exp_ppm: 12.5, observation_id: "C:0" } ] },
+          { index: 1, assignment: [
+            { atom: "C2", element: "C", exp_ppm: 12.5, observation_id: "C:0" },
+            { atom: "C1", element: "C", exp_ppm: 30.1, observation_id: "C:1" } ] }
+        ]});
+        console.log(JSON.stringify({
+          risk: risk, labels: labels, nClaims: claims.length, firstClaim: claims[0]
+        }));
+        """
+    )
+    if not shutil.which("node"):
+        pytest.skip("node is not available")
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["risk"] == {"nSignals": 4, "maxAbsZ": 3.5, "oodAtoms": 1, "looFlips": 1}
+    assert payload["labels"] == ["C1", "C2", "H1", "H2", "H3"]
+    assert payload["nClaims"] == 2
+    assert payload["firstClaim"]["observation_id"] == "C:0"
+    assert payload["firstClaim"]["candidate_indices"] == [0, 1]
+    assert payload["firstClaim"]["atom_labels"] == ["C1", "C2"]
+
+
+def test_scan_wizard_fields_dom_and_i18n_lock() -> None:
+    """DOM + i18n lock for the scan wizard coordinate fields (GAP-8).
+
+    The panel and its five fields are new ids (existing pinned ids stay
+    untouched); every user-visible label/message exists in BOTH locale
+    blocks.  Removing the panel, renaming an id, or shipping an
+    untranslated error turns this red.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    for dom_id in (
+        "scan-wizard-panel",
+        "scan-wiz-atom-1",
+        "scan-wiz-atom-2",
+        "scan-wiz-start",
+        "scan-wiz-end",
+        "scan-wiz-points",
+        "scan-wiz-status",
+    ):
+        assert f'id="{dom_id}"' in html, dom_id
+    # The panel lives inside #job-modal so the generic draft capture
+    # (_captureWizardDraft's input[id]/select[id]/textarea[id] sweep)
+    # round-trips the fields without any per-field registry.
+    assert html.index('id="job-modal"') < html.index('id="scan-wizard-panel"')
+    assert html.index('id="scan-wizard-panel"') < html.index("function _captureWizardDraft()")
+    assert 'modal.querySelectorAll("input[id], select[id], textarea[id]")' in html
+    i18n_keys = [
+        "modal.scan_coord",
+        "modal.scan_atom_1",
+        "modal.scan_atom_2",
+        "modal.scan_start",
+        "modal.scan_end",
+        "modal.scan_points",
+        "modal.scan_hint",
+        "modal.scan_invalid",
+        "modal.scan_err_fields_required",
+        "modal.scan_err_atom_not_integer",
+        "modal.scan_err_atom_not_positive",
+        "modal.scan_err_atoms_not_distinct",
+        "modal.scan_err_atom_out_of_range",
+        "modal.scan_err_range_not_finite",
+        "modal.scan_err_range_not_positive",
+        "modal.scan_err_range_equal",
+        "modal.scan_err_points_invalid",
+        "modal.scan_err_no_confirmed_structure",
+    ]
+    for key in i18n_keys:
+        assert html.count(f'"{key}":') == 2, f"{key} must exist in zh-CN and en-US"
+
+
+def test_scan_wizard_submission_path_lock() -> None:
+    """The wizard submit path uses the pure builder; conversion is once.
+
+    ``submitJobModal`` must route every scan body through
+    ``buildScanWizardBodyParts`` (validated per final submitted structure)
+    and the 1-based -> 0-based conversion must live in exactly one place.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function buildScanWizardBodyParts(fields, structureEntry)" in html
+    assert "function scanWizardCountAtoms(xyzText)" in html
+    # Exactly-once conversion: both atom conversions sit at the single
+    # marked site inside the builder and nowhere else in the page.
+    builder = html.split("function buildScanWizardBodyParts", 1)[1].split(
+        "function scanWizardErrorMessage", 1
+    )[0]
+    assert builder.count("scan-index-base-convert") == 1
+    assert builder.count("atomA - 1") == 1
+    assert builder.count("atomB - 1") == 1
+    assert html.count("atomA - 1") == 1
+    assert html.count("atomB - 1") == 1
+    # submitJobModal consumes the builder result; it never re-derives
+    # coordinates or points itself.
+    assert "scanParts = buildScanWizardBodyParts(scanWizardFieldValues(), s);" in html
+    assert "inputPayload.scan_coordinates = scanParts.input.scan_coordinates;" in html
+    assert "methodPayload.scan_points = scanParts.method.scan_points;" in html
+    assert (
+        "methodPayload.levels.scan = Object.assign({}, methodPayload.levels.scan"
+        " || {}, scanParts.mirror);" in html
+    )
+    # Scan bodies are bound to the final submitted structure's geometry:
+    # the scan branch submits explicit xyz_text, never a smiles/asset guess.
+    scan_branch = html.split("if (scanParts) {", 1)[1].split("} else if", 1)[0]
+    assert (
+        'inputPayload = { source_type: "xyz_text", '
+        'source: String(s.xyz || s.xyz_text || "") };' in scan_branch
+    )
+    # Batch semantics: a failed per-structure validation aborts the whole
+    # submit with a clear result instead of queueing an unverifiable job.
+    assert "scanWizardSetStatus(scanMsg);" in html
+    assert "window.alert(scanMsg);" in html
+
+
+def test_scan_wizard_state_hydration_and_switch_away_lock() -> None:
+    """Draft restore, edit-recalc hydration, and switch-away wiring (GAP-8)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    visibility = html.split("function updateInputModeVisibility()", 1)[1].split(
+        "function updateTaskNamePlaceholder", 1
+    )[0]
+    assert (
+        "var isScan = wizardState && wizardState.workflow "
+        '&& wizardState.workflow.id === "scan";' in visibility
+    )
+    assert 'scanPanel.style.display = isScan ? "block" : "none";' in visibility
+    assert "scanWizardClear();" in visibility
+    # Fresh context on pending-task/editor hydrate; the hydrate chain's
+    # final updateConfigCards() refills from the method-stage mirror.
+    pending = html.split("function applyPendingNewTask()", 1)[1].split(
+        "function configureStageSourcePanel", 1
+    )[0]
+    assert "scanWizardClear();" in pending
+    config = html.split("function updateConfigCards()", 1)[1].split(
+        "function loadDefaultMethodProfile", 1
+    )[0]
+    assert "scanWizardSyncFromMethodState();" in config
+    assert "function scanWizardSyncFromMethodState()" in html
+    assert "function refreshScanWizardStatus()" in html
+    # Structure changes re-validate: remove/clear paths call
+    # updateInputModeVisibility, which refreshes the scan status.
+    assert "function scanWizardEnsureListeners()" in html
+
+
+# ── Executed scan submission: real wizard body -> real v1 -> runner argv ─
+# (todo 13 / GAP-8 acceptance).  Reuses T9's node captured-body helper and
+# fake-scheduler seam from tests/test_scan_workflow.py; production code is
+# never touched and no live scan process can spawn.
+
+
+def test_executed_wizard_body_reaches_v1_validation_and_runner_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run the page's REAL builder output through real v1 + fake scheduler.
+
+    The node harness executes ``buildScanWizardBodyParts`` from the shipped
+    HTML (1-based fields -> 0-based wire, distinct values so the chain is
+    proven to carry data, not constants); the resulting ``/api/v1/jobs``
+    body is posted through the real FastAPI route (real
+    ``_validate_scan_submission``), the scheduler seam captures the JobSpec
+    instead of queueing, and the real ``JobRunner._build_cmd`` must emit
+    ``--coordinate <a,b,start,end>`` and ``--scan-points <n>``.
+    """
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from acp.scheduler.runner import JobRunner
+    from tests.test_scan_workflow import (
+        XYZ_TRIATOMIC,
+        _fake_scheduler,
+        _run_wizard_builder_in_node,
+    )
+
+    built = _run_wizard_builder_in_node(
+        [
+            {
+                "name": "accepted",
+                "fields": {
+                    "atomA": "2",
+                    "atomB": "3",
+                    "start": "1.5",
+                    "end": "2.5",
+                    "points": "7",
+                },
+                "structure": {"xyz": XYZ_TRIATOMIC},
+            }
+        ]
+    )[0]["result"]
+    assert built["ok"] is True, built
+    # Captured builder output: 1-based display fields became the 0-based wire form.
+    assert built["input"]["scan_coordinates"] == ["1,2,1.5,2.5"]
+    assert built["method"]["scan_points"] == 7
+
+    body = {
+        "workflow": "scan",
+        "molecule_name": "wizard_scan",
+        "input": {
+            "source_type": "xyz_text",
+            "source": XYZ_TRIATOMIC,
+            "charge": 0,
+            "multiplicity": 1,
+            "scan_coordinates": built["input"]["scan_coordinates"],
+        },
+        "method": {
+            "schema_id": "dft_scan",
+            "profile_id": "default",
+            "scan_points": built["method"]["scan_points"],
+            "levels": {"scan": dict(built["mirror"], engine="orca", functional="r2SCAN-3c")},
+        },
+        "resources": {"nproc": 4, "mem": "8GB"},
+        "execution_mode": "local",
+    }
+
+    os.environ["ACP_RUN_ROOT"] = str(tmp_path)
+    from acp.api.server import create_app
+
+    captured: list = []
+    with TestClient(create_app(run_root=tmp_path, max_running=1)) as client:
+        _fake_scheduler(monkeypatch, captured)
+        response = client.post("/api/v1/jobs", json=body)
+        assert response.status_code == 201, response.text
+
+    # Fake scheduler: exactly one JobSpec captured, nothing queued for real work.
+    assert len(captured) == 1
+    spec = captured[0]
+    assert spec.workflow == "scan"
+    assert spec.input["scan_coordinates"] == ["1,2,1.5,2.5"]
+    assert spec.method["scan_points"] == 7
+
+    # Real runner argv builder (pure — spawns nothing).
+    cmd = JobRunner(python_executable="python")._build_cmd(spec, tmp_path, input_path="input.xyz")
+    coordinate_at = cmd.index("--coordinate")
+    assert cmd[coordinate_at + 1] == "1,2,1.5,2.5"
+    points_at = cmd.index("--scan-points")
+    assert cmd[points_at + 1] == "7"
+
+
+# ---------------------------------------------------------------------------
+# Queue-row freshness / detail-cache coherence (todo 14 / GAP-9) — static
+# pins supplementary to the executed browser suite
+# (tests/test_frontend_interaction.py::TestQueueRowFreshnessBrowser).
+# ---------------------------------------------------------------------------
+
+
+def test_job_detail_cache_epoch_guard_present() -> None:
+    """Late detail responses from older generations are rejected, and the
+    frozen (job_id, attempt, revision) identity gates cache writes."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "jobDetailGenerations" in html, "detail request generation map missing"
+    assert "function jobExecutionIdentity(job)" in html
+    body = html.split("function jobExecutionIdentity(job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "attempt" in body and "revision" in body
+    assert "name_revision" not in body, (
+        "name_revision is organization naming — it must not enter the execution-version identity"
+    )
+    fetch_body = html.split("async function fetchJobDetail(jobId)", 1)[1].split(
+        "\nasync function ", 1
+    )[0]
+    assert "jobDetailGenerations[key]" in fetch_body, "generation capture/check missing"
+    assert "function jobDetailCacheStaleFor(" in html
+    assert "function invalidateJobDetail(" in html
+
+
+def test_job_detail_cache_invalidated_on_all_row_actions_and_batch_ops() -> None:
+    """Every row action and batch operation invalidates the acted jobs'
+    cached detail — not only the selected job's."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    for fn in (
+        "async function pauseJob(",
+        "async function unpauseJob(",
+        "async function continueJob(",
+        "async function rerunJob(",
+        "async function cancelJob(",
+    ):
+        idx = html.index(fn)
+        body = html[idx : idx + 1500]
+        assert "refreshJobDetailAfterAction(jobId)" in body, (
+            f"{fn} does not route through the invalidating post-action refresh"
+        )
+    helper = html.split("async function refreshJobDetailAfterAction(", 1)[1][:1500]
+    assert "invalidateJobDetail(jobId)" in helper
+    assert "findJobRowInCache" in html
+    for fn in (
+        "async function submitDeleteJobModal(",
+        "async function submitPurgeModal(",
+        "async function _batchOp(",
+        "function _refreshAfterRename(",
+    ):
+        idx = html.index(fn)
+        body = html[idx : idx + 2500]
+        assert "invalidateJobDetail(" in body, f"{fn} does not invalidate jobDetailCache"
+
+
+def test_refresh_jobs_prunes_detail_cache_against_list() -> None:
+    """refreshJobs drops cached details whose status/attempt/revision
+    disagree with the fresh list row, and recovery changes re-render rows."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    refresh = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
+    assert "pruneJobDetailCacheAgainstList()" in refresh
+    assert "jobDetailCacheRevision" in refresh, "recovery revision must gate the render key"
+    assert "function renderQueueRowsForRecoveryChange()" in html
+    assert "function pruneJobDetailCacheAgainstList()" in html
+
+
+def test_queue_row_signature_and_terminal_floor() -> None:
+    """Row render cache includes the recovery matrix (recovery-only changes
+    must rebuild rows) and terminal rows never render active-only actions."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    row_fn = html.split("function buildQueueRow(job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "getJobRecovery(job)" in row_fn, "row signature must include recovery"
+    actions = html.split("function appendQueueInlineActions(", 1)[1].split("\nfunction ", 1)[0]
+    assert "isTerminalJobStatus(" in actions, "terminal floor missing on queue rows"
+    assert "btn-rename-task" in actions, "rename button must stay on queue rows"
+    assert "openTaskRenameModal" in actions
+    drawer = html.split("async function openDetailDrawer(job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "isTerminalJobStatus(" in drawer, "terminal floor missing on the detail drawer"
+    assert "function isTerminalJobStatus(" in html

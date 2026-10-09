@@ -1,0 +1,84 @@
+{
+  "config_summary": {
+    "float_rounding_decimals": 10,
+    "machine_paths": "temp roots normalized to <TMP>",
+    "orca_interface": {
+      "maxcore": 2000,
+      "mem": "8GB",
+      "nproc": 4
+    },
+    "shermo": {
+      "pressure_atm": 1.0,
+      "standard_state": "1M",
+      "temperature_K": 298.15
+    }
+  },
+  "files": {
+    "casscf_nevpt2.json": {
+      "bytes": 3319,
+      "sha256": "6a878a3af59f64892ec052cb81545e33846d917e2b2a902033ce7b156734c3a4"
+    },
+    "censo_records.json": {
+      "bytes": 1416,
+      "sha256": "841f5dbb46405c9b4196e4562492d6b92c77b90a31cf7c8ec28689ab63a185fa"
+    },
+    "error_tokens.json": {
+      "bytes": 2026,
+      "sha256": "936e579f27e482cd038fc29f50d7a65e6b6033afc2437d8c857743d7be3cd142"
+    },
+    "hessian_resolution.json": {
+      "bytes": 3785,
+      "sha256": "3272f1ea81560da7fdf2cc68af393535e5c407a53184ec6dc020e33ecd40825e"
+    },
+    "irc.json": {
+      "bytes": 1225,
+      "sha256": "7c390f3f3b1101bcd81b360279792fd12879e5f6585c39855d6fa583932b8725"
+    },
+    "nmr_shielding.json": {
+      "bytes": 1691,
+      "sha256": "c21880ee4cb308d56b5434fc7f94666fb4331405bb682328a3601d2f68396910"
+    },
+    "optimize_rescue.json": {
+      "bytes": 16442,
+      "sha256": "6d6fa0710e88f5cbf14b76386ecc8c826f1da6754074235b82c16ab9774cfbe1"
+    },
+    "orca_routes.json": {
+      "bytes": 7507,
+      "sha256": "b9029fa59a8f6e190065ed515548d9638b98df594e99f90fe473bbfb7417b5df"
+    },
+    "scan.json": {
+      "bytes": 2805,
+      "sha256": "a95a3d6c30d5c889b7f3d993cd4791ec03dd7bae61700825495a579cd9e69036"
+    },
+    "shermo_standard_state.json": {
+      "bytes": 1410,
+      "sha256": "a8752b650db66c5e490d5dd6708938ec57cf063c5a798fde4da245cbfc2a610d"
+    },
+    "unit_strings.json": {
+      "bytes": 1797,
+      "sha256": "1a5f0118f394063d6d89a1d778085c7102118fd04123bd1a77b9b349d55e2239"
+    },
+    "workflow_requests.json": {
+      "bytes": 3617,
+      "sha256": "300dbac703b448ec285ce326c884154fce52f173916cbc31ee695afe168b34fe"
+    }
+  },
+  "generator": "tests/baseline/cccp_calculation_goldens/generate_goldens.py",
+  "generator_sha256": "9b0d619fdef9c180994938ba8cd642212a39b6daad564fd522adf9c8ee6afc10",
+  "inputs": {
+    "casscf_nevpt2.json": "CASSCF input kwargs + recorded ORCA CASSCF/NEVPT2 output text",
+    "censo_records.json": "inline CENSO 1_SCREENING.json + .xyz fixture",
+    "error_tokens.json": "classify_orca_failure sample outputs + token tables",
+    "hessian_resolution.json": "resolve_recalc_hess explicit/configured/symbols matrix",
+    "irc.json": "TS artifact + stubbed direction_status metadata",
+    "nmr_shielding.json": "inline ORCA NMR tensor-block and summary-block logs",
+    "optimize_rescue.json": "build_rescue_plan (failure_type x structure_kind x explicit_ts_target)",
+    "orca_routes.json": "ORCAInterface._build_input_blocks case matrix (see cases[].input_params)",
+    "scan.json": "scan_coordinates 4-point two-coordinate plans + stubbed RelaxedScanResult",
+    "shermo_standard_state.json": "pure standard-state / Gibbs-selection functions",
+    "unit_strings.json": "Thermochemistry metadata + normal-modes product + gradient product units",
+    "workflow_requests.json": "pes2ts_xtb_path_request_v1 + pes2ts_orca_gradient_request_v1 payloads"
+  },
+  "schema": "cccp_calculation_goldens_manifest_v1",
+  "source_commit": "f1c49a148ff85c4fd4ff7167dd7fdeb64e5c434f"
+}

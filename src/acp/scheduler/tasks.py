@@ -25,8 +25,27 @@ from typing import Any
 
 from acp.scheduler.jobs import JobRecord
 from acp.scheduler.migrations import migrate
+from acp.scheduler.store import row_to_record
 
 logger = logging.getLogger(__name__)
+
+#: Batch size B for one task-projection reconcile scan. Drifted rows leave the
+#: drift set once repaired, so N drifted rows converge in <= ceil(N/B) scans.
+PROJECTION_RECONCILE_BATCH: int = 200
+
+#: Authoritative projection columns compared by the drift query. ``updated_at``
+#: and ``last_activity_at`` are deliberately excluded: they change on every sync
+#: and are not part of the state that must agree with jobs.
+_PROJECTION_DRIFT_SQL = """
+    SELECT j.* FROM jobs j
+    LEFT JOIN tasks t ON t.task_id = j.id
+    WHERE t.task_id IS NULL
+       OR COALESCE(t.status, '') <> COALESCE(j.status, '')
+       OR COALESCE(t.current_stage, '') <> COALESCE(j.current_stage, '')
+       OR COALESCE(t.progress, -1.0) <> COALESCE(j.progress, -1.0)
+    ORDER BY j.id
+    LIMIT ?
+"""
 
 _TASKS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -198,6 +217,14 @@ class TaskIndex:
     Mirrors the :class:`~acp.scheduler.jobs.JobStore` connection pattern
     (per-call connections guarded by a lock); a shared connection may be
     supplied instead of a path.
+
+    Lock discipline: ``_lock`` is a **non-reentrant** :class:`threading.Lock`.
+    Any helper called while it is held must use the caller's already-open
+    connection and must never call ``query_rows``/``_run``/``upsert``/
+    ``_query``/``writer_connection`` (or anything else that acquires the lock).
+    ``_project_transition``/``_payload_from_record`` therefore receive the
+    held ``conn`` explicitly; re-entering the lock in the same thread is a
+    permanent self-deadlock.
     """
 
     def __init__(self, conn_or_path: sqlite3.Connection | Path | str):
@@ -267,13 +294,7 @@ class TaskIndex:
     # CRUD
     # ------------------------------------------------------------------ #
 
-    def upsert(self, record: dict[str, Any]) -> None:
-        """Insert or update a task row keyed by ``task_id``.
-
-        First-write-wins columns (project_id, molecule_name, task_name,
-        remark, molecule_key, tags, archived, batch_id, created_at) are
-        only set on INSERT.  Sync-owned columns are updated on conflict.
-        """
+    def _normalize_row(self, record: dict[str, Any]) -> dict[str, Any]:
         row: dict[str, Any] = {}
         for col in _TASK_COLUMNS:
             value = record.get(col)
@@ -282,15 +303,34 @@ class TaskIndex:
             row["layout_version"] = int(row["layout_version"])
         except (TypeError, ValueError):
             row["layout_version"] = 2
+        return row
+
+    def _upsert_conn(self, conn: sqlite3.Connection, record: dict[str, Any]) -> None:
+        row = self._normalize_row(record)
         columns = ", ".join(_TASK_COLUMNS)
         placeholders = ", ".join("?" for _ in _TASK_COLUMNS)
-
         update_parts = ", ".join(f"{c}=excluded.{c}" for c in _SYNC_COLUMNS)
-        self._run(
+        conn.execute(
             f"INSERT INTO tasks ({columns}) VALUES ({placeholders}) "
             f"ON CONFLICT(task_id) DO UPDATE SET {update_parts}",
             tuple(row[col] for col in _TASK_COLUMNS),
         )
+
+    def upsert(self, record: dict[str, Any]) -> None:
+        """Insert or update a task row keyed by ``task_id``.
+
+        First-write-wins columns (project_id, molecule_name, task_name,
+        remark, molecule_key, tags, archived, batch_id, created_at) are
+        only set on INSERT.  Sync-owned columns are updated on conflict.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._upsert_conn(conn, record)
+                conn.commit()
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
 
     def get(self, task_id: str) -> dict[str, Any] | None:
         rows = self._query("SELECT * FROM tasks WHERE task_id=?", (task_id,))
@@ -327,16 +367,19 @@ class TaskIndex:
     # JobRecord mirroring
     # ------------------------------------------------------------------ #
 
-    def sync_from_job(self, record: JobRecord, layout_version: int = 2) -> None:
-        """Derive and upsert a task row from a :class:`JobRecord`.
+    def _payload_from_record(
+        self,
+        record: JobRecord,
+        layout_version: int = 2,
+        conn: sqlite3.Connection | None = None,
+    ) -> dict[str, Any]:
+        """Build the projection payload for *record*.
 
-        ``task_id == job_id`` (existing jobs are indexed as-is); the node
-        mapping follows §9.3 — ``node_id``/``storage_mode`` distinguish the
-        remote (``sftp``) and local execution paths.  ``node_id`` carries
-        the real execution-node name when dispatch already recorded one
-        (``result["node"]`` or ``result["execution_target"]``); the
-        fallback chain (``remote_job_id`` present → ``"remote"``, else
-        ``"local"``) keeps pre-dispatch and historical rows indexed.
+        When *conn* is supplied the caller already holds ``self._lock`` and an
+        open connection (the ``sync_job_transition``/``reconcile_projection``
+        path); the alias-aware ``molecule_key`` is then resolved through that
+        connection so no lock-taking helper is re-entered. ``_lock`` is
+        non-reentrant — see the :class:`TaskIndex` lock-discipline note.
         """
         remote = bool(record.remote_job_id)
         result = record.result if isinstance(record.result, dict) else {}
@@ -353,95 +396,195 @@ class TaskIndex:
         )
         last_activity_at = record.completed_at or record.started_at or record.created_at
         project_id = record.project_id or record.spec.project_id
-        self.upsert(
-            {
-                "task_id": record.id,
-                "job_id": record.id,
-                "project_id": project_id,
-                "molecule_name": record.spec.molecule_name,
-                "task_name": record.spec.task_name,
-                "remark": record.spec.remark,
-                "display_name": Path(record.work_dir).name if record.work_dir else record.spec.name,
-                "workflow": record.spec.workflow,
-                "task_dir_name": Path(record.work_dir).name if record.work_dir else "",
-                "status": record.status.value,
-                "node_id": node,
-                "node_path": record.work_dir,
-                "input_hash": record.input_hash or record.spec.input_hash,
-                "result_manifest_path": None,
-                "current_stage": record.current_stage,
-                "storage_mode": "sftp" if remote else "local",
-                "layout_version": layout_version,
-                "created_at": record.created_at,
-                "updated_at": record.updated_at,
-                "molecule_key": self.compute_molecule_key(
-                    project_id,
-                    record.spec.molecule_name,
-                ),
-                "tags": tags_json,
-                "archived": 0,
-                "batch_id": batch_id,
-                "last_activity_at": last_activity_at,
-                "started_at": record.started_at,
-                "completed_at": record.completed_at,
-                "group_id": record.group_id or record.id,
-                "progress": record.progress,
-                "custom_name": getattr(record, "custom_name", None) or getattr(record.spec, "custom_name", None),
-            }
-        )
+        return {
+            "task_id": record.id,
+            "job_id": record.id,
+            "project_id": project_id,
+            "molecule_name": record.spec.molecule_name,
+            "task_name": record.spec.task_name,
+            "remark": record.spec.remark,
+            "display_name": Path(record.work_dir).name if record.work_dir else record.spec.name,
+            "workflow": record.spec.workflow,
+            "task_dir_name": Path(record.work_dir).name if record.work_dir else "",
+            "status": record.status.value,
+            "node_id": node,
+            "node_path": record.work_dir,
+            "input_hash": record.input_hash or record.spec.input_hash,
+            "result_manifest_path": None,
+            "current_stage": record.current_stage,
+            "storage_mode": "sftp" if remote else "local",
+            "layout_version": layout_version,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+            "molecule_key": (
+                self._molecule_key_with_conn(conn, project_id, record.spec.molecule_name)
+                if conn is not None
+                else self.compute_molecule_key(project_id, record.spec.molecule_name)
+            ),
+            "tags": tags_json,
+            "archived": 0,
+            "batch_id": batch_id,
+            "last_activity_at": last_activity_at,
+            "started_at": record.started_at,
+            "completed_at": record.completed_at,
+            "group_id": record.group_id or record.id,
+            "progress": record.progress,
+            "custom_name": getattr(record, "custom_name", None)
+            or getattr(record.spec, "custom_name", None),
+        }
 
-    def sync_job_transition(self, record: JobRecord) -> None:
-        """Sync status transition with compare-before-write optimization.
+    def sync_from_job(self, record: JobRecord, layout_version: int = 2) -> None:
+        """Derive and upsert a task row from a :class:`JobRecord`.
 
-        If the task row does not exist, falls back to sync_from_job.
-        Only writes when status/stage/progress actually changed.
+        ``task_id == job_id`` (existing jobs are indexed as-is); the node
+        mapping follows §9.3 — ``node_id``/``storage_mode`` distinguish the
+        remote (``sftp``) and local execution paths.  ``node_id`` carries
+        the real execution-node name when dispatch already recorded one
+        (``result["node"]`` or ``result["execution_target"]``); the
+        fallback chain (``remote_job_id`` present → ``"remote"``, else
+        ``"local"``) keeps pre-dispatch and historical rows indexed.
         """
-        rows = self._query(
+        payload = self._payload_from_record(record, layout_version)
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._upsert_conn(conn, payload)
+                conn.commit()
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    def _read_jobs_row(self, conn: sqlite3.Connection, job_id: str) -> sqlite3.Row | None:
+        if not jobs_table_exists(conn):
+            return None
+        return conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+
+    def _project_transition(
+        self,
+        conn: sqlite3.Connection,
+        job_id: str,
+        record: JobRecord,
+        job_row: sqlite3.Row | None,
+    ) -> None:
+        """Project one transition from the current jobs row onto the tasks row.
+
+        The passed ``record`` is only a fallback for a standalone index DB
+        without a ``jobs`` table; when the jobs row is present it is the
+        authority, so a stale snapshot can never overwrite a newer state.
+        Only projection-owned columns are written (never org fields).
+        """
+        source = row_to_record(job_row) if job_row is not None else record
+        stored = conn.execute(
             "SELECT status, current_stage, progress FROM tasks WHERE task_id=?",
-            (record.id,),
-        )
-        if not rows:
-            self.sync_from_job(record)
+            (job_id,),
+        ).fetchone()
+        if stored is None:
+            # Lock discipline: pass the held ``conn`` so the payload's
+            # molecule_key resolution never re-acquires ``self._lock``.
+            self._upsert_conn(conn, self._payload_from_record(source, conn=conn))
             return
 
-        stored = rows[0]
         now = _utc_now_iso()
-
-        status_changed = stored["status"] != record.status.value
-        stage_changed = (stored["current_stage"] or "") != (record.current_stage or "")
+        status_changed = stored["status"] != source.status.value
+        stage_changed = (stored["current_stage"] or "") != (source.current_stage or "")
+        progress_changed = stored["progress"] != source.progress
 
         if status_changed or stage_changed:
-            terminal = record.status.is_terminal
-            if terminal and record.completed_at is not None:
+            terminal = source.status.is_terminal
+            if terminal and source.completed_at is not None:
                 ca_sql = "completed_at=?"
-                ca_param: tuple[Any, ...] = (record.completed_at,)
+                ca_param: tuple[Any, ...] = (source.completed_at,)
             else:
                 ca_sql = "completed_at=completed_at"
                 ca_param = ()
-            self._run(
-                f"UPDATE tasks SET status=?, current_stage=?, "
+            conn.execute(
+                f"UPDATE tasks SET status=?, current_stage=?, progress=?, "
                 f"started_at=COALESCE(started_at,?), "
                 f"{ca_sql}, last_activity_at=?, updated_at=? "
                 f"WHERE task_id=?",
                 (
-                    record.status.value,
-                    record.current_stage,
-                    record.started_at,
+                    source.status.value,
+                    source.current_stage,
+                    # NULL is a real jobs-authoritative value (rerun clears
+                    # jobs.progress); skipping it strands the row in the
+                    # drift set forever (D-T10-1).
+                    source.progress,
+                    source.started_at,
                     *ca_param,
                     now,
                     now,
-                    record.id,
+                    job_id,
                 ),
             )
             return
 
-        stored_progress = stored["progress"]
-        new_progress = record.progress
-        if new_progress is not None and stored_progress != new_progress:
-            self._run(
+        if progress_changed:
+            conn.execute(
                 "UPDATE tasks SET progress=?, updated_at=? WHERE task_id=?",
-                (new_progress, now, record.id),
+                (source.progress, now, job_id),
             )
+
+    def sync_job_transition(self, record: JobRecord) -> None:
+        """Project a status transition from the CURRENT jobs row.
+
+        Compare-before-write is preserved (no write when status/stage/progress
+        are unchanged), but the compared values come from the authoritative
+        jobs row read inside this same SQLite connection — never from the
+        passed-in ``record``. A missing tasks row is created from the jobs row.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                job_row = self._read_jobs_row(conn, record.id)
+                self._project_transition(conn, record.id, record, job_row)
+                conn.commit()
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    def find_projection_drift(self, limit: int = PROJECTION_RECONCILE_BATCH) -> list[str]:
+        """Return up to *limit* drifted job ids, oldest first, in one query.
+
+        Drift = a missing tasks row or a status/current_stage/progress
+        mismatch against the authoritative jobs row. ``ORDER BY j.id`` keeps
+        the page stable; repaired rows leave the set, so the next scan makes
+        progress and no old row starves.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                if not jobs_table_exists(conn):
+                    return []
+                rows = conn.execute(_PROJECTION_DRIFT_SQL, (limit,)).fetchall()
+                return [row["id"] for row in rows]
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
+
+    def reconcile_projection(self, limit: int = PROJECTION_RECONCILE_BATCH) -> int:
+        """Repair up to *limit* drifted task rows from the jobs authority.
+
+        One paged drift query (no per-job query) plus a bounded batch of
+        projections on a single connection. With batch size B, N drifted rows
+        converge within ``ceil(N/B)`` scans: each repair removes its row from
+        the drift set, so the next scan reaches the next-oldest drift.
+        """
+        with self._lock:
+            conn = self._connect()
+            try:
+                if not jobs_table_exists(conn):
+                    return 0
+                rows = conn.execute(_PROJECTION_DRIFT_SQL, (limit,)).fetchall()
+                if not rows:
+                    return 0
+                for job_row in rows:
+                    source = row_to_record(job_row)
+                    self._project_transition(conn, job_row["id"], source, None)
+                conn.commit()
+                return len(rows)
+            finally:
+                if self._shared_conn is None:
+                    conn.close()
 
     def delete(self, task_id: str) -> None:
         """Remove a task row. No-op if absent."""
@@ -699,6 +842,26 @@ class TaskIndex:
     # Molecule key resolution (alias-aware)
     # ------------------------------------------------------------------ #
 
+    def _molecule_key_with_conn(
+        self,
+        conn: sqlite3.Connection,
+        project_id: str | None,
+        molecule_name: str,
+    ) -> str:
+        """Resolve ``molecule_key`` through an already-open connection.
+
+        Lock discipline: the caller holds ``self._lock``, so this must not call
+        any method that re-acquires it. ``resolve_molecule_key`` accepts a raw
+        connection for exactly this purpose (the same path migrations use).
+        """
+        if not project_id:
+            from acp.scheduler.naming import molecule_group_key
+
+            return molecule_group_key(molecule_name)
+        from acp.scheduler.molecule_groups import resolve_molecule_key
+
+        return resolve_molecule_key(conn, project_id, molecule_name)
+
     def compute_molecule_key(self, project_id: str | None, molecule_name: str) -> str:
         """Resolve *molecule_name* to the effective ``molecule_key``.
 
@@ -716,6 +879,7 @@ class TaskIndex:
 
 __all__ = [
     "NameRevisionConflictError",
+    "PROJECTION_RECONCILE_BATCH",
     "TaskIndex",
     "jobs_table_exists",
     "resolve_task_names",

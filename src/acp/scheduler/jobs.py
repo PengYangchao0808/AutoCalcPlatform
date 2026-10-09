@@ -12,6 +12,7 @@ metadata.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -65,6 +66,54 @@ class JobStatus(str, Enum):
         return self in active
 
 
+#: Retention gate (D03 plan todo 9): only these terminal statuses may ever
+#: have their work/task directories reclaimed by a cleanup sweep.
+TERMINAL_STATUSES: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
+
+#: Submission states that mean "bsub outcome not settled yet" — the job may
+#: still be adopted/launched, so its directory must never be reclaimed.
+PENDING_SUBMIT_STATES: frozenset[str] = frozenset({"intent", "unconfirmed"})
+
+#: Cancel states that allow reclamation: no cancellation requested at all
+#: (``None``) or a cancellation CONFIRMED by the poll/reconcile chain.
+#: Anything else (``requested``/``sent``/``unconfirmed``) keeps the dir.
+CONFIRMED_CANCEL_STATES: frozenset[str | None] = frozenset({None, "confirmed"})
+
+
+def is_deletion_eligible(
+    status: str | None,
+    submit_state: str | None,
+    cancel_state: str | None,
+) -> bool:
+    """Exact DB-lifecycle predicate gating any work-dir retention deletion.
+
+    ``deletable = is_terminal(status) ∧ submit_state ∉ {intent, unconfirmed}
+    ∧ cancel_state ∈ {None, "confirmed"}``.
+
+    Shared by ``LocalCleanup.cleanup_old_work_dirs`` and
+    ``RemoteCleanup.cleanup_old_jobs`` so local and remote retention can
+    never diverge (r16/r17 P1).  Age (mtime/completed_at) is evaluated
+    ONLY after this gate passes — mtime alone is never a deletion
+    qualifier.
+
+    Args:
+        status: ``JobRecord.status`` value (``None`` = unknown → keep).
+        submit_state: ``result["remote"]["submit_state"]`` (``None`` ok).
+        cancel_state: ``result["remote"]["cancel_state"]`` (``None`` ok).
+
+    Returns:
+        ``True`` when the directory of this job may be considered for
+        reclamation (age check still applies afterwards).
+    """
+    if status is None or status not in TERMINAL_STATUSES:
+        return False
+    if submit_state in PENDING_SUBMIT_STATES:
+        return False
+    if cancel_state not in CONFIRMED_CANCEL_STATES:
+        return False
+    return True
+
+
 #: Exit code a mechanism-study subprocess returns when it pauses at a manual
 #: review gate (a StudyOrchestrator decision point). The poller translates
 #: this into :attr:`JobStatus.WAITING_REVIEW` instead of marking the job
@@ -73,45 +122,63 @@ class JobStatus(str, Enum):
 EXIT_WAITING_REVIEW = 77
 
 
-def _derive_supported_workflows() -> tuple[str, ...]:
-    """Derive the scheduler's supported workflow set from WORKFLOW_CATALOG.
+#: Catalog ``status == "active"`` workflow ids in catalog order, used only when
+#: ``acp.catalog`` cannot be imported (e.g. early bootstrap / standalone cccp).
+_FALLBACK_ACTIVE_WORKFLOWS: tuple[str, ...] = (
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "tsmode",
+    "casscf",
+    "xtb_optimize",
+    "nmr",
+    "Confsearch",
+    "PESsearch",
+    "BatchOptimize",
+    "XtbPathSearch",
+    "OrcaGradient",
+)
 
-    R14/D5: previously this was a hand-maintained tuple that drifted out
-    of sync with ``acp.catalog.WORKFLOW_CATALOG``. It now derives from the
-    catalog's ``status == "active"`` entries, plus the synthetic ``fake``
-    workflow that exists only for scheduler tests (kept here, not in the
-    public catalog — see test 3.12 which excludes ``fake`` from the
-    equality assertion against the catalog's active set).
+#: Synthetic scheduler-only workflows (no catalog entry). ``fake`` is an
+#: in-process no-op used by the scheduler test base and the legacy Workbench
+#: demo button; it is accepted internally but never advertised publicly.
+_SYNTHETIC_WORKFLOWS: tuple[str, ...] = ("fake",)
 
-    Falls back to a static list when ``acp.catalog`` cannot be imported
-    (e.g. during early bootstrap or standalone cccp use).
+
+def _derive_public_workflows() -> tuple[str, ...]:
+    """Derive the public workflow set from ``WORKFLOW_CATALOG``.
+
+    R14/D5: previously a hand-maintained tuple that drifted out of sync with
+    ``acp.catalog.WORKFLOW_CATALOG``. It now derives from the catalog's
+    ``status == "active"`` entries.  The synthetic ``fake`` workflow is
+    deliberately excluded — it belongs only on internal acceptance surfaces.
+
+    Falls back to a static list when ``acp.catalog`` cannot be imported.
     """
     try:
         from acp.catalog import WORKFLOW_CATALOG
     except ImportError:
-        return (
-            "Confsearch",
-            "PESsearch",
-            "BatchOptimize",
-            "XtbPathSearch",
-            "OrcaGradient",
-            "irc",
-            "scan",
-            "nmr",
-            "singlepoint",
-            "optimize",
-            "frequency",
-            "xtb_optimize",
-            "fake",
-        )
-    active = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
-    # ``fake`` is a synthetic scheduler-only workflow (no catalog entry);
-    # append it so test 3.12's set difference `SUPPORTED_WORKFLOWS - {"fake"}`
-    # equals the catalog's active id set exactly.
-    return active + ("fake",)
+        return _FALLBACK_ACTIVE_WORKFLOWS
+    return tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
 
-SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
+def _derive_all_workflows() -> tuple[str, ...]:
+    """Internal acceptance set = public workflows + synthetic ``fake``.
+
+    The scheduler accepts ``fake`` (API/scheduler submission stays 200), but it
+    must stay out of :data:`PUBLIC_WORKFLOWS`.
+    """
+    return _derive_public_workflows() + _SYNTHETIC_WORKFLOWS
+
+
+#: Public workflow surface (API listings / error strings): catalog active only.
+PUBLIC_WORKFLOWS: tuple[str, ...] = _derive_public_workflows()
+#: Internal acceptance set: public workflows plus the synthetic ``fake``.
+ALL_WORKFLOWS: tuple[str, ...] = _derive_all_workflows()
+#: Backward-compatible alias for the internal acceptance set (includes ``fake``).
+SUPPORTED_WORKFLOWS: tuple[str, ...] = ALL_WORKFLOWS
 
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
 SCAN_CONFIG_FILENAME = "scan_config.json"
@@ -248,7 +315,230 @@ def scan_method_flags(
         points = scan_level.get("scan_points")
     if points is not None:
         flags += ["--scan-points", str(points)]
+
+    use_scants = method.get("scan_use_scants")
+    if use_scants is None:
+        use_scants = scan_level.get("scan_use_scants")
+    if use_scants is None:
+        use_scants = method.get("use_scants")
+    if use_scants is None:
+        use_scants = payload.get("scan_use_scants")
+    if use_scants is None:
+        use_scants = payload.get("use_scants")
+    if _as_bool(use_scants) is True:
+        flags += ["--scants"]
     return flags
+
+
+# ── scan submission validation (shared ACP submission boundary) ──────────
+# ``scan_method_flags`` is the parameter generator, NOT a validator; this
+# module holds the boundary rules both v1 create/edit and v2 batch use.
+# First phase is DISTANCE scans only (angle/dihedral deferred).
+
+
+def _scan_atom_count_from_xyz(text: Any) -> int | None:
+    """Atom count of a standard XYZ block, or None when unparseable."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    lines = text.splitlines()
+    if not lines:
+        return None
+    first = lines[0].strip()
+    try:
+        declared = int(first)
+    except ValueError:
+        return None
+    if declared <= 0:
+        return None
+    return declared
+
+
+def _scan_atom_count_from_input(payload: Mapping[str, Any]) -> int | None:
+    """Best-effort atom count of the confirmed structure in an input payload."""
+    for key in ("xyz_text",):
+        count = _scan_atom_count_from_xyz(payload.get(key))
+        if count is not None:
+            return count
+    source_type = str(payload.get("source_type") or "")
+    if source_type in ("xyz_text", "xyz", "plain"):
+        count = _scan_atom_count_from_xyz(payload.get("source"))
+        if count is not None:
+            return count
+    geometry = payload.get("geometry")
+    if isinstance(geometry, (list, tuple)) and geometry:
+        return len(geometry)
+    for key in ("symbols", "atoms"):
+        values = payload.get(key)
+        if isinstance(values, (list, tuple)) and values:
+            return len(values)
+    scan_request = payload.get("scan_request")
+    if isinstance(scan_request, Mapping):
+        inner = scan_request.get("source")
+        if isinstance(inner, Mapping):
+            return _scan_atom_count_from_input(inner)
+    return None
+
+
+def _submission_scan_coordinates(
+    payload: Mapping[str, Any], method: Mapping[str, Any]
+) -> list[Any]:
+    """Raw coordinate entries, mirroring ``scan_method_flags`` source order."""
+    raw_coordinates: Any = None
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                raw_coordinates = candidate
+                break
+        if raw_coordinates is not None:
+            break
+    if raw_coordinates is None:
+        raise ValueError("scan job requires at least one coordinate")
+    if isinstance(raw_coordinates, (str, Mapping)):
+        coordinates = [raw_coordinates]
+    elif isinstance(raw_coordinates, (list, tuple)):
+        coordinates = list(raw_coordinates)
+    else:
+        raise ValueError("scan coordinates must be a string or a sequence")
+    if not coordinates:
+        raise ValueError("scan job requires at least one coordinate")
+    return coordinates
+
+
+def _submission_scan_points(method: Mapping[str, Any], payload: Mapping[str, Any]) -> Any:
+    """Scan point count as the generator resolves it (None when absent)."""
+    points = method.get("scan_points")
+    if points is None:
+        levels = method.get("levels")
+        scan_level: Mapping[str, Any] = {}
+        if isinstance(levels, Mapping):
+            candidate_level = levels.get("scan") or levels.get("scan_coordinate")
+            if isinstance(candidate_level, Mapping):
+                scan_level = candidate_level
+        points = scan_level.get("scan_coordinate_points")
+        if points is None:
+            points = scan_level.get("scan_points")
+    return points
+
+
+def _parse_submission_coordinate(entry: Any, index: int) -> tuple[tuple[int, int], float, float]:
+    """Parse one coordinate entry into ((atom_a, atom_b), start, end)."""
+    label = f"scan coordinate {index + 1}"
+    if isinstance(entry, Mapping):
+        kind = str(entry.get("kind") or "distance")
+        if kind != "distance":
+            raise ValueError(f"{label}: only distance scans are supported, got kind {kind!r}")
+        atoms_raw = entry.get("atoms")
+        if not isinstance(atoms_raw, (list, tuple)) or len(atoms_raw) != 2:
+            raise ValueError(f"{label}: distance coordinates require exactly two atoms")
+        raw_atoms = list(atoms_raw)
+        start_raw = entry.get("start")
+        end_raw = entry.get("end")
+        if start_raw is None or end_raw is None:
+            raise ValueError(f"{label}: scan coordinate objects require start and end")
+    elif isinstance(entry, str):
+        parts = [text.strip() for text in entry.split(",")]
+        if len(parts) != 4:
+            raise ValueError(f"{label} must be atom1,atom2,start,end")
+        raw_atoms = parts[:2]
+        start_raw, end_raw = parts[2], parts[3]
+    else:
+        raise ValueError(f"{label} must be a string or a coordinate object")
+
+    atoms: list[int] = []
+    for raw_atom in raw_atoms:
+        if isinstance(raw_atom, bool):
+            raise ValueError(f"{label}: atom indices must be integers")
+        if isinstance(raw_atom, int):
+            atoms.append(raw_atom)
+            continue
+        try:
+            parsed = int(str(raw_atom).strip())
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label}: atom indices must be integers") from error
+        atoms.append(parsed)
+
+    def _finite(value: Any) -> float:
+        if isinstance(value, bool):
+            raise ValueError(f"{label}: start and end must be finite numbers")
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label}: start and end must be finite numbers") from error
+        if not math.isfinite(parsed):
+            raise ValueError(f"{label}: start and end must be finite numbers")
+        return parsed
+
+    return (atoms[0], atoms[1]), _finite(start_raw), _finite(end_raw)
+
+
+def validate_scan_submission(
+    workflow: str,
+    method: Mapping[str, Any] | None = None,
+    inp: Mapping[str, Any] | None = None,
+    *,
+    atom_count: int | None = None,
+) -> None:
+    """Validate a scan submission at the shared ACP submission boundary.
+
+    Both v1 (create/edit-recalculate) and v2 (batch per-item) call this
+    before queueing work; violations raise :class:`ValueError` with a
+    client-safe message.  Rules (distance scans only, first phase):
+    non-empty coordinates; integer distinct 0-based indices within the
+    known atom count; finite positive differing start/end; integer
+    ``scan_points`` >= 2.  When the input carries no confirmed structure
+    geometry the atom selection cannot be verified and the submission is
+    rejected instead of queueing an unverifiable selection.
+
+    Args:
+        workflow: Workflow id; anything other than ``scan`` is a no-op.
+        method: Submission ``method`` mapping (may be empty).
+        inp: Submission ``input`` mapping (may be empty).
+        atom_count: Explicit atom count of the final submitted structure;
+            when omitted it is resolved from inline geometry in ``inp``.
+
+    Raises:
+        ValueError: On any rule violation.
+    """
+    if workflow != "scan":
+        return
+    payload: Mapping[str, Any] = inp or {}
+    method_map: Mapping[str, Any] = method or {}
+    coordinates = _submission_scan_coordinates(payload, method_map)
+    known = atom_count if atom_count is not None else _scan_atom_count_from_input(payload)
+    for index, entry in enumerate(coordinates):
+        (atom_a, atom_b), start, end = _parse_submission_coordinate(entry, index)
+        label = f"scan coordinate {index + 1}"
+        if atom_a == atom_b:
+            raise ValueError("scan coordinate atoms must be different atoms")
+        for atom in (atom_a, atom_b):
+            if atom < 0:
+                raise ValueError(f"{label}: atom indices must be 0-based and non-negative")
+            if known is not None and atom >= known:
+                raise ValueError(f"{label}: atom index {atom} is out of range for {known} atoms")
+        if known is None:
+            raise ValueError(
+                f"{label}: atom indices cannot be verified without a confirmed "
+                "structure (atom count unknown); submit explicit geometry "
+                "(xyz_text/geometry) so the atom selection can be checked"
+            )
+        if start <= 0 or end <= 0:
+            raise ValueError("start and end distances must be greater than 0")
+        if math.isclose(start, end, abs_tol=1.0e-9):
+            raise ValueError("start and end distances must differ")
+    points = _submission_scan_points(method_map, payload)
+    if points is None:
+        return
+    if isinstance(points, bool):
+        raise ValueError("scan_points must be an integer >= 2")
+    try:
+        parsed_points = int(points)
+    except (TypeError, ValueError) as error:
+        raise ValueError("scan_points must be an integer >= 2") from error
+    if isinstance(points, float) and not points.is_integer():
+        raise ValueError("scan_points must be an integer >= 2")
+    if parsed_points < 2:
+        raise ValueError("scan_points must be an integer >= 2")
 
 
 # ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────
@@ -349,39 +639,85 @@ def xtbmd_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
-# ── nmr flag emission (E7: runner ⇄ script_gen parity) ──────────────────
-# NMR workflow scalar knobs that flow method → CLI. Nuclei is emitted as
-# a comma-joined string. Solvent/ewin go through the shared resolvers
-# (censo_solvent_from_method / censo_ewin_from_method), not here.
-_NMR_SCALAR_FLAGS: dict[str, str] = {
-    "boltzmann_temp": "--boltzmann-temp",
-    "tms_shielding_h": "--tms-1h",
-    "tms_shielding_c": "--tms-13c",
-    "error_model": "--error-model",
-    "nmr_method": "--nmr-method",
-    "nmr_basis": "--nmr-basis",
-}
+# ── nmr flag emission (T19/T20: single resolver source; E7 parity) ──────
+# NMR CLI flags are rendered from acp.nmr.method_config.resolve_nmr_method
+# (G06 single source of truth) — the resolver owns key precedence, so this
+# module never reads flat nmr_method/nmr_basis keys. Flag spellings match
+# the ``acp run nmr`` parser in cli.py. INVARIANT: both nmr builders
+# (runner._build_nmr_cmd, script_gen.build_remote_nmr_cmd_tail) emit ONLY
+# nmr_method_flags — caller-side censo_preset/solvent/ewin emission for
+# nmr would duplicate --preset/--solvent/--ewin (same values, emitted
+# twice) and read levels.censo instead of the nmr wizard's
+# levels.conformer.ewin. The censo_* helpers below apply to
+# Confsearch/ensemble/energy/xtbmd only.
+_NMR_FLAG_FIELDS: tuple[tuple[str, str], ...] = (
+    ("nmr_method", "--nmr-method"),
+    ("nmr_basis", "--nmr-basis"),
+    ("solvent_model", "--solvent-model"),
+    ("solvent", "--solvent"),
+    ("boltzmann_temp", "--boltzmann-temp"),
+    ("tms_1h", "--tms-1h"),
+    ("tms_13c", "--tms-13c"),
+    ("ewin", "--ewin"),
+    ("max_conformers", "--max-conformers"),
+    ("error_model", "--error-model"),
+    ("conformer_preset", "--preset"),
+)
 
 
-def nmr_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the NMR CLI flag group from a job's method dict (E7 parity).
+def nmr_method_flags(method: dict[str, Any], config: Mapping[str, Any] | None = None) -> list[str]:
+    """Emit the NMR CLI flag group from a job's method payload (E7 parity).
 
-    Nuclei (a list) is emitted as a comma-joined ``--nuclei`` value when
-    present. Solvent and ewin are resolved through the shared
-    :func:`censo_solvent_from_method` / :func:`censo_ewin_from_method`
-    helpers (caller-side), not here, so the NMR and energy/ensemble
-    branches stay consistent.
+    G06: :func:`acp.nmr.method_config.resolve_nmr_method` is the single
+    source — this function only renders the resolved config into argv. A
+    flag is emitted only when its resolved value differs from the
+    resolver's built-in default (an empty payload resolved against no
+    config), so payloads that set nothing emit nothing and the CLI defaults
+    apply unchanged. Nuclei is comma-joined; ``None``/empty values are
+    never emitted (gas phase resolves ``solvent`` to ``""`` — ``--solvent``
+    drops while ``--solvent-model none`` still carries the signal).
+
+    Args:
+        method: Job/wizard NMR method payload (flat legacy keys or the
+            frontend's ``{schema_id, profile_id, levels}`` shape).
+        config: Merged cccp config mapping (``load_config()`` output) or
+            ``None`` — forwarded to the resolver as-is.
+
+    Returns:
+        Flattened ``[flag, value, ...]`` argv fragment.
+
+    Raises:
+        NmrMethodConfigError: The payload cannot become a valid NMR config
+            (rejection rules live in the resolver — nothing mismatched
+            silently falls back to defaults).
     """
+    from acp.nmr.method_config import resolve_nmr_method
+
+    resolved = resolve_nmr_method(method, config)
+    builtin = resolve_nmr_method({}, None)
     flags: list[str] = []
-    nuclei = method.get("nuclei")
-    if isinstance(nuclei, (list, tuple)) and nuclei:
-        flags += ["--nuclei", ",".join(str(n) for n in nuclei)]
-    for key, flag in _NMR_SCALAR_FLAGS.items():
-        value = method.get(key)
-        if value is None or value == "":
+    if resolved.nuclei != builtin.nuclei:
+        flags += ["--nuclei", ",".join(resolved.nuclei)]
+    for attr, flag in _NMR_FLAG_FIELDS:
+        value = getattr(resolved, attr)
+        if value is None or value == "" or value == getattr(builtin, attr):
             continue
         flags += [flag, str(value)]
     return flags
+
+
+def nmr_flag_config(config_path: str | None = None) -> dict[str, Any]:
+    """Merged config backing NMR flag emission (T20 local ⇄ remote parity).
+
+    Mirrors the CLI's ``_build_config`` full 6-source merge
+    (``cccp.config.load_config``) so the emitted argv carries every
+    nmr-relevant value that differs from the resolver's built-in
+    defaults — the flags then determine the effective config on hosts
+    that do not receive the ``--config`` file (remote nodes).
+    """
+    from cccp.config import load_config
+
+    return load_config(Path(config_path) if config_path else None)
 
 
 # ── Confsearch / stage-workflow flag emission (E7: runner ⇄ script_gen) ───
@@ -488,7 +824,6 @@ _BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
 _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
     {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
 )
-
 
 
 def batchoptimize_method_flags(
@@ -656,6 +991,8 @@ class JobRecord:
     node_id: str | None = None
     host: str | None = None
     result: dict[str, Any] | None = None
+    revision: int = 0
+    attempt: int = 1
 
     def touch(self) -> None:
         self.updated_at = _utc_now_iso()
@@ -682,6 +1019,8 @@ class JobRecord:
             "node_id": self.node_id,
             "host": self.host,
             "result": self.result,
+            "revision": self.revision,
+            "attempt": self.attempt,
         }
 
 
@@ -717,7 +1056,8 @@ def build_task_record(record: JobRecord) -> TaskRecord:
         current_stage=record.current_stage,
         created_at=record.created_at,
         updated_at=record.updated_at,
-        custom_name=getattr(record, "custom_name", None) or getattr(record.spec, "custom_name", None),
+        custom_name=getattr(record, "custom_name", None)
+        or getattr(record.spec, "custom_name", None),
     )
 
 
@@ -725,15 +1065,23 @@ __all__ = [
     "JobStatus",
     "JobSpec",
     "JobRecord",
+    "TERMINAL_STATUSES",
+    "PENDING_SUBMIT_STATES",
+    "CONFIRMED_CANCEL_STATES",
+    "is_deletion_eligible",
     "build_task_record",
+    "PUBLIC_WORKFLOWS",
+    "ALL_WORKFLOWS",
     "SUPPORTED_WORKFLOWS",
     "censo_preset_from_method",
     "censo_solvent_from_method",
     "censo_ewin_from_method",
     "input_chemistry_flags",
     "scan_method_flags",
+    "validate_scan_submission",
     "xtbmd_method_flags",
     "nmr_method_flags",
+    "nmr_flag_config",
     "batchoptimize_method_flags",
     "confsearch_method_flags",
     "SCAN_CONFIG_FILENAME",

@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from acp.storage.layout import TaskStorage
+from cccp.qc.translation import render_censo_template_lines
 
 logger = logging.getLogger(__name__)
 
@@ -179,8 +180,8 @@ def resolve_levels(
         refinement_overrides["basis"] = str(refinement_sp["basis"]).lower()
 
     screening_extras = _base_route_extras(screening_sp)
-    screening_template_lines = ["! " + " ".join(screening_extras)] if screening_extras else []
-    refinement_template_lines = ["! " + " ".join(sp_route_extras)] if sp_route_extras else []
+    screening_template_lines = render_censo_template_lines(screening_extras)
+    refinement_template_lines = render_censo_template_lines(sp_route_extras)
 
     levels_solvent = sp_solvent or opt_solvent
     levels_solvent_model = sp_solvent_model or opt_solvent_model

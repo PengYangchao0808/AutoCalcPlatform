@@ -32,6 +32,7 @@ from acp.scheduler.jobs import (
     censo_solvent_from_method,
     confsearch_method_flags,
     input_chemistry_flags,
+    nmr_flag_config,
     nmr_method_flags,
     scan_method_flags,
     xtbmd_method_flags,
@@ -522,18 +523,14 @@ def build_remote_nmr_cmd_tail(
         elif isinstance(stereocenters, list) and stereocenters:
             cmd += ["--stereocenters", ",".join(str(s) for s in stereocenters)]
 
-    if spec.name:
-        cmd += ["--name", spec.name]
-    preset = censo_preset_from_method(method)
-    if preset:
-        cmd += ["--preset", preset]
-    cmd += nmr_method_flags(method)
-    solvent = censo_solvent_from_method(method)
-    if solvent:
-        cmd += ["--solvent", solvent]
-    ewin = censo_ewin_from_method(method)
-    if ewin is not None:
-        cmd += ["--ewin", str(ewin)]
+    # --name intentionally not emitted: the nmr parser never accepted it
+    # (G06) — task naming is manager-owned (spec.name → work_dir name).
+    # INVARIANT (E7): all nmr flags come from the single resolver-backed
+    # group — byte-identical call to JobRunner._build_nmr_cmd; no
+    # caller-side censo_preset/solvent/ewin here (duplicate emission; and
+    # the nmr wizard nests ewin under levels.conformer, which
+    # censo_ewin_from_method never reads).
+    cmd += nmr_method_flags(method, nmr_flag_config(spec.config_path))
     return cmd
 
 
@@ -564,37 +561,60 @@ def build_lsf_script_spec(
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     remote_dir_name: str | None = None,
+    remote_job_dir: str | None = None,
     python_executable: str | None = None,
     pre_cmds: list[str] | None = None,
+    submission_id: str | None = None,
+    code_release: str | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
     Args:
         spec: The scheduler job specification.
-        job_id: The ACP job identifier (used for the BSUB job name and the
-            remote working directory).
+        job_id: The ACP job identifier (used for the BSUB job name).
         node: The target remote compute node.
         queue: LSF queue name.
         walltime: LSF wall-clock limit.
         extra_flags: Additional BSUB flags.
-        input_path: Relative path to the uploaded input file (default
-            ``inputs/input.xyz``).
+    input_path: Relative path to the uploaded input file (default
+        ``inputs/input.xyz``).
+    submission_id: Contract-A submission id — the LSF job name becomes
+        ``acp_<submission_id>`` (attempt-digested, unique per attempt).
+        When omitted a deterministic id is derived from *job_id* with
+        attempt 1 (bare/test callers); the runner always passes the
+        persisted id.
         config_path: Optional path to a job-level YAML config on the remote
             node (e.g. ``cccp.yaml`` in the job directory).
-        remote_dir_name: Leaf directory name for the remote job dir (v1.2
-            task-dir naming); falls back to ``job_id`` when not given.
+        remote_dir_name: Leaf directory name used only for display/LSF
+            job-name derivation when *remote_job_dir* is not given.
+        remote_job_dir: Already-resolved absolute remote job directory
+            (from ``resolve_remote_dir``).  When given it is used verbatim —
+            the caller owns storage identity; this function never re-joins.
         python_executable: Interpreter to use on the node.  When given it
             overrides ``node.python_executable`` — callers pass a
             probe-resolved (Python 3.10+) interpreter here so LSF scripts
             never fall back to a too-old default ``python``.
         pre_cmds: Shell lines injected into the generated script before
             the CLI runs (cluster-level environment setup).
+        code_release: Verified content-hash release id the job is bound to
+            (D03, todo 8).  Reuses the existing
+            ``LSFScriptSpec.remote_code_dir`` field — no parallel code-dir
+            key: when given, it is set to
+            ``<node.remote_code_dir>/releases/<code_release>`` so the
+            PYTHONPATH line points at the immutable snapshot
+            ``releases/<id>/src``.  ``None`` keeps the shared directory
+            (unversioned dev-hatch mode only).
 
     Returns:
         ``(lsf_spec, cli_command)``.
     """
-    dir_leaf = remote_dir_name or job_id
-    remote_job_dir = posixpath.join(node.remote_work_dir, dir_leaf)
+    if remote_job_dir is None:
+        remote_job_dir = posixpath.join(node.remote_work_dir, remote_dir_name or job_id)
+    effective_code_dir = (
+        posixpath.join(node.remote_code_dir, "releases", code_release)
+        if code_release
+        else node.remote_code_dir
+    )
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,
@@ -604,13 +624,17 @@ def build_lsf_script_spec(
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
         spec, queue=queue, walltime=walltime, extra_flags=extra_flags
     )
+    # Contract A: ``-J acp_<submission_id>`` (attempt-digested) replaces the
+    # former ``acp_<job_id>`` name so reconcile can query it unambiguously.
+    from acp.scheduler.remote.submission import submission_id_for
+
     lsf_spec = LSFScriptSpec(
-        job_name=f"acp_{job_id}",
+        job_name=f"acp_{submission_id or submission_id_for(job_id, 1)}",
         queue=queue,
         nproc=nproc,
         mem_mb_per_core=mem_mb_per_core,
         walltime=walltime,
-        remote_code_dir=node.remote_code_dir,
+        remote_code_dir=effective_code_dir,
         remote_job_dir=remote_job_dir,
         cli_command=cli_command,
         pre_cmds=list(pre_cmds or []),

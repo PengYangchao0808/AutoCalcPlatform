@@ -107,6 +107,15 @@ class RemoteNode:
         queue: Per-node LSF queue override (``#BSUB -q``). ``None`` (default)
             falls back to :attr:`RemoteExecutionConfig.queue` at submission
             time. Purely a submission attribute — never a filtering axis.
+        pinned_release: Content-hash release id this node is pinned to when
+            ``auto_sync`` is disabled.  ``auto_sync=False`` never falls back
+            to the unversioned shared directory: submission requires an
+            existing *verified* release (``ACP_REMOTE_CODE_RELEASE`` env
+            override first, then this field) and is rejected otherwise —
+            unless the explicit dev escape hatch
+            ``ACP_REMOTE_ALLOW_UNVERSIONED=1`` is set (loudly marked
+            ``unversioned-shared``; the immutability guarantee does not
+            cover that mode).
         capabilities: Static capability declaration
             (:class:`NodeCapabilities`). ``None`` (default) marks the node
             *generic* for the submission-time capability filter.
@@ -131,6 +140,7 @@ class RemoteNode:
     enabled: bool = True
     host_key_policy: str = "reject"
     queue: str | None = None
+    pinned_release: str | None = None
     capabilities: NodeCapabilities | None = None
     type: str = "lsf"
 
@@ -155,7 +165,8 @@ class RemoteNode:
         Required keys: ``name``, ``host``, ``username``,
         ``remote_work_dir``, ``remote_code_dir``.
         Optional keys: ``port``, ``password``, ``key_file``,
-        ``max_concurrent_jobs``, ``enabled``, ``queue``, ``capabilities``,
+        ``max_concurrent_jobs``, ``enabled``, ``queue``, ``pinned_release``,
+        ``capabilities``,
         ``type``.
         A missing/blank ``queue`` or a missing ``capabilities`` block yields
         ``None`` (generic-node sentinel); unknown ``capabilities.software``
@@ -194,6 +205,7 @@ class RemoteNode:
             enabled=bool(data.get("enabled", True)),
             host_key_policy=str(data.get("host_key_policy", "reject")),
             queue=_parse_node_queue(data.get("queue")),
+            pinned_release=(str(data["pinned_release"]) if data.get("pinned_release") else None),
             capabilities=_parse_capabilities(data.get("capabilities"), node_name),
             type=_parse_node_type(data.get("type"), node_name),
         )
@@ -234,6 +246,8 @@ class RemoteNode:
             data["host_key_policy"] = self.host_key_policy
         if self.queue is not None:
             data["queue"] = self.queue
+        if self.pinned_release is not None:
+            data["pinned_release"] = self.pinned_release
         if self.capabilities is not None:
             data["capabilities"] = {
                 "software": list(self.capabilities.software),
@@ -250,7 +264,14 @@ class RemoteExecutionConfig:
         execution_mode: ``'local'`` (default) or ``'remote'``.
         poll_interval: Seconds between remote status polls (default 15).
         retention_days: Days before remote job dirs are cleaned up.
-        auto_sync: Whether to auto-sync code to nodes before submitting.
+        auto_sync: Whether to publish a fresh content-hash code release to
+            the node before submitting (verify-then-publish, D03).  When
+            False no files are uploaded, but submission still REQUIRES an
+            existing verified release — ``ACP_REMOTE_CODE_RELEASE`` or the
+            node's ``pinned_release`` — and is rejected otherwise; only the
+            explicit dev escape hatch ``ACP_REMOTE_ALLOW_UNVERSIONED=1``
+            submits against the shared directory (provenance
+            ``unversioned-shared``, immutability not covered).
         require_all_binaries: When True (default), pre-submit probes treat
             a missing workflow-required binary as a hard error that aborts
             the submission with configuration guidance.  Set False to keep
@@ -264,6 +285,9 @@ class RemoteExecutionConfig:
         max_concurrent_sessions: Maximum SFTP sessions in the connection pool.
         connect_timeout: Seconds to wait for an SSH connection.
         read_timeout: Seconds to wait for SFTP read operations.
+        submission_timeout: Seconds to wait for the ``bsub`` reply — the
+            only timeout governing the blocking submit call; the submit
+            lease TTL derives from it (contract A).
     """
 
     execution_mode: str = "local"
@@ -282,6 +306,7 @@ class RemoteExecutionConfig:
     max_concurrent_sessions: int = 20
     connect_timeout: int = 10
     read_timeout: int = 30
+    submission_timeout: int = 60
 
     @property
     def is_remote(self) -> bool:
@@ -340,6 +365,7 @@ class RemoteExecutionConfig:
         max_concurrent_sessions = int(data.get("max_concurrent_sessions", 20))
         connect_timeout = int(data.get("connect_timeout", 10))
         read_timeout = int(data.get("read_timeout", 30))
+        submission_timeout = int(data.get("submission_timeout", 60))
 
         raw_nodes = data.get("nodes") or []
         nodes: list[RemoteNode] = []
@@ -362,6 +388,7 @@ class RemoteExecutionConfig:
             max_concurrent_sessions=max_concurrent_sessions,
             connect_timeout=connect_timeout,
             read_timeout=read_timeout,
+            submission_timeout=submission_timeout,
         )
 
 

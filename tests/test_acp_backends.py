@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -36,7 +37,7 @@ from acp.backends.xtb import XTBInterface
 from cccp.qc.interfaces import CRESTInterface
 from cccp.qc.interfaces.constraints import DistanceConstraint
 from cccp.qc.interfaces.xtb_thermo import XTBThermoResult
-from tests.conftest import requires_isostat, requires_shermo
+from tests.conftest import RealQCSnapshot, requires_isostat, requires_shermo
 
 
 def _make_config() -> dict[str, Any]:
@@ -88,6 +89,14 @@ def test_registry_exposes_registered_backends() -> None:
     assert get_backend("crest") is CrestBackend
     assert get_backend("xtb") is XTBBackend
     assert get_backend("external") is ExternalBackend
+    assert require_backend("frequency") is ORCABackend
+    assert require_backend("single_point") is ORCABackend
+    assert require_backend("clustering") is ExternalBackend
+    assert require_backend("thermochemistry") is ExternalBackend
+    assert require_backend("irc") is ORCABackend
+
+
+def test_require_backend_selection_matches_declared_matrix() -> None:
     assert issubclass(require_backend("frequency"), FrequencyCalculator)
     assert issubclass(require_backend("single_point"), SinglePointCalculator)
     assert issubclass(require_backend("clustering"), ClusteringTool)
@@ -98,6 +107,80 @@ def test_registry_exposes_registered_backends() -> None:
 def test_require_backend_rejects_unknown_capability() -> None:
     with pytest.raises(ValueError, match="Unknown capability"):
         _ = require_backend("imaginary")
+
+
+def test_require_backend_never_selects_stubs() -> None:
+    from acp.backends.registry import BackendRegistry
+    from cccp.calculation.errors import UnsupportedCapabilityError
+
+    registry = BackendRegistry()
+    registry.register(CrestBackend)
+    with pytest.raises(UnsupportedCapabilityError):
+        registry.require("geometry_optimization")
+    with pytest.raises(UnsupportedCapabilityError):
+        registry.require("single_point")
+
+
+def test_call_capability_rejects_missing_capability_structured() -> None:
+    from acp.calculations.primitives._common import CalculationInputs, call_capability
+    from cccp.calculation.errors import UnsupportedCapabilityError
+
+    backend = XTBBackend(_make_config())
+    inputs = CalculationInputs(
+        coordinates=np.zeros((1, 3)),
+        symbols=("H",),
+        charge=0,
+        multiplicity=1,
+    )
+    with pytest.raises(UnsupportedCapabilityError, match="frequency"):
+        call_capability(backend, "frequency", inputs, None, {})
+
+
+def test_external_backend_rejects_before_launch_when_binary_missing() -> None:
+    from cccp.calculation.errors import BackendUnavailableError
+
+    backend = ExternalBackend(_make_config())
+
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return None
+
+    with patch("cccp.backends.external_backend.resolve_executable", side_effect=_resolve):
+        with pytest.raises(BackendUnavailableError, match="isostat"):
+            backend.cluster(Path("ensemble.xyz"))
+        with pytest.raises(BackendUnavailableError, match="Shermo"):
+            backend.thermochemistry(Path("frequency.log"))
+
+
+def test_external_backend_stays_off_task_layer_and_raw_runner() -> None:
+    """Lock the todo-14 decoupling: no acp.calculations / cccp.calculation and
+    no direct runner call in the external backend; execution goes through the
+    shared adapter and normalization modules.  The implementation lives in
+    ``cccp.backends.external_backend`` (plan todo 12); the ``acp.backends``
+    path is a pure re-export shim."""
+    import ast
+
+    import acp.backends.external_backend as shim
+    import cccp.backends.external_backend as module
+
+    assert shim.ExternalBackend is module.ExternalBackend
+
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    assert "acp.calculations" not in source
+    assert "cccp.calculation" not in source
+    assert "run_shermo" not in source
+
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ImportFrom):
+            imported.add(node.module or "")
+        elif isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+    assert not any(
+        name.startswith("acp.calculations") or name.startswith("cccp.calculation")
+        for name in imported
+    )
+    assert "cccp.qc.shermo_adapter" in imported
+    assert "cccp.qc.thermo_normalize" in imported
 
 
 def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:
@@ -404,7 +487,7 @@ def test_orca_backend_get_version_uses_detect_version() -> None:
     backend = ORCABackend(config)
     backend._interface.executable = Path("/usr/bin/orca")
 
-    with patch("acp.backends.orca.detect_version", return_value="ORCA 6.1.1") as mock_detect:
+    with patch("cccp.backends.orca.detect_version", return_value="ORCA 6.1.1") as mock_detect:
         assert backend.get_version() == "ORCA 6.1.1"
         assert backend.get_version() == "ORCA 6.1.1"
 
@@ -416,7 +499,7 @@ def test_orca_backend_get_version_returns_none_when_missing() -> None:
     backend = ORCABackend(config)
     backend._interface.executable = None
 
-    with patch("acp.backends.orca.detect_version", return_value=None) as mock_detect:
+    with patch("cccp.backends.orca.detect_version", return_value=None) as mock_detect:
         assert backend.get_version() is None
 
     mock_detect.assert_called_once_with("orca", None)
@@ -467,7 +550,7 @@ def test_external_backend_is_available_when_binaries_on_path() -> None:
     def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
         return Path(f"/usr/bin/{name}")
 
-    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+    with patch("cccp.backends.external_backend.resolve_executable", side_effect=_resolve):
         assert backend.is_available() is True
 
 
@@ -477,7 +560,7 @@ def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
     def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
         return None if name == "shermo" else Path(f"/usr/bin/{name}")
 
-    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+    with patch("cccp.backends.external_backend.resolve_executable", side_effect=_resolve):
         assert backend.is_available() is False
 
 
@@ -485,10 +568,25 @@ def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
 @pytest.mark.integration
 @requires_isostat
 @requires_shermo
-def test_external_backend_binary_smoke_check() -> None:
-    backend = ExternalBackend(_make_config())
+def test_external_backend_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Availability must hold under the SAME production config the gate used.
+
+    ``_make_config()`` carries bare ``isostat``/``Shermo`` names, which miss
+    binaries configured only in ``~/.cccp.yaml`` (BUG-4).  The body therefore
+    builds the backend from the conftest snapshot config (``load_config`` at
+    collection) — the config the ``requires_*`` gates resolved against — and
+    re-asserts the gated binaries are still on disk at their gate paths.
+    """
+    backend = ExternalBackend(real_qc_snapshot.config)
 
     assert backend.is_available() is True
+    for name in ("isostat", "shermo"):
+        gate_path = real_qc_binary_path(name)
+        assert gate_path is not None
+        assert gate_path.is_file()
 
 
 def test_isostat_title_normalisation_to_molclus_format(tmp_path: Path) -> None:
@@ -544,3 +642,35 @@ def test_isostat_title_normalisation_keeps_coord_lines(tmp_path: Path) -> None:
         assert lines[5] == "H  1.0  0.0  0.0"
     finally:
         out.unlink(missing_ok=True)
+
+
+def test_compat_identity_after_backends_move() -> None:
+    """acp.backends compat shims re-export the cccp.backends objects (A is B)."""
+    import acp.backends as acp_backends
+    import acp.backends.base as acp_base
+    import acp.backends.registry as acp_registry
+    import acp.core.registry as acp_core_registry
+    import cccp.backends as cccp_backends
+    import cccp.backends.base as cccp_base
+    import cccp.backends.registry as cccp_registry
+    from cccp.core.registry import Registry as CccpRegistry
+    from cccp.qc.interfaces.base import QCResult as InterfaceQCResult
+
+    assert acp_backends.require_backend is cccp_backends.require_backend
+    assert acp_backends.get_backend is cccp_backends.get_backend
+    for name in (
+        "ORCABackend",
+        "CrestBackend",
+        "XTBBackend",
+        "CensoBackend",
+        "IsostatBackend",
+        "MolclusBackend",
+        "ExternalBackend",
+    ):
+        assert getattr(acp_backends, name) is getattr(cccp_backends, name), name
+    assert acp_base.QCResult is cccp_base.QCResult is InterfaceQCResult
+    assert acp_base.to_qc_result is cccp_base.to_qc_result
+    assert acp_base.QCBackend is cccp_base.QCBackend
+    assert acp_registry.backend_registry is cccp_registry.backend_registry
+    assert acp_core_registry.Registry is CccpRegistry
+    assert QCResult is InterfaceQCResult

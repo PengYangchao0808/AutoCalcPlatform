@@ -49,6 +49,20 @@ ACP 的前端文件树采用**本地磁盘直接映射**（后端 `build_manifes
 
 **远程任务同契约（2026-09-27）**：远程作业目录（`<remote_dir>`）提交时必须携带同一组 Zone A 调度器标记（scheduler markers）`job.json` + `task.json`，节点侧才判定为调度器语境、产物平铺（`<remote_dir>/RESULT/…`、`state.json`、`WORK/00_RUNTIME/checkpoint.json`）。实现：`RemoteJobRunner._prepare_and_submit` 在 `bsub` 前调用 `_upload_scheduler_markers`（`src/acp/scheduler/remote/runner.py`），本地缺失的标记先生成，再经 `FileStager.upload_file` 上传；上传失败即提交失败并清理远端目录（不得静默产出嵌套任务）。上传的 `job.json` 是**提交时快照**，节点侧仅按存在性判定（`workflows/_helpers.is_scheduler_task_dir`），无提交后刷新、不读取其内容。历史远程任务的嵌套布局（`<remote_dir>/<molecule>/RESULT/…`）由读取端（`RemoteStructureCache` 单层嵌套兜底）只读兼容，**不迁移磁盘、不重跑任务**。
 
+### 2b. 远端目录映射、所有权与 release 绑定（execution-integrity，2026-10-06）
+
+远端作业目录**不再是"由 `task_dir_name` 在 `remote_work_dir` 下直接拼接"的平铺路径**。权威映射规则（实现：`src/acp/scheduler/remote/paths.py`）：
+
+```
+<remote_dir> = <remote_work_dir>/<项目叶子>/<任务叶子[__NN]>
+```
+
+- 相对路径由**本地分配映射派生**（`storage_relative_path(record, run_root)`：`record.work_dir` 相对 run_root，POSIX 分隔符），天然携带 `__NN` 去重后缀 —— 本地与远端目录身份一一对应，同项目同名 / 跨项目同名不再互踩。
+- **存储身份跨 attempt 稳定**：rerun / continue / edit-recalculate 复用同一远端目录；attempt 回执在目录内隔离归档（`WORK/00_RUNTIME/attempts/<N>/`，`.exit_code`/`state.json`/`run.lock`/`events.jsonl` 等）。
+- **单一持久化路径键**：`record.result["remote_dir"]` 是唯一路径键；`result["remote"]` 只存元数据（`schema`/`relative`/`attempt`/`submit_state`…），且必须与 `remote_dir` 保持同步（`_sync_path_keys`）。
+- **所有权证据**：目录内 Zone A 标记 `job.json` / `task.json`（marker 中的 `job_id`/attempt 与本任务一致才视为本任务所有）。提交时对目标目录做**排他认领**：目录被他任务持有 → `RemoteDirConflictError`，**绝不删除他人目录**；历史 in-flight 平铺目录（`<remote_work_dir>/<task_dir_name 或 job_id>`）仅经双候选探测只读收养（`path_source="legacy_flat"`，不发迁移、不重跑）。
+- **release 绑定属安装目录**：节点执行代码以内容寻址 release 驻留在安装区 `<remote_code_dir>/releases/<release_id>/`（verify-then-publish，`.complete` 标记最后写入，此后不可变）；任务目录内**不保存代码副本**，只在 job record 持久化绑定元数据（`release_id` 等），且**绑定先持久化、后 bsub**。release 裁剪（GC）的引用刷新/资格判定/删除全部在节点级协调锁内完成，仅由持有 `job_store` 的 `cleanup_old_jobs` 路径以 `with_release_gc=True` 触发。
+
 **v1 残留已移除**（2026-08-23）：小写脚手架目录 `inputs/ work/ results/` 停止创建；`_resolve_work_dir` 的 legacy job_id 分支、`JobSpec.task_dir_name` 的 legacy 回退、休眠的 set-based `dedup_task_dir_name` 已删除。
 
 ## 3. Zone 定义与规则
@@ -65,7 +79,7 @@ ACP 的前端文件树采用**本地磁盘直接映射**（后端 `build_manifes
 | 工作流 | 产物根（调度器任务） | 说明 |
 |---|---|---|
 | ensemble / energy / xtbmd_censo_energy | 任务根 `WORK/{02_SEARCH,03_OPT}` + `RESULT/` | `RESULT/{structures,energies,ensembles}/` 经 `energy_shared.write_final_outputs` 统一收口；历史 `finalDFT/` 仅只读兼容 |
-| nmr | 任务根（本就平铺） | `nmr_report.json`、`nmr_assignment.xlsx`、plots；`nmr_summary.json` |
+| nmr | `RESULT/reports/`（`storage.result_category_dir("reports")`） | `nmr_report.json`、`nmr_summary.json`、`nmr_assignment.xlsx`（可选）、`plots/*.png`；旧任务根平铺布局仅只读兼容 |
 | simple (singlepoint/optimize/frequency/xtb-optimize) | 任务根 `WORK/<stage>` | `optimized.xyz`、`energy.json`、`frequencies.txt`、`thermo.json` |
 | scan | 任务根 `RESULT/trajectories/` + `RESULT/structures/` | `scan_trajectory.json`、逐帧 XYZ |
 | irc | 任务根 `RESULT/irc/` | `irc_forward.xyz`、`irc_reverse.xyz`、`irc_report.json` |
@@ -143,7 +157,7 @@ PESsearch（S2）的新任务使用 `WORK/07_PATH/pes_scan_001/`，不得再把�
 
 ## 6. 相关防回归约束
 
-1. **`_SCHEDULER_MARKERS`**（`simple.py`）：调度器在 subprocess 启动前创建的任何文件（如 `metrics.json`）必须加入该集合，否则 `_resolve_output_dir` 会把 simple 工作流重定向到 `<work_dir>_1/` 兄弟目录。v1.2 起集合为：`submit.lsf` `.exit_code` `events.jsonl` `job.json` `stdout.log` `stderr.log` `mechanism_config.json` `metrics.json` `WORK` `RESULT` `input.xyz` `task.json` `input_source.json`（小写 `inputs/work/results` 已随脚手架移除而删除）。
+1. **`_SCHEDULER_MARKERS` 与目录复用语义**（`simple.py::_resolve_output_dir`）：目录复用按序判定 — (a) **调度身份**：`job.json` + `task.json` 同时存在 → 无条件复用（第二道保险，即使目录含集合未登记文件）；(b) 空目录或纯 marker 白名单（目录内容 ⊆ 集合）→ 复用；否则重定向 `<work_dir>_1/` 兄弟目录（非调度 CLI 再嵌套 `<safe_name>/`）。调度器在 subprocess 启动前创建的任何文件（如 `metrics.json`）必须加入该集合。当前全集（2026-10-07 审计收口）：`submit.lsf` `.exit_code` `events.jsonl` `job.json` `stdout.log` `stderr.log` `mechanism_config.json` `metrics.json` `path_config.json` `gradient_config.json` `WORK` `RESULT` `INPUT` `input.xyz` `task.json` `input_source.json` `resume_source.json` `.structure_history` `electronic_state.json` `input.com` `input.inp`（小写 `inputs/work/results` 已随脚手架移除而删除；豁免类别与审计表见 root AGENTS.md ANTI #11）。
 2. **resume 兼容**：`result_summary.json` 与 `metrics.json` 均为 **write-only by 工作流/调度器，绝不参与 resume/checkpoint 判定**。`state.json`、`.stage_*`、`WORK/08_ANALYSIS/**`（mechanism checkpoint，双探针兼容 legacy `mechanism_study/**`）才是 checkpoint 真相源。
 3. **display-only**：`metrics.json` 永不 gate 任何控制流（resume/purge/cleanup 不得依赖它）。
 4. **工作流侧调度器探测契约**：`workflows/_helpers.is_scheduler_task_dir`（`job.json` + `task.json` 双文件存在）。调度器将来新增预创建文件时若影响该判定，必须同步本契约。远程作业目录同样适用：提交时由 `RemoteJobRunner._upload_scheduler_markers` 上传这两份标记（§2a）；缺失时节点产物嵌套到 `<molecule>/`，扁平结果拉取与远程 checkpoint 读取系统性失败。

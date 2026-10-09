@@ -1,13 +1,14 @@
 """Shared vibration-source discovery for catalog + endpoint.
 
-Provides a single 3-tier resolution path used by both the structure-viewer
+Provides a single 4-tier resolution path used by both the structure-viewer
 catalog (``probe_vibration_projection``) and the vibrations API endpoint
 (``find_vibration_source``) so that availability decisions never diverge.
 
 Resolution tiers (identical to the former endpoint-only logic):
   1. Per-item product ``RESULT/frequencies/{item_id}__normal_modes.json``
   2. Global product ``RESULT/frequencies/normal_modes.json``
-  3. Historical ORCA outputs under ``WORK/04_FREQ/`` (+ batch subpaths)
+  3. Canonical tsmode product ``RESULT/tsmode/normal_modes.json``
+  4. Historical ORCA outputs under ``WORK/04_FREQ/`` (+ batch subpaths)
 
 Performance: the catalog is a hot path (rebuilt per poll).  Historical ORCA
 files are parsed at most once per ``(path, mtime_ns, size)`` identity and
@@ -169,7 +170,7 @@ def _probe_orca_file(p: Path) -> tuple[bool, int | None]:
 
 
 # ---------------------------------------------------------------------------
-# Shared 3-tier source discovery
+# Shared 4-tier source discovery
 # ---------------------------------------------------------------------------
 
 
@@ -184,7 +185,8 @@ def find_vibration_source(
     Resolution order mirrors the endpoint exactly:
       1. Per-item product (when ``is_batch`` and ``item_id`` provided).
       2. Global product ``RESULT/frequencies/normal_modes.json``.
-      3. Historical ORCA output under ``WORK/04_FREQ/`` (+ batch subpaths).
+      3. Canonical tsmode product ``RESULT/tsmode/normal_modes.json``.
+      4. Historical ORCA output under ``WORK/04_FREQ/`` (+ batch subpaths).
 
     Product files are schema-validated before acceptance so catalog and
     endpoint never diverge on malformed JSON.  Invalid files are silently
@@ -205,7 +207,13 @@ def find_vibration_source(
     if global_path.is_file() and _is_valid_product(global_path):
         return VibrationSource(kind="product", path=global_path)
 
-    # Tier 3: historical ORCA outputs
+    # Tier 3: canonical tsmode product (validated) — the tsmode engine never
+    # writes RESULT/frequencies/* (todo 17: catalog/endpoint divergence).
+    tsmode_path = task_root / "RESULT" / "tsmode" / "normal_modes.json"
+    if tsmode_path.is_file() and _is_valid_product(tsmode_path):
+        return VibrationSource(kind="product", path=tsmode_path)
+
+    # Tier 4: historical ORCA outputs
     work = task_root / "WORK"
     if not work.is_dir():
         return None

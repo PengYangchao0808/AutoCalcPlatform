@@ -7,7 +7,10 @@ OpenLAVA (LSF) compute node over SSH/SFTP and monitors it to completion.
 
 The full flow:
 
-1. **Sync code** to the selected node (if ``auto_sync`` and code changed).
+1. **Bind a verified code release** (D03) — build/ensure the content-hash
+   snapshot (or select the pinned/continue release), hold its temp ref
+   until the binding is persisted, THEN submit; ``auto_sync=False`` still
+   requires a verified release (dev hatch only for the shared dir).
 2. **Select node** — explicit ``target_node`` or least-loaded.
 3. **Materialise + upload input** — write ``input.xyz`` locally, SFTP to
    ``inputs/``.
@@ -30,15 +33,18 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import posixpath
 import re
+import shlex
 import threading
 import time
 import uuid
-from dataclasses import asdict
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
@@ -54,14 +60,28 @@ from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMonitor
 from acp.scheduler.remote.node_manager import detect_node_python
+from acp.scheduler.remote.paths import resolve_remote_dir
+from acp.scheduler.remote.release import (
+    build_release_manifest,
+    ensure_node_release,
+    release_release_ref,
+    verify_existing_release,
+)
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
     build_remote_scan_config_payload,
     generate_lsf_script,
 )
-from acp.scheduler.remote.sftp import FileStager
+from acp.scheduler.remote.sftp import FileStager, RemoteDirConflictError
 from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
-from acp.scheduler.remote.sync import CodeSyncer
+from acp.scheduler.remote.submission import (
+    heartbeat_submit_worker,
+    lease_ttl_seconds,
+    submission_id_for,
+    submission_lsf_name,
+    submit_lease_valid,
+)
+from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_root
 from acp.scheduler.runner import materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
@@ -71,7 +91,10 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "RemoteJobRunner",
     "RemoteNodeUnavailableError",
+    "RemotePollObservation",
     "RemoteSubmissionError",
+    "RemoteSubmissionIndeterminate",
+    "RemoteSubmissionRejected",
 ]
 
 _LSF_JOB_ID_RE = re.compile(r"Job <(\d+)>")
@@ -87,6 +110,21 @@ _MONITOR_TIMEOUT_BUFFER = 3600
 _MONITOR_TIMEOUT_FALLBACK = 10 * 24 * 3600
 # Read state.json on every poll cycle for real-time remote progress.
 _STATE_READ_INTERVAL = 1
+
+# Provenance sentinel for the explicit dev escape hatch
+# (ACP_REMOTE_ALLOW_UNVERSIONED=1): the job runs from the shared, mutable
+# directory and the immutability guarantee does NOT cover this mode.
+_UNVERSIONED_RELEASE = "unversioned-shared"
+
+
+def _release_state_dir() -> Path:
+    """Local verified-release cache dir (``~/.acp/remote_sync``).
+
+    ``ACP_REMOTE_RELEASE_STATE_DIR`` overrides it so tests never touch the
+    developer's home directory.
+    """
+    env = os.environ.get("ACP_REMOTE_RELEASE_STATE_DIR")
+    return Path(env) if env else _default_state_dir()
 
 
 class _RemoteJobStateBase(TypedDict):
@@ -137,8 +175,94 @@ class RemoteNodeUnavailableError(RuntimeError):
     """No suitable remote node is available for job dispatch."""
 
 
+@dataclass(frozen=True)
+class RemotePollObservation:
+    """Structured result of one remote poll — the poll never mutates the record.
+
+    ``observed_status`` carries a legal *state* observation (RUNNING/PAUSED)
+    for the manager to persist through ``store.transition``; ``progress`` and
+    ``current_stage`` are *progress* observations persisted through the
+    narrow ``store.update_progress`` API.  On terminal polls ``final_state``
+    carries ``{"result": ..., "error": ...}`` for the terminal transition and
+    ``stage_events`` are stage events the manager emits only AFTER the
+    terminal CAS succeeds (see :meth:`RemoteJobRunner.apply_terminal_side_effects`).
+    """
+
+    terminal: bool
+    exit_code: int | None = None
+    lsf_status: str | None = None
+    observed_status: JobStatus | None = None
+    progress: float | None = None
+    current_stage: str | None = None
+    final_state: dict[str, Any] | None = None
+    stage_events: tuple[tuple[str, dict[str, Any]], ...] = ()
+
+
 class RemoteSubmissionError(RuntimeError):
     """LSF job submission (``bsub``) failed or produced no job ID."""
+
+
+class RemoteSubmissionRejected(RemoteSubmissionError):
+    """Definitive submission rejection — the job never entered LSF.
+
+    Never deletes the remote directory (contract A): the job goes FAILED
+    only and retention reclaims the directory, so a reused dir keeps its
+    checkpoint/step_result/RESULT intact.
+    """
+
+
+class RemoteSubmissionIndeterminate(RemoteSubmissionError):
+    """``bsub`` outcome unknown (SSH/timeout/unparseable reply).
+
+    The remote directory is kept, ``submit_state`` becomes
+    ``unconfirmed`` and the submission is reconciled — never judged
+    terminal from the transport failure alone.
+    """
+
+
+_NOT_FOUND_PHRASES = (
+    "not found",
+    "not submitted",
+    "no unfinished",
+    "no matching",
+    "no jobs",
+    "does not exist",
+)
+
+_UNSUPPORTED_PHRASES = (
+    "invalid option",
+    "unrecognized option",
+    "unknown option",
+    "illegal option",
+    "usage: bjobs",
+    "usage:bjobs",
+)
+
+
+def _explicit_not_found(raw: str) -> bool:
+    """True only on an EXPLICIT not-found report (never bare/empty output)."""
+    lower = raw.lower()
+    return any(phrase in lower for phrase in _NOT_FOUND_PHRASES)
+
+
+def _bjobs_option_unsupported(raw: str) -> bool:
+    """True when the ``bjobs`` dialect rejects the option we used."""
+    lower = (raw or "").lower()
+    return any(phrase in lower for phrase in _UNSUPPORTED_PHRASES)
+
+
+def _bjobs_name_column(lines: list[str]) -> int | None:
+    """Locate the job-name column of a ``bjobs -u`` table (feature detection)."""
+    for line in lines:
+        parts = line.split()
+        if not parts or parts[0] != "JOBID":
+            continue
+        upper = [p.upper() for p in parts]
+        for candidate in ("JOB_NAME", "JOBNAME", "NAME"):
+            if candidate in upper:
+                return upper.index(candidate)
+        return None
+    return None
 
 
 class RemoteJobRunner:
@@ -180,6 +304,10 @@ class RemoteJobRunner:
         # Keyed by node name; TTL 300 s so repeated submissions on the same
         # node don't re-probe every time.
         self._python_probe_cache: dict[str, tuple[float, str]] = {}
+        # job_id -> (node, release_id, ref_id): temporary release references
+        # held across the ensure→bind window so GC cannot reclaim a release
+        # between verification and the persisted binding (D03, todo 8).
+        self._pending_release_refs: dict[str, tuple[RemoteNode, str, str]] = {}
 
     # ------------------------------------------------------------------ #
     # Non-blocking poller-driven API
@@ -190,16 +318,38 @@ class RemoteJobRunner:
         record: JobRecord,
         event_log: JobEventLog,
         target_node: str | None = None,
+        *,
+        remote_job_dir: str | None = None,
+        on_submitted: Callable[[str], None] | None = None,
+        submission_id: str | None = None,
+        on_code_release_bound: Callable[[str], None] | None = None,
     ) -> str:
         """Prepare and submit the LSF job, return the LSF job ID immediately.
 
         Executes steps 1-5 (node selection, housekeeping, binary probe,
-        code sync, upload, LSF script, ``bsub``).  Does **not** enter
+        code release, upload, LSF script, ``bsub``).  Does **not** enter
         the monitor loop — that is driven by :meth:`poll_remote`.
 
         ``target_node`` is the already-resolved execution target from
         ``NodeRegistry`` (single-point selection, M4).  When omitted the
         legacy ``select_node(spec)`` path runs for backward compatibility.
+
+        ``remote_job_dir`` is the manager's already-resolved storage
+        identity dir; when omitted the record is resolved through
+        :func:`~acp.scheduler.remote.paths.resolve_remote_dir` (persisted
+        mapping → legacy dual-candidate probe → fallback).
+
+        ``on_submitted`` fires with the LSF job id **immediately** after
+        ``bsub`` returns it (before stage-state/tail work) so the manager
+        can persist the id with a fresh-revision CAS; ``submission_id``
+        names the LSF job (contract A).
+
+        ``on_code_release_bound`` fires with the verified release id
+        BEFORE ``bsub`` so the manager can persist
+        ``result["remote"]["code_release"]`` through the same conditional
+        submit-intent write (contract D: the binding is durable before any
+        LSF job exists).  The temporary release reference is dropped only
+        after this callback returns — success or failure.
         """
         spec = record.spec
         work_dir = Path(record.work_dir)
@@ -215,24 +365,64 @@ class RemoteJobRunner:
             node = self.select_node(spec)
         event_log.append("remote.node_selected", job_id=record.id, node=node.name, host=node.host)
 
+        if submission_id is None:
+            meta = (record.result or {}).get("remote")
+            if isinstance(meta, dict) and meta.get("submission_id"):
+                submission_id = str(meta["submission_id"])
+        if not submission_id:
+            submission_id = submission_id_for(record.id, record.attempt)
+
+        # Heartbeats bracket each long pre-bsub phase so a slow node never
+        # leaves the in-process lease heartbeat stale past its TTL window
+        # (no-op when no worker is registered, e.g. the legacy run path).
+        heartbeat_submit_worker(submission_id)
         self._pre_submit_housekeeping(node, event_log, record.id)
+        heartbeat_submit_worker(submission_id)
         self._probe_required_binaries(node, spec, event_log, record.id)
+        heartbeat_submit_worker(submission_id)
 
-        if self._config.auto_sync:
-            self._sync_code_if_needed(node, event_log, record.id)
-
-        if spec.uses_v2_naming:
-            remote_job_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
-        else:
-            remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+        # D03: fail closed BEFORE any directory claim/upload when no
+        # verified release can be bound — never warn-and-continue.
+        code_release = self._ensure_code_release(node, event_log, record)
+        heartbeat_submit_worker(submission_id)
 
         try:
-            lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record, spec, node, remote_job_dir, event_log, work_dir
+            remote_job_dir = self._resolve_remote_dir_for(
+                record, node, event_log, explicit=remote_job_dir
             )
-        except Exception:
-            self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
-            raise
+
+            claim_state: dict[str, str] = {}
+            try:
+                lsf_job_id, cli_cmd = self._prepare_and_submit(
+                    record,
+                    spec,
+                    node,
+                    remote_job_dir,
+                    event_log,
+                    work_dir,
+                    claim_state=claim_state,
+                    on_submitted=on_submitted,
+                    submission_id=submission_id,
+                    code_release=code_release,
+                    on_code_release_bound=on_code_release_bound,
+                )
+            except RemoteSubmissionIndeterminate as exc:
+                # Contract A: keep the directory, project ``unconfirmed`` and
+                # reconcile later — never judge the job from a lost reply.
+                self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
+                raise
+            except RemoteSubmissionRejected:
+                # Contract A: a definitive rejection never deletes the dir —
+                # FAILED only; retention reclaims (checkpoint/RESULT intact).
+                raise
+            except Exception:
+                if claim_state.get("disposition") == "created":
+                    self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+                raise
+        finally:
+            # Every exit path (success or failure) ends the bind window and
+            # drops the pending temp reference — never leak a ref.
+            self._release_pending_ref(record.id)
 
         self._set_remote_stage_state(record.id, "running", started=True)
 
@@ -272,18 +462,25 @@ class RemoteJobRunner:
         record: JobRecord,
         event_log: JobEventLog,
         cancel_event: threading.Event,
-    ) -> tuple[bool, int | None]:
+    ) -> RemotePollObservation:
         """Single non-blocking check of remote job status.
 
         Checks ``.exit_code`` first (authoritative), then ``bjobs``
         (LSF state).  Tails logs and periodically reads ``state.json``
         for fine-grained stage progress.
 
-        Returns ``(is_terminal, exit_code)``.
+        The observation is *returned* without mutating ``record``: state
+        transitions (PENDING/PAUSED→RUNNING, →PAUSED) and progress are
+        persisted by the caller through conditional store APIs, and terminal
+        side effects run only after the terminal CAS succeeds (see
+        :meth:`collect_final_state` / :meth:`apply_terminal_side_effects`).
         """
         state = self._job_states.get(record.id)
         if state is None:
-            return (True, record.exit_code if record.exit_code is not None else 1)
+            return RemotePollObservation(
+                terminal=True,
+                exit_code=record.exit_code if record.exit_code is not None else 1,
+            )
 
         node = state["node"]
         remote_job_dir = state["remote_job_dir"]
@@ -302,14 +499,36 @@ class RemoteJobRunner:
                     lsf_job_id=lsf_job_id,
                     bkill_ok=ok,
                 )
+                if not ok:
+                    # D05: a failed bkill is not a cancellation.  Keep the
+                    # poll state (no ``cancel_sent``) and return a
+                    # non-terminal observation so the manager stays
+                    # CANCELLING and retries bkill on the next poll —
+                    # only a bjobs-confirmed disappearance finalises.
+                    return RemotePollObservation(
+                        terminal=False,
+                        progress=record.progress,
+                        current_stage=record.current_stage,
+                    )
                 state["cancel_sent"] = True
-            exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
-            self._cleanup_job_state(record.id)
-            return (True, exit_code if exit_code is not None else 130)
+            exit_code = self._wait_exit_code(
+                node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+            )
+            # Poll-state teardown happens in apply_terminal_side_effects,
+            # only after the manager persists the terminal transition.
+            return RemotePollObservation(
+                terminal=True,
+                exit_code=exit_code if exit_code is not None else 130,
+            )
 
         exit_code = self._monitor.get_exit_code(node, remote_job_dir)
+        if exit_code is not None and not self._receipt_is_current(
+            node, remote_job_dir, record.attempt
+        ):
+            # Stale receipt from a previous attempt — not this run's result.
+            exit_code = None
         if exit_code is not None:
-            return self._finalize_remote(
+            return self.collect_final_state(
                 record,
                 event_log,
                 state,
@@ -336,6 +555,7 @@ class RemoteJobRunner:
             logger.warning("bjobs poll failed for %s: %s", record.id, exc)
             status = ""
 
+        observed_status: JobStatus | None = None
         if status:
             event_log.append(
                 "remote.lsf_status",
@@ -345,24 +565,27 @@ class RemoteJobRunner:
             )
             self._mirror_lsf_stage(record.id, status)
 
+            # State observations (legal transitions only — the manager CASes
+            # them against the persisted status; a no-op change stays a
+            # progress-only observation).
             if status == "running" and record.status in (
                 JobStatus.PENDING,
                 JobStatus.PAUSED,
             ):
-                record.status = JobStatus.RUNNING
-
-            if status == STATUS_PAUSED and record.status in (
+                observed_status = JobStatus.RUNNING
+            elif status == STATUS_PAUSED and record.status in (
                 JobStatus.PENDING,
                 JobStatus.RUNNING,
-                JobStatus.PAUSED,
             ):
-                record.status = JobStatus.PAUSED
+                observed_status = JobStatus.PAUSED
 
             if RemoteJobMonitor.is_terminal(status):
-                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                exit_code = self._wait_exit_code(
+                    node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+                )
                 if exit_code is None:
                     # LSF reports a terminal state but the wrapper script
-                    # never wrote ``.exit_code`` \u2014 this happens when LSF
+                    # never wrote ``.exit_code`` — this happens when LSF
                     # kills the whole process group (e.g. the walltime /
                     # RUNLIMIT limit) before the trailing
                     # ``echo $? > .exit_code`` can run.  Synthesise an exit
@@ -384,7 +607,7 @@ class RemoteJobRunner:
                             record.id,
                             status,
                         )
-                return self._finalize_remote(
+                return self.collect_final_state(
                     record,
                     event_log,
                     state,
@@ -404,7 +627,13 @@ class RemoteJobRunner:
         state["stdout_offset"] = stdout_offset
         state["stderr_offset"] = stderr_offset
 
-        return (False, None)
+        return RemotePollObservation(
+            terminal=False,
+            lsf_status=status or None,
+            observed_status=observed_status,
+            progress=record.progress,
+            current_stage=record.current_stage,
+        )
 
     def cancel_remote(
         self,
@@ -474,7 +703,211 @@ class RemoteJobRunner:
         }
         return True
 
-    def _finalize_remote(
+    def reconcile_submission(self, record: JobRecord) -> str:
+        """Contract-A verdict for a pending submission: found / not_accepted / unknown.
+
+        * ``remote_job_id`` present → rebuild poll state (``found`` when
+          the persisted metadata resolves, else ``unknown``).
+        * otherwise query LSF by the submission name
+          (``bjobs -J acp_<submission_id>``, OpenLAVA ``bjobs -u`` fallback
+          with feature detection) — adoption requires a SINGLE match plus
+          a readable remote ``job.json`` whose job_id/attempt is this
+          record's; multiple matches or unreadable markers → ``unknown``.
+        * ``not_accepted`` requires the full contract-A positive-evidence
+          set (explicit not-found query with the name-query feature
+          available, no ``.exit_code``, no ``state.json``, no ``.stage_*``,
+          no other-attempt evidence) **and** an invalid submit lease.
+          ``STATUS_UNKNOWN``/empty output/read failures/parse failures are
+          ALWAYS ``unknown``.  The directory is never deleted here.
+        * While the submit lease is valid, a missing job stays
+          ``unknown`` — the submit worker may not have run ``bsub`` yet.
+        """
+        result = record.result or {}
+        meta = result.get("remote") if isinstance(result.get("remote"), dict) else {}
+        lsf_job_id = record.remote_job_id or result.get("lsf_job_id")
+        if lsf_job_id:
+            return "found" if self.recover_job_state(record) else "unknown"
+
+        submission_id = meta.get("submission_id")
+        if not isinstance(submission_id, str) or not submission_id:
+            return "unknown"
+        node_name = meta.get("node") or result.get("node")
+        node = self._config.get_node(str(node_name)) if node_name else None
+        if node is None:
+            return "unknown"
+
+        name = submission_lsf_name(submission_id)
+        kind, match_ids = self._run_bjobs_name_query(node, name)
+        if kind == "found":
+            if len(match_ids) != 1:
+                return "unknown"
+            remote_dir = self._reconcile_remote_dir(record, node)
+            if remote_dir is None:
+                return "unknown"
+            if not self._markers_owned_by(node, remote_dir, record):
+                return "unknown"
+            record.remote_job_id = match_ids[0]
+            merged = dict(result)
+            merged["lsf_job_id"] = match_ids[0]
+            record.result = merged
+            return "found"
+        if kind == "not_found":
+            ttl = lease_ttl_seconds(self._config)
+            if submit_lease_valid(meta, ttl_seconds=ttl):
+                return "unknown"
+            evidence = self._submission_absence_evidence(node, record)
+            if evidence is True:
+                return "not_accepted"
+            return "unknown"
+        return "unknown"
+
+    def _run_bjobs_name_query(self, node: RemoteNode, name: str) -> tuple[str, list[str]]:
+        """Query LSF for *name*.  Returns ``(kind, job_ids)`` with kind in
+        ``{"found", "not_found", "empty", "unsupported", "error"}``.
+
+        ``not_found`` is only reported on an EXPLICIT not-found phrase;
+        empty output and unparseable tables stay non-committal (contract
+        A: monitor maps empty output to STATUS_NOT_FOUND — not usable).
+        """
+        try:
+            code, out, _err = self._ssh.execute(
+                node, f"bjobs -J {shlex.quote(name)} 2>&1", timeout=30
+            )
+        except SSHExecutionError:
+            return "error", []
+        raw = (out or "").strip()
+        if code != 0 or _bjobs_option_unsupported(raw):
+            return self._run_bjobs_user_scan(node, name)
+        if not raw:
+            return "empty", []
+        if _explicit_not_found(raw):
+            return "not_found", []
+        ids: list[str] = []
+        for line in raw.splitlines():
+            parts = line.split()
+            if len(parts) >= 3 and parts[0].isdigit():
+                ids.append(parts[0])
+        if ids:
+            return "found", ids
+        return "empty", []
+
+    def _run_bjobs_user_scan(self, node: RemoteNode, name: str) -> tuple[str, list[str]]:
+        """OpenLAVA-compatible fallback: scan ``bjobs -u <user>`` by job name."""
+        user = shlex.quote(node.username or "")
+        try:
+            code, out, _err = self._ssh.execute(node, f"bjobs -u {user} 2>&1", timeout=30)
+        except SSHExecutionError:
+            return "error", []
+        raw = (out or "").strip()
+        if code != 0 and _bjobs_option_unsupported(raw):
+            return "unsupported", []
+        if not raw:
+            return "empty", []
+        if _explicit_not_found(raw):
+            return "not_found", []
+        lines = raw.splitlines()
+        name_idx = _bjobs_name_column(lines)
+        if name_idx is None:
+            return "unsupported", []
+        ids: list[str] = []
+        for line in lines:
+            parts = line.split()
+            if len(parts) > name_idx and parts[0].isdigit() and parts[name_idx] == name:
+                ids.append(parts[0])
+        if ids:
+            return "found", ids
+        return "empty", []
+
+    def _reconcile_remote_dir(self, record: JobRecord, node: RemoteNode) -> str | None:
+        result = record.result or {}
+        remote_dir = result.get("remote_dir")
+        if remote_dir:
+            return str(remote_dir)
+        meta = result.get("remote") if isinstance(result.get("remote"), dict) else {}
+        relative = meta.get("relative")
+        if isinstance(relative, str) and relative:
+            return posixpath.join(node.remote_work_dir, relative)
+        return None
+
+    def _markers_owned_by(self, node: RemoteNode, remote_dir: str, record: JobRecord) -> bool:
+        """True only when ``job.json`` is readable AND names this job/attempt."""
+        for marker in ("job.json", "task.json"):
+            try:
+                raw = self._stager.read_remote_file(
+                    node, posixpath.join(remote_dir, marker)
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, SSHExecutionError):
+                return False
+            if not raw:
+                return False
+            try:
+                payload = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                return False
+            if not isinstance(payload, dict):
+                return False
+            owner = payload.get("id") or payload.get("task_id")
+            if owner != record.id:
+                return False
+            declared = payload.get("attempt")
+            if isinstance(declared, int) and declared != record.attempt:
+                return False
+            return True
+        return False
+
+    def _submission_absence_evidence(self, node: RemoteNode, record: JobRecord) -> bool | None:
+        """Contract-A exclusion evidence: True = all clear, False = run
+        evidence present, None = unreadable (never counts as evidence)."""
+        remote_dir = self._reconcile_remote_dir(record, node)
+        if remote_dir is None:
+            return None
+        for marker in (".exit_code", "state.json"):
+            try:
+                content = self._stager.read_remote_file(
+                    node, posixpath.join(remote_dir, marker)
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, SSHExecutionError):
+                return None
+            if not content:
+                continue
+            return False
+        try:
+            entries = self._stager.list_remote_dir(node, remote_dir)
+        except FileNotFoundError:
+            return True
+        except (OSError, SSHExecutionError):
+            return None
+        names = {getattr(entry, "name", "") for entry in entries}
+        if any(name.startswith(".stage_") for name in names):
+            return False
+        if "job.json" not in names and "task.json" not in names:
+            return True
+        # Markers present: only this attempt's declared run may exist —
+        # a readable marker declaring another attempt is foreign evidence.
+        for marker in ("job.json", "task.json"):
+            try:
+                raw = self._stager.read_remote_file(
+                    node, posixpath.join(remote_dir, marker)
+                )
+            except FileNotFoundError:
+                continue
+            except (OSError, SSHExecutionError):
+                return None
+            try:
+                payload = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                return None
+            if isinstance(payload, dict):
+                declared = payload.get("attempt")
+                if isinstance(declared, int) and declared != record.attempt:
+                    return False
+        return True
+
+    def collect_final_state(
         self,
         record: JobRecord,
         event_log: JobEventLog,
@@ -484,14 +917,16 @@ class RemoteJobRunner:
         lsf_job_id: str,
         exit_code: int,
         seen_stages: set[str],
-    ) -> tuple[bool, int]:
-        """Apply the terminal *exit_code* to *record* and tear down poll state.
+    ) -> RemotePollObservation:
+        """Collect the terminal-state payload without applying side effects.
 
         Shared by the ``.exit_code`` and LSF-terminal branches of
-        :meth:`poll_remote` so both follow one finalisation path: flush the
-        remote logs, read the final ``state.json``, persist result metadata +
-        provenance, mark stage tasks, emit a terminal event, and drop the
-        in-memory poll state.  Returns ``(True, exit_code)``.
+        :meth:`poll_remote`: flushes the remote logs, reads the final
+        ``state.json`` (stage events are collected, not emitted), and fills
+        the in-memory result metadata + provenance.  The returned
+        observation is what the manager persists through the terminal CAS;
+        events, stage teardown and poll-state cleanup follow in
+        :meth:`apply_terminal_side_effects` — only after that CAS succeeds.
         """
         stdout_offset = state["stdout_offset"]
         stderr_offset = state["stderr_offset"]
@@ -502,13 +937,19 @@ class RemoteJobRunner:
         state["stderr_offset"] = self._tail_and_emit(
             node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
         )
+        stage_events: tuple[tuple[str, dict[str, Any]], ...] = ()
         try:
-            self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+            collected = self._observe_remote_state(
+                record, event_log, node, remote_job_dir, seen_stages, emit=False
+            )
+            stage_events = tuple((etype, dict(payload)) for _ts, etype, _name, payload in collected)
+            state["seen_stages"] = seen_stages
         except Exception:
             logger.debug("Final state.json read failed for %s", record.id, exc_info=True)
 
         record.exit_code = exit_code
-        record.progress = 1.0 if exit_code == 0 else record.progress
+        if exit_code == 0:
+            record.progress = 1.0
         result = dict(record.result or {})
         result["lsf_job_id"] = lsf_job_id
         result["node"] = node.name
@@ -519,16 +960,53 @@ class RemoteJobRunner:
         result["command_line"] = " ".join(cli_cmd)
         record.result = result
         self._build_provenance(record, cli_cmd)
-        final_status = "completed" if exit_code == 0 else "failed"
-        self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
-        self._finalize_stages(record.id, final_status)
+        return RemotePollObservation(
+            terminal=True,
+            exit_code=exit_code,
+            progress=record.progress,
+            current_stage=record.current_stage,
+            final_state={"result": dict(record.result or {}), "error": record.error},
+            stage_events=stage_events,
+        )
+
+    def apply_terminal_side_effects(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        stage_events: tuple[tuple[str, dict[str, Any]], ...] = (),
+    ) -> None:
+        """Emit terminal events and tear down stage/poll state — idempotent.
+
+        Called by the manager only AFTER the terminal CAS succeeds, and safe
+        to retry: every event carries a stable
+        ``terminal:<job>:<attempt>:<event>`` idempotency key, so a crash
+        between the event and the ``terminal_side_effects_done`` marker can
+        never duplicate the event on the reconcile retry.
+        """
+        exit_code = record.exit_code
+        key_base = f"terminal:{record.id}:{record.attempt}"
+        for event_type, payload in stage_events:
+            event_log.append(
+                event_type,
+                job_id=record.id,
+                idempotency_key=f"{key_base}:{event_type}:{payload.get('stage', '')}",
+                **payload,
+            )
+        if record.status == JobStatus.CANCELLED:
+            self._cleanup_job_state(record.id)
+            return
+        success = exit_code == 0
+        event_type = "job.completed" if success else "job.failed"
         event_log.append(
-            "job.completed" if exit_code == 0 else "job.failed",
+            event_type,
             job_id=record.id,
             exit_code=exit_code,
+            idempotency_key=f"{key_base}:{event_type}",
         )
+        final_status = "completed" if success else "failed"
+        self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
+        self._finalize_stages(record.id, final_status)
         self._cleanup_job_state(record.id)
-        return (True, exit_code)
 
     # ------------------------------------------------------------------ #
     # Remote state observation (state.json + .stage_* files)
@@ -541,18 +1019,22 @@ class RemoteJobRunner:
         node: RemoteNode,
         remote_job_dir: str,
         seen: set[str],
-    ) -> None:
+        *,
+        emit: bool = True,
+    ) -> list[tuple[float, str, str, dict[str, object]]]:
         """Read remote ``state.json`` and mirror progress/stages to *record*.
 
         Mirrors the logic in :meth:`JobRunner._observe_state` but reads
-        the state file over SFTP instead of the local filesystem.
+        the state file over SFTP instead of the local filesystem.  With
+        ``emit=False`` the stage events are only returned (terminal polls
+        defer emission until after the manager's terminal CAS).
         """
         data = cast(
             dict[str, object] | None,
             self._monitor.find_remote_state_json(node, remote_job_dir),
         )
         if data is None:
-            return
+            return []
 
         # Mirror the observed payload into the local work dir: the API's
         # state.json enrichment reads only local files, so without this the
@@ -560,7 +1042,7 @@ class RemoteJobRunner:
         self._mirror_state_json(record, data)
 
         if data.get("status") == "failed":
-            return
+            return []
 
         current_stage = data.get("current_stage")
         record.current_stage = str(current_stage) if isinstance(current_stage, str) else None
@@ -598,8 +1080,10 @@ class RemoteJobRunner:
                     (ts, "stage.failed", name, {"stage": name, "error": str(info.get("error", ""))})
                 )
 
-        for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
-            event_log.append(event_type, job_id=record.id, **payload)
+        if emit:
+            for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
+                event_log.append(event_type, job_id=record.id, **payload)
+        return pending_events
 
     def _mirror_state_json(self, record: JobRecord, data: dict[str, object]) -> None:
         """Write the observed remote state payload to the local work dir."""
@@ -693,25 +1177,43 @@ class RemoteJobRunner:
         # environment, e.g. module load).
         self._probe_required_binaries(node, spec, event_log, record.id)
 
-        # 2. Code sync (if enabled and needed)
-        if self._config.auto_sync:
-            self._sync_code_if_needed(node, event_log, record.id)
+        # 2. Code release (D03): same wiring as submit_remote — verify or
+        # publish the immutable snapshot first, fail closed before any
+        # directory claim when no verified release can be bound.
+        code_release = self._ensure_code_release(node, event_log, record)
 
-        if spec.uses_v2_naming:
-            remote_job_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
-        else:
-            remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
-
-        # Steps 3–5: prepare remote dir, upload input + script, submit.
-        # If anything fails before bsub succeeds, clean up the remote
-        # directory so we don't leak stale inputs (plan P2-1).
         try:
-            lsf_job_id, cli_cmd = self._prepare_and_submit(
-                record, spec, node, remote_job_dir, event_log, work_dir
-            )
-        except Exception:
-            self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
-            raise
+            # Storage identity resolution — the SAME path as submit_remote
+            # (no second directory-join implementation in this legacy entry).
+            remote_job_dir = self._resolve_remote_dir_for(record, node, event_log)
+
+            # Steps 3–5: claim the remote dir, archive the previous attempt's
+            # receipts, upload input + script, submit.  Late failures only
+            # clean up a directory this submission created.
+            claim_state: dict[str, str] = {}
+            try:
+                lsf_job_id, cli_cmd = self._prepare_and_submit(
+                    record,
+                    spec,
+                    node,
+                    remote_job_dir,
+                    event_log,
+                    work_dir,
+                    claim_state=claim_state,
+                    code_release=code_release,
+                )
+            except RemoteSubmissionIndeterminate as exc:
+                self._mark_submission_unconfirmed(record, event_log, node, remote_job_dir, exc)
+                raise
+            except RemoteSubmissionRejected:
+                raise
+            except Exception:
+                if claim_state.get("disposition") == "created":
+                    self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+                raise
+        finally:
+            # Same guarantee as submit_remote: never leak a pending ref.
+            self._release_pending_ref(record.id)
 
         self._set_remote_stage_state(record.id, "running", started=True)
 
@@ -762,80 +1264,130 @@ class RemoteJobRunner:
         remote_job_dir: str,
         event_log: JobEventLog,
         work_dir: Path,
+        claim_state: dict[str, str] | None = None,
+        on_submitted: Callable[[str], None] | None = None,
+        submission_id: str | None = None,
+        code_release: str | None = None,
+        on_code_release_bound: Callable[[str], None] | None = None,
     ) -> tuple[str, list[str]]:
-        """Prepare remote inputs, generate the LSF script, and bsub.
+        """Claim the dir, archive old receipts, upload inputs, bind, bsub.
 
         Returns ``(lsf_job_id, cli_command)``.  Raises on any failure —
-        the caller is responsible for cleanup.
+        contract A: **no submission failure ever deletes the directory**
+        (reused dirs keep checkpoint/step_result/RESULT; a created dir is
+        reclaimed by retention).  Input/marker/script upload failures
+        raise :class:`RemoteSubmissionRejected`; transport/parse failures
+        around ``bsub`` raise :class:`RemoteSubmissionIndeterminate`.
+
+        The exclusive claim runs BEFORE any file write, and the previous
+        attempt's receipt archive runs BEFORE ``bsub`` — a failure there
+        aborts the submission (no PENDING is published).
+
+        ``code_release`` (the verified release from
+        :meth:`_ensure_code_release`) drives the generated script's
+        PYTHONPATH and is persisted via ``on_code_release_bound`` BEFORE
+        ``bsub`` (contract D); the temp reference protecting the
+        ensure→bind window is dropped right after that write.
         """
-        # 3. Prepare remote directory + upload input
-        self._stager.make_remote_dir(node, remote_job_dir)
+        disposition = self._stager.claim_remote_job_dir(node, remote_job_dir, record)
+        if claim_state is not None:
+            claim_state["disposition"] = disposition
 
-        inputs_dir = work_dir
-        inputs_dir.mkdir(parents=True, exist_ok=True)
-        run_root = work_dir.parent.parent
-        materialized_roles: dict[str, Path] = {}
-        materialized = materialize_job_input(spec.input, inputs_dir, run_root, materialized_roles)
+        if submission_id is None:
+            submission_id = submission_id_for(record.id, record.attempt)
+        heartbeat_submit_worker(submission_id)
 
-        bond_scan_mode = spec.workflow == "PESsearch" and (
-            str(spec.method.get("mode") or "") == "bond_length_scan"
-        )
-        is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
-        remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
-        if bond_scan_mode:
-            scan_payload = build_remote_scan_config_payload(spec) or {}
-            scan_config_local = work_dir / SCAN_CONFIG_FILENAME
-            scan_config_local.write_text(
-                json.dumps(scan_payload, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
+        try:
+            self._archive_remote_attempt(node, remote_job_dir, record, event_log, disposition)
+
+            inputs_dir = work_dir
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+            run_root = work_dir.parent.parent
+            materialized_roles: dict[str, Path] = {}
+            materialized = materialize_job_input(
+                spec.input, inputs_dir, run_root, materialized_roles
             )
-            self._stager.upload_file(
+
+            bond_scan_mode = spec.workflow == "PESsearch" and (
+                str(spec.method.get("mode") or "") == "bond_length_scan"
+            )
+            is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
+            remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
+            if bond_scan_mode:
+                scan_payload = build_remote_scan_config_payload(spec) or {}
+                scan_config_local = work_dir / SCAN_CONFIG_FILENAME
+                scan_config_local.write_text(
+                    json.dumps(scan_payload, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                self._stager.upload_file(
+                    node,
+                    scan_config_local,
+                    posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
+                )
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="scan_config",
+                )
+            elif materialized and materialized.is_file():
+                remote_path = posixpath.join(remote_job_dir, remote_input_name)
+                self._stager.upload_file(node, materialized, remote_path)
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="input",
+                )
+            else:
+                raise RemoteSubmissionRejected(
+                    f"Failed to materialise input for job {record.id}"
+                )
+
+            # 3b. Scheduler-context markers (job.json + task.json): the node
+            # side detects them by existence only (workflows/_helpers.py) and
+            # otherwise nests products under <remote_job_dir>/<molecule>/,
+            # where the flat result-fetch layer never finds them.
+            self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
+            heartbeat_submit_worker(submission_id)
+
+            # 4. Generate + upload LSF script
+            py = self._resolve_node_python(node, job_id=record.id)
+            script_release = (
+                code_release if code_release and code_release != _UNVERSIONED_RELEASE else None
+            )
+            lsf_spec, cli_cmd = build_lsf_script_spec(
+                spec,
+                record.id,
                 node,
-                scan_config_local,
-                posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
+                # Per-node queue override; None keeps cluster queue byte-identically.
+                queue=node.queue or self._config.queue,
+                walltime=self._config.walltime,
+                extra_flags=self._config.extra_flags,
+                input_path=remote_input_name,
+                remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
+                remote_job_dir=remote_job_dir,
+                python_executable=py,
+                pre_cmds=self._config.pre_cmds,
+                submission_id=submission_id,
+                code_release=script_release,
             )
-            event_log.append(
-                "remote.input_uploaded",
-                job_id=record.id,
-                node=node.name,
-                role="scan_config",
-            )
-        elif materialized and materialized.is_file():
-            remote_path = posixpath.join(remote_job_dir, remote_input_name)
-            self._stager.upload_file(node, materialized, remote_path)
-            event_log.append(
-                "remote.input_uploaded",
-                job_id=record.id,
-                node=node.name,
-                role="input",
-            )
-        else:
-            raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
-
-        # 3b. Scheduler-context markers (job.json + task.json): the node
-        # side detects them by existence only (workflows/_helpers.py) and
-        # otherwise nests products under <remote_job_dir>/<molecule>/,
-        # where the flat result-fetch layer never finds them.
-        self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
-
-        # 4. Generate + upload LSF script
-        py = self._resolve_node_python(node, job_id=record.id)
-        lsf_spec, cli_cmd = build_lsf_script_spec(
-            spec,
-            record.id,
-            node,
-            # Per-node queue override; None keeps cluster queue byte-identically.
-            queue=node.queue or self._config.queue,
-            walltime=self._config.walltime,
-            extra_flags=self._config.extra_flags,
-            input_path=remote_input_name,
-            remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
-            python_executable=py,
-            pre_cmds=self._config.pre_cmds,
-        )
-        script_text = generate_lsf_script(lsf_spec)
-        script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
-        self._stager.upload_text(node, script_text, script_remote_path)
+            script_text = generate_lsf_script(lsf_spec)
+            script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
+            self._stager.upload_text(node, script_text, script_remote_path)
+        except (
+            RemoteSubmissionRejected,
+            RemoteSubmissionIndeterminate,
+            RemoteDirConflictError,
+        ):
+            raise
+        except RemoteSubmissionError as exc:
+            raise RemoteSubmissionRejected(str(exc)) from exc
+        except (OSError, SSHExecutionError) as exc:
+            raise RemoteSubmissionRejected(
+                f"submission preparation failed for job {record.id} on {node.name}: {exc}"
+            ) from exc
 
         record.current_stage = "remote_execution"
         record.progress = 0.0
@@ -850,16 +1402,88 @@ class RemoteJobRunner:
         # Initialise the remote_execution stage task.
         self._init_remote_stage(record.id)
 
-        # 5. Submit via bsub
-        lsf_job_id = self._submit_lsf(node, script_remote_path, remote_job_dir)
-        event_log.append(
-            "remote.submitted",
-            job_id=record.id,
-            lsf_job_id=lsf_job_id,
-            node=node.name,
-            remote_dir=remote_job_dir,
+        # 4b. Bind the verified release BEFORE bsub (contract D): persist
+        # ``result["remote"]["code_release"]`` through the submit-intent
+        # write, then drop the temp reference — and only then submit.
+        # A failed bind aborts the submission (fail closed, no bsub).
+        self._bind_code_release(record, event_log, code_release, on_code_release_bound)
+
+        # 5. Submit via bsub — the id is handed to the persistence callback
+        # BEFORE any stage-state/log-tail work (contract A write order).
+        # The heartbeat renews the submit lease right before the blocking
+        # call so a slow upload phase never expires the lease mid-submit.
+        heartbeat_submit_worker(submission_id)
+        lsf_job_id = self._submit_lsf(
+            node, script_remote_path, remote_job_dir, submission_id=submission_id
         )
+        if on_submitted is not None:
+            try:
+                on_submitted(lsf_job_id)
+            except Exception as exc:
+                # Never roll back an accepted submission over a persistence
+                # failure: reconcile converges it (no second bsub).
+                logger.warning(
+                    "on_submitted persistence failed for %s (job <%s>): %s",
+                    record.id,
+                    lsf_job_id,
+                    exc,
+                )
+                try:
+                    event_log.append(
+                        "remote.submit_id_persist_failed",
+                        job_id=record.id,
+                        lsf_job_id=lsf_job_id,
+                        submission_id=submission_id,
+                        error=str(exc),
+                    )
+                except OSError:
+                    logger.debug("submit_id_persist_failed event write failed", exc_info=True)
+        try:
+            event_log.append(
+                "remote.submitted",
+                job_id=record.id,
+                lsf_job_id=lsf_job_id,
+                node=node.name,
+                remote_dir=remote_job_dir,
+            )
+        except OSError:
+            # Contract A (iii): an event write failure never rolls back an
+            # accepted submission — the id is already persisted/reconciled.
+            logger.warning(
+                "remote.submitted event write failed for %s; submission kept",
+                record.id,
+                exc_info=True,
+            )
         return lsf_job_id, cli_cmd
+
+    def _mark_submission_unconfirmed(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        node: RemoteNode,
+        remote_job_dir: str,
+        exc: Exception,
+    ) -> None:
+        """Project ``submit_state="unconfirmed"`` + event (in-memory; the
+        manager persists it) after an indeterminate ``bsub``."""
+        result = dict(record.result or {})
+        meta = dict(result.get("remote") or {})
+        meta["submit_state"] = "unconfirmed"
+        meta["unconfirmed_at"] = _utc_now_iso()
+        result["remote"] = meta
+        record.result = result
+        try:
+            event_log.append(
+                "remote.submit_unconfirmed",
+                job_id=record.id,
+                node=node.name,
+                remote_dir=remote_job_dir,
+                submission_id=meta.get("submission_id"),
+                reason=str(exc),
+                idempotency_key=f"submit-unconfirmed:{record.id}:{record.attempt}",
+            )
+        except OSError:
+            logger.debug("remote.submit_unconfirmed event write failed", exc_info=True)
 
     def _upload_scheduler_markers(
         self,
@@ -904,6 +1528,176 @@ class RemoteJobRunner:
             node=node.name,
             files=["job.json", "task.json"],
         )
+
+    def _resolve_remote_dir_for(
+        self,
+        record: JobRecord,
+        node: RemoteNode,
+        event_log: JobEventLog,
+        *,
+        explicit: str | None = None,
+    ) -> str:
+        """Resolve storage identity → remote dir and emit legacy-path events.
+
+        Shared by ``submit_remote`` and the legacy ``run()``/``_run_remote``
+        entry so there is exactly one directory-resolution implementation.
+        """
+        resolved, fallback = resolve_remote_dir(
+            record,
+            node,
+            explicit=explicit,
+            probe=self._owner_probe(node, record),
+        )
+        source = ((record.result or {}).get("remote") or {}).get("path_source")
+        if fallback:
+            event_log.append(
+                "remote.path_legacy_fallback",
+                job_id=record.id,
+                node=node.name,
+                remote_dir=resolved,
+            )
+        elif source == "legacy_flat":
+            # Legacy in-flight job adopted at its old flat directory —
+            # persist happens through the record.result write-back.
+            event_log.append(
+                "remote.path_legacy_flat",
+                job_id=record.id,
+                node=node.name,
+                remote_dir=resolved,
+            )
+        return resolved
+
+    def _owner_probe(self, node: RemoteNode, record: JobRecord):
+        """Ownership predicate for the dual-candidate probe (job.json/task.json)."""
+
+        def probe(candidate: str) -> bool:
+            for marker in ("job.json", "task.json"):
+                try:
+                    raw = self._stager.read_remote_file(
+                        node, posixpath.join(candidate, marker)
+                    )
+                except (OSError, SSHExecutionError):
+                    continue
+                if not raw:
+                    continue
+                try:
+                    payload = json.loads(raw.decode("utf-8", errors="replace"))
+                except ValueError:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                owner = payload.get("id") or payload.get("task_id")
+                if owner == record.id:
+                    return True
+            return False
+
+        return probe
+
+    def _archive_remote_attempt(
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        record: JobRecord,
+        event_log: JobEventLog,
+        disposition: str,
+    ) -> None:
+        """Archive the previous attempt's receipts into ``attempts/<n>/``.
+
+        Runs inside the submit thread BEFORE ``bsub``: a failure aborts the
+        submission (no PENDING published before archiving completes) and the
+        poller never observes the directory first.  ``checkpoint.json`` /
+        ``step_result*.json`` / ``RESULT/`` are archived too unless this is
+        a **continue** (``remote.resume``), which adopts them in place.
+        """
+        previous_attempt = record.attempt - 1
+        if previous_attempt < 1 or disposition == "created":
+            return
+        meta = (record.result or {}).get("remote")
+        adopt_results = isinstance(meta, dict) and bool(meta.get("resume"))
+        archive_root = posixpath.join(
+            remote_job_dir, "WORK", "00_RUNTIME", "attempts", str(previous_attempt)
+        )
+        moved: list[str] = []
+
+        def _move(rel_src: str, rel_dst: str) -> None:
+            src = posixpath.join(remote_job_dir, rel_src)
+            if not self._stager.remote_exists(node, src):
+                return
+            self._stager.rename_remote(node, src, posixpath.join(archive_root, rel_dst))
+            moved.append(rel_src)
+
+        for name in (".exit_code", "state.json"):
+            _move(name, name)
+        try:
+            entries = self._stager.list_remote_dir(node, remote_job_dir)
+        except (FileNotFoundError, OSError):
+            entries = []
+        for entry in entries:
+            if entry.name.startswith(".stage_"):
+                _move(entry.name, entry.name)
+        runtime_rel = posixpath.join("WORK", "00_RUNTIME")
+        _move(posixpath.join(runtime_rel, "run.lock"), posixpath.join(runtime_rel, "run.lock"))
+        if adopt_results:
+            if moved:
+                event_log.append(
+                    "remote.attempts_archived",
+                    job_id=record.id,
+                    attempt=previous_attempt,
+                    files=moved,
+                    adopted_results=True,
+                )
+            return
+
+        _runtime_checkpoint = posixpath.join(runtime_rel, "checkpoint.json")
+        _move(_runtime_checkpoint, _runtime_checkpoint)
+        _move("checkpoint.json", "checkpoint.json")
+        _move("RESULT", "RESULT")
+        try:
+            runtime_entries = self._stager.list_remote_dir(
+                node, posixpath.join(remote_job_dir, runtime_rel)
+            )
+        except (FileNotFoundError, OSError):
+            runtime_entries = []
+        for source_entries, rel_prefix in ((entries, ""), (runtime_entries, runtime_rel)):
+            for entry in source_entries:
+                if entry.name.startswith("step_result"):
+                    rel = posixpath.join(rel_prefix, entry.name)
+                    _move(rel, rel)
+        if moved:
+            event_log.append(
+                "remote.attempts_archived",
+                job_id=record.id,
+                attempt=previous_attempt,
+                files=moved,
+                adopted_results=False,
+            )
+
+    def _receipt_is_current(self, node: RemoteNode, remote_job_dir: str, attempt: int) -> bool:
+        """True unless the remote receipts demonstrably belong to an older attempt.
+
+        ``state.json``/``job.json`` may declare the attempt they were
+        written for; a declared-but-different attempt means the receipt
+        set predates the current attempt and must not drive finalisation.
+        Unknown/undeclared receipts stay current (legacy compatibility).
+        """
+        for marker in ("state.json", "job.json"):
+            try:
+                raw = self._stager.read_remote_file(
+                    node, posixpath.join(remote_job_dir, marker)
+                )
+            except (OSError, SSHExecutionError):
+                continue
+            if not raw:
+                continue
+            try:
+                payload = json.loads(raw.decode("utf-8", errors="replace"))
+            except ValueError:
+                continue
+            if isinstance(payload, dict):
+                declared = payload.get("attempt")
+                if isinstance(declared, int) and declared != attempt:
+                    return False
+        return True
 
     def _cleanup_remote_dir(
         self, node: RemoteNode, remote_job_dir: str, event_log: JobEventLog, job_id: str
@@ -975,11 +1769,18 @@ class RemoteJobRunner:
                     bkill_ok=ok,
                 )
                 # Grace period for .exit_code to appear.
-                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                exit_code = self._wait_exit_code(
+                    node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+                )
                 break
 
             # --- Definitive terminal signal: .exit_code file ---
             exit_code = self._monitor.get_exit_code(node, remote_job_dir)
+            if exit_code is not None and not self._receipt_is_current(
+                node, remote_job_dir, record.attempt
+            ):
+                # Stale receipt from a previous attempt — keep polling.
+                exit_code = None
             if exit_code is not None:
                 try:
                     self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
@@ -1022,7 +1823,9 @@ class RemoteJobRunner:
 
             # --- LSF reports terminal but no .exit_code yet ---
             if RemoteJobMonitor.is_terminal(status):
-                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                exit_code = self._wait_exit_code(
+                    node, remote_job_dir, timeout=_EXIT_CODE_GRACE, attempt=record.attempt
+                )
                 break
 
             time.sleep(self._poll_interval)
@@ -1055,14 +1858,24 @@ class RemoteJobRunner:
         return exit_code
 
     def _wait_exit_code(
-        self, node: RemoteNode, remote_job_dir: str, timeout: float = _EXIT_CODE_GRACE
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        timeout: float = _EXIT_CODE_GRACE,
+        attempt: int | None = None,
     ) -> int | None:
-        """Poll for ``.exit_code`` for up to *timeout* seconds."""
+        """Poll for ``.exit_code`` for up to *timeout* seconds.
+
+        When *attempt* is given, receipts declaring a different attempt are
+        rejected (stale previous-attempt ``.exit_code`` never finalises the
+        current attempt).
+        """
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             ec = self._monitor.get_exit_code(node, remote_job_dir)
             if ec is not None:
-                return ec
+                if attempt is None or self._receipt_is_current(node, remote_job_dir, attempt):
+                    return ec
             time.sleep(1.0)
         return None
 
@@ -1092,30 +1905,235 @@ class RemoteJobRunner:
         return new_offset
 
     # ------------------------------------------------------------------ #
-    # Code sync
+    # Code release binding (D03, todo 8)
     # ------------------------------------------------------------------ #
 
-    def _sync_code_if_needed(self, node: RemoteNode, event_log: JobEventLog, job_id: str) -> None:
-        try:
-            if not self._syncer.check_sync_needed(node):
-                logger.debug("Code already in sync with %s", node.name)
-                return
-            event_log.append("remote.sync_start", job_id=job_id, node=node.name)
-            result = self._syncer.sync_code(node)
-            event_log.append(
-                "remote.sync_done",
-                job_id=job_id,
-                node=node.name,
-                uploaded=result.uploaded,
-                total=result.total,
-                errors=result.errors,
+    def _ensure_code_release(
+        self, node: RemoteNode, event_log: JobEventLog, record: JobRecord
+    ) -> str | None:
+        """Build or select the verified code release for *record*.
+
+        Selection order (frozen):
+
+        1. the job's ORIGINAL ``code_release`` (continue/rerun — verified
+           only, NEVER silently upgraded; a missing/failing release is an
+           explicit rejection),
+        2. explicit ``ACP_REMOTE_CODE_RELEASE``,
+        3. the node's ``pinned_release``,
+        4. a fresh content-hash release (``auto_sync=True``, verify-then-
+           publish),
+        5. the explicit dev escape hatch ``ACP_REMOTE_ALLOW_UNVERSIONED=1``
+           (shared directory, provenance ``unversioned-shared`` + alert —
+           the immutability guarantee does NOT cover this mode),
+        6. otherwise → reject.
+
+        Every failure raises :class:`RemoteSubmissionRejected` BEFORE the
+        submission is prepared — never a warn-and-continue into an
+        unverified tree.  On success the temp reference held by
+        ensure/verify is parked in :attr:`_pending_release_refs` until the
+        bind write lands (:meth:`_bind_code_release`).
+        """
+        job_id = record.id
+        prior = self._prior_code_release(record)
+        if prior and prior != _UNVERSIONED_RELEASE:
+            return self._select_existing_release(node, event_log, record, prior, source="reused")
+
+        explicit = (os.environ.get("ACP_REMOTE_CODE_RELEASE") or "").strip()
+        if explicit:
+            return self._select_existing_release(
+                node, event_log, record, explicit, source="explicit"
             )
-            if not result.ok:
-                logger.warning("Code sync to %s had errors: %s", node.name, result.errors)
+        if node.pinned_release:
+            return self._select_existing_release(
+                node, event_log, record, node.pinned_release, source="pinned"
+            )
+        if self._config.auto_sync:
+            return self._publish_release(node, event_log, record)
+        if (os.environ.get("ACP_REMOTE_ALLOW_UNVERSIONED") or "") == "1":
+            try:
+                event_log.append(
+                    "remote.code_release_ready",
+                    job_id=job_id,
+                    node=node.name,
+                    release_id=_UNVERSIONED_RELEASE,
+                    source=_UNVERSIONED_RELEASE,
+                    unversioned=True,
+                    warning=(
+                        "dev escape hatch ACP_REMOTE_ALLOW_UNVERSIONED=1: the job "
+                        "runs from the mutable shared directory; the immutable-"
+                        "release guarantee does NOT cover this mode"
+                    ),
+                )
+            except OSError:
+                logger.debug("code_release_ready event write failed for %s", job_id, exc_info=True)
+            return _UNVERSIONED_RELEASE
+
+        reason = (
+            "auto_sync is disabled and no verified code release is configured "
+            "(set cluster pinned_release or ACP_REMOTE_CODE_RELEASE); the "
+            "unversioned shared directory is only reachable via the explicit "
+            "dev escape hatch ACP_REMOTE_ALLOW_UNVERSIONED=1"
+        )
+        self._emit_code_release_failed(event_log, record, node, reason)
+        raise RemoteSubmissionRejected(f"job {job_id} cannot be submitted on {node.name}: {reason}")
+
+    @staticmethod
+    def _prior_code_release(record: JobRecord) -> str | None:
+        """The release bound to this job by an earlier attempt, if any."""
+        result = record.result or {}
+        for source in (result.get("remote"), result):
+            if isinstance(source, dict):
+                value = source.get("code_release")
+                if isinstance(value, str) and value:
+                    return value
+        return None
+
+    def _select_existing_release(
+        self,
+        node: RemoteNode,
+        event_log: JobEventLog,
+        record: JobRecord,
+        release_id: str,
+        *,
+        source: str,
+    ) -> str:
+        """Verify an existing release (pin/explicit/continue) and hold its ref."""
+        try:
+            binding = verify_existing_release(node, release_id, stager=self._stager, ssh=self._ssh)
         except Exception as exc:
-            logger.error("Code sync to %s failed: %s", node.name, exc)
-            event_log.append("remote.sync_failed", job_id=job_id, node=node.name, error=str(exc))
+            reason = f"code release {release_id} cannot be verified on {node.name}: {exc}"
+            self._emit_code_release_failed(event_log, record, node, reason)
+            detail = (
+                " — the job's original release is gone; refusing to upgrade to a different release"
+                if source == "reused"
+                else ""
+            )
+            raise RemoteSubmissionRejected(
+                f"job {record.id} cannot be submitted: {reason}{detail}"
+            ) from exc
+        self._pending_release_refs[record.id] = (
+            node,
+            binding.release_id,
+            binding.ref_id,
+        )
+        self._emit_code_release_ready(event_log, record, node, binding.release_id, source)
+        return binding.release_id
+
+    def _publish_release(self, node: RemoteNode, event_log: JobEventLog, record: JobRecord) -> str:
+        """Build the content manifest and ensure the release on *node*."""
+        try:
+            root = _project_root()
+            manifest = build_release_manifest(root)
+            binding = ensure_node_release(
+                node,
+                manifest,
+                stager=self._stager,
+                ssh=self._ssh,
+                state_dir=_release_state_dir(),
+                project_root=root,
+            )
+        except Exception as exc:
+            reason = f"code release build/verification failed on {node.name}: {exc}"
+            self._emit_code_release_failed(event_log, record, node, reason)
+            raise RemoteSubmissionRejected(
+                f"job {record.id} cannot be submitted: {reason}"
+            ) from exc
+        self._pending_release_refs[record.id] = (
+            node,
+            binding.release_id,
+            binding.ref_id,
+        )
+        self._emit_code_release_ready(event_log, record, node, binding.release_id, binding.source)
+        return binding.release_id
+
+    def _bind_code_release(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        code_release: str | None,
+        on_code_release_bound: Callable[[str], None] | None,
+    ) -> None:
+        """Persist the release binding BEFORE bsub, then close the bind window.
+
+        Order (frozen): bind write → drop temp ref → ``bsub``.  The temp
+        ref is dropped on EVERY exit path (success or failure), so GC can
+        never reclaim the release between verification and durability.
+        """
+        try:
+            if not code_release:
+                return
+            if on_code_release_bound is not None:
+                # Manager path: the binding lands through the SAME conditional
+                # submit-intent write that created the intent (contract D).
+                on_code_release_bound(code_release)
+            result = dict(record.result or {})
+            meta = dict(result.get("remote") or {})
+            meta["code_release"] = code_release
+            result["remote"] = meta
+            record.result = result
+        except RemoteSubmissionError:
             raise
+        except Exception as exc:
+            raise RemoteSubmissionRejected(
+                f"could not persist code release binding {code_release!r} for "
+                f"job {record.id} before bsub: {exc}"
+            ) from exc
+        finally:
+            self._release_pending_ref(record.id)
+
+    def _release_pending_ref(self, job_id: str) -> None:
+        """Drop the job's pending temp reference (idempotent, never raises).
+
+        Must never mask the submission outcome — a cleanup hiccup only
+        over-protects the release until the next GC pass.
+        """
+        pending = self._pending_release_refs.pop(job_id, None)
+        if pending is None:
+            return
+        node, release_id, ref_id = pending
+        try:
+            release_release_ref(node, release_id, ref_id, stager=self._stager, ssh=self._ssh)
+        except Exception as exc:  # logged — never mask the submission result
+            logger.warning(
+                "Could not release temp ref %s for job %s on %s: %s",
+                release_id,
+                job_id,
+                node.name,
+                exc,
+            )
+
+    @staticmethod
+    def _emit_code_release_ready(
+        event_log: JobEventLog,
+        record: JobRecord,
+        node: RemoteNode,
+        release_id: str,
+        source: str,
+    ) -> None:
+        try:
+            event_log.append(
+                "remote.code_release_ready",
+                job_id=record.id,
+                node=node.name,
+                release_id=release_id,
+                source=source,
+            )
+        except OSError:
+            logger.debug("code_release_ready event write failed for %s", record.id, exc_info=True)
+
+    @staticmethod
+    def _emit_code_release_failed(
+        event_log: JobEventLog, record: JobRecord, node: RemoteNode, reason: str
+    ) -> None:
+        try:
+            event_log.append(
+                "remote.code_release_failed",
+                job_id=record.id,
+                node=node.name,
+                reason=reason,
+            )
+        except OSError:
+            logger.debug("code_release_failed event write failed for %s", record.id, exc_info=True)
 
     # ------------------------------------------------------------------ #
     # Pre-submit housekeeping (Phase 5)
@@ -1365,27 +2383,52 @@ class RemoteJobRunner:
     # LSF submission
     # ------------------------------------------------------------------ #
 
-    def _submit_lsf(self, node: RemoteNode, script_remote_path: str, remote_job_dir: str) -> str:
-        """Run ``bsub < submit.lsf`` on *node* and return the parsed LSF job ID."""
+    def _submit_lsf(
+        self,
+        node: RemoteNode,
+        script_remote_path: str,
+        remote_job_dir: str,
+        *,
+        submission_id: str | None = None,
+    ) -> str:
+        """Run ``bsub < submit.lsf`` on *node* and return the parsed LSF job ID.
+
+        Classification (contract A): SSH/timeout failures and an
+        unparseable reply are :class:`RemoteSubmissionIndeterminate`
+        (outcome unknown); a non-zero ``bsub`` with readable diagnostics
+        is :class:`RemoteSubmissionRejected` (definitive refusal).
+        """
         cmd = f'cd "{remote_job_dir}" && bsub < "{script_remote_path}"'
         try:
-            code, out, err = self._ssh.execute(node, cmd, timeout=60)
+            code, out, err = self._ssh.execute(
+                node, cmd, timeout=self._config.submission_timeout
+            )
         except SSHExecutionError as exc:
-            raise RemoteSubmissionError(f"bsub SSH execution failed on {node.name}: {exc}") from exc
+            raise RemoteSubmissionIndeterminate(
+                f"bsub SSH execution failed on {node.name} (outcome unknown): {exc}"
+            ) from exc
         if code != 0:
-            raise RemoteSubmissionError(
-                f"bsub failed on {node.name} (exit={code}): {err.strip() or out.strip()}"
+            detail = err.strip() or out.strip()
+            if not detail:
+                raise RemoteSubmissionIndeterminate(
+                    f"bsub exited {code} on {node.name} without diagnostics "
+                    f"(outcome unknown)"
+                )
+            raise RemoteSubmissionRejected(
+                f"bsub failed on {node.name} (exit={code}): {detail}"
             )
         match = _LSF_JOB_ID_RE.search(out)
         if not match:
-            raise RemoteSubmissionError(
-                f"Could not parse LSF job ID from bsub output on {node.name}: {out!r}"
+            raise RemoteSubmissionIndeterminate(
+                f"Could not parse LSF job ID from bsub output on {node.name} "
+                f"(reply lost or garbled): {out!r}"
             )
         lsf_job_id = match.group(1)
         logger.info(
-            "Submitted LSF job <%s> on %s, remote_dir=%s",
+            "Submitted LSF job <%s> on %s (submission=%s), remote_dir=%s",
             lsf_job_id,
             node.name,
+            submission_id or "-",
             remote_job_dir,
         )
         return lsf_job_id

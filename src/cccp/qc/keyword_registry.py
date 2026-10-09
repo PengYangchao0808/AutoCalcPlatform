@@ -53,6 +53,7 @@ __all__ = [
     "IMPL_XTB_BINARY",
     "KeywordValueError",
     "MethodPolicy",
+    "ORCA_FUNCTIONAL_ALIASES",
     "PolicyDecision",
     "canonical_token",
     "calculation_policy",
@@ -60,6 +61,7 @@ __all__ = [
     "legal_values",
     "method_family",
     "method_policy",
+    "orca_native_functional",
     "resolve",
     "resolve_implementation",
 ]
@@ -181,6 +183,40 @@ def method_family(method: str) -> str:
 def _is_native_method(method: str) -> bool:
     """Return True for ORCA-native ``Native-*`` method spellings."""
     return _normalize_method(method).startswith(_NATIVE_PREFIX)
+
+
+# ── ORCA-native functional aliases (emission layer, T16) ────────────────
+#
+# ORCA >= 6 rejects some legacy functional spellings in the simple-input
+# line ("UNRECOGNIZED OR DUPLICATED KEYWORD(S)") and exposes the same
+# functional under a shorter native keyword. This registry maps the
+# REQUESTED level name (what METHOD_META, the Goodman error-model binding
+# and every receipt keep verbatim) to the NATIVE token an engine actually
+# parses. Consumers are emission/provenance sites only — the ORCA NMR
+# input renderer and the NMR workflow's executed-keyword receipt — NEVER a
+# rewrite of recorded levels (Goodman level semantics stay on the request).
+
+#: Requested functional spelling (case/whitespace-folded) → ORCA-native keyword.
+ORCA_FUNCTIONAL_ALIASES: dict[str, str] = {
+    # ORCA 6.x spells the modified-PW 1-parameter hybrid as ``mPW1PW``.
+    "MPW1PW91": "mPW1PW",
+}
+
+
+def orca_native_functional(method: str) -> str:
+    """Return the ORCA-native simple-input keyword for a requested functional.
+
+    Case/whitespace-insensitive alias lookup. A spelling without an alias
+    returns unchanged — the requested name IS the emitted keyword.
+
+    Args:
+        method: Requested functional spelling, e.g. ``"mPW1PW91"``.
+
+    Returns:
+        The ORCA-native keyword (``"mPW1PW"`` for ``"mPW1PW91"``), or
+        *method* verbatim when no alias applies.
+    """
+    return ORCA_FUNCTIONAL_ALIASES.get(_normalize_method(method), str(method))
 
 
 # ── Implementations ─────────────────────────────────────────────────────

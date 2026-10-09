@@ -5,6 +5,16 @@ Pipeline
 Pipeline execution for conformer search stages.
 
 Author: QCcalc Team (adapted from RPH)
+
+DEPRECATED — legacy cccp API (marked 2026-10-05, plan todo 30; no removal scheduled).
+
+Usage evidence (verified by grep at repo HEAD 66222f7):
+    - No ACP production callers and no test callers.
+    - Sole in-repo consumer is the re-export in ``cccp/pipeline/__init__.py``.
+
+Support scope: all exports stay (external users cannot be confirmed). Anemic
+delegate shim — the engine it wrapped was removed in wave-8; new multi-step
+execution belongs in ``acp/calculations``.
 """
 
 from pathlib import Path

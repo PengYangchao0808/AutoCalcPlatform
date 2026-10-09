@@ -5,6 +5,7 @@
 > 适用范围：ACP (Auto-Calc Platform) 全部**可提交**功能，用于**真实提交 QC 计算任务**的手工测试与自动化测试。
 >
 > 基准版本：`main` @ `b87a86a`（2026-09-30）。文档中所有 CLI 参数、状态码、产物路径均以 `src/acp/` 当前代码为准（当本手册与 `README.md` / `docs/ACP_Job_File_Layout_Spec.md` 冲突时，以本手册标注的代码行为为准，差异见 §8.3）。
+> 2026-10-07 修订（real-qc-gap-remediation T12/D7）：§3.4（scan 默认无 ScanTS）、§3.7（Confsearch 实际阶段）、§3.10（IRC provenance 互斥组 + `--input-role` + `--step` 兼容说明）、§5.3（energy 产物 RESULT 相对双口径）、§6.2/§6.4（真实二进制检测方式 + level-1 冒烟现状）对齐修复后行为。
 >
 > 维护：新增 active 工作流 / 状态 / 端点时必须同步更新本手册，否则视为回归。
 
@@ -15,7 +16,7 @@
 | 章节 | 内容 | 适用读者 |
 |------|------|----------|
 | §1 | 环境与前置条件（安装、QC 可执行文件、run_root、启动服务） | 首次搭建测试环境 |
-| §2 | 功能总览矩阵（12 个 active 工作流 + 提交渠道 + 依赖） | 快速索引 |
+| §2 | 功能总览矩阵（14 个 active 工作流 + 提交渠道 + 依赖） | 快速索引 |
 | §3 | **手工测试用例（真实提交计算任务，逐工作流）** | 手工测试执行者 |
 | §4 | 调度器 / API / Web 提交与任务生命周期 | 集成 / 端到端测试 |
 | §5 | 结果产物与验证方法 | 判定测试通过与否 |
@@ -29,7 +30,7 @@
 
 1. 进程退出码 = `0`（CLI）；调度器任务最终状态 = `completed`。
 2. `RESULT/result_manifest.json` 存在且可被读取器解析（`load_result_manifest` 不返回 `None`）。
-3. 每个 `products[].path`（相对 `RESULT/`）在磁盘上真实存在。
+3. 产物路径双口径（见 §5.3）：科学类产物（`energy_report` 等，如 `RESULT/energy/step_0_singlepoint.json`）`path` 相对 `RESULT/`；历史 `file` 类产物为**任务根相对**。验证时先按 `RESULT/` 解析，失败再按任务根解析，两处均缺才算缺产物。
 4. 关键产物（如 `confsearch_manifest.json` / `pes_profile.json` / `nmr_report.json`）schema 字段完整（见 §5.2）。
 5. `metrics.json` 仅用于展示，**不得**作为通过/失败判据。
 
@@ -150,17 +151,18 @@ systemd 部署：`sudo systemctl restart acp`（**代码改动后必须重启**�
 | 层级 | 覆盖内容 | 是否需要真实 QC 二进制 |
 |------|----------|------------------------|
 | 单元 / 契约测试 | 数据模型、解析器、清单读写、状态机 | 否（mock） |
-| 工作流管线测试 | 11 个 active 工作流的**编排逻辑** | 否（`FakeBackend` / `subprocess` patch） |
-| 真实二进制冒烟 | 二进制存在 + `--version` | 是（仅 5 个 marker 门控用例，见 §6.4） |
-| **真实计算任务端到端** | 真实 CREST/xTB/CENSO/ORCA 全链路 | **是 — 目前仅手工覆盖，自动化为缺口** |
+| 工作流管线测试 | 14 个 active 工作流的**编排逻辑** | 否（`FakeBackend` / `subprocess` patch） |
+| 真实二进制冒烟 | 二进制存在 + `--version` | 是（marker 门控用例，见 §6.4） |
+| **level-1 真实链路冒烟** | 真实 ORCA/CREST/CENSO 连通性 + 解析（不做精度断言） | 是（`tests/test_cccp_real_qc_smoke.py`、`tests/test_acp_nmr_qc_smoke.py`，`--run-slow --run-integration` 门控） |
+| **真实计算任务端到端** | 真实 CREST/xTB/CENSO/ORCA 全链路（产物 + 科学判定） | **是 — level-1 之外系统化覆盖以本手册 §3 手工用例为准** |
 
-> **结论**：现有自动化测试**不覆盖任何真实 QC 全链路**。本手册 §3 的手工用例是真实提交计算任务的**唯一系统化方案**；§6.5 给出补齐自动化的建议。
+> **结论**：自动化已覆盖 level-1 真实冒烟（连通性/解析，NMR 链与 cccp 任务层；skip 记 `NOT_VERIFIED`），但**完整科学判定级别**的真实端到端仍以 §3 手工用例为权威方案；§6.5 给出补齐自动化的建议。
 
 ---
 
 ## 2. 功能总览矩阵
 
-### 2.1 Active 工作流（12 个，可提交）
+### 2.1 Active 工作流（14 个，可提交）
 
 | # | workflow id | CLI 子命令 | 类别 | 依赖二进制 | 调度器支持 | 远程支持 |
 |---|-------------|-----------|------|-----------|-----------|---------|
@@ -176,15 +178,17 @@ systemd 部署：`sudo systemctl restart acp`（**代码改动后必须重启**�
 | 10 | `Confsearch` | `acp run Confsearch` | preset | crest, xtb, isostat, censo, orca | ✅ | ✅ |
 | 11 | `PESsearch` | `acp run PESsearch` | preset | orca, xtb | ✅ | ✅ |
 | 12 | `BatchOptimize` | `acp run BatchOptimize` | preset | orca, shermo（shermo 仅 `opt_freq_sp_thermo` 使用） | ✅ | ✅ |
+| 13 | `XtbPathSearch` | `acp run XtbPathSearch --path-config <json>` | preset（pes2ts 冻结 payload） | xtb | ✅ | ❌ **本地专用**（不在 `_ALLOWED_REMOTE_WORKFLOWS`） |
+| 14 | `OrcaGradient` | `acp run OrcaGradient --gradient-config <json>` | preset（pes2ts 冻结 payload） | orca | ✅ | ❌ **本地专用**（不在 `_ALLOWED_REMOTE_WORKFLOWS`） |
 
-> **CLI 拼写注意**：xTB 优化的真实子命令是 **`xtb_optimize`（下划线）**，`README` 中的 `xtb-optimize` 是错的。
-> **新增但 AGENTS.md 未列**：`casscf` 与 `acp doctor` 均为真实可用入口。
+> **CLI 拼写注意**：xTB 优化的真实子命令是 **`xtb_optimize`（下划线）**，`xtb-optimize` 写法不可用。
+> **XtbPathSearch / OrcaGradient**（2026-10 起 active）：消费冻结 `pes2ts_xtb_path_request_v1` / `pes2ts_orca_gradient_request_v1` payload（PES2TS → ACP 执行统一）；调度器可提交（stage_tasks 已登记），远程不可提交。执行核心在 `cccp/calculation/tasks/{xtb_path_search,orca_gradient}.py`。
 
 ### 2.2 CLI 顶级语法
 
 ```
 acp {run, doctor, init} ...
-acp run {Confsearch|PESsearch|BatchOptimize|irc|scan|tsmode|nmr|
+acp run {Confsearch|PESsearch|BatchOptimize|XtbPathSearch|OrcaGradient|irc|scan|tsmode|nmr|
          singlepoint|optimize|frequency|xtb_optimize|casscf|serve|fake}
 ```
 
@@ -196,7 +200,7 @@ acp run {Confsearch|PESsearch|BatchOptimize|irc|scan|tsmode|nmr|
 `optfreq`, `optfreqsp`, `conformer`, `benchmark`, `ensemble`, `energy`, `xtbmd_censo_energy`, `mechanism`, `mech-conf`, `mech-step`, `mech-confirm`, `mech-chain`, `Lowconfirm`, `Highconfirm`。
 
 - **API 提交** → HTTP **400** `Unsupported workflow '<id>'. Supported: [...]`。
-- **CLI**（12 个有解析器）→ **exit 2**，双语退役提示（见 §7 NT-01）；`conformer`/`benchmark` 无 CLI 入口。
+- **CLI**（12 个有解析器，`_CLI_REMOVED_WORKFLOWS`）→ **exit 2**，双语退役提示（见 §7 NT-01）；`conformer`/`benchmark` 无 CLI 入口。
 - 退役映射：`ensemble`→`Confsearch --protocol censo-crest --refinement-policy screen`；`energy`→`Confsearch --protocol censo-crest --refinement-policy rank1|cumulative-99`；`xtbmd_censo_energy`→`Confsearch --protocol xtbmd-censo`；`mechanism/mech-*`→`PESsearch`+`BatchOptimize`+`irc`；`Lowconfirm`→`BatchOptimize --profile opt_freq`+`irc`；`Highconfirm`→`BatchOptimize --profile opt_freq_sp_thermo`+`irc`；`optfreq`/`optfreqsp`→ simple/BatchOptimize。
 
 ### 2.4 Confsearch 协议 × 精修策略矩阵
@@ -265,7 +269,7 @@ EOF
 
 ```bash
 acp run singlepoint --input water.xyz --method r2SCAN-3c --output /tmp/acp_mt/sp --nproc 4
-# 或 SMILES：acp run singlepoint --input "O" --method wB97X-D4 --basis def2-TZVPPD
+# 注：simple 系列仅接受结构文件输入（.xyz/.gjf/.com/.inp）；SMILES 输入支持见 scan / Confsearch / nmr 工作流
 ```
 
 - **预期产物**（`<out>/RESULT/`）：
@@ -306,8 +310,11 @@ acp run scan --input "CCO" --coordinate 0,2,1.0,3.0 --scan-points 21 \
     --method r2SCAN-3c --output /tmp/acp_mt/scan --nproc 4
 # 多坐标耦合（可重复 --coordinate）
 acp run scan --input "CCO" --coordinate 0,2,1.0,3.0 --coordinate 2,3,1.0,2.0
+# 显式启用 ScanTS（TS 导向扫描；默认不启用）
+acp run scan --input ts_guess.xyz --coordinate 0,1,1.0,2.0 --scants
 ```
 
+- **ScanTS 语义（2026-10-07 起）**：默认**不启用 ScanTS**（普通柔性扫描，`use_scants` 默认 OFF）；仅显式 `--scants` 才在 ORCA 路由写入 `ScanTS`。`--scants` 不适用于同步多坐标或显式网格扫描（任务层显式报错，非静默）。SMILES 输入（如上 `--input "CCO"`）会先物化为 XYZ（任务根 `input.xyz` + `input_source.json` 溯源）。
 - **预期产物**：`RESULT/trajectories/scan_trajectory.json`（`frames[{index, path, energy_hartree, ...}]`）；`RESULT/structures/scan_frame_NNN.xyz`；`RESULT/result_manifest.json`（`scan_trajectory` + `scan_frame_*`）。
 - **判定**：exit 0；帧数与 `--scan-points` 一致；能量曲线可被 `energy-graph?view=scan` 渲染。
 - **自动化**：`tests/test_scan_workflow.py`、`tests/test_acp_pes_dft_scan.py`（mock）。
@@ -339,6 +346,12 @@ acp run casscf --input water.xyz --active-electrons 2 --active-orbitals 2 \
 ### 3.7 MT-CS — Confsearch（统一构象搜索，4 协议）
 
 - **前置**：`crest` + `xtb` + `isostat` + `censo` + `orca` 全部可用（本机缺 `isostat`，需先补齐）。
+- **实际阶段按协议 × 精修策略（以代码为准，`confsearch/engine.py::CONFSEARCH_STAGES` = prepare → sampling → energy → dedup → refinement → finalize）**：
+  - `xtb-crest`：CREST iMTD 构象搜索（GFN-xTB 级）→ xTB 级能量排序/Boltzmann。**纯 xTB 协议无 DFT 精修阶段**——`refinement-policy` 为 `rank1/cumulative-99/all` 时仅告警并按 `screen` 处理（`contracts.py::PURE_XTB_PROTOCOLS`）。
+  - `xtb-md`：xTB-MD 采样 + 构象提取/聚类 → xTB 级排序；同样**无 DFT 精修**（纯 xTB 规则同上）。
+  - `censo-crest`：CREST 搜索 → **CENSO 排序/精修**（DFT 级别由 `--preset censo-light|censo-default|censo-zero` 决定）→ 最终排名。
+  - `xtbmd-censo`：xTB-MD 采样 + ISOSTAT 聚类 → CENSO 排序/精修 → 最终排名。
+  - `--refinement-policy screen`（默认）在**所有**协议下都不追加精修候选（`selection.py::select_for_refinement` 对 `screen` 返回 `[]`）；`rank1/cumulative-99/all` 只改变进入精修/报告名单的候选范围（`selection.py`），不改变上述协议本身的阶段构成。
 
 ```bash
 # 协议 1：xtb-crest（CREST 搜索 + DFT 精修）
@@ -427,15 +440,17 @@ acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo \
 
 - **前置**：一个已验证的 TS 结构 + 溯源（provenance）。
 - **标准驱动路径（推荐）**：由 BatchOptimize 的 TS 产物经调度器发起
-  `POST /api/v1/jobs/{id}/artifacts/{artifact_id}/run-irc`。
-- **手工 CLI 路径**（需 `--ts-provenance-json`，schema `irc_ts_source_v1`，含 `geometry_sha256` 等）：
+  `POST /api/v1/jobs/{id}/artifacts/{artifact_id}/run-irc`（调度器以**内联 JSON** 形式注入溯源）。
+- **手工 CLI 路径**（provenance 为**必填互斥组**：文件路径用 `--ts-provenance <file>`；`--ts-provenance-json` 仅用于调度器内联 JSON 文本，**不是**文件路径。二者缺一 → argparse 报 `one of the arguments --ts-provenance --ts-provenance-json is required`（exit 2）。示例同时携带可选的 `--input-role transition_state`，手工运行建议一并显式声明）：
 
 ```bash
-acp run irc --input ts.xyz --ts-provenance-json prov.json \
-    --direction both --maxpoints 100 --step 0.1 \
+acp run irc --input ts.xyz --input-role transition_state \
+    --ts-provenance prov.json \
+    --direction both --maxpoints 100 \
     --output /tmp/acp_mt/irc --nproc 4
 ```
 
+- **`--step` 兼容说明**：`--step`（默认 0.1）仅为兼容保留，**不进入 ORCA `%irc` 块、对计算无影响**（接口层记 unused-kwarg WARNING）。步骤数经 `--maxpoints` 控制。
 - **校验逻辑（rc=2）**：provenance 必须是 `schema == "irc_ts_source_v1"` 的 JSON；输入 XYZ 的 sha256 必须等于 `geometry_sha256`；`method/basis/charge/multiplicity` 若提供必须与溯源一致。
 - **预期产物**（`RESULT/irc/`）：`irc_report.json`、`irc_forward.xyz`、`irc_reverse.xyz`、`irc_<dir>_path.xyz`、`irc_<dir>_point_NNNN.xyz`；`RESULT/trajectories/irc_trajectory.json`（`irc_trajectory_v1`）；`RESULT/result_manifest.json`（`irc_report` + `irc_trajectory`）。
 - **判定**：exit 0；两个端点连通性指纹 + 原子 RMSD 校验通过。
@@ -498,6 +513,23 @@ acp run nmr --input "CC(O)C" --spectrum exp_spectrum.txt --enumerate \
 - **自动化**：`tests/test_acp_workflows_nmr.py`、`tests/test_acp_nmr_*.py`（mock；`test_acp_nmr_spectra.py` 使用真实 nmrglue + 合成数据）。
 
 ---
+
+### 3.12a MT-P2T — XtbPathSearch / OrcaGradient（pes2ts 冻结 payload，本地专用）
+
+- **前置**：`XtbPathSearch` 需 xtb；`OrcaGradient` 需 orca。两者均消费 PES2TS 侧冻结的 request JSON（`--path-config` / `--gradient-config`），**本地专用**（不在 `_ALLOWED_REMOTE_WORKFLOWS`，远程提交被 script_gen 拒绝）。
+- **payload 形状（以代码为准）**：`XtbPathSearch` = `pes2ts_xtb_path_request_v1`（`source_type:"xyz_text_pair"` + `start_xyz`/`end_xyz` + `gfn_level` 等）；`OrcaGradient` = `pes2ts_orca_gradient_request_v1`（`xyz` + `method` + theory 摘要）。
+
+```bash
+acp run XtbPathSearch --path-config pes2ts_xtb_path_request.json \
+    --output /tmp/acp_mt/xtbpath --nproc 4
+acp run OrcaGradient --gradient-config pes2ts_orca_gradient_request.json \
+    --output /tmp/acp_mt/grad --nproc 4
+```
+
+- **预期产物**：`XtbPathSearch` → `RESULT/pes_search/xtbpath.xyz` + `RESULT/pes_search/path_frames/path_frame_*.xyz` + manifest 注册（`pes_search` 视图）；`OrcaGradient` → 梯度/能量载荷 + manifest 注册。
+- **判定**：exit 0；帧 XYZ 原子数一致；manifest 产品路径与实际文件相符。
+- **负向**：缺 `--path-config`/`--gradient-config` 或 payload 缺必填键（如 `xyz`/`method`）→ 结构化错误退出。
+- **自动化**：`tests/test_acp_workflows_xtb_path.py`、`tests/test_acp_workflows_orca_gradient.py`、`tests/test_cccp_task_xtb_path_search.py`、`tests/test_cccp_task_orca_gradient.py`（mock xtb/orca；执行核心在 `cccp/calculation/tasks/`）。
 
 ### 3.13 组合工作流端到端（真实链路）
 
@@ -699,10 +731,15 @@ m = load_result_manifest(task_dir)          # 缺失/损坏返回 None（读取�
 assert m is not None and m["version"] == 2
 for kind in ("structure", "energy_report", "frequency_modes"):
     for p in find_products(m, kind):
-        assert (task_dir / "RESULT" / p["path"]).exists()
+        # 双口径解析：科学类产物 RESULT-相对；历史 file 类任务根相对
+        candidates = [task_dir / "RESULT" / p["path"], task_dir / p["path"]]
+        assert any(c.exists() for c in candidates), p["path"]
 ```
 
-- product：`{id, label, path, kind, [metadata]}`，`path` 相对 `RESULT/`。
+- product：`{id, label, path, kind, [metadata]}`。
+- **path 口径双轨（2026-10-07 定型）**：
+  - **科学类产物**（`energy_report` 等）`path` 相对 `RESULT/`：能量产物落 `RESULT/energy/<step_id>.json`（如 `step_0_singlepoint.json`；product id `step_0_singlepoint_energy`），内容含能量、`"unit": "hartree"`、方法/步骤 id，`metadata.energy_hartree` 供结构查看器消费（五类 step kind：SINGLEPOINT/OPTIMIZE/FREQUENCY/SCAN/CASSCF）。
+  - **历史 `file` 类产物**：`path` 为**任务根相对**（如 `WORK/05_SP/sp.out`，不复制进 RESULT）。读取兼容保留（读取器不解析路径，消费者须双探针）。
 - `kind` 取值含 `structure | frequency_modes | energy_report | ensemble | trajectory | report | file | pes_profile | irc_endpoint | thermo_report | multireference_report | wavefunction | spin_diagnostics | active_space | state_comparison`（未知回退 `file`）。
 - 可复用结构来源 = product kind ∈ `{structure, xyz}`（供下游 BatchOptimize / 结构来源面板消费）。
 
@@ -749,9 +786,10 @@ PYTHONPATH=src python3.11 -m pytest <target> -q
 
 - **markers**：`slow`、`integration`、`requires_gaussian`（声明未用）、`requires_orca/crest/xtb/isostat/shermo`。
 - **`--run-slow` / `--run-integration`**：任一传入才运行标记为 `slow`/`integration` 的用例；默认自动跳过。
-- **真实二进制检测**：conftest 导入时 `shutil.which()` 确定 `HAS_ORCA` 等，生成 `requires_*` skipif。
+- **真实二进制检测（2026-10-06 起，D8 修复后）**：conftest 导入时经 `cccp.config.load_config` + `cccp.software.resolve_executable_with_source` 构建**单一 `RealQCSnapshot`**（`resolve_real_qc_snapshot`，会话内缓存）——优先级与生产完全一致：配置 `executables.<tool>.path`（含 `~/.cccp.yaml`）→ `CONFSEARCH_<TOOL>_PATH` 环境变量 → PATH → 回退；`HAS_*` 与 `requires_*` skipif 均派生自该快照。skip reason 以字面量 `NOT_VERIFIED` 开头并携带 `source=...` 探测溯源（`pytest -rs` 可见）。
+- **版本记录口径**：检测/运行环境版本随验收记录登记（本机 venv：Python 3.11.13；原始全量报告为 3.13.9，差异记入验收台账，检测方法本身与次要版本无关）。
 - **`fake_backend` fixture**：monkeypatch `acp.backends.get_backend`，记录调用、支持预置结果/异常。
-- **环境清理（autouse）**：删除所有 `CONFSEARCH_*` 与 `ACP_RUN_ROOT`，设置 `ACP_DISABLE_MPI_SNIFF=1`。
+- **环境清理（autouse）**：删除所有 `CONFSEARCH_*` 与 `ACP_RUN_ROOT`，设置 `ACP_DISABLE_MPI_SNIFF=1`（快照在 collection 时已定型，清理不改变门控判定）。
 
 ### 6.3 功能 → 测试文件 → 命令
 
@@ -771,23 +809,30 @@ PYTHONPATH=src python3.11 -m pytest <target> -q
 | 端到端（in-process） | `test_e2e_refactor.py` | mock backend + 真实编排 | `PYTHONPATH=src python3.11 -m pytest tests/test_e2e_refactor.py -v` |
 | 前端契约 | `test_frontend_sync.py` | 源码扫描 | `PYTHONPATH=src python3.11 -m pytest tests/test_frontend_sync.py -q` |
 
-### 6.4 真实二进制自动化现状（缺口）
+### 6.4 真实二进制自动化现状
 
-标记门控的真实二进制/网络用例**仅 5 + 3 个**：
+标记门控的真实二进制/网络用例：
 
 - `test_orca_binary_smoke_check`、`test_crest_binary_smoke_check`、`test_xtb_binary_smoke_check`（`slow`+`integration`+`requires_*`）
 - `test_external_backend_binary_smoke_check`（`requires_isostat`+`requires_shermo`）
 - `test_pes_orca_simulscan_integration.py::test_orca_synchronous_scan_tracks_both_targets`（`slow`+`requires_orca`，真实 ORCA 扫描）
 - `tests/test_remote_phase1_integration.py`（**真实 SSH**，需 `ACP_REMOTE_PASSWORD_COMPUTE_01`，非 marker 门控）
 
+**level-1 真实链路冒烟（2026-10 起存在，`--run-slow --run-integration` 门控）**：
+
+- `tests/test_cccp_real_qc_smoke.py` — cccp 任务层真实 ORCA 冒烟（小分子，连通性/解析级）
+- `tests/test_acp_nmr_qc_smoke.py` — NMR 工作链 level-1 真实冒烟：RDKit 初始几何 → ORCA GIAO、CREST → GIAO（多构象）、CREST → CENSO `censo-light` → GIAO（乙醇等 4 分子；断言 GIAO 状态/原子序/屏蔽张量解析 + 连通性，**不做精度/标定断言**；缺二进制 → skip `NOT_VERIFIED`）
+
 ```bash
 # 真实 ORCA 扫描
 PYTHONPATH=src python3.11 -m pytest tests/test_pes_orca_simulscan_integration.py --run-slow -v
+# level-1 NMR 真实冒烟（本机二进制经 ~/.cccp.yaml 或 CONFSEARCH_* 注入时直接可跑）
+PYTHONPATH=src python3.11 -m pytest tests/test_acp_nmr_qc_smoke.py --run-slow --run-integration -q
 # 真实 SSH（需节点密码环境变量）
 PYTHONPATH=src ACP_REMOTE_PASSWORD_COMPUTE_01='<pw>' python3 tests/test_remote_phase1_integration.py
 ```
 
-> **所有 11 个 active 工作流的真实 QC 全链路均无自动化覆盖**（Confsearch×4、PESsearch、BatchOptimize、irc、scan、tsmode OptTS、NMR GIAO 均为 mock）。这是本手册 §3 手工用例存在的原因。
+> 真实 QC 覆盖分层现状：NMR GIAO 链与 cccp 任务层已有 level-1 冒烟（连通性/解析级，非完整科学判定）；**Confsearch×4、PESsearch、BatchOptimize、irc、scan、tsmode OptTS、XtbPathSearch/OrcaGradient 的完整真实链路仍无自动化覆盖**（编排层测试为 mock）。这是本手册 §3 手工用例存在的原因；补齐建议见 §6.5。
 
 ### 6.5 建议补充的真实端到端自动化（后续工作）
 
@@ -836,7 +881,7 @@ PYTHONPATH=src ACP_REMOTE_PASSWORD_COMPUTE_01='<pw>' python3 tests/test_remote_p
 
 **BatchOptimize**：源组 `--from-job|--from-artifact|--items-file`（互斥必填）；`--profile`(默认 `opt_freq`) `--layout-mode` `--select` `--method/--basis` `--sp-method/--sp-basis` `--temperature`(298.15) `--pressure`(1.0) `--scale-factor`(0.9905) `--opt-convergence`(loose/normal/tight/verytight) `--opt-initial-hessian`(auto/model/calculate) `--opt-recalc-hess` `--opt-trust-radius` `--opt-max-iter` `--opt-rescue-policy`(off/adaptive) `--scf-*`；每角色 `--{minimum,transition-state}-*` 覆盖；`--batch-roles-json`。
 
-**irc**：`--input|-i`(必填) `--ts-provenance|--ts-provenance-json`(互斥必填) `--input-role transition_state` `--direction both|forward|reverse` `--maxpoints/--max-points`(100) `--step`(0.1) `--method` `--basis` `--charge` `--multiplicity` `--output`(默认 `./irc_output`)。
+**irc**：`--input|-i`(必填) `--ts-provenance <文件路径>|--ts-provenance-json <内联JSON文本>`(**互斥必填**；后者仅供调度器内联注入) `--input-role transition_state`(可选，建议显式) `--direction both|forward|reverse` `--maxpoints/--max-points`(100) `--step`(0.1，**兼容保留、无效果**) `--method` `--basis` `--charge` `--multiplicity` `--output`(默认 `./irc_output`)。
 
 **tsmode**：`--source-bundle`(必填) `--source-mode-index`(必填) `--max-steps` `--recalc-hess` `--trust-radius` `--retry-limit`(2) `--no-final-frequency` `--allow-unverified-mapping` `--output`(默认 `./tsmode_output`)。
 
@@ -844,7 +889,7 @@ PYTHONPATH=src ACP_REMOTE_PASSWORD_COMPUTE_01='<pw>' python3 tests/test_remote_p
 
 **simple 公共**：`--input|-i`(必填) `--output`(默认 `./out`) `--charge` `--multiplicity` `--name` `--method`(r2SCAN-3c) `--basis` `--dispersion` `--solvent-model smd|cpcm|none` `--solvent` `--route-extras` `--spin-preset` `--spin-config` `--nproc` `--mem` `--config` `--log-level`；sp/opt/freq/scan 另有 `--aux-j-basis` `--aux-c-basis` `--ri-approximation none|RI|RIJCOSX|RIJK`。
 `optimize` 追加：`--geom-maxiter` `--opt-convergence Loose|Normal|Tight|VeryTight`(默认 Tight) `--calc-hess [N|auto]|--no-calc-hess`。
-`scan` 追加：`--coordinate A,B,START,END`（**0-based**，可重复，必填）`--scan-points`(21)。
+`scan` 追加：`--coordinate A,B,START,END`（**0-based**，可重复，必填）`--scan-points`(21) `--scants`(默认**不启用 ScanTS**，显式 opt-in)。
 `xtb_optimize` 追加：`--gfn 0|1|2`(2) `--opt-level crude..extreme`(normal) `--max-steps` `--solvent-model gbsa|alpb|none`。
 `casscf` 追加：`--active-electrons/--nel`(必填) `--active-orbitals/--norb`(必填) `--nroots`(1) `--dynamic-correlation none|sc_nevpt2|fic_nevpt2` `--orbital-source` `--frozen-core/--no-frozen-core`。
 
@@ -864,8 +909,8 @@ PYTHONPATH=src ACP_REMOTE_PASSWORD_COMPUTE_01='<pw>' python3 tests/test_remote_p
 
 ### 8.3 已知文档漂移 / 坑（测试时以代码为准）
 
-1. `README.md` 的 `xtb-optimize` → 实际 `xtb_optimize`；`--backend`/`--reference`（nmr）已过时。
-2. `tests/AGENTS.md` 计数过时（写 60 文件/1047 测试；实际约 197 文件/4580 用例）。
+1. ~~`README.md` 的 `xtb-optimize`~~ 已修复（2026-10-05 文档同步后 README 使用 `xtb_optimize`）；`--backend`/`--reference`（nmr）已过时，勿用。
+2. ~~`tests/AGENTS.md` 计数过时~~ 已修复（2026-10-05 同步为 247 文件/≈5.7k 用例）。
 3. `docs/ACP_Job_File_Layout_Spec.md` 列出的 `RESULT/batch_items.json` 无写入者；batch 提交输入在任务根 `batch_items.json`，断点态在 `checkpoint.json::items_state`。
 4. scan 帧名 `scan_frame_NNN.xyz`（非 `frame_*.xyz`）。
 5. `_SCHEDULER_MARKERS` 含 `INPUT`（spec 列表遗漏）。

@@ -92,3 +92,25 @@ def test_contracts_are_frozen() -> None:
 
 def test_step_kind_excludes_irc() -> None:
     assert "irc" not in {kind.value for kind in StepKind}
+
+
+def test_relocated_types_keep_identity() -> None:
+    """ACP compat surface keeps ``A is B`` identity for the relocated types.
+
+    Moved here from tests/test_cccp_calculation_contracts.py (todo 16: cccp-side
+    tests must not import the acp package).  Changed shapes stay distinct types
+    converted via the adapter.
+    """
+    import acp.calculations.contracts as acp_contracts
+    import cccp.calculation.contracts as contracts
+
+    assert acp_contracts.ArtifactRef is contracts.ArtifactRef
+    assert acp_contracts.OptimizationSpec is contracts.OptimizationSpec
+    assert acp_contracts.OptimizationMode is contracts.OptimizationMode
+    assert acp_contracts.StructureRole is contracts.StructureRole
+    assert acp_contracts.ElectronicStateSpec is contracts.ElectronicStateSpec
+    assert acp_contracts.CASSCFSpec is contracts.CASSCFSpec
+    assert acp_contracts.GuessSpec is contracts.GuessSpec
+    assert acp_contracts.validate_casscf_spec is contracts.validate_casscf_spec
+    assert acp_contracts.StructureArtifact is not contracts.StructureArtifact
+    assert acp_contracts.Provenance is not contracts.Provenance

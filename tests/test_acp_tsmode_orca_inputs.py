@@ -16,9 +16,7 @@ SYMBOLS = ["H", "O", "H"]
 
 class TestTsGeomBlockHessianRead:
     def test_hess_file_emits_inhess_read(self):
-        block = ts_geom_block(
-            "read", 0, 0.15, ts_mode=2, hess_file_name="source.hess"
-        )
+        block = ts_geom_block("read", 0, 0.15, ts_mode=2, hess_file_name="source.hess")
         assert "InHess Read" in block
         assert 'InHessName "source.hess"' in block
         assert "TS_Mode {M 2} end" in block
@@ -49,12 +47,13 @@ class TestTransitionStateOptHessStaging:
     @pytest.fixture()
     def hess_source(self, tmp_path):
         source = tmp_path / "upstream.hess"
-        source.write_text("$atoms\n1\nH 1.0\n", encoding="utf-8")
+        source.write_text(
+            "$atoms\n1\nH 1.007 0.0 0.0 0.0\n$hessian\n1\n1.0\n$act_energy\n  -100.123456\n",
+            encoding="utf-8",
+        )
         return source
 
-    def test_hess_staged_and_referenced(
-        self, tmp_path, interface, hess_source, monkeypatch
-    ):
+    def test_hess_staged_and_referenced(self, tmp_path, interface, hess_source, monkeypatch):
         captured = {}
 
         def fake_run_orca(inp, out, output_callback=None):
@@ -76,12 +75,20 @@ class TestTransitionStateOptHessStaging:
         )
         staged = work / "ts.hess"
         assert staged.is_file()
-        assert staged.read_text(encoding="utf-8") == hess_source.read_text(encoding="utf-8")
+        # Byte-identical raw copy: unparsed sections ($act_energy, …) survive
+        # staging — the Python-side matrix is never re-flattened.
+        assert staged.read_bytes() == hess_source.read_bytes()
+        assert b"$act_energy" in staged.read_bytes()
         text = captured["inp"]
         assert "InHess Read" in text
         assert 'InHessName "ts.hess"' in text
         assert "TS_Mode {M 1} end" in text
         assert "Calc_Hess true" not in text
+        # The ORCA input references the staged file only — no $hessian
+        # section or matrix values re-emitted into the input.
+        assert "$hessian" not in text
+        assert "$orca_hessian" not in text
+        assert "$act_energy" not in text
         assert result.output_file is not None
 
     def test_calculate_with_hess_rejected(self, tmp_path, interface, hess_source):
@@ -211,3 +218,173 @@ class TestExplicitTargetRescueGuard:
         assert attempts[1]["ts_mode"] == 1
         assert attempts[1]["scf_maxiter"] == 500
         assert result.metadata.get("rescue_attempts") == 1
+
+
+def _tsmode_bundle(tmp_path, level):
+    from acp.calculations.tsmode.source import load_bundle_from_files
+    from tests.tsmode_synthetic import make_consistent_pair
+
+    out_path, hess_path, _coords, freqs, modes = make_consistent_pair(tmp_path)
+    bundle = load_bundle_from_files(out_path, hess_path, level=level)
+    return bundle, freqs, modes
+
+
+def _tsmode_request():
+    from acp.calculations.tsmode.contracts import (
+        TsmodeOptimizationSettings,
+        TsmodeRequest,
+    )
+
+    return TsmodeRequest(
+        source={"kind": "test"},
+        source_mode_index=8,
+        optimization=TsmodeOptimizationSettings(require_verified_mapping=False),
+        request_id="req_render",
+    )
+
+
+def _route_lines(captured: list[str]) -> list[str]:
+    return [line for text in captured for line in text.splitlines() if line.startswith("!")]
+
+
+def _run_capture(tmp_path, monkeypatch, level, *, config=None, fail_first=False):
+    from acp.calculations.tsmode.engine import TsmodeEngine
+    from tests.tsmode_synthetic import write_out_file
+
+    bundle, freqs, modes = _tsmode_bundle(tmp_path, level)
+    optimized = np.asarray(bundle.coordinates_angstrom) + 0.02
+    captured: list[str] = []
+    calls = {"count": 0}
+
+    def fake_run_orca(self, input_file, output_file, output_callback=None):
+        captured.append(Path(input_file).read_text(encoding="utf-8"))
+        calls["count"] += 1
+        if fail_first and calls["count"] == 1:
+            Path(output_file).write_text("SCF NOT CONVERGED\n", encoding="utf-8")
+            return False
+        write_out_file(Path(output_file), optimized, freqs, modes)
+        return True
+
+    monkeypatch.setattr("cccp.qc.interfaces.orca.ORCAInterface._run_orca", fake_run_orca)
+    result = TsmodeEngine(config=config or {}).run(_tsmode_request(), bundle, tmp_path / "task")
+    return result, captured
+
+
+class TestSourceLevelRenderedIntoOrcaInput:
+    def test_optimize_and_frequency_inputs_carry_source_level(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4")
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "completed"
+        assert len(captured) == 2, captured
+        for text in captured:
+            assert "def2-TZVP" in text, text
+            assert "D4" in text, text
+
+    def test_successful_rescue_input_carries_source_level(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4")
+        result, captured = _run_capture(tmp_path, monkeypatch, level, fail_first=True)
+
+        assert result.workflow_result.status == "completed"
+        assert len(captured) >= 3, captured
+        for text in captured:
+            assert "def2-TZVP" in text, text
+            assert "D4" in text, text
+
+    def test_source_level_wins_over_default_config(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4")
+        config = {"theory": {"dft": {"basis": "def2-SVP", "dispersion": "D3BJ"}}}
+        _result, captured = _run_capture(tmp_path, monkeypatch, level, config=config)
+
+        for text in captured:
+            assert "def2-TZVP" in text, text
+            assert "D4" in text, text
+            assert "ma-def2-SVP" not in text, text
+            assert "D3BJ" not in text, text
+
+    def test_explicit_none_dispersion_emits_no_token(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="none")
+        _result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        for text in captured:
+            assert "def2-TZVP" in text, text
+            assert "D4" not in text, text
+            assert "D3BJ" not in text, text
+
+    def test_composite_method_carries_no_fabricated_basis_or_dispersion(
+        self, tmp_path, monkeypatch
+    ):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="r2SCAN-3c", basis="")
+        _result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        for text in captured:
+            assert "r2SCAN-3c" in text, text
+            assert "D4" not in text, text
+            assert "D3BJ" not in text, text
+            assert "def2-" not in text.lower(), text
+
+    def test_scf_canonical_token_completes_and_renders_once(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(
+            method="PBE0", basis="def2-TZVP", dispersion="D4", scf="TightSCF"
+        )
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "completed", result.report.attempts
+        routes = _route_lines(captured)
+        assert len(routes) == 2, routes
+        for route in routes:
+            assert route.count("TightSCF") == 1, route
+            assert " tight" not in route, route
+
+    def test_scf_domain_token_completes_and_renders_once(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", dispersion="D4", scf="tight")
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "completed", result.report.attempts
+        routes = _route_lines(captured)
+        assert len(routes) == 2, routes
+        for route in routes:
+            assert route.count("TightSCF") == 1, route
+            assert " tight" not in route, route
+
+    def test_scf_canonical_token_rescue_renders_once(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(
+            method="PBE0", basis="def2-TZVP", dispersion="D4", scf="TightSCF"
+        )
+        result, captured = _run_capture(tmp_path, monkeypatch, level, fail_first=True)
+
+        assert result.workflow_result.status == "completed", result.report.attempts
+        routes = _route_lines(captured)
+        assert len(routes) >= 3, routes
+        for route in routes:
+            assert route.count("TightSCF") == 1, route
+            assert " tight" not in route, route
+
+    def test_unknown_scf_token_is_not_silently_dropped(self, tmp_path, monkeypatch):
+        from acp.calculations.tsmode.contracts import SourceLevelOfTheory
+
+        level = SourceLevelOfTheory(method="PBE0", basis="def2-TZVP", scf="BogusSCF")
+        result, captured = _run_capture(tmp_path, monkeypatch, level)
+
+        assert result.workflow_result.status == "failed"
+        assert captured == []
+        errors = " ".join(
+            str(error) for attempt in result.report.attempts for error in attempt.get("errors", [])
+        )
+        assert "BogusSCF" in errors, errors

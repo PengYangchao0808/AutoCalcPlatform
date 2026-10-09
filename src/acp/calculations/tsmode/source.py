@@ -95,7 +95,8 @@ class HessianModes:
         frequencies_cm1: Signed wavenumbers (imaginary = negative).
         projector: ``(3N, 3N)`` translation/rotation projector ``P = I-QQᵀ``.
         masses_amu: Per-atom masses used for the weighting.
-        n_zero_modes_removed: Number of near-zero eigenvalues discarded.
+        n_zero_modes_removed: Number of near-zero eigenvalues discarded —
+            equals the external-subspace rank (6 nonlinear / 5 linear).
     """
 
     eigenvalues: NDArray[np.float64]
@@ -110,7 +111,21 @@ def build_external_subspace(
     coordinates_angstrom: NDArray[np.float64],
     sqrt_masses: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    """Orthonormalized translation+rotation vectors (mass-weighted basis)."""
+    """Orthonormalized translation+rotation vectors (mass-weighted basis).
+
+    Returns a ``(3N, r)`` array whose columns form an orthonormal basis of
+    the external subspace: ``r == 6`` for nonlinear molecules (3N−6
+    vibrations remain) and ``r == 5`` for linear ones — rotation about the
+    molecular axis vanishes, so keeping all 6 directions would project a
+    spurious direction out of the vibrational space (3N−5 vibrations).
+
+    The rank test is an **SVD of the 6×3N mass-weighted basis matrix**:
+    right singular vectors whose singular value falls below
+    ``1e-8 * s_max`` are degenerate and dropped.  QR must not be used for
+    this: ``np.linalg.qr`` always returns orthonormal columns (norms
+    identically 1) even for a rank-deficient basis, so a column-norm filter
+    on Q can never detect the linear degeneracy.
+    """
     n_atoms = len(sqrt_masses)
     dim = 3 * n_atoms
     coords = np.asarray(coordinates_angstrom, dtype=np.float64)
@@ -132,13 +147,14 @@ def build_external_subspace(
         lever = np.cross(centered, axis)
         vector = lever * sqrt_masses[:, None]
         basis[3 + index] = vector.reshape(-1)
-    # Orthonormalize (columns of Q span the external subspace).
-    q, _ = np.linalg.qr(basis.T)
-    # Drop numerically degenerate columns (linear molecule: rotation about
-    # the molecular axis has zero norm).
-    norms = np.linalg.norm(q, axis=0)
-    keep = norms > 1e-8
-    return q[:, keep]
+    # SVD rank test: rows of `basis` are the external vectors; the surviving
+    # right singular vectors (transposed) are an orthonormal basis of their
+    # row space. Nonlinear → rank 6, linear → rank 5, monatomic → rank 3.
+    _u, singular_values, vt = np.linalg.svd(basis, full_matrices=False)
+    if singular_values.size == 0 or singular_values[0] <= 0.0:
+        return np.zeros((dim, 0), dtype=np.float64)
+    rank = int(np.count_nonzero(singular_values > 1e-8 * singular_values[0]))
+    return vt[:rank].T
 
 
 def compute_hessian_modes(
@@ -192,6 +208,9 @@ def compute_hessian_modes(
     vib_vectors = (projector @ eigenvectors).T.reshape((-1, n_atoms, 3))
 
     threshold = zero_threshold_relative * float(np.max(np.abs(eigenvalues)))
+    # The projector kernel is exactly the external subspace, so this mask
+    # discards external.shape[1] modes: 6 nonlinear / 5 linear (3N−6 / 3N−5
+    # vibrations survive).
     mask = np.abs(eigenvalues) > threshold
     n_removed = int((~mask).sum())
     eigenvalues = eigenvalues[mask]

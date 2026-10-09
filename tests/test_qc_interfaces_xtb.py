@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from cccp.qc.interfaces.xtb import XTBInterface
-from tests.conftest import requires_xtb
+from tests.conftest import RealQCSnapshot, requires_xtb
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
@@ -100,7 +100,21 @@ def test_xtb_optimize_parses_mocked_run_into_qcresult(
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_xtb
-def test_xtb_binary_smoke_check(sample_config: dict[str, object]) -> None:
-    interface = XTBInterface(sample_config)
+def test_xtb_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Gate and body must resolve xTB through the SAME production path.
 
-    assert shutil.which(str(interface.exe_path)) is not None
+    ``sample_config`` carries the bare name ``xtb``, which misses a binary
+    configured only in ``~/.cccp.yaml`` (BUG-4).  The body therefore builds
+    the interface from the conftest snapshot config (``load_config`` at
+    collection) and asserts its ``resolve_executable`` result is verbatim the
+    path the ``requires_xtb`` gate opened on.
+    """
+    interface = XTBInterface(real_qc_snapshot.config)
+    gate_path = real_qc_binary_path("xtb")
+
+    assert gate_path is not None
+    assert interface.executable == gate_path
+    assert gate_path.is_file()

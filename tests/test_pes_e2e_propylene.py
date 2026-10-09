@@ -47,7 +47,7 @@ from pathlib import Path
 
 import pytest
 
-ORCA_BIN = os.environ.get("ACP_PES_E2E_ORCA_BIN", "/home/xieningke/orca611/orca")
+ORCA_BIN = os.environ.get("ACP_PES_E2E_ORCA_BIN", str(Path.home() / "orca611" / "orca"))
 BASELINE_DIR = Path(
     os.environ.get(
         "ACP_PES_E2E_BASELINE_DIR", "/var/lib/acp/runs/uncategorized/propylene_PESsearch"

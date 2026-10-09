@@ -1,9 +1,14 @@
 """ORCA ``.out`` parsing into :class:`OrcaCalculation` records (design doc §11).
 
-Standalone regex-driven parser mirroring the conventions of
-``cccp.qc.interfaces.orca`` (frequency-section splitting, ``FINAL SINGLE POINT
-ENERGY`` last-match semantics) without importing the subprocess layer.  Never
-raises on partial output — populates whatever markers are found.
+Viewer-facing aggregate parser.  The **frequency science** (frequency list,
+IR intensities, indexed mode vectors) has exactly one implementation —
+:mod:`cccp.calculation.frequency_parse` — and this module delegates to it
+(plan todo 19); the local regex mirrors below are the documented standalone
+fallback for a cccp-less environment only (same semantics, kept honest by
+``tests/test_acp_frequency_modes.py::TestLocalFallbackMirror``).  Energy /
+SCF / HOMO-LUMO extraction stays here (viewer aggregates, not frequency
+science).  Never raises on partial output — populates whatever markers are
+found.
 """
 
 from __future__ import annotations
@@ -38,16 +43,17 @@ _ORBITAL_SECTION_HEADER = "ORBITAL ENERGIES"
 _NORMAL_MODES_SECTION_HEADER = "NORMAL MODES"
 _INTEGER_TOKEN_RE = re.compile(r"^\d+$")
 
-# Guarded cccp import for normal-mode parsing (reuses orca_ts helpers).
+# Guarded import of the single scientific frequency parse (plan todo 19).
 _CCCP_AVAILABLE = False
-_parse_ts_frequency_map = None
-_parse_ts_mode_vectors = None
+_parse_orca_frequency_text = None
 try:
-    from cccp.qc.interfaces.orca_ts import parse_ts_frequency_map as _parse_ts_frequency_map
-    from cccp.qc.interfaces.orca_ts import parse_ts_mode_vectors as _parse_ts_mode_vectors
+    from cccp.calculation.frequency_parse import (
+        parse_orca_frequency_text as _parse_orca_frequency_text,
+    )
+
     _CCCP_AVAILABLE = True
 except ImportError:
-    logger.debug("cccp normal-mode parsers unavailable; using local fallback")
+    logger.debug("cccp frequency_parse unavailable; using local fallback")
 
 
 def _local_parse_frequency_map(log_text: str) -> dict[int, float]:
@@ -182,9 +188,10 @@ class OrcaOutputParser:
         n_opt_cycles = self._count_opt_cycles(text)
         is_opt_job = bool(n_opt_cycles or opt_converged or opt_failed)
         job_done = "ORCA-CHEMISTRY JOB DONE" in text
-        frequencies, imaginary = self._parse_frequencies(text)
         homo, lumo = self._parse_homo_lumo(text)
-        mode_freqs, mode_vecs, mode_ir = self._parse_normal_modes(text)
+        frequencies, imaginary, ir_intensities, mode_freqs, mode_vecs, mode_ir = (
+            _frequency_fields(text)
+        )
         return OrcaCalculation(
             success=final_energy is not None or job_done or scf_converged or opt_converged,
             final_energy_hartree=final_energy,
@@ -194,7 +201,7 @@ class OrcaOutputParser:
             gradients_rms=self._parse_rms_gradients(text),
             frequencies=frequencies,
             imaginary_modes=imaginary,
-            ir_intensities=self._parse_ir_intensities(text, frequencies),
+            ir_intensities=ir_intensities,
             homo_hartree=homo,
             lumo_hartree=lumo,
             mode_frequencies=mode_freqs,
@@ -320,78 +327,83 @@ class OrcaOutputParser:
                 homo = lumo - gap
         return homo, lumo
 
-    @staticmethod
-    def _parse_normal_modes(
-        text: str,
-    ) -> tuple[
-        dict[int, float],
-        dict[int, tuple[tuple[float, float, float], ...]],
-        dict[int, float] | None,
-    ]:
-        """Parse ORCA normal-mode vectors with stable mode indices.
+def _frequency_fields(
+    text: str,
+) -> tuple[
+    list[float],
+    list[float],
+    list[float] | None,
+    dict[int, float],
+    dict[int, tuple[tuple[float, float, float], ...]],
+    dict[int, float] | None,
+]:
+    """All frequency-science fields in one parse (plan todo 19).
 
-        Reuses ``cccp.qc.interfaces.orca_ts.parse_ts_frequency_map`` and
-        ``parse_ts_mode_vectors`` when available; falls back to a local
-        regex mirror when cccp is unavailable.
+    Primary path delegates to :func:`cccp.calculation.frequency_parse.parse_orca_frequency_text`
+    (the single implementation); the local mirrors are the documented
+    standalone fallback when cccp is unavailable.
 
-        Returns:
-            (mode_frequencies, mode_vectors, mode_ir_intensities).
-            ``mode_ir_intensities`` is ``None`` when no IR SPECTRUM section
-            is found.
-        """
-        if _CCCP_AVAILABLE and _parse_ts_frequency_map is not None:
-            try:
-                freq_map = _parse_ts_frequency_map(text)
-            except Exception:
-                logger.debug("cccp parse_ts_frequency_map failed; using local fallback", exc_info=True)
-                freq_map = _local_parse_frequency_map(text)
+    Returns:
+        ``(frequencies, imaginary_modes, ir_intensities, mode_frequencies,
+        mode_vectors, mode_ir_intensities)``.
+    """
+    if _CCCP_AVAILABLE and _parse_orca_frequency_text is not None:
+        try:
+            analysis = _parse_orca_frequency_text(text)
+        except Exception:  # noqa: BLE001 — viewer parse never raises
+            logger.debug("cccp frequency_parse failed; using local fallback", exc_info=True)
         else:
-            freq_map = _local_parse_frequency_map(text)
+            return (
+                list(analysis.frequencies),
+                list(analysis.imaginary_frequencies),
+                list(analysis.ir_intensities) if analysis.ir_intensities is not None else None,
+                dict(analysis.mode_frequencies),
+                dict(analysis.mode_vectors),
+                dict(analysis.mode_ir_intensities) if analysis.mode_ir_intensities else None,
+            )
+    return _local_frequency_fields(text)
 
-        # Supplement freq_map with zero-frequency modes from the vectors map.
-        # cccp's parse_ts_frequency_map and the local mirror both filter out
-        # 0.0 entries, but the spec requires the index map to keep ORCA mode
-        # indices without zero-mode compaction.
-        all_pairs = _local_parse_all_frequency_pairs(text)
-        for mode_idx, freq_val in all_pairs.items():
-            if mode_idx not in freq_map:
-                freq_map[mode_idx] = freq_val
 
-        if _CCCP_AVAILABLE and _parse_ts_mode_vectors is not None:
+def _local_frequency_fields(
+    text: str,
+) -> tuple[
+    list[float],
+    list[float],
+    list[float] | None,
+    dict[int, float],
+    dict[int, tuple[tuple[float, float, float], ...]],
+    dict[int, float] | None,
+]:
+    """Standalone (cccp-less) mirror of the frequency-science semantics."""
+    frequencies, imaginary = OrcaOutputParser._parse_frequencies(text)
+    ir_intensities = OrcaOutputParser._parse_ir_intensities(text, frequencies)
+
+    freq_map = _local_parse_frequency_map(text)
+    for mode_idx, freq_val in _local_parse_all_frequency_pairs(text).items():
+        if mode_idx not in freq_map:
+            freq_map[mode_idx] = freq_val
+    mode_vectors = _local_parse_mode_vectors(text)
+
+    mode_ir: dict[int, float] | None = None
+    ir_sections = text.split(_IR_SECTION_HEADER)
+    if len(ir_sections) >= 2:
+        ir_map: dict[int, float] = {}
+        for line in ir_sections[-1].splitlines():
+            match = _IR_LINE_RE.match(line)
+            if not match:
+                continue
+            numbers = [float(n) for n in _NUMBER_RE.findall(line[match.start(2) :])]
+            if not numbers:
+                continue
             try:
-                raw_vectors = _parse_ts_mode_vectors(text)
-            except Exception:
-                logger.debug("cccp parse_ts_mode_vectors failed; using local fallback", exc_info=True)
-                raw_vectors = _local_parse_mode_vectors(text)
-            mode_vectors: dict[int, tuple[tuple[float, float, float], ...]] = {}
-            for mode_idx, arr in raw_vectors.items():
-                tuples: list[tuple[float, float, float]] = []
-                for row in arr:
-                    tuples.append((float(row[0]), float(row[1]), float(row[2])))
-                mode_vectors[mode_idx] = tuple(tuples)
-        else:
-            mode_vectors = _local_parse_mode_vectors(text)
+                value = numbers[-2] if len(numbers) >= 3 else numbers[-1]
+                ir_map[int(match.group(1))] = value
+            except (IndexError, ValueError):
+                continue
+        if ir_map:
+            mode_ir = ir_map
 
-        mode_ir: dict[int, float] | None = None
-        ir_sections = text.split(_IR_SECTION_HEADER)
-        if len(ir_sections) >= 2:
-            ir_map: dict[int, float] = {}
-            for line in ir_sections[-1].splitlines():
-                match = _IR_LINE_RE.match(line)
-                if not match:
-                    continue
-                numbers = [float(n) for n in _NUMBER_RE.findall(line[match.start(2):])]
-                if not numbers:
-                    continue
-                try:
-                    value = numbers[-2] if len(numbers) >= 3 else numbers[-1]
-                    ir_map[int(match.group(1))] = value
-                except (IndexError, ValueError):
-                    continue
-            if ir_map:
-                mode_ir = ir_map
-
-        return freq_map, mode_vectors, mode_ir
+    return frequencies, imaginary, ir_intensities, freq_map, mode_vectors, mode_ir
 
 
 def _float_or_none(match: re.Match[str] | None) -> float | None:

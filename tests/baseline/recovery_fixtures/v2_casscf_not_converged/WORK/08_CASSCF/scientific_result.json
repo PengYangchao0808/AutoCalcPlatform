@@ -1,0 +1,37 @@
+{
+  "artifacts": [
+    {
+      "path": "casscf.log",
+      "type": "log"
+    },
+    {
+      "path": "active_space.json",
+      "type": "active_space"
+    }
+  ],
+  "kind": "casscf",
+  "result_id": "v2:052106151753ea19bf3c1d22b7de2dfe-step0-casscf",
+  "summary": {
+    "energy_hartree": -108.5,
+    "errors": [],
+    "metadata": {
+      "casscf": {
+        "casscf_energy_hartree": -108.5,
+        "converged": false
+      },
+      "multireference": {
+        "active_electrons": 2,
+        "active_orbitals": 2,
+        "casscf_energy_hartree": -108.5,
+        "converged": false,
+        "multiplicity": 1,
+        "natural_occupations": [
+          1.7,
+          0.3
+        ],
+        "nroots": 1
+      }
+    },
+    "status": "completed"
+  }
+}

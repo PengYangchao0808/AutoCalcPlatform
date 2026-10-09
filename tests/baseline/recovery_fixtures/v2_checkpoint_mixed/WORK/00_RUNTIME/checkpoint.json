@@ -1,0 +1,39 @@
+{
+  "identity_schema": 2,
+  "items_state": {
+    "__handoff__": {
+      "single_point_energy": -100.5
+    }
+  },
+  "plan_fingerprint": "v2:1f42183904c1d932834e8c2c8a6404c4",
+  "resume_count": 0,
+  "step_states": [
+    {
+      "energy": -100.5,
+      "error": "",
+      "executed_this_run": false,
+      "index": 0,
+      "kind": "singlepoint",
+      "last_executed_attempt": 1,
+      "result_ref": {
+        "path": "WORK/05_SP/step_result.json",
+        "sha256": "f03a2827b218e0a78ccb9c6558e4299f320f68b6f30844c2d941c283c3078c07"
+      },
+      "reused_from_attempt": null,
+      "status": "completed"
+    },
+    {
+      "energy": null,
+      "error": "fixture: synthetic frequency failure",
+      "executed_this_run": true,
+      "index": 1,
+      "kind": "frequency",
+      "last_executed_attempt": null,
+      "result_ref": null,
+      "reused_from_attempt": null,
+      "status": "failed"
+    }
+  ],
+  "task_id": "fixture_recovery_v2",
+  "workflow": "optimize"
+}

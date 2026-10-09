@@ -11,6 +11,7 @@ import pytest
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.remote.runner import RemotePollObservation
 from acp.scheduler.store import JobStore
 from acp.scheduler.tasks import TaskIndex
 
@@ -326,15 +327,30 @@ def _real_node(name: str, max_jobs: int = 8) -> RemoteNode:
 class _NodeAwareRemoteRunner:
     """Stands in for ``RemoteJobRunner.submit_remote``: records the node."""
 
-    def submit_remote(self, record, event_log, target_node=None) -> str:
+    def submit_remote(
+        self,
+        record,
+        event_log,
+        target_node=None,
+        *,
+        remote_job_dir=None,
+        on_submitted=None,
+        submission_id=None,
+        on_code_release_bound=None,  # protocol double: no real release to bind
+    ) -> str:
         result = dict(record.result or {})
         result["node"] = target_node or "comp-01"
         result["lsf_job_id"] = "424242"
         record.result = result
+        if on_submitted is not None:
+            on_submitted("424242")
         return "424242"
 
     def poll_remote(self, record, event_log, cancel_event):
-        return (False, None)
+        return RemotePollObservation(terminal=False)
+
+    def reconcile_submission(self, record) -> str:
+        return "found" if record.remote_job_id else "unknown"
 
 
 @_requires_remote_config

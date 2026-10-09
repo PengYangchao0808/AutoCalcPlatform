@@ -17,6 +17,29 @@
 #
 # Add any new runtime import used by ``acp run <workflow>`` here as well as
 # in ``pyproject.toml`` so bootstrapped nodes stay in sync.
-numpy>=1.26
+#
+# Sync policy (todo 32): every line below must appear VERBATIM in
+# ``pyproject.toml`` (core ``[project].dependencies`` or the ``nmr`` extra)
+# — drift-locked by ``tests/test_packaging_assets.py``.  scipy / matplotlib
+# / openpyxl are REQUIRED on nodes: for a remote job the whole workflow runs
+# on the node (DP4/DP5 + regression need scipy, report plots need
+# matplotlib, the XLSX report writer needs openpyxl — without it the XLSX
+# artifact would be silently skipped in the node log).
+#
+# Deliberately NOT shipped to nodes:
+#   qml        — only builds against numpy<2 (platform pins numpy>=2.1.0);
+#                FCHL/DP5 degrades to the documented unweighted-KDE fallback
+#                (acp.nmr.error_model), with explicit errors when a kernel
+#                is required but absent
+#   openbabel  — FCHL ``frag_reps.gz`` fragmentation path not wired yet
+#                (stays in the ``nmr`` extra)
+# nmrglue IS shipped: remote nmr jobs may submit a Bruker tree
+# (``--bruker inputs/bruker`` from ``script_gen.build_remote_nmr_cmd_tail``)
+# which stage 0a processes on the node.
+numpy>=2.1.0
 rdkit>=2022.09.1
 pyyaml>=6.0
+scipy>=1.10
+matplotlib>=3.7
+openpyxl>=3.1
+nmrglue>=0.10

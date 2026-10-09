@@ -1,0 +1,63 @@
+# Real ORCA 6.1.1 GIAO NMR output excerpt (ethanol, HF/def2-SVP) — verbatim
+# from the todo-51 level-1 smoke probe (host workstation, 2026-10-06).
+# Trimmed excerpt: section 1 = new ORCA 6 per-nucleus shielding tensor block,
+# section 2 = the compact summary table consumed by NmrShieldingParser.
+# Carbon atoms 0/1 are shielded; oxygen (atom 2) is not in the NMR-active
+# element set, so summary rows skip index 2 — the validation gap this
+# fixture pins.
+
+GIAO: Analytic para- and diamagnetic shielding integrals (SHARK)       ... done (  0.0 sec)
+-------------------
+CHEMICAL SHIELDINGS (ppm)
+-------------------
+
+Method             : SCF
+Type of density    : Electron Density
+Type of derivative : Magnetic Field (with GIAOs) (Direction=X)
+Multiplicity       :   1
+Irrep              :   0
+Basis              : AO
+ --------------
+ Nucleus   0C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+           248.462          4.764         0.001
+             5.263        238.497         0.002
+             0.028          0.008       236.035
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+           -50.945         -2.277        -0.009
+             2.218        -54.000        -0.006
+            -0.035         -0.009       -63.931
+
+Total shielding tensor (ppm): 
+           197.517          2.487        -0.008
+             7.481        184.497        -0.003
+            -0.008         -0.001       172.104
+
+
+ Diagonalized sT*s matrix:
+ 
+ sDSO           236.035          236.489          250.470  iso=     240.998
+ sPSO           -63.931          -53.680          -51.265  iso=     -56.292
+        ---------------  ---------------  ---------------
+ Total          172.104          182.809          199.205  iso=     184.706
+
+# --- compact summary table (same run) ---
+
+--------------------------------
+CHEMICAL SHIELDING SUMMARY (ppm)
+--------------------------------
+
+
+  Nucleus  Element    Isotropic     Anisotropy
+  -------  -------  ------------   ------------
+      0       C          184.706         21.749 
+      1       C          147.611         55.441 
+      3       H           30.727          9.039 
+      4       H           30.734          9.042 
+      5       H           31.526         10.211 
+      6       H           28.966          7.380 
+      7       H           28.967          7.379 
+      8       H           32.318         21.840 

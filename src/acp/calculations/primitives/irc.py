@@ -1,66 +1,68 @@
-"""Intrinsic reaction coordinate (IRC) calculation primitive.
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
+"""IRC calculation primitive — ACP compat wrapper (plan todo 21).
 
-Executes a forward+reverse IRC from a converged transition state, parses
-endpoint geometries, materialises them under ``RESULT/irc/``, and registers
-``IRC_ENDPOINT`` products in the result manifest.
-
-This is a **standalone** request — not part of any ``CalculationPlan``.
+The bidirectional IRC execution core lives in
+:mod:`cccp.calculation.tasks.irc`: direction resolution, the single backend
+``irc`` capability call, endpoint discovery / per-direction completion
+semantics and the typed ``IrcPayload``.  This module is the ACP-side compat
+surface: the legacy ``run_irc(ts_artifact, …)`` entry, the legacy backend
+registry seam, and the **publication half** — ``RESULT/irc`` endpoint
+products (``IRC_ENDPOINT``), ``RESULT/trajectories`` trajectory products and
+``result_manifest.json`` registration through the named publication entry
+(:func:`acp.calculations.result_publication.register_result_manifest`).
+``run_irc`` is a pure re-export alias of ``execute_irc`` (todo 23 hard
+switch: no ``def run_irc`` may exist outside ``cccp.calculation.tasks.irc``).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
 
-from acp.backends.base import QCResult, to_qc_result
 from acp.calculations.contracts import (
     ArtifactRef,
+    CalculationRequest,
     CalculationResult,
-    JsonValue,
     StructureArtifact,
     StructureRole,
 )
-from acp.calculations.progress import ProgressReporter
-from acp.storage.manifest import ProductKind, ResultManifest
-from cccp.qc.interfaces.orca_ts import parse_irc_endpoints
-from cccp.utils import file_io
-
-from ._common import (
-    CalculationInputs,
+from acp.calculations.legacy_adapters import to_legacy_result, to_task_request
+from acp.calculations.primitives._common import (
     backend_for_request,
     backend_name,
-    error_text,
-    load_inputs,
+    capability_kwargs,
     output_dir,
-    result_from_qc,
 )
-from .irc_trajectory import IrcTrajectoryRecorder
+from acp.calculations.progress import ProgressReporter
+from acp.calculations.result_publication import register_result_manifest
+from acp.storage.manifest import ProductKind, ResultManifest
+from cccp import calculation as _cccp_calculation
+from cccp.calculation.context import TaskContext
+from cccp.calculation.progress import ProgressEvent, ProgressEventKind
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import IrcPayload, TaskResult
+from cccp.calculation.tasks import irc as _irc_task
+from cccp.calculation.tasks.irc import (
+    resolve_result_dir,
+)
+from cccp.utils import file_io
 
 logger = logging.getLogger(__name__)
 
-_BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
+__all__ = ["IRC_PROGRESS_STAGES", "run_irc"]
+
 IRC_PROGRESS_STAGES = ("preparing", "irc_forward", "irc_backward", "validating")
-_IRC_RESOURCE_KEYS = frozenset(
-    {
-        "backend",
-        "engine",
-        "config",
-        "output_dir",
-        "result_dir",
-        "coordinates",
-        "symbols",
-        "charge",
-        "multiplicity",
-        "method",
-    }
-)
+
+#: Compat aliases for the frozen golden generator (pre-migration helper names).
+_resolve_direction = _irc_task.resolve_direction
+_completed_directions = _irc_task.completed_directions
 
 
-def run_irc(
+def execute_irc(
     ts_artifact: StructureArtifact,
     *,
     directions: tuple[str, ...] = ("forward", "reverse"),
@@ -70,384 +72,128 @@ def run_irc(
     profile: str | None = None,
     progress_reporter: ProgressReporter | None = None,
 ) -> CalculationResult:
-    """Run an IRC calculation from a converged transition state.
+    """ACP compat wrapper: cccp task core + endpoint/trajectory publication.
 
-    Args:
-        ts_artifact: Input structure **must** have ``role == TRANSITION_STATE``.
-        directions: IRC directions to compute (``"forward"``, ``"reverse"``,
-            or both).
-        method: Override method string forwarded to the backend.
-        resources: Additional resources (backend, charge, multiplicity, etc.).
-        workflow: Workflow label for the result manifest.
-        profile: Profile label for provenance.
-        progress_reporter: Optional scheduler progress reporter.
-
-    Returns:
-        CalculationResult with endpoint artifacts and manifest registration.
-
-    Raises:
-        ValueError: If the input artifact role is not ``TRANSITION_STATE``.
+    The legacy role gate (transition-state artifact) is enforced before any
+    backend dispatch, exactly like the pre-migration entry point.  Endpoint
+    products are materialised from the typed payload; an empty payload (the
+    backend call itself failed) skips endpoint registration and only partial
+    trajectory products are registered — the legacy exception-path
+    publication rules.
     """
     if progress_reporter is not None:
         progress_reporter.initialize()
-    active_stage: str | None = None
-
-    try:
-        if progress_reporter is not None:
-            progress_reporter.start_stage("preparing")
-            active_stage = "preparing"
-
-        if ts_artifact.role != StructureRole.TRANSITION_STATE:
-            raise ValueError(
-                f"IRC requires a transition-state artifact; got role={ts_artifact.role.value!r}"
-            )
-
-        resources = dict(resources or {})
-        resources.setdefault("backend", "orca")
-        if method:
-            resources["method"] = method
-
-        from acp.calculations.contracts import CalculationRequest
-
-        request = CalculationRequest(
-            input_artifact=ts_artifact,
-            method=method,
-            resources=resources,
-            workflow=workflow,
-            profile=profile,
+    if ts_artifact.role != StructureRole.TRANSITION_STATE:
+        raise ValueError(
+            f"IRC requires a transition-state artifact; got role={ts_artifact.role.value!r}"
         )
 
-        inputs = load_inputs(request)
-        selected_backend = backend_name(request)
-        backend = backend_for_request(request, selected_backend)
-        target_dir = output_dir(request) or Path.cwd() / "irc_work"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        result_dir = _result_dir(request, target_dir)
-        recorder = IrcTrajectoryRecorder(result_dir, target_dir, directions=tuple(directions))
+    resources = dict(resources or {})
+    resources.setdefault("backend", "orca")
+    if method:
+        resources["method"] = method
 
-        direction_str = _resolve_direction(directions)
+    request = CalculationRequest(
+        input_artifact=ts_artifact,
+        method=method,
+        resources=resources,
+        workflow=workflow,
+        profile=profile,
+    )
+    task_request, binding = to_task_request(request, TaskKind.IRC, directions=directions)
+    selected_backend = backend_name(request)
+    backend = backend_for_request(request, selected_backend)
+    target_dir = output_dir(request) or Path.cwd() / "irc_work"
+    target_dir.mkdir(parents=True, exist_ok=True)
 
-        def _on_snapshot(payload: dict[str, Any]) -> None:
-            nonlocal active_stage
-            if progress_reporter is None:
-                return
-            frames = payload.get("frames") or []
-            forward_count = sum(frame.get("direction") == "forward" for frame in frames)
-            reverse_count = sum(frame.get("direction") == "reverse" for frame in frames)
-            if direction_str == "both" and reverse_count and active_stage == "irc_forward":
-                progress_reporter.complete_stage("irc_forward")
-                progress_reporter.start_stage("irc_backward")
-                active_stage = "irc_backward"
-            if active_stage is not None:
-                progress_reporter.set_stage_detail(
-                    active_stage, f"正向 {forward_count} 点 · 反向 {reverse_count} 点"
-                )
+    sink = _IrcReporterSink(progress_reporter) if progress_reporter is not None else None
+    context = TaskContext(
+        config=binding.config,
+        workdir=binding.artifact_root or target_dir,
+        backend=backend,
+        capability_extras=capability_kwargs(request),
+        progress=sink,
+    )
+    task_result = _cccp_calculation.run_irc(task_request, context=context)
 
-        recorder.on_snapshot = _on_snapshot
-        if progress_reporter is not None:
-            progress_reporter.complete_stage("preparing")
-            active_stage = None
-
-            direction_stage = "irc_backward" if direction_str == "reverse" else "irc_forward"
-            progress_reporter.start_stage(direction_stage)
-            active_stage = direction_stage
-
-        # --- Backend call ---
-        irc_kwargs = _irc_kwargs(request)
-        if selected_backend == "orca":
-            irc_kwargs["output_callback"] = recorder.feed_line
-        recorder.start()
-        try:
-            raw_result = backend.irc(
-                inputs.coordinates,
-                list(inputs.symbols),
-                charge=inputs.charge,
-                multiplicity=inputs.multiplicity,
-                output_dir=target_dir,
-                direction=direction_str,
-                **irc_kwargs,
-            )
-        except _BACKEND_FAILURES as error:
-            recorder.stop()
-            if progress_reporter is not None and active_stage is not None:
-                progress_reporter.fail_stage(active_stage, error_text(error))
-            partial = recorder.finish(status="failed", complete=False)
-            partial_artifacts = _register_trajectory_products(
-                result_dir, selected_backend, partial
-            )
-            metadata = _irc_metadata(directions)
-            if partial is not None:
-                metadata["trajectory_frame_count"] = len(partial.get("frames") or [])
-            return result_from_qc(
-                request,
-                selected_backend,
-                None,
-                [error_text(error)],
-                partial_artifacts,
-                metadata=metadata,
-                status="failed",
-            )
-        finally:
-            recorder.stop()
-
-        # Normalise to QCResult
-        qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
-        success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
-        endpoints = _discover_endpoints(raw_result, target_dir, inputs)
-        completed_directions = _completed_directions(raw_result, endpoints, success)
-        endpoints = {direction: info for direction, info in endpoints.items() if direction in completed_directions}
-        errors: list[str] = []
-        if not success:
-            raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
-            if raw_error:
-                errors.append(str(raw_error))
-            failure_message = errors[0] if errors else "IRC calculation failed"
-            if progress_reporter is not None and active_stage is not None:
-                progress_reporter.fail_stage(active_stage, failure_message)
-        elif progress_reporter is not None and active_stage is not None:
-            recorder.refresh(force=True)
-            completed_stage = active_stage
-            progress_reporter.complete_stage(active_stage)
-            active_stage = None
-            if (
-                direction_str == "both"
-                and "reverse" in endpoints
-                and completed_stage == "irc_forward"
-            ):
-                progress_reporter.start_stage("irc_backward")
-                progress_reporter.complete_stage("irc_backward")
-
-        if success and progress_reporter is not None:
-            progress_reporter.start_stage("validating")
-            active_stage = "validating"
-
-        # --- Parse endpoint geometries ---
-        if success and not endpoints:
-            success = False
-            message = "IRC produced no endpoint geometries"
-            errors.append(message)
-            if progress_reporter is not None and active_stage is not None:
-                progress_reporter.fail_stage(active_stage, message)
-                active_stage = None
-
-        # ORCAInterface.forward_points/reverse_points currently count direction
-        # header occurrences, not validated IRC iterations. Until a parser is
-        # backed by real ORCA point records, intentionally publish no point-count
-        # metric rather than exposing a fabricated count.
-
-        # --- Materialise endpoint structures ---
-        artifacts = _write_endpoint_products(
-            request,
-            selected_backend,
-            result_dir,
-            endpoints,
-            inputs,
-            success,
-            directions,
-        )
-        trajectory = recorder.finish(
-            status="completed" if success else "failed",
-            complete=bool(success),
-        )
-        artifacts.extend(_register_trajectory_products(result_dir, selected_backend, trajectory))
-
-        if success and progress_reporter is not None and active_stage is not None:
-            progress_reporter.complete_stage(active_stage)
-            active_stage = None
-
-        metadata = _irc_metadata(directions)
-        metadata["endpoint_count"] = len(endpoints)
-        for direction in ("forward", "reverse"):
-            key = f"{direction}_endpoint"
-            if direction in endpoints:
-                metadata[key] = str(endpoints[direction]["path"])
-        if trajectory is not None:
-            metadata["trajectory_path"] = "trajectories/irc_trajectory.json"
-            metadata["trajectory_frame_count"] = len(trajectory.get("frames") or [])
-            metadata["path_files"] = dict(trajectory.get("geometry_files") or {})
-
-        return result_from_qc(
-            request,
-            selected_backend,
-            qc_result,
-            errors,
-            artifacts,
-            metadata=metadata,
-            status="completed" if success else "failed",
-        )
-    except Exception as error:
-        if "recorder" in locals():
-            recorder.stop()
-            recorder.finish(status="failed", complete=False)
-        if progress_reporter is not None and active_stage is not None:
-            progress_reporter.fail_stage(active_stage, error_text(error))
-        raise
+    legacy = to_legacy_result(task_result, binding)
+    metadata = dict(task_result.metadata)
+    metadata.update(legacy.metadata)
+    metadata["directions"] = list(directions)
+    result_dir = resolve_result_dir(target_dir, request.resources)
+    artifacts = _publish_irc_products(
+        request,
+        task_result,
+        result_dir,
+        selected_backend,
+        directions,
+    )
+    return CalculationResult(
+        energy=legacy.energy,
+        coords=legacy.coords,
+        frequencies=legacy.frequencies,
+        artifacts=artifacts,
+        status=legacy.status,
+        errors=legacy.errors,
+        provenance=legacy.provenance,
+        metadata=metadata,
+    )
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+#: Pure re-export alias (no ``def run_irc`` outside the cccp task core).
+run_irc = execute_irc
 
 
-def _resolve_direction(directions: tuple[str, ...]) -> str:
-    """Map a directions tuple to the ORCA direction keyword."""
-    forward = "forward" in directions
-    reverse = "reverse" in directions
-    if forward and reverse:
-        return "both"
-    if forward:
-        return "forward"
-    if reverse:
-        return "reverse"
-    return "both"
+# ── ACP-side product publication (endpoint/trajectory science comes from cccp)
 
 
-def _irc_kwargs(request: Any) -> dict[str, Any]:
-    """Forward backend-specific IRC options without leaking request internals."""
-    kwargs = {
-        key: value for key, value in request.resources.items() if key not in _IRC_RESOURCE_KEYS
-    }
-    if request.method:
-        kwargs["method"] = request.method
-    return kwargs
+def _publish_irc_products(
+    request: CalculationRequest,
+    task_result: TaskResult,
+    result_dir: Path,
+    backend: str,
+    directions: tuple[str, ...],
+) -> list[ArtifactRef]:
+    """Materialise endpoint/trajectory products and register the manifest.
 
-
-def _irc_metadata(directions: tuple[str, ...]) -> dict[str, JsonValue]:
-    return {"directions": list(directions)}
-
-
-def _result_dir(request: Any, target_dir: Path) -> Path:
-    """Resolve the task RESULT directory from an explicit path or WORK layout."""
-    raw_result_dir = request.resources.get("result_dir")
-    if isinstance(raw_result_dir, str) and raw_result_dir:
-        return Path(raw_result_dir)
-    for parent in (target_dir, *target_dir.parents):
-        if parent.name == "RESULT":
-            return parent
-        if parent.name == "WORK":
-            return parent.parent / "RESULT"
-    return target_dir / "RESULT"
-
-
-def _completed_directions(raw_result: object, endpoints: dict[str, Any], success: bool) -> set[str]:
-    """Require directional completion; reject ORCA iteration-limit endpoints."""
-    import re
-    metadata = getattr(raw_result, "metadata", None) or {}
-    statuses = metadata.get("direction_status") or {}
-    if statuses:
-        return {d for d, status in statuses.items() if status in {"completed", "converged"}}
-    log_path = getattr(raw_result, "log_file", None)
-    if log_path and Path(log_path).is_file():
-        log = Path(log_path).read_text(encoding="utf-8", errors="replace")
-        headers = list(re.finditer(r"(?:FORWARD|BACKWARD|REVERSE) IRC", log, re.I))
-        if headers:
-            completed = set()
-            for i, header in enumerate(headers):
-                section = log[header.end():headers[i + 1].start() if i + 1 < len(headers) else len(log)]
-                direction = "forward" if "FORWARD" in header.group().upper() else "reverse"
-                if "MAXIMUM NUMBER OF ITERATIONS REACHED" in section.upper():
-                    continue
-                if re.search(r"IRC.*CONVERGED|IRC.*CONVERGENCE REACHED|IRC.*CONVERGENCE ACHIEVED", section, re.I):
-                    completed.add(direction)
-                    continue
-                threshold = re.search(r"Convergence thresholds\s+([0-9.Ee+-]+)\s+([0-9.Ee+-]+)", section)
-                rows = re.findall(r"^\s*\d+\s+[-0-9.Ee+]+\s+[-0-9.Ee+]+\s+([-0-9.Ee+]+)\s+([-0-9.Ee+]+)\s*$", section, re.M)
-                if threshold and rows and all(float(v) <= float(t) for v, t in zip(rows[-1], threshold.groups())):
-                    completed.add(direction)
-            return completed
-    # Typed backend success with explicit endpoints remains supported.
-    return set(endpoints) if success else set()
-
-
-def _discover_endpoints(
-    raw_result: object,
-    target_dir: Path,
-    inputs: CalculationInputs,
-) -> dict[str, dict[str, Any]]:
-    """Extract endpoint geometries from the backend result or discover files.
-
-    Returns a dict mapping direction → {"path": Path, "coordinates": NDArray, "symbols": list[str]}.
+    Never raises: a missing/partial payload just skips publication (the IRC
+    step is never failed due to publication alone).
     """
-    endpoints: dict[str, dict[str, Any]] = {}
-
-    # 1. Try explicit endpoint paths from the result (IrcResult-style)
-    metadata = getattr(raw_result, "metadata", None)
-    raw_endpoints = getattr(raw_result, "endpoints", None)
-    if not isinstance(raw_endpoints, dict) and isinstance(metadata, dict):
-        raw_endpoints = metadata.get("endpoints")
-    if isinstance(raw_endpoints, dict):
-        for direction, path_value in raw_endpoints.items():
-            if direction in ("forward", "reverse") and path_value is not None:
-                path = Path(path_value)
-                if path.exists():
-                    coords, symbols = _read_xyz(path)
-                    if coords is not None:
-                        endpoints[direction] = {
-                            "path": path,
-                            "coordinates": coords,
-                            "symbols": symbols,
-                        }
-
-    # 2. Try final_geometries from the result
-    final_geometries = getattr(raw_result, "final_geometries", None)
-    if not isinstance(final_geometries, dict) and isinstance(metadata, dict):
-        final_geometries = metadata.get("final_geometries")
-    if isinstance(final_geometries, dict):
-        for direction, geometry in final_geometries.items():
-            if direction in endpoints or direction not in ("forward", "reverse"):
-                continue
-            if geometry is not None:
-                coords = np.asarray(geometry, dtype=float)
-                if coords.ndim == 2 and coords.shape[1] == 3:
-                    # Write a temporary endpoint file
-                    endpoint_path = target_dir / f"irc_{direction[0]}.xyz"
-                    file_io.write_xyz(
-                        endpoint_path,
-                        coords,
-                        list(inputs.symbols),
-                        title=f"IRC {direction} endpoint",
-                    )
-                    endpoints[direction] = {
-                        "path": endpoint_path,
-                        "coordinates": coords,
-                        "symbols": list(inputs.symbols),
-                    }
-
-    # 3. Fallback: discover endpoint files via parse_irc_endpoints
-    if not endpoints:
-        discovered = parse_irc_endpoints("", target_dir)
-        for direction, path in discovered.items():
-            if direction in endpoints:
-                continue
-            coords, symbols = _read_xyz(path)
-            if coords is not None:
-                endpoints[direction] = {"path": path, "coordinates": coords, "symbols": symbols}
-
-    return endpoints
-
-
-def _read_xyz(path: Path) -> tuple[NDArray[np.float64] | None, list[str]]:
-    """Read an XYZ file and return (coordinates, symbols)."""
     try:
-        from acp.results.structure_policy import single_geometry
-        if single_geometry(path.read_text(encoding="utf-8")) is None:
-            return None, []
-        coordinates, symbols = file_io.read_xyz(path)
-        return np.asarray(coordinates, dtype=float), [str(s) for s in symbols]
-    except (FileNotFoundError, ValueError, OSError):
-        return None, []
+        return _publish_irc_products_unchecked(
+            request, task_result, result_dir, backend, directions
+        )
+    except Exception:  # noqa: BLE001 — publication never fails the step
+        logger.debug("irc: product publication failed; skipping", exc_info=True)
+        return []
+
+
+def _publish_irc_products_unchecked(
+    request: CalculationRequest,
+    task_result: TaskResult,
+    result_dir: Path,
+    backend: str,
+    directions: tuple[str, ...],
+) -> list[ArtifactRef]:
+    artifacts: list[ArtifactRef] = []
+    payload = task_result.payload if isinstance(task_result.payload, IrcPayload) else None
+    if payload is not None and payload.directions:
+        artifacts.extend(
+            _write_endpoint_products(request, task_result, payload, result_dir, backend, directions)
+        )
+    artifacts.extend(_register_trajectory_products(result_dir, backend))
+    return artifacts
 
 
 def _write_endpoint_products(
-    request: Any,
-    backend: str,
+    request: CalculationRequest,
+    task_result: TaskResult,
+    payload: IrcPayload,
     result_dir: Path,
-    endpoints: dict[str, dict[str, Any]],
-    inputs: CalculationInputs,
-    success: bool,
-    directions: tuple[str, ...] = ("forward", "reverse"),
+    backend: str,
+    directions: tuple[str, ...],
 ) -> list[ArtifactRef]:
-    """Materialise endpoint XYZ files under ``RESULT/irc/`` and register products."""
+    """Write ``RESULT/irc/irc_{direction}.xyz`` endpoint products and register them."""
     irc_dir = result_dir / "irc"
     irc_dir.mkdir(parents=True, exist_ok=True)
 
@@ -455,24 +201,21 @@ def _write_endpoint_products(
     manifest = ResultManifest(
         task_id="",
         workflow=request.workflow or "irc",
-        status="completed" if success else "failed",
+        status=task_result.status,
     )
-
+    entries = {entry.direction.value: entry for entry in payload.directions}
     for direction in ("forward", "reverse"):
-        if direction not in endpoints:
+        entry = entries.get(direction)
+        if entry is None or not entry.success or entry.coordinates is None:
             continue
-        info = endpoints[direction]
-        coords = info["coordinates"]
-        symbols = info.get("symbols") or list(inputs.symbols)
+        symbols = list(entry.symbols or ())
         out_path = irc_dir / f"irc_{direction}.xyz"
-
         file_io.write_xyz(
             out_path,
-            np.asarray(coords, dtype=float),
-            list(symbols),
+            np.asarray(entry.coordinates, dtype=float),
+            symbols,
             title=f"IRC {direction} endpoint",
         )
-
         relative_path = str(out_path.relative_to(result_dir))
         artifacts.append(ArtifactRef(path=out_path, type="structure", source=backend))
         _ = manifest.add_product(
@@ -480,27 +223,35 @@ def _write_endpoint_products(
             label=f"IRC {direction} endpoint",
             path=relative_path,
             kind=ProductKind.IRC_ENDPOINT,
-            metadata={"source_kind":"irc_endpoint", "direction":direction,
-                      "direction_status":"completed", "requested_directions":list(directions),
-                      "optimization_status":"not_performed", "policy_version":1},
+            metadata={
+                "source_kind": "irc_endpoint",
+                "direction": direction,
+                "direction_status": "completed",
+                "requested_directions": list(directions),
+                "optimization_status": "not_performed",
+                "policy_version": 1,
+            },
         )
 
-    _ = manifest.write(result_dir)
+    _ = register_result_manifest(result_dir, manifest)
     return artifacts
 
 
-def _register_trajectory_products(
-    result_dir: Path,
-    backend: str,
-    trajectory: dict[str, Any] | None,
-) -> list[ArtifactRef]:
+def _register_trajectory_products(result_dir: Path, backend: str) -> list[ArtifactRef]:
     """Register the IRC path trajectory and per-direction geometry products."""
-    if trajectory is None:
-        return []
-    artifacts: list[ArtifactRef] = []
     trajectory_path = result_dir / "trajectories" / "irc_trajectory.json"
-    if trajectory_path.is_file():
-        artifacts.append(ArtifactRef(path=trajectory_path, type="trajectory", source=backend))
+    if not trajectory_path.is_file():
+        return []
+    try:
+        trajectory = json.loads(trajectory_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(trajectory, dict):
+        return []
+
+    artifacts: list[ArtifactRef] = [
+        ArtifactRef(path=trajectory_path, type="trajectory", source=backend)
+    ]
     try:
         manifest = ResultManifest.read(result_dir)
     except FileNotFoundError:
@@ -532,8 +283,48 @@ def _register_trajectory_products(
                 path=str(relative_path),
                 kind=ProductKind.TRAJECTORY,
             )
-    _ = manifest.write(result_dir)
+    _ = register_result_manifest(result_dir, manifest)
     return artifacts
 
 
-__all__ = ["IRC_PROGRESS_STAGES", "run_irc"]
+# ── progress mapping (scientific events → ACP ProgressReporter presentation)
+
+
+class _IrcReporterSink:
+    """Map cccp scientific stage/metric events onto the ACP progress reporter.
+
+    Stage names and point counts are scientific; the presentation detail
+    string stays ACP-side.
+    """
+
+    def __init__(self, reporter: ProgressReporter) -> None:
+        self._reporter = reporter
+        self._current: str | None = None
+        self._forward_count = 0
+        self._reverse_count = 0
+
+    def emit(self, event: ProgressEvent) -> None:
+        if event.kind is ProgressEventKind.STAGE_STARTED:
+            self._reporter.start_stage(event.stage)
+            self._current = event.stage
+            return
+        if event.kind is ProgressEventKind.STAGE_COMPLETED:
+            self._reporter.complete_stage(event.stage)
+            self._current = None
+            return
+        if event.kind is ProgressEventKind.STAGE_FAILED:
+            self._reporter.fail_stage(event.stage, event.message or "")
+            return
+        if event.kind is not ProgressEventKind.METRIC or event.value is None:
+            return
+        if event.metric == "irc_forward_points":
+            self._forward_count = int(event.value)
+        elif event.metric == "irc_reverse_points":
+            self._reverse_count = int(event.value)
+        else:
+            return
+        if self._current is not None:
+            self._reporter.set_stage_detail(
+                self._current,
+                f"正向 {self._forward_count} 点 · 反向 {self._reverse_count} 点",
+            )

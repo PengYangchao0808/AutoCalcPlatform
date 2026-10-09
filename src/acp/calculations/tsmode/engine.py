@@ -27,7 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -40,15 +40,25 @@ from acp.calculations.contracts import (
     StructureArtifact,
     StructureRole,
 )
+from acp.calculations.identity import config_digest
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
+from acp.calculations.step_result import locate_recorded_file, portable_path
 from acp.calculations.tsmode.contracts import (
+    FrequencyCredential,
     FrequencySourceBundle,
+    OptimizeCredential,
+    PublicationState,
+    SourceLevelOfTheory,
     TargetResolution,
     TsmodeError,
     TsmodeOptimizationSettings,
     TsmodeReport,
     TsmodeRequest,
+    optimized_structure_digest,
+    sha256_file,
+    validate_coordinate_array,
+    validate_mode_completeness,
 )
 from acp.calculations.tsmode.mode_mapping import enforce_launch_gate, resolve_target_mode
 from acp.calculations.tsmode.source import (
@@ -67,13 +77,21 @@ from cccp.qc.interfaces.orca_ts import (
     parse_ts_frequency_map,
     parse_ts_mode_vectors,
 )
+from cccp.qc.interfaces.route_render import orca_keyword_context
+from cccp.qc.method_meta import method_meta
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["TsmodeEngine", "TsmodeEngineResult", "compute_engine_fingerprint"]
 
 _CHECKPOINT_NAME = "tsmode_checkpoint.json"
+_CHECKPOINT_SCHEMA_V2 = "tsmode_checkpoint_v2"
 _EXECUTION_STATUSES = ("pending", "running", "completed", "failed")
+#: Artifact types that may carry the final frequency table, best first.
+#: ORCA's ``QCResult.output_file`` (type ``"output"``) names the ``.inp``
+#: route file — it never contains the table — so type priority alone is
+#: not enough when artifacts arrive in interface field order.
+_FREQUENCY_LOG_ARTIFACT_TYPES: tuple[str, ...] = ("frequency_log", "log", "output")
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +102,18 @@ class TsmodeEngineResult:
     report: TsmodeReport
     resolution: TargetResolution
     output_root: Path
+
+
+@dataclass(frozen=True, slots=True)
+class _FrequencyScience:
+    """Canonical frequency data extracted from one stage result or checkpoint."""
+
+    frequency_map: dict[int, float] = field(default_factory=dict)
+    frequency_vectors: dict[int, NDArray[np.float64]] = field(default_factory=dict)
+    expected_mode_indices: list[int] = field(default_factory=list)
+    frequencies: list[float] = field(default_factory=list)
+    artifacts: list[dict[str, Any]] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
 
 
 def compute_engine_fingerprint(
@@ -105,6 +135,102 @@ def compute_engine_fingerprint(
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return "fp_" + hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
+
+
+_LEVEL_RESOURCE_FIELDS: tuple[str, ...] = (
+    "basis",
+    "dispersion",
+    "solvent",
+    "solvent_model",
+    "grid",
+    "scf",
+)
+_ROUTE_NOOP_VALUES: frozenset[str] = frozenset({"none", "normal"})
+_GFN_FAMILIES: frozenset[str] = frozenset({"gfn", "gfnff"})
+
+
+def _level_route_carriers(level: SourceLevelOfTheory) -> list[str]:
+    """Tokens for inherited level fields the ORCA frequency capability drops.
+
+    ``ORCAInterface.frequency`` consumes basis/solvent/solvent_model/
+    scf_convergence but not dispersion/grid (unlike single_point and OptTS);
+    the explicit value is passed verbatim through the sanctioned
+    ``route_extras`` channel so the rendered Frequency input carries the same
+    inherited level as the OptTS input.  Method-inherent values are skipped.
+    Follow-up: forward dispersion/grid through the cccp frequency capability
+    and drop this bridge.
+    """
+    meta = method_meta(level.method) or {}
+    family, _implementation = orca_keyword_context(level.method)
+    carriers: list[str] = []
+    dispersion = (level.dispersion or "").strip()
+    if (
+        dispersion
+        and dispersion.lower() not in _ROUTE_NOOP_VALUES
+        and not meta.get("builtin_dispersion")
+    ):
+        carriers.append(dispersion)
+    grid = (level.grid or "").strip()
+    if grid and grid.lower() not in _ROUTE_NOOP_VALUES and family not in _GFN_FAMILIES:
+        carriers.append(grid)
+    return carriers
+
+
+def _project_source_level(level: SourceLevelOfTheory) -> tuple[str, dict[str, Any]]:
+    """Project the frequency-source level onto one legacy request shape.
+
+    Returns ``(method, resources)``.  ``method`` rides on the top-level
+    ``CalculationRequest.method``; every present level field is emitted under
+    its legacy resource key so ``to_task_request`` can lift it into the typed
+    ``MethodSpec`` (``grid`` into ``integration_grid``, ``scf`` into ``scf``).
+    Absent fields are never emitted (no fabricated default); unknown empty
+    values stay absent and are reported as unconfirmed.
+    """
+    resources: dict[str, Any] = {}
+    for level_field in _LEVEL_RESOURCE_FIELDS:
+        value = getattr(level, level_field)
+        if value:
+            resources[level_field] = value
+    carriers = _level_route_carriers(level)
+    if carriers:
+        resources["route_extras"] = carriers
+    return level.method, resources
+
+
+def _collect_stage_input_evidence(
+    root: Path,
+    snapshot: dict[str, Path],
+    stage_dirs: list[Path],
+) -> list[dict[str, Any]]:
+    """Attach staged source artifacts and rendered backend inputs with digests."""
+    evidence: list[dict[str, Any]] = []
+    for snapshot_path in snapshot.values():
+        path = Path(snapshot_path)
+        if path.is_file():
+            evidence.append(
+                {
+                    "kind": "staged_input",
+                    "path": str(path.relative_to(root)),
+                    "sha256": sha256_file(path),
+                }
+            )
+    for directory in stage_dirs:
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.rglob("*.inp")):
+            evidence.append(
+                {
+                    "kind": "backend_input",
+                    "path": str(path.relative_to(root)),
+                    "sha256": sha256_file(path),
+                }
+            )
+    return evidence
+
+
+def _unconfirmed_level_fields(level: SourceLevelOfTheory) -> list[str]:
+    """Level fields with no recorded value; never silently resolved."""
+    return [field for field in ("method", "basis") if not getattr(level, field)]
 
 
 class TsmodeEngine:
@@ -137,6 +263,9 @@ class TsmodeEngine:
 
         warnings: list[str] = list(bundle.warnings)
         settings = request.optimization
+        unconfirmed_level = _unconfirmed_level_fields(bundle.level)
+        if unconfirmed_level:
+            warnings.append("level of theory unconfirmed for: " + ", ".join(unconfirmed_level))
 
         # 1. prepare_source — immutable snapshot owned by this task.
         snapshot = snapshot_bundle_files(bundle, input_dir)
@@ -160,28 +289,36 @@ class TsmodeEngine:
 
         fingerprint = compute_engine_fingerprint(bundle, resolution, settings)
         checkpoint = self._load_checkpoint(work_dir)
-        completed_stages: list[str] = ["prepare_source", "resolve_target"]
+        if (
+            checkpoint is None
+            or checkpoint.get("schema_version") != _CHECKPOINT_SCHEMA_V2
+            or checkpoint.get("fingerprint") != fingerprint
+        ):
+            checkpoint = None
 
+        completed_stages: list[str] = ["prepare_source", "resolve_target"]
         attempts: list[dict[str, Any]] = []
         optimized_coords: NDArray[np.float64] | None = None
         optimization_status = "pending"
+        optimize_credential: OptimizeCredential | None = None
 
         # 3. optimize_ts — directed OptTS reading the source Hessian.
-        resume_optimize = (
-            checkpoint is not None
-            and checkpoint.get("fingerprint") == fingerprint
-            and checkpoint.get("optimization", {}).get("status") == "completed"
-            and isinstance(checkpoint.get("optimization", {}).get("coordinates"), list)
+        resume_optimize, optimize_reason = self._adopt_optimize_credential(
+            checkpoint, bundle, resolution, settings, root
         )
-        if resume_optimize:
-            optimized_coords = np.asarray(
-                checkpoint["optimization"]["coordinates"], dtype=np.float64
-            )
+        if resume_optimize and checkpoint is not None:
+            optimize_credential = OptimizeCredential.from_dict(checkpoint["optimize_credential"])
+            assert optimize_credential is not None  # adoption validated the payload
+            optimized_coords = np.asarray(optimize_credential.coordinates, dtype=np.float64)
             optimization_status = "completed"
             attempts.append({"stage": "optimize_ts", "resumed": True})
             completed_stages.append("optimize_ts")
             warnings.append("resumed from checkpoint: optimization stage skipped")
         else:
+            if checkpoint is not None and checkpoint.get("optimize_credential") is not None:
+                warnings.append(
+                    f"optimize credential invalid ({optimize_reason}); recomputing optimize"
+                )
             opt_result = self._run_optimize_stage(
                 bundle,
                 resolution,
@@ -198,19 +335,26 @@ class TsmodeEngine:
                 }
             )
             if opt_result.coords is not None and opt_result.status == "completed":
-                optimized_coords = np.asarray(opt_result.coords, dtype=np.float64)
-                optimization_status = "completed"
-                completed_stages.append("optimize_ts")
-                self._write_checkpoint(
-                    work_dir,
-                    fingerprint,
-                    optimization={
-                        "status": "completed",
-                        "coordinates": [[float(v) for v in row] for row in optimized_coords],
-                        "energy_hartree": opt_result.energy,
-                    },
-                    frequency=None,
-                )
+                candidate_coords = np.asarray(opt_result.coords, dtype=np.float64)
+                coordinate_problem = validate_coordinate_array(candidate_coords, bundle.n_atoms)
+                if coordinate_problem:
+                    optimization_status = "failed"
+                    warnings.append(
+                        "optimization produced invalid coordinates: " + coordinate_problem
+                    )
+                else:
+                    optimized_coords = candidate_coords
+                    optimization_status = "completed"
+                    completed_stages.append("optimize_ts")
+                    optimize_credential = self._build_optimize_credential(
+                        bundle, resolution, settings, optimized_coords, opt_result, root
+                    )
+                    self._write_checkpoint(
+                        work_dir,
+                        fingerprint,
+                        optimize_credential=optimize_credential.to_dict(),
+                        invalidate_frequency=True,
+                    )
             else:
                 optimization_status = "failed"
 
@@ -225,6 +369,7 @@ class TsmodeEngine:
                 frequency_status="skipped",
                 frequencies=None,
                 warnings=warnings + ["optimization failed; last valid structure retained in WORK"],
+                artifacts=_collect_stage_input_evidence(root, snapshot, [work_dir / "optimize"]),
             )
             self._publish(root, result_dir, report, optimized_xyz=None, normal_modes=None)
             return TsmodeEngineResult(
@@ -240,65 +385,102 @@ class TsmodeEngine:
         for symbol, row in zip(bundle.elements, optimized_coords):
             geometry_lines.append(f"{symbol:2s} {row[0]:15.10f} {row[1]:15.10f} {row[2]:15.10f}")
 
-        pending_report = self._report(request, bundle, resolution, attempts,
-            execution_status="running", optimization_status="completed", frequency_status="pending",
-            frequencies=None, warnings=warnings)
-        self._publish(root, result_dir, pending_report,
-            optimized_xyz="\n".join(geometry_lines) + "\n", normal_modes=None)
+        pending_report = self._report(
+            request,
+            bundle,
+            resolution,
+            attempts,
+            execution_status="running",
+            optimization_status="completed",
+            frequency_status="pending",
+            frequencies=None,
+            warnings=warnings,
+            artifacts=_collect_stage_input_evidence(root, snapshot, [work_dir / "optimize"]),
+        )
+        self._publish(
+            root,
+            result_dir,
+            pending_report,
+            optimized_xyz="\n".join(geometry_lines) + "\n",
+            normal_modes=None,
+        )
 
         # 4. frequency_final — same level, on the final structure.
         frequency_status = "pending"
         frequencies: list[float] = []
         frequency_map: dict[int, float] = {}
         frequency_vectors: dict[int, NDArray[np.float64]] = {}
-        resume_frequency = (
-            checkpoint is not None
-            and checkpoint.get("fingerprint") == fingerprint
-            and checkpoint.get("frequency", {}).get("status") == "completed"
-        )
+        mode_data_incomplete = False
         if not request.final_frequency:
             frequency_status = "skipped"
             warnings.append("final frequency validation disabled by request")
-        elif resume_frequency:
-            frequencies = [float(value) for value in checkpoint["frequency"].get("frequencies", [])]
-            frequency_status = "completed"
-            completed_stages.append("frequency_final")
-            attempts.append({"stage": "frequency_final", "resumed": True})
         else:
-            freq_result = self._run_frequency_stage(
-                bundle,
-                optimized_coords,
-                work_dir / "frequency",
-            )
-            attempts.append(
-                {
-                    "stage": "frequency_final",
-                    "status": freq_result.status,
-                    "errors": list(freq_result.errors),
-                    "directory": "WORK/tsmode/frequency",
-                }
-            )
-            frequency_map, frequency_vectors = self._parse_frequency_products(freq_result)
-            frequencies = [float(value) for value in freq_result.frequencies]
-            if freq_result.status == "completed" and frequencies:
-                frequency_status = "completed"
-                completed_stages.append("frequency_final")
-                self._write_checkpoint(
-                    work_dir,
-                    fingerprint,
-                    optimization=None,
-                    frequency={
-                        "status": "completed",
-                        "frequencies": frequencies,
-                        "geometry_sha_prefix": hashlib.sha256(
-                            json.dumps(
-                                [[round(float(v), 8) for v in row] for row in optimized_coords]
-                            ).encode("utf-8")
-                        ).hexdigest()[:16],
-                    },
+            if resume_optimize:
+                resume_frequency, frequency_reason, frequency_credential = (
+                    self._adopt_frequency_credential(checkpoint, optimize_credential, bundle, root)
                 )
             else:
-                frequency_status = "failed"
+                resume_frequency = False
+                frequency_reason = "optimize_recomputed"
+                frequency_credential = None
+            if resume_frequency and frequency_credential is not None:
+                frequency_map = {
+                    index: float(value)
+                    for index, value in frequency_credential.mode_frequencies.items()
+                }
+                frequency_vectors = {
+                    index: np.asarray(rows, dtype=np.float64)
+                    for index, rows in frequency_credential.mode_vectors.items()
+                }
+                frequencies = [float(value) for value in frequency_credential.frequencies]
+                frequency_status = "completed"
+                completed_stages.append("frequency_final")
+                attempts.append({"stage": "frequency_final", "resumed": True})
+            else:
+                if checkpoint is not None and checkpoint.get("frequency_credential") is not None:
+                    warnings.append(
+                        f"frequency credential invalid ({frequency_reason}); recomputing frequency"
+                    )
+                freq_result = self._run_frequency_stage(
+                    bundle,
+                    optimized_coords,
+                    work_dir / "frequency",
+                )
+                attempts.append(
+                    {
+                        "stage": "frequency_final",
+                        "status": freq_result.status,
+                        "errors": list(freq_result.errors),
+                        "directory": "WORK/tsmode/frequency",
+                    }
+                )
+                science = self._evaluate_frequency_science(freq_result, bundle.n_atoms, root)
+                frequency_map = science.frequency_map
+                frequency_vectors = science.frequency_vectors
+                frequencies = (
+                    [float(value) for value in freq_result.frequencies]
+                    if freq_result.frequencies
+                    else science.frequencies
+                )
+                mode_data_incomplete = bool(science.problems)
+                if freq_result.status == "completed" and frequencies and not science.problems:
+                    frequency_status = "completed"
+                    completed_stages.append("frequency_final")
+                    if optimize_credential is not None:
+                        credential = self._build_frequency_credential(
+                            bundle, optimize_credential, science
+                        )
+                        self._write_checkpoint(
+                            work_dir,
+                            fingerprint,
+                            frequency_credential=credential.to_dict(),
+                        )
+                else:
+                    frequency_status = "failed"
+                    if science.problems:
+                        warnings.append(
+                            "final mode data incomplete: " + "; ".join(science.problems)
+                        )
 
         # 5. validate_ts — chemical validation separate from execution.
         validation = validate_ts_frequencies(frequencies)
@@ -335,9 +517,14 @@ class TsmodeEngine:
             frequencies=frequencies,
             warnings=warnings,
             validation=validation.to_dict(),
+            artifacts=_collect_stage_input_evidence(
+                root, snapshot, [work_dir / "optimize", work_dir / "frequency"]
+            ),
         )
-        normal_modes = self._build_normal_modes(
-            bundle, frequency_map, frequency_vectors, frequencies
+        normal_modes = (
+            None
+            if mode_data_incomplete
+            else self._build_normal_modes(bundle, frequency_map, frequency_vectors, frequencies)
         )
         self._publish(
             root,
@@ -346,6 +533,7 @@ class TsmodeEngine:
             optimized_xyz="\n".join(geometry_lines) + "\n",
             normal_modes=normal_modes,
         )
+        self._record_publication(work_dir, fingerprint, result_dir)
         status = "completed" if execution_status == "completed" else "failed"
         return TsmodeEngineResult(
             workflow_result=self._workflow_result(status, attempts, stages=completed_stages),
@@ -359,6 +547,256 @@ class TsmodeEngine:
     def _effective_config(self) -> dict[str, Any]:
         return load_config(overrides=self._config) if self._config else load_config()
 
+    def _effective_config_digest(self) -> str | None:
+        return config_digest(self._effective_config())
+
+    def _build_optimize_credential(
+        self,
+        bundle: FrequencySourceBundle,
+        resolution: TargetResolution,
+        settings: TsmodeOptimizationSettings,
+        coordinates: NDArray[np.float64],
+        result: CalculationResult,
+        root: Path,
+    ) -> OptimizeCredential:
+        rows = [[float(value) for value in row] for row in coordinates]
+        return OptimizeCredential(
+            source_content_sha256=bundle.source_revision(),
+            target_mode_id=resolution.target_mode_id,
+            optimizer_mode_index=resolution.optimizer_mode_index,
+            effective_level=bundle.level.to_dict(),
+            optimization_parameters=settings.to_dict(),
+            effective_config_digest=self._effective_config_digest(),
+            optimized_structure_sha256=optimized_structure_digest(list(bundle.elements), rows),
+            coordinates=rows,
+            elements=list(bundle.elements),
+            required_completion_artifacts=self._collect_credential_artifacts(result, root),
+            energy_hartree=result.energy,
+        )
+
+    def _build_frequency_credential(
+        self,
+        bundle: FrequencySourceBundle,
+        optimize_credential: OptimizeCredential,
+        science: _FrequencyScience,
+    ) -> FrequencyCredential:
+        modes = [
+            {
+                "mode_index": int(index),
+                "frequency_cm1": float(science.frequency_map[index]),
+                "vectors": [
+                    [float(value) for value in row]
+                    for row in science.frequency_vectors.get(index, [])
+                ],
+            }
+            for index in sorted(science.frequency_map)
+        ]
+        return FrequencyCredential(
+            adopted_optimized_structure_sha256=(optimize_credential.optimized_structure_sha256),
+            effective_level=bundle.level.to_dict(),
+            expected_mode_indices=list(science.expected_mode_indices),
+            modes=modes,
+            frequencies=[float(value) for value in science.frequencies],
+            artifacts=[dict(entry) for entry in science.artifacts],
+        )
+
+    @staticmethod
+    def _collect_credential_artifacts(
+        result: CalculationResult, root: Path
+    ) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        for artifact in result.artifacts:
+            path = Path(artifact.path)
+            if not path.is_file():
+                continue
+            entries.append(
+                {
+                    "type": artifact.type,
+                    "path": portable_path(path, root),
+                    "sha256": sha256_file(path),
+                }
+            )
+        return entries
+
+    @staticmethod
+    def _verify_credential_artifacts(entries: list[dict[str, Any]], root: Path) -> str:
+        for entry in entries:
+            recorded = entry.get("path")
+            if not isinstance(recorded, str) or not recorded:
+                return "artifact_path_missing"
+            digest = entry.get("sha256")
+            if not isinstance(digest, str) or not digest:
+                continue
+            located = locate_recorded_file([root], recorded)
+            if located is None:
+                return f"artifact_missing:{recorded}"
+            if sha256_file(located) != digest:
+                return f"artifact_digest_mismatch:{recorded}"
+        return ""
+
+    def _adopt_optimize_credential(
+        self,
+        checkpoint: dict[str, Any] | None,
+        bundle: FrequencySourceBundle,
+        resolution: TargetResolution,
+        settings: TsmodeOptimizationSettings,
+        root: Path,
+    ) -> tuple[bool, str]:
+        if checkpoint is None:
+            return False, "no_checkpoint"
+        credential = OptimizeCredential.from_dict(checkpoint.get("optimize_credential"))
+        if credential is None:
+            return False, "missing_or_malformed"
+        if credential.source_content_sha256 != bundle.source_revision():
+            return False, "source_content_changed"
+        if credential.target_mode_id != resolution.target_mode_id:
+            return False, "target_mode_changed"
+        if credential.optimizer_mode_index != resolution.optimizer_mode_index:
+            return False, "optimizer_mode_index_changed"
+        if credential.effective_level != bundle.level.to_dict():
+            return False, "effective_level_changed"
+        if credential.optimization_parameters != settings.to_dict():
+            return False, "optimization_parameters_changed"
+        if credential.effective_config_digest != self._effective_config_digest():
+            return False, "effective_config_changed"
+        if credential.elements != list(bundle.elements):
+            return False, "element_order_changed"
+        coordinate_problem = validate_coordinate_array(credential.coordinates, bundle.n_atoms)
+        if coordinate_problem:
+            return False, coordinate_problem
+        expected_digest = optimized_structure_digest(credential.elements, credential.coordinates)
+        if credential.optimized_structure_sha256 != expected_digest:
+            return False, "optimized_structure_digest_mismatch"
+        artifact_problem = self._verify_credential_artifacts(
+            credential.required_completion_artifacts, root
+        )
+        if artifact_problem:
+            return False, artifact_problem
+        return True, ""
+
+    def _adopt_frequency_credential(
+        self,
+        checkpoint: dict[str, Any] | None,
+        optimize_credential: OptimizeCredential | None,
+        bundle: FrequencySourceBundle,
+        root: Path,
+    ) -> tuple[bool, str, FrequencyCredential | None]:
+        if checkpoint is None or optimize_credential is None:
+            return False, "no_validated_optimize", None
+        credential = FrequencyCredential.from_dict(checkpoint.get("frequency_credential"))
+        if credential is None:
+            return False, "missing_or_malformed", None
+        if (
+            credential.adopted_optimized_structure_sha256
+            != optimize_credential.optimized_structure_sha256
+        ):
+            return False, "adopted_structure_mismatch", None
+        if credential.effective_level != bundle.level.to_dict():
+            return False, "effective_level_changed", None
+        artifact_problem = self._verify_credential_artifacts(credential.artifacts, root)
+        if artifact_problem:
+            return False, artifact_problem, None
+        problems = validate_mode_completeness(
+            credential.expected_mode_indices,
+            credential.mode_frequencies,
+            credential.mode_vectors,
+            bundle.n_atoms,
+        )
+        if problems:
+            return False, "mode_data_incomplete: " + "; ".join(problems), None
+        return True, "", credential
+
+    @staticmethod
+    def _read_wrapper_normal_modes(
+        result: CalculationResult,
+    ) -> tuple[dict[int, float], dict[int, list[list[float]]]]:
+        for artifact in result.artifacts:
+            if artifact.type != "normal_modes":
+                continue
+            path = Path(artifact.path)
+            if not path.is_file():
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            raw_modes = payload.get("modes")
+            if not isinstance(raw_modes, list):
+                continue
+            frequency_map: dict[int, float] = {}
+            vectors: dict[int, list[list[float]]] = {}
+            for mode in raw_modes:
+                if not isinstance(mode, dict):
+                    continue
+                index = mode.get("mode_index")
+                if not isinstance(index, int) or isinstance(index, bool):
+                    continue
+                frequency = mode.get("frequency_cm1")
+                if isinstance(frequency, (int, float)):
+                    frequency_map[int(index)] = float(frequency)
+                raw_vectors = mode.get("vectors")
+                if isinstance(raw_vectors, list) and raw_vectors:
+                    try:
+                        vectors[int(index)] = [
+                            [float(component) for component in row] for row in raw_vectors
+                        ]
+                    except (TypeError, ValueError):
+                        continue
+            if frequency_map:
+                return frequency_map, vectors
+        return {}, {}
+
+    def _evaluate_frequency_science(
+        self, result: CalculationResult, n_atoms: int, root: Path
+    ) -> _FrequencyScience:
+        artifacts = self._collect_credential_artifacts(result, root)
+        log_map, log_vectors = self._parse_frequency_products(result)
+        wrapper_map, wrapper_vectors = self._read_wrapper_normal_modes(result)
+        expected = sorted(set(log_map) | set(wrapper_map))
+        frequencies = [float(value) for value in result.frequencies]
+        if not expected:
+            return _FrequencyScience(frequencies=frequencies, artifacts=artifacts)
+        for source_map, source_vectors in (
+            (wrapper_map, wrapper_vectors),
+            (log_map, log_vectors),
+        ):
+            if not source_map:
+                continue
+            problems = validate_mode_completeness(expected, source_map, source_vectors, n_atoms)
+            if not problems:
+                return _FrequencyScience(
+                    frequency_map={index: float(value) for index, value in source_map.items()},
+                    frequency_vectors={
+                        index: np.asarray(rows, dtype=np.float64)
+                        for index, rows in source_vectors.items()
+                    },
+                    expected_mode_indices=expected,
+                    frequencies=frequencies,
+                    artifacts=artifacts,
+                )
+        problems = validate_mode_completeness(expected, log_map, log_vectors, n_atoms)
+        return _FrequencyScience(
+            frequency_map={index: float(value) for index, value in log_map.items()},
+            frequency_vectors={
+                index: np.asarray(rows, dtype=np.float64) for index, rows in log_vectors.items()
+            },
+            expected_mode_indices=expected,
+            frequencies=frequencies,
+            artifacts=artifacts,
+            problems=problems,
+        )
+
+    def _record_publication(self, work_dir: Path, fingerprint: str, result_dir: Path) -> None:
+        normal_modes = result_dir / "normal_modes.json"
+        digest = sha256_file(normal_modes) if normal_modes.is_file() else ""
+        state = PublicationState(
+            status="published" if digest else "pending",
+            normal_modes_sha256=digest or None,
+        )
+        self._write_checkpoint(work_dir, fingerprint, publication=state.to_dict())
+
     def _run_optimize_stage(
         self,
         bundle: FrequencySourceBundle,
@@ -368,16 +806,7 @@ class TsmodeEngine:
         target_dir: Path,
     ) -> CalculationResult:
         target_dir.mkdir(parents=True, exist_ok=True)
-        level_kwargs: dict[str, Any] = {}
-        if bundle.level.solvent and bundle.level.solvent_model:
-            level_kwargs["solvent"] = bundle.level.solvent
-            level_kwargs["solvent_model"] = bundle.level.solvent_model
-        if bundle.level.grid:
-            level_kwargs["grid"] = bundle.level.grid
-        if bundle.level.scf:
-            level_kwargs["scf"] = bundle.level.scf
-        if settings.convergence:
-            level_kwargs["opt_level"] = settings.convergence
+        method, level_resources = _project_source_level(bundle.level)
 
         resources: dict[str, Any] = {
             "backend": "orca",
@@ -400,7 +829,9 @@ class TsmodeEngine:
             resources["trust_radius"] = settings.trust_radius
         if settings.max_iterations is not None:
             resources["geom_maxiter"] = settings.max_iterations
-        resources.update(level_kwargs)
+        if settings.convergence:
+            resources["opt_level"] = settings.convergence
+        resources.update(level_resources)
 
         artifact = StructureArtifact(
             path=Path(bundle.hessian_file),
@@ -410,7 +841,7 @@ class TsmodeEngine:
         )
         request = CalculationRequest(
             input_artifact=artifact,
-            method=bundle.level.method,
+            method=method,
             resources=resources,
             workflow="tsmode",
             profile="default",
@@ -424,14 +855,7 @@ class TsmodeEngine:
         target_dir: Path,
     ) -> CalculationResult:
         target_dir.mkdir(parents=True, exist_ok=True)
-        level_kwargs: dict[str, Any] = {}
-        if bundle.level.solvent and bundle.level.solvent_model:
-            level_kwargs["solvent"] = bundle.level.solvent
-            level_kwargs["solvent_model"] = bundle.level.solvent_model
-        if bundle.level.grid:
-            level_kwargs["grid"] = bundle.level.grid
-        if bundle.level.scf:
-            level_kwargs["scf"] = bundle.level.scf
+        method, level_resources = _project_source_level(bundle.level)
 
         resources: dict[str, Any] = {
             "backend": "orca",
@@ -442,7 +866,7 @@ class TsmodeEngine:
             "multiplicity": bundle.multiplicity,
             "output_dir": str(target_dir),
         }
-        resources.update(level_kwargs)
+        resources.update(level_resources)
         artifact = StructureArtifact(
             path=Path(bundle.hessian_file),
             elements=list(bundle.elements),
@@ -451,7 +875,7 @@ class TsmodeEngine:
         )
         request = CalculationRequest(
             input_artifact=artifact,
-            method=bundle.level.method,
+            method=method,
             resources=resources,
             workflow="tsmode",
             profile="default",
@@ -464,19 +888,34 @@ class TsmodeEngine:
     def _parse_frequency_products(
         result: CalculationResult,
     ) -> tuple[dict[int, float], dict[int, NDArray[np.float64]]]:
-        """Parse the final-frequency log into (frequency map, mode vectors)."""
-        log_path = next(
-            (
-                Path(artifact.path)
-                for artifact in result.artifacts
-                if artifact.type in ("log", "frequency_log", "output")
-            ),
-            None,
+        """Parse the final-frequency log into (frequency map, mode vectors).
+
+        Candidates are ordered by artifact-type priority
+        (``frequency_log`` > ``log`` > ``output``), then by ``.out``
+        suffix, then by artifact order; every existing candidate is parsed
+        until one yields a non-empty frequency map.  The ``.out`` rule
+        matters because ORCA's type ``"output"`` artifact is the ``.inp``
+        route file (interface field order puts it before the real log).
+        """
+        candidates = [
+            (artifact.type, Path(artifact.path))
+            for artifact in result.artifacts
+            if artifact.type in _FREQUENCY_LOG_ARTIFACT_TYPES
+        ]
+        candidates.sort(
+            key=lambda item: (
+                _FREQUENCY_LOG_ARTIFACT_TYPES.index(item[0]),
+                0 if item[1].suffix.lower() == ".out" else 1,
+            )
         )
-        if log_path is None or not log_path.is_file():
-            return {}, {}
-        text = log_path.read_text(encoding="utf-8", errors="replace")
-        return parse_ts_frequency_map(text), parse_ts_mode_vectors(text)
+        for _artifact_type, path in candidates:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            frequency_map = parse_ts_frequency_map(text)
+            if len(frequency_map) > 0:
+                return frequency_map, parse_ts_mode_vectors(text)
+        return {}, {}
 
     def _mode_correspondence_evidence(
         self,
@@ -590,6 +1029,7 @@ class TsmodeEngine:
         frequencies: list[float] | None,
         warnings: list[str],
         validation: dict[str, Any] | None = None,
+        artifacts: list[dict[str, Any]] | None = None,
     ) -> TsmodeReport:
         imaginary: list[dict[str, Any]] = []
         if frequencies:
@@ -599,6 +1039,7 @@ class TsmodeEngine:
                         "frequency_cm1": value,
                     }
                 )
+        level = bundle.level.to_dict()
         return TsmodeReport(
             source={
                 "bundle_id": bundle.bundle_id,
@@ -615,13 +1056,15 @@ class TsmodeEngine:
                 "version": resolution.mapping_version,
                 "verified_against_orca": resolution.evidence.get("verified_against_orca"),
             },
-            resolved_level=bundle.level.to_dict(),
+            resolved_level=dict(level),
+            source_level=dict(level),
             attempts=[dict(attempt) for attempt in attempts],
             execution_status=execution_status,
             optimization_status=optimization_status,
             frequency_status=frequency_status,
             imaginary_modes=imaginary,
             validation=validation or {},
+            artifacts=[dict(entry) for entry in (artifacts or [])],
             warnings=list(warnings),
         )
 
@@ -665,10 +1108,15 @@ class TsmodeEngine:
                 label="TS Mode optimized structure (saddle-point candidate)",
                 path="tsmode/optimized.xyz",
                 kind=ProductKind.STRUCTURE,
-                metadata={"role": "transition_state", "candidate": "tsmode",
-                          "optimization_status": "converged", "source_kind": "optimization",
-                          "frequency_status": report.frequency_status,
-                          "validation": report.validation, "policy_version": 1},
+                metadata={
+                    "role": "transition_state",
+                    "candidate": "tsmode",
+                    "optimization_status": "converged",
+                    "source_kind": "optimization",
+                    "frequency_status": report.frequency_status,
+                    "validation": report.validation,
+                    "policy_version": 1,
+                },
             )
         if normal_modes is not None:
             manifest.add_product(
@@ -703,24 +1151,29 @@ class TsmodeEngine:
         work_dir: Path,
         fingerprint: str,
         *,
-        optimization: dict[str, Any] | None,
-        frequency: dict[str, Any] | None,
+        optimize_credential: dict[str, Any] | None = None,
+        frequency_credential: dict[str, Any] | None = None,
+        publication: dict[str, Any] | None = None,
+        invalidate_frequency: bool = False,
     ) -> None:
         path = work_dir / _CHECKPOINT_NAME
-        existing = TsmodeEngine._load_checkpoint(work_dir) or {
-            "fingerprint": fingerprint,
-            "schema_version": "tsmode_checkpoint_v1",
-        }
-        if existing.get("fingerprint") != fingerprint:
-            # Target or system changed — full invalidation (plan §10.2).
+        existing = TsmodeEngine._load_checkpoint(work_dir) or {}
+        if (
+            existing.get("fingerprint") != fingerprint
+            or existing.get("schema_version") != _CHECKPOINT_SCHEMA_V2
+        ):
             existing = {
                 "fingerprint": fingerprint,
-                "schema_version": "tsmode_checkpoint_v1",
+                "schema_version": _CHECKPOINT_SCHEMA_V2,
             }
-        if optimization is not None:
-            existing["optimization"] = optimization
-        if frequency is not None:
-            existing["frequency"] = frequency
+        if invalidate_frequency:
+            existing.pop("frequency_credential", None)
+        if optimize_credential is not None:
+            existing["optimize_credential"] = optimize_credential
+        if frequency_credential is not None:
+            existing["frequency_credential"] = frequency_credential
+        if publication is not None:
+            existing["publication"] = publication
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(existing, indent=2), encoding="utf-8")
         tmp.replace(path)

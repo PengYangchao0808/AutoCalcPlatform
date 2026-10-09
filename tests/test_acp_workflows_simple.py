@@ -8,6 +8,7 @@ execution for supported entry points, and CLI help smoke tests.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -124,6 +125,19 @@ def _make_scheduler_dir(root: Path, name: str) -> Path:
     return d
 
 
+def _make_marker_only_dir(root: Path, name: str) -> Path:
+    """Markers but NO scheduler identity (no ``job.json``/``task.json``).
+
+    A directory without identity is not a scheduler task dir; unknown extra
+    files there must still redirect (BUG-1b negative branch).
+    """
+    d = root / name
+    d.mkdir()
+    for fname in ("events.jsonl", "stdout.log", "stderr.log", "metrics.json"):
+        (d / fname).write_text("placeholder")
+    return d
+
+
 def test_resolve_output_dir_reuses_scheduler_marker_dir(tmp_path):
     d = _make_scheduler_dir(tmp_path, "job_out")
     assert _resolve_output_dir(d) == d.resolve()
@@ -131,8 +145,37 @@ def test_resolve_output_dir_reuses_scheduler_marker_dir(tmp_path):
     assert not (tmp_path / "job_out_1").exists()
 
 
-def test_resolve_output_dir_redirects_when_extra_file_present(tmp_path):
+def test_resolve_output_dir_reuses_scheduler_dir_with_structure_history(tmp_path):
+    """Branch (a): job.json + task.json + the markers a rerun/edit preserves
+    (incl. ``.structure_history``) are reused in place."""
     d = _make_scheduler_dir(tmp_path, "job_out")
+    (d / ".structure_history").mkdir()
+    (d / "electronic_state.json").write_text("{}")
+    (d / "input.com").write_text("placeholder")
+    assert _resolve_output_dir(d) == d.resolve()
+    assert not (tmp_path / "job_out_1").exists()
+
+
+def test_resolve_output_dir_reuses_scheduler_identity_with_unknown_file(tmp_path):
+    """Branch (b) — positive identity guarantee independent of the whitelist:
+    job.json + task.json + an UNKNOWN extra file (incomplete marker set) must
+    STILL reuse base.  The marker-subset whitelist alone would redirect here;
+    the positive scheduler-identity check keeps the task dir in place."""
+    d = tmp_path / "job_out"
+    d.mkdir()
+    (d / "job.json").write_text("placeholder")
+    (d / "task.json").write_text("placeholder")
+    (d / "unknown_extra.dat").write_text("not a scheduler marker")
+    assert _resolve_output_dir(d) == d.resolve(), (
+        "scheduler identity must reuse base even with unregistered extra files"
+    )
+    assert not (tmp_path / "job_out_1").exists()
+
+
+def test_resolve_output_dir_redirects_when_extra_file_present(tmp_path):
+    """Branch (c): no scheduler identity + an unknown extra file redirects to
+    ``<name>_1`` (the original CLI redirection intent)."""
+    d = _make_marker_only_dir(tmp_path, "job_out")
     (d / "prev_result.xyz").write_text("1\n\nC 0 0 0\n")
     result = _resolve_output_dir(d)
     assert result != d.resolve()
@@ -238,6 +281,80 @@ def test_read_input_xyz(tmp_path):
     assert charge == 0
     assert mult == 1
     assert coords.shape == (3, 3)
+
+
+# ---------------------------------------------------------------------------
+# scan input materialization (SMILES → traceable XYZ + provenance)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("suffix", [".xyz", ".gjf", ".com", ".inp"])
+def test_prepare_scan_input_accepts_supported_files(tmp_path, suffix):
+    from acp.workflows.simple import prepare_scan_input
+
+    f = tmp_path / f"mol{suffix}"
+    f.write_text("placeholder\n")
+    plan = prepare_scan_input(str(f))
+    assert plan.is_smiles is False
+    assert plan.file_path == f
+    assert plan.symbols == []
+    assert plan.charge is None and plan.multiplicity is None
+
+
+def test_prepare_scan_input_missing_file_raises_filenotfound():
+    from acp.workflows.simple import prepare_scan_input
+
+    with pytest.raises(FileNotFoundError):
+        prepare_scan_input("/nonexistent/file.xyz")
+
+
+def test_prepare_scan_input_invalid_smiles_raises_valueerror_with_token():
+    from acp.workflows.simple import prepare_scan_input
+
+    with pytest.raises(ValueError, match="SMILES") as excinfo:
+        prepare_scan_input("CCOXX!!")
+    assert "CCOXX!!" in str(excinfo.value)
+
+
+def test_prepare_scan_input_materializes_smiles_to_traceable_xyz(tmp_path):
+    from acp.storage.layout import TaskStorage
+    from acp.workflows.simple import prepare_scan_input
+
+    plan = prepare_scan_input("CCO")
+    assert plan.is_smiles is True
+    assert plan.file_path is None
+    storage = TaskStorage(tmp_path)
+    input_path = plan.materialize(storage)
+
+    assert input_path == tmp_path / "input.xyz"
+    xyz_lines = input_path.read_text(encoding="utf-8").splitlines()
+    assert xyz_lines[0] == "9"
+    assert "source=CCO" in xyz_lines[1]
+    assert "seed=42" in xyz_lines[1]
+
+    provenance = json.loads((tmp_path / "input_source.json").read_text(encoding="utf-8"))
+    assert provenance["smiles"] == "CCO"
+    assert provenance["source_type"] == "smiles"
+    assert provenance["embedding"] == {"method": "ETKDGv3", "seed": 42}
+    assert provenance["atom_count"] == 9
+    assert provenance["charge"] == 0
+    assert provenance["multiplicity"] == 1
+    import hashlib
+
+    assert provenance["xyz_content_sha256"] == hashlib.sha256(input_path.read_bytes()).hexdigest()
+
+
+def test_prepare_scan_input_charged_smiles_records_effective_charge(tmp_path):
+    from acp.storage.layout import TaskStorage
+    from acp.workflows.simple import prepare_scan_input
+
+    plan = prepare_scan_input("[NH4+]")
+    assert plan.charge == 1
+    assert plan.multiplicity == 1
+    plan.materialize(TaskStorage(tmp_path))
+    provenance = json.loads((tmp_path / "input_source.json").read_text(encoding="utf-8"))
+    assert provenance["charge"] == 1
+    assert provenance["atom_count"] == 5
 
 
 # ---------------------------------------------------------------------------
@@ -361,6 +478,8 @@ def test_run_singlepoint_mock(fake_backend, tmp_path):
     fake_backend.set_result("single_point", energy=-40.0, success=True)
     result = run_singlepoint(str(inp), output_dir=out)
     assert result.status == "completed"
+    # Canonical summary key "energy" plus legacy "sp_energy" coexist (BUG-7).
+    assert result.metadata.get("energy") == -40.0
     assert result.metadata.get("sp_energy") == -40.0
     assert len(fake_backend.calls) == 1
 
@@ -469,7 +588,7 @@ def test_simple_optimize_threads_reporter_to_orca_trajectory(
                 converged=True,
             )
 
-    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    monkeypatch.setattr("cccp.backends.registry.get_backend", lambda _name: SyntheticOrca())
     reporter = ProgressReporter(tmp_path / "progress", min_interval=60.0)
 
     result = run_optimize(
@@ -520,6 +639,9 @@ def test_run_xtb_optimize_mock(fake_backend, tmp_path):
     assert result.status == "completed"
     assert result.metadata.get("converged") is True
     assert result.metadata.get("energy") == -10.5
+    # OPTIMIZE-kind writes the canonical "energy" key only; the legacy
+    # "sp_energy" alias is singlepoint-exclusive (BUG-7 key contract).
+    assert "sp_energy" not in result.metadata
 
 
 def test_run_xtb_optimize_gfn_mapping(tmp_path):
@@ -583,20 +705,33 @@ def test_run_frequency_no_modes(fake_backend, tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("workflow", "handler", "stage"),
+    ("workflow", "handler", "stage", "metadata", "energy_value"),
     [
-        ("singlepoint", "_handle_singlepoint", "single_point"),
-        ("optimize", "_handle_optimize", "optimize"),
-        ("frequency", "_handle_frequency", "frequency"),
-        ("xtb_optimize", "_handle_xtb_optimize", "xtb_optimize"),
+        # New-form singlepoint metadata writes BOTH keys (canonical + legacy).
+        (
+            "singlepoint",
+            "_handle_singlepoint",
+            "single_point",
+            {"energy": -40.0, "sp_energy": -40.0},
+            -40.0,
+        ),
+        # Legacy results carry only sp_energy — summary must still render a number.
+        ("singlepoint", "_handle_singlepoint", "single_point", {"sp_energy": -40.0}, -40.0),
+        ("optimize", "_handle_optimize", "optimize", {"energy": -76.42}, -76.42),
+        ("frequency", "_handle_frequency", "frequency", {}, None),
+        ("xtb_optimize", "_handle_xtb_optimize", "xtb_optimize", {"energy": -10.5}, -10.5),
+        ("casscf", "_handle_casscf", "casscf", {"energy": -1.23}, -1.23),
     ],
 )
 def test_simple_cli_handlers_construct_reporter(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
     workflow: str,
     handler: str,
     stage: str,
+    metadata: dict[str, Any],
+    energy_value: float | None,
 ) -> None:
     import acp.cli as acp_cli
     import acp.workflows.simple as simple_workflow
@@ -605,31 +740,41 @@ def test_simple_cli_handlers_construct_reporter(
     input_path = tmp_path / "mol.xyz"
     input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
     output_dir = tmp_path / f"{workflow}-output"
-    args = acp_cli.build_parser().parse_args(
-        [
-            "run",
-            workflow,
-            "--input",
-            str(input_path),
-            "--output",
-            str(output_dir),
-            "--log-level",
-            "ERROR",
-        ]
-    )
+    cli_args = [
+        "run",
+        workflow,
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_dir),
+        "--log-level",
+        "ERROR",
+    ]
+    if workflow == "casscf":
+        cli_args += ["--nel", "4", "--norb", "4"]
+    args = acp_cli.build_parser().parse_args(cli_args)
     captured: dict[str, Any] = {}
 
     def fake_run(**kwargs) -> WorkflowResult:
         captured.update(kwargs)
-        return WorkflowResult(status="completed", metadata={})
+        return WorkflowResult(status="completed", metadata=dict(metadata))
 
     monkeypatch.setattr(simple_workflow, f"run_{workflow}", fake_run)
 
-    assert getattr(acp_cli, handler)(args) == 0
+    with caplog.at_level(logging.INFO, logger="acp.cli"):
+        assert getattr(acp_cli, handler)(args) == 0
     assert isinstance(captured["progress_reporter"], ProgressReporter)
     state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
     assert list(state["stages"]) == [stage]
     assert state["status"] == "completed"
+
+    energy_lines = [r.getMessage() for r in caplog.records if "Energy:" in r.getMessage()]
+    if energy_value is None:
+        assert energy_lines == []
+    else:
+        assert len(energy_lines) == 1
+        assert "N/A" not in energy_lines[0]
+        assert str(energy_value) in energy_lines[0]
 
 
 def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: Path) -> None:
@@ -661,6 +806,84 @@ def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: 
     assert "live_metrics" not in state
 
 
+def test_scan_cli_defaults_geom_maxiter_to_200(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("2\nmol\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\n", encoding="utf-8")
+    output_dir = tmp_path / "scan-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--scan-points",
+            "3",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run(req, *, progress_reporter=None) -> WorkflowResult:
+        captured["resources"] = dict(req.resources)
+        return WorkflowResult(status="completed", metadata={})
+
+    monkeypatch.setattr(simple_workflow, "run_scan", fake_run)
+
+    assert acp_cli._handle_scan(args) == 0
+    assert captured["resources"]["geom_maxiter"] == 200
+
+
+def test_scan_cli_explicit_geom_maxiter_wins(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("2\nmol\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\n", encoding="utf-8")
+    output_dir = tmp_path / "scan-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--scan-points",
+            "3",
+            "--geom-maxiter",
+            "250",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run(req, *, progress_reporter=None) -> WorkflowResult:
+        captured["resources"] = dict(req.resources)
+        return WorkflowResult(status="completed", metadata={})
+
+    monkeypatch.setattr(simple_workflow, "run_scan", fake_run)
+
+    assert acp_cli._handle_scan(args) == 0
+    assert captured["resources"]["geom_maxiter"] == 250
+
+
 # ---------------------------------------------------------------------------
 # CLI help smoke tests
 # ---------------------------------------------------------------------------
@@ -668,6 +891,7 @@ def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: 
 _SIMPLE_WF = [
     ("singlepoint", "--method"),
     ("optimize", "--geom-maxiter"),
+    ("scan", "--geom-maxiter"),
     ("frequency", "--solvent-model"),
 ]
 
@@ -681,6 +905,17 @@ def test_cli_help_contains_expected_flags(wf_name, expected_flag):
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert expected_flag in result.stdout, f"Expected '{expected_flag}' in help for {wf_name}"
+
+
+def test_cli_scan_help_geom_maxiter_registered_once():
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "scan", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "--geom-maxiter" in result.stdout
+    assert result.stdout.count("Max geometry iterations (maps to MaxIter in %geom") == 1
 
 
 def test_cli_singlepoint_help_common_args():

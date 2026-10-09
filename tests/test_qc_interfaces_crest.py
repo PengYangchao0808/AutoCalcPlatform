@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +12,7 @@ import pytest
 
 from cccp.qc.interfaces.crest import CRESTInterface
 from cccp.qc.interfaces.xtb import XTBInterface
-from tests.conftest import requires_crest
+from tests.conftest import RealQCSnapshot, requires_crest
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
@@ -24,6 +24,24 @@ H 0.0000000000 0.0000000000 0.0000000000
 conf-2
 H 0.0000000000 0.0000000000 0.5000000000
 """
+
+# Real CREST accepts `-chrg`/`--chrg` (and `-charges <file>`), never `-charge`.
+LEGAL_CREST_CHARGE_FLAGS = ("-chrg", "--chrg")
+
+
+def _assert_crest_charge_flag(args: list[str], charge: int) -> None:
+    """Charge must ride a CREST-legal flag and `-charge` must not appear."""
+    assert "-charge" not in args, f"illegal `-charge` token in CREST args: {args}"
+    seen = False
+    for index, token in enumerate(args):
+        if token not in LEGAL_CREST_CHARGE_FLAGS:
+            continue
+        assert index + 1 < len(args), f"charge flag {token} without a value: {args}"
+        assert args[index + 1] == str(charge), (
+            f"charge flag {token} not followed by {charge}: {args}"
+        )
+        seen = True
+    assert seen, f"no legal CREST charge flag in args: {args}"
 
 
 def test_crest_interface_instantiates_with_minimal_config(
@@ -40,10 +58,24 @@ def test_crest_interface_instantiates_with_minimal_config(
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_crest
-def test_crest_binary_smoke_check(sample_config: dict[str, object]) -> None:
-    interface = CRESTInterface(sample_config)
+def test_crest_binary_smoke_check(
+    real_qc_snapshot: RealQCSnapshot,
+    real_qc_binary_path: Callable[[str], Path | None],
+) -> None:
+    """Gate and body must resolve CREST through the SAME production path.
 
-    assert shutil.which(str(interface.exe_path)) is not None
+    ``sample_config`` carries the bare name ``crest``, which misses a binary
+    configured only in ``~/.cccp.yaml`` (BUG-4).  The body therefore builds
+    the interface from the conftest snapshot config (``load_config`` at
+    collection) and asserts its ``resolve_executable`` result is verbatim the
+    path the ``requires_crest`` gate opened on.
+    """
+    interface = CRESTInterface(real_qc_snapshot.config)
+    gate_path = real_qc_binary_path("crest")
+
+    assert gate_path is not None
+    assert interface.executable == gate_path
+    assert gate_path.is_file()
 
 
 def test_crest_run_uses_alpb_with_solvent_model_alpb(
@@ -222,3 +254,71 @@ def test_xtb_optimize_no_solvent_with_solvent_model_none(
     args = mock_run.call_args[0][0]
     assert "--alpb" not in args
     assert "--gbsa" not in args
+
+
+@pytest.mark.parametrize("charge", [-1, 0, 1])
+def test_crest_conformer_search_builds_legal_charge_flag(
+    sample_config: dict[str, object], tmp_path: Path, charge: int
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["crest", str(tmp_path / "crest_input.xyz")],
+        returncode=0,
+        stdout=CREST_ENSEMBLE,
+        stderr="",
+    )
+
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config)
+        interface.run_conformer_search(
+            COORDINATES,
+            SYMBOLS,
+            output_dir=tmp_path,
+            charge=charge,
+            multiplicity=2,
+        )
+
+    args = mock_run.call_args[0][0]
+    _assert_crest_charge_flag(args, charge)
+
+
+@pytest.mark.parametrize("charge", [-1, 0, 1])
+def test_crest_batch_optimization_builds_legal_charge_flag(
+    sample_config: dict[str, object], tmp_path: Path, charge: int
+) -> None:
+    completed = subprocess.CompletedProcess(
+        args=["crest", "-mdopt", "crest_ensemble.xyz"],
+        returncode=0,
+        stdout="",
+        stderr="",
+    )
+
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config)
+        interface.run_batch_optimization(
+            COORDINATES,
+            SYMBOLS,
+            output_dir=tmp_path,
+            charge=charge,
+            multiplicity=2,
+        )
+
+    args = mock_run.call_args[0][0]
+    _assert_crest_charge_flag(args, charge)

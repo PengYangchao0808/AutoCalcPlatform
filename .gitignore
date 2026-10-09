@@ -71,6 +71,7 @@ coord.original
 *.out
 *.chk
 !tests/fixtures/**
+!tests/baseline/recovery_fixtures/**
 scratch/
 /results/
 output/

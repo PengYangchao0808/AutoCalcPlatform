@@ -23,11 +23,18 @@ import logging
 import math
 import pickle
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.special import log_ndtr
 
 from acp.nmr.models import NmrConfig
+
+if TYPE_CHECKING:
+    from acp.nmr.fchl import AtomFchlProbability
+    from acp.nmr.protocol import NmrProtocolSpec
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,10 @@ _MODELS_DIR = Path(__file__).resolve().parent / "models"
 
 _GOODMAN_LEVEL = ("mPW1PW91", "6-311G(d)", "goodman-legacy")
 
+#: Error-model id → trained (method, basis) level — single source for both
+#: the name-level check below and the protocol-level check (todo 29).
+_TRAINED_ERROR_MODEL_LEVELS = {_GOODMAN_LEVEL[2]: (_GOODMAN_LEVEL[0], _GOODMAN_LEVEL[1])}
+
 
 def validate_error_model_binding(config: NmrConfig) -> None:
     """Raise ``ValueError`` when the error model and NMR level diverge.
@@ -48,6 +59,11 @@ def validate_error_model_binding(config: NmrConfig) -> None:
     DevDoc §10.2: the Goodman distributions are trained on
     ``mPW1PW91/6-311G(d)``. Using them with a different level produces
     meaningless probabilities.
+
+    This is the NAME-level check only. The protocol-level check — what
+    actually ran (geometry/reference/model presence) — lives in
+    :func:`validate_protocol_binding`, whose mismatch verdict is
+    ``unvalidated_protocol`` instead of an exception.
     """
     method_ok = config.nmr_method.strip().lower() == _GOODMAN_LEVEL[0].lower()
     basis_ok = _basis_equal(config.nmr_basis, _GOODMAN_LEVEL[1])
@@ -68,6 +84,56 @@ def validate_error_model_binding(config: NmrConfig) -> None:
             f"mPW1PW91/6-311G(d) but got {config.nmr_method}/{config.nmr_basis}. "
             "Switch the error model (and its trained parameters) to match."
         )
+
+
+def validate_protocol_binding(spec: NmrProtocolSpec) -> list[str]:
+    """Protocol-level binding check (todo 29 / gap G04) — returns issue codes.
+
+    Name-only matching (method/basis/model strings) is insufficient: the
+    statistical model must be bound to the RECORDING — every segment it
+    depends on has to be present and consistent with what actually ran.
+
+    Issue codes (empty list = fully bound, calibration claims allowed):
+
+    * ``statistical_model_not_bound`` — placeholder model, unknown model id,
+      or the recorded level diverges from the model's trained level;
+    * ``missing_reference`` — a required nucleus has no TMS reference (a
+      shielding must never stand in for a missing shift reference), or pinned
+      reference validation was requested without a real reference dataset
+      attached (todo 31);
+    * ``reference_not_for_level`` — the table has no row for the recorded
+      level, so the in-force references are unverifiable defaults;
+    * ``geometry_not_optimized`` — no optimization level executed (or
+      provenance is unknown): calling CENSO is not DFT-optimized geometry.
+
+    Args:
+        spec: The six-segment protocol record to validate.
+
+    Returns:
+        Issue codes; ``[]`` when the protocol is fully bound.
+    """
+    issues: list[str] = []
+
+    model_id = spec.statistical_model.error_model.strip().lower()
+    trained = _TRAINED_ERROR_MODEL_LEVELS.get(model_id)
+    if model_id.startswith("placeholder") or trained is None:
+        issues.append("statistical_model_not_bound")
+    else:
+        method_ok = spec.shielding.nmr_method.strip().lower() == trained[0].lower()
+        basis_ok = _basis_equal(spec.shielding.nmr_basis, trained[1])
+        if not (method_ok and basis_ok):
+            issues.append("statistical_model_not_bound")
+
+    if spec.reference.missing_nuclei or (
+        spec.reference.reference_validation_requested and not spec.reference.reference_data_present
+    ):
+        issues.append("missing_reference")
+    if spec.reference.tms_source == "unknown":
+        issues.append("reference_not_for_level")
+    if spec.geometry.optimization_executed is not True:
+        issues.append("geometry_not_optimized")
+
+    return issues
 
 
 def _basis_equal(actual: str, expected: str) -> bool:
@@ -133,6 +199,10 @@ class PlaceholderStudentTErrorModel(ErrorModel):
         return total
 
 
+class NonFiniteResidualError(ValueError):
+    """Raised when a DP4 residual is NaN/±Inf instead of silently poisoning the total."""
+
+
 class GoodmanErrorModel(ErrorModel):
     """Goodman DP4 Gaussian error model (verified DP4.py:17-21, 190-194).
 
@@ -156,12 +226,18 @@ class GoodmanErrorModel(ErrorModel):
             logger.debug("No σ for nucleus %s in Goodman model; skipping", nucleus)
             return 0.0
         # P(r) = 2 * Φ(-|r/σ|); log P = log(2) + log Φ(-|z|)
-        # Φ(-|z|) = 0.5 * erfc(|z| / sqrt(2)); log(2·0.5·erfc) = log(erfc(...))
+        # Φ(-|z|) = 0.5 * erfc(|z| / sqrt(2)) → log P = log(erfc(|z|/sqrt(2))),
+        # evaluated as log(2) + log_ndtr(-|z|) because math.erfc underflows to
+        # 0.0 for |z| ≳ 37 (e.g. a 100 ppm carbon residual) and log(0) raises.
         total = 0.0
         for r in residuals:
-            z = abs(float(r) / sigma)
-            # erfc via math (stable for moderate z; for large z, log-erfc → -inf)
-            log_p = math.log(math.erfc(z / math.sqrt(2.0)))
+            r_val = float(r)
+            if not math.isfinite(r_val):
+                raise NonFiniteResidualError(
+                    f"non-finite {nucleus} residual {r_val!r} in Goodman DP4 likelihood"
+                )
+            z = abs(r_val / sigma)
+            log_p = math.log(2.0) + float(log_ndtr(-z))
             total += log_p
         return total
 
@@ -194,6 +270,98 @@ def _rebuild_kde(pickle_path: Path):
         return gaussian_kde(dataset, weights=weights, bw_method=old.factor)
 
 
+# ---------------------------------------------------------------------------
+# Typed DP5 path record: weighted vs unweighted calibration (todo 38 / G12)
+# ---------------------------------------------------------------------------
+
+DP5_PATH_FCHL = "fchl"
+DP5_PATH_FALLBACK = "fallback"
+DP5_PATH_MIXED = "mixed"
+#: Closed vocabulary of DP5 atom paths.
+DP5_PATHS: tuple[str, ...] = (DP5_PATH_FCHL, DP5_PATH_FALLBACK, DP5_PATH_MIXED)
+
+#: Goodman FCHL-weighted KDE — the calibrated path (in-domain samples only).
+DP5_CALIBRATION_WEIGHTED = "weighted"
+#: Unweighted global KDE fallback — its own (distinct) calibration status.
+DP5_CALIBRATION_UNWEIGHTED = "unweighted"
+#: Out-of-domain: no contributing training neighbour — no formal probability.
+DP5_CALIBRATION_OUT_OF_DOMAIN = "out_of_domain"
+#: Closed vocabulary of DP5 calibration statuses.
+DP5_CALIBRATION_STATUSES: tuple[str, ...] = (
+    DP5_CALIBRATION_WEIGHTED,
+    DP5_CALIBRATION_UNWEIGHTED,
+    DP5_CALIBRATION_OUT_OF_DOMAIN,
+)
+
+
+@dataclass(frozen=True)
+class Dp5ProbabilityRecord:
+    """A DP5 probability plus which path produced it and its calibration status.
+
+    ``calibration_status`` is one of :data:`DP5_CALIBRATION_STATUSES`:
+    ``weighted`` (FCHL-weighted KDE), ``unweighted`` (global-KDE fallback) or
+    ``out_of_domain`` (no contributing training neighbour). In the
+    out-of-domain case the raw fallback value is kept for diagnostics but
+    :attr:`formal_probability` is None — it must never be presented as a
+    formal calibrated probability.
+    """
+
+    probability: float
+    path: str
+    calibration_status: str
+    out_of_domain: bool
+    n_atoms: int
+    out_of_domain_atoms: int
+    min_effective_neighbors: float | None = None
+    min_support_fraction: float | None = None
+    reasons: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.path not in DP5_PATHS:
+            raise ValueError(f"unknown DP5 path {self.path!r}")
+        if self.calibration_status not in DP5_CALIBRATION_STATUSES:
+            raise ValueError(f"unknown DP5 calibration status {self.calibration_status!r}")
+
+    @property
+    def formal_probability(self) -> float | None:
+        """The value only when it may be presented as a formal probability."""
+        if self.calibration_status == DP5_CALIBRATION_OUT_OF_DOMAIN:
+            return None
+        return self.probability
+
+    def as_dict(self) -> dict[str, object]:
+        """JSON-safe view for workflow/report diagnostics."""
+        return {
+            "probability": float(self.probability),
+            "formal_probability": self.formal_probability,
+            "path": self.path,
+            "calibration_status": self.calibration_status,
+            "out_of_domain": bool(self.out_of_domain),
+            "n_atoms": int(self.n_atoms),
+            "out_of_domain_atoms": int(self.out_of_domain_atoms),
+            "min_effective_neighbors": self.min_effective_neighbors,
+            "min_support_fraction": self.min_support_fraction,
+            "reasons": list(self.reasons),
+        }
+
+
+@dataclass(frozen=True)
+class Dp5FchlDiagnostics:
+    """FCHL DP5 outcome + per-conformer per-atom records from the same pass.
+
+    ``atom_records[c][i]`` is the
+    :class:`~acp.nmr.fchl.AtomFchlProbability` computed for atom/signal *i*
+    in the *c*-th conformer that entered the Boltzmann average. The records
+    come from the weighted-KDE pass itself — never recomputed (the kernel is
+    expensive) and never fabricated: an atom with no contributing training
+    neighbour is flagged by ``record.out_of_domain`` / its
+    :class:`~acp.nmr.fchl.FchlSupport`.
+    """
+
+    record: Dp5ProbabilityRecord
+    atom_records: tuple[tuple[AtomFchlProbability, ...], ...]
+
+
 class GoodmanDP5Model:
     """Goodman DP5 probability model (verified DP5.py:73-141, 356-383).
 
@@ -211,7 +379,14 @@ class GoodmanDP5Model:
       when an atom has no similar training neighbours (``sum(K_sim)==0``).
 
     Both share the same downstream ``Rescale_DP5`` (DP5.py:367-383) via the
-    correct/incorrect KDEs. :attr:`dp5_mode` reports which path ran.
+    correct/incorrect KDEs.
+
+    Deprecated (G07): the former ``dp5_mode``/``fchl_kernel`` mutable
+    attributes were removed — they were shared state where the last
+    candidate's path overwrote every earlier candidate's mode. Which path
+    ran is a per-call fact: callers report it themselves (the workflow's
+    ``_compute_candidate_dp5`` returns an immutable outcome carrying mode +
+    kernel), and callers needing the kernel call ``kernel_backend()``.
     """
 
     model_id = "goodman-dp5"
@@ -234,9 +409,8 @@ class GoodmanDP5Model:
         self._incorrect_kde = _rebuild_kde(i_path)
         self._atom_kde = None  # lazy — built on first use
         self._atomic_reps = None  # lazy — loaded when FCHL first used
+        self._fragment_reps = None  # lazy — loaded when the >=86-atom path first used
         self.models_dir = models_dir
-        self.dp5_mode = "fallback"
-        self.fchl_kernel = ""  # set when the FCHL path runs: "qml" | "numpy"
 
     @property
     def atom_kde(self):
@@ -271,6 +445,34 @@ class GoodmanDP5Model:
             self._atomic_reps = load_atomic_reps(self.models_dir)
         return self._atomic_reps
 
+    def _get_fragment_reps(self) -> np.ndarray:
+        """Lazily load + verify the fragment training-set FCHL representations.
+
+        The >=86-atom path pairs ``K_sim`` from ``frag_reps.gz`` with the
+        doubled ``folded_scaled_errors`` vector, so the training-index
+        correspondence (``2 * n_fragment_train == len(folded_errors)``) is
+        enforced here: a mismatched asset set raises instead of silently
+        weighting residuals with the wrong neighbours (the shipped upstream
+        assets mismatch — see :func:`acp.nmr.fchl.fragment_path_status`).
+        """
+        from acp.nmr.fchl import (
+            FragmentPathUnavailableError,
+            fragment_residual_index_ok,
+            load_atomic_reps,
+        )
+
+        if self._fragment_reps is None:
+            reps = load_atomic_reps(self.models_dir, use_frag=True)
+            if not fragment_residual_index_ok(int(reps.shape[0]), int(self.folded_errors.size)):
+                raise FragmentPathUnavailableError(
+                    f"frag_reps.gz has {reps.shape[0]} training fragments but "
+                    f"folded_scaled_errors.p has {self.folded_errors.size} residuals; "
+                    "the doubled fragment similarities cannot be paired with the "
+                    "residual vector (refusing to weight the wrong neighbours)"
+                )
+            self._fragment_reps = reps
+        return self._fragment_reps
+
     def atom_probability(self, scaled_error: float) -> float:
         """Per-atom DP5 probability (DP5.py:104-108).
 
@@ -282,27 +484,52 @@ class GoodmanDP5Model:
         hi = self.mean_abs_error + diff
         return float(self.atom_kde.integrate_box_1d(lo, hi))
 
-    def atom_probability_fchl(
+    def atom_probability_fchl_diagnostic(
         self,
         representation: np.ndarray,
         scaled_error: float,
-    ) -> float:
-        """FCHL-weighted per-atom DP5 probability (DP5.py:85-108).
+        *,
+        use_fragment_reps: bool = False,
+    ) -> AtomFchlProbability:
+        """FCHL-weighted per-atom DP5 probability with path/support diagnostics.
 
-        Uses the atom's FCHL representation to weight the KDE against the
-        training-set similarity. Falls back to the global KDE when ``qml``
-        is unavailable (the caller should route via
-        :meth:`probability_per_conformer_fchl`, which handles the switch).
+        Same computation as :meth:`atom_probability_fchl` (its float view),
+        but the result records the path (weighted vs ``sum(K_sim)==0``
+        fallback) and the neighbour-support metrics; ``out_of_domain`` is True
+        when no training neighbour contributes. With ``use_fragment_reps=True``
+        the training side is ``frag_reps.gz`` (>=86-atom radius-3 fragments).
         """
-        from acp.nmr.fchl import atom_probability_fchl
+        from acp.nmr.fchl import atom_probability_fchl_diagnostic
 
-        return atom_probability_fchl(
+        training_reps = self._get_fragment_reps() if use_fragment_reps else self._get_atomic_reps()
+        return atom_probability_fchl_diagnostic(
             representation,
             scaled_error,
             self.folded_errors,
             self.mean_abs_error,
-            self._get_atomic_reps(),
+            training_reps,
         )
+
+    def atom_probability_fchl(
+        self,
+        representation: np.ndarray,
+        scaled_error: float,
+        *,
+        use_fragment_reps: bool = False,
+    ) -> float:
+        """FCHL-weighted per-atom DP5 probability (DP5.py:85-108).
+
+        Uses the atom's FCHL representation to weight the KDE against the
+        training-set similarity. With ``use_fragment_reps=True`` the training
+        side is ``frag_reps.gz`` (>=86-atom radius-3 fragments, capacity 53)
+        instead of ``atomic_reps.gz``; the two paths are not numerically
+        equivalent. Falls back to the global KDE when ``qml`` is unavailable
+        (the caller should route via :meth:`probability_per_conformer_fchl`,
+        which handles the switch).
+        """
+        return self.atom_probability_fchl_diagnostic(
+            representation, scaled_error, use_fragment_reps=use_fragment_reps
+        ).probability
 
     def candidate_probability(self, atom_probs: list[float]) -> float:
         """Raw per-candidate DP5 before rescale (DP5.py:356-364).
@@ -339,7 +566,6 @@ class GoodmanDP5Model:
         :meth:`probability_per_conformer` for the Goodman-faithful path
         where KDE is evaluated per conformer before probability averaging.
         """
-        self.dp5_mode = "fallback"
         atom_probs = [self.atom_probability(abs(se)) for se in scaled_errors]
         raw = self.candidate_probability(atom_probs)
         return self.rescale(raw)
@@ -374,8 +600,23 @@ class GoodmanDP5Model:
         Returns:
             DP5 probability in ``[0, 1]``.
         """
-        self.dp5_mode = "fallback"
         return self._probability_per_conformer(conformer_calc_shifts, exp_shifts, boltzmann_weights)
+
+    def probability_per_conformer_diagnostic(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+    ) -> Dp5ProbabilityRecord:
+        """Unweighted-KDE DP5 with a typed path/calibration record (todo 38).
+
+        The unweighted path is its own calibration regime
+        (:data:`DP5_CALIBRATION_UNWEIGHTED`), recorded separately from the
+        FCHL-weighted one.
+        """
+        return self._probability_per_conformer_record(
+            conformer_calc_shifts, exp_shifts, boltzmann_weights
+        )
 
     def probability_per_conformer_fchl(
         self,
@@ -383,6 +624,8 @@ class GoodmanDP5Model:
         exp_shifts: list[float],
         boltzmann_weights: list[float],
         conformer_reps: list[list[np.ndarray]],
+        *,
+        use_fragment_reps: bool = False,
     ) -> float:
         """Goodman-faithful DP5 with the FCHL-weighted atom path.
 
@@ -393,6 +636,14 @@ class GoodmanDP5Model:
         FCHL assets (``atomic_reps.gz``); the kernel runs on ``qml`` when
         importable, else the pure-numpy port.
 
+        With ``use_fragment_reps=True`` (molecules >= 86 atoms) the training
+        side is ``frag_reps.gz`` and ``conformer_reps`` must hold radius-3
+        fragment descriptors (see
+        :func:`acp.nmr.fchl.build_fragment_representations`); the fragment
+        and atomic paths are **not numerically equivalent** and the fragment
+        asset/residual index correspondence is enforced by
+        :meth:`_get_fragment_reps`.
+
         Args:
             conformer_calc_shifts: Per-conformer ¹³C calc shifts.
             exp_shifts: Experimental ¹³C shifts.
@@ -401,9 +652,36 @@ class GoodmanDP5Model:
                 ¹³C atoms (parallel to ``conformer_calc_shifts``);
                 ``conformer_reps[c][i]`` = descriptor of atom *i* in
                 conformer *c*.
+            use_fragment_reps: Use the fragment training set (>=86 atoms).
 
         Returns:
             DP5 probability in ``[0, 1]``.
+        """
+        return self.probability_per_conformer_fchl_diagnostic(
+            conformer_calc_shifts,
+            exp_shifts,
+            boltzmann_weights,
+            conformer_reps,
+            use_fragment_reps=use_fragment_reps,
+        ).probability
+
+    def probability_per_conformer_fchl_diagnostic(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+        conformer_reps: list[list[np.ndarray]],
+        *,
+        use_fragment_reps: bool = False,
+    ) -> Dp5ProbabilityRecord:
+        """FCHL-weighted DP5 with path/support/calibration record (todo 38).
+
+        Same computation as :meth:`probability_per_conformer_fchl` (its float
+        view). ``calibration_status`` distinguishes the weighted path from the
+        unweighted fallback, and :attr:`Dp5ProbabilityRecord.formal_probability`
+        is None when any atom slot is out of domain (no contributing training
+        neighbour) — such values must never be presented as formal
+        probabilities.
         """
         if not self.fchl_available:
             raise RuntimeError(
@@ -413,15 +691,51 @@ class GoodmanDP5Model:
             )
         if len(conformer_reps) != len(conformer_calc_shifts):
             raise ValueError("conformer_reps and conformer_calc_shifts lengths differ")
-        from acp.nmr.fchl import kernel_backend
-
-        self.dp5_mode = "fchl"
-        self.fchl_kernel = kernel_backend()
-        return self._probability_per_conformer(
+        return self._probability_per_conformer_record(
             conformer_calc_shifts,
             exp_shifts,
             boltzmann_weights,
             conformer_reps=conformer_reps,
+            use_fragment_reps=use_fragment_reps,
+        )
+
+    def probability_per_conformer_fchl_atom_diagnostics(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+        conformer_reps: list[list[np.ndarray]],
+        *,
+        use_fragment_reps: bool = False,
+    ) -> Dp5FchlDiagnostics:
+        """FCHL-weighted DP5 plus the per-atom records from the same KDE pass.
+
+        Same computation as
+        :meth:`probability_per_conformer_fchl_diagnostic` (which stays the
+        record-only view), additionally returning the per-conformer
+        :class:`~acp.nmr.fchl.AtomFchlProbability` records whose support /
+        out-of-domain flags back the atomic diagnostics (todo 39 / G16).
+        """
+        if not self.fchl_available:
+            raise RuntimeError(
+                "FCHL-weighted DP5 requires the FCHL assets (atomic_reps.gz/"
+                "frag_reps.gz). Use probability_per_conformer() for the "
+                "fallback path."
+            )
+        if len(conformer_reps) != len(conformer_calc_shifts):
+            raise ValueError("conformer_reps and conformer_calc_shifts lengths differ")
+        collector: list[list[AtomFchlProbability]] = []
+        record = self._probability_per_conformer_record(
+            conformer_calc_shifts,
+            exp_shifts,
+            boltzmann_weights,
+            conformer_reps=conformer_reps,
+            use_fragment_reps=use_fragment_reps,
+            atom_records=collector,
+        )
+        return Dp5FchlDiagnostics(
+            record=record,
+            atom_records=tuple(tuple(row) for row in collector),
         )
 
     def _probability_per_conformer(
@@ -430,20 +744,59 @@ class GoodmanDP5Model:
         exp_shifts: list[float],
         boltzmann_weights: list[float],
         conformer_reps: list[list[np.ndarray]] | None = None,
+        use_fragment_reps: bool = False,
     ) -> float:
+        """Shared per-conformer DP5 pipeline (float view over the record path)."""
+        return self._probability_per_conformer_record(
+            conformer_calc_shifts,
+            exp_shifts,
+            boltzmann_weights,
+            conformer_reps,
+            use_fragment_reps,
+        ).probability
+
+    def _probability_per_conformer_record(
+        self,
+        conformer_calc_shifts: list[list[float]],
+        exp_shifts: list[float],
+        boltzmann_weights: list[float],
+        conformer_reps: list[list[np.ndarray]] | None = None,
+        use_fragment_reps: bool = False,
+        atom_records: list[list[AtomFchlProbability]] | None = None,
+    ) -> Dp5ProbabilityRecord:
         """Shared per-conformer DP5 pipeline (DP5.py:73-141, 339-383).
 
         When *conformer_reps* is provided, per-atom probabilities use the
-        FCHL-weighted KDE; otherwise the unweighted global KDE fallback.
+        FCHL-weighted KDE (fragment training set when *use_fragment_reps*);
+        otherwise the unweighted global KDE fallback. The returned record
+        distinguishes the weighted/unweighted calibration status and flags
+        out-of-domain atom slots (no contributing training neighbour).
+
+        *atom_records*, when passed, collects the per-conformer
+        :class:`~acp.nmr.fchl.AtomFchlProbability` records produced by the
+        weighted-KDE pass (one list per conformer that entered the average).
         """
         import numpy as np
         from scipy.stats import linregress
 
+        from acp.nmr.fchl import ATOM_PROBABILITY_MODE_FALLBACK, ATOM_PROBABILITY_MODE_FCHL
+
         n_atoms = len(exp_shifts)
         if n_atoms == 0 or not conformer_calc_shifts:
-            return 0.0
+            return Dp5ProbabilityRecord(
+                probability=0.0,
+                path=DP5_PATH_FALLBACK,
+                calibration_status=DP5_CALIBRATION_UNWEIGHTED,
+                out_of_domain=False,
+                n_atoms=0,
+                out_of_domain_atoms=0,
+            )
 
         use_fchl = conformer_reps is not None
+        modes_seen: set[str] = set()
+        out_of_domain_flags = [False] * n_atoms
+        effective_values: list[float] = []
+        fraction_values: list[float] = []
 
         # Per-conformer: scale + per-atom KDE probability (DP5.py:75-110)
         # Boltzmann-average the probabilities (DP5.py:339-353)
@@ -453,6 +806,7 @@ class GoodmanDP5Model:
         ):
             if len(conf_shifts) != n_atoms:
                 continue
+            conf_atom_records: list[AtomFchlProbability] = []
             if n_atoms >= 2:
                 slope, intercept, _, _, _ = linregress(exp_shifts, conf_shifts)
                 if slope == 0 or not np.isfinite(slope):
@@ -463,14 +817,73 @@ class GoodmanDP5Model:
             for i in range(n_atoms):
                 err = abs(scaled[i] - exp_shifts[i])
                 if use_fchl:
-                    p = self.atom_probability_fchl(conformer_reps[conf_idx][i], err)  # type: ignore[index]
+                    atom_record = self.atom_probability_fchl_diagnostic(  # type: ignore[index]
+                        conformer_reps[conf_idx][i], err, use_fragment_reps=use_fragment_reps
+                    )
+                    modes_seen.add(atom_record.mode)
+                    out_of_domain_flags[i] = out_of_domain_flags[i] or atom_record.out_of_domain
+                    effective_values.append(atom_record.support.effective_neighbors)
+                    fraction_values.append(atom_record.support.support_fraction)
+                    if atom_records is not None:
+                        conf_atom_records.append(atom_record)
+                    p = atom_record.probability
                 else:
                     p = self.atom_probability(err)
                 avg_atom_probs[i] += weight * p
+            if atom_records is not None and use_fchl:
+                atom_records.append(conf_atom_records)
 
         # Candidate-level: gmean combine (DP5.py:356-364) + rescale (DP5.py:381)
         raw = self.candidate_probability(avg_atom_probs)
-        return self.rescale(raw)
+        probability = self.rescale(raw)
+
+        if not use_fchl:
+            return Dp5ProbabilityRecord(
+                probability=probability,
+                path=DP5_PATH_FALLBACK,
+                calibration_status=DP5_CALIBRATION_UNWEIGHTED,
+                out_of_domain=False,
+                n_atoms=n_atoms,
+                out_of_domain_atoms=0,
+            )
+
+        if modes_seen == {ATOM_PROBABILITY_MODE_FCHL}:
+            path = DP5_PATH_FCHL
+        elif modes_seen and modes_seen <= {ATOM_PROBABILITY_MODE_FALLBACK}:
+            path = DP5_PATH_FALLBACK
+        elif modes_seen:
+            path = DP5_PATH_MIXED
+        else:
+            path = DP5_PATH_FALLBACK
+        out_of_domain_atoms = sum(1 for flag in out_of_domain_flags if flag)
+        out_of_domain = out_of_domain_atoms > 0
+        if out_of_domain:
+            calibration_status = DP5_CALIBRATION_OUT_OF_DOMAIN
+            reasons: tuple[str, ...] = ("out_of_domain",)
+            logger.warning(
+                "FCHL-weighted DP5: %d/%d atom slots out of domain (no contributing "
+                "training neighbours); values are uncalibrated fallbacks, not formal "
+                "probabilities",
+                out_of_domain_atoms,
+                n_atoms,
+            )
+        elif path == DP5_PATH_FCHL:
+            calibration_status = DP5_CALIBRATION_WEIGHTED
+            reasons = ()
+        else:
+            calibration_status = DP5_CALIBRATION_UNWEIGHTED
+            reasons = ()
+        return Dp5ProbabilityRecord(
+            probability=probability,
+            path=path,
+            calibration_status=calibration_status,
+            out_of_domain=out_of_domain,
+            n_atoms=n_atoms,
+            out_of_domain_atoms=out_of_domain_atoms,
+            min_effective_neighbors=min(effective_values) if effective_values else None,
+            min_support_fraction=min(fraction_values) if fraction_values else None,
+            reasons=reasons,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +934,18 @@ def dp5_fchl_available(models_dir: Path | None = None) -> bool:
 
 
 __all__ = [
+    "DP5_CALIBRATION_OUT_OF_DOMAIN",
+    "DP5_CALIBRATION_STATUSES",
+    "DP5_CALIBRATION_UNWEIGHTED",
+    "DP5_CALIBRATION_WEIGHTED",
+    "DP5_PATHS",
+    "DP5_PATH_FALLBACK",
+    "DP5_PATH_FCHL",
+    "DP5_PATH_MIXED",
+    "Dp5ProbabilityRecord",
+    "Dp5FchlDiagnostics",
     "ErrorModel",
+    "NonFiniteResidualError",
     "PlaceholderStudentTErrorModel",
     "GoodmanErrorModel",
     "GoodmanDP5Model",
@@ -530,4 +954,5 @@ __all__ = [
     "dp5_model_available",
     "dp5_fchl_available",
     "validate_error_model_binding",
+    "validate_protocol_binding",
 ]

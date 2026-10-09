@@ -26,13 +26,16 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Callable, Protocol
+
+if TYPE_CHECKING:
+    from acp.scheduler.remote.runner import RemotePollObservation
 
 from acp.chem.embedding import smiles_to_xyz, xyz_to_multiframe_demo
 from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
+from acp.scheduler.files import is_archived_attempt_path
 from acp.scheduler.jobs import (
-    EXIT_WAITING_REVIEW,
     GRADIENT_CONFIG_FILENAME,
     PATH_CONFIG_FILENAME,
     SCAN_CONFIG_FILENAME,
@@ -45,6 +48,7 @@ from acp.scheduler.jobs import (
     censo_solvent_from_method,
     confsearch_method_flags,
     input_chemistry_flags,
+    nmr_flag_config,
     nmr_method_flags,
     scan_method_flags,
     xtbmd_method_flags,
@@ -103,6 +107,12 @@ class JobRunnerRemoteProtocol(Protocol):
         self,
         record: JobRecord,
         event_log: JobEventLog,
+        target_node: str | None = None,
+        *,
+        remote_job_dir: str | None = None,
+        on_submitted: Callable[[str], None] | None = None,
+        submission_id: str | None = None,
+        on_code_release_bound: Callable[[str], None] | None = None,
     ) -> str: ...
 
     def poll_remote(
@@ -110,7 +120,16 @@ class JobRunnerRemoteProtocol(Protocol):
         record: JobRecord,
         event_log: JobEventLog,
         cancel_event: threading.Event,
-    ) -> tuple[bool, int | None]: ...
+    ) -> RemotePollObservation: ...
+
+    def reconcile_submission(self, record: JobRecord) -> str: ...
+
+    def apply_terminal_side_effects(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        stage_events: tuple[tuple[str, dict[str, Any]], ...] = (),
+    ) -> None: ...
 
     def cancel_remote(self, job_id: str) -> None: ...
 
@@ -150,11 +169,15 @@ def find_workflow_state(work_dir: Path) -> Path | None:
     conformer state at ``<output>/conformer/<id>/state.json``. Shallowest-first
     selection picks the correct (outer) state in both cases. The ``fake``
     workflow writes directly at the root.
+
+    Archived attempt receipts under ``WORK/00_RUNTIME/attempts/`` (contract B)
+    are never candidates — they belong to a closed attempt and must not be
+    replayed into the current attempt's observation.
     """
     root_state = work_dir / "state.json"
     if root_state.exists():
         return root_state
-    candidates = list(work_dir.rglob("state.json"))
+    candidates = [c for c in work_dir.rglob("state.json") if not is_archived_attempt_path(c)]
     if not candidates:
         return None
 
@@ -501,6 +524,10 @@ class JobRunner:
         # Per-task execution locks (WORK/00_RUNTIME/run.lock): at most one
         # live execution per task directory, across service restarts.
         self._run_locks: dict[str, Path] = {}
+        # Serializes the read-registered-paths → register flow so concurrent
+        # capture passes (manager terminal side effects, repeat retries) can
+        # never both register the same file.
+        self._artifact_capture_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     # New non-blocking API (poller-driven)
@@ -640,10 +667,12 @@ class JobRunner:
             event_log = self._event_logs.get(record.id)
             exit_code = record.exit_code if record.exit_code is not None else 1
             if event_log:
+                event_type = "job.failed" if exit_code != 0 else "job.completed"
                 event_log.append(
-                    "job.failed" if exit_code != 0 else "job.completed",
+                    event_type,
                     job_id=record.id,
                     exit_code=exit_code,
+                    idempotency_key=f"terminal:{record.id}:{record.attempt}:{event_type}",
                 )
             self._release_run_lock(record.id)
             with self._proc_lock:
@@ -682,24 +711,9 @@ class JobRunner:
                 self._observe_state(record, event_log, state_path, seen)
             observer = self._observer_for_record(record)
             observer.poll_and_mirror(record.id, Path(record.work_dir))
-            with self._proc_lock:
-                ce = self._cancel_events.get(record.id)
-            if ce and ce.is_set() and ret != 0:
-                event_log.append(
-                    "job.cancelled", job_id=record.id, exit_code=ret
-                ) if event_log else None
-            elif ret == 0:
-                event_log.append(
-                    "job.completed", job_id=record.id, exit_code=ret
-                ) if event_log else None
-            elif ret == EXIT_WAITING_REVIEW:
-                event_log.append(
-                    "job.waiting_review", job_id=record.id, exit_code=ret
-                ) if event_log else None
-            else:
-                event_log.append(
-                    "job.failed", job_id=record.id, exit_code=ret
-                ) if event_log else None
+            # Terminal completion events are emitted by the manager AFTER the
+            # terminal CAS (idempotent, attempt-scoped) — never here, so a
+            # CAS-rejected stale observation leaves no terminal side effect.
             self._release_run_lock(record.id)
             with self._proc_lock:
                 self._processes.pop(record.id, None)
@@ -1572,18 +1586,13 @@ class JobRunner:
             elif isinstance(stereocenters, list) and stereocenters:
                 cmd += ["--stereocenters", ",".join(str(s) for s in stereocenters)]
 
-        if spec.name:
-            cmd += ["--name", spec.name]
-        preset = censo_preset_from_method(method)
-        if preset:
-            cmd += ["--preset", preset]
-        cmd += nmr_method_flags(method)
-        solvent = censo_solvent_from_method(method)
-        if solvent:
-            cmd += ["--solvent", solvent]
-        ewin = censo_ewin_from_method(method)
-        if ewin is not None:
-            cmd += ["--ewin", str(ewin)]
+        # --name intentionally not emitted: the nmr parser never accepted it
+        # (G06) — task naming is manager-owned (spec.name → work_dir name).
+        # INVARIANT (E7): all nmr flags come from the single resolver-backed
+        # group — no caller-side censo_preset/solvent/ewin here (duplicate
+        # emission; and the nmr wizard nests ewin under levels.conformer,
+        # which censo_ewin_from_method never reads).
+        cmd += nmr_method_flags(method, nmr_flag_config(spec.config_path))
 
         if spec.config_path:
             cmd += ["--config", str(spec.config_path)]
@@ -1591,6 +1600,7 @@ class JobRunner:
             cmd += ["--nproc", str(res["nproc"])]
         if res.get("mem"):
             cmd += ["--mem", str(res["mem"])]
+        cmd += input_chemistry_flags(inp)
         return cmd
 
     def _build_pessearch_cmd(self, spec: JobSpec, work_dir: Path, source: str) -> list[str]:
@@ -1958,7 +1968,14 @@ class JobRunner:
         return self.stage_task_observer
 
     def _capture_artifacts(self, record: JobRecord, work_dir: Path) -> None:
-        """Register output files as artifacts after job completion."""
+        """Register output files as artifacts after job completion.
+
+        At-least-once: the whole read-registered-paths → register flow runs
+        under ``_artifact_capture_lock`` so a repeat capture (terminal retry)
+        cannot double-register.  Already-registered paths are supplied as the
+        snapshot AND ``result.artifacts`` is rebuilt from the full registry,
+        so a crash mid-capture converges on the next pass.
+        """
         observer = self.stage_task_observer
         store = getattr(observer, "store", None) if observer is not None else None
         db_path = getattr(store, "db_path", None)
@@ -1966,17 +1983,21 @@ class JobRunner:
         if db_path is None or not results_dir.exists():
             return
 
-        registry = ArtifactRegistry(db_path)
-        artifacts = capture_stage_artifacts(
-            registry=registry,
-            job_id=record.id,
-            task_id=None,
-            work_dir=work_dir,
-            stage_dir=results_dir,
-        )
+        with self._artifact_capture_lock:
+            registry = ArtifactRegistry(db_path)
+            registered = {artifact.file_path for artifact in registry.list_by_job(record.id)}
+            capture_stage_artifacts(
+                registry=registry,
+                job_id=record.id,
+                task_id=None,
+                work_dir=work_dir,
+                stage_dir=results_dir,
+                snapshot_before=registered,
+            )
+            artifacts = registry.list_by_job(record.id)
+
         if not artifacts:
             return
-
         result = dict(record.result or {})
         result["artifacts"] = [asdict(artifact) for artifact in artifacts]
         record.result = result
@@ -1991,11 +2012,19 @@ class JobRunner:
         read-only fallback (single-mol jobs nest one level under ``work_dir``).
         """
         canonical = sorted(
-            work_dir.rglob("RESULT/energies/ensemble_thermo.json"),
+            (
+                p
+                for p in work_dir.rglob("RESULT/energies/ensemble_thermo.json")
+                if not is_archived_attempt_path(p)
+            ),
             key=lambda p: len(p.parts),
         )
         legacy = sorted(
-            work_dir.rglob("finalDFT/ensemble_thermo.json"),
+            (
+                p
+                for p in work_dir.rglob("finalDFT/ensemble_thermo.json")
+                if not is_archived_attempt_path(p)
+            ),
             key=lambda p: len(p.parts),
         )
         candidates = canonical or legacy

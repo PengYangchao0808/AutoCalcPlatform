@@ -268,6 +268,8 @@ ORCA 文档将 M 0 定义为最低本征值模式；频率模式与优化器模�
 acp run tsmode --source-bundle bundle.json --source-mode-index 7 --output ./tsmode_out
 ```
 
+> 现状注（2026-10-07，D7 对齐）：`--source-mode-index` 取**原生打印序号**（非位置序，真实 3 原子 TS bundle 有效序号如 {6,7,8}）；tsmode **无 provenance 参数**（来源经 `--source-bundle` 表达）。因 `TS_MODE_MAPPING_VERIFIED_VERSIONS` 为空集，真实运行须另加 `--allow-unverified-mapping`（默认门禁 `mode_mapping_unsupported`）。
+
 `bundle.json` 描述经校验的本地来源文件引用及计算级别。GUI 和 CLI 共用同一解析器，不允许 CLI 绕过映射校验。调度器把管理资产落地为工作目录中的 bundle，远程节点不需要直接访问 Web API。
 
 ## 9. 执行状态与计划

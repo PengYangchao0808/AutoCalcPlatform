@@ -1,5 +1,18 @@
 # pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false
-"""Vibrational frequency calculation primitive."""
+"""Vibrational frequency — ACP compat wrapper (plan todo 19).
+
+The task core lives in :mod:`cccp.calculation.tasks.frequency`; the single
+scientific parse of frequencies / vibration vectors / IR intensities lives
+in :mod:`cccp.calculation.frequency_parse` and rides back on
+``FrequencyPayload.analysis``.  This module is the ACP-side compat surface:
+legacy ``CalculationRequest`` → typed ``TaskRequest`` conversion
+(``acp.calculations.legacy_adapters``), the legacy backend registry seam,
+and the **publication half** of the old ``_try_materialize_normal_modes``
+split — the ``normal_modes.json`` product format, geometry binding and
+manifest registration stay ACP-side (geometry binding is applied by the
+plan/batch consumers from the registered product).  ``run_frequency`` is a
+pure forwarder (the dual-root uniqueness guard classifies it as a shim).
+"""
 
 from __future__ import annotations
 
@@ -9,155 +22,151 @@ from pathlib import Path
 from typing import Any
 
 from acp.calculations.contracts import ArtifactRef, CalculationRequest, CalculationResult
-
-from ._common import (
-    artifacts_from_qc,
+from acp.calculations.legacy_adapters import to_legacy_result, to_task_request
+from acp.calculations.primitives._common import (
     backend_for_request,
     backend_name,
-    call_capability,
     capability_kwargs,
-    electronic_state_result_metadata,
-    error_text,
-    load_inputs,
     output_dir,
-    result_from_qc,
-    write_state_artifacts,
 )
+from cccp import calculation as _cccp_calculation
+from cccp.calculation.context import TaskContext
+from cccp.calculation.requests import TaskKind
+from cccp.calculation.results import FrequencyPayload, TaskResult
 
-_BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 logger = logging.getLogger(__name__)
 
 
-def _try_materialize_normal_modes(
-    qc_result: Any,
-    atom_count: int,
-    out_dir: Path | None,
-    artifacts: list[ArtifactRef],
-    backend_name_str: str,
-) -> list[ArtifactRef]:
-    """Attempt to parse ORCA normal modes and write ``normal_modes.json``.
+def run_frequency(req: CalculationRequest) -> CalculationResult:
+    """Run a frequency calculation through the cccp task core."""
+    return execute_frequency(req)
 
-    Returns the (possibly extended) artifacts list.  Never raises — all
-    failures are silently logged at debug level so the frequency step
-    is never failed due to missing modes alone.
+
+def execute_frequency(req: CalculationRequest) -> CalculationResult:
+    """ACP compat wrapper: cccp task core + product publication.
+
+    Verbatim legacy capability kwargs ride along as ``capability_extras``
+    (translation cleanup: plan todo 25); the ``normal_modes.json`` view
+    product is published from the typed payload (no re-parse of the QC
+    output) and registered as a ``normal_modes`` artifact.
     """
-    if out_dir is None:
-        return artifacts
+    task_request, binding = to_task_request(req, TaskKind.FREQUENCY)
+    selected_backend = backend_name(req)
+    backend = backend_for_request(req, selected_backend)
+    context = TaskContext(
+        config=binding.config,
+        workdir=binding.artifact_root,
+        backend=backend,
+        capability_extras=capability_kwargs(req),
+    )
+    task_result = _cccp_calculation.run_frequency(task_request, context=context)
+    legacy = _legacy_result(task_result, binding)
+    published = _publish_normal_modes(
+        task_request,
+        task_result,
+        output_dir(req),
+        selected_backend,
+        legacy.artifacts,
+    )
+    if not published:
+        return legacy
+    return CalculationResult(
+        energy=legacy.energy,
+        coords=legacy.coords,
+        frequencies=legacy.frequencies,
+        artifacts=[*legacy.artifacts, *published],
+        status=legacy.status,
+        errors=legacy.errors,
+        provenance=legacy.provenance,
+        metadata=legacy.metadata,
+    )
 
-    # Determine the log file to read — prefer freq_log_file, fall back to log_file.
-    log_path: Path | None = None
-    freq_log = getattr(qc_result, "freq_log_file", None)
-    if isinstance(freq_log, (str, Path)) and str(freq_log):
-        log_path = Path(freq_log)
-    if log_path is None or not log_path.is_file():
-        main_log = getattr(qc_result, "log_file", None)
-        if isinstance(main_log, (str, Path)) and str(main_log):
-            log_path = Path(main_log)
-    if log_path is None or not log_path.is_file():
-        logger.debug("frequency: no log file found for normal-mode parsing; skipping")
-        return artifacts
 
+def _legacy_result(task_result: TaskResult, binding: Any) -> CalculationResult:
+    """Map one typed ``TaskResult`` back to the legacy envelope (lossless)."""
+    legacy = to_legacy_result(task_result, binding)
+    if not task_result.metadata:
+        return legacy
+    metadata = dict(task_result.metadata)
+    metadata.update(legacy.metadata)
+    return CalculationResult(
+        energy=legacy.energy,
+        coords=legacy.coords,
+        frequencies=legacy.frequencies,
+        artifacts=legacy.artifacts,
+        status=legacy.status,
+        errors=legacy.errors,
+        provenance=legacy.provenance,
+        metadata=metadata,
+    )
+
+
+# ── ACP-side product publication (parse half lives in cccp) ────────────
+
+
+def _publish_normal_modes(
+    task_request: Any,
+    task_result: TaskResult,
+    out_dir: Path | None,
+    backend_label: str,
+    existing: list[ArtifactRef],
+) -> list[ArtifactRef]:
+    """Write ``normal_modes.json`` from the typed payload (publication half).
+
+    Product format (``normal_modes_v1``) is ACP's; the scientific data comes
+    from ``FrequencyPayload.analysis`` — the QC output is never re-parsed
+    here.  Never raises: missing/partial modes just skip the product (the
+    frequency step is never failed due to missing modes alone).
+    """
+    if out_dir is None or task_result.status != "completed":
+        return []
+    payload = task_result.payload
+    analysis = payload.analysis if isinstance(payload, FrequencyPayload) else None
+    if analysis is None or not analysis.mode_vectors:
+        logger.debug("frequency: no parsed normal modes; skipping normal_modes.json")
+        return []
+    if any(artifact.type == "normal_modes" for artifact in existing):
+        return []
+
+    from acp.results.frequencies import build_normal_modes_product
+
+    atom_count = _atom_count(task_request, task_result)
     try:
-        text = log_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        logger.debug("frequency: could not read %s for normal modes; skipping", log_path)
-        return artifacts
-
-    try:
-        from acp.results.orca_parser import OrcaOutputParser
-        calc = OrcaOutputParser().parse_text(text)
-    except Exception:
-        logger.debug("frequency: OrcaOutputParser failed on %s; skipping", log_path, exc_info=True)
-        return artifacts
-
-    if not calc.mode_vectors:
-        logger.debug("frequency: no NORMAL MODES section found in %s; skipping", log_path)
-        return artifacts
-
-    try:
-        from acp.results.frequencies import build_normal_modes_product
-        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=atom_count)
-    except Exception:
+        product = build_normal_modes_product(
+            analysis, geometry_product_id=None, atom_count=atom_count
+        )
+    except Exception:  # noqa: BLE001 — publication never fails the step
         logger.debug("frequency: build_normal_modes_product failed; skipping", exc_info=True)
-        return artifacts
-
+        return []
     if not product.get("modes"):
         logger.debug("frequency: normal_modes product has no valid modes; skipping")
-        return artifacts
+        return []
 
     nm_path = out_dir / "normal_modes.json"
     try:
         nm_path.write_text(json.dumps(product, indent=2, ensure_ascii=False), encoding="utf-8")
     except OSError:
         logger.debug("frequency: could not write %s; skipping", nm_path, exc_info=True)
-        return artifacts
+        return []
 
-    logger.debug("frequency: wrote normal_modes.json with %d modes to %s", len(product["modes"]), nm_path)
-    artifacts = list(artifacts)
-    artifacts.append(ArtifactRef(path=nm_path, type="normal_modes", source=backend_name_str))
-    return artifacts
-
-
-def run_frequency(req: CalculationRequest) -> CalculationResult:
-    """Run a frequency calculation through a backend capability."""
-    inputs = load_inputs(req)
-    selected_backend = backend_name(req)
-    backend = backend_for_request(req, selected_backend)
-    out_dir = output_dir(req)
-    try:
-        qc_result = call_capability(
-            backend,
-            "frequency",
-            inputs,
-            out_dir,
-            capability_kwargs(req),
-        )
-    except _BACKEND_FAILURES as error:
-        return result_from_qc(
-            req,
-            selected_backend,
-            None,
-            [error_text(error)],
-            [],
-            status="failed",
-        )
-
-    artifacts = artifacts_from_qc(qc_result, selected_backend)
-    state_metadata, state_errors, forced_status = electronic_state_result_metadata(
-        inputs, qc_result
+    logger.debug(
+        "frequency: wrote normal_modes.json with %d modes to %s",
+        len(product["modes"]),
+        nm_path,
     )
-    artifacts.extend(write_state_artifacts(inputs, qc_result, out_dir, selected_backend))
-    if not qc_result.success:
-        message = qc_result.error_message or "frequency calculation failed"
-        return result_from_qc(req, selected_backend, qc_result, [message], artifacts)
-    if state_errors:
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            state_errors,
-            artifacts,
-            metadata={"electronic_state": state_metadata},
-            status=forced_status or "failed",
-        )
-
-    # Try to materialize normal modes from the ORCA output (Wave 4, todo 22).
-    # Never fails the step — all errors are silently swallowed.
-    atom_count = len(inputs.symbols)
-    artifacts = _try_materialize_normal_modes(
-        qc_result, atom_count, out_dir, artifacts, selected_backend
-    )
-
-    if state_metadata:
-        return result_from_qc(
-            req,
-            selected_backend,
-            qc_result,
-            [],
-            artifacts,
-            metadata={"electronic_state": state_metadata},
-        )
-    return result_from_qc(req, selected_backend, qc_result, [], artifacts)
+    return [ArtifactRef(path=nm_path, type="normal_modes", source=backend_label)]
 
 
-__all__ = ["run_frequency"]
+def _atom_count(task_request: Any, task_result: TaskResult) -> int:
+    """Atom count of the input geometry (the product's vector-length check)."""
+    if task_result.symbols:
+        return len(task_result.symbols)
+    structure = getattr(task_request, "structure", None)
+    for attribute in ("symbols", "coordinates", "elements"):
+        values = getattr(structure, attribute, None)
+        if values:
+            return len(values)
+    return 0
+
+
+__all__ = ["execute_frequency", "run_frequency"]

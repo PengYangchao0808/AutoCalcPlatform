@@ -7,16 +7,21 @@ import math
 import pytest
 
 from acp.nmr.error_model import (
+    GoodmanErrorModel,
+    NonFiniteResidualError,
     PlaceholderStudentTErrorModel,
     load_error_model,
     validate_error_model_binding,
 )
 from acp.nmr.models import NmrConfig
 from acp.nmr.probability import (
+    ProbabilityInputError,
     compute_dp4,
     compute_dp5,
+    compute_dp5_goodman,
     dp5_log_to_probability,
     normalize_dp4,
+    normalize_dp4_gated,
 )
 
 
@@ -151,3 +156,198 @@ def test_normalize_dp4_handles_underflow() -> None:
     assert sum(probs) == 1.0
     assert probs[0] > probs[1]
     assert math.isfinite(probs[0])
+
+
+# todo 11: stable log-CDF — log(2) + log_ndtr(-|z|) ≡ log(erfc(z/√2)) (golden branch).
+
+
+def test_goodman_log_cdf_matches_erfc_branch() -> None:
+    """log(2)+log_ndtr(-z) ≡ log(erfc(z/√2)) on the official fixed branch."""
+    from scipy.special import log_ndtr
+
+    for z in (0.0, 0.1, 0.5, 1.0, 2.0, 3.0, 5.0):
+        stable = math.log(2.0) + float(log_ndtr(-z))
+        legacy = math.log(math.erfc(z / math.sqrt(2.0)))
+        assert stable == pytest.approx(legacy, rel=0.0, abs=1e-10)
+
+
+def test_goodman_regular_residuals_match_legacy_formula() -> None:
+    """Regular residuals stay numerically identical to the official branch."""
+    em = GoodmanErrorModel()
+    for r in (0.0, 0.1, 0.5, 1.0, 2.0):
+        for nucleus in ("13C", "1H"):
+            z = abs(r / em.SIGMA[nucleus])
+            legacy = math.log(math.erfc(z / math.sqrt(2.0)))
+            got = em.log_likelihood([r], nucleus)
+            assert got == pytest.approx(legacy, rel=0.0, abs=1e-10)
+
+
+def test_goodman_100ppm_carbon_residual_is_finite() -> None:
+    """A 100 ppm carbon residual must return finite, not raise math domain error."""
+    from scipy.special import log_ndtr
+
+    em = GoodmanErrorModel()
+    ll = em.log_likelihood([100.0], "13C")
+    assert math.isfinite(ll)
+    assert ll < 0.0
+    z = abs(100.0 / em.SIGMA["13C"])
+    expected = math.log(2.0) + float(log_ndtr(-z))  # ≈ log(2·Φ(-44))
+    assert ll == pytest.approx(expected, rel=0.0, abs=1e-10)
+
+
+def test_goodman_nonfinite_residuals_raise_typed_error() -> None:
+    """NaN/Inf residuals are typed failures — never silent NaN totals."""
+    em = GoodmanErrorModel()
+    assert issubclass(NonFiniteResidualError, ValueError)
+    with pytest.raises(NonFiniteResidualError) as excinfo:
+        em.log_likelihood([float("nan")], "13C")
+    assert "13C" in str(excinfo.value)
+    assert "nan" in str(excinfo.value)
+    with pytest.raises(NonFiniteResidualError) as excinfo:
+        em.log_likelihood([float("inf")], "1H")
+    assert "1H" in str(excinfo.value)
+    assert "inf" in str(excinfo.value)
+    with pytest.raises(NonFiniteResidualError):
+        em.log_likelihood([1.0, float("nan")], "13C")
+
+
+def test_goodman_empty_and_unknown_nucleus_semantics_unchanged() -> None:
+    """σ lookup semantics: empty list → 0.0, unknown nucleus → 0.0."""
+    em = GoodmanErrorModel()
+    assert em.log_likelihood([], "13C") == 0.0
+    assert em.log_likelihood([1.0], "31P") == 0.0
+
+
+# ---------------------------------------------------------------------------
+# todo 12: stable sigmoid + statistical pre-input validation (gap §12.1 / G14)
+# BEFORE: dp5_log_to_probability(-1000) raised
+# `OverflowError: math range error` (captured in task-12 evidence).
+# ---------------------------------------------------------------------------
+
+
+def test_dp5_log_to_probability_extreme_negative_is_finite() -> None:
+    """BEFORE: OverflowError; AFTER: finite 0.0 inside [0, 1]."""
+    p = dp5_log_to_probability(-1000.0)
+    assert math.isfinite(p)
+    assert 0.0 <= p <= 1.0
+    assert p <= 1e-12  # exp(-1000) underflows → ≈0.0
+
+
+def test_dp5_log_to_probability_extreme_positive_is_one() -> None:
+    p = dp5_log_to_probability(1000.0)
+    assert math.isfinite(p)
+    assert 0.0 <= p <= 1.0
+    assert p >= 1.0 - 1e-12
+
+
+def test_dp5_log_to_probability_zero_is_half() -> None:
+    p = dp5_log_to_probability(0.0)
+    assert p == 0.5
+
+
+def test_dp5_log_to_probability_signed_branch_agrees_with_naive() -> None:
+    """Regular inputs stay numerically identical to the naive formula."""
+    for x in (-30.0, -5.0, -1.0, -0.5, 0.5, 1.0, 5.0, 30.0):
+        naive = 1.0 / (1.0 + math.exp(-x))
+        assert dp5_log_to_probability(x) == pytest.approx(naive, rel=1e-12)
+
+
+def test_dp5_log_to_probability_infinities_map_to_limits() -> None:
+    assert dp5_log_to_probability(float("-inf")) == 0.0
+    assert dp5_log_to_probability(float("inf")) == 1.0
+
+
+def test_dp5_log_to_probability_nan_raises_typed_error() -> None:
+    with pytest.raises(ProbabilityInputError, match="NaN"):
+        dp5_log_to_probability(float("nan"))
+
+
+def test_compute_dp4_rejects_non_finite_residuals_with_placeholder_model() -> None:
+    """BEFORE: placeholder Student-t returned NaN (implicit success)."""
+    ph = PlaceholderStudentTErrorModel()
+    with pytest.raises(NonFiniteResidualError, match="nan"):
+        compute_dp4({"13C": [float("nan")]}, ph)
+    with pytest.raises(NonFiniteResidualError, match="inf"):
+        compute_dp4({"1H": [float("inf")]}, ph)
+    # finite residuals unchanged
+    assert math.isfinite(compute_dp4({"13C": [0.5]}, ph))
+
+
+def test_compute_dp4_rejects_non_finite_residuals_with_goodman_model() -> None:
+    with pytest.raises(NonFiniteResidualError, match="13C"):
+        compute_dp4({"13C": [1.0, float("nan")]}, GoodmanErrorModel())
+
+
+def test_compute_dp5_rejects_non_finite_residuals() -> None:
+    ph = PlaceholderStudentTErrorModel()
+    with pytest.raises(NonFiniteResidualError, match="nan"):
+        compute_dp5({"13C": [float("nan")]}, ph)
+    assert math.isfinite(compute_dp5({"1H": [0.1]}, ph))
+
+
+def test_compute_dp5_rejects_invalid_kde_bandwidth() -> None:
+    """BEFORE: bandwidth ≤ 0 / NaN was silently accepted (provenance-only)."""
+    ph = PlaceholderStudentTErrorModel()
+    for bad in (0.0, -0.025, float("nan"), float("inf")):
+        with pytest.raises(ProbabilityInputError, match="kde_bandwidth"):
+            compute_dp5({"1H": [0.1]}, ph, kde_bandwidth=bad)
+    assert math.isfinite(compute_dp5({"1H": [0.1]}, ph, kde_bandwidth=0.025))
+
+
+def test_compute_dp5_goodman_rejects_non_finite_residuals() -> None:
+    class _NeverCalled:
+        def probability(self, errors: list[float]) -> float:  # pragma: no cover
+            raise AssertionError("validation must reject before the model runs")
+
+    with pytest.raises(NonFiniteResidualError, match="13C"):
+        compute_dp5_goodman({"13C": [float("nan")]}, _NeverCalled())
+    with pytest.raises(NonFiniteResidualError, match="1H"):
+        # unconsumed nucleus still validated — broken input never passes silently
+        compute_dp5_goodman({"13C": [0.1], "1H": [float("inf")]}, _NeverCalled())
+
+
+def test_normalize_dp4_rejects_nan_log_likelihood() -> None:
+    """BEFORE: softmax of NaN returned [nan, nan] (implicit success)."""
+    with pytest.raises(ProbabilityInputError, match="index 1"):
+        normalize_dp4([0.0, float("nan")])
+
+
+def test_normalize_dp4_rejects_infinite_log_likelihoods() -> None:
+    for bad in (float("inf"), float("-inf")):
+        with pytest.raises(ProbabilityInputError, match="non-finite"):
+            normalize_dp4([-1000.0, bad])
+    with pytest.raises(ProbabilityInputError):
+        normalize_dp4([float("-inf")])
+
+
+def test_normalize_dp4_finite_inputs_still_normalize() -> None:
+    """Validation never perturbs valid inputs: extreme-but-finite still works."""
+    probs = normalize_dp4([-1000.0, -1001.0])
+    assert sum(probs) == pytest.approx(1.0)
+    assert probs[0] > probs[1]
+
+
+def test_normalize_dp4_gated_rejects_non_finite_anywhere() -> None:
+    # non-finite entry in a VALID candidate → typed failure
+    with pytest.raises(ProbabilityInputError, match="index 0"):
+        normalize_dp4_gated([float("nan"), -1.0], ["valid", "valid"])
+    # non-finite entry in an EXCLUDED candidate → also typed failure
+    with pytest.raises(ProbabilityInputError, match="index 1"):
+        normalize_dp4_gated([-1.0, float("inf")], ["valid", "invalid"])
+
+
+def test_normalize_dp4_gated_length_mismatch_is_typed() -> None:
+    with pytest.raises(ProbabilityInputError, match="length mismatch"):
+        normalize_dp4_gated([0.0], ["valid", "valid"])
+    # ProbabilityInputError stays catch-compatible with the old ValueError
+    with pytest.raises(ValueError):
+        normalize_dp4_gated([0.0], ["valid", "valid"])
+
+
+def test_probability_input_error_exported_and_distinct() -> None:
+    import acp.nmr.probability as probability_module
+
+    assert "ProbabilityInputError" in probability_module.__all__
+    assert issubclass(ProbabilityInputError, ValueError)
+    assert not issubclass(ProbabilityInputError, NonFiniteResidualError)
+    assert not issubclass(NonFiniteResidualError, ProbabilityInputError)

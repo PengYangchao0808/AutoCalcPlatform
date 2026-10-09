@@ -37,7 +37,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -48,12 +47,34 @@ import pytest
 from cccp.qc.interfaces.orca import NmrShieldingParser
 from cccp.qc.interfaces.route_render import RouteKeyword, render_route_line
 from cccp.qc.keyword_registry import GFN_NMR_DEFAULT_ALLOWED, method_policy
+from tests.conftest import get_real_qc_snapshot
 
-ORCA_BIN = os.environ.get("ACP_ORCA_SMOKE_BIN", "/home/xieningke/orca611/orca")
+# ORCA for this matrix: the ACP_ORCA_SMOKE_BIN override, else the conftest
+# production gate path (RealQCSnapshot = cccp.config.load_config +
+# cccp.software.resolve_executable, resolved once at collection).  Only an
+# EXPLICITLY configured gate (yaml path or CONFSEARCH_ORCA_PATH) opens the
+# module: a PATH/scan hit such as the unrelated /usr/bin/orca script must
+# never run the ORCA 6.1.1 verdict matrix (BUG-4 retired the hardcoded
+# machine default; the env override stays authoritative).
+_ORCA_OVERRIDE = os.environ.get("ACP_ORCA_SMOKE_BIN")
+_ORCA_GATE = get_real_qc_snapshot().binary("orca")
+
+if _ORCA_OVERRIDE:
+    ORCA_BIN = _ORCA_OVERRIDE
+    _SKIP_REASON = "" if Path(ORCA_BIN).exists() else f"ORCA binary not present: {ORCA_BIN}"
+elif _ORCA_GATE.source in {"config", "env"} and _ORCA_GATE.path is not None:
+    ORCA_BIN = str(_ORCA_GATE.path)
+    _SKIP_REASON = "" if Path(ORCA_BIN).exists() else f"ORCA binary not present: {ORCA_BIN}"
+else:
+    ORCA_BIN = ""
+    _SKIP_REASON = (
+        "production ORCA not explicitly configured "
+        f"({_ORCA_GATE.provenance}); set ACP_ORCA_SMOKE_BIN to override"
+    )
 OTOL_XTB = Path(ORCA_BIN).parent / "otool_xtb"
 # T22 deployment default: param_gfn0-xtb.txt lives only under .../share/xtb,
 # so this XTBPATH reproduces the recorded missing_dependency verdict.
-DEFAULT_XTBPATH = "/home/xieningke/xtb-dist/bin"
+DEFAULT_XTBPATH = "/home/<user>/xtb-dist/bin"
 EVIDENCE_DIR = Path(os.environ.get("ACP_ORCA_SMOKE_EVIDENCE_DIR", "/tmp/opencode/t17-smoke"))
 PROBE_FIXTURE = Path(__file__).parent / "fixtures" / "orca_keyword_probe.json"
 CASE_TIMEOUT_S = 300
@@ -65,7 +86,7 @@ OUTCOME_CLASSES = frozenset(
 
 pytestmark = [
     pytest.mark.slow,
-    pytest.mark.skipif(not Path(ORCA_BIN).exists(), reason=f"ORCA binary not present: {ORCA_BIN}"),
+    pytest.mark.skipif(bool(_SKIP_REASON), reason=_SKIP_REASON),
 ]
 
 
@@ -482,4 +503,6 @@ def _policy_invariants_unchanged() -> None:
 
 def test_policy_invariants_after_matrix() -> None:
     _policy_invariants_unchanged()
-    assert shutil.which(ORCA_BIN) or Path(ORCA_BIN).exists()
+    # which(abs) is subsumed by the file check (which => exists); keep the
+    # contract as a plain presence assert on the production/env-resolved path.
+    assert Path(ORCA_BIN).is_file()

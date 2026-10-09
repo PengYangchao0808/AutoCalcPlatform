@@ -1394,16 +1394,20 @@ def _resolve_tsmode(task_root: Path, workflow: str, job_id: str, warnings: list[
         except OSError:
             pass
 
-        # Probe vibrations — normal_modes.json in the tsmode dir
-        vibrations = StructureViewerVibrations(available=False)
-        normal_modes_path = tsmode_dir / "normal_modes.json"
-        if normal_modes_path.is_file():
+        # Probe vibrations via the shared resolution so the catalog and the
+        # vibrations endpoint never diverge (todo 17).
+        from acp.results.vibration_projection import probe_vibration_projection
+
+        vib_probe = probe_vibration_projection(task_root)
+        if vib_probe.available:
             vibrations = StructureViewerVibrations(
                 available=True,
                 endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
-                imaginary_count=None,
-                source="product",
+                imaginary_count=vib_probe.imaginary_count,
+                source=vib_probe.source,
             )
+        else:
+            vibrations = StructureViewerVibrations(available=False)
 
         entries.append(StructureViewerEntry(
             id=entry_id,

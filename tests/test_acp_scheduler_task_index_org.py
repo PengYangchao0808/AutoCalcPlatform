@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+from collections.abc import Callable
 from pathlib import Path
+
+import pytest
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
@@ -696,7 +700,9 @@ class TestMoveJobWiring:
         row = idx.get("j1")
         assert row["project_id"] == p2_id
 
-    def test_move_job_via_manager_wiring(self, tmp_path: Path) -> None:
+    def test_move_job_via_manager_wiring(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from unittest.mock import MagicMock
 
         from acp.scheduler.manager import JobManager
@@ -704,6 +710,11 @@ class TestMoveJobWiring:
         runner = MagicMock()
         runner.poll.return_value = (False, None)
         mgr = JobManager(run_root=tmp_path, runner=runner, poll_interval=30)
+        # submit() fires a daemon thread whose stale record snapshot can
+        # overwrite cancel()'s CANCELLED write with STARTING/RUNNING (race
+        # reproduced in task-1b-hygiene evidence). Stub the dispatch thread
+        # so the QUEUED -> CANCELLED step is deterministic, not a thread race.
+        monkeypatch.setattr(mgr, "_start_submission_thread", lambda job_id, name: False)
         try:
             p1 = mgr.projects.create_project("Source", str(tmp_path / "src"))
             p2 = mgr.projects.create_project("Target", str(tmp_path / "tgt"))
@@ -735,6 +746,352 @@ class TestMoveJobWiring:
             assert task_row2["project_id"] == p2_id
         finally:
             mgr.shutdown()
+
+
+class TestProjectionAuthority:
+    """Todo 5 (R3): jobs is authoritative; tasks is a repairable projection.
+
+    ``sync_job_transition`` must project from the CURRENT jobs row (same DB),
+    never from the passed-in stale ``JobRecord``; the reconcile pass must cover
+    missing rows and converge within the stated scan bound.
+    """
+
+    def _pair(self, tmp_path: Path) -> tuple[JobStore, TaskIndex]:
+        db = tmp_path / "authority.db"
+        migrate(db)
+        return JobStore(db), TaskIndex(db)
+
+    def test_delayed_stale_running_cannot_overwrite_paused(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        spec = _make_spec()
+        paused = JobRecord(id="j1", spec=spec, status=JobStatus.PAUSED, work_dir="/tmp/j1")
+        store.create(paused)
+        idx.sync_from_job(paused)
+        stale = JobRecord(id="j1", spec=spec, status=JobStatus.RUNNING, work_dir="/tmp/j1")
+
+        idx.sync_job_transition(stale)
+
+        assert store.get("j1").status == JobStatus.PAUSED
+        assert idx.get("j1")["status"] == "paused"
+
+    def test_terminal_rerun_replay_cannot_resurrect_completion(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        spec = _make_spec()
+        # attempt 2 is QUEUED after an in-place rerun; the delayed completion
+        # projection from attempt 1 must not resurrect COMPLETED.
+        queued = JobRecord(
+            id="j1", spec=spec, status=JobStatus.QUEUED, work_dir="/tmp/j1", attempt=2
+        )
+        store.create(queued)
+        idx.sync_from_job(queued)
+        stale_done = JobRecord(
+            id="j1",
+            spec=spec,
+            status=JobStatus.COMPLETED,
+            work_dir="/tmp/j1",
+            completed_at="2026-01-01T11:00:00",
+        )
+
+        idx.sync_job_transition(stale_done)
+
+        assert idx.get("j1")["status"] == "queued"
+
+    def test_reconcile_includes_missing_tasks_rows(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        for i in range(3):
+            store.create(
+                JobRecord(
+                    id=f"j{i}",
+                    spec=_make_spec(),
+                    status=JobStatus.COMPLETED,
+                    work_dir=f"/tmp/j{i}",
+                )
+            )
+        assert idx.find_projection_drift(10) == ["j0", "j1", "j2"]
+
+        repaired = idx.reconcile_projection(10)
+
+        assert repaired == 3
+        assert idx.find_projection_drift(10) == []
+        for i in range(3):
+            assert idx.get(f"j{i}")["status"] == "completed"
+
+    def test_drift_larger_than_batch_converges_within_ceil_bound(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        for i in range(5):
+            store.create(
+                JobRecord(
+                    id=f"j{i}",
+                    spec=_make_spec(),
+                    status=JobStatus.COMPLETED,
+                    work_dir=f"/tmp/j{i}",
+                )
+            )
+        batch = 2  # B; N=5 -> ceil(5/2)=3 scans
+        scans = 0
+        while idx.find_projection_drift(batch):
+            idx.reconcile_projection(batch)
+            scans += 1
+            assert scans <= 3, "drift did not converge within ceil(N/B) scans"
+        assert scans == 3
+        assert idx.find_projection_drift(batch) == []
+
+    def test_reconcile_only_updates_owned_projection_columns(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        spec = _make_spec()
+        running = JobRecord(id="j1", spec=spec, status=JobStatus.RUNNING, work_dir="/tmp/j1")
+        store.create(running)
+        idx.sync_from_job(running)
+        idx._run(
+            "UPDATE tasks SET custom_name='keep', name_revision=7, tags='[\"t\"]',"
+            " archived=1, status='completed' WHERE task_id='j1'"
+        )
+
+        idx.reconcile_projection(10)
+
+        row = idx.get("j1")
+        assert row["status"] == "running"
+        assert row["custom_name"] == "keep"
+        assert row["name_revision"] == 7
+        assert row["tags"] == '["t"]'
+        assert row["archived"] == 1
+
+
+class TestRerunProgressProjection:
+    """Todo 16 (D-T10-1): terminal→rerun must converge the progress projection.
+
+    ``requeue_with_spec`` clears ``jobs.progress`` to NULL while the tasks row
+    still carries the completed attempt's ``1.0``.  The jobs-authoritative
+    projection must be able to write NULL — on the status-change path and
+    through ``reconcile_projection`` — so the row leaves the drift set within
+    ``ceil(N/B)`` scans instead of being reported forever (IS-4 bound).
+    """
+
+    def _pair(self, tmp_path: Path) -> tuple[JobStore, TaskIndex]:
+        db = tmp_path / "authority.db"
+        migrate(db)
+        return JobStore(db), TaskIndex(db)
+
+    def _seed_completed_with_progress(self, store: JobStore, idx: TaskIndex) -> JobRecord:
+        """Terminal attempt N with tasks.progress=1.0 (T10 probe state)."""
+        done = _make_record(
+            job_id="j1",
+            status=JobStatus.COMPLETED,
+            work_dir="/tmp/j1",
+        )
+        assert done.progress == 1.0
+        store.create(done)
+        idx.sync_from_job(done)
+        # User-owned org fields the projection must never touch.
+        idx._run(
+            "UPDATE tasks SET custom_name='keep', name_revision=7,"
+            " tags='[\"t\"]', archived=1, group_id='g-keep' WHERE task_id='j1'"
+        )
+        return done
+
+    def _requeue(self, store: JobStore, record: JobRecord) -> JobRecord:
+        """Real in-place rerun CAS: jobs -> QUEUED, progress -> NULL, attempt+1."""
+        stored = store.get(record.id)
+        assert stored is not None
+        requeued = store.requeue_with_spec(
+            record.id,
+            new_spec=record.spec,
+            expected_revision=stored.revision,
+            expected_attempt=stored.attempt,
+            expected_status=stored.status,
+        )
+        assert requeued.status == JobStatus.QUEUED
+        assert requeued.progress is None, "rerun must clear jobs.progress"
+        return requeued
+
+    def _assert_org_fields_preserved(self, idx: TaskIndex, task_id: str) -> None:
+        row = idx.get(task_id)
+        assert row is not None
+        assert row["custom_name"] == "keep"
+        assert row["name_revision"] == 7
+        assert row["tags"] == '["t"]'
+        assert row["archived"] == 1
+        assert row["group_id"] == "g-keep"
+
+    def test_terminal_rerun_sync_projects_null_progress(self, tmp_path: Path) -> None:
+        """After terminal→rerun the sync path itself converges tasks.progress."""
+        store, idx = self._pair(tmp_path)
+        done = self._seed_completed_with_progress(store, idx)
+        requeued = self._requeue(store, done)
+
+        # manager._finish_inplace_requeue -> _sync_task_status path
+        idx.sync_job_transition(requeued)
+
+        assert idx.find_projection_drift(10) == [], (
+            "the rerun sync must leave no progress drift behind"
+        )
+        row = idx.get("j1")
+        assert row is not None
+        assert row["status"] == "queued"
+        assert row["progress"] is None, "tasks.progress must follow jobs to NULL"
+        self._assert_org_fields_preserved(idx, "j1")
+        assert idx.reconcile_projection(10) == 0
+        assert idx.find_projection_drift(10) == []
+
+    def test_reconcile_repairs_null_jobs_progress_within_bound(self, tmp_path: Path) -> None:
+        """A row already left in the pre-fix drifted state (status matches,
+        tasks.progress=1.0 vs jobs.progress NULL) drains within ceil(N/B)."""
+        store, idx = self._pair(tmp_path)
+        done = self._seed_completed_with_progress(store, idx)
+        self._requeue(store, done)
+        # Legacy state: the pre-fix sync only flipped the status column.
+        idx._run("UPDATE tasks SET status='queued', progress=1.0 WHERE task_id='j1'")
+        assert idx.find_projection_drift(10) == ["j1"], "drift must be observable"
+
+        batch = 1  # B; N=1 -> ceil(1/1) = 1 scan
+        scans = 0
+        while idx.find_projection_drift(batch):
+            idx.reconcile_projection(batch)
+            scans += 1
+            assert scans <= -(-1 // batch), (
+                "NULL jobs.progress drift must converge within ceil(N/B) scans"
+            )
+        assert scans == 1, f"expected the reconcile pass to repair the row in 1 scan, got {scans}"
+        row = idx.get("j1")
+        assert row is not None
+        assert row["progress"] is None, "reconcile must write the jobs-authoritative NULL"
+        assert row["status"] == "queued"
+        self._assert_org_fields_preserved(idx, "j1")
+
+    def test_terminal_rerun_via_manager_converges(self, tmp_path: Path) -> None:
+        """End-to-end rerun (manager path, T10 probe): drift set empties and
+        tasks.progress matches jobs (NULL); org fields survive the rerun."""
+        from acp.scheduler.manager import JobManager
+
+        mgr = JobManager(run_root=tmp_path, poll_interval=30)
+        try:
+            work_dir = tmp_path / "runs" / "pdrift"
+            results = work_dir / "RESULT"
+            results.mkdir(parents=True, exist_ok=True)
+            (results / "a.xyz").write_text("x", encoding="utf-8")
+            done = JobRecord(
+                id="pdrift",
+                spec=_make_spec(),
+                status=JobStatus.COMPLETED,
+                work_dir=str(work_dir),
+                exit_code=0,
+                progress=1.0,
+                completed_at="2026-01-01T00:00:00+00:00",
+                result={"terminal_side_effects_done": False},
+            )
+            mgr.store.create(done)
+            assert mgr.tasks is not None
+            mgr.tasks.sync_from_job(done)
+            mgr.tasks._run(
+                "UPDATE tasks SET custom_name='keep', name_revision=7,"
+                " tags='[\"t\"]', archived=1 WHERE task_id='pdrift'"
+            )
+            mgr._start_submission_thread = lambda job_id, name: True  # type: ignore[method-assign]
+
+            rerun = mgr.rerun_job(done.id)
+
+            assert rerun is not None and rerun.status == JobStatus.QUEUED
+            assert rerun.progress is None, "rerun must clear jobs.progress"
+            batch = mgr._task_reconcile_batch
+            initial = mgr.tasks.find_projection_drift(batch)
+            scans = 0
+            while mgr.tasks.find_projection_drift(batch):
+                mgr.tasks.reconcile_projection(batch)
+                scans += 1
+                bound = -(-len(initial) // batch) if initial else 1
+                assert scans <= bound, (
+                    f"drift {initial} did not converge within ceil(N/B)={bound} scans"
+                )
+            row = mgr.tasks.get(done.id)
+            assert row is not None
+            assert row["status"] == "queued"
+            assert row["progress"] is None, "tasks.progress must match jobs (NULL)"
+            assert row["custom_name"] == "keep"
+            assert row["name_revision"] == 7
+            assert row["tags"] == '["t"]'
+            assert row["archived"] == 1
+            assert mgr.store.get(done.id).progress is None, "jobs row must never be written"
+        finally:
+            mgr.shutdown()
+
+
+class TestProjectionLockDiscipline:
+    """F3 regression: the projection must not re-enter ``TaskIndex._lock``.
+
+    ``sync_job_transition`` / ``reconcile_projection`` hold the non-reentrant
+    ``_lock`` while projecting; the missing-tasks-row branch builds a payload
+    whose ``molecule_key`` resolution used to call ``query_rows`` (which takes
+    the same lock) in the same thread -> deterministic self-deadlock whenever a
+    jobs row with a non-empty ``project_id``/``molecule_name`` had no tasks row
+    (exactly the drift the reconciler exists to repair).
+    """
+
+    def _pair(self, tmp_path: Path) -> tuple[JobStore, TaskIndex]:
+        db = tmp_path / "lock_discipline.db"
+        migrate(db)
+        return JobStore(db), TaskIndex(db)
+
+    @staticmethod
+    def _run_bounded(fn: Callable[[], None]) -> bool:
+        """Run *fn* in a daemon thread; True iff it finished within the bound.
+
+        No sleeps: the thread+join timeout keeps a red run from hanging the
+        suite — on the pre-fix code the worker blocks on its own lock, the
+        join times out, and the assertion fails instead of deadlocking pytest.
+        """
+        done = threading.Event()
+
+        def target() -> None:
+            fn()
+            done.set()
+
+        worker = threading.Thread(target=target, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        return done.is_set() and not worker.is_alive()
+
+    def test_sync_job_transition_missing_row_does_not_deadlock(self, tmp_path: Path) -> None:
+        store, idx = self._pair(tmp_path)
+        record = _make_record(
+            job_id="j1",
+            status=JobStatus.COMPLETED,
+            project_id="default",
+            spec=_make_spec(molecule_name="CCO"),
+        )
+        store.create(record)
+        assert idx.get("j1") is None, "precondition: tasks row is missing"
+
+        assert self._run_bounded(lambda: idx.sync_job_transition(record)), (
+            "sync_job_transition self-deadlocked on a jobs row with no tasks row (F3)"
+        )
+        row = idx.get("j1")
+        assert row is not None
+        assert row["molecule_key"] == "CCO"
+        assert row["project_id"] == "default"
+
+    def test_reconcile_projection_repairs_missing_row_without_deadlock(
+        self, tmp_path: Path
+    ) -> None:
+        store, idx = self._pair(tmp_path)
+        for i in range(2):
+            store.create(
+                JobRecord(
+                    id=f"j{i}",
+                    spec=_make_spec(molecule_name="CCO"),
+                    status=JobStatus.COMPLETED,
+                    work_dir=f"/tmp/j{i}",
+                    project_id="default",
+                )
+            )
+        assert idx.find_projection_drift(10) == ["j0", "j1"]
+
+        assert self._run_bounded(lambda: idx.reconcile_projection(10)), (
+            "reconcile_projection self-deadlocked repairing a missing tasks row (F3)"
+        )
+        assert idx.find_projection_drift(10) == []
+        row = idx.get("j0")
+        assert row is not None
+        assert row["molecule_key"] == "CCO"
 
 
 class TestMoleculeGroupKey:

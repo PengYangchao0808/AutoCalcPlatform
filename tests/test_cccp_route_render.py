@@ -275,9 +275,11 @@ def test_nmr_route_goes_through_renderer() -> None:
             solvent="toluene",
             solvent_model="SMD",
         )
-        lines = path.read_text().splitlines()[:2]
-    assert lines[0] == "! mPW1PW91 6-311G(d) TightSCF"
-    assert lines[1] == "! SMD(Toluene)"
+        lines = path.read_text().splitlines()[:3]
+    # T16: default Goodman level emits the ORCA-native keyword + comment.
+    assert lines[0] == "# functional alias: requested=mPW1PW91 executed=mPW1PW"
+    assert lines[1] == "! mPW1PW 6-311G(d) TightSCF"
+    assert lines[2] == "! SMD(Toluene)"
 
 
 def test_irc_route_goes_through_renderer() -> None:

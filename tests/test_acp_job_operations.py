@@ -79,6 +79,7 @@ def _seed_job(
     result: dict | None = None,
     remote_job_id: str | None = None,
     make_dir: bool = True,
+    attempt: int = 1,
 ) -> JobRecord:
     if make_dir:
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -99,6 +100,7 @@ def _seed_job(
         completed_at=completed_at,
         result=result,
         remote_job_id=remote_job_id,
+        attempt=attempt,
     )
     store.create(record)
     return record
@@ -420,6 +422,71 @@ def test_startup_marks_interrupted_cancelling_job_cancelled(tmp_path: Path) -> N
         assert rec is not None
         assert rec.status == JobStatus.CANCELLED
         assert "[RESTART_FAILED]" in (rec.error or "")
+    finally:
+        mgr.shutdown()
+
+
+def test_startup_remote_cancelling_requires_confirmation(tmp_path: Path) -> None:
+    """Remote counterpart of the local seed above: a remote CANCELLING row
+    survives the restart as CANCELLING and is only reconciled — never a
+    direct CANCELLED without LSF confirmation (plan todo 6, Metis Q3)."""
+    store = JobStore(tmp_path / "jobs.db")
+    _seed_job(
+        store,
+        tmp_path / "runs/j1",
+        "mid-cancel-remote",
+        status=JobStatus.CANCELLING,
+        remote_job_id="4545",
+        result={
+            "node": "compute-01",
+            "remote_dir": "/scratch/test/acp_jobs/projA/mid-cancel-remote",
+            "execution_kind": "remote",
+            "remote": {
+                "submit_state": "submitted",
+                "node": "compute-01",
+                "relative": "projA/mid-cancel-remote",
+                "cancel_state": "requested",
+            },
+        },
+    )
+
+    mgr = _make_manager(tmp_path, store=store)
+    try:
+        rec = mgr.get("mid-cancel-remote")
+        assert rec is not None
+        assert rec.status == JobStatus.CANCELLING, (
+            "restart must not short-circuit remote CANCELLING"
+        )
+        assert rec.completed_at is None
+
+        # Restart-time reconcile with the job still alive on LSF: the bkill
+        # is re-sent and the row stays CANCELLING until bjobs confirms.
+        mgr._remote_config = RemoteExecutionConfig(execution_mode="local", nodes=[_make_node()])
+        gets: list[str] = []
+        kills: list[str] = []
+
+        class _Monitor:
+            def get_lsf_status(self, node, lsf_job_id: str) -> str:
+                gets.append(lsf_job_id)
+                return "running"
+
+            def cancel_job(self, node, lsf_job_id: str) -> bool:
+                kills.append(lsf_job_id)
+                return True
+
+        mgr._remote_monitor = _Monitor()  # type: ignore[assignment]
+        mgr.remote_runner = SimpleNamespace(  # type: ignore[assignment]
+            recover_job_state=lambda record: True,
+            reconcile_submission=lambda record: "unknown",
+            cancel_remote=lambda job_id, record=None: True,
+        )
+        mgr._requeue_active_on_startup()
+
+        rec = mgr.get("mid-cancel-remote")
+        assert rec is not None
+        assert rec.status == JobStatus.CANCELLING, "never CANCELLED before confirmation"
+        assert gets and kills == ["4545"], "reconcile must classify then re-send bkill"
+        assert rec.completed_at is None
     finally:
         mgr.shutdown()
 
@@ -814,7 +881,7 @@ def test_continue_mechanism_failed_job_requeues(tmp_path: Path) -> None:
         assert rec.exit_code is None
         assert rec.completed_at is None
         assert rec.result is not None
-        assert rec.result["attempts"] == 2  # default 1 + 1
+        assert rec.attempt == 2  # jobs.attempt is the single counter
         assert rec.result["continued_from"] == "failed"
         _wait_submission(calls, "mech-failed")
 
@@ -836,6 +903,7 @@ def test_continue_cancelled_mechanism_increments_attempts(tmp_path: Path) -> Non
             workflow="mechanism",
             status=JobStatus.CANCELLED,
             result={"attempts": 3},
+            attempt=3,
         )
         calls: list[str] = []
         mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
@@ -843,7 +911,7 @@ def test_continue_cancelled_mechanism_increments_attempts(tmp_path: Path) -> Non
         rec = mgr.continue_job("mech-cancelled")
         assert rec.status == JobStatus.QUEUED
         assert rec.result is not None
-        assert rec.result["attempts"] == 4
+        assert rec.attempt == 4
         assert rec.result["continued_from"] == "cancelled"
         _wait_submission(calls, "mech-cancelled")
     finally:
@@ -1096,7 +1164,7 @@ def test_continue_default_returns_to_source_and_preserves_provenance(
 
         assert rec.status == JobStatus.QUEUED
         assert rec.result is not None
-        assert rec.result["attempts"] == 2
+        assert rec.attempt == 2
         assert rec.result["continued_from"] == "failed"
         assert rec.result["node"] == "comp-01"
         assert rec.result["execution_target"] == "comp-01"
@@ -1151,9 +1219,9 @@ def test_rerun_preserves_job_identity_and_clears_work_dir_in_place(tmp_path: Pat
         assert rerun.group_id == source.group_id
         assert rerun.status == JobStatus.QUEUED
         assert rerun.result is not None
-        assert rerun.result["attempts"] == 2
+        assert rerun.attempt == 2
         assert Path(rerun.work_dir) == work_dir
-        # No _attempts archive: attempt history lives in DB metadata only.
+        # Legacy _attempts archive relocated under attempts/<n>/ (contract B).
         assert not (work_dir / "_attempts").exists()
         # Attempt-scoped content cleared in place; identity files preserved.
         assert not (work_dir / "WORK" / "02_SEARCH").exists()
@@ -1454,7 +1522,7 @@ def test_rerun_captures_affinity_from_previous_execution_target(
         assert rerun is not None
         assert rerun.status == JobStatus.QUEUED
         assert rerun.result is not None
-        assert rerun.result["attempts"] == 2
+        assert rerun.attempt == 2
         assert "execution_target" not in rerun.result
         assert rerun.result["affinity_node"] == "comp-01"
         _wait_submission(calls, "rerun-affinity")
@@ -2353,23 +2421,25 @@ def _poll_remote_runner(
     return runner, record, log
 
 
-def test_poll_remote_transitions_running_to_paused(tmp_path: Path) -> None:
+def test_poll_remote_observes_running_to_paused(tmp_path: Path) -> None:
     runner, record, log = _poll_remote_runner(STATUS_PAUSED, tmp_path)
-    is_terminal, exit_code = runner.poll_remote(record, log, threading.Event())
+    observation = runner.poll_remote(record, log, threading.Event())
 
-    assert is_terminal is False
-    assert exit_code is None
-    assert record.status == JobStatus.PAUSED
+    assert observation.terminal is False
+    assert observation.exit_code is None
+    assert observation.observed_status == JobStatus.PAUSED
+    assert record.status == JobStatus.RUNNING, "poll must not mutate the record"
     assert record.completed_at is None
 
 
-def test_poll_remote_transitions_paused_back_to_running(tmp_path: Path) -> None:
+def test_poll_remote_observes_paused_back_to_running(tmp_path: Path) -> None:
     runner, record, log = _poll_remote_runner("running", tmp_path)
     record.status = JobStatus.PAUSED
-    is_terminal, _exit = runner.poll_remote(record, log, threading.Event())
+    observation = runner.poll_remote(record, log, threading.Event())
 
-    assert is_terminal is False
-    assert record.status == JobStatus.RUNNING
+    assert observation.terminal is False
+    assert observation.observed_status == JobStatus.RUNNING
+    assert record.status == JobStatus.PAUSED, "poll must not mutate the record"
 
 
 # ====================================================================== #

@@ -12,21 +12,36 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import posixpath
 import stat
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import paramiko
 
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.remote.ssh import SSHConnectionPool
 
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from acp.scheduler.jobs import JobRecord
+
 logger = logging.getLogger(__name__)
 
-__all__ = ["FileStager", "RemoteFileInfo"]
+__all__ = ["FileStager", "RemoteDirConflictError", "RemoteFileInfo"]
+
+
+class RemoteDirConflictError(RuntimeError):
+    """Remote job directory exists but is not owned by this job.
+
+    Raised by :meth:`FileStager.claim_remote_job_dir` when the directory
+    carries foreign (or unreadable) ``job.json``/``task.json`` ownership
+    markers.  The directory is **never** deleted or modified — retention
+    cleanup owns removal.
+    """
 
 
 @dataclass
@@ -264,6 +279,130 @@ class FileStager:
         with self._ssh.sftp_session(node) as sftp:
             _ensure_remote_dir(sftp, remote_path)
 
+    def rename_remote(self, node: RemoteNode, src: str, dst: str) -> None:
+        """Rename *src* to *dst* on *node* (parents ensured).
+
+        Refuses to overwrite an existing *dst* (attempt receipts must never
+        clobber a previous archive).  Used only for attempt-receipt
+        archiving and retention moves — submission never renames a foreign
+        directory.
+        """
+        src = _norm_remote(src)
+        dst = _norm_remote(dst)
+        with self._ssh.sftp_session(node) as sftp:
+            parent = posixpath.dirname(dst)
+            if parent:
+                _ensure_remote_dir(sftp, parent)
+            try:
+                sftp.stat(dst)
+            except FileNotFoundError:
+                pass
+            else:
+                raise FileExistsError(f"rename target already exists: {dst}")
+            sftp.rename(src, dst)
+            logger.debug("Renamed %s:%s -> %s", node.name, src, dst)
+
+    def remote_rename(
+        self, node: RemoteNode, src: str, dst: str, *, must_not_exist: bool = True
+    ) -> None:
+        """Rename *src* to *dst* with ``mv -n``/``mv -T`` semantics.
+
+        With *must_not_exist* (default) the target is asserted absent
+        BEFORE the rename so a POSIX ``mv`` can never nest *src* inside an
+        existing *dst* directory or clobber it (D03 release publish and
+        trash isolation both depend on this exclusivity).  Raises
+        :class:`FileExistsError` when the target already exists; *src* is
+        left untouched in every failure case.
+        """
+        src = _norm_remote(src)
+        dst = _norm_remote(dst)
+        with self._ssh.sftp_session(node) as sftp:
+            parent = posixpath.dirname(dst)
+            if parent:
+                _ensure_remote_dir(sftp, parent)
+            if must_not_exist:
+                try:
+                    sftp.stat(dst)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise FileExistsError(f"rename target already exists: {dst}")
+            sftp.rename(src, dst)
+            logger.debug(
+                "Renamed %s:%s -> %s (must_not_exist=%s)", node.name, src, dst, must_not_exist
+            )
+
+    def remote_sha256(self, node: RemoteNode, remote_path: str) -> str:
+        """Return the hex SHA-256 of *remote_path* via ``sha256sum``.
+
+        Raises :class:`FileNotFoundError` when the remote file is missing
+        or ``sha256sum`` fails — verification code treats that as "not
+        present / not verified" rather than trusting a stale guess.
+        """
+        import shlex
+
+        remote_path = _norm_remote(remote_path)
+        code, out, err = self._ssh.execute(
+            node, f"sha256sum {shlex.quote(remote_path)}", timeout=60
+        )
+        if code != 0:
+            raise FileNotFoundError(
+                f"remote sha256 failed for {remote_path} on {node.name}: "
+                f"{(err or out).strip() or f'exit {code}'}"
+            )
+        digest = out.strip().split(None, 1)[0].lower() if out.strip() else ""
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise OSError(f"unparseable sha256sum output for {remote_path} on {node.name}: {out!r}")
+        return digest
+
+    def claim_remote_job_dir(self, node: RemoteNode, remote_job_dir: str, record: JobRecord) -> str:
+        """Exclusively claim *remote_job_dir* for *record*.
+
+        Recursively ensures the parents, then creates the final directory.
+        When the directory already exists, its ``job.json``/``task.json``
+        ownership markers decide:
+
+        * same ``job_id`` (any attempt — contract B reuses the storage dir
+          across attempts) → ``"reused"``;
+        * foreign ``job_id`` or unreadable markers →
+          :class:`RemoteDirConflictError` — the directory is **never**
+          deleted or modified here.
+
+        Returns:
+            ``"created"`` (newly made — deletable on submission failure)
+            or ``"reused"`` (never deletable).
+        """
+        remote_path = _norm_remote(remote_job_dir)
+        with self._ssh.sftp_session(node) as sftp:
+            created = False
+            try:
+                sftp.stat(remote_path)
+            except FileNotFoundError:
+                parent = posixpath.dirname(remote_path)
+                if parent:
+                    _ensure_remote_dir(sftp, parent)
+                try:
+                    sftp.mkdir(remote_path)
+                    created = True
+                except OSError:
+                    # Lost a creation race — fall through to ownership check.
+                    created = False
+            if created:
+                return "created"
+
+            owner = _read_owner_identity(sftp, remote_path)
+            if owner is not None and owner[0] == record.id:
+                return "reused"
+            if owner is None:
+                detail = "markers missing or unreadable"
+            else:
+                detail = f"owned by foreign job {owner[0]!r} (attempt {owner[1]})"
+            raise RemoteDirConflictError(
+                f"Remote dir {remote_path} on {node.name} already exists and is "
+                f"not owned by job {record.id!r}: {detail}. Refusing to submit "
+                "into (or delete) a conflicting directory."
+            )
+
 
 # ---------------------------------------------------------------------- #
 # Internal helpers
@@ -273,6 +412,35 @@ class FileStager:
 def _norm_remote(path: str) -> str:
     """Normalise a remote POSIX path (expand ``~`` is left to the server)."""
     return posixpath.normpath(path) if path else path
+
+
+def _read_owner_identity(
+    sftp: paramiko.SFTPClient, remote_dir: str
+) -> tuple[str, int | None] | None:
+    """Read the ``(job_id, attempt)`` ownership markers of *remote_dir*.
+
+    Returns ``None`` when neither marker exists or parses — treated as an
+    unreadable owner (conflict) by the claim.
+    """
+    for marker in ("job.json", "task.json"):
+        try:
+            with sftp.file(posixpath.join(remote_dir, marker), "rb") as f:
+                raw = f.read()
+        except (FileNotFoundError, OSError):
+            continue
+        if not raw:
+            continue
+        try:
+            payload: Any = json.loads(raw.decode("utf-8", errors="replace"))
+        except ValueError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        owner = payload.get("id") or payload.get("task_id")
+        if isinstance(owner, str) and owner:
+            attempt = payload.get("attempt")
+            return owner, attempt if isinstance(attempt, int) else None
+    return None
 
 
 def _ensure_remote_dir(sftp: paramiko.SFTPClient, remote_dir: str) -> None:

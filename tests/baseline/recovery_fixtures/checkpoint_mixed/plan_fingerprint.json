@@ -1,0 +1,24 @@
+{
+  "plan_fingerprint": "4bab9c6efc810987",
+  "plan_repr": {
+    "items": [
+      "structures/input.xyz"
+    ],
+    "profile": "opt_freq",
+    "steps": [
+      {
+        "kind": "optimize",
+        "mode": "unconstrained",
+        "spec": {
+          "max_cycles": 5
+        }
+      },
+      {
+        "kind": "frequency",
+        "mode": "unconstrained",
+        "spec": null
+      }
+    ],
+    "workflow": "BatchOptimize"
+  }
+}

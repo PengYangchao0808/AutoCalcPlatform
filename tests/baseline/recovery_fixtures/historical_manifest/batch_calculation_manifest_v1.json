@@ -1,0 +1,18 @@
+{
+  "created_at": "",
+  "items": [
+    {
+      "cache_key": "hist-cache-key-1",
+      "candidate_id": "hist_cand_1",
+      "item_id": "hist_item_1",
+      "name": "hist_1",
+      "status": "completed",
+      "tag": "TS"
+    }
+  ],
+  "kind": "batch_items_manifest",
+  "profile": "opt_freq",
+  "schema_version": "batch_calculation_v1",
+  "updated_at": "",
+  "workflow": "BatchOptimize"
+}

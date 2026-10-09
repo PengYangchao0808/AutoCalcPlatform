@@ -10,6 +10,7 @@ Coverage layers:
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -317,6 +318,12 @@ def _spec(workflow: str) -> JobSpec:
                 "boltzmann_temp": 298.15,
                 "error_model": "goodman",
                 "enumerate": False,
+                # todo 25: resolver parameters synced into the nmr edit draft
+                "functional": "mPW1PW91",
+                "basis": "6-311G(d)",
+                "solvent_model": "cpcm",
+                "ewin": 6.0,
+                "max_conformers": 10,
             },
         )
     else:  # pragma: no cover - guard for typos in the parametrisation
@@ -492,6 +499,23 @@ def test_diff_preserves_false_zero_null_distinctions() -> None:
     assert "method.tags" in paths  # order is semantic for item lists
 
 
+def test_scan_use_scants_enters_editable_diff() -> None:
+    from acp.scheduler.job_edit import editable_spec_from_parts
+
+    def _spec(use_scants: bool) -> dict:
+        return editable_spec_from_parts(
+            workflow="scan",
+            input_spec={"source": "CCO", "source_type": "smiles"},
+            method={"schema_id": "dft_scan", "levels": {"scan": {"scan_use_scants": use_scants}}},
+            resources={},
+        )
+
+    diff = diff_editable_specs(_spec(False), _spec(True))
+    by_path = {entry["path"]: entry for entry in diff}
+    assert by_path["method.levels.scan.scan_use_scants"]["old"] is False
+    assert by_path["method.levels.scan.scan_use_scants"]["new"] is True
+
+
 def test_preview_fingerprint_binds_configuration() -> None:
     a = compute_preview_fingerprint(
         "j1", "sr_x", "singlepoint", {"source": "CCO"}, {"m": 1}, {"nproc": 8}
@@ -604,7 +628,7 @@ def test_edit_in_place_updates_spec_attempts_and_clears(tmp_path: Path) -> None:
         assert updated.work_dir == record.work_dir
         assert updated.spec.method == {"levels": {"sp": {"functional": "wB97X-D4"}}}
         assert updated.result is not None
-        assert updated.result["attempts"] == 2
+        assert updated.attempt == 2, "jobs.attempt is the single counter"
         assert updated.result["attempt_history"][0]["mode"] == "edit_recalculate"
         work_dir = Path(updated.work_dir)
         assert not (work_dir / "WORK" / "old.out").exists()
@@ -802,29 +826,24 @@ def test_edit_cleanup_failure_blocks_queueing(tmp_path: Path) -> None:
         record = _seed(manager, "edit10")
         revision = compute_source_revision(record)
 
-        import acp.scheduler.manager as manager_module
-
-        original_rmtree = manager_module.shutil.rmtree
-
-        def _fail_rmtree(path: Any, *args: Any, **kwargs: Any) -> None:
-            if str(path).endswith("WORK"):
-                raise OSError("permission denied (simulated)")
-            original_rmtree(path, *args, **kwargs)
-
-        manager_module.shutil.rmtree = _fail_rmtree  # type: ignore[attr-defined]
-        try:
-            with pytest.raises(RuntimeError, match="清理旧尝试产物失败"):
-                manager.edit_recalculate(
-                    "edit10",
-                    mode="in_place",
-                    new_spec=_edit_spec("singlepoint"),
-                    expected_source_revision=revision,
-                    request_id="req-10",
-                    payload_hash="ph_x",
-                    payload_json="{}",
-                )
-        finally:
-            manager_module.shutil.rmtree = original_rmtree  # type: ignore[attr-defined]
+        # Contract B: a colliding attempt archive aborts the requeue —
+        # archiving old receipts never falls back to deletion.
+        work_dir = Path(record.work_dir)
+        stale = (
+            work_dir / "WORK" / "00_RUNTIME" / "attempts" / str(record.attempt) / "WORK" / "old.out"
+        )
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text("previous attempt", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="已阻断重跑"):
+            manager.edit_recalculate(
+                "edit10",
+                mode="in_place",
+                new_spec=_edit_spec("singlepoint"),
+                expected_source_revision=revision,
+                request_id="req-10",
+                payload_hash="ph_x",
+                payload_json="{}",
+            )
         updated = manager.get("edit10")
         assert updated is not None
         assert updated.status == JobStatus.FAILED  # stayed terminal
@@ -910,6 +929,74 @@ def test_draft_effective_config_unavailable(tmp_path: Path) -> None:
     assert draft["effective_config"]["status"] == "unavailable"
     assert draft["effective_config"]["source"] is None
     assert draft["effective_config"]["config"] is None
+
+
+# ---------------------------------------------------------------------------
+# todo 25: nmr editable-field coverage (functional/basis/solvent_model/
+# ewin/max_conformers) + resolver-backed effective config + rejection hint
+# ---------------------------------------------------------------------------
+
+_NMR_NEW_FIELDS = ("functional", "basis", "solvent_model", "ewin", "max_conformers")
+
+
+def test_nmr_editable_fields_flow_into_draft() -> None:
+    """The five resolver parameters are editable and preserved in the draft."""
+    record = _record("nmr", status=JobStatus.COMPLETED)
+    draft = build_edit_draft(record)
+    assert draft["workflow_status"] == "active"
+    assert draft["capabilities"]["can_edit"] is True
+    method = draft["editable_spec"]["method"]
+    for field in _NMR_NEW_FIELDS:
+        assert field in method, field
+        assert field in draft["preserved_fields"], field
+    assert method["functional"] == "mPW1PW91"
+    assert method["basis"] == "6-311G(d)"
+    assert method["solvent_model"] == "cpcm"
+    assert method["ewin"] == 6.0
+    assert method["max_conformers"] == 10
+
+
+def test_nmr_effective_config_recomputed_from_resolver(tmp_path: Path) -> None:
+    """Draft effective config resolves the nmr method through the T17 resolver."""
+    work_dir = tmp_path / "nmr_recompute"
+    work_dir.mkdir()  # exists but carries no effective_config.json snapshot
+    record = JobRecord(
+        id="effnmr",
+        spec=_spec("nmr"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+    )
+    draft = build_edit_draft(record)
+    eff = draft["effective_config"]
+    assert eff["status"] == "recomputed"
+    assert eff["source"] == "spec.method"
+    config = eff["config"]
+    assert config["nmr_method"] == "mPW1PW91"
+    assert config["nmr_basis"] == "6-311G(d)"
+    assert config["solvent_model"] == "cpcm"
+    assert config["ewin"] == 6.0
+    assert config["max_conformers"] == 10
+
+
+def test_nmr_unregistered_field_rejected_with_draft_hint(tmp_path: Path) -> None:
+    """Resolver rejection surfaces as a draft note; the draft still opens."""
+    bad = replace(
+        _spec("nmr"),
+        method={**_spec("nmr").method, "functional": "NotARealFunctional"},
+    )
+    record = JobRecord(
+        id="effnmr_bad",
+        spec=bad,
+        status=JobStatus.COMPLETED,
+        work_dir=str(tmp_path / "nmr_bad"),
+    )
+    draft = build_edit_draft(record)
+    assert draft["effective_config"]["status"] == "unavailable"
+    assert draft["capabilities"]["can_edit"] is True
+    assert draft["capabilities"]["disabled_reasons"] == []
+    hints = [note for note in draft["notes"] if "NMR" in note]
+    assert hints, f"expected an nmr validation hint, got {draft['notes']!r}"
+    assert "NotARealFunctional" in hints[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1221,36 +1308,54 @@ def test_rerun_endpoint_still_works_after_refactor(client: TestClient) -> None:
     assert body["id"] == "rr1"
     assert body["status"] == "queued"
     fetched = client.get("/api/v1/jobs/rr1").json()
-    assert fetched["result"]["attempts"] == 2
-    assert fetched["result"]["attempt_history"][0]["mode"] == "rerun"
+    history = fetched["result"]["attempt_history"]
+    assert history[0]["mode"] == "rerun" and history[0]["attempt"] == 1
 
 
 def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path) -> None:
-    from acp.storage.manifest import ResultManifest
     from acp.scheduler.structure_sources import StructureSourceService
+    from acp.storage.manifest import ResultManifest
+
     manager = _make_manager(tmp_path)
     try:
         record = _seed(manager, "snapshot_opt", workflow="optimize")
         root = Path(record.work_dir)
         (root / "RESULT" / "optimized.xyz").write_text(XYZ_COOH, encoding="utf-8")
         manifest = ResultManifest(workflow="optimize", status="failed")
-        manifest.add_product("opt", "OPT", "optimized.xyz", "structure",
-                             metadata={"optimization_status":"converged"})
+        manifest.add_product(
+            "opt",
+            "OPT",
+            "optimized.xyz",
+            "structure",
+            metadata={"optimization_status": "converged"},
+        )
         manifest.write(root / "RESULT")
-        manager.edit_recalculate(record.id, mode="in_place", new_spec=record.spec,
-                                 expected_source_revision=compute_source_revision(record),
-                                 request_id="snapshot_request", payload_hash="snapshot_hash", payload_json="{}")
+        manager.edit_recalculate(
+            record.id,
+            mode="in_place",
+            new_spec=record.spec,
+            expected_source_revision=compute_source_revision(record),
+            request_id="snapshot_request",
+            payload_hash="snapshot_hash",
+            payload_json="{}",
+        )
         assert not (root / "RESULT" / "optimized.xyz").exists()
-        refs = json.loads((root / ".structure_history" / "sources.json").read_text(encoding="utf-8"))
+        refs = json.loads(
+            (root / ".structure_history" / "sources.json").read_text(encoding="utf-8")
+        )
         assert len(refs) == 1
         assert (root / refs[0]["path"]).read_text(encoding="utf-8") == XYZ_COOH
         assert (root / ".structure_history" / "input_1.xyz").is_file()
         service = StructureSourceService(manager.store, manager.run_root)
         asset, checksum = service.get(refs[0]["source_ref"]["source_id"])
         assert asset["atom_count"] == 3
-        for actual, expected in zip(asset["xyz"].splitlines()[2:], XYZ_COOH.splitlines()[2:], strict=True):
+        for actual, expected in zip(
+            asset["xyz"].splitlines()[2:], XYZ_COOH.splitlines()[2:], strict=True
+        ):
             assert actual.split()[0] == expected.split()[0]
-            assert [float(v) for v in actual.split()[1:]] == pytest.approx([float(v) for v in expected.split()[1:]])
+            assert [float(v) for v in actual.split()[1:]] == pytest.approx(
+                [float(v) for v in expected.split()[1:]]
+            )
         old_asset, _ = service.get(f"job_{record.id}:RESULT/optimized.xyz")
         assert old_asset["atom_count"] == 3
         assert checksum.startswith("sha256:")
@@ -1260,20 +1365,190 @@ def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path)
 
 def test_inplace_snapshot_failure_does_not_cleanup_or_queue(tmp_path: Path) -> None:
     from acp.storage.manifest import ResultManifest
+
     manager = _make_manager(tmp_path)
     try:
         record = _seed(manager, "snapshot_invalid", workflow="optimize")
         root = Path(record.work_dir)
         (root / "RESULT" / "optimized.xyz").write_text("1\ninvalid\nH nan 0 0\n", encoding="utf-8")
         manifest = ResultManifest(workflow="optimize", status="failed")
-        manifest.add_product("opt", "OPT", "optimized.xyz", "structure", metadata={"optimization_status":"converged"})
+        manifest.add_product(
+            "opt",
+            "OPT",
+            "optimized.xyz",
+            "structure",
+            metadata={"optimization_status": "converged"},
+        )
         manifest.write(root / "RESULT")
         with pytest.raises(ValueError, match="单帧"):
-            manager.edit_recalculate(record.id, mode="in_place", new_spec=record.spec,
-                                     expected_source_revision=compute_source_revision(record),
-                                     request_id="invalid_snapshot", payload_hash="hash", payload_json="{}")
+            manager.edit_recalculate(
+                record.id,
+                mode="in_place",
+                new_spec=record.spec,
+                expected_source_revision=compute_source_revision(record),
+                request_id="invalid_snapshot",
+                payload_hash="hash",
+                payload_json="{}",
+            )
         assert (root / "RESULT" / "optimized.xyz").is_file()
         assert (root / "WORK" / "old.out").is_file()
         assert manager.get(record.id).status == JobStatus.FAILED
+    finally:
+        manager.shutdown()
+
+
+def _wait_terminal(manager: JobManager, job_id: str, timeout: float = 60.0) -> JobRecord:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        record = manager.get(job_id)
+        if (
+            record is not None
+            and record.status.is_terminal
+            and job_id not in manager._submission_jobs
+        ):
+            return record
+        time.sleep(0.25)
+    raise AssertionError(f"job {job_id} did not settle within {timeout}s")
+
+
+def test_fake_rerun_and_edit_reuse_task_dir_without_sibling(tmp_path: Path) -> None:
+    """BUG-1(b) manager-layer guard (scheduler side only).
+
+    ``fake`` is an in-process runner workflow: it never passes through
+    ``_resolve_output_dir`` and produces no ``result_manifest.json``, so this
+    test asserts only what the scheduler owns.  In-place rerun and
+    edit-recalculate must keep the SAME task directory (no ``<work_dir>_1``
+    sibling), preserve ``.structure_history``, archive each closed attempt
+    under ``WORK/00_RUNTIME/attempts/<n>/``, and leave the fake run COMPLETED
+    with ``state.json`` at the task root.
+    """
+    manager = JobManager(run_root=tmp_path / "runs", max_running=1)
+    try:
+        record = manager.submit(
+            JobSpec(workflow="fake", name="fake_inplace", input={"source": "CCO"})
+        )
+        done = _wait_terminal(manager, record.id)
+        assert done.status == JobStatus.COMPLETED
+        work_dir = Path(done.work_dir)
+        assert (work_dir / "state.json").is_file()
+
+        history = work_dir / ".structure_history"
+        history.mkdir(exist_ok=True)
+        (history / "sources.json").write_text("[]", encoding="utf-8")
+
+        assert manager.rerun_job(record.id) is not None
+        rerun_done = _wait_terminal(manager, record.id)
+        assert rerun_done.status == JobStatus.COMPLETED
+        assert Path(rerun_done.work_dir) == work_dir
+        assert not (work_dir.parent / f"{work_dir.name}_1").exists()
+        assert history.is_dir()
+        assert (work_dir / "state.json").is_file()
+        assert (work_dir / "WORK" / "00_RUNTIME" / "attempts" / "1").is_dir()
+
+        new_spec = replace(rerun_done.spec, resources={"nproc": 2})
+        manager.edit_recalculate(
+            record.id,
+            mode="in_place",
+            new_spec=new_spec,
+            expected_source_revision=compute_source_revision(rerun_done),
+            request_id="fake-edit-1",
+            payload_hash="fake-hash",
+            payload_json="{}",
+        )
+        edit_done = _wait_terminal(manager, record.id)
+        assert edit_done.status == JobStatus.COMPLETED
+        assert Path(edit_done.work_dir) == work_dir
+        assert not (work_dir.parent / f"{work_dir.name}_1").exists()
+        assert history.is_dir()
+        assert (work_dir / "WORK" / "00_RUNTIME" / "attempts" / "2").is_dir()
+        assert (work_dir / "state.json").is_file()
+    finally:
+        manager.shutdown()
+
+
+def _confsearch_collection_record(
+    manager: JobManager, job_id: str, work_dir: Path, *, result: dict[str, Any] | None = None
+) -> JobRecord:
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "input.xyz").write_text(XYZ_COOH, encoding="utf-8")
+    record = JobRecord(
+        id=job_id,
+        spec=_spec("Confsearch"),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work_dir),
+        project_id=manager.default_project_id,
+        group_id=job_id,
+        result=result,
+    )
+    manager.store.create(record)
+    return manager.store.get(job_id)  # type: ignore[return-value]
+
+
+def _write_collection_manifest(result_dir: Path) -> None:
+    from acp.storage.manifest import ResultManifest
+
+    result_dir.mkdir(parents=True, exist_ok=True)
+    (result_dir / "all_conformers.xyz").write_text(f"{XYZ_COOH}\n{XYZ_COOH}", encoding="utf-8")
+    (result_dir / "best.xyz").write_text(XYZ_COOH, encoding="utf-8")
+    manifest = ResultManifest(workflow="Confsearch", status="completed")
+    manifest.add_product(
+        "all_conformers", "Ranked conformers (XYZ)", "all_conformers.xyz", "structure"
+    )
+    manifest.add_product("rank1", "Rank 1", "best.xyz", "structure")
+    manifest.write(result_dir)
+
+
+def test_inplace_rerun_audits_skipped_collections(tmp_path: Path) -> None:
+    """todo 8 (GAP-7): collection products are skipped without raising, audited."""
+    manager = _make_manager(tmp_path)
+    try:
+        work_dir = manager.run_root / "default" / "recalc_collections"
+        record = _confsearch_collection_record(manager, "recalc_collections", work_dir)
+        _write_collection_manifest(work_dir / "RESULT")
+
+        assert manager.rerun_job(record.id) is not None
+        updated = manager.get(record.id)
+        skipped = updated.result["attempt_history"][-1]["skipped_collections"]
+        assert any(row["id"] == "all_conformers" and row["reason"] for row in skipped)
+
+        refs = json.loads(
+            (work_dir / ".structure_history" / "sources.json").read_text(encoding="utf-8")
+        )
+        assert all(ref["entry_id"] != "all_conformers" for ref in refs)
+        assert any(ref["entry_id"] == "rank1" for ref in refs)
+    finally:
+        manager.shutdown()
+
+
+def test_inplace_rerun_remote_audits_skipped_collections(tmp_path: Path) -> None:
+    """The remote cache root resolves through the same collection policy."""
+    from acp.scheduler.structure_sources import StructureSourceService
+
+    manager = _make_manager(tmp_path)
+    try:
+        work_dir = manager.run_root / "default" / "remote_recalc"
+        record = _confsearch_collection_record(
+            manager,
+            "remote_recalc",
+            work_dir,
+            result={"execution_kind": "remote", "lsf_job_id": "42"},
+        )
+        assert StructureSourceService._is_remote(record)
+        cached_root = tmp_path / "cache" / "remote_recalc"
+        _write_collection_manifest(cached_root / "RESULT")
+
+        class _FakeCache:
+            def fetch_catalog(self, _record: JobRecord, _workflow: str) -> Path:
+                return cached_root
+
+            def fetch_reusable_geometries(self, _record: JobRecord, _root: Path) -> None:
+                return None
+
+        manager._remote_structure_cache = _FakeCache()  # type: ignore[assignment]
+
+        assert manager.rerun_job(record.id) is not None
+        updated = manager.get(record.id)
+        skipped = updated.result["attempt_history"][-1]["skipped_collections"]
+        assert any(row["id"] == "all_conformers" for row in skipped)
     finally:
         manager.shutdown()

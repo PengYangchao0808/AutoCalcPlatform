@@ -40,7 +40,7 @@ from acp.api.schemas import (
     WorkflowsResponse,
 )
 from acp.scheduler.files import build_manifest, resolve_safe
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS
 from acp.scheduler.logs import read_log_tail
 from acp.storage.layout import runtime_file
 from acp.workflows.registry import list_workflow_entries, workflow_to_dict
@@ -53,7 +53,7 @@ _START_TIME = time.time()
 def _build_workflow_info() -> list[WorkflowInfo]:
     """Return workflow metadata from the ACP workflow registry.
 
-    Keeps the API in sync with ``SUPPORTED_WORKFLOWS`` without hardcoding
+    Keeps the API in sync with ``PUBLIC_WORKFLOWS`` without hardcoding
     labels, descriptions, or required binaries in the routing layer.
     """
     return [WorkflowInfo(**workflow_to_dict(entry)) for entry in list_workflow_entries()]
@@ -252,10 +252,10 @@ def get_protocols() -> ProtocolsResponse:
 @router.post("/jobs", response_model=JobCreatedResponse, status_code=201)
 def create_job(req: JobCreateRequest, request: Request) -> JobCreatedResponse:
     manager = _manager(request)
-    if req.workflow not in SUPPORTED_WORKFLOWS:
+    if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     from acp.scheduler.jobs import JobSpec
 

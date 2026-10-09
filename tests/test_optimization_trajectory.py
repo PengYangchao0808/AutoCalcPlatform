@@ -88,7 +88,7 @@ def test_orca_optimization_reports_trajectory_metrics(monkeypatch, tmp_path: Pat
                 converged=True,
             )
 
-    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    monkeypatch.setattr("cccp.backends.registry.get_backend", lambda _name: SyntheticOrca())
     reporter = RecordingReporter(tmp_path, min_interval=60.0)
     request = CalculationRequest(
         input_artifact=StructureArtifact(path=input_path, elements=["C"]),
@@ -123,7 +123,7 @@ def test_orca_failed_optimization_overrides_misleading_convergence(
             output_callback("GEOMETRY OPTIMIZATION CONVERGED")
             return QCResult(success=False, error_message="SCF failure")
 
-    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    monkeypatch.setattr("cccp.backends.registry.get_backend", lambda _name: SyntheticOrca())
     reporter = RecordingReporter(tmp_path / "progress")
     request = CalculationRequest(
         input_artifact=StructureArtifact(path=input_path, elements=["C"]),
@@ -156,7 +156,7 @@ def test_non_orca_optimization_does_not_publish_trajectory_metrics(
                 symbols=list(symbols),
             )
 
-    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticXtb())
+    monkeypatch.setattr("cccp.backends.registry.get_backend", lambda _name: SyntheticXtb())
     reporter = ProgressReporter(tmp_path / "progress")
     request = CalculationRequest(
         input_artifact=StructureArtifact(path=input_path, elements=["C"]),
@@ -183,7 +183,7 @@ def test_malformed_orca_stdout_does_not_publish_metrics(monkeypatch, tmp_path: P
                 symbols=list(symbols),
             )
 
-    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    monkeypatch.setattr("cccp.backends.registry.get_backend", lambda _name: SyntheticOrca())
     reporter = ProgressReporter(tmp_path / "progress")
     request = CalculationRequest(
         input_artifact=StructureArtifact(path=input_path, elements=["C"]),
@@ -600,7 +600,7 @@ def test_recorder_omits_geometry_ref_when_xyz_write_fails(monkeypatch, tmp_path:
         raise OSError("synthetic geometry write failure")
 
     monkeypatch.setattr(
-        "acp.calculations.primitives.optimization_trajectory._atomic_text_write",
+        "cccp.calculation.optimization_trajectory._atomic_text_write",
         fail_write,
     )
     recorder = OptimizationTrajectoryRecorder(tmp_path, item_id="X1")

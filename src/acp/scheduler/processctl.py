@@ -43,6 +43,12 @@ __all__ = [
 _PROC = Path("/proc")
 _DEFAULT_TERM_TIMEOUT = 8.0
 _DEFAULT_KILL_TIMEOUT = 5.0
+# Path characters: a needle may not be preceded by any of these — otherwise
+# ``/…/X`` would match inside ``/…/YX``-style longer path segments.
+_PATH_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/")
+# Allowed characters immediately after a matched needle: subpath separator,
+# argv separator, quoting, punctuation, or end-of-string.
+_BOUNDARY_AFTER = frozenset("/\"'),")
 
 
 def _proc_dir(pid: int) -> Path:
@@ -100,13 +106,40 @@ def pid_is_alive(pid: int) -> bool:
     return not pid_is_zombie(pid)
 
 
+def _cmdline_contains_path(cmdline: str, needle: str) -> bool:
+    """Boundary-safe *needle*-in-*cmdline* path test.
+
+    After the needle the next character must be ``/``, whitespace, a quote,
+    ``)``, ``,`` or the end of the string; the character before the needle
+    must not be a path character (``[A-Za-z0-9._-/]``).  A bare substring
+    test lets ``/…/X`` match ``/…/X__02``'s argv, so a rerun/kill of task
+    ``X`` SIGTERMed the running sibling task (observed signal -15).
+    """
+    if not needle or not cmdline:
+        return False
+    start = 0
+    while True:
+        idx = cmdline.find(needle, start)
+        if idx < 0:
+            return False
+        before = cmdline[idx - 1] if idx else ""
+        after = cmdline[idx + len(needle) :]
+        if before not in _PATH_CHARS and (
+            not after or after[0].isspace() or after[0] in _BOUNDARY_AFTER
+        ):
+            return True
+        start = idx + 1
+
+
 def process_references(pid: int, work_dir: Path) -> bool:
     """True when *pid*'s cmdline or working directory points into *work_dir*.
 
     Workflow subprocesses are started with ``cwd=work_dir`` and ORCA children
     inherit it, so the working-directory probe is the reliable anchor; the
     command-line probe covers helpers that chdir away but still carry the
-    task path in argv.
+    task path in argv.  The cmdline probe is boundary-safe (see
+    :func:`_cmdline_contains_path`) so a shorter task directory never
+    matches a longer same-prefix sibling's argv.
     """
     try:
         target = work_dir.resolve()
@@ -119,7 +152,7 @@ def process_references(pid: int, work_dir: Path) -> bool:
     if cwd and (cwd == needle or cwd.startswith(needle + "/")):
         return True
     cmdline = read_cmdline(pid)
-    return needle in cmdline
+    return _cmdline_contains_path(cmdline, needle)
 
 
 def find_task_processes(
