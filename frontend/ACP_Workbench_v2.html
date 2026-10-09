@@ -6490,6 +6490,14 @@ let deleteJobId = "";
 // Q9: job-detail cache (GET /jobs/{id}/detail projection) + queue-op state.
 let jobDetailCache = {};              // jobId -> {job, stages, artifacts_summary, error_detail, disk_state, recovery, legacy?}
 let jobDetailEndpointMissing = false; // /detail 404s while /jobs/{id} works → legacy server; stop retrying /detail
+// GAP-9 (T13): detail freshness.  Each jobId carries a request generation;
+// a response is accepted only when the generation captured at request start
+// is still current, so a late response from before a row action / rerun can
+// never overwrite newer state.  jobDetailCacheRevision bumps on every cache
+// mutation (add / drop / recovery change) so queue rows re-render when the
+// recovery matrix changes without the list rows changing.
+let jobDetailGenerations = {};
+let jobDetailCacheRevision = 0;
 let detailActionMessage = { jobId: "", kind: "", text: "", at: 0 }; // transient feedback inside the info panel
 let queueSelectedJobs = new Set();    // Q10: batch purge multi-select (job ids)
 let nodesCache = [];
@@ -16323,6 +16331,7 @@ async function submitDeleteJobModal() {
       method: "DELETE"
     });
     resetMechanismCachesForJob(deleteJobId);
+    invalidateJobDetail(deleteJobId);
     closeDeleteJobModal();
     selectedJobId = "";
     lastSelectedJob = null;
@@ -16349,7 +16358,7 @@ async function cancelJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" });
     resetMechanismCachesForJob(jobId);
-    await refreshJobs();
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     window.alert((t("job.cancel_failed") || "取消失败") + ": " + e.message);
   }
@@ -16364,8 +16373,7 @@ async function pauseJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/pause", { method: "POST" });
     setDetailActionMessage(jobId, t("job.pause_ok"), "ok");
-    await refreshJobs();
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.pause_failed", { message: describeJobOpError(e) }), "err");
   }
@@ -16376,8 +16384,7 @@ async function unpauseJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/unpause", { method: "POST" });
     setDetailActionMessage(jobId, t("job.resume_ok"), "ok");
-    await refreshJobs();
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.resume_failed", { message: describeJobOpError(e) }), "err");
   }
@@ -16424,8 +16431,7 @@ async function continueJob(jobId) {
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/continue", opts);
     setDetailActionMessage(jobId, t("job.continue_ok"), "ok");
-    await refreshJobs();
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.continue_failed", { message: translateNodeError(e) || describeJobOpError(e) }), "err");
   }
@@ -16438,9 +16444,8 @@ async function rerunJob(jobId, button) {
   if (button) button.disabled = true;
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/rerun", { method: "POST" });
-    await refreshJobs();
     setDetailActionMessage(jobId, t("job.rerun_ok"), "ok");
-    await refreshSelectedJobDetail({ force: true });
+    await refreshJobDetailAfterAction(jobId);
   } catch (e) {
     setDetailActionMessage(jobId, t("job.rerun_failed", { message: describeJobOpError(e) }), "err");
   } finally {
@@ -16507,6 +16512,7 @@ async function _batchOp(op, payload) {
     } else {
       appendLogLine("done", t("queue.view.batch_op_success", { count: ok }));
     }
+    ids.forEach(function(id) { invalidateJobDetail(id); });
     await refreshJobs();
   } catch (e) {
     appendLogLine("stderr", "batch-ops " + op + " failed: " + (e.message || e));
@@ -17252,6 +17258,7 @@ async function submitPurgeModal() {
     closePurgeModal();
     queueSelectedJobs.clear();
     updateQueueBatchBar();
+    ids.forEach(function(id) { invalidateJobDetail(id); });
     if (selectedJobId && ids.indexOf(String(selectedJobId)) !== -1) clearStaleJobSelection();
     const report = summarizePurgeReport(resp, ids);
     if (report.failCount) window.alert(report.text);
@@ -17289,13 +17296,18 @@ function appendQueueInlineActions(actions, job) {
   // Rename button — always available, shown on hover/focus-within via CSS
   actions.appendChild(makeQueueIconButton("\u270e", t("queue.rename"), "btn-rename-task", function() { openTaskRenameModal(job); }));
   const recovery = resolveJobRecovery(job);
-  if (recovery.can_pause) {
+  // GAP-9: terminal rows never show active-only actions (pause/resume/cancel)
+  // — the floor matches server _compute_recovery (active flags only for
+  // active statuses) and only diverges from a stale cache.  A fresh server
+  // recovery still decides rerun/continue/purge capability.
+  const activeOnly = !isTerminalJobStatus(status);
+  if (activeOnly && recovery.can_pause) {
     actions.appendChild(makeQueueIconButton("‖", t("job.pause"), "warn", function() { pauseJob(jobId); }));
   }
-  if (recovery.can_unpause) {
+  if (activeOnly && recovery.can_unpause) {
     actions.appendChild(makeQueueIconButton("▶", t("job.resume"), "", function() { unpauseJob(jobId); }));
   }
-  if (status === "running" && recovery.can_cancel) {
+  if (activeOnly && status === "running" && recovery.can_cancel) {
     actions.appendChild(makeQueueIconButton("✕", t("job.cancel"), "danger", function() { cancelJob(jobId); }));
   }
   if (recovery.can_continue) {
@@ -17457,6 +17469,8 @@ function _applyRenameResult(job, result) {
 
 function _refreshAfterRename(job) {
   var jobId = String(job.id || job.job_id || "");
+  invalidateJobDetail(jobId);
+  fetchJobDetail(jobId).catch(function() { /* status defaults carry the row until refetched */ });
   // Update detail panel title if this job is selected
   var vTaskName = document.getElementById("v-task-name");
   if (vTaskName && String(selectedJobId) === jobId) {
@@ -17677,7 +17691,11 @@ async function refreshJobs() {
       });
     }
     jobsCache = flat;
-    var renderKey = JSON.stringify([queryKey, taskViewOffset, body.groups, body.counts, currentLang]);
+    // GAP-9: drop cached details that disagree with the fresh rows (status /
+    // attempt / revision) before the render key is computed — the bumped
+    // cache revision makes recovery-only changes re-render too.
+    pruneJobDetailCacheAgainstList();
+    var renderKey = JSON.stringify([queryKey, taskViewOffset, body.groups, body.counts, currentLang, jobDetailCacheRevision]);
     if (renderKey !== taskQueueRenderKey) {
       taskQueueRenderKey = renderKey;
       renderQueue(body.counts || {});
@@ -18122,7 +18140,9 @@ function buildQueueRow(job) {
     var occurrence = queueRowRenderContext.occurrences[id] || 0;
     queueRowRenderContext.occurrences[id] = occurrence + 1;
     cacheKey = id + ":" + occurrence;
-    signature = JSON.stringify([job, currentLang]);
+    // GAP-9: the recovery matrix lives outside the row payload — include it
+    // in the signature so recovery-only changes rebuild the row buttons.
+    signature = JSON.stringify([job, currentLang, getJobRecovery(job)]);
     var cached = queueRowRenderContext.previous.get(cacheKey);
     if (cached && cached.signature === signature) {
       cached.node.classList.toggle("active", id === String(selectedJobId));
@@ -18938,6 +18958,71 @@ function getJobDetail(jobId) {
   return jobDetailCache[String(jobId || "")] || null;
 }
 
+// GAP-9: frozen execution-version identity from task 5 — jobs-authoritative
+// (job_id, attempt, revision) exposed by both the list and detail payloads.
+// name_revision is organization naming only and must NEVER participate here.
+function jobExecutionIdentity(job) {
+  if (!job) return "";
+  var id = String(job.id || job.job_id || "");
+  var attempt = (typeof job.attempt === "number" && isFinite(job.attempt)) ? String(job.attempt) : "";
+  var revision = (typeof job.revision === "number" && isFinite(job.revision)) ? String(job.revision) : "";
+  return id + "\u0000" + attempt + "\u0000" + revision;
+}
+
+function findJobRowInCache(jobId) {
+  const key = String(jobId || "");
+  if (!key) return null;
+  for (var i = 0; i < jobsCache.length; i += 1) {
+    if (String(jobsCache[i].id || jobsCache[i].job_id || "") === key) return jobsCache[i];
+  }
+  return null;
+}
+
+// True when a cached detail disagrees with the current list row on status or
+// on the execution-version identity (same status but a different attempt /
+// revision — e.g. a rerun completed between two polls).
+function jobDetailCacheStaleFor(detail, row) {
+  if (!detail || !isPlainObject(detail.job) || !row) return false;
+  if (String(detail.job.status || "").toLowerCase() !== String(row.status || "").toLowerCase()) return true;
+  return jobExecutionIdentity(detail.job) !== jobExecutionIdentity(row);
+}
+
+// Drop any cached detail whose status/attempt/revision disagrees with the
+// fresh list row.  Rows absent from the current view (filtered out) are left
+// alone — they cannot be compared.  Never refetches: poll ticks stay free of
+// per-row detail requests; only user actions refetch (bounded at one each).
+function pruneJobDetailCacheAgainstList() {
+  var changed = false;
+  Object.keys(jobDetailCache).forEach(function(key) {
+    var row = findJobRowInCache(key);
+    if (row && jobDetailCacheStaleFor(jobDetailCache[key], row)) {
+      delete jobDetailCache[key];
+      changed = true;
+    }
+  });
+  if (changed) jobDetailCacheRevision += 1;
+}
+
+// The recovery matrix lives outside the list rows: any cache mutation that
+// can change resolveJobRecovery() output must re-render the queue rows.
+function renderQueueRowsForRecoveryChange() {
+  var counts = (taskViewCache && taskViewCache.counts) || (lastStatus && lastStatus.queue) || {};
+  renderQueue(counts);
+}
+
+// GAP-9: called by EVERY row action and batch operation (not only for the
+// selected job).  Bumps the request generation so in-flight detail responses
+// started before the action are rejected as late, and drops the cached entry.
+function invalidateJobDetail(jobId) {
+  var key = String(jobId || "");
+  if (!key) return;
+  jobDetailGenerations[key] = (jobDetailGenerations[key] || 0) + 1;
+  if (jobDetailCache[key]) {
+    delete jobDetailCache[key];
+    jobDetailCacheRevision += 1;
+  }
+}
+
 function getJobRecovery(job) {
   const id = job && (job.id || job.job_id) ? String(job.id || job.job_id) : "";
   const detail = getJobDetail(id);
@@ -18947,10 +19032,15 @@ function getJobRecovery(job) {
 
 // Status-based fallback mirroring the plan §4.4 matrix for when the server
 // provides no recovery object (older backend / legacy /jobs/{id} path).
+function isTerminalJobStatus(status) {
+  const s = String(status || "").toLowerCase();
+  return s === "completed" || s === "failed" || s === "cancelled";
+}
+
 function computeDefaultRecovery(job) {
   const status = String(job && job.status || "").toLowerCase();
   const workflow = job && job.spec && job.spec.workflow ? String(job.spec.workflow) : "";
-  const terminal = status === "completed" || status === "failed" || status === "cancelled";
+  const terminal = isTerminalJobStatus(status);
   const continuable = (workflow === "mechanism" || workflow === "xtbmd_censo_energy") &&
     (status === "failed" || status === "cancelled");
   return {
@@ -18980,31 +19070,65 @@ function resolveJobRecovery(job) {
   return merged;
 }
 
+function _acceptJobDetail(key, payload, generation) {
+  if ((jobDetailGenerations[key] || 0) !== generation) return null;
+  const row = findJobRowInCache(key);
+  if (row && jobDetailCacheStaleFor(payload, row)) return null;
+  const prev = jobDetailCache[key];
+  jobDetailCache[key] = payload;
+  const prevRec = prev && isPlainObject(prev.recovery) ? JSON.stringify(prev.recovery) : "";
+  const nextRec = isPlainObject(payload.recovery) ? JSON.stringify(payload.recovery) : "";
+  if (prevRec !== nextRec) {
+    jobDetailCacheRevision += 1;
+    renderQueueRowsForRecoveryChange();
+  }
+  return payload;
+}
+
 // Fetch the rich detail projection; on 404/405 (endpoint missing but job
 // alive) pin jobDetailEndpointMissing and wrap the legacy record instead.
 // Throws only when the job itself cannot be fetched (deleted / offline).
+// GAP-9: returns null when the response belongs to an older request
+// generation (late response released after a row action / rerun) or when it
+// disagrees with the current list row — stale data is dropped, never cached
+// and never returned to callers.
 async function fetchJobDetail(jobId) {
   if (!jobId) return null;
   const key = String(jobId);
+  const generation = jobDetailGenerations[key] || 0;
+  const staleNow = function() { return (jobDetailGenerations[key] || 0) !== generation; };
   let detail = null;
   let detailErr = "";
   if (!jobDetailEndpointMissing) {
     try {
-      const resp = await api("/jobs/" + encodeURIComponent(jobId) + "/detail");
+      const resp = await api("/jobs/" + encodeURIComponent(key) + "/detail");
       if (resp && isPlainObject(resp.job)) detail = resp;
     } catch (e) {
       detailErr = String(e && e.message || "");
     }
+    if (staleNow()) return null;
+    if (detail) return _acceptJobDetail(key, detail, generation);
   }
-  if (detail) {
-    jobDetailCache[key] = detail;
-    return detail;
-  }
-  const job = await api("/jobs/" + encodeURIComponent(jobId));
+  const job = await api("/jobs/" + encodeURIComponent(key));
+  if (staleNow()) return null;
   if (detailErr && /not found|http 404|http 405/i.test(detailErr)) jobDetailEndpointMissing = true;
   const legacy = { job: job, stages: null, artifacts_summary: null, error_detail: null, disk_state: null, recovery: null, legacy: true };
-  jobDetailCache[key] = legacy;
-  return legacy;
+  return _acceptJobDetail(key, legacy, generation);
+}
+
+// GAP-9: shared post-action refresh for row actions.  Invalidates the acted
+// job's cached detail (also for unselected rows), refreshes the list, then
+// refetches exactly ONE fresh detail so the server recovery matrix keeps
+// deciding capability.  Poll ticks never call this — per-poll detail stays
+// bounded (only the acted job is fetched, once per user action).
+async function refreshJobDetailAfterAction(jobId) {
+  invalidateJobDetail(jobId);
+  await refreshJobs();
+  if (String(selectedJobId || "") === String(jobId)) {
+    await refreshSelectedJobDetail({ force: true });
+  } else {
+    try { await fetchJobDetail(jobId); } catch (e) { /* row falls back to status defaults until refetched */ }
+  }
 }
 
 // R3 fix: refetch the selected job's detail on poll ticks / SSE terminal
@@ -19684,11 +19808,14 @@ async function openDetailDrawer(job) {
   }
   // ── Action bar ──
   var recovery = resolveJobRecovery(job);
+  // GAP-9 floor (queue-row parity): terminal rows never show active-only
+  // actions; a fresh server recovery still decides rerun/continue capability.
+  var activeOnly = !isTerminalJobStatus(job && job.status);
   var drawerActions = document.createElement("div");
   drawerActions.className = "info-actions-grouped";
   var drawerRunGroup = document.createElement("div");
   drawerRunGroup.className = "action-group";
-  if (recovery.can_pause) {
+  if (activeOnly && recovery.can_pause) {
     var dPauseBtn = document.createElement("button");
     dPauseBtn.className = "btn";
     dPauseBtn.textContent = t("job.pause");
@@ -19696,7 +19823,7 @@ async function openDetailDrawer(job) {
     dPauseBtn.addEventListener("click", function() { pauseJob(jobId); });
     drawerRunGroup.appendChild(dPauseBtn);
   }
-  if (recovery.can_unpause) {
+  if (activeOnly && recovery.can_unpause) {
     var dResumeBtn = document.createElement("button");
     dResumeBtn.className = "btn";
     dResumeBtn.textContent = t("job.resume");
@@ -19704,7 +19831,7 @@ async function openDetailDrawer(job) {
     dResumeBtn.addEventListener("click", function() { unpauseJob(jobId); });
     drawerRunGroup.appendChild(dResumeBtn);
   }
-  if (recovery.can_cancel) {
+  if (activeOnly && recovery.can_cancel) {
     var dCancelBtn = document.createElement("button");
     dCancelBtn.className = "btn";
     dCancelBtn.textContent = t("job.cancel");
@@ -23249,9 +23376,12 @@ async function selectJob(jobId) {
   renderMechanismPlaceholder();
   // Q9: rich detail projection (stages/artifacts/error_detail/recovery);
   // fetchJobDetail transparently falls back to the legacy record on older
-  // servers and throws only when the job itself cannot be fetched.
+  // servers and throws only when the job itself cannot be fetched.  GAP-9:
+  // it also returns null when the response was rejected as late/stale — the
+  // list row carries the panel until a fresh detail arrives.
   const detail = await fetchJobDetail(jobId);
-  const job = detail.job;
+  const job = (detail && detail.job) || findJobRowInCache(jobId);
+  if (!job) return;
   lastRemoteNode = jobRemoteNodeName(job);
   selectedJobIsRemote = !!lastRemoteNode;
   let filesResp;

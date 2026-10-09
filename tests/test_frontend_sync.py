@@ -13745,3 +13745,85 @@ def test_scan_wizard_state_hydration_and_switch_away_lock() -> None:
     # Structure changes re-validate: remove/clear paths call
     # updateInputModeVisibility, which refreshes the scan status.
     assert "function scanWizardEnsureListeners()" in html
+
+
+# ---------------------------------------------------------------------------
+# Queue-row freshness / detail-cache coherence (todo 14 / GAP-9) — static
+# pins supplementary to the executed browser suite
+# (tests/test_frontend_interaction.py::TestQueueRowFreshnessBrowser).
+# ---------------------------------------------------------------------------
+
+
+def test_job_detail_cache_epoch_guard_present() -> None:
+    """Late detail responses from older generations are rejected, and the
+    frozen (job_id, attempt, revision) identity gates cache writes."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "jobDetailGenerations" in html, "detail request generation map missing"
+    assert "function jobExecutionIdentity(job)" in html
+    body = html.split("function jobExecutionIdentity(job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "attempt" in body and "revision" in body
+    assert "name_revision" not in body, (
+        "name_revision is organization naming — it must not enter the execution-version identity"
+    )
+    fetch_body = html.split("async function fetchJobDetail(jobId)", 1)[1].split(
+        "\nasync function ", 1
+    )[0]
+    assert "jobDetailGenerations[key]" in fetch_body, "generation capture/check missing"
+    assert "function jobDetailCacheStaleFor(" in html
+    assert "function invalidateJobDetail(" in html
+
+
+def test_job_detail_cache_invalidated_on_all_row_actions_and_batch_ops() -> None:
+    """Every row action and batch operation invalidates the acted jobs'
+    cached detail — not only the selected job's."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    for fn in (
+        "async function pauseJob(",
+        "async function unpauseJob(",
+        "async function continueJob(",
+        "async function rerunJob(",
+        "async function cancelJob(",
+    ):
+        idx = html.index(fn)
+        body = html[idx : idx + 1500]
+        assert "refreshJobDetailAfterAction(jobId)" in body, (
+            f"{fn} does not route through the invalidating post-action refresh"
+        )
+    helper = html.split("async function refreshJobDetailAfterAction(", 1)[1][:1500]
+    assert "invalidateJobDetail(jobId)" in helper
+    assert "findJobRowInCache" in html
+    for fn in (
+        "async function submitDeleteJobModal(",
+        "async function submitPurgeModal(",
+        "async function _batchOp(",
+        "function _refreshAfterRename(",
+    ):
+        idx = html.index(fn)
+        body = html[idx : idx + 2500]
+        assert "invalidateJobDetail(" in body, f"{fn} does not invalidate jobDetailCache"
+
+
+def test_refresh_jobs_prunes_detail_cache_against_list() -> None:
+    """refreshJobs drops cached details whose status/attempt/revision
+    disagree with the fresh list row, and recovery changes re-render rows."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    refresh = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
+    assert "pruneJobDetailCacheAgainstList()" in refresh
+    assert "jobDetailCacheRevision" in refresh, "recovery revision must gate the render key"
+    assert "function renderQueueRowsForRecoveryChange()" in html
+    assert "function pruneJobDetailCacheAgainstList()" in html
+
+
+def test_queue_row_signature_and_terminal_floor() -> None:
+    """Row render cache includes the recovery matrix (recovery-only changes
+    must rebuild rows) and terminal rows never render active-only actions."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    row_fn = html.split("function buildQueueRow(job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "getJobRecovery(job)" in row_fn, "row signature must include recovery"
+    actions = html.split("function appendQueueInlineActions(", 1)[1].split("\nfunction ", 1)[0]
+    assert "isTerminalJobStatus(" in actions, "terminal floor missing on queue rows"
+    assert "btn-rename-task" in actions, "rename button must stay on queue rows"
+    assert "openTaskRenameModal" in actions
+    drawer = html.split("async function openDetailDrawer(job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "isTerminalJobStatus(" in drawer, "terminal floor missing on the detail drawer"
+    assert "function isTerminalJobStatus(" in html
