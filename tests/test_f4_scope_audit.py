@@ -2139,6 +2139,10 @@ MIGRATION_STATION_PREFIXES = (
     # todo 8 (runtime-contract): collection policy / recalc audit stations.
     "src/acp/results/structure_policy.py",
     "src/acp/results/structure_snapshots.py",
+    # todo 17 (runtime-contract): shared vibration source resolution — tsmode
+    # product tier + catalog projection through the shared probe.
+    "src/acp/results/vibration_projection.py",
+    "src/acp/results/structure_viewer.py",
     "src/acp/confsearch/report.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(

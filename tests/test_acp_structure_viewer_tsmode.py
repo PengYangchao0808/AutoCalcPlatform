@@ -209,16 +209,6 @@ class TestTsmodeResolver:
 
 _ENGINE_JOB_ID = "t12b_engine_001"
 
-_ENDPOINT_XFAIL_REASON = (
-    "R5 defect returned by plan todo 12: find_vibration_source probes only "
-    "RESULT/frequencies/* and WORK/04_FREQ, never the tsmode product "
-    "RESULT/tsmode/normal_modes.json, so the endpoint serves "
-    "available=false/no_normal_modes while the catalog advertises "
-    "available=true. Removal rule: drop this xfail(strict) and keep the "
-    "assertions once the endpoint (or a publish mirror) serves the tsmode "
-    "product."
-)
-
 
 def _run_engine_resumed(synth_dir: Path, task_root: Path) -> dict[str, int]:
     """Fresh engine run + resume run with mocked QC; returns QC call counters."""
@@ -381,7 +371,6 @@ class TestEngineProducedConsumerProjection:
         assert isinstance(body["modes"], list)
         assert body["reason"] in (None, "no_normal_modes")
 
-    @pytest.mark.xfail(strict=True, reason=_ENDPOINT_XFAIL_REASON)
     def test_vibrations_endpoint_serves_canonical_tsmode_modes(
         self, engine_viewer_client: tuple[TestClient, Path]
     ) -> None:
