@@ -382,7 +382,10 @@ def fake_backend(monkeypatch: pytest.MonkeyPatch) -> FakeBackend:
     Covers both acquisition paths: ``acp.backends.get_backend`` (legacy
     primitives) and ``cccp.backends.registry.get_backend`` (cccp task cores),
     plus a synthetic program-availability answer so the two-step selection
-    precheck passes without real QC binaries installed.
+    precheck passes without real QC binaries installed.  Ambient config pins
+    (``executables.<name>.path``, e.g. the built-in bare ``"orca"`` default)
+    are neutralized so the synthetic resolver decides, not the machine's
+    config — otherwise the precheck ignores the patch on CI runners.
     """
     backend = FakeBackend()
 
@@ -393,6 +396,7 @@ def fake_backend(monkeypatch: pytest.MonkeyPatch) -> FakeBackend:
 
     monkeypatch.setattr("acp.backends.get_backend", get_backend)
     monkeypatch.setattr("cccp.backends.registry.get_backend", get_backend)
+    monkeypatch.setattr("cccp.calculation.selection._configured_pin", lambda config, name: None)
     monkeypatch.setattr(
         "cccp.calculation.selection.resolve_executable",
         lambda name, configured_path=None: f"/synthetic/{name}",

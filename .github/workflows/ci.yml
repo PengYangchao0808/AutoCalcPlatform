@@ -23,6 +23,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Git-history audits (tests/test_f4_scope_audit.py migration and
+          # amendment checks) diff against a fixed BASELINE commit; a
+          # shallow clone would silently degrade them to vacuous passes.
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
