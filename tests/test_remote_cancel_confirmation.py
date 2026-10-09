@@ -716,4 +716,3 @@ def test_stale_attempt_retry_skips_remote_side_effects(
         assert (final.result or {}).get("terminal_side_effects_done") is not True
     finally:
         mgr.shutdown()
-

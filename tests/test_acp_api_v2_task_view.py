@@ -658,9 +658,7 @@ def test_list_and_detail_serialize_execution_identity(client: TestClient) -> Non
 def test_task_view_status_reads_jobs_authority_when_projection_lags(client: TestClient) -> None:
     pid = _default_project_id(client)
     manager = client.app.state.job_manager
-    record = _seed_projected_job(
-        client, job_id="exec-id-2", attempt=1, revision=4, project_id=pid
-    )
+    record = _seed_projected_job(client, job_id="exec-id-2", attempt=1, revision=4, project_id=pid)
     # A lagging projection: tasks says RUNNING while the jobs row says QUEUED.
     manager.tasks._run("UPDATE tasks SET status='running' WHERE task_id=?", (record.id,))
     # Keep the background reconcile from repairing the row mid-assertion.
