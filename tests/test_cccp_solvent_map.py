@@ -35,8 +35,8 @@ from cccp.utils.solvent_map import (
     xtb_solvent_args,
 )
 
-XTB_REAL_BIN = Path("/home/xieningke/xtb-dist/bin/xtb")
-XTB_REAL_SHARE = Path("/home/xieningke/xtb-dist/share/xtb")
+XTB_REAL_BIN = Path.home() / "xtb-dist" / "bin" / "xtb"
+XTB_REAL_SHARE = Path.home() / "xtb-dist" / "share" / "xtb"
 
 ALPB_OFFICIAL = frozenset(
     {
@@ -418,7 +418,7 @@ def _run_real_xtb(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str
 @pytest.mark.slow
 @pytest.mark.skipif(
     not XTB_REAL_BIN.exists(),
-    reason="real xTB binary /home/xieningke/xtb-dist/bin/xtb not available",
+    reason="real xTB binary (XTB_REAL_BIN) not available",
 )
 def test_real_xtb_accepts_canonical_solvent_names(
     tmp_path: Path,
@@ -445,7 +445,7 @@ def test_real_xtb_accepts_canonical_solvent_names(
 @pytest.mark.slow
 @pytest.mark.skipif(
     not XTB_REAL_BIN.exists(),
-    reason="real xTB binary /home/xieningke/xtb-dist/bin/xtb not available",
+    reason="real xTB binary (XTB_REAL_BIN) not available",
 )
 def test_real_xtb_rejects_raw_alias_passthrough(tmp_path: Path) -> None:
     (tmp_path / "h2o.xyz").write_text(WATER_XYZ, encoding="utf-8")

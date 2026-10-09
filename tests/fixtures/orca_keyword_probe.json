@@ -2,53 +2,53 @@
   "schema": "cccp_orca_keyword_probe_v1",
   "generated_at": "2026-09-30T18:07:26Z",
   "orca": {
-    "path": "/home/xieningke/orca611/orca",
+    "path": "/home/<user>/orca611/orca",
     "sha256": "d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
     "version": "6.1.1 RELEASE (GIT: $487d211c$, 2025-11-21 10:33:24 +0100)",
     "size_bytes": 43977904
   },
   "otool_xtb_version": "6.7.1 (edcfbbe) compiled 2024-07-22",
   "otool_xtb": {
-    "path": "/home/xieningke/orca611/otool_xtb",
+    "path": "/home/<user>/orca611/otool_xtb",
     "sha256": "debf27a9e0fa4bfb5ca75aafe4b90d8211f08ec2f4a482f375a4987212eaa12a",
     "version": "6.7.1 (edcfbbe) compiled 2024-07-22"
   },
   "parameter_files": [
     {
       "name": "param_gfn0-xtb.txt",
-      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn0-xtb.txt",
+      "path": "/home/<user>/xtb-dist/share/xtb/param_gfn0-xtb.txt",
       "sha256": "278461cabbf89b14379aedc78ef3e141c8cef1f911f3a3c72530aec7a52b6d34"
     },
     {
       "name": "param_gfn1-xtb.txt",
-      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn1-xtb.txt",
+      "path": "/home/<user>/xtb-dist/share/xtb/param_gfn1-xtb.txt",
       "sha256": "81a9d7afdee31f5d8fd67a4d8ec966179317c7b100261c9c82d724bafb460399"
     },
     {
       "name": "param_gfn1-si-xtb.txt",
-      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn1-si-xtb.txt",
+      "path": "/home/<user>/xtb-dist/share/xtb/param_gfn1-si-xtb.txt",
       "sha256": "f878fd7f8eea16f326aff283fbc7ca23800045992c0f86536e18ad91816cf7ca"
     },
     {
       "name": "param_gfn2-xtb.txt",
-      "path": "/home/xieningke/xtb-dist/share/xtb/param_gfn2-xtb.txt",
+      "path": "/home/<user>/xtb-dist/share/xtb/param_gfn2-xtb.txt",
       "sha256": "f6f05c6c5264cb2f75c54f8ac6838044541c1e493b16f1a4d4ee4fa64de5f545"
     },
     {
       "name": "param_ipea-xtb.txt",
-      "path": "/home/xieningke/xtb-dist/share/xtb/param_ipea-xtb.txt",
+      "path": "/home/<user>/xtb-dist/share/xtb/param_ipea-xtb.txt",
       "sha256": "08a39b7854b915501d8ba87b7d3330f28932f293479a0dc52b502f039c19f122"
     },
     {
       "name": ".param_gfnff.xtb",
-      "path": "/home/xieningke/xtb-dist/share/xtb/.param_gfnff.xtb",
+      "path": "/home/<user>/xtb-dist/share/xtb/.param_gfnff.xtb",
       "sha256": "5cf2d1259dd3c65aa9594ea32a0c9a21bb819b6e16b81521888c5a3a1ec513e8"
     }
   ],
-  "parameter_files_note": "Search locations for xTB parameter files: /home/xieningke/orca611 (ORCA install dir) -> NONE; XTBPATH=/home/xieningke/xtb-dist/bin -> NONE; run cwd -> NONE; the listed files live only under /home/xieningke/xtb-dist/share/xtb. GFN2-xTB and GFN-FF completed without an on-disk param file in the ORCA dir (internal/bundled); GFN0-xTB failed from the ORCA dir because otool_xtb could not find param_gfn0-xtb.txt -> path-resolution dependency gap, not a capability verdict. Remediation verified: with XTBPATH=/home/xieningke/xtb-dist/share/xtb the GFN0-xTB case terminates normally (energy -4.366773861540 Eh); see supplementary_findings.",
+  "parameter_files_note": "Search locations for xTB parameter files: /home/<user>/orca611 (ORCA install dir) -> NONE; XTBPATH=/home/<user>/xtb-dist/bin -> NONE; run cwd -> NONE; the listed files live only under /home/<user>/xtb-dist/share/xtb. GFN2-xTB and GFN-FF completed without an on-disk param file in the ORCA dir (internal/bundled); GFN0-xTB failed from the ORCA dir because otool_xtb could not find param_gfn0-xtb.txt -> path-resolution dependency gap, not a capability verdict. Remediation verified: with XTBPATH=/home/<user>/xtb-dist/share/xtb the GFN0-xTB case terminates normally (energy -4.366773861540 Eh); see supplementary_findings.",
   "input_xyz": "* xyz 0 1\nO   0.0000000000   0.0000000000   0.1173000000\nH   0.0000000000   0.7572000000  -0.4692000000\nH   0.0000000000  -0.7572000000  -0.4692000000\n*",
   "probe_input_template": "! <keywords>\n\n* xyz 0 1\nO   0.0000000000   0.0000000000   0.1173000000\nH   0.0000000000   0.7572000000  -0.4692000000\nH   0.0000000000  -0.7572000000  -0.4692000000\n*\n",
-  "orca_invocation": "/home/xieningke/orca611/orca <case>.inp > <case>.out 2>&1",
+  "orca_invocation": "/home/<user>/orca611/orca <case>.inp > <case>.out 2>&1",
   "probe_runner": "cd /tmp/opencode/t22-probe && /opt/acp/venv/bin/python run_probe.py",
   "policy_statements": [
     "ORCA GFN solvent only {none,ALPB} (platform policy, not probe-derived)",
@@ -61,7 +61,7 @@
       "case_id": "gfn0-xtb",
       "verified": true,
       "evidence": "extra/gfn0_xtbpath.out",
-      "detail": "Re-running the GFN0-xTB case with XTBPATH=/home/xieningke/xtb-dist/share/xtb (instead of the default XTBPATH=/home/xieningke/xtb-dist/bin) yields rc=0, ORCA TERMINATED NORMALLY and FINAL SINGLE POINT ENERGY -4.366773861540 Eh with no 'param_gfn0-xtb.txt not found' error. Confirms the case-10 verdict is a path-resolution dependency gap with a known remediation, not an unsupported software capability. Platform policy (GFN0-xTB is xTB-binary-only on the ORCA path) is deliberately UNCHANGED by this probe."
+      "detail": "Re-running the GFN0-xTB case with XTBPATH=/home/<user>/xtb-dist/share/xtb (instead of the default XTBPATH=/home/<user>/xtb-dist/bin) yields rc=0, ORCA TERMINATED NORMALLY and FINAL SINGLE POINT ENERGY -4.366773861540 Eh with no 'param_gfn0-xtb.txt not found' error. Confirms the case-10 verdict is a path-resolution dependency gap with a known remediation, not an unsupported software capability. Platform policy (GFN0-xTB is xTB-binary-only on the ORCA path) is deliberately UNCHANGED by this probe."
     },
     {
       "finding_id": "nmr-shielding-parser-orca6-format-gap",
@@ -107,7 +107,7 @@
       "wall_s": 0.16,
       "failure_note": null,
       "capability": "ORCA 6.1.1 external xTB interface supports GFN2-xTB single point; observed normal termination with FINAL SINGLE POINT ENERGY -5.070370761850 Eh (documented: ORCA 6.1 external-interface table).",
-      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "dependency": "otool_xtb 6.7.1 present at /home/<user>/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/<user>/orca611.",
       "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
     },
     {
@@ -155,7 +155,7 @@
       "wall_s": 0.16,
       "failure_note": null,
       "capability": "ORCA external xTB supports ALPB(water) solvation for GFN2-xTB; observed otool_xtb '--alpb WATER', Gsolv -0.019195621438 Eh, normal termination, energy -5.084828277920 Eh (documented: ALPB is an xTB model passed through by ORCA).",
-      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611. ALPB solvent parameter is internal.",
+      "dependency": "otool_xtb 6.7.1 present at /home/<user>/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/<user>/orca611. ALPB solvent parameter is internal.",
       "policy_note": "ORCA GFN solvent only {none,ALPB} (platform policy, not probe-derived)"
     },
     {
@@ -207,7 +207,7 @@
       "wall_s": 0.16,
       "failure_note": null,
       "capability": "A DFT basis keyword is syntactically accepted with GFN2-xTB but ignored by the external xTB interface: identical energy to plain GFN2-xTB (-5.070370761850 Eh), no basis argument in the otool_xtb call, and no warning emitted. Accepted != meaningful for GFN.",
-      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "dependency": "otool_xtb 6.7.1 present at /home/<user>/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/<user>/orca611.",
       "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
     },
     {
@@ -231,7 +231,7 @@
       "wall_s": 0.21,
       "failure_note": null,
       "capability": "D4 is syntactically accepted (ORCA prints the atom-pairwise dispersion banner) but has no numerical effect on the external xTB result: energy identical to plain GFN2-xTB (-5.070370761850 Eh).",
-      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "dependency": "otool_xtb 6.7.1 present at /home/<user>/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/<user>/orca611.",
       "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
     },
     {
@@ -255,7 +255,7 @@
       "wall_s": 0.16,
       "failure_note": null,
       "capability": "DefGrid3 is syntactically accepted with GFN2-xTB but has no effect on the external xTB path (identical energy); DFT integration grids do not apply to xTB.",
-      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "dependency": "otool_xtb 6.7.1 present at /home/<user>/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/<user>/orca611.",
       "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
     },
     {
@@ -279,7 +279,7 @@
       "wall_s": 0.17,
       "failure_note": null,
       "capability": "TightSCF is accepted with GFN2-xTB and IS forwarded to otool_xtb (accuracy 1.000000 -> 0.200000); normal termination, energy -5.070370761850 Eh.",
-      "dependency": "otool_xtb 6.7.1 present at /home/xieningke/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/xieningke/orca611.",
+      "dependency": "otool_xtb 6.7.1 present at /home/<user>/orca611/otool_xtb (sha256 debf27a9...); GFN2-xTB parameters resolve without any on-disk param file in the ORCA install dir. No param* files exist under /home/<user>/orca611.",
       "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
     },
     {
@@ -303,7 +303,7 @@
       "wall_s": 0.16,
       "failure_note": null,
       "capability": "ORCA 6.1 external xTB interface supports GFN-FF; observed normal termination, energy -0.327282171380 Eh (documented: ORCA 6.1 external-interface table). Benign post-SCF warning 'Error while reading dipole moment' does not affect completion.",
-      "dependency": "otool_xtb 6.7.1 present; GFN-FF parameters resolve without an on-disk param file in the ORCA dir (.param_gfnff.xtb exists only under /home/xieningke/xtb-dist/share/xtb and was not required).",
+      "dependency": "otool_xtb 6.7.1 present; GFN-FF parameters resolve without an on-disk param file in the ORCA dir (.param_gfnff.xtb exists only under /home/<user>/xtb-dist/share/xtb and was not required).",
       "policy_note": "No direct policy statement; capability/dependency records only. Platform policy is decided in T2/T4/T7/T13, never inferred from this probe."
     },
     {
@@ -333,7 +333,7 @@
       "wall_s": 0.16,
       "failure_note": "rc=0 is misleading: ORCA aborted before producing any energy because otool_xtb could not find param_gfn0-xtb.txt. No artifact -> not valid.",
       "capability": "ORCA 6.1 external-interface table lists GFN0-xTB (software capability = supported) and ORCA dispatches otool_xtb with '--gfn 0'; the deployed otool_xtb cannot find param_gfn0-xtb.txt, so no result is produced. Local dependency gap, NOT an unsupported capability.",
-      "dependency": "param_gfn0-xtb.txt is absent from /home/xieningke/orca611 and otool_xtb invoked from the ORCA dir cannot resolve it (the file exists under /home/xieningke/xtb-dist/share/xtb, sha256 278461cab...). Missing local parameter file -> no result despite rc=0.",
+      "dependency": "param_gfn0-xtb.txt is absent from /home/<user>/orca611 and otool_xtb invoked from the ORCA dir cannot resolve it (the file exists under /home/<user>/xtb-dist/share/xtb, sha256 278461cab...). Missing local parameter file -> no result despite rc=0.",
       "policy_note": "GFN0-xTB is xTB-binary-only on the ORCA path (platform policy, not probe-derived)"
     },
     {
