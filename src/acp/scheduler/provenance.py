@@ -14,6 +14,7 @@ from typing import Any
 
 import acp
 from acp.scheduler.jobs import JobRecord, JobSpec
+from cccp.utils.resource_utils import parse_memory_mb
 
 
 class ParserStatus(str, Enum):
@@ -99,9 +100,9 @@ def build_provenance_for_job(spec: JobSpec, record: JobRecord) -> Provenance:
         command_line = "in-process fake workflow"
 
     memory_value = (
-        spec.resources.get("memory_gb")
-        if spec.resources.get("memory_gb") is not None
-        else spec.resources.get("mem")
+        spec.resources.get("mem")
+        if spec.resources.get("mem") is not None
+        else spec.resources.get("memory_gb")
     )
     return Provenance(
         input_hash=input_hash,
@@ -155,31 +156,11 @@ def _coerce_int(value: Any) -> int | None:
 
 
 def _coerce_memory_gb(value: Any) -> float | None:
-    if value is None or isinstance(value, bool):
+    if value is None:
         return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    text = str(value).strip().lower().replace(" ", "")
-    if not text:
-        return None
-    factors = (
-        ("tb", 1024.0),
-        ("t", 1024.0),
-        ("gb", 1.0),
-        ("g", 1.0),
-        ("mb", 1.0 / 1024.0),
-        ("m", 1.0 / 1024.0),
-    )
-    for suffix, factor in factors:
-        if text.endswith(suffix):
-            number = text[: -len(suffix)]
-            try:
-                return float(number) * factor
-            except ValueError:
-                return None
     try:
-        return float(text)
-    except ValueError:
+        return parse_memory_mb(value) / 1024
+    except (ValueError, OverflowError):
         return None
 
 

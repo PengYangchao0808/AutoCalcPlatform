@@ -55,20 +55,29 @@ from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.qc.keyword_registry import (
     KeywordValueError,
     calculation_policy,
+    canonical_token,
+    canonical_tokens,
     method_family,
     resolve,
     resolve_implementation,
+    scf_rank,
 )
-from cccp.qc.method_meta import method_meta
+from cccp.qc.method_meta import method_meta, scf_constraint
 from cccp.qc.translation import render_opt_geom_lines
 from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
 from cccp.utils.geometry_tools import LogParser
-from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
+from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore
 from cccp.utils.solvent_map import orca_smd_solvent
 
 logger = logging.getLogger(__name__)
+
+#: Canonical ``scf_convergence`` emission tokens (registry authority) — used
+#: to recognise SCF directives among free-form ``route_extras`` literals.
+_SCF_CONVERGENCE_TOKENS: frozenset[str] = frozenset(
+    token.upper() for token in canonical_tokens("scf_convergence")
+)
 
 # ORCA output failure classification patterns
 _SCF_FAILURE_PATTERNS = [
@@ -1297,16 +1306,22 @@ class ORCAInterface(QCInterfaceBase):
             orca_nproc_config if orca_nproc_config is not None else resources.get("nproc", 16),
         )
 
-        self.mem_str = resources.get("mem", "32GB")
+        from cccp.config import _get_default_config
+
+        default_resources = _get_default_config()["resources"]
+        self.mem_str = resources.get("mem", default_resources["mem"])
         self.mem_mb = mem_to_mb(self.mem_str)
 
-        orca_maxcore_config = orca_config.get("maxcore")
-        if orca_maxcore_config is not None:
-            self.maxcore = orca_maxcore_config
-        else:
-            self.maxcore = calc_orca_maxcore(
-                self.mem_mb, self.nproc, resources.get("orca_maxcore_safety", 0.8)
-            )
+        self._maxcore_safety = resources.get(
+            "orca_maxcore_safety", default_resources["orca_maxcore_safety"]
+        )
+        self._maxcore_pin = kwargs.get("maxcore", orca_config.get("maxcore"))
+        self.maxcore = resolve_orca_maxcore(
+            self.mem_mb,
+            self.nproc,
+            self._maxcore_safety,
+            self._maxcore_pin,
+        )
 
         self.charge = kwargs.get("charge", 0)
         self.multiplicity = kwargs.get("multiplicity", 1)
@@ -1320,6 +1335,42 @@ class ORCAInterface(QCInterfaceBase):
 
     def is_available(self) -> bool:
         return self.executable is not None
+
+    def _memory_input_blocks(
+        self, extra_blocks: list | None, nproc: int | None = None
+    ) -> tuple[int, list]:
+        """Validate raw maxcore overrides and render a single budgeted directive."""
+        actual_nproc = self.nproc if nproc is None else nproc
+        default_maxcore = resolve_orca_maxcore(
+            self.mem_mb, actual_nproc, self._maxcore_safety, self._maxcore_pin
+        )
+        maxcore = None
+        remaining = []
+        for block in extra_blocks or []:
+            if not isinstance(block, str):
+                remaining.append(block)
+                continue
+            lines = []
+            for line in block.splitlines(keepends=True):
+                if re.match(r"\s*%maxcore\b", line, re.IGNORECASE):
+                    match = re.fullmatch(r"\s*%maxcore\s+(\d+)\s*(?:#.*)?", line, re.IGNORECASE)
+                    if match is None:
+                        raise ValueError("Raw %maxcore must specify a positive integer in MB")
+                    value = resolve_orca_maxcore(self.mem_mb, actual_nproc, maxcore=int(match[1]))
+                    if maxcore is not None and value != maxcore:
+                        raise ValueError("Conflicting raw %maxcore directives")
+                    maxcore = value
+                else:
+                    lines.append(line)
+            if any(line.strip() for line in lines):
+                remaining.append("".join(lines))
+        if maxcore is not None and self._maxcore_pin is not None and maxcore != self._maxcore_pin:
+            logger.warning(
+                "Raw %%maxcore %s MB overrides configured maxcore %s MB per process",
+                maxcore,
+                self._maxcore_pin,
+            )
+        return default_maxcore if maxcore is None else maxcore, remaining
 
     def _build_input_blocks(
         self,
@@ -1346,6 +1397,7 @@ class ORCAInterface(QCInterfaceBase):
         scf_strategy: str | None = None,
         grid: str | None = None,
         dispersion: str | None = None,
+        nproc: int | None = None,
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
@@ -1407,9 +1459,8 @@ class ORCAInterface(QCInterfaceBase):
 
         _kw_family, _kw_implementation = orca_keyword_context(_method)
 
-        _dlpno_tight_scf = (
-            not basis_inline and _method.lower() == "dlpno-ccsd(t)"
-        )
+        _scf_constraint = scf_constraint(_method)
+        _scf_constraint_active = _scf_constraint is not None and not basis_inline
 
         # Governed enumerated params go through the single route renderer;
         # site quirks are declared as RouteKeyword flags, not inline token logic.
@@ -1418,10 +1469,7 @@ class ORCAInterface(QCInterfaceBase):
             RouteKeyword("opt_level", opt_level),
             RouteKeyword(
                 "scf_convergence",
-                scf_convergence,
-                suppress_tokens=(
-                    frozenset({"TightSCF"}) if _dlpno_tight_scf else frozenset()
-                ),
+                None if _scf_constraint_active else scf_convergence,
             ),
             # Historical quirk preserved: scf_strategy tokens never joined
             # the dedup set.
@@ -1523,6 +1571,52 @@ class ORCAInterface(QCInterfaceBase):
         if _gfn_solvent_token:
             _filtered_extras.append(_gfn_solvent_token)
 
+        _scf_slot: str | None = None
+        if _scf_constraint_active:
+            # Exactly ONE convergence directive per constrained route: an
+            # explicit value (governed kwarg first, then a route_extras
+            # literal) replaces the method floor; below-floor values are
+            # promoted with a warning; every other SCF literal is stripped.
+            _scf_literals = [
+                str(x).strip()
+                for x in _filtered_extras
+                if str(x).strip().upper() in _SCF_CONVERGENCE_TOKENS
+            ]
+            _filtered_extras = [
+                x
+                for x in _filtered_extras
+                if str(x).strip().upper() not in _SCF_CONVERGENCE_TOKENS
+            ]
+            _floor_token, _ = canonical_token(
+                "scf_convergence",
+                _scf_constraint["default"],
+                implementation=_kw_implementation,
+            )
+            _explicit_token: str | None = None
+            if scf_convergence:
+                _explicit_token, _ = canonical_token(
+                    "scf_convergence", scf_convergence, implementation=_kw_implementation
+                )
+            if _explicit_token is None and _scf_literals:
+                _explicit_token = _scf_literals[0]
+            _explicit_rank = scf_rank(_explicit_token) if _explicit_token else None
+            _floor_rank = scf_rank(_floor_token) if _floor_token else None
+            if (
+                _explicit_token is not None
+                and _explicit_rank is not None
+                and _floor_rank is not None
+                and _explicit_rank < _floor_rank
+            ):
+                logger.warning(
+                    "SCF convergence %s is below %s minimum for %s; using %s",
+                    _explicit_token,
+                    _scf_constraint["default"],
+                    _method,
+                    _floor_token,
+                )
+                _explicit_token = None
+            _scf_slot = _explicit_token or _floor_token
+
         _route_segments: list[str | RouteKeyword] = [
             *_filtered_extras,
             *_governed_keywords,
@@ -1532,12 +1626,11 @@ class ORCAInterface(QCInterfaceBase):
             if _method.lower() == "dlpno-ccsd(t)":
                 method_name = "DLPNO-CCSD(T)"
 
-            route_prefix = ""
-            if method_name == "DLPNO-CCSD(T)":
-                route_prefix = " TightSCF"
+            if _scf_slot:
+                method_name = f"{method_name} {_scf_slot}"
             blocks.append(
                 render_route_line(
-                    [f"{method_name}{route_prefix}", route, *_route_segments],
+                    [method_name, route, *_route_segments],
                     context=(_kw_family, _kw_implementation),
                     seen=_extras_upper,
                 )
@@ -1600,8 +1693,10 @@ class ORCAInterface(QCInterfaceBase):
                 blocks.append(f'  auxC  "{final_aux_c}"')
             blocks.append("end")
 
-        blocks.append(f"%maxcore {self.maxcore}")
-        blocks.append(f"%pal nprocs {self.nproc} end")
+        actual_nproc = self.nproc if nproc is None else nproc
+        maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)
+        blocks.append(f"%maxcore {maxcore}")
+        blocks.append(f"%pal nprocs {actual_nproc} end")
 
         # Hessian policy resolution (plan §7.2).
         # ``recalc_hess`` accepts "auto" / 0 / N / None and is resolved
@@ -3283,13 +3378,11 @@ class ORCAInterface(QCInterfaceBase):
             "OptTS", method=eff_method, basis=eff_basis,
             route_extras=route_extras, grid=_grid, opt_level=_opt_level,
             solvent=_solvent, solvent_model=_solvent_model,
-            scf_options=scf_options or None, symbols=symbols, **input_options,
+            scf_options=scf_options or None, symbols=symbols, nproc=_nproc, **input_options,
         )
         if calculate_frequencies:
             first_line, remainder = route.split("\n", 1)
             route = first_line + " NumFreq\n" + remainder
-        if _nproc is not None:
-            route = route.replace(f"%pal nprocs {self.nproc} end", f"%pal nprocs {_nproc} end")
         blocks = "\n".join(
             part
             for part in (
@@ -3439,6 +3532,7 @@ class ORCAInterface(QCInterfaceBase):
         blocks = (
             route
             + "\n"
+            + f"%maxcore {self.maxcore}\n%pal nprocs {self.nproc} end\n"
             + irc_block(
                 direction,
                 max_iter,

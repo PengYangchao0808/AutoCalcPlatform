@@ -45,6 +45,9 @@ def _bare_orca(method: str = "B3LYP", basis: str = "def2-SVP") -> ORCAInterface:
     iface.solvent_model = "none"
     iface.maxcore = 1000
     iface.nproc = 1
+    iface.mem_mb = iface.maxcore * iface.nproc
+    iface._maxcore_safety = 0.8
+    iface._maxcore_pin = iface.maxcore
     iface.charge = 0
     iface.multiplicity = 1
     iface.config = {}
@@ -210,6 +213,24 @@ def test_build_input_blocks_dlpno_suppresses_duplicate_tightscf() -> None:
     route = out.splitlines()[0]
     assert route.count("TightSCF") == 1
     assert route.startswith("! DLPNO-CCSD(T) TightSCF Opt")
+
+
+def test_ts_opt_route_dlpno_emits_scf_floor() -> None:
+    route = ts_opt_route("DLPNO-CCSD(T)", "def2-TZVPP")
+    assert route.split().count("TightSCF") == 1
+
+    route = ts_opt_route("DLPNO-CCSD(T)", "def2-TZVPP", scf="loose")
+    assert route.split().count("TightSCF") == 1
+    assert "LooseSCF" not in route
+
+    route = ts_opt_route("DLPNO-CCSD(T)", "def2-TZVPP", scf="verytight")
+    assert route.split().count("VeryTightSCF") == 1
+    assert route.split().count("TightSCF") == 0
+
+
+def test_ts_opt_route_unconstrained_keeps_absent_scf() -> None:
+    route = ts_opt_route("B3LYP", "def2-SVP")
+    assert "SCF" not in route
 
 
 def test_build_input_blocks_dispersion_gate_for_composite() -> None:

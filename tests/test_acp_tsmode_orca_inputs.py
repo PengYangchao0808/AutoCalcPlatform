@@ -121,7 +121,7 @@ class TestExplicitTargetRescueGuard:
                 raise RuntimeError("optimization failed [geometry_not_converged]")
 
         monkeypatch.setattr(
-            optimize_module, "backend_for_request", lambda req, name: FailingBackend()
+            optimize_module, "backend_for_request", lambda req, name, **kwargs: FailingBackend()
         )
 
         request = CalculationRequest(
@@ -190,7 +190,7 @@ class TestExplicitTargetRescueGuard:
                 )
 
         monkeypatch.setattr(
-            optimize_module, "backend_for_request", lambda req, name: ScfFailingBackend()
+            optimize_module, "backend_for_request", lambda req, name, **kwargs: ScfFailingBackend()
         )
         request = CalculationRequest(
             input_artifact=StructureArtifact(

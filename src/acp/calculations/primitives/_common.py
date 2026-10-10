@@ -56,6 +56,7 @@ from cccp.calculation.contracts import (
     StabilityMode,
     expected_s2_for_multiplicity,
 )
+from cccp.calculation.requests import TaskResources
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,10 @@ _RESOURCE_KEYS = frozenset(
         "backend",
         "engine",
         "config",
+        "nproc",
+        "mem",
+        "maxcore",
+        "timeout_s",
         "output_dir",
         "coordinates",
         "symbols",
@@ -259,12 +264,15 @@ def output_dir(request: CalculationRequest) -> Path | None:
     return None
 
 
-def backend_for_request(request: CalculationRequest, name: str) -> Any:
+def backend_for_request(
+    request: CalculationRequest, name: str, *, resources: TaskResources | None = None
+) -> Any:
     """Resolve a backend instance through the shared cccp registry seam."""
     return _cccp_backend_for_request(
         name,
         config=_backend_config(request),
         constructor_kwargs=_constructor_kwargs(request, name),
+        resources=resources,
     )
 
 

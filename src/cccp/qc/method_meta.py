@@ -29,6 +29,7 @@ from cccp.qc.keyword_registry import (
     method_family,
     resolve,
     resolve_implementation,
+    scf_rank,
 )
 
 # ── Functional → basis set + dispersion mapping ──────────────────────────
@@ -298,6 +299,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
         "default_aux_j": "def2/J",
         "default_aux_c": "def2-TZVPP/C",
+        "scf_convergence": ("tight", "verytight"),
     },
     # ── GFN semi-empirical methods (no basis / dispersion / RI layer) ──
     # ``basis: ()`` -> ``functional_options_map`` derives ``[]`` (NOT
@@ -408,6 +410,27 @@ def functional_options(method: str | None) -> dict[str, list[str]] | None:
     if meta is None:
         return None
     return options_for_meta(meta)
+
+
+def scf_constraint(method: str | None) -> dict[str, Any] | None:
+    """Return the method's SCF convergence constraint (``None`` = unconstrained).
+
+    Declared by the optional ``scf_convergence`` allowed-set tuple (same
+    pattern as ``basis`` / ``dispersion``).  ``default`` is the minimum-ranked
+    allowed value — the platform floor emitted when the caller supplied no
+    explicit convergence; weaker explicit values are promoted to it.
+    """
+    meta = method_meta(method)
+    if meta is None:
+        return None
+    allowed = meta.get("scf_convergence")
+    if not allowed:
+        return None
+    ranked = [(scf_rank(str(value)), str(value)) for value in allowed]
+    ranked = [(rank, value) for rank, value in ranked if rank is not None]
+    if not ranked:
+        return None
+    return {"allowed": tuple(str(value) for value in allowed), "default": min(ranked)[1]}
 
 
 def derive_functional_options_map() -> dict[str, dict[str, list[str]]]:

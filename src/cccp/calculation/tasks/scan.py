@@ -152,6 +152,7 @@ def run_scan(
         else backend_for_request(
             selection.backend,
             config=ctx.config,
+            resources=request.resources,
             constructor_kwargs={
                 key: value
                 for key, value in _scan_capability_kwargs(ctx.capability_extras, request).items()

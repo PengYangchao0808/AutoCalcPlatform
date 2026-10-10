@@ -293,38 +293,12 @@ def parse_memory_mb(mem: str | int | None) -> float | None:
     """
     if mem is None:
         return None
-    if isinstance(mem, bool):
-        message = "mem must be an int (MB) or a memory string"
-        raise TaskInputError(message)
-    if isinstance(mem, int):
-        return float(mem)
-    text = mem.strip().lower().replace(" ", "")
-    if not text:
-        message = "mem must not be empty"
-        raise TaskInputError(message)
-    multiplier = 1.0
-    suffixes = (
-        ("tb", 1024.0 * 1024.0),
-        ("gb", 1024.0),
-        ("mb", 1.0),
-        ("t", 1024.0 * 1024.0),
-        ("g", 1024.0),
-        ("m", 1.0),
-    )
-    for suffix, factor in suffixes:
-        if text.endswith(suffix):
-            text = text[: -len(suffix)]
-            multiplier = factor
-            break
+    from cccp.utils.resource_utils import parse_memory_mb as parse_total_mb
+
     try:
-        number = float(text)
-    except ValueError as exc:
-        message = f"mem must be an int (MB) or a memory string, got {mem!r}"
-        raise TaskInputError(message) from exc
-    if number != number or number <= 0:
-        message = f"mem must be positive and finite, got {mem!r}"
-        raise TaskInputError(message)
-    return number * multiplier
+        return parse_total_mb(mem, default_unit="MB")
+    except (ValueError, OverflowError) as exc:
+        raise TaskInputError(str(exc)) from exc
 
 
 # ── per-task typed options (closed union) ───────────────────────────────

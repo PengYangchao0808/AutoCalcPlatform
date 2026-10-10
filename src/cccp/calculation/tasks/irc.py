@@ -188,6 +188,7 @@ def run_irc(
             else backend_for_request(
                 selection.backend,
                 config=ctx.config,
+                resources=request.resources,
                 constructor_kwargs={
                     key: value
                     for key, value in _irc_capability_kwargs(

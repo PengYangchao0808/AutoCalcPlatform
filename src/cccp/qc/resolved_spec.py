@@ -33,6 +33,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from cccp.qc.keyword_registry import scf_rank
 from cccp.qc.method_meta import (
     AUX_C_BASIS_DEFAULT,
     AUX_J_BASIS_DEFAULT,
@@ -40,6 +41,7 @@ from cccp.qc.method_meta import (
     aux_basis_options,
     functional_options,
     method_meta,
+    scf_constraint,
 )
 
 __all__ = [
@@ -98,6 +100,7 @@ CONFLICT_RULES: dict[str, str] = {
     "empty_allowed_set": "clamp",
     "ri_support_forced_clear": "clamp",
     "aux_outside_allowed_set": "clamp",
+    "scf_below_method_minimum": "clamp",
     # reject family — cccp.qc.keyword_registry raises KeywordValueError
     "unknown_enum_value": "reject",
     "gfn_solvent_policy_violation": "reject",
@@ -105,24 +108,25 @@ CONFLICT_RULES: dict[str, str] = {
     "family_inapplicable_field": "warn",
 }
 
-# Fields whose values the clamp rule may modify.
+# Fields whose values the clamp rule may modify (the method-floor rule
+# applies to scf_convergence like basis/dispersion).
 CLAMP_FIELDS: tuple[str, ...] = (
     "basis",
     "dispersion",
     "ri_approximation",
     "aux_j_basis",
     "aux_c_basis",
+    "scf_convergence",
 )
 
-# Every field ResolvedCalculationSpec can resolve.  solvent/grid/scf are
-# included so MethodSpec-level and OptimizeOptions-level values share ONE
-# conflict rule (SOURCE_PRIORITY: the request field wins over task options);
-# they are never modified here.
+# Every field ResolvedCalculationSpec can resolve.  solvent/grid are included
+# so MethodSpec-level and OptimizeOptions-level values share ONE conflict rule
+# (SOURCE_PRIORITY: the request field wins over task options); they are never
+# modified here.
 RESOLVED_FIELDS: tuple[str, ...] = CLAMP_FIELDS + (
     "solvent",
     "solvent_model",
     "grid",
-    "scf_convergence",
     "scf_strategy",
 )
 
@@ -312,6 +316,10 @@ def resolve_calculation_spec(
     * ``aux_j_basis`` / ``aux_c_basis`` for user-RI methods: a value outside
       the derived option set (case-SENSITIVE membership) is replaced by the
       derived default (``aux_outside_allowed_set``).
+    * ``scf_convergence``: a value resolving weaker than the method floor
+      (METHOD_META ``scf_convergence`` allowed set — DLPNO-CCSD(T) requires
+      ``tight``) is promoted to the floor (``scf_below_method_minimum``);
+      ``None`` / ``""`` stay untouched.
 
     Args:
         method: Method name (case-insensitive); falsy/unknown methods get no
@@ -370,6 +378,8 @@ def resolve_calculation_spec(
         elif field_name in ("aux_j_basis", "aux_c_basis") and meta is not None:
             if ri_support == "user" and requested not in (None, ""):
                 effective, reason = _clamp_aux(field_name, requested, method, basis_eff)
+        elif field_name == "scf_convergence":
+            effective, reason = _clamp_scf(requested, method)
 
         if field_name == "basis":
             basis_eff = effective
@@ -404,6 +414,20 @@ def _clamp_enum_like(requested: Any, allowed: list[str]) -> tuple[Any, str | Non
     if canonical != requested:
         return canonical, "case_mismatch"
     return canonical, None
+
+
+def _clamp_scf(requested: Any, method: str | None) -> tuple[Any, str | None]:
+    """Promote a convergence weaker than the method floor (Table ③, clamp family)."""
+    constraint = scf_constraint(method)
+    if constraint is None or requested in (None, ""):
+        return requested, None
+    requested_rank = scf_rank(str(requested))
+    if requested_rank is None:
+        return requested, None
+    floor_rank = scf_rank(constraint["default"])
+    if floor_rank is not None and requested_rank < floor_rank:
+        return constraint["default"], "scf_below_method_minimum"
+    return requested, None
 
 
 def _clamp_aux(

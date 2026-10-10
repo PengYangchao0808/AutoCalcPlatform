@@ -68,6 +68,7 @@ from acp.scheduler.nodes import (
 from acp.scheduler.processctl import pid_is_alive, read_cmdline, terminate_task_processes
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import compute_input_hash
+from acp.scheduler.resources import with_job_resources
 from acp.scheduler.runner import (
     JobRunner,
     find_workflow_state,
@@ -830,6 +831,8 @@ class JobManager:
         if spec.workflow == "irc":
             spec = self._verified_irc_spec(spec)
 
+        if spec.workflow != "fake":
+            spec = with_job_resources(spec)
         spec = replace(
             spec,
             project_id=spec.project_id or self.default_project_id,
@@ -1154,6 +1157,8 @@ class JobManager:
             )
         if record.spec.workflow == "irc":
             new_spec = self._verified_irc_spec(new_spec or record.spec)
+        if record.spec.workflow != "fake":
+            new_spec = with_job_resources(new_spec or record.spec)
 
         killed = self._terminate_stale_task_processes(record)
         if self._has_live_task_process(record):

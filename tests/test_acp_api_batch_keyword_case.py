@@ -262,6 +262,65 @@ def test_validate_method_method_alias_and_case_canonicalization_warn(
     )
 
 
+def test_validate_method_solvent_model_case_fold_is_silent(
+    client: TestClient,
+) -> None:
+    """Given a catalog-spelled solvent model (CPCM/SMD), When validated, Then
+    the intentional lower-case storage fold lands in normalized_levels WITHOUT
+    a canonicalization warning (case folding is the field's storage
+    convention, not a migration)."""
+    for raw, stored in (("CPCM", "cpcm"), ("SMD", "smd")):
+        response = client.post(
+            "/api/v1/validate-method",
+            json={
+                "schema_id": "dft_optimize",
+                "levels": {
+                    "optimize": {
+                        "engine": "orca",
+                        "functional": "wB97X-D4",
+                        "basis": "def2-TZVP",
+                        "solvent_model": raw,
+                    }
+                },
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["valid"] is True
+        assert body["warnings"] == [], f"unexpected warning for {raw}: {body['warnings']}"
+        assert body["normalized_levels"]["optimize"]["solvent_model"] == stored
+
+
+def test_validate_method_dispersion_case_fold_still_warns(
+    client: TestClient,
+) -> None:
+    """Given a case-folded dispersion keyword, When validated, Then the T24
+    warning still fires (only solvent_model's storage fold is silent)."""
+    response = client.post(
+        "/api/v1/validate-method",
+        json={
+            "schema_id": "dft_optimize",
+            "levels": {
+                "optimize": {
+                    "engine": "orca",
+                    "functional": "wB97X-D4",
+                    "basis": "def2-TZVP",
+                    "dispersion": "d4",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["valid"] is True
+    assert any("dispersion" in w and "canonicalized to 'D4'" in w for w in body["warnings"]), (
+        f"dispersion canonicalization warning missing: {body['warnings']}"
+    )
+    assert body["normalized_levels"]["optimize"]["dispersion"] == "D4"
+
+
 def test_validate_method_unknown_schema_still_has_empty_warnings(
     client: TestClient,
 ) -> None:

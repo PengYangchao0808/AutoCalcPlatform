@@ -157,6 +157,9 @@ def _rendered_input(effective: dict[str, object]) -> str:
     interface.solvent_model = None
     interface.maxcore = 4000
     interface.nproc = 4
+    interface.mem_mb = interface.maxcore * interface.nproc
+    interface._maxcore_safety = 0.8
+    interface._maxcore_pin = interface.maxcore
     interface.config = {"optimization_control": {"recalc_hess": 0}}
     blocks, _resolution = interface._build_input_blocks(
         "opt",

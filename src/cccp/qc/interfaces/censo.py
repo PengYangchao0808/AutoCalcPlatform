@@ -7,6 +7,8 @@ Interface for CENSO conformer ensemble generation and refinement.
 Author: QCcalc Team
 """
 
+from __future__ import annotations
+
 import copy
 import json
 import logging
@@ -27,6 +29,7 @@ from cccp.software import (
     resolve_executable,
 )
 from cccp.utils.file_io import read_xyz_multiframe
+from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore
 
 logger = logging.getLogger(__name__)
 
@@ -372,6 +375,44 @@ class CensoInterface:
 
     # ----- CLI construction ------------------------------------------------
 
+    def _memory_templates(
+        self,
+        preset_cfg: dict[str, Any],
+        nproc: int,
+        part_templates: dict[str, list[str]] | None,
+    ) -> dict[str, list[str]]:
+        """Inject the task's per-core MB budget into every active ORCA part.
+
+        CENSO owns child core allocation (including balanced trailing jobs).
+        Dividing by the total core budget keeps the sum of child allocations
+        within the task memory budget regardless of the child count.
+        """
+        templates = {part: list(lines) for part, lines in (part_templates or {}).items() if lines}
+        resources = self.config.get("resources", {})
+        memory = resources.get("mem")
+        if memory is None:
+            return templates
+        from cccp.config import _get_default_config
+
+        defaults = _get_default_config()["resources"]
+        orca = self.config.get("executables", {}).get("orca", {})
+        maxcore = resolve_orca_maxcore(
+            mem_to_mb(memory), nproc,
+            resources.get("orca_maxcore_safety", defaults["orca_maxcore_safety"]),
+            orca.get("maxcore"),
+        )
+        for part in preset_cfg.get("parts", []):
+            if str(preset_cfg.get(part, {}).get("prog", "orca")).lower() != "orca":
+                continue
+            lines = templates.setdefault(part, [])
+            if any(
+                line.strip().lower().startswith("%maxcore")
+                for block in lines for line in block.splitlines()
+            ):
+                raise ValueError("CENSO templates must take maxcore from the task memory budget")
+            lines.append(f"%maxcore {maxcore}")
+        return templates
+
     def build_cli(
         self,
         input_xyz: Path,
@@ -696,9 +737,7 @@ class CensoInterface:
         nproc_val = nproc if nproc is not None else self._nproc
         keep_all_val = self._keep_all if keep_all is None else bool(keep_all)
 
-        effective_templates = {
-            part: lines for part, lines in (part_templates or {}).items() if lines
-        }
+        effective_templates = self._memory_templates(preset_cfg, nproc_val, part_templates)
 
         rcfile = self._generate_rcfile(
             preset_cfg,

@@ -13,7 +13,7 @@ executables:
   orca:
     path: "orca"  # ORCA executable (resolved via PATH by cccp.software.resolve_executable)
     nproc: 10               # ORCA-specific core count (overrides resources.nproc if set)
-    maxcore:            # ORCA-specific maxcore in MB (auto-calculated if not set)
+    maxcore:            # Optional MB per process; nproc * maxcore must fit resources.mem
 
   xtb:
     path: "xtb"  # xTB executable
@@ -40,7 +40,7 @@ executables:
 # ==================== Computational Resources ====================
 resources:
   nproc: 16       # Number of CPU cores (built-in default)
-  mem: "30GB"     # Memory limit
+  mem: "30GB"     # Total task memory; unitless config/CLI values use GB (1024 MB)
   orca_maxcore_safety: 0.8  # ORCA maxcore safety factor
 
 # ==================== Theory Level Configuration ====================

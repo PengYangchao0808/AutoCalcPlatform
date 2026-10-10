@@ -38,6 +38,9 @@ from cccp.utils.resource_utils import (
     find_executable,
     mb_to_mem_str,
     mem_to_mb,
+    normalize_memory,
+    parse_memory_mb,
+    resolve_orca_maxcore,
     resolve_executable_config,
 )
 from cccp.utils.solvent_map import (
@@ -78,6 +81,9 @@ __all__ = [
     "GeometryUtils",
     "LogParser",
     "mem_to_mb",
+    "normalize_memory",
+    "parse_memory_mb",
+    "resolve_orca_maxcore",
     "mb_to_mem_str",
     "calc_orca_maxcore",
     "find_executable",

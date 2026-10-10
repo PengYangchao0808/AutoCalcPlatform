@@ -52,7 +52,7 @@ def execute_frequency(req: CalculationRequest) -> CalculationResult:
     """
     task_request, binding = to_task_request(req, TaskKind.FREQUENCY)
     selected_backend = backend_name(req)
-    backend = backend_for_request(req, selected_backend)
+    backend = backend_for_request(req, selected_backend, resources=task_request.resources)
     context = TaskContext(
         config=binding.config,
         workdir=binding.artifact_root,

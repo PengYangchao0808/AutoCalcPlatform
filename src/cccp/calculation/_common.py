@@ -47,8 +47,10 @@ from cccp.calculation.contracts import (
     orca_xyz_multiplicity,
 )
 from cccp.calculation.errors import UnsupportedCapabilityError
+from cccp.calculation.requests import TaskResources
 from cccp.calculation.results import ErrorKind
 from cccp.qc.resolved_spec import ResolvedCalculationSpec, resolve_calculation_spec
+from cccp.utils.resource_utils import normalize_memory
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +397,7 @@ def backend_for_request(
     constructor_kwargs: Mapping[str, Any] | None = None,
     *,
     acquire: Any = None,
+    resources: TaskResources | None = None,
 ) -> Any:
     """Resolve a backend instance through a registry seam.
 
@@ -402,13 +405,30 @@ def backend_for_request(
     an already-built instance passes through unchanged (legacy instance
     seams and tests).  *acquire* overrides the lookup (default: the shared
     ``cccp.backends.registry`` singleton).
+    Explicit task resources override a detached constructor config; callers
+    supplying an instance own its resource allocation.
     """
     if acquire is None:
         from cccp.backends.registry import get_backend as acquire
 
     reference = acquire(name)
     if isinstance(reference, type):
-        return reference(dict(config or {}), **dict(constructor_kwargs or {}))
+        effective_config = dict(config or {})
+        if resources is not None:
+            resource_config = dict(effective_config.get("resources") or {})
+            executables = dict(effective_config.get("executables") or {})
+            orca = dict(executables.get("orca") or {})
+            if resources.nproc is not None:
+                resource_config["nproc"] = resources.nproc
+                orca["nproc"] = resources.nproc
+            if resources.mem is not None:
+                resource_config["mem"] = normalize_memory(resources.mem, default_unit="MB")
+            if resources.maxcore is not None:
+                orca["maxcore"] = resources.maxcore
+            effective_config["resources"] = resource_config
+            executables["orca"] = orca
+            effective_config["executables"] = executables
+        return reference(effective_config, **dict(constructor_kwargs or {}))
     return reference
 
 

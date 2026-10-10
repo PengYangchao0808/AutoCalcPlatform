@@ -86,10 +86,40 @@ def test_resolved_fields_cover_solvent_grid_scf() -> None:
         "ri_approximation",
         "aux_j_basis",
         "aux_c_basis",
+        "scf_convergence",
     )
-    for shared in ("solvent", "solvent_model", "grid", "scf_convergence", "scf_strategy"):
-        assert shared in RESOLVED_FIELDS
-        assert shared not in CLAMP_FIELDS
+    for passthrough in ("solvent", "solvent_model", "grid", "scf_strategy"):
+        assert passthrough in RESOLVED_FIELDS
+        assert passthrough not in CLAMP_FIELDS
+
+
+def test_scf_below_method_floor_promoted() -> None:
+    spec = resolve_calculation_spec("DLPNO-CCSD(T)", explicit={"scf_convergence": "loose"})
+    res = spec["scf_convergence"]
+    assert res.requested == "loose"
+    assert res.effective == "tight"
+    assert res.adjustment_reason == "scf_below_method_minimum"
+
+
+def test_scf_at_or_above_floor_untouched() -> None:
+    for value in ("tight", "verytight"):
+        spec = resolve_calculation_spec("DLPNO-CCSD(T)", explicit={"scf_convergence": value})
+        res = spec["scf_convergence"]
+        assert res.effective == value
+        assert res.adjustment_reason is None
+
+
+def test_scf_floor_ignored_for_unconstrained_method() -> None:
+    spec = resolve_calculation_spec("wB97M-V", explicit={"scf_convergence": "loose"})
+    assert spec["scf_convergence"].effective == "loose"
+
+
+def test_scf_absent_not_promoted() -> None:
+    spec = resolve_calculation_spec("DLPNO-CCSD(T)")
+    res = spec["scf_convergence"]
+    assert res.requested is None
+    assert res.effective is None
+    assert res.adjustment_reason is None
 
 
 # ── priority cases (Table ①) ─────────────────────────────────────────────

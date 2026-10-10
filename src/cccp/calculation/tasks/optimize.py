@@ -446,6 +446,7 @@ def run_optimize(
         else backend_for_request(
             selection.backend,
             config=ctx.config,
+            resources=request.resources,
             constructor_kwargs={
                 key: value for key, value in base_kwargs.items() if key != "output_name"
             },

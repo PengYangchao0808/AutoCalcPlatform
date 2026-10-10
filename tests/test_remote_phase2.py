@@ -367,10 +367,13 @@ def test_derive_lsf_resources():
 
 
 def test_derive_lsf_resources_defaults():
+    from cccp.config import _get_default_config
+
     spec = JobSpec(workflow="ensemble", input={"source": "CCO"})
-    nproc, mem_per_core, _, _, _ = derive_lsf_resources(spec)
-    assert nproc == 8
-    assert mem_per_core == 2000
+    with patch("acp.scheduler.resources.load_config", return_value=_get_default_config()):
+        nproc, mem_per_core, _, _, _ = derive_lsf_resources(spec)
+    assert nproc == 16
+    assert mem_per_core == 1920
     print("  [OK] derive_lsf_resources: defaults when no resources")
 
 
@@ -1389,7 +1392,7 @@ trap _acp_record_exit EXIT
 
 export PYTHONPATH="/home/test/acp_code/releases/0d0e0fa11ce00001/src:$PYTHONPATH"
 cd "/scratch/test/acp_jobs/mol_ensemble"
-python3.13 -m acp.cli run ensemble --input input.xyz --output . --nproc 4
+python3.13 -m acp.cli run ensemble --input input.xyz --output . --nproc 4 --mem 8000MB
 echo $? > .exit_code
 """
 
@@ -1465,7 +1468,7 @@ def _submit_and_capture_script(node: RemoteNode, config: RemoteExecutionConfig) 
         spec = JobSpec(
             workflow="ensemble",
             input={"source": "CCO", "source_type": "smiles"},
-            resources={"nproc": 4},
+            resources={"nproc": 4, "mem": "8000MB"},
         )
         record = JobRecord(id="queuejob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")

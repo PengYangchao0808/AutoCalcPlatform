@@ -90,6 +90,28 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        the moved ``ORCABackend`` must keep ``relaxed_scan`` thinness and the
        ``casscf`` delegation (Amendment A/E teeth redirected to the new
        station) plus ``A is B`` identity between the two module paths.
+    R. ``orca.py`` + ``orca_ts.py``: method SCF floor + single-directive slot
+       (2026-10-10) — the DLPNO-CCSD(T) built-in ``" TightSCF"`` prefix is
+       replaced by a constraint-driven SCF slot (METHOD_META
+       ``scf_convergence`` allowed set consumed via ``scf_constraint`` +
+       registry ``scf_rank`` / ``canonical_token(s)`` helpers): exactly ONE
+       convergence directive per route, where an explicit value replaces the
+       floor and below-floor values are promoted with a warning.  Sanctioned
+       scopes: the ``orca.py`` import lines and the
+       ``_SCF_CONVERGENCE_TOKENS`` module constant, plus the two
+       ``orca_ts.py`` import lines (function bodies ride existing method
+       scopes).  Teeth: the hardcoded prefix must be gone and both consumers
+       must use the helpers.
+    S. ``orca.py`` + ``censo.py``: unified task memory budget (2026-10-10).
+       ORCA resolves per-process maxcore from total memory and rejects pins
+       outside the budget, including raw input overrides. CENSO receives
+       the same per-core budget through every active ORCA part template.
+       Sanctioned scopes: resource utility imports, the memory assignments
+       in ORCAInterface.__init__, its new _memory_input_blocks helper and
+       renderer call, IRC's independent resource directives, CENSO's
+       _memory_templates helper and its one call in
+       refine_ensemble. Teeth and negative injections require validation,
+       single-directive rendering, and template propagation to remain.
 """
 
 from __future__ import annotations
@@ -122,6 +144,7 @@ ALLOWED_PY = frozenset(
         "src/cccp/qc/interfaces/hess_file.py",
         "src/cccp/qc/interfaces/base.py",
         "src/cccp/qc/interfaces/crest.py",
+        "src/cccp/qc/interfaces/censo.py",
         "src/acp/backends/orca.py",
     }
 )
@@ -757,7 +780,9 @@ def test_amendment_i_predicates_confined_and_negatives() -> None:
     )
     issues = _amendment_i_orca_teeth(injected)
     assert any("still reaches for acp" in issue for issue in issues)
-    stripped = worktree.replace("from cccp.qc.method_meta import method_meta\n", "")
+    stripped = worktree.replace(
+        "from cccp.qc.method_meta import method_meta, scf_constraint\n", ""
+    )
     issues = _amendment_i_orca_teeth(stripped)
     assert any("direct cccp.qc.method_meta import missing" in issue for issue in issues)
 
@@ -1527,6 +1552,224 @@ def test_amendment_q_predicates_confined_and_negatives() -> None:
     assert any("scope" in issue for issue in issues)
 
 
+# ── Amendment R: method SCF floor + single-directive slot (2026-10-10) ─────
+#
+# The DLPNO-CCSD(T) built-in ``" TightSCF"`` prefix is replaced by a
+# constraint-driven SCF slot: METHOD_META ``scf_convergence`` allowed set
+# (consumed via ``cccp.qc.method_meta.scf_constraint`` + registry
+# ``scf_rank`` / ``canonical_token(s)`` helpers) yields exactly ONE
+# convergence directive per route — an explicit value (governed kwarg or
+# free-form literal) replaces the method floor, below-floor values are
+# promoted with a warning.  Sanctioned scopes: the ``orca.py`` import lines
+# and the ``_SCF_CONVERGENCE_TOKENS`` module constant, plus the two
+# ``orca_ts.py`` import lines (function bodies ride the existing method
+# scopes).  Teeth: the hardcoded prefix must be gone and every consumer must
+# actually use the helpers.
+
+_AMENDMENT_R_ORCA_IMPORTS = frozenset(
+    {
+        "canonical_token,",
+        "canonical_tokens,",
+        "scf_rank,",
+        "from cccp.qc.method_meta import method_meta, scf_constraint",
+    }
+)
+_AMENDMENT_R_ORCA_TS_IMPORTS = frozenset(
+    {
+        "from cccp.qc.keyword_registry import canonical_token, scf_rank",
+        "from cccp.qc.method_meta import scf_constraint",
+    }
+)
+_AMENDMENT_R_CONSTANT_NAME = "_SCF_CONVERGENCE_TOKENS"
+
+
+def _is_amendment_r_orca_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the SCF floor / slot wave."""
+    stripped = txt.strip()
+    if stripped in _AMENDMENT_R_ORCA_IMPORTS:
+        return True
+    for idx, line in enumerate(worktree_src.splitlines()):
+        if line.startswith(_AMENDMENT_R_CONSTANT_NAME):
+            return idx + 1 <= ln <= idx + 3
+    return False
+
+
+def _is_amendment_r_orca_ts_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca_ts.py`` additions for the SCF floor wave."""
+    return txt.strip() in _AMENDMENT_R_ORCA_TS_IMPORTS
+
+
+def _amendment_r_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: prefix gone, helpers consumed, constant present."""
+    issues: list[str] = []
+    if _AMENDMENT_R_CONSTANT_NAME not in worktree:
+        issues.append("  Amendment R: _SCF_CONVERGENCE_TOKENS constant missing")
+    if "scf_constraint(" not in worktree:
+        issues.append("  Amendment R: scf_constraint helper not consumed")
+    if "canonical_token(" not in worktree:
+        issues.append("  Amendment R: canonical_token helper not consumed")
+    if 'route_prefix = " TightSCF"' in worktree:
+        issues.append("  Amendment R: hardcoded DLPNO TightSCF prefix still present")
+    return issues
+
+
+def _amendment_r_orca_ts_teeth(worktree: str) -> list[str]:
+    """Teeth: the OptTS route must consume the shared SCF floor helper."""
+    issues: list[str] = []
+    if "_constrained_scf_value" not in worktree:
+        issues.append("  Amendment R: _constrained_scf_value helper missing")
+    if 'scf_convergence", _constrained_scf_value' not in worktree:
+        issues.append("  Amendment R: ts_opt_route does not use the SCF floor helper")
+    return issues
+
+
+def test_amendment_r_predicates_confined_and_negatives() -> None:
+    """Amendment R is confined to the SCF floor / slot wiring — negative injection."""
+    fp_orca = "src/cccp/qc/interfaces/orca.py"
+    fp_ts = "src/cccp/qc/interfaces/orca_ts.py"
+    orca = _worktree_content(fp_orca)
+    ts = _worktree_content(fp_ts)
+
+    added_orca, _ = _diff_hunks(fp_orca)
+    r_orca = [(ln, txt) for ln, txt in added_orca if _is_amendment_r_orca_addition(ln, txt, orca)]
+    assert len(r_orca) == 7, f"expected 7 sanctioned orca.py additions, got {r_orca}"
+
+    added_ts, _ = _diff_hunks(fp_ts)
+    r_ts = [(ln, txt) for ln, txt in added_ts if _is_amendment_r_orca_ts_addition(ln, txt, ts)]
+    assert len(r_ts) == 2, f"expected 2 sanctioned orca_ts.py additions, got {r_ts}"
+
+    assert not _is_amendment_r_orca_addition(1, "canonical_tokens", orca)
+    assert not _is_amendment_r_orca_addition(1, "import scf_rank", orca)
+    assert not _is_amendment_r_orca_ts_addition(
+        1, "from cccp.qc.method_meta import scf_constraint, extra", ts
+    )
+
+    assert not _amendment_r_orca_teeth(orca)
+    issues = _amendment_r_orca_teeth(orca + '\nroute_prefix = " TightSCF"\n')
+    assert any("prefix still present" in issue for issue in issues)
+    issues = _amendment_r_orca_teeth(orca.replace(_AMENDMENT_R_CONSTANT_NAME, "_RENAMED_SCF"))
+    assert any("constant missing" in issue for issue in issues)
+
+    assert not _amendment_r_orca_ts_teeth(ts)
+    issues = _amendment_r_orca_ts_teeth(ts.replace("_constrained_scf_value", "_renamed_scf"))
+    assert any("helper missing" in issue for issue in issues)
+
+
+def _amendment_s_import_line(ln: int, txt: str, source: str, *, censo: bool = False) -> bool:
+    expected = {
+        "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore",
+    }
+    if censo:
+        expected.add("from __future__ import annotations")
+    return txt.strip() in expected and any(
+        isinstance(node, ast.ImportFrom) and node.lineno == ln
+        for node in ast.parse(source).body
+    )
+
+
+def _is_amendment_s_orca_addition(ln: int, txt: str, source: str) -> bool:
+    if _amendment_s_import_line(ln, txt, source):
+        return True
+    helper = _func_range(source, "_memory_input_blocks", "ORCAInterface")
+    if helper is not None and helper[0] <= ln <= helper[1]:
+        return True
+    for cls in ast.parse(source).body:
+        if not isinstance(cls, ast.ClassDef) or cls.name != "ORCAInterface":
+            continue
+        for func in cls.body:
+            if not isinstance(func, ast.FunctionDef) or func.name != "__init__":
+                continue
+            start = next(
+                node.lineno for node in func.body
+                if isinstance(node, ast.ImportFrom) and node.module == "cccp.config"
+            )
+            end = next(
+                node.end_lineno for node in func.body
+                if isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Attribute) and t.attr == "maxcore" for t in node.targets)
+            )
+            if end is not None and start <= ln <= end:
+                return True
+    renderer = _func_range(source, "_build_input_blocks", "ORCAInterface")
+    return renderer is not None and renderer[0] <= ln <= renderer[1] and txt.strip() in {
+        "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
+        'blocks.append(f"%maxcore {maxcore}")',
+    }
+
+
+def _is_amendment_s_censo_addition(ln: int, txt: str, source: str) -> bool:
+    if _amendment_s_import_line(ln, txt, source, censo=True):
+        return True
+    helper = _func_range(source, "_memory_templates", "CensoInterface")
+    if helper is not None and helper[0] <= ln <= helper[1]:
+        return True
+    refine = _func_range(source, "refine_ensemble", "CensoInterface")
+    return refine is not None and refine[0] <= ln <= refine[1] and txt.strip() == (
+        "effective_templates = self._memory_templates(preset_cfg, nproc_val, part_templates)"
+    )
+
+
+def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
+    if txt.strip() == "from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb":
+        return any(isinstance(node, ast.ImportFrom) and node.lineno == ln for node in ast.parse(source).body)
+    for cls in ast.parse(source).body:
+        if not isinstance(cls, ast.ClassDef) or cls.name != "ORCAInterface":
+            continue
+        for func in cls.body:
+            if not isinstance(func, ast.FunctionDef) or func.name != "__init__":
+                continue
+            start = next(
+                node.lineno for node in func.body
+                if isinstance(node, ast.Assign)
+                and any(isinstance(t, ast.Attribute) and t.attr == "mem_str" for t in node.targets)
+            )
+            end = next(
+                node.end_lineno for node in func.body
+                if isinstance(node, ast.If)
+                and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Name)
+                and node.test.left.id == "orca_maxcore_config"
+            )
+            return end is not None and start <= ln <= end
+    return False
+
+
+def _amendment_s_teeth(source: str, *, censo: bool = False) -> list[str]:
+    requirements = (
+        ('resolve_orca_maxcore(', 'total-memory validation missing'),
+        ('self._memory_templates(preset_cfg, nproc_val, part_templates)', 'template wiring missing'),
+        ('lines.append(f"%maxcore {maxcore}")', 'template maxcore missing'),
+    ) if censo else (
+        ('self.maxcore = resolve_orca_maxcore(', 'total-memory validation missing'),
+        ('resolve_orca_maxcore(self.mem_mb, actual_nproc, maxcore=int(match[1]))',
+         'raw maxcore validation missing'),
+        ('maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)', 'renderer wiring missing'),
+        ('blocks.append(f"%maxcore {maxcore}")', 'single maxcore rendering missing'),
+        ('default_resources["mem"]', 'authoritative default missing'),
+        ('%maxcore {self.maxcore}\\n%pal nprocs {self.nproc} end\\n', 'IRC resources missing'),
+    )
+    return [f"  Amendment S: {message}" for text, message in requirements if text not in source]
+
+
+def test_amendment_s_memory_scopes_and_negative_injections() -> None:
+    for name, predicate, censo in (
+        ("orca", _is_amendment_s_orca_addition, False),
+        ("censo", _is_amendment_s_censo_addition, True),
+    ):
+        source = _worktree_content(f"src/cccp/qc/interfaces/{name}.py")
+        assert not predicate(1, "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore", source)
+        assert not predicate(1, "unrelated_algorithm()", source)
+        assert not _amendment_s_teeth(source, censo=censo)
+        assert _amendment_s_teeth(source.replace("resolve_orca_maxcore(", "unguarded_maxcore("), censo=censo)
+        assert _amendment_s_teeth(source.replace("self._memory_", "self._unwired_memory_"), censo=censo)
+    baseline = _baseline_content("src/cccp/qc/interfaces/orca.py")
+    for ln, txt in enumerate(baseline.splitlines(), 1):
+        if 'self.mem_str = resources.get("mem", "32GB")' in txt:
+            assert _is_amendment_s_orca_deletion(ln, txt, baseline)
+        if 'self.charge = kwargs.get("charge", 0)' in txt:
+            assert not _is_amendment_s_orca_deletion(ln, txt, baseline)
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1578,9 +1821,12 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_g_orca_ts_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_r_orca_ts_addition(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
             violations.extend(_amendment_f_orca_ts_teeth(worktree))
             violations.extend(_amendment_g_orca_ts_teeth(worktree))
+            violations.extend(_amendment_r_orca_ts_teeth(worktree))
             continue
 
         # ── acp/backends/orca.py: Amendment J (shim) or A + E ────────────
@@ -1675,6 +1921,10 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_q_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_r_orca_addition(ln, txt, worktree):
+                    continue
+                if _is_amendment_s_orca_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -1719,6 +1969,18 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_l_orca_teeth(worktree))
             violations.extend(_amendment_n_orca_teeth(worktree))
             violations.extend(_amendment_q_orca_teeth(worktree))
+            violations.extend(_amendment_r_orca_teeth(worktree))
+            violations.extend(_amendment_s_teeth(worktree))
+            continue
+
+        if fp == "src/cccp/qc/interfaces/censo.py":
+            worktree = _worktree_content(fp)
+            for ln, txt in added:
+                if not txt.strip() or txt.strip().startswith("#"):
+                    continue
+                if not _is_amendment_s_censo_addition(ln, txt, worktree):
+                    violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_s_teeth(worktree, censo=True))
             continue
 
         # ── interfaces/base.py: Amendment J (QCResult merge) ─────────────
@@ -1775,9 +2037,11 @@ def test_orca_ts_no_changes() -> None:
         and not txt.strip().startswith("#")
         and not _is_amendment_f_orca_ts_addition(ln, txt, worktree)
         and not _is_amendment_g_orca_ts_addition(ln, txt, worktree)
+        and not _is_amendment_r_orca_ts_addition(ln, txt, worktree)
     ]
     violations.extend(_amendment_f_orca_ts_teeth(worktree))
     violations.extend(_amendment_g_orca_ts_teeth(worktree))
+    violations.extend(_amendment_r_orca_ts_teeth(worktree))
     assert not violations, "orca_ts.py additions outside Amendments F/G:\n" + "\n".join(violations)
 
 
@@ -1825,6 +2089,10 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_q_deletion(ln, t, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t) for ln, t in bad_entries
+                if not _is_amendment_s_orca_deletion(ln, t, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             if _is_pure_reexport_shim(_worktree_content(fp)):
