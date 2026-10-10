@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -247,7 +248,12 @@ def test_materialized_smiles_geometry_binds_scan_identity(tmp_path: Path) -> Non
 
     first = _fingerprint()
     original = input_path.read_text(encoding="utf-8")
-    perturbed = original.replace("-0.8883105789", "-0.9883105789", 1)
+    # Shift the first coordinate token found in the XYZ body: RDKit wheel
+    # builds differ across platforms, so no literal geometry value is stable.
+    match = re.search(r"-?\d+\.\d+", original)
+    assert match is not None
+    shifted = f"{float(match.group()) + 0.1:.10f}"
+    perturbed = original[: match.start()] + shifted + original[match.end() :]
     assert perturbed != original
     input_path.write_text(perturbed, encoding="utf-8")
 
