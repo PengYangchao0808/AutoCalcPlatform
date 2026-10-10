@@ -344,6 +344,93 @@ def test_scan_method_flags_emits_scants_iff_enabled() -> None:
     assert "--scants" not in absent
 
 
+def test_scan_method_flags_emits_multi_atom_coordinates() -> None:
+    """Mapping coordinates with 2-4 atoms render comma-joined; string entries
+    stay blind pass-through (the generator never validates)."""
+    from acp.scheduler.jobs import scan_method_flags
+
+    angle = scan_method_flags(
+        {"scan_points": 2}, {"coordinate": {"atoms": [0, 1, 2], "start": 90, "end": 120}}
+    )
+    assert angle == ["--coordinate", "0,1,2,90,120", "--scan-points", "2"]
+    dihedral = scan_method_flags(
+        {"scan_points": 2}, {"coordinate": {"atoms": [0, 1, 2, 3], "start": 90, "end": 120}}
+    )
+    assert dihedral == ["--coordinate", "0,1,2,3,90,120", "--scan-points", "2"]
+    five_part = scan_method_flags({"scan_points": 2}, {"coordinate": "0,1,2,90,120"})
+    assert five_part == ["--coordinate", "0,1,2,90,120", "--scan-points", "2"]
+    six_part = scan_method_flags({"scan_points": 2}, {"coordinate": "0,1,2,3,90,120"})
+    assert six_part == ["--coordinate", "0,1,2,3,90,120", "--scan-points", "2"]
+    with pytest.raises(ValueError, match="2-4 atoms"):
+        scan_method_flags(
+            {"scan_points": 2}, {"coordinate": {"atoms": [0], "start": 1.0, "end": 2.0}}
+        )
+
+
+def test_scan_method_flags_rejects_mapping_kind_atom_count_mismatch() -> None:
+    """F1: an explicit ``kind`` in a mapping coordinate pins the atom count.
+
+    The legacy queue path bypasses ``validate_scan_submission``, so a mapping
+    like ``{"kind": "angle", "atoms": [0, 1]}`` must be rejected by the
+    generator itself instead of silently running a DISTANCE scan.
+    """
+    from acp.scheduler.jobs import scan_method_flags
+
+    with pytest.raises(ValueError, match="requires 3 atoms"):
+        scan_method_flags(
+            {"scan_points": 2},
+            {"coordinate": {"kind": "angle", "atoms": [0, 1], "start": 90, "end": 120}},
+        )
+    with pytest.raises(ValueError, match="requires 4 atoms"):
+        scan_method_flags(
+            {"scan_points": 2},
+            {"coordinate": {"kind": "dihedral", "atoms": [0, 1, 2], "start": 0, "end": 90}},
+        )
+    with pytest.raises(ValueError, match="unsupported"):
+        scan_method_flags(
+            {"scan_points": 2},
+            {"coordinate": {"kind": "torsion", "atoms": [0, 1, 2, 3], "start": 0, "end": 90}},
+        )
+    # Explicit kind with the matching count still emits.
+    distance = scan_method_flags(
+        {"scan_points": 2},
+        {"coordinate": {"kind": "distance", "atoms": [0, 1], "start": 1.0, "end": 2.0}},
+    )
+    assert distance == ["--coordinate", "0,1,1.0,2.0", "--scan-points", "2"]
+    # Back-compat: mappings WITHOUT kind keep atom-count inference (2-4 atoms).
+    inferred = scan_method_flags(
+        {"scan_points": 2}, {"coordinate": {"atoms": [0, 1, 2], "start": 90, "end": 120}}
+    )
+    assert inferred == ["--coordinate", "0,1,2,90,120", "--scan-points", "2"]
+    # No-kind mappings outside the 2-4 window keep the pre-existing error.
+    with pytest.raises(ValueError, match="2-4 atoms"):
+        scan_method_flags(
+            {"scan_points": 2},
+            {"coordinate": {"atoms": [0, 1, 2, 3, 4], "start": 90, "end": 120}},
+        )
+
+
+def test_scan_method_flags_normalizes_integral_float_points() -> None:
+    """F2: an integral float ``scan_points`` passes the validation boundary but
+    must emit the integer form — argparse rejects ``--scan-points 21.0``."""
+    from acp.scheduler.jobs import scan_method_flags
+
+    float_integral = scan_method_flags({"scan_points": 21.0}, {"coordinate": "0,1,1.0,1.4"})
+    assert float_integral == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "21"]
+    int_points = scan_method_flags({"scan_points": 21}, {"coordinate": "0,1,1.0,1.4"})
+    assert int_points == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "21"]
+    # Non-integral floats pass through unchanged (validated paths reject them
+    # at the boundary; the generator stays a generator).
+    non_integral = scan_method_flags({"scan_points": 21.5}, {"coordinate": "0,1,1.0,1.4"})
+    assert non_integral == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "21.5"]
+    # The levels-scoped resolution gets the same normalization.
+    from_levels = scan_method_flags(
+        {"levels": {"scan": {"scan_coordinate_points": 7.0}}},
+        {"coordinate": "0,1,1.0,1.4"},
+    )
+    assert from_levels == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "7"]
+
+
 def test_scan_scants_projected_by_local_and_remote_argv(tmp_path: Path) -> None:
     from acp.scheduler.remote.script_gen import build_remote_cli_command
     from acp.scheduler.runner import JobRunner
@@ -366,6 +453,9 @@ def test_scan_scants_projected_by_local_and_remote_argv(tmp_path: Path) -> None:
 # validator; these tests pin the boundary rules themselves.
 
 XYZ_TRIATOMIC = "3\ntriatomic\nO 0.0 0.0 0.0\nC 1.2 0.0 0.0\nH 2.0 0.0 0.0\n"
+XYZ_TETRATOMIC = (
+    "4\ntetratomic\nC 0.0 0.0 0.0\nH 1.09 0.0 0.0\nH -0.36 1.03 0.0\nH -0.36 -0.51 0.89\n"
+)
 
 
 def _scan_method(points: object = 21) -> dict:
@@ -412,7 +502,8 @@ def test_scan_submission_rejects_empty_coordinates_list() -> None:
         ("0,1,-1.0,2.0", "greater than 0"),
         ("0,1,0.0,2.0", "greater than 0"),
         ("0,1,2.0,2.0", "differ"),
-        ("0,1,1.0", "atom1,atom2,start,end"),
+        ("0,1,1.0,1.0000000001", "differ"),
+        ("0,1,1.0", "atom1,atom2"),
     ],
 )
 def test_scan_submission_rejects_invalid_coordinates(coordinate: str, match: str) -> None:
@@ -450,15 +541,87 @@ def test_scan_submission_accepts_valid_distance_coordinate() -> None:
     )
 
 
-def test_scan_submission_rejects_distance_only_violations() -> None:
+def test_scan_submission_accepts_angle_and_dihedral_coordinates() -> None:
+    """Kind-aware boundary: 3-atom angle and 4-atom dihedral scans pass in
+    both the string form (kind inferred from atom count) and the mapping
+    form (explicit ``kind``)."""
     from acp.scheduler.jobs import validate_scan_submission
 
-    with pytest.raises(ValueError, match="distance"):
+    validate_scan_submission("scan", _scan_method(), _scan_input(coordinate="0,1,2,90,120"))
+    validate_scan_submission(
+        "scan",
+        _scan_method(),
+        _scan_input(coordinate="0,1,2,3,-180.0,180.0", xyz=XYZ_TETRATOMIC),
+    )
+    validate_scan_submission(
+        "scan",
+        _scan_method(),
+        _scan_input(coordinate={"kind": "angle", "atoms": [0, 1, 2], "start": 100, "end": 160}),
+    )
+    validate_scan_submission(
+        "scan",
+        _scan_method(),
+        _scan_input(
+            coordinate={"kind": "dihedral", "atoms": [0, 1, 2, 3], "start": -60, "end": 60},
+            xyz=XYZ_TETRATOMIC,
+        ),
+    )
+
+
+def test_scan_submission_rejects_kind_atom_count_mismatch() -> None:
+    """Object form: unknown ``kind`` and kind/atom-count mismatches rejected."""
+    from acp.scheduler.jobs import validate_scan_submission
+
+    with pytest.raises(ValueError, match="unsupported scan coordinate kind"):
         validate_scan_submission(
             "scan",
             _scan_method(),
-            _scan_input(coordinate={"atoms": [0, 1], "start": 10.0, "end": 20.0, "kind": "angle"}),
+            _scan_input(
+                coordinate={"kind": "torsion", "atoms": [0, 1, 2, 3], "start": 0, "end": 90}
+            ),
         )
+    with pytest.raises(ValueError, match="angle coordinates require 3 atoms"):
+        validate_scan_submission(
+            "scan",
+            _scan_method(),
+            _scan_input(coordinate={"kind": "angle", "atoms": [0, 1], "start": 90, "end": 120}),
+        )
+    with pytest.raises(ValueError, match="dihedral coordinates require 4 atoms"):
+        validate_scan_submission(
+            "scan",
+            _scan_method(),
+            _scan_input(
+                coordinate={"kind": "dihedral", "atoms": [0, 1, 2], "start": 0, "end": 90},
+                xyz=XYZ_TETRATOMIC,
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("coordinate", "match"),
+    [
+        ("0,1,2,90,181", "0 and 180"),
+        ("0,1,2,-5,120", "0 and 180"),
+        ("0,1,2,3,-180.0,361.0", "-360 and 360"),
+        ("0,1,2,3,-400.0,180.0", "-360 and 360"),
+    ],
+)
+def test_scan_submission_rejects_out_of_range_angle_and_dihedral(
+    coordinate: str, match: str
+) -> None:
+    from acp.scheduler.jobs import validate_scan_submission
+
+    with pytest.raises(ValueError, match=match):
+        validate_scan_submission(
+            "scan", _scan_method(), _scan_input(coordinate=coordinate, xyz=XYZ_TETRATOMIC)
+        )
+
+
+def test_scan_submission_rejects_duplicate_atoms_in_angle_coordinate() -> None:
+    from acp.scheduler.jobs import validate_scan_submission
+
+    with pytest.raises(ValueError, match="different atoms"):
+        validate_scan_submission("scan", _scan_method(), _scan_input(coordinate="0,1,1,90,120"))
 
 
 def test_scan_submission_rejects_unverifiable_atom_selection() -> None:
@@ -596,6 +759,51 @@ def test_wizard_body_passes_v1_and_reaches_runner_flags(
     assert cmd[points_at + 1] == "21"
 
 
+def test_angle_scan_body_through_v1_reaches_local_and_remote_argv(
+    scan_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Coverage: a 5-part ANGLE coordinate flows real v1 create → JobSpec →
+    local runner argv and remote argv (E7 parity)."""
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+    from acp.scheduler.runner import JobRunner
+
+    body = _wizard_body(coordinate="0,1,2,90,120", xyz=XYZ_TRIATOMIC)
+    body["method"]["levels"]["scan"].update(
+        {"scan_coordinate_kind": "angle", "scan_coordinate_start": 90, "scan_coordinate_end": 120}
+    )
+    captured: list = []
+    _fake_scheduler(monkeypatch, captured)
+    response = scan_client.post("/api/v1/jobs", json=body)
+    assert response.status_code == 201, response.text
+    assert len(captured) == 1
+    spec = captured[0]
+    cmd = JobRunner(python_executable="python")._build_cmd(spec, tmp_path, input_path="input.xyz")
+    assert cmd[cmd.index("--coordinate") + 1] == "0,1,2,90,120"
+    assert cmd[cmd.index("--scan-points") + 1] == "21"
+    remote = build_remote_cli_command(spec, input_path="input.xyz")
+    assert remote[remote.index("--coordinate") + 1] == "0,1,2,90,120"
+    assert remote[remote.index("--scan-points") + 1] == "21"
+
+
+def test_dihedral_scan_body_through_v1_reaches_runner_argv(
+    scan_client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Coverage: a 6-part DIHEDRAL coordinate (4-atom xyz) flows v1 → argv."""
+    from acp.scheduler.runner import JobRunner
+
+    body = _wizard_body(coordinate="0,1,2,3,-180.0,180.0", xyz=XYZ_TETRATOMIC, points=15.0)
+    captured: list = []
+    _fake_scheduler(monkeypatch, captured)
+    response = scan_client.post("/api/v1/jobs", json=body)
+    assert response.status_code == 201, response.text
+    assert len(captured) == 1
+    cmd = JobRunner(python_executable="python")._build_cmd(
+        captured[0], tmp_path, input_path="input.xyz"
+    )
+    assert cmd[cmd.index("--coordinate") + 1] == "0,1,2,3,-180.0,180.0"
+    assert cmd[cmd.index("--scan-points") + 1] == "15"
+
+
 @pytest.mark.parametrize(
     ("coordinate", "points", "match"),
     [
@@ -673,6 +881,11 @@ def test_v2_batch_scan_item_failure_is_per_item(
 # ── Executed wizard builder: real body -> real v1 -> runner argv ─────────
 
 _WIZARD_HTML = Path(__file__).resolve().parents[1] / "frontend" / "ACP_Workbench_v2.html"
+# Local 4-atom geometry for the dihedral builder cases (self-contained so the
+# node-harness section never depends on the backend-boundary fixtures).
+_WIZARD_XYZ_TETRA = (
+    "4\ntetratomic\nC 0.0 0.0 0.0\nH 1.09 0.0 0.0\nH -0.36 1.03 0.0\nH -0.36 -0.51 0.89\n"
+)
 
 
 def _run_wizard_builder_in_node(cases: list[dict]) -> list[dict]:
@@ -737,6 +950,33 @@ def test_wizard_builder_converts_one_based_exactly_once() -> None:
                     },
                     "structure": {"xyz": XYZ_TRIATOMIC},
                 },
+                {
+                    "name": "angle",
+                    "fields": {
+                        "kind": "angle",
+                        "atomA": "1",
+                        "atomB": "2",
+                        "atomC": "3",
+                        "start": "100.0",
+                        "end": "160.0",
+                        "points": "21",
+                    },
+                    "structure": {"xyz": XYZ_TRIATOMIC},
+                },
+                {
+                    "name": "dihedral",
+                    "fields": {
+                        "kind": "dihedral",
+                        "atomA": "1",
+                        "atomB": "2",
+                        "atomC": "3",
+                        "atomD": "4",
+                        "start": "0.0",
+                        "end": "180.0",
+                        "points": "21",
+                    },
+                    "structure": {"xyz": _WIZARD_XYZ_TETRA},
+                },
             ]
         )
     }
@@ -745,9 +985,20 @@ def test_wizard_builder_converts_one_based_exactly_once() -> None:
     assert valid["input"]["scan_coordinates"] == ["0,1,1.0,3.0"]
     assert valid["method"]["scan_points"] == 21
     assert valid["mirror"]["scan_coordinate_atoms"] == [1, 2]
+    assert valid["mirror"]["scan_coordinate_kind"] == "distance"
     two = results["two_atoms"]
     assert two["input"]["scan_coordinates"] == ["1,2,1.5,2.5"]
     assert two["atomCount"] == 3
+    angle = results["angle"]
+    assert angle["ok"] is True
+    assert angle["input"]["scan_coordinates"] == ["0,1,2,100.0,160.0"]
+    assert angle["mirror"]["scan_coordinate_kind"] == "angle"
+    assert angle["mirror"]["scan_coordinate_atoms"] == [1, 2, 3]
+    dihedral = results["dihedral"]
+    assert dihedral["ok"] is True
+    assert dihedral["input"]["scan_coordinates"] == ["0,1,2,3,0.0,180.0"]
+    assert dihedral["mirror"]["scan_coordinate_kind"] == "dihedral"
+    assert dihedral["mirror"]["scan_coordinate_atoms"] == [1, 2, 3, 4]
 
 
 def test_wizard_builder_rejection_matrix() -> None:
@@ -764,6 +1015,32 @@ def test_wizard_builder_rejection_matrix() -> None:
         ("points_one", {**base, "points": "1"}, XYZ_TRIATOMIC, "points_invalid"),
         ("points_fraction", {**base, "points": "2.5"}, XYZ_TRIATOMIC, "points_invalid"),
         ("no_structure", base, {"smiles": "CCO"}, "no_confirmed_structure"),
+        ("angle_missing_atom_3", {**base, "kind": "angle"}, XYZ_TRIATOMIC, "fields_required"),
+        (
+            "angle_out_of_bounds",
+            {**base, "kind": "angle", "atomC": "3", "start": "181", "end": "160"},
+            XYZ_TRIATOMIC,
+            "range_angle_invalid",
+        ),
+        (
+            "dihedral_out_of_bounds",
+            {**base, "kind": "dihedral", "atomC": "3", "atomD": "4", "start": "-400", "end": "180"},
+            _WIZARD_XYZ_TETRA,
+            "range_dihedral_invalid",
+        ),
+        (
+            "angle_duplicate_atoms",
+            {**base, "kind": "angle", "atomC": "2"},
+            XYZ_TRIATOMIC,
+            "atoms_not_distinct",
+        ),
+        (
+            "angle_atom_3_out_of_range",
+            {**base, "kind": "angle", "atomC": "4"},
+            XYZ_TRIATOMIC,
+            "atom_out_of_range",
+        ),
+        ("kind_unknown", {**base, "kind": "quadrilateral"}, XYZ_TRIATOMIC, "kind_invalid"),
     ]
     results = {
         item["name"]: item["result"]

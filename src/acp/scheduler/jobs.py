@@ -295,11 +295,20 @@ def scan_method_flags(
             atoms = coordinate.get("atoms")
             start = coordinate.get("start")
             end = coordinate.get("end")
-            if not isinstance(atoms, (list, tuple)) or len(atoms) != 2:
-                raise ValueError("scan coordinate objects require exactly two atoms")
+            if not isinstance(atoms, (list, tuple)) or not 2 <= len(atoms) <= 4:
+                raise ValueError("scan coordinate objects require 2-4 atoms")
             if start is None or end is None:
                 raise ValueError("scan coordinate objects require start and end")
-            coordinate = f"{atoms[0]},{atoms[1]},{start},{end}"
+            kind = coordinate.get("kind")
+            if kind is not None:
+                expected = _SCAN_KIND_ATOM_COUNTS.get(str(kind))
+                if expected is None:
+                    raise ValueError(f"scan coordinate objects: unsupported kind {kind!r}")
+                if len(atoms) != expected:
+                    raise ValueError(
+                        f"scan coordinate objects: kind {kind!r} requires {expected} atoms"
+                    )
+            coordinate = ",".join(str(part) for part in (*atoms, start, end))
         flags += ["--coordinate", str(coordinate)]
 
     levels = method.get("levels")
@@ -314,6 +323,8 @@ def scan_method_flags(
     if points is None:
         points = scan_level.get("scan_points")
     if points is not None:
+        if isinstance(points, float) and points.is_integer():
+            points = int(points)
         flags += ["--scan-points", str(points)]
 
     use_scants = method.get("scan_use_scants")
@@ -333,7 +344,14 @@ def scan_method_flags(
 # ── scan submission validation (shared ACP submission boundary) ──────────
 # ``scan_method_flags`` is the parameter generator, NOT a validator; this
 # module holds the boundary rules both v1 create/edit and v2 batch use.
-# First phase is DISTANCE scans only (angle/dihedral deferred).
+# Coordinate kinds: distance (2 atoms), angle (3), dihedral (4) — the
+# string form infers the kind from the atom count, the object form sets
+# ``kind`` explicitly (default "distance").
+
+_SCAN_KIND_ATOM_COUNTS: dict[str, int] = {"distance": 2, "angle": 3, "dihedral": 4}
+_SCAN_ATOM_COUNT_KINDS: dict[int, str] = {
+    count: kind for kind, count in _SCAN_KIND_ATOM_COUNTS.items()
+}
 
 
 def _scan_atom_count_from_xyz(text: Any) -> int | None:
@@ -421,16 +439,19 @@ def _submission_scan_points(method: Mapping[str, Any], payload: Mapping[str, Any
     return points
 
 
-def _parse_submission_coordinate(entry: Any, index: int) -> tuple[tuple[int, int], float, float]:
-    """Parse one coordinate entry into ((atom_a, atom_b), start, end)."""
+def _parse_submission_coordinate(
+    entry: Any, index: int
+) -> tuple[tuple[int, ...], str, float, float]:
+    """Parse one coordinate entry into ``(atoms, kind, start, end)``."""
     label = f"scan coordinate {index + 1}"
     if isinstance(entry, Mapping):
         kind = str(entry.get("kind") or "distance")
-        if kind != "distance":
-            raise ValueError(f"{label}: only distance scans are supported, got kind {kind!r}")
+        expected_atoms = _SCAN_KIND_ATOM_COUNTS.get(kind)
+        if expected_atoms is None:
+            raise ValueError(f"{label}: unsupported scan coordinate kind {kind!r}")
         atoms_raw = entry.get("atoms")
-        if not isinstance(atoms_raw, (list, tuple)) or len(atoms_raw) != 2:
-            raise ValueError(f"{label}: distance coordinates require exactly two atoms")
+        if not isinstance(atoms_raw, (list, tuple)) or len(atoms_raw) != expected_atoms:
+            raise ValueError(f"{label}: {kind} coordinates require {expected_atoms} atoms")
         raw_atoms = list(atoms_raw)
         start_raw = entry.get("start")
         end_raw = entry.get("end")
@@ -438,10 +459,12 @@ def _parse_submission_coordinate(entry: Any, index: int) -> tuple[tuple[int, int
             raise ValueError(f"{label}: scan coordinate objects require start and end")
     elif isinstance(entry, str):
         parts = [text.strip() for text in entry.split(",")]
-        if len(parts) != 4:
-            raise ValueError(f"{label} must be atom1,atom2,start,end")
-        raw_atoms = parts[:2]
-        start_raw, end_raw = parts[2], parts[3]
+        if len(parts) not in (4, 5, 6):
+            raise ValueError(f"{label} must be atom1,atom2[,atom3[,atom4]],start,end")
+        atom_total = len(parts) - 2
+        kind = _SCAN_ATOM_COUNT_KINDS[atom_total]
+        raw_atoms = parts[:atom_total]
+        start_raw, end_raw = parts[atom_total], parts[atom_total + 1]
     else:
         raise ValueError(f"{label} must be a string or a coordinate object")
 
@@ -469,7 +492,7 @@ def _parse_submission_coordinate(entry: Any, index: int) -> tuple[tuple[int, int
             raise ValueError(f"{label}: start and end must be finite numbers")
         return parsed
 
-    return (atoms[0], atoms[1]), _finite(start_raw), _finite(end_raw)
+    return tuple(atoms), kind, _finite(start_raw), _finite(end_raw)
 
 
 def validate_scan_submission(
@@ -483,9 +506,10 @@ def validate_scan_submission(
 
     Both v1 (create/edit-recalculate) and v2 (batch per-item) call this
     before queueing work; violations raise :class:`ValueError` with a
-    client-safe message.  Rules (distance scans only, first phase):
-    non-empty coordinates; integer distinct 0-based indices within the
-    known atom count; finite positive differing start/end; integer
+    client-safe message.  Rules (kind-aware: distance/angle/dihedral):
+    non-empty coordinates; integer pairwise-distinct 0-based indices
+    within the known atom count; finite kind-valid start/end (distance
+    > 0, angle 0-180, dihedral -360..360, start != end); integer
     ``scan_points`` >= 2.  When the input carries no confirmed structure
     geometry the atom selection cannot be verified and the submission is
     rejected instead of queueing an unverifiable selection.
@@ -507,11 +531,11 @@ def validate_scan_submission(
     coordinates = _submission_scan_coordinates(payload, method_map)
     known = atom_count if atom_count is not None else _scan_atom_count_from_input(payload)
     for index, entry in enumerate(coordinates):
-        (atom_a, atom_b), start, end = _parse_submission_coordinate(entry, index)
+        atoms, kind, start, end = _parse_submission_coordinate(entry, index)
         label = f"scan coordinate {index + 1}"
-        if atom_a == atom_b:
+        if len(set(atoms)) != len(atoms):
             raise ValueError("scan coordinate atoms must be different atoms")
-        for atom in (atom_a, atom_b):
+        for atom in atoms:
             if atom < 0:
                 raise ValueError(f"{label}: atom indices must be 0-based and non-negative")
             if known is not None and atom >= known:
@@ -522,8 +546,22 @@ def validate_scan_submission(
                 "structure (atom count unknown); submit explicit geometry "
                 "(xyz_text/geometry) so the atom selection can be checked"
             )
-        if start <= 0 or end <= 0:
-            raise ValueError("start and end distances must be greater than 0")
+        match kind:
+            case "distance":
+                if start <= 0 or end <= 0:
+                    raise ValueError("start and end distances must be greater than 0")
+            case "angle":
+                if not (0.0 <= start <= 180.0 and 0.0 <= end <= 180.0):
+                    raise ValueError(
+                        f"{label}: angle scan start and end must be between 0 and 180 degrees"
+                    )
+            case "dihedral":
+                if not (-360.0 <= start <= 360.0 and -360.0 <= end <= 360.0):
+                    raise ValueError(
+                        f"{label}: dihedral scan start and end must be between -360 and 360 degrees"
+                    )
+            case unreachable:
+                raise ValueError(f"{label}: unsupported scan coordinate kind {unreachable!r}")
         if math.isclose(start, end, abs_tol=1.0e-9):
             raise ValueError("start and end distances must differ")
     points = _submission_scan_points(method_map, payload)

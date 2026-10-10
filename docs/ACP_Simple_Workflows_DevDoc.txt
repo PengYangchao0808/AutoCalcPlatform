@@ -1929,3 +1929,40 @@ scale_factor 0.9905 与 r2SCAN-3c 频率的匹配性：需按文献/NIST 核对�
  | v8.0 | 2026-07-31 | 真机验证（首次真实 ORCA 5.x 输出对照）：（1）证实频率解析正则 bug——真实格式为 N: value cm**-1，现有 Mode\#... 正则 0 匹配，生产 job 的 frequencies.txt 缺失（Critical）；（2）发现 Opt Freq log 多频率段问题（Recalc_Hess 中间段，curcusone-i 4 段），修复正则必须取最后一段 + 过滤 6 个零频；（3）Shermo 热化学链路实测通过（-E 生效、G 三方交叉一致），§12.3 第 7/8 条关闭；（4）修订既往结论：H4 已修复关闭、M9 降级、M6/M8 确认存在；（5）新增 §18 + 遗留事项清单（P0 频率正则修复待实施）。
 
  | v8.1 | 2026-07-31 | 遗留事项全部实施：P0 频率解析重写（_parse_frequencies() 按段取最后一段 + 过滤零频，真实 fixture 回归测试）；P1 Shermo 失败返回 failed（不再假成功）；P1 scale_factor 三源统一为 0.9905（FIELD_DEFINITIONS/CLI/simple.py）；P2 M6 route_extras 透传 SP stage；P2 M8 materialize 支持 .com/.inp（本地 + 远端上传命名）。新增 11 条测试，全量回归 684 passed。新增 §19。
+
+20. 松弛扫描坐标类型扩展（angle/dihedral）
+
+scan 工作流的扫描坐标从单一 distance 扩展为 distance/angle/dihedral 三类内部坐标；CLI、catalog 协议摘要与前端扫描向导同步支持。
+
+20.1 线路契约（wire contract）
+
+- `input.scan_coordinates` 条目为 0-based 字符串：
+  - distance（2 原子）：`a0,a1,start,end`
+  - angle（3 原子）：`a0,a1,a2,start,end`
+  - dihedral（4 原子）：`a0,a1,a2,a3,start,end`
+- 亦支持对象形式：`{kind, atoms, start, end}`，其中 `kind` 取 `distance|angle|dihedral`，`atoms` 为 0-based 原子索引列表。
+
+20.2 kind ↔ 原子数对照
+
+ | kind | 原子数 | 字符串条目形式
+ | distance | 2 | a0,a1,start,end
+ | angle | 3 | a0,a1,a2,start,end
+ | dihedral | 4 | a0,a1,a2,a3,start,end
+
+20.3 校验规则
+
+- 所有原子两两不同（pairwise distinct）
+- distance 值 > 0 Å
+- angle 值 0–180°
+- dihedral 值 −360–360°
+- start ≠ end
+- scan_points ≥ 2
+
+20.4 前端
+
+- `#scan-selection-panel`：位于右栏 `#tiw-right` 结构预览下方的通用原子选择面板，向导第 2 步可见（相同交互位置与 PESsearch 通用原子选择面板一致）。
+- 纯点击拾取：在结构预览中按顺序点击原子（2=距离 / 3=键角 / 4=二面角），无手动原子编号输入；再次点击可取消，选满后重新开始。
+- 类型按钮：距离扫描（2）/ 键角（3）/ 二面角（4） + 清除；附选择摘要（已选择 n / N 个原子）、任务徽标（本次 Scan 任务：类型 · 范围 · 点数 / 尚未完成坐标选择）与状态提示。
+- 扫描范围与点数：在共享「计算协议」对话框的 `dft_scan` scan 层配置（`scan_coordinate_kind/start/end/points`，默认 distance 1.0→3.0 Å / 21 点，profile 默认值总会存在）；面板不提供范围输入。
+- 状态权威：`scanSelectionState.selectedAtoms`（0-based）为拾取权威；`wizardState.method.stages.scan.scan_coordinate_atoms`（1-based）为镜像/水合来源；提交时经 `buildScanWizardBodyParts` 唯一一次 1-based→0-based 转换。
+- 有意保留差异：切换扫描类型时，若范围仍等于上一类型默认值（distance 1.0/3.0、angle 100/160、dihedral 0/180）则同步替换为新类型默认值（守卫式，不覆盖用户已修改值），避免角度扫描残留距离默认值。

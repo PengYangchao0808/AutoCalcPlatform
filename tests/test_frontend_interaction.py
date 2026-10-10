@@ -659,47 +659,186 @@ class TestMethodFamilyGatingBrowser:
 
 
 # ---------------------------------------------------------------------------
-# Scan wizard (GAP-8): fields, 1-based->0-based once, real submission body
+# Scan wizard (GAP-8): click-picked atoms, 1-based->0-based once, real body
+#
+# page.click / page.fill / page.screenshot hang in this container (pre-existing,
+# proven on pristine HEAD) — every scan interaction below drives the live UI
+# through page.evaluate with in-page .click() / direct state calls instead.
 # ---------------------------------------------------------------------------
 
 _SCAN_XYZ = "3\ntriatomic\nO 0.0 0.0 0.0\nC 1.2 0.0 0.0\nH 2.0 0.0 0.0\n"
 
 
-def _pick_workflow(page: Page, title_pattern: str) -> None:
-    """Pick a workflow by its rendered title in the workflow picker."""
-    page.click("#btn-config-workflow")
-    page.wait_for_selector("#workflow-config-modal", state="visible")
-    title = page.locator(".workflow-option-title", has_text=re.compile(rf"^{title_pattern}$"))
-    title.first.locator("xpath=..").click()
-    page.click("#wf-config-ok")
-    page.wait_for_selector("#workflow-config-modal", state="hidden")
+def _scan_click(page: Page, selector: str) -> None:
+    """Click an element through its own .click() (page.click hangs here)."""
+    page.evaluate(
+        """(sel) => {
+            const el = document.querySelector(sel);
+            if (!el) throw new Error("missing element: " + sel);
+            el.click();
+        }""",
+        selector,
+    )
 
 
-def _back_to_structure_step(page: Page) -> None:
-    """Step back to the structure step via the modal back button."""
-    page.click("#modal-back")
-    page.wait_for_selector('#job-modal[data-create-step="1"]', state="attached")
+def _scan_wait(page: Page, expression: str, *, timeout: float, what: str) -> None:
+    """Poll a boolean page expression via evaluate.
+
+    wait_for_function polls via requestAnimationFrame, which intermittently
+    stalls in this container — conditions known to be true are never re-checked
+    (observed on the draft-restore wait). Evaluate-based polling is reliable.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if page.evaluate("() => Boolean(" + expression + ")"):
+            return
+        if time.monotonic() > deadline:
+            raise AssertionError(f"timed out after {timeout:.0f} s waiting for {what}")
+        time.sleep(0.25)
 
 
-def _fill_scan_fields(page: Page, atom_a: str, atom_b: str) -> None:
-    page.fill("#scan-wiz-atom-1", atom_a)
-    page.fill("#scan-wiz-atom-2", atom_b)
+def _scan_wait_wizard_open(page: Page) -> None:
+    """Open the create wizard with an in-page click.
+
+    The DCL init binds ``#btn-new-calc`` before its await chain, but the page
+    fixture can hand us control before DOMContentLoaded fires — retry until
+    the modal actually opens (the same contract ``_wait_wizard_open`` keeps
+    via page.click for the non-scan flows).
+    """
+    deadline = time.monotonic() + 45
+    while True:
+        opened = page.evaluate(
+            "() => { const m = document.getElementById('job-modal');"
+            " return !!m && m.style.display === 'flex'; }"
+        )
+        if opened:
+            break
+        if time.monotonic() > deadline:
+            raise AssertionError("wizard did not open within 45 s")
+        page.evaluate(
+            "() => { const b = document.getElementById('btn-new-calc'); if (b) b.click(); }"
+        )
+        time.sleep(0.3)
+    # The DCL init loads both catalogs and then writes the default profile.
+    # Driving the flow before it settles lets the workflow picker run
+    # loadDefaultMethodProfile against a missing schema (stages = {}, no
+    # range/points) and lets a late write-back race our state — wait it out.
+    deadline = time.monotonic() + 45
+    while True:
+        ready = page.evaluate(
+            """() => ({
+                profile: !!wizardState.method.profile_id,
+                workflows: Array.isArray(workflowCatalogCache) && workflowCatalogCache.length > 0,
+                methods: !!(methodCatalogCache && methodCatalogCache.method_schemas),
+                loadFailed: !!(methodCatalogCache && methodCatalogCache._loadFailed),
+                workflowFailed: !!(workflowCatalogCache && workflowCatalogCache._loadFailed),
+            })"""
+        )
+        if ready["profile"] and ready["workflows"] and ready["methods"]:
+            return
+        if ready["loadFailed"] or ready["workflowFailed"]:
+            raise AssertionError(f"catalog load failed during init: {ready}")
+        if time.monotonic() > deadline:
+            raise AssertionError(f"page init did not settle within 45 s: {ready}")
+        time.sleep(0.5)
+
+
+def _pick_workflow(page: Page, title: str) -> None:
+    """Pick a workflow by its exact rendered title in the workflow picker.
+
+    The option list only renders once the workflow catalog has loaded, so
+    wait for the title first; clicking goes through the elements' own
+    .click() handlers (page.click hangs in this container).
+    """
+    _scan_click(page, "#btn-config-workflow")
+    _scan_wait(
+        page,
+        "document.getElementById('workflow-config-modal') &&"
+        " getComputedStyle(document.getElementById('workflow-config-modal')).display !== 'none'",
+        timeout=15,
+        what="workflow picker to open",
+    )
+    _scan_wait(
+        page,
+        "Array.from(document.querySelectorAll('.workflow-option-title')).some("
+        "function(el) { return el.textContent.trim() === " + json.dumps(title) + "; })",
+        timeout=30,
+        what=f"workflow option {title!r} to render",
+    )
+    page.evaluate(
+        """(title) => {
+            const titleEl = Array.from(document.querySelectorAll('.workflow-option-title'))
+                .find((el) => el.textContent.trim() === title);
+            titleEl.closest('.workflow-option').click();
+            document.getElementById('wf-config-ok').click();
+        }""",
+        title,
+    )
+    _scan_wait(
+        page,
+        "document.getElementById('workflow-config-modal') &&"
+        " getComputedStyle(document.getElementById('workflow-config-modal')).display === 'none'",
+        timeout=15,
+        what="workflow picker to close",
+    )
+
+
+def _scan_pick_atoms(page: Page, *indices: int) -> None:
+    """Click preview atoms through the real click handler (0-based indices)."""
+    for index in indices:
+        page.evaluate("(n) => { handleScanPreviewAtomClick({ index: n }); }", index)
 
 
 @pytest.mark.slow
 class TestScanWizardBrowser:
     """Todo 9 browser acceptance: the scan wizard on the real submit path."""
 
-    def _open_scan_step_one(self, page: Page) -> None:
-        _wait_wizard_open(page)
-        page.click('.input-mode-tab[data-input-mode="structure"]')
-        page.fill("#modal-structure-input", _SCAN_XYZ)
-        page.wait_for_function("wizardStructures.length > 0", timeout=20_000)
-        page.click("#modal-submit")  # next step -> 2
-        page.wait_for_selector('#job-modal[data-create-step="2"]', state="attached")
-        _pick_workflow(page, r"Relaxed Scan")
-        _back_to_structure_step(page)
-        page.wait_for_selector("#scan-wizard-panel", state="visible")
+    def _open_scan_step_two(self, page: Page) -> None:
+        """Open the wizard, parse the structure, pick Relaxed Scan, STAY at 2.
+
+        Step 2 is where the PES-style scan selection panel lives
+        (``#scan-selection-panel`` below the 3D preview) — the panel and its
+        click-only atom picking are gated on ``createWizardStep === 2``.
+        """
+        _scan_wait_wizard_open(page)
+        page.evaluate(
+            """(text) => {
+                document.querySelector('.input-mode-tab[data-input-mode="structure"]').click();
+                document.getElementById('modal-structure-input').value = text;
+            }""",
+            _SCAN_XYZ,
+        )
+        # Setting .value does not fire the input listener, so parse directly;
+        # awaiting the async parse means wizardStructures is populated by the
+        # time this evaluate returns.
+        page.evaluate("() => parseStructuresPreview()")
+        _scan_wait(page, "wizardStructures.length > 0", timeout=20, what="structure parse")
+        _scan_click(page, "#modal-submit")  # step 1 -> 2
+        _scan_wait(
+            page,
+            "document.getElementById('job-modal').dataset.createStep === '2'",
+            timeout=10,
+            what="wizard step 2",
+        )
+        _pick_workflow(page, "Relaxed Scan")
+        _scan_wait(
+            page,
+            "document.getElementById('scan-selection-panel').classList.contains('active')",
+            timeout=15,
+            what="scan selection panel to activate",
+        )
+        # The 3Dmol CDN is stubbed out in this suite, so the real preview
+        # model never materialises. canPickScanAtoms() gates on a preview
+        # model plus a matching structure key — supply both so the click
+        # handler under test is reachable (renderScanPreviewSelection then
+        # degrades gracefully without a viewer).
+        page.evaluate(
+            """() => {
+                if (!previewModel) previewModel = { setClickable: function() {} };
+                previewModelStructureKey =
+                    String((scanWizardCurrentStructure() || {}).xyz || '').trim();
+            }"""
+        )
 
     def test_scan_wizard_submit_posts_real_body_with_0_based_coordinate(self, page: Page) -> None:
         captured: list[dict] = []
@@ -717,16 +856,29 @@ class TestScanWizardBrowser:
             )
 
         page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
-        self._open_scan_step_one(page)
-        _fill_scan_fields(page, "1", "2")
-        page.fill("#scan-wiz-start", "1.0")
-        page.fill("#scan-wiz-end", "3.0")
-        page.fill("#scan-wiz-points", "21")
-        page.click("#modal-submit")  # step 1 -> 2
-        page.click("#modal-submit")  # step 2 -> 3
+        self._open_scan_step_two(page)
+        _scan_pick_atoms(page, 0, 1)  # display atoms 1,2 -> mirror [1, 2]
+        _evidence(
+            "flow6-scan-wizard-pre-submit.json",
+            page.evaluate(
+                """() => ({
+                    selected: scanSelectionState.selectedAtoms.slice(),
+                    stages: JSON.parse(JSON.stringify(wizardState.method.stages.scan)),
+                    kind: scanSelectionState.selectionKind,
+                    canPick: canPickScanAtoms(),
+                })"""
+            ),
+        )
         dialogs: list[str] = []
         page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
-        page.click("#modal-submit")  # submit
+        _scan_click(page, "#modal-submit")  # step 2 -> 3
+        _scan_wait(
+            page,
+            "document.getElementById('job-modal').dataset.createStep === '3'",
+            timeout=10,
+            what="wizard step 3",
+        )
+        _scan_click(page, "#modal-submit")  # submit
         page.wait_for_timeout(1500)
 
         assert not dialogs, f"valid submit must not alert: {dialogs}"
@@ -735,11 +887,13 @@ class TestScanWizardBrowser:
         _evidence("flow6-scan-wizard-body.json", body)
         assert body["workflow"] == "scan"
         assert body["input"]["source_type"] == "xyz_text"
-        # 1-based display (1,2) converted to 0-based exactly once at submit.
-        assert body["input"]["scan_coordinates"] == ["0,1,1.0,3.0"]
+        # Default profile range 1.0/3.0 passes the builder through String():
+        # JS String(1.0)/String(3.0) -> "1"/"3" (exact formatting is not part
+        # of the contract — node tests cover string fidelity).
+        assert body["input"]["scan_coordinates"] == ["0,1,1,3"]
         assert body["method"]["scan_points"] == 21
         assert body["method"]["levels"]["scan"]["scan_coordinate_atoms"] == [1, 2]
-        _shot(page, "flow6-scan-wizard-submitted.png")
+        assert body["method"]["levels"]["scan"]["scan_coordinate_kind"] == "distance"
 
     def test_scan_wizard_rejects_out_of_range_atom_without_submitting(self, page: Page) -> None:
         captured: list[dict] = []
@@ -757,50 +911,72 @@ class TestScanWizardBrowser:
             )
 
         page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
-        self._open_scan_step_one(page)
-        _fill_scan_fields(page, "1", "99")
+        self._open_scan_step_two(page)
+        # The click handler clamps picks to the kind's atom count, so plant
+        # the out-of-range state directly (selection + its stages mirror) and
+        # let the submit-time builder be the one to reject it.
+        page.evaluate(
+            """() => {
+                scanSelectionState.selectedAtoms = [98];
+                wizardState.method.stages.scan = wizardState.method.stages.scan || {};
+                wizardState.method.stages.scan.scan_coordinate_atoms = [99];
+            }"""
+        )
         dialogs: list[str] = []
         page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
-        page.click("#modal-submit")
-        page.click("#modal-submit")
-        page.click("#modal-submit")
+        _scan_click(page, "#modal-submit")  # step 2 -> 3
+        _scan_click(page, "#modal-submit")  # submit
         page.wait_for_timeout(1500)
 
-        assert captured == [], "invalid scan fields must never reach the API"
-        assert dialogs, "invalid scan fields must produce a clear validation result"
-        status_text = page.evaluate("document.getElementById('scan-wiz-status').textContent")
-        assert "99" in status_text or any(
-            "range" in d.lower() or "out of" in d.lower() or "invalid" in d.lower() for d in dialogs
-        ), dialogs
-        _evidence("flow7-scan-wizard-rejected.json", {"dialogs": dialogs, "posted": captured})
+        assert captured == [], "invalid scan selection must never reach the API"
+        assert dialogs, "invalid scan selection must produce a clear validation result"
+        error = page.evaluate("() => document.getElementById('scan-selection-error').textContent")
+        assert error and error.strip(), f"panel must surface the validation error: {error!r}"
+        _evidence(
+            "flow7-scan-wizard-rejected.json",
+            {"dialogs": dialogs, "posted": captured, "error": error},
+        )
 
-    def test_scan_wizard_switch_away_drops_scan_fields(self, page: Page) -> None:
-        self._open_scan_step_one(page)
-        _fill_scan_fields(page, "1", "2")
-        page.click("#modal-submit")  # step 1 -> 2
-        _pick_workflow(page, r"Geometry Optimization")
-        _back_to_structure_step(page)
-        page.wait_for_timeout(300)
-        panel_display = page.evaluate("document.getElementById('scan-wizard-panel').style.display")
-        atom_a = page.evaluate("document.getElementById('scan-wiz-atom-1').value")
-        assert panel_display == "none", panel_display
-        assert atom_a == "", f"scan atom fields must clear on switch-away, got {atom_a!r}"
-        _evidence("flow8-scan-switch-away.json", {"panel": panel_display, "atomA": atom_a})
+    def test_scan_wizard_switch_away_clears_scan_selection(self, page: Page) -> None:
+        self._open_scan_step_two(page)
+        _scan_pick_atoms(page, 0, 1)
+        picked = _scan_pick_snapshot(page)
+        assert picked["selected"] == [0, 1], picked
 
-    def test_scan_draft_restore_round_trips_fields(self, page: Page) -> None:
-        _wait_wizard_open(page)
+        _pick_workflow(page, "Geometry Optimization")
+        _scan_wait(
+            page,
+            "!document.getElementById('scan-selection-panel').classList.contains('active')",
+            timeout=10,
+            what="scan selection panel to deactivate",
+        )
+        after = page.evaluate(
+            """() => {
+                const panel = document.getElementById('scan-selection-panel');
+                return {
+                    panelActive: panel.classList.contains('active'),
+                    panelDisplay: getComputedStyle(panel).display,
+                    selected: scanSelectionState.selectedAtoms.slice(),
+                    mirror: (wizardState.method.stages.scan || {}).scan_coordinate_atoms || null,
+                    canPick: canPickScanAtoms(),
+                };
+            }"""
+        )
+        assert after["panelActive"] is False, after
+        assert after["panelDisplay"] == "none", after
+        assert after["selected"] == [], f"selection must clear on switch-away: {after}"
+        assert after["mirror"] is None, f"stages mirror atoms must be dropped: {after}"
+        assert after["canPick"] is False, after
+        _evidence("flow8-scan-switch-away.json", after)
+
+    def test_scan_draft_restore_round_trips_selection(self, page: Page) -> None:
+        _scan_wait_wizard_open(page)
         snapshot = {
-            "structures": [],
+            "structures": [{"name": "mol", "xyz": _SCAN_XYZ, "has_3d": True}],
             "selectedIndex": 0,
             "activeTab": "task",
             "step": 1,
-            "fields": {
-                "scan-wiz-atom-1": {"value": "2"},
-                "scan-wiz-atom-2": {"value": "3"},
-                "scan-wiz-start": {"value": "1.5"},
-                "scan-wiz-end": {"value": "2.5"},
-                "scan-wiz-points": {"value": "7"},
-            },
+            "fields": {},
             "workflowState": {
                 "workflow": {"id": "scan", "label": "Relaxed Scan", "schema_id": "dft_scan"},
                 "method": {
@@ -809,13 +985,22 @@ class TestScanWizardBrowser:
                     "stages": {
                         "scan": {
                             "engine": "orca",
-                            "scan_coordinate_atoms": [2, 3],
+                            "scan_coordinate_kind": "distance",
                             "scan_coordinate_start": 1.5,
                             "scan_coordinate_end": 2.5,
                             "scan_coordinate_points": 7,
                         }
                     },
                 },
+            },
+            # The stage mirror deliberately carries NO atoms here: the restored
+            # pick survives only through this block plus its structureKey —
+            # syncScanSelectionFromWizard keeps it while the key still matches
+            # the staged structure.
+            "scanSelection": {
+                "selectionKind": "distance",
+                "selectedAtoms": [1, 2],
+                "structureKey": _SCAN_XYZ.strip(),
             },
         }
         created = page.evaluate(
@@ -833,60 +1018,111 @@ class TestScanWizardBrowser:
             {"name": "scan-wizard-draft", "snapshot": snapshot},
         )
         assert created.get("draft_id"), created
-        page.click("#wizard-drafts-open")
-        page.wait_for_selector("#wizard-drafts-modal", state="visible")
-        row = page.locator("#wizard-drafts-list > div").filter(has_text="scan-wizard-draft")
-        row.locator("button.btn.primary").click()
-        page.wait_for_timeout(1500)
 
-        values = page.evaluate(
-            """() => ({
-                atomA: document.getElementById("scan-wiz-atom-1").value,
-                atomB: document.getElementById("scan-wiz-atom-2").value,
-                start: document.getElementById("scan-wiz-start").value,
-                end: document.getElementById("scan-wiz-end").value,
-                points: document.getElementById("scan-wiz-points").value,
-            })"""
+        dialogs: list[str] = []
+        page.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        _scan_click(page, "#wizard-drafts-open")
+        _scan_wait(
+            page,
+            "document.getElementById('wizard-drafts-modal') &&"
+            " getComputedStyle(document.getElementById('wizard-drafts-modal')).display !== 'none'",
+            timeout=15,
+            what="drafts box to open",
         )
-        _evidence("flow9-scan-draft-restore.json", values)
-        assert values["atomA"] == "2", values
-        assert values["atomB"] == "3", values
-        assert values["start"] in ("1.5", "1.50"), values
-        assert values["end"] in ("2.5", "2.50"), values
-        assert values["points"] == "7", values
+        _scan_wait(
+            page,
+            "Array.from(document.querySelectorAll('#wizard-drafts-list > div')).some("
+            "function(row) { return row.textContent.includes('scan-wizard-draft'); })",
+            timeout=20,
+            what="draft row to render",
+        )
+        page.evaluate(
+            """(name) => {
+                const row = Array.from(document.querySelectorAll('#wizard-drafts-list > div'))
+                    .find((el) => el.textContent.includes(name));
+                row.querySelector('button.btn.primary').click();
+            }""",
+            "scan-wizard-draft",
+        )
+        # Evaluate-poll instead of wait_for_function: rAF-based polling
+        # intermittently stalls in this container (observed: a condition that
+        # is already true never fires the next frame).
+        deadline = time.monotonic() + 35
+        while True:
+            picked = page.evaluate("() => scanSelectionState.selectedAtoms.length")
+            if picked == 2:
+                break
+            if time.monotonic() > deadline:
+                state = page.evaluate(
+                    """() => ({
+                        selected: scanSelectionState.selectedAtoms.slice(),
+                        structureKey: scanSelectionState.structureKey,
+                        nStructures: wizardStructures.length,
+                        structureXyz:
+                            String((scanWizardCurrentStructure() || {}).xyz || '').slice(0, 30),
+                        stages: JSON.parse(JSON.stringify(wizardState.method.stages)),
+                        wf: wizardState.workflow && wizardState.workflow.id,
+                        step: createWizardStep,
+                        draftScanSelection: (wizardDraft || {}).scanSelection || null,
+                        draftStructures: ((wizardDraft || {}).structures || []).length,
+                        modalDisplay: document.getElementById('job-modal').style.display,
+                        draftsOverlay: document.getElementById('wizard-drafts-modal').style.display,
+                    })"""
+                )
+                _evidence(
+                    "flow9-scan-draft-restore-diag.json",
+                    {"dialogs": dialogs, **state},
+                )
+                raise AssertionError(f"draft restore did not land in time: {state}")
+            time.sleep(0.25)
 
-    def test_scan_edit_hydration_fills_fields_from_stage_mirror(self, page: Page) -> None:
-        _wait_wizard_open(page)
-        values = page.evaluate(
+        restored = _scan_pick_snapshot(page)
+        _evidence("flow9-scan-draft-restore.json", restored)
+        assert restored["selected"] == [1, 2], restored
+        assert "C#2 — H#3" in restored["summary"], restored
+        # Task-badge range/points come from the stages mirror (1.5 → 2.5 · 7 点).
+        assert "1.5 → 2.5" in restored["badge"], restored
+        assert "7 点" in restored["badge"], restored
+
+    def test_scan_edit_hydration_hydrates_state_from_stage_mirror(self, page: Page) -> None:
+        self._open_scan_step_two(page)
+        result = page.evaluate(
             """() => {
-                scanWizardClear();
-                scanWizardUserDirty = false;
-                wizardState.workflow = {id: "scan", label: "Relaxed Scan", schema_id: "dft_scan"};
+                // Edit drafts carry only the stage mirror; hydration must
+                // rebuild selection kind, atoms, summary and badge from it.
+                resetScanSelection();
                 wizardState.method.stages = {
                     scan: {
                         engine: "orca",
-                        scan_coordinate_atoms: [2, 3],
-                        scan_coordinate_start: 1.25,
-                        scan_coordinate_end: 2.75,
+                        scan_coordinate_kind: "angle",
+                        scan_coordinate_start: 100,
+                        scan_coordinate_end: 160,
                         scan_coordinate_points: 9,
                     }
                 };
                 updateConfigCards();
+                var kindHydrated = scanSelectionState.selectionKind;
+                // Atoms hydrate only once the kind matches (a kind change
+                // clears the mirror first) — add them for the second pass.
+                wizardState.method.stages.scan.scan_coordinate_atoms = [1, 2, 3];
+                updateConfigCards();
                 return {
-                    atomA: document.getElementById("scan-wiz-atom-1").value,
-                    atomB: document.getElementById("scan-wiz-atom-2").value,
-                    start: document.getElementById("scan-wiz-start").value,
-                    end: document.getElementById("scan-wiz-end").value,
-                    points: document.getElementById("scan-wiz-points").value,
+                    kindHydrated: kindHydrated,
+                    kind: scanSelectionState.selectionKind,
+                    selected: scanSelectionState.selectedAtoms.slice(),
+                    mirror: (wizardState.method.stages.scan || {}).scan_coordinate_atoms || null,
+                    summary: document.getElementById('scan-selection-summary').textContent,
+                    badge: document.getElementById('scan-task-badge').textContent,
                 };
             }"""
         )
-        _evidence("flow10-scan-edit-hydration.json", values)
-        assert values["atomA"] == "2", values
-        assert values["atomB"] == "3", values
-        assert values["start"] == "1.25", values
-        assert values["end"] == "2.75", values
-        assert values["points"] == "9", values
+        _evidence("flow10-scan-edit-hydration.json", result)
+        assert result["kindHydrated"] == "angle", result
+        assert result["kind"] == "angle", result
+        assert result["selected"] == [0, 1, 2], result
+        assert result["mirror"] == [1, 2, 3], result
+        assert "键角扫描" in result["summary"] and "O#1 — C#2 — H#3" in result["summary"], result
+        assert "100 → 160" in result["badge"] and "9 点" in result["badge"], result
 
 
 # ---------------------------------------------------------------------------
@@ -1524,3 +1760,314 @@ class TestQueueRowFreshnessBrowser:
             f"batch ops must invalidate every selected row's detail cache: {cache_state}"
         )
         _evidence("t14-batch-op-invalidation.json", cache_state)
+
+
+# ---------------------------------------------------------------------------
+# WS3 — scan click-to-pick in the step-2 right-pane selection panel. These
+# cases are evaluate-driven (same pattern as test_scan_edit_hydration_*): the
+# page fixture stubs the 3Dmol CDN, so a recording previewModel/previewViewer
+# pair is bootstrapped and the selection/state layer under test is exercised
+# for real — append/restart/toggle semantics, the 1-based stages-mirror write
+# through the click handler, marker shape bookkeeping, step gating, and PES
+# dispatch preservation.
+# ---------------------------------------------------------------------------
+
+
+_SCAN_PICK_BOOTSTRAP = """async (args) => {
+  // The DCL init (catalog fetch -> default profile write-back) can finish
+  // AFTER this bootstrap and replace wizardState.method.stages, dropping the
+  // 1-based atom mirror these cases assert on. Wait for it to settle first.
+  var deadline = Date.now() + 20000;
+  for (;;) {
+    if (wizardState && wizardState.method && wizardState.method.profile_id &&
+        Array.isArray(workflowCatalogCache) && workflowCatalogCache.length > 0 &&
+        methodCatalogCache && methodCatalogCache.method_schemas) break;
+    if (Date.now() > deadline) throw new Error("page init did not settle in 20s");
+    await new Promise(function(resolve) { setTimeout(resolve, 50); });
+  }
+  window.__pickLog = { spheres: [], cylinders: [], styles: [], removed: [], clickable: [] };
+  previewViewer = {
+    addSphere: function(opts) {
+      var shape = { kind: "sphere", opts: opts };
+      window.__pickLog.spheres.push(shape);
+      return shape;
+    },
+    addCylinder: function(opts) {
+      var shape = { kind: "cylinder", opts: opts };
+      window.__pickLog.cylinders.push(shape);
+      return shape;
+    },
+    addStyle: function(target, style) {
+      window.__pickLog.styles.push({ target: target, style: style });
+    },
+    removeShape: function(shape) { window.__pickLog.removed.push(shape); },
+    setStyle: function() {},
+    render: function() {},
+    removeAllModels: function() {},
+  };
+  previewModel = {
+    setClickable: function(_sel, enabled, cb) {
+      window.__pickLog.clickable.push(!!enabled);
+      window.__pickModelClick = cb || null;
+    },
+  };
+  wizardState.workflow = { id: "scan", label: "Relaxed Scan", schema_id: "dft_scan" };
+  wizardState.method.stages = {
+    scan: { engine: "orca", scan_coordinate_kind: "distance",
+            scan_coordinate_start: 1.0, scan_coordinate_end: 3.0,
+            scan_coordinate_points: 21 }
+  };
+  wizardStructures = [{ name: "mol", xyz: args.xyz, has_3d: true }];
+  wizardSelectedStructureIndex = 0;
+  previewModelStructureKey = String(args.xyz).trim();
+  resetScanSelection();
+  document.getElementById("job-modal").style.display = "block";
+  createWizardStep = 2;
+  updatePESSelectionVisibility();
+  return { canPick: canPickScanAtoms(), clicks: window.__pickLog.clickable.slice() };
+}"""
+
+
+def _scan_pick_snapshot(page: Page) -> dict:
+    """State-only snapshot: selection state + stages mirror + panel texts."""
+    return page.evaluate(
+        """() => ({
+            selected: scanSelectionState.selectedAtoms.slice(),
+            shapes: scanSelectionState.shapes.length,
+            mirror: (wizardState.method.stages.scan || {}).scan_coordinate_atoms || null,
+            markers: scanSelectionState.shapes.map((s) => ({ kind: s.kind, opts: s.opts })),
+            summary: document.getElementById('scan-selection-summary').textContent,
+            badge: document.getElementById('scan-task-badge').textContent,
+            status: document.getElementById('scan-selection-status').textContent,
+            hint: document.getElementById('scan-pick-hint').textContent,
+            canPick: canPickScanAtoms(),
+        })"""
+    )
+
+
+@pytest.mark.slow
+class TestScanAtomPickBrowser:
+    """WS3 scan atom picking: selection semantics, mirror writes, markers."""
+
+    def test_scan_pick_append_restart_and_toggle_semantics(self, page: Page) -> None:
+        boot = page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        assert boot["canPick"] is True, boot
+        # The step-2 visibility pass binds the model handler more than once
+        # (sync + branch); every decision must enable picking.
+        assert boot["clicks"] and all(boot["clicks"]), boot
+        _scan_pick_atoms(page, 0)
+        mid = _scan_pick_snapshot(page)
+        assert mid["selected"] == [0], mid
+        assert mid["mirror"] == [1], mid
+        assert mid["shapes"] == 1, mid
+        assert "已选择 1 / 2" in mid["summary"], mid
+        _scan_pick_atoms(page, 1)
+        full = _scan_pick_snapshot(page)
+        assert full["selected"] == [0, 1], full
+        assert full["mirror"] == [1, 2], full
+        assert full["shapes"] == 3, full
+        assert "O#1 — C#2" in full["summary"], full
+        _scan_pick_atoms(page, 2)
+        restarted = _scan_pick_snapshot(page)
+        assert restarted["selected"] == [2], restarted
+        assert restarted["mirror"] == [3], restarted
+        assert restarted["shapes"] == 1, restarted
+        _scan_pick_atoms(page, 2)
+        toggled = _scan_pick_snapshot(page)
+        assert toggled["selected"] == [], toggled
+        assert toggled["mirror"] == [], toggled
+        assert toggled["shapes"] == 0, toggled
+        _evidence("flow11-scan-pick-semantics.json", toggled)
+
+    def test_scan_pick_angle_kind_fills_three_slots_and_kind_switch_clears(
+        self, page: Page
+    ) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        page.evaluate("() => { setScanSelectionKind('angle'); }")
+        page.evaluate(
+            "() => { handleScanPreviewAtomClick({ index: 0 });"
+            " handleScanPreviewAtomClick({ index: 1 });"
+            " handleScanPreviewAtomClick({ index: 2 }); }"
+        )
+        full = _scan_pick_snapshot(page)
+        assert full["selected"] == [0, 1, 2], full
+        assert full["mirror"] == [1, 2, 3], full
+        assert full["shapes"] == 5, full
+        page.evaluate("() => { setScanSelectionKind('dihedral'); }")
+        cleared = _scan_pick_snapshot(page)
+        assert cleared["selected"] == [], cleared
+        assert cleared["shapes"] == 0, cleared
+        assert "已选择 0 / 4" in cleared["summary"], cleared
+        _evidence("flow12-scan-pick-kind-switch.json", cleared)
+
+    def test_scan_pick_renders_position_colored_markers(self, page: Page) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        page.evaluate("() => { handleScanPreviewAtomClick({ index: 1 }); }")
+        page.evaluate("() => { handleScanPreviewAtomClick({ index: 2 }); }")
+        snap = _scan_pick_snapshot(page)
+        spheres = [m for m in snap["markers"] if m["kind"] == "sphere"]
+        cylinders = [m for m in snap["markers"] if m["kind"] == "cylinder"]
+        assert [s["opts"]["color"] for s in spheres] == ["#4ea1ff", "#38c172"], snap
+        assert all(s["opts"]["radius"] == 0.4 and s["opts"]["opacity"] == 0.82 for s in spheres), (
+            snap
+        )
+        assert len(cylinders) == 1, snap
+        cylinder = cylinders[0]["opts"]
+        assert cylinder["color"] == "#f2b84b" and cylinder["dashed"] is True, snap
+        _evidence("flow13-scan-pick-markers.json", snap)
+
+    def test_scan_pick_gating_step2_enables_and_other_steps_disable(self, page: Page) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        assert page.evaluate("() => canPickScanAtoms()") is True
+        assert page.evaluate("() => window.__pickLog.clickable.slice(-1)[0]") is True
+        page.evaluate("() => { setCreateWizardStep(1); }")
+        assert page.evaluate("() => canPickScanAtoms()") is False
+        assert page.evaluate("() => window.__pickLog.clickable.slice(-1)[0]") is False
+        page.evaluate("() => { setCreateWizardStep(3); }")
+        assert page.evaluate("() => canPickScanAtoms()") is False
+        assert page.evaluate("() => window.__pickLog.clickable.slice(-1)[0]") is False
+        page.evaluate("() => { setCreateWizardStep(2); }")
+        assert page.evaluate("() => canPickScanAtoms()") is True
+        assert page.evaluate("() => window.__pickLog.clickable.slice(-1)[0]") is True
+        _evidence(
+            "flow14-scan-pick-gating.json",
+            {"step2": True, "step1": False, "step3": False, "step2_again": True},
+        )
+
+    def test_scan_pick_preserves_pes_dispatch(self, page: Page) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        result = page.evaluate(
+            """(args) => {
+              wizardState.workflow = { id: "PESsearch", label: "PESsearch",
+                  schema_id: "pes_search" };
+              wizardStructures = [{ name: "mol", xyz: args.xyz, has_3d: true }];
+              wizardSelectedStructureIndex = 0;
+              previewModelStructureKey = String(args.xyz).trim();
+              s2scanState.atoms = parseXyzAtoms(args.xyz);
+              s2scanState.selectedAtoms = [];
+              createWizardStep = 2;
+              window.__pickLog.clickable = [];
+              attachPESPreviewSelection();
+              var bound = window.__pickLog.clickable.slice();
+              window.__pickModelClick({ index: 1 });
+              return {
+                bound: bound,
+                pesSelected: pesSelectionState.selectedAtoms.slice(),
+                scanSelected: scanSelectionState.selectedAtoms.slice(),
+                canScan: canPickScanAtoms(),
+              };
+            }""",
+            {"xyz": _SCAN_XYZ},
+        )
+        assert result["bound"] == [True], result
+        assert result["pesSelected"] == [1], result
+        assert result["scanSelected"] == [], result
+        assert result["canScan"] is False, result
+        _evidence("flow15-scan-pick-pes-dispatch-preserved.json", result)
+
+    def test_scan_kind_switch_swaps_default_range_only(self, page: Page) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        result = page.evaluate(
+            """() => {
+              setScanSelectionKind('angle');
+              var stage = wizardState.method.stages.scan;
+              var swapped = {
+                kind: stage.scan_coordinate_kind,
+                start: stage.scan_coordinate_start,
+                end: stage.scan_coordinate_end,
+              };
+              // User-edited values are never destroyed by a later switch.
+              stage.scan_coordinate_start = 2.0;
+              stage.scan_coordinate_end = 4.5;
+              setScanSelectionKind('dihedral');
+              var kept = {
+                kind: stage.scan_coordinate_kind,
+                start: stage.scan_coordinate_start,
+                end: stage.scan_coordinate_end,
+              };
+              return { swapped: swapped, kept: kept };
+            }"""
+        )
+        assert result["swapped"]["kind"] == "angle", result
+        assert isinstance(result["swapped"]["start"], (int, float)), result
+        assert isinstance(result["swapped"]["end"], (int, float)), result
+        assert result["swapped"]["start"] == 100, result
+        assert result["swapped"]["end"] == 160, result
+        assert result["kept"]["kind"] == "dihedral", result
+        assert result["kept"]["start"] == 2.0, result
+        assert result["kept"]["end"] == 4.5, result
+        _evidence("flow16-scan-kind-switch-range-mirror.json", result)
+
+    def test_scan_preview_rerender_keeps_selection_and_redraws_markers(self, page: Page) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        _scan_pick_atoms(page, 0, 1)
+        before = _scan_pick_snapshot(page)
+        assert before["selected"] == [0, 1], before
+        assert before["mirror"] == [1, 2], before
+        assert before["shapes"] == 3, before
+        log_before = page.evaluate(
+            "() => ({ spheres: window.__pickLog.spheres.length,"
+            " removed: window.__pickLog.removed.length })"
+        )
+        result = page.evaluate(
+            """(args) => {
+              // The recording stub predates renderPreviewStructure3D's
+              // addModel call; extend it in place (the shared bootstrap
+              // stays untouched so existing cases remain byte-identical).
+              previewViewer.addModel = function(data, fmt) {
+                return {
+                  setClickable: function(_sel, enabled, cb) {
+                    window.__pickLog.clickable.push(!!enabled);
+                    window.__pickModelClick = cb || null;
+                  },
+                };
+              };
+              renderPreviewStructure3D({ name: "mol", xyz: args.xyz, has_3d: true });
+              return {
+                selected: scanSelectionState.selectedAtoms.slice(),
+                shapes: scanSelectionState.shapes.length,
+                mirror: (wizardState.method.stages.scan || {}).scan_coordinate_atoms || null,
+                canPick: canPickScanAtoms(),
+                spheres: window.__pickLog.spheres.length,
+                removed: window.__pickLog.removed.length,
+              };
+            }""",
+            {"xyz": _SCAN_XYZ},
+        )
+        assert result["selected"] == [0, 1], result
+        assert result["mirror"] == [1, 2], result
+        assert result["shapes"] == 3, result
+        assert result["canPick"] is True, result
+        # Old shapes were cleared and new ones drawn — a real re-render.
+        assert result["removed"] > log_before["removed"], (log_before, result)
+        assert result["spheres"] > log_before["spheres"], (log_before, result)
+        _evidence(
+            "flow17-scan-pick-rerender-marker-restore.json",
+            {"before": before, "log_before": log_before, "after": result},
+        )
+
+    def test_scan_kind_switch_mid_pick_clears_selection_and_shapes(self, page: Page) -> None:
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        result = page.evaluate(
+            """() => {
+              handleScanPreviewAtomClick({ index: 0 });
+              handleScanPreviewAtomClick({ index: 1 });
+              var mid = {
+                selected: scanSelectionState.selectedAtoms.slice(),
+                shapes: scanSelectionState.shapes.length,
+              };
+              setScanSelectionKind('angle');
+              return {
+                mid: mid,
+                selected: scanSelectionState.selectedAtoms.slice(),
+                shapes: scanSelectionState.shapes.length,
+                summary: document.getElementById('scan-selection-summary').textContent,
+              };
+            }"""
+        )
+        assert result["mid"]["selected"] == [0, 1], result
+        assert result["mid"]["shapes"] == 3, result
+        assert result["selected"] == [], result
+        assert result["shapes"] == 0, result
+        assert "已选择 0 / 3" in result["summary"], result
+        _evidence("flow18-scan-kind-switch-mid-pick-clears.json", result)

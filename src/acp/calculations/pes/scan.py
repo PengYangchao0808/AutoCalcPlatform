@@ -105,6 +105,7 @@ from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.utils.constants import HARTREE_TO_KCAL
 from cccp.utils.file_io import read_xyz, write_xyz
 from cccp.utils.geometry_tools import GeometryUtils
+from cccp.utils.resource_utils import mem_to_mb
 
 logger = logging.getLogger(__name__)
 
@@ -1108,7 +1109,7 @@ _SP_MAX_WORKERS = 8
 
 
 def _sp_resource_plan(cfg: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-    """Return ``(workers, sp_cfg)`` dividing the task nproc across SP workers.
+    """Return ``(workers, sp_cfg)`` dividing task cores and memory across SP workers.
 
     Both ``resources.nproc`` and ``executables.orca.nproc`` must be lowered:
     the CLI propagates ``--nproc`` into both, and ``ORCAInterface`` gives
@@ -1119,6 +1120,11 @@ def _sp_resource_plan(cfg: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     task_nproc = int(resources.get("nproc") or 1)
     per_job = max(1, min(_SP_MAX_NPROC_PER_JOB, task_nproc))
     workers = max(1, min(task_nproc // per_job, _SP_MAX_WORKERS))
+    if resources.get("mem") is not None:
+        total_mb = mem_to_mb(resources["mem"])
+        if total_mb < workers:
+            raise ValueError("PES memory budget is too small for the SP worker count")
+        resources["mem"] = f"{total_mb // workers}MB"
     executables = cfg.get("executables")
     executables = dict(executables) if isinstance(executables, dict) else {}
     orca_exec = executables.get("orca")

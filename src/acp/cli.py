@@ -59,16 +59,25 @@ def _build_config(args: argparse.Namespace) -> dict[str, Any]:
     """
     from cccp.config import load_config as legacy_load
 
-    config = legacy_load(config_path=Path(args.config) if args.config else None)
+    overrides: dict[str, Any] = {}
 
     if getattr(args, "nproc", None) is not None:
-        config.setdefault("resources", {})["nproc"] = args.nproc
-        config.setdefault("executables", {}).setdefault("orca", {})["nproc"] = args.nproc
+        overrides.setdefault("resources", {})["nproc"] = args.nproc
+        overrides.setdefault("executables", {}).setdefault("orca", {})["nproc"] = args.nproc
 
     if getattr(args, "mem", None) is not None:
-        config.setdefault("resources", {})["mem"] = args.mem
+        overrides.setdefault("resources", {})["mem"] = args.mem
 
-    return config
+    try:
+        return legacy_load(
+            config_path=Path(args.config) if args.config else None,
+            overrides=overrides,
+        )
+    except ValueError as exc:
+        parser = getattr(args, "_argument_parser", None)
+        if parser is not None:
+            parser.error(f"Invalid configuration: {exc}")
+        raise
 
 
 def _parse_levels(levels_value: str | None) -> dict[str, Any] | None:
@@ -434,8 +443,12 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             "--coordinate",
             action="append",
             required=True,
-            metavar="ATOM1,ATOM2,START,END",
-            help="Zero-based distance coordinate; repeat for coupled coordinates",
+            metavar="ATOMS,START,END",
+            help=(
+                "Zero-based scan coordinate: 2 atoms (distance), 3 (angle), "
+                "4 (dihedral) as atom1[,atom2[,atom3[,atom4]]],start,end; "
+                "repeat for coupled coordinates"
+            ),
         )
         parser.add_argument(
             "--scan-points",
@@ -3971,6 +3984,7 @@ def main(argv: list[str] | None = None) -> int:
         return _reject_retired_workflow(argv_values[1])
     parser = build_parser()
     args = parser.parse_args(argv_values)
+    args._argument_parser = parser
 
     if args.command == "run":
         dispatch: dict[str, Callable[[argparse.Namespace], int]] = {

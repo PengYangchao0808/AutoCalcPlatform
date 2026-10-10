@@ -1191,11 +1191,13 @@
 #job-modal .preview-right-title, #job-modal .tiw-info-panel-header,
 #job-modal .tiw-info-panel-header > span { font-size:15px !important; line-height:1.35; font-weight:600; }
 #job-modal .config-card-body strong, #job-modal .task-info-summary,
-#job-modal .pes-selection-title { font-size:14px !important; line-height:1.4; font-weight:600; }
+#job-modal .pes-selection-title, #job-modal .scan-selection-title { font-size:14px !important; line-height:1.4; font-weight:600; }
 #job-modal .config-card-desc, #job-modal .config-detail-description,
 #job-modal .config-detail-list, #job-modal .config-detail-meta,
 #job-modal .config-detail-chips, #job-modal .pes-selection-hint,
 #job-modal .pes-selection-status, #job-modal .node-select-hint,
+#job-modal .scan-selection-hint, #job-modal .scan-selection-status,
+#job-modal .scan-selection-order-hint,
 #job-modal .node-select-detail, #job-modal .node-select-note { font-size:12px !important; line-height:1.45; }
 #job-modal .tiw-left label, #job-modal .resource-field label { font-size:13px !important; line-height:1.35; }
 #job-modal [style*="font-size:11px"], #job-modal [style*="font-size: 11px"] { font-size:12px !important; line-height:1.45; }
@@ -1522,14 +1524,18 @@
 #job-modal[data-create-step="1"] .tiw-left > .config-detail-row,
 #job-modal[data-create-step="3"] .tiw-left > .config-detail-row { display:none !important; }
 #job-modal[data-create-step="2"] .tiw-right > .preview-right { display:flex !important; }
-#job-modal[data-create-step="3"] .tiw-right > .pes-selection-panel { display:none !important; }
-#job-modal .tiw-right > .pes-selection-panel { margin:0; }
-#job-modal .tiw-right.pes-selection-active > .preview-right {
+#job-modal[data-create-step="3"] .tiw-right > .pes-selection-panel,
+#job-modal[data-create-step="3"] .tiw-right > .scan-selection-panel { display:none !important; }
+#job-modal .tiw-right > .pes-selection-panel,
+#job-modal .tiw-right > .scan-selection-panel { margin:0; }
+#job-modal .tiw-right.pes-selection-active > .preview-right,
+#job-modal .tiw-right.scan-selection-active > .preview-right {
   flex:0 1 clamp(230px, 34vh, 300px);
   min-height:190px;
   max-height:38vh;
 }
-#job-modal .tiw-right.pes-selection-active > .pes-selection-panel {
+#job-modal .tiw-right.pes-selection-active > .pes-selection-panel,
+#job-modal .tiw-right.scan-selection-active > .scan-selection-panel {
   flex:0 1 auto;
   min-height:0;
   max-height:min(38vh, 280px);
@@ -1538,13 +1544,15 @@
   border-radius:0;
   overflow:auto;
 }
-#job-modal .pes-selection-head { align-items:flex-start; gap:10px; margin-bottom:6px; }
-#job-modal .pes-selection-copy { flex:1 1 180px; min-width:0; }
-#job-modal .pes-selection-actions { flex:0 1 auto; gap:5px; }
-#job-modal .pes-selection-actions .btn { min-height:30px; padding:0 9px; font-size:12px !important; }
-#job-modal .pes-selection-status { margin-top:4px; color:var(--tiw-accent); }
-#job-modal .pes-selection-panel.picking-disabled .pes-selection-status { color:var(--amber,#f2b84b); }
-#job-modal .tiw-right.pes-selection-active > .tiw-info-panel {
+#job-modal .pes-selection-head, #job-modal .scan-selection-head { align-items:flex-start; gap:10px; margin-bottom:6px; }
+#job-modal .pes-selection-copy, #job-modal .scan-selection-copy { flex:1 1 180px; min-width:0; }
+#job-modal .pes-selection-actions, #job-modal .scan-selection-actions { flex:0 1 auto; gap:5px; }
+#job-modal .pes-selection-actions .btn, #job-modal .scan-selection-actions .btn { min-height:30px; padding:0 9px; font-size:12px !important; }
+#job-modal .pes-selection-status, #job-modal .scan-selection-status { margin-top:4px; color:var(--tiw-accent); }
+#job-modal .pes-selection-panel.picking-disabled .pes-selection-status,
+#job-modal .scan-selection-panel.picking-disabled .scan-selection-status { color:var(--amber,#f2b84b); }
+#job-modal .tiw-right.pes-selection-active > .tiw-info-panel,
+#job-modal .tiw-right.scan-selection-active > .tiw-info-panel {
   flex:0 1 180px;
   min-height:100px;
   max-height:min(28vh, 200px);
@@ -1552,20 +1560,24 @@
 #job-modal[data-create-step="2"] .tiw-right > .wizard-step-summary { display:none !important; }
 
 @media (max-height:700px) {
-  #job-modal .tiw-right.pes-selection-active > .preview-right {
+  #job-modal .tiw-right.pes-selection-active > .preview-right,
+  #job-modal .tiw-right.scan-selection-active > .preview-right {
     flex-basis:clamp(190px, 30vh, 230px);
     max-height:34vh;
   }
-  #job-modal .tiw-right.pes-selection-active > .pes-selection-panel {
+  #job-modal .tiw-right.pes-selection-active > .pes-selection-panel,
+  #job-modal .tiw-right.scan-selection-active > .scan-selection-panel {
     max-height:min(42vh, 260px);
   }
-  #job-modal .tiw-right.pes-selection-active > .tiw-info-panel {
+  #job-modal .tiw-right.pes-selection-active > .tiw-info-panel,
+  #job-modal .tiw-right.scan-selection-active > .tiw-info-panel {
     flex-basis:150px;
     min-height:80px;
     max-height:160px;
   }
 }
-#job-modal .tiw-grid.preview-expanded .tiw-right.pes-selection-active > .preview-right {
+#job-modal .tiw-grid.preview-expanded .tiw-right.pes-selection-active > .preview-right,
+#job-modal .tiw-grid.preview-expanded .tiw-right.scan-selection-active > .preview-right {
   flex:1 1 auto;
   min-height:0;
   max-height:none;

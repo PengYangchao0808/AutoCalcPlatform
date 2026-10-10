@@ -6784,7 +6784,9 @@ def test_shared_geometry_loader_contract() -> None:
     assert "previewViewer = $3Dmol.createViewer" in html
     assert "s2scanState.viewer = $3Dmol.createViewer" in html
     assert "s2scanState.resultViewer = $3Dmol.createViewer" in html
-    assert html.count("previewViewer.setStyle") == 2, "preview viewer styling must stay untouched"
+    # 2 = preview + PES selection renderer resets; the 3rd is the scan
+    # selection renderer's identical per-render reset (WS3, deliberate).
+    assert html.count("previewViewer.setStyle") == 3, "preview viewer styling must stay untouched"
     assert "s2scanState.viewer.setStyle" in html
 
 
@@ -13627,78 +13629,144 @@ def test_nmr_panel_pure_helpers_behavior() -> None:
     assert payload["firstClaim"]["atom_labels"] == ["C1", "C2"]
 
 
-def test_scan_wizard_fields_dom_and_i18n_lock() -> None:
-    """DOM + i18n lock for the scan wizard coordinate fields (GAP-8).
+def test_scan_selection_panel_dom_and_i18n_lock() -> None:
+    """DOM + i18n lock for the PES-style scan selection panel (right pane).
 
-    The panel and its five fields are new ids (existing pinned ids stay
-    untouched); every user-visible label/message exists in BOTH locale
-    blocks.  Removing the panel, renaming an id, or shipping an
-    untranslated error turns this red.
+    The scan workflow's atom picking mirrors PESsearch's 通用原子选择 panel:
+    a #scan-selection-panel inside #tiw-right (after #pes-selection-panel,
+    before #tiw-info-panel) shown at wizard step 2, with click-only kind
+    buttons (距离/键角/二面角 + 清除), selection summary, task badge and
+    status.  The old step-1 left panel (#scan-wizard-panel with #scan-wiz-*
+    manual inputs) is deleted — range/points moved to the shared
+    method-protocol dialog.  Every user-visible label/message exists in
+    BOTH locale blocks.  Removing the panel, renaming an id, resurrecting a
+    dead id, shipping an untranslated key, or sneaking the PES-only
+    double-bond kind into this panel turns this red.
     """
     html = FRONTEND.read_text(encoding="utf-8")
+    for dom_id in (
+        "scan-selection-panel",
+        "scan-clear-selection",
+        "scan-selection-summary",
+        "scan-selection-error",
+        "scan-task-badge",
+        "scan-selection-status",
+        "scan-pick-hint",
+    ):
+        assert f'id="{dom_id}"' in html, dom_id
+    # Exactly three click-only kind buttons (mirrors .pes-function-btn);
+    # scan has NO double-bond kind — that PES-only mode must not leak in.
+    kind_buttons = re.findall(r"<button[^>]*scan-function-btn[^>]*>", html)
+    assert len(kind_buttons) == 3, f"expected 3 scan-function-btn buttons, got {len(kind_buttons)}"
+    for kind in ("distance", "angle", "dihedral"):
+        assert any(f'data-scan-kind="{kind}"' in btn for btn in kind_buttons), kind
+    scan_section = html.split('id="scan-selection-panel"', 1)[1].split("</section>", 1)[0]
+    assert 'data-selection-kind="double_bond_scan"' not in scan_section
+    # Right-pane placement: inside #tiw-right, after the PES panel, before
+    # the info panel (step 2 shows picking, not the old left column).
+    assert html.index('id="tiw-right"') < html.index('id="scan-selection-panel"') < html.index(
+        'id="tiw-info-panel"'
+    )
+    assert html.index('id="pes-selection-panel"') < html.index('id="scan-selection-panel"')
+    # Old step-1 left panel and its manual inputs are gone for good.
     for dom_id in (
         "scan-wizard-panel",
         "scan-wiz-atom-1",
         "scan-wiz-atom-2",
+        "scan-wiz-atom-3",
+        "scan-wiz-atom-4",
         "scan-wiz-start",
         "scan-wiz-end",
         "scan-wiz-points",
         "scan-wiz-status",
+        "scan-wiz-pick-hint",
     ):
-        assert f'id="{dom_id}"' in html, dom_id
-    # The panel lives inside #job-modal so the generic draft capture
-    # (_captureWizardDraft's input[id]/select[id]/textarea[id] sweep)
-    # round-trips the fields without any per-field registry.
-    assert html.index('id="job-modal"') < html.index('id="scan-wizard-panel"')
-    assert html.index('id="scan-wizard-panel"') < html.index("function _captureWizardDraft()")
-    assert 'modal.querySelectorAll("input[id], select[id], textarea[id]")' in html
+        assert f'id="{dom_id}"' not in html, dom_id
     i18n_keys = [
-        "modal.scan_coord",
-        "modal.scan_atom_1",
-        "modal.scan_atom_2",
-        "modal.scan_start",
-        "modal.scan_end",
-        "modal.scan_points",
-        "modal.scan_hint",
+        # New right-pane panel copy (both locales required).
+        "scan.selection.title",
+        "scan.selection.hint",
+        "scan.function.distance",
+        "scan.function.angle",
+        "scan.function.dihedral",
+        "scan.action.clear",
+        "scan.task.title",
+        "scan.task.incomplete",
+        # Pick hints + validation errors still shared with the builder.
+        "modal.scan_pick_hint_distance",
+        "modal.scan_pick_hint_angle",
+        "modal.scan_pick_hint_dihedral",
         "modal.scan_invalid",
         "modal.scan_err_fields_required",
         "modal.scan_err_atom_not_integer",
         "modal.scan_err_atom_not_positive",
         "modal.scan_err_atoms_not_distinct",
         "modal.scan_err_atom_out_of_range",
+        "modal.scan_err_kind_invalid",
         "modal.scan_err_range_not_finite",
         "modal.scan_err_range_not_positive",
+        "modal.scan_err_range_angle_invalid",
+        "modal.scan_err_range_dihedral_invalid",
         "modal.scan_err_range_equal",
         "modal.scan_err_points_invalid",
         "modal.scan_err_no_confirmed_structure",
     ]
     for key in i18n_keys:
         assert html.count(f'"{key}":') == 2, f"{key} must exist in zh-CN and en-US"
+    # Old-panel-only labels die with the panel (each verified twice today).
+    removed_keys = [
+        "modal.scan_coord",
+        "modal.scan_atom_1",
+        "modal.scan_atom_2",
+        "modal.scan_atom_3",
+        "modal.scan_atom_4",
+        "modal.scan_atom_ph",
+        "modal.scan_start",
+        "modal.scan_end",
+        "modal.scan_points",
+        "modal.scan_hint",
+        "modal.scan_kind_distance",
+        "modal.scan_kind_angle",
+        "modal.scan_kind_dihedral",
+    ]
+    for key in removed_keys:
+        assert html.count(f'"{key}":') == 0, f"{key} must be gone with the old panel"
 
 
-def test_scan_wizard_submission_path_lock() -> None:
+def test_scan_selection_submission_path_lock() -> None:
     """The wizard submit path uses the pure builder; conversion is once.
 
     ``submitJobModal`` must route every scan body through
-    ``buildScanWizardBodyParts`` (validated per final submitted structure)
-    and the 1-based -> 0-based conversion must live in exactly one place.
+    ``buildScanWizardBodyParts`` fed by the click-only field snapshot
+    (validated per final submitted structure) and the 1-based -> 0-based
+    conversion must live in exactly one place.
     """
     html = FRONTEND.read_text(encoding="utf-8")
     assert "function buildScanWizardBodyParts(fields, structureEntry)" in html
     assert "function scanWizardCountAtoms(xyzText)" in html
-    # Exactly-once conversion: both atom conversions sit at the single
-    # marked site inside the builder and nowhere else in the page.
+    # Exactly-once conversion: the single marked loop inside the builder is
+    # the only parseInt(raw(name), 10) - 1 site in the whole page; the old
+    # per-atom atomA - 1 / atomB - 1 sites are gone for good.
     builder = html.split("function buildScanWizardBodyParts", 1)[1].split(
         "function scanWizardErrorMessage", 1
     )[0]
     assert builder.count("scan-index-base-convert") == 1
-    assert builder.count("atomA - 1") == 1
-    assert builder.count("atomB - 1") == 1
-    assert html.count("atomA - 1") == 1
-    assert html.count("atomB - 1") == 1
-    # submitJobModal consumes the builder result; it never re-derives
-    # coordinates or points itself.
-    assert "scanParts = buildScanWizardBodyParts(scanWizardFieldValues(), s);" in html
+    assert html.count("scan-index-base-convert") == 1
+    assert builder.count("parseInt(raw(") == 1
+    assert html.count("parseInt(raw(") == 1
+    assert "atomA - 1" not in html
+    assert "atomB - 1" not in html
+    # submitJobModal consumes the builder result from the selection-state
+    # snapshot; it never re-derives coordinates or points itself, and the
+    # snapshot never reads the deleted #scan-wiz-* inputs.
+    assert "scanParts = buildScanWizardBodyParts(scanSelectionFieldValues(), s);" in html
+    assert "function scanSelectionFieldValues()" in html
+    field_values = html.split("function scanSelectionFieldValues()", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert "scanSelectionState.selectedAtoms" in field_values
+    assert "wizardState.method.stages.scan" in field_values
+    assert 'getElementById("scan-wiz-' not in field_values
     assert "inputPayload.scan_coordinates = scanParts.input.scan_coordinates;" in html
     assert "methodPayload.scan_points = scanParts.method.scan_points;" in html
     assert (
@@ -13712,39 +13780,146 @@ def test_scan_wizard_submission_path_lock() -> None:
         'inputPayload = { source_type: "xyz_text", '
         'source: String(s.xyz || s.xyz_text || "") };' in scan_branch
     )
-    # Batch semantics: a failed per-structure validation aborts the whole
-    # submit with a clear result instead of queueing an unverifiable job.
-    assert "scanWizardSetStatus(scanMsg);" in html
+    # Batch semantics: a failed per-structure validation routes through the
+    # selection panel's error sink and aborts the submit with a clear
+    # result instead of queueing an unverifiable job.
+    assert "setScanSelectionError(" in html
     assert "window.alert(scanMsg);" in html
 
 
-def test_scan_wizard_state_hydration_and_switch_away_lock() -> None:
-    """Draft restore, edit-recalc hydration, and switch-away wiring (GAP-8)."""
+def test_scan_selection_hydration_and_switch_away_lock() -> None:
+    """Step-2 visibility, hydrate/reset, kind switch, and switch-away wiring.
+
+    The right-pane selection panel shows only at wizard step 2
+    (``createWizardStep === 2`` plus the ``scan-selection-active`` marker),
+    hydration flows through ``syncScanSelectionFromWizard``, pending-task
+    hydrate starts from ``resetScanSelection``, and a kind switch mirrors
+    the coordinate kind/start/end while never touching the click-picked
+    atoms (the click handler stays their single writer).  The deleted left
+    panel leaves no ``scan-wizard-panel`` block behind.
+    """
     html = FRONTEND.read_text(encoding="utf-8")
-    visibility = html.split("function updateInputModeVisibility()", 1)[1].split(
-        "function updateTaskNamePlaceholder", 1
+    assert "function updateScanSelectionVisibility()" in html
+    visibility = html.split("function updateScanSelectionVisibility()", 1)[1].split(
+        "\nfunction ", 1
     )[0]
-    assert (
-        "var isScan = wizardState && wizardState.workflow "
-        '&& wizardState.workflow.id === "scan";' in visibility
-    )
-    assert 'scanPanel.style.display = isScan ? "block" : "none";' in visibility
-    assert "scanWizardClear();" in visibility
-    # Fresh context on pending-task/editor hydrate; the hydrate chain's
-    # final updateConfigCards() refills from the method-stage mirror.
+    assert "createWizardStep === 2" in visibility
+    assert "scan-selection-active" in visibility
+    # Hydrate/restore: the method-stage mirror flows back into the selection
+    # state without resetting the ranges.
+    assert "function syncScanSelectionFromWizard(" in html
+    sync = html.split("function syncScanSelectionFromWizard(", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert "scan_coordinate_kind" in sync
+    assert "scan_coordinate_atoms" in sync
+    # Fresh context on pending-task/editor hydrate.
+    assert "function resetScanSelection()" in html
     pending = html.split("function applyPendingNewTask()", 1)[1].split(
         "function configureStageSourcePanel", 1
     )[0]
-    assert "scanWizardClear();" in pending
-    config = html.split("function updateConfigCards()", 1)[1].split(
-        "function loadDefaultMethodProfile", 1
+    assert "resetScanSelection();" in pending
+    # Kind switch (distance/angle/dihedral): mirror the kind, swap start/end
+    # only while they still equal the previous kind's defaults, and leave
+    # the picked atoms to the click handler (single writer).
+    assert "function setScanSelectionKind(kind)" in html
+    kind_switch = html.split("function setScanSelectionKind(kind)", 1)[1].split(
+        "\nfunction ", 1
     )[0]
-    assert "scanWizardSyncFromMethodState();" in config
-    assert "function scanWizardSyncFromMethodState()" in html
-    assert "function refreshScanWizardStatus()" in html
-    # Structure changes re-validate: remove/clear paths call
-    # updateInputModeVisibility, which refreshes the scan status.
-    assert "function scanWizardEnsureListeners()" in html
+    assert "wizardState.method.stages.scan.scan_coordinate_kind = kind;" in kind_switch
+    assert re.search(r"scan_coordinate_start\s*=(?!=)", kind_switch), (
+        "setScanSelectionKind must write stages.scan.scan_coordinate_start"
+    )
+    assert re.search(r"scan_coordinate_end\s*=(?!=)", kind_switch), (
+        "setScanSelectionKind must write stages.scan.scan_coordinate_end"
+    )
+    assert "scanWizardKindDefaults" in kind_switch
+    assert "scan_coordinate_atoms" not in kind_switch
+    assert "function handleScanPreviewAtomClick(atom)" in html
+    handler = html.split("function handleScanPreviewAtomClick(atom)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert re.search(r"scan_coordinate_atoms\s*=(?!=)", handler), (
+        "handleScanPreviewAtomClick must be the single writer of scan_coordinate_atoms"
+    )
+    # Switch-away: updateInputModeVisibility no longer carries the old
+    # left-panel block, and its dead helpers vanished page-wide.
+    mode_visibility = html.split("function updateInputModeVisibility()", 1)[1].split(
+        "function updateTaskNamePlaceholder", 1
+    )[0]
+    assert "scan-wizard-panel" not in mode_visibility
+    for dead in (
+        "scanWizardEnsureListeners",
+        "scanWizardUserDirty",
+        "scanSelectionRebuildFromFields",
+    ):
+        assert dead not in html, dead
+
+
+def test_scan_atom_pick_dispatch_wiring() -> None:
+    """WS3: click-to-pick binds through the PES preview dispatcher only.
+
+    The scan picker hangs off attachPESPreviewSelection's single dispatch
+    point (PES behavior stays byte-identical), its marker renderer mirrors
+    the PES renderer's shape recipe, every preview re-render drops stale
+    scan shapes without rebuilding from deleted fields, and the visibility
+    pass drives the step-2 right-pane panel's picking state instead of
+    blanket-disabling the model.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "let scanSelectionState = {" in html
+    for name in (
+        "canPickScanAtoms",
+        "handleScanPreviewAtomClick",
+        "renderScanPreviewSelection",
+        "clearScanPreviewSelectionShapes",
+    ):
+        assert f"function {name}(" in html, name
+    attach = html.split("function attachPESPreviewSelection()", 1)[1].split(
+        "function canPickPESAtoms", 1
+    )[0]
+    assert "var canPick = canPickPESAtoms() || canPickScanAtoms();" in attach
+    assert (
+        "canPickPESAtoms() ? handlePESPreviewAtomClick(atom) : handleScanPreviewAtomClick(atom);"
+        in attach
+    )
+    assert "if (canPickScanAtoms()) renderScanPreviewSelection();" in attach
+    assert "renderPESPreviewSelection();" in attach
+    assert "function canPickScanAtoms()" in html
+    can_pick = html.split("function canPickScanAtoms()", 1)[1].split("\nfunction ", 1)[0]
+    assert "createWizardStep === 2" in can_pick, "scan picking is a step-2 right-pane capability"
+    assert "createWizardStep === 1" not in can_pick
+    preview = html.split("function renderPreviewStructure3D(structure)", 1)[1].split(
+        "function isPESsearchTask", 1
+    )[0]
+    assert "clearPESPreviewSelectionShapes();" in preview
+    assert "clearScanPreviewSelectionShapes();" in preview
+    # Re-render must NOT rebuild the selection from the deleted atom fields
+    # — the click selection itself is the authority and must survive a
+    # preview re-render instead of being wiped by a fields-based rebuild.
+    assert "scanSelectionRebuildFromFields" not in preview
+    assert "scheduleViewerFraming(" in preview
+    assert ".zoomTo();" not in preview
+    handler = html.split("function handleScanPreviewAtomClick(atom)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert "renderScanPreviewSelection();" in handler
+    assert "updateScanSelectionSummary" in handler
+    assert "dispatchEvent" not in handler, "click-only picking never fakes input events"
+    visibility = html.split("function updatePESSelectionVisibility()", 1)[1].split(
+        "function setPESSelectionMode", 1
+    )[0]
+    assert "updateScanSelectionVisibility()" in visibility
+    assert "function updateScanSelectionVisibility()" in html
+    scan_vis = html.split("function updateScanSelectionVisibility()", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    scan_gate_lines = [
+        ln
+        for ln in (visibility + "\n" + scan_vis).splitlines()
+        if 'toggle("picking-disabled"' in ln and "canPickPESAtoms" not in ln
+    ]
+    assert scan_gate_lines, "scan panel must toggle .picking-disabled from its pick gate"
 
 
 # ── Executed scan submission: real wizard body -> real v1 -> runner argv ─
