@@ -112,7 +112,9 @@ def run_clustering(
     backend = (
         ctx.backend
         if ctx.backend is not None
-        else backend_for_request(selection.backend, config=ctx.config)
+        else backend_for_request(
+            selection.backend, config=ctx.config, resources=request.resources
+        )
     )
     backend_label = str(getattr(backend, "name", selection.backend) or selection.backend)
     target_dir = Path(

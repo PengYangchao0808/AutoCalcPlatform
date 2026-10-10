@@ -715,7 +715,9 @@ class TestCheckpointV2Credentials:
         )
         monkeypatch.setattr(engine_module, "run_optimize", fake_optimize)
         monkeypatch.setattr(
-            frequency_module, "backend_for_request", lambda req, name: FakeFrequencyBackend()
+            frequency_module,
+            "backend_for_request",
+            lambda req, name, **kwargs: FakeFrequencyBackend(),
         )
 
         task_root = tmp_path / "task"

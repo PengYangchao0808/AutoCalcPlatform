@@ -417,6 +417,8 @@ def test_nmr_local_remote_argv_parity_default_payload(tmp_path: Path) -> None:
     local, remote = _nmr_argv_pair({}, tmp_path)
     ns_local, ns_remote = _parsed_namespaces(local, remote)
     assert ns_local == ns_remote
+    for argv in (local, remote):
+        assert argv.count("--nproc") == argv.count("--mem") == 1
     expected = nmr_method_flags({})
     assert _nmr_flag_fragment(local[3:]) == expected
     assert _nmr_flag_fragment(remote[3:]) == expected

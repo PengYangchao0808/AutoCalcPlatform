@@ -2417,7 +2417,7 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "profile_id": "default",
                 "label": "Default Relaxed Scan",
                 "label_zh": "标准松弛扫描",
-                "summary": "r2SCAN-3c/ORCA relaxed scan over a distance coordinate",
+                "summary": "r2SCAN-3c/ORCA relaxed scan over an internal coordinate (distance/angle/dihedral)",
                 "levels": {
                     "scan": {
                         "engine": "orca",
@@ -5016,17 +5016,20 @@ def normalize_and_validate_method_config(
                             continue
                         _idx, canonical = match
                         if field_name == "solvent_model":
+                            # Storage fold (see ``_normalize_solvent``), not a
+                            # migration — the catalog's canonical spelling is
+                            # the title-case option ("CPCM"/"SMD").
                             user_val = str(user_val).lower()
                         else:
                             user_val = canonical
-                        if warnings_out is not None and str(user_val) != str(
-                            user_lv.get(field_name)
-                        ):
-                            warnings_out.append(
-                                _canonicalization_warning(
-                                    lid, field_name, user_lv.get(field_name), user_val
+                            if warnings_out is not None and str(user_val) != str(
+                                user_lv.get(field_name)
+                            ):
+                                warnings_out.append(
+                                    _canonicalization_warning(
+                                        lid, field_name, user_lv.get(field_name), user_val
+                                    )
                                 )
-                            )
                     elif str(user_val) not in [str(o) for o in options]:
                         match = _match_option_case_insensitive(options, user_val)
                         if match is not None:

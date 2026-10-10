@@ -7,6 +7,7 @@ Covers the contract keys emitted by the batch engine:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch, MagicMock
@@ -169,6 +170,96 @@ class TestScfControls:
         )
         route_line = blocks.splitlines()[0]
         assert route_line.count("TightSCF") == 1
+
+    def test_scf_convergence_not_duplicated_for_dlpno_route_extras(self) -> None:
+        orca = ORCAInterface(_make_config(), method="DLPNO-CCSD(T)")
+        blocks, _ = orca._build_input_blocks(
+            "sp",
+            route_extras=["TightSCF"],
+            basis="def2-TZVPP",
+            aux_j_basis="def2/J",
+            aux_c_basis="def2-TZVPP/C",
+            symbols=_SYMBOLS,
+        )
+        route_line = blocks.splitlines()[0]
+        assert route_line.split().count("TightSCF") == 1
+
+    def test_scf_convergence_not_duplicated_for_dlpno_both_channels(self) -> None:
+        orca = ORCAInterface(_make_config(), method="DLPNO-CCSD(T)")
+        blocks, _ = orca._build_input_blocks(
+            "sp",
+            scf_convergence="tight",
+            route_extras=["TightSCF"],
+            basis="def2-TZVPP",
+            aux_j_basis="def2/J",
+            aux_c_basis="def2-TZVPP/C",
+            symbols=_SYMBOLS,
+        )
+        route_line = blocks.splitlines()[0]
+        assert route_line.split().count("TightSCF") == 1
+
+    def test_verytight_route_extra_replaces_dlpno_prefix(self) -> None:
+        orca = ORCAInterface(_make_config(), method="DLPNO-CCSD(T)")
+        blocks, _ = orca._build_input_blocks(
+            "sp",
+            route_extras=["VeryTightSCF"],
+            basis="def2-TZVPP",
+            aux_j_basis="def2/J",
+            aux_c_basis="def2-TZVPP/C",
+            symbols=_SYMBOLS,
+        )
+        assert blocks.splitlines()[0] == "! DLPNO-CCSD(T) VeryTightSCF SP"
+
+    def test_dlpno_governed_verytight_single_directive(self) -> None:
+        orca = ORCAInterface(_make_config(), method="DLPNO-CCSD(T)")
+        blocks, _ = orca._build_input_blocks(
+            "sp",
+            scf_convergence="verytight",
+            basis="def2-TZVPP",
+            aux_j_basis="def2/J",
+            aux_c_basis="def2-TZVPP/C",
+            symbols=_SYMBOLS,
+        )
+        assert blocks.splitlines()[0] == "! DLPNO-CCSD(T) VeryTightSCF SP"
+
+    def test_dlpno_below_floor_promoted_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        orca = ORCAInterface(_make_config(), method="DLPNO-CCSD(T)")
+        with caplog.at_level(logging.WARNING, logger="cccp.qc.interfaces.orca"):
+            blocks, _ = orca._build_input_blocks(
+                "sp",
+                route_extras=["LooseSCF"],
+                basis="def2-TZVPP",
+                aux_j_basis="def2/J",
+                aux_c_basis="def2-TZVPP/C",
+                symbols=_SYMBOLS,
+            )
+        assert blocks.splitlines()[0] == "! DLPNO-CCSD(T) TightSCF SP"
+        assert "below" in caplog.text
+
+    def test_dlpno_mixed_channels_single_directive(self) -> None:
+        orca = ORCAInterface(_make_config(), method="DLPNO-CCSD(T)")
+        blocks, _ = orca._build_input_blocks(
+            "sp",
+            scf_convergence="verytight",
+            route_extras=["TightSCF"],
+            basis="def2-TZVPP",
+            aux_j_basis="def2/J",
+            aux_c_basis="def2-TZVPP/C",
+            symbols=_SYMBOLS,
+        )
+        assert blocks.splitlines()[0] == "! DLPNO-CCSD(T) VeryTightSCF SP"
+
+    def test_tightscf_route_extra_preserved_for_non_dlpno(self) -> None:
+        orca = ORCAInterface(_make_config(), method="r2SCAN-3c")
+        blocks, _ = orca._build_input_blocks(
+            "sp",
+            route_extras=["TightSCF"],
+            symbols=_SYMBOLS,
+        )
+        route_line = blocks.splitlines()[0]
+        assert route_line.split().count("TightSCF") == 1
 
     def test_scf_strategy_slowconv(self) -> None:
         orca = ORCAInterface(_make_config(), method="r2SCAN-3c")

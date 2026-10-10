@@ -102,7 +102,7 @@ def execute_irc(
     )
     task_request, binding = to_task_request(request, TaskKind.IRC, directions=directions)
     selected_backend = backend_name(request)
-    backend = backend_for_request(request, selected_backend)
+    backend = backend_for_request(request, selected_backend, resources=task_request.resources)
     target_dir = output_dir(request) or Path.cwd() / "irc_work"
     target_dir.mkdir(parents=True, exist_ok=True)
 

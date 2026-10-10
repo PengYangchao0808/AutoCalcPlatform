@@ -26,6 +26,8 @@ from cccp.qc.interfaces.route_render import (
     orca_keyword_context,
     render_route_line,
 )
+from cccp.qc.keyword_registry import canonical_token, scf_rank
+from cccp.qc.method_meta import scf_constraint
 from cccp.utils.constants import HARTREE_TO_KCAL
 
 logger = logging.getLogger(__name__)
@@ -312,6 +314,40 @@ def parse_irc_iteration_energies(log_text: str) -> dict[str, list[float]]:
     return energies
 
 
+def _constrained_scf_value(method: str, scf: str | None) -> str | None:
+    """Apply the METHOD_META SCF floor to an OptTS convergence value.
+
+    Unconstrained methods pass through unchanged.  For a constrained method
+    (e.g. DLPNO-CCSD(T): ``tight`` minimum) an absent/``normal`` value falls
+    back to the floor and a weaker explicit value is promoted with a warning.
+    """
+    constraint = scf_constraint(method)
+    if constraint is None:
+        return scf
+    floor_value = constraint["default"]
+    implementation = orca_keyword_context(method)[1]
+    floor_token, _ = canonical_token("scf_convergence", floor_value, implementation=implementation)
+    explicit_token, _ = (
+        canonical_token("scf_convergence", str(scf), implementation=implementation)
+        if scf
+        else (None, None)
+    )
+    if explicit_token is None:
+        return floor_value
+    explicit_rank = scf_rank(explicit_token)
+    floor_rank = scf_rank(floor_token)
+    if explicit_rank is not None and floor_rank is not None and explicit_rank < floor_rank:
+        logger.warning(
+            "SCF convergence %s is below %s minimum for %s; using %s",
+            explicit_token,
+            floor_value,
+            method,
+            floor_token,
+        )
+        return floor_value
+    return scf
+
+
 def ts_opt_route(
     method: str,
     basis: str = "",
@@ -363,7 +399,7 @@ def ts_opt_route(
     if not is_composite and basis:
         segments.append(RouteKeyword("basis", basis))
     segments.append(RouteKeyword("grid", grid))
-    segments.append(RouteKeyword("scf_convergence", scf))
+    segments.append(RouteKeyword("scf_convergence", _constrained_scf_value(method, scf)))
     if orca_keyword_context(method)[0] in ("gfn", "gfnff"):
         _gfn_token = orca_gfn_solvent_token(method, solvent, solvent_model)
         if _gfn_token:

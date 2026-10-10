@@ -757,6 +757,14 @@ def test_dlpno_basis_locked_single_option() -> None:
     assert meta["default_aux_c"] == "def2-TZVPP/C"
 
 
+def test_dlpno_scf_constraint_declared() -> None:
+    from cccp.qc.method_meta import scf_constraint
+
+    constraint = scf_constraint("DLPNO-CCSD(T)")
+    assert constraint == {"allowed": ("tight", "verytight"), "default": "tight"}
+    assert scf_constraint("wB97M-V") is None
+
+
 # =====================================================================
 # Phase 0a: BASIS_CATALOG ORCA keyword existence gate
 # =====================================================================

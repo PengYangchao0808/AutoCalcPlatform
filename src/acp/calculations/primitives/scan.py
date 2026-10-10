@@ -76,7 +76,7 @@ def execute_scan(req: CalculationRequest) -> CalculationResult:
     except TaskInputError as error:
         raise ScanCoordinateError(str(error)) from error
     selected_backend = backend_name(req)
-    backend = backend_for_request(req, selected_backend)
+    backend = backend_for_request(req, selected_backend, resources=task_request.resources)
     target_dir = output_dir(req) or Path.cwd() / "scan_work"
     target_dir.mkdir(parents=True, exist_ok=True)
 

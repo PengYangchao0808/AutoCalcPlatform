@@ -117,11 +117,18 @@ FROZEN_REMOTE_READ_RULES: dict = {
     "errors": "remote-missing and connection-failure distinguished; bounded, traversal-guarded",
 }
 
-#: Frozen scan submission rules (plan todo 9, distance-only first phase).
+#: Frozen scan submission rules (plan todo 9; kind-aware contract).
+#: ``scan_method_flags`` remains a pass-through generator — see ``generator``.
 FROZEN_SCAN_RULES: dict = {
-    "coordinates": "non-empty; exactly two distinct integer indices per coordinate",
+    "coordinates": (
+        "non-empty; exactly the kind's distinct integer atoms per coordinate "
+        "(distance 2, angle 3, dihedral 4)"
+    ),
     "atom_indices": "0-based at submit; within the known atom count of the submitted structure",
-    "range_values": "finite start/end; valid distance range",
+    "range_values": (
+        "finite start/end; distance > 0, angle 0-180 degrees, "
+        "dihedral -360 to 360 degrees; start != end"
+    ),
     "points": "integer points >= 2",
     "conversion": "1-based display -> 0-based submit, applied exactly once",
     "generator": "scan_method_flags is a parameter generator, not the validator",
@@ -374,6 +381,11 @@ def _frozen_display_to_submit_coordinate(display_coordinate: str) -> str:
     return f"{int(a1) - 1},{int(a2) - 1},{start},{end}"
 
 
+#: Kind inferred from atom count in string coordinates: 4/5/6 comma parts ->
+#: 2/3/4 atoms -> distance/angle/dihedral (mirrors the shared boundary).
+_FROZEN_SCAN_KIND_BY_ATOM_COUNT: dict = {2: "distance", 3: "angle", 4: "dihedral"}
+
+
 def _frozen_validate_scan_submission(
     workflow: str,
     inp: dict,
@@ -405,24 +417,35 @@ def _frozen_validate_scan_submission(
     points = method.get("scan_points")
     for coordinate in coordinates:
         parts = [part.strip() for part in str(coordinate).split(",")]
-        if len(parts) != 4:
-            raise ValueError("distance scan coordinate must be atom1,atom2,start,end")
+        if len(parts) not in (4, 5, 6):
+            raise ValueError("scan coordinate must be atom1,atom2[,atom3[,atom4]],start,end")
+        atom_total = len(parts) - 2
+        kind = _FROZEN_SCAN_KIND_BY_ATOM_COUNT[atom_total]
         try:
-            a1, a2 = int(parts[0]), int(parts[1])
-            start, end = float(parts[2]), float(parts[3])
+            atoms = [int(part) for part in parts[:atom_total]]
+            start, end = float(parts[atom_total]), float(parts[atom_total + 1])
         except ValueError as exc:
             raise ValueError("scan coordinate indices must be integers and bounds finite") from exc
-        if a1 == a2:
+        if len(set(atoms)) != len(atoms):
             raise ValueError("scan atom indices must be distinct")
-        for index in (a1, a2):
+        for index in atoms:
             if index < 0:
                 raise ValueError("scan atom indices must be non-negative")
             if atom_count is not None and index >= atom_count:
                 raise ValueError("scan atom index out of range for the submitted structure")
         if not (math.isfinite(start) and math.isfinite(end)):
             raise ValueError("scan range bounds must be finite")
-        if not (start < end):
-            raise ValueError("scan range start must be below end")
+        if kind == "distance":
+            if start <= 0 or end <= 0:
+                raise ValueError("distance scan bounds must be greater than 0")
+        elif kind == "angle":
+            if not (0.0 <= start <= 180.0 and 0.0 <= end <= 180.0):
+                raise ValueError("angle scan bounds must be between 0 and 180 degrees")
+        else:  # dihedral — the third and last kind in _FROZEN_SCAN_KIND_BY_ATOM_COUNT
+            if not (-360.0 <= start <= 360.0 and -360.0 <= end <= 360.0):
+                raise ValueError("dihedral scan bounds must be between -360 and 360 degrees")
+        if math.isclose(start, end, abs_tol=1.0e-9):
+            raise ValueError("scan range start and end must differ")
         if points is None:
             raise ValueError("scan points are required")
         if not isinstance(points, int) or isinstance(points, bool) or points < 2:
@@ -433,6 +456,17 @@ def test_contract_5_scan_validation_rules_reference_implementation() -> None:
     """Frozen literal definition of the shared v1/v2 submission validation."""
     valid = {"coordinate": "0,1,1.0,3.0"}
     _frozen_validate_scan_submission("scan", valid, {"scan_points": 4}, atom_count=6)
+    # Kind-aware acceptance: angle (3 atoms) and dihedral (4 atoms) strings.
+    _frozen_validate_scan_submission(
+        "scan", {"coordinate": "0,1,2,90.0,120.0"}, {"scan_points": 4}, atom_count=6
+    )
+    _frozen_validate_scan_submission(
+        "scan", {"coordinate": "0,1,2,3,-180.0,180.0"}, {"scan_points": 4}, atom_count=6
+    )
+    # Scan direction is free: end < start is a legal scan (no ``<`` rule).
+    _frozen_validate_scan_submission(
+        "scan", {"coordinate": "0,1,3.0,1.0"}, {"scan_points": 4}, atom_count=6
+    )
 
     with pytest.raises(ValueError, match="at least one coordinate"):
         _frozen_validate_scan_submission("scan", {}, {"scan_points": 4})
@@ -440,6 +474,10 @@ def test_contract_5_scan_validation_rules_reference_implementation() -> None:
         _frozen_validate_scan_submission("scan", {"coordinate": []}, {"scan_points": 4})
     with pytest.raises(ValueError, match="distinct"):
         _frozen_validate_scan_submission("scan", {"coordinate": "1,1,1.0,3.0"}, {"scan_points": 4})
+    with pytest.raises(ValueError, match="distinct"):
+        _frozen_validate_scan_submission(
+            "scan", {"coordinate": "0,1,1,90.0,120.0"}, {"scan_points": 4}
+        )
     with pytest.raises(ValueError, match="non-negative"):
         _frozen_validate_scan_submission("scan", {"coordinate": "-1,0,1.0,3.0"}, {"scan_points": 4})
     with pytest.raises(ValueError, match="out of range"):
@@ -448,12 +486,41 @@ def test_contract_5_scan_validation_rules_reference_implementation() -> None:
         )
     with pytest.raises(ValueError, match="finite"):
         _frozen_validate_scan_submission("scan", {"coordinate": "0,1,nan,3.0"}, {"scan_points": 4})
-    with pytest.raises(ValueError, match="start must be below end"):
-        _frozen_validate_scan_submission("scan", {"coordinate": "0,1,3.0,1.0"}, {"scan_points": 4})
+    with pytest.raises(ValueError, match="greater than 0"):
+        _frozen_validate_scan_submission("scan", {"coordinate": "0,1,-1.0,3.0"}, {"scan_points": 4})
+    with pytest.raises(ValueError, match="0 and 180"):
+        _frozen_validate_scan_submission(
+            "scan", {"coordinate": "0,1,2,90.0,181.0"}, {"scan_points": 4}
+        )
+    with pytest.raises(ValueError, match="-360 and 360"):
+        _frozen_validate_scan_submission(
+            "scan", {"coordinate": "0,1,2,3,0.0,400.0"}, {"scan_points": 4}
+        )
+    with pytest.raises(ValueError, match="differ"):
+        _frozen_validate_scan_submission("scan", {"coordinate": "0,1,2.0,2.0"}, {"scan_points": 4})
+    # F3: the frozen reference mirrors production's math.isclose tolerance —
+    # start/end inside the 1e-9 band are rejected, merely-equal is not the rule.
+    with pytest.raises(ValueError, match="differ"):
+        _frozen_validate_scan_submission(
+            "scan", {"coordinate": "0,1,1.0,1.0000000001"}, {"scan_points": 4}
+        )
+    _frozen_validate_scan_submission(
+        "scan", {"coordinate": "0,1,1.0,1.000001"}, {"scan_points": 4}, atom_count=6
+    )
     with pytest.raises(ValueError, match="integer >= 2"):
         _frozen_validate_scan_submission("scan", valid, {"scan_points": 1})
     # Non-scan workflows are untouched at this boundary.
     _frozen_validate_scan_submission("optimize", {}, {})
+
+
+def test_contract_5_frozen_scan_rules_are_kind_aware_literal_data() -> None:
+    """The frozen rule literal itself names all three kinds and their ranges."""
+    rules = FROZEN_SCAN_RULES
+    assert "distance 2, angle 3, dihedral 4" in rules["coordinates"]
+    assert "distance > 0" in rules["range_values"]
+    assert "angle 0-180" in rules["range_values"]
+    assert "dihedral -360 to 360" in rules["range_values"]
+    assert "start != end" in rules["range_values"]
 
 
 def test_contract_5_scan_display_to_submit_conversion_applied_once() -> None:

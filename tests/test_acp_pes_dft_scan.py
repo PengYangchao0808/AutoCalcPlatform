@@ -76,6 +76,9 @@ def _bare_orca() -> ORCAInterface:
     iface.solvent_model = "none"
     iface.maxcore = 1000
     iface.nproc = 1
+    iface.mem_mb = iface.maxcore * iface.nproc
+    iface._maxcore_safety = 0.8
+    iface._maxcore_pin = iface.maxcore
     iface.charge = 0
     iface.multiplicity = 1
     iface.config = {}

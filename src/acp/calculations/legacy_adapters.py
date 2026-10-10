@@ -449,13 +449,19 @@ def to_task_request(
         return envelope_values.get(canonical)
 
     mem_value = _env("mem")
+    task_memory = None
+    if mem_value is not None:
+        from cccp.utils.resource_utils import normalize_memory
+
+        try:
+            task_memory = normalize_memory(mem_value)
+        except (ValueError, OverflowError) as exc:
+            raise TaskInputError(str(exc)) from exc
+        if task_memory != mem_value:
+            raw[key_names.get("mem", "mem")] = mem_value
     task_resources = TaskResources(
         nproc=_as_int(_env("nproc")),
-        mem=(
-            mem_value
-            if isinstance(mem_value, (str, int)) and not isinstance(mem_value, bool)
-            else None
-        ),
+        mem=task_memory,
         maxcore=_as_int(_env("maxcore")),
         timeout_s=_as_float(_env("timeout_s")),
     )

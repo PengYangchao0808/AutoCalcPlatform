@@ -151,7 +151,7 @@ def execute_optimize(
         progress_reporter = _OPTIMIZATION_PROGRESS_REPORTER.get()
     task_request, binding = to_task_request(req, TaskKind.OPTIMIZE)
     selected_backend = backend_name(req)
-    backend = backend_for_request(req, selected_backend)
+    backend = backend_for_request(req, selected_backend, resources=task_request.resources)
     sink = _ReporterSink(progress_reporter) if progress_reporter is not None else None
     context = TaskContext(
         config=binding.config,

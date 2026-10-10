@@ -601,8 +601,12 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         config['resources']['nproc'] = min(multiprocessing.cpu_count(), 32)
         logger.warning(f"Invalid nproc, using {config['resources']['nproc']}")
 
-    if not config['resources'].get('mem'):
-        config['resources']['mem'] = '32GB'
+    from cccp.utils.resource_utils import normalize_memory
+
+    memory = config['resources'].get('mem')
+    if memory is None or memory == "":
+        memory = _get_default_config()['resources']['mem']
+    config['resources']['mem'] = normalize_memory(memory)
 
     protocol = config.get('protocols', {}).get('default', 'censo-lite')
     if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark', 'censo-lite'):

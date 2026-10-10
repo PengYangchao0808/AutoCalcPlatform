@@ -78,3 +78,9 @@ output/
 irc_output/
 uploads/
 .omo/
+
+# Keep Python caches ignored after the fixture-directory exceptions above.
+__pycache__/
+
+# Mock ORCA gradient output can be produced by subprocess capability probes.
+/grad.engrad

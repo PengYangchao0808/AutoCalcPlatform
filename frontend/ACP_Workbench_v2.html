@@ -1010,7 +1010,6 @@ body.resizing-v canvas {
 #job-modal[data-create-step="2"] .tiw-left > .parse-errors,
 #job-modal[data-create-step="2"] .tiw-left > #nmr-experiment-panel,
 #job-modal[data-create-step="2"] .tiw-left > #nmr-enumerate-row,
-#job-modal[data-create-step="2"] .tiw-left > #scan-wizard-panel,
 #job-modal[data-create-step="2"] .tiw-left > .create-review,
 #job-modal[data-create-step="2"] .tiw-right > .preview-right,
 #job-modal[data-create-step="2"] .tiw-right > .tiw-info-panel,
@@ -1027,7 +1026,6 @@ body.resizing-v canvas {
 #job-modal[data-create-step="3"] .tiw-left > .parse-errors,
 #job-modal[data-create-step="3"] .tiw-left > #nmr-experiment-panel,
 #job-modal[data-create-step="3"] .tiw-left > #nmr-enumerate-row,
-#job-modal[data-create-step="3"] .tiw-left > #scan-wizard-panel,
 #job-modal[data-create-step="3"] .tiw-left > .config-cards-row,
 #job-modal[data-create-step="3"] .tiw-left > .config-detail-row,
 #job-modal[data-create-step="3"] .tiw-left > .task-info-details,
@@ -3776,21 +3774,21 @@ option, optgroup {
 .s2scan-status-chip.completed { color: var(--green); border: 1px solid rgba(56,193,114,0.32); background: rgba(56,193,114,0.10); }
 .s2scan-status-chip.failed { color: var(--red); border: 1px solid rgba(229,83,83,0.28); background: rgba(229,83,83,0.10); }
 .s2scan-status-chip.queued { color: var(--amber); border: 1px solid rgba(242,184,75,0.28); background: rgba(242,184,75,0.10); }
-.pes-selection-panel { display: none; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(78,161,255,0.045); }
-.pes-selection-panel.active { display: block; }
-.pes-selection-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.pes-selection-title { font-size: 12px; font-weight: 700; color: var(--text-primary); }
-.pes-selection-hint { margin-top: 3px; color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
-.pes-selection-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.pes-selection-actions .btn { padding: 5px 10px; font-size: 11px; }
-.pes-selection-actions .btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.pes-selection-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 24px; color: var(--text-secondary); font-size: 12px; }
-.pes-selection-summary .selection-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(78,161,255,0.35); background: rgba(78,161,255,0.10); color: var(--accent); font-weight: 600; }
-.pes-selection-summary .selection-empty { color: var(--text-tertiary); }
-.pes-selection-error { display: none; margin-top: 6px; color: var(--red); font-size: 11px; }
-.pes-task-badge { margin-top: 10px; padding: 9px 10px; border: 1px solid rgba(78,161,255,0.35); border-radius: 8px; background: rgba(78,161,255,0.08); color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
-.pes-task-badge strong { display: block; margin-bottom: 2px; color: var(--text-primary); font-size: 12px; }
-.pes-task-badge .task-kind { color: var(--accent); font-weight: 700; }
+.pes-selection-panel, .scan-selection-panel { display: none; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(78,161,255,0.045); }
+.pes-selection-panel.active, .scan-selection-panel.active { display: block; }
+.pes-selection-head, .scan-selection-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.pes-selection-title, .scan-selection-title { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.pes-selection-hint, .scan-selection-hint, .scan-selection-order-hint { margin-top: 3px; color: var(--text-tertiary); font-size: 11px; line-height: 1.45; }
+.pes-selection-actions, .scan-selection-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.pes-selection-actions .btn, .scan-selection-actions .btn { padding: 5px 10px; font-size: 11px; }
+.pes-selection-actions .btn.active, .scan-selection-actions .btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.pes-selection-summary, .scan-selection-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 24px; color: var(--text-secondary); font-size: 12px; }
+.pes-selection-summary .selection-badge, .scan-selection-summary .selection-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(78,161,255,0.35); background: rgba(78,161,255,0.10); color: var(--accent); font-weight: 600; }
+.pes-selection-summary .selection-empty, .scan-selection-summary .selection-empty { color: var(--text-tertiary); }
+.pes-selection-error, .scan-selection-error { display: none; margin-top: 6px; color: var(--red); font-size: 11px; }
+.pes-task-badge, .scan-task-badge { margin-top: 10px; padding: 9px 10px; border: 1px solid rgba(78,161,255,0.35); border-radius: 8px; background: rgba(78,161,255,0.08); color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.pes-task-badge strong, .scan-task-badge strong { display: block; margin-bottom: 2px; color: var(--text-primary); font-size: 12px; }
+.pes-task-badge .task-kind, .scan-task-badge .task-kind { color: var(--accent); font-weight: 700; }
 .s2scan-frame-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
 .s2scan-frame-table th { text-align: left; padding: 4px 8px; color: var(--text-tertiary); border-bottom: 1px solid var(--border-subtle); font-weight: 600; }
 .s2scan-frame-table td { padding: 4px 8px; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.03); }
@@ -5296,45 +5294,6 @@ option, optgroup {
             </div>
           </div>
         </div>
-        <!-- Scan coordinate panel (distance-only first phase). Visible only
-             for the scan workflow. Atom indices are entered 1-based and
-             converted to the 0-based wire form exactly once at submit,
-             bound to each final submitted structure's atom order. -->
-        <div id="scan-wizard-panel" style="display:none; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 12px; margin-top: 4px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong data-i18n="modal.scan_coord">扫描坐标（键长）</strong>
-            <span style="font-size: 11px; color: var(--text-tertiary);" id="scan-wiz-status"></span>
-          </div>
-          <div class="form-row" style="margin-top:0;">
-            <div>
-              <label data-i18n="modal.scan_atom_1">原子 1</label>
-              <input class="modal-input" id="scan-wiz-atom-1" type="number" step="1" min="1"
-                placeholder="1" data-i18n-placeholder="modal.scan_atom_ph">
-            </div>
-            <div>
-              <label data-i18n="modal.scan_atom_2">原子 2</label>
-              <input class="modal-input" id="scan-wiz-atom-2" type="number" step="1" min="1"
-                placeholder="2" data-i18n-placeholder="modal.scan_atom_ph">
-            </div>
-          </div>
-          <div class="form-row">
-            <div>
-              <label data-i18n="modal.scan_start">起始值 (Å)</label>
-              <input class="modal-input" id="scan-wiz-start" type="number" step="any" value="1.0">
-            </div>
-            <div>
-              <label data-i18n="modal.scan_end">终止值 (Å)</label>
-              <input class="modal-input" id="scan-wiz-end" type="number" step="any" value="3.0">
-            </div>
-            <div>
-              <label data-i18n="modal.scan_points">扫描点数</label>
-              <input class="modal-input" id="scan-wiz-points" type="number" step="1" min="2" value="21">
-            </div>
-          </div>
-          <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">
-            <span data-i18n="modal.scan_hint">原子序号按结构 1-based 显示；提交时转换为 0-based，并对每个最终提交的结构重新校验。</span>
-          </div>
-        </div>
         <!-- Step 2/3 content: config-cards, task-info, create-review live inside
              the tiw-grid frame so all steps share the same visual layout (plan §8). -->
         <div class="config-cards-row">
@@ -5482,6 +5441,31 @@ option, optgroup {
               <div class="pes-task-badge" id="pes-task-badge">
                 <strong>本次 PESsearch 任务</strong>
                 <span class="task-kind">尚未完成扫描坐标选择</span>
+              </div>
+            </section>
+            <!-- Scan atom picking mirrors the PESsearch panel: click-only kind
+                 buttons + summary + task badge; range/points live in the shared
+                 method-protocol dialog (dft_scan schema). -->
+            <section class="scan-selection-panel" id="scan-selection-panel" aria-label="Scan 扫描原子选择">
+              <div class="scan-selection-head">
+                <div class="scan-selection-copy">
+                  <div class="scan-selection-title" data-i18n="scan.selection.title">Scan 通用原子选择</div>
+                  <div class="scan-selection-hint" data-i18n="scan.selection.hint">先选择扫描类型，再按顺序点击原子。距离扫描可选择任意两个原子，无需化学键；扫描范围与点数在「配置计算协议」中设置。</div>
+                  <div class="scan-selection-status" id="scan-selection-status" role="status">请在结构预览中选择扫描原子。</div>
+                  <div class="scan-selection-order-hint" id="scan-pick-hint" data-i18n="modal.scan_pick_hint_distance">点击选择 2 个原子（A—B 距离，不必成键）</div>
+                </div>
+                <div class="scan-selection-actions">
+                  <button type="button" class="btn ghost scan-function-btn active" data-scan-kind="distance" data-i18n="scan.function.distance">距离扫描（2）</button>
+                  <button type="button" class="btn ghost scan-function-btn" data-scan-kind="angle" data-i18n="scan.function.angle">键角（3）</button>
+                  <button type="button" class="btn ghost scan-function-btn" data-scan-kind="dihedral" data-i18n="scan.function.dihedral">二面角（4）</button>
+                  <button type="button" class="btn ghost" id="scan-clear-selection" data-i18n="scan.action.clear">清除</button>
+                </div>
+              </div>
+              <div class="scan-selection-summary" id="scan-selection-summary"><span class="selection-empty">尚未选择扫描原子</span></div>
+              <div class="scan-selection-error" id="scan-selection-error"></div>
+              <div class="scan-task-badge" id="scan-task-badge">
+                <strong data-i18n="scan.task.title">本次 Scan 任务</strong>
+                <span class="task-kind" data-i18n="scan.task.incomplete">尚未完成扫描坐标选择</span>
               </div>
             </section>
             <section class="tiw-info-panel" id="tiw-info-panel" hidden>
@@ -7079,22 +7063,28 @@ const I18N = {
     "modal.submit": "提交",
     "modal.required_smiles": "请输入 SMILES",
     "modal.submit_failed": "提交失败: {message}",
-    "modal.scan_coord": "扫描坐标（键长）",
-    "modal.scan_atom_1": "原子 1",
-    "modal.scan_atom_2": "原子 2",
-    "modal.scan_atom_ph": "1-based 序号",
-    "modal.scan_start": "起始值 (Å)",
-    "modal.scan_end": "终止值 (Å)",
-    "modal.scan_points": "扫描点数",
-    "modal.scan_hint": "原子序号按结构 1-based 显示；提交时转换为 0-based，并对每个最终提交的结构重新校验。",
+    "modal.scan_pick_hint_distance": "点击选择 2 个原子（A—B 距离，不必成键）",
+    "modal.scan_pick_hint_angle": "按顺序点击 3 个原子（A—B—C 键角，B 为顶点）",
+    "modal.scan_pick_hint_dihedral": "按顺序点击 4 个原子（A—B—C—D 二面角，绕 B—C 轴）",
+    "scan.selection.title": "Scan 通用原子选择",
+    "scan.selection.hint": "先选择扫描类型，再按顺序点击原子。距离扫描可选择任意两个原子，无需化学键；扫描范围与点数在「配置计算协议」中设置。",
+    "scan.function.distance": "距离扫描（2）",
+    "scan.function.angle": "键角（3）",
+    "scan.function.dihedral": "二面角（4）",
+    "scan.action.clear": "清除",
+    "scan.task.title": "本次 Scan 任务",
+    "scan.task.incomplete": "尚未完成扫描坐标选择",
     "modal.scan_invalid": "扫描参数无效",
-    "modal.scan_err_fields_required": "请填写全部扫描参数（原子 1 / 原子 2 / 起始值 / 终止值 / 点数）",
+    "modal.scan_err_fields_required": "请填写全部扫描参数（原子 1–4 按坐标类型必填 / 起始值 / 终止值 / 点数）",
     "modal.scan_err_atom_not_integer": "原子序号必须是整数",
     "modal.scan_err_atom_not_positive": "原子序号必须是 1 或更大（1-based）",
-    "modal.scan_err_atoms_not_distinct": "原子 1 和原子 2 必须是不同原子",
+    "modal.scan_err_atoms_not_distinct": "任意两个所选原子必须互不相同",
     "modal.scan_err_atom_out_of_range": "原子序号超出当前结构的原子数范围",
+    "modal.scan_err_kind_invalid": "扫描坐标类型无效",
     "modal.scan_err_range_not_finite": "起始值和终止值必须是有限数值",
     "modal.scan_err_range_not_positive": "键长起始值和终止值必须大于 0",
+    "modal.scan_err_range_angle_invalid": "键角须在 0–180° 内",
+    "modal.scan_err_range_dihedral_invalid": "二面角须在 −360–360° 内",
     "modal.scan_err_range_equal": "起始值和终止值不能相同",
     "modal.scan_err_points_invalid": "扫描点数必须是不小于 2 的整数",
     "modal.scan_err_no_confirmed_structure": "没有已确认的结构（原子数未知），无法校验原子选择",
@@ -8684,22 +8674,28 @@ const I18N = {
     "modal.submit": "Submit",
     "modal.required_smiles": "Please enter a SMILES string",
     "modal.submit_failed": "Submit failed: {message}",
-    "modal.scan_coord": "Scan Coordinate (Distance)",
-    "modal.scan_atom_1": "Atom 1",
-    "modal.scan_atom_2": "Atom 2",
-    "modal.scan_atom_ph": "1-based index",
-    "modal.scan_start": "Start (Å)",
-    "modal.scan_end": "End (Å)",
-    "modal.scan_points": "Scan Points",
-    "modal.scan_hint": "Atom indices are shown 1-based; they convert to 0-based exactly once at submit and are re-validated against every final submitted structure.",
+    "modal.scan_pick_hint_distance": "Pick 2 atoms in order (A—B distance; bonding not required)",
+    "modal.scan_pick_hint_angle": "Pick 3 atoms in order (A—B—C angle; B is the vertex)",
+    "modal.scan_pick_hint_dihedral": "Pick 4 atoms in order (A—B—C—D dihedral about the B—C axis)",
+    "scan.selection.title": "Scan Atom Selection",
+    "scan.selection.hint": "Pick a scan type, then click atoms in order. Distance accepts any two atoms; range and points are set in the method protocol dialog.",
+    "scan.function.distance": "Distance (2)",
+    "scan.function.angle": "Angle (3)",
+    "scan.function.dihedral": "Dihedral (4)",
+    "scan.action.clear": "Clear",
+    "scan.task.title": "This Scan Task",
+    "scan.task.incomplete": "Coordinates not selected yet",
     "modal.scan_invalid": "Invalid scan parameters",
-    "modal.scan_err_fields_required": "Fill in all scan parameters (atom 1 / atom 2 / start / end / points)",
+    "modal.scan_err_fields_required": "Fill in all scan parameters (atoms 1–4 as required by kind / start / end / points)",
     "modal.scan_err_atom_not_integer": "Atom indices must be integers",
     "modal.scan_err_atom_not_positive": "Atom indices must be 1 or greater (1-based)",
-    "modal.scan_err_atoms_not_distinct": "Atom 1 and atom 2 must be different atoms",
+    "modal.scan_err_atoms_not_distinct": "Any two selected atoms must be different atoms",
     "modal.scan_err_atom_out_of_range": "Atom index is out of range for the current structure",
+    "modal.scan_err_kind_invalid": "Invalid scan coordinate kind",
     "modal.scan_err_range_not_finite": "Start and end must be finite numbers",
     "modal.scan_err_range_not_positive": "Start and end distances must be greater than 0",
+    "modal.scan_err_range_angle_invalid": "Angle values must be within 0–180°",
+    "modal.scan_err_range_dihedral_invalid": "Dihedral values must be within −360–360°",
     "modal.scan_err_range_equal": "Start and end values must differ",
     "modal.scan_err_points_invalid": "Scan points must be an integer >= 2",
     "modal.scan_err_no_confirmed_structure": "No confirmed structure (atom count unknown) - the atom selection cannot be verified",
@@ -23476,6 +23472,13 @@ let pesSelectionState = {
   structureKey: "",
   shapes: [],
 };
+let scanSelectionState = {
+  active: false,
+  selectionKind: "distance",
+  selectedAtoms: [],
+  structureKey: "",
+  shapes: [],
+};
 let reactionViewer = null;              // mechanism builder: reaction-changes 3D viewer (P1)
 var reactionViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let reactionChangesViewMode = "reactant"; // active side for the reaction-changes 3D viewer
@@ -24837,6 +24840,11 @@ function _captureWizardDraft() {
       selectedAtoms: pesSelectionState.selectedAtoms.slice(),
       structureKey: pesSelectionState.structureKey
     },
+    scanSelection: {
+      selectionKind: scanSelectionState.selectionKind,
+      selectedAtoms: scanSelectionState.selectedAtoms.slice(),
+      structureKey: scanSelectionState.structureKey
+    },
     mechanism: {
       reactionDefinition: reactionDefinition ? JSON.parse(JSON.stringify(reactionDefinition)) : null,
       productStructure: mechProductStructure ? JSON.parse(JSON.stringify(mechProductStructure)) : null,
@@ -24873,6 +24881,13 @@ function _restoreWizardDraft(draft) {
   lastParsedStructureInput = draft.lastParsedStructureInput == null ? null : draft.lastParsedStructureInput;
   lastParsedUploadName = draft.lastParsedUploadName == null ? null : draft.lastParsedUploadName;
   if (draft.pesSelection) Object.assign(pesSelectionState, draft.pesSelection);
+  if (draft.scanSelection) {
+    scanSelectionState.selectionKind = draft.scanSelection.selectionKind || "distance";
+    scanSelectionState.selectedAtoms = Array.isArray(draft.scanSelection.selectedAtoms)
+      ? draft.scanSelection.selectedAtoms.slice() : [];
+    scanSelectionState.structureKey = draft.scanSelection.structureKey || "";
+    updateScanKindButtons(scanSelectionState.selectionKind);
+  }
   var savedMechanism = draft.mechanism;
   if (savedMechanism && typeof savedMechanism === "object") {
     reactionDefinition = savedMechanism.reactionDefinition
@@ -24968,6 +24983,7 @@ function openModal() {
   wizardState.s2_mode = "path_search";
   s2scanResetState();
   resetPESSelection();
+  ensureScanSelectionListeners();
   s2scanCloseReport();
   document.getElementById("parse-errors").style.display = "none";
   document.getElementById("parse-status").textContent = "";
@@ -26017,6 +26033,7 @@ function renderPreviewStructure3D(structure) {
   if (!previewViewer) return;
   previewViewer.removeAllModels();
   clearPESPreviewSelectionShapes();
+  clearScanPreviewSelectionShapes();
   previewModel = null;
   previewModelStructureKey = structure && structure.xyz ? String(structure.xyz).trim() : "";
   var emptyEl = document.getElementById("preview-3d-empty");
@@ -26368,10 +26385,10 @@ function renderPESPreviewSelection() {
 
 function attachPESPreviewSelection() {
   if (!previewModel) return;
-  var canPick = canPickPESAtoms();
+  var canPick = canPickPESAtoms() || canPickScanAtoms();
   try {
     previewModel.setClickable({}, canPick, function(atom) {
-      handlePESPreviewAtomClick(atom);
+      canPickPESAtoms() ? handlePESPreviewAtomClick(atom) : handleScanPreviewAtomClick(atom);
     });
   } catch (e) {
     console.warn("PES atom selection unavailable:", e);
@@ -26380,6 +26397,7 @@ function attachPESPreviewSelection() {
   var selectionPanel = document.getElementById("pes-selection-panel");
   if (selectionPanel) selectionPanel.classList.toggle("picking-disabled", !canPick);
   renderPESPreviewSelection();
+  if (canPickScanAtoms()) renderScanPreviewSelection();
 }
 
 function canPickPESAtoms() {
@@ -26450,6 +26468,88 @@ function handlePESPreviewAtomClick(atom) {
   updatePESConfigNote();
 }
 
+function clearScanPreviewSelectionShapes() {
+  if (!previewViewer) return;
+  (scanSelectionState.shapes || []).forEach(function(shape) {
+    try { previewViewer.removeShape(shape); } catch (e) {}
+  });
+  scanSelectionState.shapes = [];
+}
+
+function renderScanPreviewSelection() {
+  if (!previewViewer) return;
+  clearScanPreviewSelectionShapes();
+  previewViewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
+  var structure = scanWizardCurrentStructure();
+  var atoms = parseXyzAtoms(structure && structure.xyz ? String(structure.xyz) : "");
+  var selected = scanSelectionState.selectedAtoms || [];
+  var colors = ["#4ea1ff", "#38c172", "#f2b84b", "#c084fc"];
+  selected.forEach(function(index, position) {
+    var atom = atoms[index];
+    if (!atom) return;
+    var sphere = previewViewer.addSphere({
+      center: { x: atom.x, y: atom.y, z: atom.z },
+      radius: 0.4,
+      color: colors[position],
+      opacity: 0.82,
+    });
+    scanSelectionState.shapes.push(sphere);
+    previewViewer.addStyle({ index: index }, { sphere: { scale: 0.38, color: colors[position] } });
+  });
+  var linePairs = selected.map(function(_, index) { return [index - 1, index]; }).slice(1);
+  linePairs.forEach(function(pair) {
+    var i = pair[0], j = pair[1];
+    var first = atoms[selected[i]], second = atoms[selected[j]];
+    if (!first || !second) return;
+    scanSelectionState.shapes.push(previewViewer.addCylinder({
+      start: { x: first.x, y: first.y, z: first.z },
+      end: { x: second.x, y: second.y, z: second.z },
+      radius: 0.09,
+      color: "#f2b84b",
+      dashed: true,
+      dashLength: 0.12,
+      gapLength: 0.08,
+      opacity: 0.95,
+    }));
+  });
+  previewViewer.render();
+}
+
+function canPickScanAtoms() {
+  var modal = document.getElementById("job-modal");
+  var structure = scanWizardCurrentStructure();
+  var xyz = structure && structure.xyz ? String(structure.xyz).trim() : "";
+  return !!(
+    modal && modal.style.display !== "none" &&
+    createWizardStep === 2 && wizardState && wizardState.workflow &&
+    wizardState.workflow.id === "scan" &&
+    structure && structure.has_3d && xyz && previewModel &&
+    previewModelStructureKey === xyz
+  );
+}
+
+function handleScanPreviewAtomClick(atom) {
+  if (!canPickScanAtoms() || !atom || typeof atom.index !== "number") return;
+  var nAtoms = scanWizardAtomCount(scanSelectionState.selectionKind) || 2;
+  var index = Number(atom.index);
+  var selected = scanSelectionState.selectedAtoms.slice();
+  var existing = selected.indexOf(index);
+  if (existing >= 0) selected.splice(existing, 1);
+  else if (selected.length < nAtoms) selected.push(index);
+  else selected = [index];
+  scanSelectionState.selectedAtoms = selected;
+  if (wizardState && wizardState.method && wizardState.method.stages) {
+    if (!wizardState.method.stages.scan) wizardState.method.stages.scan = {};
+    // Click handler is the single writer of the 1-based atom mirror (it
+    // round-trips through the method-protocol dialog / edit drafts).
+    wizardState.method.stages.scan.scan_coordinate_atoms = selected.map(function(i) { return i + 1; });
+  }
+  renderScanPreviewSelection();
+  updateScanSelectionSummary();
+  updateScanTaskBadge();
+  setScanSelectionError(null);
+}
+
 function updatePESSelectionVisibility() {
   var active = isPESsearchTask();
   var visible = active && createWizardStep === 2;
@@ -26475,15 +26575,17 @@ function updatePESSelectionVisibility() {
       if (typeof s2scanState !== "undefined" && s2scanState) s2scanState.selectedAtoms = [];
     }
     pesSelectionState.active = false;
-    if (previewModel) {
-      try { previewModel.setClickable({}, false); } catch (e) {}
-    }
     clearPESPreviewSelectionShapes();
     updatePESSelectionSummary();
     updatePESTaskBadge();
     updatePESSelectionStatus();
     if (selectionPanel) selectionPanel.classList.remove("picking-disabled");
   }
+  // Scan reuses this visibility pass: its right-pane picking panel and the
+  // click-to-pick gate are driven from updateScanSelectionVisibility so both
+  // PES and scan branches reach it (a scan task never blanket-disables the
+  // model while its step-2 picking is allowed).
+  updateScanSelectionVisibility();
 }
 
 function setPESSelectionMode(mode) {
@@ -27680,11 +27782,11 @@ async function previewStructureSource(sourceId, sourceUid) {
   }
 }
 
-// --- Scan wizard coordinate fields (distance-only first phase) -------------
+// --- Scan wizard coordinate fields (distance / angle / dihedral) ----------
 // Atom indices are entered 1-based for display and converted to the 0-based
-// wire form EXACTLY ONCE — the single conversion site is marked
-// "scan-index-base-convert" inside buildScanWizardBodyParts.  The builder is
-// pure (no DOM) so tests can execute it against real structures.
+// wire form EXACTLY ONCE — the single conversion site is the marked loop
+// inside buildScanWizardBodyParts.  The builder is pure (no DOM) so tests
+// can execute it against real structures.
 
 function scanWizardCountAtoms(xyzText) {
   if (typeof xyzText !== "string") return null;
@@ -27701,6 +27803,13 @@ function scanWizardCountAtoms(xyzText) {
   return count > 0 ? count : null;
 }
 
+function scanWizardAtomCount(kind) {
+  if (kind === "distance") return 2;
+  if (kind === "angle") return 3;
+  if (kind === "dihedral") return 4;
+  return null;
+}
+
 function buildScanWizardBodyParts(fields, structureEntry) {
   function fail(code) { return { ok: false, code: code }; }
   var entry = structureEntry || {};
@@ -27711,38 +27820,69 @@ function buildScanWizardBodyParts(fields, structureEntry) {
     var value = fields && fields[name];
     return String(value === undefined || value === null ? "" : value).trim();
   }
-  var rawA = raw("atomA");
-  var rawB = raw("atomB");
+  // An empty kind keeps distance-only callers valid; any explicit kind
+  // outside the three supported values fails before the field checks.
+  var kind = raw("kind") || "distance";
+  var nAtoms = scanWizardAtomCount(kind);
+  if (!nAtoms) return fail("kind_invalid");
+  var atomNames = ["atomA", "atomB", "atomC", "atomD"];
+  var rawAtoms = [];
+  for (var i = 0; i < nAtoms; i++) rawAtoms.push(raw(atomNames[i]));
   var rawStart = raw("start");
   var rawEnd = raw("end");
   var rawPoints = raw("points");
-  if (!rawA || !rawB || !rawStart || !rawEnd || !rawPoints) return fail("fields_required");
-  if (!/^[+-]?\d+$/.test(rawA) || !/^[+-]?\d+$/.test(rawB)) return fail("atom_not_integer");
-  var atomA = parseInt(rawA, 10);
-  var atomB = parseInt(rawB, 10);
-  if (atomA < 1 || atomB < 1) return fail("atom_not_positive");
-  if (atomA === atomB) return fail("atoms_not_distinct");
-  if (atomA > atomCount || atomB > atomCount) return fail("atom_out_of_range");
+  for (var i = 0; i < nAtoms; i++) {
+    if (!rawAtoms[i]) return fail("fields_required");
+  }
+  if (!rawStart || !rawEnd || !rawPoints) return fail("fields_required");
+  for (var i = 0; i < nAtoms; i++) {
+    if (!/^[+-]?\d+$/.test(rawAtoms[i])) return fail("atom_not_integer");
+  }
+  var atoms = [];
+  for (var i = 0; i < nAtoms; i++) {
+    var parsedAtom = parseInt(rawAtoms[i], 10);
+    if (parsedAtom < 1) return fail("atom_not_positive");
+    atoms.push(parsedAtom);
+  }
+  for (var i = 0; i < nAtoms; i++) {
+    for (var j = i + 1; j < nAtoms; j++) {
+      if (atoms[i] === atoms[j]) return fail("atoms_not_distinct");
+    }
+  }
+  for (var i = 0; i < nAtoms; i++) {
+    if (atoms[i] > atomCount) return fail("atom_out_of_range");
+  }
   var start = Number(rawStart);
   var end = Number(rawEnd);
   if (!isFinite(start) || !isFinite(end)) return fail("range_not_finite");
-  if (start <= 0 || end <= 0) return fail("range_not_positive");
+  if (kind === "distance") {
+    if (start <= 0 || end <= 0) return fail("range_not_positive");
+  } else if (kind === "angle") {
+    if (start < 0 || start > 180 || end < 0 || end > 180) return fail("range_angle_invalid");
+  } else if (kind === "dihedral") {
+    if (start < -360 || start > 360 || end < -360 || end > 360) {
+      return fail("range_dihedral_invalid");
+    }
+  }
   if (start === end) return fail("range_equal");
   if (!/^[+-]?\d+$/.test(rawPoints)) return fail("points_invalid");
   var points = parseInt(rawPoints, 10);
   if (points < 2) return fail("points_invalid");
   // scan-index-base-convert: the ONLY 1-based -> 0-based conversion site.
-  var atom0 = atomA - 1;
-  var atom1 = atomB - 1;
+  var wire = [];
+  for (var i = 0; i < nAtoms; i++) {
+    wire.push(String(parseInt(raw(atomNames[i]), 10) - 1));
+  }
   return {
     ok: true,
     atomCount: atomCount,
     input: {
-      scan_coordinates: [String(atom0) + "," + String(atom1) + "," + rawStart + "," + rawEnd]
+      scan_coordinates: [wire.join(",") + "," + rawStart + "," + rawEnd]
     },
     method: { scan_points: points },
     mirror: {
-      scan_coordinate_atoms: [atomA, atomB],
+      scan_coordinate_kind: kind,
+      scan_coordinate_atoms: atoms,
       scan_coordinate_start: start,
       scan_coordinate_end: end,
       scan_coordinate_points: points
@@ -27754,63 +27894,167 @@ function scanWizardErrorMessage(code) {
   return t("modal.scan_err_" + code) || String(code || "invalid");
 }
 
-var scanWizardUserDirty = false;
+// Per-kind default scan ranges as display strings. A kind switch swaps the
+// start/end inputs to the new kind's defaults ONLY while the current values
+// still equal the previous kind's defaults — user edits are never destroyed.
+var scanWizardKindDefaults = {
+  distance: { start: "1.0", end: "3.0" },
+  angle: { start: "100.0", end: "160.0" },
+  dihedral: { start: "0.0", end: "180.0" }
+};
 
-function scanWizardFieldValues() {
-  function val(id) {
-    var el = document.getElementById(id);
-    return el ? el.value : "";
+function updateScanKindButtons(kind) {
+  document.querySelectorAll(".scan-function-btn").forEach(function(button) {
+    button.classList.toggle("active", button.getAttribute("data-scan-kind") === kind);
+  });
+  var hint = document.getElementById("scan-pick-hint");
+  if (hint) {
+    hint.setAttribute("data-i18n", "modal.scan_pick_hint_" + kind);
+    hint.textContent = t("modal.scan_pick_hint_" + kind);
   }
+}
+
+function scanKindLabel(kind) {
+  return ({
+    distance: "距离扫描",
+    angle: "键角扫描",
+    dihedral: "二面角扫描"
+  })[kind] || String(kind || "distance");
+}
+
+function formatScanAtom(index) {
+  var structure = scanWizardCurrentStructure();
+  var atoms = parseXyzAtoms(structure && structure.xyz ? String(structure.xyz) : "");
+  var atom = atoms[index];
+  return atom ? String(atom.elem || "?") + "#" + (index + 1) : "#" + (index + 1);
+}
+
+function updateScanSelectionSummary() {
+  var summary = document.getElementById("scan-selection-summary");
+  if (!summary) return;
+  var kind = scanSelectionState.selectionKind || "distance";
+  var selected = scanSelectionState.selectedAtoms || [];
+  var count = scanWizardAtomCount(kind) || 2;
+  if (selected.length !== count) {
+    summary.innerHTML = '<span class="selection-empty">' + escapeHtml(scanKindLabel(kind)) +
+      "：已选择 " + selected.length + " / " + count + " 个原子</span>";
+    return;
+  }
+  summary.innerHTML = '<span class="selection-badge">' + escapeHtml(scanKindLabel(kind)) +
+    "：" + escapeHtml(selected.map(formatScanAtom).join(" — ")) + "</span>" +
+    "<span>内部索引：[" + selected.join(", ") + "]</span>";
+}
+
+function updateScanTaskBadge() {
+  var badge = document.getElementById("scan-task-badge");
+  if (!badge) return;
+  var kind = scanSelectionState.selectionKind || "distance";
+  var scanLevel = (wizardState && wizardState.method && wizardState.method.stages && wizardState.method.stages.scan) || {};
+  var unit = kind === "distance" ? "Å" : "°";
+  var startText = scanLevel.scan_coordinate_start === undefined || scanLevel.scan_coordinate_start === null
+    ? "?" : String(scanLevel.scan_coordinate_start);
+  var endText = scanLevel.scan_coordinate_end === undefined || scanLevel.scan_coordinate_end === null
+    ? "?" : String(scanLevel.scan_coordinate_end);
+  var pointsText = scanLevel.scan_coordinate_points === undefined || scanLevel.scan_coordinate_points === null
+    ? "?" : String(scanLevel.scan_coordinate_points);
+  var rangeText = startText + " → " + endText + " " + unit + " · " + pointsText + " 点";
+  var selected = scanSelectionState.selectedAtoms || [];
+  var atomsText = selected.length === (scanWizardAtomCount(kind) || 2)
+    ? selected.map(formatScanAtom).join(" — ")
+    : (t("scan.task.incomplete") || "尚未完成扫描坐标选择");
+  badge.innerHTML = '<strong>' + escapeHtml(t("scan.task.title") || "本次 Scan 任务") + "</strong>" +
+    '<span class="task-kind">' + escapeHtml(scanKindLabel(kind) + " · " + rangeText) + "</span>" +
+    '<span style="display:block;color:var(--text-tertiary);">' + escapeHtml(atomsText) + "</span>";
+}
+
+function updateScanSelectionStatus() {
+  var status = document.getElementById("scan-selection-status");
+  if (!status) return;
+  var isChinese = currentLang === "zh-CN";
+  if (!(wizardState && wizardState.workflow && wizardState.workflow.id === "scan")) {
+    status.textContent = isChinese ? "请在结构预览中选择扫描原子。" : "Pick scan atoms in the structure preview.";
+    return;
+  }
+  var structure = scanWizardCurrentStructure();
+  if (structure && (structure.geometry_state === "pending" || structure.geometry_state === "loading")) {
+    status.textContent = isChinese
+      ? "本次输入的结构坐标正在加载，请稍候。"
+      : "The staged structure coordinates are loading. Please wait.";
+  } else if (structure && structure.geometry_state === "failed") {
+    status.textContent = isChinese
+      ? "本次输入结构坐标加载失败，请重新选择该结构后重试。"
+      : "Could not load coordinates for the staged structure. Reselect it and try again.";
+  } else if (!structure || !structure.has_3d || !structure.xyz) {
+    status.textContent = isChinese
+      ? "本次输入没有可用的 3D 坐标，请选择或导入带坐标的结构。"
+      : "The staged input has no usable 3D coordinates. Select or import a structure with coordinates.";
+  } else if (!previewModel || previewModelStructureKey !== String(structure.xyz).trim()) {
+    status.textContent = isChinese
+      ? "预览中的结构不是本次输入结构；请选择本次输入中的结构后再点选。"
+      : "The preview is not showing the staged input. Select the staged structure before picking atoms.";
+  } else {
+    status.textContent = (isChinese
+      ? "在右侧结构中依次点击原子。"
+      : "Click atoms in order in the structure preview.") + " " +
+      t("modal.scan_pick_hint_" + (scanSelectionState.selectionKind || "distance"));
+  }
+}
+
+function setScanSelectionError(code) {
+  var el = document.getElementById("scan-selection-error");
+  if (!el) return;
+  el.textContent = code ? (scanWizardErrorMessage(code) || "") : "";
+  el.style.display = code ? "block" : "none";
+}
+
+function scanSelectionFieldValues() {
+  var scanLevel = (wizardState && wizardState.method && wizardState.method.stages && wizardState.method.stages.scan) || {};
+  var selected = scanSelectionState.selectedAtoms || [];
   return {
-    atomA: val("scan-wiz-atom-1"),
-    atomB: val("scan-wiz-atom-2"),
-    start: val("scan-wiz-start"),
-    end: val("scan-wiz-end"),
-    points: val("scan-wiz-points")
+    kind: String(scanLevel.scan_coordinate_kind || scanSelectionState.selectionKind || "distance"),
+    atomA: selected.length > 0 ? String(selected[0] + 1) : "",
+    atomB: selected.length > 1 ? String(selected[1] + 1) : "",
+    atomC: selected.length > 2 ? String(selected[2] + 1) : "",
+    atomD: selected.length > 3 ? String(selected[3] + 1) : "",
+    start: scanLevel.scan_coordinate_start === undefined || scanLevel.scan_coordinate_start === null
+      ? "" : String(scanLevel.scan_coordinate_start),
+    end: scanLevel.scan_coordinate_end === undefined || scanLevel.scan_coordinate_end === null
+      ? "" : String(scanLevel.scan_coordinate_end),
+    points: scanLevel.scan_coordinate_points === undefined || scanLevel.scan_coordinate_points === null
+      ? "" : String(scanLevel.scan_coordinate_points)
   };
 }
 
-function scanWizardSetStatus(message) {
-  var el = document.getElementById("scan-wiz-status");
-  if (el) el.textContent = message || "";
-}
-
-function scanWizardClear() {
-  var atoms = ["scan-wiz-atom-1", "scan-wiz-atom-2"];
-  for (var i = 0; i < atoms.length; i++) {
-    var el = document.getElementById(atoms[i]);
-    if (el) el.value = "";
-  }
-  var defaults = { "scan-wiz-start": "1.0", "scan-wiz-end": "3.0", "scan-wiz-points": "21" };
-  Object.keys(defaults).forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.value = defaults[id];
-  });
-  scanWizardUserDirty = false;
-  scanWizardSetStatus("");
-}
-
-function scanWizardSyncFromMethodState() {
-  if (scanWizardUserDirty) return;
-  var scan = (wizardState && wizardState.method && wizardState.method.stages || {}).scan || {};
-  var atoms = scan.scan_coordinate_atoms;
-  if (Array.isArray(atoms) && atoms.length === 2) {
-    var a1 = document.getElementById("scan-wiz-atom-1");
-    var a2 = document.getElementById("scan-wiz-atom-2");
-    if (a1) a1.value = String(atoms[0]);
-    if (a2) a2.value = String(atoms[1]);
-  }
-  var map = {
-    "scan-wiz-start": scan.scan_coordinate_start,
-    "scan-wiz-end": scan.scan_coordinate_end,
-    "scan-wiz-points": scan.scan_coordinate_points
-  };
-  Object.keys(map).forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el && map[id] !== undefined && map[id] !== null && map[id] !== "") {
-      el.value = String(map[id]);
+function setScanSelectionKind(kind) {
+  if (!scanWizardAtomCount(kind)) return;
+  var previousKind = scanSelectionState.selectionKind || "distance";
+  scanSelectionState.selectionKind = kind;
+  if (wizardState && wizardState.method && wizardState.method.stages) {
+    if (!wizardState.method.stages.scan) wizardState.method.stages.scan = {};
+    wizardState.method.stages.scan.scan_coordinate_kind = kind;
+    // Swap start/end to the new kind's defaults ONLY while the current values
+    // still equal the previous kind's defaults — user edits are never destroyed.
+    var previousDefaults = scanWizardKindDefaults[previousKind] || scanWizardKindDefaults.distance;
+    var nextDefaults = scanWizardKindDefaults[kind] || scanWizardKindDefaults.distance;
+    var scanLevel = wizardState.method.stages.scan;
+    var startAtDefault = scanLevel.scan_coordinate_start === undefined || scanLevel.scan_coordinate_start === null ||
+      Number(scanLevel.scan_coordinate_start) === Number(previousDefaults.start);
+    var endAtDefault = scanLevel.scan_coordinate_end === undefined || scanLevel.scan_coordinate_end === null ||
+      Number(scanLevel.scan_coordinate_end) === Number(previousDefaults.end);
+    if (startAtDefault && endAtDefault) {
+      scanLevel.scan_coordinate_start = Number(nextDefaults.start);
+      scanLevel.scan_coordinate_end = Number(nextDefaults.end);
     }
-  });
+  }
+  if (previousKind !== kind) {
+    scanSelectionState.selectedAtoms = [];
+    clearScanPreviewSelectionShapes();
+    renderScanPreviewSelection();
+    updateScanSelectionSummary();
+  }
+  updateScanKindButtons(kind);
+  updateScanTaskBadge();
+  updateScanSelectionStatus();
 }
 
 function scanWizardCurrentStructure() {
@@ -27818,48 +28062,135 @@ function scanWizardCurrentStructure() {
   return wizardStructures[wizardSelectedStructureIndex] || wizardStructures[0] || null;
 }
 
-function refreshScanWizardStatus() {
-  var panel = document.getElementById("scan-wizard-panel");
-  if (!panel || panel.style.display === "none") { scanWizardSetStatus(""); return; }
-  var fields = scanWizardFieldValues();
-  var filled = ["atomA", "atomB", "start", "end", "points"].every(function(key) {
-    return String(fields[key]).trim() !== "";
-  });
-  if (!filled) { scanWizardSetStatus(""); return; }
-  var result = buildScanWizardBodyParts(fields, scanWizardCurrentStructure());
-  scanWizardSetStatus(result.ok ? "" : scanWizardErrorMessage(result.code));
+function clearScanSelectionAtomMirror() {
+  var scanLevel = wizardState && wizardState.method && wizardState.method.stages && wizardState.method.stages.scan;
+  if (scanLevel && scanLevel.scan_coordinate_atoms !== undefined) {
+    delete scanLevel.scan_coordinate_atoms;
+  }
 }
 
-function scanWizardEnsureListeners() {
-  var ids = ["scan-wiz-atom-1", "scan-wiz-atom-2", "scan-wiz-start", "scan-wiz-end", "scan-wiz-points"];
-  ids.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (!el || el._scanWizBound) return;
-    el._scanWizBound = true;
-    el.addEventListener("input", function() {
-      scanWizardUserDirty = true;
-      var scanLevel = wizardState && wizardState.method && wizardState.method.stages &&
-        wizardState.method.stages.scan;
-      if (scanLevel) {
-        var fields = scanWizardFieldValues();
-        var textA = String(fields.atomA).trim();
-        var textB = String(fields.atomB).trim();
-        if (/^[+-]?\d+$/.test(textA) && /^[+-]?\d+$/.test(textB)) {
-          scanLevel.scan_coordinate_atoms = [parseInt(textA, 10), parseInt(textB, 10)];
-        }
-        if (String(fields.start).trim() !== "" && isFinite(Number(fields.start))) {
-          scanLevel.scan_coordinate_start = Number(fields.start);
-        }
-        if (String(fields.end).trim() !== "" && isFinite(Number(fields.end))) {
-          scanLevel.scan_coordinate_end = Number(fields.end);
-        }
-        if (/^[+-]?\d+$/.test(String(fields.points).trim())) {
-          scanLevel.scan_coordinate_points = parseInt(String(fields.points).trim(), 10);
-        }
+function updateScanSelectionForProtocol() {
+  var scanLevel = (wizardState && wizardState.method && wizardState.method.stages && wizardState.method.stages.scan) || {};
+  var kind = String(scanLevel.scan_coordinate_kind || "");
+  if (!scanWizardAtomCount(kind)) kind = scanSelectionState.selectionKind || "distance";
+  if (kind !== (scanSelectionState.selectionKind || "distance")) {
+    scanSelectionState.selectionKind = kind;
+    scanSelectionState.selectedAtoms = [];
+    clearScanPreviewSelectionShapes();
+    clearScanSelectionAtomMirror();
+    updateScanKindButtons(kind);
+    renderScanPreviewSelection();
+  }
+  updateScanSelectionSummary();
+  updateScanTaskBadge();
+}
+
+function syncScanSelectionFromWizard(forceReset) {
+  var structure = scanWizardCurrentStructure();
+  var xyz = structure && structure.xyz ? String(structure.xyz).trim() : "";
+  var atoms = xyz ? parseXyzAtoms(xyz) : [];
+  if (!xyz || !atoms.length) {
+    scanSelectionState.selectedAtoms = [];
+    scanSelectionState.structureKey = "";
+    clearScanPreviewSelectionShapes();
+    updateScanSelectionSummary();
+    updateScanTaskBadge();
+    return;
+  }
+  var changed = xyz !== scanSelectionState.structureKey;
+  if (forceReset || changed) {
+    scanSelectionState.selectedAtoms = [];
+    clearScanPreviewSelectionShapes();
+    scanSelectionState.structureKey = xyz;
+  }
+  var scanLevel = (wizardState && wizardState.method && wizardState.method.stages && wizardState.method.stages.scan) || {};
+  var kind = String(scanLevel.scan_coordinate_kind || scanSelectionState.selectionKind || "distance");
+  if (!scanWizardAtomCount(kind)) kind = "distance";
+  scanSelectionState.selectionKind = kind;
+  updateScanKindButtons(kind);
+  var picked = scanLevel.scan_coordinate_atoms;
+  var nAtoms = scanWizardAtomCount(kind) || 2;
+  if (Array.isArray(picked) && picked.length === nAtoms && scanSelectionState.selectedAtoms.length === 0) {
+    var restored = [];
+    var valid = true;
+    for (var i = 0; i < picked.length; i++) {
+      var value = Number(picked[i]);
+      if (!isFinite(value) || Math.floor(value) !== value || value < 1 || value > atoms.length) {
+        valid = false;
+        break;
       }
-      refreshScanWizardStatus();
+      if (restored.indexOf(value - 1) >= 0) {
+        valid = false;
+        break;
+      }
+      restored.push(value - 1);
+    }
+    if (valid) scanSelectionState.selectedAtoms = restored;
+  }
+  updateScanSelectionSummary();
+  updateScanTaskBadge();
+  if (previewModel) attachPESPreviewSelection();
+}
+
+function resetScanSelection() {
+  clearScanPreviewSelectionShapes();
+  scanSelectionState.selectedAtoms = [];
+  scanSelectionState.structureKey = "";
+  scanSelectionState.active = false;
+  clearScanSelectionAtomMirror();
+  setScanSelectionError(null);
+  updateScanSelectionSummary();
+  updateScanTaskBadge();
+}
+
+function ensureScanSelectionListeners() {
+  document.querySelectorAll(".scan-function-btn").forEach(function(button) {
+    if (button._scanSelBound) return;
+    button._scanSelBound = true;
+    button.addEventListener("click", function() {
+      setScanSelectionKind(button.dataset.scanKind);
     });
   });
+  var clearBtn = document.getElementById("scan-clear-selection");
+  if (clearBtn && !clearBtn._scanSelBound) {
+    clearBtn._scanSelBound = true;
+    clearBtn.addEventListener("click", function() {
+      scanSelectionState.selectedAtoms = [];
+      clearScanPreviewSelectionShapes();
+      clearScanSelectionAtomMirror();
+      renderScanPreviewSelection();
+      updateScanSelectionSummary();
+      updateScanTaskBadge();
+      setScanSelectionError(null);
+      updateScanSelectionStatus();
+    });
+  }
+}
+
+function updateScanSelectionVisibility() {
+  var isScan = wizardState && wizardState.workflow && wizardState.workflow.id === "scan";
+  var visible = isScan && createWizardStep === 2;
+  var panel = document.getElementById("scan-selection-panel");
+  if (panel) panel.classList.toggle("active", visible);
+  var rightPane = document.getElementById("tiw-right");
+  if (rightPane) rightPane.classList.toggle("scan-selection-active", visible);
+  if (isScan) {
+    scanSelectionState.active = true;
+    updateScanSelectionForProtocol();
+    syncScanSelectionFromWizard(false);
+    if (previewModel) attachPESPreviewSelection();
+    updateScanSelectionStatus();
+    if (panel) panel.classList.toggle("picking-disabled", !canPickScanAtoms());
+    return;
+  }
+  if (scanSelectionState.active) resetScanSelection();
+  scanSelectionState.active = false;
+  if (!canPickPESAtoms() && !canPickScanAtoms()) {
+    if (previewModel) {
+      try { previewModel.setClickable({}, false); } catch (e) {}
+    }
+  }
+  updateScanSelectionStatus();
 }
 
 function updateInputModeVisibility() {
@@ -27869,20 +28200,6 @@ function updateInputModeVisibility() {
   if (nmrPanel) {
     var isNmr = wizardState && wizardState.workflow && wizardState.workflow.id === "nmr";
     nmrPanel.style.display = isNmr ? "block" : "none";
-  }
-  // Scan coordinate panel: visible only for the scan workflow; switching
-  // away from scan drops the scan parameters so they can never ride along
-  // into another workflow's submission or draft.
-  var scanPanel = document.getElementById("scan-wizard-panel");
-  if (scanPanel) {
-    var isScan = wizardState && wizardState.workflow && wizardState.workflow.id === "scan";
-    scanPanel.style.display = isScan ? "block" : "none";
-    if (isScan) {
-      scanWizardEnsureListeners();
-      refreshScanWizardStatus();
-    } else {
-      scanWizardClear();
-    }
   }
   // NMR enumerate row (P2): only for nmr, and only meaningful with a single
   // candidate. Explicit multi-candidate input and enumeration are mutually
@@ -28119,8 +28436,6 @@ function refreshIrcSourceSummary() {
 
 function updateConfigCards() {
   ensureWizardWorkflowValid();
-  scanWizardSyncFromMethodState();
-  refreshScanWizardStatus();
   syncBatchOptimizeProfileSummary();
   scheduleNodeMatchingRefresh();
   var wfTitle = document.getElementById("workflow-card-title");
@@ -28321,10 +28636,10 @@ function applyPendingNewTask() {
   if (!pending) return;
   window._pendingNewTask = null;
   window._mechProjectId = pending.projectId || "";
-  // Fresh context for a pending job/editor hydrate: drop any scan fields
-  // left over from a previous session; hydration refills them from the
-  // draft's method stages via scanWizardSyncFromMethodState().
-  scanWizardClear();
+  // Fresh context for a pending job/editor hydrate: drop any scan selection
+  // left over from a previous session; hydration refills it from the draft's
+  // method stages via syncScanSelectionFromWizard().
+  resetScanSelection();
   // Resolve through the catalog so an invalid/stale pending workflow id
   // (e.g. a retired entry) self-heals to the current default instead of
   // rendering a legacy schema.
@@ -32081,11 +32396,11 @@ async function submitJobModal() {
     // for another input) before any body is queued for submission.
     var scanParts = null;
     if (workflow === "scan") {
-      scanParts = buildScanWizardBodyParts(scanWizardFieldValues(), s);
+      scanParts = buildScanWizardBodyParts(scanSelectionFieldValues(), s);
       if (!scanParts.ok) {
         var scanMsg = (t("modal.scan_invalid") || "Invalid scan parameters") +
           " (" + moleculeName + "): " + scanWizardErrorMessage(scanParts.code);
-        scanWizardSetStatus(scanMsg);
+        setScanSelectionError(scanParts.code);
         window.alert(scanMsg);
         return;
       }

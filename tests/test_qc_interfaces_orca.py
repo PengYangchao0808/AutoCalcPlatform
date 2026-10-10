@@ -612,6 +612,9 @@ def _bare_nmr_interface(method: str, basis: str = "") -> ORCAInterface:
     interface.solvent_model = "none"
     interface.maxcore = 1000
     interface.nproc = 1
+    interface.mem_mb = interface.maxcore * interface.nproc
+    interface._maxcore_safety = 0.8
+    interface._maxcore_pin = interface.maxcore
     return interface
 
 

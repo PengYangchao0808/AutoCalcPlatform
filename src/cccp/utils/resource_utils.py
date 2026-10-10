@@ -8,17 +8,61 @@ Extracted from RPH.
 Author: QCcalc Team
 """
 
+from __future__ import annotations
+
+import logging
+import math
 import os
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Any
-import logging
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
-def mem_to_mb(mem_str: str) -> int:
+_MEMORY_PATTERN = re.compile(
+    r"((?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(TB|GB|MB|T|G|M)?", re.IGNORECASE
+)
+_MEMORY_FACTORS = {"MB": 1, "GB": 1024, "TB": 1024 * 1024}
+
+
+def _memory_parts(value: str | int | float, default_unit: str) -> tuple[float, str]:
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        raise ValueError(f"Invalid memory specification: {value!r}")
+    unit = default_unit.upper()
+    if unit not in _MEMORY_FACTORS:
+        raise ValueError(f"Invalid memory unit: {default_unit!r}")
+    if isinstance(value, str):
+        match = _MEMORY_PATTERN.fullmatch(re.sub(r"\s+", "", value))
+        if match is None:
+            raise ValueError(f"Cannot parse memory string: {value!r}")
+        amount = float(match[1])
+        if match[2]:
+            unit = match[2].upper()
+            if len(unit) == 1:
+                unit += "B"
+    else:
+        amount = float(value)
+    total = amount * _MEMORY_FACTORS[unit]
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError(f"Memory must be positive and finite: {value!r}")
+    return amount, unit
+
+
+def parse_memory_mb(value: str | int | float, *, default_unit: str = "GB") -> float:
+    """Parse total memory in MB; callers declare their unitless-value contract."""
+    amount, unit = _memory_parts(value, default_unit)
+    return amount * _MEMORY_FACTORS[unit]
+
+
+def normalize_memory(value: str | int | float, *, default_unit: str = "GB") -> str:
+    """Return a validated, unit-suffixed memory value, preserving the chosen unit."""
+    amount, unit = _memory_parts(value, default_unit)
+    return f"{str(amount).removesuffix('.0')}{unit}"
+
+
+def mem_to_mb(mem_str: str | int | float) -> int:
     """
     Convert a memory specification to megabytes.
 
@@ -30,28 +74,10 @@ def mem_to_mb(mem_str: str) -> int:
     Returns:
         Memory in MB
     """
-    if not mem_str:
-        return 4000
-
-    mem_str = str(mem_str).strip().upper()
-
-    tb_match = re.match(r'^(\d+(?:\.\d+)?)\s*TB?$', mem_str)
-    if tb_match:
-        return int(float(tb_match.group(1)) * 1024 * 1024)
-
-    gb_match = re.match(r'^(\d+(?:\.\d+)?)\s*GB?$', mem_str)
-    if gb_match:
-        return int(float(gb_match.group(1)) * 1024)
-
-    mb_match = re.match(r'^(\d+(?:\.\d+)?)\s*MB?$', mem_str)
-    if mb_match:
-        return int(float(mb_match.group(1)))
-
-    num_match = re.match(r'^(\d+(?:\.\d+)?)$', mem_str)
-    if num_match:
-        return int(float(num_match.group(1)) * 1024)
-
-    raise ValueError(f"Cannot parse memory string: {mem_str}")
+    total = int(parse_memory_mb(mem_str))
+    if total < 1:
+        raise ValueError("Memory must be at least 1 MB")
+    return total
 
 
 def mb_to_mem_str(mb: int) -> str:
@@ -64,9 +90,18 @@ def mb_to_mem_str(mb: int) -> str:
     Returns:
         Memory string like "16GB"
     """
-    if mb >= 1024:
+    if mb >= 1024 and mb % 1024 == 0:
         return f"{mb // 1024}GB"
     return f"{mb}MB"
+
+
+def _validate_orca_budget(mem_mb: int, nproc: int, safety_factor: float) -> None:
+    if isinstance(nproc, bool) or not isinstance(nproc, int) or nproc <= 0:
+        raise ValueError("nproc must be a positive integer")
+    if isinstance(safety_factor, bool) or not 0 < safety_factor <= 1:
+        raise ValueError("orca_maxcore_safety must be in (0, 1]")
+    if not math.isfinite(mem_mb) or mem_mb <= 0:
+        raise ValueError("Total memory must be positive and finite")
 
 
 def calc_orca_maxcore(mem_mb: int, nproc: int, safety_factor: float = 0.8) -> int:
@@ -81,7 +116,28 @@ def calc_orca_maxcore(mem_mb: int, nproc: int, safety_factor: float = 0.8) -> in
     Returns:
         Maxcore value per process in MB
     """
-    return int(mem_mb * safety_factor / nproc)
+    _validate_orca_budget(mem_mb, nproc, safety_factor)
+    result = int(mem_mb * safety_factor / nproc)
+    if result < 1:
+        raise ValueError("Memory budget is too small for ORCA: maxcore would be below 1 MB")
+    return result
+
+
+def resolve_orca_maxcore(
+    mem_mb: int, nproc: int, safety_factor: float = 0.8, maxcore: int | None = None
+) -> int:
+    """Resolve ORCA's per-process MB, rejecting pins that exceed the total budget."""
+    _validate_orca_budget(mem_mb, nproc, safety_factor)
+    if maxcore is None:
+        return calc_orca_maxcore(mem_mb, nproc, safety_factor)
+    if isinstance(maxcore, bool) or not isinstance(maxcore, int) or maxcore <= 0:
+        raise ValueError("ORCA maxcore must be a positive integer in MB per process")
+    if maxcore * nproc > mem_mb:
+        raise ValueError(
+            f"Memory budget ({mem_mb} MB) cannot cover nproc * maxcore "
+            f"({nproc} * {maxcore} = {nproc * maxcore} MB)"
+        )
+    return maxcore
 
 
 def find_executable(program_name: str, fallback_paths: Optional[list] = None) -> Tuple[Optional[Path], str]:
@@ -203,9 +259,12 @@ class ResourceManager:
         self.config = config
         resources = config.get('resources', {})
 
-        self.nproc = resources.get('nproc', 16)
-        self.mem_str = resources.get('mem', '32GB')
-        self.mem_mb = mem_to_mb(self.mem_str)
+        from cccp.config import _get_default_config
+
+        defaults = _get_default_config()['resources']
+        self.nproc = resources.get('nproc', defaults['nproc'])
+        self.mem_str = resources.get('mem', defaults['mem'])
+        self.mem_mb = 0 if not self.mem_str or self.mem_str == '0' else mem_to_mb(self.mem_str)
 
         self._resolve_from_system()
 
@@ -223,7 +282,10 @@ class ResourceManager:
         safety = self.config.get('resources', {}).get('orca_maxcore_safety', 0.8)
         return {
             'nprocs': self.nproc,
-            'maxcore': calc_orca_maxcore(self.mem_mb, self.nproc, safety)
+            'maxcore': resolve_orca_maxcore(
+                self.mem_mb, self.nproc, safety,
+                self.config.get('executables', {}).get('orca', {}).get('maxcore'),
+            )
         }
 
     def get_crest_params(self) -> Dict[str, Any]:

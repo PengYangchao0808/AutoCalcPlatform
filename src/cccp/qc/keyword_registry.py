@@ -55,7 +55,9 @@ __all__ = [
     "MethodPolicy",
     "ORCA_FUNCTIONAL_ALIASES",
     "PolicyDecision",
+    "SCF_CONVERGENCE_ORDER",
     "canonical_token",
+    "canonical_tokens",
     "calculation_policy",
     "is_applicable",
     "legal_values",
@@ -64,6 +66,7 @@ __all__ = [
     "orca_native_functional",
     "resolve",
     "resolve_implementation",
+    "scf_rank",
 ]
 
 
@@ -439,6 +442,10 @@ _LEGACY_ALIAS_KEYS: dict[str, frozenset[str]] = {
     "dispersion": frozenset(),
 }
 
+#: Tightness ordering of the ``scf_convergence`` domain — the single
+#: authority for "weaker than the method floor" comparisons.
+SCF_CONVERGENCE_ORDER: tuple[str, ...] = ("loose", "normal", "tight", "verytight")
+
 
 def legal_values(domain: str) -> tuple[str, ...]:
     """Return every accepted input spelling for an enumerated ``domain``.
@@ -460,6 +467,52 @@ def legal_values(domain: str) -> tuple[str, ...]:
     if domain_key in ENUM_DOMAINS:
         return tuple(sorted(_ENUM_TABLES[domain_key]))
     return ()
+
+
+def canonical_tokens(domain: str) -> tuple[str, ...]:
+    """Return every canonical emission token of enumerated ``domain``.
+
+    Companion to :func:`legal_values` (input spellings): consumers that must
+    recognise emitter-side tokens inside free-form text (e.g. ``route_extras``
+    literals) use this deduplicated set.  Free-form domains return ``()``.
+
+    Args:
+        domain: Enumerated or free-form domain name.
+
+    Returns:
+        Canonical tokens in table order, deduplicated.
+
+    Raises:
+        KeywordValueError: Unknown domain.
+    """
+    domain_key = _normalize_domain(domain)
+    if domain_key not in ENUM_DOMAINS:
+        return ()
+    tokens: list[str] = []
+    for token, _warning in _ENUM_TABLES[domain_key].values():
+        if token and token not in tokens:
+            tokens.append(token)
+    return tuple(tokens)
+
+
+def scf_rank(value: str | None) -> int | None:
+    """Tightness rank of an ``scf_convergence`` value or canonical token.
+
+    Accepts both input spellings (``tight``) and emission tokens
+    (``TightSCF``), case-insensitively — ``loose`` < ``normal`` < ``tight`` <
+    ``verytight``.  ``None`` for empty or unknown values (no explicit
+    preference).
+    """
+    if not value:
+        return None
+    key = str(value).strip().lower()
+    if key in SCF_CONVERGENCE_ORDER:
+        return SCF_CONVERGENCE_ORDER.index(key)
+    for rank, domain_value in enumerate(SCF_CONVERGENCE_ORDER):
+        token, _warning = _ENUM_TABLES["scf_convergence"].get(domain_value, (None, None))
+        if token and token.lower() == key:
+            return rank
+    return None
 
 
 def canonical_token(domain: str, value: str, *, implementation: str) -> tuple[str | None, bool]:

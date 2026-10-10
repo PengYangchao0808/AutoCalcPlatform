@@ -1225,6 +1225,9 @@ class JobRunner:
         input_path: str = "",
         materialized_roles: Mapping[str, Path | str] | None = None,
     ) -> list[str]:
+        from acp.scheduler.resources import with_job_resources
+
+        spec = with_job_resources(spec)
         wf = spec.workflow
         if wf not in (
             "Confsearch",
@@ -1520,6 +1523,9 @@ class JobRunner:
         For backwards compatibility a single-candidate ``spec.input`` is
         also accepted (treated as a one-element candidate list).
         """
+        from acp.scheduler.resources import with_job_resources
+
+        spec = with_job_resources(spec)
         cmd: list[str] = [self.python, "-m", "acp.cli", "run", "nmr"]
         cmd += ["--output", work_dir.as_posix()]
 

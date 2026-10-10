@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import posixpath
 import shlex
 from collections.abc import Mapping
@@ -38,6 +39,8 @@ from acp.scheduler.jobs import (
     xtbmd_method_flags,
 )
 from acp.scheduler.remote.config import RemoteNode
+from acp.scheduler.resources import resolve_job_resources, with_job_resources
+from cccp.utils.resource_utils import mem_to_mb
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +69,8 @@ __all__ = [
 _REMOTE_CHECKPOINT_PATH = "WORK/00_RUNTIME/checkpoint.json"
 _REMOTE_RESULT_MANIFEST_PATH = "RESULT/result_manifest.json"
 
-_DEFAULT_NPROC = 8
-_DEFAULT_MEM_MB_PER_CORE = 2000
 _DEFAULT_QUEUE = "normal"
 _DEFAULT_WALLTIME = ""
-_MIN_MEM_MB_PER_CORE = 256
 
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
     "GFN0-xTB": 0,
@@ -90,9 +90,11 @@ class LSFScriptSpec:
         job_name: BSUB ``-J`` job name.
         queue: BSUB ``-q`` queue name.
         nproc: BSUB ``-n`` number of CPU cores.
-        mem_mb_per_core: Per-core memory in MB; used to compute the per-process
-            ``-M`` RLIMIT_AS as ``mem_mb_per_core * nproc * 1.05`` (MB→KB
-            included). Chosen over ``rusage[mem=...]`` to avoid OpenLava's
+        mem_mb_per_core: Rounded-up per-core share of the total budget in MB.
+        mem_total_mb: Exact task memory in MB, used for the per-process
+            ``-M`` RLIMIT_AS with the existing 5% margin and MB→KB conversion.
+            Older direct constructors fall back to mem_mb_per_core * nproc.
+            Chosen over ``rusage[mem=...]`` to avoid OpenLava's
             double-counting of reserved vs. actually-used memory, which
             caused jobs to PEND unnecessarily.
         walltime: BSUB ``-W`` wall-clock limit (e.g. ``"24:00"``).
@@ -118,6 +120,7 @@ class LSFScriptSpec:
     cli_command: list[str]
     pre_cmds: list[str] = field(default_factory=list)
     extra_flags: str = ""
+    mem_total_mb: int | None = None
 
 
 # ── Allowed remote workflows ────────────────────────────────────────────
@@ -156,6 +159,7 @@ def build_remote_cli_command(
             node.
     """
     py = python_executable or "python"
+    spec = with_job_resources(spec)
     wf = spec.workflow
     if wf not in _ALLOWED_REMOTE_WORKFLOWS:
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
@@ -541,13 +545,10 @@ def derive_lsf_resources(
     extra_flags: str = "",
 ) -> tuple[int, int, str, str, str]:
     """Derive LSF resource parameters from a :class:`JobSpec`."""
-    res = spec.resources
-    nproc = _coerce_int(res.get("nproc")) or _DEFAULT_NPROC
-    total_mem_mb = _parse_total_mem_mb(res.get("mem"))
-    if total_mem_mb is not None and nproc > 0:
-        mem_mb_per_core = max(total_mem_mb // nproc, _MIN_MEM_MB_PER_CORE)
-    else:
-        mem_mb_per_core = _DEFAULT_MEM_MB_PER_CORE
+    res = resolve_job_resources(spec)
+    nproc = res["nproc"]
+    total_mem_mb = mem_to_mb(res["mem"])
+    mem_mb_per_core = math.ceil(total_mem_mb / nproc)
     return nproc, mem_mb_per_core, queue, walltime, extra_flags
 
 
@@ -608,6 +609,7 @@ def build_lsf_script_spec(
     Returns:
         ``(lsf_spec, cli_command)``.
     """
+    spec = with_job_resources(spec)
     if remote_job_dir is None:
         remote_job_dir = posixpath.join(node.remote_work_dir, remote_dir_name or job_id)
     effective_code_dir = (
@@ -639,6 +641,7 @@ def build_lsf_script_spec(
         cli_command=cli_command,
         pre_cmds=list(pre_cmds or []),
         extra_flags=extra_flags,
+        mem_total_mb=mem_to_mb(spec.resources["mem"]),
     )
     return lsf_spec, cli_command
 
@@ -646,12 +649,13 @@ def build_lsf_script_spec(
 def generate_lsf_script(s: LSFScriptSpec) -> str:
     """Render a complete ``bsub`` submission script."""
     cli_str = " ".join(shlex.quote(arg) for arg in s.cli_command)
+    total_mem_mb = s.mem_total_mb if s.mem_total_mb is not None else s.mem_mb_per_core * s.nproc
     lines: list[str] = [
         "#!/bin/bash",
         f"#BSUB -J {s.job_name}",
         f"#BSUB -q {s.queue}",
         f"#BSUB -n {s.nproc}",
-        f"#BSUB -M {int(s.mem_mb_per_core * s.nproc * 1024 * 1.05)}",
+        f"#BSUB -M {int(total_mem_mb * 1024 * 1.05)}",
     ]
     if s.walltime:
         lines.append(f"#BSUB -W {s.walltime}")
@@ -690,50 +694,3 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
 def remote_artifact_pull_list() -> list[str]:
     """Standard remote artifact paths to fetch after job completion."""
     return [_REMOTE_RESULT_MANIFEST_PATH, _REMOTE_CHECKPOINT_PATH]
-
-
-# ---------------------------------------------------------------------- #
-# Internal helpers
-# ---------------------------------------------------------------------- #
-
-
-def _coerce_int(value: Any) -> int | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, int):
-        return value
-    try:
-        return int(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_total_mem_mb(value: Any) -> int | None:
-    """Parse memory into megabytes; a bare numeric value is interpreted as GB."""
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return int(float(value) * 1024)
-    text = str(value).strip().lower().replace(" ", "")
-    if not text:
-        return None
-    units = (
-        ("tb", 1024 * 1024),
-        ("gb", 1024),
-        ("mb", 1),
-        ("t", 1024 * 1024),
-        ("g", 1024),
-        ("m", 1),
-    )
-    for suffix, factor in units:
-        if text.endswith(suffix):
-            number = text[: -len(suffix)]
-            try:
-                return int(float(number) * factor)
-            except ValueError:
-                return None
-    try:
-        # Unitless resource values follow the Workbench default: GB.
-        return int(float(text) * 1024)
-    except ValueError:
-        return None

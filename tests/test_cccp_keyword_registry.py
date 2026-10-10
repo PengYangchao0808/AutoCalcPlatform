@@ -38,14 +38,17 @@ from cccp.qc.keyword_registry import (
     IMPL_XTB_BINARY,
     IMPLEMENTATIONS,
     KeywordValueError,
+    SCF_CONVERGENCE_ORDER,
     calculation_policy,
     canonical_token,
+    canonical_tokens,
     is_applicable,
     legal_values,
     method_family,
     method_policy,
     resolve,
     resolve_implementation,
+    scf_rank,
 )
 
 _PROBE_FIXTURE = Path(__file__).parent / "fixtures" / "orca_keyword_probe.json"
@@ -407,6 +410,24 @@ def test_canonical_token_probe() -> None:
         canonical_token("grid", "nope", implementation=IMPL_ORCA_DFT)
     with pytest.raises(KeywordValueError):
         canonical_token("basis", "def2-SVP", implementation=IMPL_ORCA_DFT)
+
+
+def test_scf_rank_orders_values_and_tokens() -> None:
+    assert SCF_CONVERGENCE_ORDER == ("loose", "normal", "tight", "verytight")
+    assert scf_rank("loose") == 0
+    assert scf_rank("Tight") == 2
+    assert scf_rank("TightSCF") == 2
+    assert scf_rank("verYtight") == 3
+    assert scf_rank("VeryTightSCF") == 3
+    assert scf_rank(None) is None
+    assert scf_rank("") is None
+    assert scf_rank("bogus") is None
+
+
+def test_canonical_tokens_dedups_and_orders() -> None:
+    assert canonical_tokens("scf_convergence") == ("LooseSCF", "TightSCF", "VeryTightSCF")
+    assert canonical_tokens("grid") == ("DefGrid1", "DefGrid2", "DefGrid3")
+    assert canonical_tokens("basis") == ()
 
 
 def test_applicability_table_is_complete_and_queryable() -> None:
