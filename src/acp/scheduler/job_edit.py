@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from acp.scheduler.jobs import JobRecord, JobSpec
+from acp.scheduler.jobs import JobRecord, JobSpec, scan_method_flags
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,14 @@ EDIT_ACTIVE_WORKFLOWS: frozenset[str] = frozenset(
     }
 )
 
+# Registered active workflows with immutable or dedicated input contracts.
+# Their generic editor must not advertise changes that execution cannot read.
+_DEDICATED_EDIT_HINTS: dict[str, str] = {
+    "tsmode": "TS Mode 参数继承频率证据；请使用 TS Mode 专用向导选择模式并创建新任务。",
+    "XtbPathSearch": "XtbPathSearch 使用冻结 path_request；请在 PES2TS 中修改请求并创建新任务。",
+    "OrcaGradient": "OrcaGradient 使用冻结 gradient_request；请在 PES2TS 中修改请求并创建新任务。",
+}
+
 # Retired/planned workflows never re-open their execution entry; the draft
 # only offers read-only parameter viewing plus a migration hint (plan §5.1).
 RETIRED_MIGRATION_HINTS: dict[str, str] = {
@@ -128,11 +136,14 @@ def audit_workflow_edit_coverage() -> dict[str, list[str]]:
 def workflow_edit_status(workflow_id: str) -> dict[str, Any]:
     """Edit capability projection for one workflow id."""
     status = _catalog_status_map().get(workflow_id, "unknown")
-    editable = workflow_id in EDIT_ACTIVE_WORKFLOWS and status == "active"
+    editable = (workflow_id in EDIT_ACTIVE_WORKFLOWS and status == "active"
+                and workflow_id not in _DEDICATED_EDIT_HINTS)
     return {
         "status": status,
         "editable": editable,
-        "migration_hint": None if editable else RETIRED_MIGRATION_HINTS.get(workflow_id),
+        "migration_hint": None if editable else (
+            _DEDICATED_EDIT_HINTS.get(workflow_id) or RETIRED_MIGRATION_HINTS.get(workflow_id)
+        ),
     }
 
 
@@ -240,7 +251,13 @@ def _structure_input_identity(value: Any) -> tuple[tuple[str, ...], tuple[str, .
                     geometries.append(
                         hashlib.sha256(geometry.strip().encode("utf-8")).hexdigest()
                     )
-            for child in item.values():
+            for key, child in item.items():
+                if key == "scan_request" and isinstance(child, dict):
+                    # The serialized PES mirror carries the same source,
+                    # not an additional starting structure.
+                    if not isinstance(item.get("source"), (dict, str)):
+                        visit(child.get("source"))
+                    continue
                 if isinstance(child, (dict, list, tuple)):
                     visit(child)
         elif isinstance(item, (list, tuple)):
@@ -530,7 +547,11 @@ def resolve_previous_outputs(
 
     root = Path(work_dir)
     manifest = load_result_manifest(root)
-    from acp.confsearch.manifest import find_confsearch_manifest, read_manifest, resolve_manifest_geometry
+    from acp.confsearch.manifest import (
+        find_confsearch_manifest,
+        read_manifest,
+        resolve_manifest_geometry,
+    )
     from acp.storage.manifest import ResultManifest
     conformer_manifest = find_confsearch_manifest(root)
     if conformer_manifest is not None:
@@ -743,8 +764,8 @@ def build_edit_draft(
     reasons: list[str] = []
     if not editable:
         reasons.append(
-            f"工作流 {spec.workflow} 为 {edit_status['status']}；原地编辑重算已禁用，"
-            "仅支持查看与迁移"
+            f"工作流 {spec.workflow}：" + (edit_status.get("migration_hint") or
+            f"状态为 {edit_status['status']}；通用编辑重算已禁用")
         )
     can_in_place = editable and terminal
     if editable and not terminal:
@@ -773,6 +794,16 @@ def build_edit_draft(
     notes: list[str] = []
     if not editable and edit_status.get("migration_hint"):
         notes.append(f"迁移建议：{edit_status['migration_hint']}")
+    if editable and spec.workflow == "scan":
+        try:
+            coordinate_count = scan_method_flags(method, spec.input).count("--coordinate")
+        except (ValueError, TypeError, KeyError):
+            coordinate_count = 0
+        if coordinate_count > 1:
+            notes.append(
+                f"此任务有 {coordinate_count} 个联动扫描坐标；面板显示首个坐标。"
+                "此处可修改点数和计算方法；坐标组需整体重新配置。"
+            )
     if editable and spec.workflow == "nmr":
         # todo 25: unregistered/invalid method fields are rejected by the
         # resolver — surface the reason at draft time (hint only; the
@@ -780,6 +811,8 @@ def build_edit_draft(
         _config, problem = _resolve_nmr_effective_config(record)
         if problem:
             notes.append(f"NMR 方法参数未通过编辑校验（提交前请修正）：{problem}")
+    from acp.scheduler.edit_parameters import method_projection_for_edit
+
     return {
         "job_id": record.id,
         "workflow": spec.workflow,
@@ -788,6 +821,7 @@ def build_edit_draft(
         "attempt": attempt_number(record),
         "source_revision": compute_source_revision(record),
         "editable_spec": editable_spec_from_record(record),
+        "method_projection": method_projection_for_edit(spec),
         "input_refs": input_refs,
         "effective_config": effective_config_info(record),
         "capabilities": {

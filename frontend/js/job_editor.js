@@ -29,8 +29,25 @@
   var menuEl = null;
 
   function isActive() { return !!editorContext; }
+  function isCollecting() { return !!(editorContext && editorContext.collecting); }
   function currentMode() { return editorContext ? editorContext.mode : null; }
   function sourceJobId() { return editorContext ? editorContext.sourceJobId : ""; }
+
+  function selectedWorkflow(ctx) {
+    return (typeof wizardState !== "undefined" && wizardState.workflow && wizardState.workflow.id) ||
+      (ctx && ctx.originalSpec && ctx.originalSpec.workflow) || "";
+  }
+
+  function workflowChanged(ctx) {
+    return !!(ctx && ctx.originalSpec && ctx.originalSpec.workflow &&
+      selectedWorkflow(ctx) !== ctx.originalSpec.workflow);
+  }
+
+  function workflowSelectionError(workflow) {
+    var ctx = editorContext;
+    return ctx && ctx.executionMode === "in_place" && ctx.originalSpec.workflow &&
+      workflow !== ctx.originalSpec.workflow ? t("edit.workflow_locked") : "";
+  }
 
   // ---------------------------------------------------------------------------
   // 纯工具（无 DOM 依赖；经 ACPJobEditorInternals 暴露给回归测试）
@@ -110,7 +127,16 @@
   function sourceRequiresIndependentJob(ctx) {
     if (!ctx) return false;
     if (ctx.mode === "new_from_job") return true;
+    if (workflowChanged(ctx)) return true;
     var selection = ctx.sourceSelection || {};
+    if (ctx.originalSpec.workflow === "nmr" && selection.kind === "original_input" &&
+      ctx.baselineFormState && Array.isArray(ctx.baselineFormState.nmr_candidates)) {
+      var geometries = function (rows) {
+        return rows.map(function (row) { return { item_id: row.item_id, xyz: row.xyz }; });
+      };
+      if (!deepEqual(geometries(nmrCandidatesProjection()),
+        geometries(ctx.baselineFormState.nmr_candidates))) return true;
+    }
     var ref = (selection.payload || {}).source_ref || {};
     if (["task_result", "last_structure", "job_result"].indexOf(selection.kind) >= 0 &&
         ref.job_id === ctx.sourceJobId && (selection.payload || {}).xyz) return false;
@@ -550,7 +576,7 @@
   // 到 catalog 中该 profile 的 levels；再缺失才保留当前默认并标注）。
   function hydrateMethodBase(ctx, draft) {
     var spec = draft.editable_spec || {};
-    var m = spec.method || {};
+    var m = draft.method_projection || spec.method || {};
     if (has(m, "profile_id")) wizardState.method.profile_id = m.profile_id;
     else if (has(m, "profile")) wizardState.method.profile_id = m.profile;
     var lv = m.levels;
@@ -578,9 +604,37 @@
     var m = deepCopy(ctx.originalSpec.method || {});
     if (current.profile_id && current.profile_id !== ctx.methodBaseline.profile_id) {
       m.profile_id = current.profile_id;
+      m.levels = deepCopy(wizardState.method.stages || {});
+      Object.keys(m.levels).forEach(function (id) {
+        if (!m.levels[id]._disabled) m.levels[id]._disabled = false;
+      });
+      return m;
     }
-    var stages = cleanLevels(current.stages);
-    if (Object.keys(stages).length) m.levels = stages;
+    var before = ctx.methodBaseline.stages || {};
+    var stages = wizardState.method.stages || {};
+    m.levels = m.levels || {};
+    Object.keys(m.levels).forEach(function (id) {
+      Object.keys(m.levels[id] || {}).forEach(function (key) {
+        if (has(before[id], key)) m.levels[id][key] = deepCopy(before[id][key]);
+      });
+    });
+    Object.keys(Object.assign({}, before, current.stages || {})).forEach(function (id) {
+      var oldLevel = before[id];
+      var level = stages[id];
+      if (deepEqual(oldLevel, (current.stages || {})[id])) return;
+      if (!level || level._disabled) {
+        m.levels[id] = Object.assign({}, m.levels[id] || {}, { _disabled: true });
+      } else if (!oldLevel) {
+        m.levels[id] = Object.assign({}, deepCopy(level), { _disabled: false });
+      } else {
+        var target = m.levels[id] || (m.levels[id] = { engine: level.engine });
+        Object.keys(Object.assign({}, oldLevel, level)).forEach(function (key) {
+          if (!deepEqual(oldLevel[key], level[key])) {
+            target[key] = has(level, key) ? deepCopy(level[key]) : null;
+          }
+        });
+      }
+    });
     return m;
   }
 
@@ -600,17 +654,7 @@
     hydrateMethod: function (ctx, draft) {
       var spec = draft.editable_spec || {};
       var m = spec.method || {};
-      if (has(m, "profile_id")) wizardState.method.profile_id = m.profile_id;
-      else if (has(m, "profile")) wizardState.method.profile_id = m.profile;
-      // steps/levels：以 catalog 中该 profile 的 levels 为准（未存进 spec）。
-      var prof = methodProfileById(wizardState.method.profile_id);
-      if (prof && prof.levels && Object.keys(prof.levels).length) {
-        wizardState.method.stages = deepCopy(prof.levels);
-      } else if (m.levels && Object.keys(m.levels).length) {
-        wizardState.method.stages = deepCopy(m.levels);
-      } else {
-        ctx.methodBackfilled = true;
-      }
+      hydrateMethodBase(ctx, draft);
       // batch_roles：默认 → 旧扁平 → 原 batch_roles（存在性合并）。
       var staticDefaults = (typeof batchRoleStaticDefaults === "function")
         ? batchRoleStaticDefaults()
@@ -649,13 +693,14 @@
       return {
         profile_id: wizardState.method.profile_id || "",
         batch_roles: deepCopy((wizardState.method.stages || {}).batch_roles || {}),
+        electronic_state: deepCopy(((wizardState.method.stages || {}).batch || {}).electronic_state),
       };
     },
     buildMethod: function (ctx, body, current) {
       var staticDefaults = (typeof batchRoleStaticDefaults === "function")
         ? batchRoleStaticDefaults()
         : (window.batchRoleStaticDefaults ? window.batchRoleStaticDefaults() : null);
-      return buildBatchMethodFromPatch(
+      var method = buildBatchMethodFromPatch(
         ctx.originalSpec.method || {},
         (ctx.methodBaseline || {}).batch_roles || {},
         current.batch_roles || {},
@@ -663,6 +708,12 @@
         current.profile_id || "",
         staticDefaults
       );
+      if (!deepEqual(current.electronic_state, (ctx.methodBaseline || {}).electronic_state)) {
+        method.levels = method.levels || {};
+        method.levels.batch = method.levels.batch || {};
+        method.levels.batch.electronic_state = current.electronic_state || null;
+      }
+      return method;
     },
     patchOriginalInput: function (ctx, overlay, body) {
       // 批量条目：include/名称/标签/电子态以批量面板当前值为准（仅 patch
@@ -757,10 +808,19 @@
     buildMethod: function (ctx, body, current) {
       var m = baseBuildMethod(ctx, body, current);
       var cs = ((current.stages || {}).confsearch) || {};
-      if (has(cs, "protocol")) m.protocol = cs.protocol;
-      if (has(cs, "confsearch_profile")) m.profile = cs.confsearch_profile;
-      if (has(cs, "refinement_policy")) m.refinement_policy = cs.refinement_policy;
-      if (has(cs, "ewin") && cs.ewin !== "") m.ewin = cs.ewin;
+      var oldCs = (((ctx.methodBaseline || {}).stages || {}).confsearch) || {};
+      [["protocol", "protocol"], ["confsearch_profile", "profile"],
+        ["refinement_policy", "refinement_policy"], ["ewin", "ewin"]].forEach(function (pair) {
+        if (has(cs, pair[0]) && !deepEqual(cs[pair[0]], oldCs[pair[0]])) m[pair[1]] = cs[pair[0]];
+      });
+      ["refinement_sp", "dft_opt"].some(function (id) {
+        var level = (current.stages || {})[id];
+        var before = ((ctx.methodBaseline || {}).stages || {})[id] || {};
+        if (!level || (deepEqual(level.solvent, before.solvent) &&
+          deepEqual(level.solvent_model, before.solvent_model))) return false;
+        m.solvent = level.solvent_model === "none" ? "" : (level.solvent || "");
+        return true;
+      });
       return m;
     },
     patchOriginalInput: patchOriginalChargeMult,
@@ -774,6 +834,10 @@
       // assigned 文本可恢复；bruker 资产失效要求替换。
       var spec = draft.editable_spec || {};
       var inp = spec.input || {};
+      var toggle = document.getElementById("nmr-enumerate-toggle");
+      if (toggle) toggle.checked = !!inp.enumerate;
+      setFieldValue("nmr-enumerate-centers", Array.isArray(inp.stereocenters)
+        ? inp.stereocenters.join(",") : (inp.stereocenters || ""));
       if (inp.experiment && inp.experiment.mode === "assigned" &&
         typeof nmrExperimentMode !== "undefined") {
         nmrExperimentMode = "assigned";
@@ -785,11 +849,44 @@
     buildMethod: baseBuildMethod,
     patchOriginalInput: function (ctx, overlay, body) {
       overlay = patchOriginalChargeMult(ctx, overlay, body);
+      var currentCandidates = nmrCandidatesProjection();
+      var baselineCandidates = (ctx.baselineFormState || {}).nmr_candidates || [];
+      if (!deepEqual(currentCandidates, baselineCandidates)) {
+        var originalCandidates = Array.isArray(overlay.candidates) ? overlay.candidates : [overlay];
+        overlay.candidates = currentCandidates.map(function (current) {
+          var index = baselineCandidates.findIndex(function (candidate) {
+            return candidate.item_id === current.item_id;
+          });
+          var baseline = baselineCandidates[index] || {};
+          var candidate = deepCopy(originalCandidates[index] || {});
+          if (index < 0 || current.xyz !== baseline.xyz) {
+            candidate = { source_type: "xyz_text", source: current.xyz };
+            if (!current.xyz) throw new Error(t("edit.no_payload_collected"));
+          }
+          candidate.name = current.name;
+          candidate.charge = current.charge;
+          candidate.multiplicity = current.multiplicity;
+          return candidate;
+        });
+        if (!overlay.candidates.length) throw new Error(t("edit.no_payload_collected"));
+      }
+      ["charge", "multiplicity"].forEach(function (key) {
+        var baselineKey = key === "charge" ? "charge" : "mult";
+        if (body && body.input && has(body.input, key) &&
+          String(body.input[key]) !== String((ctx.baselineFormState || {})[baselineKey])) {
+          (overlay.candidates || []).forEach(function (candidate) { candidate[key] = body.input[key]; });
+        }
+      });
+      var enumToggle = document.getElementById("nmr-enumerate-toggle");
+      var enumerate = !!(enumToggle && enumToggle.checked);
+      if (enumerate !== (ctx.baselineFormState || {}).nmr_enumerate) overlay.enumerate = enumerate;
+      var centers = fieldVal("nmr-enumerate-centers").trim();
+      if (centers !== (ctx.baselineFormState || {}).nmr_stereocenters) overlay.stereocenters = centers;
       if (overlay.experiment && overlay.experiment.mode === "assigned" &&
         typeof nmrExperimentMode !== "undefined" && nmrExperimentMode === "assigned") {
         var ta = document.getElementById("nmr-experiment-text");
         var text = ta ? String(ta.value || "") : "";
-        if (text && text !== (ctx.baselineFormState || {}).nmr_experiment_text) {
+        if (text !== (ctx.baselineFormState || {}).nmr_experiment_text) {
           overlay.experiment = { mode: "assigned", content: text };
         }
       }
@@ -855,9 +952,37 @@
     methodProjection: baseMethodProjection,
     buildMethod: baseBuildMethod,
     patchOriginalInput: function (ctx, overlay, body) {
+      overlay = patchOriginalChargeMult(ctx, overlay, body);
       var m = ctx.originalSpec.method || {};
       if (Array.isArray(m.select) && has(overlay, "select") === false && m.select.length) {
         overlay.select = deepCopy(m.select);
+      }
+      if (m.mode === "bond_length_scan" && typeof pesSelectionState !== "undefined") {
+        var selected = pesSelectionState.selectedAtoms || [];
+        var originalSelection = (overlay.selection || (overlay.scan_request || {}).selection || {});
+        var originalAtoms = originalSelection.atom_indices ||
+          ((overlay.coordinate || (overlay.scan_request || {}).coordinate || {}).atoms || []);
+        var oldCoordinate = overlay.coordinate || (overlay.scan_request || {}).coordinate || {};
+        var oldKind = originalSelection.kind || (oldCoordinate.kind === "angle" ? "angle" :
+          oldCoordinate.kind === "dihedral" ? "dihedral" : "bond_stretch");
+        if (!deepEqual(selected, originalAtoms) || pesSelectionState.selectionKind !== oldKind) {
+          if (!selected.length) throw new Error(t("edit.pes_selection_required"));
+          overlay.coordinate = deepCopy(overlay.coordinate || (overlay.scan_request || {}).coordinate || {});
+          var kind = pesSelectionState.selectionKind;
+          overlay.coordinate.kind = kind === "angle" ? "angle" : kind === "dihedral" ? "dihedral" : "distance";
+          overlay.coordinate.unit = overlay.coordinate.kind === "distance" ? "angstrom" : "degree";
+          overlay.coordinate.atoms = kind === "double_bond_scan" ? selected.slice(0, 2) : selected.slice();
+          overlay.selection = Object.assign({}, originalSelection, { kind: kind, atom_indices: selected.slice() });
+          if (kind === "double_bond_scan") {
+            overlay.coordinates = [deepCopy(overlay.coordinate), deepCopy(overlay.coordinate)];
+            overlay.coordinates[1].atoms = selected.slice(2, 4);
+            overlay.selection.groups = [selected.slice(0, 2), selected.slice(2, 4)];
+          } else {
+            overlay.coordinates = null;
+            overlay.scan_request = null;
+            overlay.selection.groups = [];
+          }
+        }
       }
       return overlay;
     },
@@ -927,6 +1052,16 @@
       overlay.multiplicity = parseInt(bi.multiplicity, 10);
     }
     return overlay;
+  }
+
+  function nmrCandidatesProjection() {
+    return (typeof wizardStructures !== "undefined" ? wizardStructures : []).map(function (item) {
+      return {
+        item_id: item.item_id || item.input_id || "",
+        name: item.name || "", xyz: item.xyz || "",
+        charge: item.charge, multiplicity: item.multiplicity,
+      };
+    });
   }
 
   function batchItemProjection(item) {
@@ -1008,15 +1143,16 @@
       if (structure.multiplicity !== undefined) row.multiplicity = structure.multiplicity;
       if (typeof renderStageBatchPreview === "function") renderStageBatchPreview();
     }
-    updateEditorUiState();
+    syncSourceExecutionMode(ctx);
   }
 
   function onTaskStructureRemoved(index, structure) {
     var row = findOriginalBatchRow(structure, index);
-    if (!row) return;
-    row.include = false;
-    if (typeof renderStageBatchPreview === "function") renderStageBatchPreview();
-    updateEditorUiState();
+    if (row) {
+      row.include = false;
+      if (typeof renderStageBatchPreview === "function") renderStageBatchPreview();
+    }
+    if (editorContext) syncSourceExecutionMode(editorContext);
   }
 
   function onBatchItemChanged(row) {
@@ -1460,7 +1596,7 @@
     hideFooter();
     updateModalSubmitButton();
     Promise.all([
-      api("/jobs/" + encodeURIComponent(jobId) + "/edit-draft"),
+      apiRemote("/jobs/" + encodeURIComponent(jobId) + "/edit-draft"),
       ensureCatalogsLoaded(),
     ]).then(function (results) {
       if (!editorContext || editorContext.requestToken !== token) return;
@@ -1538,6 +1674,10 @@
       charge = inp.items[0].charge;
       mult = has(inp.items[0], "multiplicity") ? inp.items[0].multiplicity : mult;
     }
+    if (Array.isArray(inp.candidates) && inp.candidates.length) {
+      charge = inp.candidates[0].charge;
+      mult = inp.candidates[0].multiplicity;
+    }
     if (charge !== undefined && charge !== null) document.getElementById("modal-charge").value = String(charge);
     if (mult !== undefined && mult !== null) document.getElementById("modal-mult").value = String(mult);
     // 4) 项目与节点。
@@ -1559,6 +1699,20 @@
     setWizardInputMode("task");
     updateEditModeTabs();
     updateConfigCards();
+    if (spec.workflow === "scan" && typeof syncScanSelectionFromWizard === "function") {
+      syncScanSelectionFromWizard(false);
+    }
+    if (spec.workflow === "PESsearch" && spec.method.mode === "bond_length_scan" &&
+      typeof pesSelectionState !== "undefined") {
+      if (typeof syncPESSelectionFromWizard === "function") syncPESSelectionFromWizard(false);
+      var request = inp.scan_request || {};
+      var coordinate = inp.coordinate || request.coordinate || {};
+      var selection = inp.selection || request.selection || {};
+      pesSelectionState.selectionKind = selection.kind ||
+        (coordinate.kind === "angle" ? "angle" : coordinate.kind === "dihedral" ? "dihedral" : "bond_stretch");
+      pesSelectionState.selectedAtoms = deepCopy(selection.atom_indices || coordinate.atoms || []);
+      if (typeof syncPESSelectionFromWizard === "function") syncPESSelectionFromWizard(false);
+    }
     ctx.methodBaseline = ctx.adapter.methodProjection();
     ctx.baselineFormState = formProjection();
     renderOriginalInputPanel();
@@ -1572,20 +1726,29 @@
   function serializeFromCollectedBody(body) {
     var ctx = editorContext;
     var spec = ctx.originalSpec;
-    var workflow = spec.workflow;
-    var method = serializeMethod(ctx, body);
+    var workflow = selectedWorkflow(ctx);
+    var changedWorkflow = workflowChanged(ctx);
+    var selectionError = workflowSelectionError(workflow);
+    if (selectionError) throw new Error(selectionError);
+    if (changedWorkflow && (!body || body.workflow !== workflow || !body.input || !body.method)) {
+      throw new Error(t("edit.no_payload_collected"));
+    }
+    // A different workflow is a new calculation contract. Use its existing
+    // submit builder instead of merging the source workflow's frozen input.
+    var method = changedWorkflow ? deepCopy(body.method) : serializeMethod(ctx, body);
     var out = {
       mode: ctx.executionMode,
       workflow: workflow,
-      input: serializeInput(ctx, body),
+      input: changedWorkflow ? deepCopy(body.input) : serializeInput(ctx, body),
       method: method,
+      method_projection_changed: changedWorkflow || !deepEqual(ctx.adapter.methodProjection(), ctx.methodBaseline),
       resources: serializeResources(ctx, body),
       // molecule_name 不是表单可编辑字段：原值优先，保证未修改 diff 为零。
       molecule_name: spec.molecule_name || (body && body.molecule_name) || "",
-      task_name: (body && body.task_name) || "",
+      task_name: (body && body.task_name) || (changedWorkflow ? workflow : ""),
       remark: (body && body.remark) || "",
       tags: (body && body.tags && body.tags.length) ? body.tags : deepCopy(spec.tags || []),
-      request_id: newRequestId(),
+      request_id: ctx.requestId || newRequestId(),
       expected_source_revision: ctx.draft.source_revision,
     };
     if (ctx.executionMode === "new_job") {
@@ -1638,7 +1801,7 @@
       if (!ls || !ls.xyz_text) throw new Error(t("edit.last_structure_missing"));
       var selectedLast = ctx.sourceSelection.payload || {};
       var sourceRef = deepCopy(selectedLast.source_ref || ls.source_ref || {});
-      return {
+      return patchOriginalChargeMult(ctx, {
         source_type: "xyz_text",
         source: selectedLast.xyz || selectedLast.xyz_text || ls.xyz_text,
         charge: orig.charge,
@@ -1649,7 +1812,7 @@
           entry_id: ls.entry_id,
           source_id: sourceRef.source_id || "",
         },
-      };
+      }, body);
     }
     if (kind === "path_frame") {
       var selectedPath = ctx.sourceSelection.payload || {};
@@ -1751,6 +1914,7 @@
     // to sections the user has already reached.
     if (requested > current + 1) return false;
     ctx.editStep = requested;
+    if (typeof createWizardStep !== "undefined") createWizardStep = requested;
     modal.setAttribute("data-create-step", String(requested));
     modal.querySelectorAll(".create-step").forEach(function (button) {
       var buttonStep = Number(button.getAttribute("data-create-step"));
@@ -1880,8 +2044,8 @@
   // body.input（原样透传或服务端快照），页面收集器的结构前置校验
   // （解析结构 / PES 选原子 / NMR 实验谱）不应阻断无修改重算 —— 表单
   // 公共字段直接读取，不路由 submitJobModal。
-  function collectFormOnlyBody() {
-    var spec = editorContext.originalSpec;
+  function collectFormOnlyBody(ctx) {
+    var spec = (ctx || editorContext).originalSpec;
     var taskName = fieldVal("modal-task-name").trim()
       .replace(/[/\\:*?"<>|]/g, "")
       .replace(/\s+/g, "_")
@@ -1891,7 +2055,10 @@
       remark: fieldVal("modal-remark").trim(),
       task_name: taskName,
       molecule_name: spec.molecule_name || "",
-      input: {},
+      input: {
+        charge: Number(fieldVal("modal-charge")),
+        multiplicity: Number(fieldVal("modal-mult")),
+      },
       resources: {
         nproc: parseInt(fieldVal("modal-nproc"), 10) || 4,
         mem: ACPMemoryInput.read("modal-mem", "modal-mem-unit"),
@@ -1926,14 +2093,21 @@
     var ctx = editorContext;
     if (!ctx || ctx.submitting || ctx.collecting) return;
     if (!ctx.draft) return;
+    if (!(ctx.draft.capabilities || {}).can_edit) return;
+    var selectionError = workflowSelectionError(selectedWorkflow(ctx));
+    if (selectionError) {
+      window.alert(t("edit.preview_failed") + ": " + selectionError);
+      return;
+    }
     if (!ACPMemoryInput.read("modal-mem", "modal-mem-unit")) return;
     if (ctx.editStep < 3) {
       setEditStep(ctx.editStep + 1);
       return;
     }
-    var passiveKind = ctx.sourceSelection.kind === "original_input" ||
+    ctx.requestId = null;
+    var passiveKind = !workflowChanged(ctx) && (ctx.sourceSelection.kind === "original_input" ||
       ctx.sourceSelection.kind === "last_structure" ||
-      ctx.sourceSelection.kind === "path_frame";
+      ctx.sourceSelection.kind === "path_frame");
     var collecting = passiveKind ? Promise.resolve(collectFormOnlyBody()) : null;
     if (passiveKind) {
       ctx.collecting = false;
@@ -1967,7 +2141,7 @@
   function runPreview(collectedBody) {
     var ctx = editorContext;
     var payload = serializeFromCollectedBody(collectedBody);
-    return api("/jobs/" + encodeURIComponent(ctx.sourceJobId) + "/edit-recalculate/preview", {
+    return apiRemote("/jobs/" + encodeURIComponent(ctx.sourceJobId) + "/edit-recalculate/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1987,7 +2161,8 @@
     var okBtn = document.getElementById("edit-summary-confirm");
     if (okBtn) okBtn.disabled = true;
     var payload = serializeFromCollectedBody(ctx.pendingPreviewBody);
-    api("/jobs/" + encodeURIComponent(ctx.sourceJobId) + "/edit-recalculate", {
+    ctx.requestId = payload.request_id;
+    apiRemote("/jobs/" + encodeURIComponent(ctx.sourceJobId) + "/edit-recalculate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -2045,6 +2220,7 @@
     var isBatch = !!(ctx && ctx.originalSpec &&
       ctx.originalSpec.workflow === "BatchOptimize");
     return {
+      workflow: selectedWorkflow(ctx),
       remark: fieldVal("modal-remark"),
       task_name: fieldVal("modal-task-name").trim(),
       nproc: fieldVal("modal-nproc"),
@@ -2058,6 +2234,14 @@
       original_task_structure: originalTaskStructureProjection(ctx),
       batch_items: ctx ? batchItemsProjection() : null,
       nmr_experiment_text: nmrText,
+      nmr_candidates: ctx && ctx.originalSpec.workflow === "nmr" ? nmrCandidatesProjection() : null,
+      nmr_enumerate: !!(document.getElementById("nmr-enumerate-toggle") || {}).checked,
+      nmr_stereocenters: fieldVal("nmr-enumerate-centers").trim(),
+      pes_selection: ctx && ctx.originalSpec.workflow === "PESsearch" &&
+        typeof pesSelectionState !== "undefined" ? {
+          kind: pesSelectionState.selectionKind,
+          atoms: pesSelectionState.selectedAtoms.slice(),
+        } : null,
     };
   }
 
@@ -2069,7 +2253,7 @@
     var count = 0;
     Object.keys(proj).forEach(function (key) {
       if (key === "nmr_experiment_text") {
-        if (proj[key] && proj[key] !== base[key]) count++;
+        if (proj[key] !== base[key]) count++;
         return;
       }
       if (key === "batch_items") {
@@ -2395,6 +2579,10 @@
       htmlParts.push('<div class="edit-banner-hint edit-warn">' +
         t("edit.method_backfilled") + "</div>");
     }
+    (d.notes || []).forEach(function (note) {
+      htmlParts.push('<div class="edit-banner-hint edit-warn">' +
+        escapeHtml(String(note)) + "</div>");
+    });
     htmlParts.push("</div>");
     el.innerHTML = htmlParts.join("");
   }
@@ -2424,12 +2612,16 @@
       '<input type="radio" name="edit-exec-mode" value="in_place"' +
       (ctx.executionMode === "in_place" ? " checked" : "") +
       (caps.can_in_place && !requiresNewJob ? "" : " disabled") + "> " + t("edit.exec_in_place") + "</label>");
-    htmlParts.push('<label class="edit-radio"><input type="radio" name="edit-exec-mode" value="new_job"' +
-      (ctx.executionMode === "new_job" ? " checked" : "") + "> " + t("edit.exec_new_job") + "</label>");
+    htmlParts.push('<label class="edit-radio' + (caps.can_new_job ? "" : " disabled") + '"><input type="radio" name="edit-exec-mode" value="new_job"' +
+      (ctx.executionMode === "new_job" ? " checked" : "") +
+      (caps.can_new_job ? "" : " disabled") + "> " + t("edit.exec_new_job") + "</label>");
     htmlParts.push('<span class="flex-spacer"></span>');
     htmlParts.push('<span class="edit-changed-badge" id="edit-changed-badge"></span>');
     htmlParts.push("</div>");
-    if (requiresNewJob && ctx.mode !== "new_from_job") {
+    if (workflowChanged(ctx)) {
+      htmlParts.push('<div class="edit-banner-hint">' +
+        escapeHtml(t("edit.workflow_changed")) + "</div>");
+    } else if (requiresNewJob && ctx.mode !== "new_from_job") {
       htmlParts.push('<div class="edit-banner-hint">' +
         escapeHtml(t("edit.source_requires_new_job")) + "</div>");
     }
@@ -2445,6 +2637,9 @@
           return;
         }
         ctx.executionMode = radio.value;
+        ctx.pendingPreviewBody = null;
+        ctx.fingerprint = null;
+        renderFooter();
         updateEditorUiState();
       });
     });
@@ -2484,8 +2679,8 @@
     var btn = modalSubmitBtn();
     if (btn && !ctx.collecting && !ctx.submitting) {
       var caps = ctx.draft.capabilities || {};
-      btn.disabled = ctx.executionMode === "in_place" &&
-        (!caps.can_in_place || sourceRequiresIndependentJob(ctx));
+      btn.disabled = !caps.can_edit || (ctx.executionMode === "in_place" ?
+        (!caps.can_in_place || sourceRequiresIndependentJob(ctx)) : !caps.can_new_job);
       btn.title = btn.disabled ? t("edit.in_place_blocked") : "";
     }
   }
@@ -2627,6 +2822,8 @@
   // 导出：Workbench 只保留入口绑定（计划 §8）。
   window.ACPJobEditor = {
     isActive: isActive,
+    isCollecting: isCollecting,
+    workflowSelectionError: workflowSelectionError,
     currentStep: currentStep,
     setStep: setEditStep,
     currentMode: currentMode,
@@ -2666,5 +2863,6 @@
     mergeBatchRoles: mergeBatchRoles,
     buildBatchMethodFromPatch: buildBatchMethodFromPatch,
     adapterFor: adapterFor,
+    collectFormOnlyBody: collectFormOnlyBody,
   };
 })();

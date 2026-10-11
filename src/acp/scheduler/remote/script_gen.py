@@ -32,7 +32,9 @@ from acp.scheduler.jobs import (
     censo_preset_from_method,
     censo_solvent_from_method,
     confsearch_method_flags,
+    electronic_state_from_method,
     input_chemistry_flags,
+    nmr_candidate_metadata_flags,
     nmr_flag_config,
     nmr_method_flags,
     scan_method_flags,
@@ -281,7 +283,9 @@ def build_remote_cli_command(
             cmd += ["--name", spec.name]
         levels = method.get("levels", {})
         if levels:
-            cmd += method_levels_to_cli_flags(levels)
+            cmd += method_levels_to_cli_flags(levels, workflow=wf)
+            if electronic_state_from_method(method):
+                cmd += ["--spin-config", "electronic_state.json"]
         if wf == "scan":
             cmd += scan_method_flags(method, inp)
     elif wf == "irc":
@@ -490,6 +494,10 @@ def build_remote_nmr_cmd_tail(
     candidates = inp.get("candidates") if isinstance(inp.get("candidates"), list) else None
     if candidates:
         for idx, cand in enumerate(candidates):
+            remote_input_path = cand.get("remote_input_path") if isinstance(cand, dict) else None
+            if remote_input_path:
+                cmd += ["--input", str(remote_input_path)]
+                continue
             cand_source = (
                 (cand.get("source") or cand.get("smiles") or cand.get("input"))
                 if isinstance(cand, dict)
@@ -535,6 +543,7 @@ def build_remote_nmr_cmd_tail(
     # the nmr wizard nests ewin under levels.conformer, which
     # censo_ewin_from_method never reads).
     cmd += nmr_method_flags(method, nmr_flag_config(spec.config_path))
+    cmd += nmr_candidate_metadata_flags(inp)
     return cmd
 
 

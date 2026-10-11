@@ -41,7 +41,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -53,6 +53,7 @@ from acp.scheduler.jobs import (
     JobSpec,
     JobStatus,
     build_task_record,
+    electronic_state_from_method,
 )
 from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.provenance import build_provenance_for_job
@@ -82,7 +83,7 @@ from acp.scheduler.remote.submission import (
     submit_lease_valid,
 )
 from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_root
-from acp.scheduler.runner import materialize_job_input
+from acp.scheduler.runner import JobRunner, _electronic_state_cli_flags, materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
 
@@ -1331,6 +1332,34 @@ class RemoteJobRunner:
                     node=node.name,
                     role="scan_config",
                 )
+            elif spec.workflow == "nmr":
+                # Use the local materializer for the complete candidate and
+                # experiment set; each remote argument points at an uploaded
+                # file, including native input extensions and Bruker assets.
+                local_command = JobRunner()._build_nmr_cmd(spec, work_dir)
+                local_sources = [local_command[i + 1] for i, flag in enumerate(local_command)
+                                 if flag == "--input"]
+                candidates = spec.input.get("candidates")
+                candidates = candidates if isinstance(candidates, list) else [spec.input]
+                if len(local_sources) != len(candidates):
+                    raise RemoteSubmissionRejected("NMR candidate materialization is incomplete")
+                staged_input = dict(spec.input)
+                staged_candidates = []
+                for candidate, source in zip(candidates, local_sources):
+                    staged = dict(candidate)
+                    path = Path(source)
+                    if path.is_file():
+                        staged["remote_input_path"] = path.relative_to(work_dir).as_posix()
+                    else:
+                        staged["remote_input_path"] = source
+                    staged_candidates.append(staged)
+                staged_input["candidates"] = staged_candidates
+                spec = replace(spec, input=staged_input)
+                self._stager.upload_directory(
+                    node, work_dir / "inputs", posixpath.join(remote_job_dir, "inputs")
+                )
+                event_log.append("remote.input_uploaded", job_id=record.id,
+                                 node=node.name, role="nmr_candidates_and_experiment")
             elif materialized and materialized.is_file():
                 remote_path = posixpath.join(remote_job_dir, remote_input_name)
                 self._stager.upload_file(node, materialized, remote_path)
@@ -1350,6 +1379,22 @@ class RemoteJobRunner:
             # otherwise nests products under <remote_job_dir>/<molecule>/,
             # where the flat result-fetch layer never finds them.
             self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
+            if spec.workflow in {"singlepoint", "optimize", "frequency", "scan"}:
+                module = electronic_state_from_method(spec.method)
+                if module:
+                    _electronic_state_cli_flags(module, work_dir)
+                    self._stager.upload_file(
+                        node, work_dir / "electronic_state.json",
+                        posixpath.join(remote_job_dir, "electronic_state.json"),
+                    )
+            resume_source = work_dir / "resume_source.json"
+            remote_meta = (record.result or {}).get("remote") or {}
+            if remote_meta.get("resume"):
+                if not resume_source.is_file():
+                    raise RemoteSubmissionRejected("Continue requires resume_source.json")
+                self._stager.upload_file(
+                    node, resume_source, posixpath.join(remote_job_dir, "resume_source.json")
+                )
             heartbeat_submit_worker(submission_id)
 
             # 4. Generate + upload LSF script
@@ -1628,9 +1673,10 @@ class RemoteJobRunner:
 
         for name in (".exit_code", "state.json"):
             _move(name, name)
+        _move("resume_source.json", "resume_source.json")
         try:
             entries = self._stager.list_remote_dir(node, remote_job_dir)
-        except (FileNotFoundError, OSError):
+        except FileNotFoundError:
             entries = []
         for entry in entries:
             if entry.name.startswith(".stage_"):
@@ -1656,13 +1702,37 @@ class RemoteJobRunner:
             runtime_entries = self._stager.list_remote_dir(
                 node, posixpath.join(remote_job_dir, runtime_rel)
             )
-        except (FileNotFoundError, OSError):
+        except FileNotFoundError:
             runtime_entries = []
         for source_entries, rel_prefix in ((entries, ""), (runtime_entries, runtime_rel)):
             for entry in source_entries:
                 if entry.name.startswith("step_result"):
                     rel = posixpath.join(rel_prefix, entry.name)
                     _move(rel, rel)
+        # A rerun starts with the same clean scientific/configuration surface
+        # as a local reset. Keep identity and attempt archives, and move all
+        # other root files plus WORK stages out of the execution namespace.
+        stable = {"job.json", "task.json", "input_source.json", "WORK", ".structure_history"}
+        for entry in entries:
+            if entry.name in stable or entry.name in moved:
+                continue
+            _move(entry.name, entry.name)
+        work_rel = "WORK"
+        try:
+            work_entries = self._stager.list_remote_dir(node, posixpath.join(remote_job_dir, work_rel))
+        except FileNotFoundError:
+            work_entries = []
+        for entry in work_entries:
+            if entry.name == "00_RUNTIME":
+                continue
+            rel = posixpath.join(work_rel, entry.name)
+            _move(rel, rel)
+        for entry in runtime_entries:
+            if entry.name == "attempts":
+                continue
+            rel = posixpath.join(runtime_rel, entry.name)
+            if rel not in moved:
+                _move(rel, rel)
         if moved:
             event_log.append(
                 "remote.attempts_archived",

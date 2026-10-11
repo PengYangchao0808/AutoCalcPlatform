@@ -264,6 +264,20 @@ def input_chemistry_flags(inp: dict[str, Any]) -> list[str]:
     return flags
 
 
+def electronic_state_from_method(method: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    """Resolve the electronic-state sidecar identically for both runners."""
+    levels = method.get("levels")
+    if not isinstance(levels, Mapping):
+        return None
+    for level in levels.values():
+        if not isinstance(level, Mapping) or level.get("_disabled"):
+            continue
+        module = level.get("electronic_state")
+        if isinstance(module, Mapping) and module:
+            return module
+    return None
+
+
 def scan_method_flags(
     method: Mapping[str, Any],
     inp: Mapping[str, Any] | None = None,
@@ -744,6 +758,20 @@ def nmr_method_flags(method: dict[str, Any], config: Mapping[str, Any] | None = 
     return flags
 
 
+def nmr_candidate_metadata_flags(inp: Mapping[str, Any]) -> list[str]:
+    """Carry per-candidate names and chemistry through the NMR CLI boundary."""
+    candidates = inp.get("candidates")
+    if not isinstance(candidates, list):
+        return []
+    metadata = []
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            raise ValueError("NMR candidates must be objects")
+        item = {key: candidate[key] for key in ("name", "charge", "multiplicity") if key in candidate}
+        metadata.append(item)
+    return ["--candidate-metadata-json", json.dumps(metadata, separators=(",", ":"))]
+
+
 def nmr_flag_config(config_path: str | None = None) -> dict[str, Any]:
     """Merged config backing NMR flag emission (T20 local ⇄ remote parity).
 
@@ -1115,6 +1143,8 @@ __all__ = [
     "censo_solvent_from_method",
     "censo_ewin_from_method",
     "input_chemistry_flags",
+    "electronic_state_from_method",
+    "nmr_candidate_metadata_flags",
     "scan_method_flags",
     "validate_scan_submission",
     "xtbmd_method_flags",

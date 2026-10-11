@@ -603,6 +603,7 @@ class V1EditDraftResponse(BaseModel):
     attempt: int
     source_revision: str
     editable_spec: dict[str, Any]
+    method_projection: dict[str, Any] = Field(default_factory=dict)
     input_refs: dict[str, Any]
     effective_config: dict[str, Any] = Field(default_factory=dict)
     capabilities: V1EditCapabilities
@@ -621,6 +622,10 @@ class V1EditPreviewRequest(BaseModel):
     workflow: str | None = None
     input: dict[str, Any] = Field(default_factory=dict)
     method: dict[str, Any] = Field(default_factory=dict)
+    method_projection_changed: bool = Field(
+        default=False,
+        description="Form method changed; apply levels even when equal to a stale stored mirror",
+    )
     resources: dict[str, Any] = Field(default_factory=dict)
     molecule_name: str = ""
     task_name: str = ""
@@ -669,6 +674,10 @@ class V1EditRecalculateRequest(BaseModel):
     name: str = ""
     input: dict[str, Any] = Field(default_factory=dict)
     method: dict[str, Any] = Field(default_factory=dict)
+    method_projection_changed: bool = Field(
+        default=False,
+        description="Form method changed; apply levels even when equal to a stale stored mirror",
+    )
     resources: dict[str, Any] = Field(default_factory=dict)
     output_dir: str | None = None
     config_path: str | None = None

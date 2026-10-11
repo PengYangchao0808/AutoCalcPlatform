@@ -22,6 +22,7 @@ import posixpath
 import re
 import sqlite3
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -532,6 +533,11 @@ class StructureSourceService:
         record = self._store.get(job_id)
         if record is None:
             raise ValueError(f"Job not found: {job_id}")
+        # Explicit immutable snapshot IDs survive reruns. A current-result
+        # path must never acquire an old-attempt alias while the new attempt
+        # is queued/running, even when that current path is temporarily absent.
+        if record.status.is_active and not rel_path.startswith(".structure_history/"):
+            raise ValueError(f"Job {job_id} is not completed (status={record.status.value})")
         if not rel_path.startswith(".structure_history/"):
             current = resolve_safe(record.work_dir, rel_path)
             if current is None or not current.is_file():
@@ -570,6 +576,14 @@ class StructureSourceService:
         if asset is None:
             raise ValueError(f"Source file is not a parseable XYZ structure: {rel_path}")
         checksum = single_geometry(text)["content_checksum"]
+        if rel_path.startswith(".structure_history/"):
+            snapshot = next((entry for entry in self._history_entries(record)
+                             if entry.get("path") == rel_path), None)
+            if snapshot is None or snapshot.get("content_checksum") != checksum:
+                raise ValueError(f"Unregistered or changed structure snapshot: {rel_path}")
+            for key in ("molecule_name", "charge", "multiplicity", "tag", "candidate_id"):
+                if key in snapshot:
+                    asset[key] = snapshot[key]
         return asset, checksum
 
     @staticmethod
@@ -598,20 +612,57 @@ class StructureSourceService:
         except (OSError, ValueError):
             return []
         entries = []
+        input_history: dict[int, dict[str, Any]] = {}
         for ref in refs:
             rel = ref.get("path") or ""
             path = resolve_safe(record.work_dir, rel)
             if path is None:
                 continue
+            snapshot_record = record
+            attempt = ref.get("attempt")
+            if isinstance(attempt, int) and not isinstance(attempt, bool) and attempt > 0:
+                if attempt not in input_history:
+                    try:
+                        saved = json.loads(
+                            (history.parent / f"input_{attempt}.json").read_text(encoding="utf-8")
+                        )
+                    except (OSError, ValueError):
+                        saved = {}
+                    input_history[attempt] = saved if isinstance(saved, dict) else {}
+                saved = input_history[attempt]
+                if saved:
+                    source = saved.get("source")
+                    if not isinstance(source, dict):
+                        source = (saved.get("scan_request") or {}).get("source") or saved
+                    historical_input = {
+                        **saved,
+                        **{key: source[key] for key in ("charge", "multiplicity") if key in source},
+                    }
+                    snapshot_record = replace(
+                        record, spec=replace(record.spec, input=historical_input)
+                    )
             try:
-                meta = self._parse_structure_meta(record, path.read_text(encoding="utf-8"), rel)
+                meta = self._parse_structure_meta(
+                    snapshot_record,
+                    path.read_text(encoding="utf-8"),
+                    str(ref.get("original_path") or rel),
+                    candidate_hint=str(ref.get("candidate_id") or ""),
+                    tag_hint=str(ref.get("tag") or ""),
+                )
             except (OSError, UnicodeError):
                 continue
             if meta:
+                if ref.get("snapshot_checksum") != meta.get("content_checksum"):
+                    continue
+                for key in ("charge", "multiplicity", "tag", "role", "candidate_id"):
+                    if key in ref:
+                        meta[key] = ref[key]
                 item = {"id": ref["entry_id"], "kind": "structure", "path": rel,
                         "label": str(ref.get("label") or "") + f" · attempt {ref['attempt']}",
                         "metadata": ref}
-                entries.append(self._entry(record, item, rel, meta, remote=False, needs_fetch=False))
+                entries.append(
+                    self._entry(snapshot_record, item, rel, meta, remote=False, needs_fetch=False)
+                )
         return entries
 
     def _discover_job(self, record: JobRecord) -> list[dict[str, Any]]:

@@ -13784,7 +13784,13 @@ def test_scan_selection_submission_path_lock() -> None:
     # selection panel's error sink and aborts the submit with a clear
     # result instead of queueing an unverifiable job.
     assert "setScanSelectionError(" in html
-    assert "window.alert(scanMsg);" in html
+    assert "jobFormValidationFailed(scanMsg);" in html
+    validator = html.split("function jobFormValidationFailed", 1)[1].split(
+        "\nasync function submitJobBatch", 1
+    )[0]
+    assert "ACPJobEditor.isCollecting()" in validator
+    assert "throw new Error(message)" in validator
+    assert "window.alert(message)" in validator
 
 
 def test_scan_selection_hydration_and_switch_away_lock() -> None:
