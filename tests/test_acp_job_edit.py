@@ -383,10 +383,13 @@ def test_draft_capabilities_and_input_refs(workflow: str) -> None:
     draft = build_edit_draft(record)
     assert draft["workflow"] == workflow
     assert draft["workflow_status"] == "active"
-    assert draft["capabilities"]["can_edit"] is True
-    assert draft["capabilities"]["can_in_place"] is True
-    assert draft["capabilities"]["can_new_job"] is True
-    assert draft["capabilities"]["disabled_reasons"] == []
+    dedicated = workflow in {"tsmode", "XtbPathSearch", "OrcaGradient"}
+    assert draft["capabilities"]["can_edit"] is not dedicated
+    assert draft["capabilities"]["can_in_place"] is not dedicated
+    assert draft["capabilities"]["can_new_job"] is not dedicated
+    assert bool(draft["capabilities"]["disabled_reasons"]) is dedicated
+    if dedicated:
+        assert draft["migration_hint"], "Frozen contracts must explain how to create a revised task"
     assert draft["source_revision"].startswith("sr_")
     assert draft["attempt"] == 1
     assert draft["editable_spec"]["method"], "method payload must survive the projection"
@@ -1202,6 +1205,44 @@ def test_api_submit_in_place(client: TestClient) -> None:
     assert replay.json()["replayed"] is True
 
 
+def test_api_partial_edit_replay_preserves_attempt_and_rejects_changed_patch(
+    client: TestClient,
+) -> None:
+    from cccp.utils.resource_utils import parse_memory_mb
+
+    record = _seed_api_job(client, "partial-replay")
+    endpoint = "/api/v1/jobs/partial-replay/edit-recalculate"
+    original_resources = client.get("/api/v1/jobs/partial-replay").json()["spec"]["resources"]
+    patch = {
+        "mode": "in_place",
+        "input": {"charge": -1, "multiplicity": 2},
+        "expected_source_revision": compute_source_revision(record),
+    }
+    preview = client.post(endpoint + "/preview", json=patch)
+    assert preview.status_code == 200
+    body = {
+        **patch,
+        "request_id": "req-partial-replay",
+        "preview_fingerprint": preview.json()["preview_fingerprint"],
+    }
+    submitted = client.post(endpoint, json=body)
+    assert submitted.status_code == 200
+    assert submitted.json()["attempt"] == 2
+    replay = client.post(endpoint, json=body)
+    assert replay.status_code == 200
+    assert replay.json()["replayed"] is True
+    assert replay.json()["attempt"] == 2
+    fetched = client.get("/api/v1/jobs/partial-replay").json()
+    assert fetched["spec"]["input"]["charge"] == -1
+    assert fetched["spec"]["input"]["multiplicity"] == 2
+    assert fetched["spec"]["method"] == record.spec.method
+    resources = fetched["spec"]["resources"]
+    assert resources["nproc"] == original_resources["nproc"]
+    assert parse_memory_mb(resources["mem"]) == parse_memory_mb(original_resources["mem"])
+    changed = client.post(endpoint, json={**body, "input": {"charge": 1}})
+    assert changed.status_code == 409
+
+
 def test_api_submit_fingerprint_conflict_409(client: TestClient) -> None:
     record = _seed_api_job(client, "sub2")
     spec = _spec("singlepoint")
@@ -1279,6 +1320,64 @@ def test_api_submit_new_job_mode(client: TestClient) -> None:
     assert created.json()["spec"]["method"]["levels"]["sp"]["functional"] == "HF"
 
 
+def test_api_pes_to_scan_reports_workflow_lock_before_input_validation(client: TestClient) -> None:
+    record = _seed_api_job(client, "pes_to_scan_locked", workflow="PESsearch")
+    response = client.post(
+        "/api/v1/jobs/pes_to_scan_locked/edit-recalculate/preview",
+        json={"mode": "in_place", "workflow": "scan", "input": {}, "method": {}},
+    )
+    assert response.status_code == 422
+    assert "锁定工作流" in response.json()["detail"]
+    assert "创建新任务" in response.json()["detail"]
+    manager: JobManager = client.app.state.job_manager
+    assert compute_source_revision(manager.get(record.id)) == compute_source_revision(record)
+
+
+def test_api_pes_to_scan_new_job_uses_scan_input_and_keeps_original(client: TestClient) -> None:
+    record = _seed_api_job(client, "pes_to_scan_new", workflow="PESsearch")
+    body = {
+        "mode": "new_job",
+        "workflow": "scan",
+        "task_name": "scan",
+        "input": {
+            "source_type": "xyz_text",
+            "source": XYZ_COOH,
+            "charge": -1,
+            "multiplicity": 2,
+            "scan_coordinates": ["0,1,1.2,2.4"],
+        },
+        "method": {
+            "schema_id": "dft_scan",
+            "scan_points": 11,
+            "levels": {"scan": {"engine": "orca", "functional": "r2SCAN-3c"}},
+        },
+        "resources": {"nproc": 8, "mem": "8GB"},
+        "expected_source_revision": compute_source_revision(record),
+        "request_id": "pes-to-scan-new",
+    }
+    preview = client.post(
+        "/api/v1/jobs/pes_to_scan_new/edit-recalculate/preview", json=body
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["ok"] is True
+    assert preview.json()["workflow"] == "scan"
+    body["preview_fingerprint"] = preview.json()["preview_fingerprint"]
+    response = client.post("/api/v1/jobs/pes_to_scan_new/edit-recalculate", json=body)
+    assert response.status_code == 200, response.text
+    manager: JobManager = client.app.state.job_manager
+    created = manager.get(response.json()["job_id"])
+    original = manager.get(record.id)
+    assert created.id != record.id
+    assert created.spec.workflow == "scan"
+    assert created.spec.input["scan_coordinates"] == ["0,1,1.2,2.4"]
+    assert (created.spec.input["charge"], created.spec.input["multiplicity"]) == (-1, 2)
+    assert "scan_request" not in created.spec.input
+    assert "mode" not in created.spec.method
+    assert created.spec.method["scan_points"] == 11
+    assert compute_source_revision(original) == compute_source_revision(record)
+    assert original.status == JobStatus.FAILED
+
+
 def test_api_submit_active_job_in_place_409(client: TestClient) -> None:
     _seed_api_job(client, "sub6", status=JobStatus.RUNNING)
     spec = _spec("singlepoint")
@@ -1318,7 +1417,9 @@ def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path)
 
     manager = _make_manager(tmp_path)
     try:
-        record = _seed(manager, "snapshot_opt", workflow="optimize")
+        original = _spec("optimize")
+        original = replace(original, input={**original.input, "charge": -1})
+        record = _seed(manager, "snapshot_opt", spec=original)
         root = Path(record.work_dir)
         (root / "RESULT" / "optimized.xyz").write_text(XYZ_COOH, encoding="utf-8")
         manifest = ResultManifest(workflow="optimize", status="failed")
@@ -1333,7 +1434,7 @@ def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path)
         manager.edit_recalculate(
             record.id,
             mode="in_place",
-            new_spec=record.spec,
+            new_spec=replace(record.spec, input={**record.spec.input, "charge": 1}),
             expected_source_revision=compute_source_revision(record),
             request_id="snapshot_request",
             payload_hash="snapshot_hash",
@@ -1349,6 +1450,7 @@ def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path)
         service = StructureSourceService(manager.store, manager.run_root)
         asset, checksum = service.get(refs[0]["source_ref"]["source_id"])
         assert asset["atom_count"] == 3
+        assert asset["charge"] == -1  # Immutable snapshot keeps the old attempt's chemistry.
         for actual, expected in zip(
             asset["xyz"].splitlines()[2:], XYZ_COOH.splitlines()[2:], strict=True
         ):
@@ -1356,9 +1458,12 @@ def test_inplace_rerun_keeps_successful_output_snapshot_readable(tmp_path: Path)
             assert [float(v) for v in actual.split()[1:]] == pytest.approx(
                 [float(v) for v in expected.split()[1:]]
             )
-        old_asset, _ = service.get(f"job_{record.id}:RESULT/optimized.xyz")
-        assert old_asset["atom_count"] == 3
+        with pytest.raises(ValueError, match="not completed"):
+            service.get(f"job_{record.id}:RESULT/optimized.xyz")
         assert checksum.startswith("sha256:")
+        (root / refs[0]["path"]).write_text(XYZ_COOH.replace("0.0", "0.1"), encoding="utf-8")
+        with pytest.raises(ValueError, match="snapshot"):
+            service.get(refs[0]["source_ref"]["source_id"])
     finally:
         manager.shutdown()
 

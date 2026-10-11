@@ -1,0 +1,93 @@
+== suite: architecture-remediation (root: <repo>) ==
+-- gate: cccp_imports_acp --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: workflow_executes_qc --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: workflow_route_assembly --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: backend_imports_task_module --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: compat_forwarders_are_pure --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: legacy_batch_quarantine --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: unique_run_scan --
+ALLOWED:
+src/cccp/calculation/tasks/scan.py:78: def run_scan(
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: unique_run_irc --
+ALLOWED:
+src/cccp/calculation/tasks/irc.py:111: def run_irc(
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: wave2_shermo_external --
+ALLOWED:
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+-- gate: final_shermo --
+ALLOWED:
+src/acp/scheduler/capabilities.py:118: #: energy_shared.py:489 ``run_shermo``).  ORCA itself is already in the
+src/acp/scheduler/capabilities.py:135: #: ``run_shermo``).
+src/cccp/backends/AGENTS.md:33: | External tools | `external_backend.py` | Thermochemistry via shared `execute_shermo` + `thermo_normalize` (todo 14); NO direct `run_shermo`, NO task-layer imports |
+src/cccp/qc/AGENTS.md:27: | Shermo thermo | `runners/__init__.py` | `run_shermo()`（唯一 runner）+ `batch_process_thermo()`（低层兼容包装，DEPRECATED）— 见下方"Shermo 单一实现" |
+src/cccp/qc/AGENTS.md:39: - **`run_shermo` 是 QC 接口/runner 层职责** — 驻留 `runners/__init__.py` 属正常分层；目录统一（如并入 `interfaces/`）非最高优先级，迁移须保留旧导入路径。
+src/cccp/qc/AGENTS.md:43: - `run_shermo` 的合法调用方：共享适配（`shermo_adapter.py`）与 `batch_process_thermo` 等低层兼容包装（同一 runner 文件内，**不计为重复科学实现**）；`energy_shared` 的直调已移除。
+src/cccp/qc/AGENTS.md:44: - `scripts/check_grep_gates.py::FINAL_SHERMO_ALLOWED_PATHS` 仅 `src/cccp/**` — `src/acp` 禁止生产直呼 `run_shermo`（注释/导入/类型除外）。
+src/cccp/qc/__init__.py:20:     run_shermo,
+src/cccp/qc/__init__.py:41:     "run_shermo",
+src/cccp/qc/runners/__init__.py:7: ``run_shermo`` below is the single Shermo runner (QC-interface/runner
+src/cccp/qc/runners/__init__.py:87: def run_shermo(
+src/cccp/qc/runners/__init__.py:235:             otherwise call :func:`run_shermo` per file directly.
+src/cccp/qc/runners/__init__.py:260:         thermo = run_shermo(
+src/cccp/qc/shermo_adapter.py:22: from cccp.qc.runners import run_shermo
+src/cccp/qc/shermo_adapter.py:238:     raw_result = run_shermo(
+ALLOWLISTED (wave-0 baseline, must only shrink):
+BLOCKING:
+STALE ALLOWLIST ENTRIES (violations gone — remove the entry in the same todo):
+HISTORICAL GATES (separate case, excluded from this suite — never widen exemptions):
+compat_no_writers
+wave2_optfreq
+wave2_no_result_summary
+wave3_confirmengine
+wave3_no_batchmanifest
+wave3_no_legacy_manifests
+wave3_batch_no_stages
+wave4_endpointprovider
+wave4_confirm_no_irc
+wave4_batch_no_irc
+wave5_s2manifest
+wave5_layout_imports
+wave6
+wave6_scheduler_mechanism
+wave6_zero
+wave7_no_db_writes
+wave8_confsearch_decoupled
+wave8_cccp_engine_gone
+wave8_engine_import_gone
+wave8_optfreq_all
+docs_retired_map_only
+frontend_removed_tokens
+final_mechanism_imports
+pre_delete_mechanism_external
+final_stage_terms
+final_optfreq_terms
+final_forbidden_symbols
+calculations_no_mechanism_terms
+== summary ==
+gates run: 10
+allowlisted findings: 0
+blocking findings: 0
+stale allowlist entries: 0

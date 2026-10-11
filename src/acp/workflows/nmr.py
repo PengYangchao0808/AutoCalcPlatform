@@ -201,6 +201,7 @@ def _parse_candidates(
     charge: int | None,
     multiplicity: int | None,
     strict_topology: bool = False,
+    candidate_metadata: list[dict[str, Any]] | None = None,
 ) -> list[Structure]:
     """Parse each input source (SMILES/SDF/XYZ) into a :class:`Structure`.
 
@@ -216,17 +217,29 @@ def _parse_candidates(
     :class:`TopologyUnavailableError` instead of degrading.
     """
     reader = StructureReader()
+    if candidate_metadata is not None and len(candidate_metadata) != len(input_sources):
+        raise ValueError("NMR candidate metadata must contain one object per input")
     candidates: list[Structure] = []
+    used_ids: set[str] = set()
     for idx, source in enumerate(input_sources):
+        submitted = candidate_metadata[idx] if candidate_metadata is not None else {}
+        candidate_charge = submitted.get("charge", charge)
+        candidate_mult = submitted.get("multiplicity", multiplicity)
         structure = reader.read(
             source,
-            charge=charge,
-            multiplicity=multiplicity,
-            name=f"candidate_{idx + 1}",
+            charge=candidate_charge,
+            multiplicity=candidate_mult,
+            name=str(submitted.get("name") or f"candidate_{idx + 1}"),
         )
         safe = sanitize_job_name(structure.id) or f"candidate_{idx + 1}"
+        base_id = safe
+        suffix = 2
+        while safe in used_ids:
+            safe = f"{base_id}__{suffix:02d}"
+            suffix += 1
+        used_ids.add(safe)
         metadata: dict[str, object] = {"source": source, **(structure.metadata or {})}
-        metadata.update(_capture_candidate_topology(structure, source, charge, multiplicity))
+        metadata.update(_capture_candidate_topology(structure, source, candidate_charge, candidate_mult))
         if strict_topology and metadata["nmr_structure_map"] is None:
             raise TopologyUnavailableError(
                 f"topology unavailable for candidate {idx + 1} ({source!r}): "
@@ -3255,6 +3268,7 @@ def run_nmr_analysis(
     bruker: str | Path | None = None,
     bruker_references: dict[str, float] | None = None,
     progress_reporter: ProgressReporter | None = None,
+    candidate_metadata: list[dict[str, Any]] | None = None,
 ) -> WorkflowResult:
     """Run the full NMR + DP4/DP5 workflow.
 
@@ -3331,7 +3345,8 @@ def run_nmr_analysis(
         )
     try:
         candidates = _parse_candidates(
-            input_sources, charge, multiplicity, strict_topology=strict_topology
+            input_sources, charge, multiplicity, strict_topology=strict_topology,
+            candidate_metadata=candidate_metadata,
         )
         if bruker is not None:
             experiment = _load_experiment_bruker(bruker, bruker_references, output_root)
@@ -3365,7 +3380,9 @@ def run_nmr_analysis(
 
     # Stage 1 (optional): diastereomer enumeration (DevDoc §5, P2)
     if enumerate_stereoisomers:
-        enum_result = _enumerate_input(input_sources, stereocenters, charge, multiplicity)
+        enum_result = _enumerate_input(
+            input_sources, stereocenters, candidates[0].charge, candidates[0].multiplicity
+        )
         if isinstance(enum_result, str):
             _fail_progress(progress_reporter, enum_result)
             return WorkflowResult(

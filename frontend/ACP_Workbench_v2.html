@@ -6626,6 +6626,9 @@ const I18N = {
     "edit.execution_mode": "执行：",
     "edit.exec_in_place": "原地重算",
     "edit.exec_new_job": "创建新任务",
+    "edit.workflow_locked": "原地重算保留原工作流；如需从 PESsearch 等工作流切换为 scan，请先在底部选择“创建新任务”。",
+    "edit.workflow_changed": "已更换工作流，将创建新任务。计算方案已按新工作流重设，请核对输入结构和计算参数。",
+    "edit.pes_selection_required": "PESsearch 扫描原子尚未选定，请返回步骤 2，在结构预览中选择扫描原子。",
     "edit.in_place_blocked": "当前状态不可原地重算：请先取消并等待终态，或切换为创建新任务",
     "edit.changed_n": "已修改 {n} 项",
     "edit.batch_items_summary": "批量输入清单（共 {total} 项，可勾选参与重算的部分）",
@@ -8237,6 +8240,9 @@ const I18N = {
     "edit.execution_mode": "Execution:",
     "edit.exec_in_place": "Recalculate in place",
     "edit.exec_new_job": "Create a new task",
+    "edit.workflow_locked": "In-place recalculation keeps the original workflow. Select “Create a new task” below before switching workflows, for example from PESsearch to scan.",
+    "edit.workflow_changed": "The workflow changed and a new task will be created. Its calculation profile has been reset; review the input structure and calculation parameters.",
+    "edit.pes_selection_required": "PESsearch scan atoms are not selected. Return to step 2 and select them in the structure preview.",
     "edit.in_place_blocked": "In-place recalculation unavailable: cancel and wait for a terminal status, or switch to new-task mode",
     "edit.changed_n": "{n} field(s) modified",
     "edit.batch_items_summary": "Batch items ({total} total — untick to exclude)",
@@ -29211,7 +29217,7 @@ async function submitStageWorkflowJob(workflow) {
   try {
     payload = collectStageJobPayload(workflow, methodBase);
   } catch (err) {
-    window.alert(String(err.message || err));
+    jobFormValidationFailed(String(err.message || err));
     return;
   }
   var body = {
@@ -29236,6 +29242,7 @@ async function submitStageWorkflowJob(workflow) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
+    if (created && created.__editCollected) return;
     await refreshJobs();
     if (created && created.job_id) await selectJob(created.job_id);
   } catch (err) {
@@ -29263,6 +29270,15 @@ async function openWorkflowConfig() {
   }
 
   container.innerHTML = "";
+  var workflowLockHint = window.ACPJobEditor && ACPJobEditor.workflowSelectionError
+    ? workflowCatalogCache.map(function(wf) { return ACPJobEditor.workflowSelectionError(wf.id); }).find(Boolean)
+    : "";
+  if (workflowLockHint) {
+    var hint = document.createElement("div");
+    hint.className = "edit-banner-hint";
+    hint.textContent = workflowLockHint;
+    container.appendChild(hint);
+  }
   var categories = {};
   workflowCatalogCache.forEach(function(wf) {
     if (!categories[wf.category]) categories[wf.category] = [];
@@ -29290,8 +29306,15 @@ async function openWorkflowConfig() {
     categories[cat].forEach(function(wf) {
       var opt = document.createElement("div");
       opt.className = "workflow-option";
+      opt.setAttribute("data-workflow-id", wf.id);
       if (wf.id === wizardState.workflow.id) opt.classList.add("selected");
-      if (wf.status === "planned") opt.classList.add("disabled");
+      var selectionError = window.ACPJobEditor && ACPJobEditor.workflowSelectionError
+        ? ACPJobEditor.workflowSelectionError(wf.id) : "";
+      if (wf.status === "planned" || selectionError) {
+        opt.classList.add("disabled");
+        opt.setAttribute("aria-disabled", "true");
+        if (selectionError) opt.title = selectionError;
+      }
       var cat2 = currentLang === "zh-CN" ? "label_zh" : "label";
       opt.innerHTML =
         '<div class="workflow-option-title">' + escapeHtml(wf[cat2] || wf.label) +
@@ -29300,7 +29323,7 @@ async function openWorkflowConfig() {
         '<div class="workflow-option-desc">' + escapeHtml(
           currentLang === "zh-CN" ? (wf.description_zh || wf.description || "") : (wf.description || "")
         ) + '</div>';
-      if (wf.status !== "planned") {
+      if (wf.status !== "planned" && !selectionError) {
         opt.addEventListener("click", function() {
           wizardState.workflow = {
             id: wf.id,
@@ -29320,6 +29343,7 @@ async function openWorkflowConfig() {
           configureStageSourcePanel(wf.id);
           updateS2InlineVisibility();
           updateInputModeVisibility();
+          if (window.ACPJobEditor && ACPJobEditor.isActive()) ACPJobEditor.refreshUi();
         });
       }
       grid.appendChild(opt);
@@ -31732,6 +31756,11 @@ async function openMethodConfig() {
   doValidate().then(function() { refreshMethodValidationState(); });
 }
 
+function jobFormValidationFailed(message) {
+  if (window.ACPJobEditor && ACPJobEditor.isCollecting()) throw new Error(message);
+  window.alert(message);
+}
+
 async function submitJobBatch(bodies) {
   // The scheduler owns execution concurrency.  Submit every molecule now so
   // all JobRecords are durable before the first workflow finishes; the
@@ -31853,20 +31882,20 @@ async function submitPESsearchTask() {
   var kind = selectionKind === "angle" ? "angle" : selectionKind === "dihedral" ? "dihedral" : "distance";
   var expected = selectionKind === "bond_stretch" ? 2 : selectionKind === "angle" ? 3 : 4;
   if (!structure || !structure.xyz) {
-    window.alert(t("modal.parse_first") || "请先解析结构");
+    jobFormValidationFailed(t("modal.parse_first") || "请先解析结构");
     return;
   }
   if (wizardStructures.length !== 1) {
-    window.alert("PESsearch 每个任务需要且只接受一个结构，请返回步骤 1，仅保留一个输入结构后再提交。");
+    jobFormValidationFailed("PESsearch 每个任务需要且只接受一个结构，请返回步骤 1，仅保留一个输入结构后再提交。");
     return;
   }
   var sourceXyz = String(structure.xyz).trim();
   if (!pesSelectionState.structureKey || pesSelectionState.structureKey !== sourceXyz) {
-    window.alert("扫描原子选择与当前输入结构不一致，请返回步骤 2，在右侧结构预览中重新选择。");
+    jobFormValidationFailed("扫描原子选择与当前输入结构不一致，请返回步骤 2，在右侧结构预览中重新选择。");
     return;
   }
   if (selected.length !== expected) {
-    window.alert("请先在 MOL.js 中选择 " + expected + " 个扫描原子");
+    jobFormValidationFailed("请先在结构预览中选择 " + expected + " 个扫描原子");
     return;
   }
   var sourceAtoms = parseXyzAtoms(sourceXyz);
@@ -31874,7 +31903,7 @@ async function submitPESsearchTask() {
   if (distinctSelection.size !== expected || selected.some(function(index) {
     return !Number.isInteger(index) || index < 0 || index >= sourceAtoms.length;
   })) {
-    window.alert("扫描原子编号无效或重复，请返回步骤 2 重新选择。");
+    jobFormValidationFailed("扫描原子编号无效或重复，请返回步骤 2 重新选择。");
     return;
   }
   var start = coordinate.start;
@@ -31882,7 +31911,7 @@ async function submitPESsearchTask() {
   var points = coordinate.n_points;
   var bond2Range = null;
   if (!isFinite(start) || !isFinite(end) || !isFinite(points) || points < 3 || points > 101 || start === end) {
-    window.alert("请在计算协议中完整填写有效的 PESsearch 扫描范围和点数");
+    jobFormValidationFailed("请在计算协议中完整填写有效的 PESsearch 扫描范围和点数");
     return;
   }
   if (selectionKind === "double_bond_scan") {
@@ -31891,7 +31920,7 @@ async function submitPESsearchTask() {
     var selAtoms = (typeof s2scanState !== "undefined" && s2scanState && s2scanState.atoms) || [];
     var a0 = selAtoms[selected[0]], a1 = selAtoms[selected[1]], a2 = selAtoms[selected[2]], a3 = selAtoms[selected[3]];
     if (!a0 || !a1 || !a2 || !a3) {
-      window.alert("无法读取选中原子的坐标，请在结构预览中重新选择扫描原子");
+      jobFormValidationFailed("无法读取选中原子的坐标，请在结构预览中重新选择扫描原子");
       return;
     }
     var delta = end - start;
@@ -31900,7 +31929,7 @@ async function submitPESsearchTask() {
     var end1 = Number((len1 + delta).toFixed(4));
     var end2 = Number((len2 + delta).toFixed(4));
     if (len1 + delta <= 0 || len2 + delta <= 0) {
-      window.alert("双键同步扫描的目标键长必须大于 0，请调整扫描范围（当前键长 " + len1 + " Å / " + len2 + " Å）");
+      jobFormValidationFailed("双键同步扫描的目标键长必须大于 0，请调整扫描范围（当前键长 " + len1 + " Å / " + len2 + " Å）");
       return;
     }
     start = len1;
@@ -32010,7 +32039,7 @@ async function submitPESsearchTask() {
   var _confirmMsg = (t("modal.scan_summary_title") || "提交确认") + "\n\n"
     + _summaryLines.map(function(pair) { return pair[0] + "：" + pair[1]; }).join("\n")
     + "\n\n" + (currentLang === "zh-CN" ? "确认提交？" : "Confirm submission?");
-  if (!window.confirm(_confirmMsg)) {
+  if (!(window.ACPJobEditor && ACPJobEditor.isCollecting()) && !window.confirm(_confirmMsg)) {
     if (submitButton) submitButton.disabled = false;
     return;
   }
@@ -32022,6 +32051,7 @@ async function submitPESsearchTask() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (result && result.__editCollected) return;
     _discardSavedWizardDraft();
     closeModal();
     await refreshJobs();
@@ -32101,13 +32131,13 @@ async function submitJobModal() {
   }
 
   if (!wizardStructures.length) {
-    window.alert(t("modal.parse_first") || "\u8bf7\u5148\u89e3\u6790\u7ed3\u6784");
+    jobFormValidationFailed(t("modal.parse_first") || "\u8bf7\u5148\u89e3\u6790\u7ed3\u6784");
     return;
   }
 
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
   if (wfEntry && wfEntry.status === "planned") {
-    window.alert(t("modal.workflow_not_available") || "\u8be5\u5de5\u4f5c\u6d41\u5c1a\u672a\u63a5\u5165\u540e\u7aef\uff0c\u65e0\u6cd5\u63d0\u4ea4");
+    jobFormValidationFailed(t("modal.workflow_not_available") || "\u8be5\u5de5\u4f5c\u6d41\u5c1a\u672a\u63a5\u5165\u540e\u7aef\uff0c\u65e0\u6cd5\u63d0\u4ea4");
     return;
   }
 
@@ -32153,7 +32183,7 @@ async function submitJobModal() {
       // P3: Bruker raw-data zip uploaded via /uploads?parse=false.
       if (!nmrBrukerAsset || !nmrBrukerAsset.upload_id) {
         if (nmrStatus) nmrStatus.textContent = t("modal.nmr_bruker_required") || "需上传 Bruker zip";
-        window.alert(t("modal.nmr_bruker_required") || "请先上传 Bruker zip");
+        jobFormValidationFailed(t("modal.nmr_bruker_required") || "请先上传 Bruker zip");
         return;
       }
       nmrExperiment = {
@@ -32166,7 +32196,7 @@ async function submitJobModal() {
       var expText = (document.getElementById("nmr-experiment-text").value || "").trim();
       if (!expText) {
         if (nmrStatus) nmrStatus.textContent = t("modal.nmr_spectrum_required") || "需实验谱";
-        window.alert(t("modal.nmr_spectrum_required") || "NMR 工作流需要实验谱文本");
+        jobFormValidationFailed(t("modal.nmr_spectrum_required") || "NMR 工作流需要实验谱文本");
         return;
       }
       nmrExperiment = { mode: "assigned", content: expText };
@@ -32193,7 +32223,7 @@ async function submitJobModal() {
       nmrCandidates.push(np);
     }
     if (!nmrCandidates.length) {
-      window.alert(t("modal.parse_first") || "请先解析结构");
+      jobFormValidationFailed(t("modal.parse_first") || "请先解析结构");
       return;
     }
     var nmrCleanedLevels = {};
@@ -32249,6 +32279,7 @@ async function submitJobModal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nmrBody),
       });
+      if (nmrResult && nmrResult.__editCollected) return;
       _discardSavedWizardDraft();
       closeModal();
       await refreshJobs();
@@ -32401,7 +32432,7 @@ async function submitJobModal() {
         var scanMsg = (t("modal.scan_invalid") || "Invalid scan parameters") +
           " (" + moleculeName + "): " + scanWizardErrorMessage(scanParts.code);
         setScanSelectionError(scanParts.code);
-        window.alert(scanMsg);
+        jobFormValidationFailed(scanMsg);
         return;
       }
     }
@@ -32575,6 +32606,7 @@ async function submitJobModal() {
   }
   try {
     await submitJobBatch(batchBodies);
+    if (window.ACPJobEditor && ACPJobEditor.isCollecting()) return;
     _discardSavedWizardDraft();
     closeModal();
   } catch (error) {

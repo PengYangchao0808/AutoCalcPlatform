@@ -2395,18 +2395,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                     "scan_coordinate_start",
                     "scan_coordinate_end",
                     "scan_coordinate_points",
-                    "scan_mode",
-                    "scan_reuse_previous_geometry",
-                    "scan_full_scan",
-                    "scan_failure_policy",
-                    "scan_retry_count",
                     "scan_use_scants",
-                    "scan_max_iterations",
-                    "scan_optimizer_method",
-                    "scan_optimizer_max_iterations",
-                    "scan_optimizer_convergence",
-                    "scan_optimizer_retries",
-                    "scan_optimizer_retry_strategy",
+                    "max_steps",
                     "electronic_state",
                 ],
             }
@@ -2433,18 +2423,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "scan_coordinate_start": 1.0,
                         "scan_coordinate_end": 3.0,
                         "scan_coordinate_points": 21,
-                        "scan_mode": "relaxed_scan",
-                        "scan_reuse_previous_geometry": True,
-                        "scan_full_scan": True,
-                        "scan_failure_policy": "retry_previous",
-                        "scan_retry_count": 2,
                         "scan_use_scants": False,
-                        "scan_max_iterations": 250,
-                        "scan_optimizer_method": "GFN2-xTB",
-                        "scan_optimizer_max_iterations": 250,
-                        "scan_optimizer_convergence": "normal",
-                        "scan_optimizer_retries": 2,
-                        "scan_optimizer_retry_strategy": "previous_geometry",
+                        "max_steps": 250,
                     }
                 },
             }
@@ -5182,6 +5162,7 @@ def method_levels_to_workflow_config(
 
 _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     "functional": "method",
+    "grid": "grid",
     "basis": "basis",
     "aux_j_basis": "aux-j-basis",
     "aux_c_basis": "aux-c-basis",
@@ -5226,10 +5207,17 @@ _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     # --calc-hess / --no-calc-hess rather than a single --recalc-hess flag.
 }
 
+_SIMPLE_LEVEL_FIELDS = frozenset({
+    "functional", "basis", "aux_j_basis", "aux_c_basis", "ri_approximation",
+    "dispersion", "solvent_model", "solvent", "grid", "scf_convergence",
+})
+
 
 def method_levels_to_cli_flags(
     levels: dict[str, Any],
     prefix_map: dict[str, str] | None = None,
+    *,
+    workflow: str | None = None,
 ) -> list[str]:
     """Convert method levels dict to CLI flag list.
 
@@ -5243,10 +5231,21 @@ def method_levels_to_cli_flags(
     prefix_map = prefix_map or {}
     cmd: list[str] = []
     for level_id, level_config in levels.items():
+        if not isinstance(level_config, dict) or level_config.get("_disabled"):
+            continue
         prefix = prefix_map.get(level_id, "")
         for field, value in level_config.items():
             if field == "engine" or value is None or value == "":
                 continue
+            if workflow in {"singlepoint", "optimize", "frequency", "scan"}:
+                supported = _SIMPLE_LEVEL_FIELDS
+                if workflow in {"optimize", "scan"}:
+                    supported = supported | {"max_steps"}
+                if workflow == "optimize":
+                    supported = supported | {"opt_convergence", "recalc_hess"}
+                if field in _LEVEL_TO_CLI_FLAG_MAP or field == "recalc_hess":
+                    if field not in supported:
+                        raise ValueError(f"{workflow} does not support method field {field!r}")
             # recalc_hess maps to the mutually-exclusive --calc-hess /
             # --no-calc-hess CLI surface. It is only meaningful on the
             # unprefixed opt level; prefixed levels (e.g. sp-) are skipped

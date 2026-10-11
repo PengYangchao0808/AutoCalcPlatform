@@ -19,6 +19,8 @@ import threading
 import urllib.parse
 from collections import Counter, OrderedDict
 from collections.abc import Callable
+from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol
@@ -2040,6 +2042,9 @@ def _canonicalize_batch_keywords(method: dict[str, Any]) -> None:
         batch = levels.get("batch")
         if isinstance(batch, dict):
             targets.append(batch)
+    roles = method.get("batch_roles")
+    if isinstance(roles, dict):
+        targets.extend(role for role in roles.values() if isinstance(role, dict))
     for field in _BATCH_KEYWORD_FIELDS:
         options = FIELD_DEFINITIONS.get(field, {}).get("options")
         if not options:
@@ -2178,6 +2183,18 @@ def preview_irc_ts_source(request: Request, source_id: str = Query(...)) -> dict
     return source.provenance()
 
 
+def _validate_simple_method_cli(workflow: str, method: dict[str, Any]) -> None:
+    """Fail before queueing when a method field has no simple CLI consumer."""
+    if workflow not in {"singlepoint", "optimize", "frequency", "scan"}:
+        return
+    from acp.catalog import method_levels_to_cli_flags
+
+    try:
+        method_levels_to_cli_flags(method.get("levels") or {}, workflow=workflow)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 def _validate_scan_submission(
     workflow: str, method: dict[str, Any], inp: dict[str, Any]
 ) -> None:
@@ -2208,6 +2225,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
     req.method = _expand_method_electronic_state(req.method)
+    _validate_simple_method_cli(req.workflow, req.method)
     _validate_scan_submission(req.workflow, req.method, req.input)
     if req.workflow == "irc":
         req.input = _resolve_irc_source_reference(req.input, manager)
@@ -5113,14 +5131,51 @@ def _build_edited_spec(
     is legal at creation is legal for recalculation and vice versa (plan §9).
     """
     workflow = req.workflow or record.spec.workflow
+    if req.mode == "in_place" and workflow != record.spec.workflow:
+        raise EditValidationError(
+            "原地重算锁定工作流；请切换为「创建新任务」以更换工作流"
+        )
     edit_status = workflow_edit_status(workflow)
     if not edit_status["editable"]:
         raise EditValidationError(
-            f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算；"
-            f"迁移建议：{edit_status.get('migration_hint') or '—'}"
+            edit_status.get("migration_hint") or
+            f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算"
         )
-    method = _expand_method_electronic_state(dict(req.method))
-    inp = dict(req.input)
+    from acp.scheduler.edit_parameters import (
+        apply_edited_parameters,
+        merge_edit_input,
+        merge_edit_section,
+    )
+
+    supplied = req.model_fields_set
+    same_workflow = workflow == record.spec.workflow
+
+    def section(key: str) -> dict[str, Any]:
+        original = getattr(record.spec, key) if same_workflow else {}
+        if key not in supplied:
+            return deepcopy(original)
+        if key == "input":
+            return merge_edit_input(original, getattr(req, key))
+        return merge_edit_section(original, getattr(req, key))
+
+    method = _expand_method_electronic_state(section("method"))
+    inp = section("input")
+    if same_workflow:
+        try:
+            edited_levels = None
+            if "method" in supplied and (
+                req.method_projection_changed or req.method != record.spec.method
+            ):
+                edited_levels = req.method.get("levels") or {}
+            method, inp = apply_edited_parameters(
+                record.spec, method, inp, edited_levels=edited_levels,
+            )
+        except ValueError as exc:
+            raise EditValidationError(str(exc)) from exc
+    _validate_scan_submission(workflow, method, inp)
+    _validate_simple_method_cli(workflow, method)
+    if workflow == "BatchOptimize" and method != record.spec.method:
+        _canonicalize_batch_keywords(method)
     batch_snapshots: list[dict[str, Any]] = []
     _validate_reaction_path_frame_input(inp, record, request, manager)
     structure_changed = input_structure_changed(
@@ -5177,20 +5232,20 @@ def _build_edited_spec(
     is_submit = isinstance(req, V1EditRecalculateRequest)
     spec = JobSpec(
         workflow=workflow,
-        name=req.name if is_submit else record.spec.name,
+        name=req.name if is_submit and "name" in supplied else record.spec.name,
         input=inp,
         method=method,
-        resources=dict(req.resources),
+        resources=section("resources"),
         output_dir=req.output_dir if is_submit else None,
         config_path=(req.config_path if is_submit and req.config_path else record.spec.config_path),
-        tags=list(req.tags),
-        node_tags=list(req.node_tags),
+        tags=list(req.tags if "tags" in supplied else record.spec.tags),
+        node_tags=list(req.node_tags if "node_tags" in supplied else record.spec.node_tags),
         project_id=req.project_id or (record.project_id or record.spec.project_id),
         execution_mode=execution_mode,
         target_node=target_node,
         molecule_name=molecule_name,
         task_name=task_name,
-        remark=req.remark,
+        remark=req.remark if "remark" in supplied else record.spec.remark,
     )
     if workflow == "irc":
         try:
@@ -5338,6 +5393,14 @@ def _edit_payload_dict(
     }
 
 
+def _edit_request_payload(job_id: str, body: V1EditRecalculateRequest) -> dict[str, Any]:
+    """Hash supplied patch fields, independently of the mutable source spec."""
+    return {"job_id": job_id, "request": body.model_dump(
+        exclude_unset=True,
+        exclude={"request_id", "expected_source_revision", "preview_fingerprint"},
+    )}
+
+
 @router.get("/jobs/{job_id}/edit-draft", response_model=V1EditDraftResponse)
 def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
     """Restore the original submission configuration as an editable draft."""
@@ -5345,7 +5408,11 @@ def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    draft = build_edit_draft(record, run_root=manager.run_root)
+    read_record = record
+    if _is_remote_job(record):
+        root = _job_read_root(request, record)
+        read_record = replace(record, work_dir=str(root))
+    draft = build_edit_draft(read_record, run_root=manager.run_root)
     if _is_remote_job(record):
         from acp.scheduler.job_edit import resolve_previous_outputs
         root = _job_read_root(request, record)
@@ -5521,6 +5588,9 @@ def submit_job_edit_recalculate(
     from acp.scheduler.job_edit import JobEditOperationStore
 
     known_request = False
+    payload = _edit_request_payload(job_id, body)
+    payload_hash = compute_payload_hash(payload)
+    legacy_payload = False
     existing_op = JobEditOperationStore(manager.store.db_path).get(body.request_id)
     if existing_op is not None:
         if existing_op["job_id"] != job_id:
@@ -5531,12 +5601,22 @@ def submit_job_edit_recalculate(
         # A replayed request may legitimately carry a stale revision and
         # fingerprint — the manager's payload-hash check arbitrates it.
         known_request = True
+        stored_payload = json.loads(existing_op["payload_json"] or "{}")
+        legacy_payload = "request" not in stored_payload
+        if not legacy_payload:
+            if existing_op["payload_hash"] != payload_hash:
+                raise HTTPException(status_code=409, detail="request_id 已用于不同的提交负载")
+            if existing_op["status"] == "completed":
+                result = json.loads(existing_op["result_json"] or "{}")
+                result["replayed"] = True
+                return V1EditRecalculateResponse(**result)
     source_status = workflow_edit_status(record.spec.workflow)
     if body.mode == "in_place":
         if not source_status["editable"]:
             raise HTTPException(
                 status_code=422,
                 detail=(
+                    source_status.get("migration_hint") or
                     f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
                     "历史任务仅支持查看与迁移，原地编辑重算已禁用"
                 ),
@@ -5578,7 +5658,9 @@ def submit_job_edit_recalculate(
                 },
             )
     diff = _edited_spec_diff(record, spec)
-    payload = _edit_payload_dict(job_id, body, spec)
+    if legacy_payload:
+        payload = _edit_payload_dict(job_id, body, spec)
+        payload_hash = compute_payload_hash(payload)
     try:
         result = manager.edit_recalculate(
             job_id,
@@ -5586,7 +5668,7 @@ def submit_job_edit_recalculate(
             new_spec=spec,
             expected_source_revision=body.expected_source_revision,
             request_id=body.request_id,
-            payload_hash=compute_payload_hash(payload),
+            payload_hash=payload_hash,
             payload_json=json.dumps(payload, default=str, sort_keys=True),
             diff_summary=diff,
         )

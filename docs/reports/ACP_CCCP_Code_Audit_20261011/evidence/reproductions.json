@@ -1,0 +1,201 @@
+{
+  "remote_electronic_state_loss": {
+    "local_argv": [
+      "/usr/bin/python3.11",
+      "-m",
+      "acp.cli",
+      "run",
+      "singlepoint",
+      "--input",
+      "molecule.xyz",
+      "--output",
+      "/tmp/acp-code-audit-u0z_q00q/task",
+      "--method",
+      "PBE0",
+      "--basis",
+      "def2-SVP",
+      "--spin-config",
+      "/tmp/acp-code-audit-u0z_q00q/task/electronic_state.json",
+      "--nproc",
+      "1",
+      "--mem",
+      "1GB",
+      "--charge",
+      "0",
+      "--multiplicity",
+      "3"
+    ],
+    "remote_argv": [
+      "python",
+      "-m",
+      "acp.cli",
+      "run",
+      "singlepoint",
+      "--input",
+      "molecule.xyz",
+      "--output",
+      ".",
+      "--method",
+      "PBE0",
+      "--basis",
+      "def2-SVP",
+      "--nproc",
+      "1",
+      "--mem",
+      "1GB",
+      "--charge",
+      "0",
+      "--multiplicity",
+      "3"
+    ],
+    "local_has_spin_config": true,
+    "remote_has_spin_config": false,
+    "local_sidecar_exists": true
+  },
+  "remote_casscf_builder_gap": {
+    "result": "No remote subprocess mapping for workflow: casscf"
+  },
+  "truncated_xyz_accepted_by_task_loader": {
+    "declared_atoms": 3,
+    "loaded_atoms": 2,
+    "shape": [
+      2,
+      3
+    ]
+  },
+  "nonfinite_geometry_accepted_by_task_loader": {
+    "finite": false
+  },
+  "xyz_writer_silently_truncates": {
+    "declared_atoms": 2,
+    "written_atom_rows": 1
+  },
+  "multiframe_element_identity_loss": {
+    "actual_frame_symbols": [
+      [
+        "C",
+        "H"
+      ],
+      [
+        "N",
+        "H"
+      ]
+    ],
+    "returned_symbols_for_all_frames": [
+      "C",
+      "H"
+    ],
+    "shape": [
+      4,
+      3
+    ]
+  },
+  "standard_gjf_charge_multiplicity_loss": {
+    "input": [
+      1,
+      2
+    ],
+    "cccp_reader": [
+      0,
+      1
+    ],
+    "cccp_handler": [
+      0,
+      1
+    ],
+    "acp_intake": [
+      0,
+      1
+    ]
+  },
+  "standard_orca_intake_charge_multiplicity_loss": {
+    "input": [
+      1,
+      2
+    ],
+    "acp_intake": [
+      0,
+      1
+    ]
+  },
+  "legacy_candidate_energy_unit_mismatch": {
+    "gap_hartree": 0.0015936014376405157,
+    "gap_kcal_mol": 1.0,
+    "legacy_weights": [
+      0.5006724224324554,
+      0.49932757756754464
+    ],
+    "hartree_aware_weights": [
+      0.8439354867781949,
+      0.15606451322180512
+    ],
+    "selected_in_half_kcal_window": 2
+  },
+  "negative_scan_index_passes_task_validation": {
+    "input_atoms_1_based": [
+      0,
+      1
+    ],
+    "backend_atoms_0_based": [
+      -1,
+      0
+    ],
+    "validator": "accepted"
+  },
+  "nonuniform_lambda_targets_use_uniform_progress": {
+    "lambda_values": [
+      0.0,
+      0.2,
+      1.0
+    ],
+    "expected_middle_target": 1.4,
+    "actual_middle_target": 2.0,
+    "actual_middle_constraint": 2.0
+  },
+  "plan_point_override_drops_full_fidelity_fields": {
+    "original_lambda_values": [
+      0.0,
+      0.2,
+      1.0
+    ],
+    "copy_lambda_values": [],
+    "copy_points": 4
+  },
+  "negative_temperature_accepted_zero": {
+    "weights": [
+      0.15606451322180515,
+      0.8439354867781949
+    ]
+  },
+  "negative_temperature_accepted_none": {
+    "weights": [
+      0.15606451322180515,
+      0.8439354867781949
+    ]
+  },
+  "legacy_store_update_revives_terminal": {
+    "terminal_before_legacy_update": "completed",
+    "status_after": "queued",
+    "revision_after": 1
+  },
+  "legacy_store_delete_leaves_task_row": {
+    "job_exists": false,
+    "task_exists": true
+  },
+  "invalid_remote_config_becomes_local": {
+    "input_mode": "remot",
+    "resolved_mode": "local"
+  },
+  "server_import_creates_run_root": {
+    "exists": true
+  },
+  "legacy_lsf_shell_list_does_not_redirect": {
+    "shell_argv_shape": [
+      "command",
+      "<",
+      "submit.lsf"
+    ],
+    "stdout": "stdin=",
+    "meaning": "the redirection tokens are positional shell arguments, not stdin redirection"
+  }
+}

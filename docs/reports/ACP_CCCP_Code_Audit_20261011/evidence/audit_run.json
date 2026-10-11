@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-10-11",
+  "timezone": "Asia/Shanghai",
+  "source_commit": "27d2e2b3f6508c96d2d5e04e4e1ff6d8a37359ea",
+  "source_worktree_clean_at_start": true,
+  "python": "3.11.13",
+  "tools_and_dependencies": {
+    "pytest": "9.1.1",
+    "ruff": "0.15.22",
+    "mypy": "2.3.1",
+    "fastapi": "0.141.1",
+    "starlette": "1.6.0",
+    "anyio": "4.15.1",
+    "numpy": "2.4.6"
+  },
+  "source_scope": [
+    "src/acp/**/*.py",
+    "src/cccp/**/*.py"
+  ],
+  "manual_review": "Targeted review of dependency/call graph candidates, input I/O, scan plans, local/remote parameter conversion, state storage, recovery and complexity hotspots; not line-by-line review of all source.",
+  "checks": [
+    {
+      "name": "ast_inventory",
+      "command": "/usr/bin/python3.11 docs/reports/ACP_CCCP_Code_Audit_20261011/audit_inventory.py",
+      "exit_code": 0,
+      "state": "completed"
+    },
+    {
+      "name": "behavior_probes",
+      "command": "/usr/bin/python3.11 docs/reports/ACP_CCCP_Code_Audit_20261011/reproduce_findings.py",
+      "exit_code": 0,
+      "state": "completed",
+      "probe_count": 19,
+      "note": "Completion is not a correctness pass; the probes capture current defects."
+    },
+    {
+      "name": "ruff",
+      "command": "ruff check src/acp src/cccp --output-format json --no-cache",
+      "exit_code": 1,
+      "state": "completed_with_findings",
+      "findings": 676
+    },
+    {
+      "name": "ruff_format",
+      "command": "ruff format --check src/acp src/cccp --no-cache",
+      "exit_code": 1,
+      "state": "completed_with_findings",
+      "files_needing_format": 91
+    },
+    {
+      "name": "mypy",
+      "command": "mypy src/acp src/cccp --cache-dir /tmp/acp-code-audit-mypy-20261011 --no-incremental --show-error-codes",
+      "exit_code": 1,
+      "state": "completed_with_findings",
+      "findings": 577,
+      "affected_files": 127
+    },
+    {
+      "name": "architecture_gates",
+      "command": "/usr/bin/python3.11 scripts/check_grep_gates.py --suite architecture-remediation",
+      "exit_code": 0,
+      "state": "passed",
+      "gates": 10,
+      "blocking": 0,
+      "allowlisted": 0
+    },
+    {
+      "name": "full_non_slow_pytest",
+      "command": "ACP_RUN_ROOT=/tmp/acp-code-audit-20261011 pytest -m 'not slow' tests/ -q --disable-warnings --junitxml=docs/reports/ACP_CCCP_Code_Audit_20261011/evidence/pytest.xml",
+      "exit_code": 130,
+      "state": "interrupted_after_stall",
+      "junit_report_written": false
+    },
+    {
+      "name": "initial_focused_pytest",
+      "command": "ACP_RUN_ROOT=/tmp/acp-code-audit-focused-20261011 pytest -m 'not slow' tests/test_architecture_invariants.py tests/test_grep_gates_script.py tests/test_recovery_identity.py tests/test_recovery_cross_version.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_task_scan.py tests/test_acp_electronic_state.py tests/test_acp_confsearch_boltzmann.py tests/test_remote_phase3.py --disable-warnings -q --junitxml=docs/reports/ACP_CCCP_Code_Audit_20261011/evidence/focused_pytest.xml",
+      "exit_code": 130,
+      "state": "interrupted_after_stall",
+      "junit_report_written": false
+    },
+    {
+      "name": "testclient_diagnostic",
+      "command": "ACP_RUN_ROOT=/tmp/acp-code-audit-hang-20261011 timeout 75s pytest tests/test_architecture_invariants.py::test_legacy_api_mechanism_returns_410 -vv -s --disable-warnings -o faulthandler_timeout=25",
+      "exit_code": 124,
+      "state": "timed_out",
+      "location": "Starlette TestClient.__enter__ / AnyIO portal"
+    },
+    {
+      "name": "bare_fastapi_control",
+      "command": "timeout 15s /usr/bin/python3.11: enter and exit TestClient(FastAPI()) without any ACP imports",
+      "exit_code": 124,
+      "state": "timed_out",
+      "location": "same TestClient.__enter__ / AnyIO portal"
+    },
+    {
+      "name": "verified_focused_pytest",
+      "command": "ACP_RUN_ROOT=/tmp/acp-code-audit-unit-20261011 timeout 180s pytest -m 'not slow' tests/test_architecture_invariants.py tests/test_grep_gates_script.py tests/test_recovery_identity.py tests/test_recovery_cross_version.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_task_scan.py tests/test_acp_electronic_state.py tests/test_acp_confsearch_boltzmann.py tests/test_remote_phase3.py -k 'not test_legacy_api_mechanism_returns_410' --disable-warnings -q --junitxml=docs/reports/ACP_CCCP_Code_Audit_20261011/evidence/verified_pytest.xml",
+      "exit_code": 0,
+      "state": "passed",
+      "passed": 328,
+      "deselected": 1,
+      "duration_seconds": 51.46
+    }
+  ],
+  "not_verified": [
+    "complete non-slow suite",
+    "browser tests",
+    "real QC binaries",
+    "real SSH / LSF",
+    "complete task submission",
+    "concurrent fault injection"
+  ],
+  "production_source_changed": false,
+  "service_restarted": false,
+  "cleanup_or_deployment_performed": false
+}

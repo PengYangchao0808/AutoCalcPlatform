@@ -44,6 +44,12 @@ _EXPECTED_SCHEDULER_MARKERS: frozenset[str] = frozenset(
         "metrics.json",
         "path_config.json",
         "gradient_config.json",
+        # Edit/rerun parity: remote scan/batch sidecars and the manager's
+        # effective configuration are created before the CLI launches.
+        "scan_config.json",
+        "batch_items.json",
+        "batch_config.json",
+        "effective_config.json",
         # Task layout scaffolding + identity.
         "WORK",
         "RESULT",

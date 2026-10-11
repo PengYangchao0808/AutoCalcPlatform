@@ -202,7 +202,12 @@ def page(server_url: str) -> Generator[Page, None, None]:
     context = None
     try:
         try:
-            browser = pw_ctx.chromium.launch(headless=True)
+            # The 3D viewer is stubbed below; these form tests need no GPU.
+            # Avoid hardware-driver lockups on servers with headless NVIDIA GPUs.
+            browser = pw_ctx.chromium.launch(
+                headless=True,
+                args=["--disable-gpu", "--disable-software-rasterizer", "--use-gl=disabled"],
+            )
         except Exception as exc:
             if _chromium_launch_failure_is_missing_binary(exc):
                 pytest.skip(
@@ -2071,3 +2076,193 @@ class TestScanAtomPickBrowser:
         assert result["shapes"] == 0, result
         assert "已选择 0 / 3" in result["summary"], result
         _evidence("flow18-scan-kind-switch-mid-pick-clears.json", result)
+
+
+def _open_pes_edit_draft(page: Page, tmp_path: Path) -> None:
+    from acp.scheduler.job_edit import build_edit_draft
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+
+    source = {"source_type": "xyz_text", "xyz_text": _SCAN_XYZ, "charge": -1, "multiplicity": 2}
+    coordinate = {
+        "kind": "distance",
+        "atoms": [0, 1],
+        "unit": "angstrom",
+        "start": 1.2,
+        "end": 2.4,
+        "n_points": 11,
+    }
+    selection = {"kind": "bond_stretch", "atom_indices": [0, 1]}
+    spec = JobSpec(
+        workflow="PESsearch",
+        molecule_name="browser_molecule",
+        task_name="PESsearch",
+        input={
+            "scan_request": {"source": source, "coordinate": coordinate, "selection": selection},
+            "coordinate": coordinate,
+            "selection": selection,
+        },
+        method={"mode": "bond_length_scan", "schema_id": "pes_scan", "profile_id": "default"},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    draft = build_edit_draft(
+        JobRecord(id="browser_pes", spec=spec, status=JobStatus.FAILED), run_root=tmp_path
+    )
+    draft_json = json.dumps(draft)
+    page.route(
+        "**/api/v1/jobs/browser_pes/edit-draft",
+        lambda route: route.fulfill(content_type="application/json", body=draft_json),
+    )
+    page.evaluate("initializeMethodDefaults()")
+    assert page.evaluate("!!(workflowCatalogCache.length && methodCatalogCache.method_schemas)"), (
+        page.locator("body").inner_text()[:1200]
+    )
+    page.evaluate("""() => {
+      window.__editorErrors = [];
+      window.addEventListener('unhandledrejection', event => {
+        window.__editorErrors.push(String(event.reason && event.reason.stack || event.reason));
+      });
+    }""")
+    page.evaluate("ACPJobEditor.openJobEditor({id: 'browser_pes'}, 'edit_recalculate')")
+    _scan_wait(
+        page,
+        """window.__editorErrors.length ||
+      document.querySelector('.edit-banner-error') ||
+      document.querySelector('input[name="edit-exec-mode"][value="in_place"]')""",
+        timeout=15,
+        what="edited PES draft",
+    )
+    assert not page.evaluate("window.__editorErrors"), page.evaluate("window.__editorErrors")
+    assert page.locator(".edit-banner-error").count() == 0, page.locator(
+        "#edit-recalc-banner"
+    ).inner_text()
+    _scan_wait(
+        page,
+        "wizardStructures.length === 1 && wizardState.workflow.id === 'PESsearch'",
+        timeout=10,
+        what="original PES input",
+    )
+
+
+@pytest.mark.slow
+class TestEditWorkflowSwitchBrowser:
+    """Exercise real selection, form collection and preview without submitting a job."""
+
+    def test_in_place_disables_scan_selection_and_explains_new_job_mode(
+        self, page: Page, tmp_path: Path
+    ) -> None:
+        _open_pes_edit_draft(page, tmp_path)
+        _scan_click(page, "#modal-submit")
+        _scan_click(page, "#btn-config-workflow")
+        _scan_wait(
+            page,
+            "document.querySelector('.workflow-option[data-workflow-id=\"scan\"]')",
+            timeout=10,
+            what="scan workflow option",
+        )
+        option = page.locator('.workflow-option[data-workflow-id="scan"]')
+        assert option.get_attribute("aria-disabled") == "true"
+        assert "Create a new task" in option.get_attribute("title")
+        _scan_click(page, '.workflow-option[data-workflow-id="scan"]')
+        assert page.evaluate("wizardState.workflow.id") == "PESsearch"
+        assert "Create a new task" in page.locator("#workflow-categories").inner_text()
+
+    def test_stale_workflow_change_is_blocked_before_collecting_pes_input(
+        self, page: Page, tmp_path: Path
+    ) -> None:
+        _open_pes_edit_draft(page, tmp_path)
+        messages: list[str] = []
+        page.on("dialog", lambda dialog: (messages.append(dialog.message), dialog.dismiss()))
+        page.evaluate("wizardState.workflow.id = 'scan'; pesSelectionState.selectedAtoms = []")
+        page.evaluate("ACPJobEditor.checkAndSubmit()")
+        assert len(messages) == 1
+        assert "original workflow" in messages[0]
+        assert "No submittable payload" not in messages[0]
+
+    def test_new_scan_collects_scan_payload_and_preserves_validation_reason(
+        self, page: Page, tmp_path: Path
+    ) -> None:
+        _open_pes_edit_draft(page, tmp_path)
+        escaped_creates: list[dict] = []
+        previews: list[dict] = []
+        messages: list[str] = []
+        page.on("dialog", lambda dialog: (messages.append(dialog.message), dialog.dismiss()))
+
+        def block_create(route) -> None:
+            if route.request.method == "POST":
+                escaped_creates.append(route.request.post_data_json)
+                route.fulfill(status=500, body="Editor collection escaped to job creation")
+            else:
+                route.continue_()
+
+        def capture_preview(route) -> None:
+            body = route.request.post_data_json
+            previews.append(body)
+            route.fulfill(
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "ok": True,
+                        "workflow": body["workflow"],
+                        "diff": [],
+                        "warnings": [],
+                        "blocking_reasons": [],
+                        "preview_fingerprint": "pf_browser",
+                    }
+                ),
+            )
+
+        page.route("**/api/v1/jobs", block_create)
+        page.route("**/api/v1/jobs/browser_pes/edit-recalculate/preview", capture_preview)
+        _scan_click(page, 'input[name="edit-exec-mode"][value="new_job"]')
+        _scan_click(page, "#modal-submit")
+        _scan_click(page, "#btn-config-workflow")
+        _scan_wait(
+            page,
+            "document.querySelector('.workflow-option[data-workflow-id=\"scan\"]')",
+            timeout=10,
+            what="scan workflow option",
+        )
+        option = page.locator('.workflow-option[data-workflow-id="scan"]')
+        assert option.get_attribute("aria-disabled") is None
+        _scan_click(page, '.workflow-option[data-workflow-id="scan"]')
+        _scan_click(page, "#wf-config-ok")
+        page.evaluate(_SCAN_PICK_BOOTSTRAP, {"xyz": _SCAN_XYZ})
+        _scan_click(page, "#modal-submit")  # parameter step -> review
+        _scan_click(page, "#modal-submit")
+        _scan_wait(
+            page,
+            "!document.getElementById('modal-submit').disabled",
+            timeout=10,
+            what="validation result",
+        )
+        assert len(messages) == 1
+        assert "Invalid scan parameters" in messages[0]
+        assert "No submittable payload" not in messages[0]
+        assert not previews
+        assert not escaped_creates
+
+        _scan_click(page, "#modal-back")
+        page.evaluate(
+            "handleScanPreviewAtomClick({index: 0}); handleScanPreviewAtomClick({index: 1})"
+        )
+        _scan_click(page, "#modal-submit")
+        _scan_click(page, "#modal-submit")
+        _scan_wait(
+            page,
+            "document.getElementById('edit-summary-overlay')",
+            timeout=10,
+            what="scan preview summary",
+        )
+        assert len(previews) == 1
+        body = previews[0]
+        assert body["mode"] == "new_job"
+        assert body["workflow"] == "scan"
+        assert body["task_name"] == "scan"
+        assert body["input"]["scan_coordinates"] == ["0,1,1,3"]
+        assert body["input"]["source"] == _SCAN_XYZ
+        assert (body["input"]["charge"], body["input"]["multiplicity"]) == (-1, 2)
+        assert body["method"]["schema_id"] == "dft_scan"
+        assert body["method"]["scan_points"] == 21
+        assert "mode" not in body["method"]
+        assert "scan_request" not in body["input"]
+        assert not escaped_creates

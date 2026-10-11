@@ -373,6 +373,12 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     )
 
     if wf in ("singlepoint", "optimize", "frequency", "scan"):
+        parser.add_argument("--grid", help="ORCA integration grid (e.g. DEFGRID2)")
+        parser.add_argument(
+            "--scf-convergence",
+            choices=["Loose", "Normal", "Tight", "VeryTight"],
+            help="SCF convergence threshold",
+        )
         parser.add_argument(
             "--aux-j-basis",
             default="AutoAux",
@@ -2476,6 +2482,7 @@ Spectrum file format (DevDoc §6.2):
         type=str,
         help="Path to experimental-spectrum text (DevDoc §6.2) or literal text",
     )
+    nmr.add_argument("--candidate-metadata-json", help=argparse.SUPPRESS)
     nmr.add_argument(
         "--bruker",
         type=str,
@@ -2984,6 +2991,8 @@ def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
         "aux_j_basis",
         "aux_c_basis",
         "ri_approximation",
+        "grid",
+        "scf_convergence",
         "geom_maxiter",
         "opt_convergence",
     ):
@@ -3705,6 +3714,18 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         )
         return 1
 
+    candidate_metadata = None
+    if getattr(args, "candidate_metadata_json", None):
+        try:
+            candidate_metadata = json.loads(args.candidate_metadata_json)
+        except json.JSONDecodeError as exc:
+            logger.error("Invalid NMR candidate metadata: %s", exc)
+            return 1
+        if (not isinstance(candidate_metadata, list) or len(candidate_metadata) != len(args.input)
+                or not all(isinstance(item, dict) for item in candidate_metadata)):
+            logger.error("NMR candidate metadata must contain one object per input")
+            return 1
+
     bruker_references: dict[str, float] | None = None
     if args.bruker_ref:
         bruker_references = {}
@@ -3776,6 +3797,7 @@ def _handle_nmr(args: argparse.Namespace) -> int:
     try:
         result = run_nmr_analysis(
             input_sources=args.input,
+            candidate_metadata=candidate_metadata,
             spectrum=args.spectrum,
             output_dir=str(output_dir),
             config=cfg,

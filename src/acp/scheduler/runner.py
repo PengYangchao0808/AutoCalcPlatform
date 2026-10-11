@@ -47,7 +47,9 @@ from acp.scheduler.jobs import (
     censo_preset_from_method,
     censo_solvent_from_method,
     confsearch_method_flags,
+    electronic_state_from_method,
     input_chemistry_flags,
+    nmr_candidate_metadata_flags,
     nmr_flag_config,
     nmr_method_flags,
     scan_method_flags,
@@ -465,6 +467,8 @@ def materialize_job_input(
     inputs_dir: Path,
     run_root: Path,
     materialized_roles: dict[str, Path] | None = None,
+    *,
+    stem: str = "input",
 ) -> Path | None:
     if isinstance(inp.get("scan_request"), dict):
         return None
@@ -484,7 +488,7 @@ def materialize_job_input(
     if tsmode_bundle is not None:
         return tsmode_bundle
 
-    return _materialize_single_input(inp, inputs_dir, run_root)
+    return _materialize_single_input(inp, inputs_dir, run_root, stem=stem)
 
 
 def _looks_like_smiles(s: str) -> bool:
@@ -1404,15 +1408,8 @@ class JobRunner:
             if levels:
                 from acp.catalog import method_levels_to_cli_flags
 
-                cmd += method_levels_to_cli_flags(levels)
-                spin_module = next(
-                    (
-                        lv.get("electronic_state")
-                        for lv in levels.values()
-                        if isinstance(lv, Mapping) and lv.get("electronic_state")
-                    ),
-                    None,
-                )
+                cmd += method_levels_to_cli_flags(levels, workflow=wf)
+                spin_module = electronic_state_from_method(method)
                 if isinstance(spin_module, Mapping):
                     cmd += _electronic_state_cli_flags(spin_module, work_dir)
             if wf == "scan":
@@ -1554,7 +1551,7 @@ class JobRunner:
                 # materializing to XYZ (which has no bond table).
                 cmd += ["--input", str(cand_source)]
                 continue
-            materialized = materialize_job_input(cand, inputs_dir, work_dir)
+            materialized = materialize_job_input(cand, inputs_dir, work_dir, stem=f"input_{idx}")
             if materialized is not None:
                 cmd += ["--input", str(materialized)]
             else:
@@ -1599,6 +1596,7 @@ class JobRunner:
         # emission; and the nmr wizard nests ewin under levels.conformer,
         # which censo_ewin_from_method never reads).
         cmd += nmr_method_flags(method, nmr_flag_config(spec.config_path))
+        cmd += nmr_candidate_metadata_flags(inp)
 
         if spec.config_path:
             cmd += ["--config", str(spec.config_path)]
