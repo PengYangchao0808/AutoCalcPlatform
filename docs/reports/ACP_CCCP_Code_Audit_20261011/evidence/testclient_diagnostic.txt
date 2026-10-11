@@ -1,0 +1,61 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.13, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python3.11
+cachedir: .pytest_cache
+rootdir: <repo>
+configfile: pyproject.toml
+plugins: anyio-4.15.1, cov-7.1.0, mock-3.15.1
+collecting ... collected 1 item
+
+tests/test_architecture_invariants.py::test_legacy_api_mechanism_returns_410 Timeout (0:00:25)!
+Thread 0x000015091fbee640 (most recent call first):
+  File "/usr/lib64/python3.11/selectors.py", line 468 in select
+  File "/usr/lib64/python3.11/asyncio/base_events.py", line 1898 in _run_once
+  File "/usr/lib64/python3.11/asyncio/base_events.py", line 608 in run_forever
+  File "/usr/lib64/python3.11/asyncio/base_events.py", line 641 in run_until_complete
+  File "/usr/lib64/python3.11/asyncio/runners.py", line 118 in run
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2548 in run
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/_core/_eventloop.py", line 83 in run
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 538 in run_blocking_portal
+  File "/usr/lib64/python3.11/threading.py", line 982 in run
+  File "/usr/lib64/python3.11/threading.py", line 1045 in _bootstrap_inner
+  File "/usr/lib64/python3.11/threading.py", line 1002 in _bootstrap
+
+Thread 0x0000150952cb4200 (most recent call first):
+  File "/usr/lib64/python3.11/threading.py", line 327 in wait
+  File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 451 in result
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 2780 in run_sync_from_thread
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 119 in run_sync
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 303 in _spawn_task_from_thread
+  File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 384 in start_task_soon
+  File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 697 in __enter__
+  File "<repo>/tests/test_architecture_invariants.py", line 257 in test_legacy_api_mechanism_returns_410
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/python.py", line 167 in pytest_pyfunc_call
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/python.py", line 1707 in runtest
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/runner.py", line 184 in pytest_runtest_call
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/runner.py", line 250 in <lambda>
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/runner.py", line 361 in from_call
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/runner.py", line 249 in call_and_report
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/runner.py", line 139 in runtestprotocol
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/main.py", line 408 in pytest_runtestloop
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/main.py", line 384 in _main
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/main.py", line 330 in wrap_session
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/main.py", line 377 in pytest_cmdline_main
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/home/<user>/.local/lib/python3.11/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/config/__init__.py", line 229 in _main
+  File "/home/<user>/.local/lib/python3.11/site-packages/_pytest/config/__init__.py", line 253 in _console_main
+  File "/home/<user>/.local/bin/pytest", line 8 in <module>
