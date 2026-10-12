@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-12",
+  "source_commit": "0e3c97839ea6ee20c5ca89d5d11f8fbf90075932",
+  "runs": {
+    "existing_non_slow": {
+      "tests": 707,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 707,
+      "seconds": 433.311,
+      "failed_cases": []
+    },
+    "state_contracts": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 3,
+      "seconds": 0.628,
+      "failed_cases": []
+    },
+    "backend_probes": {
+      "tests": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 17,
+      "seconds": 3.281,
+      "failed_cases": []
+    },
+    "frontend_probes": {
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 20,
+      "seconds": 90.979,
+      "failed_cases": [],
+      "scope": "19 functional/fault probes plus 1 browser pointer control; no FPS or paint performance verification."
+    },
+    "existing_browser_startup": {
+      "tests": 5,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 1,
+      "seconds": 456.565,
+      "failed_cases": [
+        "test_stalled_catalogs_and_missing_viewer_do_not_block_shell[False]",
+        "test_stalled_catalogs_and_missing_viewer_do_not_block_shell[True]",
+        "test_failed_task_list_has_retry_and_recovers",
+        "test_paging_keeps_counts_and_reuses_unchanged_rows"
+      ],
+      "classification": "ENVIRONMENT_LIMITATION: pointer stability wait also fails on an independent blank-page button control; not counted as an ACP defect."
+    }
+  },
+  "deployment_interpreter_metadata_readonly": {
+    "path": "<venv>/bin/python",
+    "python": "3.11.13",
+    "fastapi": "0.141.1",
+    "starlette": "1.6.0",
+    "anyio": "4.15.1",
+    "paramiko": "5.0.0",
+    "matches_test_dependencies": true,
+    "production_http_or_remote_io_exercised": false
+  }
+}

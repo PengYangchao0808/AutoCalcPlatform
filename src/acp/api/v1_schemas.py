@@ -1417,6 +1417,7 @@ class StructureViewerPayloadModel(BaseModel):
     groups: list[StructureViewerGroupModel] = Field(default_factory=list)
     entries: list[StructureViewerEntryModel] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    ensemble_thermo: dict[str, Any] | None = None
 
 
 class StructureViewerModeModel(BaseModel):

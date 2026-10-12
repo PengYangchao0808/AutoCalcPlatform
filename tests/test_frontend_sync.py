@@ -8741,6 +8741,219 @@ def test_vibration_summary_bar_node_logic() -> None:
     assert "PASS" in result.stdout
 
 
+def test_ensemble_total_g_summary_bar_and_drawer_source_contract() -> None:
+    """Source contract: ensemble total G chip + drawer row use the frozen
+    payload.ensemble_thermo key behind strict null/finite guards, rendered
+    via the 2-arg _t("structure.ensemble_total_g", STR.ENSEMBLE_TOTAL_G) form."""
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+
+    assert js.count('className = "sv-summary-ensemble"') == 1
+    assert ".sv-summary-ensemble" in css
+
+    t_call = '_t("structure.ensemble_total_g", STR.ENSEMBLE_TOTAL_G)'
+    assert js.count(t_call) == 2
+    assert "ENSEMBLE_TOTAL_G:" in js
+
+    assert '"structure.ensemble_total_g": "系综总自由能"' in html
+    assert '"structure.ensemble_total_g": "Ensemble total G"' in html
+
+    assert "payload.ensemble_thermo" in js or "payload && payload.ensemble_thermo" in js
+    assert 'typeof ensG === "number" && isFinite(ensG)' in js
+
+    render_body = js.split("function renderStructureViewer()", 1)[1]
+    render_body = render_body[: render_body.index("function _renderStripItem(")]
+    assert render_body.index("sv-summary-energy") < render_body.index("sv-summary-ensemble")
+
+    drawer_body = js.split("function _renderSourceDrawer(", 1)[1].split("\n  function ", 1)[0]
+    assert drawer_body.index('STR.WEIGHT') < drawer_body.index(t_call)
+    assert "sv-summary-ensemble" not in drawer_body
+
+
+def test_ensemble_total_g_summary_bar_node_logic() -> None:
+    """Node logic: ensemble chip renders formatted total G after the energy
+    span when payload.ensemble_thermo is present; absent/invalid -> no chip,
+    no crash; drawer row carries kcal/mol + Eh + meta; payload passthrough."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        function fakeEl(tag) {
+          return {
+            tag: tag, children: [], className: "", textContent: "",
+            attrs: {}, style: {},
+            classList: {
+              _classes: [],
+              toggle: function (cls, on) {
+                var idx = this._classes.indexOf(cls);
+                if (on && idx < 0) this._classes.push(cls);
+                if (!on && idx >= 0) this._classes.splice(idx, 1);
+              },
+              contains: function (cls) { return this._classes.indexOf(cls) >= 0; },
+            },
+            setAttribute: function (k, v) { this.attrs[k] = v; },
+            getAttribute: function (k) { return this.attrs[k]; },
+            removeAttribute: function (k) { delete this.attrs[k]; },
+            addEventListener: function () {},
+            appendChild: function (c) { this.children.push(c); return c; },
+            querySelectorAll: function () { return []; },
+            querySelector: function () { return null; },
+          };
+        }
+        var _summaryBar = fakeEl("div");
+        var _bottomStrip = fakeEl("div");
+        var _layout = fakeEl("div");
+        var _sourceDrawer = fakeEl("div");
+        _layout.addEventListener = function () {};
+        var document = {
+          createElement: fakeEl,
+          getElementById: function (id) {
+            if (id === "sv-summary-bar") return _summaryBar;
+            if (id === "sv-bottom-strip") return _bottomStrip;
+            if (id === "sv-layout") return _layout;
+            if (id === "sv-drawer-source") return _sourceDrawer;
+            return null;
+          },
+        };
+        require(SV_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var LABEL = "\\u7cfb\\u7efc\\u603b\\u81ea\\u7531\\u80fd";
+        var ENSEMBLE = {
+          total_gibbs_kcal_mol: -97248.3477,
+          total_gibbs_hartree: -155.123456,
+          rank1_weight: 0.9832,
+          t_s_mix_kcal_per_mol: 0.421,
+          population_coverage: 0.997,
+          temperature_k: 298.15,
+          method: "GFN2-xTB",
+        };
+
+        function barClasses() {
+          return _summaryBar.children.map(function (c) { return c.className; });
+        }
+        function barTextByClass(cls) {
+          for (var i = 0; i < _summaryBar.children.length; i++) {
+            if (_summaryBar.children[i].className === cls) return _summaryBar.children[i].textContent;
+          }
+          return null;
+        }
+        function renderWith(ensemble, energy) {
+          ns.state.payload = {
+            entries: [{
+              id: "e1", group_id: "g1", label: "conf_0001",
+              status: "completed", badges: [],
+              energy: energy, source: { kind: "formal_result" },
+              geometry: { endpoint: "/geo", format: "xyz" },
+            }],
+            default_entry_id: "e1",
+            groups: [{ id: "g1" }],
+            warnings: [],
+            ensemble_thermo: ensemble,
+          };
+          ns.state.selectedEntryId = "e1";
+          ns.state.jobId = "job-ens";
+          _summaryBar.children.length = 0;
+          _sourceDrawer.children.length = 0;
+          ns.renderStructureViewer();
+        }
+
+        var energy = { value: -154.974579, unit: "hartree" };
+        renderWith(ENSEMBLE, energy);
+        var classes = barClasses();
+        if (classes.indexOf("sv-summary-ensemble") < 0) {
+          console.error("FAIL: ensemble chip missing, got: " + classes.join(","));
+          process.exit(1);
+        }
+        if (classes.indexOf("sv-summary-energy") > classes.indexOf("sv-summary-ensemble")) {
+          console.error("FAIL: ensemble chip must follow energy span");
+          process.exit(1);
+        }
+        var expectChip = LABEL + " -97248.3477 kcal/mol";
+        if (barTextByClass("sv-summary-ensemble") !== expectChip) {
+          console.error("FAIL: chip text, got: " + barTextByClass("sv-summary-ensemble"));
+          process.exit(1);
+        }
+
+        renderWith(null, energy);
+        if (barClasses().indexOf("sv-summary-ensemble") >= 0) {
+          console.error("FAIL: chip rendered without ensemble_thermo");
+          process.exit(1);
+        }
+
+        renderWith({ rank1_weight: 0.9 }, energy);
+        if (barClasses().indexOf("sv-summary-ensemble") >= 0) {
+          console.error("FAIL: chip rendered with missing total_gibbs_kcal_mol");
+          process.exit(1);
+        }
+
+        renderWith({ total_gibbs_kcal_mol: "99" }, energy);
+        if (barClasses().indexOf("sv-summary-ensemble") >= 0) {
+          console.error("FAIL: chip rendered with non-numeric total_gibbs_kcal_mol");
+          process.exit(1);
+        }
+
+        renderWith(ENSEMBLE, null);
+        if (barTextByClass("sv-summary-ensemble") !== expectChip) {
+          console.error("FAIL: chip must survive entry.energy === null");
+          process.exit(1);
+        }
+
+        renderWith(ENSEMBLE, energy);
+        ns.openDrawer("source", null);
+        var body = _sourceDrawer.children[_sourceDrawer.children.length - 1];
+        var row = null;
+        for (var i = 0; i < body.children.length; i++) {
+          var kid = body.children[i];
+          if (kid.className === "sv-inspector-section" && kid.children[0] &&
+              kid.children[0].textContent === LABEL) {
+            row = kid;
+            break;
+          }
+        }
+        if (!row) {
+          console.error("FAIL: drawer ensemble row missing");
+          process.exit(1);
+        }
+        if (row.children[1].textContent !== "-97248.3477 kcal/mol (-155.123456 Eh)") {
+          console.error("FAIL: drawer value, got: " + row.children[1].textContent);
+          process.exit(1);
+        }
+        if (row.children.length < 3 ||
+            row.children[2].textContent.indexOf("T\\u00b7S_mix 0.4210 kcal/mol") < 0 ||
+            row.children[2].textContent.indexOf("coverage 99.7%") < 0) {
+          console.error("FAIL: drawer meta line, got: " +
+            (row.children[2] ? row.children[2].textContent : "<none>"));
+          process.exit(1);
+        }
+
+        var data = {
+          availability: "ready", revision: 3,
+          entries: [], groups: [], warnings: [],
+          ensemble_thermo: ENSEMBLE,
+        };
+        if (!ns._applyCatalogResponse(ns.state, ns.state.requestToken, data)) {
+          console.error("FAIL: _applyCatalogResponse rejected current token");
+          process.exit(1);
+        }
+        if (!ns.state.payload.ensemble_thermo ||
+            ns.state.payload.ensemble_thermo.total_gibbs_kcal_mol !== -97248.3477) {
+          console.error("FAIL: ensemble_thermo not preserved in state.payload");
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("SV_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Ensemble total G node test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
 def test_electronic_state_module_renderer_dispatch() -> None:
     """Contract: electronic_state type:'module' gets a dedicated renderer.
 

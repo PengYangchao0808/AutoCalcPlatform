@@ -337,6 +337,8 @@ class StructureViewerPayload:
         groups: Ordered list of entry groups.
         entries: Ordered list of structure entries.
         warnings: Accumulated non-fatal warnings.
+        ensemble_thermo: Parsed ``ensemble_thermo.json`` (``conformers`` key
+            stripped) for Confsearch jobs; ``None`` otherwise or when absent.
     """
 
     schema_version: str = _SCHEMA_VERSION
@@ -348,6 +350,7 @@ class StructureViewerPayload:
     groups: tuple[StructureViewerGroup, ...] = ()
     entries: tuple[StructureViewerEntry, ...] = ()
     warnings: tuple[str, ...] = ()
+    ensemble_thermo: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to the doc §4.1 JSON shape."""
@@ -361,6 +364,7 @@ class StructureViewerPayload:
             "groups": [g.to_dict() for g in self.groups],
             "entries": [e.to_dict() for e in self.entries],
             "warnings": list(self.warnings),
+            "ensemble_thermo": self.ensemble_thermo,
         }
 
 
@@ -1590,6 +1594,26 @@ def _probe_result_manifest(task_root: Path, warnings: list[str]) -> None:
         logger.debug("corrupt result manifest at %s: %s", manifest_path, exc)
 
 
+def _load_ensemble_thermo(root: Path) -> dict[str, Any] | None:
+    """Parse ``RESULT/energies/ensemble_thermo.json`` with ``conformers`` stripped.
+
+    Returns ``None`` when the file is missing, unreadable, malformed, or not a
+    dict — never raises and never appends a warning (absence is normal for
+    pure-xTB Confsearch protocols).
+    """
+    path = root / "RESULT" / "energies" / "ensemble_thermo.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    data.pop("conformers", None)
+    return data
+
+
 def build_structure_viewer_payload(
     task_root: Path | str,
     *,
@@ -1705,6 +1729,10 @@ def build_structure_viewer_payload(
     groups = tuple(groups_raw)
     entries = tuple(entries_raw)
 
+    ensemble_thermo: dict[str, Any] | None = None
+    if workflow == "Confsearch":
+        ensemble_thermo = _load_ensemble_thermo(root)
+
     return StructureViewerPayload(
         schema_version=_SCHEMA_VERSION,
         job_id=job_id,
@@ -1715,6 +1743,7 @@ def build_structure_viewer_payload(
         groups=groups,
         entries=entries,
         warnings=tuple(warnings),
+        ensemble_thermo=ensemble_thermo,
     )
 
 # ── Structure overlay + RMSD (todo 40) ──────────────────────────────────────

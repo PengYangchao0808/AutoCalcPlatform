@@ -59,6 +59,15 @@
 .sv-summary-title { font-weight: 600; }
 .sv-summary-badge { padding: 2px 6px; border-radius: 3px; font-size: 11px; }
 .sv-summary-energy { font-family: monospace; }
+.sv-summary-ensemble {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--sv-accent-soft);
+  color: var(--sv-text-secondary);
+  white-space: nowrap;
+}
 .sv-summary-actions { margin-left: auto; display: flex; gap: 4px; }
 
 /* ===== Bottom strip (collapsible, max 88px) ===== */

@@ -76,6 +76,7 @@
     ENERGY: "\u80fd\u91cf",                                           // 能量
     DELTA_E: "\u0394E",                                               // ΔE
     WEIGHT: "Boltzmann \u6743\u91cd",                                // Boltzmann 权重
+    ENSEMBLE_TOTAL_G: "\u7cfb\u7efc\u603b\u81ea\u7531\u80fd",        // 系综总自由能
     WEIGHT_SOURCES: {
       censo: "CENSO",
       xtb: "xTB",
@@ -2380,6 +2381,17 @@
         summaryBar.appendChild(energySpan);
       }
 
+      /* Ensemble total G chip — top-level payload.ensemble_thermo; omitted when absent/non-finite */
+      var ensThermo = payload && payload.ensemble_thermo;
+      var ensG = ensThermo && ensThermo.total_gibbs_kcal_mol;
+      if (typeof ensG === "number" && isFinite(ensG)) {
+        var ensembleSpan = document.createElement("span");
+        ensembleSpan.className = "sv-summary-ensemble";
+        ensembleSpan.textContent = _t("structure.ensemble_total_g", STR.ENSEMBLE_TOTAL_G) +
+          " " + ensG.toFixed(4) + " kcal/mol";
+        summaryBar.appendChild(ensembleSpan);
+      }
+
       if (entry.status) {
         var statusBadge = document.createElement("span");
         statusBadge.className = "sv-summary-badge";
@@ -3384,6 +3396,34 @@
     if (entry.boltzmann_weight != null) {
       body.appendChild(_inspectorSection(_t("structure.weight", STR.WEIGHT),
         _formatWeightValue(entry)));
+    }
+    var ensThermo = payload && payload.ensemble_thermo;
+    var ensG = ensThermo && ensThermo.total_gibbs_kcal_mol;
+    if (typeof ensG === "number" && isFinite(ensG)) {
+      var ensValue = ensG.toFixed(4) + " kcal/mol";
+      var ensEh = ensThermo.total_gibbs_hartree;
+      if (typeof ensEh === "number" && isFinite(ensEh)) {
+        ensValue += " (" + ensEh.toFixed(6) + " Eh)";
+      }
+      var ensRow = _inspectorSection(
+        _t("structure.ensemble_total_g", STR.ENSEMBLE_TOTAL_G), ensValue);
+      var ensMeta = [];
+      if (typeof ensThermo.rank1_weight === "number" && isFinite(ensThermo.rank1_weight)) {
+        ensMeta.push("p\u2081 " + ensThermo.rank1_weight.toFixed(4));
+      }
+      if (typeof ensThermo.t_s_mix_kcal_per_mol === "number" && isFinite(ensThermo.t_s_mix_kcal_per_mol)) {
+        ensMeta.push("T\u00b7S_mix " + ensThermo.t_s_mix_kcal_per_mol.toFixed(4) + " kcal/mol");
+      }
+      if (typeof ensThermo.population_coverage === "number" && isFinite(ensThermo.population_coverage)) {
+        ensMeta.push("coverage " + (ensThermo.population_coverage * 100).toFixed(1) + "%");
+      }
+      if (ensMeta.length) {
+        var ensMetaDiv = document.createElement("div");
+        ensMetaDiv.className = "sv-inspector-value sv-muted";
+        ensMetaDiv.textContent = ensMeta.join(" \u00b7 ");
+        ensRow.appendChild(ensMetaDiv);
+      }
+      body.appendChild(ensRow);
     }
     if (structureViewerState.newerAvailable) {
       var newerNotice = document.createElement("div");
