@@ -1,0 +1,230 @@
+{
+  "browser_version": "153.0.8010.12",
+  "startup": {
+    "request_paths": [
+      "/",
+      "/js/vendor/3Dmol-2.5.5.min.js",
+      "/css/structure_viewer.css",
+      "/css/structure_source_picker.css",
+      "/css/task_input_workspace.css",
+      "/css/tsmode_editor.css",
+      "/js/geometry_store.js",
+      "/js/structure_viewer.js",
+      "/js/structure_editor.js",
+      "/js/vibration_viewer.js",
+      "/js/structure_source_picker.js",
+      "/js/tsmode_editor.js",
+      "/js/memory_input.js",
+      "/js/job_editor.js",
+      "/js/task_input_workspace.js",
+      "/js/candidate_details.js",
+      "/api/v1/status",
+      "/api/v1/projects",
+      "/api/v1/workflow-catalog",
+      "/api/v1/method-catalog",
+      "/api/v2/task-view",
+      "/api/v1/maintenance/disk-usage"
+    ],
+    "localized_elements": 209
+  },
+  "main_rename_error": "重命名失败: audit injected failure",
+  "source_row_rename_error": [
+    "showToast is not defined"
+  ],
+  "detail_fallback": {
+    "legacy": true,
+    "stages": null,
+    "recovery": null,
+    "visible_load_error": ""
+  },
+  "summary_log_failure": {
+    "same_child": true,
+    "progress": 0.2,
+    "log_messages": []
+  },
+  "folder_error": {
+    "files": [],
+    "expanded": true
+  },
+  "nmr_error_as_absence": "暂无 nmr_report.json（任务未完成或已过期）",
+  "pes_history_error": "历史备份加载失败。",
+  "disk_error_hides_pill": true,
+  "shared_timeout": {
+    "budgets": [
+      8000,
+      60000
+    ],
+    "name": "Error",
+    "message": "请求超时（0 秒），请稍后重试。",
+    "elapsed_ms": 40.39999961853027
+  },
+  "frame_fallbacks": {
+    "irc": [
+      {
+        "path": "/jobs/audit/irc/frames/forward/0/geometry",
+        "budget_ms": 8000
+      }
+    ],
+    "optimization": [
+      {
+        "path": "/jobs/audit/optimization/frame/0",
+        "budget_ms": 8000
+      },
+      {
+        "path": "/jobs/audit/files/missing.xyz",
+        "budget_ms": 8000
+      }
+    ],
+    "sampling": [
+      {
+        "path": "/jobs/audit/files/missing.xyz",
+        "budget_ms": 8000
+      },
+      {
+        "path": "/jobs/audit/sampling/frame/0",
+        "budget_ms": 8000
+      }
+    ],
+    "scan": [
+      {
+        "path": "/jobs/audit/files/missing.xyz",
+        "budget_ms": 8000
+      },
+      {
+        "path": "/jobs/audit/s2/frame/0",
+        "budget_ms": 60000
+      }
+    ],
+    "conformer": [
+      {
+        "path": "/jobs/audit/files/missing.xyz",
+        "budget_ms": 8000
+      }
+    ]
+  },
+  "info_dom_refresh": {
+    "unchanged_summary_reuses_dom": true,
+    "changed_summary_replaces_desktop": true,
+    "changed_summary_replaces_mobile": true
+  },
+  "queue_dom_refresh": {
+    "unchanged_reused": true,
+    "row_count": 2,
+    "affected_desktop_replaced": true,
+    "unaffected_desktop_reused": true,
+    "unaffected_mobile_reused": true
+  },
+  "requests_without_deadlines": {
+    "deadlines": [],
+    "calls": [
+      {
+        "url": "/api/v1/jobs/unreachable-audit/structure-viewer",
+        "signal": true
+      },
+      {
+        "url": "/api/v2/structure-sources/audit/candidate",
+        "signal": false
+      }
+    ],
+    "catalog_settled": false,
+    "candidate_settled": false
+  },
+  "sse_registered_events": [
+    "job.created",
+    "job.started",
+    "job.status",
+    "stage.started",
+    "stage.progress",
+    "stage.completed",
+    "stage.failed",
+    "log.stdout",
+    "log.stderr",
+    "log",
+    "job.completed",
+    "job.failed",
+    "job.cancelled",
+    "job.paused",
+    "job.resumed",
+    "done",
+    "error"
+  ],
+  "startup_layout": [
+    {
+      "tag": "BUTTON",
+      "id": "btn-new-project",
+      "display": "flex",
+      "visibility": "visible",
+      "width": 24,
+      "height": 24
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "display": "flex",
+      "visibility": "visible",
+      "width": 211,
+      "height": 32
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "display": "block",
+      "visibility": "visible",
+      "width": 239,
+      "height": 122.5
+    },
+    {
+      "tag": "SECTION",
+      "id": "queue-panel",
+      "display": "flex",
+      "visibility": "visible",
+      "width": 239,
+      "height": 545
+    },
+    {
+      "tag": "ASIDE",
+      "id": "right-col-zone",
+      "display": "flex",
+      "visibility": "visible",
+      "width": 240,
+      "height": 736
+    },
+    {
+      "tag": "MAIN",
+      "id": "",
+      "display": "grid",
+      "visibility": "visible",
+      "width": 1280,
+      "height": 736
+    },
+    {
+      "tag": "DIV",
+      "id": "",
+      "display": "grid",
+      "visibility": "visible",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "tag": "BODY",
+      "id": "",
+      "display": "block",
+      "visibility": "visible",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "tag": "HTML",
+      "id": "",
+      "display": "block",
+      "visibility": "visible",
+      "width": 1280,
+      "height": 800
+    }
+  ],
+  "stalled_catalog_handlers_work": true,
+  "pointer_stability_control": {
+    "normal_click": false,
+    "error": "Locator.click: Timeout 1500ms exceeded.\nCall log:\n  - waiting for locator(\"#control\")\n    - locator resolved to <button id=\"control\">control</button>\n  - attempting click action\n    - waiting for element to be visible, enabled and stable\n"
+  }
+}

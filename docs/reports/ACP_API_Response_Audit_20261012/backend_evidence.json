@@ -1,0 +1,162 @@
+{
+  "sse_initial": {
+    "file_bytes": 14600000,
+    "events": 50000,
+    "io": {
+      "bytes": 29455008,
+      "readlines": 1,
+      "opens": 5
+    },
+    "elapsed_ms": 19.862,
+    "response_progress_events": 200
+  },
+  "sse_resume": {
+    "file_bytes": 14600000,
+    "events": 50000,
+    "io": {
+      "bytes": 14600000,
+      "readlines": 50002,
+      "opens": 2
+    },
+    "elapsed_ms": 126.174,
+    "response_progress_events": 1
+  },
+  "sse_loop_block": {
+    "injected_count_delay_ms": 40,
+    "count_calls": 2,
+    "elapsed_ms": 80.582,
+    "timer_due_ms": 10,
+    "timer_fired_ms": 80.68,
+    "same_thread": true
+  },
+  "catalog_rebuild": {
+    "requests": 3,
+    "entry_counts_per_build": [
+      200,
+      200,
+      200
+    ]
+  },
+  "detail_xyz_reads": {
+    "products": 200,
+    "xyz_reads": 200,
+    "bytes_read": 5400,
+    "summary_count": 200,
+    "response_has_xyz_text": false
+  },
+  "log_cursor_scan": {
+    "stdout_bytes": 900000,
+    "io": {
+      "bytes": 900000,
+      "readlines": 100000
+    },
+    "new_stdout_lines": 0
+  },
+  "large_file_listing": {
+    "file_bytes": 209715201,
+    "listed": [],
+    "truncated": false
+  },
+  "source_detail_remote_reads": {
+    "loads": 2,
+    "read_file_calls": 2
+  },
+  "negative_cache": {
+    "calls": 2
+  },
+  "ssh_budgets": {
+    "command_attempts": 3,
+    "timeout_per_command_s": 30,
+    "sftp_settimeout_calls": 0
+  },
+  "assets": {
+    "html_bytes": 1699019,
+    "inline_js_bytes": 1384244,
+    "inline_css_bytes": 218747,
+    "synchronous_external_js_bytes": 615559,
+    "inline_plus_synchronous_js_bytes": 1999803,
+    "external_scripts": [
+      {
+        "async": null,
+        "id": "viewer-library",
+        "src": "js/vendor/3Dmol-2.5.5.min.js",
+        "bytes": 537792
+      },
+      {
+        "src": "js/geometry_store.js",
+        "bytes": 19089
+      },
+      {
+        "src": "js/structure_viewer.js",
+        "bytes": 162337
+      },
+      {
+        "src": "js/structure_editor.js",
+        "bytes": 76597
+      },
+      {
+        "src": "js/vibration_viewer.js",
+        "bytes": 73304
+      },
+      {
+        "src": "js/structure_source_picker.js",
+        "bytes": 82299
+      },
+      {
+        "src": "js/tsmode_editor.js",
+        "bytes": 32355
+      },
+      {
+        "src": "js/memory_input.js",
+        "bytes": 2292
+      },
+      {
+        "src": "js/job_editor.js",
+        "bytes": 129870
+      },
+      {
+        "src": "js/task_input_workspace.js",
+        "bytes": 8072
+      },
+      {
+        "src": "js/candidate_details.js",
+        "bytes": 29344
+      }
+    ],
+    "i18n_attributes": {
+      "data-i18n": 275,
+      "data-i18n-title": 20,
+      "data-i18n-ph": 8,
+      "data-i18n-opt": 15,
+      "data-i18n-placeholder": 1
+    },
+    "i18n_dictionary_bytes": 175567,
+    "content_encoding": null
+  },
+  "local_range": {
+    "status": 206,
+    "content_range": "bytes 2-5/10",
+    "content": "2345"
+  },
+  "anyio_thread_tokens": 40,
+  "stream_between_chunks": {
+    "borrowed_worker_tokens": 0
+  },
+  "prefetch_fifo": {
+    "attempt_order": [
+      "old-1",
+      "old-2",
+      "new-completion"
+    ],
+    "remaining_items": 0
+  },
+  "remote_index_refresh": {
+    "sweeps": 2,
+    "index_calls": 2
+  },
+  "remote_range": {
+    "status": 200,
+    "content_range": null,
+    "bytes_returned": 10
+  }
+}
