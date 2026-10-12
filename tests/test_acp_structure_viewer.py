@@ -171,8 +171,46 @@ class TestPayloadSchema:
         expected_keys = {
             "schema_version", "job_id", "workflow", "job_status",
             "revision", "default_entry_id", "groups", "entries", "warnings",
+            "ensemble_thermo",
         }
         assert set(d.keys()) == expected_keys
+
+    def test_ensemble_thermo_block_stripped_and_none_when_missing(self, tmp_path: Path):
+        """Seeded file → block with ``conformers`` stripped; missing file → None."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        (tmp_path / "seeded").mkdir()
+        seeded = _make_task_dir(tmp_path / "seeded")
+        energies = seeded / "RESULT" / "energies"
+        energies.mkdir(parents=True)
+        (energies / "ensemble_thermo.json").write_text(
+            json.dumps(
+                {
+                    "method": "CENSO",
+                    "temperature_k": 298.15,
+                    "total_gibbs_kcal_mol": -42.5,
+                    "conformers": [{"id": "0001"}, {"id": "0002"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with_file = build_structure_viewer_payload(
+            seeded, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        block = with_file.ensemble_thermo
+        assert isinstance(block, dict)
+        assert "conformers" not in block
+        assert block["total_gibbs_kcal_mol"] == -42.5
+        assert block["method"] == "CENSO"
+
+        (tmp_path / "missing").mkdir()
+        missing = _make_task_dir(tmp_path / "missing")
+        without_file = build_structure_viewer_payload(
+            missing, job_id="j2", workflow="Confsearch", job_status="completed"
+        )
+        assert without_file.ensemble_thermo is None
+        assert without_file.to_dict()["ensemble_thermo"] is None
+        assert not any("ensemble" in w.lower() for w in without_file.warnings)
 
     def test_payload_types(self, tmp_path: Path):
         """Field types match the contract."""

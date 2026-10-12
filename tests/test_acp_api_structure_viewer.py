@@ -539,6 +539,28 @@ def _write_confsearch_manifest(work_dir: Path) -> None:
     )
 
 
+def _write_ensemble_thermo(work_dir: Path) -> None:
+    """Write RESULT/energies/ensemble_thermo.json with a conformers list."""
+    energies = work_dir / "RESULT" / "energies"
+    energies.mkdir(parents=True, exist_ok=True)
+    block = {
+        "method": "CENSO",
+        "temperature_k": 298.15,
+        "total_gibbs_hartree": -100.123,
+        "total_gibbs_kcal_mol": -42.5,
+        "rank1_gibbs_hartree": -100.100,
+        "rank1_weight": 0.62,
+        "mixing_entropy_kcal_per_mol_kelvin": 0.0015,
+        "mixing_entropy_cal_per_mol_kelvin": 1.5,
+        "t_s_mix_kcal_per_mol": 0.45,
+        "population_coverage": 0.99,
+        "censo_reference_gibbs_hartree": -100.111,
+        "censo_reference_gibbs_kcal_mol": -42.4,
+        "conformers": [{"conf_id": "0001"}, {"conf_id": "0002"}],
+    }
+    (energies / "ensemble_thermo.json").write_text(json.dumps(block), encoding="utf-8")
+
+
 def _write_batch_manifest(work_dir: Path, *, items: list[dict[str, Any]] | None = None) -> None:
     """Write a minimal result_manifest with batch structure products."""
     result_dir = work_dir / "RESULT"
@@ -629,6 +651,30 @@ class TestCatalogEndpoint:
         assert by_id["conf_0001"]["weight_source"] == "censo"
         assert by_id["conf_0002"]["weight_source"] == "dft"
         assert all(e["energy"]["temperature_k"] == 350.0 for e in body["entries"])
+
+    def test_ensemble_thermo_block_present_and_stripped(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Confsearch with ensemble_thermo.json → block survives model_validate,
+        conformers stripped; job without the file → ensemble_thermo is null."""
+        work_dir = _seed_job(sv_client, tmp_path, job_id="sv-thermo-001")
+        _write_confsearch_manifest(work_dir)
+        _write_ensemble_thermo(work_dir)
+
+        resp = sv_client.get("/api/v1/jobs/sv-thermo-001/structure-viewer")
+        assert resp.status_code == 200
+        block = resp.json()["ensemble_thermo"]
+        assert isinstance(block, dict)
+        assert "conformers" not in block
+        assert isinstance(block["total_gibbs_kcal_mol"], (int, float))
+        assert block["total_gibbs_kcal_mol"] == -42.5
+
+        work_dir2 = _seed_job(sv_client, tmp_path, job_id="sv-thermo-002")
+        _write_confsearch_manifest(work_dir2)
+
+        resp2 = sv_client.get("/api/v1/jobs/sv-thermo-002/structure-viewer")
+        assert resp2.status_code == 200
+        assert resp2.json()["ensemble_thermo"] is None
 
     def test_unknown_job_404(self, sv_client: TestClient, tmp_path: Path) -> None:
         """Unknown job id → 404."""

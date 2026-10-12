@@ -80,7 +80,10 @@ _FENCE_SUFFIX = ".fence"
 _ATTEMPT_SIDECAR_SUFFIX = ".attempt"
 
 _CATALOG_FETCH_PATHS: dict[str, tuple[str, ...]] = {
-    "Confsearch": ("RESULT/confsearch/confsearch_manifest.json",),
+    "Confsearch": (
+        "RESULT/confsearch/confsearch_manifest.json",
+        "RESULT/energies/ensemble_thermo.json",
+    ),
     "PESsearch": (
         "RESULT/pes_search/pes_recommendations.json",
         "RESULT/pes_search/pes_review.json",
