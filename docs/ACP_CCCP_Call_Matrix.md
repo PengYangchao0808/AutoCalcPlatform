@@ -3,7 +3,7 @@
 **Generated:** 2026-10-05 (plan todo 36)
 **Updated:** 2026-10-06 (plan todo 33 — nmr row / chain brought to the final
 task-core, checkpoint and solvent evidence)
-**Scope:** the 14 active `acp run <workflow>` workflows and every legal
+**Scope:** the 15 active `acp run <workflow>` workflows and every legal
 protocol / profile / branch, mapped to the **unique execution core**
 `cccp.calculation` task entries.
 
@@ -46,6 +46,7 @@ The `fake` demo workflow is intentionally excluded (no QC execution).
 | 12 | `xtb_optimize` | `acp.workflows.simple.run_xtb_optimize` | `StepKind.OPTIMIZE` with `backend="xtb"` | `run_optimize` |
 | 13 | `XtbPathSearch` | `acp.workflows.xtb_path.run_xtb_path_search` | frozen `pes2ts_xtb_path_request_v1` payload (verbatim recipe) | `run_xtb_path_search` |
 | 14 | `OrcaGradient` | `acp.workflows.orca_gradient.run_orca_gradient` | frozen `pes2ts_orca_gradient_request_v1` payload | `run_orca_gradient` |
+| 15 | `XtbConstrainedOpt` | `acp.workflows.xtb_constrained_opt.run_xtb_constrained_opt` | frozen `pes2ts_xtb_constrained_opt_request_v1` payload; `physical_sp` on/off | `run_xtb_constrained_opt` |
 
 ## Per-workflow call chains
 
@@ -159,6 +160,16 @@ never defaulted in ACP.
 `pes2ts_orca_gradient_request_v1` payload and forwards it to
 `cccp.calculation.tasks.orca_gradient.run_orca_gradient`.  ORCA route/block
 rendering stays in `cccp/qc`.
+
+### 15. XtbConstrainedOpt
+
+`run_xtb_constrained_opt` (`acp/workflows/xtb_constrained_opt.py`) validates
+the frozen `pes2ts_xtb_constrained_opt_request_v1` payload, adapts it through
+`legacy_adapters.pes2ts_xtb_constrained_opt_to_task_request`, and forwards it
+to `cccp.calculation.tasks.xtb_constrained_opt.run_xtb_constrained_opt`.  The
+xcontrol constraint/`$fix` compilation and the optimization-log convergence
+parsing stay in the cccp task core; the optional unrestrained physical single
+point runs on the same xTB backend instance.
 
 ## Single execution core (A4)
 

@@ -262,6 +262,7 @@ TASK_CAPABILITY_MAP: dict[str, tuple[str, ...]] = {
     "nmr_shielding": ("nmr_shielding",),
     "xtb_path_search": ("xtb_path_search",),
     "orca_gradient": ("orca_gradient",),
+    "xtb_constrained_opt": ("constrained_optimization", "single_point"),
 }
 
 

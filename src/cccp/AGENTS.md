@@ -15,7 +15,7 @@ src/cccp/   # QC 底座（four-layer ①qc → ②backends → ③calculation；
 ├── pipeline/        # PipelineExecutor — thin orchestration
 ├── qc/              # QC subprocess layer: interfaces/ (ORCA/CREST/xTB/CENSO/ISOSTAT/Molclus), runners/, cluster/ + shared science adapters at qc/ top level (hessian_policy, method_meta, resolved_spec, shermo_adapter, thermo_normalize, translation, keyword_registry)
 ├── backends/        # Capability-Protocol adapter layer (todo 12 moved here from acp.backends; no subprocess) — see backends/AGENTS.md
-├── calculation/     # Task layer — the SINGLE execution station: tasks/ (14 task cores), requests/results contracts, _common, batch, selection, progress (see root AGENTS.md ANTI #17)
+├── calculation/     # Task layer — the SINGLE execution station: tasks/ (15 task cores), requests/results contracts, _common, batch, selection, progress (see root AGENTS.md ANTI #17)
 └── utils/           # 5 shared utility modules (constants, file_io, geometry_tools, resource_utils, solvent_map)
 ```
 

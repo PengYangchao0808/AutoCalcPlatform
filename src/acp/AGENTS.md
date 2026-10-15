@@ -3,7 +3,7 @@
 ## OVERVIEW
 The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ≈247 files (incl. API + scheduler + nmr). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17).
 
-**可运行工作流（14，registry 驱动）**: Confsearch, PESsearch, BatchOptimize, XtbPathSearch, OrcaGradient, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize（XtbPathSearch/OrcaGradient 消费冻结 `pes2ts_*_request_v1` payload，本地专用）。Retired（catalog `status:"retired"`，仅历史作业展示）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
+**可运行工作流（15，registry 驱动）**: Confsearch, PESsearch, BatchOptimize, XtbPathSearch, OrcaGradient, XtbConstrainedOpt, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize（XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload，本地专用）。Retired（catalog `status:"retired"`，仅历史作业展示）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
 ## STRUCTURE
 ```
@@ -22,7 +22,7 @@ acp/
 ├── chem/                # RDKit embedding + composition
 ├── intake/              # 数据摄入：models, parsers（6 格式）, storage
 ├── io/                  # StructureReader / StructureWriter（thin cccp wrapper）
-├── workflows/           # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
+├── workflows/           # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
 ├── nmr/                 # DP4/DP5、平均、缩放/归属、FCHL、谱图、报告（25 模块；见 nmr/AGENTS.md）
 ├── api/                 # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
 └── scheduler/           # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）

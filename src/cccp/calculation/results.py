@@ -1236,6 +1236,57 @@ class OrcaGradientPayload:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class XtbConstrainedOptPayload:
+    """Typed payload for ``xtb_constrained_opt`` results.
+
+    ``energy_effective_hartree`` is xTB's restraint-including TOTAL ENERGY
+    from the constrained optimization log; ``energy_physical_hartree`` is the
+    optional unrestrained single point at the final geometry.  Geometry
+    non-convergence is recorded via ``converged_geometry=False`` and is NOT a
+    failure (xTB exits 0 and writes ``xtbopt.xyz`` even then).
+    """
+
+    optimized_ref: ArtifactRef | None = None
+    energy_effective_hartree: float | None = None
+    energy_physical_hartree: float | None = None
+    converged_geometry: bool | None = None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {}
+        if self.optimized_ref is not None:
+            payload["optimized_ref"] = _artifact_to_dict(self.optimized_ref)
+        for key, value in (
+            ("energy_effective_hartree", self.energy_effective_hartree),
+            ("energy_physical_hartree", self.energy_physical_hartree),
+            ("converged_geometry", self.converged_geometry),
+        ):
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> XtbConstrainedOptPayload:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            return cls()
+        raw_ref = payload.get("optimized_ref")
+        if raw_ref is not None and not isinstance(raw_ref, Mapping):
+            message = "payload.optimized_ref must be a mapping"
+            raise TaskInputError(message)
+        converged = payload.get("converged_geometry")
+        if converged is not None and not isinstance(converged, bool):
+            message = "payload.converged_geometry must be a boolean"
+            raise TaskInputError(message)
+        return cls(
+            optimized_ref=_artifact_from_dict(raw_ref),
+            energy_effective_hartree=parse_float_strict(payload, "energy_effective_hartree"),
+            energy_physical_hartree=parse_float_strict(payload, "energy_physical_hartree"),
+            converged_geometry=converged,
+        )
+
+
 TaskPayload: TypeAlias = (
     SinglePointPayload
     | OptimizePayload
@@ -1251,6 +1302,7 @@ TaskPayload: TypeAlias = (
     | NmrShieldingPayload
     | XtbPathSearchPayload
     | OrcaGradientPayload
+    | XtbConstrainedOptPayload
 )
 
 # Table ① (todo 11/24): task → payload types (paired with TASK_OPTIONS_TYPES).
@@ -1269,6 +1321,7 @@ TASK_PAYLOAD_TYPES: dict[TaskKind, type] = {
     TaskKind.NMR_SHIELDING: NmrShieldingPayload,
     TaskKind.XTB_PATH_SEARCH: XtbPathSearchPayload,
     TaskKind.ORCA_GRADIENT: OrcaGradientPayload,
+    TaskKind.XTB_CONSTRAINED_OPT: XtbConstrainedOptPayload,
 }
 
 
@@ -1534,6 +1587,7 @@ __all__ = [
     "TaskResult",
     "ThermochemistryPayload",
     "XtbPathFrame",
+    "XtbConstrainedOptPayload",
     "XtbPathSearchPayload",
     "artifact_ref_from_dict",
     "artifact_ref_to_dict",

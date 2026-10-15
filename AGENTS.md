@@ -6,9 +6,9 @@
 ## OVERVIEW
 Automated computational chemistry platform. Two packages under `src/`: `cccp`（Computational Chemistry Connection Package — QC 底座，≈86 .py：qc 子进程层 + 共享科学适配 + backends 能力层 + calculation 任务层）与 `acp`（工作流/规划/持久层，≈247 .py：calculation-plan-driven 工作流 + 统一 CLI + API/scheduler/nmr）。Python 3.10+，setuptools，YAML config。
 
-**四层架构（迁移已收口，见 ANTI #17）**: ① `cccp/qc` 子进程接口与共享科学适配（含 `hessian_policy/method_meta/resolved_spec/shermo_adapter/thermo_normalize/translation/keyword_registry`）→ ② `cccp/backends` 能力 Protocol 适配层（无 subprocess）→ ③ `cccp/calculation` 任务层（**唯一执行驻点**，`tasks/` 14 个任务核心）→ ④ `acp` 工作流/规划/发布层（`acp.calculations.primitives` 为纯兼容转发，`acp.backends` 为纯 re-export shim）。全部 14 个工作流经 `cccp.calculation` 任务核心执行。
+**四层架构（迁移已收口，见 ANTI #17）**: ① `cccp/qc` 子进程接口与共享科学适配（含 `hessian_policy/method_meta/resolved_spec/shermo_adapter/thermo_normalize/translation/keyword_registry`）→ ② `cccp/backends` 能力 Protocol 适配层（无 subprocess）→ ③ `cccp/calculation` 任务层（**唯一执行驻点**，`tasks/` 15 个任务核心）→ ④ `acp` 工作流/规划/发布层（`acp.calculations.primitives` 为纯兼容转发，`acp.backends` 为纯 re-export shim）。全部 15 个工作流经 `cccp.calculation` 任务核心执行。
 
-**可运行工作流（14，registry 驱动）**: `acp run Confsearch | PESsearch | BatchOptimize | XtbPathSearch | OrcaGradient | irc | scan | tsmode | casscf | nmr | singlepoint | optimize | frequency | xtb_optimize`；simple 系列 + scan/irc 由 `workflows/simple.py` + `registry.py` 组装；XtbPathSearch/OrcaGradient 消费冻结 `pes2ts_*_request_v1` payload（PES2TS → ACP 执行统一，本地专用）。另有 `acp run serve`（Web 服务）与 `acp doctor`（诊断）。
+**可运行工作流（15，registry 驱动）**: `acp run Confsearch | PESsearch | BatchOptimize | XtbPathSearch | OrcaGradient | XtbConstrainedOpt | irc | scan | tsmode | casscf | nmr | singlepoint | optimize | frequency | xtb_optimize`；simple 系列 + scan/irc 由 `workflows/simple.py` + `registry.py` 组装；XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload（PES2TS → ACP 执行统一，本地专用）。另有 `acp run serve`（Web 服务）与 `acp doctor`（诊断）。
 
 **Retired**（catalog `status:"retired"`，仅历史作业展示，**勿重建/勿扩展 CLI**）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
@@ -16,7 +16,7 @@ Automated computational chemistry platform. Two packages under `src/`: `cccp`（
 
 ## STRUCTURE（地图 — 叶级明细一律看嵌套 AGENTS.md）
 ```
-src/cccp/                 # QC 底座：config/software/version + core + qc/{interfaces,runners,cluster} + qc/{hessian_policy,method_meta,resolved_spec,shermo_adapter,thermo_normalize,translation,keyword_registry}.py + backends/（能力适配） + calculation/（任务层，tasks/ 14 核心） + io + utils
+src/cccp/                 # QC 底座：config/software/version + core + qc/{interfaces,runners,cluster} + qc/{hessian_policy,method_meta,resolved_spec,shermo_adapter,thermo_normalize,translation,keyword_registry}.py + backends/（能力适配） + calculation/（任务层，tasks/ 15 核心） + io + utils
 src/acp/
 ├── cli.py                # argparse 统一入口：run/doctor/serve；retired 子命令拦截报错
 ├── catalog.py            # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS（≈4.3k 行；electronic-state/CASSCF 路由块）
@@ -26,7 +26,7 @@ src/acp/
 ├── results/              # result_manifest 读取 + frames（TrajectoryFrame/VIEW_REGISTRY）+ sampling_graph + frame_candidates + structure_viewer + irc_projection + remote_structure_cache + orca_parser + frequencies
 ├── storage/              # result_manifest v2 写入（含 electronic-state product kinds）
 ├── core/  backends/  chem/  intake/  io/      # 通用机制 / 纯 re-export shim（→ cccp.backends）/ 化学 / 摄入 / 结构 I/O
-├── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
+├── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
 ├── nmr/                  # DP4/DP5、平均、缩放/归属、FCHL、谱图/处理、协议/证据门、报告、修订/诊断、DP5q 隔离（25 模块；见 nmr/AGENTS.md）
 ├── api/                  # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
 └── scheduler/            # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
@@ -50,7 +50,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 | `src/acp/nmr/AGENTS.md` | DP4/DP5 + FCHL + 谱图/处理 + 协议/证据门 + 报告 + 修订/诊断 + DP5q 隔离 |
 | `src/acp/scheduler/AGENTS.md` | Job 生命周期、持久化、stage_tasks |
 | `src/acp/scheduler/remote/AGENTS.md` | LSF 远程执行：SSH/SFTP/bsub/bjobs/结果拉取 |
-| `src/acp/workflows/AGENTS.md` | 工作流实现 + registry（14 active） |
+| `src/acp/workflows/AGENTS.md` | 工作流实现 + registry（15 active） |
 | `src/cccp/AGENTS.md` | cccp 包根：config/version + 7 子包（core/io/pipeline/qc/utils/backends/calculation） |
 | `src/cccp/backends/AGENTS.md` | 能力 Protocol 适配层实现体（ORCA/CREST/xTB/CENSO/Isostat/Molclus；无 subprocess） |
 | `src/cccp/core/AGENTS.md` | ConformerEngine（dormant）+ ProtocolSpec + CandidateSet |
@@ -139,7 +139,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 pip install -e .                 # 运行全部 pytest 需 -e '.[dev,api,remote]'（CI 同）
 pip install -e '.[api]' / '.[remote]' / '.[dev]'
 
-# Run — 14 个可运行工作流（retired 子命令会被 CLI 拦截并提示替代）
+# Run — 15 个可运行工作流（retired 子命令会被 CLI 拦截并提示替代）
 acp run Confsearch --input "CCO" --protocol xtb-crest --refinement-policy screen --output ./out
 acp run Confsearch --input "CCO" --protocol censo-crest --profile light
 acp run PESsearch --from-job 20260823_001_Confsearch --output ./pes_out
@@ -147,6 +147,7 @@ acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
 acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo
 acp run XtbPathSearch --path-config request.json --output ./path_out
 acp run OrcaGradient --gradient-config request.json --output ./grad_out
+acp run XtbConstrainedOpt --opt-config request.json --output ./opt_out
 acp run irc --input ts_structure.xyz --input-role transition_state --ts-provenance prov.json --output ./irc_out
 acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out   # 默认无 ScanTS；--scants 显式 opt-in
 acp run nmr --input "CCO" --spectrum exp_spectrum.txt --output ./nmr_out
