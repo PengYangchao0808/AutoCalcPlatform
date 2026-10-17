@@ -518,7 +518,9 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
 # 4. Frontend parity (E7 — five-way)
 # ---------------------------------------------------------------------------
 
-_FRONTEND = REPO_ROOT / "frontend" / "ACP_Workbench_v2.html"
+#: xtbmd submit/rank1 wiring moved out of the monolith HTML into the wizard
+#: module (feat/frontend-modular-slice); the frozen source pins read it there.
+_FRONTEND = REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard.js"
 
 
 @pytest.mark.skipif(not _FRONTEND.exists(), reason="frontend not checked out")

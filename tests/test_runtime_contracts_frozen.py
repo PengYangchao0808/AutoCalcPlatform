@@ -166,7 +166,12 @@ FROZEN_V2_REMOTE_WRAPPER_RULES: dict = {
     "errors": "shared apiRequest error conversion; never a raw AbortError",
 }
 
-_FRONTEND = Path(__file__).resolve().parents[1] / "frontend" / "ACP_Workbench_v2.html"
+_FRONTEND_JS = Path(__file__).resolve().parents[1] / "frontend" / "js"
+#: Contract-8 source-of-truth moved out of the monolith HTML into modules
+#: (feat/frontend-modular-slice): the v2 wrapper lives in the compat api module,
+#: the shared error conversion in the client transport module.
+_CONTRACT_8_API_JS = _FRONTEND_JS / "workbench" / "compat" / "api.js"
+_CONTRACT_8_TRANSPORT_JS = _FRONTEND_JS / "client" / "transport.js"
 
 
 # ── (1) TS Mode report JSON ────────────────────────────────────────────────
@@ -635,7 +640,11 @@ def test_contract_7_science_publication_rules_are_frozen_literal_data() -> None:
 
 def test_contract_8_frontend_wrapper_rules_present_in_source() -> None:
     """Frozen source pins: /api/v2 namespace, 60s budget, shared error conversion."""
-    html = _FRONTEND.read_text(encoding="utf-8")
+    html = (
+        _CONTRACT_8_API_JS.read_text(encoding="utf-8")
+        + "\n"
+        + _CONTRACT_8_TRANSPORT_JS.read_text(encoding="utf-8")
+    )
     rules = FROZEN_V2_REMOTE_WRAPPER_RULES
     assert rules["namespace"] == "/api/v2"
     assert rules["remote_budget_ms"] == 60000
@@ -654,7 +663,7 @@ def test_contract_8_frontend_wrapper_rules_present_in_source() -> None:
 
 
 def test_contract_8_v2_remote_call_sites_pass_remote_budget() -> None:
-    html = _FRONTEND.read_text(encoding="utf-8")
+    html = _CONTRACT_8_API_JS.read_text(encoding="utf-8")
     assert "timeoutMs: API_REMOTE_TIMEOUT_MS" in html, (
         "no apiV2 call site passes the 60s remote budget yet"
     )
