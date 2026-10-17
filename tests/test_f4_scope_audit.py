@@ -2474,6 +2474,9 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/chem/composition.py",
     "src/acp/core/registry.py",
     "src/acp/catalog.py",
+    # Four-site version lockstep (ANTI-PATTERN #2): every release commit bumps
+    # this file, so the audit must not flag it as unaudited.
+    "src/acp/__init__.py",
     # todo 19: the frequency-science delegation target (single parse in cccp).
     "src/acp/results/orca_parser.py",
     # todo 25: CENSO template-line construction points (translation-layer consumers).

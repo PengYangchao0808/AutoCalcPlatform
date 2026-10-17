@@ -8,7 +8,7 @@ Consumed by the ``acp`` workflow layer; both packages ship
 together as the ``acp`` distribution.
 
 Author: QCcalc Team
-Version: 0.1.3
+Version: 0.2.0
 """
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
