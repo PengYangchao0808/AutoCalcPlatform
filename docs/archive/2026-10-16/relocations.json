@@ -1,0 +1,392 @@
+[
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Deck",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\presentations\\ACP_Architecture_Deck",
+    "category": "archive/2026-10-16/presentations"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reports",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\evidence\\reports",
+    "category": "archive/2026-10-16/evidence"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_ACR_CCCP_Submodule_Layering_20261015.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_ACR_CCCP_Submodule_Layering_20261015.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_ACV_Frontend_Feasibility_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_ACV_Frontend_Feasibility_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_API_Web_Response_Issue_Audit_20261012.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_API_Web_Response_Issue_Audit_20261012.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Code_Quality_Audit_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_Architecture_Code_Quality_Audit_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Deck_Source.zip",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\presentations\\ACP_Architecture_Deck_Source.zip",
+    "category": "archive/2026-10-16/presentations"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Deck.zip",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\presentations\\ACP_Architecture_Deck.zip",
+    "category": "archive/2026-10-16/presentations"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Hierarchy_20261015.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Architecture_Hierarchy_20261015.html",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Hierarchy_20261015.png",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Architecture_Hierarchy_20261015.png",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Architecture_Review_and_Execution_Plan_20261015.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Architecture_Review_and_Execution_Plan_20261015.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_BatchOptimize_Advanced_Config_UX_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_BatchOptimize_Advanced_Config_UX_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Calculation_Workflow_Refactor_Cleanup_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Calculation_Workflow_Refactor_Cleanup_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Candidate_Workspace_Gap_Audit.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Candidate_Workspace_Gap_Audit.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_CCCP_Architecture_Report.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_CCCP_Architecture_Report.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_CCCP_Call_Matrix.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_CCCP_Call_Matrix.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_CCCP_Task_API_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_CCCP_Task_API_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Confsearch_Manual_Mechanism_Modification_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Confsearch_Manual_Mechanism_Modification_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Drafts_Feature_Issue_Report.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Drafts_Feature_Issue_Report.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Edit_And_Recalculate_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Edit_And_Recalculate_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Edit_Execution_Consistency_Fix_20261011.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Edit_Execution_Consistency_Fix_20261011.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Electronic_State_CASSCF_Design.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Electronic_State_CASSCF_Design.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Energy_Graph_Axis_Rendering_Issue_Report.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Energy_Graph_Axis_Rendering_Issue_Report.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Energy_Trajectory_Viewer_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Energy_Trajectory_Viewer_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Ensemble_Total_Gibbs_DevDoc.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Ensemble_Total_Gibbs_DevDoc.txt",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Execution_Integrity_Rebaseline_Notes.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Execution_Integrity_Rebaseline_Notes.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Function_Test_Manual.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Function_Test_Manual.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_IRC_TS_Inheritance_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_IRC_TS_Inheritance_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Job_File_Layout_Spec.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Job_File_Layout_Spec.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Mechanism_Research_DevDoc.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Mechanism_Research_DevDoc.html",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Mechanism_Research_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Mechanism_Research_DevDoc.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Memory_Resource_Chain.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Memory_Resource_Chain.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_MethodMeta_Frontend_DevDoc.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_MethodMeta_Frontend_DevDoc.txt",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Module_Boundaries_and_Interfaces_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_Module_Boundaries_and_Interfaces_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_New_Task_Candidate_Workspace_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_New_Task_Candidate_Workspace_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_NMR_DP4_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_NMR_DP4_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Open_Source_Reuse_Assessment_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_Open_Source_Reuse_Assessment_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_ORCA_Hessian_Defaults_Plan.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_ORCA_Hessian_Defaults_Plan.txt",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_PES_DFT_Scan_Extension_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_PES_DFT_Scan_Extension_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_PES_Manual_Review_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_PES_Manual_Review_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_PES_Task_Alignment.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_PES_Task_Alignment.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Product_Architecture_Optimization_Plan_20261015.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Product_Architecture_Optimization_Plan_20261015.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Product_Kernel_Manual_20261016.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\presentations\\ACP_Product_Kernel_Manual_20261016.html",
+    "category": "archive/2026-10-16/presentations"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Product_Strategy_and_Differentiation_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_Product_Strategy_and_Differentiation_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Project_Task_Storage_Design_v2.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Project_Task_Storage_Design_v2.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Real_QC_Gap_Remediation_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Real_QC_Gap_Remediation_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Refactor_Wave0_Inventory.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Refactor_Wave0_Inventory.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Remove_Conformer_NMR_Benchmark_Plan.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Remove_Conformer_NMR_Benchmark_Plan.html",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Remove_Conformer_NMR_Benchmark_Plan.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Remove_Conformer_NMR_Benchmark_Plan.txt",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Remove_Gaussian_Plan.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Remove_Gaussian_Plan.txt",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Result_Selection_Unification_Implementation.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Result_Selection_Unification_Implementation.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Result_Selection_Unification_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Result_Selection_Unification_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_RI_AuxBasis_Refactor_DevDoc.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_RI_AuxBasis_Refactor_DevDoc.txt",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_S2_Bond_Length_Scan_MD_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_S2_Bond_Length_Scan_MD_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_S2_Double_Bond_Scan_Fix_Report.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_S2_Double_Bond_Scan_Fix_Report.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_S2_Double_Bond_Scan_Incident_Report.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_S2_Double_Bond_Scan_Incident_Report.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Scan_OptTS_GFN_DevPlan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Scan_OptTS_GFN_DevPlan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Simple_Workflows_DevDoc.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Simple_Workflows_DevDoc.html",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Simple_Workflows_DevDoc.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Simple_Workflows_DevDoc.txt",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Structure_Measure_Edit_Fix_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Structure_Measure_Edit_Fix_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Structure_Sources_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Structure_Sources_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Structure_Viewer_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Structure_Viewer_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Structure_Viewer_Modification_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Structure_Viewer_Modification_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Structure_Viewer_UX_Revision_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Structure_Viewer_UX_Revision_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Task_Organization_DevDoc.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Task_Organization_DevDoc.md",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Task_Structure_Organization_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Task_Structure_Organization_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Three_Ends_Four_Modules_Architecture_20261015.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Three_Ends_Four_Modules_Architecture_20261015.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Three_Module_Boundaries_ADR_20261015.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Three_Module_Boundaries_ADR_20261015.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Three_Tier_Architecture_20261016.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Three_Tier_Architecture_20261016.html",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Three_Tier_Architecture_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_Three_Tier_Architecture_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Three_Tier_Cohesive_Modules_20261016.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\next-change\\ACP_Three_Tier_Cohesive_Modules_20261016.md",
+    "category": "reference/next-change"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_TSMode_Optimization_Implementation_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_TSMode_Optimization_Implementation_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Unified_Execution_Target_DevDoc.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\reference\\current\\ACP_Unified_Execution_Target_DevDoc.txt",
+    "category": "reference/current"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_Vibration_Viewer_UX_Optimization_Plan.md",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_Vibration_Viewer_UX_Optimization_Plan.md",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\ACP_xTBMD_CENSO_Energy_DevDoc.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\ACP_xTBMD_CENSO_Energy_DevDoc.txt",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\remote_execution_plan.html",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\remote_execution_plan.html",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\remote_execution_plan.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\remote_execution_plan.txt",
+    "category": "archive/2026-10-16/history"
+  },
+  {
+    "old": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\Remote_Results_Preview_Download_Dev_Plan.txt",
+    "new": "E:\\Calculations\\Common_Script\\Auto_Calc_Platform\\ACP_V1_20260811\\docs\\archive\\2026-10-16\\history\\Remote_Results_Preview_Download_Dev_Plan.txt",
+    "category": "archive/2026-10-16/history"
+  }
+]

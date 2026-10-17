@@ -33,10 +33,26 @@ def xcontrol_constraint_block(constraints: Sequence[CoordinateConstraint]) -> st
 
     xTB uses 1-based atom indices and the per-line syntax
     ``<kind>: <i>, <j>[, <k>[, <l>]], <value>[, <force_constant>]``.
+
+    Force-constant capability note (verified on xTB 6.7.1): the per-line
+    fourth argument is silently IGNORED by that binary, while the block-level
+    ``force constant=`` line is honored.  When every constraint carries the
+    same explicit force constant we therefore emit the block-level line
+    instead of the per-line argument; mixed or unset force constants keep the
+    per-line form (xTB then uses its automatic strength).
     """
     if not constraints:
         return ""
     lines = ["$constrain"]
+    force_constants = {
+        float(c.force_constant) for c in constraints if c.force_constant is not None
+    }
+    uniform_force_constant = (
+        len(force_constants) == 1
+        and all(c.force_constant is not None for c in constraints)
+    )
+    if uniform_force_constant:
+        lines.append(f"  force constant={next(iter(force_constants)):.4f}")
     for c in constraints:
         if isinstance(c, DistanceConstraint):
             kind = "distance"
@@ -46,7 +62,7 @@ def xcontrol_constraint_block(constraints: Sequence[CoordinateConstraint]) -> st
             kind = "dihedral"
         atoms = ", ".join(str(a + 1) for a in c.atoms)
         line = f"  {kind}: {atoms}, {c.target:.6f}"
-        if c.force_constant is not None:
+        if c.force_constant is not None and not uniform_force_constant:
             line += f", {c.force_constant:.4f}"
         lines.append(line)
     lines.append("$end")

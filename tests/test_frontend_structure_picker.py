@@ -28,7 +28,20 @@ FRONTEND = REPO_ROOT / "frontend" / "ACP_Workbench_v2.html"
 FRONTEND_JS_DIR = REPO_ROOT / "frontend" / "js"
 FRONTEND_CSS_DIR = REPO_ROOT / "frontend" / "css"
 PICKER_JS = FRONTEND_JS_DIR / "structure_source_picker.js"
+SCAN_S2_JS = FRONTEND_JS_DIR / "workbench" / "features" / "scan-s2.js"
 PICKER_CSS = FRONTEND_CSS_DIR / "structure_source_picker.css"
+
+def read_workbench_content() -> str:
+    html_raw = FRONTEND.read_text(encoding="utf-8")
+    chunks = []
+    for src in re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', html_raw):
+        clean = src.split("?")[0]
+        if "workbench/" in clean:
+            p = REPO_ROOT / "frontend" / clean
+            if p.is_file():
+                chunks.append(p.read_text(encoding="utf-8"))
+    return html_raw + "\n" + "\n".join(chunks)
+
 
 # i18n key extraction patterns (same approach as test_frontend_sync.py)
 _PICKER_I18N_KEY_RE = re.compile(r'"((?:picker)\.[^"]+)":')
@@ -107,7 +120,7 @@ def test_picker_css_file_exists() -> None:
 
 def test_picker_css_linked_in_html() -> None:
     """CSS file is linked in ACP_Workbench_v2.html."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert re.search(
         r'<link rel="stylesheet" href="css/structure_source_picker\.css(?:\?v=[^"]*)?">', html
     ), "structure_source_picker.css not linked in HTML"
@@ -138,7 +151,7 @@ def test_editor_density_uses_compact_inline_controls() -> None:
 
 def test_picker_js_loaded_in_html() -> None:
     """JS file is loaded via script tag in ACP_Workbench_v2.html."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '<script src="js/structure_source_picker.js"></script>' in html, (
         "structure_source_picker.js not loaded in HTML"
     )
@@ -151,7 +164,7 @@ def test_picker_js_loaded_in_html() -> None:
 
 def test_results_tab_references_picker() -> None:
     """Results tab integration: loadStructureSources references ACPSourcePicker."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     # The loadStructureSources function should reference ACPSourcePicker
     section = html.split("async function loadStructureSources")[1].split("function ")[0]
     assert "ACPSourcePicker" in section, "loadStructureSources does not reference ACPSourcePicker"
@@ -159,27 +172,31 @@ def test_results_tab_references_picker() -> None:
 
 def test_batch_picker_references_picker() -> None:
     """BatchOptimize picker integration: stageBatchFromResults references ACPSourcePicker."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     section = html.split("async function stageBatchFromResults")[1].split("function ")[0]
     assert "ACPSourcePicker" in section, "stageBatchFromResults does not reference ACPSourcePicker"
 
 
 def test_s2scan_references_picker() -> None:
-    """S2 scan picker integration: s2scanLoadAssets references ACPSourcePicker."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    section = html.split("async function s2scanLoadAssets")[1].split("function ")[0]
-    assert "ACPSourcePicker" in section, "s2scanLoadAssets does not reference ACPSourcePicker"
+    """FE-04 slice 1: S2 panel no longer mounts a structure picker.
+
+    The legacy s2scan modal (and its s2scanLoadAssets picker integration) was
+    removed; structure selection happens through the active pes/scan panels.
+    """
+    scan_s2 = SCAN_S2_JS.read_text(encoding="utf-8")
+    assert "ACPSourcePicker" not in scan_s2, "scan-s2.js must not reference ACPSourcePicker"
+    assert "_acpPicker" not in scan_s2, "scan-s2.js must not hold a picker instance"
 
 
 def test_results_picker_variable_declared() -> None:
     """resultsPicker variable declared for results tab picker instance."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "var resultsPicker" in html, "resultsPicker variable not declared"
 
 
 def test_results_picker_cleanup_in_reset() -> None:
     """resetResultsPanel destroys picker instance."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     section = html.split("function resetResultsPanel")[1].split("function ")[0]
     assert "resultsPicker" in section, "resetResultsPanel does not reference resultsPicker"
     assert "destroy" in section, "resetResultsPanel does not call destroy()"
@@ -302,7 +319,7 @@ EXPECTED_PICKER_KEYS = {
 
 def test_picker_i18n_parity() -> None:
     """All picker.* i18n keys present in both zh-CN and en-US dicts."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Verify keys exist at all
     for key in EXPECTED_PICKER_KEYS:
@@ -319,7 +336,7 @@ def test_picker_i18n_parity() -> None:
 
 def test_availability_badge_keys_present() -> None:
     """Availability badge i18n keys present in both dicts."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for key in (
         "picker.availability.pending_sync",
         "picker.availability.pending_fetch",
@@ -358,11 +375,15 @@ def test_picker_keys_used_in_js() -> None:
 
 
 def test_s2scan_close_destroys_picker() -> None:
-    """s2scanClose destroys picker instance."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    section = html.split("function s2scanClose()")[1].split("function ")[0]
-    assert "_acpPicker" in section, "s2scanClose does not clean up picker"
-    assert "destroy" in section, "s2scanClose does not call destroy()"
+    """FE-04 slice 1: no picker lifecycle remains in scan-s2.js.
+
+    s2scanClose was deleted with the legacy modal; the picker destroy
+    contract applies only to live picker hosts now.
+    """
+    scan_s2 = SCAN_S2_JS.read_text(encoding="utf-8")
+    assert "ACPSourcePicker" not in scan_s2, "scan-s2.js must not reference ACPSourcePicker"
+    assert "_acpPicker" not in scan_s2, "scan-s2.js must not hold a picker instance"
+    assert "function s2scanClose(" not in scan_s2, "s2scanClose must stay deleted"
 
 
 # ---------------------------------------------------------------------------
@@ -384,13 +405,13 @@ def test_existing_frontier_files_still_exist() -> None:
 
 def test_structure_viewer_css_still_linked() -> None:
     """structure_viewer.css still linked in HTML."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '<link rel="stylesheet" href="css/structure_viewer.css">' in html
 
 
 def test_picker_css_loads_after_structure_viewer_css() -> None:
     """picker CSS loads after structure_viewer.css (correct cascade order)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     sv_pos = html.index('<link rel="stylesheet" href="css/structure_viewer.css">')
     sp_match = re.search(
         r'<link rel="stylesheet" href="css/structure_source_picker\.css(?:\?v=[^"]*)?">', html
@@ -401,7 +422,7 @@ def test_picker_css_loads_after_structure_viewer_css() -> None:
 
 def test_picker_js_loads_after_vibration_viewer() -> None:
     """picker JS loads after vibration_viewer.js (correct load order)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     vib_pos = html.index('<script src="js/vibration_viewer.js"></script>')
     sp_pos = html.index('<script src="js/structure_source_picker.js"></script>')
     assert sp_pos > vib_pos, "picker JS must load after vibration_viewer.js"
@@ -577,7 +598,7 @@ def test_task_input_workspace_css_has_design_tokens() -> None:
 
 def test_task_input_workspace_css_linked_after_picker_css() -> None:
     """task_input_workspace.css linked AFTER structure_source_picker.css."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     sp_match = re.search(
         r'<link rel="stylesheet" href="css/structure_source_picker\.css(?:\?v=[^"]*)?">', html
     )
@@ -592,7 +613,7 @@ def test_task_input_workspace_css_linked_after_picker_css() -> None:
 
 def test_task_input_workspace_js_loaded_in_html() -> None:
     """task_input_workspace.js loaded via script tag."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '<script src="js/task_input_workspace.js"></script>' in html, (
         "task_input_workspace.js not loaded in HTML"
     )
@@ -600,7 +621,7 @@ def test_task_input_workspace_js_loaded_in_html() -> None:
 
 def test_candidate_details_js_loaded_in_html() -> None:
     """candidate_details.js loaded via script tag."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '<script src="js/candidate_details.js"></script>' in html, (
         "candidate_details.js not loaded in HTML"
     )
@@ -608,7 +629,7 @@ def test_candidate_details_js_loaded_in_html() -> None:
 
 def test_scaffold_scripts_load_after_job_editor() -> None:
     """New script tags load after job_editor.js (correct load order)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     je_pos = html.index('<script src="js/job_editor.js"></script>')
     tiw_pos = html.index('<script src="js/task_input_workspace.js"></script>')
     cd_pos = html.index('<script src="js/candidate_details.js"></script>')
@@ -692,14 +713,14 @@ def test_picker_js_source_group_null_by_default() -> None:
 
 def test_html_has_unified_structure_library_tab() -> None:
     """Candidate and task-result sources share one structure-library tab."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'data-i18n="modal.mode_library"' in html, "structure-library tab missing"
     assert 'data-input-mode="candidate"' not in html, "duplicate candidate tab remains"
 
 
 def test_html_has_single_library_browser_host() -> None:
     """The unified library uses one browser instead of duplicate hosts."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="task-results-browser"' in html, "structure-library browser missing"
     assert 'id="candidate-browser"' not in html, "duplicate candidate browser remains"
     assert 'data-source-group="candidate"' in html
@@ -708,7 +729,7 @@ def test_html_has_single_library_browser_host() -> None:
 
 def test_html_candidate_i18n_keys_in_both_locales() -> None:
     """modal.mode_candidate i18n key exists in both zh-CN and en-US."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '"modal.mode_candidate":' in html, "modal.mode_candidate key missing"
     zh_block = html.split('"zh-CN":')[1].split('"en-US":')[0]
     en_block = html.split('"en-US":')[1]
@@ -718,19 +739,19 @@ def test_html_candidate_i18n_keys_in_both_locales() -> None:
 
 def test_html_has_candidate_picker_variable() -> None:
     """candidatePicker variable declared in HTML."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "var candidatePicker" in html, "candidatePicker variable missing"
 
 
 def test_html_has_load_candidate_sources_function() -> None:
     """loadCandidateSources function defined in HTML."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "async function loadCandidateSources(" in html, "loadCandidateSources missing"
 
 
 def test_html_candidate_picker_mounts_with_source_group() -> None:
     """Candidate picker mount includes sourceGroup: 'candidate'."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     cand_section = html.split("async function loadCandidateSources")[1].split("function ")[0]
     assert 'sourceGroup: "candidate"' in cand_section, \
         "Candidate picker not mounted with sourceGroup: 'candidate'"
@@ -738,7 +759,7 @@ def test_html_candidate_picker_mounts_with_source_group() -> None:
 
 def test_html_library_picker_mounts_without_forced_source_group() -> None:
     """The library starts with all sources and applies its local quick filter."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     task_section = html.split("async function loadStructureSources")[1].split("function ")[0]
     assert "sourceGroup: null" in task_section, "library picker should initially show all sources"
     assert "function setLibrarySourceGroup(group)" in html
@@ -746,19 +767,19 @@ def test_html_library_picker_mounts_without_forced_source_group() -> None:
 
 def test_html_has_sync_picker_selection_function() -> None:
     """_syncPickerSelection function defined in HTML."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function _syncPickerSelection()" in html, "_syncPickerSelection missing"
 
 
 def test_html_has_input_reconciling_guard() -> None:
     """_inputReconciling re-entrancy guard declared."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "var _inputReconciling" in html, "_inputReconciling guard missing"
 
 
 def test_html_submit_gating_for_geometry_state() -> None:
     """submitJobModal blocks on pending/loading/failed geometry_state."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     submit_section = html.split("async function submitJobModal")[1].split("async function ")[0]
     assert "geometry_state" in submit_section, "geometry_state gating missing from submitJobModal"
     assert '"pending"' in submit_section, "pending state check missing"
@@ -768,7 +789,7 @@ def test_html_submit_gating_for_geometry_state() -> None:
 
 def test_html_submit_gating_for_version_changed() -> None:
     """submitJobModal blocks on version_changed."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     submit_section = html.split("async function submitJobModal")[1].split("async function ")[0]
     assert "version_changed" in submit_section, "version_changed gating missing from submitJobModal"
 

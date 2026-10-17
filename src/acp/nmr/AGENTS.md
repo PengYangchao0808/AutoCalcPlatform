@@ -1,7 +1,7 @@
 # nmr/ — NMR + DP4/DP5 Stereochemistry (Phase 3)
 
 ## OVERVIEW
-Goodman DP4/DP5 NMR chemical-shift prediction and stereochemistry assignment on top of the ACP conformer-search + ORCA GIAO pipeline (reactivated 2026-08-07 / P1a; see `docs/ACP_NMR_DP4_DevDoc.md`). 25 modules + 1 data dir, ~19k lines (as of 2026-10-06, after the `acp-nmr-goodman-gap-remediation` pass). Orchestrated by `acp/workflows/nmr.py`; this package owns all NMR-domain logic: shielding models, Boltzmann averaging, DP4/DP5 probability with typed states, FCHL kernels, four-layer spectra model + per-nucleus processors, assignment (two-phase + iterative), evidence gates, protocol spec / reference validation, atomic diagnostics, analysis revision, report serialization, and the isolated `ShiftPredictor`/DP5q research seam.
+Goodman DP4/DP5 NMR chemical-shift prediction and stereochemistry assignment on top of the ACP conformer-search + ORCA GIAO pipeline (reactivated 2026-08-07 / P1a; see `docs/reference/current/ACP_NMR_DP4_DevDoc.md`). 25 modules + 1 data dir, ~19k lines (as of 2026-10-06, after the `acp-nmr-goodman-gap-remediation` pass). Orchestrated by `acp/workflows/nmr.py`; this package owns all NMR-domain logic: shielding models, Boltzmann averaging, DP4/DP5 probability with typed states, FCHL kernels, four-layer spectra model + per-nucleus processors, assignment (two-phase + iterative), evidence gates, protocol spec / reference validation, atomic diagnostics, analysis revision, report serialization, and the isolated `ShiftPredictor`/DP5q research seam.
 
 ## STRUCTURE
 ```
@@ -57,7 +57,7 @@ nmr/
 | Report emission | `report.py` | schema v2 nmr_report.json + nmr_assignment.xlsx + scatter/error PNGs (RESULT/reports/plots/) |
 | Workflow entry | `src/acp/workflows/nmr.py` | `run_nmr_analysis` + `revise_nmr_analysis` (3892 L) |
 | Evaluation harness | `tests/benchmark/nmr/` + `scripts/nmr_benchmark.py` | Dataset manifests, layered metrics, pre-registered thresholds, A/B protocol transfer, reference validation, ShiftPredictor screening (harness-level only; not accuracy claims) |
-| Dev doc | `docs/ACP_NMR_DP4_DevDoc.md` | Authoritative design + P1–P4 audit history + §11.2 corrections + D.9 acceptance status |
+| Dev doc | `docs/reference/current/ACP_NMR_DP4_DevDoc.md` | Authoritative design + P1–P4 audit history + §11.2 corrections + D.9 acceptance status |
 
 ## CONVENTIONS
 - **Type annotations**: PEP 604 (`X | None`) with `from __future__ import annotations` (matches `acp/` style)

@@ -772,8 +772,14 @@ def test_executor_emits_on_frame_done(tmp_path: Path, monkeypatch: pytest.Monkey
 
 
 def test_frontend_pes_pending_contract() -> None:
-    html = (Path(__file__).parent.parent / "frontend" / "ACP_Workbench_v2.html").read_text(
-        encoding="utf-8"
+    # The PES-pending contract moved out of the monolith HTML into the energy
+    # module (runtime lookup) + i18n module (zh/en definitions), preserving the
+    # 3-occurrence count (1 runtime + 2 translations).
+    _frontend = Path(__file__).parent.parent / "frontend" / "js" / "workbench"
+    html = (
+        (_frontend / "features" / "energy.js").read_text(encoding="utf-8")
+        + "\n"
+        + (_frontend / "i18n.js").read_text(encoding="utf-8")
     )
     assert '"energy.pes_pending"' in html
     assert "pes_scan_pending" in html

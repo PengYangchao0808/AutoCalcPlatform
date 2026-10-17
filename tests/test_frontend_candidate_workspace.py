@@ -8,6 +8,19 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import re
+
+def read_workbench_content() -> str:
+    html_raw = HTML.read_text(encoding="utf-8")
+    chunks = []
+    for src in re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', html_raw):
+        clean = src.split("?")[0]
+        if "workbench/" in clean:
+            p = ROOT / "frontend" / clean
+            if p.is_file():
+                chunks.append(p.read_text(encoding="utf-8"))
+    return html_raw + "\n" + "\n".join(chunks)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "frontend" / "ACP_Workbench_v2.html"
@@ -19,7 +32,7 @@ TIW_JS = ROOT / "frontend" / "js" / "task_input_workspace.js"
 def test_standalone_candidate_library_button_absent() -> None:
     """The standalone candidate-library nav button is removed; candidate
     management is reachable through the wizard workspace (source tabs)."""
-    html = HTML.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="btn-candidate-library"' not in html, \
         "standalone btn-candidate-library must be removed"
     # Candidate management is now via wizard source tabs with sourceGroup
@@ -44,7 +57,7 @@ def test_filter_controls_are_disclosed_on_demand() -> None:
 
 
 def test_candidate_geometry_has_explicit_state_machine_and_retry() -> None:
-    html = HTML.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for state in ("pending", "loading", "ready", "failed"):
         assert state in html and "geometry_state" in html
     assert "geometry_state" in html
@@ -54,7 +67,7 @@ def test_candidate_geometry_has_explicit_state_machine_and_retry() -> None:
 def test_inactive_sources_hidden_until_filter_enables_them() -> None:
     """The wizard workspace picker mounts with usageStatus active by default;
     the source_group tabs drive which data set is shown."""
-    html = HTML.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'sourceGroup' in html or 'source_group' in html, \
         "workspace must use sourceGroup/source_group to drive picker tabs"
 

@@ -1,7 +1,8 @@
 """xTB-MD CENSO energy workflow — GFN1 batch optimization + orchestration.
 
 Phase 3 implements the frame-wise GFN1-xTB geometry optimization stage of
-the ``xtbmd_censo_energy`` pipeline (see docs/ACP_xTBMD_CENSO_Energy_DevDoc.html
+the ``xtbmd_censo_energy`` pipeline (see
+docs/archive/2026-10-16/history/ACP_xTBMD_CENSO_Energy_DevDoc.txt
 §7): split the GFN-FF MD trajectory into frames, discard the adaptive
 equilibration prefix (sliding-window ±2σ mean test, v1.3), uniformly
 subsample when the frame count exceeds ``--max-frames``, optimize every

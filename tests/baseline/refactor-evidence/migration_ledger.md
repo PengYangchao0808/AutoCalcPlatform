@@ -66,4 +66,4 @@ P2 任务（`conformer_search`/`md_sampling`/`clustering`/`xtb_path_search`/`cen
 - 内容寻址 release：`acp/scheduler/remote/release.py`（D03，安装区 `<remote_code_dir>/releases/`）
 - 两层身份/`step_result.json`/`resume_source.json`/前置条件阻断：`acp/calculations/{executor,step_requirements,step_result,checkpoint}.py` + `acp/calculations/batch/engine.py`
 
-契约口径与兄弟计划 todo 40/41 再基线注记：`docs/ACP_Execution_Integrity_Rebaseline_Notes.md`；远端目录布局：`docs/ACP_Job_File_Layout_Spec.md` §2b；四不变量：root `AGENTS.md` § EXECUTION PROTOCOL。
+契约口径与兄弟计划 todo 40/41 再基线注记：`docs/reference/current/ACP_Execution_Integrity_Rebaseline_Notes.md`；远端目录布局：`docs/reference/current/ACP_Job_File_Layout_Spec.md` §2b；四不变量：root `AGENTS.md` § EXECUTION PROTOCOL。

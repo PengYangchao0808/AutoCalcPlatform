@@ -48,7 +48,7 @@ remote/
 - **CLI command generation**: `build_remote_cli_command` produces `python -m acp.cli run <workflow> ...` argv — remote nodes run the synced codebase, not an installed package
 
 ## STATE-TRANSITION RULES（execution-integrity，2026-10-06）
-> Root `AGENTS.md` § EXECUTION PROTOCOL；spec：`docs/ACP_Job_File_Layout_Spec.md` §2b + `docs/ACP_Execution_Integrity_Rebaseline_Notes.md`。
+> Root `AGENTS.md` § EXECUTION PROTOCOL；spec：`docs/reference/current/ACP_Job_File_Layout_Spec.md` §2b + `docs/reference/current/ACP_Execution_Integrity_Rebaseline_Notes.md`。
 
 - **CAS transitions**: 本地 job 状态只经 `scheduler/store.py` CAS API 变更（`revision`/`status`/`attempt` 守卫）；远端 `state.json`/bjobs 只是**观测**，poller 只做前进式提案、绝不覆盖用户控制意图（pause/cancel），终态不可复活。
 - **submit states（契约 A）**: `submit_state="intent"`（含 `submission_id`、owner token、`lease_expires_at` wall-clock UTC）先于 bsub 持久化 → `submitted`；`on_submitted` 重读 revision 有界重试；租约有效期间 reconcile 永不判 `not_accepted`；`not_accepted` 只由 5 条证据成立**且提交权租约已失效**。

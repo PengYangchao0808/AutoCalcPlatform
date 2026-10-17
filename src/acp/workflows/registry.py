@@ -71,6 +71,17 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         ),
         requires_binaries=["xtb"],
     ),
+    "XtbConstrainedOpt": WorkflowRegistryEntry(
+        name="XtbConstrainedOpt",
+        label="xTB Constrained Optimization",
+        description=(
+            "Single-geometry xTB native constrained optimization (+ optional "
+            "unrestrained physical single point) from a frozen "
+            "pes2ts_xtb_constrained_opt_request_v1 payload delivered via "
+            "--opt-config."
+        ),
+        requires_binaries=["xtb"],
+    ),
     "OrcaGradient": WorkflowRegistryEntry(
         name="OrcaGradient",
         label="ORCA Single-Point Gradient",

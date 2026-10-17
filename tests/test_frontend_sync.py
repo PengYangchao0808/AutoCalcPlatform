@@ -21,6 +21,53 @@ SERVER = REPO_ROOT / "src" / "acp" / "api" / "server.py"
 # Structure-viewer extracted modules (todo 13)
 FRONTEND_JS_DIR = REPO_ROOT / "frontend" / "js"
 FRONTEND_CSS_DIR = REPO_ROOT / "frontend" / "css"
+FRONTEND_WORKBENCH_CSS_DIR = FRONTEND_CSS_DIR / "workbench"
+FRONTEND_WORKBENCH_JS_DIR = FRONTEND_JS_DIR / "workbench"
+
+def read_workbench_scripts() -> str:
+    """Read all decomposed workbench script files referenced by ACP_Workbench_v2.html in document order."""
+    html_raw = FRONTEND.read_text(encoding="utf-8")
+    chunks: list[str] = []
+    for src in re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', html_raw):
+        clean = src.split("?")[0]
+        if clean.startswith(("js/workbench/", "js/client/", "js/visualization/")):
+            p = REPO_ROOT / "frontend" / clean
+            if p.is_file():
+                chunks.append(p.read_text(encoding="utf-8"))
+    return "\n".join(chunks)
+
+
+_CACHED_SCRIPTS: str | None = None
+_CACHED_CONTENT: str | None = None
+
+
+def get_cached_workbench_scripts() -> str:
+    global _CACHED_SCRIPTS
+    if _CACHED_SCRIPTS is None:
+        _CACHED_SCRIPTS = read_workbench_scripts()
+    return _CACHED_SCRIPTS
+
+
+def read_workbench_content() -> str:
+    """Read the full workbench page representation (HTML skeleton + referenced workbench scripts).
+    Used by sync assertions verifying cross-layer contracts between DOM structure and classic scripts."""
+    global _CACHED_CONTENT
+    if _CACHED_CONTENT is None:
+        _CACHED_CONTENT = FRONTEND.read_text(encoding="utf-8") + "\n" + get_cached_workbench_scripts()
+    return _CACHED_CONTENT
+
+
+def read_workbench_css() -> str:
+    """Read all stylesheets linked by ACP_Workbench_v2.html in cascade order."""
+    html = read_workbench_content()
+    css_chunks: list[str] = []
+    for href in re.findall(r'<link[^>]+href=["\']([^"\']+\.css[^"\']*)["\']', html):
+        clean = href.split("?")[0]
+        path = REPO_ROOT / "frontend" / clean
+        if path.is_file():
+            css_chunks.append(path.read_text(encoding="utf-8"))
+    return "\n".join(css_chunks)
+
 FRONTEND_FILES: list[Path] = [
     FRONTEND,
     FRONTEND_JS_DIR / "geometry_store.js",
@@ -29,12 +76,24 @@ FRONTEND_FILES: list[Path] = [
     FRONTEND_JS_DIR / "vibration_viewer.js",
     FRONTEND_CSS_DIR / "structure_viewer.css",
 ]
+if FRONTEND_WORKBENCH_CSS_DIR.is_dir():
+    FRONTEND_FILES.extend(sorted(FRONTEND_WORKBENCH_CSS_DIR.glob("*.css")))
 
 _I18N_KEY_RE = re.compile(r'"((?:energy|tab\.energy)\.[^"]+)":')
 _NODES_I18N_KEY_RE = re.compile(r'"(nodes\.[^"]+)":')
 _ZH_BLOCK_RE = re.compile(r'"zh-CN":\s*\{(.*?)\n\s*"en-US":', re.DOTALL)
 _EN_BLOCK_RE = re.compile(r'"en-US":\s*\{(.*?)(?:\n\s*\};)', re.DOTALL)
 _SP_JS = FRONTEND_JS_DIR / "structure_source_picker.js"
+
+
+def viewer_creation_site_count() -> int:
+    """Pin the five scene creation sites — all route through the shared
+    ACPVisualization.mol3d adapter (FE-09). The regex also accepts the legacy
+    raw $3Dmol.createViewer form so a regression would still be counted
+    (and fail the == 5 budget pins below)."""
+    source = "\n".join(path.read_text(encoding="utf-8")
+                       for path in (FRONTEND_WORKBENCH_JS_DIR / "features").glob("*.js"))
+    return len(re.findall(r"(?:\$3Dmol\.createViewer|ACPVisualization\.mol3d\.create)\(", source))
 
 
 class _ProfileRecord(TypedDict, total=False):
@@ -58,7 +117,7 @@ def _extract_nodes_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # ty
 
 
 def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     server = SERVER.read_text(encoding="utf-8")
 
     assert 'html_path = _FRONTEND_DIR / "ACP_Workbench_v2.html"' in server
@@ -175,7 +234,7 @@ def test_optimization_geometry_loader_frame_endpoint_first() -> None:
     must live in its own try/catch so a failed request never blocks the
     remaining fallbacks (only AbortError is rethrown).
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     body = html.split("function energyGraphLoadFrameGeometry(node)", 1)[1]
     body = body.split("\nasync function ", 1)[0]
@@ -206,7 +265,7 @@ def test_wizard_default_workflow_and_protocol_are_catalog_driven() -> None:
     ``resolveDefaultWorkflow`` (Confsearch first) + ``pickDefaultProfile``
     (censo-crest preferred) + self-healing ``ensureWizardWorkflowValid``.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # 1. Catalog integrity: every visible workflow must resolve to a schema
     #    the method catalog actually defines, otherwise the wizard cannot
@@ -267,40 +326,41 @@ def test_wizard_default_workflow_and_protocol_are_catalog_driven() -> None:
 
 
 def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
-    """Regression guard for docs/ACP_Energy_Graph_Axis_Rendering_Issue_Report.md.
+    """Regression guard for docs/archive/2026-10-16/history/ACP_Energy_Graph_Axis_Rendering_Issue_Report.md.
 
     The axis band lives at the bottom of the fixed 1040x520 viewBox.  The
     layout contract must guarantee the SVG always fits the chart viewport so
     the axes stay visible: no vertical scrolling, no min-height forcing
     overflow, and no full-replacement redraw leaving the axes below the fold.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    css = read_workbench_css()
+    html = read_workbench_content()
 
     # Energy chart: viewport must never scroll; the SVG is fully responsive
     # (min-width: 0) so the axes can never be pushed out of the card — the
     # contract is enforced by layout, not by scrollbars.
-    assert ".energy-chart-scroll {\n  min-width: 0;\n  min-height: 0;\n  overflow: hidden;" in html
-    assert ".energy-chart-scroll { min-height: 0; overflow: auto;" not in html
+    assert ".energy-chart-scroll {\n  min-width: 0;\n  min-height: 0;\n  overflow: hidden;" in css
+    assert ".energy-chart-scroll { min-height: 0; overflow: auto;" not in css
     svg_rule = (
         ".energy-chart-svg {\n  display: block;\n  flex: 1 1 auto;\n  width: 100%;\n"
         "  min-width: 0;\n  min-height: 0;\n  height: 100%;\n}"
     )
-    assert svg_rule in html
+    assert svg_rule in css
     assert (
         ".energy-chart-svg { display: block; width: 100%; min-width: 640px; min-height: 360px; height: 100%; }"
-        not in html
+        not in css
     )
 
     # Optimization chart: same contract — the SVG is measured from the live
     # container (ResizeObserver), so no fixed pixel width can force clipping.
     assert (
         ".optimization-chart-svg { display: block; width: 100%; min-width: 0; min-height: 0; height: 100%; cursor: grab; }"
-        in html
+        in css
     )
-    assert "min-width: 620px" not in html
-    assert "min-width: 620px; height: 238px;" not in html
-    assert ".optimization-chart-scroll { flex: 1 1 0; min-height: 0; overflow: hidden;" in html
-    assert ".optimization-chart-card { display: flex; flex-direction: column;" in html
+    assert "min-width: 620px" not in css
+    assert "min-width: 620px; height: 238px;" not in css
+    assert ".optimization-chart-scroll { flex: 1 1 0; min-height: 0; overflow: hidden;" in css
+    assert ".optimization-chart-card { display: flex; flex-direction: column;" in css
 
     # Axes are still generated and appended inside the SVG viewBox.
     assert "function energyGraphAxesMarkup(xDom, yDom, geom" in html
@@ -314,7 +374,7 @@ def test_optimization_chart_single_view_switching_contract() -> None:
     from the live container, zoom/pan/box/reset interactions wired for the
     optimization branch, and item_id-locked polling for batch trajectories.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     view_ids = (
         'OPTIMIZATION_VIEW_IDS = ["energy", "force", "energy_derivative", "force_derivative"]'
@@ -354,7 +414,7 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     Without an explicit pick the panel must never render the misleading
     four-row "no data" convergence block — it shows the task status instead.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # 1. State machine: selectionOrigin field + selectJob reset.
     assert 'selectionOrigin: "none",' in html
@@ -499,7 +559,7 @@ def test_energy_i18n_keys_complete_across_locales() -> None:
     A future edit that adds an energy key to only one locale will fail here —
     that is its purpose.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     zh_keys = _extract_energy_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_energy_keys(html, _EN_BLOCK_RE)
@@ -525,7 +585,7 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
     node) also turns it red, and so T12 can rely on the stable ids/hooks
     named here.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Stable DOM hooks (T12 payload wiring + manual QA target these ids).
     assert 'id="modal-node-select"' in html
@@ -623,7 +683,7 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
 
 def test_node_selector_i18n_keys_complete_across_locales() -> None:
     """Dual-locale completeness for nodes.* keys (selector + D12 codes)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     zh_keys = _extract_nodes_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_nodes_keys(html, _EN_BLOCK_RE)
@@ -674,7 +734,7 @@ def test_submit_payload_carries_node_selection() -> None:
     become ``node_tags``, and auto ("") omits both so the server default
     applies.  Removing a payload key or a branch's wiring turns this red.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Shared helper maps the selector state onto the payload.
     helper = html.split("function applyNodeSelectionToBody(body, opts)", 1)[1]
@@ -711,7 +771,7 @@ def test_continue_node_override_and_stage_preselect_lock() -> None:
     remote-node display reads the T8 top-level node_id with a result.node
     fallback for older responses.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Continue override control in the detail action bar.
     assert 'dContinueNodeSel.id = "detail-continue-node-select";' in html
@@ -779,7 +839,7 @@ def test_frame_candidate_save_uses_terminal_status_predicate() -> None:
     terminal-status predicate (completed OR failed OR cancelled) instead of a
     completed-only variable.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "const jobTerminal = jobStatus ===" in html, (
         "jobTerminal must be defined checking all three terminal statuses"
@@ -795,7 +855,7 @@ def test_frame_candidate_role_picker_gate_uses_terminal_predicate() -> None:
     picker when the job status is exactly "completed".  A terminal-status
     predicate (completed / failed / cancelled) must replace it.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # The role-picker gate must use a terminal predicate, not the
     # completed-only variable.
@@ -811,7 +871,7 @@ def test_frame_candidate_disabled_active_job_branch_retained() -> None:
     This assertion must PASS against the current source — it guards the
     existing disabled branch so a future refactor cannot silently drop it.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "energy.inspector.save_after_complete" in html
     assert (
@@ -827,7 +887,7 @@ def test_frame_candidate_post_body_includes_item_id() -> None:
     The current POST body contains ``view_type``, ``frame_index``,
     ``role``, and ``expected_revision`` — but no ``item_id``.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Extract the role-picker click handler that builds the POST body.
     assert "[data-energy-candidate-role]" in html, "sanity: role-picker button selector exists"
@@ -861,7 +921,7 @@ def test_pes_candidate_card_mode_is_workflow_view_driven() -> None:
     decided by workflow + view_type alone; ``canEditRole`` may only disable
     the TS/INT/none role buttons inside the PES card.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     card = _candidate_card_source(html)
 
     # The bug form is banned: editability must never select the card mode.
@@ -894,7 +954,7 @@ def test_pes_locked_selection_never_renders_generic_save_button() -> None:
     not bind that action at all — locking only disables the role buttons and
     saving goes through the toolbar lock button → /pes/review.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     card = _candidate_card_source(html)
 
     assert "if (isScanPES) {" in card, "sanity: PES card branch exists"
@@ -915,12 +975,24 @@ def test_pes_review_confirm_accepts_single_candidate() -> None:
     confirm dialog must POST the *entire* working candidate set to
     /pes/review without any minimum-size gate.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     payload = html.split("function energyGraphReviewPayload()", 1)[1]
     payload = payload.split("\nfunction ", 1)[0]
-    assert "s2scanState.candidates.map(" in payload, (
+    # R4: the working candidate set is owned by the candidateReview controller;
+    # the payload maps the controller snapshot (single owner), still as a whole.
+    assert "candidateReviewState()" in payload, (
+        "the review payload must read the working candidate set from the "
+        "candidateReview controller (single owner)"
+    )
+    assert "candidates.map(" in payload, (
         "the review payload must carry the whole working candidate set"
+    )
+    assert "s2scanState" not in payload, (
+        "the review payload must not read the deprecated s2scanState aliases"
+    )
+    assert "s2scanState" not in payload, (
+        "the review payload must not read the deprecated s2scanState aliases"
     )
     assert re.search(r"candidates\.length\s*[<>]=?\s*2", payload) is None, (
         "the frontend must not impose a >=2 candidate gate — a single TS frame is a valid selection"
@@ -945,7 +1017,7 @@ def test_pes_none_role_labeled_cancel_candidate_with_effect_hint() -> None:
     取消候选 (not the ambiguous 无标记) and carry a "保存并锁定后生效"
     hint — as a button tooltip plus an edit-mode note line.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Labels in both locales.
     assert '"energy.card.type_none": "取消候选"' in html, "zh label must read 取消候选, not 无标记"
@@ -970,7 +1042,7 @@ def test_pes_interrupted_scan_review_contract() -> None:
     """Failed-task partial scans: interrupted banner (never 计算中), view-only
     geometry gate, and unconverged manual-judgement badge (2026-09).
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Interrupted scans must never render as 计算中 — both the workspace
     # status badge and the footer completeness label say 扫描中断、数据不完整.
@@ -994,7 +1066,7 @@ def test_pes_interrupted_scan_review_contract() -> None:
 
 def test_pes_live_status_transition_rebuilds_review_toolbar() -> None:
     """A failed scan can gain review controls without gaining another frame."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     revision_source = "function energyGraphDataRevision(data) {" + html.split(
         "function energyGraphDataRevision(data) {", 1
     )[1].split("\nfunction optimizationJobItemId", 1)[0]
@@ -1038,7 +1110,7 @@ _EXPECTED_STRUCTURE_EXTS = [
 
 def test_structure_upload_exts_constant_defined() -> None:
     """STRUCTURE_UPLOAD_EXTS must be a single constant listing all accepted extensions."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "STRUCTURE_UPLOAD_EXTS" in html, "STRUCTURE_UPLOAD_EXTS constant missing"
     for ext in _EXPECTED_STRUCTURE_EXTS:
         assert (
@@ -1049,7 +1121,7 @@ def test_structure_upload_exts_constant_defined() -> None:
 
 def test_structure_upload_exts_include_sd_log_out() -> None:
     """Regression guard: .sd, .log, .out must be in the accept list (S5)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     accept_line = html.split('id="upload-file-input"')[1].split(">")[0]
     for ext in (".sd", ".log", ".out"):
         assert ext in accept_line, f"{ext} missing from file picker accept attribute"
@@ -1057,7 +1129,7 @@ def test_structure_upload_exts_include_sd_log_out() -> None:
 
 def test_file_picker_accept_matches_constant() -> None:
     """The file picker accept attribute must list the same extensions as STRUCTURE_UPLOAD_EXTS."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     # Extract accept attribute value
     accept_match = re.search(r'id="upload-file-input"[^>]*accept="([^"]*)"', html)
     assert accept_match, "Could not find accept attribute on upload-file-input"
@@ -1070,7 +1142,7 @@ def test_file_picker_accept_matches_constant() -> None:
 
 def test_is_accepted_structure_file_function_exists() -> None:
     """isAcceptedStructureFile(file) must exist and use STRUCTURE_UPLOAD_EXTS."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function isAcceptedStructureFile(" in html, "isAcceptedStructureFile function missing"
     # The function body must reference STRUCTURE_UPLOAD_EXTS
     fn_body = html.split("function isAcceptedStructureFile(")[1].split("\nfunction ")[0]
@@ -1081,7 +1153,7 @@ def test_is_accepted_structure_file_function_exists() -> None:
 
 def test_reject_unsupported_file_function_exists() -> None:
     """rejectUnsupportedFile(file) must exist and use modal.unsupported_ext."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function rejectUnsupportedFile(" in html, "rejectUnsupportedFile function missing"
     fn_body = html.split("function rejectUnsupportedFile(")[1].split("\nfunction ")[0]
     assert "modal.unsupported_ext" in fn_body, (
@@ -1091,7 +1163,7 @@ def test_reject_unsupported_file_function_exists() -> None:
 
 def test_change_handler_calls_reject_unsupported() -> None:
     """The file input change handler must call rejectUnsupportedFile for unsupported files."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     # Find the change handler block (fileInput.addEventListener("change", ...
     change_block = html.split('fileInput.addEventListener("change"')[1].split("});")[0]
     assert "rejectUnsupportedFile(" in change_block, (
@@ -1104,7 +1176,7 @@ def test_change_handler_calls_reject_unsupported() -> None:
 
 def test_drop_handler_calls_reject_unsupported() -> None:
     """The dropzone drop handler must call rejectUnsupportedFile for unsupported files."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     # Find the drop handler block
     drop_block = html.split('dropzone.addEventListener("drop"')[1].split("});")[0]
     assert "rejectUnsupportedFile(" in drop_block, "drop handler must call rejectUnsupportedFile"
@@ -1115,7 +1187,7 @@ def test_drop_handler_calls_reject_unsupported() -> None:
 
 def test_reject_unsupported_does_not_clear_wizard_state() -> None:
     """rejectUnsupportedFile must not reset wizardUploadFile or other wizard state."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     fn_body = html.split("function rejectUnsupportedFile(")[1].split("\nfunction ")[0]
     assert "wizardUploadFile = null" not in fn_body, (
         "rejectUnsupportedFile must NOT clear wizardUploadFile"
@@ -1127,7 +1199,7 @@ def test_reject_unsupported_does_not_clear_wizard_state() -> None:
 
 def test_unsupported_ext_locale_key_in_both_locales() -> None:
     """modal.unsupported_ext must exist in both zh-CN and en-US locale dictionaries."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     zh_keys = _extract_all_modal_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_all_modal_keys(html, _EN_BLOCK_RE)
     assert "modal.unsupported_ext" in zh_keys, "modal.unsupported_ext missing from zh-CN locale"
@@ -1136,7 +1208,7 @@ def test_unsupported_ext_locale_key_in_both_locales() -> None:
 
 def test_nmr_bruker_zip_upload_unchanged() -> None:
     """The NMR Bruker zip upload must remain independent (accept=.zip, parse=false)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="nmr-bruker-file"' in html, "NMR Bruker file input missing"
     bruker_block = html.split('id="nmr-bruker-file"')[1].split(">")[0]
     assert ".zip" in bruker_block, "NMR Bruker input must accept .zip"
@@ -1146,7 +1218,7 @@ def test_nmr_bruker_zip_upload_unchanged() -> None:
 
 def test_is_accepted_structure_file_case_insensitive() -> None:
     """isAcceptedStructureFile must compare extensions case-insensitively."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     fn_body = html.split("function isAcceptedStructureFile(")[1].split("\nfunction ")[0]
     assert ".toLowerCase()" in fn_body or ".toLowerCase()" in fn_body.replace(" ", ""), (
         "isAcceptedStructureFile must use toLowerCase() for case-insensitive comparison"
@@ -1169,7 +1241,7 @@ def test_wizard_project_section_is_first_step() -> None:
     the workflow/protocol cards, so users configured the job before deciding
     where it belongs.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
 
     proj_pos = modal.find('id="modal-project-section"')
@@ -1202,25 +1274,25 @@ def test_wizard_project_section_is_first_step() -> None:
 
 def test_job_modal_layout_prevents_card_and_toolbar_overlap() -> None:
     """Long labels stay inside balanced cards and preview actions stay horizontal."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    css = read_workbench_css()
 
-    assert "#job-modal .config-cards-row {" in html
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in html
-    assert "#job-modal .config-card {" in html
-    assert "grid-template-columns: minmax(0, 1fr) auto;" in html
-    assert "#job-modal .config-card-btn {" in html
-    assert "white-space: nowrap;" in html
-    assert "#job-modal .preview-right-toolbar {" in html
-    assert "#job-modal .preview-right-actions {" in html
-    assert "min-width: max-content;" in html
-    assert ".footer-selected-count {" in html
-    assert "flex: 1 1 auto;" in html
-    assert "#job-modal .config-cards-row { grid-template-columns: minmax(0, 1fr); }" in html
+    assert "#job-modal .config-cards-row {" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
+    assert "#job-modal .config-card {" in css
+    assert "grid-template-columns: minmax(0, 1fr) auto;" in css
+    assert "#job-modal .config-card-btn {" in css
+    assert "white-space: nowrap;" in css
+    assert "#job-modal .preview-right-toolbar {" in css
+    assert "#job-modal .preview-right-actions {" in css
+    assert "min-width: max-content;" in css
+    assert ".footer-selected-count {" in css
+    assert "flex: 1 1 auto;" in css
+    assert "#job-modal .config-cards-row { grid-template-columns: minmax(0, 1fr); }" in css
 
 
 def test_results_filter_targets_modal_project_not_top_filter() -> None:
     """The embedded picker follows the modal target project directly."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "function resultsProjectTargetId()" in html
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
@@ -1242,7 +1314,7 @@ def test_results_filter_targets_modal_project_not_top_filter() -> None:
 
 def test_results_rows_status_badges_project_labels_and_search_scope() -> None:
     """Status badges, project grouping/labels, and the widened search hay."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for key in (
         '"results.status_completed": "已完成"',
@@ -1276,7 +1348,7 @@ def test_results_rows_status_badges_project_labels_and_search_scope() -> None:
 
 def test_structure_source_ref_records_project_provenance() -> None:
     """source_ref must carry project_id/job_status so cross-project loads stay traceable."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     ref_body = html.split("source_ref: {", 1)[1].split("}", 1)[0]
     assert "project_id" in ref_body
@@ -1296,7 +1368,7 @@ def test_energy_workspace_peer_layout_contract() -> None:
     70/30 chart/inspector grid with a focus mode and a narrow-screen fallback.
     Candidate band / card / hit-layer contracts from the denoise refactor stay.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "energy-candidate-band" in html, "Band container class missing"
     assert 'data-energy-candidate-jump="' in html, "Chip jump attribute missing"
@@ -1308,11 +1380,12 @@ def test_energy_workspace_peer_layout_contract() -> None:
     assert "energy-card-type-btn" in html, "Card type button class missing"
     assert 'data-energy-action="card-cancel"' in html, "Card cancel action missing"
 
-    assert "energy-point-hit" in html, "Energy point hit class missing"
-    assert "energy-point-group" in html, "Energy point group class missing"
-    assert "optimization-point-hit" in html, "Optimization point hit class missing"
+    css = read_workbench_css()
+    assert "energy-point-hit" in css or "energy-point-hit" in html, "Energy point hit class missing"
+    assert "energy-point-group" in css or "energy-point-group" in html, "Energy point group class missing"
+    assert "optimization-point-hit" in css or "optimization-point-hit" in html, "Optimization point hit class missing"
 
-    assert ".energy-marker-max" not in html, ".energy-marker-max CSS still present"
+    assert ".energy-marker-max" not in css, ".energy-marker-max CSS still present"
     assert "energy-role-row" not in html, ".energy-role-row still present"
     assert 'type !== "maximum"' in html or "type !== 'maximum'" in html, (
         "Defensive maximum-type filter missing"
@@ -1328,12 +1401,12 @@ def test_energy_workspace_peer_layout_contract() -> None:
         "#viewer-energy must appear after the closing #sv-layout tag (peer view)"
     )
 
-    assert "grid-template-columns: minmax(0, 7fr) minmax(0, 3fr)" in html, (
+    assert "grid-template-columns: minmax(0, 7fr) minmax(0, 3fr)" in css, (
         "Energy workspace 70/30 chart/inspector split missing"
     )
-    assert "energy-focus-mode" in html, "Energy focus-mode class missing"
+    assert "energy-focus-mode" in css or "energy-focus-mode" in html, "Energy focus-mode class missing"
 
-    energy_media = html.split("@media (max-width: 1100px)", 1)[1].split("}", 1)[0]
+    energy_media = css.split("@media (max-width: 1100px)", 1)[1].split("}", 1)[0]
     assert ".energy-workspace-grid" in energy_media, (
         "Energy workspace must collapse to one column at <=1100px"
     )
@@ -1344,7 +1417,9 @@ def test_energy_workspace_peer_layout_contract() -> None:
 
 
 def test_viewer_framing_shared_helper_call_order() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = (FRONTEND_JS_DIR / "visualization" / "framing.js").read_text(encoding="utf-8")
+    page = read_workbench_content()
+    assert "ACPVisualization.framing." in page
 
     marker = "function frame3DViewer("
     assert html.count(marker) == 1, "Shared framing helper must be defined once"
@@ -1361,7 +1436,9 @@ def test_viewer_framing_shared_helper_call_order() -> None:
 
 
 def test_viewer_framing_container_stability_wait() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = (FRONTEND_JS_DIR / "visualization" / "framing.js").read_text(encoding="utf-8")
+    page = read_workbench_content()
+    assert "ACPVisualization.framing." in page
 
     wait_marker = "function waitForContainerStable("
     schedule_marker = "function scheduleViewerFraming("
@@ -1388,15 +1465,12 @@ def test_viewer_framing_container_stability_wait() -> None:
 
 
 def test_all_viewer_load_sites_use_shared_framing() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     load_sites = (
         "renderMolDoc",
         "energyGraphLoadFrameGeometry",
         "renderPreviewStructure3D",
         "renderReactionChanges3D",
-        "s2scanLoadPreview",
-        "s2scanInitCoordinateViewer",
-        "s2scanLoadResultFrame",
     )
 
     for name in load_sites:
@@ -1409,7 +1483,7 @@ def test_all_viewer_load_sites_use_shared_framing() -> None:
 
 
 def test_energy_viewer_same_frame_guard_allows_relayout_reframe() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     marker = "function energyGraphLoadFrameGeometry("
     assert html.count(marker) == 1, "Energy geometry loader must be defined once"
     body = html.split(marker, 1)[1].split("\nasync function ", 1)[0].split("\nfunction ", 1)[0]
@@ -1432,11 +1506,10 @@ def test_energy_viewer_same_frame_guard_allows_relayout_reframe() -> None:
 
 
 def test_viewer_framing_disposed_in_cleanup_paths() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     cleanup_paths = (
         "energyGraphDestroyViewer",
         "clearViewer",
-        "s2scanClose",
         "s2scanResetState",
     )
 
@@ -1458,11 +1531,11 @@ def test_energy_structure_viewer_stays_within_visible_panel() -> None:
     shift). Checking only "canvas equals its own container" is insufficient —
     the container itself must be bounded by the visible panel.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    css = read_workbench_css()
 
     viewer_marker = ".energy-structure-viewer {"
-    assert html.count(viewer_marker) == 1, "Viewer base rule must be defined once"
-    viewer_rule = html.split(viewer_marker, 1)[1].split("}", 1)[0]
+    assert css.count(viewer_marker) == 1, "Viewer base rule must be defined once"
+    viewer_rule = css.split(viewer_marker, 1)[1].split("}", 1)[0]
     assert "width: 100%" in viewer_rule, "Viewer must fill its column, not self-size"
     assert "min-width: 0" in viewer_rule, (
         "Viewer must defeat the aspect-ratio-transferred minimum width"
@@ -1472,7 +1545,7 @@ def test_energy_structure_viewer_stays_within_visible_panel() -> None:
     )
 
     panel_marker = "\n.energy-inspector-panel {"
-    panel_rule_bodies = [segment.split("}", 1)[0] for segment in html.split(panel_marker)[1:]]
+    panel_rule_bodies = [segment.split("}", 1)[0] for segment in css.split(panel_marker)[1:]]
     rows_rules = [r for r in panel_rule_bodies if "grid-template-rows" in r]
     assert rows_rules, "Inspector panel rows-grid definition missing"
     assert any("grid-template-columns: minmax(0, 1fr)" in r for r in rows_rules), (
@@ -1481,29 +1554,24 @@ def test_energy_structure_viewer_stays_within_visible_panel() -> None:
 
 
 def test_frontend_script_has_no_syntax_errors() -> None:
-    """Regression guard: the main <script> block must pass node --check."""
+    """Check each actual classic script, without hiding cross-file syntax errors."""
     if not shutil.which("node"):
         import pytest
 
         pytest.skip("node not available")
 
     html = FRONTEND.read_text(encoding="utf-8")
-    script_start = html.find("<script>")
-    script_end = html.rfind("</script>")
-    assert script_start != -1 and script_end != -1, "Could not find <script> block"
-
-    js_start = html.index("\n", script_start) + 1
-    js_content = html[js_start:script_end]
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False, encoding="utf-8") as f:
-        _ = f.write(js_content)
-        _ = f.flush()
+    sources = re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html)
+    assert sources, "Default page must load its scripts"
+    for source in sources:
+        script = FRONTEND.parent / source.split("?")[0]
+        assert script.is_file(), f"Missing script: {source}"
         result = subprocess.run(
-            ["node", "--check", f.name],
+            ["node", "--check", str(script)],
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, f"node --check failed:\n{result.stderr}"
+        assert result.returncode == 0, f"node --check failed for {source}:\n{result.stderr}"
 
 
 def test_frontend_files_exist_and_readable() -> None:
@@ -1534,7 +1602,7 @@ def test_vibration_viewer_js_has_namespace() -> None:
 
 
 def test_v2_html_loads_structure_viewer_modules() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '<link rel="stylesheet" href="css/structure_viewer.css">' in html
     assert '<script src="js/geometry_store.js"></script>' in html
     assert '<script src="js/structure_viewer.js"></script>' in html
@@ -2303,7 +2371,7 @@ def test_workbench_sse_terminal_refresh_wiring() -> None:
     matches completed/failed/cancelled/done, and the terminal branch (selected
     job only) calls refreshPending with force — the SSE terminal event is the
     authoritative signal and must bypass the stale job_status guard."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     sse = html.split("function openSSE(jobId)", 1)[1]
 
@@ -2337,7 +2405,7 @@ def test_workbench_sse_terminal_refresh_wiring() -> None:
 def test_summary_refresh_has_no_retry_hook() -> None:
     """Negative lock: refreshSelectedJobSummary must NOT call refreshPending —
     terminal retries are owned solely by refreshIfChanged (same-tick race)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     summary_body = html.split("async function refreshSelectedJobSummary()", 1)[1]
     summary_body = summary_body.split("\nfunction ", 1)[0]
@@ -2349,32 +2417,34 @@ def test_summary_refresh_has_no_retry_hook() -> None:
 
 
 def test_summary_poll_refreshifchanged_outside_drawer_gate() -> None:
-    """Structural lock: in summaryPoll the refreshIfChanged() call site sits
-    AFTER the drawer-skip summary line AND inside the `localGen % 2 === 0`
-    branch — proving the periodic retry still covers the drawer-open path
-    (and is not dragged behind the drawer condition)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    """Structural lock (R2 owner: client/polling-strategy.js lane 2). The
+    selected-job summary fetch keeps its drawer-skip, while the periodic
+    (every-2nd-tick) structure-viewer refresh sits OUTSIDE the drawer
+    condition — proving the pending-fetch retry still covers the drawer-open
+    path (and is not dragged behind the drawer condition)."""
+    poll_src = (
+        REPO_ROOT / "frontend" / "js" / "client" / "polling-strategy.js"
+    ).read_text(encoding="utf-8")
 
-    summary_poll = html.split("async function summaryPoll()", 1)[1]
-    summary_poll = summary_poll.split("\n    } catch", 1)[0]
+    lane2 = poll_src.split("async function pollSummaryLane()", 1)[1]
+    lane2 = lane2.split("async function pollLogLane", 1)[0]
 
-    drawer_skip = "if (!drawerOpen) await refreshSelectedJobSummary();"
-    gate = "if (localGen % 2 === 0) {"
-    assert drawer_skip in summary_poll, "summaryPoll must keep the drawer-skip summary line"
-    assert gate in summary_poll, "summaryPoll must keep the 5s localGen gate"
+    drawer_skip = "selectedId && !drawerOpen && handlers.pollSelectedSummary"
+    gate = "tick % 2 === 0"
+    assert drawer_skip in lane2, "lane 2 must keep the drawer-skip for the summary fetch"
+    assert gate in lane2, "lane 2 must keep the every-2nd-tick (5s) gate"
 
-    # refreshIfChanged call lives inside the localGen branch ...
-    gen_branch = summary_poll.split(gate, 1)[1].split("\n      }", 1)[0]
-    assert "window.ACPStructureViewer.refreshIfChanged()" in gen_branch, (
-        "refreshIfChanged() must run inside the `localGen % 2 === 0)` branch"
+    # The periodic structure-viewer dispatch lives inside the tick gate ...
+    tick_branch = lane2.split(gate, 1)[1].split("} catch (e) {", 1)[0]
+    assert "if (handlers.pollStructureViewer)" in tick_branch, (
+        "pollStructureViewer dispatch must run inside the `tick % 2 === 0` branch"
     )
-    assert drawer_skip not in gen_branch, (
-        "drawer-skip summary line must stay outside the 5s gate"
+    # ... and the drawer state must NOT gate it (drawer only guards the summary fetch).
+    assert "drawerOpen" not in tick_branch, (
+        "the periodic structure-viewer refresh must stay outside the drawer condition"
     )
-
-    # ... and after the drawer-skip line (never pulled into the drawer condition)
-    assert summary_poll.index(drawer_skip) < summary_poll.index(gate) < (
-        summary_poll.index("window.ACPStructureViewer.refreshIfChanged()")
+    assert lane2.index(drawer_skip) < lane2.index(gate), (
+        "drawer-skip summary line must sit before the 5s gate"
     )
 
 
@@ -2515,7 +2585,7 @@ def test_structure_workspace_html_contract() -> None:
     The legacy list/inspector panels were removed in the UX spec v2.0 P0
     restructure; their ids must never come back into the static markup.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert 'id="structure-playback-bar"' in html
     assert 'id="sv-layout"' in html
@@ -2695,7 +2765,7 @@ def _div_span(html: str, id_token: str) -> tuple[int, int]:
 
 def test_tab_independence_energy_not_in_sv_layout() -> None:
     """#viewer-energy is a peer canvas view, not a descendant of #sv-layout."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert html.count('id="sv-layout"') == 1
     assert html.count('id="viewer-energy"') == 1
@@ -2711,7 +2781,7 @@ def test_tab_independence_energy_not_in_sv_layout() -> None:
 
 def test_drawers_default_closed() -> None:
     """All three overlay drawers start hidden; vibration dock also hidden."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for drawer_id in ("measure", "source", "more"):
         pattern = '<div[^>]*id="sv-drawer-' + drawer_id + '"[^>]*>'
@@ -2730,7 +2800,7 @@ def test_drawers_default_closed() -> None:
 
 def test_summary_bar_exists_in_html() -> None:
     """Summary bar id exists and has dedicated CSS rules."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
 
     assert 'id="sv-summary-bar"' in html
@@ -2741,7 +2811,7 @@ def test_summary_bar_exists_in_html() -> None:
 
 def test_bottom_strip_defaults_hidden() -> None:
     """Bottom strip exists in HTML but starts hidden for single-entry payloads."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     match = re.search(r'<div[^>]*id="sv-bottom-strip"[^>]*>', html)
     assert match is not None, "sv-bottom-strip div missing"
@@ -2773,7 +2843,7 @@ def test_no_empty_inspector_sections() -> None:
 
 def test_selectjob_calls_onjobselected() -> None:
     """Contract: selectJob must call ACPStructureViewer.onJobSelected."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     select_job = html.split("async function selectJob(jobId)", 1)[1]
     select_job = select_job.split("\nasync function ", 1)[0]
@@ -2787,20 +2857,21 @@ def test_selectjob_calls_onjobselected() -> None:
 
 
 def test_polling_calls_refreshifchanged() -> None:
-    """Contract: summaryPoll must call ACPStructureViewer.refreshIfChanged."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    """Contract (R2): the lane-2 pollStructureViewer handler wired in
+    compat/api.js must call ACPStructureViewer.refreshIfChanged."""
+    html = read_workbench_content()
 
-    summary_poll = html.split("async function summaryPoll()", 1)[1]
-    summary_poll = summary_poll.split("\n    } catch", 1)[0]
+    wiring = html.split("ACPClient.polling.init({", 1)[1].split("ACPClient.polling.start(", 1)[0]
+    handler = wiring.split("pollStructureViewer: function", 1)[1].split("},", 1)[0]
 
-    assert "ACPStructureViewer.refreshIfChanged" in summary_poll, (
-        "summaryPoll must call ACPStructureViewer.refreshIfChanged"
+    assert "ACPStructureViewer.refreshIfChanged" in handler, (
+        "pollStructureViewer handler must call ACPStructureViewer.refreshIfChanged"
     )
 
 
 def test_file_tree_xyz_click_calls_injectmanualentry() -> None:
     """Contract: file-tree .xyz click must call injectManualEntry."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     xyz_block = html.split('node.path.endsWith(".xyz")', 1)[1]
     xyz_block = xyz_block.split("return;", 1)[0]
@@ -3043,7 +3114,7 @@ def test_structure_viewer_node_geometry_409_retry() -> None:
 
 def test_structure_viewer_svload_xyz_bridge_exists() -> None:
     """Contract: _svLoadXyzToViewer bridge function exists in HTML."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "window._svLoadXyzToViewer" in html, (
         "Bridge function _svLoadXyzToViewer must exist in HTML"
@@ -3058,7 +3129,7 @@ def test_structure_viewer_svload_xyz_bridge_exists() -> None:
 
 def test_energy_selectframe_pushes_to_structure_viewer() -> None:
     """Contract: energyGraphSelectFrame delegates to energyGraphSetSelection which pushes to structure viewer."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[1]
     select_frame = select_frame.split("\nfunction ", 1)[0]
@@ -3086,7 +3157,7 @@ def test_structure_viewer_js_has_energy_push_api() -> None:
 
 def test_structure_viewer_energy_push_forbidden_ids_still_absent() -> None:
     """Contract: forbidden identifiers from anti-pattern #29 must stay absent."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "energyGraphConfirmAndBatch" not in html, (
         "energyGraphConfirmAndBatch must stay absent (anti-pattern #29)"
@@ -3317,7 +3388,7 @@ def _extract_structure_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  
 
 def test_phase_a_structure_tab_contract() -> None:
     """Phase-A lock: single structure tab, conformers/3d absent (todo 14)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert 'data-tab="conformers"' not in html, "conformers tab must be removed"
     assert 'data-tab="3d"' not in html, "3d tab must be renamed to structure"
@@ -3359,7 +3430,7 @@ def test_phase_a_store_api_names() -> None:
 
 def test_phase_a_selectjob_autoload_call() -> None:
     """Phase-A lock: selectJob calls onJobSelected which triggers loadStructureViewer (todo 17)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[
         0
@@ -3399,7 +3470,7 @@ def test_phase_a_dirty_guard_branch() -> None:
 
 def test_phase_a_forbidden_identifiers_absent() -> None:
     """Phase-A lock: forbidden identifiers must stay absent (anti-pattern #29)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "energyGraphConfirmAndBatch" not in html
     assert 'data-energy-action="to-batch"' not in html
@@ -3414,7 +3485,7 @@ def test_phase_a_i18n_structure_keys_complete_across_locales() -> None:
 
     A future edit that adds a structure key to only one locale will fail here.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
@@ -3431,7 +3502,7 @@ def test_phase_a_i18n_structure_keys_complete_across_locales() -> None:
 def test_phase_a_i18n_structure_keys_used_in_js_exist_in_both_locales() -> None:
     """Phase-A lock: every structure.* key referenced by _t() in
     structure_viewer.js must exist in both locale dictionaries."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     js = FRONTEND_JS_DIR / "structure_viewer.js"
     js_content = js.read_text(encoding="utf-8")
 
@@ -3531,7 +3602,7 @@ def test_vibration_viewer_frequency_inspector_contract() -> None:
 def test_vibration_viewer_i18n_keys_complete_across_locales() -> None:
     """Every structure.vib.* key must exist in BOTH zh-CN and en-US, and the
     required Wave-5 subset (loading/none/chip/summary/4 reasons) is present."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     zh_keys = _extract_vib_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_vib_keys(html, _EN_BLOCK_RE)
@@ -3910,7 +3981,7 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
 
 def test_vibration_dock_host_element_exists() -> None:
     """Dock host element exists in HTML with display:none default."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     dock_match = re.search(r'<div[^>]*id="sv-vibration-dock"[^>]*>', html)
     assert dock_match is not None, "sv-vibration-dock div missing from HTML"
     assert "display:none" in dock_match.group(0).replace(" ", ""), (
@@ -4012,7 +4083,7 @@ def test_vibration_dock_default_mode_selection_order() -> None:
 
 def test_vibration_dock_i18n_keys_new() -> None:
     """New dock i18n keys exist in both locales."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     zh_keys = _extract_vib_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_vib_keys(html, _EN_BLOCK_RE)
     new_keys = {
@@ -4047,7 +4118,7 @@ def test_vibration_dock_ir_unit_updated() -> None:
 
 def test_vibration_old_drawer_removed_from_html() -> None:
     """Old sv-drawer-vibration div removed from HTML."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="sv-drawer-vibration"' not in html
 
 
@@ -4242,7 +4313,7 @@ def test_vibration_viewer_arrow_contract() -> None:
     source, and the three toggle labels in both locales."""
     vib = _VIB_JS.read_text(encoding="utf-8")
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # 3Dmol shape API usage + arrow spec
     assert ".addArrow(" in vib, "viewer.addArrow usage missing"
@@ -4522,7 +4593,7 @@ def test_vibration_viewer_animation_contract() -> None:
     removeAllModels+addModel rebuild, NO viewer.animate(), throttle
     constant, speed clamp, injectables, style reuse, control labels."""
     vib = _VIB_JS.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # rAF loop + injectables
     assert "requestAnimationFrame" in vib
@@ -4864,7 +4935,7 @@ def test_vibration_viewer_teardown_contract() -> None:
     vib = _VIB_JS.read_text(encoding="utf-8")
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
     editor = _EDITOR_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in (
         "stopAnimationAndRestore",
@@ -5124,7 +5195,7 @@ def test_vibration_viewer_ts_evidence_contract() -> None:
     mismatch-disable branch in both locales; pure-helper names; evidence-only
     (no batch/irc validation calls)."""
     vib = _VIB_JS.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in (
         "tsJudgment",
@@ -6215,7 +6286,7 @@ def test_structure_editor_transaction_contract() -> None:
     ed_js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
     sv_js = _SV_JS_PATH.read_text(encoding="utf-8")
     css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in (
         "checkCollisions",
@@ -6488,7 +6559,7 @@ def test_structure_editor_asset_contract() -> None:
     hook WITHOUT submit, no RESULT/WORK writes, i18n keys both locales."""
     ed_js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
     sv_js = _SV_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in (
         "buildEditedXyz",
@@ -6731,7 +6802,7 @@ def test_shared_geometry_loader_contract() -> None:
     """Phase-D lock: ONE shared loader; energy viewer keeps its canvas but
     loses its duplicate parse/style/load logic; no new viewer instances;
     reaction/preview/s2scan viewers untouched."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
 
     for name in (
@@ -6777,17 +6848,17 @@ def test_shared_geometry_loader_contract() -> None:
     # the NMR candidate structure canvas, which must route through the shared
     # loader (registerCanvasLoader/sharedLoadGeometry + scheduleViewerFraming).
     # Adding another instance requires a deliberate update here.
-    assert html.count("$3Dmol.createViewer") == 8, "viewer instance count changed"
+    # FE-04 slice 1: legacy S2 modal viewers (s2scanState.viewer/resultViewer)
+    # removed with the dead s2scan panels — budget dropped 8 -> 5.
+    assert viewer_creation_site_count() == 5, "viewer instance count changed"
 
-    # reaction/preview/s2scan viewers untouched
-    assert "reactionViewer = $3Dmol.createViewer" in html
-    assert "previewViewer = $3Dmol.createViewer" in html
-    assert "s2scanState.viewer = $3Dmol.createViewer" in html
-    assert "s2scanState.resultViewer = $3Dmol.createViewer" in html
+    # reaction/preview viewer creation converged on the shared mol3d adapter
+    # (FE-09); creation options stay pinned by module_tests/viz_framing.test.js.
+    assert "reactionViewer = ACPVisualization.mol3d.create(" in html
+    assert "previewViewer = ACPVisualization.mol3d.create(" in html
     # 2 = preview + PES selection renderer resets; the 3rd is the scan
     # selection renderer's identical per-render reset (WS3, deliberate).
     assert html.count("previewViewer.setStyle") == 3, "preview viewer styling must stay untouched"
-    assert "s2scanState.viewer.setStyle" in html
 
 
 def test_shared_geometry_loader_node_logic() -> None:
@@ -6964,7 +7035,7 @@ def test_irc_playback_contract() -> None:
     playback goes through the shared loader (main-irc adapter), buttons +
     i18n present in both locales."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in ("playIrcPath", "stopIrcPlayback", "isIrcPlaying"):
         assert f"{name}: {name}," in sv, f"{name} missing from namespace"
@@ -7141,7 +7212,7 @@ def test_overlay_contract() -> None:
     """Todo-40 lock: overlay API surface, distinct second-model style, teardown
     clears, unproven-mapping note, i18n both locales."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in ("loadOverlay", "renderOverlay", "clearOverlay", "overlayMeasurementsBlocked"):
         assert f"{name}: {name}," in sv, f"{name} missing from namespace"
@@ -7344,7 +7415,7 @@ def test_perf_threshold_contract() -> None:
     """Todo-41 lock: the four named thresholds with exact values, degrade
     branch in the shared loader, sampling in playback/list, notice keys."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name, value in (
         ("LIST_VIRTUALIZE_THRESHOLD", "100"),
@@ -7664,7 +7735,7 @@ def test_i18n_str_fallback_sweep() -> None:
     """Todo-42 mechanical sweep: every STR fallback across the three viewer
     modules maps to a dictionary key present in BOTH locales — via a _t /
     _editBtn / _playbackBtn call-site link or the declared map above."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
 
@@ -7698,7 +7769,7 @@ def test_view_state_contract() -> None:
     wiring, listbox ARIA + keyboard, aria-labels/live, storage NEVER touches
     result data."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for name in ("viewStateStore", "saveViewState", "restoreViewState", "clearViewState"):
         assert f"{name}: {name}," in sv, f"{name} missing from namespace"
@@ -8331,7 +8402,7 @@ def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
     pick through ACPGeometryStore (addToSelection / addMeasurement /
     clearSelection), updates measure-status, and opens the drawer — WITHOUT a
     synchronous renderMolDoc() model rebuild in the pick callback."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     handler = html.split("function handleMeasureClick(atom)", 1)[1]
     handler = handler[: handler.index("// ── Mechanism Builder")]
@@ -8372,7 +8443,7 @@ def test_measure_status_element_and_update_function() -> None:
     """measure-mode-status span exists and _updateMeasureStatus is store-based:
     it reads the ACPGeometryStore selection length (not the removed
     measureBuffer) and the active measureType."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert 'id="measure-mode-status"' in html, "measure-mode-status span missing"
     assert "function _updateMeasureStatus()" in html, "_updateMeasureStatus function missing"
@@ -8394,7 +8465,7 @@ def test_measure_status_element_and_update_function() -> None:
 
 def test_set_mode_calls_update_measure_status() -> None:
     """setMode calls _updateMeasureStatus."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     setmode_fn = html.split("function setMode(mode)", 1)[1]
     setmode_fn = setmode_fn[: setmode_fn.index("function updateFrameController")]
@@ -8596,7 +8667,7 @@ def test_geometry_store_node_subscribe_change_tokens() -> None:
 
 def test_measure_i18n_keys_in_both_locales() -> None:
     """New i18n keys exist in both zh-CN and en-US locale blocks."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for zh, en in (
         ('"structure.vib.btn": "振动模式"', '"structure.vib.btn": "Vibrations"'),
@@ -8746,7 +8817,7 @@ def test_ensemble_total_g_summary_bar_and_drawer_source_contract() -> None:
     payload.ensemble_thermo key behind strict null/finite guards, rendered
     via the 2-arg _t("structure.ensemble_total_g", STR.ENSEMBLE_TOTAL_G) form."""
     js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
 
     assert js.count('className = "sv-summary-ensemble"') == 1
@@ -8962,7 +9033,7 @@ def test_electronic_state_module_renderer_dispatch() -> None:
     text-input fallback, so the structured value never renders as
     '[object Object]'.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # 1. The dedicated dispatch string exists in buildFieldRow.
     assert 'fieldName].renderer === "electronic_state"' in html
@@ -9002,7 +9073,7 @@ def test_electronic_state_module_renderer_dispatch() -> None:
 
 def test_batch_no_preset_identifiers_remain() -> None:
     """All preset/inheritance identifiers must be completely removed."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for marker in [
         "BATCH_PRESETS",
         "_batchPresetMatch",
@@ -9041,7 +9112,7 @@ def test_batch_no_preset_identifiers_remain() -> None:
 
 def test_batch_toggle_buttons_present() -> None:
     """Role buttons remain editable at zero and counts use selected explicit roles."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "mc-batch-role-bar" in html, "Role toggle bar CSS class missing"
     assert "mc-batch-role-btn" in html, "Role toggle button CSS class missing"
     assert "mc-batch-role-count" in html, "Role count span CSS class missing"
@@ -9058,7 +9129,7 @@ def test_batch_toggle_buttons_present() -> None:
 
 def test_batch_serializer_emits_batch_roles() -> None:
     """Serializer emits batch_roles with exact key set and preserves null/0."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
     assert "methodPayload.batch_roles = {}" in fn_body, "batch_roles initialization missing"
@@ -9102,7 +9173,7 @@ def test_batch_serializer_emits_batch_roles() -> None:
 
 def test_batch_role_defaults_defined() -> None:
     """_BATCH_ROLE_DEFAULTS defines complete defaults for both roles."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "_BATCH_ROLE_DEFAULTS" in html, "_BATCH_ROLE_DEFAULTS constant missing"
     assert "_BATCH_ROLE_DEFAULTS.int" in html or '_BATCH_ROLE_DEFAULTS["int"]' in html
     assert "_BATCH_ROLE_DEFAULTS.ts" in html or '_BATCH_ROLE_DEFAULTS["ts"]' in html
@@ -9118,14 +9189,14 @@ def test_batch_role_defaults_defined() -> None:
 
 def test_batch_hessian_label_not_computation_count() -> None:
     """Plan section: 'Hessian 计算次数' is forbidden; '每 N 个优化循环重算' is correct."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert r"Hessian \u8ba1\u7b97\u6b21\u6570" not in html, "'Hessian 计算次数' is forbidden"
     assert r"\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af\u91cd\u7b97" in html
 
 
 def test_batch_trust_radius_label() -> None:
     """opt_trust_radius label must be '信赖半径' (NOT '步长')."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert r"\u4fe1\u8d56\u534a\u5f84" in html, "'信赖半径' label missing for opt_trust_radius"
     # Must NOT be renamed to 步长
     assert r"\u6b65\u957f" not in html, "'步长' must not replace '信赖半径'"
@@ -9133,13 +9204,13 @@ def test_batch_trust_radius_label() -> None:
 
 def test_batch_preview_endpoint_url_present() -> None:
     """config-preview endpoint URL string present."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "/api/v1/batch-optimize/config-preview" in html, "Preview endpoint URL missing"
 
 
 def test_batch_preview_debounce_and_abort() -> None:
     """Debounce timer and AbortController markers present."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "_previewDebounceTimer" in html, "Debounce timer variable missing"
     assert "_previewAbortCtrl" in html, "Abort controller variable missing"
     assert "_PREVIEW_DEBOUNCE_MS" in html, "Debounce constant missing"
@@ -9148,13 +9219,13 @@ def test_batch_preview_debounce_and_abort() -> None:
 
 def test_batch_preview_schema_validation() -> None:
     """Preview response validates schema string."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "batch_optimize_preview_v1" in html, "Preview schema version string missing"
 
 
 def test_batch_preview_failure_explicit() -> None:
     """Preview failure must be labeled unverified."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function _renderPreviewFailure(" in html, "_renderPreviewFailure missing"
     assert "mc-preview-failure" in html, "Failure CSS class missing"
     assert "mc-preview-unverified" in html, "Unverified CSS class missing"
@@ -9166,7 +9237,7 @@ def test_batch_preview_failure_explicit() -> None:
 
 def test_batch_server_preview_rendering() -> None:
     """_renderServerPreview renders per-role effective view."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function _renderServerPreview(data)" in html, "_renderServerPreview missing"
     assert "orca_summary" in html, "orca_summary reference missing"
     assert "_previewGeneration" in html, "Generation token missing"
@@ -9174,14 +9245,14 @@ def test_batch_server_preview_rendering() -> None:
 
 def test_batch_step_bar_removed_from_batch_modal() -> None:
     """The flow selector is sufficient; BatchOptimize must not render a duplicate step bar."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'stepBar = document.createElement("div")' not in html
     assert "mc-batch-flat" in html
 
 
 def test_batch_modal_has_title_without_explanatory_subtitle() -> None:
     """BatchOptimize keeps the title and suppresses the redundant subtitle."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert r"\u6279\u91cf\u4f18\u5316\u8bbe\u7f6e" in html, "批量优化设置 title missing"
     batch_branch = html.split('if (wizardState.workflow.id === "BatchOptimize")', 1)[1]
     batch_branch = batch_branch.split("} else {", 1)[0]
@@ -9190,7 +9261,7 @@ def test_batch_modal_has_title_without_explanatory_subtitle() -> None:
 
 def test_batch_purpose_specific_disclosures_replace_more_options() -> None:
     """Advanced controls are grouped by purpose instead of one mixed bucket."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert r"\u66f4\u591a\u8ba1\u7b97\u9009\u9879" not in html
     for marker in ["SCF 详细设置", "热化学", "失败重试", "参数摘要"]:
         assert marker in html
@@ -9198,7 +9269,7 @@ def test_batch_purpose_specific_disclosures_replace_more_options() -> None:
 
 def test_batch_single_point_role_fields_are_primary_and_catalog_backed() -> None:
     """SP profiles expose role-specific method/basis fields outside More Options."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'if (batchHasStep("singlepoint"))' in html
     assert '_buildBatchRoleMethodField(methodFields, "sp_method"' in html
     assert '_buildBatchRoleMethodField(methodFields, "sp_basis"' in html
@@ -9207,22 +9278,22 @@ def test_batch_single_point_role_fields_are_primary_and_catalog_backed() -> None
 
 def test_batch_compact_grids_cover_primary_and_more_fields() -> None:
     """Wide screens use two-column compact fields and narrow screens collapse."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert ".mc-batch-more-fields" in html
-    assert "repeat(2, minmax(0, 1fr))" in html
-    assert "@media (max-width: 680px)" in html
+    css = read_workbench_css()
+    assert ".mc-batch-more-fields" in css
+    assert "repeat(2, minmax(0, 1fr))" in css
+    assert "@media (max-width: 680px)" in css
 
 
 def test_batch_parameter_summary_collapsible() -> None:
     """A normalised parameter summary is not mislabeled as a full input preview."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '_makeBatchDisclosure("参数摘要", "Parameter Summary"' in html
     assert '"输入预览" : "Input Preview"' not in html
 
 
 def test_batch_copy_other_role_method() -> None:
     """The role-toolbar copy button copies methods but not optimizer/SCF fields."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "roleToolbar.appendChild(copyRoleBtn)" in html
     assert "roleToolbar.appendChild(roleBar)" in html
     copy_body = html.split('copyRoleBtn.addEventListener("click"', 1)[1]
@@ -9236,7 +9307,7 @@ def test_batch_copy_other_role_method() -> None:
 
 def test_batch_hessian_recalc_writes_values() -> None:
     """Hessian recalc UI: 每N循环 writes N, 不重算 writes 0."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     body = html.split("function _buildHessianRecalcField(dest)", 1)[1]
     body = body.split("\n        }", 1)[0]
     # "auto" mode writes "auto"
@@ -9251,7 +9322,7 @@ def test_batch_hessian_recalc_writes_values() -> None:
 
 def test_batch_restore_default_affects_active_role_only() -> None:
     """Restore-default button resets only the active role's draft."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     restore_body = html.split('restoreBtn.addEventListener("click"', 1)
     assert len(restore_body) > 1, "Restore button handler missing"
     handler = restore_body[1].split("});", 1)[0]
@@ -9265,7 +9336,7 @@ def test_batch_restore_default_affects_active_role_only() -> None:
 
 def test_batch_cancel_reverts_whole_draft() -> None:
     """Cancel/close on the batch config window must fully revert changes."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     open_body = html.split("async function openMethodConfig()", 1)[1]
     open_body = open_body.split("\nasync function ", 1)[0]
     assert "var _methodDraft = JSON.parse(JSON.stringify(wizardState.method));" in open_body
@@ -9282,7 +9353,7 @@ def test_batch_cancel_reverts_whole_draft() -> None:
 
 def test_batch_cancel_blocks_late_validation_writeback() -> None:
     """doValidate must not write normalized values after cancel closed the modal."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     modal_guard = (
         'var modalHidden = document.getElementById("method-config-modal").style.display === "none";'
     )
@@ -9292,14 +9363,14 @@ def test_batch_cancel_blocks_late_validation_writeback() -> None:
 
 def test_batch_restore_default_button_in_footer() -> None:
     """'恢复当前页默认' button added to modal footer for BatchOptimize."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "mt-config-restore-default" in html, "Restore-default button id missing"
     assert r"\u6062\u590d\u5f53\u524d\u9875\u9ed8\u8ba4" in html, "恢复当前页默认 label missing"
 
 
 def test_batch_update_config_cards_reads_batch_roles() -> None:
     """updateConfigCards reads INT/TS methods from batch_roles."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     update_body = html.split("function updateConfigCards()", 1)[1]
     update_body = update_body.split("\nfunction ", 1)[0]
     assert "batch_roles" in update_body, "updateConfigCards must reference batch_roles"
@@ -9309,7 +9380,7 @@ def test_batch_update_config_cards_reads_batch_roles() -> None:
 
 def test_batch_hessian_combined_row_still_exists() -> None:
     """Hessian has initial select + recalc segmented in one row."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "mc-hessian-row" in html, "Hessian combined row class missing"
     assert "mc-hessian-seg" in html, "Hessian segmented control class missing"
     assert "mc-hessian-seg-btn" in html, "Hessian segmented button class missing"
@@ -9317,19 +9388,19 @@ def test_batch_hessian_combined_row_still_exists() -> None:
 
 def test_batch_basis_readonly_display() -> None:
     """Single-option locked basis shows read-only display."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "mc-basis-readonly" in html, "Basis read-only display class missing"
 
 
 def test_batch_info_tooltip() -> None:
     """Help text uses info tooltip."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "mc-info-tip" in html, "Info tooltip class missing"
 
 
 def test_batch_convergence_canonicalization() -> None:
     """Payload builder uses lowercase enum values."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
     # Serializer reads from batch_roles which stores user-selected values
@@ -9338,7 +9409,7 @@ def test_batch_convergence_canonicalization() -> None:
 
 def test_batch_preview_local_summary_for_active_role() -> None:
     """Local summary renders for the active role only."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     body = html.split("function _renderLocalSummary()", 1)[1]
     body = body.split("\n        }", 1)[0]
     assert "_batchRoleActive" in body, "Must use active role for local summary"
@@ -9349,17 +9420,20 @@ def test_batch_engine_defaults_match_backend() -> None:
     """batchRoleStaticDefaults() must mirror backend ROLE_PRODUCT_DEFAULTS exactly.
 
     Imports ROLE_PRODUCT_DEFAULTS at runtime, extracts the JS object literal
-    from the HTML (now the shared ``batchRoleStaticDefaults`` factory used by
-    both openMethodConfig and ACPJobEditor), and asserts every key/value pair
-    matches for both roles. Static assertions are kept for semantic
+    from the single authoritative shared factory
+    (frontend/js/workbench/contracts/batch_role_defaults.js, consumed by both
+    wizard openMethodConfig and ACPJobEditor), and asserts every key/value
+    pair matches for both roles. Static assertions are kept for semantic
     documentation.
     """
     from acp.calculations.batch.options import ROLE_PRODUCT_DEFAULTS
 
-    html = FRONTEND.read_text(encoding="utf-8")
+    defaults_js = (
+        FRONTEND_JS_DIR / "workbench" / "contracts" / "batch_role_defaults.js"
+    ).read_text(encoding="utf-8")
 
     # Extract the JS literal from the shared defaults factory.
-    block = html.split("function batchRoleStaticDefaults()", 1)[1]
+    block = defaults_js.split("function batchRoleStaticDefaults()", 1)[1]
     block = block.split("return {", 1)[1]
     block = block.split("\n  };", 1)[0]
     block += "\n}"  # re-add closing brace for the outer object
@@ -9394,28 +9468,28 @@ def test_batch_engine_defaults_match_backend() -> None:
 
     # Static semantic assertions (kept for readability)
     # INT: no trust radius override, auto hessian
-    assert "opt_trust_radius: null" in html, "INT trust_radius must be null"
-    assert 'opt_initial_hessian: "auto"' in html, "INT initial_hessian must be auto"
-    assert 'opt_recalc_hess: "auto"' in html, "INT recalc_hess must be auto"
+    assert "opt_trust_radius: null" in defaults_js, "INT trust_radius must be null"
+    assert 'opt_initial_hessian: "auto"' in defaults_js, "INT initial_hessian must be auto"
+    assert 'opt_recalc_hess: "auto"' in defaults_js, "INT recalc_hess must be auto"
     # TS: trust 0.3, calculate hessian, recalc every 5
-    assert "opt_trust_radius: 0.3" in html, "TS trust_radius must be 0.3"
-    assert 'opt_initial_hessian: "calculate"' in html, "TS initial_hessian must be calculate"
-    assert "opt_recalc_hess: 5" in html, "TS recalc_hess must be 5"
+    assert "opt_trust_radius: 0.3" in defaults_js, "TS trust_radius must be 0.3"
+    assert 'opt_initial_hessian: "calculate"' in defaults_js, "TS initial_hessian must be calculate"
+    assert "opt_recalc_hess: 5" in defaults_js, "TS recalc_hess must be 5"
     # Shared defaults
-    assert 'opt_convergence: "tight"' in html, "Shared opt_convergence must be tight"
-    assert "scf_max_iter: 300" in html, "Shared scf_max_iter must be 300"
-    assert 'scf_convergence: "tight"' in html, "Shared scf_convergence must be tight"
+    assert 'opt_convergence: "tight"' in defaults_js, "Shared opt_convergence must be tight"
+    assert "scf_max_iter: 300" in defaults_js, "Shared scf_max_iter must be 300"
+    assert 'scf_convergence: "tight"' in defaults_js, "Shared scf_convergence must be tight"
 
 
 def test_batch_no_expert_overrides_group() -> None:
     """expert_overrides group must not appear in FIELD_GROUPS."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id: "expert_overrides"' not in html
 
 
 def test_batch_temperature_pressure_labels() -> None:
     """Temperature/pressure/scale_factor labels present in batch form."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert r"\u6e29\u5ea6" in html, "Temperature label missing"
     assert r"\u538b\u529b" in html, "Pressure label missing"
     assert r"\u9891\u7387\u7f29\u653e\u56e0\u5b50" in html, "Scale factor label missing"
@@ -9423,13 +9497,13 @@ def test_batch_temperature_pressure_labels() -> None:
 
 def test_batch_slowconv_label_zh() -> None:
     """SlowConv zh label (慢收敛) present."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'slowconv: "慢收敛"' in html, "SlowConv zh label missing"
 
 
 def test_batch_hessian_control_writes_canonical_field() -> None:
     """Hessian tri-state control must read/write opt_recalc_hess."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     body = html.split("function buildHessianFieldRow(dest)", 1)[1]
     body = body.split("\n    function ", 1)[0]
     assert "st.opt_recalc_hess" in body, "control must write the canonical opt_recalc_hess field"
@@ -9442,7 +9516,7 @@ def test_batch_hessian_control_writes_canonical_field() -> None:
 
 def test_p2c_job_detail_effective_config_function_exists() -> None:
     """P2c contract: buildJobDetailEffectiveConfig is defined exactly once."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert html.count("function buildJobDetailEffectiveConfig(") == 1, (
         "buildJobDetailEffectiveConfig must be defined exactly once"
     )
@@ -9450,7 +9524,7 @@ def test_p2c_job_detail_effective_config_function_exists() -> None:
 
 def test_p2c_effective_config_schema_guard() -> None:
     """P2c contract: render only when schema === batch_optimize_effective_v1."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert (
         'effectiveConfig.schema !== "batch_optimize_effective_v1"' in html
         or "effectiveConfig.schema !== 'batch_optimize_effective_v1'" in html
@@ -9459,7 +9533,7 @@ def test_p2c_effective_config_schema_guard() -> None:
 
 def test_p2c_effective_config_orca_summary_chips() -> None:
     """P2c contract: orca_summary arrays drive chip rendering per role."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     fn_body = html.split("function buildJobDetailEffectiveConfig(", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
     assert "orca_summary" in fn_body, "orca_summary key reference missing in detail renderer"
@@ -9469,7 +9543,7 @@ def test_p2c_effective_config_orca_summary_chips() -> None:
 
 def test_p2c_effective_config_null_safety() -> None:
     """P2c contract: non-batch or absent effective_config renders nothing."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     fn_body = html.split("function buildJobDetailEffectiveConfig(", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
     assert "!effectiveConfig" in fn_body, "Null guard for effectiveConfig missing"
@@ -9481,7 +9555,7 @@ def test_p2c_effective_config_null_safety() -> None:
 
 def test_p2c_effective_config_zh_labels() -> None:
     """P2c contract: Chinese label '\u751f\u6548\u914d\u7f6e' (生效配置) via \\uXXXX."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert r"\u751f\u6548\u914d\u7f6e" in html, (
         "Chinese label '生效配置' (\\u751f\\u6548\\u914d\\u7f6e) missing"
     )
@@ -9506,7 +9580,7 @@ def test_p2c_effective_config_rescue_not_in_api() -> None:
 
 def test_electronic_state_summary_expands_preset() -> None:
     """A chosen preset (e.g. doublet) must not render as 'automatic'."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     es_body = html.split("function _esSummaryText(curVal)", 1)[1].split("\n    function ", 1)[0]
     assert "curVal.preset_id" in es_body, "summary must expand the stored preset_id"
     assert "_ES_PRESET_DETAILS" in html
@@ -9522,7 +9596,7 @@ def test_electronic_state_summary_expands_preset() -> None:
 
 def test_task_view_data_layer() -> None:
     """T4 data-layer contract: apiV2, DEFAULT_TASK_VIEW, prefs, refreshJobs rewrite."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # (1) apiV2 function definition and "/api/v2" literal present.
     assert "async function apiV2(path, opts)" in html, "apiV2 function definition missing"
@@ -9539,8 +9613,9 @@ def test_task_view_data_layer() -> None:
     assert "__all__" in html, "__all__ fallback literal missing from loadTaskViewPrefs"
 
     # (4) refreshJobs uses apiV2("/task-view...) and no longer sets limit=50.
-    refresh_body = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
-    assert 'apiV2("/task-view' in refresh_body, 'refreshJobs must call apiV2("/task-view...)'
+    refresh_body = html.split("function configureTaskListController()", 1)[1].split("\nfunction renderTaskPagination", 1)[0]
+    assert "client: ACPClient.taskView" in refresh_body
+    assert 'adapters.v2("/task-view?"' in html
     assert 'query.set("limit", "50")' not in refresh_body, "refreshJobs must no longer set limit=50"
 
     # (5) API_BASE unchanged.
@@ -9553,7 +9628,7 @@ def test_task_view_data_layer() -> None:
     assert "taskViewCache = body" in refresh_body, (
         "refreshJobs must store full body in taskViewCache"
     )
-    assert "body.groups" in refresh_body, "refreshJobs must derive jobsCache from body.groups"
+    assert "body.groups" in refresh_body and "jobsCache = rows" in refresh_body
 
     # (7) try/catch around JSON.parse in loadTaskViewPrefs.
     prefs_fn = html.split("function loadTaskViewPrefs(", 1)[1].split("\nfunction ", 1)[0]
@@ -9577,16 +9652,34 @@ def test_task_view_data_layer() -> None:
     #     candidate workspace added _loadPendingGeometry api call (+1).
     #     After merging origin/main's api() timeout wave, 4 SFTP-backed
     #     call sites moved to apiRemote() (60s budget) — floor lowered
-    #     accordingly.
+    #     accordingly.  FE-04 slice 1 removed the dead s2scan modal call
+    #     sites (structure-preview / jobs POST / structure-sources detail /
+    #     structure-assets x2) — floor lowered to 57.  FE-04 slice 2 +
+    #     FE-05 removed the dead s2scan B-group report chain and the
+    #     ensureMechanismDraftStudy POST /mechanism-studies draft write —
+    #     floor lowered to 56.  R1 moved the job detail fetch (GET
+    #     /jobs/{id}/detail) and its legacy-record fallback (GET /jobs/{id})
+    #     into the ACPClient.jobDetail client module — the calls still
+    #     funnel through the injected v1 `api` adapter (same single
+    #     transport chokepoint), so the page-side floor lowers to 54 and
+    #     the migrated endpoints are pinned in the client module below
+    #     (equivalent-or-stronger guard).
     api_v1_count = html.count('api("/')
-    assert api_v1_count >= 60, (
-        f"v1 api('/ call count expected at least 60 (including IRC TS source checks), got {api_v1_count}"
+    assert api_v1_count >= 54, (
+        f"v1 api('/ call count expected at least 54 (including IRC TS source checks), got {api_v1_count}"
+    )
+    client_src = (FRONTEND_JS_DIR / "client/job-detail-query.js").read_text(encoding="utf-8")
+    assert 'adapters.v1("/jobs/" + encodeURIComponent(id) + "/detail", { signal: signal })' in client_src, (
+        "R1: the rich detail endpoint must be fetched by the ACPClient.jobDetail module"
+    )
+    assert 'adapters.v1("/jobs/" + encodeURIComponent(id), { signal: signal }).then(legacyWrap)' in client_src, (
+        "R1: the legacy /jobs/{id} fallback must stay in the ACPClient.jobDetail module"
     )
 
 
 def test_task_view_prefs_corrupt_fallback() -> None:
     """T4 contract: corrupt localStorage JSON must fall back to DEFAULT_TASK_VIEW clone."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # The loadTaskViewPrefs function must have a catch branch that assigns
     # a JSON.parse(JSON.stringify(DEFAULT_TASK_VIEW)) deep clone as fallback.
@@ -9600,7 +9693,7 @@ def test_task_view_prefs_corrupt_fallback() -> None:
 
 def test_task_view_prefs_constants_structure() -> None:
     """T4 contract: DEFAULT_TASK_VIEW must declare all filter dimensions."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Extract the DEFAULT_TASK_VIEW definition.
     start = html.index("const DEFAULT_TASK_VIEW")
@@ -9615,7 +9708,7 @@ def test_task_view_prefs_constants_structure() -> None:
 
 def test_api_v2_after_api_definition() -> None:
     """T4 contract: apiV2 must be defined AFTER api() (not replacing it)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     api_pos = html.index("async function api(path, opts)")
     api_v2_pos = html.index("async function apiV2(path, opts)")
@@ -9639,7 +9732,7 @@ def _extract_queue_view_keys(html: str, block_re: re.Pattern[str]) -> set[str]: 
 
 def test_queue_view_toolbar_present() -> None:
     """T5 contract: toolbar DOM ids and data-i18n refs must exist."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Five control ids
     for ctrl_id in (
@@ -9692,7 +9785,7 @@ def test_queue_view_toolbar_present() -> None:
 
 def test_queue_view_i18n_parity() -> None:
     """T5 contract: queue.view.* keys must be identical in zh-CN and en-US."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
@@ -9708,7 +9801,7 @@ def test_queue_view_i18n_parity() -> None:
 
 def test_task_view_chips_logic() -> None:
     """T5 contract: chip render/remove/clear functions exist and reference prefs."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # renderChips function exists
     assert "function renderChips()" in html, "renderChips() function missing"
@@ -9730,7 +9823,7 @@ def test_task_view_chips_logic() -> None:
 
 def test_task_view_prefs_clone_safety() -> None:
     """T5 contract: prefs mutation must clone before assign (T4 verifier note)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # _clonePrefs must use JSON.parse(JSON.stringify(...)) pattern
     clone_fn = html.split("function _clonePrefs()", 1)[1].split("\nfunction ", 1)[0]
@@ -9774,7 +9867,7 @@ def test_task_view_prefs_clone_safety() -> None:
 
 def test_data_i18n_opt_support_in_apply_i18n() -> None:
     """T5 contract: applyI18n must handle data-i18n-opt for select options."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     apply_fn = html.split("function applyI18n()", 1)[1].split("\nfunction ", 1)[0]
     assert "data-i18n-opt" in apply_fn, "applyI18n must handle data-i18n-opt attribute"
@@ -9782,7 +9875,7 @@ def test_data_i18n_opt_support_in_apply_i18n() -> None:
 
 def test_bind_task_view_toolbar_called_at_startup() -> None:
     """T5 contract: _bindTaskViewToolbar must be called in DOMContentLoaded."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "function _bindTaskViewToolbar()" in html, "_bindTaskViewToolbar() function missing"
     # Must be called in DOMContentLoaded handler
@@ -9794,7 +9887,7 @@ def test_bind_task_view_toolbar_called_at_startup() -> None:
 
 def test_task_view_filter_panel_structure() -> None:
     """T5 contract: filter panel has header, body, close button."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert 'id="task-view-filter-panel"' in html, "Filter panel id missing"
     assert 'id="task-view-filter-body"' in html, "Filter panel body id missing"
@@ -9810,7 +9903,7 @@ def test_task_view_filter_panel_structure() -> None:
 
 def test_task_view_group_render() -> None:
     """T6 contract: view: collapse-key prefix, sentinel→i18n, group header elements."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # (1) _buildTaskViewGroup function exists and uses view: namespace prefix.
     assert "function _buildTaskViewGroup(" in html, "_buildTaskViewGroup function missing"
@@ -9906,7 +9999,7 @@ def test_task_view_group_render() -> None:
 
 def test_slim_card_rules() -> None:
     """T6 contract: progress bar guarded by isActiveJobStatus, ellipsis, tag truncation, no 暂无."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     build_fn = html.split("function buildQueueRow(job)", 1)[1].split("\nfunction ", 1)[0]
 
@@ -9969,7 +10062,7 @@ def test_slim_card_rules() -> None:
 
 def test_task_sort_collator() -> None:
     """T6 contract: module-level Intl.Collator, sortTaskRows, runningFirst partition."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # (1) Module-level Intl.Collator with zh locale and numeric:true.
     collator_line = None
@@ -9999,7 +10092,7 @@ def test_task_sort_collator() -> None:
     )
 
     # (5) sortTaskRows is called in refreshJobs.
-    refresh_fn = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
+    refresh_fn = html.split("function configureTaskListController()", 1)[1].split("\nfunction renderTaskPagination", 1)[0]
     assert "sortTaskRows(" in refresh_fn, "refreshJobs must call sortTaskRows"
 
     # (6) Name sort also sorts groups.
@@ -10045,7 +10138,7 @@ def test_task_sort_collator_node_smoke() -> None:
 
 def test_queue_view_i18n_parity_t6_keys() -> None:
     """T6 contract: new i18n keys must be present in both locales."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     new_keys = [
         "queue.view.group_tasks_count",
@@ -10069,7 +10162,7 @@ def test_queue_view_i18n_parity_t6_keys() -> None:
 
 def test_p2_batch_and_archive_ui() -> None:
     """T9 contract: batch toolbar + archive + export + endpoint literals."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Batch bar control ids
     for ctrl_id in (
@@ -10118,7 +10211,7 @@ def test_p2_batch_and_archive_ui() -> None:
 
 def test_archive_toggle_wiring() -> None:
     """T9 contract: prefs.archived wired to #task-view-archived."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # _applyTaskViewPrefsToControls sets archived select
     apply_fn = html.split("function _applyTaskViewPrefsToControls(", 1)[1].split("\nfunction ", 1)[
@@ -10135,13 +10228,14 @@ def test_archive_toggle_wiring() -> None:
     assert "archivedEl.value" in html, "archived change handler must read value"
 
     # refreshJobs passes archived param
-    refresh_fn = html.split("async function refreshJobs(", 1)[1].split("\nfunction ", 1)[0]
-    assert "prefs.archived" in refresh_fn or "p.archived" in refresh_fn, (
+    refresh_fn = html.split("function configureTaskListController()", 1)[1].split("\nfunction renderTaskPagination", 1)[0]
+    assert "client: ACPClient.taskView" in refresh_fn and "prefs.archived" in html, (
         "refreshJobs must pass archived param"
     )
 
     # archived-row CSS class
-    assert ".archived-row" in html, "archived-row CSS class missing"
+    css = read_workbench_css()
+    assert ".archived-row" in css, "archived-row CSS class missing"
     assert "archived-row" in html and "job.archived" in html, (
         "buildQueueRow must apply archived-row class"
     )
@@ -10149,7 +10243,7 @@ def test_archive_toggle_wiring() -> None:
 
 def test_export_logic() -> None:
     """T9 contract: CSV builder + JSON export + Blob/download."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # _exportCSV function
     assert "function _exportCSV(" in html, "_exportCSV function missing"
@@ -10173,7 +10267,7 @@ def test_export_logic() -> None:
 
 def test_molecule_management_ui() -> None:
     """T9 contract: merge suggestions + bulk assign molecule."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Merge suggestions banner rendering
     assert "function _renderMergeSuggestions(" in html, "_renderMergeSuggestions function missing"
@@ -10200,7 +10294,7 @@ def test_molecule_management_ui() -> None:
     )
 
     # refreshJobs triggers suggestions for molecule grouping
-    refresh_fn = html.split("async function refreshJobs(", 1)[1].split("\nfunction ", 1)[0]
+    refresh_fn = html.split("function configureTaskListController()", 1)[1].split("\nfunction renderTaskPagination", 1)[0]
     assert "_loadMergeSuggestions" in refresh_fn, "refreshJobs must call _loadMergeSuggestions"
     assert "_renderMergeSuggestions" in refresh_fn, "refreshJobs must call _renderMergeSuggestions"
 
@@ -10212,7 +10306,7 @@ def test_molecule_management_ui() -> None:
 
 def test_tag_management_dialog() -> None:
     """T9 contract: tag management modal with rename/merge/delete."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Modal DOM
     assert 'id="tag-mgmt-modal"' in html, "tag-mgmt-modal missing"
@@ -10254,7 +10348,7 @@ def test_tag_management_dialog() -> None:
 
 def test_lineage_panel() -> None:
     """T9 contract: lineage panel lazy-loads /api/v2/tasks/{id}/lineage."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # _loadAndRenderLineage function
     assert "function _loadAndRenderLineage(" in html, "_loadAndRenderLineage function missing"
@@ -10300,7 +10394,7 @@ def test_lineage_panel() -> None:
 
 def test_tag_group_option_enabled() -> None:
     """T9 contract: tag option in #task-view-group must NOT be disabled."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Find the tag option line
     tag_opt_match = re.search(r'<option\s+value="tag"[^>]*>.*?</option>', html)
@@ -10318,7 +10412,7 @@ def test_tag_group_option_enabled() -> None:
 
 def test_queue_view_i18n_parity_t9_keys() -> None:
     """T9 contract: new i18n keys must be present in both locales."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     new_keys = [
         "queue.view.batch_add_tags",
@@ -10365,7 +10459,7 @@ def test_queue_view_i18n_parity_t9_keys() -> None:
 
 def test_saved_views_menu_dom_ids() -> None:
     """T10 contract: saved views menu DOM ids must exist in toolbar."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for elem_id in (
         "task-view-views-btn",
@@ -10378,7 +10472,7 @@ def test_saved_views_menu_dom_ids() -> None:
 
 def test_saved_views_i18n_parity() -> None:
     """T10 contract: saved views i18n keys present in both locales."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     view_keys = [
         "queue.view.views_btn",
@@ -10402,7 +10496,7 @@ def test_saved_views_i18n_parity() -> None:
 
 def test_saved_views_handler_functions_exist() -> None:
     """T10 contract: saved views JS handler functions must be defined."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for func_name in (
         "_toggleViewsMenu",
@@ -10417,7 +10511,7 @@ def test_saved_views_handler_functions_exist() -> None:
 
 def test_saved_views_query_fields_not_job_ids() -> None:
     """T10 contract: saved view query uses filter fields, NOT job/task ID lists."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     query_fields = [
         "group_by",
@@ -10436,7 +10530,7 @@ def test_saved_views_query_fields_not_job_ids() -> None:
 
 def test_saved_views_live_query_assertion() -> None:
     """T10 contract: saved view stores query filters, not snapshot of task IDs."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert '"statuses"' in html or "'statuses'" in html, "saved view must include statuses"
     assert '"group_by"' in html or "'group_by'" in html, "saved view must include group_by"
@@ -10458,7 +10552,7 @@ def test_saved_views_live_query_assertion() -> None:
 
 def test_auto_tag_rules_tab_dom() -> None:
     """T11: tag-mgmt-modal has auto-tag rules tab with required DOM elements."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "tag-mgmt-tab-tags" in html, "tags tab button missing"
     assert "tag-mgmt-tab-auto" in html, "auto-tag tab button missing"
     assert "tag-mgmt-panel-tags" in html, "tags panel missing"
@@ -10475,7 +10569,7 @@ def test_auto_tag_rules_tab_dom() -> None:
 
 def test_auto_tag_rules_handler_functions_exist() -> None:
     """T11: JS handler functions for auto-tag rules are defined."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for fn in [
         "_switchMgmtTab",
         "_loadAutoTagRules",
@@ -10491,19 +10585,19 @@ def test_auto_tag_rules_handler_functions_exist() -> None:
 
 def test_auto_tag_rules_backfill_endpoint_literal() -> None:
     """T11: frontend references the backfill endpoint."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "auto-tag-rules/apply" in html, "backfill endpoint not referenced"
 
 
 def test_auto_tag_rules_settings_storage() -> None:
     """T11: rules are stored in project settings.auto_tag_rules via PATCH."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "auto_tag_rules" in html, "auto_tag_rules key not in frontend"
 
 
 def test_auto_tag_rules_i18n_parity() -> None:
     """T11: auto-tag i18n keys exist in both zh-CN and en-US."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
     expected = {
@@ -10528,7 +10622,7 @@ def test_auto_tag_rules_i18n_parity() -> None:
 
 def test_auto_tag_rules_event_bindings() -> None:
     """T11: event listeners bound for tab switch, add, and backfill buttons."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "tag-mgmt-tab-tags" in html and "addEventListener" in html, "tab event binding missing"
     assert "auto-tag-add-btn" in html, "add button binding missing"
     assert "auto-tag-apply-btn" in html, "backfill button binding missing"
@@ -10552,7 +10646,7 @@ def _extract_rename_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # t
 
 def test_task_rename_modal_dom() -> None:
     """T12: #task-rename-modal exists with input + three buttons + data-i18n."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="task-rename-modal"' in html, "task-rename-modal missing"
     assert 'id="task-rename-input"' in html, "task-rename-input missing"
     assert 'id="task-rename-restore"' in html, "restore button missing"
@@ -10569,7 +10663,7 @@ def test_task_rename_modal_dom() -> None:
 
 def test_task_rename_modal_input_attributes() -> None:
     """T12: input has maxlength and correct type."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="task-rename-input" class="modal-input" type="text" maxlength="200"' in html, (
         "input missing required attributes"
     )
@@ -10577,7 +10671,7 @@ def test_task_rename_modal_input_attributes() -> None:
 
 def test_displayTaskName_defined_and_used() -> None:
     """T12: displayTaskName function defined and used at display sites."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function displayTaskName(job)" in html, "displayTaskName not defined"
     assert "displayTaskName(job) || deleteJobId" in html, (
         "openDeleteJobModal not using displayTaskName"
@@ -10593,13 +10687,13 @@ def test_displayTaskName_defined_and_used() -> None:
 
 def test_canonicalTaskName_still_exists() -> None:
     """T12: canonicalTaskName function preserved for pure-path uses."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function canonicalTaskName(job)" in html, "canonicalTaskName removed"
 
 
 def test_displayTaskName_not_used_for_file_tree_nodes() -> None:
     """T12: file-tree node labels still use disk names (canonicalTaskName)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     # displayTaskName should NOT appear in file-tree node rendering contexts.
     # The updateFileTreeTaskName PANEL TITLE uses displayTaskName (correct),
     # but actual node labels (file names) should not.
@@ -10609,7 +10703,7 @@ def test_displayTaskName_not_used_for_file_tree_nodes() -> None:
 
 def test_pencil_button_in_queue_inline_actions() -> None:
     """T12: pencil (✎) button wired in appendQueueInlineActions."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     actions_section = html.split("function appendQueueInlineActions")[1].split("}")[0]
     assert "btn-rename-task" in actions_section, (
         "pencil button class missing in appendQueueInlineActions"
@@ -10621,7 +10715,7 @@ def test_pencil_button_in_queue_inline_actions() -> None:
 
 def test_pencil_button_in_detail_panel() -> None:
     """T12: pencil button next to #v-task-name in detail panel."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     render_section = html.split("function renderInfoInto")[1].split("function ")[0]
     assert 'taskName.id = "v-task-name"' in render_section, (
         "v-task-name id assignment missing in renderInfoInto"
@@ -10634,20 +10728,20 @@ def test_pencil_button_in_detail_panel() -> None:
 
 def test_pencil_css_reveal_rules() -> None:
     """T12: CSS hover/focus-within reveal + @media(hover:none) always-show."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert ".btn-rename-task { display: none" in html, "pencil default hidden rule missing"
-    assert ".queue-row:hover .btn-rename-task" in html, "hover reveal rule missing"
-    assert ".queue-row:focus-within .btn-rename-task" in html, "focus-within reveal rule missing"
-    assert "@media (hover: none)" in html, "@media(hover:none) rule missing"
+    css = read_workbench_css()
+    assert ".btn-rename-task { display: none" in css, "pencil default hidden rule missing"
+    assert ".queue-row:hover .btn-rename-task" in css, "hover reveal rule missing"
+    assert ".queue-row:focus-within .btn-rename-task" in css, "focus-within reveal rule missing"
+    assert "@media (hover: none)" in css, "@media(hover:none) rule missing"
     assert (
         ".btn-rename-task { display: inline-flex"
-        in html.split("@media (hover: none)")[1].split("}")[0]
+        in css.split("@media (hover: none)")[1].split("}")[0]
     ), "always-show rule in @media(hover:none) missing"
 
 
 def test_task_rename_i18n_parity() -> None:
     """T12: all task rename i18n keys present in both zh-CN and en-US."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     expected = {
         "queue.rename",
         "task.rename.title",
@@ -10671,7 +10765,7 @@ def test_task_rename_i18n_parity() -> None:
 
 def test_task_rename_patch_call_shape() -> None:
     """T12: PATCH call includes custom_name and expected_name_revision."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'apiV2("/tasks/" + encodeURIComponent' in html, "apiV2 PATCH call not found"
     assert "expected_name_revision" in html, "expected_name_revision not in PATCH payload"
     assert "custom_name" in html, "custom_name not in PATCH payload"
@@ -10680,7 +10774,7 @@ def test_task_rename_patch_call_shape() -> None:
 
 def test_task_rename_409_handling() -> None:
     """T12: 409 conflict handling with name_revision_conflict marker."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "name_revision_conflict" in html, "name_revision_conflict marker missing"
     # The 409 handler should refresh revision from response
     rename_section = html.split("submitTaskRenameNow")[1].split("function _applyRenameResult")[0]
@@ -10689,7 +10783,7 @@ def test_task_rename_409_handling() -> None:
 
 def test_task_rename_handler_functions_exist() -> None:
     """T12: rename handler functions defined."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for fn in (
         "openTaskRenameModal",
         "closeTaskRenameModal",
@@ -10712,7 +10806,7 @@ def test_task_rename_apply_result_static_no_self_call() -> None:
     ``RangeError: Maximum call stack size exceeded`` (shown to the user as a
     bogus 重命名失败). Fan-out now lives in non-recursive _applyRenameFields.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function _applyRenameFields(" in html, "_applyRenameFields helper missing"
     result_body = html.split("function _applyRenameResult(", 1)[1].split(
         "function _refreshAfterRename(", 1
@@ -10738,7 +10832,7 @@ def test_task_rename_apply_result_runtime_no_recursion() -> None:
     """
     if not shutil.which("node"):
         pytest.skip("node not available")
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     extracted = "function _applyRenameFields(" + html.split(
         "function _applyRenameFields(", 1
     )[1].split("function _refreshAfterRename(", 1)[0]
@@ -10817,7 +10911,7 @@ def test_task_rename_apply_result_runtime_no_recursion() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Edit-and-recalculate chain (docs/ACP_Edit_And_Recalculate_Plan.md §8/§14)
+# Edit-and-recalculate chain (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md §8/§14)
 # ---------------------------------------------------------------------------
 
 JOB_EDITOR_JS = FRONTEND_JS_DIR / "job_editor.js"
@@ -10826,7 +10920,7 @@ _EDIT_I18N_KEY_RE = re.compile(r'"(edit\.[^"]+)":')
 
 
 def _i18n_block_keys(block_re: re.Pattern[str], key_re: re.Pattern[str]) -> set[str]:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     block = block_re.search(html)
     assert block is not None
     return set(key_re.findall(block.group(1)))
@@ -10835,10 +10929,11 @@ def _i18n_block_keys(block_re: re.Pattern[str], key_re: re.Pattern[str]) -> set[
 def test_job_editor_module_loaded_before_inline_script() -> None:
     """job_editor.js ships, loads in v2, and exports the editor surface."""
     assert JOB_EDITOR_JS.is_file(), "frontend/js/job_editor.js missing"
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     tag = '<script src="js/job_editor.js"></script>'
     assert tag in html, "v2 HTML must load job_editor.js"
-    assert html.index(tag) < html.find("<script>\n"), "job_editor.js loads before inline script"
+    wb_first = html.find('<script src="js/workbench/compat/shared-state.js">')
+    assert html.index(tag) < wb_first, "job_editor.js loads before workbench bundle scripts"
     js = JOB_EDITOR_JS.read_text(encoding="utf-8")
     for export in (
         "openJobEditor",
@@ -10865,7 +10960,7 @@ def test_job_editor_js_has_no_syntax_errors() -> None:
 def test_rerun_button_routes_through_action_menu() -> None:
     """↻ opens the 3-action menu (直接重跑/修改参数后重算/复制为新任务),
     both in queue rows and the detail drawer (plan §4.1)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function openRerunActionMenu(" in html
     assert "ACPJobEditor.openRerunMenu(job, btn)" in html
     # Detail drawer routes through the same wrapper (queue + drawer parity).
@@ -10885,7 +10980,7 @@ def test_rerun_button_routes_through_action_menu() -> None:
 def test_edit_banner_container_and_close_guard() -> None:
     """Edit banner container exists; modal close routes through the editor
     guard so a dirty draft asks before vanishing (plan §4.2)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="edit-recalc-banner"' in html
     assert "function closeJobModalGuarded(" in html
     assert 'getElementById("modal-cancel").addEventListener("click", closeJobModalGuarded)' in html
@@ -10896,7 +10991,7 @@ def test_edit_banner_container_and_close_guard() -> None:
 def test_api_create_intercepted_in_edit_mode() -> None:
     """All POST /jobs submits funnel through ACPJobEditor while editing —
     the single chokepoint reuses every existing payload builder (plan §8)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     api_body = html.split("async function api(path, opts) {", 1)[1].split(
         "async function apiV2(", 1
     )[0]
@@ -10947,7 +11042,7 @@ def test_single_submit_entry_dispatches_to_editor() -> None:
     """The footer #modal-submit is the ONLY submit button: it dispatches to
     ACPJobEditor.checkAndSubmit while a draft is open, otherwise the normal
     create flow. The banner submit button is gone."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     js = JOB_EDITOR_JS.read_text(encoding="utf-8")
     assert "function handleModalSubmit()" in html
     assert "ACPJobEditor.checkAndSubmit()" in html
@@ -10969,7 +11064,7 @@ def test_profile_summary_resolved_from_catalog() -> None:
     """Profile titles resolve from profile_id against the catalog on every
     render — never from the mutable wizardState.method.profile_label (the
     stale "仅优化" bug); language switches re-resolve via applyI18n."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function resolveCurrentProfile()" in html
     assert "function resolveCurrentProfileLabel()" in html
     cards = html.split("function updateConfigCards()", 1)[1].split("\nfunction ", 1)[0]
@@ -10991,7 +11086,7 @@ def test_profile_summary_resolved_from_catalog() -> None:
 
 def test_editor_single_source_area() -> None:
     """The modal has one three-entry source browser and one preview state."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     js = JOB_EDITOR_JS.read_text(encoding="utf-8")
     tabs = html.split('class="input-mode-tabs"', 1)[1].split("</div>", 1)[0]
     assert 'data-input-mode="task"' in tabs
@@ -11015,7 +11110,7 @@ def test_editor_single_source_area() -> None:
 
 def test_job_modal_structure_browser_visual_contract() -> None:
     """The source browser uses a two-column workspace (left list + right preview)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
     assert 'id="preview-structure-title"' in modal
     assert 'id="source-coordinate-disclosure"' in modal
@@ -11030,7 +11125,7 @@ def test_job_modal_structure_browser_visual_contract() -> None:
     assert "grid-template-columns" in tiw_css, "tiw-grid grid-template-columns missing from CSS"
     assert "minmax(0, 3fr) minmax(380px, 2fr)" in tiw_css, "60/40 workspace columns missing"
     assert "@media (max-width: 1100px)" in tiw_css, "responsive breakpoint missing from tiw CSS"
-    assert '@media (max-width: 900px)' in html
+    assert '@media (max-width: 900px)' in read_workbench_css() or '@media (max-width: 900px)' in html
     assert 'class="tiw-source-toolbar"' in modal, "tiw-source-toolbar missing"
     assert 'id="tiw-toolbar-host"' in modal, "tiw-toolbar-host missing"
     assert 'id="tiw-list-header"' in modal, "tiw-list-header column header missing"
@@ -11075,30 +11170,30 @@ def test_job_editor_source_tabs_do_not_apply_unparsed_sources() -> None:
 
 
 def test_job_modal_typography_has_a_clear_four_level_hierarchy() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "--editor-font-detail: 12px" in html
-    assert "--editor-font-base: 14px" in html
-    assert "--editor-font-feature: 16px" in html
-    assert "--editor-font-title: 18px" in html
-    assert 'font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif !important' in html
-    assert "--editor-weight-normal: 400" in html
-    assert "--editor-weight-medium: 600" in html
-    assert "--editor-weight-strong: 700" in html
-    assert "#job-modal .modal-header h2 {" in html
-    feature_heading_rule = html.split("#job-modal .modal-section-title,", 1)[1].split("}", 1)[0]
+    css = read_workbench_css()
+    assert "--editor-font-detail: 12px" in css
+    assert "--editor-font-base: 14px" in css
+    assert "--editor-font-feature: 16px" in css
+    assert "--editor-font-title: 18px" in css
+    assert 'font-family: "Noto Sans SC", Inter, "Segoe UI", sans-serif !important' in css
+    assert "--editor-weight-normal: 400" in css
+    assert "--editor-weight-medium: 600" in css
+    assert "--editor-weight-strong: 700" in css
+    assert "#job-modal .modal-header h2 {" in css
+    feature_heading_rule = css.split("#job-modal .modal-section-title,", 1)[1].split("}", 1)[0]
     assert "#job-modal #modal-project-section > label" in feature_heading_rule
     assert "#job-modal .config-card-label" in feature_heading_rule
     assert "#job-modal .config-card-body strong" not in feature_heading_rule
-    content_title_rule = html.rsplit("#job-modal .edit-banner-source,", 1)[1].split("}", 1)[0]
+    content_title_rule = css.rsplit("#job-modal .edit-banner-source,", 1)[1].split("}", 1)[0]
     assert "#job-modal .config-card-body strong" in content_title_rule
     assert "#job-modal .sp-row-name" in content_title_rule
-    assert "#job-modal .sp-row-meta {" in html
-    assert "font-size: var(--editor-font-base) !important" not in html
+    assert "#job-modal .sp-row-meta {" in css
+    assert "font-size: var(--editor-font-base) !important" not in css
 
 
 def test_job_modal_numbered_headings_use_aligned_step_layout() -> None:
     """Steps 1/2/3/5 share the left edge; protocol remains the right column."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
 
     # project-step-inline is the compressed single-row variant (task 2026-09-22)
@@ -11109,10 +11204,11 @@ def test_job_modal_numbered_headings_use_aligned_step_layout() -> None:
 
     # The numbered config headings must keep feature-heading typography and
     # must not be pulled back into the tertiary/detail text rule.
-    tertiary_rule = html.split("#job-modal .muted,", 1)[1].split("{", 1)[0]
+    css = read_workbench_css()
+    tertiary_rule = css.split("#job-modal .muted,", 1)[1].split("{", 1)[0]
     assert "#job-modal .config-card-label" not in tertiary_rule
-    assert "#job-modal .config-step {" in html
-    assert "#job-modal .project-step { display: grid; gap: 8px; }" in html
+    assert "#job-modal .config-step {" in css
+    assert "#job-modal .project-step { display: grid; gap: 8px; }" in css
 
 
 def test_job_editor_workflow_adapters_registered() -> None:
@@ -11143,11 +11239,16 @@ def test_job_editor_batch_roundtrip_semantics() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
     js = JOB_EDITOR_JS.read_text(encoding="utf-8")
+    contracts_js = (
+        FRONTEND_JS_DIR / "workbench" / "contracts" / "batch_role_defaults.js"
+    ).read_text(encoding="utf-8")
     harness = (
         '"use strict";\n'
         "global.window = {};\n"
         "global.document = { removeEventListener: function() {}, "
         "getElementById: function() { return null; } };\n"
+        + contracts_js
+        + "\n"
         + js
         + textwrap.dedent(
             """
@@ -11251,7 +11352,7 @@ def test_job_editor_batch_roundtrip_semantics() -> None:
 
 def test_energy_graph_set_selection_exists() -> None:
     """energyGraphSetSelection is the unified selection writer."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function energyGraphSetSelection(opts)" in html, "Unified selection writer missing"
     body = html.split("function energyGraphSetSelection(opts)", 1)[1].split("\nfunction ", 1)[0]
     assert "energyGraphState.selection =" in body, "Must store selection object"
@@ -11261,7 +11362,7 @@ def test_energy_graph_set_selection_exists() -> None:
 
 def test_energy_graph_node_for_annotation_exists() -> None:
     """energyGraphNodeForAnnotation resolves node_id then frame_index."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function energyGraphNodeForAnnotation(data, annotation)" in html, "Annotation resolver missing"
     body = html.split("function energyGraphNodeForAnnotation(data, annotation)", 1)[1].split("\nfunction ", 1)[0]
     assert "annotation.node_id" in body, "Must check node_id first"
@@ -11270,7 +11371,7 @@ def test_energy_graph_node_for_annotation_exists() -> None:
 
 def test_energy_band_frame_i18n_key_exists() -> None:
     """energy.band.frame key exists in both locales."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     zh_keys = _extract_energy_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_energy_keys(html, _EN_BLOCK_RE)
     assert "energy.band.frame" in zh_keys, "energy.band.frame missing from zh-CN"
@@ -11279,7 +11380,7 @@ def test_energy_band_frame_i18n_key_exists() -> None:
 
 def test_energy_annotations_consume_node_id() -> None:
     """renderTrajectoryAnnotations uses energyGraphNodeForAnnotation for resolution."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     body = html.split("function renderTrajectoryAnnotations(opts)", 1)[1].split("\nfunction ", 1)[0]
     assert "energyGraphNodeForAnnotation" in body, "Must use energyGraphNodeForAnnotation for resolution"
 
@@ -11306,7 +11407,7 @@ def test_scan_optimizer_method_option_groups_consumed() -> None:
     """
     from acp.catalog import FIELD_DEFINITIONS
 
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Verify the backend actually defines option_groups for scan_optimizer_method
     fd = FIELD_DEFINITIONS.get("scan_optimizer_method", {})
@@ -11327,7 +11428,7 @@ def test_scan_optimizer_level_method_linkage_registration() -> None:
     level using scan_optimizer_method (not "functional") as the method field.
     Basis/dispersion/RI must key off scan_optimizer_method for METHOD_META lookup.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Verify the level-to-method-field mapping exists
     assert '"scan_optimizer": "scan_optimizer_method"' in html, (
@@ -11356,7 +11457,7 @@ def test_copy_scan_level_button_exists() -> None:
     The button copies scan_optimizer level fields into single_point, then
     rebuilds the card.  It must be disabled when scan_optimizer has no state.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "modal.copy_scan_level" in html, "copy_scan_level i18n key missing"
     assert "mc-copy-scan-level" in html, "copy button class missing"
@@ -11379,7 +11480,7 @@ def test_submit_summary_contains_three_lines() -> None:
     max iterations + n points), single point energy (method/basis or disabled),
     recovery strategy (per-point retry or native note).
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Verify i18n keys exist in both locales
     for key in (
@@ -11410,7 +11511,7 @@ def test_recovery_differentiation_native_disables_per_point_retry() -> None:
     with an explanatory note.  Multiple coordinates (double_bond_scan) keep
     them enabled.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Verify native single-coordinate detection
     assert "_native_single_coord" in html, "native single-coordinate flag missing"
@@ -11448,7 +11549,7 @@ def test_pes_scan_profiles_catalog_driven() -> None:
     assert "hybrid-dft" in profile_ids, "hybrid-dft profile missing"
 
     # Verify no hardcoded profile id list in the frontend for pes_scan
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     # The profile selector is built dynamically from schema.profiles
     assert "profiles = schema.profiles || []" in html or \
            "var profiles = schema.profiles" in html, (
@@ -11472,7 +11573,7 @@ def test_catalogutils_family_gate_is_payload_driven_not_method_list() -> None:
     """T15: family gating keys on catalog payload signals, never on a
     hardcoded method list (AGENTS anti-pattern #27).
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     src = _catalogutils_source(html)
 
     assert "function isFieldFamilyLocked(" in src
@@ -11502,7 +11603,7 @@ def test_buildfieldrow_family_locked_render_hidden_or_locked() -> None:
     basis -> locked read-only built-in display, dispersion -> built-in badge,
     grid/SCF -> hidden with the stale value cleared.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "family-unavailable fields (T15)" in html
     gate = html.index("if (isFieldFamilyLocked(fieldName, functional)) {")
@@ -11543,7 +11644,7 @@ def test_select_empty_default_option_wired() -> None:
     )
     assert "grid" in sp_level["fields"], "single_point level must expose the grid field"
 
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "explicit empty default (T15)" in html
     assert 'defaultEmptyOpt.value = "";' in html
     assert 'curVal === "" && opts.indexOf("") < 0' in html, (
@@ -11556,7 +11657,7 @@ def test_method_change_handlers_apply_family_state_sweep() -> None:
     applyMethodFamilyState (clears family-locked fields, re-defaults values
     the new family no longer admits).
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     for handler in (
         'if (fieldName === "functional") {',
@@ -11582,7 +11683,7 @@ def test_catalogutils_family_gating_behavior_node() -> None:
     from acp.catalog import get_method_catalog
 
     catalog = get_method_catalog()
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     cu_src = _catalogutils_source(html)
 
     with tempfile.NamedTemporaryFile(
@@ -11744,7 +11845,7 @@ def test_copy_scan_level_reconciles_against_copied_method_family() -> None:
     The method travels with the copy (scan_optimizer_method → functional),
     so the family sweep must read the destination's POST-copy functional.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     src = _catalogutils_source(html)
 
     # The copy procedure lives in CatalogUtils (single testable authority).
@@ -11810,7 +11911,7 @@ def test_copy_scan_level_serialized_payload_node() -> None:
     from acp.catalog import get_method_catalog
 
     catalog = get_method_catalog()
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     cu_src = _catalogutils_source(html)
     pes_src = _pes_protocol_builder_source(html)
 
@@ -12034,7 +12135,7 @@ def _t23_node(script: str, *, with_pes: bool = False) -> None:
     from acp.catalog import get_method_catalog
 
     catalog = get_method_catalog()
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     paths: dict[str, str] = {}
     with tempfile.NamedTemporaryFile(
@@ -12075,7 +12176,7 @@ def _t23_node(script: str, *, with_pes: bool = False) -> None:
 def test_t23_serializer_family_lock_source_contract() -> None:
     """(a,g) buildPESProtocolFromMethod carries the T23a serialization
     defense (payload family gate, both levels) and no method literals."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     src = _pes_protocol_builder_source(html)
 
     assert "serialization defense (T23a)" in src
@@ -12208,7 +12309,7 @@ def test_t23_gfn_serialization_defense_node() -> None:
 def test_t23_banner_source_contract() -> None:
     """(d) the ORCA-availability banner keys on the catalog family gate;
     the hardcoded _xtbMethods list stays retired."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "var _xtbMethods" not in html
     assert "_xtbMethods = [" not in html
@@ -12243,7 +12344,7 @@ def test_t23_banner_family_gate_behavior_node() -> None:
 def test_t23_hydration_grid_migration_hint_source_contract() -> None:
     """(f) draft hydration migrates legacy grid aliases and shows the hint;
     (g) the alias mirror is a marked historical-compat branch."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "legacy grid migration hint (T23f)" in html
     fn = html.split("function _restoreWizardDraft(draft) {", 1)[1].split(
@@ -12380,7 +12481,7 @@ def test_t23_derived_copy_projection_behavior_node() -> None:
 def test_t23_hardcode_audit_sentinels() -> None:
     """(g) retired hardcode declarations stay retired and remaining method
     literals live only in marked historical-compat branches."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     cu = _catalogutils_source(html)
 
     assert "var _scopedFieldBase" not in html
@@ -12433,7 +12534,7 @@ def test_tsmode_editor_css_exists() -> None:
 
 def test_v2_html_loads_tsmode_editor_modules() -> None:
     """ACP_Workbench_v2.html includes tsmode_editor.js + tsmode_editor.css."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert '<script src="js/tsmode_editor.js"></script>' in html
     assert '<link rel="stylesheet" href="css/tsmode_editor.css">' in html
     assert html.index('<script src="js/structure_source_picker.js"></script>') < \
@@ -12472,7 +12573,7 @@ def test_vibration_viewer_has_ts_mode_create_string() -> None:
 
 def test_submit_tsmode_task_branch_exists() -> None:
     """submitJobModal() has a tsmode branch that opens ACPTsmodeEditor."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'stageWf === "tsmode"' in html, (
         "submitJobModal must have a tsmode workflow branch"
     )
@@ -12483,7 +12584,7 @@ def test_submit_tsmode_task_branch_exists() -> None:
 
 def test_tsmode_i18n_keys_in_both_locales() -> None:
     """tsmode.* i18n keys exist in both zh-CN and en-US blocks."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     tsmode_key_re = re.compile(r'"(tsmode\.[^"]+)":')
 
     zh_m = _ZH_BLOCK_RE.search(html)
@@ -12547,7 +12648,7 @@ def test_tsmode_editor_has_i18n_helper() -> None:
 
 def test_candidate_inspector_i18n_keys_in_both_locales() -> None:
     """candidate.inspector.* i18n keys exist in both zh-CN and en-US blocks."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     ci_key_re = re.compile(r'"(candidate\.inspector\.[^"]+)":')
 
     zh_m = _ZH_BLOCK_RE.search(html)
@@ -12597,7 +12698,7 @@ def test_candidate_inspector_i18n_keys_in_both_locales() -> None:
 
 def test_wizard_footer_selected_count_element() -> None:
     """footer-selected-count and footer-input-count elements exist."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="footer-selected-count"' in html, "footer-selected-count element missing"
     assert 'id="footer-input-count"' in html, "footer-input-count element missing"
     assert 'id="footer-input-badge"' in html, "footer-input-badge element missing"
@@ -12607,7 +12708,7 @@ def test_wizard_footer_selected_count_element() -> None:
 
 def test_wizard_inspector_i18n_keys_in_both_locales() -> None:
     """wizard.* i18n keys exist in both zh-CN and en-US blocks."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     _wizard_key_re = re.compile(r'"(wizard\.[^"]+)":')
     zh_m = _ZH_BLOCK_RE.search(html)
     en_m = _EN_BLOCK_RE.search(html)
@@ -12636,14 +12737,66 @@ def test_picker_set_source_group_exists() -> None:
 
 
 def test_wizard_create_viewer_count_pinned() -> None:
-    """$3Dmol.createViewer count in the HTML is pinned at 8 viewer instances."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    count = html.count("$3Dmol.createViewer")
-    assert count == 8, f"Expected exactly 8 $3Dmol.createViewer calls, found {count}"
+    """Viewer creation sites pinned at 5 (FE-04 slice 1: legacy S2 modal
+    viewers removed from the 8-instance budget)."""
+    html = read_workbench_content()
+    count = viewer_creation_site_count()
+    assert count == 5, f"Expected exactly 5 viewer creation calls, found {count}"
+
+
+def test_no_standalone_s2scan_modal() -> None:
+    """FE-04 slice 1: the legacy S2 static modal must not exist in the HTML.
+
+    S2 result review now lives on the energy viewer; selection flows through
+    the active pes/scan selection panels. The modal DOM (and its dedicated
+    listeners/styles) were removed — this guards against reintroduction.
+    """
+    html = read_workbench_content()
+    assert 'id="s2scan-modal"' not in html, (
+        "legacy s2scan-modal must not be reintroduced into the workbench HTML"
+    )
+
+
+def test_s2scan_geometry_helpers_live_anchors() -> None:
+    """FE-04 slice 1: shared geometry helpers remain single-definition and
+    stay wired to their live caller in wizard.js.
+
+    s2scanDist/s2scanAngle/s2scanDihedral are the active coordinate math used
+    by the pes/scan selection flow; each must be defined exactly once in
+    scan-s2.js and wizard.js must keep calling s2scanDist.
+    """
+    scan_s2 = (FRONTEND_WORKBENCH_JS_DIR / "features" / "scan-s2.js").read_text(encoding="utf-8")
+    for name in ("s2scanDist", "s2scanAngle", "s2scanDihedral"):
+        n = scan_s2.count(f"function {name}(")
+        assert n == 1, f"{name} must be defined exactly once in scan-s2.js, found {n}"
+    wizard = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard.js").read_text(encoding="utf-8")
+    assert "s2scanDist(" in wizard, "wizard.js must keep its live s2scanDist call site"
+
+
+def test_no_retired_mechanism_write_interactions() -> None:
+    """FE-05: retired mechanism write interactions must not be reintroduced.
+
+    Mechanism write endpoints answer 410 Gone (backend route tests pin the
+    interface layer); the frontend must not re-add the dead write path — no
+    accept/lock button, no manual-mapping button, no allow-zero escape hatch,
+    no confirm-handler stub, and no draft-study POST client. Read-only
+    mechanism rendering stays allowed.
+    """
+    html = read_workbench_content()
+    for gone in (
+        "mech-accept-lock",
+        "mech-manual-mapping",
+        "mech-allow-zero-changes",
+        "_retiredConfirmReaction",
+        "ensureMechanismDraftStudy",
+    ):
+        assert gone not in html, (
+            f"retired mechanism write interaction must not be reintroduced: {gone}"
+        )
 
 
 def test_wizard_no_batch_management_in_step1() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="candidate-library-modal"' not in html, \
         "standalone candidate-library-modal must be removed"
     assert "批量管理" not in html, \
@@ -12652,14 +12805,14 @@ def test_wizard_no_batch_management_in_step1() -> None:
 
 def test_wizard_atom_toggle_button_in_toolbar() -> None:
     """preview-atom-numbers button exists in preview-right-toolbar."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="preview-atom-numbers"' in html, "preview-atom-numbers button missing"
     assert "wizardAtomLabelsOn" in html, "wizardAtomLabelsOn state variable missing"
 
 
 def test_wizard_mobile_toggle_buttons_exist() -> None:
     """wizard-mobile-list-btn and wizard-mobile-detail-btn exist for small-screen fallback."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="wizard-mobile-list-btn"' in html, "wizard-mobile-list-btn missing"
     assert 'id="wizard-mobile-detail-btn"' in html, "wizard-mobile-detail-btn missing"
     assert "wizard-show-list" in html, "wizard-show-list CSS class missing"
@@ -12668,17 +12821,17 @@ def test_wizard_mobile_toggle_buttons_exist() -> None:
 
 def test_wizard_disabled_badge_in_drawer() -> None:
     """loaded-structure-disabled-badge rendered for disabled/archived structures in drawer."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "loaded-structure-disabled-badge" in html, "loaded-structure-disabled-badge class missing"
     assert "wizard.disabled_needs_action" in html, "wizard.disabled_needs_action i18n key not used in JS"
 
 
 def test_wizard_project_section_compressed() -> None:
     """#modal-project-section uses project-step-inline class for compressed layout."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "project-step-inline" in html, "project-step-inline class missing"
-    # The inline CSS must exist
-    assert ".project-step-inline" in html, ".project-step-inline CSS rule missing"
+    # The stylesheet CSS must exist
+    assert ".project-step-inline" in read_workbench_css(), ".project-step-inline CSS rule missing"
 
 
 # ---------------------------------------------------------------------------
@@ -12689,7 +12842,7 @@ class TestTaskInputWorkspace:
 
     @staticmethod
     def _html() -> str:
-        return FRONTEND.read_text(encoding="utf-8")
+        return read_workbench_content()
 
     def test_unified_structure_library_filters(self) -> None:
         html = self._html()
@@ -12737,14 +12890,17 @@ class TestTaskInputWorkspace:
 
     def test_create_viewer_count_pinned(self) -> None:
         html = self._html()
-        count = html.count("$3Dmol.createViewer")
-        assert count == 8, f"Expected exactly 8 $3Dmol.createViewer calls, found {count}"
+        count = viewer_creation_site_count()
+        assert count == 5, f"Expected exactly 5 viewer creation calls, found {count}"
 
     def test_candidate_api_preserved_and_used(self) -> None:
+        # FE-07b: candidateApi is a transport delegation shim; the .status
+        # attachment moved to js/client/transport.js (behavior pinned by
+        # module test wizard_candidate_api.test.js err.status/err.body).
         html = self._html()
         assert "async function candidateApi" in html, "candidateApi function missing"
-        assert "apiErr.status = response.status" in html, \
-            "candidateApi must attach .status to thrown errors"
+        assert "err.status = response.status" in html, \
+            "transport must attach .status to thrown errors"
 
     def test_no_standalone_candidate_library_modal(self) -> None:
         html = self._html()
@@ -12778,6 +12934,8 @@ def test_candidate_details_js_exists() -> None:
 
 def test_candidate_details_js_passes_node_check() -> None:
     """candidate_details.js is valid JS (node --check)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
     result = subprocess.run(
         ["node", "--check", str(_CD_JS)],
         capture_output=True, text=True,
@@ -12819,14 +12977,14 @@ def test_candidate_details_not_provided_fallback() -> None:
 
 def test_candidate_details_host_div_exists() -> None:
     """#candidate-details-host div exists in the wizard right column."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'id="candidate-details-host"' in html, "candidate-details-host div missing"
     assert 'class="tiw-details-host"' in html, "tiw-details-host class missing"
 
 
 def test_candidate_details_wired_in_on_preview_item() -> None:
     """candidateDetailsPanel.setEntry is called from both wizard onPreviewItem callbacks."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     count = html.count("candidateDetailsPanel.setEntry(item)")
     assert count >= 2, \
         f"candidateDetailsPanel.setEntry(item) should appear in both onPreviewItem callbacks, found {count}"
@@ -12834,7 +12992,7 @@ def test_candidate_details_wired_in_on_preview_item() -> None:
 
 def test_candidate_details_mount_called_in_open_modal() -> None:
     """ACPCandidateDetails.mount is called in openModal."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     open_modal_start = html.index("function openModal()")
     next_fn = html.find("\n  function ", open_modal_start + 1)
     open_modal_section = html[open_modal_start:next_fn if next_fn != -1 else len(html)]
@@ -12844,7 +13002,7 @@ def test_candidate_details_mount_called_in_open_modal() -> None:
 
 def test_candidate_details_cleanup_in_close_modal() -> None:
     """candidateDetailsPanel.destroy() is called in closeModal."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     close_start = html.index("function closeModal()")
     close_section = html[close_start:close_start + 300]
     assert "candidateDetailsPanel" in close_section, \
@@ -12853,7 +13011,7 @@ def test_candidate_details_cleanup_in_close_modal() -> None:
 
 def test_candidate_details_i18n_keys_in_both_locales() -> None:
     """cd.* i18n keys exist in both zh-CN and en-US blocks."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     _cd_key_re = re.compile(r'"(cd\.[^"]+)":')
     zh_m = _ZH_BLOCK_RE.search(html)
     en_m = _EN_BLOCK_RE.search(html)
@@ -12913,7 +13071,7 @@ _WIZARD_I18N_PREFIXES = ("wizard.", "cd.", "trash.", "modal.mode_")
 
 def test_wizard_i18n_parity_across_locales() -> None:
     """Every wizard.*/cd.*/trash.*/modal.mode_* key exists in both zh-CN and en-US."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     zh_m = _ZH_BLOCK_RE.search(html)
     en_m = _EN_BLOCK_RE.search(html)
     assert zh_m, "zh-CN block not found"
@@ -12931,7 +13089,7 @@ def test_wizard_i18n_parity_across_locales() -> None:
 
 def test_wizard_step2_step3_inside_tiw_grid() -> None:
     """config-cards-row, task-info-details, create-review are children of .tiw-left."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     grid_start = html.index('class="tiw-grid"')
     grid_end = html.index("<!-- /tiw-grid -->", grid_start)
     grid_html = html[grid_start:grid_end]
@@ -12945,7 +13103,7 @@ def test_wizard_step2_step3_inside_tiw_grid() -> None:
 
 def test_wizard_step_summary_in_tiw_right() -> None:
     """wizard-step-summary div exists inside tiw-right for steps 2/3 compact view."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     grid_start = html.index('class="tiw-grid"')
     grid_end = html.index("<!-- /tiw-grid -->", grid_start)
     grid_html = html[grid_start:grid_end]
@@ -12957,18 +13115,18 @@ def test_wizard_step_summary_in_tiw_right() -> None:
 
 def test_wizard_step_css_rules_target_tiw_children() -> None:
     """Step visibility CSS rules use .tiw-left > and .tiw-right > child selectors."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert '.tiw-left > .config-cards-row' in html, "step CSS missing .tiw-left > .config-cards-row"
-    assert '.tiw-right > .wizard-step-summary' in html, "step CSS missing .tiw-right > .wizard-step-summary"
-    assert 'data-create-step="2"] .tiw-left > .source-section-header' in html, \
+    css = read_workbench_css()
+    assert '.tiw-left > .config-cards-row' in css, "step CSS missing .tiw-left > .config-cards-row"
+    assert '.tiw-right > .wizard-step-summary' in css, "step CSS missing .tiw-right > .wizard-step-summary"
+    assert 'data-create-step="2"] .tiw-left > .source-section-header' in css, \
         "step-2 CSS missing source-section-header hide rule"
-    assert 'data-create-step="3"] .tiw-left > .create-review' in html, \
+    assert 'data-create-step="3"] .tiw-left > .create-review' in css, \
         "step-3 CSS missing create-review show rule"
 
 
 def test_wizard_no_standalone_config_cards_outside_grid() -> None:
     """config-cards-row does NOT appear as a direct child of .modal-body."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     body_start = html.index('<div class="modal-body">')
     body_end = html.index("</div><!-- /modal-body -->", body_start) if "<!-- /modal-body -->" in html[body_start:body_start+5000] else -1
     if body_end < 0:
@@ -12984,7 +13142,7 @@ def test_wizard_no_standalone_config_cards_outside_grid() -> None:
 
 def test_editor_source_tab_mapping_preserved() -> None:
     """Legacy candidate drafts normalize to the unified task/library mode."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert 'if (mode === "candidate") mode = "task"' in html, \
         "legacy candidate draft normalization missing"
     js = _SP_JS.read_text(encoding="utf-8") if _SP_JS.exists() else ""
@@ -12996,7 +13154,7 @@ def test_editor_source_tab_mapping_preserved() -> None:
 
 def test_editor_check_and_submit_interception() -> None:
     """handleModalSubmit delegates to ACPJobEditor.checkAndSubmit when editor is active."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     submit_fn_start = html.index("function handleModalSubmit()")
     submit_fn = html[submit_fn_start:submit_fn_start + 300]
     assert "ACPJobEditor.checkAndSubmit()" in submit_fn, \
@@ -13005,7 +13163,7 @@ def test_editor_check_and_submit_interception() -> None:
 
 def test_editor_cancel_routes_through_guarded_close() -> None:
     """closeJobModalGuarded routes through ACPJobEditor.cancelEditor(false)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     guard_start = html.index("function closeJobModalGuarded()")
     guard_fn = html[guard_start:guard_start + 400]
     assert "ACPJobEditor.cancelEditor(false)" in guard_fn, \
@@ -13014,7 +13172,7 @@ def test_editor_cancel_routes_through_guarded_close() -> None:
 
 def test_wizard_submit_button_uses_i18n() -> None:
     """Submit button text uses t() calls, not hard-coded strings."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     step_fn_start = html.index("function setCreateWizardStep(step)")
     step_fn = html[step_fn_start:step_fn_start + 800]
     assert 't("wizard.submit_task")' in step_fn, "submit button not using i18n"
@@ -13023,7 +13181,7 @@ def test_wizard_submit_button_uses_i18n() -> None:
 
 def test_wizard_review_uses_i18n() -> None:
     """renderCreateReview uses t() calls for all labels, not hard-coded Chinese."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     review_fn_start = html.index("function renderCreateReview()")
     review_fn_end = html.index("function renderStepCompactSummary()", review_fn_start)
     review_fn = html[review_fn_start:review_fn_end]
@@ -13053,7 +13211,7 @@ def test_frame_controller_visibility_gate_uses_live_tab_id() -> None:
         energy/path/wavefunction tabs, for a single-frame document, or when
         no active canvas tab exists.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # --- STATIC half ---------------------------------------------------
     # Exact pre-rename literal (was at the updateFrameController gate).
@@ -13158,7 +13316,7 @@ def test_conformer_inspector_spec_matches_energy_graph_metadata_keys() -> None:
     ``_INSPECTOR_COMMON_KEYS`` so stale payloads cannot render raw duplicate
     rows next to the localized "Boltzmann 权重" row.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     source = (REPO_ROOT / "src" / "acp" / "results" / "energy_graph.py").read_text(encoding="utf-8")
 
     specs_block = html.split("var ENERGY_INSPECTOR_FIELD_SPECS = {", 1)[1].split("\n};", 1)[0]
@@ -13221,7 +13379,7 @@ def test_weight_provenance_i18n_keys_and_js_refs() -> None:
     key from one locale turns ``test_phase_a_i18n_structure_keys_complete_
     across_locales`` red as well.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
 
     zh = _locale_weight_source_values(html, _ZH_BLOCK_RE)
@@ -13405,13 +13563,15 @@ def test_workbench_api_timeout_no_raw_abort_exception() -> None:
     Timeouts now throw the localized ``api.timeout`` error, and remote-capable
     endpoints opt into the ``apiRemote()`` budget instead.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     assert "var API_TIMEOUT_MS = 8000;" in html
     assert "var API_REMOTE_TIMEOUT_MS = 60000;" in html
     assert "function apiRemote(path, opts)" in html
     assert "var timedOut = false;" in html
-    assert 'throw new Error(t("api.timeout", { seconds: Math.round(timeoutMs / 1000) }));' in html
+    assert 'settings.translate("api.timeout", { seconds: seconds })' in html
+    assert "translate: t" in html
+    assert "return ACPClient.transport.request(url, opts)" in html
     # Caller-provided aborts keep the AbortError name (silent-cancel filters).
     assert "if (timedOut) {" in html
     assert "throw e;" in html
@@ -13422,11 +13582,12 @@ def test_workbench_api_timeout_no_raw_abort_exception() -> None:
         'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/remote-files")',
         'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review").then(',
         'apiRemote("/jobs/" + encodeURIComponent(jobId) + "/pes/review/restore", {',
-        'apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/profile")',
-        'apiRemote("/jobs/" + encodeURIComponent(s2scanState.jobId) + "/s2/candidates")',
-        'apiRemote("/structure-sources/" + encodeURIComponent(sourceId))',
+        # FE-04 slice 1 removed the s2scanLoadAssets legacy fallback that held
+        # the paren-terminated structure-sources remote call; wizard.js:3318
+        # keeps a comma-form call site covered by the transport contract.
+        # FE-04 slice 2 removed the dead s2scanLoadStep5Data remote calls
+        # (s2/profile + s2/candidates) together with the B-group report chain.
         "await apiRemote(url)",
-        "await apiRemote(s2scanUrl)",
         "jobRemoteNodeName(job) ? await apiRemote(url) : await api(url)",
         "apiRemote(s2Url, ac ? { signal: ac.signal } : {})",
     ):
@@ -13447,20 +13608,23 @@ def test_workbench_api_timeout_behavior() -> None:
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     match = re.search(
         r"(var API_TIMEOUT_MS = 8000;[\s\S]*?async function apiV2\(path, opts\) \{[\s\S]*?\n\})",
         html,
     )
     assert match, "api()/apiRemote() block not found in workbench HTML"
     api_source = match.group(1)
+    modules = "\n".join((FRONTEND_JS_DIR / relative).read_text(encoding="utf-8")
+                        for relative in ("client/transport.js", "client/resource-store.js",
+                                         "workbench/contracts/task_view_contract.js", "client/task-view-query.js"))
 
     script = (
         "const API_BASE = '/api/v1';\n"
         "function t(key, vars) { return key + (vars ? ':' + JSON.stringify(vars) : ''); }\n"
         "function fail(msg) { console.error('FAIL: ' + msg); process.exit(1); }\n"
         "class FakeAbortError extends Error { constructor() { super('signal is aborted without reason'); this.name = 'AbortError'; } }\n"
-        + api_source
+        + "global.window = global;\n" + modules + "\n" + api_source
         + "\n"
         + textwrap.dedent(
             """
@@ -13548,7 +13712,7 @@ def test_workbench_api_timeout_behavior() -> None:
 
 
 def test_validate_method_warnings_rendered_in_modal_and_summary() -> None:
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     # Modal carries a dedicated (amber) warnings block beside the errors block.
     assert 'id="mc-validation-warnings"' in html
@@ -13582,7 +13746,7 @@ def _nmr_panel_region(html: str) -> str:
 
 def test_nmr_report_reader_unified_local_remote() -> None:
     """fetchNmrReportJson probes the todo-22 layout first and unwraps remote previews."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     region = _nmr_panel_region(html)
 
     assert "NMR_REPORT_PATHS" in region
@@ -13605,7 +13769,7 @@ def test_nmr_report_reader_unified_local_remote() -> None:
 
 def test_nmr_null_render_em_dash_not_zero() -> None:
     """Missing winner/regression/boltzmann numerics render an em dash, never 0."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     region = _nmr_panel_region(html)
 
     assert "nmrDisplayNumber" in region
@@ -13687,7 +13851,7 @@ def test_nmr_panel_linkage_hooks_present() -> None:
     parallel framing mechanism, and the panel never hand-rolls a trajectory /
     view projection (root AGENTS ANTI-PATTERN 21).
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     region = _nmr_panel_region(html)
 
     # Shared linkage state + single selection applier.
@@ -13733,7 +13897,7 @@ def test_nmr_panel_quality_and_risk_namespaces_separated() -> None:
     """T40: per-candidate quality surfaces T39 risk indicators without mixing
     them into the calibrated probability namespace, and legacy reports render
     the T24 note (schema_version absent)."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     region = _nmr_panel_region(html)
 
     assert "function renderNmrCandidateQuality(" in region
@@ -13763,7 +13927,7 @@ def test_nmr_panel_quality_and_risk_namespaces_separated() -> None:
 
 def test_nmr_i18n_keys_complete_across_locales() -> None:
     """T40: every new nmr.* key exists in both zh-CN and en-US, paired."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
 
     zh_keys = _extract_nmr_keys(html, _ZH_BLOCK_RE)
     en_keys = _extract_nmr_keys(html, _EN_BLOCK_RE)
@@ -13788,7 +13952,7 @@ def test_nmr_panel_pure_helpers_behavior() -> None:
     ``element+per-element-count`` convention; claim aggregation dedupes atoms
     and candidate indices per observation id.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     region = _nmr_panel_region(html)
 
     def fn_source(name: str) -> str:
@@ -13856,7 +14020,7 @@ def test_scan_selection_panel_dom_and_i18n_lock() -> None:
     dead id, shipping an untranslated key, or sneaking the PES-only
     double-bond kind into this panel turns this red.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for dom_id in (
         "scan-selection-panel",
         "scan-clear-selection",
@@ -13954,7 +14118,7 @@ def test_scan_selection_submission_path_lock() -> None:
     (validated per final submitted structure) and the 1-based -> 0-based
     conversion must live in exactly one place.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function buildScanWizardBodyParts(fields, structureEntry)" in html
     assert "function scanWizardCountAtoms(xyzText)" in html
     # Exactly-once conversion: the single marked loop inside the builder is
@@ -14017,7 +14181,7 @@ def test_scan_selection_hydration_and_switch_away_lock() -> None:
     atoms (the click handler stays their single writer).  The deleted left
     panel leaves no ``scan-wizard-panel`` block behind.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "function updateScanSelectionVisibility()" in html
     visibility = html.split("function updateScanSelectionVisibility()", 1)[1].split(
         "\nfunction ", 1
@@ -14085,7 +14249,7 @@ def test_scan_atom_pick_dispatch_wiring() -> None:
     pass drives the step-2 right-pane panel's picking state instead of
     blanket-disabling the model.
     """
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "let scanSelectionState = {" in html
     for name in (
         "canPickScanAtoms",
@@ -14245,7 +14409,7 @@ def test_executed_wizard_body_reaches_v1_validation_and_runner_argv(
 def test_job_detail_cache_epoch_guard_present() -> None:
     """Late detail responses from older generations are rejected, and the
     frozen (job_id, attempt, revision) identity gates cache writes."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     assert "jobDetailGenerations" in html, "detail request generation map missing"
     assert "function jobExecutionIdentity(job)" in html
     body = html.split("function jobExecutionIdentity(job)", 1)[1].split("\nfunction ", 1)[0]
@@ -14264,7 +14428,7 @@ def test_job_detail_cache_epoch_guard_present() -> None:
 def test_job_detail_cache_invalidated_on_all_row_actions_and_batch_ops() -> None:
     """Every row action and batch operation invalidates the acted jobs'
     cached detail — not only the selected job's."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     for fn in (
         "async function pauseJob(",
         "async function unpauseJob(",
@@ -14294,9 +14458,10 @@ def test_job_detail_cache_invalidated_on_all_row_actions_and_batch_ops() -> None
 def test_refresh_jobs_prunes_detail_cache_against_list() -> None:
     """refreshJobs drops cached details whose status/attempt/revision
     disagree with the fresh list row, and recovery changes re-render rows."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    refresh = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
-    assert "pruneJobDetailCacheAgainstList()" in refresh
+    html = read_workbench_content()
+    refresh = html.split("function configureTaskListController()", 1)[1].split("\nfunction renderTaskPagination", 1)[0]
+    assert "pruneDetailsAgainstList: pruneJobDetailCacheAgainstList" in refresh
+    assert "deps.views.pruneDetailsAgainstList()" in html
     assert "jobDetailCacheRevision" in refresh, "recovery revision must gate the render key"
     assert "function renderQueueRowsForRecoveryChange()" in html
     assert "function pruneJobDetailCacheAgainstList()" in html
@@ -14305,7 +14470,7 @@ def test_refresh_jobs_prunes_detail_cache_against_list() -> None:
 def test_queue_row_signature_and_terminal_floor() -> None:
     """Row render cache includes the recovery matrix (recovery-only changes
     must rebuild rows) and terminal rows never render active-only actions."""
-    html = FRONTEND.read_text(encoding="utf-8")
+    html = read_workbench_content()
     row_fn = html.split("function buildQueueRow(job)", 1)[1].split("\nfunction ", 1)[0]
     assert "getJobRecovery(job)" in row_fn, "row signature must include recovery"
     actions = html.split("function appendQueueInlineActions(", 1)[1].split("\nfunction ", 1)[0]
@@ -14315,3 +14480,48 @@ def test_queue_row_signature_and_terminal_floor() -> None:
     drawer = html.split("async function openDetailDrawer(job)", 1)[1].split("\nfunction ", 1)[0]
     assert "isTerminalJobStatus(" in drawer, "terminal floor missing on the detail drawer"
     assert "function isTerminalJobStatus(" in html
+
+
+def test_workbench_links_workbench_stylesheets() -> None:
+    """H1 contract: ACP_Workbench_v2.html links external workbench CSS before other styles."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert '<link rel="stylesheet" href="css/workbench/' in html
+    legacy_or_base = (
+        'href="css/workbench/legacy-base.css"' in html
+        or 'href="css/workbench/base.css"' in html
+    )
+    assert legacy_or_base, "Workbench stylesheet link missing from HTML head"
+    wb_idx = html.find('href="css/workbench/')
+    sv_idx = html.find('href="css/structure_viewer.css"')
+    assert wb_idx < sv_idx, "Workbench base stylesheet must load before structure_viewer.css"
+
+
+def test_workbench_links_modular_scripts() -> None:
+    """H3 contract: ACP_Workbench_v2.html links all 14 modular workbench scripts in dependency order."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    expected_scripts = [
+        "js/workbench/contracts/batch_role_defaults.js",
+        "js/workbench/compat/shared-state.js",
+        "js/workbench/i18n.js",
+        "js/workbench/compat/api.js",
+        "js/workbench/features/molecule-view.js",
+        "js/workbench/features/energy.js",
+        "js/workbench/features/queue.js",
+        "js/workbench/features/job-detail.js",
+        "js/workbench/features/files-logs.js",
+        "js/workbench/features/reaction-builder.js",
+        "js/workbench/features/nmr.js",
+        "js/workbench/features/wizard.js",
+        "js/workbench/features/scan-s2.js",
+        "js/workbench/bootstrap.js",
+    ]
+    assert "js/workbench/compat/workbench-inline.js" not in html, "intermediate workbench-inline.js must not be referenced"
+    last_idx = -1
+    for s in expected_scripts:
+        tag = f'<script src="{s}"></script>'
+        assert tag in html, f"Missing script tag: {tag}"
+        idx = html.index(tag)
+        assert idx > last_idx, f"Script {s} out of order in HTML"
+        last_idx = idx
+        script_file = REPO_ROOT / "frontend" / s
+        assert script_file.is_file(), f"Script file missing: {script_file}"

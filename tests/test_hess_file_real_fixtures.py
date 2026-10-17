@@ -1,7 +1,7 @@
 """Real ORCA 6.1.1 ``.hess`` fixtures — integrity + D1 defect regressions (T02).
 
 Expected values come from the audit's independent decode
-(``docs/reports/ACP_Real_QC_Gap_Audit_20261006.json`` section ``D1``) — never
+(``docs/archive/2026-10-16/evidence/reports/ACP_Real_QC_Gap_Audit_20261006.json`` section ``D1``) — never
 from the parser under test. Fixtures are byte-identical freezes of real ORCA
 6.1.1 output (see ``tests/fixtures/qc/orca61/README.md``).
 

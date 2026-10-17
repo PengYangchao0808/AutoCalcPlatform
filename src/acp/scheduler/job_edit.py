@@ -1,4 +1,4 @@
-"""Job Edit & Recalculate (docs/ACP_Edit_And_Recalculate_Plan.md).
+"""Job Edit & Recalculate (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md).
 
 Draft restoration, workflow edit-coverage registry, editable-spec diffing,
 preview fingerprints, idempotency operation records, and last-valid-structure
@@ -80,6 +80,7 @@ EDIT_ACTIVE_WORKFLOWS: frozenset[str] = frozenset(
         "BatchOptimize",
         "XtbPathSearch",
         "OrcaGradient",
+        "XtbConstrainedOpt",
     }
 )
 
@@ -89,6 +90,9 @@ _DEDICATED_EDIT_HINTS: dict[str, str] = {
     "tsmode": "TS Mode 参数继承频率证据；请使用 TS Mode 专用向导选择模式并创建新任务。",
     "XtbPathSearch": "XtbPathSearch 使用冻结 path_request；请在 PES2TS 中修改请求并创建新任务。",
     "OrcaGradient": "OrcaGradient 使用冻结 gradient_request；请在 PES2TS 中修改请求并创建新任务。",
+    "XtbConstrainedOpt": (
+        "XtbConstrainedOpt 使用冻结 constrained_opt_request；请在 PES2TS 中修改请求并创建新任务。"
+    ),
 }
 
 # Retired/planned workflows never re-open their execution entry; the draft

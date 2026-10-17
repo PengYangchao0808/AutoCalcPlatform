@@ -256,6 +256,7 @@ _WORKFLOW_TO_SCHEMA_KEY: dict[str, str] = {
     "BatchOptimize": "batch_optimize",
     "XtbPathSearch": "xtb_path_search",
     "OrcaGradient": "orca_gradient",
+    "XtbConstrainedOpt": "xtb_constrained_opt",
 }
 
 

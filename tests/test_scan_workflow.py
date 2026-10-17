@@ -902,7 +902,10 @@ def _run_wizard_builder_in_node(cases: list[dict]) -> list[dict]:
 
     if not shutil.which("node"):
         pytest.skip("node not available")
-    html = _WIZARD_HTML.read_text(encoding="utf-8")
+    wizard_js = _WIZARD_HTML.parent / "js" / "workbench" / "features" / "wizard.js"
+    if not wizard_js.is_file():
+        pytest.skip("frontend module layout lands with feat/frontend-modular-slice")
+    html = wizard_js.read_text(encoding="utf-8")
     start = html.index("function scanWizardCountAtoms")
     end = html.index("function scanWizardErrorMessage")
     source = html[start:end]

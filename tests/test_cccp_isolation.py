@@ -1,7 +1,7 @@
 # pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnannotatedClassAttribute=false, reportUnusedFunction=false
 """P0 low-level isolation probes: ``cccp`` must work without the ``acp`` package.
 
-Design (docs/ACP_CCCP_Architecture_Report.md appendix B + plan todo 3):
+Design (docs/reference/current/ACP_CCCP_Architecture_Report.md appendix B + plan todo 3):
 
 * Every behavior probe runs in a **fresh child interpreter** (``sys.executable
   -c <script>``) so import blocking is clean.  The child installs an

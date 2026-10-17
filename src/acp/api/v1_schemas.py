@@ -580,7 +580,7 @@ class V1JobPurgeResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Edit & recalculate (docs/ACP_Edit_And_Recalculate_Plan.md §9) —
+# Edit & recalculate (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md §9) —
 # GET /jobs/{id}/edit-draft · POST /jobs/{id}/edit-recalculate/preview ·
 # POST /jobs/{id}/edit-recalculate.
 # ---------------------------------------------------------------------------
@@ -1337,7 +1337,7 @@ class NodeBootstrapResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Structure-viewer models (docs/ACP_Structure_Viewer_Modification_Plan.md §4).
+# Structure-viewer models (docs/archive/2026-10-16/history/ACP_Structure_Viewer_Modification_Plan.md §4).
 # ---------------------------------------------------------------------------
 
 
@@ -1470,7 +1470,7 @@ class StructureViewerOverlayResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# S2 bond-length scan (docs/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
+# S2 bond-length scan (docs/archive/2026-10-16/history/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
 # ---------------------------------------------------------------------------
 
 
@@ -1792,7 +1792,7 @@ class V1SamplingFrameResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# TS Mode frequency sources (docs/ACP_TSMode_Optimization_Implementation_Plan.md §8).
+# TS Mode frequency sources (docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md §8).
 # ---------------------------------------------------------------------------
 
 

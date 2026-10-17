@@ -3,7 +3,7 @@
 ``TaskRequest`` is the serializable intent; :class:`TaskContext` is the
 runtime companion passed to ``run_*(request, *, context=None)``.  The
 runtime rules implemented/documented here are authoritative in
-``docs/ACP_CCCP_Task_API_DevDoc.md`` §TaskContext:
+``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md`` §TaskContext:
 
 * R1  ``context=None`` acquisition (config deferred; workdir/output root).
 * R2  relative input basis (``input_base``).
