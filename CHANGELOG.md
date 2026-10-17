@@ -13,6 +13,92 @@ The git tag `v0.N.X` on `main` is the single source of truth; the four
 in-repo version sites (`pyproject.toml`, `src/acp/__init__.py`,
 `src/cccp/__init__.py`, `src/cccp/version.py`) must always equal the latest tag.
 
+## [0.2.0] - 2026-10-13
+
+Release: NMR expansion, end-to-end memory budget chain, internal-coordinate
+scans, and structure-viewer v2 — 600 commits since 0.1.3.
+
+### Added — NMR
+
+- DP4/DP5 pipeline expansion across assignment, scaling, spectra, and
+  probability.
+- FCHL atom representations (NumPy opt-in) with availability, neighbor, and
+  domain limits.
+- protocol-transfer A/B experiment harness and benchmark corpus.
+- QC smoke gates for CENSO with an explicit NOT_VERIFIED tri-state (never a
+  pass).
+
+### Added — memory/resource chain
+
+- job resources resolved once at the scheduler boundary (unitless GB →
+  explicit MB), threaded through task cores, backends, LSF scripts, and
+  provenance.
+- ORCA per-process maxcore budgeting from the total memory budget
+  (contradictory pins rejected); CENSO child budgeting; LSF per-process
+  RLIMIT_AS.
+- SCF convergence floor: registry-ordered tokens promote SCF below the method
+  constraint (DLPNO); SCF directives in free-form `route_extras` are not
+  duplicated.
+
+### Added — internal-coordinate scans
+
+- distance / angle / dihedral scan coordinates across the CLI, scheduler
+  validation, catalog schema, and the workbench wizard.
+
+### Added — structure viewer v2
+
+- single-column result-first workspace, collapsible vibration dock, IRC frame
+  projection and playback, overlay/RMSD, edited-structure assets, and frame
+  candidates.
+- ensemble thermodynamics in the viewer payload (conformers stripped) and
+  remote catalog fetch with backend prefetch on terminal transitions.
+- vendored 3Dmol (no CDN dependency) with revalidating static assets.
+
+### Added — remote execution
+
+- scheduler markers uploaded before `bsub` (flat v2 layout), attempt-fenced
+  result cache, capability-filtered node selection, bounded task views.
+- PES remote read root and review write-back; structure sources from terminal
+  jobs; task custom names.
+
+### Added — method validation & keywords
+
+- unified QC keyword registry as the single source of truth and
+  method-family-aware field gating (backend + wizard).
+- case-insensitive enumerated keywords folded at exactly three choke points;
+  end-to-end method-validation warnings.
+- new workflows: XtbPathSearch and OrcaGradient.
+- CLI: `acp init` interactive setup wizard (local/remote sniffing, TOFU
+  connect test, merge-safe config persistence).
+
+### Added — job editing
+
+- edit-parameter projection: edited level fields reach every execution alias
+  before validation/diff/fingerprint/submission; dedicated-contract workflows
+  (tsmode / XtbPathSearch / OrcaGradient) surface targeted migration hints.
+
+### Fixed
+
+- remote execution integrity: pause/cancel intent never overwritten by stale
+  polls; CANCELLING requires a confirmed remote stop; terminal side effects are
+  idempotent and ordered after the terminal persistence.
+- MPI ABI compatibility: ORCA-bundled OpenMPI is preferred over conda
+  Hydra/MPICH; incompatible launchers are rejected with actionable errors.
+- structure viewer: canvas sizing, annotation collisions, stale-bundle caching
+  (frontend assets now revalidate), SSE and catalog prefetch on terminal
+  transitions.
+- scheduler: tasks projection bounded and self-healing on rerun; scan
+  submission validated before queueing (422).
+
+### Docs & audits
+
+- API/web response audit retest issue (2026-10-12) with backend/browser repro
+  harness.
+- CCCP code audit (2026-10-11) with AST inventory and evidence.
+- functional test manual for real computation task submission.
+- AGENTS anti-patterns extended (remote scheduler markers, keyword folding,
+  pending-fetch prefetch, read-root, API timeouts, edit effectiveness).
+
 ## [0.1.3] - 2026-09-07
 
 Release: energy & trajectory viewer, CASSCF/electronic-state support, and
