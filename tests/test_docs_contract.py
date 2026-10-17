@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MANUAL = REPO_ROOT / "docs" / "ACP_Function_Test_Manual.md"
+MANUAL = REPO_ROOT / "docs" / "reference" / "current" / "ACP_Function_Test_Manual.md"
 README = REPO_ROOT / "README.md"
 ROOT_AGENTS = REPO_ROOT / "AGENTS.md"
 

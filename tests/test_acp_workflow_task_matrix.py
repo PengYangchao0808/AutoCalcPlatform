@@ -30,7 +30,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src"
 ACP = SRC / "acp"
-MATRIX_DOC = REPO / "docs" / "ACP_CCCP_Call_Matrix.md"
+MATRIX_DOC = REPO / "docs" / "reference" / "current" / "ACP_CCCP_Call_Matrix.md"
 
 #: The 15 active QC workflows (excludes the ``fake`` demo workflow).
 ACTIVE_WORKFLOWS: tuple[str, ...] = (
