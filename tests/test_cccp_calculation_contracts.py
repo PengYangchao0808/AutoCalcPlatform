@@ -120,6 +120,7 @@ P2_TASKS = {
     "nmr_shielding",
     "xtb_path_search",
     "orca_gradient",
+    "xtb_constrained_opt",
 }
 
 BANNED_IDENTITY_NAMES = {

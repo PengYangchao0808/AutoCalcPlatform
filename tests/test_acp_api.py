@@ -208,6 +208,7 @@ def test_workflows_and_protocols(client: TestClient) -> None:
         "BatchOptimize",
         "XtbPathSearch",
         "OrcaGradient",
+        "XtbConstrainedOpt",
     }
     assert names == active
     from acp.scheduler.jobs import ALL_WORKFLOWS

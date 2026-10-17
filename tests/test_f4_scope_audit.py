@@ -112,6 +112,19 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        _memory_templates helper and its one call in
        refine_ensemble. Teeth and negative injections require validation,
        single-directive rendering, and template propagation to remain.
+    T. ``xtb.py`` + ``xtb_scan.py``: XtbConstrainedOpt wave (2026-10, PES2TS
+       G2-AB3 WP-1) — the xTB ≤6.7.1 threading-flag compatibility fix
+       (``-T`` → ``-P`` in the three ``XTBInterface`` launch sites, matching
+       the battle-tested ``path_search`` shape), the ``constrained_optimize``
+       ``extra_control_text`` parameter (``$fix`` freeze block inserted
+       verbatim between the constraint block and ``$opt``), and the
+       block-level ``force constant=`` unification in
+       ``xcontrol_constraint_block``. Sanctioned scopes: the three threading
+       methods (``optimize``/``constrained_optimize``/``single_point`` of
+       ``XTBInterface``) and ``xcontrol_constraint_block``. Teeth: no
+       ``-T`` threading line remains, three ``-P`` lines present, the
+       xcontrol write must insert ``extra_control_text``, and the
+       constraint writer must emit the block-level force constant.
 """
 
 from __future__ import annotations
@@ -145,6 +158,8 @@ ALLOWED_PY = frozenset(
         "src/cccp/qc/interfaces/base.py",
         "src/cccp/qc/interfaces/crest.py",
         "src/cccp/qc/interfaces/censo.py",
+        "src/cccp/qc/interfaces/xtb.py",
+        "src/cccp/qc/interfaces/xtb_scan.py",
         "src/acp/backends/orca.py",
     }
 )
@@ -1770,6 +1785,117 @@ def test_amendment_s_memory_scopes_and_negative_injections() -> None:
             assert not _is_amendment_s_orca_deletion(ln, txt, baseline)
 
 
+# ── Amendment T: XtbConstrainedOpt wave (xTB threading flag + $fix/xcontrol) ──
+
+_XTB_THREADING_METHODS = ("optimize", "constrained_optimize", "single_point")
+
+
+def _is_amendment_t_xtb_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """True for the sanctioned ``xtb.py`` additions (Amendment T).
+
+    Scope 1: any line inside ``XTBInterface.constrained_optimize`` (signature,
+    docstring, and the xcontrol write).  Scope 2: the mechanical ``-P``
+    threading line inside the three launch methods.
+    """
+    rng = _func_range(worktree_src, "constrained_optimize", "XTBInterface")
+    if rng is not None and rng[0] <= ln <= rng[1]:
+        return True
+    if txt.strip() == '"-P", str(self.nproc),':
+        for name in _XTB_THREADING_METHODS:
+            method = _func_range(worktree_src, name, "XTBInterface")
+            if method is not None and method[0] <= ln <= method[1]:
+                return True
+    return False
+
+
+def _is_amendment_t_xtb_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """True for the sanctioned ``xtb.py`` deletions (Amendment T)."""
+    return txt.strip() in (
+        '"-T", str(self.nproc),',
+        'f"{constraint_text}\\n$opt\\n{opt_block}$end\\n",',
+    )
+
+
+def _is_amendment_t_xtb_scan_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """True inside ``xcontrol_constraint_block`` (the Amendment T scope)."""
+    rng = _func_ranges(worktree_src).get("xcontrol_constraint_block")
+    return rng is not None and rng[0] <= ln <= rng[1]
+
+
+def _is_amendment_t_xtb_scan_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """True for the sanctioned ``xtb_scan.py`` deletion (Amendment T)."""
+    return txt.strip() == "if c.force_constant is not None:"
+
+
+def _amendment_t_teeth(xtb_src: str | None = None, scan_src: str | None = None) -> list[str]:
+    """Presence teeth: the Amendment T wave must actually land.
+
+    Optional source overrides support negative-injection testing.
+    """
+    issues: list[str] = []
+    xtb = xtb_src if xtb_src is not None else _worktree_content("src/cccp/qc/interfaces/xtb.py")
+    scan = (
+        scan_src
+        if scan_src is not None
+        else _worktree_content("src/cccp/qc/interfaces/xtb_scan.py")
+    )
+    rng = _func_range(xtb, "constrained_optimize", "XTBInterface")
+    if rng is None:
+        issues.append("  Amendment T: XTBInterface.constrained_optimize missing")
+    else:
+        body = "\n".join(xtb.splitlines()[rng[0] - 1 : rng[1]])
+        if "extra_control_text: str = \"\"" not in body:
+            issues.append("  Amendment T: constrained_optimize must accept extra_control_text")
+        if "{extra_control_text}" not in body:
+            issues.append("  Amendment T: xcontrol write must insert extra_control_text")
+    if '"-T", str(self.nproc),' in xtb:
+        issues.append("  Amendment T: xTB <= 6.7.1 rejects -T; the flag must be gone")
+    if xtb.count('"-P", str(self.nproc),') < 3:
+        issues.append("  Amendment T: expected >=3 -P threading lines in xtb.py")
+    scan_rng = _func_ranges(scan).get("xcontrol_constraint_block")
+    if scan_rng is None:
+        issues.append("  Amendment T: xcontrol_constraint_block missing")
+    else:
+        body = "\n".join(scan.splitlines()[scan_rng[0] - 1 : scan_rng[1]])
+        if "force constant=" not in body:
+            issues.append("  Amendment T: block-level force constant= line missing")
+        if "uniform_force_constant" not in body:
+            issues.append("  Amendment T: uniform force-constant unification missing")
+    return issues
+
+
+def test_amendment_t_predicates_confined_and_negatives() -> None:
+    xtb = _worktree_content("src/cccp/qc/interfaces/xtb.py")
+    scan = _worktree_content("src/cccp/qc/interfaces/xtb_scan.py")
+    constrained = _func_range(xtb, "constrained_optimize", "XTBInterface")
+    assert constrained is not None
+    assert _is_amendment_t_xtb_addition(
+        constrained[0], 'extra_control_text: str = "",', xtb
+    )
+    assert not _is_amendment_t_xtb_addition(1, "unrelated_algorithm()", xtb)
+    assert not _is_amendment_t_xtb_addition(constrained[1] + 1, "extra_control_text = 1", xtb)
+    assert not _is_amendment_t_xtb_addition(1, '"-P", str(self.nproc),', xtb)
+    baseline_xtb = _baseline_content("src/cccp/qc/interfaces/xtb.py")
+    for ln, txt in enumerate(baseline_xtb.splitlines(), 1):
+        if txt.strip() == '"-T", str(self.nproc),':
+            assert _is_amendment_t_xtb_deletion(ln, txt, baseline_xtb)
+        if txt.strip() == "self.nproc = kwargs.get(\"nproc\", 1)":
+            assert not _is_amendment_t_xtb_deletion(ln, txt, baseline_xtb)
+    scan_rng = _func_ranges(scan).get("xcontrol_constraint_block")
+    assert scan_rng is not None
+    assert _is_amendment_t_xtb_scan_addition(scan_rng[0] + 1, "x = 1", scan)
+    assert not _is_amendment_t_xtb_scan_addition(1, "x = 1", scan)
+    baseline_scan = _baseline_content("src/cccp/qc/interfaces/xtb_scan.py")
+    for ln, txt in enumerate(baseline_scan.splitlines(), 1):
+        if txt.strip() == "if c.force_constant is not None:":
+            assert _is_amendment_t_xtb_scan_deletion(ln, txt, baseline_scan)
+        if txt.strip().startswith("return lines"):
+            assert not _is_amendment_t_xtb_scan_deletion(ln, txt, baseline_scan)
+    assert not _amendment_t_teeth()
+    assert _amendment_t_teeth(scan_src=scan.replace("uniform_force_constant", "unguarded"))
+    assert _amendment_t_teeth(xtb_src=xtb.replace('"-P", str(self.nproc),', '"-P", "1",'))
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -2020,6 +2146,27 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_o_crest_teeth(worktree))
             continue
 
+        # ── xtb.py + xtb_scan.py: Amendment T (XtbConstrainedOpt wave) ───
+        if fp in (
+            "src/cccp/qc/interfaces/xtb.py",
+            "src/cccp/qc/interfaces/xtb_scan.py",
+        ):
+            worktree = _worktree_content(fp)
+            predicate = (
+                _is_amendment_t_xtb_addition
+                if fp.endswith("xtb.py")
+                else _is_amendment_t_xtb_scan_addition
+            )
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if predicate(ln, txt, worktree):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_t_teeth())
+            continue
+
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
 
 
@@ -2129,6 +2276,18 @@ def test_constraints_deletions_in_amendment_d_regions() -> None:
     _, deleted = _diff_hunks(fp)
     bad = [f"  {fp}:{ln}: {t!r}" for ln, t in deleted if ln not in allowed]
     assert not bad, "Deleted lines outside Amendment D regions:\n" + "\n".join(bad)
+
+
+def test_xtb_amendment_t_deletions_confined() -> None:
+    """① ``xtb.py`` / ``xtb_scan.py`` deletions stay inside Amendment T."""
+    for fp, predicate in (
+        ("src/cccp/qc/interfaces/xtb.py", _is_amendment_t_xtb_deletion),
+        ("src/cccp/qc/interfaces/xtb_scan.py", _is_amendment_t_xtb_scan_deletion),
+    ):
+        baseline_src = _baseline_content(fp)
+        _, deleted = _diff_hunks(fp)
+        bad = [f"  {fp}:{ln}: {t!r}" for ln, t in deleted if not predicate(ln, t, baseline_src)]
+        assert not bad, f"Deleted lines outside Amendment T regions ({fp}):\n" + "\n".join(bad)
 
 
 def test_worktree_opt_freq_absent() -> None:
@@ -2325,6 +2484,10 @@ MIGRATION_STATION_PREFIXES = (
     # todo 28: PES/路径工作流任务化改线（XtbPathSearch/OrcaGradient + PES 扫描接线）。
     "src/acp/workflows/xtb_path.py",
     "src/acp/workflows/orca_gradient.py",
+    # PES2TS G2-AB3 WP-1: xTB 单几何约束优化工作流任务化接线（XtbConstrainedOpt）
+    # + 惰性导出壳（workflows/__init__.py 新增 run_xtb_constrained_opt）。
+    "src/acp/workflows/xtb_constrained_opt.py",
+    "src/acp/workflows/__init__.py",
     # todos 26/27: Confsearch 能量/ensemble/xtbmd 协议与 NMR 任务化改线站点。
     "src/acp/workflows/energy.py",
     "src/acp/workflows/ensemble.py",
@@ -2420,6 +2583,7 @@ MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
         "src/acp/workflows/xtb_path.py",
         "src/acp/workflows/orca_gradient.py",
+        "src/acp/workflows/xtb_constrained_opt.py",
         "src/acp/workflows/energy.py",
         "src/acp/workflows/ensemble.py",
         "src/acp/workflows/nmr.py",

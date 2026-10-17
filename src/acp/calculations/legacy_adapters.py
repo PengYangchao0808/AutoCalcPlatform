@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - typing only (no runtime workflow import)
     from acp.workflows.orca_gradient import OrcaGradientRequest
+    from acp.workflows.xtb_constrained_opt import XtbConstrainedOptRequest
     from acp.workflows.xtb_path import XtbPathRequest
 
 from acp.calculations.contracts import (
@@ -73,6 +74,8 @@ from cccp.calculation.requests import (
     TaskResources,
     ThermochemistryOptions,
     TsSpec,
+    XtbConstrainedOptConstraint,
+    XtbConstrainedOptOptions,
     XtbPathSearchOptions,
 )
 from cccp.calculation.results import (
@@ -1311,12 +1314,95 @@ def pes2ts_orca_gradient_to_task_request(
     return task_request, binding
 
 
+PES2TS_XTB_CONSTRAINED_OPT_CONVERSION: tuple[Pes2tsConversionRow, ...] = (
+    Pes2tsConversionRow("schema_version", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("reaction_id", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("request_sha256", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("plan_sha256", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow("point_id", "platform_identity", "binding.platform_identity"),
+    Pes2tsConversionRow(
+        "parent_frame_sha256", "platform_identity", "binding.platform_identity"
+    ),
+    Pes2tsConversionRow("geometry", "scientific", "structure.coordinates"),
+    Pes2tsConversionRow("elements", "scientific", "structure.symbols"),
+    Pes2tsConversionRow("charge", "scientific", "charge"),
+    Pes2tsConversionRow("multiplicity", "scientific", "multiplicity"),
+    Pes2tsConversionRow("constraints", "scientific", "options.constraints"),
+    Pes2tsConversionRow("force_constant", "scientific", "options.force_constant"),
+    Pes2tsConversionRow("gfn_level", "scientific", "options.gfn_level"),
+    Pes2tsConversionRow("opt_level", "scientific", "options.opt_level"),
+    Pes2tsConversionRow("max_cycle", "scientific", "options.max_steps"),
+    Pes2tsConversionRow("fix_atoms", "scientific", "options.fix_atoms"),
+    Pes2tsConversionRow("physical_sp", "scientific", "options.physical_sp"),
+    Pes2tsConversionRow("threads", "scientific", "resources.nproc"),
+    Pes2tsConversionRow("timeout_seconds", "scientific", "resources.timeout_s"),
+)
+
+
+def pes2ts_xtb_constrained_opt_to_task_request(
+    request: XtbConstrainedOptRequest,
+) -> tuple[TaskRequest, LegacyBinding]:
+    """Convert a validated ``XtbConstrainedOptRequest`` into a typed TaskRequest.
+
+    Field-level mapping per :data:`PES2TS_XTB_CONSTRAINED_OPT_CONVERSION`:
+    platform identity (reaction_id / request_sha256 / plan_sha256 / point_id
+    / parent_frame_sha256 / schema_version) stays in the binding; scientific
+    fields land on standard homes.  Effective inputs are identical before
+    and after conversion (no defaults filled, no constraint rewritten).
+    """
+    platform: dict[str, object] = {
+        "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
+        "reaction_id": str(getattr(request, "reaction_id", "") or ""),
+    }
+    for name in ("request_sha256", "plan_sha256", "point_id", "parent_frame_sha256"):
+        value = getattr(request, name, None)
+        if value:
+            platform[name] = str(value)
+
+    binding = LegacyBinding(
+        workflow="XtbConstrainedOpt",
+        platform_identity=dict(platform),
+        resources_raw={},
+        resources_extra={},
+    )
+    task_request = TaskRequest(
+        task=TaskKind.XTB_CONSTRAINED_OPT,
+        structure=StructureInput(
+            coordinates=tuple(request.geometry),
+            symbols=tuple(request.elements),
+        ),
+        charge=request.charge,
+        multiplicity=request.multiplicity,
+        options=XtbConstrainedOptOptions(
+            constraints=tuple(
+                XtbConstrainedOptConstraint(
+                    kind=spec.kind,
+                    atoms=tuple(spec.atoms),
+                    target=spec.target,
+                    unit=spec.unit,
+                )
+                for spec in request.constraints
+            ),
+            force_constant=request.force_constant,
+            gfn_level=request.gfn_level,
+            opt_level=request.opt_level,
+            max_steps=request.max_cycle,
+            fix_atoms=request.fix_atoms,
+            physical_sp=request.physical_sp,
+        ),
+        resources=TaskResources(nproc=request.threads, timeout_s=request.timeout_seconds),
+    )
+    return task_request, binding
+
+
 __all__ = [
     "LegacyBinding",
     "PES2TS_ORCA_GRADIENT_CONVERSION",
+    "PES2TS_XTB_CONSTRAINED_OPT_CONVERSION",
     "PES2TS_XTB_PATH_CONVERSION",
     "Pes2tsConversionRow",
     "pes2ts_orca_gradient_to_task_request",
+    "pes2ts_xtb_constrained_opt_to_task_request",
     "pes2ts_xtb_path_to_task_request",
     "to_legacy_request",
     "to_legacy_result",

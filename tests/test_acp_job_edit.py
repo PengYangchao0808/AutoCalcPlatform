@@ -303,6 +303,42 @@ def _spec(workflow: str) -> JobSpec:
                 "engine": "orca",
             },
         )
+    elif workflow == "XtbConstrainedOpt":
+        base.update(
+            input={
+                "source_type": "xyz_text",
+                "source": XYZ_COOH,
+                "charge": 0,
+                "multiplicity": 1,
+                "opt_request": {
+                    "schema_version": "pes2ts_xtb_constrained_opt_request_v1",
+                    "reaction_id": "RXN_TEST",
+                    "source": {
+                        "geometry": [[0.0, 0.0, 0.0], [1.1, 0.0, 0.0]],
+                        "elements": ["O", "H"],
+                        "charge": 0,
+                        "multiplicity": 1,
+                    },
+                    "recipe": {
+                        "gfn_level": 2,
+                        "constraints": [
+                            {"kind": "distance", "atoms": [0, 1], "target": 1.0, "unit": "angstrom"}
+                        ],
+                        "force_constant": 50.0,
+                        "opt_level": "normal",
+                        "max_cycle": 500,
+                        "physical_sp": True,
+                        "threads": 4,
+                        "timeout_seconds": 3600,
+                    },
+                },
+            },
+            method={
+                "schema_id": "xtb_constrained_opt",
+                "profile_id": "default",
+                "engine": "xtb",
+            },
+        )
     elif workflow == "nmr":
         base.update(
             input={
@@ -383,7 +419,7 @@ def test_draft_capabilities_and_input_refs(workflow: str) -> None:
     draft = build_edit_draft(record)
     assert draft["workflow"] == workflow
     assert draft["workflow_status"] == "active"
-    dedicated = workflow in {"tsmode", "XtbPathSearch", "OrcaGradient"}
+    dedicated = workflow in {"tsmode", "XtbPathSearch", "OrcaGradient", "XtbConstrainedOpt"}
     assert draft["capabilities"]["can_edit"] is not dedicated
     assert draft["capabilities"]["can_in_place"] is not dedicated
     assert draft["capabilities"]["can_new_job"] is not dedicated

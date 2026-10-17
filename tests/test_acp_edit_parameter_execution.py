@@ -520,7 +520,9 @@ def test_batch_electronic_state_and_keywords_reach_cli(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("workflow", ["tsmode", "XtbPathSearch", "OrcaGradient"])
+@pytest.mark.parametrize(
+    "workflow", ["tsmode", "XtbPathSearch", "OrcaGradient", "XtbConstrainedOpt"]
+)
 def test_frozen_generic_edit_is_explained_and_rejected(tmp_path: Path, workflow: str) -> None:
     spec = JobSpec(workflow=workflow)
     draft = build_edit_draft(record(spec, tmp_path))

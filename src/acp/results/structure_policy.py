@@ -87,7 +87,7 @@ __all__ = [
 WORKFLOW_SOURCE_ROLES = {
     "Confsearch": ("INT", "", "TS"), "PESsearch": ("INT", "", "TS"),
     "BatchOptimize": ("TS", "INT", ""), "XtbPathSearch": ("INT", "", "TS"),
-    "OrcaGradient": ("INT", "", "TS"),
+    "OrcaGradient": ("INT", "", "TS"), "XtbConstrainedOpt": ("INT", "", "TS"),
     "irc": ("TS", "", "INT"),
     "scan": ("INT", "", "TS"), "tsmode": ("TS", "", "INT"),
     "nmr": ("INT", "", "TS"), "singlepoint": ("INT", "TS", ""),

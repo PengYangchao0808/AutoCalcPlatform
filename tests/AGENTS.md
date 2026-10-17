@@ -1,7 +1,7 @@
 # tests/ — Test Suite
 
 ## OVERVIEW
-pytest suite covering config loading, cccp QC/task/backends layers, ACP core/IO/backend/workflow modules, FastAPI, scheduler, remote LSF execution, and NMR/DP4/DP5. **247 test files, ≈5.7k collected tests** (conftest excluded). Real-binary tests are gated behind `--run-slow`/`--run-integration` and collection-skipped by default; everything else mocks subprocess. Real-QC binary skips carry the literal `NOT_VERIFIED` (three-state rule: PASS / FAIL / NOT_VERIFIED) — a skipped real-QC test is never a green pass.
+pytest suite covering config loading, cccp QC/task/backends layers, ACP core/IO/backend/workflow modules, FastAPI, scheduler, remote LSF execution, and NMR/DP4/DP5. **248 test files, ≈5.7k collected tests** (conftest excluded). Real-binary tests are gated behind `--run-slow`/`--run-integration` and collection-skipped by default; everything else mocks subprocess. Real-QC binary skips carry the literal `NOT_VERIFIED` (three-state rule: PASS / FAIL / NOT_VERIFIED) — a skipped real-QC test is never a green pass.
 
 ## STRUCTURE
 ```

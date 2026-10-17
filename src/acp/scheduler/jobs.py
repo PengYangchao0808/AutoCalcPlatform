@@ -139,6 +139,7 @@ _FALLBACK_ACTIVE_WORKFLOWS: tuple[str, ...] = (
     "BatchOptimize",
     "XtbPathSearch",
     "OrcaGradient",
+    "XtbConstrainedOpt",
 )
 
 #: Synthetic scheduler-only workflows (no catalog entry). ``fake`` is an
