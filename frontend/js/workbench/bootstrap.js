@@ -612,6 +612,10 @@ function setupEventListeners() {
   });
 
   setupMechanismSectionListeners();
+  // Test hook: mark control wiring complete for the browser suite's readiness
+  // wait (test_frontend_multiframe_playback_browser.py).  Set only after every
+  // frame-play/prev/next/slider listener above has been attached.
+  window.__acpEventListenersReady = true;
 }
 
 
