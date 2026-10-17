@@ -73,7 +73,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **API**: `api/v1_routes.py`（任务/文件/detail/recovery 矩阵/edit-recalculate）+ `api/v2_routes.py` + `api/v2_structure_sources.py`（结构来源组织端点）
 - **NMR**: 全套见 `src/acp/nmr/AGENTS.md`；工作流入口 `workflows/nmr.py`
 - **Frontend**: `frontend/ACP_Workbench_v2.html` — 能量/轨迹查看器、任务向导、结构来源面板、job_editor
-- **权威设计文档**: `docs/ACP_Job_File_Layout_Spec.md`（文件布局契约）、`docs/ACP_CENSO_Integration_DevDoc.html`（CENSO 审计）、`docs/ACP_Energy_Trajectory_Viewer_DevDoc.md`（帧契约/采样管线）、`docs/ACP_PES_Manual_Review_DevDoc.md`（PES 人工选点 → BatchOptimize）、`docs/ACP_Simple_Workflows_DevDoc.html`（simple 工作流）
+- **权威设计文档**: `docs/reference/current/ACP_Job_File_Layout_Spec.md`（文件布局契约）、`docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md`（帧契约/采样管线）、`docs/reference/current/ACP_PES_Manual_Review_DevDoc.md`（PES 人工选点 → BatchOptimize）、`docs/reference/current/ACP_Simple_Workflows_DevDoc.html`（simple 工作流）
 
 ## CONVENTIONS
 - **Docstrings**: cccp Google 风格（`Args:/Returns:`）；acp 紧凑单行/短块 — 随所在包
