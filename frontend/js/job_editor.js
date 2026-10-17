@@ -1,6 +1,6 @@
 /**
  * ACPJobEditor — 全任务「修改参数后重算」编辑链
- * (docs/ACP_Edit_And_Recalculate_Plan.md §8)。
+ * (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md §8)。
  *
  * 职责：editorContext 管理、草稿加载（GET /jobs/{id}/edit-draft）、
  * 工作流适配 hydrate/serialize、基线脏状态、差异展示、预览与提交
@@ -27,6 +27,10 @@
   var editorContext = null;
   var tokenCounter = 0;
   var menuEl = null;
+
+  // BatchOptimize 静态角色默认：共享工厂（FE-06，
+  // js/workbench/contracts/batch_role_defaults.js，加载序先于本文件）。
+  var batchRoleStaticDefaults = window.ACPWorkbench.contracts.batchRoleStaticDefaults;
 
   function isActive() { return !!editorContext; }
   function isCollecting() { return !!(editorContext && editorContext.collecting); }
@@ -398,34 +402,8 @@
     "temperature", "pressure", "scale_factor"
   ];
 
-  // 静态角色默认（与 openMethodConfig 内 _BATCH_ROLE_DEFAULTS 静态部分一致；
-  // method/basis 等方法相关默认由页面补齐，这里仅作为缺失键的最后回退）。
-  function batchRoleStaticDefaults() {
-    return {
-      int: {
-        method: "", basis: null, sp_method: null, sp_basis: null,
-        dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
-        opt_max_iter: null, opt_convergence: "tight",
-        opt_trust_radius: null, opt_initial_hessian: "auto", opt_recalc_hess: "auto",
-        scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
-        scf_orbital_inherit: true, scf_damp: false, scf_damp_fac: 0.50,
-        scf_shift: false, scf_shift_fac: 0.30,
-        opt_rescue_policy: "adaptive", opt_max_rescue: 2,
-        temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
-      },
-      ts: {
-        method: "", basis: null, sp_method: null, sp_basis: null,
-        dispersion: "none", aux_j_basis: "", aux_c_basis: "", ri_approximation: "none",
-        opt_max_iter: null, opt_convergence: "tight",
-        opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5,
-        scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal",
-        scf_orbital_inherit: true, scf_damp: false, scf_damp_fac: 0.50,
-        scf_shift: false, scf_shift_fac: 0.30,
-        opt_rescue_policy: "adaptive", opt_max_rescue: 2,
-        temperature: 298.15, pressure: 1.0, scale_factor: 0.9905,
-      },
-    };
-  }
+  // 静态角色默认改由共享工厂 batchRoleStaticDefaults 提供（IIFE 顶部别名，
+  // js/workbench/contracts/batch_role_defaults.js）；这里仅消费。
 
   // 旧版公共扁平字段 → 角色键（公共：同时落到 int/ts）。
   var BATCH_FLAT_COMMON = {
@@ -656,9 +634,7 @@
       var m = spec.method || {};
       hydrateMethodBase(ctx, draft);
       // batch_roles：默认 → 旧扁平 → 原 batch_roles（存在性合并）。
-      var staticDefaults = (typeof batchRoleStaticDefaults === "function")
-        ? batchRoleStaticDefaults()
-        : (window.batchRoleStaticDefaults ? window.batchRoleStaticDefaults() : null);
+      var staticDefaults = batchRoleStaticDefaults();
       wizardState.method.stages.batch_roles = mergeBatchRoles(m, staticDefaults);
     },
     hydrateInput: function (ctx, draft) {
@@ -697,9 +673,7 @@
       };
     },
     buildMethod: function (ctx, body, current) {
-      var staticDefaults = (typeof batchRoleStaticDefaults === "function")
-        ? batchRoleStaticDefaults()
-        : (window.batchRoleStaticDefaults ? window.batchRoleStaticDefaults() : null);
+      var staticDefaults = batchRoleStaticDefaults();
       var method = buildBatchMethodFromPatch(
         ctx.originalSpec.method || {},
         (ctx.methodBaseline || {}).batch_roles || {},

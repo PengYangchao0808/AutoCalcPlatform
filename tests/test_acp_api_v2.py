@@ -869,20 +869,23 @@ def test_v2_remote_js_helper_v2_namespace_60s_budget_and_timeout_conversion() ->
     if not shutil.which("node"):
         pytest.skip("node not available")
 
-    frontend = Path(__file__).resolve().parents[1] / "frontend" / "ACP_Workbench_v2.html"
-    html = frontend.read_text(encoding="utf-8")
-    assert "timeoutMs: API_REMOTE_TIMEOUT_MS" in html, (
+    frontend = Path(__file__).resolve().parents[1] / "frontend"
+    api_js = (frontend / "js" / "workbench" / "compat" / "api.js").read_text(encoding="utf-8")
+    assert "timeoutMs: API_REMOTE_TIMEOUT_MS" in api_js, (
         "no version-aware v2 remote helper passes the 60s budget yet"
     )
 
     match = re.search(
         r"(var API_TIMEOUT_MS = 8000;[\s\S]*?async function apiV2\(path, opts\) \{[\s\S]*?\n\})",
-        html,
+        api_js,
     )
-    assert match, "api/apiRequest/apiRemote/apiV2 block not found in workbench HTML"
-    remote_match = re.search(r"(function apiV2Remote\(path, opts\) \{[\s\S]*?\n\})", html)
-    assert remote_match, "apiV2Remote helper missing from workbench HTML"
+    assert match, "api/apiRequest/apiRemote/apiV2 block not found in workbench api.js"
+    remote_match = re.search(r"(function apiV2Remote\(path, opts\) \{[\s\S]*?\n\})", api_js)
+    assert remote_match, "apiV2Remote helper missing from workbench api.js"
     api_source = match.group(1) + "\n" + remote_match.group(1)
+    # apiRequest now delegates to ACPClient.transport.request (transport.js) for
+    # the shared timeout/error conversion; load it so the delegation resolves.
+    transport_js = (frontend / "js" / "client" / "transport.js").read_text(encoding="utf-8")
 
     script = (
         "const API_BASE = '/api/v1';\n"
@@ -895,6 +898,9 @@ def test_v2_remote_js_helper_v2_namespace_60s_budget_and_timeout_conversion() ->
         "    this.name = 'AbortError';\n"
         "  }\n"
         "}\n"
+        + "global.window = global;\n"
+        + transport_js
+        + "\n"
         + api_source
         + "\n"
         + textwrap.dedent(

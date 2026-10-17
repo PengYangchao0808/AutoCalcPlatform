@@ -145,7 +145,7 @@ def test_raw_trajectory_outgrowing_snapshot_is_visible(tmp_path: Path) -> None:
 def test_frontend_detects_irc_growth_and_follows_active_direction() -> None:
     if shutil.which("node") is None:
         pytest.skip("node unavailable")
-    html = (Path(__file__).parents[1] / "frontend" / "ACP_Workbench_v2.html").read_text(
+    html = (Path(__file__).parents[1] / "frontend" / "js" / "workbench" / "features" / "energy.js").read_text(
         encoding="utf-8"
     )
     revision_fn = html.split("function energyGraphDataRevision(data) {", 1)[1].split(

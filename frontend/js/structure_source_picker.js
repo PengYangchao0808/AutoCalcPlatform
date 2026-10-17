@@ -17,7 +17,10 @@
  *     destroy()
  *
  * Internal:
- *   - _fetchImpl  (default: window.fetch; tests inject a fake)
+ *   - _fetchImpl  (default: window.fetch; tests inject a fake — passed through
+ *                   to ACPClient.transport.request via opts.fetchImpl)
+ *   - _apiV2/_apiV1 (thin delegators over ACPClient.transport; exposed for
+ *                   module tests)
  *   - _esc        (XSS-safe text insertion)
  *   - _t          (i18n helper, reads from app t() with fallback)
  *   - _debounce   (standard debounce)
@@ -69,82 +72,50 @@
     return window.fetch(url, opts);
   };
 
-  /** apiV2 helper — fetches /api/v2 + path. */
-  async function _apiV2(path, opts) {
-    opts = opts || {};
-    if (!opts.signal && typeof AbortController !== "undefined") {
-      var ac = new AbortController();
-      var timer = setTimeout(function () {
-        ac.abort();
-      }, 8000);
-      opts.signal = ac.signal;
-    }
-    var resp = await _fetchImpl("/api/v2" + path, opts);
-    if (timer) clearTimeout(timer);
-    if (!resp.ok) {
-      var msg = "HTTP " + resp.status;
-      try {
-        var body = await resp.json();
-        if (body && body.detail) {
-          var d = body.detail;
-          if (typeof d === "string") {
-            msg = d;
-          } else if (Array.isArray(d)) {
-            msg = d
-              .map(function (item) {
-                if (item && typeof item === "object") {
-                  var loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
-                  return (loc ? loc + ": " : "") + (item.msg || JSON.stringify(item));
-                }
-                return String(item);
-              })
-              .join("; ");
-          } else {
-            msg = JSON.stringify(d);
-          }
-        }
-      } catch (e) {}
-      var err = new Error(msg);
-      err.status = resp.status;
-      err.body = body;
-      throw err;
-    }
-    var ct = resp.headers.get("content-type") || "";
-    return ct.includes("application/json") ? resp.json() : resp.text();
+  /**
+   * Transport options: 8s budget (same as the pre-migration inline
+   * AbortController) plus the test-injectable fetch implementation, passed
+   * through to the shared transport via opts.fetchImpl (transport strips it
+   * before calling fetch).
+   */
+  function _transportOpts(opts) {
+    opts = Object.assign({}, opts || {});
+    opts.timeoutMs = 8000;
+    opts.fetchImpl = _fetchImpl;
+    return opts;
   }
 
-  /** v1 API helper — fetches /api/v1 + path. */
+  /**
+   * apiV2 helper — delegates to the shared client transport (/api/v2 prefix).
+   * Error contract (via transport): Error with .status, .body (parsed JSON,
+   * undefined for non-JSON bodies), FastAPI detail flattening in message
+   * (422 arrays as "loc: msg; ..."), localized own-timeout error, caller
+   * aborts rethrown with AbortError name intact.
+   */
+  async function _apiV2(path, opts) {
+    return window.ACPClient.transport.request("/api/v2" + path, _transportOpts(opts));
+  }
+
+  /**
+   * v1 API helper — delegates to the shared client transport (/api/v1 prefix).
+   * Legacy message adapter: the pre-migration _apiV1 flattened 422 array
+   * details WITHOUT the "loc: " prefix; keep that exact text by re-deriving
+   * the message from the transport-attached body (transport output untouched).
+   */
   async function _apiV1(path, opts) {
-    opts = opts || {};
-    if (!opts.signal && typeof AbortController !== "undefined") {
-      var ac = new AbortController();
-      var timer = setTimeout(function () {
-        ac.abort();
-      }, 8000);
-      opts.signal = ac.signal;
+    try {
+      return await window.ACPClient.transport.request("/api/v1" + path, _transportOpts(opts));
+    } catch (err) {
+      if (err && typeof err.status === "number" && err.body && Array.isArray(err.body.detail)) {
+        var legacy = err.body.detail
+          .map(function (i) {
+            return i && typeof i === "object" ? i.msg || JSON.stringify(i) : String(i);
+          })
+          .join("; ");
+        if (legacy) err.message = legacy;
+      }
+      throw err;
     }
-    var resp = await _fetchImpl("/api/v1" + path, opts);
-    if (timer) clearTimeout(timer);
-    if (!resp.ok) {
-      var msg = "HTTP " + resp.status;
-      try {
-        var body = await resp.json();
-        if (body && body.detail) {
-          var d = body.detail;
-          if (typeof d === "string") msg = d;
-          else if (Array.isArray(d))
-            msg = d
-              .map(function (i) {
-                return i && typeof i === "object" ? i.msg || JSON.stringify(i) : String(i);
-              })
-              .join("; ");
-          else msg = JSON.stringify(d);
-        }
-      } catch (e) {}
-      throw new Error(msg);
-    }
-    var ct = resp.headers.get("content-type") || "";
-    return ct.includes("application/json") ? resp.json() : resp.text();
   }
 
   /** Short date format. */
@@ -2395,6 +2366,11 @@
       return _createInstance(container, options);
     },
     _fetchImpl: _fetchImpl,
+    // Exposed for module tests (structure_source_picker.test.js): the shared
+    // transport delegation and the v1 legacy message adapter are behavior
+    // contracts, not implementation details.
+    _apiV2: _apiV2,
+    _apiV1: _apiV1,
   };
 
   // Expose for tests

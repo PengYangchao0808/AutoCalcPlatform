@@ -1,13 +1,22 @@
 // Execute the actual workbench functions against a small DOM surface.
+// H2 decomposition moved these helpers out of the inline HTML into
+// js/workbench/{compat/api.js, features/job-detail.js}; extract from the
+// living production sources instead of the HTML shell.
 const fs = require('fs');
+const path = require('path');
 const vm = require('vm');
 const assert = require('assert');
 const html = fs.readFileSync(process.argv[2], 'utf8');
+const jsRoot = path.resolve(path.dirname(process.argv[2]), 'js');
+const corpus = [
+  'workbench/compat/api.js',
+  'workbench/features/job-detail.js',
+].map(rel => fs.readFileSync(path.join(jsRoot, rel), 'utf8')).join('\n');
 function source(name) {
-  const start = html.indexOf('function ' + name + '(');
+  const start = corpus.indexOf('function ' + name + '(');
   assert(start >= 0, name);
-  const end = html.indexOf('\nfunction ', start + 1);
-  return html.slice(start, end);
+  const end = corpus.indexOf('\nfunction ', start + 1);
+  return corpus.slice(start, end);
 }
 class Element {
   constructor() { this.children = []; this.attrs = {}; this.style = {}; this.classList = { add() {} }; }

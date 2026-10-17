@@ -214,27 +214,17 @@ def browser_page(server_url: str, browser_errors: list[str]) -> Generator[Page, 
         page = context.new_page()
         page.on("pageerror", lambda exc: browser_errors.append(str(exc)))
 
-        # The Workbench bootstrap (DOMContentLoaded handler) awaits several network
-        # loads BEFORE calling setupEventListeners() (ACP_Workbench_v2.html:25352),
-        # which wires the frame-play/prev/next/slider listeners. Clicking before
-        # that silently no-ops, so mark the moment the listeners exist and wait
-        # for it below.
+        # The modular Workbench bootstrap (js/workbench/bootstrap.js) wires the
+        # frame-play/prev/next/slider listeners in setupEventListeners() and
+        # flips ``window.__acpEventListenersReady`` at the end of that function.
+        # Clicking before that silently no-ops, so the wait below blocks until
+        # the wiring genuinely completed.  (The pre-slice wrap-a-global trick
+        # raced the synchronous DOMContentLoaded call and no longer applies now
+        # that setupEventListeners lives in a module rather than inline HTML.)
         context.add_init_script(
             """
         (() => {
           window.__acpEventListenersReady = false;
-          const timer = setInterval(() => {
-            if (performance.now() > 120000) { clearInterval(timer); return; }
-            if (typeof setupEventListeners === 'function' && !setupEventListeners.__acpWrapped) {
-              clearInterval(timer);
-              const orig = setupEventListeners;
-              window.setupEventListeners = function () {
-                window.__acpEventListenersReady = true;
-                return orig.apply(this, arguments);
-              };
-              window.setupEventListeners.__acpWrapped = true;
-            }
-          }, 5);
         })();
         """
         )
