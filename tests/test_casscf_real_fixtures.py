@@ -1,7 +1,7 @@
 """Real ORCA 6.1.1 CASSCF fixtures — D5 defect regressions (T02, fixed in T09).
 
 Expected values come from the audit's independent decode
-(``docs/reports/ACP_Real_QC_Gap_Audit_20261006.json`` sections ``D5`` and
+(``docs/archive/2026-10-16/evidence/reports/ACP_Real_QC_Gap_Audit_20261006.json`` sections ``D5`` and
 ``D5_scf_false_positive``) — never from the parser under test.
 
 Post-T09 invariants covered here:

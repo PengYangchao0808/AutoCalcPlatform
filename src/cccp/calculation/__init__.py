@@ -4,7 +4,7 @@ Public surface (PEP 562 lazy): contracts (scientific types), the
 serializable ``TaskRequest`` envelope, the typed ``TaskResult`` envelope,
 scientific progress events, the runtime ``TaskContext``, and the two-step
 backend selection records.  The authoritative API specification is
-``docs/ACP_CCCP_Task_API_DevDoc.md``.
+``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md``.
 
 This initializer is deliberately lazy: importing ``cccp.calculation`` (or
 its pure-type modules ``errors``/``contracts``) must never pull in task

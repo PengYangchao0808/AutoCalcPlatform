@@ -2,7 +2,7 @@
 
 Guards, with AST + runtime assertions, that:
 
-1. The matrix document ``docs/ACP_CCCP_Call_Matrix.md`` covers all 14 active
+1. The matrix document ``docs/reference/current/ACP_CCCP_Call_Matrix.md`` covers all 15 active
    workflows and their legal branches (protocols / profiles / refinement
    policies), not just the default path.
 2. Every workflow's execution route references a unique
@@ -30,15 +30,16 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src"
 ACP = SRC / "acp"
-MATRIX_DOC = REPO / "docs" / "ACP_CCCP_Call_Matrix.md"
+MATRIX_DOC = REPO / "docs" / "reference" / "current" / "ACP_CCCP_Call_Matrix.md"
 
-#: The 14 active QC workflows (excludes the ``fake`` demo workflow).
+#: The 15 active QC workflows (excludes the ``fake`` demo workflow).
 ACTIVE_WORKFLOWS: tuple[str, ...] = (
     "Confsearch",
     "PESsearch",
     "BatchOptimize",
     "XtbPathSearch",
     "OrcaGradient",
+    "XtbConstrainedOpt",
     "irc",
     "scan",
     "tsmode",
@@ -66,6 +67,7 @@ TASK_CORE_MODULES: dict[str, str] = {
     "run_nmr_shielding": "cccp.calculation.tasks.nmr_shielding",
     "run_xtb_path_search": "cccp.calculation.tasks.xtb_path_search",
     "run_orca_gradient": "cccp.calculation.tasks.orca_gradient",
+    "run_xtb_constrained_opt": "cccp.calculation.tasks.xtb_constrained_opt",
     "run_batch": "cccp.calculation.batch",
 }
 
@@ -200,6 +202,13 @@ WORKFLOW_ROUTES: dict[str, dict[str, object]] = {
         "route": ("src/acp/workflows/orca_gradient.py",),
         "tasks": ("run_orca_gradient",),
     },
+    "XtbConstrainedOpt": {
+        "route": (
+            "src/acp/workflows/xtb_constrained_opt.py",
+            "src/acp/calculations/legacy_adapters.py",
+        ),
+        "tasks": ("run_xtb_constrained_opt",),
+    },
 }
 
 #: Executable backend/runner entry points that must never appear in ACP code.
@@ -309,7 +318,7 @@ def test_active_workflow_set_matches_matrix() -> None:
     runtime = set(PUBLIC_WORKFLOWS)
     assert runtime == set(ACTIVE_WORKFLOWS), (
         "active workflow set drifted from the matrix; update ACTIVE_WORKFLOWS "
-        "and docs/ACP_CCCP_Call_Matrix.md"
+        "and docs/reference/current/ACP_CCCP_Call_Matrix.md"
     )
     assert "fake" in SUPPORTED_WORKFLOWS
     assert set(WORKFLOW_ROUTES) == set(ACTIVE_WORKFLOWS)

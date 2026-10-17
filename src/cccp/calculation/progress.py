@@ -4,7 +4,7 @@ The progress interface carries SCIENTIFIC events only (stage lifecycle +
 scientific metrics with stable names/units).  UI presentation fields
 (``label_key``/``priority``/display ordering) are ACP concerns: ACP
 converts these events into LiveMetric display metrics and CCCP never
-carries them.  See ``docs/ACP_CCCP_Task_API_DevDoc.md`` §Progress.
+carries them.  See ``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md`` §Progress.
 
 Author: QCcalc Team
 """

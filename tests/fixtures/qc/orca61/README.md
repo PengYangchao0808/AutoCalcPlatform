@@ -5,7 +5,7 @@ Byte-identical freezes of real ORCA 6.1.1 artifacts captured on **2026-10-06** f
 destination sha256 were verified equal for every file at freeze time.
 
 Expected values used by the regression tests come from the independent decode in
-`docs/reports/ACP_Real_QC_Gap_Audit_20261006.json` (sections `D1`, `D5`,
+`docs/archive/2026-10-16/evidence/reports/ACP_Real_QC_Gap_Audit_20261006.json` (sections `D1`, `D5`,
 `D5_scf_false_positive`) — never from the parsers under test.
 
 Only `.hess` / `.out` / `.xyz` / `.json` / `.md` files are frozen; wavefunction binaries

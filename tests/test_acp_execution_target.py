@@ -1,6 +1,6 @@
 """Tests for the Unified Execution Target (Phase 1 + W2-T4).
 
-Covers DevDoc ``docs/ACP_Unified_Execution_Target_DevDoc.txt`` §16:
+Covers DevDoc ``docs/reference/current/ACP_Unified_Execution_Target_DevDoc.txt`` §16:
 NodeRegistry construction, conflict validation, resolution priority,
 ``_is_remote_job`` provenance routing, M3 poll transport tolerance,
 M5 local admission, and the exception dichotomy.

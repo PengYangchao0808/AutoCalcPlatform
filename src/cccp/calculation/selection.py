@@ -258,6 +258,7 @@ def capability_requirement(request: TaskRequest) -> CapabilityRequirement:
             TaskKind.NMR_SHIELDING: "nmr_shielding",
             TaskKind.XTB_PATH_SEARCH: "xtb_path_search",
             TaskKind.ORCA_GRADIENT: "orca_gradient",
+            TaskKind.XTB_CONSTRAINED_OPT: "constrained_optimization",
         }.get(request.task)
         if base is None:
             message = f"no capability mapping for task {request.task.value!r}"

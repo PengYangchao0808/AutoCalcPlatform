@@ -260,7 +260,13 @@ class _Harness:
         out: set[str] = set()
         for path in self.sftp.files:
             if path.startswith(root):
-                out.add(path[len(root) :].split("/", 1)[0])
+                top = path[len(root) :].split("/", 1)[0]
+                # Dot-prefixed coordination dirs (`.refs` ref tokens, `.staging`
+                # in-flight uploads, `.trash` prune isolates) are metadata, not
+                # releases — exclude them from the release-directory listing.
+                if top.startswith("."):
+                    continue
+                out.add(top)
         return out
 
     def ref_files(self, node: RemoteNode, release_id: str) -> list[str]:
@@ -758,8 +764,12 @@ def test_continue_reuses_original_release_without_upgrade(
         script = harness.script_of(remote_dir)
         assert f"releases/{rel1}/src" in script
         assert record.result["remote"]["code_release"] == rel1
-        # No NEW release was published for the upgraded tree.
+        # No NEW release was published for the upgraded tree.  `.refs` is a
+        # design-internal coordination directory (ref tokens), never a release,
+        # so `release_dirs()` excludes it and only release ids participate.
         assert harness.release_dirs(harness.node) == {rel1}
+        # The verify/continue temp ref was released on the bind exit path.
+        assert harness.ref_files(harness.node, rel1) == []
         ready = [e for e in log.read_all() if e.get("type") == "remote.code_release_ready"]
         assert ready and ready[0]["release_id"] == rel1
         assert harness.bsub_calls == 1

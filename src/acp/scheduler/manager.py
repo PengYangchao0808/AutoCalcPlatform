@@ -1326,7 +1326,7 @@ class JobManager:
         payload_json: str,
         diff_summary: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Apply an edited spec as a new attempt (docs/ACP_Edit_And_Recalculate_Plan.md).
+        """Apply an edited spec as a new attempt (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md).
 
         ``mode="in_place"`` reuses the shared in-place requeue core with a
         validated spec; ``mode="new_job"`` performs exactly one regular

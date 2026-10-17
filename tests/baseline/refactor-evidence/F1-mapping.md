@@ -3,7 +3,7 @@
 **Audit date**: 2026-08-28
 **Branch**: refactor/calc-cleanup
 **Plan file**: `.omo/plans/acp-calc-refactor-cleanup.md`
-**Frozen MD**: `docs/ACP_Calculation_Workflow_Refactor_Cleanup_Plan.md`
+**Frozen MD**: `docs/archive/2026-10-16/history/ACP_Calculation_Workflow_Refactor_Cleanup_Plan.md`
 
 ## Evidence Sources
 

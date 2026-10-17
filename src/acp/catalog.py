@@ -450,6 +450,27 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "XtbConstrainedOpt",
+        "label": "xTB Constrained Optimization",
+        "label_zh": "xTB 约束优化",
+        "category": "preset",
+        "description": (
+            "Single-geometry xTB native constrained optimization (+ optional "
+            "unrestrained physical single point) from a frozen "
+            "pes2ts_xtb_constrained_opt_request_v1 payload delivered via "
+            "--opt-config (PES2TS → ACP execution unification)"
+        ),
+        "description_zh": (
+            "基于冻结 pes2ts_xtb_constrained_opt_request_v1 请求（--opt-config）的 "
+            "xTB 单几何约束优化（可选无约束物理单点）"
+        ),
+        "method_schema_id": "xtb_constrained_opt",
+        "default_backend": "xtb",
+        "requires_binaries": ["xtb"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "Lowconfirm",
         "label": "Low Confirmation",
         "label_zh": "粗优化",
@@ -4238,6 +4259,42 @@ METHOD_SCHEMAS["orca_gradient"] = {
                 "request knobs are never defaulted"
             ),
             "levels": {"orca_gradient": {"engine": "orca"}},
+        }
+    ],
+}
+
+# XtbConstrainedOpt (PES2TS → ACP G2-AB3 WP-1): the constrained-opt recipe
+# knobs (constraints/force_constant/opt_level/max_cycle/fix_atoms/
+# physical_sp/gfn_level/threads/timeout) live in the frozen
+# ``pes2ts_xtb_constrained_opt_request_v1`` payload delivered via
+# ``--opt-config`` and are never defaulted by ACP. The schema carries only
+# the workflow-level stage declaration for plan compilation — mirror of
+# ``METHOD_SCHEMAS["xtb_path_search"]``.
+METHOD_SCHEMAS["xtb_constrained_opt"] = {
+    "method_levels": [
+        {
+            "level_id": "xtb_constopt",
+            "label": "xTB Constrained Optimization",
+            "label_zh": "xTB 约束优化",
+            "required": True,
+            "allowed_engines": ["xtb"],
+            "fields": [],
+        }
+    ],
+    "stages": {
+        "mode": "static",
+        "static": ["prepare", "run_constrained_opt", "physical_sp", "finalize"],
+    },
+    "profiles": [
+        {
+            "profile_id": "default",
+            "label": "Default xTB Constrained Opt",
+            "summary": (
+                "Single-geometry xTB constrained optimization from a "
+                "pes2ts_xtb_constrained_opt_request_v1 payload (--opt-config); "
+                "recipe knobs are never defaulted"
+            ),
+            "levels": {"xtb_constopt": {"engine": "xtb"}},
         }
     ],
 }

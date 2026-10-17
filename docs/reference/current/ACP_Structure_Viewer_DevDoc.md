@@ -1,0 +1,280 @@
+# 结构查看器（Structure Viewer）设计文档
+
+**状态**: v1.5（2026-09-28，远端缓存写回 `push_paths`/`fetch(force)` + 远程 PES 审阅写回；v1.4：终端态目录预取由后端拥有（`JobManager`）+ 前端资源 no-cache 重校验；v1.3：Confsearch `weight_source` / 真实温度透传 + canonical fill-only-missing 兜底；v1.2 远程调度器标记后的扁平布局 + 嵌套只读兜底 + 终态重试单一 owner 契约；UX spec v2.0 P0+P1 已交付；标签归一化 + default_entry_id 优先级锁定；测试矩阵与化学正确性套件见 §10）
+**范围**: Workbench「结构查看器」标签页的统一结构浏览、虚频可视化、轻量几何编辑，
+以及后端 `structure_viewer_v1` 目录契约 / `normal_modes_v1` 振动产物 / 4 个 REST 端点
+
+## 1. 概述
+
+原「3D」与「构象集合」标签页合并为单一的 **结构查看器 / Structure Viewer** 标签页
+（`frontend/ACP_Workbench_v2.html`，`data-tab="structure"`；旧 id 经 `setViewerTab()`
+首行兼容映射）。选中任务即自动加载默认结构，无需手动打开 XYZ。
+
+分阶段交付（均已上线）：
+
+| 阶段 | 内容 |
+|------|------|
+| Phase A（Wave 3） | 状态店 + 目录拉取 + 自动加载 + manual_file 注入 + 能量图→查看器单向推送 |
+| Phase B（Wave 5） | 虚频检查器：频率列表、位移箭头、rAF 动画、TS 证据提示、互斥与拆卸契约 |
+| Phase C（Wave 6） | 轻量几何编辑：键长/键角/二面角、事务与撤销/重做、碰撞警告、另存为结构资产 |
+| Phase D（Wave 7） | 统一几何加载器（共享样式/相机店）、IRC 帧投影与播放、叠合 RMSD、性能阈值、视图状态持久化、无障碍 |
+
+**当前语义边界（有意为之，勿当缺陷）**：
+
+- 能量图 → 结构查看器的选择推送是**单向**的；在结构列表中选择不会反向高亮能量图节点。
+- 超长条目列表的虚拟化是固定 head 50 + tail 50 双窗口（**非滚动位置感知**）。
+- 叠合（overlay）展示两个原始帧，不返回/施加叠合变换矩阵；RMSD 由后端 Kabsch 计算。
+- 视图状态只存 `localStorage`（`acp.sv.view.*`），**绝不**写入 RESULT/ 或任务清单。
+
+### UX spec v2.0 布局与交互契约（P0+P1 已交付，P2 进行中）
+
+v2.0 重构将结构查看器从三栏固定面板布局改为**单列弹性工作区**。核心变更：
+
+**布局结构**：
+- `#sv-layout` 使用 `display:flex; flex-direction:column`，取代旧的 `grid-template-columns: 220px` 三栏 grid
+- `.sv-canvas-col` 包含 summary bar、3D viewer 容器、bottom strip、frame controller
+- **高度契约**：`.sv-canvas-col` 必须 `flex: 1 1 auto` 撑满 `#sv-layout` 剩余高度（viewer 内容全部绝对定位，不贡献内容高度，缺 flex-grow 会导致画布 0px 高——2026-09-11 回归）；`>=1920px` 媒体块必须显式 `width: 100%` 配合 `max-width: 1600px; margin: 0 auto`（auto margin 关闭 flex 交叉轴拉伸，缺 width 会收缩为 fit-content）
+- 旧 `.sv-list-panel` 和 `.sv-inspector-panel` 已移除
+- 能量工作区（`#viewer-energy`）现在是 `#sv-layout` 的 **peer 视图**（sibling），不再嵌套在 sv-layout 内部
+
+**UI 元素**：
+- **Result summary bar**（`#sv-summary-bar`）：显示当前选中条目的标签、能量、badges、状态徽标、切换器、输入/结果切换、详情按钮、strip 展开按钮
+- **Bottom strip**（`#sv-bottom-strip`）：可折叠的条目列表，默认隐藏（单条目时始终隐藏），最大高度 88px；多条目时展示为横向滚动的 `sv-strip-item` 卡片，每个卡片显示标签、相对能量、Boltzmann 权重条
+- **Overlay drawers**（`#sv-drawer-measure/vibration/source/more`）：四个可覆盖抽屉，默认 `display:none`；由 `openDrawer(id)` 打开、`closeDrawer(id)` 关闭；每次只允许一个抽屉打开（`closeAllDrawers()` 互斥）
+- **Switcher dropdown**：conformer/candidate/batch 三种 kind，点击 summary bar 中的切换器标签展开下拉列表，带过滤输入框和 rank/energy/boltzmann 权重显示
+- **Input/result toggle**：当条目同时包含 `formal_result` 和 `calculation_input` 时，显示"结果"/"输入"切换按钮，切换时重绘 summary bar 并选择对应条目
+- **Unified frame controller**：IRC/scan 路径与**多帧 XYZ 文件播放**（如 `all_conformers.xyz`）共用的统一播放控件（prev/next/play/slider/energy display）
+  - **可见性契约**：`#frame-controller`（`frontend/ACP_Workbench_v2.html:3743`）的显示/隐藏由 `updateFrameController()`（:17948）单一拥有，覆盖全部变更路径（Play/prev/next/滑块经 :17961、文件加载 :15283/:15308/:15330、i18n 重放 :7615）；其门控必须引用**存活的 `data-tab` 值**，结构页签 id 为 `structure`（页签按钮 :3613-3616）。`setViewerTab()` 另按帧数显示/隐藏（:12669）；旧 id `"3d"`/`"conformers"` 仅作为 `setViewerTab` 入参别名保留（:12630）。
+  - **已知缺口**：IRC 控制器在降级（大体系）状态复用同一元素时，`updateFrameController()` 先在子元素解引用处（:17942）抛异常、到不了门控，故本门控**不守护**该状态（另案跟踪）。
+  - **回归锁**：本不变式由 `tests/test_frontend_sync.py::test_frame_controller_visibility_gate_uses_live_tab_id`（静态存活 tab-id 集合断言 + Node 行为断言，:8953）与 Playwright 套件 `tests/test_frontend_multiframe_playback_browser.py` 锁定。
+
+**交互契约**：
+- 条目选择通过 `selectEntry(entryId, origin)` 统一入口，origin 区分 `"user"`（列表点击）、`"energy_graph"`（能量图推送）、`"input_toggle"`（输入/结果切换）、`"switcher"`（切换器选择）
+- 选择时同步更新：summary bar 重绘、bottom strip active 样式、3D viewer 加载几何、IRC 播放停止、叠合清除
+- **双向同步**：选择条目时调用 `window._energyGraphSyncFromStructure(entryId)` 反向推送能量图高亮（best-effort，异常静默忽略）
+
+## 2. `structure_viewer_v1` 载荷契约
+
+构建入口：`src/acp/results/structure_viewer.py::build_structure_viewer_payload(task_root,
+*, job_id, workflow, job_status, item_id=None) -> StructureViewerPayload`（冻结 dataclass，
+entries/warnings 为 tuple；对缺失/损坏清单**从不抛异常**，错误进 warnings）。
+
+字段（`to_dict()` wire 形状，API 层另加 `availability`）：
+`schema_version="structure_viewer_v1"`, `job_id`, `workflow`, `job_status`, `revision`,
+`default_entry_id`, `groups[]`, `entries[]`, `warnings[]`。
+
+`StructureViewerGroup`：`id` / `label` / `kind`。已知组：`final_conformers`（构象）、
+`pes_confirmed` + `pes_recommendations`（严格分组，确认组在前）、`batch_items`、
+`irc_forward`（正向）/ `irc_reverse`（反向）、scan 条目不分组的空 group_id。
+
+`StructureViewerEntry` 关键字段：
+- `geometry.endpoint`（形如 `/api/v1/jobs/{job}/structure-viewer/entries/{id}/geometry`）、
+  `geometry.format="xyz"`
+- `energy{value, unit, kind, temperature_k}`、`relative_energy_kcal`、`boltzmann_weight`
+- `weight_source`：Boltzmann 权重的来源标签，词表 `censo` | `xtb` | `dft` | `computed`。
+  Confsearch 解析器逐条从 manifest conformer 行的同名字段透传
+  （`src/acp/results/structure_viewer.py:686-689,719`）；旧清单缺该字段时为 `null`
+  （API 模型默认值，`src/acp/api/v1_schemas.py:1241`）。
+- `source.kind` 词表：`formal_result` | `algorithm_recommendation` | `manual_review` |
+  `last_valid_cycle` | `calculation_input` | `manual_file`
+- `source.confirmed`：仅 PES 条目携带（确认 `True` / 推荐 `False`；None 省略）。
+  自动推荐**永不**变成正式结构产品——推荐条目 kind 固定 `algorithm_recommendation`
+  且 `confirmed=False`，与人工确认组严格分组、同名冲突经 collision 后缀隔离。
+- `source.frame_index`：多帧几何（IRC/scan/优化轨迹）的帧号；几何端点据此用
+  `read_traj_frame_xyz` 提取精确帧块。
+- `badges`：`selected`（rank-1）、`rank-N`、`TS`/`INT`、`未确认`、`兼容模式`、
+  `failed-last-frame` 等。
+
+**Confsearch 权重与温度语义**（`src/acp/results/structure_viewer.py::_resolve_confsearch`）：
+
+- **温度读取优先级**：manifest 顶层 `temperature_k` → `provenance.temperature_k` →
+  默认 `298.15`（`:615-621`）。仅含 Gibbs 自由能（`free_energy_hartree` 非空）的条目
+  在 `energy.temperature_k` 上显示该温度（`:711-716`）；纯电子能条目不显示温度。
+  顶层键由 manifest 载荷构建器在提供时写入（`src/acp/confsearch/manifest.py:212-214,238-239`）。
+- **权重填充（fill-only-missing）**：条目自带的 `boltzmann_weight` 原样保留，不重算、
+  不归一化、不跨来源混算；仅当存在缺失项时才为缺失项补算，已有值不受影响
+  （`:732-759`），warning 文本保持 `"Boltzmann weights missing from manifest; computed from energies"`（`:733-734`）。
+- **补算用 canonical 助手**：缺失项经
+  `acp.confsearch.shared.boltzmann.boltzmann_weights(..., missing="none")` 计算，
+  缺失/非有限项映射为 `None` 并从归一化分母中剔除，有限项归一化到 1.0，全缺失返回全
+  `None`（`src/acp/confsearch/shared/boltzmann.py:13-17,32-33,52-71`）。
+  查看器本地重复的 R 常数已删除；引擎侧 `result_helpers.build_entries` 保持默认
+  `missing="zero"` 调用不变，两者对有限项给出的权重逐位一致
+  （`shared/boltzmann.py:13-49`）。
+
+**显示标签归一化**：正式结果（`source.kind == "formal_result"`）的条目标签在投影时
+经 `_normalize_display_label()` 归一化。BatchOptimize 引擎给 CLI `--items-file` 产物
+的默认标签形如 `"input (TS, opt_freq)"`，其中 `input` 前缀来源于 item.name 的缺省值。
+结构查看器从不把这个原始 `input` 前缀作为正式结果的主标题显示。归一化规则：
+- `source_kind != "formal_result"` → 标签不变（input 结构保留原名）
+- 标签不以 `input` 开头 → 不变
+- Optimize 系工作流 → 含 TS 标签时 `"TS 优化结果"`，否则 `"优化结果"`
+- simple `singlepoint`/`frequency` → 专用中文标签
+- 其余 → `"计算结果"`
+- 有意义的 item 名称（如 `"mol_A (TS, opt_freq)"`）直接透传，不触发归一化
+
+（已锁定：`test_batch_formal_result_label_not_input`、`test_batch_formal_result_label_preserved_when_meaningful`、`test_legacy_formal_result_label_normalized`、`test_calculation_input_label_not_normalized`）
+
+**固定语义（矩阵测试锁定，todo 43）**：条目顺序 = 文件/清单顺序，**绝不**按能量重排；
+Confsearch 默认 rank-1；PES 默认链 = 最高置信 TS 推荐 → 最高分峰推荐 → 首个确认条目；
+Batch 完成项按产品清单顺序、失败轨迹项追加在后、默认首个完成项；
+**全部 item 失败的 Batch 任务 `default_entry_id=None`**（前端回退渲染首条，P1）；
+IRC 默认 `irc_forward_0`（正向第 0 帧作为 TS/路径中心代理，仅显示默认，非 TS 认定）；
+`job_status`（completed/failed/cancelled/running）不改变条目集，只参与 revision。
+
+## 3. Revision 算法
+
+`_compute_revision`：按**固定顺序**对每个存在的源文件计算
+`SHA-256(filename.encode() + file_bytes)`，再拼接 `job_status.encode()` 后取
+hexdigest 前 16 位。源顺序：`RESULT/result_manifest.json` →
+`RESULT/confsearch/confsearch_manifest.json` → `RESULT/pes_search/pes_profile.json`
+→ `pes_recommendations.json` → `pes_review.json`。无任何源时为 `"empty"`。
+文件字节变化或 job_status 变化都会改变 revision（前端 `refreshIfChanged` 据此增量刷新；
+编辑中 `state.dirty` 时只提示「有新结构可用」不覆盖坐标）。
+
+## 4. Entry-id 方案
+
+| 来源 | id 方案 |
+|------|---------|
+| Confsearch 构象 | `conf_{conf_id}`（缺 id 回退 `conf_rank_{rank}`） |
+| PES | `pes_{candidate_id}` |
+| BatchOptimize | `batch_{item_id}` |
+| simple 工作流 | `simple_{step_kind}` |
+| scan 帧 | `scan_frame_{index}` |
+| IRC 帧 | `irc_{forward|reverse}_{frame_index}` |
+| 手动文件 | `manual_<sha256(relpath)[:12]>`（前端 `_sha256hex` 与 Python hashlib 逐位一致） |
+| 遗留产品 | `legacy_<sha256(relpath)[:12]>` |
+| 冲突 | `{entry_id}_{sha256(geometry_ref)[:6]}`（`resolve_collision`） |
+
+## 5. 自动加载矩阵（按工作流）
+
+| workflow | 解析器行为 |
+|----------|-----------|
+| Confsearch（含退役 ensemble/energy/xtbmd_censo_energy 经协议引擎） | `RESULT/confsearch/confsearch_manifest.json` 每构象一条，逐条透传 `weight_source`，温度取顶层 `temperature_k` → `provenance.temperature_k` → `298.15`；Boltzmann 权重缺失时**只补算缺失项**（已有值原样保留、不归一化，P2；canonical `boltzmann_weights(missing="none")`），warning 提示 |
+| PESsearch | pes_review.json 确认条目（manual_review）+ pes_recommendations.json 推荐（algorithm_recommendation），确认组在前 |
+| BatchOptimize | 完成项（result_manifest 产品，TAG→TS/INT 角色）+ 失败项（`WORK/03_OPT/batch/{item}/optimize/optimization_trajectory.json` 末有效周期，last_valid_cycle）；`?item_id=` 过滤（未知 item 抛 `StructureViewerError`→404） |
+| optimize / xtb-optimize / xtb_optimize | 正式结构产品 → 失败轨迹末帧（last_valid_cycle，默认） → 计算 input.xyz |
+| singlepoint / frequency | 计算 input.xyz（几何未改变徽标） |
+| scan | `RESULT/trajectories/scan_trajectory.json` 每帧一条，文件顺序，默认最低能帧 |
+| irc | `RESULT/irc/irc_{forward,reverse}.xyz`（单/多帧）逐帧条目，组 irc_forward(正向)/irc_reverse(反向)，默认 `irc_forward_0`；缺一个方向时 warning |
+| 其余/退役 | `_resolve_legacy`：result_manifest 结构/xyz 产品 → `result_summary.json` 回退，`兼容模式` 徽标，只读展示（**200，不用 410**） |
+
+**`default_entry_id` 选择优先级**（各解析器返回）：
+
+- simple 工作流：`formal_result`（正式结构产品）> `last_valid_cycle`（失败轨迹末帧）> `calculation_input`（input.xyz 回退）。正式结果和 input 同时存在时，正式结果胜出（`test_default_entry_prefers_formal_result` 锁定）
+- Confsearch：rank-1 条目
+- PESsearch：最高置信 TS 推荐 → 最高分峰推荐 → 首个确认条目
+- BatchOptimize：请求的 item_id（如指定了 `?item_id=`）> 首个完成项；全部失败时 `None`
+- IRC：`irc_forward_0`
+- scan：最低能帧
+
+**显示标签归一化**（投影时，非存储时）：formal_result 条目标签以 `"input"` 开头时
+按 §2 规则替换为工作流相关中文标签（`"TS 优化结果"` / `"优化结果"` / `"计算结果"` 等）。
+calculation_input 条目标签不受影响。详见 §2 `_normalize_display_label()` 条目。
+
+## 6. API 面（`src/acp/api/v1_routes.py`）
+
+| 端点 | 语义 | 错误码 |
+|------|------|--------|
+| `GET /api/v1/jobs/{id}/structure-viewer` | 目录载荷（+`availability: ready/pending_fetch`，`?item_id=` Batch 过滤；`?fetch=1` 拉取纯远程任务目录元数据；终态自动重试与嵌套兜底语义见 §8） | 404 未知 job / 未知 item |
+| `GET .../entries/{entry_id}/geometry` | `text/plain` XYZ 精确帧（frame_index 提取）；远程未同步首访 409，`?fetch=1` 同步拉取 | 404 未知 entry / 路径逃逸 / 文件缺失；409 `pending_fetch` |
+| `GET .../entries/{entry_id}/vibrations` | `available` + modes 或 `reason`（200，非 409）；`threshold_cm1` + `threshold_source: default/job_config`；`source: product/historical_projection` | 404 未知 job/entry；**从不 500** |
+| `GET .../structure-viewer/overlay?entry_a=&entry_b=` | 映射 + Kabsch RMSD + 最大位移原子；reason: `identity/mcs/unproven/geometry_unreadable/failed` | 404 未知 job/entry；映射失败 → `ok=false`（不 500） |
+
+**410 刻意不使用**：结构查看器只读展示退役/历史任务（200 + legacy 条目）。
+
+vibrations 失败 reason 词表：`no_normal_modes` / `geometry_mismatch` /
+`pending_fetch` / `historical_unavailable`。
+
+## 7. `normal_modes_v1` 振动产物
+
+生成链：`acp.results.orca_parser.OrcaOutputParser`（ORCA 5.x，`cccp.orca_ts` 优先、
+本地镜像回退）→ `acp.results.frequencies.build_normal_modes_product(calc, *,
+geometry_product_id, atom_count)` → frequency 基元落盘
+`<step>/normal_modes.json` → executor 复制到 `RESULT/frequencies/normal_modes.json`
+（单项）或 `RESULT/frequencies/{item_id}__normal_modes.json`（Batch per-item）。
+
+```json
+{
+  "schema_version": "normal_modes_v1",
+  "units": {"frequency": "cm-1", "displacement": "dimensionless_orca_normal_mode"},
+  "atom_count": 3,
+  "geometry_product_id": "batch_opt_item_001",
+  "modes": [
+    {"mode_index": 6, "frequency_cm1": -797.72, "imaginary": true,
+     "ir_intensity": 24.8, "vectors": [[0.01, -0.02, 0.03]]}
+  ],
+  "warnings": []
+}
+```
+
+要点：
+- **ORCA 原生 mode_index 保留，绝不重排**；`mode_frequencies`/`mode_vectors` 保留
+  零模（平动/转动 6 个 0.0 行），`calc.frequencies` 列表过滤精确 0.0（两套语义并存，P3）；
+  多个 `VIBRATIONAL FREQUENCIES`/`NORMAL MODES` section 一律**最后一个生效**。
+- 损坏 mode（行数不符/NaN）跳过 + warnings，永不致命；`ir_intensity` 缺省省略。
+- FREQUENCY_MODES 产品 metadata 携带几何绑定 `{geometry_product_id, geometry_ref,
+  geometry_fingerprint(sha256[:16])}`；振动端点用它做几何匹配（前端
+  `geometryMismatch` 门：双 pid 非空且不同 → 禁用箭头/动画；任一侧为 null 放行
+  ——历史投影无 pid 属预期）。
+- **historical_projection 回退**：产品缺失时端点只读解析 `WORK/04_FREQ/*.out|*.log`
+  （Batch 另探 `WORK/{item}/frequency/` 与 `WORK/04_FREQ/batch/{item}/frequency/`），
+  `source="historical_projection"`，**不写任何文件**（API 快照测试 + 解析器级快照测试双重锁定）。
+- TS 频率数量判定统一使用 `f < 0 cm⁻¹`：Batch、IRC、TS Mode 和前端
+  `tsJudgment` 均要求恰好一个负频率；两个负频率属于高阶鞍点候选。
+  低势垒的弱虚频不会因为幅值小而自动失败，振动方向和 IRC 仍需检查。
+- 振动 API 的 `threshold_cm1=0.0`、`threshold_source="fixed"` 仅为旧客户端
+  保留；旧任务中的 `imaginary_threshold_cm1` 不再参与判定。
+
+## 8. 远程缓存
+
+`src/acp/results/remote_structure_cache.py::RemoteStructureCache`：
+`run_root/.remote_cache/<job_id>/<rel_path>`（拒绝绝对路径与 `..`）。目录不可用且为
+远程任务时 catalog 返回 `availability="pending_fetch"`；前端对终态任务自动以
+`?fetch=1` 重试一次，服务端只拉取 workflow 对应的 manifest/目录索引及 manifest
+引用的 `frequency_modes` 小产品，并直接从受控缓存根构建目录。geometry 首访 409，
+`?fetch=1` 经 `RemoteResultFetcher` 同步拉取（tmp + `os.replace` 原子写、按 path
+加锁、继承 run_root 权限），因此不会把完整远程任务树复制回本机 work_dir。
+`sweep_expired(ttl_days=7)` 清理；`manager._purge_job_records` 挂接 `purge_job`
+随任务级联清除。
+
+**嵌套布局只读兜底（2026-09-27）**：历史远程任务（提交时尚未上传调度器标记，见 `docs/reference/current/ACP_Job_File_Layout_Spec.md` §2a）把产物写在 `<remote_dir>/<molecule>/` 下。`fetch()` 对每个相对路径**始终扁平优先**（扁平命中零额外 SFTP 调用，不调用 `list_files`），仅当扁平 `read_file` 抛 `FileNotFoundError` 才进入单层嵌套探测：`fetcher.list_files` 缺失（极简 Fake/旧实现）→ 静默降级为旧行为；存在时按名称排序顶层目录，逐个试 `<dir>/<rel_path>`，候选读取的 `FileNotFoundError` 与任何其他异常都跳过（debug 日志）继续下一候选，首个命中即 memoize 前缀（per-job 专用发现锁，不包裹 `_master_lock`）。memo 只省重复 `list_files`：后续 fetch 仍扁平优先、未命中先试 memo 前缀，memo 未命中再回退完整发现（前缀失效时自愈，允许重复 `list_files`）；因此混合布局（嵌套 `RESULT/...` + 扁平 `input.xyz`）两条路径都可取；缓存目录始终扁平（`run_root/.remote_cache/<job_id>/<rel_path>`），无磁盘迁移、不重跑任务。
+
+**`xtb_optimize` 键归一化（2026-09-27）**：`_CATALOG_FETCH_PATHS` 使用下划线规范键 `xtb_optimize`（`RESULT/result_manifest.json` + `input.xyz`，与 `optimize`/`singlepoint`/`frequency` 同值），连字符键已不存在；并新增显式 `nmr` 条目（`RESULT/result_manifest.json`）。结构查看器 `_DISPATCH_TABLE`、`_resolve_simple` 的 step-kind/label 映射与 `_OPTIMIZE_WORKFLOW_KEYS` 均接受 `xtb_optimize`，与历史 `xtb-optimize` 拼写产出相同 entries、默认条目与“xTB 优化”标签。
+
+**终态重试契约（前端 `frontend/js/structure_viewer.js`）**：终态 pending 重试由 `refreshIfChanged` **单一拥有**，`ACP_Workbench_v2.html` 的 `summaryPoll` 每 5s 调用（抽屉打开/SSE 丢失仍生效）；判定只用**本次新鲜响应**的 `job_status`/`availability`（不读可能过期的 `state.payload`），依次经 captured-token 守卫、dirty 守卫（置 `newerAvailable`，不覆盖编辑）、30s backoff，再委派内部 `_retryPendingFetch(jobId)`。`_retryPendingFetch` 无 availability/terminal 门槛（仅 in-flight 原子守卫），硬失败（`availability=""`）后下一轮仍可重试；其 `finally` 按 jobId 守卫（换 job 后不得清新 job 的 `pendingFetchInFlight`）。公共 `refreshPending(jobId, opts)` 是 SSE 即时入口：默认带 availability+terminal 守卫，`{force:true}` 跳过守卫（终态 SSE 是权威信号，不被过期 `payload.job_status` 拦截）；SSE 终态分支（completed/failed/cancelled/done）调用 `refreshPending(jid, {force:true})`。重试状态（`pendingFetchInFlight`/`pendingFetchNextRetryAt`）**仅在 `loadStructureViewer` 检测到 jobId 变化时重置**；`_applyCatalogResponse` 在 `availability="ready"` 时清零 backoff（必须位于 token 早退之后，避免陈旧响应误清）。终态自动 `?fetch=1` 条件 = `availability ∈ {pending_fetch, unavailable}`。
+
+**后端目录预取契约（2026-09-28，`JobManager`）**：前端 `?fetch=1` 只是快速路径，**绝不是唯一路径**。`JobManager._poll_job` 在远程任务终态跃迁时调用 `_queue_catalog_prefetch(job_id)`；`_queue_startup_catalog_prefetch()` 在服务启动时扫描最近 100×3（completed/failed/cancelled）条远程任务，为尚未缓存目录的任务补排队（单次上限 300）。独立守护线程 `acp-catalog-prefetch`（懒启动，队列 + `task_done`，单任务异常仅告警不杀线程）经 **`JobManager.structure_cache` 单例**（API 与预取共享；`v1_routes._remote_structure_cache` 直接委派该属性）只拉取 `_CATALOG_FETCH_PATHS` 小元数据，几何保持懒加载；`fetch()`/`fetch_catalog()` 的本地缓存命中与 `catalog_ready` 短路保证幂等。效果：任何前端版本（含缓存旧 JS、未刷新标签页）在任务完成后的下一次 catalog 轮询即看到 `availability=ready`——2026-09-28 事故（Pi 上旧 JS 无终态重试，完成的任务永远停在 pending_fetch，且整个时段零 SFTP 读取）由此根治。`/js`+`/css` 静态资源改为 `_RevalidatingStaticFiles`（`Cache-Control: no-cache`，未变文件 304），保证普通刷新必取到新前端。锁定：`tests/test_acp_remote_catalog_prefetch.py`（7 用例）。
+
+**缓存写回契约（2026-09-28）**：远端缓存同时服务写路径。`fetch(force=..., raise_errors=...)` 支持强制重读（可变文件刷新；远端缺失时删除本地陈旧副本）与传输错误上抛（写路径拒绝静默降级）；`push_paths(record, rel_paths)` 按缓存路径原样 SFTP 上传（目录自动创建，缺失缓存文件跳过，失败抛 `RemotePushError`）；`fetch_matching(record, dir_rel, prefix)` 经 `list_files` 前缀列举补拉（审阅备份轮次）。消费方：远程 PES 审阅写回（`_remote_review_setup` → `save_pes_review` → `_remote_review_write_back`，见 `docs/reference/current/ACP_PES_Manual_Review_DevDoc.md` §3.3）与 `RemoteResultFetcher.write_file`。锁定：`TestRemoteStructureCache`（force/push/fetch_matching 用例）+ `tests/test_remote_phase4.py::test_write_file_*`。
+
+## 9. 前端模块
+
+| 模块 | 命名空间 / 版本 | 职责 |
+|------|----------------|------|
+| `frontend/js/structure_viewer.js` | `window.ACPStructureViewer` 0.15.0 | **单列工作区布局**：渲染 summary bar + bottom strip + overlay drawers（旧 list panel / inspector panel 已移除）。**状态店**（jobId/payload/revision/selectionToken/requestToken/dirty/displayed*）；目录拉取 + 409 重试；**共享几何加载器** `sharedLoadGeometry({canvasId, source})` + `geometryStore{currentXyz, stylePreset, cameras, loaderVersion, userPresetChosen, lastLoadDegraded}` + `registerCanvasLoader`/`saveCamera`/`restoreCamera`/`setStylePreset`；IRC 播放 `playIrcPath/stopIrcPlayback`（~4 fps，相机不跳变）；叠合 `loadOverlay/renderOverlay/clearOverlay`（第二模型 cyanCarbon + 最大位移原子高亮，unproven → 测量清除提示）；性能阈值 `LIST_VIRTUALIZE_THRESHOLD=100`（head50+tail50 双窗口 + 强制含选中/默认）、`TRAJECTORY_SAMPLE_THRESHOLD=500 → TARGET=200`（首尾保留、stride 采样，列表分组与 IRC 播放共用）、`LARGE_SYSTEM_ATOM_THRESHOLD=200`（>200 原子按次降级线框 + aria-live 通知，用户显式选样式则不降级）；视图状态 `localStorage["acp.sv.view.{job}:{entry}"]` `{version:1, camera, stylePreset, measurements, atomCount, savedAt}`（相机恢复带 atomCount 守卫；损坏/版本不符静默默认）；listbox 无障碍（role/aria-selected/aria-activedescendant + 方向键/Enter）；**抽屉系统** `openDrawer(id)`/`closeDrawer(id)`/`closeAllDrawers()`/`_renderDrawerContent(id)` → `_renderSourceDrawer`/`_renderVibrationDrawer`/`_renderMeasureDrawer`/`_renderMoreDrawer`；**底部条** `_renderStripItem(entry)` + `_syncStripActive()`（选择同步 active 样式）；**切换器** `_openSwitcherDropdown`/`_closeSwitcherDropdown`（conformer/candidate/batch 三种 kind，过滤输入框 + rank 列表）；**输入/结果切换** `sv-input-result-toggle`（formal_result vs calculation_input 条目间切换）；**双向同步**：选择条目时调用 `window._energyGraphSyncFromStructure(entryId)` 反向推送能量图高亮 |
+| `frontend/js/vibration_viewer.js` | `window.ACPVibrationViewer` 0.8.1 | 频率检查器（负频置顶排序、IR 强度）、位移箭头（振幅 0.05-0.6、>50 原子跳氢）、rAF 动画（30fps 节流、getView/setView 相机保持、禁用内置 animate）、播放/编辑互斥（`ACPStructureEditor.setLocked`）、拆卸契约 `stopAnimationAndRestore/handleTeardown`（切 tab/切 job/销毁 viewer/切条目）、TS 证据 `tsJudgment`（仅证据展示，判定归 Batch/IRC）、`geometryMismatch` 几何绑定门、**底部停靠面板** `renderFrequencyInspector(dock)` 三列布局（TS 证据 / 模式浏览 / 动画控制）、**模式分类** `_categorizeModes`（虚频/有效/全部 + 零模折叠）、**筛选标签**（虚频 n / 有效模式 n / 全部 n）、**键盘导航** `_navigateMode`（左右键切换模式）、**默认选择顺序** `defaultModeIndex`（最负虚频 → 首个正频） |
+| `frontend/js/structure_editor.js` | `window.ACPStructureEditor` 0.8.0 | 邻接图（显式键或共价半径 1.3 推断）、键长 0.4-5.0 Å / 键角 1-179° / 二面角（(-180,180] 最短旋转）编辑、环/断开拒绝、事务引擎（undo/redo/reset 字节级还原、碰撞 <0.55·(ri+rj) 警告、entry 作用域）、dirty 同步到查看器刷新守卫、导出 XYZ + 另存为结构资产（POST `/structure-assets`，provenance 注释 + edit_operations 全量）+ 新建计算预填（**绝不**代提交） |
+| `frontend/css/structure_viewer.css` | 0.9.0 | 单列 flex 工作区（`.sv-layout { display:flex; flex-direction:column }`；`.sv-canvas-col { flex:1 1 auto }` 高度契约；≥1920px `width:100% + max-width:1600px` 居中）；summary bar / bottom strip / overlay drawers / switcher dropdown / 输入结果切换 / 播放条 / 降级通知 / 焦点可见样式；1100px 断点抽屉响应式；**振动停靠面板** `.sv-vibration-dock`（三列布局、筛选标签、模式轨道、控件网格）；**字体 token** `--font-ui` / `--font-mono`；响应式 800-1199px 双行 / <800px 底部 sheet |
+
+合规：视图投影一律经 `TrajectoryFrame.to_node()`（反模式 #28）；查看器只读 +
+绝不代提交任务（#29）；所有 viewer 装载路径复用 `scheduleViewerFraming`
+（#30）；向导默认值经目录解析（#27）。
+
+## 10. 测试地图
+
+| 文件 | 锁定内容 |
+|------|----------|
+| `tests/test_acp_structure_viewer.py` | 载荷契约、revision、id 方案、损坏清单、8 类解析器、叠合 RMSD（Kabsch 精度）、**TestAcceptanceMatrix**（状态矩阵/全序/Boltzmann 混合/全失败 Batch/解析器级只读快照）、**标签归一化**（`test_batch_formal_result_label_not_input`："input (TS, opt_freq)" → "TS 优化结果"；`test_batch_formal_result_label_preserved_when_meaningful`：有意义名称透传；`test_legacy_formal_result_label_normalized`：遗留清单 "input" → "计算结果"；`test_calculation_input_label_not_normalized`：input 条目不触发归一化）、**default_entry_id 优先级**（`test_default_entry_prefers_formal_result`：formal_result > calculation_input）、**权重来源 + 真实温度**（`TestWeightProvenance`：顶层温度优先/`provenance` 兜底/损坏回退 298.15、`weight_source` 逐条透传并在 fill-only-missing 后保留、legacy 清单补算 + warning、补算与 canonical 助手逐位一致、NaN 能量按缺失处理） |
+| `tests/test_acp_api_structure_viewer.py` | 4 端点全覆盖：404/409/路径逃逸/远程 pending_fetch + fetch=1/历史投影 no-write 快照/IRC 逐帧几何/叠合端点；`weight_source` 经 `StructureViewerEntryModel` 往返、缺省 `None`、旧载荷缺键兼容 |
+| `tests/test_acp_frequency_modes.py` | ORCA 解析矩阵（分块/多 section 末节生效/零模分流/索引对齐）、`normal_modes_v1` 产品、executor/Batch 落盘、**化学正确性**（产物不可互换、跨语言 TS 门一致性、IRC 门差异锁定） |
+| `tests/test_acp_irc_projection.py` | `VIEW_REGISTRY["irc"]`、块解析、双方向路径序（非单调能量证明不重排）、无能量降级、单方向 warning |
+| `tests/test_acp_sampling_graph.py` | sampling 投影 + VIEW_REGISTRY 回归（irc 注册后保持完整） |
+| `tests/test_frontend_sync.py` | 前端全合同：命名空间/i18n 双语完整（含 STR 机械扫描）/禁用标识符/viewer framing/store 懒加载与陈旧守卫/共享加载器/IRC 播放/叠合/性能阈值/视图状态/listbox 无障碍/**化学正确性**（参考分子编辑序列、±180 最短路径、断开拒绝、模式不混用）/**UX spec v2.0 布局合同**：`test_tab_independence_energy_not_in_sv_layout`（energy workspace 与 sv-layout peer 关系）、`test_drawers_default_closed`（三个抽屉 + dock display:none 默认）、`test_summary_bar_exists_in_html`（summary bar 存在 + CSS flex）、`test_bottom_strip_defaults_hidden`（底部条默认隐藏）、`test_no_empty_inspector_sections`（renderInspector 驱动抽屉渲染而非空段落）、`test_structure_viewer_summary_strip_rendering`（renderStructureViewer 驱动 summary bar + bottom strip）、`test_energy_workspace_peer_layout_contract`（energy workspace 70/30 grid + focus mode + 响应式）、**振动 dock 合同**：`test_vibration_dock_host_element_exists` / `test_vibration_dock_height_constants` / `test_vibration_dock_state_persistence` / `test_vibration_dock_summary_entries` / `test_vibration_dock_filter_tabs` / `test_vibration_dock_default_mode_selection_order` / `test_vibration_dock_keyboard_navigation` / `test_vibration_dock_no_positive_freq_labeled_imaginary` / `test_vibration_viewer_node_categorize_modes` |
+| `tests/test_acp_confsearch_boltzmann.py` | canonical Boltzmann 助手的 `missing` 策略：`"zero"` 与历史实现逐位一致（缺失项 0.0 且在分母）、`"none"` 缺失项返回 `None` 且从分母剔除（有限项和为 1.0，全缺失全 `None`），含 NaN/Inf/空表/温度敏感性 |
+| `tests/test_acp_confsearch_provenance.py` | `source_conf_id` 筛选表连接键（`records_from_ensemble_result` 从 `Structure.metadata` 取 `source`/`conf_id`）、rank1 单条目权重 = 表 `p₁`（非 1.0）且 G1 通过、部分/畸形表查找失败时全部回退 `computed` + warning、非 rank1 的 sum≈1 门不变、`ConformerEntry.to_dict` 序列化新字段、`ProtocolOutcome` 新字段默认值 |
+| `tests/test_acp_confsearch_protocols_provenance.py` | 四协议 × policy 的来源接线（rank1 读表取 `p₁`、`cumulative-99`/`all` → `dft` + coverage、`screen` → delegated 元数据、纯 xTB → `xtb`/`xtb_table`）、表缺失/损坏降级不抛异常，以及显式 `--temperature` 的非变异转发（`levels.thermo.temperature` 与 `config.censo.temperature` 两通道，显式 levels 优先） |
+| `tests/test_acp_confsearch_report.py` | `final_report.json` schema `confsearch_final_report_v1` 的顶层/逐构象字段与取值、`energy_kind` 协议默认、`final_conformers.xyz` 帧数/rank 序/缺失几何跳过（全缺失抛错）、`register_final_report` 新建 manifest/合并保留既有产品与 header/幂等/缺件抛错 |
+| `tests/test_acp_confsearch_engine_provenance.py` | 引擎收尾回归：manifest 注入 `temperature_k`/`weight_table`/`report`，`final_report.json`/`final_conformers.xyz` 落盘，两个产品注册进 `RESULT/result_manifest.json`（该文件随引擎收尾提交落地） |
+| `tests/test_acp_weight_provenance_metadata.py` | delegated 工作流元数据：`write_final_outputs` 的 `temperature_k`/`population_coverage`/`weight_source`（dft/censo/xtb 三分支）/`weight_method`，旧键与磁盘格式不变；`build_result_ensemble` 的 `conf_id` 连接键（含结构 id 回退）；`run_ensemble_generation` 的四个新增键（censo 与 censo-zero → xtb） |
+| `tests/test_acp_confsearch_manifest_provenance.py` | `build_manifest_payload` 的 `temperature_k`/`weight_table`/`report` 注入与未提供时的省略、非 dict `weight_table` 警告省略、`boltzmann.json` 附加键（temperature_k/source/method/population_coverage/reference）与旧的 `weights`/`weight_sum` 形状兼容、`ensemble.*` 输出形状不变 |

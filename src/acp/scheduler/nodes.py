@@ -3,7 +3,7 @@ Scheduler Execution Nodes
 =========================
 
 Unified execution-target model for the ACP scheduler (DevDoc:
-``docs/ACP_Unified_Execution_Target_DevDoc.txt``, Phase 1).
+``docs/reference/current/ACP_Unified_Execution_Target_DevDoc.txt``, Phase 1).
 
 ``local`` is a first-class execution target; remote servers are configured
 nodes.  This module unifies **node description and selection** only — the

@@ -231,7 +231,7 @@ CREATE TABLE IF NOT EXISTS molecule_aliases (
         "id": "018",
         "description": (
             "create job_edit_operations table (edit-and-recalculate idempotency, "
-            "docs/ACP_Edit_And_Recalculate_Plan.md §9/§10)"
+            "docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md §9/§10)"
         ),
         "sql": """
 CREATE TABLE IF NOT EXISTS job_edit_operations (

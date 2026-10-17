@@ -2,7 +2,7 @@
 
 **Audit date**: 2026-08-28
 **Branch**: refactor/calc-cleanup
-**Source**: `docs/ACP_Calculation_Workflow_Refactor_Cleanup_Plan.md` §19 (lines 1141-1154)
+**Source**: `docs/archive/2026-10-16/history/ACP_Calculation_Workflow_Refactor_Cleanup_Plan.md` §19 (lines 1141-1154)
 
 ## Sign-Off Table
 

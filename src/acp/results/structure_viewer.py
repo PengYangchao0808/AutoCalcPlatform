@@ -7,7 +7,7 @@ delegates to existing authoritative readers (``acp.results.manifest``,
 ``acp.compat.legacy.manifests``).  It must **never** re-implement workflow
 parsing or duplicate ``StructureSourceService``.
 
-Design doc reference: ``docs/ACP_Structure_Viewer_Modification_Plan.md`` §4.1.
+Design doc reference: ``docs/archive/2026-10-16/history/ACP_Structure_Viewer_Modification_Plan.md`` §4.1.
 """
 
 from __future__ import annotations

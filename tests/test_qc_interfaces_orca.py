@@ -429,7 +429,7 @@ def test_orca_build_input_blocks_gfn_gbsa_rejected(
 
 # ── Dev-plan named GFN acceptance tests (GAP-6 closure, T19) ────────────────
 #
-# docs/ACP_Scan_OptTS_GFN_DevPlan.md §4/§9 names these exact test ids.
+# docs/archive/2026-10-16/history/ACP_Scan_OptTS_GFN_DevPlan.md §4/§9 names these exact test ids.
 # test_functional_options_map_gfn_basis_empty lives in test_acp_catalog.py
 # (added by T11); the two input-block tests live here.
 
