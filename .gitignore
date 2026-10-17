@@ -84,3 +84,6 @@ __pycache__/
 
 # Mock ORCA gradient output can be produced by subprocess capability probes.
 /grad.engrad
+
+# --- Local build/presentation artifacts (chrome profile, decks, probes) ---
+/artifacts/
