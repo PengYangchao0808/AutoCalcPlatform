@@ -1,6 +1,6 @@
 """TS Mode workflow contracts: requests, source bundles, target resolution.
 
-Implements the data model of ``docs/ACP_TSMode_Optimization_Implementation_Plan.md``
+Implements the data model of ``docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md``
 §4 (FrequencySourceBundle), §6 (three mode-identifier model), §7 (request /
 snapshot / error codes) and §12 (report contract ``tsmode_report_v1``).
 

@@ -2,7 +2,7 @@
 
 Replaces the retired ``ensemble`` / ``energy`` / ``xtbmd_censo_energy``
 workflows with one entry, four protocols, quality profiles, and refinement
-policies (docs/ACP_Confsearch_Manual_Mechanism_Modification_Plan.md §3).
+policies (docs/archive/2026-10-16/history/ACP_Confsearch_Manual_Mechanism_Modification_Plan.md §3).
 """
 
 from __future__ import annotations

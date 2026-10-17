@@ -54,7 +54,7 @@ scheduler/
 - **CLI-flag parity (E7)**: shared resolution in `jobs.py` (`censo_preset_from_method` / `censo_solvent_from_method` / `censo_ewin_from_method` / `xtbmd_method_flags` + `_as_bool`) used by BOTH `runner.py` and `remote/script_gen.py` — add new workflow flags here, not in either file
 
 ## STATE TRANSITIONS（execution-integrity 四不变量，2026-10-06）
-> 详见 root `AGENTS.md` § EXECUTION PROTOCOL 与 `docs/ACP_Execution_Integrity_Rebaseline_Notes.md`。
+> 详见 root `AGENTS.md` § EXECUTION PROTOCOL 与 `docs/reference/current/ACP_Execution_Integrity_Rebaseline_Notes.md`。
 
 - **CAS-only state writes**: 一切 job 状态写入走 `store.py` 的 CAS API（`transition`/`update_progress`/`update_execution_identity`/`requeue_with_spec`，`revision`/`status`/`attempt` 守卫，冲突 → `JobStateConflictError`）。用户 pause/cancel 意图永不被过期 poll 观测覆盖；`PENDING/PAUSED→RUNNING` 合法转换不丢失；终态不可被旧写入复活；进度/工件写不得覆盖 status/spec/result；终态副作用在终态持久化**之后**且幂等可重试。
 - **submit/cancel states**: `result["remote"]["submit_state"]`（`intent`（先于 bsub 持久化，含 `submission_id`/owner token/lease）/`submitted`/…）与 `cancel_state`（CANCELLING 只有**确认远端已停止**后才置 CANCELLED）是 job-detail/v1 recovery 矩阵的投影字段（`v1_schemas.py::JobRecovery.submit_state/cancel_state`）。

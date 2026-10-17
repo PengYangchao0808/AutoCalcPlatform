@@ -15,6 +15,7 @@ from cccp.calculation.tasks.orca_gradient import run_orca_gradient
 from cccp.calculation.tasks.scan import run_scan
 from cccp.calculation.tasks.singlepoint import run_singlepoint
 from cccp.calculation.tasks.thermochemistry import run_thermochemistry
+from cccp.calculation.tasks.xtb_constrained_opt import run_xtb_constrained_opt
 from cccp.calculation.tasks.xtb_path_search import run_xtb_path_search
 
 __all__ = [
@@ -31,5 +32,6 @@ __all__ = [
     "run_scan",
     "run_singlepoint",
     "run_thermochemistry",
+    "run_xtb_constrained_opt",
     "run_xtb_path_search",
 ]

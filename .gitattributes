@@ -1,0 +1,18 @@
+# Repo standard: LF in index/worktree for text files (see cleanup 2026-10-17).
+* text=auto
+
+# Byte-fidelity exceptions — intentionally CRLF, never normalize:
+frontend/js/vendor/README.md -text
+tests/fixtures/bruker_real_group_delay/acqus -text
+
+# Common binaries (auto-detected, listed for clarity):
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pptx binary
+*.xlsx binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.dmp binary

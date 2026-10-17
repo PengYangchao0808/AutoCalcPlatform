@@ -1,10 +1,18 @@
 # ACP — 自动化化学计算平台
 
+架构命名与双人协作见[主方案 v1.7 第 37 节](docs/ACP_Architecture_Adjustment_Plan_20261016.md#37-统一命名与双人并行开发计划)：ACR → ACP Services，ACV → ACP Visualization；前端与服务/科学代码分工开发，现有运行入口与导入尚未更名。
+
+v1.6 补充[统一交互初始化与组件装配](docs/ACP_Architecture_Adjustment_Plan_20261016.md#36-统一交互初始化acp-init-与组件装配)：复用现有 `acp init`，逐步支持部署档位/组件选择、配置预览、幂等应用与 doctor 验证；IN-01—06 衔接 M0—M4。现有命令主要配置本地软件与远程节点，完整部署向导尚待实施。
+
 **Auto-Calc Platform (ACP)** 是一个模块化的 Python 计算化学平台，旨在降低量子化学计算的入门门槛，通过 CLI 和 Web 界面让不熟悉计算化学流程的研究人员也能轻松提交任务、查看进度、可视化结果。
 
 ---
 
 ## 开发状态
+
+下一次修改统一按[《ACP 完整架构调整方案》v1.5](docs/ACP_Architecture_Adjustment_Plan_20261016.md)实施：ACP / ACR / CCCP 三层九模块，按垂直切片推进并保留科学结果、恢复和旧任务兼容。该方案仍为待实施设计，不表示已完成代码迁移。
+
+文档入口见 [docs 导航](docs/README.md)。现行契约与下一轮方案附件分别归入 `docs/reference/current/`、`docs/reference/next-change/`；旧方案、审计记录及演示材料统一保存在 `docs/archive/2026-10-16/`，不作为另一套实施路线。
 
 | 阶段 | 状态 | 内容 |
 |------|------|------|
@@ -38,7 +46,7 @@
 - 人工确认（2026-09-03 起）：Workbench 能量与轨迹查看器上手动增删/修改 TS、INT 选点后
   `POST /api/v1/jobs/{id}/pes/review` 写入 `RESULT/pes_search/pes_review.json`，
   物化 `RESULT/structures/*.xyz` 并更新 `RESULT/result_manifest.json`；
-  历史 mechanism 任务保持只读（410）。详见 `docs/ACP_PES_Manual_Review_DevDoc.md`
+  历史 mechanism 任务保持只读（410）。详见 `docs/reference/current/ACP_PES_Manual_Review_DevDoc.md`
 
 #### 能量与轨迹查看器（Energy & Trajectory）
 
@@ -49,7 +57,7 @@ Workbench "能量与轨迹"标签页是 PES 扫描、几何优化、构象搜索
 - 优化视图收敛面板：RMS/MAX 梯度和位移 vs 阈值达标判定
 - IRC / NEB 视图已注册（IRC 能量曲线已接线：`irc_trajectory_v1` 正/反向双 series，运行中自动刷新，可从历史 `WORK/<stage>/ORCA` 轨迹只读回填；NEB 投影仍未实现）。IRC 逐帧结构浏览与路径动画由下方结构查看器提供
 
-详见 `docs/ACP_Energy_Trajectory_Viewer_DevDoc.md`
+详见 `docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md`
 
 #### 结构查看器（Structure Viewer）
 
@@ -64,7 +72,7 @@ Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中�
 结构查看器端点：`GET /api/v1/jobs/{id}/structure-viewer` · `GET .../entries/{e}/geometry` ·
 `GET .../entries/{e}/vibrations` · `GET .../structure-viewer/overlay?entry_a=&entry_b=`
 
-详见 `docs/ACP_Structure_Viewer_DevDoc.md`
+详见 `docs/reference/current/ACP_Structure_Viewer_DevDoc.md`
 
 ### 3. BatchOptimize — 批量优化确认 `acp run BatchOptimize`
 - 对 PESsearch 候选或其他结构进行 per-item Opt/TS + 频率 + 单点能 + 热力学修正
@@ -546,6 +554,8 @@ pytest -m "not slow" -v
 | Web 服务 | http://127.0.0.1:8765（启动 `acp run serve` 后；WSL 用户优先使用 127.0.0.1 避免 IPv6 问题）|
 | 前端仪表盘 | `frontend/ACP_Workbench_v2.html`（v1 `ACP_Workbench.html` 为遗留只读）|
 | 开发文档 | `docs/`（CENSO 集成、MethodMeta、Simple Workflows） |
+| 三层架构设计 | `docs/reference/next-change/ACP_Three_Tier_Architecture_20261016.md`（[HTML 阐释版](docs/archive/2026-10-16/history/ACP_Three_Tier_Architecture_20261016.html)，设计阶段） |
+| 产品内核可视化手册 | [docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html](docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html)（v1.5，投资人/工程双读者） |
 
 ---
 

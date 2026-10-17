@@ -821,6 +821,58 @@ args) exactly like PESsearch --scan-config; recipe knobs are never defaulted.
         help="Logging level (default: INFO)",
     )
 
+    xtb_constopt = run_sub.add_parser(
+        "XtbConstrainedOpt",
+        help="xTB single-geometry constrained optimization (frozen pes2ts_xtb_constrained_opt_request_v1 payload)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run XtbConstrainedOpt --opt-config request.json --output ./opt_out
+  acp run XtbConstrainedOpt --opt-config request.json --output ./out --nproc 8 --mem 16
+  acp run XtbConstrainedOpt --opt-config request.json --output ./out --register
+
+--opt-config ships the complete frozen request (geometry + elements + charge/
+multiplicity, distance/angle/dihedral constraints with 0-based atom positions,
+force constant, opt level, optional $fix freeze set, optional physical
+single point). The optimization runs entirely inside one xTB process; the
+evidence product separates xTB's GEOMETRY OPTIMIZATION CONVERGED status and
+the restraint-including TOTAL ENERGY from the unrestrained physical energy.
+Geometry non-convergence is reported in the evidence, not silently accepted.
+        """,
+    )
+    xtb_constopt.set_defaults(workflow="XtbConstrainedOpt")
+    xtb_constopt.add_argument(
+        "--opt-config",
+        required=True,
+        help=(
+            "Frozen pes2ts_xtb_constrained_opt_request_v1 request as a JSON file path "
+            "(or an inline JSON string)"
+        ),
+    )
+    xtb_constopt.add_argument("--output", "-o", default="./xtb_constopt_out", help="Output directory")
+    xtb_constopt.add_argument("--nproc", type=int, help="Number of CPU cores")
+    xtb_constopt.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (bare numbers default to GB; use MB/GB/TB suffixes)",
+    )
+    xtb_constopt.add_argument("--config", type=str, help="Configuration YAML file")
+    xtb_constopt.add_argument(
+        "--register",
+        action="store_true",
+        help=(
+            "After a successful run, register the output directory as a "
+            "COMPLETED job in the ACP jobs store (acp_jobs.db under "
+            "ACP_RUN_ROOT) so the Workbench job list can resolve it. Off by default."
+        ),
+    )
+    xtb_constopt.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
     orca_gradient = run_sub.add_parser(
         "OrcaGradient",
         help="ORCA single-point gradient EnGrad (frozen pes2ts_orca_gradient_request_v1 payload)",
@@ -1946,6 +1998,71 @@ def _handle_xtb_path_search(args: argparse.Namespace) -> int:
     reporter.complete()
     if getattr(args, "register", False):
         return _register_xtb_path_cli_job(args, output_dir, path_request, result)
+    return 0
+
+
+def _handle_xtb_constrained_opt(args: argparse.Namespace) -> int:
+    """Execute the xTB single-geometry constrained optimization workflow.
+
+    Thin dispatch layer: load the frozen ``pes2ts_xtb_constrained_opt_request_v1``
+    payload, call :func:`acp.workflows.xtb_constrained_opt.run_xtb_constrained_opt`,
+    and translate typed workflow errors into exit codes (input → 2, execution → 1).
+    A normally-terminated xTB run whose geometry optimization did not converge
+    is still a completed workflow (the evidence records converged_geometry=false).
+    """
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.xtb_constrained_opt import (
+        XTC_STAGES,
+        XtbConstrainedOptError,
+        XtbConstrainedOptInputError,
+        run_xtb_constrained_opt,
+    )
+
+    setup_logging(args.log_level)
+    try:
+        opt_request = _load_plan_argument(args.opt_config)
+    except ValueError as exc:
+        logger.error("XtbConstrainedOpt --opt-config error: %s", exc)
+        return 2
+    if not isinstance(opt_request, dict):
+        logger.error("XtbConstrainedOpt --opt-config must be a JSON object request payload")
+        return 2
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    reporter = ProgressReporter(output_dir, job_name="XtbConstrainedOpt", stages=list(XTC_STAGES))
+    try:
+        result = run_xtb_constrained_opt(
+            opt_request,
+            output_dir=output_dir,
+            config=cfg,
+            progress_reporter=reporter,
+        )
+    except XtbConstrainedOptInputError as exc:
+        logger.error("XtbConstrainedOpt input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except XtbConstrainedOptError as exc:
+        logger.error("XtbConstrainedOpt failed: %s", exc)
+        reporter.fail(str(exc))
+        return 1
+    except KeyboardInterrupt:
+        logger.warning("XtbConstrainedOpt interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+    if result.status != "completed":
+        logger.error("XtbConstrainedOpt failed: %s", result.error)
+        reporter.fail(result.error or "XtbConstrainedOpt failed")
+        return 1
+    logger.info("XtbConstrainedOpt completed")
+    logger.info("  Converged   : %s", result.metadata.get("converged_geometry", "N/A"))
+    logger.info("  E_effective : %s", result.metadata.get("energy_effective_hartree", "N/A"))
+    logger.info("  E_physical  : %s", result.metadata.get("energy_physical_hartree", "N/A"))
+    logger.info("  Manifest    : %s", result.metadata.get("result_manifest_path", "N/A"))
+    logger.info("  Evidence    : %s", result.metadata.get("evidence_path", "N/A"))
+    reporter.complete()
+    if getattr(args, "register", False):
+        return _register_xtb_path_cli_job(args, output_dir, opt_request, result)
     return 0
 
 
@@ -4015,6 +4132,7 @@ def main(argv: list[str] | None = None) -> int:
             "BatchOptimize": _handle_batch_optimize,
             "XtbPathSearch": _handle_xtb_path_search,
             "OrcaGradient": _handle_orca_gradient,
+            "XtbConstrainedOpt": _handle_xtb_constrained_opt,
             "ensemble": _handle_ensemble,
             "energy": _handle_energy,
             "nmr": _handle_nmr,

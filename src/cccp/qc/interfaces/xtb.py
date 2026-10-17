@@ -154,7 +154,9 @@ class XTBInterface:
             "--gfn", str(self.gfn_level),
             "--charge", str(charge),
             "--uhf", str(multiplicity - 1),
-            "-T", str(self.nproc),
+            # xTB <= 6.7.1 rejects -T ("Unknown option"); -P plus the
+            # OMP/MKL/OPENBLAS env pins in _thread_env control threading and
+            # match the battle-tested path_search launch shape.
             "-P", str(self.nproc),
         ]
 
@@ -227,6 +229,7 @@ class XTBInterface:
         opt_level: str = "normal",
         max_steps: Optional[int] = None,
         timeout: Optional[int] = None,
+        extra_control_text: str = "",
         **kwargs
     ) -> QCResult:
         """Optimize *coordinates* under internal-coordinate *constraints*.
@@ -245,6 +248,9 @@ class XTBInterface:
             opt_level: Optimization level (crude, normal, tight, verytight).
             max_steps: Optional ``$opt maxcycle`` override.
             timeout: Subprocess timeout in seconds.
+            extra_control_text: Additional xcontrol blocks (e.g. a ``$fix``
+                block with 1-based atom indices) inserted verbatim between
+                the constraint block and the ``$opt`` block.
             **kwargs: Additional parameters.
 
         Returns:
@@ -264,7 +270,7 @@ class XTBInterface:
         constraint_text = xcontrol_constraint_block(list(constraints))
         opt_block = f"  maxcycle={int(max_steps)}\n" if max_steps is not None else ""
         xcontrol_path.write_text(
-            f"{constraint_text}\n$opt\n{opt_block}$end\n",
+            f"{constraint_text}\n{extra_control_text}\n$opt\n{opt_block}$end\n",
             encoding="utf-8",
         )
 
@@ -275,7 +281,9 @@ class XTBInterface:
             "--gfn", str(self.gfn_level),
             "--charge", str(charge),
             "--uhf", str(multiplicity - 1),
-            "-T", str(self.nproc),
+            # xTB <= 6.7.1 rejects -T ("Unknown option"); -P plus the
+            # OMP/MKL/OPENBLAS env pins in _thread_env control threading and
+            # match the battle-tested path_search launch shape.
             "-P", str(self.nproc),
             "--input", str(xcontrol_path),
         ]
@@ -483,7 +491,10 @@ class XTBInterface:
             "--gfn", str(self.gfn_level),
             "--charge", str(charge),
             "--uhf", str(multiplicity - 1),
-            "-T", str(self.nproc),
+            # xTB <= 6.7.1 rejects -T ("Unknown option"); -P plus the
+            # OMP/MKL/OPENBLAS env pins in _thread_env control threading and
+            # match the battle-tested path_search launch shape.
+            "-P", str(self.nproc),
         ]
 
         xtb_args.extend(self._solvent_args())

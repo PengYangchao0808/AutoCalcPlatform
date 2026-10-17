@@ -28,7 +28,7 @@ forwarded to :func:`policy_from_config`.  Recognised flat keys include
 
 Key migration changes vs bond_scan.py:
 - Relaxed scan execution goes through the cccp relaxed-scan task core
-  (``cccp.calculation.tasks.scan.run_scan``) — see docs/ACP_PES_Task_Alignment.md
+  (``cccp.calculation.tasks.scan.run_scan``) — see docs/reference/current/ACP_PES_Task_Alignment.md
 - Uses generic naming (PesScanRequest, no orchestrator identifiers)
 - Single-point delegation via BatchSinglePointExecutor (todo 31)
 - Result manifest via ``acp.storage.manifest.ResultManifest``
@@ -660,7 +660,7 @@ def _run_relaxed_scan_backend(
     ``batch/_singlepoint_execution`` and ``primitives/scan.py``).  The typed
     ``TaskResult`` is folded back into a ``RelaxedScanResult`` so frame
     extraction, path analysis and candidate selection keep their input
-    contract unchanged (see docs/ACP_PES_Task_Alignment.md).
+    contract unchanged (see docs/reference/current/ACP_PES_Task_Alignment.md).
 
     The per-point optimization level is canonicalised once (shared model,
     ``acp.calculations.levels``) and every layer of the level — method,

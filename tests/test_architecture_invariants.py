@@ -29,6 +29,7 @@ CURRENT_ACTIVE_IDS = (
     "BatchOptimize",
     "XtbPathSearch",
     "OrcaGradient",
+    "XtbConstrainedOpt",
 )
 TARGET_ACTIVE_IDS = (
     "singlepoint",
@@ -45,6 +46,7 @@ TARGET_ACTIVE_IDS = (
     "nmr",
     "XtbPathSearch",
     "OrcaGradient",
+    "XtbConstrainedOpt",
 )
 
 TARGET_STATE_ENABLED = True
@@ -90,7 +92,7 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
     assert active_ids == CURRENT_ACTIVE_IDS
-    assert len(active_ids) == 14
+    assert len(active_ids) == 15
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
@@ -106,6 +108,7 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
         "BatchOptimize",
         "XtbPathSearch",
         "OrcaGradient",
+        "XtbConstrainedOpt",
     }
 
 
@@ -196,7 +199,7 @@ def test_batch_engine_no_stage_symbols() -> None:
 def test_target_active_workflow_ids_are_exact() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
-    assert len(active_ids) == 14
+    assert len(active_ids) == 15
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
@@ -212,6 +215,7 @@ def test_target_active_workflow_ids_are_exact() -> None:
         "nmr",
         "XtbPathSearch",
         "OrcaGradient",
+        "XtbConstrainedOpt",
     }
 
 

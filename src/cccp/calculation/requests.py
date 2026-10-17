@@ -6,7 +6,7 @@ work directory, progress sink — live in :mod:`cccp.calculation.context` and
 are passed separately (``run_*(request, *, context=None)``).  Platform
 identity (workflow / profile / candidate id / trajectory item id /
 state-sweep) MUST NOT appear here; see
-``docs/ACP_CCCP_Task_API_DevDoc.md`` for the authoritative spec.
+``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md`` for the authoritative spec.
 
 Author: QCcalc Team
 """
@@ -69,6 +69,7 @@ class TaskKind(str, Enum):
     NMR_SHIELDING = "nmr_shielding"
     XTB_PATH_SEARCH = "xtb_path_search"
     ORCA_GRADIENT = "orca_gradient"
+    XTB_CONSTRAINED_OPT = "xtb_constrained_opt"
 
 
 # ── request building blocks ─────────────────────────────────────────────
@@ -1435,7 +1436,161 @@ class OrcaGradientOptions:
         return cls(backend_inputs=tuple(fragments))
 
 
-# ── P2 contract mapping table (input/backend/semantics/identity) ───────
+@dataclass(frozen=True, slots=True)
+class XtbConstrainedOptConstraint:
+    """One typed geometric constraint (0-based atoms; unit enforced upstream).
+
+    ``kind`` is one of ``distance`` / ``angle`` / ``dihedral``; ``atoms``
+    carries the matching arity.  The ACP adapter validates units and atom
+    ranges against the frozen ``pes2ts_xtb_constrained_opt_request_v1``
+    payload before any constraint reaches this layer.
+    """
+
+    kind: str
+    atoms: tuple[int, ...]
+    target: float
+    unit: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "atoms", tuple(int(a) for a in self.atoms))
+        object.__setattr__(self, "target", float(self.target))
+        if self.kind not in ("distance", "angle", "dihedral"):
+            message = f"constraint kind must be distance/angle/dihedral, got {self.kind!r}"
+            raise TaskInputError(message)
+        arity = {"distance": 2, "angle": 3, "dihedral": 4}[self.kind]
+        if len(self.atoms) != arity:
+            message = f"constraint kind {self.kind!r} requires {arity} atoms, got {len(self.atoms)}"
+            raise TaskInputError(message)
+
+    def cache_signature(self) -> JsonObject:
+        """Cache-identity payload for one constraint."""
+        return {"kind": self.kind, "atoms": list(self.atoms), "target": self.target}
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"kind": self.kind, "atoms": list(self.atoms), "target": self.target}
+        if self.unit:
+            payload["unit"] = self.unit
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> XtbConstrainedOptConstraint:
+        """Parse strictly (rules S1–S4)."""
+        if not isinstance(payload, Mapping):
+            message = "constraint entry must be a mapping"
+            raise TaskInputError(message)
+        atoms_raw = payload.get("atoms", [])
+        if not isinstance(atoms_raw, list):
+            message = "constraint.atoms must be a list"
+            raise TaskInputError(message)
+        atoms = tuple(parse_int_tuple_strict({"atoms": atoms_raw}, "atoms") or ())
+        target = parse_float_strict(payload, "target")
+        if target is None:
+            message = "constraint.target is required"
+            raise TaskInputError(message)
+        unit = parse_str_strict(payload, "unit") or ""
+        kind = parse_str_strict(payload, "kind")
+        if kind is None:
+            message = "constraint.kind is required"
+            raise TaskInputError(message)
+        return cls(kind=kind, atoms=atoms, target=target, unit=unit)
+
+
+@dataclass(frozen=True, slots=True)
+class XtbConstrainedOptOptions:
+    """Task-specific options for ``xtb_constrained_opt`` (single geometry).
+
+    The frozen-recipe semantics of the PES2TS payload are preserved verbatim:
+    every knob is optional at this layer only because the ACP adapter already
+    rejected incomplete recipes — the task core re-checks the scientific
+    invariants (non-empty constraints, positive force constant).
+    """
+
+    task: ClassVar[TaskKind] = TaskKind.XTB_CONSTRAINED_OPT
+    constraints: tuple[XtbConstrainedOptConstraint, ...] = ()
+    force_constant: float | None = None
+    gfn_level: int | None = None
+    opt_level: str = "normal"
+    max_steps: int | None = None
+    fix_atoms: tuple[int, ...] | None = None
+    physical_sp: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "constraints", tuple(self.constraints))
+        if self.fix_atoms is not None:
+            object.__setattr__(self, "fix_atoms", tuple(int(a) for a in self.fix_atoms))
+        if not self.constraints:
+            message = "xtb_constrained_opt requires at least one constraint"
+            raise TaskInputError(message)
+        if self.force_constant is not None and self.force_constant <= 0.0:
+            message = "force_constant must be positive when present"
+            raise TaskInputError(message)
+
+    def cache_signature(self) -> JsonObject:
+        """Cache-identity payload: structured knobs only."""
+        return {
+            "constraints": [c.cache_signature() for c in self.constraints],
+            "force_constant": self.force_constant,
+            "gfn_level": self.gfn_level,
+            "opt_level": self.opt_level,
+            "max_steps": self.max_steps,
+            "fix_atoms": list(self.fix_atoms) if self.fix_atoms is not None else None,
+            "physical_sp": self.physical_sp,
+        }
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "constraints": [c.to_dict() for c in self.constraints],
+            "opt_level": self.opt_level,
+            "physical_sp": self.physical_sp,
+        }
+        if self.force_constant is not None:
+            payload["force_constant"] = self.force_constant
+        if self.gfn_level is not None:
+            payload["gfn_level"] = self.gfn_level
+        if self.max_steps is not None:
+            payload["max_steps"] = self.max_steps
+        if self.fix_atoms is not None:
+            payload["fix_atoms"] = list(self.fix_atoms)
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object] | None) -> XtbConstrainedOptOptions:
+        """Parse strictly; unknown fields are ignored (rule S2)."""
+        if not payload:
+            message = "xtb_constrained_opt requires options (constraints are never defaulted)"
+            raise TaskInputError(message)
+        raw_constraints = payload.get("constraints", [])
+        if not isinstance(raw_constraints, list):
+            message = "options.constraints must be a list"
+            raise TaskInputError(message)
+        constraints: list[XtbConstrainedOptConstraint] = []
+        for index, entry in enumerate(raw_constraints):
+            if not isinstance(entry, Mapping):
+                message = f"options.constraints[{index}] must be a mapping"
+                raise TaskInputError(message)
+            constraints.append(XtbConstrainedOptConstraint.from_dict(entry))
+        fix_atoms_raw = payload.get("fix_atoms")
+        if fix_atoms_raw is not None and not isinstance(fix_atoms_raw, list):
+            message = "options.fix_atoms must be a list or null"
+            raise TaskInputError(message)
+        physical_sp_raw = payload.get("physical_sp", False)
+        if not isinstance(physical_sp_raw, bool):
+            message = "options.physical_sp must be a boolean"
+            raise TaskInputError(message)
+        opt_level = parse_str_strict(payload, "opt_level") or "normal"
+        return cls(
+            constraints=tuple(constraints),
+            force_constant=parse_float_strict(payload, "force_constant"),
+            gfn_level=parse_int_strict(payload, "gfn_level"),
+            opt_level=opt_level,
+            max_steps=parse_int_strict(payload, "max_steps"),
+            fix_atoms=(
+                tuple(int(a) for a in fix_atoms_raw) if isinstance(fix_atoms_raw, list) else None
+            ),
+            physical_sp=physical_sp_raw,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1524,6 +1679,19 @@ P2_TASK_CONTRACTS: dict[TaskKind, TaskContractMapping] = {
         artifact_identity="engrad/log referenced as artifact; payload keeps gradients",
         record_identity="gradient rows carry unit + shape + input atom order",
     ),
+    TaskKind.XTB_CONSTRAINED_OPT: TaskContractMapping(
+        input_shape="single_structure",
+        capability="constrained_optimization",
+        backends=("xtb",),
+        success=(
+            "completed with restraint-including effective energy + convergence "
+            "evidence; geometry non-convergence stays a completed result"
+        ),
+        partial="n/a — optional physical single point is skipped when no converged geometry",
+        empty="missing xTB log is failed(error_kind=backend_failure)",
+        artifact_identity="optimized geometry/log/xcontrol referenced as artifacts; payload keeps energies",
+        record_identity="effective energy includes the restraint potential; physical energy is the unrestrained SP",
+    ),
 }
 
 
@@ -1542,6 +1710,7 @@ TaskOptions: TypeAlias = (
     | NmrShieldingOptions
     | XtbPathSearchOptions
     | OrcaGradientOptions
+    | XtbConstrainedOptOptions
 )
 
 # Table ① (todo 11/24): task → options/payload types.  The task → execution
@@ -1562,6 +1731,7 @@ TASK_OPTIONS_TYPES: dict[TaskKind, type] = {
     TaskKind.NMR_SHIELDING: NmrShieldingOptions,
     TaskKind.XTB_PATH_SEARCH: XtbPathSearchOptions,
     TaskKind.ORCA_GRADIENT: OrcaGradientOptions,
+    TaskKind.XTB_CONSTRAINED_OPT: XtbConstrainedOptOptions,
 }
 
 
@@ -1801,6 +1971,11 @@ def validate_request(request: TaskRequest) -> None:
             message = "options.end_structure requires a path or inline coordinates+symbols"
             raise TaskInputError(message)
 
+    if request.task is TaskKind.XTB_CONSTRAINED_OPT:
+        if not isinstance(request.options, XtbConstrainedOptOptions):
+            message = "xtb_constrained_opt requires XtbConstrainedOptOptions"
+            raise TaskInputError(message)
+
     _validate_fragment_conflicts(request)
 
     # resource quota sanity (doc §"Resource semantics")
@@ -1862,6 +2037,8 @@ __all__ = [
     "TaskResources",
     "ThermochemistryOptions",
     "TsSpec",
+    "XtbConstrainedOptConstraint",
+    "XtbConstrainedOptOptions",
     "XtbPathSearchOptions",
     "fragment_structured_conflicts",
     "options_from_dict",

@@ -3,7 +3,7 @@
 
 Stage-based implementation of the Goodman DP4/DP5 method on top of the
 ACP conformer-search + ORCA GIAO pipeline (DevDoc
-``docs/ACP_NMR_DP4_DevDoc.md``). Reuses ``acp run ensemble`` (censo-light)
+``docs/reference/current/ACP_NMR_DP4_DevDoc.md``). Reuses ``acp run ensemble`` (censo-light)
 for conformer generation and adds GIAO NMR + Bayesian probability on top.
 """
 

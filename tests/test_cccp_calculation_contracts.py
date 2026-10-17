@@ -5,7 +5,7 @@ Covers: options type mismatch -> TaskInputError, to_dict/from_dict
 round-trips (unknown fields / invalid enum / NaN / Inf / schema_version),
 TaskRequest/TaskContext separation, platform-identity quarantine, record
 identity, TaskContext runtime rules, pure-type import isolation, and the
-field-level mapping table of docs/ACP_CCCP_Task_API_DevDoc.md.
+field-level mapping table of docs/reference/current/ACP_CCCP_Task_API_DevDoc.md.
 """
 
 from __future__ import annotations
@@ -120,6 +120,7 @@ P2_TASKS = {
     "nmr_shielding",
     "xtb_path_search",
     "orca_gradient",
+    "xtb_constrained_opt",
 }
 
 BANNED_IDENTITY_NAMES = {
@@ -1106,7 +1107,7 @@ def test_contracts_pure_type_isolation() -> None:
 
 
 def test_current_spec_document_exists_and_is_complete() -> None:
-    doc = Path("docs/ACP_CCCP_Task_API_DevDoc.md")
+    doc = Path("docs/reference/current/ACP_CCCP_Task_API_DevDoc.md")
     assert doc.is_file()
     text = doc.read_text(encoding="utf-8")
     for marker in (
