@@ -2,7 +2,7 @@
 
 Guards, with AST + runtime assertions, that:
 
-1. The matrix document ``docs/ACP_CCCP_Call_Matrix.md`` covers all 15 active
+1. The matrix document ``docs/reference/current/ACP_CCCP_Call_Matrix.md`` covers all 15 active
    workflows and their legal branches (protocols / profiles / refinement
    policies), not just the default path.
 2. Every workflow's execution route references a unique
@@ -318,7 +318,7 @@ def test_active_workflow_set_matches_matrix() -> None:
     runtime = set(PUBLIC_WORKFLOWS)
     assert runtime == set(ACTIVE_WORKFLOWS), (
         "active workflow set drifted from the matrix; update ACTIVE_WORKFLOWS "
-        "and docs/ACP_CCCP_Call_Matrix.md"
+        "and docs/reference/current/ACP_CCCP_Call_Matrix.md"
     )
     assert "fake" in SUPPORTED_WORKFLOWS
     assert set(WORKFLOW_ROUTES) == set(ACTIVE_WORKFLOWS)

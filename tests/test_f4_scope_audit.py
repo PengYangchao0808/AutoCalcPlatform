@@ -34,7 +34,7 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        rides along.  Teeth: the writer body must not contain ``+ 1`` and
        must emit the target before ``C``.
     E. ``orca.py`` + ``backends/orca.py``: electronic-state & CASSCF wave
-       (2026-09-07, ``docs/ACP_Electronic_State_CASSCF_Design.md``) — the
+       (2026-09-07, ``docs/reference/current/ACP_Electronic_State_CASSCF_Design.md``) — the
        structured ``%scf`` renderer (HFTyp/GuessMix/FlipSpin/BrokenSym/MORead/
        STAB), spin-diagnostics parsing (``<S²>`` + Mulliken/Loewdin spin
        populations), CASSCF/NEVPT2 input rendering and output parsing, the
@@ -54,7 +54,8 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        ``IrcPathPoint`` must exist, ``parse_irc_endpoints`` must survive, and
        ``ORCAInterface.irc`` must accept ``output_callback``.
     G. ``orca_ts.py`` + ``orca.py`` + ``hess_file.py``(NEW): TS Mode wave
-       (2026-09-22, ``docs/ACP_TSMode_Optimization_Implementation_Plan.md``) —
+       (2026-09-22,
+       ``docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md``) —
        ``ts_geom_block`` read-Hessian input generation (``InHess Read`` /
        ``InHessName`` / read+calculate guard / TS_Mode int type check),
        ``TsOptResult`` ``energy``/``frequencies`` aliases,
@@ -599,8 +600,8 @@ def _target_orca(src: str) -> set[int]:
 
 # ── Amendment G: TS Mode wave (2026-09-22) ───────────────────────────────────
 #
-# ``docs/ACP_TSMode_Optimization_Implementation_Plan.md`` §9/§13: the TS Mode
-# directed-OptTS wave adds read-Hessian input generation and .hess parsing:
+# ``docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md``
+# §9/§13: the TS Mode directed-OptTS wave adds read-Hessian input generation and .hess parsing:
 #
 # * ``orca_ts.py``: ``ts_geom_block`` gains ``hess_file_name`` (``InHess Read``
 #   + ``InHessName``), the read/calculate guard, and an int type check on the
@@ -2575,6 +2576,12 @@ MIGRATION_STATION_PREFIXES = (
     "src/acp/results/vibration_projection.py",
     "src/acp/results/structure_viewer.py",
     "src/acp/confsearch/report.py",
+    # Amendment 2026-10-17 (docs reorg): docstring-only doc-path updates
+    # (docs/… → docs/archive|reference/…) in confsearch root files — no
+    # behavioral change; registered here so the R1 station boundary keeps
+    # auditing them.
+    "src/acp/confsearch/__init__.py",
+    "src/acp/confsearch/contracts.py",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {

@@ -902,7 +902,7 @@ def _run_wizard_builder_in_node(cases: list[dict]) -> list[dict]:
 
     if not shutil.which("node"):
         pytest.skip("node not available")
-    html = _WIZARD_HTML.read_text(encoding="utf-8")
+    html = (_WIZARD_HTML.parent / "js" / "workbench" / "features" / "wizard.js").read_text(encoding="utf-8")
     start = html.index("function scanWizardCountAtoms")
     end = html.index("function scanWizardErrorMessage")
     source = html[start:end]

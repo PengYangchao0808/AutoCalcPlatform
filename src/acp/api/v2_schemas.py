@@ -3,7 +3,7 @@ API v2 Schemas
 ==============
 
 Pydantic models for the project-task ``/api/v2`` surface
-(docs/ACP_Project_Task_Storage_Design_v2.md §12).  v2 "tasks" are the
+(docs/reference/current/ACP_Project_Task_Storage_Design_v2.md §12).  v2 "tasks" are the
 existing scheduler jobs — the jobs table is the task index.
 """
 

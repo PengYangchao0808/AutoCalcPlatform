@@ -5,7 +5,7 @@ API can serve per-point data before ``RESULT/pes_search/pes_profile.json``
 exists.  The snapshot is display-only: publishing failures are logged and
 never propagate into the calculation pipeline.
 
-Data flow (see docs/ACP_Energy_Trajectory_Viewer_DevDoc.md):
+Data flow (see docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md):
 
 * xTB / synchronous-ORCA drivers invoke :meth:`PesScanSnapshotWriter.publish_point`
   from the interface's per-frame callback (``point_callback``);

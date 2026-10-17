@@ -78,7 +78,7 @@ ReferenceValueKind = Literal["shift", "shielding"]
 ReferenceAvailabilityStatus = Literal["available", "unavailable"]
 ComparisonStatus = Literal["computed", "unavailable"]
 
-_DEV_DOC: Final = "docs/ACP_NMR_DP4_DevDoc.md §8.0"
+_DEV_DOC: Final = "docs/reference/current/ACP_NMR_DP4_DevDoc.md §8.0"
 _NOTICE: Final = "src/acp/nmr/models/NOTICE.md"
 _TMS_ASSET: Final = "src/acp/nmr/models/tms_references.txt (NOTICE-listed DP5 asset)"
 

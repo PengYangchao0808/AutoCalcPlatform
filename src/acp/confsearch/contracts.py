@@ -2,7 +2,7 @@
 
 The Confsearch workflow replaces the retired ``ensemble`` / ``energy`` /
 ``xtbmd_censo_energy`` entries with one entry and four protocols
-(docs/ACP_Confsearch_Manual_Mechanism_Modification_Plan.md §3):
+(docs/archive/2026-10-16/history/ACP_Confsearch_Manual_Mechanism_Modification_Plan.md §3):
 
 * ``xtb-crest``  — CREST → GFN2-xTB energies → dedup → Boltzmann (pure xTB)
 * ``xtb-md``     — GFN-FF/xTB MD → GFN1 opt → ISOSTAT dedup → Boltzmann (pure xTB)

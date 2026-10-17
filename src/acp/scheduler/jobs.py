@@ -997,7 +997,7 @@ class JobSpec:
     execution_mode: ExecutionMode | None = None
     target_node: str | None = None
     node_tags: list[str] = field(default_factory=list)
-    # v2 task-storage naming (docs/ACP_Project_Task_Storage_Design_v2.md §4):
+    # v2 task-storage naming (docs/reference/current/ACP_Project_Task_Storage_Design_v2.md §4):
     # physical task dir name is "<molecule>_<task>_<remark>".  The fields are
     # optional — :meth:`task_dir_name` applies a defaulting chain so every
     # caller (old API clients, CLI invocations) still gets a valid v2 name.

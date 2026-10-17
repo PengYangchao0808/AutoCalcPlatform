@@ -551,10 +551,21 @@ def test_remote_simple_spin_configuration_matches_local(tmp_path: Path) -> None:
     )
 
 
+def _job_editor_source(frontend: Path) -> str:
+    """job_editor.js preceded by its load-order prerequisite.
+
+    FE-06 moved batchRoleStaticDefaults into the shared workbench contract
+    module, which the page loads BEFORE js/job_editor.js; node harnesses must
+    mirror that order or the IIFE-top alias throws at load time.
+    """
+    contracts = (frontend / "js/workbench/contracts/batch_role_defaults.js").read_text()
+    return contracts + "\n" + (frontend / "js/job_editor.js").read_text()
+
+
 def test_editor_passive_charge_and_batch_spin_serialization(tmp_path: Path) -> None:
     if not shutil.which("node"):
         pytest.skip("NOT_VERIFIED: node unavailable")
-    js = (Path(__file__).parents[1] / "frontend/js/job_editor.js").read_text()
+    js = _job_editor_source(Path(__file__).parents[1] / "frontend")
     harness = """
 global.window = {};
 const fields = {
@@ -620,7 +631,7 @@ if (wizardState.method.stages.batch.max_steps !== 42) throw Error('stored levels
 def test_editor_nmr_candidate_edit_remove_add_and_enumeration(tmp_path: Path) -> None:
     if not shutil.which("node"):
         pytest.skip("NOT_VERIFIED: node unavailable")
-    js = (Path(__file__).parents[1] / "frontend/js/job_editor.js").read_text()
+    js = _job_editor_source(Path(__file__).parents[1] / "frontend")
     harness = """
 global.window = {};
 const fields = {'nmr-enumerate-toggle': {checked: true}, 'nmr-enumerate-centers': {value: '2,3'}};
@@ -706,8 +717,10 @@ def test_editor_parameter_step_enables_the_real_atom_picker(tmp_path: Path, work
     if not shutil.which("node"):
         pytest.skip("NOT_VERIFIED: node unavailable")
     frontend = Path(__file__).parents[1] / "frontend"
-    editor = (frontend / "js/job_editor.js").read_text()
-    page = (frontend / "ACP_Workbench_v2.html").read_text()
+    editor = _job_editor_source(frontend)
+    # H2 decomposition moved the picker gates into features/wizard.js; extract
+    # from the living production source instead of the HTML shell.
+    wizard = (frontend / "js/workbench/features/wizard.js").read_text()
     # Execute the actual step controller and the actual picker gates with
     # DOM/viewer dependencies replaced, so their shared state is exercised.
     controller = (
@@ -722,7 +735,7 @@ def test_editor_parameter_step_enables_the_real_atom_picker(tmp_path: Path, work
             "function "
             + name
             + "() {"
-            + page.split("function " + name + "() {", 1)[1].split("\n}\n", 1)[0]
+            + wizard.split("function " + name + "() {", 1)[1].split("\n}\n", 1)[0]
             + "\n}\n"
         )
     harness = """

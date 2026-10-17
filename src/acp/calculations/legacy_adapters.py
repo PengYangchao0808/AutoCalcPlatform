@@ -13,7 +13,7 @@ id) and the verbatim legacy residue needed for exact reconstruction
 travel through :class:`LegacyBinding`, which lives only on the ACP side:
 the caller passes it in and gets it back with the result.
 
-Authoritative mapping tables: ``docs/ACP_CCCP_Task_API_DevDoc.md``.
+Authoritative mapping tables: ``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md``.
 
 Author: QCcalc Team
 """

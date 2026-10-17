@@ -10,7 +10,7 @@ contracts (``acp.calculations.contracts``).
 
 This module is a pure-type seam: importing it must never pull in task
 execution modules or ``cccp.qc`` interfaces.  The current API specification
-lives in ``docs/ACP_CCCP_Task_API_DevDoc.md``.
+lives in ``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md``.
 
 Author: QCcalc Team
 """
@@ -915,7 +915,7 @@ def validate_casscf_spec(spec: CASSCFSpec, *, n_electrons: int | None = None) ->
 # ── strict envelope serialization helpers (TaskRequest/TaskResult) ──────
 #
 # These implement the documented serialization rules of
-# ``docs/ACP_CCCP_Task_API_DevDoc.md`` (strict enums, finite floats,
+# ``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md`` (strict enums, finite floats,
 # schema-version checks).  They are deliberately separate from the
 # permissive legacy ``*_from_dict`` parsers above, whose coercion semantics
 # are preserved unchanged for ACP compatibility consumers.

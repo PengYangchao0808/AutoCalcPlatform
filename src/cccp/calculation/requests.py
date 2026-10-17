@@ -6,7 +6,7 @@ work directory, progress sink — live in :mod:`cccp.calculation.context` and
 are passed separately (``run_*(request, *, context=None)``).  Platform
 identity (workflow / profile / candidate id / trajectory item id /
 state-sweep) MUST NOT appear here; see
-``docs/ACP_CCCP_Task_API_DevDoc.md`` for the authoritative spec.
+``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md`` for the authoritative spec.
 
 Author: QCcalc Team
 """

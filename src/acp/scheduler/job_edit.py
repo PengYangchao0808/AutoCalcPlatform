@@ -1,4 +1,4 @@
-"""Job Edit & Recalculate (docs/ACP_Edit_And_Recalculate_Plan.md).
+"""Job Edit & Recalculate (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md).
 
 Draft restoration, workflow edit-coverage registry, editable-spec diffing,
 preview fingerprints, idempotency operation records, and last-valid-structure

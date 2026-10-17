@@ -1,4 +1,4 @@
-"""Edit-and-recalculate tests (docs/ACP_Edit_And_Recalculate_Plan.md §14).
+"""Edit-and-recalculate tests (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md §14).
 
 Coverage layers:
 * pure adapter/serialisation round-trips for all 11 active workflows (E01/E02)

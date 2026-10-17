@@ -4,7 +4,7 @@
 execution plus a typed per-task payload.  Partial scientific output is
 represented as ``complete=False`` with valid sub-items — there is no global
 ``PARTIAL`` status (ACP maps explicitly).  See
-``docs/ACP_CCCP_Task_API_DevDoc.md`` for the authoritative spec.
+``docs/reference/current/ACP_CCCP_Task_API_DevDoc.md`` for the authoritative spec.
 
 Author: QCcalc Team
 """

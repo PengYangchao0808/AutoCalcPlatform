@@ -1,6 +1,6 @@
 """TS Mode directed transition-state optimization.
 
-Design plan: docs/ACP_TSMode_Optimization_Implementation_Plan.md.
+Design plan: docs/archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md.
 
 Re-exports only — implementation lives in the sibling modules
 (:mod:`contracts`, :mod:`source`, :mod:`mode_mapping`, :mod:`validation`,
