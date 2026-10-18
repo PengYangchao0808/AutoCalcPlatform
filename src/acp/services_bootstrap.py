@@ -30,34 +30,16 @@ from acp.calculations.result_publication import (
 )
 from acp.calculations.step_requirements import evaluate_prerequisite
 from acp.catalog import normalize_and_validate_method_config
-from acp.scheduler.migrations import migrate
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.remote import paths as remote_paths
 from acp.scheduler.remote import release as remote_release
 from acp.scheduler.remote import submission as remote_submission
-from acp.scheduler.store import JobStore
 from acp.scheduler.task_views import query_project_tasks
 from acp.scheduler.tasks import TaskIndex
 from acp_services.bootstrap import ServicesPorts
 from acp_services.runtime.commands import RuntimeCommands
 
 __all__ = ["build_runtime_commands", "build_services_ports"]
-
-
-class _JobStoreAdapter:
-    """Expose ``JobStore`` behind :class:`JobStorePort` (db_path + schema init)."""
-
-    def __init__(self, store: JobStore) -> None:
-        self._store = store
-
-    @property
-    def db_path(self) -> Path:
-        return self._store.db_path
-
-    def initialize_schema(self) -> None:
-        # JobStore creates its own schema in ``__init__``; re-running is
-        # idempotent and keeps the injected port honest about the entry point.
-        self._store._init_schema()  # noqa: SLF001 - composition-root wiring
 
 
 class _JobControlAdapter:
@@ -199,7 +181,6 @@ def build_services_ports(
     run_root: str | Path,
     *,
     db_path: str | Path | None = None,
-    store: JobStore | None = None,
     manager: Any | None = None,
     task_index: TaskIndex | None = None,
 ) -> ServicesPorts:
@@ -208,7 +189,6 @@ def build_services_ports(
     Args:
         run_root: Task data root; the project read path is rooted here.
         db_path: SQLite path; defaults to ``<run_root>/acp_jobs.db``.
-        store: Pre-built ``JobStore`` (created when omitted).
         manager: Live ``JobManager`` to expose via the control port. When
             omitted, the scheduler is **not** started and the control port
             fails loudly if used.
@@ -216,16 +196,15 @@ def build_services_ports(
 
     Returns:
         A frozen :class:`ServicesPorts` wired to the real legacy objects.
+
+    The store/schema closure (``JobStore`` / migrations) is Services-native
+    since B05-7 and is therefore **not** injected: ``ProjectManager`` owns its
+    own schema initialisation through ``acp_services.store``.
     """
     run_root_path = Path(run_root)
     resolved_db_path = Path(db_path) if db_path is not None else run_root_path / "acp_jobs.db"
-    job_store = store or JobStore(resolved_db_path)
-    index = task_index or TaskIndex(job_store.db_path)
-    projects = ProjectManager(
-        job_store,
-        run_root_path,
-        migrations=SimpleNamespace(migrate=migrate),
-    )
+    index = task_index or TaskIndex(resolved_db_path)
+    projects = ProjectManager(None, run_root_path, db_path=resolved_db_path)
     control = _JobControlAdapter(manager) if manager is not None else _UnattachedJobControl()
 
     # CLI flag conversion is imported lazily so importing this module stays
@@ -238,8 +217,6 @@ def build_services_ports(
     )
 
     return ServicesPorts(
-        job_store=_JobStoreAdapter(job_store),
-        migrations=SimpleNamespace(migrate=migrate),
         tasks=index,
         task_views=SimpleNamespace(query_project_tasks=query_project_tasks),
         control=control,

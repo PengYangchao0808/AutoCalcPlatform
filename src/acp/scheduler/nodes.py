@@ -35,6 +35,7 @@ from acp.scheduler.capabilities import (
     is_degraded,
     matches_capabilities,
 )
+from acp_services.store.records import ExecutionMode as ExecutionMode
 
 if TYPE_CHECKING:
     from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
@@ -51,9 +52,6 @@ __all__ = [
     "validate_execution_request",
     "validate_submission_target",
 ]
-
-ExecutionMode = Literal["local", "remote"]
-"""Typed execution-mode preference — never a bare ``str``."""
 
 LOCAL_NODE_NAME = "local"
 

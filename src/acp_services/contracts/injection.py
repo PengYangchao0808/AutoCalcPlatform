@@ -39,8 +39,6 @@ from typing import Any, Protocol, runtime_checkable
 
 __all__ = [
     "JobStateAdvancePort",
-    "JobStorePort",
-    "MigrationsPort",
     "TaskIndexPort",
     "TaskViewQueryPort",
     "JobControlPort",
@@ -61,25 +59,6 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Platform ports
 # ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class JobStorePort(Protocol):
-    """Job persistence surface needed by the dependency closure.
-
-    Minimal shape: the on-disk database location plus a schema-initialisation
-    entry point. Later Runtime/store todos widen this against the CAS API
-    (``acp/scheduler/store.py``) without re-interview.
-    """
-
-    @property
-    def db_path(self) -> Path:
-        """Path of the SQLite database backing the job store."""
-        ...
-
-    def initialize_schema(self) -> None:
-        """Create/migrate the schema so the database is safe to read."""
-        ...
 
 
 @runtime_checkable
@@ -111,15 +90,6 @@ class JobStateAdvancePort(Protocol):
         **fields: Any,
     ) -> Any:
         """CAS-advance one job row; raise on a stale expectation."""
-        ...
-
-
-@runtime_checkable
-class MigrationsPort(Protocol):
-    """Versioned schema migration entry (``acp/scheduler/migrations.migrate``)."""
-
-    def migrate(self, db_path: Path | str) -> int:
-        """Apply all pending migrations to *db_path* and return the count."""
         ...
 
 

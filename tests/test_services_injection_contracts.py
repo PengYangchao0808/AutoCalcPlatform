@@ -29,8 +29,6 @@ _SERVICES_ROOT = _REPO_ROOT / "src" / "acp_services"
 _REGISTRY_PATH = _REPO_ROOT / "tests" / "baseline" / "services-evidence" / "injection_registry.md"
 
 _EXPECTED_PORTS = {
-    "JobStorePort",
-    "MigrationsPort",
     "TaskIndexPort",
     "TaskViewQueryPort",
     "JobControlPort",
@@ -371,8 +369,6 @@ def test_services_ports_is_frozen_and_complete() -> None:
     assert dataclasses.is_dataclass(ServicesPorts)
     field_names = {field.name for field in dataclasses.fields(ServicesPorts)}
     assert {
-        "job_store",
-        "migrations",
         "tasks",
         "task_views",
         "control",
@@ -385,10 +381,13 @@ def test_services_ports_is_frozen_and_complete() -> None:
         "remote_submission",
         "projects",
     } <= field_names
+    # The schema/store closure is Services-native since B05-7 (todo 77).
+    assert "job_store" not in field_names
+    assert "migrations" not in field_names
 
     ports = ServicesPorts(**{name: object() for name in field_names})
     with pytest.raises(dataclasses.FrozenInstanceError):
-        ports.job_store = object()  # type: ignore[misc]
+        ports.tasks = object()  # type: ignore[misc]
 
 
 def test_first_slice_uses_injected_ports(tmp_path: Path) -> None:
@@ -396,7 +395,7 @@ def test_first_slice_uses_injected_ports(tmp_path: Path) -> None:
     from acp_services import bootstrap as services_bootstrap
 
     ports = build_services_ports(tmp_path)
-    observed = {"migrate": 0, "ensure": 0, "list": 0}
+    observed = {"ensure": 0, "list": 0}
 
     real_projects = ports.projects
 
@@ -412,19 +411,12 @@ def test_first_slice_uses_injected_ports(tmp_path: Path) -> None:
             observed["ensure"] += 1
             return real_projects.ensure_default_project()
 
-    real_migrations = ports.migrations
-
-    class _MigrationSpy:
-        def migrate(self, db_path):  # type: ignore[no-untyped-def]
-            observed["migrate"] += 1
-            return real_migrations.migrate(db_path)
-
-    injected = dataclasses.replace(ports, projects=_ProjectSpy(), migrations=_MigrationSpy())
+    injected = dataclasses.replace(ports, projects=_ProjectSpy())
     listing = services_bootstrap.open_project_read_path(injected)
 
-    # Production entry observed the injected implementations.
-    assert observed == {"migrate": 1, "ensure": 1, "list": 1}
-    # Real JobStore-backed result.
+    # Production entry observed the injected implementation.
+    assert observed == {"ensure": 1, "list": 1}
+    # Real JobStore-backed result; the native store closure created the schema.
     assert listing
     assert any(row["project_id"] == "uncategorized" for row in listing)
     assert (tmp_path / "acp_jobs.db").is_file()
@@ -436,7 +428,9 @@ def test_build_services_ports_offers_real_implementations(tmp_path: Path) -> Non
 
     ports = build_services_ports(tmp_path)
     assert isinstance(ports.projects, ProjectManager)
-    assert ports.job_store.db_path == tmp_path / "acp_jobs.db"
+    # The schema/store closure is Services-native (B05-7): no injected port,
+    # but the project manager still resolves the shared database path.
+    assert ports.projects.db_path == tmp_path / "acp_jobs.db"
     # Control port is an unattached placeholder (no scheduler started) and
     # fails loudly rather than silently doing nothing.
     with pytest.raises(RuntimeError, match="JobManager"):

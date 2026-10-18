@@ -18,9 +18,7 @@ from typing import Any
 
 from acp_services.contracts.injection import (
     JobControlPort,
-    JobStorePort,
     MethodConfigPort,
-    MigrationsPort,
     PlanExecutionPort,
     ProjectReadPort,
     RemotePathsPort,
@@ -42,10 +40,12 @@ class ServicesPorts:
     Equality is structural; use :func:`dataclasses.replace` to swap a single
     port (e.g. a test spy) without mutating a live context. Every field is a
     transitional seam with a registered migration/removal task.
+
+    The schema/store closure (``JobStorePort`` / ``MigrationsPort``) is **no
+    longer a field**: the implementation moved in place to ``acp_services.store``
+    (B05-7 / todo 77), so it is consumed natively, not injected.
     """
 
-    job_store: JobStorePort
-    migrations: MigrationsPort
     tasks: TaskIndexPort
     task_views: TaskViewQueryPort
     control: JobControlPort
@@ -63,12 +63,11 @@ def open_project_read_path(ports: ServicesPorts) -> list[dict[str, Any]]:
     """First slice (todo 72): read the project directory through injected ports.
 
     Exercises the store+schema closure of ``ProjectManager`` (the dependency
-    sample): initialise the schema via the job-store port, run the versioned
-    migration port, then ensure + list projects via the injected project read
-    port. The returned list is the real legacy result — no re-implementation.
+    sample): the store/migrations closure is Services-native since B05-7, so the
+    project port owns its own schema initialisation; this then ensures + lists
+    projects via the injected project read port. The returned list is the real
+    result — no re-implementation.
     """
-    ports.job_store.initialize_schema()
-    ports.migrations.migrate(ports.job_store.db_path)
     default_project_id = ports.projects.ensure_default_project()
     listing = ports.projects.list_projects()
     if not any(row.get("project_id") == default_project_id for row in listing):
