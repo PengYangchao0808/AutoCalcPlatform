@@ -234,6 +234,21 @@ module.exports.register = async function (h) {
     assertEq(ns.arrowState._lastCount, 3, "recovery restores the consistent count");
   });
 
+  await test("vibration: RECORDED FINDING (owner T27/T30) — cold-start static arrows draw 0 (arrowState.enabled chicken-and-egg)", () => {
+    const { ns } = loadRig();
+    seedGeometry(ns);
+    ns.arrowState.enabled = false;
+    ns.arrowState.displayMode = "arrows";
+    const inst = makeStubInstance();
+    ns._viewerImpl = () => inst;
+    ns.refreshArrows();
+    assertEq(ns.arrowState._lastCount, 0,
+      "cold start draws nothing: _arrowsVisible requires arrowState.enabled, set only by a successful draw");
+    ns.arrowState.enabled = true;
+    ns.refreshArrows();
+    assertEq(ns.arrowState._lastCount, 3, "with enabled seeded, the same call draws the 3 arrows");
+  });
+
   await test("vibration: frame recipe runs on the instance — camera preserved across rebuilds", async () => {
     const { sandbox, ns, viz } = loadRig();
     seedGeometry(ns);

@@ -205,21 +205,21 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 
 | 符号/文件 | 现状 | 目标 owner | 备注 |
 |---|---|---|---|
-| `js/visualization/scene_instance.js`（受限实例 API） | **未接入**（F-①-1：HTML 不装载；模块测试 9/9） | **T7**（扩展 v2）→ **T8**（HTML 装载 + pin 更新） | R5 页面接入 FAIL 的收口点 |
-| `viewer`/`mainViewerFraming`/`currentModel`/`currentModelAtoms`/`viewerModelLoaded`（shared-state.js:38-42） | 未迁移（原生句柄全局） | **T8** | 全局声明保留为只读投影；含徽标 label 句柄与 parse 清理 |
-| molecule-view.js 主结构调用点（initViewer/clickable/highlight/addStyle 等） | 未迁移 | **T8** | 消费者兼容表（评审 A3）：structure_viewer/vibration_viewer/structure_editor 同切片必需调整 |
-| `energyGraphState.viewer` + `_canvasViewerImpl` 注入（energy.js:131/138/2878） | 未迁移 | **T9** | dispose 幂等；PNG 导出与 framing 保持；renderer 不接触 viewer |
-| `previewViewer`（声明 reaction-builder.js:2367，消费 wizard/job_editor/bootstrap） | 未迁移（跨文件声明） | **T10**（向导侧迁移）+ **T11**（核对并清理与 wizard 的重复声明） | T18 提取后执行 T10 |
-| `reactionViewer`/`reactionViewerFraming`（reaction-builder.js:2389-2390） | 未迁移 | **T11** | hover shape/标签回调同迁 |
-| `nmrPanelState.viewers`（nmr.js:332-341，上限 8） | 未迁移 | **T12** | per-candidate dispose；`getModel` 读原子→`selectedAtoms` 等效 |
-| vibration_viewer 动画帧/箭头 + `_viewerImpl` seam | 未迁移 | **T13** | 单 interval 断言（两实例独立）；播放/隐藏走实例 |
-| structure_viewer `_canvasViewer`/`_mainViewerImpl`/IRC 播放/overlay + structure_editor 桥 | 未迁移 | **T14** | overlay 经 `getModelCount()/getModel(index)` token；编辑推送不回归 |
-| `s2scanState.viewer/resultViewer`（scan-s2.js:16-17） | **死字段**（无创建点，F-⑥-1） | **T25** | 清理死 viewer 字段（T15 补 pin 若 T25 未做） |
-| `$3Dmol` 注释级出现（energy_chart_renderer.js:11 / candidate_review_controller.js:19，GAP-2-a/b） | 可执行面已单驻点 | **T15/T27**（裁定断言口径：代码级或容忍注释） | 非可执行，低危 |
-| 生命周期矩阵（复挂载/A→B→A/隐藏/销毁迟到回调/多实例/PNG/降级）+ pin | 待建 | **T15** | pin：`$3Dmol` 单驻点、`addModel(` 不直用原生返回 |
-| FE-09 六创建入口单 adapter | 现状 6 创建点均经 mol3d_adapter | **T27**（验证唯一性） | 不新建 adapter |
-| `framePlayTimer`（reaction-builder.js:2045/2369 区） | 未迁移（全局 interval） | **T8/T13**（动画归实例） | `stopFramePlayback` 调用点 molecule-view 5 处 |
-| structure_viewer IRC `_ircSetInterval`:1252 | 未迁移 | **T13/T14**（动画生命周期经实例 `play/pausePlayback`） | 清理点 9 处已登记（T2 §⑤） |
+| `js/visualization/scene_instance.js`（受限实例 API） | **已迁移·单实现**（T7 模块 v2 → T8 HTML:1237 装载；T15 生命周期矩阵） | 保持（T15 pin） | R5 页面接入收口点已闭合 |
+| `viewer`/`mainViewerFraming`/`currentModel`/`currentModelAtoms`/`viewerModelLoaded`（shared-state.js:38-42） | **已迁移·单实现**（受限实例只读投影，非原生句柄） | 保持（T15） | T8 完成；`currentModel` = opaque token |
+| molecule-view.js 主结构调用点（initViewer/clickable/highlight/addStyle 等） | **已迁移·单实现** | 保持（T15） | T8 完成；消费者兼容表（评审 A3）已落实 |
+| `energyGraphState.viewer` + `_canvasViewerImpl` 注入（energy.js:131/138/2878） | **已迁移·单实现** | 保持（T15） | T9 完成；dispose 幂等、PNG 导出与 framing 保持 |
+| `previewViewer`（唯一声明 reaction-builder.js:2367，消费 wizard/job_editor/bootstrap） | **已迁移·单实现** | 保持（T15） | T10 向导侧迁移；T11 核对：唯一声明在 reaction-builder，wizard 只赋值（非重复声明） |
+| `reactionViewer`/`reactionViewerFraming`（reaction-builder.js:2389-2390） | **已迁移·单实现** | 保持（T15） | T11 完成；hover shape/标签回调 + 失效守卫 |
+| `nmrPanelState.viewers`（nmr.js:332-341，上限 8） | **已迁移·单实现** | 保持（T15） | T12 完成；per-candidate dispose；`selectedAtoms` 等效 |
+| vibration_viewer 动画帧/箭头 + `_viewerImpl` seam | **已迁移·单实现** | 保持（T15） | T13 完成；单 interval 断言；播放/隐藏走实例 |
+| structure_viewer `_canvasViewer`/`_mainViewerImpl`/IRC 播放/overlay + structure_editor 桥 | **已迁移·单实现** | 保持（T15） | T14 完成；overlay 经 token；编辑推送不回归 |
+| `s2scanState.viewer/resultViewer`（scan-s2.js:16-17/65-66） | **死字段**（无创建点，F-⑥-1） | **T25**（清理） | T15 已补 pin（`test_scan_s2_dead_viewer_fields_pin`）守护至 T25 |
+| `$3Dmol` 注释级出现（energy_chart_renderer.js:11 / candidate_review_controller.js:19，GAP-2-a/b） | **已迁移·单实现（可执行面单驻点）** | **T27**（唯一性复核） | T15 pin `test_dollar3dmol_single_station_pin` 落地（容许注释级） |
+| 生命周期矩阵（复挂载/A→B→A/隐藏/销毁迟到回调/多实例/PNG/降级）+ pin | **已建**（T15） | 保持 | `scene_lifecycle_matrix.test.js`（8 行）+ 场景扩展；pin：`$3Dmol` 单驻点、`addModel(` 受限 token |
+| FE-09 六创建入口单 adapter | **已迁移·单实现**（features/*.js 创建点 = 0；全部经 `scene_instance.js`→adapter） | **T27**（唯一性复核） | T8/T10/T11/T12 收敛完成；不新建 adapter |
+| `framePlayTimer`（reaction-builder.js:2045/2369 区） | **已迁移**（动画归实例 interval） | 保持（T15） | T8/T11 收敛；`stopFramePlayback` 调用点已适配 |
+| structure_viewer IRC `_ircSetInterval`:1252 | **已迁移**（经实例 `play/pausePlayback`） | 保持（T15） | T13/T14 收敛；清理点 9 处（T2 §⑤） |
 
 ### 5.2 向导四片与通用用例（GAP-3，Wave 1 G2）
 
@@ -267,6 +267,21 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 | `js/vendor/3Dmol-2.5.5.min.js` | vendor | 保持（仅经 mol3d_adapter 执行） | 无原生 `getModelCount`（T7 注意） |
 
 > 「无 owner」符号：**0**（上表逐行有 owner 或「保持」；保持=收口后仍为唯一实现/范围外，非悬空）。
+
+### 5.5 T15 生命周期矩阵 + 既有发现裁定（2026-10-18）
+
+**矩阵落地**：新增 `frontend/js/module_tests/scene_lifecycle_matrix.test.js`（8 行：反复挂载 / A→B→A / 隐藏-显示 / 暂停-停止 / 销毁+迟到回调 / 多实例相机+选择独立 / 缺 3Dmol 降级 / PNG 导出），并扩展 `energy_viewer.test.js`（复挂载+PNG）、`vibration_playback.test.js`（冷启动箭头）、`nmr_viewer.test.js`（成功路径 textContent）。既有 per-scenario harness（reaction/wizard_preview/nmr/vibration/energy）覆盖各自场景矩阵项。红可证：`/tmp` 移除 `scene_instance.js` 迟到回调守卫后，matrix 5 报 `expected 0 got 3`（matrix 1/2 同红）——断言有牙齿（见证据 task-15 §QA）。
+
+**pin 落地**（`tests/test_frontend_sync.py`）：`test_dollar3dmol_single_station_pin`（可执行面仅 `mol3d_adapter.js`，容许 GAP-2-a/b 注释级）、`test_add_model_result_restricted_methods_pin`（`= ...addModel(` 结果只可用 token 白名单方法）、`test_scan_s2_dead_viewer_fields_pin`（T25 守护）。
+
+**发现裁定（无静默通过）**：
+
+| 发现 | 来源 | 裁定 | owner |
+|---|---|---|---|
+| (a) `_arrowsVisible()` 鸡生蛋：`arrowState.enabled` 仅在绘制成功后置 true，冷启动静态「箭头」模式画不出箭头（`vibration_viewer.js:539-570`，自 `5a430fc` 既有） | T13 §6 | **recorded-finding（T15 范围外，未修复——T15 禁改产品 JS）**；以 `vibration_playback.test.js::RECORDED FINDING` 显式锁定当前行为（修复后该断言会红并提示更新） | T27/T30（可视化收口复核） |
+| (b) `nmr.js:837` 成功路径 `container.textContent = ""`（DOM 语义删除子节点）摘除 3Dmol canvas → 画布不可见 + 复用检查必失败（自 T40 既有） | T12 §3a | **recorded-finding（T15 范围外，未修复）**；以 `nmr_viewer.test.js::RECORDED FINDING` 显式锁定；复用路径的 replace+dispose 语义已由 T12 测试守护 | T27/T30 |
+
+两项均为 **既有缺陷、非迁移引入**；T15 不改产品 JS（共享树协议 + MUST NOT），故只登记 + 加可见测试，不静默通过。
 
 ---
 
@@ -325,11 +340,11 @@ DRIFT-1 `wizard.js:3850` 非 viewer 行（实际 `updateInputModeVisibility` 区
 | A00-2 §43/42.7 校正 | T3、T6 | ✅ 已交付（T3 §5 + 本文档 §7 补丁） |
 | A00-3 H/R1–R4 复验 + F0/S0 固定 | T1、T3、T4 | ✅ 已交付（本文档 §2/§3） |
 | A00-4 请求/并发/占用测量 | T5 | ✅ 已交付（本文档 §4；N1/N2 NOT_VERIFIED 显式） |
-| A01-1 scene_instance 审计扩展 | T7 | 待执行 |
-| A01-2 opts.viewer/addModel 边界 | T7 | 待执行 |
-| A01-3 逐场景迁移 | T8–T14 | 待执行 |
-| A01-4 身份/framing/多实例/PNG/降级 | T8–T15 | 待执行 |
-| A01-5 生命周期验证 | T15 | 待执行 |
+| A01-1 scene_instance 审计扩展 | T7 | ✅ 已交付（T7 证据；HTML:1237 T8 装载） |
+| A01-2 opts.viewer/addModel 边界 | T7 | ✅ 已交付（T7 证据） |
+| A01-3 逐场景迁移 | T8–T14 | ✅ 已交付（T8–T14 证据；§5.1 状态已更新） |
+| A01-4 身份/framing/多实例/PNG/降级 | T8–T15 | ✅ 已交付（T8–T15 证据；T15 矩阵 + pin） |
+| A01-5 生命周期验证 | T15 | ✅ 已交付（T15 证据；`scene_lifecycle_matrix.test.js` + red-ability） |
 | A02-1 四片提取 | T16–T20 | 待执行 |
 | A02-2 defaults/校验/保留行为 | T19、T21 | 待执行 |
 | A02-3 loadNodes/loadBackends 归位 | T22 | 待执行 |

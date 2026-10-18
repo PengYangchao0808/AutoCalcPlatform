@@ -253,6 +253,17 @@ module.exports.register = async function (h) {
     assertEq(noScene.sandbox.nmrPanelState.viewers, {}, "no stale registry entry");
   });
 
+  await test("nmr: RECORDED FINDING (owner T27/T30) — success path writes container.textContent = \"\" (detaches canvas in real DOM)", async () => {
+    const { sandbox } = loadNmr({});
+    const container = sandbox._containers["0"];
+    sandbox.nmrFetchCandidateGeometry = async () => "1\nx\nC 0 0 0\n";
+    await sandbox.nmrLoadCandidateGeometry({ id: "job1" }, { index: 0 }, 0);
+    assert(sandbox.nmrPanelState.viewers[0], "viewer created through the success path");
+    assertEq(container.className, "nmr-structure-viewer", "success path marks the container loaded");
+    assertEq(container.textContent, "",
+      "retained verbatim: DOM textContent='' removes the 3Dmol canvas child (real-vendor probe), owner T27/T30");
+  });
+
   await test("source pin: nmr.js holds no raw viewer handles or second adapter", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "workbench", "features", "nmr.js"), "utf8");
     for (const banned of ["ACPVisualization.mol3d.create(", "ACPVisualization.mol3d.destroy(", "$3Dmol", "getModel(", "info.viewer"]) {
