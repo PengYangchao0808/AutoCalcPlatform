@@ -11,7 +11,7 @@
 | 契约锚点（只读） | `src/acp/results/frames.py`（`TrajectoryFrame.to_node():64`、`TrajectoryAnnotation.to_annotation():125`、`_ANNOTATION_METADATA_KEYS:90`、`VIEW_REGISTRY:175`）— **本任务零修改**（ANTI #21） |
 | 产品契约 | `src/cccp/calculation/products/*`（T11/T12，`PRODUCT_SCHEMA_VERSION=1`） |
 | status | `delivered`（provider 侧；**未 integrated** — B 应用并验收前不得置 `integrated`） |
-| applied_commit（provider 交付提交） | `<填充于提交后>`（HN-02 入库提交）；`handoff_registry.md` HN-02 行回填同 sha（第二提交） |
+| applied_commit（provider 交付提交） | `4d2c6f8d10370faf84138678e9e10eba26c5f13a`（HN-02 文档 + 五态 fixture 入库提交）；`handoff_registry.md` HN-02 行回填同 sha（第二提交） |
 | 范围 | 本次声明支持的产品：`structure_trajectory` / `curve_scatter` / `vibration` / `derived`（`ProductKind` 全 4 类） |
 
 ---
