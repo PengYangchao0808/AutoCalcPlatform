@@ -26,6 +26,7 @@ from acp.scheduler.structure_source_store import (
     RevisionConflictError,
     StructureSourceStore,
 )
+from acp_services.contracts.access import AccessAction
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,32 @@ def _manager(request: Request) -> Any:
     return manager
 
 
+def _require_structure_source_access(
+    request: Request,
+    *,
+    action: str,
+    project_id: str | None = None,
+    resource_id: str = "",
+) -> None:
+    """Authorize one structure-source entry before any store/indexer work.
+
+    Running before :func:`_get_stores` guarantees a denial creates no state (the
+    singleton store/indexer is never initialized).  The 403 body shape matches
+    the existing error contract.
+    """
+    from acp_services.workspace.entry_authz import EntryClass, default_entry_authorizer
+
+    authorizer = getattr(request.app.state, "entry_authorizer", None) or default_entry_authorizer()
+    decision = authorizer.authorize(
+        EntryClass.STRUCTURE_SOURCES,
+        project_id=project_id,
+        action=action,
+        resource_id=resource_id or (project_id or ""),
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=decision.http_status, detail=decision.error_detail())
+
+
 def _get_stores(request: Request) -> tuple[StructureSourceStore, StructureSourceIndexer]:
     """Lazy-init singleton pair keyed by run_root."""
     run_root = getattr(request.app.state, "run_root", "")
@@ -142,6 +169,11 @@ def get_facets(
     usage_status: str | None = None,
     include_inactive: bool = False,
 ) -> dict[str, Any]:
+    _require_structure_source_access(
+        request,
+        action=AccessAction.READ,
+        project_id=(project_id if not all_projects else None),
+    )
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
     if source_kind and source_group:
@@ -174,6 +206,7 @@ def get_facets(
 
 @router.post("/structure-sources/batch-metadata")
 def batch_metadata(request: Request, body: _BatchBody) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id="batch")
     source_store, _ = _get_stores(request)
     items = []
     for item in body.items:
@@ -202,6 +235,9 @@ def batch_metadata(request: Request, body: _BatchBody) -> dict[str, Any]:
 @router.post("/structure-sources/trash/purge")
 def purge_structure_source_trash(request: Request, body: _TrashPurgeBody) -> dict[str, Any]:
     """Purge selected or all project trash entries without deleting source jobs."""
+    _require_structure_source_access(
+        request, action=AccessAction.WRITE, project_id=body.project_id, resource_id="trash"
+    )
     source_store, _ = _get_stores(request)
     source_uids = (
         source_store.trash_uids(body.project_id)
@@ -246,6 +282,11 @@ def list_structure_sources(
     cursor: str | None = None,
     context_workflow: str | None = None,
 ) -> dict[str, Any]:
+    _require_structure_source_access(
+        request,
+        action=AccessAction.READ,
+        project_id=(project_id if not all_projects else None),
+    )
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
     if source_kind and source_group:
@@ -283,6 +324,7 @@ def list_structure_sources(
 
 @router.get("/structure-sources/{source_uid}")
 def get_structure_source(request: Request, source_uid: str) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.READ, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     projection = source_store.get(source_uid)
     if projection is None:
@@ -292,6 +334,7 @@ def get_structure_source(request: Request, source_uid: str) -> dict[str, Any]:
 
 @router.get("/structure-sources/{source_uid}/candidate")
 def get_candidate(request: Request, source_uid: str) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.READ, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     try:
         return source_store.get_candidate_detail(source_uid)
@@ -303,6 +346,7 @@ def get_candidate(request: Request, source_uid: str) -> dict[str, Any]:
 def patch_candidate_status(
     request: Request, source_uid: str, body: _CandidateStatusBody
 ) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     try:
         return source_store.set_candidate_status(
@@ -325,6 +369,7 @@ def patch_candidate_status(
 def add_candidate_assessment(
     request: Request, source_uid: str, body: _AssessmentBody
 ) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     try:
         return source_store.add_assessment(
@@ -345,6 +390,7 @@ def add_candidate_assessment(
 
 @router.patch("/structure-sources/{source_uid}/metadata")
 def patch_metadata(request: Request, source_uid: str, body: _MetadataPatchBody) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     projection = source_store.get(source_uid)
     if projection is None:
@@ -395,6 +441,7 @@ def patch_metadata(request: Request, source_uid: str, body: _MetadataPatchBody) 
 
 @router.get("/projects/{project_id}/structure-tags")
 def list_project_tags(request: Request, project_id: str) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.READ, project_id=project_id)
     source_store, _ = _get_stores(request)
     tags = source_store.project_tag_counts(project_id)
     return {"tags": tags}
@@ -402,6 +449,7 @@ def list_project_tags(request: Request, project_id: str) -> dict[str, Any]:
 
 @router.post("/projects/{project_id}/structure-tags/rename")
 def rename_project_tag(request: Request, project_id: str, body: _TagRenameBody) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, project_id=project_id)
     source_store, _ = _get_stores(request)
     affected = source_store.rename_project_tag(project_id, body.source, body.target)
     return {"affected": affected}
@@ -409,6 +457,7 @@ def rename_project_tag(request: Request, project_id: str, body: _TagRenameBody) 
 
 @router.post("/projects/{project_id}/structure-tags/remove")
 def remove_project_tag(request: Request, project_id: str, body: _TagRemoveBody) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, project_id=project_id)
     source_store, _ = _get_stores(request)
     affected = source_store.remove_project_tag(project_id, body.tag)
     return {"affected": affected}
