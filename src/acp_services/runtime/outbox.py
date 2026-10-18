@@ -45,7 +45,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Protocol, runtime_checkable
 
 from acp_services.contracts.events import (
@@ -54,6 +53,7 @@ from acp_services.contracts.events import (
     OwnerType,
 )
 from acp_services.runtime.events import EventLogPort
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 __all__ = [
     "EventOutboxStorePort",
@@ -70,10 +70,6 @@ logger = logging.getLogger(__name__)
 #: payload must never contain one of these keys, otherwise ``**payload`` would
 #: silently overwrite the carrier and corrupt the record.
 _RESERVED_PAYLOAD_KEYS = frozenset({"type", "timestamp", "idempotency_key", "event_id"})
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _coerce_scope(value: EventScope | str) -> EventScope:

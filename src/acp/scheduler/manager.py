@@ -84,6 +84,7 @@ from acp_services.data.operations import (
     PrepareOperationWorker,
     PrepareRequest,
 )
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
 
 logger = logging.getLogger(__name__)
@@ -203,10 +204,6 @@ if TYPE_CHECKING:
     from acp.scheduler.remote.node_manager import NodeManager
     from acp.scheduler.remote.runner import RemotePollObservation
     from acp.scheduler.remote.ssh import SSHConnectionPool
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _load_review_payload(work_dir: Path) -> dict[str, Any] | None:

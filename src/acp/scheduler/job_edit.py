@@ -21,11 +21,11 @@ import hashlib
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from acp.scheduler.jobs import JobRecord, JobSpec, scan_method_flags
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -890,10 +890,6 @@ def diff_editable_specs(old: dict[str, Any], new: dict[str, Any]) -> list[dict[s
 
 
 # --- idempotency operation store (plan §9/§10) --------------------------------
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 class JobEditOperationStore:

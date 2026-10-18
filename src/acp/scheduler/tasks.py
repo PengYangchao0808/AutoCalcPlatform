@@ -19,13 +19,13 @@ import threading
 import unicodedata
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from acp.scheduler.jobs import JobRecord
 from acp.scheduler.migrations import migrate
 from acp.scheduler.store import row_to_record
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +146,6 @@ _SYNC_COLUMNS: tuple[str, ...] = (
     "result_manifest_path",
     "updated_at",
 )
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 class NameRevisionConflictError(Exception):

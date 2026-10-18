@@ -59,6 +59,7 @@ from acp.scheduler.processctl import find_task_processes, pid_is_alive, process_
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +147,6 @@ class LocalCleanupProtocol(Protocol):
     """
 
     def pre_submit_housekeeping(self) -> Any: ...
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _safe_timestamp(value: object) -> float:

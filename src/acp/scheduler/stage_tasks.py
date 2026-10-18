@@ -7,20 +7,16 @@ import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
 from acp.calculations.pes.scan import PES_SCAN_STAGES
 from acp.scheduler.jobs import JobSpec, censo_preset_from_method
 from acp.scheduler.migrations import migrate
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 _TERMINAL_TASK_STATES = {"completed", "failed", "cancelled", "skipped"}
 _EVENT_PRIORITY = {"started": 0, "completed": 1, "failed": 2}
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
