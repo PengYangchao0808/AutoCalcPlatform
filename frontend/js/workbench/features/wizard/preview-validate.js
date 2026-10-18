@@ -18,10 +18,11 @@
  * The method-config shell in wizard.js keeps thin same-name delegates, so
  * every call site is unchanged during migration.
  *
- * The 3D viewer CREATION (`previewViewer = ACPVisualization.mol3d.create`) is
- * deliberately left in wizard.js: it is T10's migration scope. This slice only
- * owns the preview REBUILD, which drives the shared page-global `previewViewer`
- * (declared in reaction-builder.js) through the global `initPreviewViewer`.
+ * The 3D viewer CREATION lives in wizard.js `initPreviewViewer` (T10: a
+ * bounded `ACPVisualization.scene` instance — model/shape/label tokens, no
+ * native handles). This slice owns the preview REBUILD, which drives the
+ * shared page-global `previewViewer` / `previewModel` (declared in
+ * reaction-builder.js) through the global `initPreviewViewer`.
  *
  * H-4 fix (task-16 §7): a late batch-config preview must never write into a
  * detached/reopened form. `createBatchConfigPreview` aborts the previously
@@ -189,7 +190,7 @@ window.ACPWizardPreviewValidate = (function () {
             fontSize: 10, fontColor: "white", backgroundColor: "black",
             backgroundOpacity: 0.6, showBackground: true,
             alignment: "center", inFront: true,
-          }, { model: previewModel, serial: a.serial != null ? a.serial : i });
+          }, { serial: a.serial != null ? a.serial : i });
         }
       }
       previewViewer.render();
