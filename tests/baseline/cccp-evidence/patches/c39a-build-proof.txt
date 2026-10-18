@@ -1,0 +1,109 @@
+########################################################################
+# C08-s0 (T56 / C39a) first-batch build spec — raw evidence log
+# generated: 2026-10-18T12:49:38Z  host: redacted-host
+# interpreter: /usr/bin/python3.11 (Python 3.11.13)
+########################################################################
+
+== [1] repo snapshot ==
+0394393b33f1c4900c8eb17da343f7dbdc2098bb
+ M docs/ACP_Architecture_Adjustment_Plan_20261016.md
+ M scripts/verify_cccp_isolation.py
+ M src/acp/calculations/identity.py
+ M tests/baseline/refactor-evidence/e2e-task-root.txt
+?? docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md
+?? docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md
+?? src/cccp/analysis/
+?? src/cccp/calculation/products/
+?? tests/baseline/cccp-evidence/patches/
+?? tests/baseline/cccp-evidence/workflow_task_map.md
+?? tests/fixtures/science_products/
+
+== [2] asset digests (sha256sum) ==
+bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65  <repo>/src/acp/nmr/models/atomic_reps.gz
+246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309  <repo>/src/acp/nmr/models/c_w_kde_mean_s_0.025.p
+c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd  <repo>/src/acp/nmr/models/folded_scaled_errors.p
+e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64  <repo>/src/acp/nmr/models/frag_reps.gz
+2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e  <repo>/src/acp/nmr/models/i_w_kde_mean_s_0.025.p
+55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146  <repo>/src/acp/nmr/models/LICENSE-DP5
+f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0  <repo>/src/acp/nmr/models/NOTICE.md
+5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7  <repo>/src/acp/nmr/models/tms_references.txt
+
+== [3] asset sizes (stat -c '%s %n') ==
+22171041 <repo>/src/acp/nmr/models/atomic_reps.gz
+79518 <repo>/src/acp/nmr/models/c_w_kde_mean_s_0.025.p
+851489 <repo>/src/acp/nmr/models/folded_scaled_errors.p
+18044581 <repo>/src/acp/nmr/models/frag_reps.gz
+24353668 <repo>/src/acp/nmr/models/i_w_kde_mean_s_0.025.p
+1175 <repo>/src/acp/nmr/models/LICENSE-DP5
+3204 <repo>/src/acp/nmr/models/NOTICE.md
+4578 <repo>/src/acp/nmr/models/tms_references.txt
+
+== [4] directory apparent size (du -sb / du -sh) ==
+65513350	<repo>/src/acp/nmr/models
+63M	<repo>/src/acp/nmr/models
+
+== [4b] sum of file sizes only vs du (4096 = directory entry) ==
+sum_file_bytes= 65509254 count= 8
+
+== [5] patch applicability: git apply --check ==
+# base blob HEAD:pyproject.toml = 25404ebd884066268a428948de8eb7d4cab23d22
+# last commit touching pyproject.toml = f5f70642890fabf62663a268d1bbe6548a32a114 feat(services): dependency-injection contracts for transitional assembly (no direct old-impl imports)
+# worktree pyproject.toml sha256 = 0c24617eb1a6ef5970e159fccf89a211e42183ddbbf356d105be4097ff274829
+正在检查补丁 pyproject.toml...
+CHECK_EXIT=0
+
+== [6] git apply --stat ==
+ pyproject.toml |   10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+== [7] patch sha256 ==
+0059eb6b20d0ea05b231fdf3e8d0b854718b166789d59e6f2dd1ff23621f3450  <repo>/tests/baseline/cccp-evidence/patches/c39a-pyproject-first-batch.patch
+
+== [8] toolchain ==
+build 1.6.1 setuptools 65.5.1
+wheel 0.48.0 (installed under /tmp/opencode/builddeps for --no-isolation)
+
+== [9] BUILD A — current tree + patched pyproject (cccp.analysis.nmr absent) ==
+$ cd /tmp/opencode/t56-build/Aclean && PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/opencode/t56-build/distA .
+removing build/bdist.linux-x86_64/wheel
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+Successfully built acp-0.2.0-py3-none-any.whl
+acp-0.2.0-py3-none-any.whl
+-- namelist: acp/nmr/models/* --
+   acp/nmr/models.py
+   acp/nmr/models/LICENSE-DP5
+   acp/nmr/models/NOTICE.md
+   acp/nmr/models/atomic_reps.gz
+   acp/nmr/models/c_w_kde_mean_s_0.025.p
+   acp/nmr/models/folded_scaled_errors.p
+   acp/nmr/models/frag_reps.gz
+   acp/nmr/models/i_w_kde_mean_s_0.025.p
+   acp/nmr/models/tms_references.txt
+-- namelist: cccp/* summary --
+  cccp/ entries = 90
+  cccp/analysis/ = ['cccp/analysis/__init__.py', 'cccp/analysis/identity.py']
+
+== [10] BUILD B — synthetic post-T55 layout (src/cccp/analysis/nmr/{__init__.py,model_assets/atomic_reps.gz}) + PATCHED pyproject ==
+$ 90:# single CCCP asset location `src/cccp/analysis/nmr/model_assets/`
+96:"cccp.analysis.nmr" = ["model_assets/*"]
+$ cd /tmp/opencode/t56-build/Bclean && PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/opencode/t56-build/distBclean .
+removing build/bdist.linux-x86_64/wheel
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+Successfully built acp-0.2.0-py3-none-any.whl
+-- namelist: cccp/analysis/nmr/* --
+   cccp/analysis/nmr/__init__.py
+   cccp/analysis/nmr/model_assets/atomic_reps.gz
+
+== [11] CONTROL — same synthetic layout, PRISTINE pyproject (patch reverted) ==
+removing build/bdist.linux-x86_64/wheel
+WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
+Successfully built acp-0.2.0-py3-none-any.whl
+-- namelist: cccp/analysis/nmr/* --
+   ['cccp/analysis/nmr/__init__.py']
+  => model_assets/atomic_reps.gz ABSENT without the patch; PRESENT with it.
