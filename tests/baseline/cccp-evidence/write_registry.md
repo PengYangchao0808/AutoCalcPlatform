@@ -234,6 +234,7 @@ git -C "$REPO" worktree remove "$WT" --force
 | `scripts/check_grep_gates.py`（4 pin）、`scripts/verify_cccp_isolation.py` | `B请求` | 全局护栏脚本；pin 禁禁用 | RT-N/A | C(请求)→B | T48 | `python3.11 scripts/check_grep_gates.py` PASS | D-KEEP | pending |
 | 根 `README.md`、`AGENTS.md`（root + nested）、`docs/**`（含主方案、索引、Plan_3） | `B请求` | 根文档/主方案（B 表第 7 行） | RT-N/A | C(请求)→B | 各波 | B 应用后文档一致 | D-KEEP | pending |
 | `src/acp/scheduler/{stage_tasks,registration,job_edit,store,events}.py`、`scheduler/remote/script_gen.py` | `B补丁` | T2 registry-string/动态 provider/远端允许集；平台调度 | RT-CONV（保留调度预建文件全集，ANTI #11） | C→B | T3/T7 | A-PATCH + A-DIR | D-KEEP | pending |
+| `tests/test_packaging_assets.py`（`test_package_data_covers_all_nmr_model_assets` / `test_critical_nmr_assets_exist` / `_CRITICAL_ASSETS`） | `B请求`（打包测试） | **B请求补登（T55）**：T55 将 8 资产迁至 `src/cccp/analysis/nmr/model_assets/`；该共享打包测试仍指旧 `src/acp/nmr/models/`，须与 `pyproject.toml` 首批补丁（§4.8）**同批**应用（补丁：`patches/t55-c39a-packaging-test.patch`）。**T50/T51 reconciliation**：本行 T55 产生时补登，T50/T51 汇总时并入共享打包测试清单（原 T5 registry 未含此文件） | RT-N/A | C(请求)→B | T39/T40a（B40a） | B 应用两补丁后 `pytest tests/test_packaging_assets.py` 全绿；两态证据见 `build_spec_first_batch.md §1d` + T55 evidence | D-KEEP | pending |
 
 ## 5. 覆盖交叉核对（T2 台账 acp 文件 ↔ 本表行）
 
