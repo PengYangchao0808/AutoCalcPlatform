@@ -57,6 +57,7 @@
 | 初始化向导（run_init） | `src/acp/init_wizard/flows.py:348` | `acp.init_wizard.flows.run_init`（`acp init`） | `src/acp/cli.py:4102` | 统一 init：使用方式/档位/组件/计划应用/doctor；接收 todo 36 | `tests/test_acp_init_cli.py`；`tests/test_acp_init_persist.py` |
 | 历史 manifest 只读兼容（compat/legacy） | `src/acp/compat/legacy/manifests.py:111` | `acp.compat.legacy.manifests.read_s2_path_manifest` | `src/acp/results/`（历史任务读取）；`src/acp/compat/legacy/layouts.py` | 历史 reader 逐项关闭并同步契约；接收 todo 70 | `tests/test_legacy_layout_compat.py` |
 | 工作流注册表（WorkflowRegistryEntry） | `src/acp/workflows/registry.py:15` | `acp.workflows.registry.list_workflow_entries` | `src/acp/cli.py`（子命令映射）；`src/acp/api/`（catalog 端点） | CLI/Web 共用 Services 用例后收口；接收 todo 35 | `tests/test_core_workflow.py`；`tests/test_acp_workflow_task_matrix.py` |
+| 持久 prepare operation（PrepareOperationService） | `src/acp_services/data/operations.py:498` | `acp.services_data_bootstrap.build_prepare_executor`（Services 侧执行器注入；旧 `acp.scheduler.manager._queue_catalog_prefetch` 改为入队持久操作） | `src/acp/scheduler/manager.py:4765`（终态后台预取与启动恢复） | 旧进程内预取队列已删除（todo 13 已交付）；transfer 校验/发布与 availability 经 prepare 操作接管；接收 todo 14 至 todo 16 | `tests/test_services_prepare_operations.py`；`tests/test_acp_remote_catalog_prefetch.py` |
 
 ## 覆盖说明
 

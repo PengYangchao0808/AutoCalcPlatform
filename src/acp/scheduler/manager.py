@@ -77,6 +77,12 @@ from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStateConflictError, JobStore
 from acp.scheduler.tasks import PROJECTION_RECONCILE_BATCH, TaskIndex
 from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
+from acp_services.data.contracts import ResourceKind
+from acp_services.data.operations import (
+    PrepareOperationService,
+    PrepareOperationWorker,
+    PrepareRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -421,10 +427,16 @@ class JobManager:
         # code path may acquire ``_lock`` and then wait for this lock.
         self._side_effect_lock = threading.Lock()
 
-        # Background remote-catalog prefetch (terminal remote jobs).  Worker
-        # is started lazily on first enqueue; see _queue_catalog_prefetch.
+        # Persistent prepare operations (B02-3/todo 13): the terminal
+        # remote-catalog prefetch is a durable DB operation, not an in-process
+        # queue that a restart drops.  The queue below is only a low-latency
+        # wake signal; the ``data_operations`` table is the authority.
         self._catalog_prefetch_queue: queue.Queue[str | None] = queue.Queue()
         self._catalog_prefetch_thread: threading.Thread | None = None
+        self._prepare_worker_stop = threading.Event()
+        self._prepare_operations = PrepareOperationService(self.store.db_path)
+        self._prepare_worker: PrepareOperationWorker | None = None
+        self._prepare_executor = self._build_prepare_executor()
 
         # Background local-cleanup thread (Phase 5B step 5B.3).
         self._cleanup_thread: threading.Thread | None = None
@@ -3015,6 +3027,7 @@ class JobManager:
             "_shutdown_event",
             "_cleanup_stop_event",
             "_release_gc_stop",
+            "_prepare_worker_stop",
         ):
             event = getattr(self, event_name, None)
             if event is not None:
@@ -3057,6 +3070,10 @@ class JobManager:
             # 2. Only now release the in-process registry entry and file lock.
             self._release_manager_lock()
             self._release_run_root_claim()
+            try:
+                self._prepare_operations.close()
+            except Exception:
+                logger.debug("Error closing prepare-operation store", exc_info=True)
             # 3. Cancel any remaining job signals / close pools (ownership-neutral).
             with self._lock:
                 for ev in self._cancel_events.values():
@@ -4703,78 +4720,108 @@ class JobManager:
             )
 
     # ------------------------------------------------------------------ #
-    # Remote catalog prefetch (terminal remote jobs)
+    # Remote catalog prefetch (terminal remote jobs) — persistent (todo 13)
     # ------------------------------------------------------------------ #
 
-    def _queue_catalog_prefetch(self, job_id: str) -> None:
-        """Enqueue one terminal remote job for background catalog prefetch.
+    def _build_prepare_executor(self) -> Any:
+        from acp.services_data_bootstrap import build_prepare_executor
 
-        No-op when remote fetching is not configured.  The worker thread is
-        created lazily on the first enqueue and reused afterwards.  Once the
-        manager is closing no worker is created/registered/started; the queued
-        item is best-effort and may be dropped.
-        """
+        return build_prepare_executor(
+            job_lookup=self.store.get,
+            cache_provider=lambda: self.structure_cache,
+            is_remote=self._is_remote_job,
+        )
+
+    def _prepare_request(self, record: JobRecord) -> PrepareRequest:
+        workflow = str(record.spec.workflow or "")
+        return PrepareRequest(
+            job_id=record.id,
+            attempt=record.attempt,
+            resource_id=f"catalog:{workflow}",
+            resource_kind=ResourceKind.CACHE,
+            resource_digest=f"{record.id}\x1f{record.attempt}\x1f{workflow}",
+            permission_scope="local-single",
+            payload={"workflow": workflow, "job_id": record.id, "attempt": record.attempt},
+        )
+
+    def _ensure_prepare_worker(self) -> None:
         if self._remote_fetcher is None:
             return
-        self._catalog_prefetch_queue.put(job_id)
         with self._lock:
             if self._closing:
                 return
-            thread = self._catalog_prefetch_thread
-            if thread is None or not thread.is_alive():
-                thread = threading.Thread(
-                    target=self._catalog_prefetch_loop,
-                    daemon=True,
-                    name="acp-catalog-prefetch",
+            worker = self._prepare_worker
+            if worker is None or not worker.is_alive:
+                worker = PrepareOperationWorker(
+                    self._prepare_operations,
+                    self._prepare_executor,
+                    stop_event=self._prepare_worker_stop,
+                    wake_queue=self._catalog_prefetch_queue,
                 )
-                self._catalog_prefetch_thread = thread
-                thread.start()
+                worker.start()
+                self._prepare_worker = worker
+                self._catalog_prefetch_thread = worker.thread
 
-    def _catalog_prefetch_loop(self) -> None:
-        """Drain the prefetch queue; one failure never kills the worker."""
-        while True:
-            job_id = self._catalog_prefetch_queue.get()
-            try:
-                if job_id is None:
-                    return
-                self._prefetch_remote_catalog(job_id)
-            except Exception:
-                logger.warning("Remote catalog prefetch failed for %s", job_id, exc_info=True)
-            finally:
-                self._catalog_prefetch_queue.task_done()
+    def _queue_catalog_prefetch(self, job_id: str) -> None:
+        """Enqueue one terminal remote job as a persistent prepare operation.
+
+        No-op when remote fetching is not configured.  The operation is durable
+        (deduplicated by its stable scoped key); the wake signal below only
+        shortens the worker's poll latency and is never the source of truth.
+        """
+        if self._remote_fetcher is None:
+            return
+        record = self.store.get(job_id)
+        if record is None or not record.status.is_terminal or not self._is_remote_job(record):
+            return
+        try:
+            self._prepare_operations.enqueue(self._prepare_request(record))
+        except Exception:
+            logger.warning("Failed to persist prepare operation for %s", job_id, exc_info=True)
+            return
+        self._ensure_prepare_worker()
+        try:
+            self._catalog_prefetch_queue.put(job_id)
+        except Exception:  # pragma: no cover - unbounded queue never raises
+            pass
 
     def _prefetch_remote_catalog(self, job_id: str) -> None:
         """Pull one terminal remote job's small catalog files into the cache.
 
         The backend owns this sync so that ``availability`` flips from
         ``pending_fetch`` to ``ready`` without depending on a browser issuing
-        ``?fetch=1`` (cached workbench JS may lack the terminal retry).
-        Geometry stays lazy; failures are logged and never propagate.
+        ``?fetch=1`` (cached workbench JS may lack the terminal retry).  Geometry
+        stays lazy; failures are logged and never propagate.  The real fetch is
+        delegated to the injected executor so the worker and this entry point
+        share one implementation.
         """
-        record = self.store.get(job_id)
-        if record is None or not record.status.is_terminal:
-            return
-        if not self._is_remote_job(record):
-            return
-        cache = self.structure_cache
-        workflow = str(record.spec.workflow or "")
-        if cache.catalog_ready(Path(record.work_dir), workflow):
-            return
-        if cache.catalog_ready(cache.job_root(job_id), workflow):
-            return
-        if cache.fetch_catalog(record, workflow) is not None:
+        result = self._prepare_executor.prefetch(job_id)
+        if result.prepared and result.detail == "fetched":
             logger.info("Prefetched remote structure catalog for job %s", job_id)
-        else:
-            logger.debug("Remote structure catalog not ready after prefetch for %s", job_id)
+        elif not result.prepared:
+            logger.debug(
+                "Remote structure catalog not ready after prefetch for %s (%s)",
+                job_id,
+                result.detail,
+            )
 
     def _queue_startup_catalog_prefetch(self) -> None:
-        """Enqueue recent terminal remote jobs whose catalog is not cached yet.
+        """Replay undecided prepare operations and enqueue recent terminal jobs.
 
         Repairs jobs that reached a terminal state before this process started
-        (e.g. across an upgrade) so their viewers are ready on first open.
+        (e.g. across an upgrade) so their viewers are ready on first open, and
+        replays operations an earlier process left undecided (DB authority).
         """
         if self._remote_fetcher is None:
             return
+        try:
+            report = self._prepare_operations.recover()
+            if report.requeued:
+                logger.info(
+                    "Recovered %d undecided prepare operation(s) on startup", report.requeued
+                )
+        except Exception:
+            logger.warning("Prepare-operation recovery failed", exc_info=True)
         queued = 0
         try:
             for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
@@ -4795,6 +4842,8 @@ class JobManager:
             logger.warning("Startup remote catalog prefetch sweep failed", exc_info=True)
         if queued:
             logger.info("Queued %d remote catalog prefetch(es) on startup", queued)
+        if queued or self._prepare_operations.pending_count() > 0:
+            self._ensure_prepare_worker()
 
     def _poll_job(self, job_id: str) -> None:
         """Single non-blocking check of one job's status.
