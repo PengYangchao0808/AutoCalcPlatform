@@ -12,11 +12,8 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
-import shutil
-from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -138,65 +135,6 @@ def resolve_orca_maxcore(
             f"({nproc} * {maxcore} = {nproc * maxcore} MB)"
         )
     return maxcore
-
-
-def find_executable(program_name: str, fallback_paths: Optional[list] = None) -> Tuple[Optional[Path], str]:
-    """
-    Find executable in system PATH or fallback locations.
-
-    Args:
-        program_name: Name of executable
-        fallback_paths: List of fallback paths to check
-
-    Returns:
-        Tuple of (Path to executable, source)
-        - Path or None if not found
-        - source: 'PATH', 'FALLBACK', or 'NOT_FOUND'
-    """
-    exe = shutil.which(program_name)
-    if exe:
-        return Path(exe), 'PATH'
-
-    if fallback_paths:
-        for path_str in fallback_paths:
-            path = Path(path_str)
-            if path.is_file() and os.access(path, os.X_OK):
-                return path.resolve(), 'FALLBACK'
-            if path.is_dir():
-                exe_path = path / program_name
-                if exe_path.is_file() and os.access(exe_path, os.X_OK):
-                    return exe_path.resolve(), 'FALLBACK'
-
-    return None, 'NOT_FOUND'
-
-
-def resolve_executable_config(config: Dict[str, Any], program_key: str) -> Tuple[Path, Dict[str, Any]]:
-    """
-    Resolve executable path from configuration.
-
-    Args:
-        config: Configuration dictionary
-        program_key: Key for executable (e.g., 'gaussian', 'orca')
-
-    Returns:
-        Tuple of (executable_path, resolved_config)
-    """
-    executables = config.get('executables', {})
-    prog_config = executables.get(program_key, {})
-
-    prog_path = prog_config.get('path', program_key)
-    exe = Path(prog_path)
-
-    if not exe.is_absolute():
-        exe, _ = find_executable(prog_path)
-
-    fallback_paths = prog_config.get('fallback_paths', [])
-    if not exe or not exe.exists():
-        exe, source = find_executable(prog_path, fallback_paths)
-        if exe:
-            logger.info(f"Using fallback {program_key}: {exe} ({source})")
-
-    return exe, prog_config
 
 
 def get_system_resources() -> Dict[str, int]:
