@@ -76,6 +76,7 @@ from acp.scheduler.runner import (
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStateConflictError, JobStore
 from acp.scheduler.tasks import PROJECTION_RECONCILE_BATCH, TaskIndex
+from acp.services_events_bootstrap import open_outbox_delivery
 from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
 from acp_services.data.contracts import ResourceKind
 from acp_services.data.operations import (
@@ -83,6 +84,7 @@ from acp_services.data.operations import (
     PrepareOperationWorker,
     PrepareRequest,
 )
+from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
 
 logger = logging.getLogger(__name__)
 
@@ -455,6 +457,7 @@ class JobManager:
             self._rebuild_reservations()
         self._dispatch_queued_jobs()
         self._queue_startup_catalog_prefetch()
+        self._sweep_outbox()
         self._poll_thread.start()
         self._reconcile_thread.start()
         self._activate_run_root()
@@ -3090,6 +3093,34 @@ class JobManager:
     def _event_log(self, record: JobRecord) -> JobEventLog:
         return JobEventLog(runtime_file(record.work_dir, "events.jsonl"))
 
+    def _outbox_event_path(self, job_id: str) -> Path:
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(job_id)
+        return runtime_file(record.work_dir, "events.jsonl")
+
+    def _deliver_outbox(self, job_id: str | None = None) -> OutboxDeliveryResult | None:
+        """Deliver committed outbox rows to the durable JSONL (post-commit).
+
+        Delivery only appends events — it never touches job state.  A failure is
+        non-fatal: the row stays pending and the next sweep retries it.
+        """
+        if not self.store.has_pending_outbox(job_id=job_id):
+            return None
+        try:
+            service = open_outbox_delivery(self.store, path_for=self._outbox_event_path)
+            return service.deliver_pending(job_id=job_id)
+        except Exception:
+            logger.debug("outbox delivery failed", exc_info=True)
+            return None
+
+    def _sweep_outbox(self) -> None:
+        """Deliver every undelivered outbox row (startup + periodic recovery)."""
+        try:
+            self._deliver_outbox()
+        except Exception:
+            logger.debug("outbox sweep failed", exc_info=True)
+
     def _write_job_json(self, record: JobRecord) -> None:
         path = Path(record.work_dir) / "job.json"
         path.write_text(
@@ -4093,22 +4124,23 @@ class JobManager:
                     status=JobStatus.CANCELLED,
                     completed_at=_utc_now_iso(),
                     result=result_payload,
+                    outbox=OutboxEventSpec(
+                        event_type="remote.cancel_confirmed",
+                        payload={
+                            "job_id": fresh.id,
+                            "lsf_job_id": lsf_job_id,
+                            "evidence": evidence,
+                            "attempt": fresh.attempt,
+                        },
+                        attempt=fresh.attempt,
+                    ),
                 )
             except JobStateConflictError:
                 continue
             self._sync_task_status(stored)
             self._write_job_json(stored)
             self._stage_task_observer.finalize_job(stored.id, "cancelled")
-            try:
-                self._event_log(stored).append(
-                    "remote.cancel_confirmed",
-                    job_id=stored.id,
-                    lsf_job_id=lsf_job_id,
-                    evidence=evidence,
-                    attempt=stored.attempt,
-                )
-            except OSError:
-                logger.debug("cancel_confirmed event write failed for %s", stored.id)
+            self._deliver_outbox(stored.id)
             self._release_reservation(stored.id)
             self._dispatch_queued_jobs()
             return
@@ -5352,6 +5384,7 @@ class JobManager:
                 elif self._pending_orphans(record.result or {}):
                     self._orphan_cancel_pass(record)
         self._reconcile_task_projection()
+        self._sweep_outbox()
 
     def _reconcile_task_projection(self) -> None:
         """Repair one bounded batch of jobs/tasks projection drift.

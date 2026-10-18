@@ -7,6 +7,14 @@ Re-exports only (ANTI #5): the frozen-plan worker lives in
 
 from __future__ import annotations
 
+from acp_services.runtime.outbox import (
+    EventOutboxStorePort,
+    OutboxDeliveryError,
+    OutboxDeliveryResult,
+    OutboxDeliveryService,
+    OutboxEventSpec,
+    OutboxRecord,
+)
 from acp_services.runtime.receipts import (
     ReceiptRejectedError,
     ReceiptVerdict,
@@ -37,11 +45,17 @@ __all__ = [
     "CccpTaskExecutor",
     "DeclaredPlanVerifier",
     "DependencyNotSatisfiedError",
+    "EventOutboxStorePort",
     "ExecutionScope",
     "FrozenPlan",
     "FrozenPlanIdentity",
     "FrozenStep",
     "FrozenWorker",
+    "OutboxDeliveryError",
+    "OutboxDeliveryResult",
+    "OutboxDeliveryService",
+    "OutboxEventSpec",
+    "OutboxRecord",
     "PlanVerificationError",
     "PlanVerificationPort",
     "ReceiptConflictError",

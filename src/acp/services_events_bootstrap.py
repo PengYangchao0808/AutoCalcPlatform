@@ -21,15 +21,23 @@ Author: ACP Services (B lane, todo 22).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from acp.scheduler.events import JobEventLog
-from acp_services.contracts.events import EventScope, OwnerType
+from acp.scheduler.store import JobStore
+from acp_services.contracts.events import EventEnvelope, EventScope, OwnerType
 from acp_services.runtime.events import PersistentEventService
+from acp_services.runtime.outbox import (
+    OutboxDeliveryService,
+    OutboxRecord,
+)
 
 __all__ = [
     "JobEventLogPort",
+    "JobStoreOutboxPort",
+    "open_outbox_delivery",
     "open_persistent_event_service",
     "open_persistent_event_service_for_path",
 ]
@@ -99,4 +107,55 @@ def open_persistent_event_service_for_path(
         owner_id=owner_id,
         scope=scope,
         retention=retention,
+    )
+
+
+class JobStoreOutboxPort:
+    """Adapt :class:`JobStore`'s SQL outbox to ``EventOutboxStorePort``.
+
+    A pass-through of the owner-repository transaction boundary: the rows were
+    written in the same commit as the state change; this adapter only lets the
+    Services delivery service read and acknowledge them.
+    """
+
+    __slots__ = ("_store",)
+
+    def __init__(self, store: JobStore) -> None:
+        self._store = store
+
+    def pending_outbox(
+        self, *, job_id: str | None = None, limit: int | None = None
+    ) -> list[OutboxRecord]:
+        return self._store.pending_outbox(job_id=job_id, limit=limit)
+
+    def mark_outbox_delivered(self, event_id: str, *, seq: int, delivered_at: str) -> bool:
+        return self._store.mark_outbox_delivered(event_id, seq=seq, delivered_at=delivered_at)
+
+    def mark_outbox_failed(self, event_id: str, *, error: str) -> None:
+        self._store.mark_outbox_failed(event_id, error=error)
+
+
+def open_outbox_delivery(
+    store: JobStore,
+    *,
+    path_for: Callable[[str], Path | str],
+    notifier: Callable[[EventEnvelope], None] | None = None,
+) -> OutboxDeliveryService:
+    """Wire the Services outbox delivery onto the legacy ``JobStore`` + JSONL.
+
+    ``path_for(job_id) -> Path`` resolves the per-task ``events.jsonl``;
+    ``notifier`` is the post-commit SSE wake hook (called only after the fact is
+    durable).  The delivery writes the legacy-compatible record shape (``type`` /
+    ``idempotency_key`` / ``event_id``) so the old ``after_seq`` SSE reader keeps
+    working unchanged, while :class:`PersistentEventService` migrates the same
+    records into envelopes on read.
+    """
+
+    def _log_for(owner_id: str):  # noqa: ANN202 - local closure
+        return JobEventLogPort(JobEventLog(path_for(owner_id)))
+
+    return OutboxDeliveryService(
+        outbox=JobStoreOutboxPort(store),
+        log_for=_log_for,
+        notifier=notifier,
     )
