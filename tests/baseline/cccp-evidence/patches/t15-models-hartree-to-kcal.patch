@@ -1,0 +1,13 @@
+diff --git a/src/acp/core/models.py b/src/acp/core/models.py
+index 8459113..cfcbd77 100644
+--- a/src/acp/core/models.py
++++ b/src/acp/core/models.py
+@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, cast
+ 
+ import numpy as np
+ 
+-HARTREE_TO_KCAL = 627.5094740631
++from cccp.utils.constants import HARTREE_TO_KCAL
+ 
+ if TYPE_CHECKING:
+     from cccp.core.candidates import CandidateSet, ConformerCandidate
