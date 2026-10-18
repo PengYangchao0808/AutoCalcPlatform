@@ -146,6 +146,15 @@ _ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset(
 )
 _ENRICHMENT_CAP = 200
 
+#: Transitional per-row detail-fetch budget for the retained compatibility
+#: branch (``_enrich_active_rows``).  The authoritative list path reads the
+#: prepared projection and performs zero per-row detail reads; the compat branch
+#: is only reached for rows an unprepared snapshot does not cover, and is hard
+#: capped here so a cold/uncovered list can never fan out one detail read per
+#: row.  Deletion of the branch is gated on A-lane A04 "zero consumers" evidence
+#: (plan todo 19); B03-3 pins the cap so a future change can only shrink it.
+_LIST_DETAIL_FETCH_BUDGET: int = _ENRICHMENT_CAP
+
 #: Compatibility switch for the pre-projection enrichment path.  The plan
 #: (``acp-parallel-plan-2-services`` todo 19) keeps ``_enrich_active_rows`` as a
 #: retained compatibility branch — deletion requires A-lane A04 "zero consumers"
@@ -282,7 +291,7 @@ def _enrich_active_rows(
         dict.fromkeys(
             row["id"] for row in rows if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
         )
-    )[:_ENRICHMENT_CAP]
+    )[:_LIST_DETAIL_FETCH_BUDGET]
     records = manager.store.get_many(active_ids)
     snapshots = {}
     for job_id, record in records.items():
@@ -545,7 +554,16 @@ def get_task_view(
     offset: int = Query(default=0, ge=0),
     include_facets: bool = True,
 ) -> V2TaskViewResponse:
-    """Grouped task view with filters, facets, and counts (T3)."""
+    """Grouped task view with filters, facets, and counts (T3).
+
+    The list path is a single bounded query: ``query_project_tasks`` builds one
+    SELECT per request from the resolved project scope + filters + pagination
+    (fixed SQL budget, no per-row detail fetch).  Rows are then enriched from the
+    prepared projection snapshot in memory; the retained compatibility branch is
+    the only per-row detail reader and is hard-capped at
+    ``_LIST_DETAIL_FETCH_BUDGET``.  ``total``/``counts``/``facets`` stay
+    whole-scope and ``offset``/``next_offset`` pagination is preserved.
+    """
     from acp.scheduler.task_views import (
         ArchivedFilter,
         GroupBy,
