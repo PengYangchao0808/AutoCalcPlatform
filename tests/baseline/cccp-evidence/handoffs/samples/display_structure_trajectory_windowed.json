@@ -1,0 +1,77 @@
+{
+  "display_kind": "structure_trajectory_display_v1",
+  "source_product": {
+    "product_kind": "structure_trajectory",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "input_digest": "sha256:abababababababababababababababababababababababababababababababab"
+  },
+  "state": "available",
+  "complete": true,
+  "coordinate_units": "angstrom",
+  "topology_source": "orca_xyz",
+  "atom_order": [
+    "C:0",
+    "H:0",
+    "H:1",
+    "O:0"
+  ],
+  "frame_window": {
+    "offset": 0,
+    "limit": 1,
+    "total_frames": 2,
+    "subsampled": true,
+    "frame_indices_in_window": [
+      0
+    ],
+    "frame_indices_omitted": [
+      1
+    ]
+  },
+  "frames": [
+    {
+      "frame_id": "structure_trajectory:frame:0",
+      "frame_index": 0,
+      "label": "step 0",
+      "source_artifact": "RESULT/trajectories/opt.xyz",
+      "atoms": [
+        {
+          "atom_uid": "C:0",
+          "element": "C",
+          "coordinate": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "atom_uid": "H:0",
+          "element": "H",
+          "coordinate": [
+            1.09,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "atom_uid": "H:1",
+          "element": "H",
+          "coordinate": [
+            -0.36,
+            1.03,
+            0.0
+          ]
+        },
+        {
+          "atom_uid": "O:0",
+          "element": "O",
+          "coordinate": [
+            -0.64,
+            -0.69,
+            0.0
+          ]
+        }
+      ]
+    }
+  ]
+}
