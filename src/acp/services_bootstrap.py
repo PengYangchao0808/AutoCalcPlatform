@@ -164,7 +164,11 @@ def build_services_ports(
     resolved_db_path = Path(db_path) if db_path is not None else run_root_path / "acp_jobs.db"
     job_store = store or JobStore(resolved_db_path)
     index = task_index or TaskIndex(job_store.db_path)
-    projects = ProjectManager(job_store, run_root_path)
+    projects = ProjectManager(
+        job_store,
+        run_root_path,
+        migrations=SimpleNamespace(migrate=migrate),
+    )
     control = _JobControlAdapter(manager) if manager is not None else _UnattachedJobControl()
 
     # CLI flag conversion is imported lazily so importing this module stays
