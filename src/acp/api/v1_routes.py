@@ -7391,4 +7391,69 @@ def bootstrap_node(
     )
 
 
+# ---------------------------------------------------------------------------
+# Read-only availability surface (B02-5 / plan todo 15)
+# ---------------------------------------------------------------------------
+
+
+def _read_only_reader(request: Request) -> Any:
+    """Build the read-only resource reader from the manager-owned singletons.
+
+    Strictly read-only: it consults the prepared cache index and the
+    ``data_operations`` rows only.  It never fetches over SSH/SFTP and never
+    enqueues a prepare operation — only an explicit prepare command, the
+    terminal-transition background flow and startup recovery may do that.
+    """
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    manager = _manager(request)
+    return build_read_only_reader(
+        job_lookup=manager.get,
+        cache=manager.structure_cache,
+        operations=getattr(manager, "_prepare_operations", None),
+    )
+
+
+@router.get("/jobs/{job_id}/availability")
+def get_job_availability(
+    job_id: str,
+    request: Request,
+    resource_id: str | None = Query(default=None),
+    relative_path: str = Query(default=""),
+    workflow: str = Query(default=""),
+    expected_revision: int = Query(default=0, ge=0),
+    attempt: int | None = Query(default=None, ge=1),
+) -> dict[str, Any]:
+    """Return a read-only availability snapshot for one job resource.
+
+    Additive read surface: it reports ``availability`` / ``freshness`` /
+    ``basis_revision`` from the prepared cache index and prepare-operation rows
+    and never triggers a fetch or a new prepare operation.  The existing job
+    GETs keep their original behaviour and read root (the switch is todo 16).
+
+    Raises:
+        404: Unknown job id.
+    """
+    from acp_services.data.read_root import AvailabilityRead
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    resolved_workflow = workflow or str(record.spec.workflow or "")
+    resolved_resource = resource_id or f"catalog:{resolved_workflow}"
+    reader = _read_only_reader(request)
+    snapshot = reader.availability(
+        AvailabilityRead(
+            job_id=job_id,
+            resource_id=resolved_resource,
+            workflow=resolved_workflow,
+            relative_path=relative_path,
+            attempt=attempt,
+            expected_revision=expected_revision,
+        )
+    )
+    return snapshot.to_dict()
+
+
 __all__ = ["router"]
