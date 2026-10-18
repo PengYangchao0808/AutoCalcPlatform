@@ -1,0 +1,67 @@
+{
+  "view_type": "scan",
+  "node_type": "frame",
+  "nodes": [
+    {
+      "id": "curve_scatter:series:scan_energy:point:0",
+      "label": "Point 0",
+      "type": "frame",
+      "frame_index": 0,
+      "x": 1.0,
+      "energy": -114.5,
+      "status": "completed",
+      "geometry_ref": "RESULT/trajectories/scan.json",
+      "metadata": {
+        "series_id": "curve_scatter:series:scan_energy",
+        "x_unit": "angstrom-or-degree",
+        "y_unit": "hartree"
+      }
+    },
+    {
+      "id": "curve_scatter:series:scan_energy:point:1",
+      "label": "Point 1",
+      "type": "frame",
+      "frame_index": 1,
+      "x": 1.5,
+      "energy": -114.42,
+      "status": "completed",
+      "geometry_ref": "RESULT/trajectories/scan.json",
+      "metadata": {
+        "series_id": "curve_scatter:series:scan_energy",
+        "x_unit": "angstrom-or-degree",
+        "y_unit": "hartree"
+      }
+    },
+    {
+      "id": "curve_scatter:series:scan_energy:point:2",
+      "label": "Point 2",
+      "type": "frame",
+      "frame_index": 2,
+      "x": 2.0,
+      "energy": -114.31,
+      "status": "completed",
+      "geometry_ref": "RESULT/trajectories/scan.json",
+      "metadata": {
+        "series_id": "curve_scatter:series:scan_energy",
+        "x_unit": "angstrom-or-degree",
+        "y_unit": "hartree"
+      }
+    }
+  ],
+  "annotations": [
+    {
+      "id": "minimum_0",
+      "type": "minimum",
+      "label": "最低能量",
+      "frame_index": 0,
+      "x": 1.0,
+      "y": -114.5,
+      "status": "completed",
+      "geometry_ref": "RESULT/trajectories/scan.json",
+      "selected": false
+    }
+  ],
+  "skipped_points": [],
+  "unavailable": null,
+  "migrations": []
+}
