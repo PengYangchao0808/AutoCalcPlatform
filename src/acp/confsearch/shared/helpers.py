@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from acp.storage.layout import TaskStorage
+from cccp.analysis.confsearch.selection import cumulative_selection_count
 from cccp.qc.translation import render_censo_template_lines
 
 logger = logging.getLogger(__name__)
@@ -259,6 +260,12 @@ def select_cumulative_boltzmann(
     sorted by ascending ``gtot``; conformers are accumulated until their
     cumulative Boltzmann population reaches ``threshold`` (the conformer
     crossing the threshold is included). Rank1 is always selected.
+
+    Canonical cutoff loop (T21): the accumulate-until-threshold loop is
+    :func:`cccp.analysis.confsearch.selection.cumulative_selection_count`.
+    This caller keeps the historical plain cutoff (``epsilon=0.0``), while
+    ``select_for_refinement("cumulative-99", ...)`` uses ``epsilon=1e-9`` —
+    the two thresholds remain behaviourally distinct by design.
     """
     from .boltzmann import boltzmann_weights as _bw
 
@@ -266,14 +273,8 @@ def select_cumulative_boltzmann(
         return []
     ordered = sorted(records, key=lambda r: r.gtot)
     weights = _bw([r.gtot for r in ordered], temperature_k)
-    selected: list[Any] = []
-    cumulative = 0.0
-    for rec, weight in zip(ordered, weights):
-        selected.append(rec)
-        cumulative += float(weight) if weight is not None else 0.0
-        if cumulative >= threshold:
-            break
-    return selected
+    count = cumulative_selection_count(weights, threshold, epsilon=0.0)
+    return ordered[:count]
 
 
 # ---------------------------------------------------------------------------
