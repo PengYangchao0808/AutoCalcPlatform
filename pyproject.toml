@@ -73,7 +73,7 @@ acp = "acp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["cccp*", "acp*"]
+include = ["cccp*", "acp*", "acp_services*"]
 
 # Ship non-.py package data. `acp/nmr/models/` is a DATA DIRECTORY (no
 # __init__.py — see src/acp/nmr/AGENTS.md): DP5/FCHL binary artifacts
