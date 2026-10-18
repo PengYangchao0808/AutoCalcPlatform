@@ -60,6 +60,11 @@
 | 持久 prepare operation（PrepareOperationService） | `src/acp_services/data/operations.py:498` | `acp.services_data_bootstrap.build_prepare_executor`（Services 侧执行器注入；旧 `acp.scheduler.manager._queue_catalog_prefetch` 改为入队持久操作） | `src/acp/scheduler/manager.py:4765`（终态后台预取与启动恢复） | 旧进程内预取队列已删除（todo 13 已交付）；transfer 校验/发布与 availability 经 prepare 操作接管；接收 todo 14 至 todo 16 | `tests/test_services_prepare_operations.py`；`tests/test_acp_remote_catalog_prefetch.py` |
 | 校验传输管线（TransferPipeline） | `src/acp_services/data/transfer.py:1` | `acp.services_data_bootstrap.build_transfer_pipeline`（端口注入委托 RemoteStructureCache 的 traversal guard/fence/generation/publish；push_paths 保持） | `src/acp/scheduler/manager.py:4765`（prepare 执行器注入面；todo 14 交付适配器，todo 15 至 todo 16 接线读取） | 缓存发布/可用性经 prepare 操作且以冻结摘要/大小/身份/attempt/generation 校验；四类拒绝与崩溃窗口可对账；历史无摘要经受控源端基线接纳；接收 todo 14 至 todo 16 | `tests/test_services_transfer_verify.py`；`tests/test_acp_remote_catalog_prefetch.py`；`tests/test_services_prepare_operations.py` |
 | 旧读取根 GET 过渡适配器（legacy read-root adapter，todo 15 登记） | `src/acp/api/v1_routes.py:366` | `acp.api.v1_routes._job_read_root`（镜像 `src/acp/api/v2_routes.py:220`）；旧 GET 原行为与 409/200 语义保留，副作用=终态远端 `fetch_catalog` 同步预取，属受限过渡项 | `src/acp/api/v1_routes.py:2564`；`src/acp/api/v1_routes.py:2622`；`src/acp/api/v1_routes.py:3134`；`src/acp/api/v1_routes.py:4932`；`src/acp/api/v1_routes.py:5413`；`src/acp/api/v2_routes.py:256` | 新只读面（`GET /api/v1/jobs/{id}/availability`，todo 15 交付于 `src/acp/api/v1_routes.py:7395`）成为唯一读取路径且旧 GET 显式兼容路径冻结（F0/F1×S0/S1 证据齐备）后，删除本行；切换与删除均由 todo 16 收口，不得因删除旧行为致 F0＋S1 不可用 | `tests/test_services_read_root.py`；`tests/test_acp_api_v1.py`；`tests/test_acp_api_v2.py` |
+| cache-only 读切换·catalog 过渡兼容面（todo 16 登记） | `src/acp_services/data/resource_read.py:123` | `acp.api.v1_routes.get_structure_viewer_catalog`（`src/acp/api/v1_routes.py:3651`）；旧 GET `pending_fetch`/`ready` 语义与读取根保留，过渡窗口内不改 | `src/acp/api/v1_routes.py:7437`（新只读 `GET /jobs/{id}/availability?resource=catalog`）；`src/acp/api/v1_routes.py:7502`（新只读 `GET /jobs/{id}/prepared/{resource}`） | 新 cache-only 路径 F0/F1×S0/S1 矩阵齐备（接收 todo 69 至 todo 75）且旧 GET 零消费者证据后删除本行；期限=矩阵收口切片，窗口内旧 GET 副作用为已登记过渡项 | `tests/test_services_cache_only_switch.py` |
+| cache-only 读切换·manifest 过渡兼容面（todo 16 登记） | `src/acp_services/data/resource_read.py:123` | `acp.api.v1_routes.get_energy_graph`（`src/acp/api/v1_routes.py:2599`）；旧 GET 原行为保留（远端终态经 `_job_read_root` 同步 `fetch_catalog` 属已登记过渡副作用） | `src/acp/api/v1_routes.py:7437`；`src/acp/api/v1_routes.py:7502`（新只读面，零网络零 operation） | 新 cache-only 路径矩阵齐备（接收 todo 69 至 todo 75）且旧 GET 零消费者证据后删除本行；期限=矩阵收口切片 | `tests/test_services_cache_only_switch.py` |
+| cache-only 读切换·frame_candidates 过渡兼容面（todo 16 登记） | `src/acp_services/data/resource_read.py:123` | `acp.api.v1_routes.list_frame_candidates_endpoint`（`src/acp/api/v1_routes.py:4345`）；旧 GET 保持 `RESULT/frame_candidates.json` 权威文件语义 | `src/acp/api/v1_routes.py:7502`（新只读面读已准备权威文件） | 新 cache-only 路径矩阵齐备（接收 todo 69 至 todo 75）且旧 GET 零消费者证据后删除本行；期限=矩阵收口切片 | `tests/test_services_cache_only_switch.py` |
+| cache-only 读切换·frequency_modes 过渡兼容面（todo 16 登记） | `src/acp_services/data/resource_read.py:123` | `acp.api.v1_routes.get_structure_viewer_vibrations`（`src/acp/api/v1_routes.py:3967`）；旧 GET 的 `available=false`/`pending_fetch` 语义保留 | `src/acp/api/v1_routes.py:7502`（新只读面读 `RESULT/frequencies/normal_modes.json`） | 新 cache-only 路径矩阵齐备（接收 todo 69 至 todo 75）且旧 GET 零消费者证据后删除本行；期限=矩阵收口切片 | `tests/test_services_cache_only_switch.py` |
+| cache-only 读切换·geometry 过渡兼容面（todo 16 登记） | `src/acp_services/data/resource_read.py:123` | `acp.api.v1_routes.get_structure_viewer_geometry`（`src/acp/api/v1_routes.py:3758`）；旧 GET 的 409 `pending_fetch` 与 `?fetch=1` 懒取语义保留 | `src/acp/api/v1_routes.py:7502`（新只读面按 Range 有界读已准备几何） | 新 cache-only 路径矩阵齐备（接收 todo 69 至 todo 75）且旧 GET 零消费者证据后删除本行；期限=矩阵收口切片 | `tests/test_services_cache_only_switch.py` |
 
 ## 覆盖说明
 
@@ -69,6 +74,11 @@
 - remote paths/release/submission → 行 7/8/9；calculations 发布 → 行 12；
 - api 读取 → 行 17；init_wizard → 行 28；catalog → 行 26；
 - 另含 storage/manifest、results/frame_candidates、remote_structure_cache、scheduler/store、manager 控制面、calculations/executor、calculations/step_requirements、api 事件/SSE、scheduler/events、remote/script_gen、CLI dispatch、batch engine、compat/legacy、workflows registry。
+
+**逐资源过渡兼容面（todo 16 追加）**：cache-only 逐资源切换新增 5 行兼容面登记
+（catalog/manifest/frame_candidates/frequency_modes/geometry），每行含调用者（兼容入口=旧 GET、生产消费者=新只读面）、
+期限（矩阵收口切片）与退出条件（F0/F1×S0/S1 矩阵齐备且旧 GET 零消费者后删除）。
+旧读取根 GET 过渡适配器（todo 15 登记）在窗口内保留，其终态远端 `fetch_catalog` 副作用属已登记过渡项。
 
 ## 与 cccp 台账的边界
 
