@@ -222,8 +222,12 @@ function setupEventListeners() {
   document.getElementById("sysres-drawer-overlay").addEventListener("mousedown", function(event) {
     if (event.target.id === "sysres-drawer-overlay") closeSysresDrawer();
   });
-  document.getElementById("sysres-refresh-nodes").addEventListener("click", loadNodes);
-  document.getElementById("sysres-refresh-backends").addEventListener("click", loadBackends);
+  document.getElementById("sysres-refresh-nodes").addEventListener("click", function() {
+    ACPWorkbench.controllers.systemResources.loadNodes();
+  });
+  document.getElementById("sysres-refresh-backends").addEventListener("click", function() {
+    ACPWorkbench.controllers.systemResources.loadBackends();
+  });
 
   var sourceTabs = Array.from(document.querySelectorAll(".input-mode-tab"));
   sourceTabs.forEach(function(tab, tabIndex) {

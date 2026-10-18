@@ -1334,67 +1334,33 @@ function renderMeasurementList() {
 // Phase 6: remote node selector + status panel
 // ----------------------------------------------------------------------
 
-async function loadNodes() {
-  const list = document.getElementById("sysres-node-list");
-  if (!list) return;
-  try {
-    const data = await api("/nodes");
-    nodesCache = data.nodes || [];
-    renderNodePanel();
-  } catch (e) {
-    nodesCache = [];
-    if (String(e.message).indexOf("not configured") >= 0) {
-      list.innerHTML = '<div class="muted">' + escapeHtml(t("nodes.empty")) + '</div>';
-    } else {
-      list.innerHTML = '<div class="node-error">' + escapeHtml(t("nodes.load_error") + ": " + e.message) + '</div>';
-    }
-  }
+// T22: the System & Resources use case (requests + panel state/rendering +
+// retry) now lives in ACPWorkbench.controllers.systemResources. The historical
+// global names stay as thin delegates for existing callers during migration.
+// Node matching + ping remain here (callers + submission wiring still use them).
+if (typeof ACPWorkbench !== "undefined" && ACPWorkbench.controllers &&
+    ACPWorkbench.controllers.systemResources && window.ACPClient) {
+  ACPWorkbench.controllers.systemResources.init({
+    client: window.ACPClient,
+    document: document,
+    escapeHtml: escapeHtml,
+    translate: t,
+    onPingNode: pingNode,
+  });
+} else if (window.ACPClient) {
+  console.error(
+    "systemResources: ACPWorkbench.controllers.systemResources is missing — " +
+    "verify js/workbench/controllers/system_resources_controller.js loads before " +
+    "js/workbench/features/reaction-builder.js."
+  );
+}
+
+function loadNodes() {
+  return ACPWorkbench.controllers.systemResources.loadNodes();
 }
 
 function renderNodePanel() {
-  const list = document.getElementById("sysres-node-list");
-  if (!list) return;
-  list.innerHTML = "";
-  if (!nodesCache.length) {
-    list.innerHTML = '<div class="muted">' + escapeHtml(t("nodes.empty")) + '</div>';
-    return;
-  }
-  nodesCache.forEach(function(node) {
-    const row = document.createElement("div");
-    row.className = "node-row" + (node.status === "offline" ? " offline" : "");
-    const dot = document.createElement("span");
-    dot.className = "node-dot " + (node.status || "offline");
-    const info = document.createElement("div");
-    info.className = "node-info";
-    const name = document.createElement("div");
-    name.className = "node-name";
-    name.textContent = (node.name || "--") + "  " + (node.host || "");
-    const meta = document.createElement("div");
-    meta.className = "node-meta";
-    meta.textContent = t("nodes.status." + (node.status || "offline")) + " · " + (node.running_jobs || 0) + "/" + (node.max_jobs || 0) + " · DISK " + (node.disk_usage_pct || 0) + "%";
-    info.appendChild(name);
-    info.appendChild(meta);
-    if (node.error) {
-      const err = document.createElement("div");
-      err.className = "node-error";
-      err.textContent = node.error;
-      info.appendChild(err);
-    }
-    const actions = document.createElement("div");
-    actions.className = "node-actions";
-    const ping = document.createElement("button");
-    ping.className = "node-btn";
-    ping.textContent = t("nodes.ping");
-    ping.addEventListener("click", function(event) {
-      event.stopPropagation();
-      pingNode(node.name);
-    });
-    actions.appendChild(ping);
-    row.appendChild(dot);
-    row.appendChild(info);
-    row.appendChild(actions);
-    list.appendChild(row);
-  });
+  return ACPWorkbench.controllers.systemResources.renderNodes();
 }
 
 async function pingNode(name) {
@@ -1857,132 +1823,12 @@ function formatSubmitError(err) {
   return translateNodeError(err) || (err && err.message) || String(err);
 }
 
-// ----------------------------------------------------------------------
-// Local QC backends panel (GET /api/backends + /api/v1/software/discovery).
-// Version badge + multi-install warning are display-only; the discovery
-// endpoint is best-effort and degrades silently when unavailable.
-// ----------------------------------------------------------------------
-
-async function loadBackends() {
-  const list = document.getElementById("sysres-backend-list");
-  if (!list) return;
-  try {
-    const data = await apiRequest("/api/backends");
-    backendsCache = data.backends || [];
-  } catch (e) {
-    backendsCache = [];
-    list.innerHTML = '<div class="node-error">' + escapeHtml(t("backend.load_error")) + '</div>';
-    return;
-  }
-  try {
-    const ddata = await api("/software/discovery");
-    if (ddata) {
-      const map = {};
-      (ddata.software || []).forEach(function(sw) {
-        if (sw && sw.name) map[String(sw.name)] = sw;
-      });
-      softwareDiscoveryCache = map;
-    }
-  } catch (e) { /* silent: version badges still render without discovery */ }
-  renderBackendPanel();
+function loadBackends() {
+  return ACPWorkbench.controllers.systemResources.loadBackends();
 }
 
 function renderBackendPanel() {
-  const list = document.getElementById("sysres-backend-list");
-  if (!list) return;
-  list.innerHTML = "";
-  if (!backendsCache.length) {
-    list.innerHTML = '<div class="muted">' + escapeHtml(t("backend.empty")) + '</div>';
-    return;
-  }
-  backendsCache.forEach(function(b) {
-    const name = String(b.name || "");
-    const discovery = softwareDiscoveryCache[name] || null;
-    const remoteNodes = Array.isArray(b.remote_nodes) ? b.remote_nodes : [];
-    const isRemote = b.remote_available === true && remoteNodes.length > 0;
-    const effective = b.available || isRemote;
-    const version = String(b.version || b.remote_version || (discovery && discovery.version) || "").trim();
-    const resolvedPath = String(b.path || b.remote_path || (discovery && discovery.resolved) || "").trim();
-
-    const row = document.createElement("div");
-    row.className = "node-row" + (effective ? "" : " offline");
-
-    const dot = document.createElement("span");
-    dot.className = "node-dot " + (effective ? "online" : "offline");
-
-    const info = document.createElement("div");
-    info.className = "node-info";
-
-    const nameEl = document.createElement("div");
-    nameEl.className = "node-name";
-    nameEl.textContent = name || "--";
-    if (version) {
-      const badge = document.createElement("span");
-      badge.className = "backend-version";
-      badge.title = t("backend.version");
-      badge.textContent = version;
-      nameEl.appendChild(badge);
-    }
-    if (isRemote) {
-      const rbadge = document.createElement("span");
-      rbadge.className = "backend-version";
-      rbadge.title = remoteNodes.join(", ");
-      rbadge.textContent = t("backend.remote") + ": " + remoteNodes.join(", ");
-      nameEl.appendChild(rbadge);
-    }
-    if (discovery && discovery.multiple === true && Array.isArray(discovery.candidates) && discovery.candidates.length) {
-      nameEl.appendChild(buildMultiInstallDetails(discovery, resolvedPath));
-    }
-    info.appendChild(nameEl);
-
-    if (resolvedPath) {
-      const meta = document.createElement("div");
-      meta.className = "node-meta backend-path";
-      meta.textContent = resolvedPath;
-      info.appendChild(meta);
-    }
-
-    row.appendChild(dot);
-    row.appendChild(info);
-    list.appendChild(row);
-  });
-}
-
-function buildMultiInstallDetails(discovery, resolvedPath) {
-  const details = document.createElement("details");
-  details.className = "backend-multi";
-  const summary = document.createElement("summary");
-  summary.title = t("backend.multi_badge_title");
-  summary.textContent = "⚠";
-  details.appendChild(summary);
-
-  const body = document.createElement("div");
-  body.className = "backend-multi-detail";
-  discovery.candidates.forEach(function(cand) {
-    const line = document.createElement("div");
-    const candPath = String((cand && cand.path) || "");
-    const isActive = !!resolvedPath && candPath === resolvedPath;
-    line.className = "backend-candidate" + (isActive ? " active" : "");
-    let text = candPath || "--";
-    const candVersion = String((cand && cand.version) || "").trim();
-    if (candVersion) text += " · v" + candVersion;
-    const candSource = String((cand && cand.source) || "").trim();
-    if (candSource) text += " · " + candSource;
-    line.textContent = text;
-    if (isActive) {
-      const tag = document.createElement("span");
-      tag.className = "backend-candidate-tag";
-      tag.textContent = t("backend.active");
-      line.appendChild(tag);
-    }
-    body.appendChild(line);
-  });
-  const hint = document.createElement("div");
-  hint.className = "backend-multi-hint";
-  hint.textContent = t("backend.multi_install", { name: String(discovery.name || "") });
-  body.appendChild(hint);
-  details.appendChild(body);
-  return details;
+  return ACPWorkbench.controllers.systemResources.renderBackends();
 }
 
 function _updateMeasureStatus() {
@@ -2380,8 +2226,6 @@ function rejectUnsupportedFile(file) {
   var name = file && file.name ? file.name : String(file);
   window.alert((t("modal.unsupported_ext") || "不支持的文件格式") + ": " + name);
 }
-let workflowCatalogCache = [];
-let methodCatalogCache = {};
 // Page-global preview viewer — EXT owner per T16 evidence §2.5: declared
 // here, written by wizard.js (a bounded scene instance since T10; previewModel
 // is its opaque model token), consumed by wizard.js / job_editor.js /

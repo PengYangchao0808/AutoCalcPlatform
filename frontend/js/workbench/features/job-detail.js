@@ -886,7 +886,7 @@ async function openDetailDrawer(job) {
     // The node list may not be loaded yet (sysres drawer never opened):
     // fetch it once and rebuild the options in place when it arrives.
     if (!nodesCache.length) {
-      loadNodes().then(function() {
+      ACPWorkbench.controllers.systemResources.loadNodes().then(function() {
         populateContinueNodeOptions(document.getElementById("detail-continue-node-select"));
       });
     }
@@ -1176,7 +1176,10 @@ async function openSysresDrawer() {
   if (!overlay || !drawer) return;
   overlay.classList.add("open");
   drawer.classList.add("open");
-  await Promise.all([loadNodes(), loadBackends()]);
+  await Promise.all([
+    ACPWorkbench.controllers.systemResources.loadNodes(),
+    ACPWorkbench.controllers.systemResources.loadBackends(),
+  ]);
   var closeBtn = document.getElementById("sysres-drawer-close");
   if (closeBtn) closeBtn.focus();
 }
