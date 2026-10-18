@@ -72,29 +72,48 @@ class ProjectManager:
     """SQLite-backed CRUD manager for workbench projects.
 
     Args:
-        store: Minimal job-store port; ``store.db_path`` locates the database.
+        store: Optional minimal job-store port; ``store.db_path`` locates the
+            database. When omitted, ``db_path`` (or ``<run_root>/acp_jobs.db``)
+            locates it and schema initialisation runs through the
+            ``acp_services.store`` migrator — the Services-native default.
         run_root: Task data root; project directories live under it.
-        migrations: Optional migration port (``migrate(db_path)``). Injected by
-            the legacy composition root; when omitted the store must own schema
-            initialisation.
+        migrations: Optional migration port (``migrate(db_path)``). When omitted
+            schema initialisation is owned by the store port / native migrator.
+        db_path: Explicit SQLite path used only when ``store`` is omitted.
     """
 
-    def __init__(self, store: Any, run_root: Path | str, *, migrations: Any | None = None):
+    def __init__(
+        self,
+        store: Any | None,
+        run_root: Path | str,
+        *,
+        migrations: Any | None = None,
+        db_path: Path | str | None = None,
+    ):
         self.store = store
         self.run_root = Path(run_root)
         self.run_root.mkdir(parents=True, exist_ok=True)
-        self.db_path = store.db_path
+        if store is not None:
+            self.db_path = store.db_path
+        elif db_path is not None:
+            self.db_path = Path(db_path)
+        else:
+            self.db_path = self.run_root / "acp_jobs.db"
         self._lock = threading.Lock()
         self._ensure_schema(migrations)
 
     def _ensure_schema(self, migrations: Any | None) -> None:
-        """Run the injected migration port; never import the legacy migrator."""
+        """Initialise the schema without importing the legacy ``acp`` migrator."""
         if migrations is not None:
             migrations.migrate(self.db_path)
             return
         initialize = getattr(self.store, "initialize_schema", None)
         if callable(initialize):
             initialize()
+            return
+        from acp_services.store.migrations import migrate as _migrate
+
+        _migrate(self.db_path)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self.db_path))
