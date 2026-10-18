@@ -427,7 +427,11 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     # 2. Panel entry: one pure model decides the mode; the old last_cycle
     #    reader is gone and the render path never touches metadata.last_cycle.
     assert "function optimizationStatusPanelModel(data, job)" in html
-    assert "function optimizationStatusPanelMarkup(data)" in html
+    assert "function optimizationStatusPanelMarkup(data, job)" in html
+    status_panel = html.split("function optimizationStatusPanelMarkup(data, job)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert "lastSelectedJob" not in status_panel
     assert "optimizationConvergencePanelMarkup" not in html
     model = html.split("function optimizationStatusPanelModel(data, job)", 1)[1].split(
         "\nfunction ", 1
@@ -439,8 +443,17 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
         "\n}\n", 1
     )[0]
     assert "last_cycle" not in criteria
+    optimization_workspace = html.split(
+        "function optimizationWorkspaceMarkup(data, job)", 1
+    )[1].split("\nfunction ", 1)[0]
+    assert "lastSelectedJob" not in optimization_workspace
+    energy_workspace = html.split("function energyGraphWorkspaceMarkup(data, job)", 1)[1].split(
+        "\nfunction ", 1
+    )[0]
+    assert "lastSelectedJob" not in energy_workspace
     assert (
-        "metadata.last_cycle" not in html.split("function optimizationWorkspaceMarkup(data)", 1)[1]
+        "metadata.last_cycle"
+        not in html.split("function optimizationWorkspaceMarkup(data, job)", 1)[1]
     )
 
     # 3. Explicit-pick detection requires selectionOrigin === "user" and must
