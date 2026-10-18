@@ -174,8 +174,8 @@ def run_shermo(
 
         return _parse_sum_file(output_file)
 
-    except Exception as e:
-        logger.error(f"Shermo calculation failed: {e}")
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        logger.error("Shermo calculation failed: %s", e)
         return None
 
 
@@ -209,8 +209,8 @@ def _parse_sum_file(sum_file: Path) -> Optional[Dict[str, float]]:
 
         return thermo_data if thermo_data else None
 
-    except Exception as e:
-        logger.error(f"Failed to parse Shermo sum file: {e}")
+    except (OSError, ValueError) as e:
+        logger.error("Failed to parse Shermo sum file: %s", e)
         return None
 
 
