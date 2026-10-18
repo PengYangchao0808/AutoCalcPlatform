@@ -27,7 +27,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+import posixpath
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -38,6 +39,11 @@ from acp.results.frame_candidate_store import (
     write_authority,
 )
 from acp.results.remote_structure_cache import RemoteStructureCache
+from acp.scheduler.remote.paths import (
+    compose_remote_dir,
+    resolve_remote_dir,
+    storage_relative_path,
+)
 from acp.scheduler.structure_source_store import StructureSourceStore, source_uid_for
 from acp.storage.manifest import ResultManifest
 from acp_services.data.contracts import (
@@ -67,10 +73,17 @@ from acp_services.data.contracts import (
     TransferResult,
     TransferUpload,
 )
+from acp_services.data.storage_binding import (
+    MAPPING_VERSION_CURRENT,
+    MAPPING_VERSION_LEGACY,
+    PATH_SOURCE_FALLBACK,
+    PATH_SOURCE_LEGACY_FLAT,
+    LegacyResolution,
+)
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["build_data_resource_port"]
+__all__ = ["build_data_resource_port", "build_storage_allocation_port"]
 
 _MANIFEST_READ_ERRORS = (
     FileNotFoundError,
@@ -292,3 +305,148 @@ def build_data_resource_port(
     store = source_store or StructureSourceStore(resolved_db)
     structure_cache = cache or RemoteStructureCache(run_root_path)
     return _DataResourceAdapter(source_store=store, cache=structure_cache)
+
+
+# --------------------------------------------------------------------------- #
+# B02-2 (todo 12) — storage-binding allocation adapter
+# --------------------------------------------------------------------------- #
+
+
+def _relative_from(remote_dir: str, base: str) -> str:
+    """Recover the relative path of *remote_dir* under *base* (best effort)."""
+    base = (base or "").rstrip("/")
+    if base and remote_dir.startswith(base + "/"):
+        return remote_dir[len(base) + 1 :].lstrip("/")
+    return posixpath.basename(remote_dir)
+
+
+class _StorageAllocationAdapter:
+    """Delegate the allocation seam onto ``remote/paths.py`` + the exclusive claim.
+
+    Wraps the *real* entry points — ``storage_relative_path`` (paths.py:46),
+    ``compose_remote_dir`` (paths.py:59) and ``resolve_remote_dir`` (paths.py:85)
+    plus :meth:`FileStager.claim_remote_job_dir` — so the Services allocator
+    never re-implements directory derivation or ownership.  Human-readable
+    directories, the single persisted path key, scheduler markers, the
+    rerun/continue same-dir semantics and the legacy-adoption chain are all
+    preserved because they *are* the wrapped implementation.
+    """
+
+    def __init__(
+        self,
+        *,
+        node_lookup: Callable[[str], Any] | None = None,
+        stager: Any | None = None,
+    ) -> None:
+        self._node_lookup = node_lookup
+        self._stager = stager
+
+    # --- endpoint resolution -------------------------------------------
+    def _node(self, endpoint: str, *, run_root: str | None = None) -> Any:
+        if not endpoint:
+            # Local endpoint: the controlled root is the remote work dir base.
+            return SimpleNamespace(name="", remote_work_dir=str(run_root or ""))
+        if self._node_lookup is not None:
+            return self._node_lookup(endpoint)
+        from acp.scheduler.remote.config import RemoteExecutionConfig
+        from cccp.config import load_config
+
+        cfg = RemoteExecutionConfig.from_config_dict(load_config().get("cluster", {}) or {})
+        for node in cfg.nodes:
+            if node.name == endpoint:
+                return node
+        raise KeyError(f"unknown remote endpoint {endpoint!r}")
+
+    def _stager_obj(self) -> Any:
+        if self._stager is None:
+            from acp.scheduler.remote.sftp import FileStager
+            from acp.scheduler.remote.ssh import SSHConnectionPool
+
+            self._stager = FileStager(SSHConnectionPool())
+        return self._stager
+
+    # --- StorageAllocationPort -----------------------------------------
+    def storage_relative_path(self, *, work_dir: str, run_root: str) -> str:
+        return storage_relative_path(SimpleNamespace(work_dir=work_dir), run_root)
+
+    def compose_remote_dir(self, relative_path: str, *, endpoint: str) -> str:
+        return compose_remote_dir(relative_path, self._node(endpoint))
+
+    def resolve_legacy_dir(
+        self,
+        *,
+        job_id: str,
+        attempt: int,
+        work_dir: str,
+        run_root: str,
+        endpoint: str,
+        task_leaf: str = "",
+        explicit: str | None = None,
+        persisted_remote_dir: str | None = None,
+        persisted_relative: str | None = None,
+        probe: Callable[[str], bool] | None = None,
+    ) -> LegacyResolution:
+        result: dict[str, Any] = {}
+        if persisted_remote_dir:
+            result["remote_dir"] = persisted_remote_dir
+        if persisted_relative:
+            result["remote"] = {"schema": 1, "relative": persisted_relative, "attempt": attempt}
+        spec = (
+            SimpleNamespace(uses_v2_naming=True, task_dir_name=lambda: task_leaf)
+            if task_leaf
+            else None
+        )
+        record = SimpleNamespace(
+            id=job_id, attempt=attempt, work_dir=work_dir, result=result, spec=spec
+        )
+        node = self._node(endpoint, run_root=run_root)
+        remote_dir, fallback = resolve_remote_dir(
+            record, node, explicit=explicit, probe=probe, run_root=run_root
+        )
+        meta = (record.result or {}).get("remote") or {}
+        path_source = str(meta.get("path_source") or "")
+        relative = str(meta.get("relative") or "") or _relative_from(
+            remote_dir, getattr(node, "remote_work_dir", "")
+        )
+        legacy = path_source in (PATH_SOURCE_LEGACY_FLAT, PATH_SOURCE_FALLBACK)
+        return LegacyResolution(
+            remote_dir=remote_dir,
+            relative_path=relative,
+            path_source=path_source,
+            fallback=fallback,
+            mapping_version=MAPPING_VERSION_LEGACY if legacy else MAPPING_VERSION_CURRENT,
+        )
+
+    def claim_dir(
+        self,
+        *,
+        remote_dir: str,
+        job_id: str,
+        attempt: int,
+        work_dir: str,
+        endpoint: str,
+    ) -> str:
+        node = self._node(endpoint)
+        record = SimpleNamespace(
+            id=job_id, attempt=attempt, work_dir=work_dir, result={}, spec=None
+        )
+        return self._stager_obj().claim_remote_job_dir(node, remote_dir, record)
+
+
+def build_storage_allocation_port(
+    *,
+    node_lookup: Callable[[str], Any] | None = None,
+    stager: Any | None = None,
+) -> Any:
+    """Build the injected storage-allocation port from the real legacy mechanism.
+
+    Args:
+        node_lookup: Optional ``endpoint -> node`` resolver (tests inject a fake).
+            When omitted the real ``cluster`` config is loaded.
+        stager: Optional pre-built :class:`FileStager` (created on first claim).
+
+    Returns:
+        An object satisfying :class:`acp_services.data.storage_binding.StorageAllocationPort`;
+        it delegates to ``remote/paths.py`` and the exclusive claim verbatim.
+    """
+    return _StorageAllocationAdapter(node_lookup=node_lookup, stager=stager)
