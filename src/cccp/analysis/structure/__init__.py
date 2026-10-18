@@ -40,13 +40,31 @@ from cccp.analysis.structure.structures import (
     StructureEnsemble,
     StructureRecord,
 )
+from cccp.analysis.structure.topology import (
+    NMR_TOPOLOGY_SDF,
+    NMR_TOPOLOGY_SMILES,
+    NMR_TOPOLOGY_SOURCES,
+    NMR_TOPOLOGY_XYZ_INFERRED,
+    NMR_TOPOLOGY_XYZ_UNAVAILABLE,
+    NmrTopologyCapture,
+    TopologyUnavailableError,
+    capture_nmr_topology,
+)
 
 __all__ = [
+    "NMR_TOPOLOGY_SDF",
+    "NMR_TOPOLOGY_SMILES",
+    "NMR_TOPOLOGY_SOURCES",
+    "NMR_TOPOLOGY_XYZ_INFERRED",
+    "NMR_TOPOLOGY_XYZ_UNAVAILABLE",
+    "NmrTopologyCapture",
     "Structure",
     "StructureAsset",
     "StructureEnsemble",
     "StructureParseResult",
     "StructureRecord",
+    "TopologyUnavailableError",
+    "capture_nmr_topology",
     "count_elements_from_xyz",
     "detect_and_parse",
     "detect_format",
