@@ -73,6 +73,10 @@ from acp_services.data.contracts import (
     TransferResult,
     TransferUpload,
 )
+from acp_services.data.operations import (
+    PrepareExecutionResult,
+    PrepareLease,
+)
 from acp_services.data.storage_binding import (
     MAPPING_VERSION_CURRENT,
     MAPPING_VERSION_LEGACY,
@@ -83,7 +87,11 @@ from acp_services.data.storage_binding import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["build_data_resource_port", "build_storage_allocation_port"]
+__all__ = [
+    "build_data_resource_port",
+    "build_storage_allocation_port",
+    "build_prepare_executor",
+]
 
 _MANIFEST_READ_ERRORS = (
     FileNotFoundError,
@@ -450,3 +458,114 @@ def build_storage_allocation_port(
         it delegates to ``remote/paths.py`` and the exclusive claim verbatim.
     """
     return _StorageAllocationAdapter(node_lookup=node_lookup, stager=stager)
+
+
+# --------------------------------------------------------------------------- #
+# B02-3 (todo 13) — persistent prepare-operation executor adapter
+# --------------------------------------------------------------------------- #
+
+
+class _PrepareExecutorAdapter:
+    """Execute a prepare operation by prefetching through the real cache path.
+
+    B02-3 (plan todo 13).  The Services-side worker owns the persistent operation
+    state machine; this adapter (legacy side) is the *mechanism* it injects — it
+    delegates to :class:`acp.results.remote_structure_cache.RemoteStructureCache`
+    (``catalog_ready`` / ``job_root`` / ``fetch_catalog``), the exact same path
+    the scheduler's in-process prefetch used, so the ``pending_fetch → ready``
+    flip and the on-disk cache layout are unchanged.
+
+    The executor never decides state: it only reports whether the catalog is
+    prepared and is retryable.  A non-terminal / local / missing job is a
+    permanent (non-retryable) skip; a transport failure is a retryable one.
+    """
+
+    def __init__(
+        self,
+        *,
+        job_lookup: Callable[[str], Any],
+        cache_provider: Callable[[], RemoteStructureCache],
+        is_remote: Callable[[Any], bool] | None = None,
+    ) -> None:
+        self._job_lookup = job_lookup
+        self._cache_provider = cache_provider
+        self._is_remote = is_remote
+
+    def prefetch(self, job_id: str) -> PrepareExecutionResult:
+        record = self._job_lookup(job_id)
+        if record is None:
+            return PrepareExecutionResult(prepared=False, detail="job_missing", retryable=False)
+        status = getattr(record, "status", None)
+        if status is None or not getattr(status, "is_terminal", False):
+            return PrepareExecutionResult(prepared=False, detail="not_terminal", retryable=False)
+        if self._is_remote is not None and not self._is_remote(record):
+            return PrepareExecutionResult(prepared=False, detail="not_remote", retryable=False)
+        cache = self._cache_provider()
+        workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        work_dir = Path(str(record.work_dir))
+        if cache.catalog_ready(work_dir, workflow):
+            return PrepareExecutionResult(
+                prepared=True,
+                availability=Availability.READY,
+                detail="already_ready",
+                retryable=False,
+            )
+        if cache.catalog_ready(cache.job_root(job_id), workflow):
+            return PrepareExecutionResult(
+                prepared=True,
+                availability=Availability.READY,
+                detail="already_ready",
+                retryable=False,
+            )
+        if cache.fetch_catalog(record, workflow) is not None:
+            return PrepareExecutionResult(
+                prepared=True,
+                availability=Availability.READY,
+                detail="fetched",
+                retryable=False,
+            )
+        return PrepareExecutionResult(
+            prepared=False,
+            availability=Availability.PREPARING,
+            detail="not_ready",
+            retryable=True,
+        )
+
+    def execute(self, lease: PrepareLease) -> PrepareExecutionResult:
+        return self.prefetch(lease.job_id)
+
+
+def build_prepare_executor(
+    *,
+    job_lookup: Callable[[str], Any],
+    cache_provider: Callable[[], RemoteStructureCache] | None = None,
+    cache: RemoteStructureCache | None = None,
+    is_remote: Callable[[Any], bool] | None = None,
+) -> _PrepareExecutorAdapter:
+    """Build the injected prepare executor from the real remote cache path.
+
+    Args:
+        job_lookup: ``job_id -> JobRecord | None`` (the scheduler store).
+        cache_provider: Lazy accessor for the shared ``RemoteStructureCache``
+            singleton (the fetcher factory inside it resolves the current
+            fetcher, so the adapter stays valid across fetcher swaps).
+        cache: Pre-built cache (alternative to ``cache_provider``).
+        is_remote: Optional predicate distinguishing remote jobs; when omitted
+            every terminal job is eligible.
+
+    Returns:
+        An object satisfying :class:`acp_services.data.operations.PrepareExecutorPort`.
+    """
+    if cache_provider is None:
+        if cache is None:
+            raise ValueError("build_prepare_executor requires cache or cache_provider")
+        resolved = cache
+
+        def cache_provider() -> RemoteStructureCache:  # type: ignore[misc]
+            return resolved
+
+    return _PrepareExecutorAdapter(
+        job_lookup=job_lookup,
+        cache_provider=cache_provider,
+        is_remote=is_remote,
+    )
