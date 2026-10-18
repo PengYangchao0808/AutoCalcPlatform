@@ -1466,17 +1466,20 @@ def test_viewer_framing_container_stability_wait() -> None:
 
 def test_all_viewer_load_sites_use_shared_framing() -> None:
     html = read_workbench_content()
+    # T18: the preview 3D rebuild moved to the S2 slice module, so its load site
+    # is asserted against that file (the wizard.js name is a thin delegate).
+    s2_module = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js").read_text(encoding="utf-8")
     load_sites = (
-        "renderMolDoc",
-        "energyGraphLoadFrameGeometry",
-        "renderPreviewStructure3D",
-        "renderReactionChanges3D",
+        ("renderMolDoc", html),
+        ("energyGraphLoadFrameGeometry", html),
+        ("renderPreviewStructure3D", s2_module),
+        ("renderReactionChanges3D", html),
     )
 
-    for name in load_sites:
+    for name, source in load_sites:
         marker = f"function {name}("
-        assert html.count(marker) == 1, f"{name} must be defined once"
-        body = html.split(marker, 1)[1]
+        assert source.count(marker) == 1, f"{name} must be defined once"
+        body = source.split(marker, 1)[1]
         body = body.split("\nasync function ", 1)[0].split("\nfunction ", 1)[0]
         assert "scheduleViewerFraming(" in body, f"{name} bypasses shared framing"
         assert ".zoomTo();" not in body, f"{name} contains a bare zoomTo call"
@@ -9232,10 +9235,12 @@ def test_batch_preview_failure_explicit() -> None:
     assert "function _renderPreviewFailure(" in html, "_renderPreviewFailure missing"
     assert "mc-preview-failure" in html, "Failure CSS class missing"
     assert "mc-preview-unverified" in html, "Unverified CSS class missing"
-    # catch path routes to failure renderer
-    catch_body = html.split("function _fetchBatchConfigPreview()", 1)[1]
-    catch_body = catch_body.split("function _renderServerPreview", 1)[0]
-    assert "_renderPreviewFailure(" in catch_body
+    # T18: the catch path now lives in the S2 slice module (wizard.js keeps the
+    # same-name delegate). catch path routes to the failure renderer.
+    s2_module = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js").read_text(encoding="utf-8")
+    catch_body = s2_module.split("function fetch()", 1)[1]
+    catch_body = catch_body.split("function renderServer", 1)[0]
+    assert "renderFailure(" in catch_body
 
 
 def test_batch_server_preview_rendering() -> None:
@@ -9413,10 +9418,16 @@ def test_batch_convergence_canonicalization() -> None:
 def test_batch_preview_local_summary_for_active_role() -> None:
     """Local summary renders for the active role only."""
     html = read_workbench_content()
-    body = html.split("function _renderLocalSummary()", 1)[1]
-    body = body.split("\n        }", 1)[0]
-    assert "_batchRoleActive" in body, "Must use active role for local summary"
-    assert "_batchRoles" in body, "Must read from _batchRoles"
+    # T18: the renderer body moved to the S2 slice module; wizard.js supplies the
+    # active-role / roles accessors to the factory, so pin the wiring there.
+    assert "getActiveRole: function() { return _batchRoleActive; }" in html, \
+        "Must use active role for local summary"
+    assert "getRoles: function() { return _batchRoles; }" in html, \
+        "Must read from _batchRoles"
+    s2_module = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js").read_text(encoding="utf-8")
+    body = s2_module.split("function renderLocal()", 1)[1].split("\n    }", 1)[0]
+    assert "getActiveRole()" in body, "Local summary must resolve the active role"
+    assert "getRoles()" in body, "Local summary must resolve the role drafts"
 
 
 def test_batch_engine_defaults_match_backend() -> None:
@@ -13035,6 +13046,39 @@ def test_wizard_upload_parse_slice_owner_and_h3_guard() -> None:
     assert "window.ACPWizardUploadParse" in wizard_src, "delegates must route to the S1 module"
 
 
+def test_wizard_preview_validate_slice_owner_and_h4_guard() -> None:
+    """T18 S2: preview/validate state is owned by preview-validate.js; the batch
+    preview is aborted on method-config open and on cancel/close (H-4 late-preview
+    guard) and the old global names stay as thin delegates in wizard.js."""
+    module_path = FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js"
+    module_src = module_path.read_text(encoding="utf-8")
+    assert "function renderStructurePreview(" in module_src
+    assert "function renderPreviewStructure3D(" in module_src
+    assert "function createValidation(" in module_src
+    assert "function createHessianPreview(" in module_src
+    assert "function createBatchConfigPreview(" in module_src
+    assert "function abortBatchPreviews()" in module_src
+    assert "hessianPreviewToken" in module_src, "hessian preview state must live in the module"
+    assert "_previewGeneration" in module_src, "batch preview generation must live in the module"
+    html = read_workbench_content()
+    wizard_src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard.js").read_text(encoding="utf-8")
+    # S2 state lease: no closure-local validate/hessian/batch preview state left.
+    assert "\n  var validateTimer" not in wizard_src, "validation state must live in the S2 module"
+    assert "_lastValidationResult =" not in wizard_src, "validation state must live in the S2 module"
+    assert "var hessianPreviewTimer" not in wizard_src, "hessian preview state must live in the S2 module"
+    assert "var _previewGeneration" not in wizard_src, "batch preview state must live in the S2 module"
+    # Old globals remain callable as thin delegates.
+    for name in ("renderStructurePreview", "renderLoadedStructuresList",
+                 "_refreshWizardInputForm", "renderPreviewStructure3D"):
+        assert f"function {name}() {{\n  return window.ACPWizardPreviewValidate." in wizard_src, \
+            f"thin delegate missing for {name}"
+    # H-4: open + cancel/close abort any in-flight batch preview.
+    open_fn = html.split("async function openMethodConfig()", 1)[1].split("\n  var title", 1)[0]
+    assert "abortBatchPreviews()" in open_fn, "H-4: openMethodConfig must abort stale batch previews"
+    revert_fn = html.split("function revertMethodDraft()", 1)[1].split("\n  }", 1)[0]
+    assert "abortBatchPreviews()" in revert_fn, "H-4: revertMethodDraft must abort stale batch previews"
+
+
 def test_candidate_details_i18n_keys_in_both_locales() -> None:
     """cd.* i18n keys exist in both zh-CN and en-US blocks."""
     html = read_workbench_content()
@@ -13766,7 +13810,10 @@ def test_validate_method_warnings_rendered_in_modal_and_summary() -> None:
 
 def _nmr_panel_region(html: str) -> str:
     start = html.index("// ── NMR report viewer")
-    end = html.index("// ── CatalogUtils", start)
+    # T18: the S1/S2 wizard slice modules now sit between nmr.js and wizard.js in
+    # the concatenated page; bound the region at the first slice module banner so
+    # it stays nmr.js-only.
+    end = html.index(" * ACP Workbench — wizard slice S1", start)
     return html[start:end]
 
 
