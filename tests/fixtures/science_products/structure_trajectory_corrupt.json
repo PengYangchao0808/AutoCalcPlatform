@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "product_kind": "structure_trajectory",
+  "identity": {
+    "product_kind": "structure_trajectory",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "input_digest": "sha256:abababababababababababababababababababababababababababababababab",
+    "algorithm": "structure_trajectory",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "available",
+  "complete": true,
+  "errors": [],
+  "payload": {
+    "coordinate_units": "angstrom",
+    "topology_source": "orca_xyz",
+    "atom_order": [
+      "C:0"
+    ],
+    "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+    },
+    "frames": [
+      {
+        "frame_id": "structure_trajectory:frame:0",
+        "frame_index": "zero",
+        "coordinate_units": "angstrom",
+        "topology_source": "orca_xyz",
+        "atoms": [
+          {
+            "atom_uid": "C:0",
+            "element": "C",
+            "coordinate": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
