@@ -1,0 +1,57 @@
+{
+  "view_type": "scan",
+  "node_type": "frame",
+  "nodes": [
+    {
+      "id": "structure_trajectory:frame:0",
+      "label": "Frame 1",
+      "type": "frame",
+      "frame_index": 0,
+      "x": null,
+      "energy": null,
+      "status": "unknown",
+      "geometry_ref": "RESULT/trajectories/scan.xyz",
+      "metadata": {
+        "topology_source": "orca_xyz",
+        "coordinate_units": "angstrom",
+        "block_index": 0,
+        "source": {
+          "source_kind": "orca_output",
+          "artifact": "RESULT/trajectories/scan.xyz",
+          "native_index": 0,
+          "location": "trajectory"
+        }
+      }
+    },
+    {
+      "id": "structure_trajectory:frame:2",
+      "label": "Frame 3",
+      "type": "frame",
+      "frame_index": 2,
+      "x": null,
+      "energy": null,
+      "status": "unknown",
+      "geometry_ref": "RESULT/trajectories/scan.xyz",
+      "metadata": {
+        "topology_source": "orca_xyz",
+        "coordinate_units": "angstrom",
+        "block_index": 0,
+        "source": {
+          "source_kind": "orca_output",
+          "artifact": "RESULT/trajectories/scan.xyz",
+          "native_index": 2,
+          "location": "trajectory"
+        }
+      }
+    }
+  ],
+  "annotations": [],
+  "skipped_frames": [
+    {
+      "frame_index": 1,
+      "missing_reason": "missing_atom_uid"
+    }
+  ],
+  "unavailable": null,
+  "migrations": []
+}
