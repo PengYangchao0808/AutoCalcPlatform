@@ -8,6 +8,7 @@
 | 计划来源 | `.omo/plans/acp-parallel-plan-3-cccp.md` todo 10（C01-s4）；交付内容=索引 §5 十要素 + 评审 C4 四状态表 + 评审 R2-P0-4 注入/装配列 |
 | B 侧消费入口 | `docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md:88-98`（B06：按 C01 闭包逐工作流启用；未满足切片保持旧兼容路径且不声称 worker 已独立） |
 | status | `delivered`（provider 侧；**未 integrated** — B 应用并验收前不得置 `integrated`） |
+| applied_commit（provider 交付提交） | `ffcf1b821c89100ac0a5166a8cbc3cbe3b751a66`（HN-01 入库提交）；`handoff_registry.md` HN-01 行回填（`delivered` + 该 sha）随本交付第二提交入库 |
 | 范围 | **T10a 最小交付**（8 个已判独立工作流闭包记录，立即交付，不等 T8/T9）+ **T10b 滚动汇总**（阻塞工作流与阻塞任务；后续 HN 包增量更新） |
 
 ---
@@ -314,7 +315,7 @@ APPLY_CHECK=PASS exit=0
 
 ## 16. DoneClaim（T10）
 
-- **交付**：本文件（HN-01，tracked）+ `handoff_registry.md` HN-01 行回填（`status=delivered`、`applied_commit=交付提交`）——共 2 文件，pathspec 提交，零产品代码/测试/fixture 改动，未 apply 任何补丁到活树。
+- **交付**：本文件（HN-01，tracked，入库提交 `ffcf1b8`）+ `handoff_registry.md` HN-01 行回填（`status=delivered`、`applied_commit=ffcf1b8`）——共 2 文件、两次 pathspec 提交（同一提交信息），零产品代码/测试/fixture 改动，未 apply 任何补丁到活树。
 - **验证命令与结果（原文见 §9.1、§14.1）**：
   - `python3.11 scripts/verify_cccp_slice_guard.py` → `checks: 5 passed: 5 failed: 0`，EXIT=0（T48 harness 5/5 PASS）
   - `python3.11 scripts/verify_cccp_isolation.py` → `15/15 structured, leaked=none`，EXIT=0
