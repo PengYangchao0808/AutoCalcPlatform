@@ -271,6 +271,7 @@ _ENRICHMENT_CACHE_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from acp.chem.composition import HessianResolution
+    from acp_services.runtime.commands import RuntimeCommands
 
 
 class HessianResolver(Protocol):
@@ -288,6 +289,23 @@ def _manager(request: Request) -> JobManager:
     if manager is None:
         raise HTTPException(status_code=503, detail="Job scheduler not initialized")
     return manager
+
+
+def _commands(request: Request) -> RuntimeCommands:
+    """Return the Runtime command surface for submit/control entries (todo 25).
+
+    Every submit/control/edit/purge endpoint routes through this single owner;
+    the Runtime use cases forward once to the injected composition-root ports.
+    An explicit ``app.state.runtime_commands`` may be injected (test seam /
+    future self-sufficient bootstrap), otherwise it is built over the live
+    manager.
+    """
+    commands = getattr(request.app.state, "runtime_commands", None)
+    if commands is not None:
+        return commands
+    from acp.services_bootstrap import build_runtime_commands
+
+    return build_runtime_commands(_manager(request))
 
 
 def _entry_authorizer(request: Request) -> Any:
@@ -2342,7 +2360,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     except (ExecutionTargetError, NoCapableNodeError) as exc:
         raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
     try:
-        record = manager.submit(spec)
+        record = _commands(request).submit(spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if batch_snapshots:
@@ -5063,8 +5081,7 @@ def _read_effective_config(record: JobRecord) -> dict[str, Any] | None:
 
 @router.post("/jobs/{job_id}/cancel", response_model=V1JobRecordModel)
 def cancel_job(job_id: str, request: Request) -> V1JobRecordModel:
-    manager = _manager(request)
-    record = manager.cancel(job_id)
+    record = _commands(request).cancel(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return _record_to_v1_model(record)
@@ -5131,13 +5148,13 @@ def _run_job_state_action(action: Callable[[str], JobRecord], job_id: str) -> V1
 @router.post("/jobs/{job_id}/pause", response_model=V1JobRecordModel)
 def pause_job(job_id: str, request: Request) -> V1JobRecordModel:
     """Pause a RUNNING job (SIGSTOP locally, ``bstop`` on LSF) → PAUSED."""
-    return _run_job_state_action(_manager(request).pause_job, job_id)
+    return _run_job_state_action(_commands(request).pause, job_id)
 
 
 @router.post("/jobs/{job_id}/unpause", response_model=V1JobRecordModel)
 def unpause_job(job_id: str, request: Request) -> V1JobRecordModel:
     """Revive a PAUSED job in place (SIGCONT locally, ``bresume`` on LSF) → RUNNING."""
-    return _run_job_state_action(_manager(request).unpause_job, job_id)
+    return _run_job_state_action(_commands(request).unpause, job_id)
 
 
 @router.post("/jobs/{job_id}/continue", response_model=V1JobRecordModel)
@@ -5152,10 +5169,9 @@ def continue_job(
     unknown/disabled/incapable override → HTTP 400 with the same error
     codes as job creation; ``None`` returns to the source node.
     """
-    manager = _manager(request)
     target_node = body.target_node if body else None
     try:
-        record = manager.continue_job(job_id, target_node=target_node)
+        record = _commands(request).continue_job(job_id, target_node=target_node)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
     except (ExecutionTargetError, NoCapableNodeError) as exc:
@@ -5178,9 +5194,8 @@ def rerun_job(
     queueing. The optional legacy ``project_id`` body is accepted only when it
     matches the current project.
     """
-    manager = _manager(request)
     try:
-        record = manager.rerun_job(job_id, project_id=body.project_id if body else None)
+        record = _commands(request).rerun(job_id, project_id=body.project_id if body else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
     except ValueError as exc:
@@ -5735,7 +5750,7 @@ def submit_job_edit_recalculate(
         payload = _edit_payload_dict(job_id, body, spec)
         payload_hash = compute_payload_hash(payload)
     try:
-        result = manager.edit_recalculate(
+        result = _commands(request).edit_recalculate(
             job_id,
             mode=body.mode,
             new_spec=spec,
@@ -5804,8 +5819,7 @@ def purge_jobs(body: V1JobPurgeRequest, request: Request) -> V1JobPurgeResponse:
             detail="Refusing to purge the whole queue: provide job_ids or at least "
             "one of status / project_id / older_than_days",
         )
-    manager = _manager(request)
-    report = manager.purge_jobs(
+    report = _commands(request).purge(
         job_ids=body.job_ids,
         status=body.status,
         project_id=body.project_id,
@@ -6522,7 +6536,7 @@ def run_irc_from_artifact(
     )
     try:
         validate_execution_request(irc_spec)
-        record = manager.submit(irc_spec)
+        record = _commands(request).submit(irc_spec)
     except ExecutionTargetError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:

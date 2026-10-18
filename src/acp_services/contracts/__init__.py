@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from acp_services.contracts.injection import (
     JobControlPort,
+    JobEditPort,
+    JobRegistrationPort,
     JobStorePort,
+    JobSubmissionPort,
     MethodConfigPort,
     MigrationsPort,
     PlanExecutionPort,
@@ -25,7 +28,10 @@ from acp_services.contracts.injection import (
 
 __all__ = [
     "JobControlPort",
+    "JobEditPort",
+    "JobRegistrationPort",
     "JobStorePort",
+    "JobSubmissionPort",
     "MethodConfigPort",
     "MigrationsPort",
     "PlanExecutionPort",
