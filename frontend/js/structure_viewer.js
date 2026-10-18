@@ -1465,10 +1465,20 @@
     if (md && typeof md.i === "number") {
       var baseScale = 0.25;
       try { if (typeof getCurrentSphereScale === "function") baseScale = getCurrentSphereScale(); } catch (_) { /* app helper absent */ }
+      /* Model-A highlight: instance-level addStyle targets the CURRENT model
+         (B was just added), so A is styled through its getModel(0) token.
+         Viewers without token models keep the { model: 0 } selection form. */
+      var modelA = (typeof v.getModel === "function") ? v.getModel(0) : null;
       try {
-        v.addStyle({ index: md.i, model: 0 }, {
-          sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
-        });
+        if (modelA && typeof modelA.addStyle === "function") {
+          modelA.addStyle({ index: md.i }, {
+            sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
+          });
+        } else {
+          v.addStyle({ index: md.i, model: 0 }, {
+            sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
+          });
+        }
       } catch (_) { /* highlight is cosmetic */ }
     }
     try { v.render(); } catch (_) { /* render is best-effort */ }
