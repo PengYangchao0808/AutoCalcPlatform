@@ -410,3 +410,123 @@
 | 日期 | contract_version | 变更 | 提交 |
 |---|---|---|---|
 | 2026-10-18 | 1 | 首片冻结（四类 + 事件流 + 发行） | n/a |
+
+---
+
+## 10. 执行信封/回执 v1/v2 schema 字段表（B06-1 / todo 30）
+
+**Status:** APPEND-ONLY extension of §5（不删不改已冻结字段；§5.1/§5.2 仍是权威白名单）。
+**Module:** `src/acp_services/contracts/envelope.py`（stdlib-only；**不得** import `acp`，见 `public_allowlist.md`）。
+**Checker:** `tests/test_services_envelope.py`（消费 `execution_*` 样例 + 负例）。
+**Samples:** 复用 §5 已冻结的 `tests/baseline/services-evidence/contract_samples/execution_*.json`，**不重写**；本节的「v1 隐式 legacy / v2 显式」即样例中的 `envelope_version` `0` / `1`。
+
+### 10.1 版本别名映射（消除计划散文 ↔ 冻结 wire 名）
+
+| 计划散文（B06-1） | wire 字段（§5.1，样例） | 语义 | 解码动作 |
+|---|---|---|---|
+| v1 隐式 legacy | `envelope_version = 0`（或字段缺失） | 无显式信封的旧载荷 | `migrate_legacy_envelope()` 折叠别名 + 升版 + 补默认 |
+| v2 显式 envelope | `envelope_version = 1` | 当前显式信封 | 直接严格解码 |
+
+`Receipt` 同构：`receipt_version` `0`=legacy、`1`=current。旧版仅接受 camelCase/`schema_version` 别名折叠（见 §10.6），不静默丢字段。
+
+### 10.2 ExecutionEnvelope 字段（§5.1 冻结 + B06-1 追加）
+
+| 字段（envelope） | 类型 | 必填 | 冻结/追加 | 语义（真实驻点） |
+|---|---|---|---|---|
+| `envelope_version` | int | 是 | §5.1 冻结 | 信封版本；`schema_version` 为其属性别名。 |
+| `job_id` | str | 是 | §5.1 冻结 | 平台任务身份（仅 id，非展示名）。 |
+| `attempt` | int | 是 | §5.1 冻结 | 尝试序号（≥1，调度器唯一递增）。 |
+| `submission_id` | str | 是 | §5.1 冻结 | `sub_`+sha256(`job_id:attempt`)[:16]（`remote/submission.py:56-64`）；`expected_submission_id()` 等价重算。 |
+| `release_id` | str | 是 | §5.1 冻结 | 内容寻址执行版本。 |
+| `owner` | str | 是 | §5.1 冻结 | 执行 owner（fencing 基础）。 |
+| `fencing_token` | str | 是 | §5.1 冻结 | 防旧持有者写入。 |
+| `plan_digest` | str | 是 | §5.1 冻结 | 冻结 plan 摘要。 |
+| `plan_identity` | str | 是 | §5.1 冻结 | plan 层身份（`identity.py:366`）。 |
+| `data_bindings` | list[StorageBinding] | 是（可空） | §5.1 冻结 | 数据绑定与工件摘要。 |
+| `resource_budget` | object | 是 | §5.1 冻结 | 资源预算（见 §10.4）。 |
+| `scientific_closure` | object | 是 | §5.1 冻结 | 科学闭包（见 §10.5）。 |
+| `release_digest` | str | 否 | B06-1 追加 | release manifest 摘要（`release.py:109-155`）。 |
+| `step_identities` | list[str] | 否 | B06-1 追加 | step 层身份快照（`identity.py:374-385`）。 |
+| `protocol` | enum 或 null | 否 | B06-1 追加 | 所选执行协议，**按 attempt 冻结**（`local`/`lsf`/`slurm`/`podman`）。 |
+| `entrypoint` | enum | 否 | B06-1 追加 | 入口白名单：`worker.execute`/`worker.bootstrap`/`worker.resume`/`worker.reconcile`。 |
+| `required_capabilities` | list[str] | 否 | B06-1 追加 | 所需能力（`TaskKind` 词表，`requests.py:54`）。 |
+| `task_context` | **禁止** | — | §5.1 冻结 | TaskContext 不得序列化（见 §10.7）。 |
+
+平台 UI 身份（task custom_name、organization 标签、浏览器 tab、展示名）**禁止**进入信封。
+
+### 10.3 StorageBinding 字段（B06-1 定义）
+
+| 字段（binding） | 类型 | 必填 | 语义 |
+|---|---|---|---|
+| `binding_id` | str | 是 | 稳定绑定 ID（Data 唯一分配；显示名变更不重分配）。 |
+| `tenant_id` | str | 否 | 稳定租户身份。 |
+| `project_id` | str | 否 | 稳定项目身份。 |
+| `endpoint` | str | 否 | 存储端点（如节点/执行后端）。 |
+| `root` | str | 否 | 受控根。 |
+| `relative_path` | str | 否 | 完整相对路径。 |
+| `mapping_version` | int | 否 | 映射版本。 |
+| `artifact_digests` | map[str,str] | 否 | 相对工件路径 → sha256（工件摘要）。 |
+
+### 10.4 ResourceBudget 字段（复用 resolve_job_resources 语义）
+
+| 字段（budget） | 类型 | 必填 | 语义 |
+|---|---|---|---|
+| `nproc` | int 或 null | 否 | 核数（规范名；别名 `cores`/`ncores` 折叠）。 |
+| `mem` | str 或 null | 否 | 归一化带后缀内存（`resolve_job_resources` 输出名）。 |
+| `mem_mb` | int 或 null | 否 | 整数 MB（别名 `memory_gb` → ×1024 折叠）。 |
+| `queue` | str 或 null | 否 | LSF 队列。 |
+| `walltime_s` | int 或 null | 否 | 时长预算（秒）。 |
+| `partial` | bool | 否 | 部分预算标记（§5.4 partial 语义）。 |
+| `extra` | object | 否 | 其余调度元数据（如 `batch_id`/`parallelism`）透传。 |
+
+> 复用 `resolve_job_resources`（`src/acp/scheduler/resources.py:14-41`）的**字段名与语义**，但因 `acp_services → acp` 禁令**不 import** 该模块。
+
+### 10.5 ScientificClosure 字段
+
+| 字段（closure） | 类型 | 必填 | 语义 |
+|---|---|---|---|
+| `task_kind` | str | 是 | 冻结 TaskRequest 的任务种类。 |
+| `payload_schema` | int | 否 | 载荷 schema 号。 |
+| `result_schema` | int | 否 | 结果 schema 号。 |
+| `algorithm_version` | str | 否 | 算法版本。 |
+| `dependency_digests` | map[str,str] | 否 | 工作流依赖/插件摘要。 |
+
+### 10.6 ExecutionReceipt 与 ExecutionError 字段（§5.2 冻结 + B06-1 追加）
+
+| 字段（receipt） | 类型 | 必填 | 冻结/追加 | 语义 |
+|---|---|---|---|---|
+| `receipt_version` | int | 是 | §5.2 冻结 | 回执版本；`schema_version` 为其属性别名。 |
+| `job_id` | str | 是 | §5.2 冻结 | 任务身份。 |
+| `attempt` | int | 是 | §5.2 冻结 | 尝试序号（≥1）。 |
+| `submission_id` | str | 是 | §5.2 冻结 | 对应提交身份。 |
+| `state` | enum | 是 | §5.2 冻结 | `completed`/`failed`/`cancelled`/`blocked`。 |
+| `result_digest` | str | 条件 | §5.2 冻结 | 科学结果摘要；空产出为 `""`（合法空）。 |
+| `errors` | list[str 或 object] | 是（可空） | §5.2 冻结 + 追加 | 空合法；`str` 保持原样，`{code,message,retryable}` 为 B06-1 追加的 typed 错误（`list[str]` 仍是合法子集）。 |
+| `written_at` | str(ISO-8601) | 是 | §5.2 冻结 | 回执时间。 |
+| `release_id` | str | 否 | B06-1 追加 | 执行版本。 |
+| `release_digest` | str | 否 | B06-1 追加 | release 摘要。 |
+| `owner` | str | 否 | B06-1 追加 | 执行 owner。 |
+| `fencing_token` | str | 否 | B06-1 追加 | fencing。 |
+| `plan_identity` | str | 否 | B06-1 追加 | plan 层身份。 |
+| `step_identities` | list[str] | 否 | B06-1 追加 | step 层身份。 |
+| `data_bindings` | list[StorageBinding] | 否 | B06-1 追加 | 数据绑定。 |
+| `evidence_digests` | map[str,str] | 否 | B06-1 追加 | 证据/工件摘要。 |
+| `task_context` | **禁止** | — | §5.2 冻结 | TaskContext 不得序列化。 |
+
+`ExecutionError` = `{code: str, message: str, retryable: bool}`。
+
+`migrate_legacy_receipt()` 折叠 camelCase/`schema_version` 别名并升版。
+
+### 10.7 硬语义（负例）
+
+- **TaskContext 不序列化**：`task_context`/`context`/`progress`/`cancelled`/`config`/`workdir`/`backend`/`capability_extras` 等运行时字段出现即 `TaskContextSerializationError`；值为 callable/lock/泛型 dataclass/TaskContext 实例同样拒绝（`ensure_no_runtime_state`）。
+- **协议按 attempt 冻结**：`select_protocol()` 同一 attempt 只可调用一次；resume 重选 → `AttemptProtocolError`；新 attempt 经 `advance_attempt(next=self.attempt+1)` 才可重选。
+- **入口/能力不支持明确失败**：`entrypoint ∉` 白名单 或 `required_capabilities ⊄` 词表 → `UnsupportedCapabilityError`（不被静默降级）。
+- **未知字段拒绝**：信封/回执出现契约外字段 → `UnknownFieldError`（含 UI 身份字段）。
+- **未来版本拒绝**：`envelope_version`/`receipt_version` 高于当前 → `EnvelopeVersionError`。
+
+### 10.8 变更记录（追加）
+
+| 日期 | contract_version | 变更 | 提交 |
+|---|---|---|---|
+| 2026-10-18 | 1 | B06-1 追加 ExecutionEnvelope/Receipt v1/v2 字段表（§10）；§5 白名单未改，仅追加 `release_digest`/`step_identities`/`protocol`/`entrypoint`/`required_capabilities`（信封）与 release/owner/fencing/plan/step/binding/evidence（回执）；`errors` 由 `list[str]` 扩展为 `list[str 或 typed]`（`str` 子集保留） | 待提交 |
