@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import posixpath
 import re
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -78,6 +80,7 @@ from acp.storage.backend import (
 )
 from acp.storage.layout import TaskLayout
 from acp.storage.manifest import ResultManifest
+from acp_services.runtime.projections import TaskProjectionStore, TaskRowProjection
 
 logger = logging.getLogger(__name__)
 
@@ -142,12 +145,115 @@ _ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset(
 )
 _ENRICHMENT_CAP = 200
 
+#: Compatibility switch for the pre-projection enrichment path.  The plan
+#: (``acp-parallel-plan-2-services`` todo 19) keeps ``_enrich_active_rows`` as a
+#: retained compatibility branch — deletion requires A-lane A04 "zero consumers"
+#: evidence in ``.omo/evidence/``.  While it is enabled, rows that the prepared
+#: projection does not cover are still enriched per request (legacy behaviour,
+#: which existing callers depend on).  Set ``ACP_TASK_VIEW_ENRICH_COMPAT=0`` to
+#: make the prepared snapshot authoritative: the query then never scans/parses
+#: ``state.json`` and an uncovered row simply shows its jobs base facts.
+_ENRICH_ACTIVE_ROWS_COMPAT: bool = os.environ.get(
+    "ACP_TASK_VIEW_ENRICH_COMPAT", "1"
+).strip().lower() not in ("0", "false", "no", "")
+
+
+class _ManagerTaskProjectionSource:
+    """Legacy-side :class:`TaskProjectionSourcePort` over a live ``JobManager``.
+
+    This adapter is the *only* place the v2 query surface reads ``state.json``
+    for task rows, and it is invoked exclusively by the projection store's
+    background/synchronous *refresh* — never by a request handler.  It reuses the
+    existing v1 enrichment helpers so the prepared projection is field-for-field
+    identical to the old per-request enrichment.
+    """
+
+    def __init__(self, manager: JobManager) -> None:
+        self._manager = manager
+
+    def collect(self, task_ids: Sequence[str]) -> list[TaskRowProjection]:
+        """Collect authoritative enrichment facts for *task_ids* (bounded)."""
+        from acp.api.v1_routes import _enrich_job_snapshot, _record_to_v1_model
+
+        records = self._manager.store.get_many([task_id for task_id in task_ids if task_id])
+        projections: list[TaskRowProjection] = []
+        for job_id, record in records.items():
+            model = _record_to_v1_model(record)
+            enriched = _enrich_job_snapshot(record, model, include_event=False)
+            fields: dict[str, Any] = {}
+            for field in (
+                "stage_index",
+                "stage_total",
+                "stage_detail",
+                "progress_state",
+                "display_method",
+            ):
+                value = getattr(enriched, field, None)
+                if value is not None:
+                    fields[field] = value
+            live = getattr(enriched, "live_status", None)
+            if live is not None:
+                fields["live_status"] = (
+                    live.model_dump() if hasattr(live, "model_dump") else live
+                )
+            projections.append(
+                TaskRowProjection(
+                    task_id=job_id,
+                    fields=fields,
+                    basis_revision=int(getattr(record, "revision", 0) or 0),
+                )
+            )
+        return projections
+
+
+def _projection_store(manager: JobManager) -> TaskProjectionStore:
+    """Return the manager's task-projection store, installing it on first use.
+
+    The store is created lazily and attached to the manager so every v2 query
+    for this manager shares one prepared snapshot.  Background refresh is on, so
+    the projection converges without a request ever scanning ``state.json``.
+    """
+    store = getattr(manager, "task_projection", None)
+    if isinstance(store, TaskProjectionStore):
+        return store
+    return install_task_projection(manager)
+
+
+def install_task_projection(
+    manager: JobManager,
+    *,
+    auto_refresh: bool = True,
+) -> TaskProjectionStore:
+    """Install (and return) the manager-owned task-projection store.
+
+    Args:
+        manager: The live scheduler manager whose jobs feed the projection.
+        auto_refresh: When ``False`` the store never updates on its own; a caller
+            must invoke :meth:`TaskProjectionStore.refresh` explicitly.  Tests
+            that assert the query path does zero synchronous scans use this to
+            keep the snapshot deterministic.
+    """
+    store = TaskProjectionStore(
+        source=_ManagerTaskProjectionSource(manager),
+        auto_refresh=auto_refresh,
+        max_batch=_ENRICHMENT_CAP,
+    )
+    manager.task_projection = store
+    return store
+
 
 def _enrich_active_rows(
     request: Request,
     rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Enrich active-row dicts with live stage/progress fields from state.json."""
+    """Compatibility branch: enrich active rows from ``state.json`` per request.
+
+    Retained for callers that have not yet moved to the prepared projection
+    (plan todo 19 keeps it until A-lane A04 records zero consumers).  It is the
+    *synchronous scan/parse* the projection path removes, so it is only reached
+    for rows the prepared snapshot does not cover and only while
+    ``_ENRICH_ACTIVE_ROWS_COMPAT`` is enabled.
+    """
     from acp.api.v1_routes import _enrich_job_snapshot, _record_to_v1_model
 
     manager = _manager(request)
@@ -456,10 +562,20 @@ def get_task_view(
     )
     result = query_project_tasks(manager.tasks, q)
 
-    # Enrich active rows with live stage/progress fields
-    _enrich_active_rows(
-        request, [row for group in result.get("groups", []) for row in group.get("jobs", [])]
+    # Projection-first enrichment: the query only reads the prepared snapshot and
+    # schedules a background refresh; it never scans/parses ``state.json`` itself.
+    # Rows the snapshot does not cover keep their jobs-authoritative base facts,
+    # except while the retained compatibility branch is enabled.
+    rows = [row for group in result.get("groups", []) for row in group.get("jobs", [])]
+    projection = _projection_store(manager)
+    projection.enrich_rows(rows)
+    projection.request_refresh(
+        row["id"] for row in rows if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
     )
+    if _ENRICH_ACTIVE_ROWS_COMPAT:
+        uncovered = [row for row in rows if not projection.covers(row["id"])]
+        if uncovered:
+            _enrich_active_rows(request, uncovered)
 
     facets_raw = result.get("facets", {})
     facets = V2TaskViewFacetsModel(
