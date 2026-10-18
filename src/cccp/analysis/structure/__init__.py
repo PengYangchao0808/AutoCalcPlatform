@@ -35,10 +35,18 @@ from cccp.analysis.structure.parsers import (
     parse_structure_text,
     parse_xyz_text,
 )
+from cccp.analysis.structure.structures import (
+    Structure,
+    StructureEnsemble,
+    StructureRecord,
+)
 
 __all__ = [
+    "Structure",
     "StructureAsset",
+    "StructureEnsemble",
     "StructureParseResult",
+    "StructureRecord",
     "count_elements_from_xyz",
     "detect_and_parse",
     "detect_format",
