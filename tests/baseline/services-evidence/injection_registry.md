@@ -35,7 +35,6 @@
 | `acp.scheduler.manager.JobManager.edit_recalculate`（编辑重算入口） | `acp_services.contracts.injection.JobEditPort`（Runtime `edit_recalculate` 用例转发面） | `todo 25` 至 `todo 26`（Runtime 用例接管同一执行 owner） | `todo 77` | `tests/test_services_runtime_usecases.py` |
 | `acp.scheduler.registration.register_completed_cli_job`（CLI 完成作业登记） | `acp_services.contracts.injection.JobRegistrationPort`（Runtime `register_completed_job` 用例转发面） | `todo 25`（CLI 提交入口经 Runtime 用例） | `todo 77` | `tests/test_services_runtime_usecases.py` |
 | `acp.calculations.executor.CalculationPlanExecutor`（plan dispatch + resume） | `acp_services.contracts.injection.PlanExecutionPort` | `todo 27` 至 `todo 31`（worker 只执行冻结 plan 并写回执） | `todo 77` | `tests/test_calculation_executor.py` |
-| `acp.calculations.step_requirements.evaluate_prerequisite`（步骤前置条件阻断） | `acp_services.contracts.injection.StepRequirementPort` | `todo 27` | `todo 77` | `tests/test_calculation_executor.py` |
 | `acp.calculations.result_publication.register_result_manifest` 与 `load_scientific_result`（发布 + 恢复读） | `acp_services.contracts.injection.ResultPublicationPort` | `todo 28` | `todo 77` | `tests/test_result_publication.py` |
 | `acp.catalog.normalize_and_validate_method_config` 与 `acp.cli._normalize_string_choices`（参数转换三 choke point） | `acp_services.contracts.injection.MethodConfigPort` | `todo 32` 或 `todo 42`（CLI/catalog 参数转换一次切换） | `todo 77` | `tests/test_acp_catalog.py` |
 | `acp.scheduler.remote.paths`（storage_relative_path / compose_remote_dir / resolve_remote_dir） | `acp_services.contracts.injection.RemotePathsPort` | `todo 12`（StorageBinding 唯一分配权威接管） | `todo 77` | `tests/test_remote_storage_identity.py`；`tests/test_services_storage_binding.py` |
@@ -43,7 +42,7 @@
 | `acp.scheduler.remote.submission`（submission_id_for / submission_lsf_name / lease_ttl_seconds / submit_lease_valid） | `acp_services.contracts.injection.RemoteSubmissionPort` | `todo 30` 至 `todo 33`（ExecutionEnvelope/Receipt 与提交意图接管） | `todo 77` | `tests/test_remote_submission_protocol.py` |
 | `acp.scheduler.projects.ProjectManager`（读取面） | `acp_services.contracts.injection.ProjectReadPort` | `todo 6`（原地迁入 `acp_services.workspace`，公开符号与表结构不变） | `todo 6`（迁移即移除该注入；旧路径改同实现转发） | `tests/test_acp_projects.py` |
 | `acp.scheduler.projects.ProjectManager`（实现体已原地迁入；旧路径为同实现转发） | `acp_services.workspace.projects.ProjectManager` | `todo 6`（B01-1 原地接管项目/成员/分组/settings owner） | `todo 77`（迁移收口：删除过渡 `ProjectReadPort` 注入与兼容转发面） | `tests/test_acp_services_isolation.py::test_project_manager_is_single_implementation` |
-| `acp.calculations.step_requirements.evaluate_prerequisite` 与 `acp.calculations.executor.CalculationPlanExecutor`（worker 分派前的步骤前置门与 plan 执行） | `acp_services.runtime.worker.FrozenWorker`（经 `StepRequirementPort` + `TaskExecutorPort`，默认 `CccpTaskExecutor`） | `todo 31`（worker 只执行冻结 plan、过前置门后写回执） | `todo 77`（任务执行注入收口至 Services 唯一实现） | `tests/test_services_worker_contract.py` |
+| `acp.calculations.step_requirements.evaluate_prerequisite` 与 `acp.calculations.executor.CalculationPlanExecutor`（worker 分派前的步骤前置门与 plan 执行） | `acp_services.runtime.worker.FrozenWorker`（步骤前置门已为 Services-native 默认；`TaskExecutorPort` 仍注入，默认 `CccpTaskExecutor`） | `todo 31`（worker 只执行冻结 plan、过前置门后写回执） | `todo 77`（步骤前置门注入已随之关闭；执行器注入待后续批次） | `tests/test_services_worker_contract.py` |
 | `acp.calculations.identity.compute_identity`（两层冻结 plan 身份复算，`identity.py:366-392`） | `acp_services.runtime.worker.PlanVerificationPort`（过渡期注入复算适配；独立复算归 todo 78） | `todo 31`（worker 校验冻结 plan 与 envelope 身份一致） | `todo 78`（自足装配入口从冻结数据复算身份，不再注入） | `tests/test_services_worker_contract.py` |
 | `acp.scheduler.store.JobStore.transition`（revision/status/attempt CAS 状态推进） | `acp_services.contracts.injection.JobStateAdvancePort`（controller 资格校验后唯一推进面） | `todo 31`（controller 校验回执资格后经 CAS 推进） | `todo 77`（store owner 接管，删除过渡注入） | `tests/test_services_worker_contract.py` |
 
@@ -58,11 +57,25 @@ identity `acp.X is acp_services.Y` 由 `tests/test_services_migration_equivalenc
 |---|---|---|---|---|
 | `acp.scheduler.store.JobStore`（db_path + schema 初始化入口） | `acp_services.store.store.JobStore`（唯一实现；`JobStorePort` 端口已删） | `todo 77` | `todo 77`（已移除 `JobStorePort` 注入） | `tests/test_services_migration_equivalence.py` |
 | `acp.scheduler.migrations.migrate`（版本化迁移入口） | `acp_services.store.migrations.migrate`（唯一实现；`MigrationsPort` 端口已删） | `todo 77` | `todo 77`（已移除 `MigrationsPort` 注入） | `tests/test_services_migration_equivalence.py` |
+| `acp.catalog.method_levels_to_cli_flags`（参数转换 CLI flag choke point） | `acp_services.runtime.method_flags.method_levels_to_cli_flags`（唯一实现；旧路径同对象转发） | `todo 77` | `todo 77`（remote `script_gen.py:26` 改指 Services） | `tests/test_services_migration_equivalence.py` |
+| `acp.calculations.step_requirements.evaluate_prerequisite`（步骤前置条件阻断） | `acp_services.runtime.step_requirements.evaluate_prerequisite`（唯一实现；`StepRequirementPort` 不再注入） | `todo 77` | `todo 77`（已移除 `ServicesPorts.step_requirements` 注入） | `tests/test_services_migration_equivalence.py` |
 
-> 仍属过渡装配：控制/recovery（`JobControlPort`/`JobSubmissionPort`/`JobEditPort`/
-> `JobRegistrationPort`/`JobStateAdvancePort`）、plan/step requirements（`PlanExecutionPort`/
-> `StepRequirementPort`）、Data cache、catalog 参数转换的其余 choke point（`MethodConfigPort`）
-> 未在本切片迁入；它们的实现闭包与 catalog/manager 深度耦合，另批迁移。
+### 已关闭 vs 延后边界（本切片声明范围）
+
+- **CLOSED（本切片）**：schema/store、migrations、参数转换 CLI flag choke point、plan/step requirements
+  （含 `acp.calculations.contracts` / `step_result` 同实现转发；见上表）。
+- **DEFERRED（保留行与移除条件，未标关闭）**：
+  1. **控制与恢复**（`JobControlPort`/`JobSubmissionPort`/`JobEditPort`/`JobRegistrationPort`/
+     `JobStateAdvancePort`）——按计划 todo 78 明确「过渡 controller 仍可由旧 ACP 装配（与独立 worker
+     区分）」，实现体仍在 `acp.scheduler.manager.JobManager`；另批迁移。
+  2. **Data writer/cache**（`RemoteStructureCache`/`TransferPipeline` 委托面）——委托已在 todos 11-15
+     就位；随对象存储/读取面工作另批迁移。
+  3. **`MethodConfigPort` catalog 归一化 choke point**（`normalize_and_validate_method_config`）——
+     依赖 `catalog.py` 的 `FIELD_DEFINITIONS`/`METHOD_META`/`keyword_registry`，深耦合，随专用批次迁移。
+
+> 上述延后项**不阻塞 todo 78 的 worker 独立性**：独立 worker 只需 envelope + StorageBinding +
+> step requirements（本切片已 Services-native）+ CCCP 任务执行 + receipt 写入——不依赖 controller/
+> manager、Data cache 或 catalog 归一化。
 
 > **B06-2 worker 记（todo 31）**: 本阶段仅完成**端口收敛**——worker 侧 `src/acp_services/runtime/**`
 > 只经显式 Protocol（`PlanVerificationPort` / `StepRequirementPort` / `TaskExecutorPort`）装配，
