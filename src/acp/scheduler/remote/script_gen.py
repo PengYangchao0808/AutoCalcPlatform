@@ -23,7 +23,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from acp.catalog import method_levels_to_cli_flags
 from acp.scheduler.jobs import (
     SCAN_CONFIG_FILENAME,
     JobSpec,
@@ -42,6 +41,7 @@ from acp.scheduler.jobs import (
 )
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.resources import resolve_job_resources, with_job_resources
+from acp_services.runtime.method_flags import method_levels_to_cli_flags
 from cccp.utils.resource_utils import mem_to_mb
 
 logger = logging.getLogger(__name__)
