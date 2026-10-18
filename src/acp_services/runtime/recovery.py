@@ -34,7 +34,7 @@ hold when reached **through** the Runtime seam, and
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -43,26 +43,35 @@ from acp_services.contracts.injection import (
     ResultPublicationPort,
     StepRequirementPort,
 )
+from acp_services.runtime.step_requirements import (
+    evaluate_prerequisite as _evaluate_prerequisite,
+)
 
 __all__ = ["RuntimeRecovery"]
 
 
 @dataclass(frozen=True)
+class _NativeStepRequirementGate:
+    """Default step-requirement gate backed by the Services-native evaluator."""
+
+    def evaluate_prerequisite(self, prior: Any, kind: Any, item_symbols: Any) -> Any:
+        return _evaluate_prerequisite(prior, kind, item_symbols)
+
+
+@dataclass(frozen=True)
 class RuntimeRecovery:
-    """Injected-port planning/recovery surface (single owner, forwards once).
+    """Planning/recovery surface (single owner, forwards once).
 
     A frozen bundle of the three planning/recovery ports the Runtime use cases
     need. Each method calls exactly one port method and returns that call's
-    result unmodified. The Runtime does not own planning/recovery state: the
-    single owner remains the injected implementation until the migration tasks
-    (the ``PlanExecutionPort`` / ``StepRequirementPort`` /
-    ``ResultPublicationPort`` registry rows) move it into this package and
-    delete the injection.
+    result unmodified. The step-requirement gate defaults to the Services-native
+    evaluator (B05-7 / todo 77 migrated it in-package); the planning and
+    publication implementations remain injected until their own migration batch.
     """
 
     planning: PlanExecutionPort
-    step_requirements: StepRequirementPort
     publication: ResultPublicationPort
+    step_requirements: StepRequirementPort = field(default_factory=_NativeStepRequirementGate)
 
     def execute(
         self,

@@ -28,7 +28,6 @@ from acp.calculations.result_publication import (
     load_scientific_result,
     register_result_manifest,
 )
-from acp.calculations.step_requirements import evaluate_prerequisite
 from acp.catalog import normalize_and_validate_method_config
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.remote import paths as remote_paths
@@ -221,7 +220,6 @@ def build_services_ports(
         task_views=SimpleNamespace(query_project_tasks=query_project_tasks),
         control=control,
         planning=CalculationPlanExecutor(),
-        step_requirements=SimpleNamespace(evaluate_prerequisite=evaluate_prerequisite),
         publication=SimpleNamespace(
             register_result_manifest=register_result_manifest,
             load_scientific_result=load_scientific_result,

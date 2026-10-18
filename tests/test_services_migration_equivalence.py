@@ -32,7 +32,11 @@ _SERVICES_ROOT = _REPO_ROOT / "src" / "acp_services"
 def _migrated_modules() -> list[Path]:
     store_pkg = _SERVICES_ROOT / "store"
     files = sorted(p for p in store_pkg.rglob("*.py") if "__pycache__" not in p.parts)
-    files.append(_SERVICES_ROOT / "runtime" / "method_flags.py")
+    runtime = _SERVICES_ROOT / "runtime"
+    files.append(runtime / "method_flags.py")
+    files.append(runtime / "plan_contracts.py")
+    files.append(runtime / "step_result.py")
+    files.append(runtime / "step_requirements.py")
     return files
 
 
@@ -263,3 +267,131 @@ def test_normalize_legacy_method_scan_optimizer_engine(tmp_path: Path) -> None:
         {"levels": {"scan_optimizer": {"engine": "xtb"}, "opt": {}}}
     )
     assert normalized["levels"]["scan_optimizer"]["engine"] == "orca"
+
+
+# ---------------------------------------------------------------------------
+# (f) plan/step-requirements closure: identity + parity (fixed inputs)
+# ---------------------------------------------------------------------------
+
+
+def test_plan_closure_symbols_are_same_objects() -> None:
+    import acp.calculations.contracts as legacy_contracts
+    import acp.calculations.step_requirements as legacy_requirements
+    import acp.calculations.step_result as legacy_step_result
+    import acp_services.runtime.plan_contracts as moved_contracts
+    import acp_services.runtime.step_requirements as moved_requirements
+    import acp_services.runtime.step_result as moved_step_result
+
+    for name in ("StepKind", "CalculationResult", "CalculationPlan", "Provenance", "validate_plan"):
+        assert getattr(legacy_contracts, name) is getattr(moved_contracts, name), name
+    assert legacy_contracts.JsonValue is moved_contracts.JsonValue
+    assert legacy_requirements.evaluate_prerequisite is moved_requirements.evaluate_prerequisite
+    assert legacy_step_result.write_step_result is moved_step_result.write_step_result
+    assert legacy_step_result.read_step_result is moved_step_result.read_step_result
+
+
+def _prior(kind, status, result=None):
+    from acp_services.runtime.step_requirements import PriorStep
+
+    return PriorStep(kind=kind, status=status, result=result)
+
+
+def test_evaluate_prerequisite_parity() -> None:
+    from acp_services.runtime.plan_contracts import CalculationResult, StepKind
+    from acp_services.runtime.step_requirements import (
+        MISSING_REQUIREMENT,
+        UPSTREAM_FAILED,
+        evaluate_prerequisite,
+    )
+
+    # No upstream coord-producing step -> geometry prerequisite satisfied.
+    assert evaluate_prerequisite([], StepKind.SINGLEPOINT, ["O", "H", "H"]).satisfied is True
+    # Upstream optimize failed -> upstream_failed.
+    failed = evaluate_prerequisite([_prior(StepKind.OPTIMIZE, "failed")], StepKind.SINGLEPOINT, [])
+    assert failed.satisfied is False
+    assert failed.reason == UPSTREAM_FAILED
+    # Upstream optimize completed without coords -> missing_requirement.
+    no_coords = evaluate_prerequisite(
+        [_prior(StepKind.OPTIMIZE, "completed", CalculationResult())], StepKind.SINGLEPOINT, []
+    )
+    assert no_coords.satisfied is False
+    assert no_coords.reason == MISSING_REQUIREMENT
+    # Coord count mismatch against item symbols -> missing_requirement.
+    mismatch = evaluate_prerequisite(
+        [_prior(StepKind.OPTIMIZE, "completed", CalculationResult(coords=[[0.0, 0.0, 0.0]]))],
+        StepKind.SINGLEPOINT,
+        ["O", "H"],
+    )
+    assert mismatch.satisfied is False
+    assert mismatch.reason == MISSING_REQUIREMENT
+    # Matching coord count -> satisfied.
+    matched = evaluate_prerequisite(
+        [_prior(StepKind.OPTIMIZE, "completed", CalculationResult(coords=[[0.0, 0.0, 0.0]]))],
+        StepKind.SINGLEPOINT,
+        ["O"],
+    )
+    assert matched.satisfied is True
+    # THERMOCHEMISTRY requires preceding frequency + singlepoint.
+    thermo = evaluate_prerequisite([], StepKind.THERMOCHEMISTRY, [])
+    assert thermo.satisfied is False
+    assert thermo.reason == MISSING_REQUIREMENT
+    # A diagnostics-only upstream result never satisfies a normal prerequisite.
+    diagnostic = CalculationResult(
+        coords=[[0.0, 0.0, 0.0]], metadata={"diagnostic_only": True}
+    )
+    diag_out = evaluate_prerequisite(
+        [_prior(StepKind.OPTIMIZE, "completed", diagnostic)], StepKind.SINGLEPOINT, ["O"]
+    )
+    assert diag_out.satisfied is False
+    assert diag_out.reason == MISSING_REQUIREMENT
+
+
+def test_requirement_outcome_shape_is_stable() -> None:
+    from acp_services.runtime.step_requirements import SATISFIED, RequirementOutcome
+
+    assert SATISFIED.satisfied is True
+    assert SATISFIED.reason == ""
+    outcome = RequirementOutcome(satisfied=False, reason="missing_requirement")
+    assert outcome.satisfied is False
+    assert outcome.reason == "missing_requirement"
+
+
+def test_validate_plan_parity() -> None:
+    from acp_services.runtime.plan_contracts import (
+        CalculationPlan,
+        CalculationStep,
+        StepKind,
+        validate_plan,
+    )
+
+    valid = CalculationPlan(
+        workflow="optimize",
+        items=[{"path": "input.xyz"}],
+        steps=[
+            CalculationStep(kind=StepKind.SINGLEPOINT),
+            CalculationStep(kind=StepKind.FREQUENCY),
+        ],
+    )
+    assert validate_plan(valid) == []
+
+    empty = CalculationPlan(workflow="optimize", items=[], steps=[])
+    errors = validate_plan(empty)
+    assert errors and "exactly one input item" in errors[0]
+
+    thermo_only = CalculationPlan(
+        workflow="optimize",
+        items=[{"path": "input.xyz"}],
+        steps=[CalculationStep(kind=StepKind.THERMOCHEMISTRY)],
+    )
+    thermo_errors = validate_plan(thermo_only)
+    assert any("thermochemistry requires" in message for message in thermo_errors)
+
+
+def test_calculation_result_coords_shape_is_stable() -> None:
+    from acp_services.runtime.plan_contracts import CalculationResult
+
+    result = CalculationResult(coords=[(0.0, 0.0, 0.0)], frequencies=(1.0, 2.0))
+    assert result.coords == [(0.0, 0.0, 0.0)]
+    assert result.frequencies == [1.0, 2.0]
+    assert result.artifacts == []
+    assert result.status == "completed"

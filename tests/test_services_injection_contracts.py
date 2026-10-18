@@ -33,7 +33,6 @@ _EXPECTED_PORTS = {
     "TaskViewQueryPort",
     "JobControlPort",
     "PlanExecutionPort",
-    "StepRequirementPort",
     "ResultPublicationPort",
     "MethodConfigPort",
     "RemotePathsPort",
@@ -373,7 +372,6 @@ def test_services_ports_is_frozen_and_complete() -> None:
         "task_views",
         "control",
         "planning",
-        "step_requirements",
         "publication",
         "catalog",
         "remote_paths",
@@ -381,9 +379,11 @@ def test_services_ports_is_frozen_and_complete() -> None:
         "remote_submission",
         "projects",
     } <= field_names
-    # The schema/store closure is Services-native since B05-7 (todo 77).
+    # The schema/store and step-requirements closures are Services-native
+    # since B05-7 (todo 77).
     assert "job_store" not in field_names
     assert "migrations" not in field_names
+    assert "step_requirements" not in field_names
 
     ports = ServicesPorts(**{name: object() for name in field_names})
     with pytest.raises(dataclasses.FrozenInstanceError):

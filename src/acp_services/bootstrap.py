@@ -25,7 +25,6 @@ from acp_services.contracts.injection import (
     RemoteReleasePort,
     RemoteSubmissionPort,
     ResultPublicationPort,
-    StepRequirementPort,
     TaskIndexPort,
     TaskViewQueryPort,
 )
@@ -41,16 +40,16 @@ class ServicesPorts:
     port (e.g. a test spy) without mutating a live context. Every field is a
     transitional seam with a registered migration/removal task.
 
-    The schema/store closure (``JobStorePort`` / ``MigrationsPort``) is **no
-    longer a field**: the implementation moved in place to ``acp_services.store``
-    (B05-7 / todo 77), so it is consumed natively, not injected.
+    The schema/store closure (``JobStorePort`` / ``MigrationsPort``) and the
+    step-requirements closure (``StepRequirementPort``) are **no longer fields**:
+    their implementations moved in place to ``acp_services`` (B05-7 / todo 77),
+    so they are consumed natively, not injected.
     """
 
     tasks: TaskIndexPort
     task_views: TaskViewQueryPort
     control: JobControlPort
     planning: PlanExecutionPort
-    step_requirements: StepRequirementPort
     publication: ResultPublicationPort
     catalog: MethodConfigPort
     remote_paths: RemotePathsPort
