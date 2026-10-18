@@ -88,6 +88,7 @@ from acp_services.data.read_root import (
     ReadRoot,
     ReadRootResolver,
 )
+from acp_services.data.resource_read import CacheOnlyResourceReader
 from acp_services.data.storage_binding import (
     MAPPING_VERSION_CURRENT,
     MAPPING_VERSION_LEGACY,
@@ -111,6 +112,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "build_data_resource_port",
     "build_read_only_reader",
+    "build_cache_only_resource_reader",
     "build_storage_allocation_port",
     "build_prepare_executor",
     "build_transfer_cache_port",
@@ -1026,3 +1028,48 @@ def build_read_only_reader(
         clock=clock,
         max_read_bytes=max_read_bytes,
     )
+
+
+# --------------------------------------------------------------------------- #
+# B02-6 (todo 16) — per-resource cache-only read switch composition
+# --------------------------------------------------------------------------- #
+
+
+def build_cache_only_resource_reader(
+    *,
+    job_lookup: Callable[[str], Any],
+    cache: RemoteStructureCache,
+    operations: Any | None = None,
+    clock: Callable[[], str] | None = None,
+    max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
+    enabled: frozenset[str] | None = None,
+) -> CacheOnlyResourceReader:
+    """Compose the per-resource cache-only reader over the read-only surface.
+
+    The returned reader maps the five switch resources (catalog / manifest /
+    frame_candidates / frequency_modes / geometry) onto the todo-15 read-only
+    surface with a per-resource adapter, and serves them from the prepared
+    cache index only.  It never fetches, never enqueues and never writes; a
+    cold cache is reported ``not_prepared`` so the caller can use the retained
+    legacy GET fallback.
+
+    Args:
+        job_lookup: ``job_id -> JobRecord | None`` (the scheduler store).
+        cache: The shared :class:`RemoteStructureCache` (read-only index).
+        operations: Optional :class:`PrepareOperationService` operation
+            projection; only ``find`` + ``availability`` are ever called.
+        clock: Diagnostic timestamp source (tests pin it).
+        max_read_bytes: Hard cap for every bounded range read.
+        enabled: Enabled resource kinds; defaults to every resource.
+
+    Returns:
+        A :class:`~acp_services.data.resource_read.CacheOnlyResourceReader`.
+    """
+    reader = build_read_only_reader(
+        job_lookup=job_lookup,
+        cache=cache,
+        operations=operations,
+        clock=clock,
+        max_read_bytes=max_read_bytes,
+    )
+    return CacheOnlyResourceReader(reader, enabled=enabled)

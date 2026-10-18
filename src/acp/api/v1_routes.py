@@ -7414,10 +7414,30 @@ def _read_only_reader(request: Request) -> Any:
     )
 
 
+def _cache_only_resource_reader(request: Request) -> Any:
+    """Build the per-resource cache-only reader (B02-6 / todo 16).
+
+    Wraps the todo-15 read-only reader with the five per-resource compat
+    adapters and the cache-only switch registry.  Same strict guarantees: zero
+    SSH/SFTP, zero new prepare operations, zero parsing writes.  A cold cache is
+    reported ``not_prepared`` so the caller falls back to the retained legacy
+    GET (the compatibility channel).
+    """
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    manager = _manager(request)
+    return build_cache_only_resource_reader(
+        job_lookup=manager.get,
+        cache=manager.structure_cache,
+        operations=getattr(manager, "_prepare_operations", None),
+    )
+
+
 @router.get("/jobs/{job_id}/availability")
 def get_job_availability(
     job_id: str,
     request: Request,
+    resource: str | None = Query(default=None),
     resource_id: str | None = Query(default=None),
     relative_path: str = Query(default=""),
     workflow: str = Query(default=""),
@@ -7429,31 +7449,114 @@ def get_job_availability(
     Additive read surface: it reports ``availability`` / ``freshness`` /
     ``basis_revision`` from the prepared cache index and prepare-operation rows
     and never triggers a fetch or a new prepare operation.  The existing job
-    GETs keep their original behaviour and read root (the switch is todo 16).
+    GETs keep their original behaviour and read root as the per-resource legacy
+    fallback (the compatibility channel).
+
+    ``resource`` names one of the five switch resources
+    (catalog/manifest/frame_candidates/frequency_modes/geometry) and selects
+    the per-resource compat adapter (default relative path + resource id);
+    ``resource_id`` / ``relative_path`` remain supported for callers that
+    already pass explicit values.
 
     Raises:
         404: Unknown job id.
+        400: Unknown ``resource`` kind.
     """
     from acp_services.data.read_root import AvailabilityRead
+    from acp_services.data.resource_read import RESOURCE_ADAPTERS
 
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     resolved_workflow = workflow or str(record.spec.workflow or "")
-    resolved_resource = resource_id or f"catalog:{resolved_workflow}"
+
+    if resource is not None:
+        try:
+            adapter = RESOURCE_ADAPTERS[resource]
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown resource kind: {resource}"
+            ) from exc
+        resolved_resource = resource_id or adapter.resource_id(resolved_workflow)
+        resolved_path = "" if adapter.is_catalog() else adapter.resolve_relative_path(relative_path)
+    else:
+        resolved_resource = resource_id or f"catalog:{resolved_workflow}"
+        resolved_path = relative_path
+
     reader = _read_only_reader(request)
     snapshot = reader.availability(
         AvailabilityRead(
             job_id=job_id,
             resource_id=resolved_resource,
             workflow=resolved_workflow,
-            relative_path=relative_path,
+            relative_path=resolved_path,
             attempt=attempt,
             expected_revision=expected_revision,
         )
     )
     return snapshot.to_dict()
+
+
+@router.get("/jobs/{job_id}/prepared/{resource}")
+def get_prepared_resource(
+    job_id: str,
+    resource: str,
+    request: Request,
+    relative_path: str = Query(default=""),
+    expected_revision: int = Query(default=0, ge=0),
+    attempt: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=1 << 20, ge=1),
+) -> Response:
+    """Serve a prepared resource cache-only (B02-6 / todo 16 new read path).
+
+    This is the switched **new read path** for the five resources
+    (catalog/manifest/frame_candidates/frequency_modes/geometry).  It reads only
+    the prepared cache index: zero SSH/SFTP, zero new prepare operations, zero
+    parsing writes.  The catalog resource returns its availability snapshot as
+    JSON; the byte resources return the prepared body (bounded to ``limit``).
+
+    When the resource is not prepared (a cold cache) it returns 409
+    ``not_prepared`` — the caller falls back to the retained legacy GET, which
+    is the compatibility channel that keeps F0 clients working.  The legacy GETs
+    are never modified or removed by this switch.
+
+    Raises:
+        404: Unknown job id.
+        400: Unknown ``resource`` kind.
+        409: The resource is not in the prepared cache index (use the legacy GET).
+    """
+    from acp_services.data.resource_read import RESOURCE_ADAPTERS
+
+    if resource not in RESOURCE_ADAPTERS:
+        raise HTTPException(status_code=400, detail=f"Unknown resource kind: {resource}")
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    reader = _cache_only_resource_reader(request)
+    result = reader.serve(
+        resource,
+        job_id=job_id,
+        workflow=str(record.spec.workflow or ""),
+        relative_path=relative_path,
+        expected_revision=expected_revision,
+        attempt=attempt,
+        offset=offset,
+        limit=limit,
+    )
+    if not result.served:
+        raise HTTPException(
+            status_code=409,
+            detail=f"not_prepared: {result.reason or result.kind}",
+        )
+    if result.data is not None:
+        return Response(content=result.data, media_type="application/octet-stream")
+    assert result.snapshot is not None
+    return JSONResponse(content=result.snapshot.to_dict())
 
 
 __all__ = ["router"]
