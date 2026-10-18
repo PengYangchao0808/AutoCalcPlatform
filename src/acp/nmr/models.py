@@ -16,6 +16,8 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from cccp.analysis.nmr.assets import resolve_asset
+
 if TYPE_CHECKING:
     from acp.nmr.atomic_diagnostics import CandidateAtomicDiagnostics
 
@@ -37,12 +39,13 @@ def _load_tms_table() -> dict[tuple[str, str, str], tuple[float, float]]:
     """Load the Goodman TMS reference table at first use.
 
     Returns ``{(method, basis, solvent): (sigma_13C, sigma_1H)}`` with all
-    keys lowercased and whitespace-stripped. Source: ``acp/nmr/models/
-    tms_references.txt`` (Goodman-lab/DP5 ``TMSdata``).
+    keys lowercased and whitespace-stripped. Source: the Goodman DP5
+    ``TMSdata`` asset (``tms_references.txt``), located through the single
+    CCCP asset entry :func:`cccp.analysis.nmr.assets.resolve_asset`.
     """
     table: dict[tuple[str, str, str], tuple[float, float]] = {}
     try:
-        path = Path(__file__).resolve().parent / "models" / "tms_references.txt"
+        path = resolve_asset("tms_references.txt")
         if not path.exists():
             return table
         for line in path.read_text(encoding="utf-8").splitlines():

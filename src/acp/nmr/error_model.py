@@ -12,9 +12,11 @@ fetched 2026-08-07):
   then a Bayesian rescale via two weighted KDEs of per-candidate scores
   (``c_w_kde`` = correct-assignment, ``i_w_kde`` = incorrect-assignment).
 
-The trained KDE/KDE-rescale assets live in ``acp/nmr/models/`` and are
-rebuilt at load time from their stored ``dataset``+``weights``+``factor``
-(scipy's internal API changed; we do not rely on the pickled methods).
+The trained KDE/KDE-rescale assets live in the single CCCP asset location
+``src/cccp/analysis/nmr/model_assets/`` (resolved through
+:func:`cccp.analysis.nmr.assets.resolve_asset`) and are rebuilt at load time
+from their stored ``dataset``+``weights``+``factor`` (scipy's internal API
+changed; we do not rely on the pickled methods).
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ import numpy as np
 from scipy.special import log_ndtr
 
 from acp.nmr.models import NmrConfig
+from cccp.analysis.nmr.assets import asset_dir
 
 if TYPE_CHECKING:
     from acp.nmr.fchl import AtomFchlProbability
@@ -38,7 +41,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_MODELS_DIR = Path(__file__).resolve().parent / "models"
+_MODELS_DIR = asset_dir()
 
 
 # ---------------------------------------------------------------------------

@@ -56,6 +56,7 @@ from acp.nmr.shift_predictor import (
     ShiftPredictionRequest,
     register_shift_predictor,
 )
+from cccp.analysis.nmr.assets import resolve_asset
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +108,7 @@ DP5Q_STUB_UNAVAILABLE_REASONS: Final[tuple[str, ...]] = (
 #: Packaged (optional) lookup parameters for the stub — read-only, the only
 #: file this module ever reads.  Its absence keeps the stub loadable but
 #: explicitly not parameterized.
-_MODELS_DIR: Final[Path] = Path(__file__).resolve().parent / "models"
-DP5Q_STUB_PARAMETERS_PATH: Final[Path] = _MODELS_DIR / "dp5q_stub_params.json"
+DP5Q_STUB_PARAMETERS_PATH: Final[Path] = resolve_asset("dp5q_stub_params.json")
 
 #: Declared geometry requirements (carried through the todo-55 typed
 #: descriptor).  DP5q-class prediction is sold as a cheap-geometry route, so

@@ -36,6 +36,7 @@ from typing import Any
 import pytest
 
 from acp.nmr.reference_validation import ASSET_FILES
+from cccp.analysis.nmr.assets import asset_dir
 from tests.benchmark.nmr.reference_validation import (
     EXACT_TOLERANCE,
     REFERENCE_VALIDATION_SCHEMA,
@@ -54,7 +55,7 @@ from tests.nmr_spectra_benchmark import canonical_json_bytes
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / "tests" / "baseline" / "nmr"
-MODELS_DIR = REPO_ROOT / "src" / "acp" / "nmr" / "models"
+MODELS_DIR = asset_dir()
 GOLDEN_PATH = BASELINE_DIR / "fchl_golden.json"
 TOLERANCES_PATH = BASELINE_DIR / "fchl_golden_tolerances.json"
 
@@ -65,7 +66,7 @@ TOLERANCES = json.loads(TOLERANCES_PATH.read_text(encoding="utf-8"))
 GOLDEN_KEYS = set(GOLDEN["golden"])
 TOLERANCE_KEYS = set(TOLERANCES["layers"])
 
-#: sha256 pins recorded in ``src/acp/nmr/models/NOTICE.md``.
+#: sha256 pins recorded in ``src/cccp/analysis/nmr/model_assets/NOTICE.md``.
 NOTICE_PINS = {
     "atomic_reps.gz": "bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65",
     "frag_reps.gz": "e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64",

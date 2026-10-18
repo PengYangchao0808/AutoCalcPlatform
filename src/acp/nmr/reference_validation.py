@@ -19,7 +19,9 @@ ORCA migration result:
 * a missing/empty reference returns a typed ``unavailable`` outcome with a
   reason; migrated or placeholder values never stand in for references;
 * :func:`asset_hashes` records the sha256 of the NOTICE-listed
-  ``src/acp/nmr/models/`` assets (missing files degrade to ``None``).
+  ``src/cccp/analysis/nmr/model_assets/`` assets (missing files degrade to
+  ``None``), located through the single CCCP asset entry
+  :func:`cccp.analysis.nmr.assets.asset_dir`.
 
 Nothing in this module re-runs QC: it compares records that already exist.
 """
@@ -36,6 +38,7 @@ from typing import Any, Final, Literal, cast
 
 from acp.calculations.identity import identity_fingerprint
 from acp.nmr.protocol import NmrProtocolSpec, ReferenceSegment
+from cccp.analysis.nmr.assets import asset_dir
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +61,7 @@ __all__ = [
     "pinned_goodman_upstream",
 ]
 
-#: NOTICE-listed DP5 assets in ``src/acp/nmr/models/`` (missing → ``None``).
+#: NOTICE-listed DP5 assets in ``src/cccp/analysis/nmr/model_assets/`` (missing → ``None``).
 ASSET_FILES: Final[tuple[str, ...]] = (
     "atomic_reps.gz",
     "c_w_kde_mean_s_0.025.p",
@@ -79,8 +82,10 @@ ReferenceAvailabilityStatus = Literal["available", "unavailable"]
 ComparisonStatus = Literal["computed", "unavailable"]
 
 _DEV_DOC: Final = "docs/reference/current/ACP_NMR_DP4_DevDoc.md §8.0"
-_NOTICE: Final = "src/acp/nmr/models/NOTICE.md"
-_TMS_ASSET: Final = "src/acp/nmr/models/tms_references.txt (NOTICE-listed DP5 asset)"
+_NOTICE: Final = "src/cccp/analysis/nmr/model_assets/NOTICE.md"
+_TMS_ASSET: Final = (
+    "src/cccp/analysis/nmr/model_assets/tms_references.txt (NOTICE-listed DP5 asset)"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -666,18 +671,21 @@ def apply_reference_validation(
 
 
 # ---------------------------------------------------------------------------
-# Asset hashes (NOTICE-listed models/ assets)
+# Asset hashes (NOTICE-listed model_assets/ assets)
 # ---------------------------------------------------------------------------
 
 
 def asset_hashes(models_dir: Path | None = None) -> dict[str, str | None]:
-    """sha256 for the NOTICE-listed ``src/acp/nmr/models/`` assets.
+    """sha256 for the NOTICE-listed ``src/cccp/analysis/nmr/model_assets/`` assets.
 
-    Missing files are recorded as ``None`` (graceful skip — never a
-    fabricated hash); unreadable files are recorded as ``None`` with a
-    warning. The result is deterministic for unchanged files.
+    The default location comes from the single CCCP asset entry
+    :func:`cccp.analysis.nmr.assets.asset_dir`; an explicit *models_dir*
+    override is still honoured (used by tests).  Missing files are recorded
+    as ``None`` (graceful skip — never a fabricated hash); unreadable files
+    are recorded as ``None`` with a warning. The result is deterministic for
+    unchanged files.
     """
-    root = models_dir if models_dir is not None else Path(__file__).resolve().parent / "models"
+    root = models_dir if models_dir is not None else asset_dir()
     hashes: dict[str, str | None] = {}
     for name in ASSET_FILES:
         path = root / name

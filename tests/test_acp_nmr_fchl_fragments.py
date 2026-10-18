@@ -64,9 +64,9 @@ from acp.nmr.fchl import (
 )
 from acp.nmr.models import Assignment, CandidateResult, ConformerShielding, NmrConfig, SignalGroup
 from acp.workflows.nmr import _compute_candidate_dp5
+from cccp.analysis.nmr.assets import asset_dir
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MODELS_DIR = REPO_ROOT / "src" / "acp" / "nmr" / "models"
+MODELS_DIR = asset_dir()
 
 #: Shipped upstream counts (dp5@b6cf5590 assets) — the correspondence facts.
 SHIPPED_N_FRAGMENT_TRAIN = 63541

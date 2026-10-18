@@ -75,6 +75,7 @@ from typing import Any, Final
 from acp.nmr.error_model import GoodmanDP5Model, GoodmanErrorModel
 from acp.nmr.models import lookup_tms_shieldings
 from acp.nmr.reference_validation import ASSET_FILES, PINNED_GOODMAN_UPSTREAM
+from cccp.analysis.nmr.assets import asset_dir
 from tests.benchmark.nmr.harness import REPO_ROOT, _code_provenance
 from tests.nmr_spectra_benchmark import canonical_json_bytes, write_metrics
 
@@ -95,7 +96,7 @@ GOLDEN_FILENAME: Final = "fchl_golden.json"
 TOLERANCES_FILENAME: Final = "fchl_golden_tolerances.json"
 NOTICE_FILENAME: Final = "NOTICE.md"
 
-DEFAULT_MODELS_DIR: Final = REPO_ROOT / "src" / "acp" / "nmr" / "models"
+DEFAULT_MODELS_DIR: Final = asset_dir()
 DEFAULT_GOLDEN_PATH: Final = REPO_ROOT / "tests" / "baseline" / "nmr" / GOLDEN_FILENAME
 DEFAULT_TOLERANCES_PATH: Final = REPO_ROOT / "tests" / "baseline" / "nmr" / TOLERANCES_FILENAME
 DEFAULT_NOTICE_PATH: Final = DEFAULT_MODELS_DIR / NOTICE_FILENAME
@@ -735,7 +736,7 @@ def build_reference_validation_table(
 
     Args:
         models_dir: Directory holding the NOTICE-listed DP5 assets (default:
-            the committed ``src/acp/nmr/models/``).
+            the committed ``src/cccp/analysis/nmr/model_assets/``).
         golden_path: todo-36 layered golden (default: committed baseline).
         tolerances_path: todo-36 frozen tolerances (default: committed).
         notice_path: NOTICE.md pin source (default: models dir).
@@ -856,7 +857,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--now", help="pin the recorded timestamp (ISO 8601) for deterministic replay"
     )
-    parser.add_argument("--models-dir", help="DP5 asset directory (default: src/acp/nmr/models)")
+    parser.add_argument(
+        "--models-dir", help="DP5 asset directory (default: src/cccp/analysis/nmr/model_assets)"
+    )
     parser.add_argument("--golden", help="todo-36 layered golden JSON")
     parser.add_argument("--tolerances", help="todo-36 frozen tolerances JSON")
     parser.add_argument("--notice", help="NOTICE.md pin source")

@@ -51,6 +51,8 @@ from pathlib import Path
 
 import numpy as np
 
+from cccp.analysis.nmr.assets import asset_dir
+
 logger = logging.getLogger(__name__)
 
 # DP5.py:20 — cut distance used to train both the representations and the
@@ -78,7 +80,7 @@ _ALCHEMY_PERIOD_WIDTH = 1.6
 _ALCHEMY_GROUP_WIDTH = 1.6
 _ALCHEMY_EMAX = 100
 
-_MODELS_DIR = Path(__file__).resolve().parent / "models"
+_MODELS_DIR = asset_dir()
 
 
 # ---------------------------------------------------------------------------

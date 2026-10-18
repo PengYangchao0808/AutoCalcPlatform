@@ -621,7 +621,13 @@ def test_module_imports_stay_stdlib_plus_the_predictor_protocol() -> None:
     assert acp_imports == ["acp.nmr.shift_predictor"], (
         f"dp5q_stub.py may import only the todo-55 protocol, got {acp_imports}"
     )
-    assert not [name for name in imported if name == "cccp" or name.startswith("cccp.")]
+    # The single stdlib-only CCCP asset locator is the one permitted cccp
+    # import (T55 unified asset entry); any other cccp module would re-couple
+    # the stub to the default scientific chain.
+    cccp_imports = [name for name in imported if name == "cccp" or name.startswith("cccp.")]
+    assert cccp_imports == ["cccp.analysis.nmr.assets"], (
+        f"dp5q_stub.py may import only the stdlib-only CCCP asset locator, got {cccp_imports}"
+    )
     assert not [name for name in imported if "error_model" in name]
     assert not [name for name in imported if "workflows" in name]
     assert not [name for name in imported if "probability" in name]
