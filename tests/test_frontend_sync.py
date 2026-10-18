@@ -87,10 +87,11 @@ _SP_JS = FRONTEND_JS_DIR / "structure_source_picker.js"
 
 
 def viewer_creation_site_count() -> int:
-    """Pin the one remaining scene creation site — all route through the shared
-    ACPVisualization.mol3d adapter (FE-09). The regex also accepts the legacy
-    raw $3Dmol.createViewer form so a regression would still be counted
-    (and fail the == 1 budget pins below)."""
+    """Pin that no feature file creates a viewer directly (0 since T10) — all
+    scenes go through the bounded ACPVisualization.scene instance, which holds
+    the viewer via the shared ACPVisualization.mol3d adapter (FE-09). The regex
+    also accepts the legacy raw $3Dmol.createViewer form so a regression would
+    still be counted (and fail the == 0 budget pins below)."""
     source = "\n".join(path.read_text(encoding="utf-8")
                        for path in (FRONTEND_WORKBENCH_JS_DIR / "features").glob("*.js"))
     return len(re.findall(r"(?:\$3Dmol\.createViewer|ACPVisualization\.mol3d\.create)\(", source))
@@ -6868,13 +6869,15 @@ def test_shared_geometry_loader_contract() -> None:
     # T8/T12: main-structure + NMR canvases migrated — 4 -> 2 (wizard +
     # reaction-builder remain for T10/T11).
     # T11: reaction-builder migrated — 2 -> 1 (wizard remains for T10).
-    assert viewer_creation_site_count() == 1, "viewer instance count changed"
+    # T10: wizard preview migrated — 1 -> 0 (creation lives only in
+    # scene_instance.js via the adapter; features/ never create viewers).
+    assert viewer_creation_site_count() == 0, "viewer instance count changed"
 
-    # reaction viewer creation is the bounded scene instance (T11); preview
-    # stays on the shared mol3d adapter (FE-09) until T10 migrates it.
-    # Creation options stay pinned by module_tests/reaction_viewer.test.js.
+    # reaction viewer (T11) and wizard preview (T10) creation both go through
+    # the bounded scene instance; creation options stay pinned by
+    # module_tests/reaction_viewer.test.js and module_tests/wizard_preview_viewer.test.js.
     assert "reactionViewer = ACPVisualization.scene.create(" in html
-    assert "previewViewer = ACPVisualization.mol3d.create(" in html
+    assert "previewViewer = ACPVisualization.scene.create(" in html
     # 2 = preview + PES selection renderer resets; the 3rd is the scan
     # selection renderer's identical per-render reset (WS3, deliberate).
     assert html.count("previewViewer.setStyle") == 3, "preview viewer styling must stay untouched"
@@ -12764,13 +12767,14 @@ def test_picker_set_source_group_exists() -> None:
 
 
 def test_wizard_create_viewer_count_pinned() -> None:
-    """Viewer creation sites pinned at 1 (FE-04 slice 1: legacy S2 modal
+    """Viewer creation sites pinned at 0 (FE-04 slice 1: legacy S2 modal
     viewers removed from the 8-instance budget; T9: energy preview migrated
     to the bounded scene instance; T8/T12: main-structure + NMR canvases
-    migrated; T11: reaction-builder migrated)."""
+    migrated; T11: reaction-builder migrated; T10: wizard preview migrated —
+    creation lives only in scene_instance.js via the adapter)."""
     html = read_workbench_content()
     count = viewer_creation_site_count()
-    assert count == 1, f"Expected exactly 1 viewer creation calls, found {count}"
+    assert count == 0, f"Expected exactly 0 viewer creation calls, found {count}"
 
 
 def test_no_standalone_s2scan_modal() -> None:
@@ -12920,7 +12924,7 @@ class TestTaskInputWorkspace:
     def test_create_viewer_count_pinned(self) -> None:
         html = self._html()
         count = viewer_creation_site_count()
-        assert count == 1, f"Expected exactly 1 viewer creation calls, found {count}"
+        assert count == 0, f"Expected exactly 0 viewer creation calls, found {count}"
 
     def test_candidate_api_preserved_and_used(self) -> None:
         # FE-07b: candidateApi is a transport delegation shim; the .status

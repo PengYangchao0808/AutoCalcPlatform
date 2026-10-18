@@ -1318,12 +1318,13 @@ function clearParsedStructures() {
 }
 
 function initPreviewViewer() {
-  if (previewViewer) return;
+  // T10: bounded scene instance — reuse while live, recreate only after
+  // dispose. scene.create returns null when 3Dmol is missing/failed and
+  // callers guard on the falsy handle (preview empty state preserved).
+  if (previewViewer && !previewViewer.isDisposed()) return;
   var container = document.getElementById("structure-preview-3d");
   if (!container) return;
-  // Shared adapter (FE-09): returns null when 3Dmol is missing/failed —
-  // callers guard on the falsy handle (renderPreviewStructure3D etc.).
-  previewViewer = ACPVisualization.mol3d.create(container, { backgroundColor: "0x0e1419", antialias: true });
+  previewViewer = ACPVisualization.scene.create({ container: container, options: { backgroundColor: "0x0e1419", antialias: true } });
 }
 
 function renderPreviewStructure3D() {

@@ -2383,9 +2383,10 @@ function rejectUnsupportedFile(file) {
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
 // Page-global preview viewer — EXT owner per T16 evidence §2.5: declared
-// here, written by wizard.js (T10 migrates it to a scene instance), consumed
-// by wizard.js / job_editor.js / bootstrap.js / wizard/upload-parse.js. Keep
-// this the page's single declaration for the shared binding.
+// here, written by wizard.js (a bounded scene instance since T10; previewModel
+// is its opaque model token), consumed by wizard.js / job_editor.js /
+// bootstrap.js / wizard/upload-parse.js. Keep this the page's single
+// declaration for the shared binding.
 let previewViewer = null;
 var PREVIEW_ZOOM_FACTOR = 0.82;
 var previewViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
