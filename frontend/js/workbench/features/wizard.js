@@ -490,8 +490,8 @@ function _captureWizardDraft() {
     // geometry needed for resuming an uploaded input.
     uploadFile: null,
     uploadName: wizardUploadFile ? wizardUploadFile.name : "",
-    lastParsedStructureInput: lastParsedStructureInput,
-    lastParsedUploadName: lastParsedUploadName,
+    lastParsedStructureInput: window.ACPWizardUploadParse.getLastParsedStructureInput(),
+    lastParsedUploadName: window.ACPWizardUploadParse.getLastParsedUploadName(),
     pesSelection: {
       mode: pesSelectionState.mode,
       selectionKind: pesSelectionState.selectionKind,
@@ -537,8 +537,8 @@ function _restoreWizardDraft(draft) {
     if (Object.prototype.hasOwnProperty.call(saved, "value")) el.value = saved.value;
   });
   wizardUploadFile = draft.uploadFile || null;
-  lastParsedStructureInput = draft.lastParsedStructureInput == null ? null : draft.lastParsedStructureInput;
-  lastParsedUploadName = draft.lastParsedUploadName == null ? null : draft.lastParsedUploadName;
+  window.ACPWizardUploadParse.setLastParsedStructureInput(draft.lastParsedStructureInput == null ? null : draft.lastParsedStructureInput);
+  window.ACPWizardUploadParse.setLastParsedUploadName(draft.lastParsedUploadName == null ? null : draft.lastParsedUploadName);
   if (draft.pesSelection) Object.assign(pesSelectionState, draft.pesSelection);
   if (draft.scanSelection) {
     scanSelectionState.selectionKind = draft.scanSelection.selectionKind || "distance";
@@ -647,8 +647,7 @@ function openModal() {
   document.getElementById("parse-errors").style.display = "none";
   document.getElementById("parse-status").textContent = "";
   document.getElementById("modal-structure-input").value = "";
-  lastParsedStructureInput = null;
-  lastParsedUploadName = null;
+  window.ACPWizardUploadParse.resetAppliedParse();
   setDetectedFormatChip(null);
   renderPreviewWaiting();
   document.getElementById("upload-file-input").value = "";
@@ -794,6 +793,10 @@ function closeModal() {
   _closeInputListOverlay();
   if (candidateDetailsPanel) { candidateDetailsPanel.destroy(); candidateDetailsPanel = null; }
   document.getElementById("job-modal").style.display = "none";
+  // H-3: invalidate any in-flight parse on close so a late response cannot
+  // write wizardStructures / wizardParseWarnings into a hidden or reopened
+  // session (S1-owned guard).
+  window.ACPWizardUploadParse.invalidatePendingParse();
 }
 
 var createWizardStep = 1;
@@ -1080,8 +1083,9 @@ function setWizardInputMode(mode) {
   var listHeader = document.getElementById("tiw-list-header");
   if (listHeader) listHeader.style.display = mode === "task" ? "grid" : "none";
   // Invalidate any in-flight parse from the previous tab (slow-response race).
-  parseSeqToken++;
-  if (parseDebounceTimer) { clearTimeout(parseDebounceTimer); parseDebounceTimer = null; }
+  // S1-owned guard: also used by closeModal so a late parse can never write
+  // into a closed or reopened session (H-3).
+  window.ACPWizardUploadParse.invalidatePendingParse();
   if (mode === "task") loadStructureSources(false);
   if (mode === "task" && wizardStructures.length === 0) {
     var taskEmptyEl = document.getElementById("preview-3d-empty");
@@ -1097,185 +1101,41 @@ function setWizardInputMode(mode) {
   // the preview stays stuck on "等待输入" forever.
   if (mode === "structure") {
     var txt = document.getElementById("modal-structure-input").value;
-    if (txt.trim() && txt !== lastParsedStructureInput) scheduleParseStructures();
-  } else if (mode === "upload" && wizardUploadFile && wizardUploadFile.name !== lastParsedUploadName) {
+    if (txt.trim() && txt !== window.ACPWizardUploadParse.getLastParsedStructureInput()) scheduleParseStructures();
+  } else if (mode === "upload" && wizardUploadFile && wizardUploadFile.name !== window.ACPWizardUploadParse.getLastParsedUploadName()) {
     scheduleParseStructures();
   }
 }
 
-var parseSeqToken = 0;
-var parseDebounceTimer = null;
-// Content/name of the last parse whose result was actually applied. Null
-// means the current input has no applied parse result yet.
-var lastParsedStructureInput = null;
-var lastParsedUploadName = null;
-
+// ── S1 上传/解析 — extracted to features/wizard/upload-parse.js (T17) ──────
+// The slice (state + functions) now lives in js/workbench/features/wizard/
+// upload-parse.js, loaded immediately before this file. These same-name globals
+// stay as thin delegates during migration so inline `onclick=`, bootstrap.js,
+// job_editor.js and molecule-view.js callers keep working unchanged. The S1
+// state (parseSeqToken / parseDebounceTimer / lastParsed*) is owned by that
+// module and reached through its accessor API.
 function scheduleParseStructures() {
-  if (parseDebounceTimer) clearTimeout(parseDebounceTimer);
-  parseDebounceTimer = setTimeout(function() {
-    parseDebounceTimer = null;
-    parseStructuresPreview();
-  }, 350);
+  return window.ACPWizardUploadParse.scheduleParseStructures.apply(null, arguments);
 }
 
-function setDetectedFormatChip(fmt) {
-  var chip = document.getElementById("detected-format-chip");
-  if (!chip) return;
-  if (!fmt) {
-    chip.style.display = "none";
-    return;
-  }
-  chip.textContent = t("parse.detected", { format: String(fmt).toUpperCase() });
-  chip.style.display = "inline-flex";
+function setDetectedFormatChip() {
+  return window.ACPWizardUploadParse.setDetectedFormatChip.apply(null, arguments);
 }
 
 function renderPreviewWaiting() {
-  _refreshWizardInputForm(null);
-  var container = document.getElementById("structure-preview");
-  var emptyEl = document.getElementById("preview-3d-empty");
-  if (emptyEl) {
-    emptyEl.textContent = wizardInputMode === "task" ? t("wizard.select_hint") : t("parse.no_3d_waiting");
-    emptyEl.title = "";
-    emptyEl.style.display = "grid";
-  }
-  if (container) container.style.display = "grid";
-  var title = document.getElementById("preview-structure-title");
-  if (title) title.textContent = t("modal.preview_title");
-  var coords = document.getElementById("source-coordinate-text");
-  if (coords) coords.textContent = "";
-  updatePreviewActionState();
-  if (previewViewer) {
-    try {
-      previewViewer.removeAllModels();
-      previewModel = null;
-      clearPESPreviewSelectionShapes();
-      previewViewer.render();
-    } catch (e) {}
-  }
-  resetPESSelection();
+  return window.ACPWizardUploadParse.renderPreviewWaiting.apply(null, arguments);
 }
 
-async function parseStructuresPreview() {
-  var content = "";
-  var fmt = "auto";
-  var filename = "";
-
-  if (wizardInputMode === "structure") {
-    content = document.getElementById("modal-structure-input").value;
-  } else if (wizardInputMode === "upload") {
-    if (!wizardUploadFile) {
-      showParseStatus(t("modal.select_file_first") || "请先选择文件", true);
-      return;
-    }
-    filename = wizardUploadFile.name;
-  } else {
-    // "results" mode: nothing to parse from text input.
-    return;
-  }
-
-  var myToken = ++parseSeqToken;
-
-  if (wizardInputMode === "structure" && !content.trim()) {
-    wizardStructures = [];
-    wizardParseWarnings = [];
-    setDetectedFormatChip(null);
-    showParseStatus(t("parse.waiting"), false);
-    renderPreviewWaiting();
-    return;
-  }
-
-  try {
-    showParseStatus(t("parse.parsing"), false);
-    if (wizardInputMode === "upload" && wizardUploadFile) {
-      var formData = new FormData();
-      formData.append("file", wizardUploadFile);
-      var uploadBody;
-      try {
-        uploadBody = await window.ACPClient.wizardEndpoints.uploadStructure(formData);
-      } catch (e) {
-        // Legacy derivation preserved: the adapter re-derives the raw
-        // `body.detail` from the parsed error body onto err.detail (it may be
-        // a non-string, exactly like legacy); the "Upload failed" literal
-        // stays here exactly like the pre-migration call site.
-        if (myToken !== parseSeqToken) return;
-        showParseStatus(e.detail || "Upload failed", true);
-        return;
-      }
-      if (myToken !== parseSeqToken) return;
-      if (wizardUploadFile) lastParsedUploadName = wizardUploadFile.name;
-      wizardStructures = uploadBody.structures || [];
-      setDetectedFormatChip(uploadBody.detected_format);
-      handleParseResult(uploadBody);
-      return;
-    }
-
-    // Legacy called fetch() + resp.json() with NO resp.ok check: a JSON error
-    // body flowed through the ok:false presentation path. The adapter
-    // reproduces that (resolves with the parsed error body).
-    var body = await window.ACPClient.wizardEndpoints.parseStructure({
-      content: content, format: fmt, filename: filename
-    });
-    if (myToken !== parseSeqToken) return;
-    if (body.ok) lastParsedStructureInput = content;
-    wizardStructures = body.structures || [];
-    setDetectedFormatChip(body.detected_format);
-    handleParseResult(body);
-  } catch (e) {
-    if (myToken !== parseSeqToken) return;
-    showParseStatus(e.message, true);
-  }
+function parseStructuresPreview() {
+  return window.ACPWizardUploadParse.parseStructuresPreview.apply(null, arguments);
 }
 
-function handleParseResult(body) {
-  wizardParseWarnings = body.warnings || [];
-  var errBox = document.getElementById("parse-errors");
-  if (body.errors && body.errors.length) {
-    errBox.style.display = "block";
-    errBox.innerHTML = body.errors.map(function(e) { return "<div>" + escapeHtml(e) + "</div>"; }).join("");
-  } else {
-    errBox.style.display = "none";
-  }
-
-  var csRow = document.getElementById("charge-spin-row");
-  if (wizardStructures.length > 0) {
-    var allSameCharge = true, allSameMult = true;
-    var refCharge = wizardStructures[0].charge, refMult = wizardStructures[0].multiplicity;
-    for (var i = 1; i < wizardStructures.length; i++) {
-      if (wizardStructures[i].charge !== refCharge) allSameCharge = false;
-      if (wizardStructures[i].multiplicity !== refMult) allSameMult = false;
-    }
-    document.getElementById("modal-charge").value = (allSameCharge && refCharge !== undefined) ? refCharge : 0;
-    document.getElementById("modal-mult").value = (allSameMult && refMult !== undefined) ? refMult : 1;
-    csRow.style.display = "flex";
-  } else {
-    csRow.style.display = "none";
-  }
-
-  renderStructurePreview(wizardStructures, wizardParseWarnings);
-  if (body.ok && wizardStructures.length && window.ACPJobEditor && ACPJobEditor.isActive()) {
-    ACPJobEditor.onParsedSourceApplied(wizardInputMode, wizardStructures);
-  }
-  showParseStatus(
-    body.ok ? t("parse.success", { count: wizardStructures.length }) : t("parse.failed"),
-    !body.ok
-  );
-
-  if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
-    var mechPanel = document.getElementById("mech-builder-panel");
-    if (mechPanel) mechPanel.style.display = "block";
-    hookMechanismBuilder({ preserveState: true });
-  }
-   if (isPESsearchTask()) {
-     syncPESSelectionFromWizard(true);
-     attachPESPreviewSelection();
-   }
-   _scheduleWizardDraftAutosave();
+function handleParseResult() {
+  return window.ACPWizardUploadParse.handleParseResult.apply(null, arguments);
 }
 
-function showParseStatus(msg, isError) {
-  var el = document.getElementById("parse-status");
-  el.textContent = msg;
-  el.className = "parse-status " + (isError ? "err" : "ok");
+function showParseStatus() {
+  return window.ACPWizardUploadParse.showParseStatus.apply(null, arguments);
 }
 
 function renderStructurePreview(structures, warnings) {
