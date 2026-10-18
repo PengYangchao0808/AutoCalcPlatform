@@ -12777,6 +12777,76 @@ def test_wizard_create_viewer_count_pinned() -> None:
     assert count == 0, f"Expected exactly 0 viewer creation calls, found {count}"
 
 
+def test_dollar3dmol_single_station_pin() -> None:
+    """T15 single-station pin (FE-09): the vendored $3Dmol library is
+    executable-mediated by exactly one module — js/visualization/mol3d_adapter.js.
+    Every other occurrence must be a comment on one of the two known
+    GAP-2-a/b renderers (energy_chart_renderer.js, candidate_review_controller.js)."""
+    adapter = Path("visualization") / "mol3d_adapter.js"
+    allowed_comment_only = {
+        Path("visualization") / "energy_chart_renderer.js",
+        Path("workbench") / "controllers" / "candidate_review_controller.js",
+    }
+    seen_files: set[Path] = set()
+    violations: list[str] = []
+    for js in FRONTEND_JS_DIR.rglob("*.js"):
+        if "vendor" in js.parts or "module_tests" in js.parts:
+            continue
+        rel = js.relative_to(FRONTEND_JS_DIR)
+        for lineno, line in enumerate(js.read_text(encoding="utf-8").splitlines(), 1):
+            if "$3Dmol" not in line:
+                continue
+            seen_files.add(rel)
+            if rel == adapter:
+                continue
+            is_comment = line.lstrip().startswith(("//", "*", "/*"))
+            if rel not in allowed_comment_only or not is_comment:
+                violations.append(f"{rel}:{lineno}")
+    assert seen_files == {adapter} | allowed_comment_only, (
+        f"unexpected $3Dmol station set: {sorted(str(p) for p in seen_files)}"
+    )
+    assert adapter in seen_files, "mol3d_adapter.js must remain the executable $3Dmol station"
+    assert violations == [], f"$3Dmol executable/unknown references: {violations}"
+
+
+def test_add_model_result_restricted_methods_pin() -> None:
+    """T15: a value captured from addModel() is an opaque scene-instance token.
+    Call sites may only use the token whitelist (setStyle/addStyle/setClickable/
+    setHoverable/selectedAtoms); vendor-native-only GLModel methods must never be
+    called on the captured result. Guards the T8-T14 migrations."""
+    token_methods = {"setStyle", "addStyle", "setClickable", "setHoverable", "selectedAtoms"}
+    assign = re.compile(r"(?:var|let|const)?\s*([A-Za-z_$][\w$]*)\s*=\s*[\w$.]*\.addModel\(")
+    violations: list[str] = []
+    for js in FRONTEND_JS_DIR.rglob("*.js"):
+        if "vendor" in js.parts or "module_tests" in js.parts:
+            continue
+        src = js.read_text(encoding="utf-8")
+        for name in sorted({m.group(1) for m in assign.finditer(src)}):
+            for m in re.finditer(rf"\b{re.escape(name)}\.([A-Za-z_$][\w$]*)\(", src):
+                if m.group(1) not in token_methods:
+                    violations.append(f"{js.relative_to(FRONTEND_JS_DIR)}: {name}.{m.group(1)}()")
+    assert violations == [], (
+        "addModel() results are restricted tokens; native-only calls: " + "; ".join(violations)
+    )
+
+
+def test_scan_s2_dead_viewer_fields_pin() -> None:
+    """T15 pin for T25: s2scanState.viewer / s2scanState.resultViewer are dead
+    fields (F-⑥-1) — declared and nulled, never created and never consumed
+    (save the single guarded clear). Records the pending T25 cleanup and fails
+    if a creation point or a new consumer reappears first."""
+    src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "scan-s2.js").read_text(encoding="utf-8")
+    assert "viewer: null" in src and "resultViewer: null" in src, (
+        "dead viewer fields must stay declared"
+    )
+    assigns = re.findall(r"s2scanState\.(?:resultViewer|viewer)\s*=\s*(.+?);", src)
+    non_null = [a.strip() for a in assigns if a.strip() != "null"]
+    assert non_null == [], f"dead viewer fields must have no creation point until T25: {non_null}"
+    assert src.count("s2scanState.viewer.clear()") == 1, (
+        "the guarded dead-field clear is the only consumer"
+    )
+
+
 def test_no_standalone_s2scan_modal() -> None:
     """FE-04 slice 1: the legacy S2 static modal must not exist in the HTML.
 
@@ -13094,6 +13164,52 @@ def test_wizard_preview_validate_slice_owner_and_h4_guard() -> None:
     assert "abortBatchPreviews()" in open_fn, "H-4: openMethodConfig must abort stale batch previews"
     revert_fn = html.split("function revertMethodDraft()", 1)[1].split("\n  }", 1)[0]
     assert "abortBatchPreviews()" in revert_fn, "H-4: revertMethodDraft must abort stale batch previews"
+
+
+def test_wizard_draft_form_slice_owner_and_h2_guard() -> None:
+    """T19 S3: draft/form state is owned by draft-form.js; explicit 0/false/null
+    and the legacy draft reader are preserved; batch_role_defaults.js stays the
+    only batch-role default source; H-2 clears the autosave timer + bumps the
+    draft epoch on close and re-checks epoch/visibility inside the timer."""
+    module_path = FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "draft-form.js"
+    module_src = module_path.read_text(encoding="utf-8")
+    # Single S3 state owner.
+    for decl in ("const wizardState = {", "var wizardDraft = null;",
+                 "var wizardDraftMeta = null;", "var wizardDraftSaveQueue =",
+                 "var wizardDraftAutosaveTimer = null;", "var wizardDraftEpoch = 0;",
+                 "var createWizardStep = 1;", "var ircSourcePreviewSequence = 0;"):
+        assert decl in module_src, f"S3 state must live in draft-form.js: {decl!r}"
+    # Legacy draft reader + explicit falsy handling.
+    assert "function _captureWizardDraft()" in module_src
+    assert "function _restoreWizardDraft(draft)" in module_src
+    assert 'hasOwnProperty.call(saved, "checked")' in module_src, \
+        "explicit false must be restored, never collapsed to a default"
+    assert 'hasOwnProperty.call(saved, "value")' in module_src, \
+        "explicit 0/null must be restored, never collapsed to a default"
+    assert "legacy grid migration hint (T23f)" in module_src, "legacy draft migration hint preserved"
+    # batch_role_defaults.js remains the only default-value source (no literals).
+    assert "var _BATCH_ROLE_DEFAULTS = batchRoleStaticDefaults();" in module_src
+    # H-2: close ends the autosave session; the timer re-checks epoch + visibility.
+    close_fn = module_src.split("function closeModal()", 1)[1].split("\nfunction ", 1)[0]
+    assert "wizardDraftEpoch++" in close_fn, "H-2: closeModal must bump the draft epoch"
+    assert "clearTimeout(wizardDraftAutosaveTimer)" in close_fn, \
+        "H-2: closeModal must clear the pending autosave timer"
+    sched_fn = module_src.split("function _scheduleWizardDraftAutosave()", 1)[1].split(
+        "\nfunction ", 1)[0]
+    assert "scheduledEpoch !== wizardDraftEpoch" in sched_fn, \
+        "H-2: the timer callback must re-check the draft epoch"
+    assert 'modal.style.display === "none"' in sched_fn, \
+        "H-2: the timer callback must re-check modal visibility"
+    # Thin same-name delegates in wizard.js; no duplicated S3 state.
+    wizard_src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard.js").read_text(encoding="utf-8")
+    for name in ("openModal", "closeModal", "setWizardInputMode", "updateConfigCards",
+                 "openMethodConfig", "loadDefaultMethodProfile", "_scheduleWizardDraftAutosave"):
+        assert f"function {name}() {{\n  return window.ACPWizardDraftForm." in wizard_src, \
+            f"thin delegate missing for {name}"
+    for dup in ("\nconst wizardState = {", "\nvar wizardDraft = null;",
+                "\nvar wizardDraftEpoch = 0;", "\nvar createWizardStep = 1;",
+                "\nvar nmrExperimentMode =", "\nvar ircSourcePreviewSequence ="):
+        assert dup not in wizard_src, f"S3 state must not be duplicated in wizard.js: {dup.strip()!r}"
 
 
 def test_candidate_details_i18n_keys_in_both_locales() -> None:

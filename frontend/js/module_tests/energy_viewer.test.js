@@ -102,6 +102,28 @@ module.exports.register = async function (h) {
     assertEq(sandbox.ACPStructureViewer._canvasViewerImpl("other"), null);
   });
 
+  await test("energy loader: repeated mount/teardown cycle — no live viewer leaks; PNG export on remount", () => {
+    const { sandbox, registered, created } = loadEnergy({}, true);
+    const loader = registered["energy-mini"];
+    loader("1\nx\nH 0 0 0\n", {});
+    const first = sandbox.energyGraphState.viewer;
+    assert(first && first.isDisposed() === false, "first mount live");
+    sandbox.energyGraphDestroyViewer();
+    assert(first.isDisposed() === true, "first mount disposed by destroy");
+    assertEq(sandbox.energyGraphState.viewer, null, "reference dropped");
+
+    const before = created.length;
+    assertEq(loader("1\nx\nH 0 0 0\n", {}), true, "remount succeeds");
+    assertEq(created.length, before + 1, "remount creates exactly one new viewer");
+    const second = sandbox.energyGraphState.viewer;
+    assert(second !== first && second.isDisposed() === false, "fresh live instance on remount");
+
+    const data = second.pngURI();
+    assert(typeof data === "string" && data.indexOf("data:image/png") === 0, "PNG export works on the remounted instance");
+    sandbox.energyGraphDestroyViewer();
+    assertEq(second.pngURI(), null, "disposed instance -> explicit null PNG");
+  });
+
   await test("energy loader: reuse path clears models via the instance, no second creation", () => {
     const { sandbox, registered, created, nativeCalls } = loadEnergy({}, true);
     const loader = registered["energy-mini"];
