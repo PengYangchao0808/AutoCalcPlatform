@@ -28,8 +28,6 @@
 
 | 旧实现 | 目标模块 | 迁移任务 | 移除注入任务 | 验收 |
 |---|---|---|---|---|
-| `acp.scheduler.store.JobStore`（db_path + schema 初始化入口） | `acp_services.contracts.injection.JobStorePort` | `todo 77`（schema/store owner 接管） | `todo 77` | `tests/test_services_injection_contracts.py::test_first_slice_uses_injected_ports` |
-| `acp.scheduler.migrations.migrate`（版本化迁移入口） | `acp_services.contracts.injection.MigrationsPort` | `todo 77` | `todo 77` | `tests/test_services_injection_contracts.py::test_first_slice_uses_injected_ports` |
 | `acp.scheduler.tasks.TaskIndex`（读 + sync 入口） | `acp_services.contracts.injection.TaskIndexPort` | `todo 19`（只读任务投影接管）；`todo 6`（tasks 归属） | `todo 77` | `tests/test_acp_scheduler_task_views.py` |
 | `acp.scheduler.task_views.query_project_tasks`（只读投影查询） | `acp_services.contracts.injection.TaskViewQueryPort` | `todo 19` 至 `todo 20` | `todo 77` | `tests/test_acp_scheduler_task_views.py` |
 | `acp.scheduler.manager.JobManager`（pause/unpause/cancel/continue/rerun/purge 控制意图） | `acp_services.contracts.injection.JobControlPort` | `todo 25` 至 `todo 26`（Runtime 用例接管同一执行 owner） | `todo 77` | `tests/test_acp_scheduler_processctl.py` |
@@ -48,6 +46,23 @@
 | `acp.calculations.step_requirements.evaluate_prerequisite` 与 `acp.calculations.executor.CalculationPlanExecutor`（worker 分派前的步骤前置门与 plan 执行） | `acp_services.runtime.worker.FrozenWorker`（经 `StepRequirementPort` + `TaskExecutorPort`，默认 `CccpTaskExecutor`） | `todo 31`（worker 只执行冻结 plan、过前置门后写回执） | `todo 77`（任务执行注入收口至 Services 唯一实现） | `tests/test_services_worker_contract.py` |
 | `acp.calculations.identity.compute_identity`（两层冻结 plan 身份复算，`identity.py:366-392`） | `acp_services.runtime.worker.PlanVerificationPort`（过渡期注入复算适配；独立复算归 todo 78） | `todo 31`（worker 校验冻结 plan 与 envelope 身份一致） | `todo 78`（自足装配入口从冻结数据复算身份，不再注入） | `tests/test_services_worker_contract.py` |
 | `acp.scheduler.store.JobStore.transition`（revision/status/attempt CAS 状态推进） | `acp_services.contracts.injection.JobStateAdvancePort`（controller 资格校验后唯一推进面） | `todo 31`（controller 校验回执资格后经 CAS 推进） | `todo 77`（store owner 接管，删除过渡注入） | `tests/test_services_worker_contract.py` |
+
+## 已关闭注入（B05-7 / todo 77：实现迁入 Services 并移除注入）
+
+以下注入已由 todo 77 关闭：实现体原样迁入 `src/acp_services/`（旧 `acp` 路径保留为同实现转发，
+identity `acp.X is acp_services.Y` 由 `tests/test_services_migration_equivalence.py` 守护），
+`ServicesPorts` 与 `src/acp/services_bootstrap.py` 不再构造/注入对应端口。
+`applied_commit` 记于 `handoff_registry.md`（B05-7 行）。
+
+| 旧实现 | 目标模块 | 迁移任务 | 移除注入任务 | 验收 |
+|---|---|---|---|---|
+| `acp.scheduler.store.JobStore`（db_path + schema 初始化入口） | `acp_services.store.store.JobStore`（唯一实现；`JobStorePort` 端口已删） | `todo 77` | `todo 77`（已移除 `JobStorePort` 注入） | `tests/test_services_migration_equivalence.py` |
+| `acp.scheduler.migrations.migrate`（版本化迁移入口） | `acp_services.store.migrations.migrate`（唯一实现；`MigrationsPort` 端口已删） | `todo 77` | `todo 77`（已移除 `MigrationsPort` 注入） | `tests/test_services_migration_equivalence.py` |
+
+> 仍属过渡装配：控制/recovery（`JobControlPort`/`JobSubmissionPort`/`JobEditPort`/
+> `JobRegistrationPort`/`JobStateAdvancePort`）、plan/step requirements（`PlanExecutionPort`/
+> `StepRequirementPort`）、Data cache、catalog 参数转换的其余 choke point（`MethodConfigPort`）
+> 未在本切片迁入；它们的实现闭包与 catalog/manager 深度耦合，另批迁移。
 
 > **B06-2 worker 记（todo 31）**: 本阶段仅完成**端口收敛**——worker 侧 `src/acp_services/runtime/**`
 > 只经显式 Protocol（`PlanVerificationPort` / `StepRequirementPort` / `TaskExecutorPort`）装配，
@@ -71,8 +86,8 @@
 
 | 类别 | 行 |
 |---|---|
-| job store（db_path + schema 初始化入口） | 1 |
-| migrations | 2 |
+| job store（db_path + schema 初始化入口） | 已关闭（见上节，B05-7） |
+| migrations | 已关闭（见上节，B05-7） |
 | tasks / task_views（读 + sync 入口） | 3、4 |
 | manager / controller（控制意图入口） | 5 |
 | planning / executor / step requirements / recovery / publication | 6、7、8 |
@@ -95,8 +110,9 @@ choke point 与 catalog 归一化同属 `MethodConfigPort`（行 9）。
 
 ## 待分类登记（not migrated this slice — no dual write）
 
-- `acp.scheduler.molecule_groups`（`resolve_molecule_key` 等）：**待分类**。不在 B01-1（todo 6）
-  迁移范围；本切片**不迁移、不建第二实现、不双写**。归属裁决（Workspace owner 或只读投影 owner）
-  留待后续 todo（候选 todo 6 或 todo 19）明确后再登记为正式注入行。
+- `acp.scheduler.molecule_groups`（`resolve_molecule_key` 等）：**已裁决并迁移**（B05-7 / todo 77）：
+  实现驻点迁至 `acp_services.store.molecule_groups`（随 schema/store 闭包唯一实现），旧路径
+  `src/acp/scheduler/molecule_groups.py` 为同实现转发。`acp.scheduler.naming` 同理迁至
+  `acp_services.store.naming`。
 - 本节为**散文记录**，不进入上表解析（上表每行仍须含具体迁移/移除 todo 号）；
   机器可校验状态见 `tests/test_services_injection_contracts.py::test_registry_rows_carry_concrete_migration_and_removal`。
