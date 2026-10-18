@@ -13258,6 +13258,96 @@ def test_wizard_submit_edit_slice_owner_and_interception_guard() -> None:
         "the batch submit loop must live in the S4 module only"
 
 
+def test_wizard_new_and_edit_share_defaults_and_validation() -> None:
+    """T21: create wizard and edit-recalculate editor share one defaults source
+    and one submit/validation path.
+
+    Defaults: both consumers call the contracts module's
+    ``batchRoleStaticDefaults()`` factory (no role-default literal duplicated
+    in either consumer). Validation/payload: the editor collects by running
+    the page's own ``submitJobModal()``, so edit submissions use the same
+    collectors, the same ``jobFormValidationFailed`` branch and the same
+    ``POST /jobs`` chokepoint as a new task.
+    """
+    contracts = FRONTEND_WORKBENCH_JS_DIR / "contracts" / "batch_role_defaults.js"
+    defaults_js = contracts.read_text(encoding="utf-8")
+    s3_src = (
+        FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "draft-form.js"
+    ).read_text(encoding="utf-8")
+    editor_src = (FRONTEND_JS_DIR / "job_editor.js").read_text(encoding="utf-8")
+    for literal in ('opt_trust_radius: 0.3', 'opt_initial_hessian: "calculate"',
+                    "opt_recalc_hess: 5", 'opt_convergence: "tight"'):
+        assert literal in defaults_js, f"shared defaults factory lost {literal!r}"
+        assert literal not in s3_src, (
+            f"role-default literal duplicated in draft-form.js: {literal!r}"
+        )
+        assert literal not in editor_src, (
+            f"role-default literal duplicated in job_editor.js: {literal!r}"
+        )
+    assert "var _BATCH_ROLE_DEFAULTS = batchRoleStaticDefaults();" in s3_src
+    assert (
+        "var batchRoleStaticDefaults = window.ACPWorkbench.contracts.batchRoleStaticDefaults;"
+        in editor_src
+    )
+    collect_fn = editor_src.split("function collectViaPageCollectors(ctx)", 1)[1].split(
+        "\n  function ", 1)[0]
+    assert "submitJobModal()" in collect_fn, \
+        "edit mode must collect through the page's own submitJobModal()"
+    s4_src = (
+        FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "submit-edit.js"
+    ).read_text(encoding="utf-8")
+    assert "function jobFormValidationFailed(message)" in s4_src
+    assert "if (window.ACPJobEditor && ACPJobEditor.isCollecting()) throw new Error(message);" \
+        in s4_src, "shared collecting-vs-alert validation branch missing"
+    assert "return submitJobModal();" in s4_src, "single create submit entry missing"
+
+
+def test_wizard_active_workflow_form_coverage() -> None:
+    """T21: all 15 active workflows keep a catalog-driven wizard form.
+
+    The four-slice extraction must not narrow the wizard to a subset: every
+    active+visible catalog entry resolves to a method schema with at least one
+    ``method_level`` (the rows ``openMethodConfig`` renders), the workflow list
+    is filtered only by the catalog's ``visible`` flag, and the schema is read
+    from ``methodCatalogCache`` by ``method_schema_id``. A hardcoded workflow
+    whitelist (or a schema with no levels) would silently drop a form.
+    """
+    active = [
+        wf for wf in WORKFLOW_CATALOG
+        if wf.get("status") == "active" and wf.get("visible") is not False
+    ]
+    assert sorted(wf["id"] for wf in active) == [
+        "BatchOptimize", "Confsearch", "OrcaGradient", "PESsearch",
+        "XtbConstrainedOpt", "XtbPathSearch", "casscf", "frequency", "irc",
+        "nmr", "optimize", "scan", "singlepoint", "tsmode", "xtb_optimize",
+    ], "the 15 active workflows must all remain visible to the wizard form"
+    for wf in active:
+        schema = METHOD_SCHEMAS[wf["method_schema_id"]]
+        assert schema.get("method_levels"), (
+            f"active workflow {wf['id']!r} has no method_levels "
+            f"(schema {wf['method_schema_id']!r})"
+        )
+
+    s3_src = (
+        FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "draft-form.js"
+    ).read_text(encoding="utf-8")
+    for name in ("renderWorkflowDetail", "renderMethodDetail", "updateConfigCards",
+                 "loadDefaultMethodProfile", "openMethodConfig"):
+        assert f"function {name}(" in s3_src, f"S3 form path missing {name}"
+    assert "workflowCatalogCache.filter(function(w) { return w.visible !== false; })" in s3_src, \
+        "workflow list must stay catalog-visible driven"
+    assert "var schema = (methodCatalogCache.method_schemas || {})[schemaId];" in s3_src, \
+        "form fields must be read from the catalog schema, not a workflow whitelist"
+    assert "w.id === id && w.status === \"active\"" in s3_src, \
+        "workflow resolution must accept any active catalog entry"
+
+    wizard_src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard.js").read_text(encoding="utf-8")
+    for name in ("renderWorkflowDetail", "renderMethodDetail", "updateConfigCards",
+                 "loadDefaultMethodProfile", "openMethodConfig"):
+        assert f"function {name}() {{\n  return window.ACPWizardDraftForm." in wizard_src, \
+            f"thin delegate missing for {name}"
+
+
 def test_candidate_details_i18n_keys_in_both_locales() -> None:
     """cd.* i18n keys exist in both zh-CN and en-US blocks."""
     html = read_workbench_content()
