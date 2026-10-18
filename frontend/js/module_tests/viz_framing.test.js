@@ -123,4 +123,37 @@ module.exports.register = async function (h) {
     assertEq(Object.keys(sandbox.window.ACPVisualization.mol3d).sort(),
       ["create", "destroy", "frame", "isAvailable"]);
   });
+
+  await test("scene: two instances playing independently never share or cancel each other's interval", async () => {
+    const { sandbox, viz } = loadViz();
+    loadScript("js/visualization/scene_instance.js", sandbox);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const stub = () => ({
+      addModel() { return { setStyle() { return this; }, addStyle() { return this; } }; },
+      removeAllModels() {}, removeAllShapes() {}, removeAllLabels() {},
+      getView() { return [1, 0, 0, 0]; }, setView() {}, render() {}, clear() {},
+    });
+    const a = viz.scene.create({ viewer: stub() });
+    const b = viz.scene.create({ viewer: stub() });
+    let aTicks = 0, bTicks = 0;
+    a.play(() => { aTicks++; }, 5);
+    b.play(() => { bTicks++; }, 5);
+    await sleep(24);
+    assert(aTicks >= 2, "instance A ticks on its own interval");
+    assert(bTicks >= 2, "instance B ticks on its own interval");
+
+    a.stopPlayback();
+    const aAtStop = aTicks, bAtStop = bTicks;
+    await sleep(22);
+    assertEq(aTicks, aAtStop, "stopping A cancels only A's interval");
+    assert(bTicks > bAtStop, "B keeps ticking — intervals are never shared");
+
+    b.pausePlayback();
+    const bPaused = bTicks;
+    await sleep(16);
+    assertEq(bTicks, bPaused, "pausing B leaves only B paused");
+    b.stopPlayback();
+    a.dispose();
+    b.dispose();
+  });
 };

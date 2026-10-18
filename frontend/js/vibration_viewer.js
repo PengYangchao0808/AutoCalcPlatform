@@ -1,6 +1,6 @@
 /**
  * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-31)
- * @version 0.8.1
+ * @version 0.9.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -14,8 +14,10 @@
  *   - setDisplayMode(mode)             ("arrows" | "animation" | "combo")
  *   - setAmplitude(v)                  (clamped amplitude setter)
  *   - playAnimation() / pauseAnimation() / togglePlay()
- *   - stopAnimationAndRestore()      (cancel rAF + exact equilibrium restore
- *                                     + editor unlock; idempotent)
+ *   - setHidden(hidden)              (instance setHidden: pause ticking while
+ *                                     hidden WITHOUT losing the playing state)
+ *   - stopAnimationAndRestore()      (instance stopPlayback + exact equilibrium
+ *                                     restore + editor unlock; idempotent)
  *   - stopAnimation()                (alias of stopAnimationAndRestore)
  *   - isAnimationActive()            (mutual-exclusion probe)
  *   - handleTeardown()               (tab/job switch + viewer destroy hook)
@@ -40,8 +42,9 @@
  *
  * Internal (test-overridable via namespace property):
  *   - _fetchImpl                       (default: window.fetch; tests inject a fake)
- *   - _viewerImpl                      (default: resolves the app's main `viewer`)
- *   - _rafImpl / _cancelRafImpl / _nowImpl (rAF loop injectables for Node tests)
+ *   - _viewerImpl                      (default: resolves the app's main `viewer`
+ *                                       — the bounded scene instance)
+ *   - _nowImpl                         (monotonic-ish ms clock for phase timing)
  *   - _t                               (i18n lookup with STR-table fallback)
  *   - _esc                             (XSS-safe text conversion)
  *
@@ -52,11 +55,15 @@
  *   reasons: no_normal_modes / geometry_mismatch / pending_fetch / historical_unavailable
  *   NEVER fabricate frequencies; NEVER render modes when available=false.
  *   Stored mode vectors are NEVER mutated (normalization is display-only).
- *   Arrows/animation are drawn on the app's MAIN 3Dmol viewer instance only.
- *   The animation loop NEVER uses the viewer built-in animation API (it has
- *   no variable speed or phase) and NEVER changes atom ordering; the camera
- *   is preserved via getView()/setView() around every per-frame rebuild.
- *   While playing, geometry editing is disabled via
+ *   Arrows/animation are drawn on the app's MAIN scene instance only.
+ *   Playback runs on the INSTANCE's single interval (play/pausePlayback/
+ *   resumePlayback/setHidden/stopPlayback — one interval per instance); no
+ *   timer is ever owned here, so hide/show and dispose gate ticking at the
+ *   instance and two instances never share or cancel each other's interval.
+ *   The per-frame rebuild NEVER uses the viewer built-in animation API (it
+ *   has no variable speed or phase) and NEVER changes atom ordering; the
+ *   camera is preserved via getView()/setView() around every per-frame rebuild.
+ *   While a session is active, geometry editing is disabled via
  *   ACPStructureEditor.setLocked(true) (mutual exclusion, todo 30); every
  *   teardown path (tab switch / job switch / entry switch / viewer destroy)
  *   funnels through stopAnimationAndRestore()/handleTeardown() so no loop
@@ -70,7 +77,7 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.8.1";
+  var VERSION = "0.9.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -215,27 +222,32 @@
   /**
    * @typedef {Object} AnimationState
    * @property {boolean} playing
+   * @property {boolean} paused        - session paused via instance.pausePlayback
    * @property {number} phase        - oscillation phase in radians
    * @property {number} speed        - playback speed multiplier (0.25-2.0)
    * @property {number} amplitude    - mirrors arrowState.amplitude while playing
    * @property {boolean} invertPhase - flip the displacement sign
-   * @property {number|null} rafHandle
+   * @property {number|null} playSeq - seq id from instance.play() (one interval
+   *                                   per instance; null when no session runs)
    * @property {number|null} lastFrameTs
    * @property {Object|null} savedView   - last camera view captured per frame
    * @property {string|null} equilibriumXyz - snapshot for exact restore on stop
    * @property {boolean} _active      - a session has played since last stop
+   * @property {Object|null} _instance - scene instance owning the interval
    */
   var animationState = {
     playing: false,
+    paused: false,
     phase: 0,
     speed: 1,
     amplitude: AMP_DEFAULT,
     invertPhase: false,
-    rafHandle: null,
+    playSeq: null,
     lastFrameTs: null,
     savedView: null,
     equilibriumXyz: null,
     _active: false,
+    _instance: null,
   };
 
   /* ---- pure helpers (exported for tests) ---- */
@@ -402,11 +414,13 @@
   }
 
   /**
-   * Draw arrows on a 3Dmol viewer via viewer.addArrow; returns the number
-   * of arrows added.  Null endpoints and masked (skipped-H) rows draw
-   * nothing.
+   * Draw arrows through the instance shape-token API (viewerObj.addArrow);
+   * returns the number of arrows added.  Null endpoints and masked
+   * (skipped-H) rows draw nothing.  A draw whose addArrow reports the
+   * instance's explicit failure value (null) is NOT counted, so the return
+   * always matches the arrows actually on the canvas.
    *
-   * @param {Object} viewerObj  - 3Dmol viewer (must expose addArrow)
+   * @param {Object} viewerObj  - main scene instance (must expose addArrow)
    * @param {Array<Object>|null} endpoints - from computeArrowEndpoints
    * @param {Array<string>|null} symbols   - for the H skip mask
    * @param {{ color?: string }} [opts]
@@ -423,12 +437,13 @@
     for (var i = 0; i < endpoints.length; i++) {
       var ep = endpoints[i];
       if (!ep || (mask && mask[i])) continue;
-      viewerObj.addArrow({
+      var token = viewerObj.addArrow({
         start: { x: ep.start[0], y: ep.start[1], z: ep.start[2] },
         end: { x: ep.end[0], y: ep.end[1], z: ep.end[2] },
         radius: ARROW_RADIUS,
         color: color,
       });
+      if (token === null) continue; // explicit failure — nothing was drawn
       count += 1;
     }
     return count;
@@ -446,9 +461,9 @@
   }
 
   /**
-   * Resolve the app's MAIN 3Dmol viewer instance (the one displaying the
-   * current entry).  Never creates a viewer.  Tests (and future callers)
-   * may inject `_viewerImpl` on the namespace.
+   * Resolve the app's MAIN scene instance (the bounded ACPVisualization.scene
+   * viewer that displays the current entry).  Never creates a viewer.  Tests
+   * (and future callers) may inject `_viewerImpl` on the namespace.
    *
    * @returns {Object|null}
    */
@@ -754,28 +769,26 @@
     return null;
   }
 
-  /** @returns {Function|null} */
-  function _getRafImpl() {
-    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
-        typeof window.ACPVibrationViewer._rafImpl === "function") {
-      return window.ACPVibrationViewer._rafImpl;
-    }
-    if (typeof requestAnimationFrame === "function") {
-      return requestAnimationFrame;
-    }
-    return null;
+  /**
+   * The main scene instance only when it owns playback (exposes the
+   * instance play() entry).  Raw viewer objects never host the loop.
+   *
+   * @returns {Object|null}
+   */
+  function _playbackInstance() {
+    var v = _getMainViewer();
+    return (v && typeof v.play === "function") ? v : null;
   }
 
-  /** @returns {Function|null} */
-  function _getCancelRafImpl() {
-    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
-        typeof window.ACPVibrationViewer._cancelRafImpl === "function") {
-      return window.ACPVibrationViewer._cancelRafImpl;
-    }
-    if (typeof cancelAnimationFrame === "function") {
-      return cancelAnimationFrame;
-    }
-    return null;
+  /**
+   * The instance owning the CURRENT playback session (set at play time),
+   * falling back to the resolved main instance.  Pause/resume/stop/hide all
+   * act on this instance — one interval per instance, never a second one.
+   *
+   * @returns {Object|null}
+   */
+  function _sessionInstance() {
+    return animationState._instance || _playbackInstance();
   }
 
   /** @returns {number} monotonic-ish timestamp in ms */
@@ -870,20 +883,20 @@
   }
 
   /**
-   * The rAF tick: throttled to ~30fps (FRAME_MIN_MS), advances the phase
-   * by dt * speed * 2π * CYCLE_RATE_HZ, and rebuilds the model with the
-   * displacement at the new phase (H atoms frozen above the skip
-   * threshold).  Stops itself via stopAnimation() when the geometry
-   * context becomes invalid mid-play.
+   * The instance interval tick: throttled to ~30fps (FRAME_MIN_MS), advances
+   * the phase by dt * speed * 2π * CYCLE_RATE_HZ, and rebuilds the model with
+   * the displacement at the new phase (H atoms frozen above the skip
+   * threshold).  Stops the session via stopAnimation() when the geometry
+   * context becomes invalid mid-play.  Only the instance interval ever
+   * calls this — hide/pause gate ticking inside the instance.
    *
-   * @param {number} [ts] - rAF timestamp (ms); _nowImpl() when absent
+   * @param {number} [ts] - timestamp (ms); _nowImpl() when absent
    */
   function tick(ts) {
     if (!animationState.playing) return;
     var now = (ts != null) ? ts : _now();
     if (animationState.lastFrameTs != null &&
         now - animationState.lastFrameTs < FRAME_MIN_MS) {
-      animationState.rafHandle = _scheduleNextFrame();
       return;
     }
     var dt = animationState.lastFrameTs == null ? 0 : (now - animationState.lastFrameTs) / 1000;
@@ -905,30 +918,22 @@
       { invert: animationState.invertPhase, skipMask: mask }
     );
     _renderAnimationFrame(viewerObj, displaced, ctx.symbols, ctx);
-    animationState.rafHandle = _scheduleNextFrame();
-  }
-
-  function _scheduleNextFrame() {
-    var raf = _getRafImpl();
-    if (!raf) {
-      animationState.playing = false;
-      return null;
-    }
-    try {
-      return raf(tick);
-    } catch (_) {
-      animationState.playing = false;
-      return null;
-    }
   }
 
   /**
-   * Start (or resume) the animation loop.  No-op when already playing or
-   * when the geometry context is invalid (hint surfaced in the UI).  While
-   * a session is active, geometry editing is locked (mutual exclusion).
+   * Start (or resume) the playback session on the main scene instance.
+   * No-op when already playing or when the geometry context is invalid
+   * (hint surfaced in the UI); a paused session resumes through the same
+   * instance interval (never a second one).  While a session is active,
+   * geometry editing is locked (mutual exclusion).
    */
   function playAnimation() {
     if (animationState.playing) return;
+    var inst = _playbackInstance();
+    if (!inst) {
+      renderFrequencyInspector();
+      return;
+    }
     var ctx = _vibGeometry();
     if (!ctx.ok) {
       arrowState.enabled = false;
@@ -936,46 +941,64 @@
       renderFrequencyInspector();
       return;
     }
+    if (animationState.paused && animationState._instance === inst &&
+        typeof inst.resumePlayback === "function") {
+      inst.resumePlayback();
+      animationState.paused = false;
+      animationState.playing = true;
+      animationState.lastFrameTs = null;
+      renderFrequencyInspector();
+      return;
+    }
     animationState.equilibriumXyz = _buildEquilibriumXyz();
+    var seq = inst.play(tick, FRAME_MIN_MS);
+    if (seq == null) {
+      renderFrequencyInspector();
+      return; // instance refused (disposed) — no session, no lock
+    }
+    animationState._instance = inst;
+    animationState.paused = false;
     animationState.playing = true;
     animationState._active = true;
     _setEditorLocked(true);
     animationState.lastFrameTs = null;
-    animationState.rafHandle = _scheduleNextFrame();
+    animationState.playSeq = seq;
     renderFrequencyInspector();
   }
 
   /**
-   * Pause the loop but keep the currently displayed displaced model.
+   * Pause the session on its instance but keep the currently displayed
+   * displaced model (the interval stays owned by the instance, paused).
    */
   function pauseAnimation() {
     if (!animationState.playing) return;
-    if (animationState.rafHandle != null) {
-      var cancel = _getCancelRafImpl();
-      if (cancel) {
-        try { cancel(animationState.rafHandle); } catch (_) { /* already gone */ }
-      }
-      animationState.rafHandle = null;
+    var inst = _sessionInstance();
+    if (inst && typeof inst.pausePlayback === "function") {
+      try { inst.pausePlayback(); } catch (_) { /* instance already released */ }
     }
+    animationState.paused = true;
     animationState.playing = false;
     renderFrequencyInspector();
   }
 
   /**
-   * Full stop (todo 30 hardening of the todo-29 stop): cancel the rAF
-   * loop, rebuild the EXACT equilibrium model (same XYZ the app loaded),
-   * restore the saved camera, clear shapes, re-apply static arrows when
-   * the display mode includes them, reset the phase, and release the
-   * editor lock.  Idempotent — the second call performs no viewer calls.
+   * Full stop (todo 30 hardening of the todo-29 stop): stop the instance
+   * playback interval, rebuild the EXACT equilibrium model (same XYZ the
+   * app loaded), restore the saved camera, clear shapes, re-apply static
+   * arrows when the display mode includes them, reset the phase, and
+   * release the editor lock.  Idempotent — the second call performs no
+   * viewer calls.
    */
   function stopAnimationAndRestore() {
-    if (animationState.rafHandle != null) {
-      var cancel = _getCancelRafImpl();
-      if (cancel) {
-        try { cancel(animationState.rafHandle); } catch (_) { /* already gone */ }
+    if (animationState.playSeq != null) {
+      var inst = _sessionInstance();
+      if (inst && typeof inst.stopPlayback === "function") {
+        try { inst.stopPlayback(); } catch (_) { /* instance already released */ }
       }
-      animationState.rafHandle = null;
+      animationState.playSeq = null;
+      animationState._instance = null;
     }
+    animationState.paused = false;
     animationState.playing = false;
     animationState.lastFrameTs = null;
     animationState.phase = 0;
@@ -1071,6 +1094,20 @@
       pauseAnimation();
     } else {
       playAnimation();
+    }
+  }
+
+  /**
+   * Hide/show forwarding control: pauses ticking while hidden WITHOUT
+   * losing the playing state (instance setHidden contract) — the session
+   * and its single interval survive, so unhide resumes mid-phase.
+   *
+   * @param {boolean} hidden
+   */
+  function setHidden(hidden) {
+    var inst = _sessionInstance();
+    if (inst && typeof inst.setHidden === "function") {
+      try { inst.setHidden(!!hidden); } catch (_) { /* instance already released */ }
     }
   }
 
@@ -1958,6 +1995,7 @@
     playAnimation: playAnimation,
     pauseAnimation: pauseAnimation,
     togglePlay: togglePlay,
+    setHidden: setHidden,
     stopAnimation: stopAnimation,
     stopAnimationAndRestore: stopAnimationAndRestore,
     isAnimationActive: isAnimationActive,
@@ -1987,8 +2025,6 @@
     _getMainViewer: _getMainViewer,
     _arrowsVisible: _arrowsVisible,
     _viewerImpl: null,
-    _rafImpl: null,
-    _cancelRafImpl: null,
     _nowImpl: null,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
