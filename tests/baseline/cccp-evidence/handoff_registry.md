@@ -29,7 +29,7 @@
 
 | HN | owner | 可修改范围 | provider | consumer | base_commit | prerequisites | acceptance | applied_commit | status |
 |---|---|---|---|---|---|---|---|---|---|
-| HN-01 | C | `docs`/tracked `handoffs/HN-01-b06-closure.md` + 逐工作流 B06 闭包补丁（混合文件补丁，见 `write_registry.md` §4.1） | C | B（B06 独立 worker / 接线） | 产出时冻结（`provider_base_commit`） | T3 分类 + T5 写权登记 + T48 隔离能力；T2 台账六栏 | 逐工作流四状态表 + 十要素字段完整；补丁 `git apply --check` 通过或隔离 worktree 应用后定向测试通过（记录后撤销）；「已集成」仅 B 应用并通过后记录；blocked-by-B 显式 | pending | pending |
+| HN-01 | C | `docs`/tracked `handoffs/HN-01-b06-closure.md` + 逐工作流 B06 闭包补丁（混合文件补丁，见 `write_registry.md` §4.1） | C | B（B06 独立 worker / 接线） | 产出时冻结（`provider_base_commit`） | T3 分类 + T5 写权登记 + T48 隔离能力；T2 台账六栏 | 逐工作流四状态表 + 十要素字段完整；补丁 `git apply --check` 通过或隔离 worktree 应用后定向测试通过（记录后撤销）；「已集成」仅 B 应用并通过后记录；blocked-by-B 显式 | `ffcf1b821c89100ac0a5166a8cbc3cbe3b751a66`（provider 交付提交） | delivered |
 | HN-02 | C | 科学产品 → frames/VIEW_REGISTRY 字段映射表 + 五态 fixture 集（normal/empty/partial/corrupt/old）+ 实装闭包表（T13） | C | B（B-T28a/B-T28b adapter）/ A（显示） | 产出时冻结 | T11 契约骨架 + T12 曲线/振动契约（完整交付）；ANTI #21；`src/acp/results/frames.py` 只读 | 映射表逐字段（源→目标→单位/身份规则）+ fixture 五态齐全（各附期望映射输出）+ cccp 侧零 `acp.results` import；状态 A「契约可消费」即本 HN 完成；状态 B「跨路端到端」单独记录 | pending | pending |
 | HN-03 | C | 有界大数据产品 + 块索引（分块/抽样/多分辨率；派生身份=输入摘要+算法+范围+分辨率+schema）（T33） | C | B（Data 字节/元数据查询）/ A（有限产品消费） | 产出时冻结 | T11/T12 产品契约；T31/T32 分块实现 + 性能实测 | 产品块有界、原始点映射/顺序/关键点可复核；派生身份含全部维度；性能用同样本实测（不写未测收益） | pending | pending |
 | HN-04 | C | CCCP 最小科学包/依赖/资产/许可清单 + 精确打包改动请求（`pyproject.toml`/发行输入）+ wheel 构建与无 acp 安装证据（T39） | C | B（共享打包集成） | 产出时冻结 | T30/T33/T38 资产与清单；单 `pyproject.toml` 现状基线 | 精确变更请求可应用；无 acp/Services 环境安装 wheel 并运行科学 fixture/产品读取/模型报告样例；许可/可获得性声明 | pending | pending |
