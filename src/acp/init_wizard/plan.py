@@ -165,8 +165,10 @@ def make_secret_ref(name: str, reference: str) -> SecretRef:
         )
     source = source.strip().lower()
     if source not in SECRET_SOURCES:
+        # Never echo the raw reference: it may be a mistyped plaintext secret.
         raise InitAbort(
-            f"秘密 {clean_name} 的来源 {source!r} 不受支持（仅支持 {'/'.join(SECRET_SOURCES)}）"
+            f"秘密 {clean_name} 的来源不受支持（仅支持 {'/'.join(SECRET_SOURCES)}）；"
+            "请使用引用形式，勿写入明文口令"
         )
     return SecretRef(name=clean_name, source=source, ref=ref.strip())
 
