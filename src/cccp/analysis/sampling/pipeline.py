@@ -10,9 +10,9 @@ for ``xtb-md`` / ``xtbmd-censo`` protocols only.
 
 Data models, serialization, and persistence helpers live in
 ``cccp.analysis.sampling.models`` and are re-exported from
-``cccp.analysis.sampling`` so that existing
-``from acp.confsearch.sampling import ...`` imports keep working through
-the ACP compatibility shim.
+``cccp.analysis.sampling`` so that the historical ACP
+``confsearch.sampling`` import path keeps working through the ACP
+compatibility shim.
 
 Third-party dependency: **numpy only** (no rdkit, sklearn, etc.).
 """
