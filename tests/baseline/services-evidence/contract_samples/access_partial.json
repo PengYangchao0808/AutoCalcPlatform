@@ -1,0 +1,51 @@
+{
+  "contract": "access",
+  "sample_kind": "partial",
+  "sample_version": 1,
+  "expected_classification": "accepted_partial",
+  "body": {
+    "principal": {
+      "principal_id": "p1",
+      "kind": "user",
+      "display_name": "Alice",
+      "tenant_id": "t1",
+      "roles": [
+        "admin"
+      ],
+      "deployment_tier": "local-single"
+    },
+    "scope": {
+      "scope_id": "s1",
+      "tenant_id": "t1",
+      "resource_kinds": [
+        "project"
+      ],
+      "action": "read",
+      "project_ids": [
+        "proj1"
+      ]
+    },
+    "grants": [
+      {
+        "grant_id": "g1",
+        "principal_id": "p1",
+        "scope_id": "s1",
+        "resource_id": "proj1",
+        "actions": [
+          "read"
+        ],
+        "granted_at": "2026-10-18T00:00:00Z",
+        "expires_at": null,
+        "basis_revision": 1
+      }
+    ],
+    "decision": {
+      "decision_id": "d1",
+      "effect": "allow",
+      "principal_id": "p1",
+      "scope_id": "s1",
+      "reason_code": "granted",
+      "decided_at": "2026-10-18T00:00:00Z"
+    }
+  }
+}

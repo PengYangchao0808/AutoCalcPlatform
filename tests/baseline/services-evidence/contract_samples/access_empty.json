@@ -1,0 +1,32 @@
+{
+  "contract": "access",
+  "sample_kind": "empty",
+  "sample_version": 1,
+  "expected_classification": "accepted",
+  "body": {
+    "principal": {
+      "principal_id": "p0",
+      "kind": "anonymous",
+      "tenant_id": "t1",
+      "roles": [],
+      "deployment_tier": "local-single"
+    },
+    "scope": {
+      "scope_id": "s0",
+      "tenant_id": "t1",
+      "resource_kinds": [],
+      "action": "read",
+      "project_ids": []
+    },
+    "grants": [],
+    "decision": {
+      "decision_id": "d0",
+      "effect": "deny",
+      "principal_id": "p0",
+      "scope_id": "s0",
+      "reason_code": "no_grant",
+      "decided_at": "2026-10-18T00:00:00Z",
+      "available_actions": []
+    }
+  }
+}
