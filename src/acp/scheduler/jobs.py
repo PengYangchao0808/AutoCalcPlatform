@@ -15,23 +15,15 @@ import json
 import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from acp.scheduler.nodes import ExecutionMode
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 if TYPE_CHECKING:
     from acp.storage.record import TaskRecord
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _utc_now_iso() -> str:
-    return _utc_now().isoformat()
 
 
 class JobStatus(str, Enum):

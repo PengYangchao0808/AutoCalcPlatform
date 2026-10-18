@@ -44,7 +44,6 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
@@ -57,6 +56,7 @@ from acp_services.contracts.events import (
     OwnerType,
     validate_event_sequence,
 )
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 __all__ = [
     "CATEGORY_COVERAGE",
@@ -365,10 +365,6 @@ class PersistentEventService:
             owner_id=self.owner_id,
             scope=self.scope,
         )
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 # ══════════════════════════════════════════════════════════════════════════

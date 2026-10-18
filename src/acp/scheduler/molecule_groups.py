@@ -17,14 +17,11 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
-from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+
 logger = logging.getLogger(__name__)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 # ---------------------------------------------------------------------------

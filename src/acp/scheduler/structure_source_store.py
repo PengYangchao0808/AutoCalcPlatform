@@ -26,11 +26,11 @@ import re
 import sqlite3
 import threading
 import unicodedata
-from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from acp.scheduler.migrations import migrate
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -252,10 +252,6 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def source_uid_for(job_id: str, relative_path: str) -> str:

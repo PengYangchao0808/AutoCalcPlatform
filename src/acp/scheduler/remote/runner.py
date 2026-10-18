@@ -42,7 +42,7 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -86,6 +86,7 @@ from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_r
 from acp.scheduler.runner import JobRunner, _electronic_state_cli_flags, materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -142,10 +143,6 @@ class _RemoteJobState(_RemoteJobStateBase, total=False):
     poll_cycle: int
     seen_stages: set[str]
     cancel_sent: bool
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _safe_timestamp_dt(value: object) -> float:

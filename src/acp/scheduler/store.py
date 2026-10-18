@@ -16,20 +16,16 @@ import sqlite3
 import threading
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
 from acp_services.contracts.events import EventScope, OwnerType
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 from acp_services.runtime.outbox import OutboxEventSpec, OutboxRecord
 
 logger = logging.getLogger(__name__)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _status_clause(

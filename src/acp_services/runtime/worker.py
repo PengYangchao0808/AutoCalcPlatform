@@ -36,7 +36,6 @@ import os
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -49,6 +48,7 @@ from acp_services.contracts.envelope import (
     ensure_no_runtime_state,
 )
 from acp_services.contracts.injection import StepRequirementPort
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 __all__ = [
     "CccpTaskExecutor",
@@ -321,10 +321,6 @@ def read_receipt(path: Path | str) -> ExecutionReceipt | None:
     except (OSError, ValueError) as exc:
         raise ReceiptConflictError(f"existing receipt at {target} is unreadable: {exc}") from exc
     return ExecutionReceipt.from_dict(payload)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 # ── the worker ──────────────────────────────────────────────────────────────

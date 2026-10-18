@@ -50,7 +50,6 @@ import logging
 import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Protocol, runtime_checkable
 
 from acp_services.runtime.freshness import (
@@ -59,6 +58,7 @@ from acp_services.runtime.freshness import (
     incoming_is_late,
     resolve_projection_state,
 )
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +81,6 @@ ANNOTATION_FIELDS: tuple[str, ...] = (
     "observed_at",
     "stale_dimensions",
 )
-
-
-def _utc_now_iso() -> str:
-    """Return the current UTC time as an ISO-8601 string (diagnostic only)."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _override_availability(state: ProjectionState, availability: str) -> ProjectionState:
