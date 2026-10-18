@@ -300,10 +300,10 @@ function handleReactionEditAtomClick(atom) {
 
 function handleReactionAtomHoverStart(atom) {
   var state = ensureReactionDefinitionState();
-  if (!state.editMode || !reactionViewer) return;
+  if (!state.editMode || !reactionViewer || reactionViewer.isDisposed()) return;
   if (!atom || typeof atom.index !== "number") return;
   if (reactionHoverShape) {
-    try { reactionViewer.removeShape(reactionHoverShape); } catch (e) { /* already gone */ }
+    reactionViewer.removeShape(reactionHoverShape);
     reactionHoverShape = null;
   }
   reactionHoverShape = reactionViewer.addSphere({
@@ -316,12 +316,25 @@ function handleReactionAtomHoverStart(atom) {
 }
 
 function handleReactionAtomHoverEnd() {
-  if (!reactionViewer) return;
+  if (!reactionViewer || reactionViewer.isDisposed()) return;
   if (reactionHoverShape) {
-    try { reactionViewer.removeShape(reactionHoverShape); } catch (e) { /* already gone */ }
+    reactionViewer.removeShape(reactionHoverShape);
     reactionHoverShape = null;
   }
   reactionViewer.render();
+}
+
+// T11: shape-spec callbacks (addCylinder hover/click) pass through the scene
+// instance verbatim — unlike the model click/hover wrappers they do NOT die
+// with the scene generation. Each render captures its model token + instance
+// here so the closure goes inert on clear / wizard close / replace / dispose
+// (pinned by module_tests/reaction_viewer.test.js).
+function reactionSceneGuard(instance, modelToken) {
+  return function () {
+    if (!instance || instance !== reactionViewer || instance.isDisposed()) return false;
+    if (!modelToken || modelToken !== reactionModel || !instance.getModelCount()) return false;
+    return true;
+  };
 }
 
 // Toolbar/banner/hint state for edit mode + manual edits. Runs on every
@@ -532,18 +545,15 @@ function initReactionViewer() {
   if (reactionViewer) return;
   var container = document.getElementById("mech-reaction-3d");
   if (!container) return;
-  // Shared adapter (FE-09): returns null when 3Dmol is missing/failed —
+  // Bounded scene instance (restricted API v2), never a raw 3Dmol handle.
+  // scene.create returns null when 3Dmol is missing/failed —
   // renderReactionChanges3D guards on the falsy handle after this call.
-  reactionViewer = ACPVisualization.mol3d.create(container, { backgroundColor: "0x0e1419", antialias: true });
+  reactionViewer = ACPVisualization.scene.create({ container: container, options: { backgroundColor: "0x0e1419", antialias: true } });
 }
 
 function clearReactionViewerContents() {
   if (!reactionViewer) return;
-  try {
-    reactionViewer.removeAllModels();
-    reactionViewer.removeAllShapes();
-    reactionViewer.removeAllLabels();
-  } catch (e) { console.warn("Reaction viewer clear failed:", e); }
+  reactionViewer.clearScene();
   reactionModel = null;
   reactionHoverShape = null;
 }
@@ -693,11 +703,12 @@ function renderReactionChanges3D() {
   var preservedView = null;
   if (reactionPreserveViewNext) {
     reactionPreserveViewNext = false;
-    try { preservedView = reactionViewer.getView(); } catch (e) { preservedView = null; }
+    preservedView = reactionViewer.getView();
   }
   clearReactionViewerContents();
   var atoms = parseXyzAtoms(xyzText);
   reactionModel = reactionViewer.addModel(xyzText, "xyz");
+  var live = reactionSceneGuard(reactionViewer, reactionModel);
   // De-emphasize the molecular backbone so reaction-site overlays stand out.
   reactionViewer.setStyle({}, { stick: { radius: 0.14, opacity: 0.4 }, sphere: { scale: 0.26, opacity: 0.4 } });
   var manualEdits = Array.isArray(state.manualEdits) ? state.manualEdits : [];
@@ -752,11 +763,13 @@ function renderReactionChanges3D() {
       opacity: opacity,
       hoverable: true,
       hover_callback: function() {
+        if (!live()) return;
         if (hoverLabel) reactionViewer.removeLabel(hoverLabel);
         hoverLabel = reactionViewer.addLabel(tooltip, { position: mid, fontSize: 12, fontColor: "#fff", backgroundColor: "rgba(0,0,0,0.75)" });
         reactionViewer.render();
       },
       unhover_callback: function() {
+        if (!live()) return;
         if (hoverLabel) {
           reactionViewer.removeLabel(hoverLabel);
           hoverLabel = null;
@@ -802,11 +815,13 @@ function renderReactionChanges3D() {
       opacity: 0.95,
       hoverable: true,
       hover_callback: function() {
+        if (!live()) return;
         if (manualHoverLabel) reactionViewer.removeLabel(manualHoverLabel);
         manualHoverLabel = reactionViewer.addLabel(cycleTip, { position: mid, fontSize: 12, fontColor: "#fff", backgroundColor: "rgba(0,0,0,0.78)" });
         reactionViewer.render();
       },
       unhover_callback: function() {
+        if (!live()) return;
         if (manualHoverLabel) {
           reactionViewer.removeLabel(manualHoverLabel);
           manualHoverLabel = null;
@@ -814,7 +829,10 @@ function renderReactionChanges3D() {
         }
       },
       clickable: editable,
-      callback: editable ? function() { cycleReactionManualEdit(edit.atoms, edit.side); } : undefined,
+      callback: editable ? function() {
+        if (!live()) return;
+        cycleReactionManualEdit(edit.atoms, edit.side);
+      } : undefined,
     });
     reactionViewer.addSphere({ center: { x: atomA.x, y: atomA.y, z: atomA.z }, radius: 0.28, color: color, opacity: 0.95 });
     reactionViewer.addSphere({ center: { x: atomB.x, y: atomB.y, z: atomB.z }, radius: 0.28, color: color, opacity: 0.95 });
@@ -844,13 +862,13 @@ function renderReactionChanges3D() {
   // the active view's coordinate space).
   if (state.editMode && !state.locked && reactionModel) {
     reactionModel.setClickable({}, true, handleReactionEditAtomClick);
-    reactionViewer.setHoverable({}, true, handleReactionAtomHoverStart, handleReactionAtomHoverEnd);
+    reactionModel.setHoverable({}, true, handleReactionAtomHoverStart, handleReactionAtomHoverEnd);
     if (reactionManualPick !== null && atoms[reactionManualPick]) {
       reactionViewer.addStyle({ index: reactionManualPick }, { sphere: { scale: 0.4, color: "yellow", opacity: 0.7 } });
     }
   }
   if (preservedView) {
-    try { reactionViewer.resize(); reactionViewer.setView(preservedView); } catch (e) { frame3DViewer(reactionViewer); }
+    if (!reactionViewer.resize() || !reactionViewer.setView(preservedView)) frame3DViewer(reactionViewer);
   } else {
     reactionViewer.render();
     scheduleViewerFraming(document.getElementById("mech-reaction-3d"), reactionViewerFraming, function() { return reactionViewer; });
@@ -2364,6 +2382,10 @@ function rejectUnsupportedFile(file) {
 }
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
+// Page-global preview viewer — EXT owner per T16 evidence §2.5: declared
+// here, written by wizard.js (T10 migrates it to a scene instance), consumed
+// by wizard.js / job_editor.js / bootstrap.js / wizard/upload-parse.js. Keep
+// this the page's single declaration for the shared binding.
 let previewViewer = null;
 var PREVIEW_ZOOM_FACTOR = 0.82;
 var previewViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
@@ -2386,13 +2408,13 @@ let scanSelectionState = {
   structureKey: "",
   shapes: [],
 };
-let reactionViewer = null;              // mechanism builder: reaction-changes 3D viewer (P1)
+let reactionViewer = null;              // mechanism builder: bounded scene instance for the reaction-changes 3D canvas (T11)
 var reactionViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let reactionChangesViewMode = "reactant"; // active side for the reaction-changes 3D viewer
-// Manual bond edit mode (P2): model ref for click/hover wiring, locked first
-// atom of the two-click pair flow, transient hover shape, camera-preserving
-// re-render flag and a debounce timestamp separating cylinder-cycle clicks
-// from atom-pick clicks on overlapping geometry.
+// Manual bond edit mode (P2): opaque scene model token for click/hover wiring,
+// locked first atom of the two-click pair flow, transient hover shape token,
+// camera-preserving re-render flag and a debounce timestamp separating
+// cylinder-cycle clicks from atom-pick clicks on overlapping geometry.
 let reactionModel = null;
 let reactionManualPick = null;
 let reactionHoverShape = null;
