@@ -306,7 +306,7 @@ class LogParser:
                     return coords, symbols, err
                 return LogParser._parse_gaussian_content(content)
             return None, None, f"Unknown engine type: {engine_type}"
-        except Exception as e:
+        except (ValueError, IndexError, KeyError, TypeError) as e:
             return None, None, f"Parse error: {str(e)}"
 
     @staticmethod
@@ -352,7 +352,7 @@ class LogParser:
                 # cannot parse (e.g. historical Gaussian GIAO logs).
                 return LogParser._parse_gaussian_log(log_file)
             return None, None, f"Unknown engine type: {engine_type}"
-        except Exception as e:
+        except (OSError, ValueError, IndexError, KeyError, TypeError) as e:
             return None, None, f"Parse error: {str(e)}"
 
     @staticmethod
