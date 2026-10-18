@@ -77,6 +77,16 @@ from acp_services.data.contracts import (
 from acp_services.data.operations import (
     PrepareExecutionResult,
     PrepareLease,
+    default_resource_key,
+)
+from acp_services.data.read_root import (
+    DEFAULT_MAX_READ_BYTES,
+    AvailabilityRead,
+    CacheIndexFacts,
+    OperationFacts,
+    ReadOnlyResourceReader,
+    ReadRoot,
+    ReadRootResolver,
 )
 from acp_services.data.storage_binding import (
     MAPPING_VERSION_CURRENT,
@@ -100,6 +110,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "build_data_resource_port",
+    "build_read_only_reader",
     "build_storage_allocation_port",
     "build_prepare_executor",
     "build_transfer_cache_port",
@@ -850,3 +861,168 @@ def build_transfer_executor(
 ) -> TransferPrepareExecutor:
     """Wrap the pipeline as the todo-13 prepare-operation executor."""
     return TransferPrepareExecutor(pipeline, request_factory)
+
+
+# --------------------------------------------------------------------------- #
+# B02-5 (todo 15) — strictly read-only read-root + availability adapters
+# --------------------------------------------------------------------------- #
+
+
+class _ReadRootAdapter:
+    """Resolve a job's readable root from local metadata only (no network).
+
+    Local jobs read their ``work_dir``; remote jobs read the controlled
+    ``RemoteStructureCache`` root.  Remote *catalog readiness* is answered from
+    the local cache (a stat), never by fetching — that is the whole point of the
+    read-only surface: a miss is reported, not repaired.
+    """
+
+    def __init__(self, *, job_lookup: Callable[[str], Any], cache: RemoteStructureCache) -> None:
+        self._job_lookup = job_lookup
+        self._cache = cache
+
+    def resolve(self, job_id: str) -> ReadRoot:
+        record = self._job_lookup(job_id)
+        if record is None:
+            return ReadRoot(job_id=job_id, path="", found=False)
+        result = getattr(record, "result", None) or {}
+        is_remote = bool(result.get("node") and result.get("remote_dir"))
+        workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        if is_remote:
+            root = self._cache.job_root(record.id)
+            ready = self._cache.catalog_ready(root, workflow)
+            return ReadRoot(
+                job_id=job_id,
+                path=str(root),
+                is_remote=True,
+                catalog_ready=ready,
+                found=True,
+            )
+        work_dir = Path(str(record.work_dir))
+        return ReadRoot(
+            job_id=job_id,
+            path=str(work_dir),
+            is_remote=False,
+            catalog_ready=work_dir.is_dir(),
+            found=True,
+        )
+
+
+class _ReadCacheIndexAdapter:
+    """Expose the prepared cache index read-only (stat + bounded range read).
+
+    ``entry`` / ``catalog`` are local stat/fence reads (``get_cached`` /
+    ``catalog_ready`` / ``_read_fence``); ``read_bytes`` opens the cached file
+    and reads at most *limit* bytes at *offset* so a large file is never loaded
+    whole into memory.  No method can fetch from a node.
+    """
+
+    def __init__(self, cache: RemoteStructureCache) -> None:
+        self._cache = cache
+
+    def _generation(self, job_id: str) -> int:
+        return int(self._cache._read_fence(job_id)[1])
+
+    def entry(
+        self, job_id: str, relative_path: str, *, attempt: int | None = None
+    ) -> CacheIndexFacts:
+        try:
+            path = self._cache.get_cached(job_id, relative_path, attempt=attempt)
+        except ValueError:
+            return CacheIndexFacts(present=False)
+        if path is None:
+            return CacheIndexFacts(present=False)
+        size: int | None = None
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = None
+        return CacheIndexFacts(
+            present=True,
+            cached_path=str(path),
+            total_size=size,
+            generation=self._generation(job_id),
+        )
+
+    def catalog(self, job_id: str, root: str, workflow: str) -> CacheIndexFacts:
+        ready = self._cache.catalog_ready(Path(root), workflow)
+        return CacheIndexFacts(present=ready, generation=self._generation(job_id))
+
+    def read_bytes(self, path: str, offset: int, limit: int) -> bytes:
+        with open(path, "rb") as handle:  # noqa: PTH123 - bounded binary range read
+            handle.seek(int(offset))
+            return handle.read(int(limit))
+
+
+class _OperationAvailabilityAdapter:
+    """Read the committed availability of a prepare operation (read-only).
+
+    Delegates to the real :class:`PrepareOperationService` ``find`` +
+    ``availability`` — both pure reads.  There is no enqueue/lease/cancel path
+    here, so a read surface built over this adapter structurally cannot create
+    an operation.
+    """
+
+    def __init__(self, service: Any | None) -> None:
+        self._service = service
+
+    def facts(self, request: AvailabilityRead) -> OperationFacts:
+        if self._service is None:
+            return OperationFacts(exists=False)
+        attempt = int(request.attempt or 0)
+        resource_key = default_resource_key(request.job_id, attempt, request.resource_id)
+        record = self._service.find(
+            job_id=request.job_id,
+            resource_id=request.resource_id,
+            attempt=attempt,
+            permission_scope=request.permission_scope,
+            resource_key=resource_key,
+        )
+        if record is None:
+            return OperationFacts(exists=False)
+        availability = self._service.availability(record.operation_id)
+        return OperationFacts(
+            exists=True,
+            availability=availability.availability,
+            freshness=availability.freshness,
+            basis_revision=availability.basis_revision,
+            expected_revision=availability.expected_revision,
+            detail=f"operation:{record.state.value}",
+        )
+
+
+class _ReadOnlyReaderAdapter(ReadOnlyResourceReader):
+    """Marker subclass documenting the legacy-side composition (read-only)."""
+
+
+def build_read_only_reader(
+    *,
+    job_lookup: Callable[[str], Any],
+    cache: RemoteStructureCache,
+    operations: Any | None = None,
+    clock: Callable[[], str] | None = None,
+    max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
+) -> ReadOnlyResourceReader:
+    """Compose the strictly read-only reader from the real local mechanisms.
+
+    Args:
+        job_lookup: ``job_id -> JobRecord | None`` (the scheduler store).
+        cache: The shared :class:`RemoteStructureCache` (read-only index access).
+        operations: Optional :class:`PrepareOperationService` for the operation
+            projection; only ``find`` + ``availability`` are ever called, so a
+            read through this reader cannot enqueue or lease.
+        clock: Diagnostic timestamp source (tests pin it).
+        max_read_bytes: Hard cap for every bounded range read.
+
+    Returns:
+        A :class:`ReadOnlyResourceReader` that never fetches over SSH/SFTP,
+        never enqueues an operation and never parses or writes a file.
+    """
+    resolver = ReadRootResolver(_ReadRootAdapter(job_lookup=job_lookup, cache=cache))
+    return _ReadOnlyReaderAdapter(
+        resolver=resolver,
+        cache_index=_ReadCacheIndexAdapter(cache),
+        operations=_OperationAvailabilityAdapter(operations),
+        clock=clock,
+        max_read_bytes=max_read_bytes,
+    )
