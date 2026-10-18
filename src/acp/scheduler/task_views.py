@@ -193,6 +193,57 @@ _SORT_SQL: dict[TaskSort, str] = {
 
 
 # ---------------------------------------------------------------------------
+# List query budget (B03-3)
+# ---------------------------------------------------------------------------
+
+#: Hard upper bound on the SQL statements a single list query may issue.
+#:
+#: The budget is **O(1) in the returned row count**: one list request issues a
+#: fixed set of statements (project-name lookup, jobs-table probe, total
+#: ``COUNT``, per-status counts, the page ``SELECT`` and up to five facet
+#: aggregates) and never one statement per row — there is no N+1 detail fetch.
+#: This is the number pinned by ``tests/test_services_query_budget.py``; a
+#: future change that scans per row must raise this budget *and* justify it
+#: (the plan forbids per-row detail fetches).
+#:
+#: The exact count is returned alongside every result under ``sql_statements``
+#: for observability.  Callers build their wire response from explicit fields,
+#: so this diagnostic key never reaches an API response.
+LIST_SQL_BUDGET: int = 12
+
+
+class _StatementCountingConnection:
+    """Transparent ``sqlite3.Connection`` proxy that counts ``execute`` calls.
+
+    :func:`query_project_tasks` wraps its read connection in this so the fixed
+    SQL budget is observable without changing a single statement.  Every
+    statement issued through the proxy is counted — including those issued by
+    helpers that receive the connection (``_resolve_project_names``,
+    ``jobs_table_exists``, ``_build_facets``).  All other attribute access
+    (``fetchone``/``fetchall``/``close``/``row_factory``) is forwarded to the
+    wrapped connection unchanged.
+    """
+
+    __slots__ = ("_conn", "_count")
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+        self._count = 0
+
+    @property
+    def count(self) -> int:
+        """Number of :meth:`execute` calls seen so far."""
+        return self._count
+
+    def execute(self, sql: str, parameters: Any = ()) -> sqlite3.Cursor:
+        self._count += 1
+        return self._conn.execute(sql, parameters)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+
+# ---------------------------------------------------------------------------
 # Project name resolution
 # ---------------------------------------------------------------------------
 
@@ -240,7 +291,7 @@ def query_project_tasks(
         search_pattern = f"%{escaped}%"
 
     with index._lock:
-        conn = index._connect()
+        conn = _StatementCountingConnection(index._connect())
         try:
             project_names = _resolve_project_names(conn)
             from acp.scheduler.jobs import JobStatus as _JobStatus
@@ -315,6 +366,7 @@ def query_project_tasks(
             facets = (
                 _build_facets(conn, q, require_job_row=require_job_row) if q.include_facets else {}
             )
+            sql_statements = conn.count
         finally:
             if index._shared_conn is None:
                 conn.close()
@@ -360,6 +412,10 @@ def query_project_tasks(
         "offset": q.offset,
         "limit": q.max_total,
         "next_offset": q.offset + q.max_total if truncated_total else None,
+        # Diagnostic only (B03-3 budget): the fixed SQL statement count for this
+        # list query.  Never part of the wire response — the v2 route selects
+        # explicit fields when it builds ``V2TaskViewResponse``.
+        "sql_statements": sql_statements,
         "query": {
             "project_id": q.project_id,
             "group_by": q.group_by.value,
@@ -806,6 +862,7 @@ def owner_revisions_for_row(row: Mapping[str, Any]) -> dict[str, int]:
 __all__ = [
     "ArchivedFilter",
     "CATALOG_REVISION",
+    "LIST_SQL_BUDGET",
     "GroupBy",
     "TaskSort",
     "TaskViewQuery",
