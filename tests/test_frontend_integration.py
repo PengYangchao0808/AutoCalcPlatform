@@ -29,6 +29,7 @@ def test_default_page_loads_modules_in_dependency_order() -> None:
         ("js/client/polling-strategy.js", "js/workbench/compat/api.js"),
         ("js/client/job-commands.js", "js/workbench/features/queue.js"),
         ("js/client/wizard-endpoints.js", "js/workbench/features/wizard.js"),
+        ("js/workbench/features/wizard/submit-edit.js", "js/workbench/features/wizard.js"),
         ("js/client/transport.js", "js/client/system-endpoints.js"),
         ("js/client/system-endpoints.js", "js/workbench/controllers/system_resources_controller.js"),
         ("js/client/system-endpoints.js", "js/workbench/compat/api.js"),
