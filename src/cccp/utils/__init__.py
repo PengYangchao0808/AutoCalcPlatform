@@ -35,13 +35,11 @@ from cccp.utils.geometry_tools import (
 from cccp.utils.resource_utils import (
     ResourceManager,
     calc_orca_maxcore,
-    find_executable,
     mb_to_mem_str,
     mem_to_mb,
     normalize_memory,
     parse_memory_mb,
     resolve_orca_maxcore,
-    resolve_executable_config,
 )
 from cccp.utils.solvent_map import (
     LEGAL_SOLVENT_MODELS,
@@ -86,8 +84,6 @@ __all__ = [
     "resolve_orca_maxcore",
     "mb_to_mem_str",
     "calc_orca_maxcore",
-    "find_executable",
-    "resolve_executable_config",
     "ResourceManager",
     "orca_smd_solvent",
     "xtb_solvent",

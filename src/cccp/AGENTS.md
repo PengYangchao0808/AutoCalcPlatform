@@ -25,7 +25,7 @@ src/cccp/   # QC 底座（four-layer ①qc → ②backends → ③calculation；
 | Task | Location | Notes |
 |------|----------|-------|
 | Config loading | `config.py` | 6-source merge see root AGENTS.md for order |
-| **Executable resolution** | **`software.py`** | **THE single resolver — `resolve_executable(name, configured_path)`; all backends/interfaces/API/catalog route through it. `resource_utils.find_executable` is superseded (unwired legacy)** |
+| **Executable resolution** | **`software.py`** | **THE single resolver — `resolve_executable(name, configured_path)`; all backends/interfaces/API/catalog route through it. Legacy `resource_utils.find_executable`/`resolve_executable_config` retired (plan-3 T37; audit evidence in `.omo/evidence/acp-parallel-plan-3-cccp/task-37-*.md`)** |
 | Version | `__init__.py` + `version.py` (+ `acp/__init__.py` + `pyproject.toml`) | **4-way sync** — see root ANTI #2 |
 | Task cores (execution) | `calculation/tasks/` | Single execution station; contracts via `calculation/{requests,results}.py` |
 | Capability backends | `backends/` | Implementation home; `acp/backends/*` are pure re-export shims |
