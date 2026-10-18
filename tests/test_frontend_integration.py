@@ -34,6 +34,8 @@ def test_default_page_loads_modules_in_dependency_order() -> None:
         ("js/client/job-detail-query.js", "js/workbench/features/job-detail.js"),
         ("js/workbench/controllers/task_session_controller.js", "js/workbench/features/reaction-builder.js"),
         ("js/visualization/framing.js", "js/visualization/mol3d_adapter.js"),
+        ("js/visualization/mol3d_adapter.js", "js/visualization/scene_instance.js"),
+        ("js/visualization/scene_instance.js", "js/workbench/features/molecule-view.js"),
         ("js/visualization/energy_chart_renderer.js", "js/workbench/features/energy.js"),
         ("js/workbench/features/scan-s2.js", "js/workbench/bootstrap.js"),
     ):

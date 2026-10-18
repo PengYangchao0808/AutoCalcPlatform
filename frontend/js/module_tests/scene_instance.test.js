@@ -630,6 +630,34 @@ module.exports.register = async function (h) {
     b.dispose();
   });
 
+  await test("scene: repeated mount/destroy — disposed instance never ticks again; remount is clean", async () => {
+    const viz = loadScene();
+    const rigA = makeRig();
+    const a = viz.scene.create({ viewer: rigA.viewer });
+    let aTicks = 0;
+    a.play(() => { aTicks++; }, 5);
+    await sleep(14);
+    assert(aTicks >= 1, "mount A ticks");
+    a.dispose();
+    const aAtDispose = aTicks;
+
+    const rigB = makeRig();
+    const b = viz.scene.create({ viewer: rigB.viewer });
+    let bTicks = 0;
+    b.play(() => { bTicks++; }, 5);
+    await sleep(25);
+    assertEq(aTicks, aAtDispose, "old mount's callback never ticks after dispose");
+    assert(bTicks >= 1, "remounted instance ticks");
+
+    b.dispose();
+    const bAtDispose = bTicks;
+    await sleep(20);
+    assertEq(bTicks, bAtDispose, "second destroy silences the remounted instance too");
+    assertEq(rigA.viewer.__calls.length > 0, true, "mount A actually touched its stub");
+    assertEq(a.isDisposed(), true);
+    assertEq(b.isDisposed(), true);
+  });
+
   await test("scene: frame() delegates to mol3d.frame (shared framing entry); unavailable → null", () => {
     const viz = loadScene();
     const calls = [];

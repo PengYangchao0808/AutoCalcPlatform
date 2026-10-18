@@ -35,6 +35,9 @@ var queueRowRenderContext = null;
 var workbenchLoadErrors = {};
 var projectsLoaded = false;
 let projectsCache = [];
+// Main-structure holder: read-only projection of the bounded scene instance
+// (ACPVisualization.scene — never a native 3Dmol viewer). Consumers resolve
+// this binding and use the restricted instance API only.
 let viewer = null;
 var mainViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let currentModel = null;
