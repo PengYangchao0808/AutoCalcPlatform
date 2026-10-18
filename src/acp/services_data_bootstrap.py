@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import posixpath
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -84,6 +85,16 @@ from acp_services.data.storage_binding import (
     PATH_SOURCE_LEGACY_FLAT,
     LegacyResolution,
 )
+from acp_services.data.transfer import (
+    FenceSnapshot,
+    PublishOutcome,
+    SourceFailureKind,
+    SourceRead,
+    TransferPipeline,
+    TransferPrepareExecutor,
+    TransferPublicationStore,
+    TransferSourceError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +102,11 @@ __all__ = [
     "build_data_resource_port",
     "build_storage_allocation_port",
     "build_prepare_executor",
+    "build_transfer_cache_port",
+    "build_transfer_source_port",
+    "build_transfer_authorization_port",
+    "build_transfer_pipeline",
+    "build_transfer_executor",
 ]
 
 _MANIFEST_READ_ERRORS = (
@@ -569,3 +585,268 @@ def build_prepare_executor(
         cache_provider=cache_provider,
         is_remote=is_remote,
     )
+
+
+# --------------------------------------------------------------------------- #
+# B02-4 (todo 14) — verified transfer pipeline adapters
+# --------------------------------------------------------------------------- #
+
+
+class _TransferCacheAdapter:
+    """Delegate the transfer cache port onto :class:`RemoteStructureCache`.
+
+    The Services pipeline owns verification policy; this adapter supplies the
+    **mechanism** — and only the mechanism — by reusing the real cache:
+
+    * ``cache_path`` — the traversal guard (``remote_structure_cache.py:158``).
+    * ``_read_fence`` / ``_read_generation`` — the persisted attempt fence +
+      purge generation (``:221``/``:255``).
+    * ``_get_generation_lock`` / ``_write_fence`` /
+      ``_invalidate_unknown_attempt_entries`` — the exact fence protocol the
+      cache's own ``fetch`` uses, so a verified publish is indistinguishable
+      from a normal cached fetch.
+    * ``_write_attempt_sidecar`` + ``os.replace`` — the same atomic publish +
+      sidecar the cache writes at ``:466-478``; the file is never left partial
+      and no second publish implementation exists.
+
+    ``push_paths`` is delegated verbatim (``remote_structure_cache.py:499``).
+    """
+
+    def __init__(self, cache: RemoteStructureCache) -> None:
+        self._cache = cache
+
+    def guarded_path(self, job_id: str, relative_path: str) -> Path:
+        return self._cache.cache_path(job_id, relative_path)
+
+    def fence(self, job_id: str) -> FenceSnapshot:
+        attempt, generation = self._cache._read_fence(job_id)
+        return FenceSnapshot(attempt=attempt, generation=generation)
+
+    def publish(
+        self,
+        job_id: str,
+        relative_path: str,
+        tmp_path: str,
+        *,
+        attempt: int,
+        expected_generation: int,
+    ) -> PublishOutcome:
+        cache = self._cache
+        target = cache.cache_path(job_id, relative_path)  # traversal guard
+        with cache._get_generation_lock(job_id):
+            if cache._read_generation(job_id) != expected_generation:
+                return PublishOutcome(published=False, discarded=True, reason="generation_changed")
+            stored_attempt, generation = cache._read_fence(job_id)
+            if stored_attempt is not None and int(attempt) < int(stored_attempt):
+                return PublishOutcome(published=False, discarded=True, reason="attempt_advanced")
+            if attempt is not None:
+                if stored_attempt is None:
+                    cache._write_fence(job_id, attempt=int(attempt), generation=generation)
+                elif int(attempt) > int(stored_attempt):
+                    cache._write_fence(job_id, attempt=int(attempt), generation=generation)
+                    cache._invalidate_unknown_attempt_entries(job_id)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(tmp_path, str(target))
+            cache._write_attempt_sidecar(target, int(attempt))
+            try:
+                run_root_stat = os.stat(str(cache._run_root))
+                os.chmod(str(target), run_root_stat.st_mode & 0o777)
+            except OSError:
+                pass
+        logger.info("Published verified transfer %s/%s -> %s", job_id, relative_path, target)
+        return PublishOutcome(published=True, cached_path=str(target))
+
+    def exists(self, job_id: str, relative_path: str) -> bool:
+        try:
+            return self._cache.cache_path(job_id, relative_path).is_file()
+        except ValueError:
+            return False
+
+    def list_files(self, job_id: str) -> tuple[str, ...]:
+        root = self._cache.job_root(job_id)
+        if not root.is_dir():
+            return ()
+        found: list[str] = []
+        for entry in sorted(root.rglob("*")):
+            if not entry.is_file():
+                continue
+            if entry.name.endswith(".attempt"):
+                continue
+            found.append(entry.relative_to(root).as_posix())
+        return tuple(found)
+
+    def push_paths(self, job_id: str, relative_paths: Any) -> list[str]:
+        record = SimpleNamespace(id=job_id)
+        return self._cache.push_paths(record, list(relative_paths))
+
+
+class _TransferSourceAdapter:
+    """Delegate the transfer source port onto the real remote fetcher.
+
+    Classification of fetch failures is the SFTP taxonomy the pipeline needs:
+    a missing file, a permission denial (revoked access) and everything else
+    (transient transport) are distinct — an authorization revocation is never
+    conflated with "file not there".
+    """
+
+    def __init__(self, cache: RemoteStructureCache) -> None:
+        self._cache = cache
+
+    def _fetcher(self, job_id: str) -> Any:
+        factory = getattr(self._cache, "_fetcher_factory", None)
+        if factory is None:
+            return None
+        try:
+            return factory(job_id)
+        except Exception:  # pragma: no cover - factory failure is a transport failure
+            logger.warning("transfer fetcher factory failed for %s", job_id, exc_info=True)
+            return None
+
+    def read(
+        self,
+        job_id: str,
+        attempt: int,
+        relative_path: str,
+        *,
+        byte_range: Any = None,
+    ) -> SourceRead:
+        fetcher = self._fetcher(job_id)
+        if fetcher is None:
+            raise TransferSourceError(SourceFailureKind.TRANSIENT, "no remote fetcher configured")
+        record = SimpleNamespace(id=job_id, attempt=int(attempt))
+        try:
+            if byte_range is not None:
+                data = bytes(
+                    fetcher.read_range(
+                        record, relative_path, int(byte_range.offset), int(byte_range.limit)
+                    )
+                )
+            else:
+                data = bytes(fetcher.read_file(record, relative_path))
+        except FileNotFoundError as exc:
+            raise TransferSourceError(SourceFailureKind.NOT_FOUND, str(exc)) from exc
+        except PermissionError as exc:
+            raise TransferSourceError(SourceFailureKind.PERMISSION_DENIED, str(exc)) from exc
+        except Exception as exc:
+            raise self._classify(exc) from exc
+        revision = 0
+        if byte_range is None:
+            info = self._file_info(fetcher, record, relative_path)
+            if info is not None:
+                revision = int(float(getattr(info, "mtime", 0.0)) * 1_000_000)
+        return SourceRead(data=data, size_bytes=len(data), revision=revision, generation=0)
+
+    @staticmethod
+    def _file_info(fetcher: Any, record: Any, relative_path: str) -> Any:
+        info_fn = getattr(fetcher, "file_info", None)
+        if info_fn is None:
+            return None
+        try:
+            return info_fn(record, relative_path)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _classify(exc: BaseException) -> TransferSourceError:
+        errno = getattr(exc, "errno", None)
+        if errno in (1, 13, 17):  # EPERM / EACCES / EEXIST surfaced by paramiko
+            return TransferSourceError(SourceFailureKind.PERMISSION_DENIED, str(exc))
+        text = str(exc).lower()
+        if "permission denied" in text or "access denied" in text:
+            return TransferSourceError(SourceFailureKind.PERMISSION_DENIED, str(exc))
+        if "not found" in text or "no such file" in text:
+            return TransferSourceError(SourceFailureKind.NOT_FOUND, str(exc))
+        return TransferSourceError(SourceFailureKind.TRANSIENT, str(exc))
+
+
+class _TransferAuthorizationAdapter:
+    """Delegate the re-checked authorization onto an injected decision callable.
+
+    With no callable supplied every transfer is allowed (the local-single
+    deployment boundary); a real policy supplies a callable that receives the
+    transfer identity and re-evaluates the grant at both check points.
+    """
+
+    def __init__(self, decision: Callable[[Mapping[str, Any]], bool] | None = None) -> None:
+        self._decision = decision
+
+    def authorize(
+        self,
+        *,
+        job_id: str,
+        attempt: int,
+        relative_path: str,
+        action: str,
+        authorization_version: int,
+    ) -> bool:
+        if self._decision is None:
+            return True
+        return bool(
+            self._decision(
+                {
+                    "job_id": job_id,
+                    "attempt": attempt,
+                    "relative_path": relative_path,
+                    "action": action,
+                    "authorization_version": authorization_version,
+                }
+            )
+        )
+
+
+def build_transfer_cache_port(cache: RemoteStructureCache) -> _TransferCacheAdapter:
+    """Wrap the real structure cache as the transfer cache port."""
+    return _TransferCacheAdapter(cache)
+
+
+def build_transfer_source_port(cache: RemoteStructureCache) -> _TransferSourceAdapter:
+    """Wrap the real cache's fetcher as the transfer source port."""
+    return _TransferSourceAdapter(cache)
+
+
+def build_transfer_authorization_port(
+    decision: Callable[[Mapping[str, Any]], bool] | None = None,
+) -> _TransferAuthorizationAdapter:
+    """Build the re-checked authorization port (allow-all when no policy given)."""
+    return _TransferAuthorizationAdapter(decision)
+
+
+def build_transfer_pipeline(
+    *,
+    cache: RemoteStructureCache,
+    db_path: str | Path | None = None,
+    publications: TransferPublicationStore | None = None,
+    source: Any | None = None,
+    authorization: Any | None = None,
+    adoption: Any | None = None,
+) -> TransferPipeline:
+    """Compose the verified transfer pipeline from the real cache mechanism.
+
+    Args:
+        cache: The shared :class:`RemoteStructureCache` (traversal guard / fence /
+            generation / atomic publish / ``push_paths``).
+        db_path: SQLite path for the publication table; defaults to the cache's
+            run root ``acp_jobs.db`` so it survives the same backup/restore.
+        publications: Pre-built publication store (created when omitted).
+        source: Optional source port override (defaults to the real fetcher).
+        authorization: Optional authorization port override (defaults allow-all).
+        adoption: Optional historical expected-value resolver.
+    """
+    store = publications or TransferPublicationStore(
+        Path(db_path) if db_path is not None else cache._run_root / "acp_jobs.db"
+    )
+    return TransferPipeline(
+        cache=_TransferCacheAdapter(cache),
+        source=source or _TransferSourceAdapter(cache),
+        authorization=authorization or _TransferAuthorizationAdapter(),
+        publications=store,
+        adoption=adoption,
+    )
+
+
+def build_transfer_executor(
+    pipeline: TransferPipeline,
+    request_factory: Callable[[PrepareLease], Any],
+) -> TransferPrepareExecutor:
+    """Wrap the pipeline as the todo-13 prepare-operation executor."""
+    return TransferPrepareExecutor(pipeline, request_factory)

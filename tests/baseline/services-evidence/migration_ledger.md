@@ -58,6 +58,7 @@
 | 历史 manifest 只读兼容（compat/legacy） | `src/acp/compat/legacy/manifests.py:111` | `acp.compat.legacy.manifests.read_s2_path_manifest` | `src/acp/results/`（历史任务读取）；`src/acp/compat/legacy/layouts.py` | 历史 reader 逐项关闭并同步契约；接收 todo 70 | `tests/test_legacy_layout_compat.py` |
 | 工作流注册表（WorkflowRegistryEntry） | `src/acp/workflows/registry.py:15` | `acp.workflows.registry.list_workflow_entries` | `src/acp/cli.py`（子命令映射）；`src/acp/api/`（catalog 端点） | CLI/Web 共用 Services 用例后收口；接收 todo 35 | `tests/test_core_workflow.py`；`tests/test_acp_workflow_task_matrix.py` |
 | 持久 prepare operation（PrepareOperationService） | `src/acp_services/data/operations.py:498` | `acp.services_data_bootstrap.build_prepare_executor`（Services 侧执行器注入；旧 `acp.scheduler.manager._queue_catalog_prefetch` 改为入队持久操作） | `src/acp/scheduler/manager.py:4765`（终态后台预取与启动恢复） | 旧进程内预取队列已删除（todo 13 已交付）；transfer 校验/发布与 availability 经 prepare 操作接管；接收 todo 14 至 todo 16 | `tests/test_services_prepare_operations.py`；`tests/test_acp_remote_catalog_prefetch.py` |
+| 校验传输管线（TransferPipeline） | `src/acp_services/data/transfer.py:1` | `acp.services_data_bootstrap.build_transfer_pipeline`（端口注入委托 RemoteStructureCache 的 traversal guard/fence/generation/publish；push_paths 保持） | `src/acp/scheduler/manager.py:4765`（prepare 执行器注入面；todo 14 交付适配器，todo 15 至 todo 16 接线读取） | 缓存发布/可用性经 prepare 操作且以冻结摘要/大小/身份/attempt/generation 校验；四类拒绝与崩溃窗口可对账；历史无摘要经受控源端基线接纳；接收 todo 14 至 todo 16 | `tests/test_services_transfer_verify.py`；`tests/test_acp_remote_catalog_prefetch.py`；`tests/test_services_prepare_operations.py` |
 
 ## 覆盖说明
 
