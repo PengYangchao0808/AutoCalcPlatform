@@ -2081,6 +2081,45 @@ def job_runtime_commands(manager: Any | None = None) -> Any:
     return build_runtime_commands(manager)
 
 
+def job_control_command(
+    command: str,
+    job_id: str,
+    *,
+    manager: Any | None = None,
+    project_id: str | None = None,
+    target_node: str | None = None,
+) -> Any:
+    """Route one local job-control verb through the shared Runtime use case.
+
+    The CLI and the Web API must not each grow their own task state machine:
+    both enter the *same* :class:`~acp_services.runtime.commands.RuntimeCommands`
+    surface (todo 25), which forwards exactly once to the injected scheduler
+    port. ``command`` is one of ``pause`` / ``unpause`` / ``cancel`` /
+    ``continue`` / ``rerun``; the port's outcome is returned untouched.
+
+    This is the shared control entry prepared for the public CLI subcommands.
+    Wiring those subparsers to it is todo 74 (the full-CLI entry owner) and is
+    deliberately **not** done in this equivalence-only slice, so no argument
+    surface changes here.
+    """
+    commands = job_runtime_commands(manager)
+    verb = command.strip().lower()
+    if verb == "pause":
+        return commands.pause(job_id)
+    if verb == "unpause":
+        return commands.unpause(job_id)
+    if verb == "cancel":
+        return commands.cancel(job_id)
+    if verb == "continue":
+        return commands.continue_job(job_id, target_node=target_node)
+    if verb == "rerun":
+        return commands.rerun(job_id, project_id=project_id)
+    raise ValueError(
+        f"unknown job control command {command!r}; expected one of: "
+        "pause, unpause, cancel, continue, rerun"
+    )
+
+
 def _register_xtb_path_cli_job(
     args: argparse.Namespace,
     output_dir: Path,
