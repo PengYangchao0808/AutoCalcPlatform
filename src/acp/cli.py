@@ -2373,6 +2373,17 @@ Examples:
         help="target user config file to create/update (default ~/.cccp.yaml)",
     )
     init_parser.add_argument(
+        "--answers",
+        type=Path,
+        default=None,
+        help="non-interactive answer file (versioned schema); runs without prompts",
+    )
+    init_parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="render the initialization plan only; do not apply it",
+    )
+    init_parser.add_argument(
         "--log-level",
         default="INFO",
         help="Logging level (default: INFO)",
@@ -4139,16 +4150,21 @@ def _handle_doctor(args: argparse.Namespace) -> int:
 
 
 def _handle_init(args: argparse.Namespace) -> int:
-    """``acp init`` — interactive setup wizard for the user config.
+    """``acp init`` — unified setup wizard for the user config.
 
     Delegates to :func:`acp.init_wizard.flows.run_init` (exit-code mapping
     stays in the CLI layer; the wizard module itself stays import-safe on
-    core-only installs — remote-stack imports live inside its flows).
+    core-only installs — remote-stack imports live inside its flows).  The
+    default call keeps the single-argument signature for compatibility.
     """
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
     from acp.init_wizard.flows import run_init
 
+    answers_path = getattr(args, "answers", None)
+    plan_only = bool(getattr(args, "plan", False))
+    if answers_path is not None or plan_only:
+        return run_init(Path(args.config), answers_path=answers_path, plan_only=plan_only)
     return run_init(Path(args.config))
 
 
