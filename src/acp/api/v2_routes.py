@@ -80,6 +80,7 @@ from acp.storage.backend import (
 )
 from acp.storage.layout import TaskLayout
 from acp.storage.manifest import ResultManifest
+from acp_services.runtime.freshness import AVAILABILITY_READY
 from acp_services.runtime.projections import TaskProjectionStore, TaskRowProjection
 
 logger = logging.getLogger(__name__)
@@ -201,9 +202,29 @@ class _ManagerTaskProjectionSource:
                     task_id=job_id,
                     fields=fields,
                     basis_revision=int(getattr(record, "revision", 0) or 0),
+                    basis_revisions=self._basis_revisions(record, job_id),
+                    availability=AVAILABILITY_READY,
                 )
             )
         return projections
+
+    def _basis_revisions(self, record: JobRecord, job_id: str) -> dict[str, int]:
+        """Per-owner-dimension revisions this projection was built against.
+
+        Sourced from the same per-dimension authorities the query side compares
+        against (independent; no substitution).  ``organization`` has no distinct
+        task-index column yet, so it stays 0 until one exists.
+        """
+        from acp.scheduler.task_views import owner_revisions_for_row
+
+        task_row = self._manager.tasks.get(job_id) or {}
+        return owner_revisions_for_row(
+            {
+                "revision": getattr(record, "revision", 0),
+                "attempt": getattr(record, "attempt", 1),
+                "name_revision": task_row.get("name_revision", 0),
+            }
+        )
 
 
 def _projection_store(manager: JobManager) -> TaskProjectionStore:
@@ -530,6 +551,7 @@ def get_task_view(
         GroupBy,
         TaskSort,
         TaskViewQuery,
+        owner_revisions_for_row,
         query_project_tasks,
     )
 
@@ -572,10 +594,25 @@ def get_task_view(
     projection.request_refresh(
         row["id"] for row in rows if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
     )
+    freshly_enriched: set[str] = set()
     if _ENRICH_ACTIVE_ROWS_COMPAT:
         uncovered = [row for row in rows if not projection.covers(row["id"])]
         if uncovered:
             _enrich_active_rows(request, uncovered)
+            freshly_enriched = {
+                row["id"]
+                for row in uncovered
+                if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
+            }
+
+    current_revisions = {
+        row["id"]: owner_revisions_for_row(row) for row in rows if row.get("id")
+    }
+    projection.annotate_rows(
+        rows,
+        current_revisions=current_revisions,
+        freshly_enriched_ids=freshly_enriched,
+    )
 
     facets_raw = result.get("facets", {})
     facets = V2TaskViewFacetsModel(

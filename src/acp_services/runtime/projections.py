@@ -53,19 +53,51 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Protocol, runtime_checkable
 
+from acp_services.runtime.freshness import (
+    OWNER_JOB,
+    ProjectionState,
+    incoming_is_late,
+    resolve_projection_state,
+)
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ANNOTATION_FIELDS",
     "PROJECTION_FIELDS",
     "TaskProjectionSourcePort",
     "TaskProjectionStore",
     "TaskRowProjection",
 ]
 
+#: The availability/freshness/diagnostic fields :meth:`TaskProjectionStore.annotate_rows`
+#: may add to a row.  Kept separate from :data:`PROJECTION_FIELDS` (the enrichment
+#: vocabulary) so the two never blur: enrichment carries live fact values, these
+#: carry the *state* of the prepared projection.
+ANNOTATION_FIELDS: tuple[str, ...] = (
+    "availability",
+    "freshness",
+    "basis_revision",
+    "observed_at",
+    "stale_dimensions",
+)
+
 
 def _utc_now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string (diagnostic only)."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def _override_availability(state: ProjectionState, availability: str) -> ProjectionState:
+    """Return *state* with an explicit availability (freshness/basis untouched)."""
+    return ProjectionState(
+        availability=availability,
+        freshness=state.freshness,
+        basis_revision=state.basis_revision,
+        current_revision=state.current_revision,
+        stale_dimensions=state.stale_dimensions,
+        observed_at=state.observed_at,
+    )
 
 
 #: The exact enrichment fields the v2 task view may carry on a row.  Frozen here
@@ -88,15 +120,21 @@ class TaskRowProjection:
 
     ``fields`` holds only the :data:`PROJECTION_FIELDS` keys that were actually
     observed; ``None`` values are meaningless to the view and are dropped before
-    storage so a projection never clobbers a base fact with a null.  ``basis_
-    revision`` records which owner revision the projection was built against (a
-    later task consumes it for freshness); it is diagnostic here.
+    storage so a projection never clobbers a base fact with a null.
+
+    Revision bookkeeping is per owner dimension: ``basis_revisions`` maps each
+    owner dimension (job / attempt / name / catalog / organization) to the
+    revision the projection was built against.  ``basis_revision`` is the legacy
+    single-int job revision, retained for wire compatibility (additive only).
+    ``observed_at`` is diagnostic and never decides freshness.
     """
 
     task_id: str
     fields: Mapping[str, Any] = field(default_factory=dict)
     basis_revision: int = 0
     observed_at: str = ""
+    basis_revisions: Mapping[str, int] = field(default_factory=dict)
+    availability: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain mapping (enum-free wire shape)."""
@@ -105,6 +143,8 @@ class TaskRowProjection:
             "fields": dict(self.fields),
             "basis_revision": int(self.basis_revision),
             "observed_at": self.observed_at,
+            "basis_revisions": dict(self.basis_revisions),
+            "availability": self.availability,
         }
 
     @classmethod
@@ -114,11 +154,21 @@ class TaskRowProjection:
         fields: dict[str, Any] = {}
         if isinstance(raw_fields, Mapping):
             fields = {k: v for k, v in raw_fields.items() if k in PROJECTION_FIELDS}
+        raw_basis = payload.get("basis_revisions")
+        basis_revisions: dict[str, int] = {}
+        if isinstance(raw_basis, Mapping):
+            basis_revisions = {
+                str(k): int(v)
+                for k, v in raw_basis.items()
+                if isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool)
+            }
         return cls(
             task_id=str(payload.get("task_id") or ""),
             fields=fields,
             basis_revision=int(payload.get("basis_revision") or 0),
             observed_at=str(payload.get("observed_at") or ""),
+            basis_revisions=basis_revisions,
+            availability=str(payload.get("availability") or ""),
         )
 
 
@@ -304,6 +354,91 @@ class TaskProjectionStore:
                         row[key] = value
         return covered
 
+    def annotate_rows(
+        self,
+        rows: Sequence[dict[str, Any]],
+        *,
+        current_revisions: Mapping[str, Mapping[str, int]]
+        | Callable[[dict[str, Any]], Mapping[str, int]]
+        | None = None,
+        freshly_enriched_ids: Iterable[str] = (),
+    ) -> int:
+        """Add availability/freshness/basis_revision/observed_at to *rows*.
+
+        Purely additive: it writes only :data:`ANNOTATION_FIELDS` and never
+        touches the jobs-authoritative base facts or the prepared enrichment.
+        Availability/freshness come from the prepared projection's per-dimension
+        basis compared against the caller-supplied **current** owner revisions
+        (each dimension independently); with no projection the row keeps its base
+        facts and reports ``unavailable``/``unknown``.
+
+        Args:
+            current_revisions: Either a ``{task_id: {dimension: revision}}`` map
+                or a callable ``row -> {dimension: revision}``.  Missing entries
+                compare as "no current" (freshness is decided only on dimensions
+                both sides carry).
+            freshly_enriched_ids: Ids that were synchronously observed against the
+                live source by the retained compatibility path; those report a
+                fresh projection whose basis is the current revision.
+
+        Returns:
+            The number of rows that carried a prepared projection.
+        """
+        fresh_ids = set(freshly_enriched_ids)
+        covered = 0
+        with self._lock:
+            pending = set(self._pending)
+            for row in rows:
+                task_id = row.get("id")
+                if not isinstance(task_id, str):
+                    continue
+                projection = self._rows.get(task_id)
+                current = self._current_for(row, task_id, current_revisions)
+                if projection is None:
+                    state = resolve_projection_state(
+                        has_projection=False,
+                        current_revisions=current,
+                        preparing=task_id in pending,
+                        freshly_enriched=task_id in fresh_ids,
+                    )
+                else:
+                    covered += 1
+                    state = resolve_projection_state(
+                        has_projection=True,
+                        basis_revisions=projection.basis_revisions
+                        or {OWNER_JOB: projection.basis_revision},
+                        current_revisions=current,
+                        observed_at=projection.observed_at,
+                    )
+                    if projection.availability:
+                        state = _override_availability(state, projection.availability)
+                self._apply_annotation(row, state)
+        return covered
+
+    @staticmethod
+    def _current_for(
+        row: dict[str, Any],
+        task_id: str,
+        current_revisions: Mapping[str, Mapping[str, int]]
+        | Callable[[dict[str, Any]], Mapping[str, int]]
+        | None,
+    ) -> Mapping[str, int]:
+        if current_revisions is None:
+            return {}
+        if callable(current_revisions):
+            resolved = current_revisions(row)
+            return resolved if isinstance(resolved, Mapping) else {}
+        resolved = current_revisions.get(task_id)
+        return resolved if isinstance(resolved, Mapping) else {}
+
+    @staticmethod
+    def _apply_annotation(row: dict[str, Any], state: ProjectionState) -> None:
+        row["availability"] = state.availability
+        row["freshness"] = state.freshness
+        row["basis_revision"] = dict(state.basis_revision)
+        row["observed_at"] = state.observed_at
+        row["stale_dimensions"] = list(state.stale_dimensions)
+
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
@@ -333,11 +468,20 @@ class TaskProjectionStore:
                     for key, value in raw.fields.items()
                     if key in PROJECTION_FIELDS and value is not None
                 }
+                incoming_basis = dict(raw.basis_revisions) or {OWNER_JOB: int(raw.basis_revision)}
+                existing = self._rows.get(task_id)
+                if existing is not None and incoming_is_late(
+                    incoming_basis,
+                    dict(existing.basis_revisions) or {OWNER_JOB: existing.basis_revision},
+                ):
+                    continue
                 self._rows[task_id] = TaskRowProjection(
                     task_id=task_id,
                     fields=fields,
                     basis_revision=int(raw.basis_revision),
                     observed_at=raw.observed_at or observed_at,
+                    basis_revisions=incoming_basis,
+                    availability=raw.availability,
                 )
                 stored += 1
             if stored:
