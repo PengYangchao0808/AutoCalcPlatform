@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 __all__ = [
+    "JobStateAdvancePort",
     "JobStorePort",
     "MigrationsPort",
     "TaskIndexPort",
@@ -75,6 +76,38 @@ class JobStorePort(Protocol):
 
     def initialize_schema(self) -> None:
         """Create/migrate the schema so the database is safe to read."""
+        ...
+
+
+@runtime_checkable
+class JobStateAdvancePort(Protocol):
+    """CAS job-state advance seam used by the Runtime controller (B06-2).
+
+    The controller (:func:`acp_services.runtime.receipts.advance_job_state`)
+    calls :meth:`advance` **only** after a receipt has passed
+    :func:`acp_services.runtime.receipts.verify_receipt`; it is the *only*
+    state-write the controller performs, and it is a seam onto the existing CAS
+    API (``JobStore.transition``, ``src/acp/scheduler/store.py:194-367``) with
+    its revision/status/attempt guards — **not** a second state machine. A
+    stale writer (old revision/status/attempt) is rejected by the implementation
+    and must surface as a conflict; :meth:`advance` never blind-overwrites.
+
+    The command surface is deliberately minimal — it mirrors the guarded CAS
+    transition: ``expected_revision`` + optional ``expected_status`` /
+    ``expected_attempt`` plus the whitelisted ``fields`` to write. The injected
+    adapter is removed by todo 77 when the store moves into Services.
+    """
+
+    def advance(
+        self,
+        job_id: str,
+        *,
+        expected_revision: int,
+        expected_status: Any = None,
+        expected_attempt: int | None = None,
+        **fields: Any,
+    ) -> Any:
+        """CAS-advance one job row; raise on a stale expectation."""
         ...
 
 
