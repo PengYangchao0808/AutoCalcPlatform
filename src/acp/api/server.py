@@ -26,6 +26,14 @@ from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
 from acp.api.v2_routes import router as v2_router
 from acp.api.v2_structure_sources import router as v2_struct_router
+from acp_services.contracts.access import DeploymentTier, is_loopback_host
+from acp_services.workspace.boundary import (
+    API_KEY_HEADER,
+    AUTHORIZATION_HEADER,
+    LOCAL_CLI_HEADER,
+    OriginPolicy,
+    require_tier_capabilities,
+)
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 logger = logging.getLogger(__name__)
@@ -154,6 +162,30 @@ def _apply_execution_mode_override(remote_config) -> None:
     remote_config.execution_mode = env_mode
 
 
+def _resolve_deployment_tier() -> str:
+    """Deployment tier — a **process/config** fact, never request-supplied.
+
+    Reads ``ACP_DEPLOYMENT_TIER`` (mirroring ``ACP_EXECUTION_MODE``); defaults to
+    ``local-single``.  The B01-5 boundary keeps the loopback default and refuses
+    to start ``lab`` / ``hosted`` until auth/isolation capabilities are set.
+    """
+    raw = os.environ.get("ACP_DEPLOYMENT_TIER", "").strip().lower()
+    return raw or DeploymentTier.LOCAL_SINGLE
+
+
+def _resolve_tier_capabilities() -> tuple[str, ...]:
+    """Configured tier capabilities (``ACP_TIER_CAPABILITIES``, comma list)."""
+    raw = os.environ.get("ACP_TIER_CAPABILITIES", "")
+    return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
+def _is_event_stream_request(request: Request) -> bool:
+    """Whether *request* is an SSE connection (diagnostic reason only)."""
+    if "text/event-stream" in request.headers.get("accept", ""):
+        return True
+    return request.url.path.endswith("/events")
+
+
 def create_app(
     run_root: Path | str | None = None,
     host: str | None = None,
@@ -194,6 +226,16 @@ def create_app(
     local_interval = _local_cleanup_interval_hours()
     local_max_jobs = _load_local_max_jobs()
 
+    # B01-5: the deployment tier is process/config-only.  Refuse to *enable*
+    # lab/hosted while authentication/isolation capabilities are absent; a
+    # request can never downgrade the tier (there is no request input here).
+    configured_tier = _resolve_deployment_tier()
+    require_tier_capabilities(configured_tier, _resolve_tier_capabilities())
+    boundary_policy = OriginPolicy(
+        tier=configured_tier,
+        server_is_loopback=is_loopback_host(eff_host),
+    )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from acp.scheduler.manager import JobManager
@@ -224,6 +266,27 @@ def create_app(
         redoc_url="/redoc",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def _local_single_boundary(request: Request, call_next):
+        """Origin/CSRF guard for state-changing methods (SSE/GET untouched)."""
+        headers = request.headers
+        decision = boundary_policy.evaluate(
+            method=request.method,
+            origin=headers.get("origin"),
+            host=headers.get("host"),
+            is_event_stream=_is_event_stream_request(request),
+            has_auth_header=bool(headers.get(AUTHORIZATION_HEADER) or headers.get(API_KEY_HEADER)),
+            local_cli_marker=headers.get(LOCAL_CLI_HEADER) is not None,
+            client_host=request.client.host if request.client else None,
+            server_scheme=request.url.scheme,
+        )
+        if not decision.allowed:
+            return JSONResponse(
+                status_code=decision.http_status,
+                content={"detail": {"code": decision.reason_code, "message": decision.detail}},
+            )
+        return await call_next(request)
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
