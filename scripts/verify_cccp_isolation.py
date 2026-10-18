@@ -18,7 +18,7 @@ How the isolation is enforced (mirrors the proven technique of
   an ``importlib.abc.MetaPathFinder`` that raises ``ModuleNotFoundError`` for
   ``acp`` and ``acp.*`` as a backstop — before any ``cccp`` module is
   imported.
-* The child imports all fourteen published task cores and **calls** each one
+* The child imports all fifteen published task cores and **calls** each one
   with a minimal synthetic request.  A ``TaskContext.backend`` stub with no
   subprocess/QC dependency makes the calls deterministic: request
   validation, capability selection, the translation layer, capability
@@ -34,7 +34,7 @@ How the isolation is enforced (mirrors the proven technique of
 A line ``::cccp-task:: {...}`` is printed per task; ``TaskResult`` and typed
 ``CalculationError`` subclasses both count as *structured*.  Any other
 exception (``ModuleNotFoundError``/``ImportError`` from ``acp`` included) is
-unstructured and fails the run.  Exit code is 0 iff all fourteen tasks are
+unstructured and fails the run.  Exit code is 0 iff all fifteen tasks are
 structured and no ``acp`` module leaked into ``sys.modules``.
 
 Usage::
@@ -59,7 +59,9 @@ CCCP_SRC = REPO_ROOT / "src" / "cccp"
 TASK_MARKER = "::cccp-task::"
 SUMMARY_MARKER = "::cccp-summary::"
 
-#: The fourteen published task cores (7 core + 7 P2), in plan order.
+#: The fifteen published task cores (7 core + 8 P2/PES2TS), in plan order.
+#: ``xtb_constrained_opt`` joined in plan-3 T48 after its task core was proven
+#: to return a structured, ACP-free ``TaskResult`` in the same child harness.
 EXPECTED_TASKS = (
     "singlepoint",
     "optimize",
@@ -75,6 +77,7 @@ EXPECTED_TASKS = (
     "nmr_shielding",
     "xtb_path_search",
     "orca_gradient",
+    "xtb_constrained_opt",
 )
 
 
@@ -173,6 +176,8 @@ try:
         TaskKind,
         TaskRequest,
         ThermochemistryOptions,
+        XtbConstrainedOptConstraint,
+        XtbConstrainedOptOptions,
         XtbPathSearchOptions,
     )
     from cccp.calculation.results import TaskResult
@@ -189,6 +194,7 @@ try:
     from cccp.calculation.tasks.scan import run_scan
     from cccp.calculation.tasks.singlepoint import run_singlepoint
     from cccp.calculation.tasks.thermochemistry import run_thermochemistry
+    from cccp.calculation.tasks.xtb_constrained_opt import run_xtb_constrained_opt
     from cccp.calculation.tasks.xtb_path_search import run_xtb_path_search
 except BaseException as exc:  # noqa: BLE001 - report any import failure as unstructured
     _emit_summary(
@@ -417,6 +423,21 @@ def call_xtb_path_search():
     return run_xtb_path_search(request, context=_ctx())
 
 
+def call_xtb_constrained_opt():
+    options = XtbConstrainedOptOptions(
+        constraints=(
+            XtbConstrainedOptConstraint(kind="distance", atoms=(0, 1), target=0.96),
+        )
+    )
+    request = TaskRequest(
+        task=TaskKind.XTB_CONSTRAINED_OPT,
+        structure=_inline(),
+        options=options,
+        output_dir=out_dir,
+    )
+    return run_xtb_constrained_opt(request, context=_ctx())
+
+
 def call_orca_gradient():
     request = TaskRequest(
         task=TaskKind.ORCA_GRADIENT,
@@ -443,6 +464,7 @@ CALLS = (
     ("nmr_shielding", call_nmr_shielding),
     ("xtb_path_search", call_xtb_path_search),
     ("orca_gradient", call_orca_gradient),
+    ("xtb_constrained_opt", call_xtb_constrained_opt),
 )
 
 structured_count = 0
@@ -597,7 +619,10 @@ def main(argv: list[str] | None = None) -> int:
         and bool(summary.get("ok"))
     )
     if ok:
-        print("RESULT: PASS — all 14 cccp tasks returned structured, ACP-free results.")
+        print(
+            f"RESULT: PASS — all {len(EXPECTED_TASKS)} cccp tasks returned "
+            "structured, ACP-free results."
+        )
         return 0
     print("RESULT: FAIL — see the child output above for details.")
     return 2
