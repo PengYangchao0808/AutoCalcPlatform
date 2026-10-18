@@ -41,6 +41,7 @@ import json
 import logging
 import sqlite3
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -763,10 +764,51 @@ def _row_to_task(
     }
 
 
+#: Owner revision for the catalog/workflow row contract.  Bumped whenever the
+#: task-row projection vocabulary (``PROJECTION_FIELDS`` / row shape) changes;
+#: compared independently from job/attempt/name/organization revisions.
+CATALOG_REVISION: int = 1
+
+
+def _revision_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.lstrip("-").isdigit():
+        return int(value)
+    return default
+
+
+def owner_revisions_for_row(row: Mapping[str, Any]) -> dict[str, int]:
+    """Current owner revisions for one task-view row (per-dimension authorities).
+
+    Each dimension is sourced from its own authority so a stale projection can be
+    attributed to the owner that actually moved; no dimension is derived from
+    another (independent comparison, no substitution):
+
+    * ``job`` — jobs CAS revision (``row["revision"]``)
+    * ``attempt`` — scheduler attempt counter (``row["attempt"]``)
+    * ``name`` — task custom-name revision (``row["name_revision"]``)
+    * ``catalog`` — frozen row/catalog contract revision (:data:`CATALOG_REVISION`)
+    * ``organization`` — task organization revision (``row["organization_revision"]``;
+      0 when the row surface does not carry one)
+    """
+    return {
+        "job": _revision_int(row.get("revision")),
+        "attempt": _revision_int(row.get("attempt"), 1),
+        "name": _revision_int(row.get("name_revision")),
+        "catalog": CATALOG_REVISION,
+        "organization": _revision_int(row.get("organization_revision")),
+    }
+
+
 __all__ = [
     "ArchivedFilter",
+    "CATALOG_REVISION",
     "GroupBy",
     "TaskSort",
     "TaskViewQuery",
+    "owner_revisions_for_row",
     "query_project_tasks",
 ]
