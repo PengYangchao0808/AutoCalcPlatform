@@ -1,13 +1,184 @@
-"""CCCP NMR analysis science — model-asset locator.
+"""CCCP NMR analysis science (C05 waves T25–T30).
 
-This package currently carries the single model-asset locator for the DP5/FCHL
-artifacts (see :mod:`cccp.analysis.nmr.assets`).  The NMR science modules
-themselves are migrated here by the C05 waves (plan T25–T30); this ``__init__``
-holds re-exports only (repo ANTI #5) and must not grow implementation.
+Single implementation home for the NMR/DP4/DP5 science. This ``__init__``
+re-exports the migrated modules additively and holds no implementation
+(repo ANTI #5). DP5q/ShiftPredictor stay isolated (not imported here).
 """
 
 from __future__ import annotations
 
 from cccp.analysis.nmr.assets import MODEL_ASSETS_DIRNAME, asset_dir, resolve_asset
+from cccp.analysis.nmr.averaging import (
+    boltzmann_average_shieldings,
+    incomplete_conformer_ids,
+    labels_for_atoms,
+)
+from cccp.analysis.nmr.enumerate import (
+    EnumeratedCandidate,
+    EnumerateOptions,
+    enumerate_candidates,
+    enumerate_to_smiles,
+)
+from cccp.analysis.nmr.equivalence import (
+    EquivalenceError,
+    EquivalenceGroup,
+    EquivalenceResult,
+    build_all_labels,
+    build_label_for_atom,
+    detect_equivalence_groups,
+    merge_explicit_and_detected,
+)
+from cccp.analysis.nmr.io import (
+    parse_experimental_nmr,
+)
+from cccp.analysis.nmr.models import (
+    CONFORMER_EXCLUSION_REASONS,
+    DIGITAL_FILTER_COMPENSATION_GROUP_DELAY,
+    DIGITAL_FILTER_COMPENSATION_NONE,
+    DIGITAL_FILTER_COMPENSATIONS,
+    DIGITAL_FILTER_STATUSES,
+    ENERGY_DEFINITIONS,
+    ENSEMBLE_QUALITY_FLAGS,
+    ENSEMBLE_QUALITY_STATUSES,
+    EQ_BASIS_EXPLICIT,
+    EQ_BASIS_TOPOLOGY,
+    EQ_BASIS_UNKNOWN,
+    PARSE_ISSUE_CODES,
+    PROBABILITY_STATUSES,
+    PROCESSING_REASONS,
+    PROCESSING_STATUSES,
+    REPORT_SCHEMA_VERSION,
+    SIGNAL_GROUP_BASES,
+    AcquisitionSpectrum,
+    Assignment,
+    AtomShift,
+    CandidateProbability,
+    CandidateResult,
+    ConformerPopulation,
+    ConformerShielding,
+    DigitalFilterCheck,
+    EnsembleQuality,
+    ExperimentalNmr,
+    ExperimentalPeak,
+    NmrConfig,
+    NmrReport,
+    ParseIssue,
+    ParseIssueCode,
+    ProbabilityResult,
+    ProbabilityStatus,
+    ProcessedSpectrum,
+    ProcessingAssessment,
+    ProcessingProvenance,
+    ProcessingQuality,
+    RegressionResult,
+    ResonanceSignal,
+    SignalGroup,
+    SpectralLine,
+    assess_processing,
+    check_digital_filter,
+    element_of_nucleus,
+    normalize_symbol,
+    nucleus_label,
+    resonance_signals_from_peaks,
+)
+from cccp.analysis.nmr.models import (
+    CandidateEvidence as CandidateEvidence,
+)
+from cccp.analysis.nmr.models import (
+    EvidenceStatus as EvidenceStatus,
+)
+from cccp.analysis.nmr.models import (
+    NucleusEvidence as NucleusEvidence,
+)
+from cccp.analysis.nmr.models import (
+    lookup_tms_shieldings as lookup_tms_shieldings,
+)
+from cccp.analysis.nmr.structure_map import (
+    LABEL_SCHEME_GOODMAN,
+    LABEL_SCHEME_PER_ELEMENT,
+    LABEL_SCHEMES,
+    AtomIdentity,
+    NmrStructureMap,
+    StructureMapError,
+    parse_ambiguous_labels,
+)
 
-__all__ = ["MODEL_ASSETS_DIRNAME", "asset_dir", "resolve_asset"]
+__all__ = [
+    "AcquisitionSpectrum",
+    "Assignment",
+    "AtomIdentity",
+    "AtomShift",
+    "CONFORMER_EXCLUSION_REASONS",
+    "CandidateEvidence",
+    "CandidateProbability",
+    "CandidateResult",
+    "ConformerPopulation",
+    "ConformerShielding",
+    "DIGITAL_FILTER_COMPENSATIONS",
+    "DIGITAL_FILTER_COMPENSATION_GROUP_DELAY",
+    "DIGITAL_FILTER_COMPENSATION_NONE",
+    "DIGITAL_FILTER_STATUSES",
+    "DigitalFilterCheck",
+    "ENERGY_DEFINITIONS",
+    "ENSEMBLE_QUALITY_FLAGS",
+    "ENSEMBLE_QUALITY_STATUSES",
+    "EQ_BASIS_EXPLICIT",
+    "EQ_BASIS_TOPOLOGY",
+    "EQ_BASIS_UNKNOWN",
+    "EnsembleQuality",
+    "EnumerateOptions",
+    "EnumeratedCandidate",
+    "EquivalenceError",
+    "EquivalenceGroup",
+    "EquivalenceResult",
+    "EvidenceStatus",
+    "ExperimentalNmr",
+    "ExperimentalPeak",
+    "LABEL_SCHEMES",
+    "LABEL_SCHEME_GOODMAN",
+    "LABEL_SCHEME_PER_ELEMENT",
+    "MODEL_ASSETS_DIRNAME",
+    "NmrConfig",
+    "NmrReport",
+    "NmrStructureMap",
+    "NucleusEvidence",
+    "PARSE_ISSUE_CODES",
+    "PROBABILITY_STATUSES",
+    "PROCESSING_REASONS",
+    "PROCESSING_STATUSES",
+    "ParseIssue",
+    "ParseIssueCode",
+    "ProbabilityResult",
+    "ProbabilityStatus",
+    "ProcessedSpectrum",
+    "ProcessingAssessment",
+    "ProcessingProvenance",
+    "ProcessingQuality",
+    "REPORT_SCHEMA_VERSION",
+    "RegressionResult",
+    "ResonanceSignal",
+    "SIGNAL_GROUP_BASES",
+    "SignalGroup",
+    "SpectralLine",
+    "StructureMapError",
+    "assess_processing",
+    "asset_dir",
+    "boltzmann_average_shieldings",
+    "build_all_labels",
+    "build_label_for_atom",
+    "check_digital_filter",
+    "detect_equivalence_groups",
+    "element_of_nucleus",
+    "enumerate_candidates",
+    "enumerate_to_smiles",
+    "incomplete_conformer_ids",
+    "labels_for_atoms",
+    "lookup_tms_shieldings",
+    "merge_explicit_and_detected",
+    "normalize_symbol",
+    "nucleus_label",
+    "parse_ambiguous_labels",
+    "parse_experimental_nmr",
+    "resolve_asset",
+    "resonance_signals_from_peaks",
+]
