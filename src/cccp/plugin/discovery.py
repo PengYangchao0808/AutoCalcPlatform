@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 from cccp.calculation.requests import TaskKind
 from cccp.plugin.errors import (
+    PluginCapabilityConflictError,
     PluginNameConflictError,
     PluginVersionMismatchError,
 )
@@ -116,12 +117,15 @@ def discover_plugins(
     Raises:
         PluginNameConflictError: the name is reserved for a built-in, or two
             candidates declare the same name.
+        PluginCapabilityConflictError: a capability is reserved for a
+            built-in task, or two candidates declare the same capability.
         PluginVersionMismatchError: the declared API range excludes the host.
 
     The candidate ``loader`` is never invoked here.
     """
     identity = BuiltinIdentity() if builtin is None else builtin
     seen: set[str] = set()
+    seen_capabilities: dict[str, str] = {}
     discovered: list[PluginMetadata] = []
     for candidate in candidates:
         metadata = candidate.metadata
@@ -137,6 +141,22 @@ def discover_plugins(
                 declared=metadata.api.compatible_range,
                 host_api_version=PLUGIN_API_VERSION,
             )
+        for capability in metadata.capabilities:
+            if capability.name in BUILTIN_RESERVED_NAMES:
+                raise PluginCapabilityConflictError(
+                    metadata.name,
+                    capability=capability.name,
+                    reason="reserved built-in task/capability name (the built-in task layer "
+                    "remains the only execution station)",
+                )
+            previous = seen_capabilities.get(capability.name)
+            if previous is not None:
+                raise PluginCapabilityConflictError(
+                    metadata.name,
+                    capability=capability.name,
+                    reason=f"duplicate capability already declared by {previous!r}",
+                )
+            seen_capabilities[capability.name] = metadata.name
         seen.add(metadata.name)
         discovered.append(metadata)
     return PluginCatalog(builtin=identity, plugins=tuple(discovered))
