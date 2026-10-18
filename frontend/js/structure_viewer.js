@@ -1049,7 +1049,9 @@
     var v = _canvasViewer(canvasId);
     if (!v || typeof v.getView !== "function") return false;
     try {
-      geometryStore.cameras[canvasId] = v.getView();
+      var view = v.getView();
+      if (view === null) return false;
+      geometryStore.cameras[canvasId] = view;
       return true;
     } catch (_) {
       return false;
@@ -1067,12 +1069,14 @@
     var view = geometryStore.cameras[canvasId];
     if (!v || !view || typeof v.setView !== "function") return false;
     try {
-      v.setView(view);
-      if (typeof v.render === "function") v.render();
-      return true;
+      if (v.setView(view) === false) return false;
     } catch (_) {
       return false;
     }
+    try {
+      if (typeof v.render === "function") v.render();
+    } catch (_) { /* render is best-effort */ }
+    return true;
   }
 
   /**
@@ -1126,8 +1130,16 @@
     var view = null;
     try { if (typeof v.getView === "function") view = v.getView(); } catch (_) { view = null; }
     try { if (typeof v.removeAllModels === "function") v.removeAllModels(); } catch (_) { /* empty */ }
-    v.addModel(xyzText, "xyz");
-    if (styleSpec && typeof v.setStyle === "function") v.setStyle({}, styleSpec);
+    var model = v.addModel(xyzText, "xyz");
+    if (styleSpec) {
+      /* token styles its OWN model; viewers whose addModel returns no token
+         keep the legacy viewer-level setStyle fallback */
+      if (model && typeof model.setStyle === "function") {
+        model.setStyle({}, styleSpec);
+      } else if (typeof v.setStyle === "function") {
+        v.setStyle({}, styleSpec);
+      }
+    }
     if (view && typeof v.setView === "function") { try { v.setView(view); } catch (_) { /* keep */ } }
     try { if (typeof v.render === "function") v.render(); } catch (_) { /* keep */ }
     return true;
