@@ -13009,6 +13009,27 @@ def test_candidate_details_cleanup_in_close_modal() -> None:
         "candidateDetailsPanel cleanup missing from closeModal"
 
 
+def test_wizard_upload_parse_slice_owner_and_h3_guard() -> None:
+    """T17 S1: upload/parse slice is owned by upload-parse.js; the parse token is
+    invalidated on close and tab switch (H-3 late-parse guard) and the old global
+    names stay as thin delegates in wizard.js."""
+    module_path = FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "upload-parse.js"
+    module_src = module_path.read_text(encoding="utf-8")
+    assert "function invalidatePendingParse()" in module_src
+    assert "parseSeqToken++" in module_src
+    html = read_workbench_content()
+    close_fn = html.split("function closeModal()", 1)[1].split("\nfunction ", 1)[0]
+    assert "invalidatePendingParse()" in close_fn, \
+        "H-3: closeModal must invalidate the pending parse"
+    mode_fn = html.split("function setWizardInputMode(mode)", 1)[1].split("\nfunction ", 1)[0]
+    assert "invalidatePendingParse()" in mode_fn, \
+        "tab switch must invalidate the pending parse"
+    wizard_src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard.js").read_text(encoding="utf-8")
+    assert "\nvar parseSeqToken" not in wizard_src, "S1 state must live in upload-parse.js only"
+    assert "function scheduleParseStructures() {" in wizard_src, "thin delegate missing"
+    assert "window.ACPWizardUploadParse" in wizard_src, "delegates must route to the S1 module"
+
+
 def test_candidate_details_i18n_keys_in_both_locales() -> None:
     """cd.* i18n keys exist in both zh-CN and en-US blocks."""
     html = read_workbench_content()
