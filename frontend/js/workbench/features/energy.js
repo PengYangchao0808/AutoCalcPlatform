@@ -113,6 +113,52 @@ async function energyGraphFetchFrameCandidates(jobId) {
   } catch (e) { return null; }
 }
 
+/* ── R5/T23 task-session identity for candidate/result writes ──
+ * Candidate saves and PES review/restore are scoped to the task selection
+ * that started them. Capture the identity before the request and apply the
+ * response only while that same job/session is still displayed — the same
+ * token rule files-logs.js applies to /files and /logs tails. The token is
+ * the taskSession controller's monotonic session token (authoritative under
+ * A→B→A and same-job reselect); the jobId compare covers the no-controller
+ * fallback. Rejecting (rather than applying late) keeps a stale A response
+ * from repopulating B's candidate review state. */
+function energyGraphResultSession(jobId) {
+  var cur = null;
+  if (window.ACPWorkbench && ACPWorkbench.controllers && ACPWorkbench.controllers.taskSession) {
+    cur = ACPWorkbench.controllers.taskSession.current();
+  }
+  return {
+    jobId: String(jobId == null ? (energyGraphState.jobId || "") : jobId),
+    token: cur ? cur.token : null,
+  };
+}
+
+function energyGraphResultSessionCurrent(session) {
+  if (!session) return false;
+  if (String(energyGraphState.jobId || "") !== String(session.jobId)) return false;
+  var cur = null;
+  if (window.ACPWorkbench && ACPWorkbench.controllers && ACPWorkbench.controllers.taskSession) {
+    cur = ACPWorkbench.controllers.taskSession.current();
+  }
+  var nowToken = cur ? cur.token : null;
+  return nowToken === session.token;
+}
+
+/** Invalidate any in-flight energy workspace / geometry request. Called by
+ * the page's task-session reset so a response started for the previous job
+ * cannot land between the reset and the new job's first load. */
+function energyGraphInvalidateInFlight() {
+  energyGraphState.requestToken = (Number(energyGraphState.requestToken) || 0) + 1;
+  if (energyGraphState.abortController) {
+    try { energyGraphState.abortController.abort(); } catch (e) {}
+    energyGraphState.abortController = null;
+  }
+  if (energyGraphState.structureAbort) {
+    try { energyGraphState.structureAbort.abort(); } catch (e) {}
+    energyGraphState.structureAbort = null;
+  }
+}
+
 /* ── Shared-loader delegation (phase D, todo 38) ──
    The energy mini canvas registers its load adapter with the SHARED
    geometry loader in structure_viewer.js (one parse/style/load path for
@@ -963,6 +1009,7 @@ function energyGraphBindInspectorButtons(root) {
       /* Saving state: disable all */
       card.setAttribute("data-energy-card-state", "saving");
       card.querySelectorAll("button").forEach(function(btn) { btn.disabled = true; });
+      var session = energyGraphResultSession(energyGraphState.jobId);
       try {
         var body = {
           view_type: String(data.view_type || ""),
@@ -975,11 +1022,13 @@ function energyGraphBindInspectorButtons(root) {
         var resp = await api("/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate", {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         });
+        if (!energyGraphResultSessionCurrent(session)) return;
         if (resp) {
           energyGraphApplyFrameCandidates(resp);
           energyGraphRenderCurrent();
         }
       } catch (e) {
+        if (!energyGraphResultSessionCurrent(session)) return;
         var errMsg = String((e && e.message) || e);
         /* Conflict: 409 / expected_revision mismatch */
         if (errMsg.indexOf("409") >= 0 || errMsg.indexOf("revision") >= 0 || errMsg.indexOf("conflict") >= 0) {
@@ -987,7 +1036,7 @@ function energyGraphBindInspectorButtons(root) {
           energyGraphState.pendingCardError = { message: t("energy.card.conflict"), role: role };
           /* Re-fetch candidates */
           var fresh = await energyGraphFetchFrameCandidates(energyGraphState.jobId);
-          if (fresh) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
+          if (fresh && energyGraphResultSessionCurrent(session)) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
         } else {
           var errorEl2 = card.querySelector("[data-energy-card-error]");
           if (errorEl2) { errorEl2.textContent = errMsg; errorEl2.style.display = ""; }
@@ -1089,14 +1138,17 @@ function energyGraphBindInspectorButtons(root) {
       if (!entry) return;
       if (!confirm(t("energy.inspector.remove_candidate") + ": " + String(entry.candidate_id || "") + "?")) return;
       button.disabled = true;
+      var session = energyGraphResultSession(energyGraphState.jobId);
       try {
         var delUrl = "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate/" + encodeURIComponent(String(entry.candidate_id)) + "?expected_revision=" + String(Number(energyGraphState.frameCandidates.revision) || 0);
         var delResp = await api(delUrl, { method: "DELETE" });
+        if (!energyGraphResultSessionCurrent(session)) return;
         if (delResp) {
           energyGraphApplyFrameCandidates(delResp);
           energyGraphRenderCurrent();
         }
       } catch (e) {
+        if (!energyGraphResultSessionCurrent(session)) return;
         alert(String((e && e.message) || e));
       } finally {
         button.disabled = false;
@@ -3973,6 +4025,8 @@ function energyGraphOpenSaveDialog() {
         btn.addEventListener("click", async function() {
           var n = parseInt(btn.getAttribute("data-energy-review-restore"), 10);
           var errEl = overlay.querySelector(".energy-dialog-error");
+          var session = energyGraphResultSession(jobId);
+          if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
           btn.disabled = true;
           try {
             var payload = { backup: n };
@@ -3982,10 +4036,12 @@ function energyGraphOpenSaveDialog() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             });
+            if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
             energyGraphApplyReviewResult(result);
             closeDialog();
             energyGraphRenderCurrent();
           } catch (e) {
+            if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
             if (errEl) {
               errEl.style.display = "block";
               errEl.textContent = "恢复第 " + n + " 轮失败：" + (e.message || String(e));
@@ -4012,6 +4068,8 @@ function energyGraphOpenSaveDialog() {
       var note = noteInput ? noteInput.value.trim() : "";
       var errEl = overlay.querySelector(".energy-dialog-error");
       if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+      var session = energyGraphResultSession(jobId);
+      if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
 
       var payload = energyGraphReviewPayload();
       if (note) payload.note = note;
@@ -4023,10 +4081,12 @@ function energyGraphOpenSaveDialog() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
         energyGraphApplyReviewResult(result);
         closeDialog();
         energyGraphRenderCurrent();
       } catch (e) {
+        if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
         if (errEl) {
           errEl.style.display = "block";
           errEl.textContent = (e.message || String(e));

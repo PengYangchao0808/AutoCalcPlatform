@@ -115,6 +115,92 @@ module.exports.register = async function (h) {
     assert(codeOnly.indexOf("logSessionToken") !== -1, "log tails track the task-session token");
   });
 
+  function logSetup(overrides) {
+    const sandbox = setup(Object.assign({
+      logPollToken: 0,
+      logCursor: { stdout: 0, stderr: 0, irc: 0, jobId: "" },
+      logEntries: [],
+      _logTruncated: false,
+      _logFlushScheduled: false,
+      _logPanelState: { desktop: { el: null, lastRenderedIndex: 0 }, mobile: { el: null, lastRenderedIndex: 0 } },
+      MAX_LOG_LINES: 1000,
+      requestAnimationFrame: function () {},
+      selectedJobIsRemote: false,
+    }, overrides || {}));
+    const appended = [];
+    sandbox.appendLogLine = function (type, message) { appended.push(type + ":" + message); };
+    return { sandbox, appended };
+  }
+
+  function deferred() {
+    let resolve;
+    const promise = new Promise((res) => { resolve = res; });
+    return { promise, resolve };
+  }
+
+  await test("log tail: late /logs response after a task switch or same-job reselect is dropped", async () => {
+    let current = { jobId: "job-A", token: 7 };
+    const { sandbox, appended } = logSetup({ selectedJobId: "job-A" });
+    withTaskSession(sandbox, () => current);
+    const first = deferred();
+    sandbox.api = () => first.promise;
+    const p1 = sandbox.pollLogTail("job-A");
+
+    current = { jobId: "job-B", token: 8 };
+    first.resolve({ stdout_lines: ["late-A"], stdout_next_offset: 9 });
+    await p1;
+    assertEq(appended, [], "A→B: old A tail must not append into B's log");
+
+    current = { jobId: "job-A", token: 9 };
+    sandbox.selectedJobId = "job-A";
+    const second = deferred();
+    sandbox.api = () => second.promise;
+    const p2 = sandbox.pollLogTail("job-A");
+    current = { jobId: "job-A", token: 10 };
+    second.resolve({ stdout_lines: ["late-reselect"] });
+    await p2;
+    assertEq(appended, [], "same-job reselect: stale token must drop the tail");
+
+    current = { jobId: "job-A", token: 11 };
+    const third = deferred();
+    sandbox.api = () => third.promise;
+    const p3 = sandbox.pollLogTail("job-A");
+    third.resolve({ stdout_lines: ["hello"], stderr_lines: ["warn"], stdout_next_offset: 5, stderr_next_offset: 2 });
+    await p3;
+    assertEq(appended, ["log:hello", "stderr:warn"], "current session tail appends normally");
+    assertEq(sandbox.logCursor.stdout, 5);
+    assertEq(sandbox.logCursor.stderr, 2);
+  });
+
+  await test("IRC tail: late response after a task switch is dropped; current session appends", async () => {
+    let current = { jobId: "job-A", token: 7 };
+    const { sandbox, appended } = logSetup({
+      selectedJobId: "job-A",
+      lastSelectedJob: { spec: { workflow: "irc" } },
+      logCursor: { stdout: 0, stderr: 0, irc: 0, jobId: "job-A" },
+    });
+    withTaskSession(sandbox, () => current);
+
+    const late = deferred();
+    sandbox.api = () => late.promise;
+    const p1 = sandbox.pollIrcOutputTail("job-A");
+    current = { jobId: "job-B", token: 8 };
+    sandbox.selectedJobId = "job-B";
+    late.resolve({ lines: ["late-A"], next_offset: 4 });
+    await p1;
+    assertEq(appended, [], "A→B: late IRC tail must not append");
+    assertEq(sandbox.logCursor.irc, 0, "rejected response does not advance the IRC cursor");
+
+    sandbox.selectedJobId = "job-A";
+    const live = deferred();
+    sandbox.api = () => live.promise;
+    const p2 = sandbox.pollIrcOutputTail("job-A");
+    live.resolve({ lines: ["step 1"], next_offset: 8 });
+    await p2;
+    assertEq(appended, ["orca:[ORCA] step 1"], "current session IRC tail appends");
+    assertEq(sandbox.logCursor.irc, 8);
+  });
+
   await test("source purity: page script keeps transport adapters only — no raw fetch/XHR/3Dmol", () => {
     const fs = require("fs");
     const path = require("path");
