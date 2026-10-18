@@ -811,7 +811,7 @@ def test_xtb_passthrough_sorts_by_title_energy(tmp_path: Path) -> None:
 
 
 def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -> None:
-    from unittest.mock import patch
+    from tests._t24_patch_compat import patch
 
     pytest.importorskip("acp.workflows.ensemble")
     from acp.workflows.ensemble import run_ensemble_generation
@@ -909,7 +909,7 @@ def test_resolve_levels_refinement_threshold() -> None:
 
 def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
     """censo-zero opt-on with near-degenerate xTB energies → 2 handoffs."""
-    from unittest.mock import patch
+    from tests._t24_patch_compat import patch
 
     pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
@@ -958,7 +958,7 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
 
 def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> None:
     """A failing non-rank1 conformer is dropped; rank1 failure still raises."""
-    from unittest.mock import patch
+    from tests._t24_patch_compat import patch
 
     from acp.backends.censo_backend import CensoRunResult
 
@@ -1021,7 +1021,7 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
 
 def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
     """--levels refinement_threshold reaches the CENSO rcfile overrides."""
-    from unittest.mock import patch
+    from tests._t24_patch_compat import patch
 
     from acp.backends.censo_backend import CensoRunResult
 
@@ -1165,7 +1165,7 @@ def test_cli_energy_accepts_ewin() -> None:
 
 
 def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
-    from unittest.mock import patch
+    from tests._t24_patch_compat import patch
 
     pytest.importorskip("acp.workflows.ensemble")
     from acp.workflows.ensemble import run_ensemble_generation
@@ -1196,7 +1196,7 @@ def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
 
 
 def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
-    from unittest.mock import patch
+    from tests._t24_patch_compat import patch
 
     pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
