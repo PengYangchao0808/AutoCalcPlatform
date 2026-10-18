@@ -13212,6 +13212,39 @@ def test_wizard_draft_form_slice_owner_and_h2_guard() -> None:
         assert dup not in wizard_src, f"S3 state must not be duplicated in wizard.js: {dup.strip()!r}"
 
 
+def test_wizard_submit_edit_slice_owner_and_interception_guard() -> None:
+    """T20 S4: the submit/edit-recalc slice is owned by submit-edit.js; the
+    single submit entry, the per-branch payloads and the edit-mode POST /jobs
+    interception (compat/api.js) are preserved; wizard.js keeps thin delegates
+    and no duplicated submit body."""
+    module_path = FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "submit-edit.js"
+    module_src = module_path.read_text(encoding="utf-8")
+    for name in ("submitStageWorkflowJob", "jobFormValidationFailed", "submitJobBatch",
+                 "buildPESProtocolFromMethod", "submitPESsearchTask", "handleModalSubmit",
+                 "submitJobModal", "initializeMethodDefaults"):
+        assert f"function {name}(" in module_src, f"S4 body missing from submit-edit.js: {name}"
+    assert "ACPJobEditor.checkAndSubmit()" in module_src, "handleModalSubmit editor branch missing"
+    assert module_src.count('api("/jobs"') >= 4, "a submit branch stopped POSTing /jobs"
+    assert module_src.count("_discardSavedWizardDraft()") >= 3, \
+        "submit branches must still discard the saved wizard draft"
+    assert "window.confirm(_confirmMsg)" in module_src, "PES submit confirmation removed"
+    api_src = (FRONTEND_WORKBENCH_JS_DIR / "compat" / "api.js").read_text(encoding="utf-8")
+    assert 'path === "/jobs" && opts && opts.method === "POST"' in api_src, \
+        "edit POST /jobs interception condition changed"
+    assert "ACPJobEditor.interceptJobCreate(_intercepted)" in api_src, \
+        "edit POST /jobs interception target changed"
+    wizard_src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard.js").read_text(encoding="utf-8")
+    for name in ("submitStageWorkflowJob", "jobFormValidationFailed", "submitJobBatch",
+                 "buildPESProtocolFromMethod", "submitPESsearchTask", "handleModalSubmit",
+                 "submitJobModal", "initializeMethodDefaults"):
+        assert f"function {name}() {{\n  return window.ACPWizardSubmitEdit." in wizard_src, \
+            f"thin delegate missing for {name}"
+    assert "if (createWizardStep < 3)" not in wizard_src, \
+        "handleModalSubmit body must not be duplicated in wizard.js"
+    assert "await submitJobBatch(batchBodies);" not in wizard_src, \
+        "the batch submit loop must live in the S4 module only"
+
+
 def test_candidate_details_i18n_keys_in_both_locales() -> None:
     """cd.* i18n keys exist in both zh-CN and en-US blocks."""
     html = read_workbench_content()
