@@ -2482,8 +2482,8 @@ function optimizationStatusPanelModel(data, job) {
   return buildTaskStatusModel(data, job);
 }
 
-function optimizationStatusPanelMarkup(data) {
-  var model = optimizationStatusPanelModel(data, lastSelectedJob);
+function optimizationStatusPanelMarkup(data, job) {
+  var model = optimizationStatusPanelModel(data, job);
   if (model.mode === "selected") {
     var rowsHtml = model.rows.map(function(r) {
       var valueDisplay = r.value != null ? escapeHtml(r.value) + ' ' + escapeHtml(r.unit) : '--';
@@ -2513,8 +2513,8 @@ function optimizationStatusPanelMarkup(data) {
   '</div>';
 }
 
-function optimizationWorkspaceMarkup(data) {
-  var job = lastSelectedJob || {};
+function optimizationWorkspaceMarkup(data, job) {
+  job = job || {};
   var series = Array.isArray(data.series) ? data.series : [];
   var energySeries = series.filter(function(item) { return ["relative_energy", "delta_energy", "scf_energy"].indexOf(String(item.id)) >= 0; });
   var selectedNode = energyGraphSelectedNode(data);
@@ -2534,7 +2534,7 @@ function optimizationWorkspaceMarkup(data) {
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
     '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select>' + energyAnnotationToolbarMarkup() + '<span class="optimization-toolbar-spacer"></span><div class="optimization-action-group"><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool optimization-reload-btn" data-optimization-action="reload" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg><span class="reload-label">刷新</span></button></div></div>' +
-    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationStatusPanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
+    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationStatusPanelMarkup(data, job) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
 
@@ -2545,7 +2545,7 @@ function optimizationGraphRenderCurrent() {
   var root = screen.querySelector('[data-energy-view="optimization"]');
   if (!root) {
     screen.style.display = "block";
-    screen.innerHTML = optimizationWorkspaceMarkup(data);
+    screen.innerHTML = optimizationWorkspaceMarkup(data, lastSelectedJob);
     root = screen.querySelector('[data-energy-view="optimization"]');
     if (root) optimizationGraphBind(root);
     return;
@@ -2582,12 +2582,12 @@ function optimizationGraphRenderCurrent() {
   if (qualitySlot) qualitySlot.outerHTML = optimizationQualityBadge(data);
   var convergenceSlot = root.querySelector("[data-optimization-convergence]");
   if (convergenceSlot) {
-    convergenceSlot.outerHTML = optimizationStatusPanelMarkup(data);
+    convergenceSlot.outerHTML = optimizationStatusPanelMarkup(data, lastSelectedJob);
   } else {
     var chartsDiv = root.querySelector(".optimization-charts");
     if (chartsDiv) {
       var chartCard = chartsDiv.querySelector(".optimization-chart-card");
-      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationStatusPanelMarkup(data));
+      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationStatusPanelMarkup(data, lastSelectedJob));
     }
   }
   var body = root.querySelector(".energy-inspector-body");
@@ -2823,9 +2823,9 @@ function optimizationGraphBind(root) {
   if (current && current.frame_index != null) energyGraphLoadStructure(current.frame_index);
 }
 
-function energyGraphWorkspaceMarkup(data) {
+function energyGraphWorkspaceMarkup(data, job) {
   const series = Array.isArray(data.series) ? data.series : [];
-  const job = lastSelectedJob || {};
+  job = job || {};
   const projectId = String(s2scanState.projectId || "");
   const reviewState = candidateReviewState();
   const candidateCount = reviewState.candidates.length;
@@ -4120,7 +4120,7 @@ function energyGraphRenderCurrent() {
     // Mount once.  Replacing the complete workspace would also detach the
     // 3Dmol container and reset the user's chart view on every data update.
     screen.style.display = "block";
-    screen.innerHTML = energyGraphWorkspaceMarkup(energyGraphState.data);
+    screen.innerHTML = energyGraphWorkspaceMarkup(energyGraphState.data, lastSelectedJob);
     root = screen.querySelector("[data-energy-workspace]");
     if (root) energyGraphBind(root);
     return;
