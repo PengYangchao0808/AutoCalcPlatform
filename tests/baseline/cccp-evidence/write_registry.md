@@ -146,7 +146,7 @@ git -C "$REPO" worktree remove "$WT" --force
 | `src/acp/intake/storage.py` | `B补丁` | 平台路径逻辑（T16 Must NOT：不动） | RT-N/A | C→B | T16 | A-PATCH | D-KEEP | pending |
 | `src/acp/results/orca_parser.py`（`OrcaCalculation`） | `B补丁` | T2 图 A `results/frequencies.py:8`；**`results/` 为混合文件**（T5 规则）；C03 迁移源 | RT-CONV（`OrcaCalculation` 同类身份） | C→B | T16 | A-PATCH + A-DIR | D-NOSHIM（B 应用后） | pending |
 | `src/acp/results/frequencies.py` | `B补丁` | T2 frequency「科学 helper」`frequencies.py:13,114`；混合文件 | RT-CONV（原生模式升序/零模保留） | C→B | T16 | A-PATCH + A-DIR | D-NOSHIM | pending |
-| `src/acp/io/structures.py` | `B补丁` | T2 图 A `:20`（`from acp.core.models import Structure`）；`io/` 混合 | RT-CONV | C→B | T16/T52 | A-PATCH + A-DIR | D-KEEP | pending |
+| `src/acp/io/structures.py` | `B补丁` | T2 图 A `:20`（`from acp.core.models import Structure`）；`io/` 混合 | RT-SAME（NMR 拓扑符号 re-export `cccp.analysis.structure.topology`；reader/writer 薄转发保持） | C→B | T16/T52 | A-PATCH + A-DIR | D-KEEP | delivered (48b3d2f) — patch `patches/t17-io-structures.patch` |
 
 ### 4.4 C04 采样 / PES / IRC / TS 科学（T20–T24）
 
