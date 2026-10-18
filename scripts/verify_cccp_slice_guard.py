@@ -97,6 +97,11 @@ _CLI_CALL_NAMES: Final[frozenset[str]] = frozenset(
     {"run", "Popen", "call", "check_call", "check_output", "system", "popen", "which"}
 )
 _ACP_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"(?:^|[^A-Za-z0-9_])acp(?:[^A-Za-z0-9_]|$)")
+#: Embedded ``from acp`` / ``import acp`` text in a string constant (e.g. for
+#: ``exec``).  Free-form provenance/output text containing the ``acp`` word
+#: (``"generated_by=acp.calculations.pes.atom_mapping"``) is deliberately exempt
+#: per the module docstring and plan-3 §105; only real import text counts.
+_EMBEDDED_IMPORT_RE: Final[re.Pattern[str]] = re.compile(r"\b(?:from|import)\s+acp\b")
 _TASK_REF_RE: Final[re.Pattern[str]] = re.compile(r"src/cccp/[A-Za-z0-9_./-]+\.py(?::\d+)?")
 
 
@@ -219,7 +224,7 @@ def scan_reverse_dependencies(cccp_root: Path) -> list[Finding]:
                     findings.append(Finding(rel, node.lineno, "dynamic_import_target", repr(value)))
                 elif _is_acp_module_token(value):
                     findings.append(Finding(rel, node.lineno, "string_reference", repr(value)))
-                elif "acp." in value or _is_cli_acp_token(value):
+                elif _EMBEDDED_IMPORT_RE.search(value):
                     findings.append(Finding(rel, node.lineno, "string_reference", repr(value)))
     return findings
 
