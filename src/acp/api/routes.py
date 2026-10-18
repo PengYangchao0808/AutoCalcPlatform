@@ -580,4 +580,221 @@ async def stream_job_events(
     )
 
 
+# ---------------------------------------------------------------------- #
+# One authorized, reusable stream per (principal, scope)
+# ---------------------------------------------------------------------- #
+#
+# One connection multiplexes every owner in the requested scope.  Authorization
+# is re-checked on every poll (revocation closes the live connection), and
+# cursor expiry / permission change / restart emit an explicit snapshot-reset
+# frame.  Coverage is declared in the A04 contract document; whether a consumer
+# may stop polling is that consumer's decision.
+
+
+class _EntryStreamAuthorizer:
+    """Adapt the per-entry authorization gate to the Services stream port."""
+
+    def __init__(self, authorizer: Any) -> None:
+        self._authorizer = authorizer
+
+    def authorize_stream(self, *, principal_id: str, scope: Any, job_id: str = ""):
+        from acp_services.contracts.events import EventScope
+        from acp_services.runtime.events import StreamAuthorization
+        from acp_services.workspace.entry_authz import EntryClass
+
+        decision = self._authorizer.authorize(EntryClass.EVENT_STREAM, job_id=job_id)
+        resolved_scope = scope if isinstance(scope, EventScope) else EventScope(scope)
+        return StreamAuthorization(
+            allowed=bool(decision.allowed),
+            principal_id=decision.principal_id,
+            scope=resolved_scope,
+            reason_code=decision.reason_code,
+            detail=decision.detail,
+        )
+
+
+def _scope_stream_registry(request: Request):
+    from acp_services.runtime.events import AuthorizedStreamRegistry
+
+    registry = getattr(request.app.state, "authorized_event_streams", None)
+    if registry is None:
+        registry = AuthorizedStreamRegistry()
+        request.app.state.authorized_event_streams = registry
+    return registry
+
+
+def _parse_stream_cursors(raw: str) -> dict[str, int]:
+    cursors: dict[str, int] = {}
+    for item in raw.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        owner, _, seq = token.rpartition(":")
+        if not owner:
+            continue
+        try:
+            cursors[owner] = max(0, int(seq))
+        except ValueError:
+            continue
+    return cursors
+
+
+def _scope_event_frame(event: Any) -> str:
+    payload = json.dumps(event.to_dict(), default=str)
+    return f"id: {event.owner_id}:{event.seq}\nevent: {event.event_type}\ndata: {payload}\n\n"
+
+
+def _scope_reset_frame(reason: str, scope: Any, principal_id: str, **extra: Any) -> str:
+    payload = {
+        "reason": reason,
+        "scope": scope.value,
+        "principal_id": principal_id,
+        **extra,
+    }
+    return f"event: reset\ndata: {json.dumps(payload, default=str)}\n\n"
+
+
+@router.get("/events/stream")
+async def stream_scope_events(
+    request: Request,
+    scope: str = Query(default="task"),
+    job_ids: str = Query(default="", description="Comma-separated owners in this scope"),
+    after: str = Query(default="", description="Composite cursor: job_id:seq,job_id:seq"),
+    epoch: str = Query(default="", description="Client's last service epoch"),
+) -> StreamingResponse:
+    """One authorized stream per ``(principal, scope)``; many tasks, one connection."""
+    from acp_services.contracts.events import EventScope
+    from acp_services.runtime.events import (
+        RESET_CURSOR_EXPIRED,
+        RESET_PERMISSION_CHANGED,
+        RESET_SERVICE_RESTART,
+        StreamAuthorizationError,
+        StreamCursor,
+    )
+    from acp_services.workspace.entry_authz import default_entry_authorizer
+
+    manager = _manager(request)
+    try:
+        resolved_scope = EventScope(scope)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown event scope: {scope}") from exc
+
+    owners = [item.strip() for item in job_ids.split(",") if item.strip()]
+    if not owners:
+        raise HTTPException(status_code=422, detail="job_ids must name at least one owner")
+
+    for owner in owners:
+        if manager.get(owner) is None:
+            raise HTTPException(status_code=404, detail=f"Job not found: {owner}")
+
+    authorizer = getattr(request.app.state, "entry_authorizer", None)
+    guard = _EntryStreamAuthorizer(
+        authorizer if authorizer is not None else default_entry_authorizer()
+    )
+    probe = guard.authorize_stream(principal_id="", scope=resolved_scope, job_id=owners[0])
+    if probe.denied:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": probe.reason_code, "message": probe.detail or "event stream denied"},
+        )
+
+    registry = _scope_stream_registry(request)
+    try:
+        stream = registry.open(
+            principal_id=probe.principal_id,
+            scope=resolved_scope,
+            service_epoch=_START_TIME,
+            log_for=manager.event_log,
+            job_ids=owners,
+            authorizer=guard,
+        )
+    except StreamAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": RESET_PERMISSION_CHANGED, "message": str(exc)},
+        ) from exc
+
+    initial_cursors = _parse_stream_cursors(after)
+    client_epoch = epoch or str(_START_TIME)
+
+    def _cursors(values: dict[str, int]) -> list[Any]:
+        return [
+            StreamCursor(
+                principal_id=stream.principal_id,
+                scope=stream.scope,
+                job_id=owner,
+                after_seq=values.get(owner, 0),
+                service_epoch=client_epoch,
+            )
+            for owner in owners
+        ]
+
+    async def event_generator() -> AsyncIterator[str]:
+        yield "retry: 3000\n\n"
+        cursors = _cursors(initial_cursors)
+        last_heartbeat = anyio.current_time()
+
+        while True:
+            if await request.is_disconnected():
+                break
+
+            if not stream.check_authorization(guard, job_ids=owners):
+                yield _scope_reset_frame(
+                    RESET_PERMISSION_CHANGED, stream.scope, stream.principal_id
+                )
+                break
+
+            batch = stream.poll(cursors)
+            if batch.reset:
+                yield _scope_reset_frame(
+                    batch.reset_reason or RESET_CURSOR_EXPIRED,
+                    stream.scope,
+                    stream.principal_id,
+                    earliest_seq=dict(batch.earliest_seq),
+                    latest_seq=dict(batch.latest_seq),
+                )
+                snapshot = stream.snapshot()
+                for event in snapshot.events:
+                    yield _scope_event_frame(event)
+                cursors = _cursors(dict(snapshot.cursors))
+                if batch.reset_reason in (RESET_SERVICE_RESTART, RESET_PERMISSION_CHANGED):
+                    break
+            else:
+                for event in batch.events:
+                    yield _scope_event_frame(event)
+                cursors = _cursors(dict(batch.cursors))
+
+            records = [manager.get(owner) for owner in owners]
+            if all(record is not None and record.status.is_terminal for record in records):
+                for owner, record in zip(owners, records):
+                    done_payload = json.dumps(
+                        {
+                            "job_id": owner,
+                            "status": record.status.value,
+                            "progress": record.progress,
+                            "current_stage": record.current_stage,
+                            "completed_at": record.completed_at,
+                        },
+                        default=str,
+                    )
+                    yield f"event: done\ndata: {done_payload}\n\n"
+                break
+
+            now = anyio.current_time()
+            if now - last_heartbeat >= 15.0:
+                yield ": heartbeat\n\n"
+                last_heartbeat = now
+            await anyio.sleep(1.0)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 __all__ = ["router"]
