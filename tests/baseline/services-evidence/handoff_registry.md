@@ -47,6 +47,7 @@
 | B | 现有 `acp.backends` re-export shim → `cccp.backends` 移交（前序计划样板） | B（历史） | 全 acp 消费者 | `2a23b93` | 前序迁移计划收口 | `test_architecture_invariants.py` 依赖方向门 | `66222f7` | integrated |
 | C | C00 闭包地图与 C01 首个阻塞 helper | C | B 应用接线 | n/a | 计划三 C00/C01（尚未开工） | C00/C01 产出后由 B 记录 applied_commit | n/a | pending |
 | A | A00 前端基线接管地图 | A | B/C 引用 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | 无 | 地图被 `ACP_Frontend_Baseline_Map_20261018.md` 引用 | `f410ac9d`（地图基线） | delivered |
+| B | 科学产品 → 帧 adapter（`src/acp/results/frames_adapter.py`、`tests/fixtures/science_products/frames_mapping/`；消费 C 的 HN-02） | C（HN-02 映射表 + 五态 fixture，`4d2c6f8d`） | B（adapter）+ A（显示） | `48b3d2f` | C-T13/HN-02 状态 A「契约可消费」；`src/acp/results/frames.py` 只读（ANTI #21） | B 经 TrajectoryFrame.to_node 与 TrajectoryAnnotation.to_annotation 投影并通过 HN-02 normal/empty/partial/corrupt/old 五态 fixture；固定输入经 Data 发布与读取 | 随 B28b 应用提交 | integrated |
 
 ## 维护约定
 

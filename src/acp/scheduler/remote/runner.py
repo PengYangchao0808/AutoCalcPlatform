@@ -285,10 +285,12 @@ class RemoteJobRunner:
         cleanup: RemoteCleanup | None = None,
         stage_task_observer: StageTaskObserver | None = None,
         poll_interval: int | None = None,
+        publication: object | None = None,
     ) -> None:
         self._ssh = ssh_pool
         self._config = remote_config
         self._stager = stager or FileStager(ssh_pool)
+        self._publication = publication  # injected Data publication entry (B28a)
         self._monitor = monitor or RemoteJobMonitor(ssh_pool, self._stager)
         self._syncer = code_syncer or CodeSyncer(ssh_pool)
         self._cleanup = cleanup
@@ -1563,16 +1565,26 @@ class RemoteJobRunner:
                 json.dumps(record.to_dict(), indent=2, default=str), encoding="utf-8"
             )
 
-        for marker in ("job.json", "task.json"):
-            self._stager.upload_file(
-                node, work_dir / marker, posixpath.join(remote_job_dir, marker)
-            )
+        self._marker_publication().upload_markers(
+            job_id=record.id,
+            work_dir=work_dir,
+            node=node,
+            remote_job_dir=remote_job_dir,
+        )
         event_log.append(
             "remote.markers_uploaded",
             job_id=record.id,
             node=node.name,
             files=["job.json", "task.json"],
         )
+
+    def _marker_publication(self) -> Any:
+        """Return the Data publication entry used for scheduler markers."""
+        if self._publication is None:
+            from acp.services_publication_bootstrap import build_publication_data_port
+
+            self._publication = build_publication_data_port(stager=self._stager)
+        return self._publication
 
     def _resolve_remote_dir_for(
         self,

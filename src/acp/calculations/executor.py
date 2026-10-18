@@ -725,6 +725,7 @@ class CalculationPlanExecutor:
         self,
         *,
         backend_factory: Callable[..., object] | None = None,
+        publication: object | None = None,
     ) -> None:
         # backend_factory is accepted for API compatibility but the
         # primitives resolve backends internally via the cccp registry.
@@ -735,6 +736,26 @@ class CalculationPlanExecutor:
         self._resume_count: int = 0
         self._loaded_completed_facts: dict[int, dict[str, JsonValue]] = {}
         self._execution_policy: ExecutionPolicy = ExecutionPolicy()
+        self._publication = publication  # injected Data publication entry (B28a)
+        self._publisher: Callable[[Path, ResultManifest], Path] | None = None
+        self._publisher_built = False
+
+    def _publication_publisher(self) -> Callable[[Path, ResultManifest], Path] | None:
+        """Bind the injected publication port onto the manifest seam, or ``None``.
+
+        The executor keeps the named ``register_result_manifest`` call contract
+        unchanged; a publisher is supplied only when a Data publication port is
+        injected (composition-root wiring), so the default path stays the local
+        writer and fault-injection seams remain 2-argument compatible.
+        """
+        if self._publication is None:
+            return None
+        if not self._publisher_built:
+            from acp.services_publication_bootstrap import manifest_publisher
+
+            self._publisher = manifest_publisher(self._publication)  # type: ignore[arg-type]
+            self._publisher_built = True
+        return self._publisher
 
     # ── public entry point ──────────────────────────────────────────────
 
@@ -918,7 +939,9 @@ class CalculationPlanExecutor:
                         step.kind.value,
                         prerequisite.reason,
                     )
-                    self._write_result_manifest_tolerant(result_dir, plan, step_states, "running")
+                    self._write_result_manifest_tolerant(
+                        result_dir, plan, step_states, "running", self._publication_publisher()
+                    )
                     self._persist_checkpoint(
                         runtime_dir,
                         fingerprint,
@@ -981,6 +1004,7 @@ class CalculationPlanExecutor:
                         result=adoption.result,
                         result_id=result_id,
                         kind=step.kind,
+                        publisher=self._publication_publisher(),
                     )
                     if publish_error:
                         state.status = "failed"
@@ -1003,7 +1027,9 @@ class CalculationPlanExecutor:
                                 [[float(value) for value in row] for row in adoption.result.coords],
                                 list(item.elements),
                             )
-                    self._write_result_manifest_tolerant(result_dir, plan, step_states, "running")
+                    self._write_result_manifest_tolerant(
+                        result_dir, plan, step_states, "running", self._publication_publisher()
+                    )
                     self._persist_checkpoint(
                         runtime_dir,
                         fingerprint,
@@ -1197,6 +1223,7 @@ class CalculationPlanExecutor:
                     result=result,
                     result_id=result_id,
                     kind=step.kind,
+                    publisher=self._publication_publisher(),
                 )
                 if publish_error:
                     state.status = "failed"
@@ -1288,6 +1315,7 @@ class CalculationPlanExecutor:
             plan=plan,
             step_states=step_states,
             status=overall_status,
+            publisher=self._publication_publisher(),
         )
 
         return ExecutionResult(
@@ -1492,6 +1520,7 @@ class CalculationPlanExecutor:
         result: CalculationResult,
         result_id: str,
         kind: StepKind,
+        publisher: Callable[[Path, ResultManifest], Path] | None = None,
     ) -> str:
         """Contract C steps ③④ — publish unless already complete; ``""`` on ok.
 
@@ -1515,7 +1544,10 @@ class CalculationPlanExecutor:
                 result, result_id=result_id, kind=kind, result_dir=step_work_dir
             )
             publish_result(
-                step_work_dir, record=record, manifest=_step_publication_manifest(record)
+                step_work_dir,
+                record=record,
+                manifest=_step_publication_manifest(record),
+                publisher=publisher,
             )
         except (OSError, ValueError, TypeError) as exc:
             logger.warning("step %s publication failed: %s", result_id, exc, exc_info=True)
@@ -1528,6 +1560,7 @@ class CalculationPlanExecutor:
         plan: CalculationPlan,
         step_states: list[StepState],
         status: str,
+        publisher: Callable[[Path, ResultManifest], Path] | None = None,
     ) -> None:
         """Publish ``RESULT/result_manifest.json``; a write failure is pending.
 
@@ -1535,7 +1568,9 @@ class CalculationPlanExecutor:
         resume rebuilds and re-publishes it from the adopted results.
         """
         try:
-            CalculationPlanExecutor._write_result_manifest(result_dir, plan, step_states, status)
+            CalculationPlanExecutor._write_result_manifest(
+                result_dir, plan, step_states, status, publisher=publisher
+            )
         except (OSError, ValueError, TypeError) as exc:
             logger.warning(
                 "result_manifest_write_pending: publication retried on next resume (%s)",
@@ -1735,6 +1770,7 @@ class CalculationPlanExecutor:
         plan: CalculationPlan,
         step_states: list[StepState],
         status: str,
+        publisher: Callable[[Path, ResultManifest], Path] | None = None,
     ) -> None:
         """Write the unique ``RESULT/result_manifest.json``."""
         manifest = ResultManifest(
@@ -1958,7 +1994,10 @@ class CalculationPlanExecutor:
                     metadata=_diagnostic_metadata({"energy_hartree": energy_hartree}, diagnostic),
                 )
 
-        register_result_manifest(result_dir, manifest)
+        if publisher is None:
+            register_result_manifest(result_dir, manifest)
+        else:
+            register_result_manifest(result_dir, manifest, publisher=publisher)
 
 
 __all__ = [

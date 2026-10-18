@@ -54,6 +54,7 @@ __all__ = [
     "PublicationOutcome",
     "PublicationState",
     "ScientificResultRecord",
+    "ManifestPublisher",
     "load_publication_state",
     "load_scientific_result",
     "mark_publication_complete",
@@ -221,13 +222,25 @@ def load_scientific_result(result_dir: Path | str) -> ScientificResultRecord | N
         return None
 
 
-def register_result_manifest(result_dir: Path | str, manifest: ResultManifest) -> Path:
+#: Optional publication delegator: ``(result_dir, manifest) -> written path``.
+ManifestPublisher = Callable[[Path, ResultManifest], Path]
+
+
+def register_result_manifest(
+    result_dir: Path | str,
+    manifest: ResultManifest,
+    *,
+    publisher: ManifestPublisher | None = None,
+) -> Path:
     """Persist contract ② — the platform display manifest.
 
     The single named ACP persistence seam for ``RESULT/result_manifest.json``:
     executor / scan / IRC product registration routes through here instead of
-    writing the manifest themselves.
+    writing the manifest themselves.  ``publisher`` (optional) is the injected
+    Data publication entry; when omitted the local writer is used unchanged.
     """
+    if publisher is not None:
+        return publisher(Path(result_dir), manifest)
     return manifest.write(Path(result_dir))
 
 
@@ -262,13 +275,15 @@ def publish_result(
     record: ScientificResultRecord,
     manifest: ResultManifest,
     copy_products: Callable[[], None] | None = None,
+    publisher: ManifestPublisher | None = None,
 ) -> ResultManifest:
     """Run the publication sequence for *record* in contract order ①②③.
 
     ``copy_products`` (optional) materialises platform view products between ①
     and ②; it must be idempotent so a retry after a partial copy completes
     without side effects.  Publishing an already-completed ``result_id`` is an
-    idempotent no-op.
+    idempotent no-op.  ``publisher`` (optional) routes the display-manifest
+    write through the injected Data publication entry.
     """
     result_dir = Path(result_dir)
     state = load_publication_state(result_dir)
@@ -286,7 +301,10 @@ def publish_result(
     save_scientific_result(result_dir, record)  # ① scientific result + artifact refs
     if copy_products is not None:
         copy_products()  # ② platform view products
-    register_result_manifest(result_dir, manifest)  # ② display manifest
+    if publisher is None:
+        register_result_manifest(result_dir, manifest)  # ② display manifest
+    else:
+        register_result_manifest(result_dir, manifest, publisher=publisher)  # ② via Data
     mark_publication_complete(result_dir, record.result_id)  # ③ done marker
     return manifest
 
@@ -298,6 +316,7 @@ def recover_publication(
     execute_qc: Callable[[], ScientificResultRecord],
     build_manifest: Callable[[ScientificResultRecord], ResultManifest],
     copy_products: Callable[[], None] | None = None,
+    publisher: ManifestPublisher | None = None,
 ) -> PublicationOutcome:
     """Recovery entry — check for an existing valid scientific result first.
 
@@ -314,7 +333,13 @@ def recover_publication(
     record = load_scientific_result(result_dir)  # check FIRST
     if record is not None and record.result_id == result_id:
         manifest = build_manifest(record)
-        publish_result(result_dir, record=record, manifest=manifest, copy_products=copy_products)
+        publish_result(
+            result_dir,
+            record=record,
+            manifest=manifest,
+            copy_products=copy_products,
+            publisher=publisher,
+        )
         return PublicationOutcome(
             record=record, manifest=manifest, qc_executed=False, recovered=True
         )
@@ -324,5 +349,11 @@ def recover_publication(
             f"calculation returned result_id {record.result_id!r}, expected {result_id!r}"
         )
     manifest = build_manifest(record)
-    publish_result(result_dir, record=record, manifest=manifest, copy_products=copy_products)
+    publish_result(
+        result_dir,
+        record=record,
+        manifest=manifest,
+        copy_products=copy_products,
+        publisher=publisher,
+    )
     return PublicationOutcome(record=record, manifest=manifest, qc_executed=True, recovered=False)
