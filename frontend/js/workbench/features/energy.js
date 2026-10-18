@@ -116,19 +116,27 @@ async function energyGraphFetchFrameCandidates(jobId) {
 /* ── Shared-loader delegation (phase D, todo 38) ──
    The energy mini canvas registers its load adapter with the SHARED
    geometry loader in structure_viewer.js (one parse/style/load path for
-   every canvas). This canvas keeps its own element + 3Dmol instance; only
-   the duplicate load logic is removed. The lazy viewer creation below is
-   the SAME creation point that always lived here — not a new viewer. */
+   every canvas). This canvas keeps its own element + scene instance; only
+   the duplicate load logic is removed. The lazy creation below is
+   the SAME creation point that always lived here — not a new viewer.
+   T9: energyGraphState.viewer holds a bounded ACPVisualization.scene
+   instance (never a raw 3Dmol handle); all model/style/teardown/PNG/framing
+   access goes through the instance's restricted API. */
 if (window.ACPStructureViewer && typeof window.ACPStructureViewer.registerCanvasLoader === "function") {
   window.ACPStructureViewer.registerCanvasLoader("energy-mini", function(xyzText, styleSpec) {
     var container = document.getElementById("energy-structure-viewer");
     if (!container) return false;
     if (energyGraphState.viewer && container.querySelector("canvas")) {
-      try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
+      energyGraphState.viewer.removeAllModels();
     } else {
       container.innerHTML = "";
-      if (!ACPVisualization.mol3d.isAvailable()) return false;
-      energyGraphState.viewer = ACPVisualization.mol3d.create(container, { backgroundColor: "0x0e1419", antialias: true });
+      /* scene.create returns null when the 3Dmol library (or the scene
+         module) is missing — the loader degrades to false with no throw,
+         keeping the "3D 查看器未加载" empty state. */
+      var sceneNs = ACPVisualization.scene;
+      energyGraphState.viewer = (sceneNs && typeof sceneNs.create === "function")
+        ? sceneNs.create({ container: container, options: { backgroundColor: "0x0e1419", antialias: true } })
+        : null;
       if (!energyGraphState.viewer) return false;
     }
     energyGraphState.viewer.addModel(xyzText, "xyz");
@@ -2875,7 +2883,9 @@ function energyGraphDestroyViewer() {
   disposeViewerFraming(energyGraphState.structureFraming);
   if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
   if (energyGraphState.viewer) {
-    ACPVisualization.mol3d.destroy(energyGraphState.viewer);
+    // dispose() is idempotent: clearScene + destroyImpl run exactly once,
+    // tokens/callbacks die immediately; a re-entry after nulling is a no-op.
+    energyGraphState.viewer.dispose();
     energyGraphState.viewer = null;
   }
   energyGraphState.loadedFrameIndex = null;

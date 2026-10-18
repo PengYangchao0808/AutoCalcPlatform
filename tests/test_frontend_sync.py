@@ -87,10 +87,10 @@ _SP_JS = FRONTEND_JS_DIR / "structure_source_picker.js"
 
 
 def viewer_creation_site_count() -> int:
-    """Pin the five scene creation sites — all route through the shared
+    """Pin the four scene creation sites — all route through the shared
     ACPVisualization.mol3d adapter (FE-09). The regex also accepts the legacy
     raw $3Dmol.createViewer form so a regression would still be counted
-    (and fail the == 5 budget pins below)."""
+    (and fail the == 4 budget pins below)."""
     source = "\n".join(path.read_text(encoding="utf-8")
                        for path in (FRONTEND_WORKBENCH_JS_DIR / "features").glob("*.js"))
     return len(re.findall(r"(?:\$3Dmol\.createViewer|ACPVisualization\.mol3d\.create)\(", source))
@@ -6850,7 +6850,8 @@ def test_shared_geometry_loader_contract() -> None:
     # Adding another instance requires a deliberate update here.
     # FE-04 slice 1: legacy S2 modal viewers (s2scanState.viewer/resultViewer)
     # removed with the dead s2scan panels — budget dropped 8 -> 5.
-    assert viewer_creation_site_count() == 5, "viewer instance count changed"
+    # T9: energy preview migrated to the bounded scene instance — 5 -> 4.
+    assert viewer_creation_site_count() == 4, "viewer instance count changed"
 
     # reaction/preview viewer creation converged on the shared mol3d adapter
     # (FE-09); creation options stay pinned by module_tests/viz_framing.test.js.
@@ -12737,11 +12738,12 @@ def test_picker_set_source_group_exists() -> None:
 
 
 def test_wizard_create_viewer_count_pinned() -> None:
-    """Viewer creation sites pinned at 5 (FE-04 slice 1: legacy S2 modal
-    viewers removed from the 8-instance budget)."""
+    """Viewer creation sites pinned at 4 (FE-04 slice 1: legacy S2 modal
+    viewers removed from the 8-instance budget; T9: energy preview migrated
+    to the bounded scene instance)."""
     html = read_workbench_content()
     count = viewer_creation_site_count()
-    assert count == 5, f"Expected exactly 5 viewer creation calls, found {count}"
+    assert count == 4, f"Expected exactly 4 viewer creation calls, found {count}"
 
 
 def test_no_standalone_s2scan_modal() -> None:
@@ -12891,7 +12893,7 @@ class TestTaskInputWorkspace:
     def test_create_viewer_count_pinned(self) -> None:
         html = self._html()
         count = viewer_creation_site_count()
-        assert count == 5, f"Expected exactly 5 viewer creation calls, found {count}"
+        assert count == 4, f"Expected exactly 4 viewer creation calls, found {count}"
 
     def test_candidate_api_preserved_and_used(self) -> None:
         # FE-07b: candidateApi is a transport delegation shim; the .status
