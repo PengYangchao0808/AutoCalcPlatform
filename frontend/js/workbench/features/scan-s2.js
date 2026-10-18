@@ -13,8 +13,6 @@ var s2scanState = {
   atoms: [],
   selA: null,
   selB: null,
-  viewer: null,
-  resultViewer: null,
   model: null,
   lineShape: null,
   selSpheres: [],
@@ -48,7 +46,6 @@ function s2scanResetState() {
   disposeViewerFraming(s2scanState.previewFraming);
   disposeViewerFraming(s2scanState.bondFraming);
   disposeViewerFraming(s2scanState.resultFraming);
-  if (s2scanState.viewer) { try { s2scanState.viewer.clear(); } catch(e){} s2scanState.viewer = null; }
   s2scanState.step = 1;
   s2scanState.sourceType = "task_artifact";
   s2scanState.sourcePreview = null;
@@ -62,8 +59,6 @@ function s2scanResetState() {
   s2scanState.atoms = [];
   s2scanState.selA = null;
   s2scanState.selB = null;
-  s2scanState.viewer = null;
-  s2scanState.resultViewer = null;
   s2scanState.model = null;
   s2scanState.lineShape = null;
   s2scanState.selSpheres = [];

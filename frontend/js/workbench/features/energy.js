@@ -4651,6 +4651,3 @@ async function renderMechanismTab(job, tab) {
   return renderMechanismTabFromCache(tab);
 }
 
-// Retained for the SR display path, which still calls this legacy hook.
-function updateSrPickButtons() { /* retired */ }
-

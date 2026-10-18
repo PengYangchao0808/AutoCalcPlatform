@@ -148,7 +148,6 @@ module.exports.register = async function (h) {
           lockedPayload: null,
           editMode: true,
           manualEdits: (extra && extra.manualEdits) || [],
-          allowZeroChanges: false,
         }) + ";",
         sandbox
       );
