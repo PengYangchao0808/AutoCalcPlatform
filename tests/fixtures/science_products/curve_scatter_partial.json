@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "product_kind": "curve_scatter",
+  "identity": {
+    "product_kind": "curve_scatter",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "input_digest": "sha256:aa5ec339e8112b7ad4b9ad406901d2ffc75a26a51352b39d501dfbe2e442fd55",
+    "algorithm": "curve_scatter",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "available",
+  "complete": false,
+  "errors": [],
+  "payload": {
+    "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+    },
+    "series": [
+      {
+        "series_id": "curve_scatter:series:scan_energy",
+        "x_unit": "angstrom-or-degree",
+        "y_unit": "hartree",
+        "reference_frame": {
+          "axes": "cartesian",
+          "origin": "native_input"
+        },
+        "label": "",
+        "points": [
+          {
+            "point_id": "curve_scatter:series:scan_energy:point:0",
+            "x": 1.0,
+            "y": -114.5,
+            "source": {
+              "source_kind": "orca_output",
+              "artifact": "RESULT/trajectories/scan.json",
+              "native_index": 0,
+              "location": "trajectory"
+            }
+          },
+          {
+            "point_id": "curve_scatter:series:scan_energy:point:1",
+            "missing_reason": "missing_point_values",
+            "source": {
+              "source_kind": "orca_output",
+              "artifact": "RESULT/trajectories/scan.json",
+              "native_index": 1,
+              "location": "trajectory"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

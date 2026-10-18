@@ -48,28 +48,47 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TypeAlias
+from typing import TypeAlias, TypeVar, cast
 
 from cccp.calculation.contracts import (
     JsonObject,
+    JsonValue,
     ensure_finite_json_number,
+    parse_float_strict,
     parse_int_strict,
     parse_str_strict,
+    parse_str_tuple_strict,
 )
 from cccp.calculation.errors import TaskInputError
 
+#: Unit string for ORCA normal-mode displacements (verbatim from the frozen
+#: unit table ``tests/baseline/cccp_calculation_goldens/unit_strings.json``).
+DISPLACEMENT_UNITS = "dimensionless_orca_normal_mode"
+#: Normalization convention of ORCA normal-mode vectors: they are the Cartesian
+#: displacements weighted by ``M(i,i)=1/sqrt(m[i])`` — *normalized but not
+#: orthogonal* (verbatim from ORCA's NORMAL MODES header).
+DISPLACEMENT_NORMALIZATION = "mass_weighted_normalized_not_orthogonal"
+
 __all__ = [
+    "DISPLACEMENT_NORMALIZATION",
+    "DISPLACEMENT_UNITS",
     "LEGACY_PRODUCT_SCHEMA_VERSION",
+    "PRODUCT_PAYLOAD_TYPES",
     "PRODUCT_SCHEMA_VERSION",
     "CoordinateAtom",
     "CoordinateUnits",
+    "CurveScatterPayload",
+    "CurveSeries",
+    "DerivedPayload",
     "EnergyUnits",
     "FrameRecord",
     "FrequencyUnits",
     "MissingReason",
     "PointRecord",
+    "ProductIODatum",
     "ProductIdentity",
     "ProductKind",
+    "ProductParameter",
     "ProductPayload",
     "ProductSchemaError",
     "ProductState",
@@ -78,6 +97,8 @@ __all__ = [
     "SeriesRef",
     "SourceRef",
     "StructureTrajectoryPayload",
+    "VibrationMode",
+    "VibrationPayload",
     "compute_input_digest",
     "frame_stable_id",
     "point_stable_id",
@@ -105,12 +126,14 @@ class ProductSchemaError(TaskInputError):
 class ProductKind(str, Enum):
     """Closed union of science-product kinds.
 
-    ``todo 12`` extends this with ``curve`` / ``vibration`` / ``derived``
-    kinds; each new kind must register a
+    Each kind registers a
     :class:`~cccp.calculation.products.registry.ProductSpec`.
     """
 
     STRUCTURE_TRAJECTORY = "structure_trajectory"
+    CURVE_SCATTER = "curve_scatter"
+    VIBRATION = "vibration"
+    DERIVED = "derived"
 
 
 class ProductState(str, Enum):
@@ -146,6 +169,12 @@ class MissingReason(str, Enum):
     MISSING_ATOM_UID = "missing_atom_uid"
     MISSING_ELEMENT = "missing_element"
     MISSING_COORDINATES = "missing_coordinates"
+    # Curve/scatter item level.
+    MISSING_SERIES = "missing_series"
+    MISSING_POINT_VALUES = "missing_point_values"
+    # Vibration item level.
+    MISSING_FREQUENCY = "missing_frequency"
+    MISSING_DISPLACEMENTS = "missing_displacements"
 
 
 class CoordinateUnits(str, Enum):
@@ -378,6 +407,36 @@ class PointRecord:
         if self.source is not None:
             payload["source"] = self.source.to_dict()
         return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> PointRecord:
+        """Parse strictly; a point carrying a reason must not also carry x/y."""
+        if not isinstance(payload, Mapping):
+            message = "point entry must be a mapping"
+            raise ProductSchemaError(message)
+        point_id = parse_str_strict(payload, "point_id")
+        if point_id is None:
+            message = "point.point_id is required"
+            raise ProductSchemaError(message)
+        source = SourceRef.from_dict(payload.get("source"))
+        raw_reason = payload.get("missing_reason")
+        if raw_reason is not None:
+            try:
+                reason = MissingReason(raw_reason)
+            except ValueError as exc:
+                allowed = ", ".join(member.value for member in MissingReason)
+                message = f"point.missing_reason must be one of: {allowed}; got {raw_reason!r}"
+                raise ProductSchemaError(message) from exc
+            if "x" in payload or "y" in payload:
+                message = "a point with missing_reason must not carry x/y values"
+                raise ProductSchemaError(message)
+            return cls(point_id=point_id, source=source, missing_reason=reason)
+        x = parse_float_strict(payload, "x")
+        y = parse_float_strict(payload, "y")
+        if x is None or y is None:
+            message = "an available point requires both x and y"
+            raise ProductSchemaError(message)
+        return cls(point_id=point_id, x=x, y=y, source=source)
 
 
 # ── product identity ────────────────────────────────────────────────────
@@ -647,9 +706,618 @@ class StructureTrajectoryPayload:
         }
 
 
-#: Union of product payloads.  ``todo 12`` widens this with the
-#: curve/scatter, vibration and derived-product payloads.
-ProductPayload: TypeAlias = StructureTrajectoryPayload
+def _parse_vector(value: object, label: str) -> tuple[float, float, float]:
+    """Parse a strict finite 3-vector, raising :class:`ProductSchemaError`."""
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        message = f"{label} must be a 3-vector"
+        raise ProductSchemaError(message)
+    try:
+        return (
+            ensure_finite_json_number(value[0], f"{label}[0]"),
+            ensure_finite_json_number(value[1], f"{label}[1]"),
+            ensure_finite_json_number(value[2], f"{label}[2]"),
+        )
+    except TaskInputError as exc:
+        raise ProductSchemaError(str(exc)) from exc
+
+
+def _parse_reason(value: object, label: str) -> MissingReason:
+    """Parse a strict :class:`MissingReason` value."""
+    return _parse_enum(MissingReason, value, label)
+
+
+_E = TypeVar("_E", bound=Enum)
+
+
+def _parse_enum(enum_cls: type[_E], value: object, label: str) -> _E:
+    """Parse a strict enum member by value."""
+    if not isinstance(value, str):
+        message = f"{label} must be a string, got {type(value).__name__}"
+        raise ProductSchemaError(message)
+    try:
+        return enum_cls(value)
+    except ValueError as exc:
+        allowed = ", ".join(member.value for member in enum_cls)
+        message = f"{label} must be one of: {allowed}; got {value!r}"
+        raise ProductSchemaError(message) from exc
+
+
+def _parse_parameters(value: object) -> tuple[ProductParameter, ...]:
+    """Parse a strict list of :class:`ProductParameter`."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        message = "parameters must be a list"
+        raise ProductSchemaError(message)
+    return tuple(ProductParameter.from_dict(entry) for entry in value)
+
+
+def _parse_io(value: object) -> tuple[ProductIODatum, ...]:
+    """Parse a strict list of :class:`ProductIODatum`."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        message = "raw_io must be a list"
+        raise ProductSchemaError(message)
+    return tuple(ProductIODatum.from_dict(entry) for entry in value)
+
+
+def _parse_required_source(value: object, label: str) -> SourceRef:
+    """Parse a required :class:`SourceRef` (a null entry is corrupt)."""
+    source = SourceRef.from_dict(value)
+    if source is None:
+        message = f"{label} is required"
+        raise ProductSchemaError(message)
+    return source
+
+
+# ── program-specific parameters / raw I/O (kept with products) ──────────
+
+
+@dataclass(frozen=True, slots=True)
+class ProductParameter:
+    """One typed program-specific parameter kept with a product.
+
+    The value is the caller's JSON-safe payload, deliberately not coerced, so
+    a downstream consumer sees exactly the option that produced the product.
+    """
+
+    name: str
+    value: object = None
+    unit: str = ""
+    source: SourceRef | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            message = "parameter.name must be a non-empty string"
+            raise ProductSchemaError(message)
+        object.__setattr__(self, "unit", str(self.unit))
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"name": self.name}
+        if self.unit:
+            payload["unit"] = self.unit
+        if self.value is not None:
+            payload["value"] = cast("JsonValue", self.value)
+        if self.source is not None:
+            payload["source"] = self.source.to_dict()
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> ProductParameter:
+        """Parse strictly; ``name`` is required."""
+        if not isinstance(payload, Mapping):
+            message = "parameter entry must be a mapping"
+            raise ProductSchemaError(message)
+        name = parse_str_strict(payload, "name")
+        if name is None:
+            message = "parameter.name is required"
+            raise ProductSchemaError(message)
+        return cls(
+            name=name,
+            value=payload.get("value"),
+            unit=parse_str_strict(payload, "unit") or "",
+            source=SourceRef.from_dict(payload.get("source")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProductIODatum:
+    """One raw input/output datum kept with a derived product."""
+
+    name: str
+    role: str = "input"
+    value: object = None
+    source: SourceRef | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            message = "io.name must be a non-empty string"
+            raise ProductSchemaError(message)
+        role = str(self.role)
+        if role not in ("input", "output"):
+            message = "io.role must be 'input' or 'output'"
+            raise ProductSchemaError(message)
+        object.__setattr__(self, "role", role)
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"name": self.name, "role": self.role}
+        if self.value is not None:
+            payload["value"] = cast("JsonValue", self.value)
+        if self.source is not None:
+            payload["source"] = self.source.to_dict()
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> ProductIODatum:
+        """Parse strictly; ``name`` and ``role`` are required."""
+        if not isinstance(payload, Mapping):
+            message = "io entry must be a mapping"
+            raise ProductSchemaError(message)
+        name = parse_str_strict(payload, "name")
+        role = parse_str_strict(payload, "role")
+        if name is None or role is None:
+            message = "io entry requires both 'name' and 'role'"
+            raise ProductSchemaError(message)
+        return cls(
+            name=name,
+            role=role,
+            value=payload.get("value"),
+            source=SourceRef.from_dict(payload.get("source")),
+        )
+
+
+# ── curve / scatter product ─────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class CurveSeries:
+    """One curve/scatter series: units, reference frame and its points."""
+
+    ref: SeriesRef
+    points: tuple[PointRecord, ...] = ()
+    source: SourceRef | None = None
+    missing_reason: MissingReason | None = None
+    parameters: tuple[ProductParameter, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.ref, SeriesRef):
+            message = "curve series requires a SeriesRef"
+            raise ProductSchemaError(message)
+        object.__setattr__(self, "points", tuple(self.points))
+        object.__setattr__(self, "parameters", tuple(self.parameters))
+        if self.missing_reason is not None:
+            object.__setattr__(self, "missing_reason", MissingReason(self.missing_reason))
+            if self.points:
+                message = "a series with missing_reason must not carry points"
+                raise ProductSchemaError(message)
+        elif not self.ref.x_unit or not self.ref.y_unit:
+            message = "an available series requires explicit x_unit and y_unit"
+            raise ProductSchemaError(message)
+        seen: set[str] = set()
+        for point in self.points:
+            if point.point_id in seen:
+                message = f"duplicate point_id {point.point_id!r}"
+                raise ProductSchemaError(message)
+            seen.add(point.point_id)
+
+    @property
+    def available(self) -> bool:
+        """Whether this series carries points (as opposed to a reason)."""
+        return self.missing_reason is None
+
+    def is_complete(self) -> bool:
+        """Whether the series and every point carry values."""
+        return self.available and all(point.available for point in self.points)
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict (SeriesRef fields flattened in)."""
+        payload = self.ref.to_dict()
+        payload["points"] = [point.to_dict() for point in self.points]
+        if self.parameters:
+            payload["parameters"] = [parameter.to_dict() for parameter in self.parameters]
+        if self.source is not None:
+            payload["source"] = self.source.to_dict()
+        if self.missing_reason is not None:
+            payload["missing_reason"] = self.missing_reason.value
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> CurveSeries:
+        """Parse strictly; a series id and, when available, explicit units."""
+        if not isinstance(payload, Mapping):
+            message = "curve series must be a mapping"
+            raise ProductSchemaError(message)
+        ref = SeriesRef.from_dict(payload)
+        raw_points = payload.get("points")
+        if raw_points is None:
+            raw_points = []
+        if not isinstance(raw_points, list):
+            message = "series.points must be a list"
+            raise ProductSchemaError(message)
+        raw_reason = payload.get("missing_reason")
+        missing_reason = (
+            None if raw_reason is None else _parse_reason(raw_reason, "series.missing_reason")
+        )
+        return cls(
+            ref=ref,
+            points=tuple(PointRecord.from_dict(entry) for entry in raw_points),
+            source=SourceRef.from_dict(payload.get("source")),
+            missing_reason=missing_reason,
+            parameters=_parse_parameters(payload.get("parameters")),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CurveScatterPayload:
+    """Curve/scatter payload: x/y, units, reference frame and source mapping."""
+
+    series: tuple[CurveSeries, ...] = ()
+    reference_frame: ReferenceFrame = field(default_factory=ReferenceFrame)
+    parameters: tuple[ProductParameter, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "series", tuple(self.series))
+        object.__setattr__(self, "parameters", tuple(self.parameters))
+        seen: set[str] = set()
+        for entry in self.series:
+            if entry.ref.series_id in seen:
+                message = f"duplicate series_id {entry.ref.series_id!r}"
+                raise ProductSchemaError(message)
+            seen.add(entry.ref.series_id)
+
+    def is_complete(self) -> bool:
+        """Whether every series and point carries values."""
+        return all(entry.is_complete() for entry in self.series)
+
+    def missing_series(self) -> tuple[CurveSeries, ...]:
+        """Series that carry an explicit missing reason."""
+        return tuple(entry for entry in self.series if entry.missing_reason is not None)
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "reference_frame": self.reference_frame.to_dict(),
+            "series": [entry.to_dict() for entry in self.series],
+        }
+        if self.parameters:
+            payload["parameters"] = [parameter.to_dict() for parameter in self.parameters]
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> CurveScatterPayload:
+        """Parse strictly; every series and point is validated eagerly."""
+        if not isinstance(payload, Mapping):
+            message = "payload must be a mapping"
+            raise ProductSchemaError(message)
+        raw_series = payload.get("series")
+        if raw_series is None:
+            raw_series = []
+        if not isinstance(raw_series, list):
+            message = "payload.series must be a list"
+            raise ProductSchemaError(message)
+        return cls(
+            series=tuple(CurveSeries.from_dict(entry) for entry in raw_series),
+            reference_frame=ReferenceFrame.from_dict(payload.get("reference_frame")),
+            parameters=_parse_parameters(payload.get("parameters")),
+        )
+
+
+# ── vibration product ───────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class VibrationMode:
+    """One vibrational mode, keyed by ORCA's *native* mode index.
+
+    ``mode_index`` is never renumbered or compacted: zero modes are retained
+    so a consumer maps a mode straight back to the source output.
+    """
+
+    mode_index: int
+    frequency: float | None = None
+    imaginary: bool = False
+    displacements: tuple[tuple[float, float, float], ...] = ()
+    ir_intensity: float | None = None
+    source: SourceRef | None = None
+    missing_reason: MissingReason | None = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.mode_index, bool) or not isinstance(self.mode_index, int):
+            message = "mode_index must be an int"
+            raise ProductSchemaError(message)
+        if self.mode_index < 0:
+            message = "mode_index must be non-negative"
+            raise ProductSchemaError(message)
+        object.__setattr__(self, "mode_index", int(self.mode_index))
+        if self.frequency is not None:
+            object.__setattr__(
+                self,
+                "frequency",
+                _finite(self.frequency, "mode.frequency"),
+            )
+        if self.ir_intensity is not None:
+            object.__setattr__(
+                self,
+                "ir_intensity",
+                _finite(self.ir_intensity, "mode.ir_intensity"),
+            )
+        object.__setattr__(
+            self,
+            "displacements",
+            tuple(
+                _parse_vector(row, f"mode.displacements[{i}]")
+                for i, row in enumerate(self.displacements)
+            ),
+        )
+        object.__setattr__(self, "imaginary", self.frequency is not None and self.frequency < 0.0)
+        if self.missing_reason is not None:
+            object.__setattr__(self, "missing_reason", MissingReason(self.missing_reason))
+            if (
+                self.missing_reason is MissingReason.MISSING_FREQUENCY
+                and self.frequency is not None
+            ):
+                message = "a mode with missing_frequency must not carry a frequency"
+                raise ProductSchemaError(message)
+            if self.missing_reason is MissingReason.MISSING_DISPLACEMENTS and self.displacements:
+                message = "a mode with missing_displacements must not carry displacements"
+                raise ProductSchemaError(message)
+        else:
+            if self.frequency is None:
+                message = "an available mode requires a frequency"
+                raise ProductSchemaError(message)
+            if not self.displacements:
+                message = "an available mode requires displacement vectors"
+                raise ProductSchemaError(message)
+
+    @property
+    def available(self) -> bool:
+        """Whether this mode carries both a frequency and displacements."""
+        return self.missing_reason is None
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {"mode_index": self.mode_index}
+        if self.missing_reason is not None:
+            payload["missing_reason"] = self.missing_reason.value
+        if self.frequency is not None:
+            payload["frequency"] = self.frequency
+            payload["imaginary"] = self.imaginary
+        if self.displacements:
+            payload["displacements"] = [[float(c) for c in row] for row in self.displacements]
+        if self.ir_intensity is not None:
+            payload["ir_intensity"] = self.ir_intensity
+        if self.source is not None:
+            payload["source"] = self.source.to_dict()
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> VibrationMode:
+        """Parse strictly; ``mode_index`` is required (native numbering)."""
+        if not isinstance(payload, Mapping):
+            message = "mode entry must be a mapping"
+            raise ProductSchemaError(message)
+        mode_index = parse_int_strict(payload, "mode_index")
+        if mode_index is None:
+            message = "mode.mode_index is required (native numbering)"
+            raise ProductSchemaError(message)
+        raw_reason = payload.get("missing_reason")
+        reason = None if raw_reason is None else _parse_reason(raw_reason, "mode.missing_reason")
+        raw_disp = payload.get("displacements")
+        displacements: tuple[tuple[float, float, float], ...] = ()
+        if raw_disp is not None:
+            if not isinstance(raw_disp, list):
+                message = "mode.displacements must be a list"
+                raise ProductSchemaError(message)
+            displacements = tuple(
+                _parse_vector(row, f"mode.displacements[{i}]") for i, row in enumerate(raw_disp)
+            )
+        return cls(
+            mode_index=mode_index,
+            frequency=parse_float_strict(payload, "frequency"),
+            displacements=displacements,
+            ir_intensity=parse_float_strict(payload, "ir_intensity"),
+            source=SourceRef.from_dict(payload.get("source")),
+            missing_reason=reason,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class VibrationPayload:
+    """Vibration payload: native mode numbering + units + atom identity + vectors."""
+
+    frequency_units: FrequencyUnits
+    displacement_units: str
+    displacement_normalization: str
+    atom_order: tuple[str, ...] = ()
+    modes: tuple[VibrationMode, ...] = ()
+    topology_source: str = ""
+    reference_frame: ReferenceFrame = field(default_factory=ReferenceFrame)
+    parameters: tuple[ProductParameter, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "frequency_units", FrequencyUnits(self.frequency_units))
+        if not isinstance(self.displacement_units, str) or not self.displacement_units.strip():
+            message = "displacement_units must be a non-empty string"
+            raise ProductSchemaError(message)
+        if (
+            not isinstance(self.displacement_normalization, str)
+            or not self.displacement_normalization.strip()
+        ):
+            message = "displacement_normalization must be a non-empty string"
+            raise ProductSchemaError(message)
+        object.__setattr__(self, "atom_order", tuple(str(uid) for uid in self.atom_order))
+        object.__setattr__(self, "modes", tuple(self.modes))
+        object.__setattr__(self, "parameters", tuple(self.parameters))
+        previous = -1
+        for mode in self.modes:
+            if mode.mode_index <= previous:
+                message = "modes must be in strictly ascending native mode order (never renumbered)"
+                raise ProductSchemaError(message)
+            previous = mode.mode_index
+        if self.modes and not self.atom_order:
+            message = "atom_order is required when modes are present (atom identity)"
+            raise ProductSchemaError(message)
+        for mode in self.modes:
+            if mode.available and len(mode.displacements) != len(self.atom_order):
+                message = (
+                    f"mode {mode.mode_index} displacements must align with atom_order "
+                    f"({len(mode.displacements)} != {len(self.atom_order)})"
+                )
+                raise ProductSchemaError(message)
+
+    def is_complete(self) -> bool:
+        """Whether every mode carries a frequency and aligned displacements."""
+        return all(mode.available for mode in self.modes)
+
+    def missing_modes(self) -> tuple[VibrationMode, ...]:
+        """Modes that carry an explicit missing reason."""
+        return tuple(mode for mode in self.modes if mode.missing_reason is not None)
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "frequency_units": self.frequency_units.value,
+            "displacement_units": self.displacement_units,
+            "displacement_normalization": self.displacement_normalization,
+            "atom_order": list(self.atom_order),
+            "topology_source": self.topology_source,
+            "reference_frame": self.reference_frame.to_dict(),
+            "modes": [mode.to_dict() for mode in self.modes],
+        }
+        if self.parameters:
+            payload["parameters"] = [parameter.to_dict() for parameter in self.parameters]
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> VibrationPayload:
+        """Parse strictly; units, atom order and native mode order are enforced."""
+        if not isinstance(payload, Mapping):
+            message = "payload must be a mapping"
+            raise ProductSchemaError(message)
+        units_value = payload.get("frequency_units")
+        if units_value is None:
+            message = "payload.frequency_units is required (no implicit default)"
+            raise ProductSchemaError(message)
+        frequency_units = _parse_enum(FrequencyUnits, units_value, "payload.frequency_units")
+        displacement_units = parse_str_strict(payload, "displacement_units")
+        if not displacement_units:
+            message = "payload.displacement_units is required (no implicit default)"
+            raise ProductSchemaError(message)
+        normalization = parse_str_strict(payload, "displacement_normalization")
+        if not normalization:
+            message = "payload.displacement_normalization is required (no implicit default)"
+            raise ProductSchemaError(message)
+        raw_modes = payload.get("modes")
+        if raw_modes is None:
+            raw_modes = []
+        if not isinstance(raw_modes, list):
+            message = "payload.modes must be a list"
+            raise ProductSchemaError(message)
+        return cls(
+            frequency_units=frequency_units,
+            displacement_units=displacement_units,
+            displacement_normalization=normalization,
+            atom_order=parse_str_tuple_strict(payload, "atom_order"),
+            modes=tuple(VibrationMode.from_dict(entry) for entry in raw_modes),
+            topology_source=parse_str_strict(payload, "topology_source") or "",
+            reference_frame=ReferenceFrame.from_dict(payload.get("reference_frame")),
+            parameters=_parse_parameters(payload.get("parameters")),
+        )
+
+
+# ── derived product ─────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class DerivedPayload:
+    """Derived-product payload: source mapping, versions and kept parameters/I-O.
+
+    ``sources`` is the mapping back to the products this one was derived from
+    and ``source_versions`` records each source's version so the derivation is
+    reproducible.  Raw I/O and typed program-specific parameters are kept in
+    ``raw_io`` / ``parameters`` rather than being dropped.
+    """
+
+    sources: tuple[SourceRef, ...] = ()
+    source_versions: tuple[str, ...] = ()
+    parameters: tuple[ProductParameter, ...] = ()
+    raw_io: tuple[ProductIODatum, ...] = ()
+    reference_frame: ReferenceFrame = field(default_factory=ReferenceFrame)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sources", tuple(self.sources))
+        object.__setattr__(self, "source_versions", tuple(str(v) for v in self.source_versions))
+        object.__setattr__(self, "parameters", tuple(self.parameters))
+        object.__setattr__(self, "raw_io", tuple(self.raw_io))
+        if self.sources and self.source_versions and len(self.sources) != len(self.source_versions):
+            message = "source_versions must align one-to-one with sources"
+            raise ProductSchemaError(message)
+
+    def is_complete(self) -> bool:
+        """Whether every source has a recorded version."""
+        return bool(self.sources) and len(self.source_versions) == len(self.sources)
+
+    def to_dict(self) -> JsonObject:
+        """Serialise to a JSON-safe dict."""
+        payload: JsonObject = {
+            "sources": [source.to_dict() for source in self.sources],
+            "source_versions": list(self.source_versions),
+            "reference_frame": self.reference_frame.to_dict(),
+        }
+        if self.parameters:
+            payload["parameters"] = [parameter.to_dict() for parameter in self.parameters]
+        if self.raw_io:
+            payload["raw_io"] = [entry.to_dict() for entry in self.raw_io]
+        return payload
+
+    @classmethod
+    def from_dict(cls, payload: object | None) -> DerivedPayload:
+        """Parse strictly; each source and version is validated."""
+        if not isinstance(payload, Mapping):
+            message = "payload must be a mapping"
+            raise ProductSchemaError(message)
+        raw_sources = payload.get("sources")
+        if raw_sources is None:
+            raw_sources = []
+        if not isinstance(raw_sources, list):
+            message = "payload.sources must be a list"
+            raise ProductSchemaError(message)
+        return cls(
+            sources=tuple(
+                _parse_required_source(entry, f"payload.sources[{i}]")
+                for i, entry in enumerate(raw_sources)
+            ),
+            source_versions=parse_str_tuple_strict(payload, "source_versions"),
+            parameters=_parse_parameters(payload.get("parameters")),
+            raw_io=_parse_io(payload.get("raw_io")),
+            reference_frame=ReferenceFrame.from_dict(payload.get("reference_frame")),
+        )
+
+
+def _finite(value: object, label: str) -> float:
+    """Return a finite float or raise :class:`ProductSchemaError`."""
+    try:
+        return ensure_finite_json_number(value, label)
+    except TaskInputError as exc:
+        raise ProductSchemaError(str(exc)) from exc
+
+
+#: Union of product payloads: structure/trajectory, curve/scatter, vibration
+#: and derived products.
+ProductPayload: TypeAlias = (
+    StructureTrajectoryPayload | CurveScatterPayload | VibrationPayload | DerivedPayload
+)
+
+#: Runtime tuple used for ``isinstance`` validation of :attr:`ScienceProduct.payload`.
+PRODUCT_PAYLOAD_TYPES: tuple[type, ...] = (
+    StructureTrajectoryPayload,
+    CurveScatterPayload,
+    VibrationPayload,
+    DerivedPayload,
+)
 
 
 # ── envelope ────────────────────────────────────────────────────────────
@@ -692,7 +1360,7 @@ class ScienceProduct:
         object.__setattr__(self, "complete", bool(self.complete))
         object.__setattr__(self, "errors", tuple(str(e) for e in self.errors))
         object.__setattr__(self, "migrations", tuple(str(m) for m in self.migrations))
-        if self.payload is not None and not isinstance(self.payload, StructureTrajectoryPayload):
+        if self.payload is not None and not isinstance(self.payload, PRODUCT_PAYLOAD_TYPES):
             message = f"unsupported payload type {type(self.payload).__name__}"
             raise ProductSchemaError(message)
         if self.missing_reason is not None:
@@ -759,7 +1427,7 @@ class ScienceProduct:
         cls,
         *,
         identity: ProductIdentity,
-        payload: StructureTrajectoryPayload,
+        payload: ProductPayload,
         migrations: Sequence[str] = (),
     ) -> ScienceProduct:
         """Build an available product, deriving ``complete`` from the payload."""

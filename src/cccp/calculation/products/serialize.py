@@ -38,16 +38,20 @@ from cccp.calculation.products.contracts import (
     PRODUCT_SCHEMA_VERSION,
     CoordinateAtom,
     CoordinateUnits,
+    CurveScatterPayload,
+    DerivedPayload,
     FrameRecord,
     MissingReason,
     ProductIdentity,
     ProductKind,
+    ProductPayload,
     ProductSchemaError,
     ProductState,
     ReferenceFrame,
     ScienceProduct,
     SourceRef,
     StructureTrajectoryPayload,
+    VibrationPayload,
     compute_input_digest,
     frame_stable_id,
 )
@@ -158,13 +162,10 @@ def _parse_v1(payload: Mapping[str, object]) -> ScienceProduct:
     if raw_reason is not None:
         missing_reason = _enum(MissingReason, raw_reason, "product.missing_reason")
 
-    payload_dict: StructureTrajectoryPayload | None = None
+    payload_dict: ProductPayload | None = None
     raw_payload = payload.get("payload")
     if raw_payload is not None:
-        if kind is not ProductKind.STRUCTURE_TRAJECTORY:
-            message = f"no payload parser registered for product_kind {kind.value!r}"
-            raise ProductSchemaError(message)
-        payload_dict = _parse_structure_trajectory(_as_mapping(raw_payload, "product.payload"))
+        payload_dict = _parse_payload(kind, _as_mapping(raw_payload, "product.payload"))
 
     return ScienceProduct(
         identity=identity,
@@ -175,6 +176,20 @@ def _parse_v1(payload: Mapping[str, object]) -> ScienceProduct:
         errors=errors,
         migrations=migrations,
     )
+
+
+def _parse_payload(kind: ProductKind, raw: Mapping[str, object]) -> ProductPayload:
+    """Dispatch a payload document to its kind-specific strict parser."""
+    if kind is ProductKind.STRUCTURE_TRAJECTORY:
+        return _parse_structure_trajectory(raw)
+    if kind is ProductKind.CURVE_SCATTER:
+        return CurveScatterPayload.from_dict(raw)
+    if kind is ProductKind.VIBRATION:
+        return VibrationPayload.from_dict(raw)
+    if kind is ProductKind.DERIVED:
+        return DerivedPayload.from_dict(raw)
+    message = f"no payload parser registered for product_kind {kind.value!r}"
+    raise ProductSchemaError(message)
 
 
 def _parse_structure_trajectory(raw: Mapping[str, object]) -> StructureTrajectoryPayload:
