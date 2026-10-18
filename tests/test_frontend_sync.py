@@ -129,7 +129,9 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     for action in ("pause", "unpause", "continue", "rerun", "purge"):
         assert f'"/jobs/" + encodeURIComponent(jobId) + "/{action}"' in html or action in html
     assert "/jobs/" in html and "/detail" in html
-    assert html.count("function updateSrPickButtons()") == 1
+    assert "updateSrPickButtons" not in html, (
+        "T25: the retired SR pick hook (empty stub + its setMode caller) must stay removed"
+    )
     assert 'serviceStatus === "ok"' in html
     assert 'if (!response.ok)' in html
     assert 'await api("/method-catalog")' in html
@@ -12844,20 +12846,18 @@ def test_add_model_result_restricted_methods_pin() -> None:
 
 
 def test_scan_s2_dead_viewer_fields_pin() -> None:
-    """T15 pin for T25: s2scanState.viewer / s2scanState.resultViewer are dead
-    fields (F-⑥-1) — declared and nulled, never created and never consumed
-    (save the single guarded clear). Records the pending T25 cleanup and fails
-    if a creation point or a new consumer reappears first."""
+    """T25 closure of the T15 pin: the dead s2scanState.viewer /
+    s2scanState.resultViewer fields (F-⑥-1, declared and nulled but never
+    created and never consumed) were removed together with their single
+    guarded clear. The fields must not be reintroduced without a creation
+    site, a real consumer, and a deliberate update of this pin."""
     src = (FRONTEND_WORKBENCH_JS_DIR / "features" / "scan-s2.js").read_text(encoding="utf-8")
-    assert "viewer: null" in src and "resultViewer: null" in src, (
-        "dead viewer fields must stay declared"
-    )
-    assigns = re.findall(r"s2scanState\.(?:resultViewer|viewer)\s*=\s*(.+?);", src)
-    non_null = [a.strip() for a in assigns if a.strip() != "null"]
-    assert non_null == [], f"dead viewer fields must have no creation point until T25: {non_null}"
-    assert src.count("s2scanState.viewer.clear()") == 1, (
-        "the guarded dead-field clear is the only consumer"
-    )
+    assert "resultViewer" not in src, "removed dead field resultViewer must not reappear"
+    assert "viewer: null" not in src, "removed dead field viewer must not reappear"
+    assert "s2scanState.viewer" not in src, "no s2scanState.viewer read/write may reappear"
+    assert "s2scanState.viewer.clear()" not in src, "the dead guarded clear must stay deleted"
+    for name in ("s2scanDist", "s2scanAngle", "s2scanDihedral", "s2scanResetState"):
+        assert f"function {name}(" in src, f"{name} must stay defined in scan-s2.js"
 
 
 def test_no_standalone_s2scan_modal() -> None:

@@ -29,7 +29,6 @@ function createReactionDefinitionState() {
     lockedPayload: null,
     editMode: false,   // manual bond edit mode (reactant-view atom picking)
     manualEdits: [],   // [{atoms:[i,j], type:'form'|'break'}] — 0-based reactant indices
-    allowZeroChanges: false, // manual mode: "no bond changes in this reaction" ack
   };
 }
 
@@ -198,18 +197,6 @@ function getEffectiveBondChanges(state) {
     if (!consumedManualKeys[key]) out.push(buildManualChangeEntry(state, edit));
   });
   return out;
-}
-
-// Space-aware payload: each entry carries EITHER reactant_atoms (side
-// "reactant") OR product_atoms (side "product") plus its change_type.
-function buildManualBondChangesPayload(state) {
-  if (!hasManualBondEdits(state)) return null;
-  return state.manualEdits.map(function(edit) {
-    var entry = { change_type: edit.type };
-    if (edit.side === "product") entry.product_atoms = [edit.atoms[0], edit.atoms[1]];
-    else entry.reactant_atoms = [edit.atoms[0], edit.atoms[1]];
-    return entry;
-  });
 }
 
 function toggleReactionEditMode() {
@@ -1844,7 +1831,6 @@ function _updateMeasureStatus() {
 }
 
 function setMode(mode) {
-  const previousMode = molDoc.mode;
   molDoc.mode = mode;
   if (mode !== "measure" && window.ACPGeometryStore) window.ACPGeometryStore.clearSelection();
   document.querySelectorAll(".tool-icon").forEach(function(btn) { btn.classList.remove("active"); });
@@ -1855,12 +1841,6 @@ function setMode(mode) {
     if (molDoc.measureType === "dihedral") document.getElementById("btn-measure-dihedral").classList.add("active");
   }
   _updateMeasureStatus();
-  updateSrPickButtons();
-  // Refresh overlays when entering/leaving SR mode so dashed pair cylinders
-  // appear/disappear immediately (select/measure behaviour unchanged).
-  if (previousMode !== mode && (previousMode === "sr" || mode === "sr") && currentAtoms().length) {
-    renderMolDoc();
-  }
 }
 
 function updateFrameController() {
@@ -2292,15 +2272,13 @@ let reactionDefinition = null;
 
 
 // ── Mechanism research section ──
-// ── Mechanism-research section (topbar switcher + mech-* module launchers +
-//    study management). Reuses the existing mechanism review modal, report
-//    SVG builders and summary markup; only the list fetch gets a job-less
-//    wrapper (fetchMechanismStudiesForJob stays job-scoped).
+// ── Mechanism-research section: read-only study management for historical
+//    mechanism jobs. Reuses the existing mechanism review modal, report SVG
+//    builders and summary markup; the list fetch gets a job-less wrapper
+//    (fetchMechanismStudiesForJob stays job-scoped).
 const APP_SECTION_KEY = "acp.section";
 let appSection = "workbench";
 let mechSectionStudiesCache = [];
-const MECH_MODULE_IDS = ["conf", "step", "confirm", "chain"];
-const MECH_MODULE_WORKFLOWS = { conf: "mech-conf", step: "mech-step", confirm: "mech-confirm", chain: "mech-chain" };
 
 function loadAppSection() {
   // The standalone mechanism-management surface is retired from the UI.
@@ -2336,93 +2314,6 @@ function applyAppSection(section) {
 function setAppSection(section) {
   if (section && section !== appSection) {
     applyAppSection(section);
-  }
-}
-
-function mechSectionVal(id) {
-  const el = document.getElementById(id);
-  return el ? String(el.value || "").trim() : "";
-}
-
-function detectMechInputSourceType(value) {
-  if (/\r?\n/.test(value)) return "xyz_text";
-  if (/[\/\\]/.test(value) || /\.(xyz|gjf|com|sdf|mol|log|out|inp|yaml|yml|json)$/i.test(value)) return "file_path";
-  return "smiles";
-}
-
-function buildMechModuleJobBody(moduleId) {
-  const pfx = "mech-section-" + moduleId + "-";
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  const name = MECH_MODULE_WORKFLOWS[moduleId] + "_" + stamp;
-  const nproc = parseInt(mechSectionVal(pfx + "nproc"), 10) || 4;
-  const mem = ACPMemoryInput.normalize(mechSectionVal(pfx + "mem"), "GB") || "8GB";
-  const output = mechSectionVal(pfx + "output");
-  const method = { schema_id: MECH_MODULE_WORKFLOWS[moduleId] };
-  let input = null;
-  if (moduleId === "conf") {
-    const source = mechSectionVal(pfx + "input");
-    if (!source) { window.alert(t("mechsec.input_required")); return null; }
-    input = { source_type: detectMechInputSourceType(source), source: source };
-    method.mode = mechSectionVal(pfx + "mode") || "censo-lite";
-    method.charge = parseInt(mechSectionVal(pfx + "charge"), 10) || 0;
-    method.multiplicity = parseInt(mechSectionVal(pfx + "mult"), 10) || 1;
-  } else if (moduleId === "step") {
-    const source = mechSectionVal(pfx + "source");
-    if (!source) { window.alert(t("mechsec.source_required")); return null; }
-    input = { source_type: "file_path", source: source };
-    const target = mechSectionVal(pfx + "target");
-    if (target) method.target = target;
-    const planText = mechSectionVal(pfx + "plan");
-    if (planText) {
-      try { method.plan = JSON.parse(planText); } catch (e) { window.alert(t("mechsec.plan_invalid")); return null; }
-    }
-    method.strategy = mechSectionVal(pfx + "strategy") || "guided-scan";
-    method.fidelity = mechSectionVal(pfx + "fidelity") || "s3";
-  } else if (moduleId === "confirm") {
-    const manifest = mechSectionVal(pfx + "manifest");
-    if (!manifest) { window.alert(t("mechsec.manifest_required")); return null; }
-    input = { source_type: "file_path", source: manifest };
-    method.select = mechSectionVal(pfx + "select") || "ts:canonical";
-    method.fidelity = mechSectionVal(pfx + "fidelity") || "s4";
-  } else if (moduleId === "chain") {
-    const configFile = mechSectionVal(pfx + "configfile");
-    const configYaml = mechSectionVal(pfx + "configyaml");
-    if (configFile) input = { source_type: "file_path", source: configFile };
-    else if (configYaml) input = { source_type: "yaml_text", source: configYaml };
-    else { window.alert(t("mechsec.config_required")); return null; }
-  }
-  if (!input) return null;
-  if (output) method.output = output;
-  const body = {
-    workflow: MECH_MODULE_WORKFLOWS[moduleId],
-    name: name,
-    input: input,
-    method: method,
-    resources: { nproc: nproc, mem: mem },
-  };
-  if (selectedProjectId) body.project_id = selectedProjectId;
-  return body;
-}
-
-async function submitMechModule(moduleId) {
-  const body = buildMechModuleJobBody(moduleId);
-  if (!body) return;
-  const btn = document.getElementById("mech-section-submit-" + moduleId);
-  const status = document.getElementById("mech-section-status-" + moduleId);
-  if (btn) btn.disabled = true;
-  if (status) status.textContent = t("mechsec.submitting");
-  try {
-    const result = await api("/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (status) status.textContent = t("mechsec.submit_ok", { jobId: result && result.job_id ? result.job_id : "" });
-    await refreshJobs();
-  } catch (e) {
-    if (status) status.textContent = t("mechsec.submit_failed") + ": " + (e && e.message ? e.message : e);
-  } finally {
-    if (btn) btn.disabled = false;
   }
 }
 
