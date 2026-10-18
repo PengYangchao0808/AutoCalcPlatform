@@ -48,6 +48,7 @@
 | C | C00 闭包地图与 C01 首个阻塞 helper | C | B 应用接线 | n/a | 计划三 C00/C01（尚未开工） | C00/C01 产出后由 B 记录 applied_commit | n/a | pending |
 | A | A00 前端基线接管地图 | A | B/C 引用 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | 无 | 地图被 `ACP_Frontend_Baseline_Map_20261018.md` 引用 | `f410ac9d`（地图基线） | delivered |
 | B | 科学产品 → 帧 adapter（`src/acp/results/frames_adapter.py`、`tests/fixtures/science_products/frames_mapping/`；消费 C 的 HN-02） | C（HN-02 映射表 + 五态 fixture，`4d2c6f8d`） | B（adapter）+ A（显示） | `48b3d2f` | C-T13/HN-02 状态 A「契约可消费」；`src/acp/results/frames.py` 只读（ANTI #21） | B 经 TrajectoryFrame.to_node 与 TrajectoryAnnotation.to_annotation 投影并通过 HN-02 normal/empty/partial/corrupt/old 五态 fixture；固定输入经 Data 发布与读取 | 随 B28b 应用提交 | integrated |
+| B | `src/acp_services/store/**`、`src/acp_services/runtime/method_flags.py`、旧 `acp` 转发路径（store/migrations/naming/molecule_groups/storage layout+record/jobs types、catalog flag 转发） | B | A/C 消费（旧 import 路径不变，identity 转发） | `c874676b`（本切片起点；lane C 并发提交 `29b2e8f`） | todo 72 注入登记表（schema/store、migrations、参数转换行）；todo 6/11/25/31 已交付 | `tests/test_services_migration_equivalence.py`（隔离 DB 持久化/CAS + 参数转换 parity + identity + AST 隔离）+ 定向回归套件 PASS；`JobStorePort`/`MigrationsPort` 注入已删 | `1688a5a`（refactor(services): migrate injected store/migrations in-package） | integrated |
 
 ## 维护约定
 
