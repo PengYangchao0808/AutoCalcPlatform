@@ -60,6 +60,7 @@ scheduler/
 - **submit/cancel states**: `result["remote"]["submit_state"]`（`intent`（先于 bsub 持久化，含 `submission_id`/owner token/lease）/`submitted`/…）与 `cancel_state`（CANCELLING 只有**确认远端已停止**后才置 CANCELLED）是 job-detail/v1 recovery 矩阵的投影字段（`v1_schemas.py::JobRecovery.submit_state/cancel_state`）。
 - **poll/reconcile ownership**: poll 观测只允许"低态→高态"前进式更新且必须持锁重读 revision；提交权租约有效期间 reconcile 永不判 `not_accepted`（`remote/submission.py`）；manager 拥有控制意图（pause/cancel/rerun），runner/observer 只提案观测值。
 - **in-place rerun（契约 B）**: rerun/edit-recalculate 复用同一任务目录与远端目录，`attempt+1`（CAS 单事务），旧 attempt 回执归档至 `WORK/00_RUNTIME/attempts/<N>/`（`_archive_attempt_receipts` + `_archive_previous_resume_source`）；`_RERUN_STABLE_FILES`（`input.xyz`/`input_source.json`/`task.json`/`job.json`）跨 attempt 保留，其余清空。
+- **Runtime 用例单一 owner（B05-1，todo 25）**: 控制意图（submit/pause/unpause/cancel/continue/rerun/edit）**归 `JobManager` 单一 owner**；API（`src/acp/api/v1_routes.py`）与 CLI（`src/acp/cli.py`）的提交/控制入口一律经 `acp_services.runtime.commands.RuntimeCommands` 用例，每个用例经注入端口（`JobSubmissionPort`/`JobControlPort`/`JobEditPort`/`JobRegistrationPort`）**恰好转发一次**到 manager/registration，**不得**直调 store 或 manager 方法。本阶段为端口收敛，非第二状态机、不双写；独立性由 todo 77 迁入实现并移除注入后成立（`tests/test_services_runtime_usecases.py` 守护）。
 
 ## ANTI-PATTERNS
 - **`_utc_now_iso()` copy-pasted**: Same 3-line helper defined in ~9 modules (`events.py`, `jobs.py`, `manager.py`, `migrations.py`, `projects.py`, `provenance.py`, `runner.py`, `stage_tasks.py`, `store.py`, `local_cleanup.py`). Candidate for `acp.core.utils`

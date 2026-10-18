@@ -44,6 +44,9 @@ __all__ = [
     "TaskIndexPort",
     "TaskViewQueryPort",
     "JobControlPort",
+    "JobSubmissionPort",
+    "JobEditPort",
+    "JobRegistrationPort",
     "PlanExecutionPort",
     "StepRequirementPort",
     "ResultPublicationPort",
@@ -185,6 +188,61 @@ class JobControlPort(Protocol):
         force_cancel: bool = False,
     ) -> list[dict[str, Any]]:
         """Cascade-purge a job set, returning a per-job report."""
+        ...
+
+
+@runtime_checkable
+class JobSubmissionPort(Protocol):
+    """New-job submission entry (``acp/scheduler/manager.JobManager.submit``).
+
+    The Runtime submit use case (:class:`acp_services.runtime.commands.
+    RuntimeCommands`) is the single entry; the injected adapter delegates to the
+    legacy manager until todo 77 moves store/control into Services. This is a
+    port, not a second state machine: :meth:`submit` is called exactly once and
+    its return value is passed through untouched.
+    """
+
+    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
+        """Validate, persist and enqueue *spec*; return the created record."""
+        ...
+
+
+@runtime_checkable
+class JobEditPort(Protocol):
+    """Edit-recalculate entry (``manager.edit_recalculate``).
+
+    Exposes the same keyword-only operation contract the legacy manager
+    implements (in-place attempt or new job, exactly-once via ``request_id``).
+    Injected by the application composition root; removed by todo 77.
+    """
+
+    def edit_recalculate(
+        self,
+        job_id: str,
+        *,
+        mode: str,
+        new_spec: Any,
+        expected_source_revision: str | None,
+        request_id: str,
+        payload_hash: str,
+        payload_json: str,
+        diff_summary: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Apply the edited spec and return the operation result."""
+        ...
+
+
+@runtime_checkable
+class JobRegistrationPort(Protocol):
+    """CLI completed-job registration entry (store-layer, no JobManager).
+
+    The CLI ``--register`` submit entry persists a finished local run directory
+    as a COMPLETED job. The Runtime registration use case forwards to the
+    existing implementation; the injected adapter is removed by todo 77.
+    """
+
+    def register_completed_job(self, **kwargs: Any) -> Any:
+        """Persist a finished CLI run directory as a COMPLETED job."""
         ...
 
 

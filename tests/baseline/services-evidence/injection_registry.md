@@ -33,6 +33,9 @@
 | `acp.scheduler.tasks.TaskIndex`（读 + sync 入口） | `acp_services.contracts.injection.TaskIndexPort` | `todo 19`（只读任务投影接管）；`todo 6`（tasks 归属） | `todo 77` | `tests/test_acp_scheduler_task_views.py` |
 | `acp.scheduler.task_views.query_project_tasks`（只读投影查询） | `acp_services.contracts.injection.TaskViewQueryPort` | `todo 19` 至 `todo 20` | `todo 77` | `tests/test_acp_scheduler_task_views.py` |
 | `acp.scheduler.manager.JobManager`（pause/unpause/cancel/continue/rerun/purge 控制意图） | `acp_services.contracts.injection.JobControlPort` | `todo 25` 至 `todo 26`（Runtime 用例接管同一执行 owner） | `todo 77` | `tests/test_acp_scheduler_processctl.py` |
+| `acp.scheduler.manager.JobManager.submit`（新任务提交入口） | `acp_services.contracts.injection.JobSubmissionPort`（Runtime `submit` 用例转发面） | `todo 25` 至 `todo 26`（Runtime 用例接管同一执行 owner） | `todo 77`（store/控制迁入 Services 时删除注入） | `tests/test_services_runtime_usecases.py` |
+| `acp.scheduler.manager.JobManager.edit_recalculate`（编辑重算入口） | `acp_services.contracts.injection.JobEditPort`（Runtime `edit_recalculate` 用例转发面） | `todo 25` 至 `todo 26`（Runtime 用例接管同一执行 owner） | `todo 77` | `tests/test_services_runtime_usecases.py` |
+| `acp.scheduler.registration.register_completed_cli_job`（CLI 完成作业登记） | `acp_services.contracts.injection.JobRegistrationPort`（Runtime `register_completed_job` 用例转发面） | `todo 25`（CLI 提交入口经 Runtime 用例） | `todo 77` | `tests/test_services_runtime_usecases.py` |
 | `acp.calculations.executor.CalculationPlanExecutor`（plan dispatch + resume） | `acp_services.contracts.injection.PlanExecutionPort` | `todo 27` 至 `todo 31`（worker 只执行冻结 plan 并写回执） | `todo 77` | `tests/test_calculation_executor.py` |
 | `acp.calculations.step_requirements.evaluate_prerequisite`（步骤前置条件阻断） | `acp_services.contracts.injection.StepRequirementPort` | `todo 27` | `todo 77` | `tests/test_calculation_executor.py` |
 | `acp.calculations.result_publication.register_result_manifest` 与 `load_scientific_result`（发布 + 恢复读） | `acp_services.contracts.injection.ResultPublicationPort` | `todo 28` | `todo 77` | `tests/test_result_publication.py` |
@@ -51,6 +54,18 @@
 > 不 import `acp`、不触 jobs DB、不自增 attempt（AST 守护见 `tests/test_services_worker_contract.py`）。
 > **worker 独立性不由本任务证明**，而由 todo 78（自足装配入口，新进程仅凭冻结数据构造依赖）证明；
 > 上表三行的「旧实现」在 todo 77 / todo 78 实际迁入并移除注入前，仍属过渡装配。
+
+> **B05-1 Runtime 用例记（todo 25）**: 本阶段新建 `src/acp_services/runtime/commands.py`
+> （`RuntimeCommands`），把 submit/pause/unpause/cancel/continue/rerun/edit（+ purge + CLI
+> 完成作业登记）表达为 **同一执行 owner 的 Runtime 用例**：每个用例经显式注入端口
+> （`JobSubmissionPort`/`JobControlPort`/`JobEditPort`/`JobRegistrationPort`）**恰好转发一次**，
+> 由旧 acp 装配入口 `src/acp/services_bootstrap.py::build_runtime_commands` 创建适配器并注入；
+> Services 不 import/不动态查找旧实现。API `src/acp/api/v1_routes.py` 与 CLI `src/acp/cli.py`
+> 的提交/控制入口改经 Runtime 用例（旧 `JobManager`/registration 方法保留为同实现转发）。
+> **单一 owner 登记**：控制意图（pause/cancel/rerun/edit…）仍归 `acp.scheduler.manager.JobManager`，
+> Runtime 用例只是入口，不是第二个状态机、不双写；见 `src/acp/scheduler/AGENTS.md`
+> STATE TRANSITIONS。**本阶段只声明端口收敛，不声明 Services 已独立**；独立性由 todo 77 迁入
+> 实现并移除注入后证明。
 
 ## 九类覆盖核对（评审 B1）
 

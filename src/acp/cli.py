@@ -2066,6 +2066,21 @@ def _handle_xtb_constrained_opt(args: argparse.Namespace) -> int:
     return 0
 
 
+def job_runtime_commands(manager: Any | None = None) -> Any:
+    """Return the Runtime command surface for CLI job submit/control entries.
+
+    CLI job submit/control entries must go through this single boundary and
+    never call the legacy ``JobManager``/store directly (single execution owner,
+    todo 25). The composition root injects adapters over the live manager; with
+    no manager (the ``--register`` path, which must not start the scheduler) the
+    completed-job registration port stays wired while control/submit/edit are
+    unattached placeholders.
+    """
+    from acp.services_bootstrap import build_runtime_commands
+
+    return build_runtime_commands(manager)
+
+
 def _register_xtb_path_cli_job(
     args: argparse.Namespace,
     output_dir: Path,
@@ -2085,10 +2100,7 @@ def _register_xtb_path_cli_job(
         ``0`` when registered (or intentionally skipped), ``1`` when
         ``--register`` was requested but registration failed.
     """
-    from acp.scheduler.registration import (
-        CliJobRegistrationError,
-        register_completed_cli_job,
-    )
+    from acp.scheduler.registration import CliJobRegistrationError
     from acp.workflows._helpers import is_scheduler_task_dir
 
     if is_scheduler_task_dir(output_dir):
@@ -2105,7 +2117,7 @@ def _register_xtb_path_cli_job(
         resources["mem"] = args.mem
     metadata = dict(getattr(result, "metadata", None) or {})
     try:
-        record = register_completed_cli_job(
+        record = job_runtime_commands().register_completed_job(
             workflow="XtbPathSearch",
             work_dir=output_dir,
             input_payload={"path_request": path_request},
@@ -2212,10 +2224,7 @@ def _register_orca_gradient_cli_job(
         ``0`` when registered (or intentionally skipped), ``1`` when
         ``--register`` was requested but registration failed.
     """
-    from acp.scheduler.registration import (
-        CliJobRegistrationError,
-        register_completed_cli_job,
-    )
+    from acp.scheduler.registration import CliJobRegistrationError
     from acp.workflows._helpers import is_scheduler_task_dir
 
     if is_scheduler_task_dir(output_dir):
@@ -2232,7 +2241,7 @@ def _register_orca_gradient_cli_job(
         resources["mem"] = args.mem
     metadata = dict(getattr(result, "metadata", None) or {})
     try:
-        record = register_completed_cli_job(
+        record = job_runtime_commands().register_completed_job(
             workflow="OrcaGradient",
             work_dir=output_dir,
             input_payload={"gradient_request": gradient_request},

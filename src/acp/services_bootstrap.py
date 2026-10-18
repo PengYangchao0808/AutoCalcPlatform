@@ -39,8 +39,9 @@ from acp.scheduler.store import JobStore
 from acp.scheduler.task_views import query_project_tasks
 from acp.scheduler.tasks import TaskIndex
 from acp_services.bootstrap import ServicesPorts
+from acp_services.runtime.commands import RuntimeCommands
 
-__all__ = ["build_services_ports"]
+__all__ = ["build_runtime_commands", "build_services_ports"]
 
 
 class _JobStoreAdapter:
@@ -138,6 +139,62 @@ class _UnattachedJobControl:
         return self._unattached()
 
 
+def _unattached_message() -> str:
+    return (
+        "no JobManager attached to the Services runtime command surface; call "
+        "build_runtime_commands(manager=job_manager) from the application "
+        "bootstrap (this module must not start the scheduler/poller itself)"
+    )
+
+
+class _JobSubmissionAdapter:
+    """Delegate :class:`JobSubmissionPort` to a live ``JobManager`` instance."""
+
+    def __init__(self, manager: Any) -> None:
+        self._manager = manager
+
+    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
+        return self._manager.submit(spec, group_id)
+
+
+class _JobEditAdapter:
+    """Delegate :class:`JobEditPort` to a live ``JobManager`` instance."""
+
+    def __init__(self, manager: Any) -> None:
+        self._manager = manager
+
+    def edit_recalculate(self, job_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self._manager.edit_recalculate(job_id, **kwargs)
+
+
+class _JobRegistrationAdapter:
+    """Delegate :class:`JobRegistrationPort` to the store-layer registration API.
+
+    Completed CLI runs are registered without constructing a ``JobManager``
+    (single-instance lock); the adapter imports the legacy implementation lazily
+    so this module stays light and the symbol can be patched in tests.
+    """
+
+    def register_completed_job(self, **kwargs: Any) -> Any:
+        from acp.scheduler.registration import register_completed_cli_job
+
+        return register_completed_cli_job(**kwargs)
+
+
+class _UnattachedJobSubmission:
+    """Submission port placeholder used until the app attaches its live manager."""
+
+    def submit(self, spec: Any, *, group_id: str | None = None) -> Any:
+        raise RuntimeError(_unattached_message())
+
+
+class _UnattachedJobEdit:
+    """Edit port placeholder used until the app attaches its live manager."""
+
+    def edit_recalculate(self, job_id: str, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError(_unattached_message())
+
+
 def build_services_ports(
     run_root: str | Path,
     *,
@@ -210,4 +267,37 @@ def build_services_ports(
             submit_lease_valid=remote_submission.submit_lease_valid,
         ),
         projects=projects,
+    )
+
+
+def build_runtime_commands(manager: Any | None = None) -> RuntimeCommands:
+    """Build the Runtime command surface (the single submit/control owner).
+
+    This is the *only* place the legacy ``JobManager`` is adapted onto the
+    Runtime use-case ports (todo 25). API and CLI submit/control entries call
+    :class:`~acp_services.runtime.commands.RuntimeCommands`; they never reach the
+    manager or the store directly.
+
+    Args:
+        manager: Live ``JobManager`` to adapt. When ``None`` the control,
+            submission and edit ports are unattached placeholders that fail
+            loudly, while the CLI completed-job registration port stays wired
+            (it needs no manager and must not start the scheduler).
+
+    Returns:
+        A frozen :class:`RuntimeCommands` bound to the injected adapters.
+    """
+    if manager is not None:
+        control: Any = _JobControlAdapter(manager)
+        submission: Any = _JobSubmissionAdapter(manager)
+        edit: Any = _JobEditAdapter(manager)
+    else:
+        control = _UnattachedJobControl()
+        submission = _UnattachedJobSubmission()
+        edit = _UnattachedJobEdit()
+    return RuntimeCommands(
+        control=control,
+        submission=submission,
+        edit=edit,
+        registration=_JobRegistrationAdapter(),
     )
