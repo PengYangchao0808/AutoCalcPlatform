@@ -1,0 +1,17 @@
+{
+  "contract": "data",
+  "sample_kind": "old-version",
+  "sample_version": 1,
+  "expected_classification": "accepted_with_migration",
+  "body": {
+    "legacy": true,
+    "operation": {
+      "op_id": "op1",
+      "resource_id": "r1",
+      "state": "ready",
+      "avail": "ready",
+      "revision": 3,
+      "observed_at": "2026-10-18T00:00:00Z"
+    }
+  }
+}

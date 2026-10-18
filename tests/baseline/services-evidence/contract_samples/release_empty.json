@@ -1,0 +1,20 @@
+{
+  "contract": "release",
+  "sample_kind": "empty",
+  "sample_version": 1,
+  "expected_classification": "accepted",
+  "body": {
+    "release": {
+      "release_id": "rel1",
+      "manifest_version": 1,
+      "git_commit": "abc123",
+      "clean": true,
+      "files": [],
+      "dependency_lock": "lock1",
+      "asset_manifest": [],
+      "notices": [],
+      "wheel_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "legacy_import_window": null
+    }
+  }
+}

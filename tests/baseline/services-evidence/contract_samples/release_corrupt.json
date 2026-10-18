@@ -1,0 +1,26 @@
+{
+  "contract": "release",
+  "sample_kind": "corrupt",
+  "sample_version": 1,
+  "expected_classification": "rejected",
+  "body": {
+    "release": {
+      "release_id": "rel1",
+      "manifest_version": 1,
+      "git_commit": "abc123",
+      "clean": true,
+      "files": [
+        {
+          "path": "a.py",
+          "sha256": "short",
+          "size": 1
+        }
+      ],
+      "dependency_lock": "lock1",
+      "asset_manifest": [],
+      "notices": [],
+      "wheel_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "legacy_import_window": null
+    }
+  }
+}

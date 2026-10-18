@@ -1,0 +1,40 @@
+{
+  "contract": "execution",
+  "sample_kind": "partial",
+  "sample_version": 1,
+  "expected_classification": "accepted_partial",
+  "body": {
+    "envelope": {
+      "envelope_version": 1,
+      "job_id": "j1",
+      "attempt": 1,
+      "submission_id": "sub_abc",
+      "release_id": "rel_abc",
+      "owner": "w1",
+      "fencing_token": "f1",
+      "plan_digest": "d1",
+      "plan_identity": "pi1",
+      "data_bindings": [],
+      "resource_budget": {
+        "partial": true,
+        "cores": 4
+      },
+      "scientific_closure": {
+        "task_kind": "optimize",
+        "payload_schema": 1,
+        "result_schema": 1,
+        "algorithm_version": "v1"
+      }
+    },
+    "receipt": {
+      "receipt_version": 1,
+      "submission_id": "sub_abc",
+      "job_id": "j1",
+      "attempt": 1,
+      "state": "completed",
+      "result_digest": "r1",
+      "errors": [],
+      "written_at": "2026-10-18T00:00:00Z"
+    }
+  }
+}

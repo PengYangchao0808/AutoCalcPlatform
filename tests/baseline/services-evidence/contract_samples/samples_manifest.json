@@ -1,0 +1,49 @@
+{
+  "sample_version": 1,
+  "contract_version": 1,
+  "base_commit": "26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9",
+  "groups": {
+    "access": [
+      "normal",
+      "empty",
+      "partial",
+      "corrupt",
+      "old-version"
+    ],
+    "data": [
+      "normal",
+      "empty",
+      "partial",
+      "corrupt",
+      "old-version"
+    ],
+    "events": [
+      "normal",
+      "empty",
+      "partial",
+      "corrupt",
+      "old-version"
+    ],
+    "science": [
+      "normal",
+      "empty",
+      "partial",
+      "corrupt",
+      "old-version"
+    ],
+    "execution": [
+      "normal",
+      "empty",
+      "partial",
+      "corrupt",
+      "old-version"
+    ],
+    "release": [
+      "normal",
+      "empty",
+      "partial",
+      "corrupt",
+      "old-version"
+    ]
+  }
+}

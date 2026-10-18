@@ -1,0 +1,15 @@
+{
+  "contract": "events",
+  "sample_kind": "old-version",
+  "sample_version": 1,
+  "expected_classification": "accepted_with_migration",
+  "body": {
+    "legacy": true,
+    "events": [
+      {
+        "after_seq": 1,
+        "type": "state.changed"
+      }
+    ]
+  }
+}
