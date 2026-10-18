@@ -339,23 +339,41 @@ var nmrPanelState = {
   viewers: {},
 };
 
+// T12: each candidate canvas holds a bounded ACPVisualization.scene instance
+// (never a raw 3Dmol handle). Model/style/shape/teardown access goes through
+// the instance's restricted API; per-candidate cleanup is instance.dispose().
 if (window.ACPStructureViewer && typeof window.ACPStructureViewer.registerCanvasLoader === "function") {
   window.ACPStructureViewer.registerCanvasLoader("nmr-structure", function(xyzText, styleSpec) {
-    var info = nmrPanelState.viewers[nmrPanelState.loadingCandidate];
-    if (!info || !info.viewer) return false;
-    try { info.viewer.removeAllModels(); } catch (e) {}
-    info.viewer.addModel(xyzText, "xyz");
-    info.viewer.setStyle({}, styleSpec);
+    var index = nmrPanelState.loadingCandidate;
+    var info = nmrPanelState.viewers[index];
+    if (!info || !info.instance) return false;
+    info.instance.removeAllModels();
+    var model = info.instance.addModel(xyzText, "xyz");
+    if (!model) return false;
+    info.instance.setStyle({}, styleSpec);
+    // 3D pick (T40 linkage): bound on the live model token — the instance
+    // rejects click bindings without one. The callback sees a plain atom
+    // snapshot; labels are resolved at click time.
+    model.setClickable({}, true, function(atom) {
+      var current = nmrPanelState.viewers[index];
+      if (!current || !current.labels) return;
+      var label = current.labels[atom.index];
+      if (label) nmrSelectAtom(label, index);
+    });
     return true;
   });
+}
+
+function nmrReleaseViewerInfo(info) {
+  if (!info) return;
+  if (info.framing) disposeViewerFraming(info.framing);
+  if (info.instance) info.instance.dispose();
 }
 
 function nmrPanelDispose() {
   nmrPanelState.token += 1;
   Object.keys(nmrPanelState.viewers).forEach(function(key) {
-    var info = nmrPanelState.viewers[key];
-    if (info && info.framing) disposeViewerFraming(info.framing);
-    if (info && info.viewer) ACPVisualization.mol3d.destroy(info.viewer);
+    nmrReleaseViewerInfo(nmrPanelState.viewers[key]);
   });
   nmrPanelState.viewers = {};
   nmrPanelState.selectedAtom = null;
@@ -425,23 +443,21 @@ function nmrHighlightAtoms(relatedAtoms, activeAtom) {
   nmrPanelState.highlightAtoms = relatedAtoms || {};
   Object.keys(nmrPanelState.viewers).forEach(function(key) {
     var info = nmrPanelState.viewers[key];
-    if (!info || !info.viewer) return;
-    try { info.viewer.removeAllShapes(); } catch (e) { return; }
+    if (!info || !info.instance) return;
+    if (!info.instance.removeAllShapes()) return;
     var labels = info.labels || [];
     var atoms = info.atoms || [];
     labels.forEach(function(label, index) {
       if (relatedAtoms[label] !== true || !atoms[index]) return;
       var highlight = activeAtom != null && label === activeAtom;
-      try {
-        info.viewer.addSphere({
-          center: { x: atoms[index].x, y: atoms[index].y, z: atoms[index].z },
-          radius: 0.38,
-          color: highlight ? "#4ea1ff" : "#f5a623",
-          opacity: 0.85
-        });
-      } catch (e) {}
+      info.instance.addSphere({
+        center: { x: atoms[index].x, y: atoms[index].y, z: atoms[index].z },
+        radius: 0.38,
+        color: highlight ? "#4ea1ff" : "#f5a623",
+        opacity: 0.85
+      });
     });
-    try { info.viewer.render(); } catch (e) {}
+    info.instance.render();
   });
 }
 
@@ -720,26 +736,26 @@ function renderNmrPeaks(report) {
 
 function nmrEnsureViewer(candIndex, container) {
   var info = nmrPanelState.viewers[candIndex];
-  if (info && info.viewer && info.container === container && container.querySelector("canvas")) return info;
+  if (info && info.instance && !info.instance.isDisposed() && info.container === container && container.querySelector("canvas")) return info;
+  if (info) {
+    nmrReleaseViewerInfo(info);
+    delete nmrPanelState.viewers[candIndex];
+  }
   if (!ACPVisualization.mol3d.isAvailable()) return null;
   container.innerHTML = "";
-  var viewer = ACPVisualization.mol3d.create(container, { backgroundColor: "0x0e1419", antialias: true });
+  var sceneNs = ACPVisualization.scene;
+  var instance = (sceneNs && typeof sceneNs.create === "function")
+    ? sceneNs.create({ container: container, options: { backgroundColor: "0x0e1419", antialias: true } })
+    : null;
+  if (!instance) return null;
   info = {
     container: container,
-    viewer: viewer,
+    instance: instance,
     framing: { epoch: 0, pending: false, settled: false, observer: null },
     labels: [],
     atoms: []
   };
   nmrPanelState.viewers[candIndex] = info;
-  (function(index) {
-    viewer.setClickable({}, true, function(atom) {
-      var current = nmrPanelState.viewers[index];
-      if (!current || !current.labels) return;
-      var label = current.labels[atom.index];
-      if (label) nmrSelectAtom(label, index);
-    });
-  })(candIndex);
   return info;
 }
 
@@ -814,13 +830,12 @@ async function nmrLoadCandidateGeometry(job, cand, token) {
     container.textContent = t("nmr.structure.unavailable");
     return;
   }
-  var model = null;
-  try { model = info.viewer.getModel(); } catch (e) { model = null; }
-  info.atoms = model ? model.selectedAtoms({}) : [];
+  var atoms = info.instance.selectedAtoms({});
+  info.atoms = atoms || [];
   info.labels = nmrAtomLabelsFromSymbols(info.atoms.map(function(atom) { return atom.elem; }));
   container.className = "nmr-structure-viewer";
   container.textContent = "";
-  scheduleViewerFraming(container, info.framing, function() { return info.viewer; });
+  scheduleViewerFraming(container, info.framing, function() { return info.instance; });
   nmrPanelApplySelection();
 }
 
