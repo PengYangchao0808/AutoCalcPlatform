@@ -14,14 +14,16 @@ import json
 import logging
 import sqlite3
 import threading
-from collections.abc import Collection
-from dataclasses import replace
+from collections.abc import Callable, Collection, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.migrations import migrate
+from acp_services.contracts.events import EventScope, OwnerType
+from acp_services.runtime.outbox import OutboxEventSpec, OutboxRecord
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,7 @@ class JobStateConflictError(Exception):
         self.expected = expected
         self.actual = actual
 
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
@@ -102,6 +105,48 @@ CREATE TABLE IF NOT EXISTS jobs (
 )
 """
 
+# Transactional outbox (B04-2, todo 23): one row per state-change fact, written
+# in the SAME connection/transaction as the ``jobs`` UPDATE that produced it.
+# ``delivered_at`` IS NULL == committed-but-not-yet-delivered; the row is acked
+# (``delivered_at`` set, ``delivered_seq`` recorded) after the durable JSONL
+# append succeeds.  A crash anywhere before the single ``commit()`` rolls the
+# row back with the state, so no event can exist for an uncommitted state.
+_OUTBOX_SCHEMA = """
+CREATE TABLE IF NOT EXISTS job_outbox (
+    event_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    owner_type TEXT NOT NULL DEFAULT 'job',
+    scope TEXT NOT NULL DEFAULT 'task',
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    dedup_key TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    attempt INTEGER,
+    emitted_at TEXT NOT NULL,
+    delivered_at TEXT,
+    delivered_seq INTEGER,
+    delivery_attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_outbox_pending ON job_outbox(delivered_at);
+CREATE INDEX IF NOT EXISTS idx_job_outbox_job ON job_outbox(job_id, delivered_at);
+"""
+
+
+@dataclass(frozen=True)
+class CursorSnapshot:
+    """A job's revision read together with its event cursor and pending count.
+
+    ``cursor`` is the ``after_seq``-compatible sequence of the last delivered
+    event; ``pending`` counts committed-but-undelivered facts.  A subscriber
+    replays from ``cursor`` and will receive any later event exactly once, so a
+    snapshot taken before subscribing cannot lose a committed update.
+    """
+
+    record: JobRecord
+    cursor: int
+    pending: int
+
 
 class JobStore:
     """Thread-safe SQLite persistence for :class:`JobRecord`."""
@@ -110,6 +155,11 @@ class JobStore:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        # Test-only crash-injection seam: a callable invoked at named points
+        # inside the transition transaction.  Raising from it models a crash at
+        # that point (the open SQLite transaction rolls back).  ``None`` in
+        # production.
+        self._fault_point_hook: Callable[[str], None] | None = None
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
@@ -121,6 +171,7 @@ class JobStore:
         with self._lock, self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.executescript(_SCHEMA)
+            conn.executescript(_OUTBOX_SCHEMA)
             conn.commit()
         migrate(self.db_path)
 
@@ -198,6 +249,7 @@ class JobStore:
         expected_status: Collection[JobStatus] | JobStatus | None,
         expected_revision: int,
         expected_attempt: int | None = None,
+        outbox: OutboxEventSpec | Sequence[OutboxEventSpec] | None = None,
         **fields: Any,
     ) -> JobRecord:
         """CAS single-row state update: one UPDATE guarded by revision/status/attempt.
@@ -206,10 +258,20 @@ class JobStore:
         increments and the fresh record is read back on the same connection.
         Raises :class:`JobStateConflictError` when the row does not match the
         expectation, and :class:`ValueError` for unknown or forbidden fields.
+
+        When ``outbox`` is given, the event row(s) are inserted on the **same
+        connection before the single ``commit()``** as the state UPDATE — so a
+        failed CAS guard, or a crash before the commit, rolls both back together
+        and no event can exist for an uncommitted state.  Delivery of committed
+        rows is a separate post-commit step (see
+        :mod:`acp_services.runtime.outbox`).
         """
         unknown = sorted(set(fields) - self._TRANSITION_FIELDS)
         if unknown:
             raise ValueError(f"transition does not allow field(s): {', '.join(unknown)}")
+
+        outbox_specs = _normalize_outbox(outbox)
+        new_revision = expected_revision + 1
 
         assignments = ["revision=revision+1", "updated_at=?"]
         params: list[Any] = [_utc_now_iso()]
@@ -249,8 +311,131 @@ class JobStore:
             row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
             if row is None:
                 raise JobStateConflictError(job_id, expected, None)
+            self._fault_point("transition.after_update")
+            if outbox_specs:
+                self._insert_outbox_rows(conn, job_id, outbox_specs, new_revision)
+            self._fault_point("transition.before_commit")
             conn.commit()
+            self._fault_point("transition.after_commit")
             return _row_to_record(row)
+
+    def _fault_point(self, name: str) -> None:
+        """Invoke the test-only crash-injection hook at *name* (no-op when unset)."""
+        hook = self._fault_point_hook
+        if hook is not None:
+            hook(name)
+
+    def _insert_outbox_rows(
+        self,
+        conn: sqlite3.Connection,
+        job_id: str,
+        specs: Sequence[OutboxEventSpec],
+        new_revision: int,
+    ) -> None:
+        """INSERT the staged events on *conn* (same transaction as the UPDATE)."""
+        now = _utc_now_iso()
+        for spec in specs:
+            dedup_key = spec.dedup_key or f"{job_id}:{new_revision}:{spec.event_type}"
+            event_id = spec.event_id or dedup_key
+            conn.execute(
+                """INSERT OR IGNORE INTO job_outbox (
+                       event_id, job_id, owner_type, scope, event_type, payload_json,
+                       dedup_key, revision, attempt, emitted_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event_id,
+                    job_id,
+                    spec.owner_type.value,
+                    spec.scope.value,
+                    spec.event_type,
+                    json.dumps(dict(spec.payload), default=str, sort_keys=True),
+                    dedup_key,
+                    new_revision,
+                    spec.attempt,
+                    spec.emitted_at or now,
+                ),
+            )
+
+    def pending_outbox(
+        self, *, job_id: str | None = None, limit: int | None = None
+    ) -> list[OutboxRecord]:
+        """Committed-but-undelivered outbox rows, oldest first."""
+        clauses = ["delivered_at IS NULL"]
+        params: list[Any] = []
+        if job_id is not None:
+            clauses.append("job_id=?")
+            params.append(job_id)
+        query = f"SELECT * FROM job_outbox WHERE {' AND '.join(clauses)} ORDER BY rowid"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_outbox_row_to_record(row) for row in rows]
+
+    def has_pending_outbox(self, *, job_id: str | None = None) -> bool:
+        """True when at least one committed fact is still awaiting delivery."""
+        clause = "delivered_at IS NULL"
+        params: tuple[Any, ...] = ()
+        if job_id is not None:
+            clause += " AND job_id=?"
+            params = (job_id,)
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                f"SELECT 1 FROM job_outbox WHERE {clause} LIMIT 1", params
+            ).fetchone()
+        return row is not None
+
+    def get_outbox_event(self, event_id: str) -> OutboxRecord | None:
+        """Read one outbox row by its stable id (delivery diagnostics/tests)."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM job_outbox WHERE event_id=?", (event_id,)).fetchone()
+        return _outbox_row_to_record(row) if row is not None else None
+
+    def mark_outbox_delivered(
+        self, event_id: str, *, seq: int, delivered_at: str | None = None
+    ) -> bool:
+        """Ack one delivered row; idempotent (True only for the first ack)."""
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                "UPDATE job_outbox SET delivered_at=?, delivered_seq=?, last_error=NULL "
+                "WHERE event_id=? AND delivered_at IS NULL",
+                (delivered_at or _utc_now_iso(), seq, event_id),
+            )
+            conn.commit()
+            return cursor.rowcount == 1
+
+    def mark_outbox_failed(self, event_id: str, *, error: str) -> None:
+        """Record a delivery failure; the row stays pending for the next sweep."""
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE job_outbox SET delivery_attempts=delivery_attempts+1, last_error=? "
+                "WHERE event_id=? AND delivered_at IS NULL",
+                (error, event_id),
+            )
+            conn.commit()
+
+    def snapshot_with_cursor(self, job_id: str) -> CursorSnapshot | None:
+        """Read a job's revision, delivered-event cursor and pending count together.
+
+        Both SQLite reads happen on one connection, so a subscriber that replays
+        from ``cursor`` after this snapshot can never lose a committed update:
+        any later transition is a durable outbox row that will be delivered at a
+        sequence strictly greater than ``cursor``.
+        """
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                return None
+            aggregate = conn.execute(
+                "SELECT COALESCE(MAX(delivered_seq), 0) AS cursor, "
+                "SUM(CASE WHEN delivered_at IS NULL THEN 1 ELSE 0 END) AS pending "
+                "FROM job_outbox WHERE job_id=?",
+                (job_id,),
+            ).fetchone()
+        cursor = int(aggregate["cursor"] or 0) if aggregate is not None else 0
+        pending = int(aggregate["pending"] or 0) if aggregate is not None else 0
+        return CursorSnapshot(record=_row_to_record(row), cursor=cursor, pending=pending)
 
     def update_progress(
         self,
@@ -383,9 +568,7 @@ class JobStore:
         :class:`ValueError` for forbidden ``reset_fields``.
         """
         if not isinstance(new_spec, JobSpec):
-            raise TypeError(
-                f"requeue_with_spec requires a JobSpec, got {type(new_spec).__name__}"
-            )
+            raise TypeError(f"requeue_with_spec requires a JobSpec, got {type(new_spec).__name__}")
         allowed = set(self._REQUEUE_RESET_DEFAULTS) | {"result", "input_hash"}
         unknown = sorted(set(reset_fields) - allowed)
         if unknown:
@@ -982,7 +1165,9 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         node_id=row["node_id"] if "node_id" in columns else None,
         host=row["host"] if "host" in columns else None,
         result=result,
-        revision=int(row["revision"]) if "revision" in columns and row["revision"] is not None else 0,
+        revision=int(row["revision"])
+        if "revision" in columns and row["revision"] is not None
+        else 0,
         attempt=int(row["attempt"]) if "attempt" in columns and row["attempt"] is not None else 1,
     )
 
@@ -1001,4 +1186,46 @@ def row_to_record(row: sqlite3.Row) -> JobRecord:
     return _row_to_record(row)
 
 
-__all__ = ["JobStateConflictError", "JobStore", "row_to_record"]
+def _normalize_outbox(
+    outbox: OutboxEventSpec | Sequence[OutboxEventSpec] | None,
+) -> tuple[OutboxEventSpec, ...]:
+    if outbox is None:
+        return ()
+    if isinstance(outbox, OutboxEventSpec):
+        return (outbox,)
+    specs = tuple(outbox)
+    for spec in specs:
+        if not isinstance(spec, OutboxEventSpec):
+            raise TypeError(f"outbox entries must be OutboxEventSpec, got {type(spec).__name__}")
+    return specs
+
+
+def _outbox_row_to_record(row: sqlite3.Row) -> OutboxRecord:
+    columns = set(row.keys())
+    payload_raw = row["payload_json"] if "payload_json" in columns else None
+    payload: dict[str, Any] = {}
+    if payload_raw:
+        decoded = json.loads(payload_raw)
+        if isinstance(decoded, dict):
+            payload = decoded
+    return OutboxRecord(
+        event_id=row["event_id"],
+        owner_id=row["job_id"],
+        owner_type=OwnerType(row["owner_type"] if "owner_type" in columns else OwnerType.JOB.value),
+        scope=EventScope(row["scope"] if "scope" in columns else EventScope.TASK.value),
+        event_type=row["event_type"],
+        payload=payload,
+        dedup_key=row["dedup_key"],
+        revision=int(row["revision"] or 0) if "revision" in columns else 0,
+        attempt=row["attempt"] if "attempt" in columns else None,
+        emitted_at=(row["emitted_at"] if "emitted_at" in columns else "") or "",
+        delivered_at=row["delivered_at"] if "delivered_at" in columns else None,
+        delivered_seq=row["delivered_seq"] if "delivered_seq" in columns else None,
+        delivery_attempts=(
+            int(row["delivery_attempts"] or 0) if "delivery_attempts" in columns else 0
+        ),
+        last_error=(row["last_error"] if "last_error" in columns else "") or "",
+    )
+
+
+__all__ = ["CursorSnapshot", "JobStateConflictError", "JobStore", "row_to_record"]

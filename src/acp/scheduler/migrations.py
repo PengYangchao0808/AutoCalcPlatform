@@ -265,6 +265,30 @@ CREATE INDEX IF NOT EXISTS idx_tasks_project_archived_created
         "description": "add revision/attempt columns to jobs (CAS transitions, 1-based attempt)",
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility + backfill",
     },
+    {
+        "id": "021",
+        "description": "create job_outbox table (transactional outbox, B04-2)",
+        "sql": """
+CREATE TABLE IF NOT EXISTS job_outbox (
+    event_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    owner_type TEXT NOT NULL DEFAULT 'job',
+    scope TEXT NOT NULL DEFAULT 'task',
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    dedup_key TEXT NOT NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    attempt INTEGER,
+    emitted_at TEXT NOT NULL,
+    delivered_at TEXT,
+    delivered_seq INTEGER,
+    delivery_attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_outbox_pending ON job_outbox(delivered_at);
+CREATE INDEX IF NOT EXISTS idx_job_outbox_job ON job_outbox(job_id, delivered_at);
+""",
+    },
 ]
 
 
