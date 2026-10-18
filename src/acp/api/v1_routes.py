@@ -254,6 +254,8 @@ from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
 from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
+from acp_services.contracts.access import AccessAction as _AccessAction
+from acp_services.workspace.entry_authz import EntryClass as _EntryClass
 
 UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 
@@ -286,6 +288,61 @@ def _manager(request: Request) -> JobManager:
     if manager is None:
         raise HTTPException(status_code=503, detail="Job scheduler not initialized")
     return manager
+
+
+def _entry_authorizer(request: Request) -> Any:
+    """Return the per-request entry authorizer.
+
+    An explicit authorizer may be injected on ``app.state.entry_authorizer``
+    (test seam / future identity policy).  Otherwise the trusted ``local-single``
+    authorizer is used: the hook always runs, it is simply inert until an
+    identity/grant policy is configured.
+    """
+    from acp_services.workspace.entry_authz import default_entry_authorizer
+
+    authorizer = getattr(request.app.state, "entry_authorizer", None)
+    return authorizer if authorizer is not None else default_entry_authorizer()
+
+
+def _job_project_id(request: Request, job_id: str) -> str | None:
+    """Best-effort project id of *job_id* (used only for scope resolution)."""
+    record = _manager(request).get(job_id)
+    if record is None:
+        return None
+    return getattr(record, "project_id", None) or getattr(record.spec, "project_id", None)
+
+
+def _require_entry_access(
+    request: Request,
+    entry_class: str,
+    *,
+    job_id: str = "",
+    project_id: str | None = None,
+    action: str | None = None,
+    resource_id: str = "",
+) -> None:
+    """Authorize one resource entry; raise a 403 on deny.
+
+    Runs at the point of effect (before a download streams, before a publish
+    writes) rather than on a listing page.  A denial raises before the endpoint
+    body executes, so no state is created or mutated.  The 403 body shape
+    (``{"code": ..., "message": ...}``) matches the existing error contract.
+    """
+    authorizer = _entry_authorizer(request)
+    project = (
+        project_id
+        if project_id is not None
+        else (_job_project_id(request, job_id) if job_id else None)
+    )
+    decision = authorizer.authorize(
+        entry_class,
+        job_id=job_id,
+        project_id=project,
+        action=action,
+        resource_id=resource_id,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=decision.http_status, detail=decision.error_detail())
 
 
 def _apply_auto_tag_rules_on_submit(manager: JobManager, record: Any) -> None:
@@ -4277,6 +4334,14 @@ def save_frame_candidate_endpoint(
 ) -> V1FrameCandidateResponse:
     """Save an energy-viewer frame as a tagged candidate structure."""
     work_dir, workflow = _frame_candidate_work_dir(request, job_id, require_terminal=True)
+    # Publish path: re-verify write authorization before any file is written.
+    _require_entry_access(
+        request,
+        _EntryClass.FRAME_CANDIDATES,
+        job_id=job_id,
+        action=_AccessAction.WRITE,
+        resource_id=req.name or "",
+    )
 
     from acp.results.frame_candidate_geometry import FrameCandidateError
     from acp.results.frame_candidate_store import RevisionConflictError
@@ -4348,6 +4413,7 @@ def list_frame_candidates_endpoint(
 ) -> V1FrameCandidateListResponse:
     """List all saved frame candidates for a job."""
     work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_terminal=False)
+    _require_entry_access(request, _EntryClass.FRAME_CANDIDATES, job_id=job_id)
 
     from acp.results.frame_candidates import list_frame_candidates
 
@@ -4387,6 +4453,13 @@ def delete_frame_candidate_endpoint(
 ) -> V1FrameCandidateListResponse:
     """Remove a frame candidate (authority + manifest; XYZ kept on disk)."""
     work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_terminal=False)
+    _require_entry_access(
+        request,
+        _EntryClass.FRAME_CANDIDATES,
+        job_id=job_id,
+        action=_AccessAction.WRITE,
+        resource_id=candidate_id,
+    )
 
     from acp.results.frame_candidate_geometry import FrameCandidateError
     from acp.results.frame_candidate_store import RevisionConflictError
@@ -5749,6 +5822,7 @@ async def stream_job_events(
     request: Request,
     after_seq: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
+    _require_entry_access(request, _EntryClass.EVENT_STREAM, job_id=job_id)
     return await legacy_stream_job_events(job_id, request, after_seq=after_seq)
 
 
@@ -5764,6 +5838,7 @@ def get_job_logs(
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _require_entry_access(request, _EntryClass.LOG, job_id=job_id)
 
     stdout_path = runtime_file(work_dir, "stdout.log")
     stderr_path = runtime_file(work_dir, "stderr.log")
@@ -5816,6 +5891,7 @@ def get_job_files(
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id)
     manifest = build_manifest(work_dir, relative_path=path, view=view)
     entries = [
         FileEntry(
@@ -5864,6 +5940,8 @@ def download_job_file(job_id: str, file_path: str, request: Request) -> Response
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    # Re-verify authorization immediately before the download body is produced.
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=file_path)
     resolved = resolve_safe(work_dir, file_path)
     if resolved is None:
         record = manager.get(job_id)
@@ -6029,6 +6107,7 @@ def list_remote_files(
     """
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=path or "")
     try:
         files = fetcher.list_files(record, relative_path=path)
         truncated = False
@@ -6066,6 +6145,7 @@ def download_remote_archive(
         )
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request)
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id)
     include_patterns = _parse_glob_patterns(include)
     exclude_patterns = _parse_glob_patterns(exclude)
 
@@ -6139,6 +6219,13 @@ def preview_remote_file(
                 status_code=400,
                 detail=f"Preview not available for {file_path!r}; use download",
             )
+
+    _require_entry_access(
+        request,
+        _EntryClass.RANGE if mode == "range" else _EntryClass.DOWNLOAD,
+        job_id=job_id,
+        resource_id=file_path,
+    )
 
     try:
         info = fetcher.file_stat(record, file_path)
@@ -6245,6 +6332,7 @@ def remote_file_checksum(
     """Return the SHA-256 checksum of a remote file."""
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request)
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=file_path)
     try:
         data = fetcher.read_file(record, file_path)
     except FileNotFoundError:
@@ -6265,6 +6353,9 @@ def download_remote_file(
     """Stream a single file from the remote job directory (on-demand)."""
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
+    # Re-verify authorization immediately before the download body is produced
+    # (an SFTP rejection is not a Workspace revocation and vice versa).
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=file_path)
     try:
         info = fetcher.file_stat(record, file_path)
     except FileNotFoundError:
@@ -6304,6 +6395,7 @@ def get_remote_log_tail(
         )
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
+    _require_entry_access(request, _EntryClass.LOG, job_id=job_id, resource_id=name)
     try:
         tail = fetcher.log_tail(record, name, lines=lines)
     except Exception as exc:
@@ -7469,6 +7561,13 @@ def get_job_availability(
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        resource_id=resource_id or resource or "",
+    )
     resolved_workflow = workflow or str(record.spec.workflow or "")
 
     if resource is not None:
@@ -7536,6 +7635,14 @@ def get_prepared_resource(
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    _require_entry_access(
+        request,
+        _EntryClass.RANGE,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        resource_id=(f"{resource}:{relative_path}" if relative_path else resource),
+    )
 
     reader = _cache_only_resource_reader(request)
     result = reader.serve(
