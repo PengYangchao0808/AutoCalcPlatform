@@ -318,6 +318,66 @@ module.exports.register = async function (h) {
     assertEq(cr.isDirty(), false);
   });
 
+  await test("A→B→A selection resets candidate review through the taskSession hook — no leak", async () => {
+    const sandbox = makeSandbox({ console: { log: () => {}, error: () => {}, warn: () => {} } });
+    loadScript("js/workbench/controllers/task_session_controller.js", sandbox);
+    loadScript("js/workbench/controllers/candidate_review_controller.js", sandbox);
+    const ts = sandbox.window.ACPWorkbench.controllers.taskSession;
+    const cr = sandbox.window.ACPWorkbench.controllers.candidateReview;
+    ts.init({
+      hooks: {
+        resetForSelection: function () { cr.reset(); },
+        loadDetail: function () { return Promise.resolve(null); },
+        applyDetail: function () { return null; },
+      },
+    });
+
+    async function selectWithCandidates(jobId, frameIndex) {
+      await ts.select(jobId);
+      cr.upsertCandidate(frameIndex, { role: "ts" });
+      cr.setRevision(frameIndex);
+      cr.setLock(true);
+      cr.setConfirmed(true);
+    }
+    function assertReset(msg) {
+      const st = cr.getState();
+      assertEq(st.candidates, [], msg + ": candidates cleared");
+      assertEq(st.dirty, false, msg + ": dirty cleared");
+      assertEq(st.selectionLocked, false, msg + ": lock released");
+      assertEq(st.reviewConfirmed, false, msg + ": confirmation cleared");
+      assertEq(st.revision, 0, msg + ": revision reset");
+    }
+
+    await selectWithCandidates("job-A", 1);
+    assertEq(cr.getState().candidates.length, 1, "A holds its own working candidate");
+    const tokenA1 = ts.current().token;
+
+    await ts.select("job-B");
+    assertReset("A→B");
+    const tokenB = ts.current().token;
+    cr.upsertCandidate(2, { role: "intermediate" });
+    cr.setRevision(9);
+    cr.setLock(true);
+
+    await ts.select("job-A");
+    const tokenA2 = ts.current().token;
+    assert(tokenA2 > tokenB && tokenB > tokenA1, "each selection mints a fresh monotonic token");
+    assertReset("A→B→A");
+    assertEq(cr.getState().candidates, [], "returning to A never rehydrates the first A's candidates");
+  });
+
+  await test("reaction-builder resetForSelection owns the resets (candidate review + energy in-flight)", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const raw = fs.readFileSync(path.resolve(__dirname, "../workbench/features/reaction-builder.js"), "utf8");
+    const start = raw.indexOf("resetForSelection: function");
+    const end = raw.indexOf("loadDetail: function", start);
+    assert(start !== -1 && end > start, "resetForSelection hook present in selectJob");
+    const region = raw.slice(start, end);
+    assert(region.indexOf("candidateReview.reset()") !== -1, "candidate review reset wired");
+    assert(region.indexOf("energyGraphInvalidateInFlight()") !== -1, "energy in-flight result invalidation wired");
+  });
+
   await test("purity + ownership pin: no DOM/fetch/3Dmol/s2scanState in controller source", () => {
     const fs = require("fs");
     const path = require("path");

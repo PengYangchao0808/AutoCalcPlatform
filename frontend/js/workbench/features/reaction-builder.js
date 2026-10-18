@@ -2092,6 +2092,10 @@ async function selectJob(jobId) {
         energyGraphState.yDomain = null;
         energyGraphState.annotationMode = "all";
         energyGraphDestroyViewer();
+        // T23: drop any in-flight energy workspace/geometry response from the
+        // previous selection (requestToken + abort) so its late data cannot
+        // land between this reset and the new job's first load.
+        energyGraphInvalidateInFlight();
         renderMechanismPlaceholder();
         // Candidate review state resets via its single owner (R4);
         // s2scanState no longer carries review fields.
