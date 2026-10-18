@@ -4107,9 +4107,9 @@ def test_vibration_dock_i18n_keys_new() -> None:
 
 
 def test_vibration_viewer_version_bump() -> None:
-    """ACPVibrationViewer bumped to 0.8.1."""
+    """ACPVibrationViewer bumped to 0.9.0."""
     vib = _VIB_JS.read_text(encoding="utf-8")
-    assert 'var VERSION = "0.8.1"' in vib
+    assert 'var VERSION = "0.9.0"' in vib
 
 
 def test_vibration_dock_ir_unit_updated() -> None:
@@ -4587,21 +4587,28 @@ def test_structure_viewer_node_parse_xyz_first_frame() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wave 5 / todo 29: rAF animation + controls + camera preservation
+# Wave 5 / todo 29: instance playback + controls + camera preservation
 # ---------------------------------------------------------------------------
 
 
 def test_vibration_viewer_animation_contract() -> None:
-    """Contract: rAF loop, getView/setView camera save/restore,
+    """Contract: instance-owned playback interval (one interval per
+    instance, no second animation), getView/setView camera save/restore,
     removeAllModels+addModel rebuild, NO viewer.animate(), throttle
     constant, speed clamp, injectables, style reuse, control labels."""
     vib = _VIB_JS.read_text(encoding="utf-8")
     html = read_workbench_content()
 
-    # rAF loop + injectables
-    assert "requestAnimationFrame" in vib
-    for name in ("_rafImpl", "_cancelRafImpl", "_nowImpl"):
-        assert name in vib, f"{name} injectable missing"
+    # T13: playback runs on the scene instance interval — vibration owns
+    # NO timer of its own (the rAF loop is retired).
+    assert "requestAnimationFrame" not in vib, "no second animation outside the instance"
+    assert "setInterval" not in vib, "the playback interval is owned by the scene instance"
+    for name in (
+        "_nowImpl", "playSeq", "pausePlayback", "resumePlayback",
+        "setHidden", "stopPlayback",
+    ):
+        assert name in vib, f"{name} missing"
+    assert ".play(" in vib, "playback must start via the instance play() entry"
 
     # Camera preservation + per-frame rebuild recipe
     assert "getView" in vib
@@ -4747,9 +4754,10 @@ def test_vibration_viewer_node_displacement_math() -> None:
 
 
 def test_vibration_viewer_node_animation_loop() -> None:
-    """Node logic with fake rAF + fake viewer: camera captured before the
-    rebuild and restored with the SAME view object, ~30fps throttle,
-    phase advance, equilibrium restore on stop, rAF cancel, idempotency."""
+    """Node logic with a recording instance stub + fake clock: camera
+    captured before the rebuild and restored with the SAME view object,
+    ~30fps throttle, phase advance, equilibrium restore on stop, instance
+    stopPlayback routing, idempotency."""
     if not shutil.which("node"):
         pytest.skip("node not available")
 
@@ -4761,7 +4769,17 @@ def test_vibration_viewer_node_animation_loop() -> None:
         var calls = [];
         var viewSeq = 0, lastView = null, lastSetView = null;
         var models = [], arrows = 0, renders = 0;
-        var fakeViewer = {
+        var playCalls = 0, pauseCalls = 0, resumeCalls = 0, stopCalls = 0;
+        var tickFn = null, playMs = null, playSeq = 0, hiddenLog = [];
+        var inst = {
+            play: function (onTick, ms) {
+                playCalls += 1; tickFn = onTick; playMs = ms; playSeq += 1;
+                return playSeq;
+            },
+            pausePlayback: function () { pauseCalls += 1; },
+            resumePlayback: function () { resumeCalls += 1; },
+            stopPlayback: function () { stopCalls += 1; tickFn = null; },
+            setHidden: function (v) { hiddenLog.push(!!v); },
             getView: function () {
                 viewSeq += 1;
                 lastView = { seq: viewSeq };
@@ -4783,26 +4801,13 @@ def test_vibration_viewer_node_animation_loop() -> None:
             addArrow: function () { arrows += 1; },
             render: function () { renders += 1; }
         };
-        ns._viewerImpl = function () { return fakeViewer; };
+        ns._viewerImpl = function () { return inst; };
 
-        var queue = [], idSeq = 0, cancelled = [];
-        ns._rafImpl = function (fn) {
-            idSeq += 1;
-            queue.push({ id: idSeq, fn: fn });
-            return idSeq;
-        };
-        ns._cancelRafImpl = function (h) {
-            cancelled.push(h);
-            for (var i = 0; i < queue.length; i++) {
-                if (queue[i].id === h) { queue.splice(i, 1); break; }
-            }
-        };
         var nowMs = 0;
         ns._nowImpl = function () { return nowMs; };
         function flush(ts) {
             nowMs = ts;
-            var q = queue.splice(0, queue.length);
-            for (var i = 0; i < q.length; i++) q[i].fn(ts);
+            if (tickFn) tickFn(ts);
         }
 
         var coords = [[0, 0, 0], [1, 1, 1], [2, 2, 2]];
@@ -4826,8 +4831,13 @@ def test_vibration_viewer_node_animation_loop() -> None:
         ns.arrowState.enabled = true;
 
         ns.playAnimation();
-        if (!ns.animationState.playing || queue.length !== 1) {
-            console.error("FAIL: playAnimation must schedule exactly one rAF");
+        if (!ns.animationState.playing || playCalls !== 1 || playMs !== 33) {
+            console.error("FAIL: playAnimation must schedule exactly one instance interval");
+            process.exit(1);
+        }
+        ns.playAnimation();
+        if (playCalls !== 1) {
+            console.error("FAIL: replay while playing must not open a second interval");
             process.exit(1);
         }
 
@@ -4882,12 +4892,15 @@ def test_vibration_viewer_node_animation_loop() -> None:
             process.exit(1);
         }
 
-        // stop: cancel + exact equilibrium restore + idempotent
-        var pendingHandle = ns.animationState.rafHandle;
+        // stop: instance stopPlayback + exact equilibrium restore + idempotent
         var modelCountBeforeStop = models.length;
         ns.stopAnimation();
-        if (cancelled.indexOf(pendingHandle) < 0) {
-            console.error("FAIL: stop must cancel the pending rAF handle");
+        if (stopCalls !== 1) {
+            console.error("FAIL: stop must cancel the instance interval (stopPlayback)");
+            process.exit(1);
+        }
+        if (ns.animationState.playSeq !== null) {
+            console.error("FAIL: stop must clear the session seq");
             process.exit(1);
         }
         if (ns.animationState.playing) {
@@ -4900,7 +4913,7 @@ def test_vibration_viewer_node_animation_loop() -> None:
             process.exit(1);
         }
         ns.stopAnimation();
-        if (models.length !== modelCountBeforeStop + 1) {
+        if (models.length !== modelCountBeforeStop + 1 || stopCalls !== 1) {
             console.error("FAIL: stopAnimation must be idempotent");
             process.exit(1);
         }
@@ -4948,8 +4961,8 @@ def test_vibration_viewer_teardown_contract() -> None:
     ):
         assert name in vib, f"{name} missing from vibration_viewer.js"
     assert "stopAnimationAndRestore" in vib
-    # Idempotent stop: the cancel branch is guarded by a null check on the handle
-    assert "animationState.rafHandle != null" in vib
+    # Idempotent stop: the session-clear branch is guarded by a null check
+    assert "animationState.playSeq != null" in vib
 
     # Editor lock contract exists today (Wave 6 consumes isLocked)
     assert "setLocked" in editor and "isLocked" in editor
@@ -4986,10 +4999,10 @@ def test_vibration_viewer_teardown_contract() -> None:
 
 
 def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
-    """Node logic with fake rAF + fake viewer + real editor skeleton:
-    (i) play locks editing, stop unlocks + exact equilibrium + camera +
-    idempotent; (ii) handleTeardown mid-play cancels + restores + resets;
-    (iii) entry switch mid-play stops BEFORE the new geometry loads."""
+    """Node logic with a recording instance stub + fake clock + real editor
+    skeleton: (i) play locks editing, stop unlocks + exact equilibrium +
+    camera + idempotent; (ii) handleTeardown mid-play stops + restores +
+    resets; (iii) entry switch mid-play stops BEFORE the new geometry loads."""
     if not shutil.which("node"):
         pytest.skip("node not available")
 
@@ -5006,8 +5019,18 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
 
         var events = [];
         var viewSeq = 0, lastView = null, lastSetView = null;
-        var addModelCount = 0, cancelCount = 0, removeShapesCount = 0;
-        var fakeViewer = {
+        var addModelCount = 0, stopCalls = 0, removeShapesCount = 0;
+        var tickFn = null, playSeq = 0;
+        var inst = {
+            play: function (onTick, ms) {
+                tickFn = onTick; playSeq += 1; return playSeq;
+            },
+            pausePlayback: function () {},
+            resumePlayback: function () {},
+            stopPlayback: function () {
+                stopCalls += 1; events.push("stopPlayback"); tickFn = null;
+            },
+            setHidden: function () {},
             getView: function () { viewSeq += 1; lastView = { seq: viewSeq }; return lastView; },
             setView: function (v) { lastSetView = v; events.push("setView"); },
             removeAllModels: function () { events.push("removeAllModels"); },
@@ -5025,24 +5048,13 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
             addArrow: function () {},
             render: function () {}
         };
-        ns._viewerImpl = function () { return fakeViewer; };
+        ns._viewerImpl = function () { return inst; };
 
-        var queue = [], idSeq = 0;
-        ns._rafImpl = function (fn) {
-            idSeq += 1; queue.push({ id: idSeq, fn: fn }); return idSeq;
-        };
-        ns._cancelRafImpl = function (h) {
-            cancelCount += 1; events.push("cancel");
-            for (var i = 0; i < queue.length; i++) {
-                if (queue[i].id === h) { queue.splice(i, 1); break; }
-            }
-        };
         var nowMs = 0;
         ns._nowImpl = function () { return nowMs; };
         function flush(ts) {
             nowMs = ts;
-            var q = queue.splice(0, queue.length);
-            for (var i = 0; i < q.length; i++) q[i].fn(ts);
+            if (tickFn) tickFn(ts);
         }
 
         var coords = [[0, 0, 0], [1, 1, 1], [2, 2, 2]];
@@ -5084,7 +5096,7 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
             process.exit(1);
         }
         var eqXyz = ns.buildDisplacedXyz(["C", "O", "C"], coords, "");
-        var lastModelXyz = fakeViewer.lastModelXyz;
+        var lastModelXyz = inst.lastModelXyz;
         if (lastModelXyz !== eqXyz) {
             console.error("FAIL: equilibrium not restored exactly");
             process.exit(1);
@@ -5093,9 +5105,9 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
             console.error("FAIL: stop must setView the saved view");
             process.exit(1);
         }
-        var counts = [addModelCount, cancelCount, removeShapesCount];
+        var counts = [addModelCount, stopCalls, removeShapesCount];
         ns.stopAnimationAndRestore();
-        if (addModelCount !== counts[0] || cancelCount !== counts[1] ||
+        if (addModelCount !== counts[0] || stopCalls !== counts[1] ||
             removeShapesCount !== counts[2]) {
             console.error("FAIL: second stop must be a full no-op");
             process.exit(1);
@@ -5105,14 +5117,13 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
         ns.playAnimation();
         flush(2000);
         if (!ns.isAnimationActive()) { console.error("FAIL: replay"); process.exit(1); }
-        var pending = ns.animationState.rafHandle;
         ns.handleTeardown();
         if (ns.isAnimationActive()) { console.error("FAIL: teardown stops loop"); process.exit(1); }
-        if (events.indexOf("cancel") < 0) {
-            console.error("FAIL: teardown must cancel rAF");
+        if (events.indexOf("stopPlayback") < 0) {
+            console.error("FAIL: teardown must stop the instance interval");
             process.exit(1);
         }
-        if (fakeViewer.lastModelXyz !== eqXyz) {
+        if (inst.lastModelXyz !== eqXyz) {
             console.error("FAIL: teardown restores equilibrium");
             process.exit(1);
         }
@@ -5163,14 +5174,14 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
                 process.exit(1);
             }
             var lastAdd = events.lastIndexOf("addModel");
-            var cancelAt = events.indexOf("cancel");
+            var stopAt = events.indexOf("stopPlayback");
             if (lastAdd < 0 || !(lastAdd < loadAt)) {
                 console.error("FAIL: stop must rebuild equilibrium BEFORE new load: " +
                     JSON.stringify(events));
                 process.exit(1);
             }
-            if (cancelAt < 0 || !(cancelAt < loadAt)) {
-                console.error("FAIL: rAF cancel must precede new load");
+            if (stopAt < 0 || !(stopAt < loadAt)) {
+                console.error("FAIL: interval stop must precede new load");
                 process.exit(1);
             }
             console.log("PASS");
