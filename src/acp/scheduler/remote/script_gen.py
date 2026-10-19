@@ -41,6 +41,11 @@ from acp.scheduler.jobs import (
 )
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.resources import resolve_job_resources, with_job_resources
+from acp_services.runtime.execution_chain import (
+    EXECUTION_ENTRY_ENVELOPE,
+    ExecutionLaunch,
+    worker_argv,
+)
 from acp_services.runtime.method_flags import method_levels_to_cli_flags
 from cccp.utils.resource_utils import mem_to_mb
 
@@ -153,15 +158,26 @@ def build_remote_cli_command(
     input_path: str = "inputs/input.xyz",
     python_executable: str = "python",
     config_path: str | None = None,
+    *,
+    execution: ExecutionLaunch | None = None,
 ) -> list[str]:
-    """Build the ``python -m acp.cli ...`` argv for remote execution.
+    """Build the argv a remote node runs for *spec*.
+
+    When *execution* selects the frozen-envelope entry the argv is the Services
+    worker bootstrap (``python -m acp_services.worker_bootstrap``); otherwise the
+    legacy CLI mapping is built. The two entries are mutually exclusive — the
+    dispatcher freezes the choice on the attempt, and this function emits only
+    the selected one.
 
     Args:
         python_executable: Interpreter to use on the node.
         config_path: Optional path to a job-level YAML config on the remote
             node.
+        execution: The attempt's frozen execution launch (``None`` = legacy).
     """
     py = python_executable or "python"
+    if execution is not None and execution.entry == EXECUTION_ENTRY_ENVELOPE:
+        return worker_argv(py, execution)
     spec = with_job_resources(spec)
     wf = spec.workflow
     if wf not in _ALLOWED_REMOTE_WORKFLOWS:
@@ -343,24 +359,22 @@ def build_remote_worker_command(
         probe_executor: Worker-independence probe only (``ok``/``fail``).
     """
     py = python_executable or "python"
-    cmd: list[str] = [
+    launch = ExecutionLaunch(
+        entry=EXECUTION_ENTRY_ENVELOPE,
+        protocol="lsf",
+        closure="integrated",
+        work_dir=str(work_dir),
+        envelope_path=str(envelope_path),
+        plan_path=str(plan_path),
+        binding_path=str(binding_path) if binding_path else None,
+    )
+    return worker_argv(
         py,
-        "-m",
-        "acp_services.worker_bootstrap",
-        "--envelope",
-        str(envelope_path),
-        "--plan",
-        str(plan_path),
-        "--work-dir",
-        str(work_dir),
-    ]
-    if receipt_path:
-        cmd += ["--receipt", str(receipt_path)]
-    if binding_path:
-        cmd += ["--binding", str(binding_path)]
-    if probe_executor:
-        cmd += ["--probe-executor", str(probe_executor)]
-    return cmd
+        launch,
+        work_dir=str(work_dir),
+        receipt_path=str(receipt_path) if receipt_path else None,
+        probe_executor=str(probe_executor) if probe_executor else None,
+    )
 
 
 def _append_resources_and_return(
@@ -625,6 +639,7 @@ def build_lsf_script_spec(
     pre_cmds: list[str] | None = None,
     submission_id: str | None = None,
     code_release: str | None = None,
+    execution: ExecutionLaunch | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -680,6 +695,7 @@ def build_lsf_script_spec(
         input_path=input_path,
         python_executable=python_executable or node.python_executable,
         config_path=config_path,
+        execution=execution,
     )
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
         spec, queue=queue, walltime=walltime, extra_flags=extra_flags

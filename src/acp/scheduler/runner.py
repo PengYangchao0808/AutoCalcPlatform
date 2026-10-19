@@ -59,6 +59,17 @@ from acp.scheduler.processctl import find_task_processes, pid_is_alive, process_
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
+from acp_services.runtime.execution_chain import (
+    EXECUTION_ENTRY_ENVELOPE,
+    AttemptExecutionChoice,
+    frozen_artifacts_present,
+    local_launch,
+    read_attempt_choice,
+    resolve_attempt_choice,
+    with_attempt_choice,
+    worker_argv,
+    write_attempt_choice,
+)
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -614,8 +625,8 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        cmd = self._build_cmd(
-            record.spec,
+        cmd = self._build_execution_cmd(
+            record,
             work_dir,
             effective_input_path,
             materialized_roles,
@@ -1000,8 +1011,8 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        cmd = self._build_cmd(
-            record.spec,
+        cmd = self._build_execution_cmd(
+            record,
             work_dir,
             effective_input_path,
             materialized_roles,
@@ -1219,6 +1230,56 @@ class JobRunner:
 
         return False
 
+    def _resolve_attempt_choice(
+        self, record: JobRecord, work_dir: Path, *, remote: bool = False
+    ) -> AttemptExecutionChoice:
+        """Resolve (and record) this attempt's execution entry via the dispatcher.
+
+        The single dispatcher (``execution_chain``) owns the decision: an
+        already-recorded choice for the same attempt is reused verbatim (resume
+        never re-selects), a new attempt re-selects from the frozen table. The
+        choice is persisted in the attempt runtime dir so the same attempt can
+        never dispatch a second, different entry.
+        """
+        previous = read_attempt_choice(work_dir)
+        remote_meta = (record.result or {}).get("remote")
+        release_id = ""
+        if isinstance(remote_meta, Mapping):
+            raw_release = remote_meta.get("code_release")
+            if isinstance(raw_release, str):
+                release_id = raw_release
+        choice = resolve_attempt_choice(
+            workflow=record.spec.workflow,
+            attempt=record.attempt,
+            remote=remote,
+            envelope_available=frozen_artifacts_present(work_dir),
+            previous=previous,
+            release_id=release_id,
+        )
+        if previous != choice:
+            write_attempt_choice(work_dir, choice)
+        return choice
+
+    def _build_execution_cmd(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+        materialized_roles: Mapping[str, Path | str] | None,
+    ) -> list[str]:
+        """Return the ONE entry command for this attempt (dispatcher-driven).
+
+        Envelope-selected attempts run the Services worker bootstrap; every
+        other attempt keeps the legacy CLI mapping. Never both — the selection
+        is frozen on the attempt first.
+        """
+        choice = self._resolve_attempt_choice(record, work_dir)
+        record.result = with_attempt_choice(record.result, choice)
+        if choice.entry == EXECUTION_ENTRY_ENVELOPE:
+            launch = local_launch(work_dir, choice)
+            return worker_argv(self.python, launch, work_dir=str(work_dir))
+        return self._build_cmd(record.spec, work_dir, input_path, materialized_roles)
+
     def _build_cmd(
         self,
         spec: JobSpec,
@@ -1403,7 +1464,7 @@ class JobRunner:
                 cmd += ["--name", spec.name]
             levels = method.get("levels", {})
             if levels:
-                from acp.catalog import method_levels_to_cli_flags
+                from acp_services.runtime.method_flags import method_levels_to_cli_flags
 
                 cmd += method_levels_to_cli_flags(levels, workflow=wf)
                 spin_module = electronic_state_from_method(method)
