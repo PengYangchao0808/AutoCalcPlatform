@@ -53,7 +53,9 @@ from acp.nmr.shift_predictor import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PREDICTOR_MODULE_PATH = REPO_ROOT / "src" / "acp" / "nmr" / "shift_predictor.py"
+# T29: the predictor implementation now lives in cccp; ``acp.nmr.shift_predictor``
+# re-exports it. The isolation guards inspect the live implementation.
+PREDICTOR_MODULE_PATH = REPO_ROOT / "src" / "cccp" / "analysis" / "nmr" / "shift_predictor.py"
 
 #: Formal error-model class tokens, assembled from fragments so this file
 #: never carries the grep-checked coupling literal itself.
@@ -495,7 +497,7 @@ def _imported_module_names(tree: ast.Module) -> list[str]:
 
 
 def test_module_docstring_documents_the_no_replacement_boundary() -> None:
-    module = importlib.import_module("acp.nmr.shift_predictor")
+    module = importlib.import_module("cccp.analysis.nmr.shift_predictor")
     doc = module.__doc__ or ""
     assert "does NOT replace the GIAO/DP4/DP5 chain" in doc
     assert "never selected by the default NMR workflow" in doc
