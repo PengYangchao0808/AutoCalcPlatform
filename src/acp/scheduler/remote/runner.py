@@ -40,7 +40,7 @@ import shlex
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -86,6 +86,20 @@ from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_r
 from acp.scheduler.runner import JobRunner, _electronic_state_cli_flags, materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
+from acp_services.runtime.execution_chain import (
+    BINDING_FILENAME,
+    ENVELOPE_FILENAME,
+    EXECUTION_ENTRY_ENVELOPE,
+    PLAN_FILENAME,
+    RUNTIME_PROTOCOL_DIR,
+    AttemptExecutionChoice,
+    ExecutionLaunch,
+    frozen_artifacts_present,
+    read_attempt_choice,
+    resolve_attempt_choice,
+    with_attempt_choice,
+    write_attempt_choice,
+)
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -1256,6 +1270,77 @@ class RemoteJobRunner:
     # Prepare + submit
     # ------------------------------------------------------------------ #
 
+    def _resolve_remote_choice(self, record: JobRecord, work_dir: Path) -> AttemptExecutionChoice:
+        """Resolve + record the attempt entry via the single dispatcher (B06-3).
+
+        Envelope is selected only when the workflow closure is integrated and a
+        frozen envelope/plan pair is present for the attempt; otherwise the
+        legacy entry is selected. The recorded choice is reused verbatim for an
+        unchanged attempt (resume/reconcile never re-select).
+        """
+        previous = read_attempt_choice(work_dir)
+        remote_meta = (record.result or {}).get("remote")
+        release_id = ""
+        if isinstance(remote_meta, Mapping):
+            raw_release = remote_meta.get("code_release")
+            if isinstance(raw_release, str):
+                release_id = raw_release
+        choice = resolve_attempt_choice(
+            workflow=record.spec.workflow,
+            attempt=record.attempt,
+            remote=True,
+            envelope_available=frozen_artifacts_present(work_dir),
+            previous=previous,
+            release_id=release_id,
+        )
+        if previous != choice:
+            write_attempt_choice(work_dir, choice)
+        record.result = with_attempt_choice(record.result, choice)
+        return choice
+
+    def _upload_frozen_envelope(
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        work_dir: Path,
+        event_log: JobEventLog,
+        record: JobRecord,
+    ) -> ExecutionLaunch | None:
+        """Upload the frozen envelope/plan/binding and return the worker launch.
+
+        Returns ``None`` when no frozen artifacts are present (the dispatcher
+        would not have selected the envelope entry in that case). The uploaded
+        files land beside the scheduled task so the node-side worker can rebuild
+        every dependency from the synced code dir.
+        """
+        if not frozen_artifacts_present(work_dir):
+            return None
+        runtime = work_dir.joinpath(*RUNTIME_PROTOCOL_DIR)
+        binding_present = (runtime / BINDING_FILENAME).is_file()
+        for name in (ENVELOPE_FILENAME, PLAN_FILENAME, BINDING_FILENAME):
+            source = runtime / name
+            if source.is_file():
+                self._stager.upload_file(
+                    node, source, posixpath.join(remote_job_dir, name)
+                )
+        event_log.append(
+            "remote.envelope_uploaded",
+            job_id=record.id,
+            node=node.name,
+            remote_dir=remote_job_dir,
+        )
+        return ExecutionLaunch(
+            entry=EXECUTION_ENTRY_ENVELOPE,
+            protocol="lsf",
+            closure="integrated",
+            work_dir=remote_job_dir,
+            envelope_path=posixpath.join(remote_job_dir, ENVELOPE_FILENAME),
+            plan_path=posixpath.join(remote_job_dir, PLAN_FILENAME),
+            binding_path=(
+                posixpath.join(remote_job_dir, BINDING_FILENAME) if binding_present else None
+            ),
+        )
+
     def _prepare_and_submit(
         self,
         record: JobRecord,
@@ -1296,6 +1381,9 @@ class RemoteJobRunner:
         if submission_id is None:
             submission_id = submission_id_for(record.id, record.attempt)
         heartbeat_submit_worker(submission_id)
+
+        choice = self._resolve_remote_choice(record, work_dir)
+        execution_launch: ExecutionLaunch | None = None
 
         try:
             self._archive_remote_attempt(node, remote_job_dir, record, event_log, disposition)
@@ -1378,6 +1466,10 @@ class RemoteJobRunner:
             # otherwise nests products under <remote_job_dir>/<molecule>/,
             # where the flat result-fetch layer never finds them.
             self._upload_scheduler_markers(record, node, remote_job_dir, work_dir, event_log)
+            if choice.entry == EXECUTION_ENTRY_ENVELOPE:
+                execution_launch = self._upload_frozen_envelope(
+                    node, remote_job_dir, work_dir, event_log, record
+                )
             if spec.workflow in {"singlepoint", "optimize", "frequency", "scan"}:
                 module = electronic_state_from_method(spec.method)
                 if module:
@@ -1416,6 +1508,7 @@ class RemoteJobRunner:
                 pre_cmds=self._config.pre_cmds,
                 submission_id=submission_id,
                 code_release=script_release,
+                execution=execution_launch,
             )
             script_text = generate_lsf_script(lsf_spec)
             script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
