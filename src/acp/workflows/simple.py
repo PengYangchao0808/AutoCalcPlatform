@@ -556,7 +556,10 @@ def _execute(
         progress_reporter.start_stage(stage_name)
     try:
         with optimization_progress_context(progress_reporter):
-            execution = CalculationPlanExecutor().execute(plan, calc_dir)
+            from acp.services_publication_bootstrap import build_publication_data_port
+
+            executor = CalculationPlanExecutor(publication=build_publication_data_port())
+            execution = executor.execute(plan, calc_dir)
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         if progress_reporter is not None:
             progress_reporter.fail_stage(stage_name, str(error) or type(error).__name__)

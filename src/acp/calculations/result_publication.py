@@ -238,6 +238,8 @@ def register_result_manifest(
     executor / scan / IRC product registration routes through here instead of
     writing the manifest themselves.  ``publisher`` (optional) is the injected
     Data publication entry; when omitted the local writer is used unchanged.
+    Production executors inject ``acp.services_publication_bootstrap``'s Data
+    publisher so ``RESULT`` manifests reach the todo-11 ``DataResourcePort``.
     """
     if publisher is not None:
         return publisher(Path(result_dir), manifest)

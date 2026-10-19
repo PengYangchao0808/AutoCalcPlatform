@@ -494,6 +494,9 @@ def test_task_view_presents_ready_stale_and_missing(
 
 
 def test_task_view_rows_always_carry_annotation_fields(client: TestClient, tmp_path: Path) -> None:
+    from acp.api import v2_routes
+
+    manager = client.app.state.job_manager
     _seed_running_job(
         client,
         job_id="annot-fields",
@@ -501,11 +504,13 @@ def test_task_view_rows_always_carry_annotation_fields(client: TestClient, tmp_p
         state={"stage_index": 3},
         revision=1,
     )
+    store = v2_routes.install_task_projection(manager, auto_refresh=False)
+    assert store.refresh(["annot-fields"]) == 1
     rows = _query_rows(client)
     row = _row(rows, "annot-fields")
     for key in ("availability", "freshness", "basis_revision", "observed_at", "stale_dimensions"):
         assert key in row, key
-    assert row["basis_revision"]  # covered by the compat path -> current basis
+    assert row["basis_revision"]  # covered by the prepared snapshot -> current basis
 
 
 def _projection(
