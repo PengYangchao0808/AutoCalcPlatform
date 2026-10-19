@@ -64,6 +64,7 @@ __all__ = [
     "build_remote_nmr_cmd_tail",
     "build_remote_scan_config_payload",
     "build_remote_stage_cmd_tail",
+    "build_remote_worker_command",
     "derive_lsf_resources",
     "generate_lsf_script",
 ]
@@ -312,6 +313,54 @@ def build_remote_cli_command(
             cmd += ["--solvent-model", str(sm)]
 
     return _append_resources_and_return(cmd, wf, inp, method, res, config_path)
+
+
+def build_remote_worker_command(
+    *,
+    envelope_path: str,
+    plan_path: str,
+    work_dir: str,
+    receipt_path: str | None = None,
+    binding_path: str | None = None,
+    python_executable: str = "python",
+    probe_executor: str | None = None,
+) -> list[str]:
+    """Build the Services worker-bootstrap argv for remote execution (B06-6).
+
+    Unlike :func:`build_remote_cli_command` (legacy ``python -m acp.cli``), the
+    frozen-envelope worker runs the synced Services composition root directly:
+    ``python -m acp_services.worker_bootstrap ...``.  The node consumer never
+    hops through the legacy CLI; every dependency is reconstructed from the
+    frozen envelope / plan / storage binding shipped alongside the work dir.
+
+    Args:
+        envelope_path: Remote path to the frozen envelope JSON.
+        plan_path: Remote path to the frozen plan JSON.
+        work_dir: Remote task work dir holding the read-only artifacts.
+        receipt_path: Receipt output path (defaults inside the worker).
+        binding_path: Optional frozen StorageBinding JSON path.
+        python_executable: Interpreter on the node.
+        probe_executor: Worker-independence probe only (``ok``/``fail``).
+    """
+    py = python_executable or "python"
+    cmd: list[str] = [
+        py,
+        "-m",
+        "acp_services.worker_bootstrap",
+        "--envelope",
+        str(envelope_path),
+        "--plan",
+        str(plan_path),
+        "--work-dir",
+        str(work_dir),
+    ]
+    if receipt_path:
+        cmd += ["--receipt", str(receipt_path)]
+    if binding_path:
+        cmd += ["--binding", str(binding_path)]
+    if probe_executor:
+        cmd += ["--probe-executor", str(probe_executor)]
+    return cmd
 
 
 def _append_resources_and_return(

@@ -129,3 +129,13 @@ choke point 与 catalog 归一化同属 `MethodConfigPort`（行 9）。
   `acp_services.store.naming`。
 - 本节为**散文记录**，不进入上表解析（上表每行仍须含具体迁移/移除 todo 号）；
   机器可校验状态见 `tests/test_services_injection_contracts.py::test_registry_rows_carry_concrete_migration_and_removal`。
+
+> **B06-6 worker 自足装配记（todo 78）**: `src/acp_services/worker_bootstrap.py` 提供独立 worker
+> composition root（`assemble_worker` / `load_and_assemble` / `main`）：新进程仅凭冻结 envelope +
+> 冻结 plan + StorageBinding + 只读工件构造依赖，不依赖父进程注入对象、不 import `acp`、不连 jobs DB。
+> `PlanVerificationPort` 改由 Services-native `FrozenPlanVerifier`（复算冻结 plan body digest）实现——
+> 上表「`acp.calculations.identity.compute_identity`（两层冻结 plan 身份复算）」行的移除任务 **todo 78
+> 在独立 worker 路径关闭**；过渡 controller 仍可由旧 ACP 装配（计划明确区分独立 worker 与过渡 controller），
+> 故该行不删。`StepRequirementPort` 由 `ServicesStepRequirements` 适配（todo 77 唯一实现）。
+> 远端入口 `build_remote_worker_command` 指向 `python -m acp_services.worker_bootstrap`，不经旧 CLI；
+> 整链接线归 todo 32。守护：`tests/test_services_worker_bootstrap.py`。
