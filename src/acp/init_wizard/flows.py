@@ -2,12 +2,12 @@
 
 ``run_init`` owns the repeat loop: a resource menu (本地 / 已声明的计算节点 /
 声明新集群 / q) rebuilt from the RAW target YAML after every completed flow.
-The menu reads plain ``cluster.nodes[]`` dicts through a LOCAL display
-validator mirroring every raising check of
-``RemoteNode.from_config_dict`` (required keys, remote_work_dir space-free,
-``int(port)``/``int(max_concurrent_jobs)`` coercion) — broken entries render
+The menu reads plain ``cluster.nodes[]`` dicts through the **shared pure**
+node validator (``acp_services.contracts.config_validation``) — the same rule
+set ``RemoteNode.from_config_dict`` enforces — so broken entries render
 ``name (配置无效: <原因>)`` and are unselectable, disabled entries render
-``(已禁用)`` and are refused with the reason (D16c/D16d).
+``(已禁用)`` and are refused with the reason (D16c/D16d).  The pure module is
+stdlib-only, so it adds no paramiko (or ``acp``) dependency to this path.
 
 Import discipline (D7, round-1 O1): ZERO ``acp.scheduler.remote`` imports at
 module level — the scheduler remote package eagerly imports paramiko.  The
@@ -66,49 +66,11 @@ from acp.init_wizard.sniff_remote import (
     sniff_remote,
     write_remote_config,
 )
+from acp_services.contracts.config_validation import node_entry_error
 
 logger = logging.getLogger(__name__)
 
 __all__ = ["run_init"]
-
-#: Required keys, mirroring ``RemoteNode.from_config_dict`` (config.py:170) —
-#: the ONLY raising checks there are these, the remote_work_dir space rule,
-#: and ``int()`` coercion of port / max_concurrent_jobs.
-_REQUIRED_NODE_KEYS: tuple[str, ...] = (
-    "name",
-    "host",
-    "username",
-    "remote_work_dir",
-    "remote_code_dir",
-)
-
-
-# --------------------------------------------------------------------------- #
-# Local display validator over RAW node dicts (no scheduler.remote import)
-# --------------------------------------------------------------------------- #
-
-
-def _node_entry_error(entry: Any) -> str | None:
-    """Return the reason *entry* would fail ``RemoteNode.from_config_dict``.
-
-    Mirrors EVERY raising check (config.py:158-167/:176/:181); everything
-    else in ``from_config_dict`` degrades gracefully and never raises.
-    """
-    if not isinstance(entry, dict):
-        return "节点条目必须是映射"
-    for key in _REQUIRED_NODE_KEYS:
-        if key not in entry:
-            return f"缺少必需字段 {key!r}"
-    work_dir = str(entry["remote_work_dir"])
-    if " " in work_dir:
-        return f"remote_work_dir 不能包含空格（{work_dir!r}）"
-    for key in ("port", "max_concurrent_jobs"):
-        if key in entry:
-            try:
-                int(entry[key])
-            except (TypeError, ValueError):
-                return f"{key} 不是有效整数（{entry[key]!r}）"
-    return None
 
 
 def _entry_name(entry: Any) -> str:
@@ -120,7 +82,7 @@ def _entry_name(entry: Any) -> str:
 
 def _node_label(entry: Any) -> str:
     """Menu label for one raw node entry (D16c/D16d decorations)."""
-    error = _node_entry_error(entry)
+    error = node_entry_error(entry)
     name = _entry_name(entry)
     if error is not None:
         return f"{name} (配置无效: {error})"
@@ -162,7 +124,7 @@ def _resource_menu(prompts: PromptBundle, target_data: dict[str, Any]) -> tuple[
         if choice == len(options):
             return ("new", None)
         entry = entries[choice - 2]
-        error = _node_entry_error(entry)
+        error = node_entry_error(entry)
         if error is not None:
             # Broken entries are unselectable: show the reason, re-show menu.
             print(f"节点 {_entry_name(entry)} 配置无效：{error}，请先修正配置文件")
