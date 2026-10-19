@@ -2608,6 +2608,9 @@ MIGRATION_STATION_PREFIXES = (
     # B28a/B28b: ACP-side publication + science-product projection stations.
     "src/acp/results/frame_candidate_store.py",
     "src/acp/results/frames_adapter.py",
+    # todo 81 (remediation d51b024): production frame-candidate/manifest writes
+    # route through PublicationDataPort (DataResourcePort); behavior preserved.
+    "src/acp/results/frame_candidates.py",
     # CCCP-relocation forwarders (Plan 3, lane C) that this shared gate sees.
     # Registered as exact files (not whole dirs) so unrelated results/intake
     # modules keep failing the boundary; each is also in MIGRATION_SHIM_PY, so
@@ -2947,6 +2950,69 @@ def test_services_relocation_shims_stay_pure_reexports() -> None:
     for path in SERVICES_RELOCATION_SHIMS:
         src = (ROOT / path).read_text(encoding="utf-8")
         assert _is_migration_shim(src), f"{path}: registered shim has a real body"
+
+
+def _frame_candidates_publication_issues(src: str) -> list[str]:
+    """Todo 81 teeth: the production candidate/manifest writes in
+    ``save_frame_candidate`` go through ``PublicationDataPort``, while the
+    authority writer stays imported from the single store station."""
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as exc:
+        return [f"  frame_candidates.py does not parse: {exc}"]
+    issues: list[str] = []
+    fn = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "save_frame_candidate"
+        ),
+        None,
+    )
+    if fn is None:
+        return ["  frame_candidates.py missing save_frame_candidate"]
+    params = {arg.arg for arg in fn.args.args} | {arg.arg for arg in fn.args.kwonlyargs}
+    if "publication" not in params:
+        issues.append("  frame_candidates.py: save_frame_candidate lacks publication port")
+    port_calls = {
+        node.func.attr
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "publication"
+    }
+    for method in ("save_candidates", "publish_manifest"):
+        if method not in port_calls:
+            issues.append(f"  frame_candidates.py: production write bypasses publication.{method}")
+    store_imports = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "acp.results.frame_candidate_store"
+        for alias in node.names
+    }
+    if "write_authority" not in store_imports:
+        issues.append(
+            "  frame_candidates.py: authority writer not imported from frame_candidate_store"
+        )
+    return issues
+
+
+def test_frame_candidates_routes_production_writes_through_publication_port() -> None:
+    """Amendment S2 bis (todo 81): registering ``frame_candidates.py`` carries
+    teeth — production candidate/manifest writes use the injected port, the
+    direct writers remain fallback-only, and authority stays single-sourced."""
+    path = ROOT / "src/acp/results/frame_candidates.py"
+    src = path.read_text(encoding="utf-8")
+    issues = _frame_candidates_publication_issues(src)
+    assert issues == [], issues
+
+    mutated = src.replace(
+        "publication.save_candidates(root, authority_payload)",
+        "write_authority(root, authority_payload)",
+    )
+    assert mutated != src
+    assert _frame_candidates_publication_issues(mutated), "bypass mutation not caught"
 
 
 def test_services_amendment_keeps_unaudited_change_teeth() -> None:

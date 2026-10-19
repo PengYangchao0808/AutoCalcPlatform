@@ -33,6 +33,7 @@ never to widen/skip the gate.
 |---|---|---|
 | `src/acp/results/frame_candidate_store.py` | todo 28 | Authoritative `frame_candidates.json` writer + shared `atomic_write_text` (publication entry). |
 | `src/acp/results/frames_adapter.py` | todo 28 (B28b) | Science-product → `TrajectoryFrame`/`TrajectoryAnnotation` projection (ledger row 74). |
+| `src/acp/results/frame_candidates.py` | todo 81 (remediation d51b024) | Production frame-candidate/manifest writes route through `PublicationDataPort` → `DataResourcePort`; direct writers remain the non-production fallback (behavior preserved). |
 
 ### 2.3 CCCP-relocation forwarders (lane C, Plan 3) seen by the shared gate
 
@@ -131,3 +132,33 @@ module-level-paramiko ban (§3.3a) adds package-wide teeth to compensate.
 | `--gate unique_run_irc src/acp src/cccp` | — | exit 0 |
 | `--gate wave2_shermo_external <two stub paths>` | — | exit 0 |
 | `--gate final_shermo src` | — | exit 0 |
+
+## 7. Amendment S2 bis-2 (2026-10-19): todo 81 production frame-candidate station
+
+**Registration:** `src/acp/results/frame_candidates.py` added to
+`MIGRATION_STATION_PREFIXES` (exact file, not the `results/` directory).
+
+**Reason:** remediation todo 81 (commit `d51b024`) routed the production
+frame-candidate write path through the Data port: `save_frame_candidate(...)`
+gained a duck-typed `publication` entry and now calls
+`publication.save_candidates(...)` / `publication.publish_manifest(...)`, while
+retaining the direct `write_authority` / `manifest.write` path as the
+non-production fallback (tests / non-production callers).  Behavior is
+preserved and `frame_candidate_store.py` remains the single authority writer.
+
+**Equivalent-or-stronger check (applied, not waived):**
+`_frame_candidates_publication_issues` + test
+`test_frame_candidates_routes_production_writes_through_publication_port`
+enforce that (a) `save_frame_candidate` accepts the `publication` port,
+(b) both production writes call through it, (c) `write_authority` is imported
+from `acp.results.frame_candidate_store` (no second authority), and (d) a
+mutated source bypassing the port is caught.  The negative tooth in §4
+(`src/acp/results/rogue_station.py` still `unaudited`) is untouched, so the
+exact-file registration does not whitelist the `results/` directory.
+
+**Verification (2026-10-19):**
+
+| Command | Result |
+|---|---|
+| `python3.11 -m pytest tests/test_f4_scope_audit.py -q` | **36 passed** |
+| `python3.11 -m pytest tests/test_architecture_invariants.py tests/test_acp_services_isolation.py -q` | PASS |
