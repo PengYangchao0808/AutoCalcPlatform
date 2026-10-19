@@ -28,6 +28,7 @@ import json
 import logging
 import os
 import sys
+import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -2154,6 +2155,452 @@ def job_control_command(
     )
 
 
+# ---------------------------------------------------------------------------
+# Public local task management (B07-8 / todo 74)
+# ---------------------------------------------------------------------------
+# Reuse the Services use cases (RuntimeCommands / RuntimeRecovery) and the
+# persistent run_root store so a fresh process finds and controls the original
+# task; never a browser/Web path or a second task implementation.
+
+_TASK_STEP_KINDS: Final[dict[str, str]] = {
+    "singlepoint": "singlepoint",
+    "optimize": "optimize",
+    "frequency": "frequency",
+    "scan": "scan",
+    "casscf": "casscf",
+}
+
+_TASK_CONTROL_VERBS: Final[tuple[str, ...]] = (
+    "pause",
+    "unpause",
+    "continue",
+    "cancel",
+    "rerun",
+)
+
+
+def _add_task_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Register ``acp task`` subcommands (persistent controller/worker entry)."""
+    task_parser = subparsers.add_parser(
+        "task",
+        help="Local task management against the persistent run_root store",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp task ingest --xyz-text "3\\nwater\\nO 0 0 0\\nH 0 0 0.96\\nH 0 0.93 -0.24" --task-dir ./t
+  acp task execute --workflow fake --input "CCO" --name demo
+  acp task query --job 20261019_001_demo
+  acp task pause --job 20261019_001_demo
+  acp task export --job 20261019_001_demo
+        """,
+    )
+    task_sub = task_parser.add_subparsers(dest="task_command", required=True)
+
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)")
+    common.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    ingest = task_sub.add_parser("ingest", parents=[common], help="Parse an input structure")
+    ingest.add_argument("--input", "-i", default=None, help="Structure file (XYZ/GJF/COM/... )")
+    ingest.add_argument("--smiles", default=None, help="SMILES string")
+    ingest.add_argument("--xyz-text", default=None, help="Inline XYZ text")
+    ingest.add_argument("--task-dir", required=True, help="Task directory to write input.xyz into")
+    ingest.add_argument("--name", default=None, help="Molecule name")
+
+    plan = task_sub.add_parser("plan", parents=[common], help="Build a calculation plan")
+    plan.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
+    plan.add_argument("--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)")
+    plan.add_argument("--method", default="r2SCAN-3c", help="Method (default: r2SCAN-3c)")
+    plan.add_argument("--profile", default="default", help="Plan profile (default: default)")
+
+    execute = task_sub.add_parser("execute", parents=[common], help="Submit a job to the local scheduler")
+    execute.add_argument("--workflow", "-w", required=True, help="Workflow id (e.g. fake, singlepoint)")
+    execute.add_argument("--input", "-i", required=True, help="Input source (SMILES or file path)")
+    execute.add_argument("--name", default=None, help="Task/molecule name")
+    execute.add_argument("--method", default="", help="Method override")
+    execute.add_argument(
+        "--follow",
+        action="store_true",
+        help="Wait for the job to reach a terminal state (default: return once the worker starts)",
+    )
+
+    query = task_sub.add_parser("query", parents=[common], help="Query persisted job records")
+    query.add_argument("--job", default=None, help="Single job id")
+    query.add_argument("--status", default=None, help="Filter by status")
+    query.add_argument("--limit", type=int, default=50, help="Max rows (default: 50)")
+
+    for verb in _TASK_CONTROL_VERBS:
+        control = task_sub.add_parser(verb, parents=[common], help=f"{verb} a persisted job")
+        control.add_argument("--job", required=True, help="Job id")
+        control.add_argument("--project", default=None, help="Project id (rerun only)")
+        control.add_argument("--target-node", default=None, help="Execution node override (continue)")
+
+    recover = task_sub.add_parser("recover", parents=[common], help="Reuse valid results for a task")
+    recover.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
+    recover.add_argument("--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)")
+    recover.add_argument("--method", default="r2SCAN-3c", help="Method (default: r2SCAN-3c)")
+    recover.add_argument("--profile", default="default", help="Plan profile (default: default)")
+
+    export = task_sub.add_parser("export", parents=[common], help="Read the task result manifest")
+    export.add_argument("--job", default=None, help="Job id (resolves the task dir)")
+    export.add_argument("--task-dir", default=None, help="Task directory (alternative to --job)")
+
+
+def job_submit_command(spec: Any, *, manager: Any | None = None) -> Any:
+    """Submit a job through the shared Runtime use case (single execution owner)."""
+    commands = job_runtime_commands(manager)
+    return commands.submit(spec)
+
+
+def _task_run_root(args: argparse.Namespace) -> Path:
+    from acp.core.paths import resolve_run_root
+
+    return resolve_run_root(getattr(args, "run_root", None))
+
+
+def _task_manager(run_root: Path) -> Any:
+    from acp.scheduler.manager import JobManager
+
+    run_root.mkdir(parents=True, exist_ok=True)
+    return JobManager(run_root=run_root, reconnect_local_workers=True)
+
+
+def _task_store(run_root: Path) -> Any:
+    from acp_services.store.store import JobStore
+
+    return JobStore(run_root / "acp_jobs.db")
+
+
+def _emit_task(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, sort_keys=True, default=str))
+
+
+def _task_structure_elements(xyz_text: str) -> list[str]:
+    elements: list[str] = []
+    for line in xyz_text.splitlines()[2:]:
+        parts = line.split()
+        if len(parts) >= 4:
+            elements.append(parts[0])
+    return elements
+
+
+def _build_task_plan(task_dir: Path, workflow: str, method: str, profile: str) -> Any:
+    from acp.calculations.contracts import (
+        CalculationRequest,
+        StepKind,
+        StructureArtifact,
+        StructureRole,
+    )
+    from acp.calculations.plans import build_simple_plan
+
+    kind_value = _TASK_STEP_KINDS.get(workflow)
+    if kind_value is None:
+        raise ValueError(
+            f"workflow {workflow!r} has no simple plan; supported: {sorted(_TASK_STEP_KINDS)}"
+        )
+    input_path = task_dir / "input.xyz"
+    if not input_path.is_file():
+        raise FileNotFoundError(f"missing {input_path}; run `acp task ingest` first")
+    xyz_text = input_path.read_text(encoding="utf-8")
+    artifact = StructureArtifact(
+        path=input_path,
+        elements=_task_structure_elements(xyz_text),
+        role=StructureRole.MINIMUM,
+        source="cli-task",
+    )
+    request = CalculationRequest(
+        input_artifact=artifact,
+        method=method,
+        resources={"output_dir": str(task_dir / "WORK" / f"05_{kind_value.upper()}")},
+        workflow=workflow,
+        profile=profile,
+    )
+    return build_simple_plan(StepKind(kind_value), request)
+
+
+def _task_input_payload(source: str) -> dict[str, Any]:
+    candidate = Path(source)
+    if candidate.is_file():
+        return {"source": str(candidate), "source_type": "file"}
+    return {"source": source, "source_type": "smiles"}
+
+
+def _wait_for_task(
+    manager: Any,
+    job_id: str,
+    *,
+    terminal: bool,
+    timeout: float = 120.0,
+) -> Any:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        record = manager.store.get(job_id)
+        if record is None:
+            return None
+        if record.status.is_terminal:
+            return record
+        if not terminal:
+            proc = manager.runner._processes.get(job_id)
+            if proc is not None and proc.poll() is None:
+                return record
+        time.sleep(0.1)
+    return manager.store.get(job_id)
+
+
+def _handle_task_ingest(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    task_dir = Path(args.task_dir)
+    task_dir.mkdir(parents=True, exist_ok=True)
+    from acp.intake import detect_and_parse
+
+    if args.input:
+        source_path = Path(args.input)
+        text = source_path.read_text(encoding="utf-8")
+        filename = source_path.name
+    elif args.xyz_text:
+        text = args.xyz_text
+        filename = "input.xyz"
+    elif args.smiles:
+        text = args.smiles
+        filename = "input.xyz"
+    else:
+        _emit_task(
+            {
+                "command": "ingest",
+                "status": "failed",
+                "error": "one of --input/--smiles/--xyz-text required",
+            }
+        )
+        return 2
+    fmt, parsed = detect_and_parse(text, filename=filename)
+    if not parsed.ok or not parsed.structures:
+        _emit_task({"command": "ingest", "status": "failed", "errors": parsed.errors})
+        return 2
+    asset = parsed.structures[0]
+    xyz_out = text if fmt == "xyz" else (asset.xyz or text)
+    (task_dir / "input.xyz").write_text(xyz_out, encoding="utf-8")
+    _emit_task(
+        {
+            "command": "ingest",
+            "status": "ok",
+            "format": fmt,
+            "atom_count": asset.atom_count,
+            "formula": asset.formula,
+            "task_dir": str(task_dir),
+        }
+    )
+    return 0
+
+
+def _handle_task_plan(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    try:
+        plan = _build_task_plan(Path(args.task_dir), args.workflow, args.method, args.profile)
+    except (FileNotFoundError, ValueError) as exc:
+        _emit_task({"command": "plan", "status": "failed", "error": str(exc)})
+        return 2
+    _emit_task(
+        {
+            "command": "plan",
+            "status": "ok",
+            "workflow": plan.workflow,
+            "steps": [step.kind.value for step in plan.steps],
+            "task_dir": str(Path(args.task_dir)),
+        }
+    )
+    return 0
+
+
+def _handle_task_execute(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    from acp.scheduler.jobs import JobSpec
+
+    method: dict[str, Any] = {}
+    if args.method:
+        method["method"] = args.method
+    spec = JobSpec(
+        workflow=args.workflow,
+        name=args.name or "",
+        input=_task_input_payload(args.input),
+        method=method,
+    )
+    manager = _task_manager(run_root)
+    try:
+        record = job_submit_command(spec, manager=manager)
+        follow = bool(args.follow) or args.workflow == "fake"
+        fresh = _wait_for_task(manager, record.id, terminal=follow)
+        if fresh is None:
+            _emit_task({"command": "execute", "status": "failed", "error": "job vanished"})
+            return 1
+        _emit_task(
+            {
+                "command": "execute",
+                "status": fresh.status.value,
+                "job_id": fresh.id,
+                "work_dir": fresh.work_dir,
+            }
+        )
+        return 0 if not fresh.status.is_terminal or fresh.status.value == "completed" else 1
+    except (ValueError, RuntimeError) as exc:
+        _emit_task({"command": "execute", "status": "failed", "error": str(exc)})
+        return 1
+    finally:
+        manager.shutdown()
+
+
+def _handle_task_query(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    store = _task_store(run_root)
+    if args.job:
+        record = store.get(args.job)
+        if record is None:
+            _emit_task({"command": "query", "status": "not_found", "job_id": args.job})
+            return 1
+        _emit_task({"command": "query", "status": "ok", "job": record.to_dict()})
+        return 0
+    records = store.list(status=args.status, limit=args.limit)
+    _emit_task(
+        {
+            "command": "query",
+            "status": "ok",
+            "count": len(records),
+            "jobs": [
+                {
+                    "id": row.id,
+                    "status": row.status.value,
+                    "workflow": row.spec.workflow,
+                    "work_dir": row.work_dir,
+                    "attempt": row.attempt,
+                }
+                for row in records
+            ],
+        }
+    )
+    return 0
+
+
+def _handle_task_control(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    manager = _task_manager(run_root)
+    try:
+        record = job_control_command(
+            args.task_command,
+            args.job,
+            manager=manager,
+            project_id=getattr(args, "project", None),
+            target_node=getattr(args, "target_node", None),
+        )
+    except (KeyError, ValueError, RuntimeError) as exc:
+        _emit_task({"command": args.task_command, "status": "failed", "error": str(exc)})
+        return 1
+    finally:
+        manager.shutdown()
+    if record is None:
+        _emit_task({"command": args.task_command, "status": "not_found", "job_id": args.job})
+        return 1
+    _emit_task(
+        {
+            "command": args.task_command,
+            "status": record.status.value,
+            "job_id": record.id,
+            "attempt": record.attempt,
+        }
+    )
+    return 0
+
+
+def _handle_task_recover(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    run_root.mkdir(parents=True, exist_ok=True)
+    task_dir = Path(args.task_dir)
+    try:
+        plan = _build_task_plan(task_dir, args.workflow, args.method, args.profile)
+    except (FileNotFoundError, ValueError) as exc:
+        _emit_task({"command": "recover", "status": "failed", "error": str(exc)})
+        return 2
+    from acp.services_bootstrap import build_runtime_recovery
+
+    recovery = build_runtime_recovery(run_root)
+    result = recovery.execute(plan, task_root=task_dir)
+    completed = bool(getattr(result, "is_completed", False))
+    _emit_task(
+        {
+            "command": "recover",
+            "status": getattr(result, "status", "unknown"),
+            "completed": completed,
+            "task_dir": str(task_dir),
+        }
+    )
+    return 0 if completed else 1
+
+
+def _handle_task_export(args: argparse.Namespace) -> int:
+    setup_logging(args.log_level)
+    run_root = _task_run_root(args)
+    task_dir: Path | None = Path(args.task_dir) if args.task_dir else None
+    if task_dir is None and args.job:
+        record = _task_store(run_root).get(args.job)
+        if record is None:
+            _emit_task({"command": "export", "status": "not_found", "job_id": args.job})
+            return 1
+        task_dir = Path(record.work_dir)
+    if task_dir is None:
+        _emit_task(
+            {"command": "export", "status": "failed", "error": "--job or --task-dir required"}
+        )
+        return 2
+    result_dir = task_dir / "RESULT"
+    if not result_dir.is_dir():
+        _emit_task({"command": "export", "status": "no_result", "task_dir": str(task_dir)})
+        return 1
+    from acp.storage.manifest import MANIFEST_FILENAME, ResultManifest
+
+    if not (result_dir / MANIFEST_FILENAME).is_file():
+        _emit_task({"command": "export", "status": "no_result", "task_dir": str(task_dir)})
+        return 1
+    manifest = ResultManifest.read(result_dir)
+    _emit_task(
+        {
+            "command": "export",
+            "status": manifest.status,
+            "task_dir": str(task_dir),
+            "products": len(manifest.products or []),
+        }
+    )
+    return 0
+
+
+_TASK_HANDLERS: Final[dict[str, Callable[[argparse.Namespace], int]]] = {
+    "ingest": _handle_task_ingest,
+    "plan": _handle_task_plan,
+    "execute": _handle_task_execute,
+    "query": _handle_task_query,
+    "pause": _handle_task_control,
+    "unpause": _handle_task_control,
+    "continue": _handle_task_control,
+    "cancel": _handle_task_control,
+    "rerun": _handle_task_control,
+    "recover": _handle_task_recover,
+    "export": _handle_task_export,
+}
+
+
+def _dispatch_task(args: argparse.Namespace) -> int:
+    handler = _TASK_HANDLERS.get(args.task_command)
+    if handler is None:
+        return 1
+    return handler(args)
+
+
 def _register_xtb_path_cli_job(
     args: argparse.Namespace,
     output_dir: Path,
@@ -3179,6 +3626,8 @@ Examples:
         help="Server default execution target for jobs that don't specify one "
         "(overrides cluster.execution_mode; per-job execution_mode/target_node win)",
     )
+
+    _add_task_parser(subparsers)
 
     _normalize_string_choices(parser)
 
@@ -4347,6 +4796,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         return _handle_init(args)
+
+    if args.command == "task":
+        return _dispatch_task(args)
 
     if args.command != "run":
         parser.print_help()

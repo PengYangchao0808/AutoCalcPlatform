@@ -20,6 +20,7 @@ import os
 import queue
 import random
 import shutil
+import signal
 import socket
 import sqlite3
 import threading
@@ -323,7 +324,15 @@ class JobManager:
         local_retention_config: RetentionPolicy | None = None,
         local_cleanup_interval_hours: int = 6,
         local_max_jobs: int = 4,
+        reconnect_local_workers: bool = False,
     ):
+        #: Persistent controller/worker connection mode (B07-8 / todo 74):
+        #: a *reconnecting controller* skips destructive startup recovery and
+        #: queue draining, and re-attaches to worker processes that survived a
+        #: previous controller via the persisted ``run.lock`` / ``/proc``
+        #: identity (otherwise a second controller marks a still-computing
+        #: RUNNING job ``[RESTART_FAILED]``).
+        self._reconnect_local_workers = bool(reconnect_local_workers)
         self._shutdown_lock = threading.Lock()
         self._shutdown_complete = False
         # Closing latch: set by ``_stop_background_work`` (under ``self._lock``)
@@ -449,10 +458,14 @@ class JobManager:
         self._release_gc_thread: threading.Thread | None = None
         self._start_release_gc_thread()
 
-        self._requeue_active_on_startup()
-        with self._lock:
-            self._rebuild_reservations()
-        self._dispatch_queued_jobs()
+        if self._reconnect_local_workers:
+            with self._lock:
+                self._rebuild_reservations()
+        else:
+            self._requeue_active_on_startup()
+            with self._lock:
+                self._rebuild_reservations()
+            self._dispatch_queued_jobs()
         self._queue_startup_catalog_prefetch()
         self._sweep_outbox()
         self._poll_thread.start()
@@ -2496,6 +2509,10 @@ class JobManager:
             mode = "bstop"
         elif self.runner.pause_local(job_id):
             mode = "sigstop"
+        elif self._reconnect_local_workers and self._signal_reconnected_worker(
+            record, signal.SIGSTOP
+        ):
+            mode = "sigstop-reconnected"
         else:
             # Process already gone (finished between check and signal) —
             # leave the record alone so the poller finalizes it normally.
@@ -2580,6 +2597,10 @@ class JobManager:
             mode = "bresume"
         elif self.runner.resume_local(job_id):
             mode = "sigcont"
+        elif self._reconnect_local_workers and self._signal_reconnected_worker(
+            record, signal.SIGCONT
+        ):
+            mode = "sigcont-reconnected"
         else:
             # No tracked process (e.g. record survived a restart) — keep
             # PAUSED rather than flipping to RUNNING with nothing to poll.
@@ -2868,6 +2889,34 @@ class JobManager:
         actually references the task directory (PID-recycling guard).
         """
         return terminate_task_processes(Path(record.work_dir), extra_pids=[record.pid or 0])
+
+    def _signal_reconnected_worker(self, record: JobRecord, sig: signal.Signals) -> bool:
+        """SIGSTOP/SIGCONT a worker that survived a previous controller process.
+
+        Resolves the worker from the persisted ``run.lock`` / ``/proc`` task
+        identity (never the in-memory ``_processes`` table) so a fresh
+        controller can pause/revive the original task; returns whether any
+        signal was delivered.
+        """
+        pids = self.runner._live_task_pids(record)
+        if not pids:
+            return False
+        delivered = False
+        own_group = os.getpgrp()
+        for pid in pids:
+            try:
+                pgid = os.getpgid(pid)
+            except OSError:
+                pgid = pid
+            try:
+                if pgid == own_group:
+                    os.kill(pid, sig)
+                else:
+                    os.killpg(pgid, sig)
+                delivered = True
+            except OSError:
+                logger.debug("reconnect %s signal failed for pid %s", sig, pid, exc_info=True)
+        return delivered
 
     def _remote_bstop_bresume(self, record: JobRecord, method_name: str, action: str) -> None:
         """Invoke the remote monitor's bstop/bresume contract for *record*.

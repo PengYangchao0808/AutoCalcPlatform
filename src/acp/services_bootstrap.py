@@ -37,8 +37,9 @@ from acp.scheduler.task_views import query_project_tasks
 from acp.scheduler.tasks import TaskIndex
 from acp_services.bootstrap import ServicesPorts
 from acp_services.runtime.commands import RuntimeCommands
+from acp_services.runtime.recovery import RuntimeRecovery
 
-__all__ = ["build_runtime_commands", "build_services_ports"]
+__all__ = ["build_runtime_commands", "build_runtime_recovery", "build_services_ports"]
 
 
 class _JobControlAdapter:
@@ -243,6 +244,21 @@ def build_services_ports(
         ),
         projects=projects,
     )
+
+
+def build_runtime_recovery(
+    run_root: str | Path,
+    *,
+    db_path: str | Path | None = None,
+) -> RuntimeRecovery:
+    """Build the Runtime planning/recovery seam over the injected legacy ports.
+
+    Exposes the single planning/recovery owner (todo 27) so the CLI ``recover``
+    entry reuses the same two-layer identity / ``resume_source`` /
+    publication-retry semantics the Web API reaches — never a second executor.
+    """
+    ports = build_services_ports(run_root, db_path=db_path)
+    return RuntimeRecovery(planning=ports.planning, publication=ports.publication)
 
 
 def build_runtime_commands(manager: Any | None = None) -> RuntimeCommands:
