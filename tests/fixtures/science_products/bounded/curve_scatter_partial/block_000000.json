@@ -1,0 +1,85 @@
+{
+ "schema_version": 1,
+ "product_kind": "curve_scatter",
+ "identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:97fdb1a893b662830d6d1f42b03785edbf660ef17320acbc823fefd463bac8cb",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:1b09c1e71d14785e41d53399e01ba4211f14af8dc5c24bc568ca84a239e978cd"
+ },
+ "state": "available",
+ "complete": false,
+ "errors": [],
+ "payload": {
+  "reference_frame": {
+   "axes": "cartesian",
+   "origin": "native_input"
+  },
+  "series": [
+   {
+    "series_id": "curve_scatter:series:scan_energy",
+    "x_unit": "angstrom-or-degree",
+    "y_unit": "hartree",
+    "reference_frame": {
+     "axes": "cartesian",
+     "origin": "native_input"
+    },
+    "label": "scan energy",
+    "points": [
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:0",
+      "x": 0.0,
+      "y": -114.495,
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 0
+      }
+     },
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:1",
+      "x": 0.01,
+      "y": -114.494802,
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 1
+      }
+     },
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:2",
+      "x": 0.02,
+      "y": -114.49460802,
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 2
+      }
+     },
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:3",
+      "missing_reason": "missing_point_values",
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 3
+      }
+     },
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:4",
+      "x": 0.04,
+      "y": -114.49423217,
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 4
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

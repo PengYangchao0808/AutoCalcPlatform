@@ -1,0 +1,24 @@
+{
+ "fixture": "curve_scatter_normal",
+ "operation": "reconstruct",
+ "result_digest": "sha256:d23ae446ad2221d94b2f888223f453cc07c1a1b0634378dc4bcb7b3936dbb8c8",
+ "checks": {
+  "n_points": 40,
+  "first_point_id": "curve_scatter:series:scan_energy:point:0",
+  "last_point_id": "curve_scatter:series:scan_energy:point:39",
+  "block_count": 3,
+  "max_block_size": 16,
+  "total_items": 40,
+  "covered_range": [
+   0,
+   40
+  ],
+  "block_complete": [
+   true,
+   true,
+   true
+  ],
+  "missing": []
+ },
+ "expected_rejection": null
+}

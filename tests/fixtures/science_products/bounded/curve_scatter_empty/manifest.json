@@ -1,0 +1,42 @@
+{
+ "schema_version": 1,
+ "bounded_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_curve_product",
+  "input_digest": "sha256:4108808e2e7ed67c210f733da2febd5d0478a0ad4a53f26c3a6fc8531b9bc786",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:a8e46c1ba4b0d59e44aa827882639bd4503104c7e93dcfa73c1d066dc76ad97c"
+ },
+ "base_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:4108808e2e7ed67c210f733da2febd5d0478a0ad4a53f26c3a6fc8531b9bc786",
+  "algorithm": "curve_scatter",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 16,
+  "start": 0,
+  "end": 0,
+  "params": [
+   {
+    "name": "series_id",
+    "value": "curve_scatter:series:scan_energy"
+   },
+   {
+    "name": "product_kind",
+    "value": "curve_scatter"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "blocks": [],
+ "key_points": []
+}

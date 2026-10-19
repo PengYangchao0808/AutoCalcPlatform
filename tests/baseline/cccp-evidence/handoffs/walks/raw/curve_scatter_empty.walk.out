@@ -1,0 +1,11 @@
+WALK fixture=curve_scatter_empty
+  expected.json bytes=346 sha256=sha256:8ec6a3e37607a8993542dfeb3af561529c67f34387dac53a4626d1191efce864
+  STEP1 index.json bytes=1697 sha256=sha256:a2e7fbd111fe5fbf00649bce85be51b19152a58530811f28c762c1324e3f6b15
+  STEP2 header ok: hn03_block_index v1 delivery=hn-03-bounded-delivery-v1 bounded_schema=1 product_schema=1 state=ok kind=curve_scatter
+  STEP3 manifest bytes=1107 sha256=sha256:4156460ef48db6991a846477c3f669da1aab2904dfee390a7e85d70f0ef443b2 matches_index=True
+  STEP4 manifest decode ok: blocks=0 display_subsampled=False spec.method=chunk resolution=16 range=[0,0]
+  STEP6 index re-derivation: MATCH fields=12 (manifest+blocks -> index)
+  STEP7 consumption op=report_empty
+  STEP7c result_digest=sha256:6a0f78d5b3480af0e25e363bbb663652d782badd09d676bdbf615484589a4857 matches expected.json AND index.expected_consumption
+WALK RESULT: PASS fixture=curve_scatter_empty op=report_empty blocks=0 total_items=0 digest=sha256:6a0f78d5b3480af0...
+SUMMARY fixtures=1 failures=0

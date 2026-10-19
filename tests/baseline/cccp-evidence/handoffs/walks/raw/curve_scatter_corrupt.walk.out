@@ -1,0 +1,12 @@
+WALK fixture=curve_scatter_corrupt
+  expected.json bytes=328 sha256=sha256:c36ec6dc08bb644a88fa92565d2e24bcfe474fd06434bb99b68b7882b095174c
+  STEP1 index.json bytes=3164 sha256=sha256:a88c0a95ad403729ddf601996a8d9755639c1833738321578339186da7b2c5b2
+  STEP2 header ok: hn03_block_index v1 delivery=hn-03-bounded-delivery-v1 bounded_schema=1 product_schema=1 state=corrupt kind=curve_scatter
+  STEP3 manifest bytes=14855 sha256=sha256:0967206836c5310b0b7d53ea172ff984c458921257a4f126aa515c1980c14914 matches_index=True
+  STEP4 corrupt delivery: consumption = typed rejection only (no partial data)
+  REJECT manifest.json -> cccp.analysis.bounded.errors.BoundedSchemaError: unsupported bounded schema_version 99; current is 1
+  REJECT block_000000.json -> cccp.calculation.products.contracts.ProductSchemaError: product.state must be one of: available, unavailable, failed, not_prepared; got 'bogus_state'
+  REJECT block_000001.json -> json.JSONDecodeError: Expecting ',' delimiter: line 8 column 92 (char 300)
+  STEP6 index re-derivation: SKIPPED (manifest is contract-invalid by design)
+WALK RESULT: PASS fixture=curve_scatter_corrupt op=reject rejections=3
+SUMMARY fixtures=1 failures=0

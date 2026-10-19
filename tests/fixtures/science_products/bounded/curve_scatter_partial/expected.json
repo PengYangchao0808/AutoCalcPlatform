@@ -1,0 +1,30 @@
+{
+ "fixture": "curve_scatter_partial",
+ "operation": "reconstruct",
+ "result_digest": "sha256:91dccc3ff99022ce267931f244fe1ac9ecb65d86e29529888b3dfd95a4a6885f",
+ "checks": {
+  "n_points": 12,
+  "first_point_id": "curve_scatter:series:scan_energy:point:0",
+  "last_point_id": "curve_scatter:series:scan_energy:point:11",
+  "block_count": 3,
+  "max_block_size": 5,
+  "total_items": 12,
+  "covered_range": [
+   0,
+   12
+  ],
+  "block_complete": [
+   false,
+   true,
+   true
+  ],
+  "missing": [
+   {
+    "native_index": 3,
+    "point_id": "curve_scatter:series:scan_energy:point:3",
+    "reason": "missing_point_values"
+   }
+  ]
+ },
+ "expected_rejection": null
+}
