@@ -184,6 +184,33 @@ def test_b41b_deferral_stated() -> None:
     assert "todo 74 交付后" in text, "B41b execution must be deferred until after todo 74"
 
 
+def test_s4_s4c_original_fail_records_are_retained() -> None:
+    """The todo-79 addendum must not launder the original FAIL records."""
+    lines = _text().splitlines()
+    start = lines.index(STEPS_HEADER)
+    rows: list[str] = []
+    for line in lines[start + 1 :]:
+        if not line.startswith("|"):
+            break
+        if _is_separator_row(line):
+            continue
+        rows.append(line)
+
+    def verdict_for(label: str) -> str:
+        for row in rows:
+            cells = _cells(row)
+            if cells[0].startswith(f"{label} "):
+                return cells[4]
+        raise AssertionError(f"steps row {label} missing")
+
+    for label in ("S4", "S4c"):
+        assert verdict_for(label).startswith("FAIL"), (
+            f"{label} original FAIL record must be retained (audit trail); "
+            "todo-79 after-values belong in the §2.2 addendum"
+        )
+    assert "## 2.2 Todo 79 缺陷修复后值" in _text(), "todo-79 addendum missing"
+
+
 def test_wizard_completion_is_not_acceptance() -> None:
     text = _text()
     assert re.search(r"不把[“\"]?向导结束[”\"]?当验收", text), (

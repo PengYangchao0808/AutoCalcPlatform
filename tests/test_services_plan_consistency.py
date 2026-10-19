@@ -5,10 +5,13 @@ repository root) and asserts the plan's own structural invariants:
 
 1. top-level todo numbers are unique and gap-free (the plan's ``{t}``
    placeholder headers are assigned the missing numbers in file order);
+   conditionally-gated todos use the ``[~]`` checkbox and still carry an
+   explicit number;
 2. every numeric / ``F``-task reference in a ``Blocked by:`` field resolves
    to an existing todo id (cross-lane tokens such as ``C01``/``A05``/``MU-04``
    /``T69``/``B40a`` are lane labels, not this plan's todo ids, and are
-   ignored);
+   ignored); a todo without a ``Parallelization:`` line declares no
+   dependency edges (the appended F-wave remediation rows 80—83 do this);
 3. the dependency graph is acyclic;
 4. named producer-before-consumer pairs hold over the transitive dependency
    closure (contracts frozen before ports, worker before chain switch,
@@ -42,7 +45,8 @@ if not PLAN_PATH.is_file():
 
 # ── parsing ─────────────────────────────────────────────────────────────────
 
-_HEADER_RE = re.compile(r"^- \[[ xX]\] (\S+?)(?:\.|\s)")
+# `[ ]` pending, `[x]`/`[X]` done, `[~]` explicitly conditional/gated.
+_HEADER_RE = re.compile(r"^- \[[ xX~]\] (\S+?)(?:\.|\s)")
 _BLOCKED_BY_RE = re.compile(r"^\s*Parallelization:.*?\|\s*Blocked by:\s*(.*?)\s*\|\s*Blocks:")
 _BLOCKED_BY_EOI_RE = re.compile(r"^\s*Parallelization:.*?\|\s*Blocked by:\s*(.+?)\s*$")
 
@@ -184,8 +188,6 @@ def _parse_plan(path: Path) -> PlanModel:
         if blocked_text is not None:
             numeric_deps = _extract_numeric_refs(blocked_text)
             f_deps = _extract_f_refs(blocked_text)
-        elif not todo_id.startswith("F"):
-            problems.append(f"todo {todo_id}: missing Parallelization/Blocked-by line")
         todos[todo_id] = Todo(
             todo_id=todo_id,
             header_raw=lines[idx],
@@ -235,6 +237,46 @@ def _dependency_closure(model: PlanModel, todo_id: str) -> set[str]:
     return seen
 
 
+def _dangling_refs(model: PlanModel) -> list[str]:
+    known = _known_ids(model)
+    dangling: list[str] = []
+    for todo_id, todo in sorted(model.todos.items()):
+        for value in sorted(todo.numeric_deps):
+            if str(value) not in known:
+                dangling.append(f"todo {todo_id} -> numeric {value}")
+        for fid in sorted(todo.f_deps):
+            if fid not in known:
+                dangling.append(f"todo {todo_id} -> {fid}")
+    return dangling
+
+
+def _cycle_path(model: PlanModel) -> list[str] | None:
+    white, grey, black = 0, 1, 2
+    color = {tid: white for tid in model.todos}
+    cycle_path: list[str] = []
+
+    def dfs(node: str) -> bool:
+        color[node] = grey
+        for dep in sorted(_deps_of(model, node)):
+            if dep not in color:
+                continue
+            if color[dep] == grey:
+                cycle_path.extend([dep, node])
+                return True
+            if color[dep] == white and dfs(dep):
+                cycle_path.append(node)
+                return True
+        color[node] = black
+        return False
+
+    for todo_id in sorted(
+        model.todos, key=lambda t: (not t.isdigit(), int(t) if t.isdigit() else t)
+    ):
+        if color[todo_id] == white and dfs(todo_id):
+            return cycle_path
+    return None
+
+
 # ── tests ───────────────────────────────────────────────────────────────────
 
 
@@ -264,45 +306,13 @@ def test_todo_numbering_unique_and_gap_free() -> None:
 
 
 def test_blocked_by_references_resolve_to_existing_todos() -> None:
-    model = _plan()
-    known = _known_ids(model)
-    dangling: list[str] = []
-    for todo_id, todo in sorted(model.todos.items()):
-        for value in sorted(todo.numeric_deps):
-            if str(value) not in known:
-                dangling.append(f"todo {todo_id} -> numeric {value}")
-        for fid in sorted(todo.f_deps):
-            if fid not in known:
-                dangling.append(f"todo {todo_id} -> {fid}")
+    dangling = _dangling_refs(_plan())
     assert not dangling, "dangling Blocked-by references: " + ", ".join(dangling)
 
 
 def test_dependency_graph_is_acyclic() -> None:
-    model = _plan()
-    white, grey, black = 0, 1, 2
-    color = {tid: white for tid in model.todos}
-    cycle_path: list[str] = []
-
-    def dfs(node: str) -> bool:
-        color[node] = grey
-        for dep in sorted(_deps_of(model, node)):
-            if dep not in color:
-                continue
-            if color[dep] == grey:
-                cycle_path.extend([dep, node])
-                return True
-            if color[dep] == white and dfs(dep):
-                cycle_path.append(node)
-                return True
-        color[node] = black
-        return False
-
-    for todo_id in sorted(
-        model.todos, key=lambda t: (not t.isdigit(), int(t) if t.isdigit() else t)
-    ):
-        if color[todo_id] == white and dfs(todo_id):
-            pytest.fail("dependency cycle detected: " + " <- ".join(cycle_path))
-    assert all(c == black for c in color.values())
+    cycle_path = _cycle_path(_plan())
+    assert cycle_path is None, "dependency cycle detected: " + " <- ".join(cycle_path or [])
 
 
 def test_artifact_before_consumer_named_pairs() -> None:
@@ -354,3 +364,70 @@ def test_final_wave_tasks_excluded_from_pre_release_dependencies() -> None:
     assert release_f_deps == {"F1", "F2", "F3", "F4"}, (
         f"todo 76 must depend on exactly F1—F4 approval, got {sorted(release_f_deps)}"
     )
+
+
+# ── negative self-tests (synthetic plans; the real plan is never mutated) ──
+
+
+def _synthetic_todo(
+    todo_id: str,
+    numeric: tuple[int, ...] = (),
+    f_ids: tuple[str, ...] = (),
+) -> Todo:
+    return Todo(
+        todo_id=todo_id,
+        header_raw=f"- [ ] {todo_id}.",
+        blocked_by_text=None,
+        numeric_deps=frozenset(numeric),
+        f_deps=frozenset(f_ids),
+    )
+
+
+def _synthetic_model(todos: dict[str, Todo]) -> PlanModel:
+    return PlanModel(
+        todos=todos,
+        explicit_numeric_ids=frozenset(int(t) for t in todos if t.isdigit()),
+        f_ids=frozenset(t for t in todos if t.startswith("F")),
+        placeholder_count=0,
+        problems=(),
+    )
+
+
+def test_conditional_checkbox_row_is_parsed(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.md"
+    plan.write_text(
+        "- [~] 18. conditional gate\n"
+        "  Parallelization: Wave 4 | Blocked by: 12 | Blocks: 62\n",
+        encoding="utf-8",
+    )
+    model = _parse_plan(plan)
+    assert "18" in model.todos
+    assert model.todos["18"].numeric_deps == frozenset({12})
+
+
+def test_negative_duplicate_todo_number_is_detected(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.md"
+    plan.write_text(
+        "- [x] 1. first\n"
+        "  Parallelization: Wave 1 | Blocked by: none | Blocks: 2\n"
+        "- [x] 1. duplicate\n"
+        "  Parallelization: Wave 1 | Blocked by: none | Blocks: 2\n",
+        encoding="utf-8",
+    )
+    model = _parse_plan(plan)
+    assert any("duplicate todo number 1" in problem for problem in model.problems)
+
+
+def test_negative_invalid_reference_is_detected() -> None:
+    model = _synthetic_model({"1": _synthetic_todo("1", numeric=(99,))})
+    assert _dangling_refs(model) == ["todo 1 -> numeric 99"]
+
+
+def test_negative_dependency_cycle_is_detected() -> None:
+    model = _synthetic_model(
+        {
+            "1": _synthetic_todo("1", numeric=(2,)),
+            "2": _synthetic_todo("2", numeric=(1,)),
+        }
+    )
+    assert _cycle_path(model) is not None

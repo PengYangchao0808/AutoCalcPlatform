@@ -89,10 +89,10 @@
 | 执行入口单一调度器（execution_chain，todo 32 / B06-3 登记） | `src/acp_services/runtime/execution_chain.py:1` | `acp_services.runtime.execution_chain.select_execution_entry`（+ `resolve_attempt_choice`；旧 `acp.scheduler.remote.script_gen.build_remote_cli_command` 保留 legacy 分支与默认） | `src/acp/scheduler/runner.py:_build_execution_cmd`；`src/acp/scheduler/remote/runner.py:_resolve_remote_choice`；`src/acp/scheduler/remote/script_gen.py:build_remote_cli_command` | [CLOSED] 冻结能力表驱动的按 attempt 入口选择（C01 集成 8 工作流 envelope，其余 legacy）；该 attempt 冻结 envelope/plan 就绪即 envelope，否则 legacy；接收 todo 32（B06-3），逐工作流真实启用归 todo 34| `tests/test_services_chain_switch.py` |
 | 命名空间开通·原子绑定（ensure_namespace，Data 用例，todo 48 登记） | `src/acp_services/data/namespaces.py:277` | `acp_services.data.namespaces.NamespaceStore.ensure_namespace`（+ `NamespaceRecord` / `EnsureNamespaceRequest`；复用 `freeze_binding`，UNIQUE 键幂等，冲突非静默） | `src/acp_services/runtime/provisioning.py:325`（ProvisioningService 经注入端口调用；不直接读库） | [CLOSED] 名称空间与存储绑定唯一开通权威；重复/并发开通收敛为单空间；接收 todo 48（B09-1）| `tests/test_services_provisioning.py` |
 | 环境开通意图消费（ProvisionWorkspace 用例，Runtime，todo 48 登记） | `src/acp_services/runtime/provisioning.py:325` | `acp_services.runtime.provisioning.ProvisioningService`（消费 Workspace 注入的只读意图源，调用 Data `ensure_namespace`，经注入命令端口提交 provisioned/failed 并审计；重试/对账） | Workspace 环境状态命令面（注入 `EnvironmentStatePort`）；开通入口接线归 todo 52（B09-5）；无需系统账户/SSH 副作用 | [CLOSED] 幂等消费持久意图、失败可见可对账、不重复建默认空间；接受 todo 48（B09-1）| `tests/test_services_provisioning.py` |
-| 资源准入核（AdmissionController 与 ReservationLedger，todo 49 登记） | `src/acp_services/runtime/admission.py:1216` | `acp_services.runtime.admission.AdmissionController`（+ `ReservationLedger` / `ResourceBounds` / `GrantResolution` / `AdmissionDecision`；消费 todo 7 `ResourceGrantSpec`，不扩展冻结契约） | `src/acp_services/runtime/commands.py`（submit 前置准入接线归 todo 50 至 todo 51）；旧 `acp.scheduler.manager` 派发路径（无原子预留，待接线替换） | [OPEN] 派发前准入唯一入口：Runtime submit 前经 `AdmissionController.admit` 原子预留、`revalidate` 派发前重验；PAUSED 计实际内存/磁盘占用；拒绝理由结构化；接收 todo 50 至 todo 55| `tests/test_services_admission.py` |
-| 管理面用例/审计/受限 broker（AdminAuthorizer 与 AdminService 与 AdminAuditLog 与 RestrictedBroker，todo 51 登记） | `src/acp_services/workspace/admin.py:1` | `acp_services.workspace.admin`（Services-native，无旧 `acp` 兼容转发） | 管理界面/CLI 接线归 todo 52（B09-5）与 A06；旧 `acp` 侧无对应管理面 | [OPEN] 管理面唯一鉴权与审计驻点：管理员用例清单每入口重鉴权（等级≠角色、普通 Key 403）、审计记录执行人/对象/前后版本/原因/时间（`organization_events` 模式）、受限 broker 仅白名单操作且禁任意 sudo/shell/argv；接收 todo 52、73、A06| `tests/test_services_admin.py` |
-| 可信用量采集与 UsageRecord（trusted usage collection，todo 54 登记） | `src/acp_services/runtime/usage.py:1` | `acp_services.runtime.usage`（Services-native，无旧 `acp` 兼容转发；本地进程组/分配与 LSF 作业报告采集，父子层级 XOR 只选一层） | Runtime 计量/配额链路（todo 55 至 todo 61 账本与核销）；`src/acp/scheduler/remote/monitor.py`（bjobs 字段素材，只读） | [OPEN] 用量记录唯一采集驻点：usage_id 与 project/account、job/attempt/submission、外部作业身份、口径/区间/核数、证据来源与版本、最终标志、排除/待对账区间、资源类别与政策版本、核时与证据摘要齐备；缺证据待对账不零填；接收 todo 55 至 todo 61| `tests/test_services_usage.py` |
-| 共同核时配额模式（usage-only 或 quota-only，QuotaService 与 QuotaLedger，todo 55 登记） | `src/acp_services/runtime/quota.py:1` | `acp_services.runtime.quota`（Services-native，无旧 `acp` 兼容转发；消费 todo 53 metering_policy、todo 54 usage、todo 49 admission） | Runtime 计量/配额链路（todo 56 解耦、todo 57 至 todo 61 价格门）；派发准入前置接线归后续任务 | [OPEN] 配额模式唯一执行驻点：模式显式选择（未选拒绝启动，usage-only 需管理员）；quota-only 有效预算=min(user,project) 交集；派发前原子预留可执行上限（核心/时长硬上限，不可执行即拒绝）；按确认用量核销；跨周期分段；重启恢复未决预留；追加先授权+预留再扩展；未知用量待对账（租约到期不释放）；耗尽拒绝新派发、不杀在途、结果可读；接收 todo 55| `tests/test_services_quota.py` |
+| 资源准入核（AdmissionController 与 ReservationLedger，todo 49 登记） | `src/acp_services/runtime/admission.py:1216` | `acp_services.runtime.admission.AdmissionController`（+ `ReservationLedger` / `ResourceBounds` / `GrantResolution` / `AdmissionDecision`；消费 todo 7 `ResourceGrantSpec`，不扩展冻结契约） | `src/acp_services/runtime/commands.py`（submit 前置准入接线归 todo 50 至 todo 51）；旧 `acp.scheduler.manager` 派发路径（无原子预留，待接线替换） | [OPEN] 派发前准入唯一入口：Runtime submit 前经 `AdmissionController.admit` 原子预留、`revalidate` 派发前重验；PAUSED 计实际内存/磁盘占用；拒绝理由结构化；接收 todo 50 至 todo 55；生产接线未验证前保持 [OPEN]| `tests/test_services_admission.py` |
+| 管理面用例/审计/受限 broker（AdminAuthorizer 与 AdminService 与 AdminAuditLog 与 RestrictedBroker，todo 51 登记） | `src/acp_services/workspace/admin.py:1` | `acp_services.workspace.admin`（Services-native，无旧 `acp` 兼容转发） | 管理界面/CLI 接线归 todo 52（B09-5）与 A06；旧 `acp` 侧无对应管理面 | [OPEN] 管理面唯一鉴权与审计驻点：管理员用例清单每入口重鉴权（等级≠角色、普通 Key 403）、审计记录执行人/对象/前后版本/原因/时间（`organization_events` 模式）、受限 broker 仅白名单操作且禁任意 sudo/shell/argv；接收 todo 52、73、A06；生产接线未验证前保持 [OPEN]| `tests/test_services_admin.py` |
+| 可信用量采集与 UsageRecord（trusted usage collection，todo 54 登记） | `src/acp_services/runtime/usage.py:1` | `acp_services.runtime.usage`（Services-native，无旧 `acp` 兼容转发；本地进程组/分配与 LSF 作业报告采集，父子层级 XOR 只选一层） | Runtime 计量/配额链路（todo 55 至 todo 61 账本与核销）；`src/acp/scheduler/remote/monitor.py`（bjobs 字段素材，只读） | [OPEN] 用量记录唯一采集驻点：usage_id 与 project/account、job/attempt/submission、外部作业身份、口径/区间/核数、证据来源与版本、最终标志、排除/待对账区间、资源类别与政策版本、核时与证据摘要齐备；缺证据待对账不零填；接收 todo 55 至 todo 61；生产接线未验证前保持 [OPEN]| `tests/test_services_usage.py` |
+| 共同核时配额模式（usage-only 或 quota-only，QuotaService 与 QuotaLedger，todo 55 登记） | `src/acp_services/runtime/quota.py:1` | `acp_services.runtime.quota`（Services-native，无旧 `acp` 兼容转发；消费 todo 53 metering_policy、todo 54 usage、todo 49 admission） | Runtime 计量/配额链路（todo 56 解耦、todo 57 至 todo 61 价格门）；派发准入前置接线归后续任务 | [OPEN] 配额模式唯一执行驻点：模式显式选择（未选拒绝启动，usage-only 需管理员）；quota-only 有效预算=min(user,project) 交集；派发前原子预留可执行上限（核心/时长硬上限，不可执行即拒绝）；按确认用量核销；跨周期分段；重启恢复未决预留；追加先授权+预留再扩展；未知用量待对账（租约到期不释放）；耗尽拒绝新派发、不杀在途、结果可读；接收 todo 55；生产接线未验证前保持 [OPEN]| `tests/test_services_quota.py` |
 
 ## 覆盖说明
 
@@ -116,6 +116,20 @@
 - **保留面（未删除）**：`acp.calculations.primitives`、`acp.backends`、`acp.scheduler.{store,migrations}` 等同实现转发，`src/acp/compat/legacy/` 只读历史 reader，`tests/baseline/recovery_fixtures/` 跨版本 fixture，模型/资产/notice 随包。调用者审计见 `public_shim_inventory.md`。
 - **仍为 `[OPEN]` 的落盘项**（模块已通过、真实消费 `NOT_VERIFIED`）：cache-only 逐资源旧 GET 兼容面（L2-11 前端 0 调用点）、准入/配额/身份生命周期派发与 UI 接线（L2-12/L3-09）、用量采集与计量解耦生产路径（L2-15）。这些行必须保留旧路径，不得据「模块已交付」写成已接入。
 - **未关闭 gate**：W12（B11 价格/账本）、W13（B12 PostgreSQL/对象存储/Slurm/GPU）、B40b（完整发行 wheel/notice）、T34b（15/15 envelope 覆盖，当前 8/15 + 7 legacy），以及浏览器/真实科学/LSF/生产四门（closure §5）。
+
+## todo 82 复核（2026-10-19，F-wave remediation C）
+
+- **状态不变**：本轮检查器/文档/登记口径修复**没有**改变任何能力行的实现状态；计数仍为
+  `[CLOSED] 39 · [RETAINED] 5 · [OPEN] 9 · [DEFERRED] 0`（全部恰好 6 列）。
+- **`[OPEN]` 9 行保持 OPEN**：5 行 cache-only 旧 GET 兼容面（catalog / manifest / frame_candidates /
+  frequency_modes / geometry）+ 4 行生产消费缺口（AdmissionController / Admin / Usage / Quota）。
+  其中 L2-11（前端 cache-only 零调用点）、L2-12（准入/配额/身份生命周期派发+UI）、L2-15（计量解耦
+  生产路径）依赖 `todo 81` 及后续生产接线切片的实测证据；证据落地前不得改标 CLOSED。本轮只在
+  退出条件列注明"生产接线未验证"，不改状态。
+- **IS-3 残余注入**属注册性 DEFERRED（见 `injection_registry.md`「DEFERRED 注入登记表」），
+  不写入本表行状态；本表已 CLOSED 的 schema/store、migrations、plan/step、CLI flag 行不受影响。
+- **IS-6 口径**：`8/15 envelope + 7 legacy, T34b gate OPEN`；矩阵未变，不据此关闭任何行。
+- **发布结果**（todo 76 + F5）仍延后；本记录不声称生产接线或全量覆盖。
 
 ## 与 cccp 台账的边界
 
