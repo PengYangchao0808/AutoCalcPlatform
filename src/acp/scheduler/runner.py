@@ -41,6 +41,7 @@ from acp.scheduler.jobs import (
     SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
+    JobStatus,
     batchoptimize_method_flags,
     build_task_record,
     censo_ewin_from_method,
@@ -676,10 +677,27 @@ class JobRunner:
             # re-fail a job just because it is absent from ``_processes``.
             if self._foreign_task_alive(record):
                 return (False, None)
+            # The worker exited in another controller's lifetime (no live
+            # process remains).  Never finalise from ``record.exit_code``
+            # alone: that column is only filled by the controller that
+            # observed the exit, so a cross-process rerun/continue leaves it
+            # ``None`` and a completed workflow would be recorded as FAILED.
+            # Read the durable completion evidence instead; a persisted
+            # CANCELLING intent wins over any observation (control intent is
+            # never overwritten).
+            if record.status == JobStatus.CANCELLING:
+                exit_code = record.exit_code if record.exit_code not in (None, 0) else 130
+                event_type = "job.cancelled"
+            else:
+                evidence = self.disk_completion_exit_code(record)
+                exit_code = (
+                    evidence
+                    if evidence is not None
+                    else (record.exit_code if record.exit_code is not None else 1)
+                )
+                event_type = "job.completed" if exit_code == 0 else "job.failed"
             event_log = self._event_logs.get(record.id)
-            exit_code = record.exit_code if record.exit_code is not None else 1
             if event_log:
-                event_type = "job.failed" if exit_code != 0 else "job.completed"
                 event_log.append(
                     event_type,
                     job_id=record.id,
@@ -844,6 +862,59 @@ class JobRunner:
                 return True
         return bool(find_task_processes(work_dir))
 
+    def disk_completion_exit_code(self, record: JobRecord) -> int | None:
+        """Return the exit code proven by on-disk completion evidence.
+
+        Cross-process finishing (rerun/continue started by a controller that
+        exited before the worker) leaves ``record.exit_code`` empty.  The
+        wrapper marker is authoritative when present; otherwise the workflow
+        ``state.json`` records the terminal status.  Evidence declaring a
+        different attempt is ignored (stale receipt fence).
+        """
+        work_dir = Path(record.work_dir)
+        try:
+            marker = (work_dir / ".exit_code").read_text(encoding="utf-8").strip()
+        except OSError:
+            marker = ""
+        if marker:
+            try:
+                return int(marker)
+            except ValueError:
+                logger.debug("Ignoring non-numeric .exit_code marker in %s", work_dir)
+        state_path = find_workflow_state(work_dir)
+        if state_path is None:
+            return None
+        data = _read_json_object(state_path)
+        if data is None:
+            return None
+        declared_attempt = data.get("attempt")
+        if isinstance(declared_attempt, int) and not isinstance(declared_attempt, bool):
+            if declared_attempt != record.attempt:
+                return None
+        status = data.get("status")
+        if status == "completed":
+            return 0
+        if status == "failed":
+            return 1
+        stages = data.get("stages")
+        if isinstance(stages, dict) and stages:
+            if all(
+                isinstance(info, dict) and info.get("status") in ("completed", "skipped")
+                for info in stages.values()
+            ):
+                return 0
+        return None
+
+    def attach_run_lock(self, record: JobRecord, *, task_pid: int | None) -> None:
+        """Persist this controller's ownership of an adopted task process."""
+        lock_path = runtime_file(Path(record.work_dir), "run.lock")
+        try:
+            self._write_run_lock(lock_path, record, task_pid=task_pid)
+        except OSError:
+            logger.warning("Failed to write adopted run.lock for %s", record.id, exc_info=True)
+            return
+        self._run_locks[record.id] = lock_path
+
     def _guard_single_execution(self, record: JobRecord) -> None:
         """Refuse to start when a live process already occupies the task."""
         live = self._live_task_pids(record)
@@ -858,6 +929,7 @@ class JobRunner:
             "job_id": record.id,
             "owner_pid": os.getpid(),
             "task_pid": task_pid,
+            "attempt": record.attempt,
             "acquired_at": datetime.now(timezone.utc).isoformat(),
         }
         lock_path.parent.mkdir(parents=True, exist_ok=True)
