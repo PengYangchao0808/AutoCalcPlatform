@@ -1017,18 +1017,35 @@ def test_content_change_preserved_mtime_publishes_new_release_for_new_job(
 #   src/acp/calculations/irc/source.py:16-17      (acp.scheduler.files/jobs)
 #   src/acp/results/irc_remote_live.py:12-13      (acp.scheduler.jobs + remote.fetcher)
 #   src/acp/results/structure_migration.py:12     (acp.scheduler.files)
+#   src/acp/services_bootstrap.py                 (acp.scheduler.* — B06 control plane)
+#   src/acp/services_data_bootstrap.py            (acp.scheduler.remote.paths + stores)
+#   src/acp/services_events_bootstrap.py          (acp.scheduler.events/store)
+#   src/acp/services_publication_bootstrap.py     (via acp.services_data_bootstrap)
 # These modules are present on the node (in the sync file set) but their
 # MODULE-LEVEL imports reach acp.scheduler/acp.api, which are excluded
-# from the release file set — importing them node-side would fail.
+# from the release file set — importing them node-side would fail.  The
+# ``acp.services_*_bootstrap`` modules are the B06 controller composition
+# roots: they are statically reachable from ``acp.cli`` only through
+# function-level (lazy) imports, never imported by a node-side ``run``
+# workflow, and the sync/release exclusion set is deliberately left
+# unchanged (they stay in the sync file set — pinned below).
 _NODE_GAP_MODULES = {
     "acp.calculations.irc.source",
     "acp.results.irc_remote_live",
     "acp.results.structure_migration",
+    "acp.services_bootstrap",
+    "acp.services_data_bootstrap",
+    "acp.services_events_bootstrap",
+    "acp.services_publication_bootstrap",
 }
 _NODE_GAP_FILES = {
     "src/acp/calculations/irc/source.py",
     "src/acp/results/irc_remote_live.py",
     "src/acp/results/structure_migration.py",
+    "src/acp/services_bootstrap.py",
+    "src/acp/services_data_bootstrap.py",
+    "src/acp/services_events_bootstrap.py",
+    "src/acp/services_publication_bootstrap.py",
 }
 _EXCLUDED_FROM_SYNC = ("acp.api", "acp.scheduler")
 
