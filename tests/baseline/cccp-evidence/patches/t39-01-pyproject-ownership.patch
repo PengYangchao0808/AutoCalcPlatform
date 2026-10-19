@@ -1,0 +1,44 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -35,6 +35,11 @@
+     # XLSX can never be silently skipped without a capability declaration.
+     # Pure-python, no compiled wheels — safe on slim compute nodes too.
+     "openpyxl>=3.1",
++    # --- C08 (T39) multi-wheel ownership: the `acp` distribution no longer
++    # ships cccp/** — the independent `cccp` wheel (packaging/cccp/pyproject.toml)
++    # is the sole owner. Declared here as a runtime dependency so the platform
++    # still resolves the science package without installing cccp/** twice. ---
++    "cccp==0.2.0",
+ ]
+ 
+ [project.optional-dependencies]
+@@ -73,17 +78,20 @@
+ 
+ [tool.setuptools.packages.find]
+ where = ["src"]
+-include = ["cccp*", "acp*", "acp_services*"]
++# --- C08 (T39) multi-wheel ownership ---------------------------------------
++# The `acp` distribution owns `acp/**` + `acp_services/**` only. `cccp/**`
++# belongs to the independent `cccp` wheel (packaging/cccp/pyproject.toml);
++# `cccp*` is no longer discovered here so no path under `cccp/` can ever be
++# installed by two wheels at once.
++include = ["acp*", "acp_services*"]
+ 
+-# Ship non-.py package data. `acp/nmr/models/` is a DATA DIRECTORY (no
+-# __init__.py — see src/acp/nmr/AGENTS.md): DP5/FCHL binary artifacts
+-# (atomic_reps.gz, frag_reps.gz, *.p, tms_references.txt, LICENSE-DP5,
+-# NOTICE.md) loaded at runtime via acp.nmr.fchl / error_model. Without this
+-# entry setuptools only packs *.py and wheels silently lose ~64MB of model
+-# assets (wheel check: `atomic_reps.gz` must appear in the namelist —
+-# locked by tests/test_packaging_assets.py).
++# Ship non-.py package data. The DP5/FCHL model assets moved to the CCCP-owned
++# `src/cccp/analysis/nmr/model_assets/` location (plan T55) and now ship inside
++# the independent `cccp` wheel, not here. Only `acp/py.typed` must stay packed
++# for the compatibility distribution. (The former `"acp.nmr" = ["models/*"]`
++# rule is removed: its directory is empty after T55.)
+ [tool.setuptools.package-data]
+-"acp.nmr" = ["models/*"]
++"acp" = ["py.typed"]
+ 
+ [tool.pytest.ini_options]
+ testpaths = ["tests"]
