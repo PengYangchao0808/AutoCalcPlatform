@@ -1,0 +1,69 @@
+{
+  "schema": "services_wheel_namelist_manifest@1",
+  "recorded_by": "ACP Services plan todo 40 — B40a integration batch (lane-B worker)",
+  "recorded_at": "2026-10-19",
+  "state": "M1 single-wheel (C39a first-batch applied; M2 multi-wheel split NOT applied — B40b gate open)",
+  "build": {
+    "command": "PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/b40a-wheel /tmp/opencode/b40a-build",
+    "toolchain": "python 3.11.13, build 1.6.1, setuptools 65.5.1, wheel 0.48.0",
+    "wheel": "acp-0.2.0-py3-none-any.whl",
+    "wheel_sha256": "8bbd8c1f5ba052febfd2eb1efffa80d818a6001f67d09e693540cf28a71c325a",
+    "zip_entries": 545,
+    "record_entries": 545
+  },
+  "distribution": "acp",
+  "top_level_packages": [
+    "acp",
+    "acp_services",
+    "cccp"
+  ],
+  "top_level_counts": {
+    "acp": 280,
+    "acp-0.2.0.dist-info": 6,
+    "acp_services": 70,
+    "cccp": 189
+  },
+  "console_scripts": {
+    "acp": "acp.cli:main"
+  },
+  "nmr_model_assets": {
+    "dir": "cccp/analysis/nmr/model_assets/",
+    "files": 8,
+    "names": [
+      "LICENSE-DP5",
+      "NOTICE.md",
+      "atomic_reps.gz",
+      "c_w_kde_mean_s_0.025.p",
+      "folded_scaled_errors.p",
+      "frag_reps.gz",
+      "i_w_kde_mean_s_0.025.p",
+      "tms_references.txt"
+    ],
+    "digests_verified": [
+      "atomic_reps.gz",
+      "frag_reps.gz"
+    ]
+  },
+  "stale_acp_nmr_models_entries": [],
+  "acp_services_python_files": 70,
+  "duplicate_record_paths": [],
+  "future_split_ownership": {
+    "source": "tests/baseline/cccp-evidence/release_manifest.md §2 (C39b frozen ruling)",
+    "applied": false,
+    "rules": [
+      {
+        "prefix": "cccp/",
+        "owner": "cccp"
+      },
+      {
+        "prefix": "acp/",
+        "owner": "acp"
+      },
+      {
+        "prefix": "acp_services/",
+        "owner": "acp"
+      }
+    ]
+  },
+  "gate": "B40b awaits full C08 / HN-04 integration (declared-scope migrations complete); multi-wheel ownership changes NOT applied yet"
+}
