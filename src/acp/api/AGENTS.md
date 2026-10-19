@@ -1,7 +1,7 @@
 # acp/api/ — FastAPI Web API (Phase 2)
 
 ## OVERVIEW
-FastAPI application providing REST endpoints for job submission, backend discovery, SSE event streaming, and static frontend hosting. 6 files, ~1600 lines. Wires into `acp.scheduler` for job lifecycle.
+FastAPI application providing REST endpoints for job submission, backend discovery, SSE event streaming, and static frontend hosting. Wires into `acp.scheduler` for job lifecycle. Services read surfaces (`GET /api/v1/jobs/{id}/availability`, `GET /api/v1/jobs/{id}/prepared/{resource}`) coexist with the legacy GET paths; control endpoints go through `acp_services.runtime.commands.RuntimeCommands`. Legacy GET behavior is retained for F0 compatibility (closure L2-02/L2-03).
 
 ## STRUCTURE
 ```
@@ -9,7 +9,9 @@ api/
 ├── __init__.py     # Re-exports: ["server", "routes", "schemas"] (4 lines)
 ├── server.py       # create_app() factory + module-level app = create_app() side effects (92)
 ├── routes.py       # /api/status, /api/backends, /api/jobs CRUD, SSE, file download (387)
-├── v1_routes.py    # Job submission, molecule upload, task management endpoints (700)
+├── v1_routes.py    # Job submission, molecule upload, task management + read-only availability/prepared endpoints
+├── v2_routes.py    # Task views, batch ops, molecule groups, lineage
+├── v2_structure_sources.py  # Structure-source organization endpoints
 ├── schemas.py      # Pydantic models: StatusResponse, BackendsResponse, JobCreateRequest+ (170)
 └── v1_schemas.py   # V1 API Pydantic models (247)
 ```
@@ -19,7 +21,7 @@ api/
 |------|------------|
 | `server.py` | `create_app()` factory — wires routers, lifespan starts `JobManager`, serves frontend at `/` and `/legacy/`; `/js` + `/css` mount `_RevalidatingStaticFiles` (`Cache-Control: no-cache`) so a normal reload always picks up newly deployed workbench JS/CSS |
 | `routes.py` | `/api/status` (service health + queue counts), `/api/backends` (capability discovery), `/api/jobs` (create/list/get/cancel/logs/files), `/api/jobs/{id}/events` (SSE stream) |
-| `v1_routes.py` | Higher-level job submission, molecule upload, task management (~700 lines); structure-viewer remote files go through the manager-owned `RemoteStructureCache` singleton (`JobManager.structure_cache`) — never build a second cache instance; PES/energy reads resolve remote jobs via `_job_read_root` (cache-first, terminal catalog fetch); remote PES review writes stage in the cache root and write back over SFTP (`_remote_review_setup` → `save_pes_review` → `_remote_review_write_back`) |
+| `v1_routes.py` | Higher-level job submission, molecule upload, task management (~700 lines); control endpoints build `RuntimeCommands` (`acp_services.runtime.commands`) via `build_runtime_commands`; read-only `GET /jobs/{job_id}/availability` and `GET /jobs/{job_id}/prepared/{resource}` use Data `resource_read`; structure-viewer remote files go through the manager-owned `RemoteStructureCache` singleton (`JobManager.structure_cache`) — never build a second cache instance; PES/energy reads resolve remote jobs via `_job_read_root` (cache-first, terminal catalog fetch); remote PES review writes stage in the cache root and write back over SFTP (`_remote_review_setup` → `save_pes_review` → `_remote_review_write_back`). Legacy GET behavior (including `_job_read_root` terminal `fetch_catalog`) is deliberately retained for F0 (closure L2-03) |
 | `schemas.py` | Shared Pydantic request/response models for status, backends, jobs, files |
 | `v1_schemas.py` | V1-specific Pydantic schemas |
 
@@ -37,3 +39,4 @@ api/
 - **`__all__` lists module names, not symbols**: `__init__.py` re-exports `["server", "routes", "schemas"]` instead of actual symbols like `app`, `create_app`, `router` — breaks `from acp.api import app` in type checkers
 - **No pyright suppressions** locally (unlike broader `acp/` package) — but many `# type: ignore` in `v1_routes.py`
 - **`_WORKFLOW_INFO` hardcoded**: Workflow metadata in `routes.py` is a static list, not derived from `acp.workflows` registry — drift risk
+- **Deleting legacy GET before F0 gate**: `/availability` and `/prepared/{resource}` are additive; old GET paths stay until the F0/F1×S0/S1 matrix and zero-consumer evidence close (closure L2-03/§7.4)
