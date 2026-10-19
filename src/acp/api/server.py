@@ -186,6 +186,24 @@ def _is_event_stream_request(request: Request) -> bool:
     return request.url.path.endswith("/events")
 
 
+def _maybe_configure_structured_logging() -> bool:
+    """Opt the API process into structured JSON logging when configured.
+
+    Additive: returns ``False`` (and touches no logger) unless
+    ``ACP_LOG_FORMAT=json`` is set (B08-6 / todo 47).  Observation only — the
+    logging pipeline never becomes a settlement/recovery authority.
+    """
+    from acp_services.entrypoints.diagnostics import (
+        configure_structured_logging,
+        structured_logging_enabled,
+    )
+
+    if not structured_logging_enabled():
+        return False
+    configure_structured_logging()
+    return True
+
+
 def create_app(
     run_root: Path | str | None = None,
     host: str | None = None,
@@ -206,6 +224,8 @@ def create_app(
     configuration survives uvicorn's module re-import under ``--reload``.
     """
     from acp.core.paths import check_run_root_safety, resolve_run_root
+
+    _maybe_configure_structured_logging()
 
     run_root_path = resolve_run_root(run_root or os.environ.get("ACP_RUN_ROOT"))
     eff_host = host or os.environ.get("ACP_HOST", "127.0.0.1")

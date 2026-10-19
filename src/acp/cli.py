@@ -42,8 +42,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def setup_logging(level: str = "INFO") -> None:
-    """Configure root logger with the given level."""
+def setup_logging(level: str = "INFO", *, structured: bool | None = None) -> None:
+    """Configure the root logger with the given level.
+
+    The legacy text format is preserved by default.  Structured (JSON-line,
+    redacted) logging is opt-in via ``ACP_LOG_FORMAT=json`` or an explicit
+    ``structured=True``; it writes to stderr so machine JSON envelopes on stdout
+    stay clean (B08-6 / todo 47).  Logging is observation only — never a
+    settlement or recovery authority.
+    """
+    if structured is None:
+        from acp_services.entrypoints.diagnostics import structured_logging_enabled
+
+        structured = structured_logging_enabled()
+    if structured:
+        from acp_services.entrypoints.diagnostics import configure_structured_logging
+
+        configure_structured_logging(level=level)
+        return
     numeric_level = getattr(logging, level.upper(), logging.INFO)
     logging.basicConfig(
         level=numeric_level,
