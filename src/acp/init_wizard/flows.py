@@ -28,6 +28,10 @@ from acp.init_wizard.capabilities import (
     collect_capability_report,
     render_capability_report,
 )
+from acp.init_wizard.lab_doctor import (
+    collect_lab_capability_report,
+    render_lab_capability_report,
+)
 from acp.init_wizard.newnode import (
     PromptBundle,
     _validate_remote_path,
@@ -66,6 +70,7 @@ from acp.init_wizard.sniff_remote import (
     sniff_remote,
     write_remote_config,
 )
+from acp_services.contracts.access import DeploymentTier
 from acp_services.contracts.config_validation import node_entry_error
 
 logger = logging.getLogger(__name__)
@@ -527,11 +532,23 @@ def _preview_and_apply(prompts: PromptBundle, plan: InitPlan, *, plan_only: bool
 
 
 def _print_doctor(plan: InitPlan) -> bool:
-    """Step 7: three-state doctor capability report; returns overall ok."""
+    """Step 7: three-state doctor report (+ four-state Lab report when Lab).
+
+    The base report keeps PASS / FAIL / NOT_VERIFIED for software/components;
+    for the Lab tier an additive four-state capability report is appended so an
+    unverified DB/HTTPS/LSF/quota/isolation combination is never shown as
+    available and its enablement is refused instead of silently downgraded.
+    """
     report = collect_capability_report(plan)
     print("\n== 验证（doctor） ==")
     print(render_capability_report(report))
-    return report.ok
+    ok = report.ok
+    if plan.tier == DeploymentTier.LAB:
+        lab_report = collect_lab_capability_report(plan)
+        print()
+        print(render_lab_capability_report(lab_report))
+        ok = ok and lab_report.ok
+    return ok
 
 
 def _run_local_unified(

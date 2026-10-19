@@ -16,6 +16,11 @@ from acp.init_wizard.capabilities import (
     render_capability_report,
 )
 from acp.init_wizard.flows import run_init
+from acp.init_wizard.lab_doctor import (
+    collect_lab_capability_report,
+    lab_environment_from_plan,
+    render_lab_capability_report,
+)
 from acp.init_wizard.newnode import FlowResult
 from acp.init_wizard.options import (
     COMPONENT_SPECS,
@@ -51,10 +56,13 @@ __all__ = [
     "ask_secret",
     "build_plan",
     "collect_capability_report",
+    "collect_lab_capability_report",
+    "lab_environment_from_plan",
     "load_answers",
     "menu",
     "plan_from_answers",
     "render_capability_report",
+    "render_lab_capability_report",
     "render_plan",
     "run_init",
     "tier_enablement",
