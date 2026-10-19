@@ -35,6 +35,7 @@ from acp.scheduler.remote import release as remote_release
 from acp.scheduler.remote import submission as remote_submission
 from acp.scheduler.task_views import query_project_tasks
 from acp.scheduler.tasks import TaskIndex
+from acp.services_publication_bootstrap import build_publication_data_port
 from acp_services.bootstrap import ServicesPorts
 from acp_services.runtime.commands import RuntimeCommands
 from acp_services.runtime.recovery import RuntimeRecovery
@@ -220,7 +221,7 @@ def build_services_ports(
         tasks=index,
         task_views=SimpleNamespace(query_project_tasks=query_project_tasks),
         control=control,
-        planning=CalculationPlanExecutor(),
+        planning=CalculationPlanExecutor(publication=build_publication_data_port()),
         publication=SimpleNamespace(
             register_result_manifest=register_result_manifest,
             load_scientific_result=load_scientific_result,

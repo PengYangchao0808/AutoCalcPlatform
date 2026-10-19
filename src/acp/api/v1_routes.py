@@ -4340,6 +4340,13 @@ def _frame_candidate_work_dir(
     return work_dir, str(record.spec.workflow or "")
 
 
+def _frame_candidate_publication_entry() -> Any:
+    """Production publication entry routing candidate writes through Data."""
+    from acp.services_publication_bootstrap import build_publication_data_port
+
+    return build_publication_data_port()
+
+
 @router.post(
     "/jobs/{job_id}/frame-candidate",
     response_model=V1FrameCandidateResponse,
@@ -4377,6 +4384,7 @@ def save_frame_candidate_endpoint(
             expected_revision=req.expected_revision,
             item_id=req.item_id,
             frame_id=req.frame_id,
+            publication=_frame_candidate_publication_entry(),
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

@@ -129,11 +129,20 @@ def _get_stores(request: Request) -> tuple[StructureSourceStore, StructureSource
         db_path = getattr(request.app.state, "db_path", "")
         source_store = StructureSourceStore(db_path)
         manager = _manager(request)
+        from acp.services_data_bootstrap import build_data_resource_port
+
+        data_port = build_data_resource_port(
+            run_root,
+            db_path=db_path,
+            source_store=source_store,
+            cache=getattr(manager, "structure_cache", None),
+        )
         indexer = StructureSourceIndexer(
             store=manager.store,
             source_store=source_store,
             run_root=Path(run_root),
             structure_cache=getattr(manager, "structure_cache", None),
+            data_port=data_port,
         )
         indexer.ensure_started()
         _singletons[run_root] = (source_store, indexer)

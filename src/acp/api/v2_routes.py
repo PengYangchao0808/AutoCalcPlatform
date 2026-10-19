@@ -157,16 +157,17 @@ _ENRICHMENT_CAP = 200
 _LIST_DETAIL_FETCH_BUDGET: int = _ENRICHMENT_CAP
 
 #: Compatibility switch for the pre-projection enrichment path.  The plan
-#: (``acp-parallel-plan-2-services`` todo 19) keeps ``_enrich_active_rows`` as a
-#: retained compatibility branch — deletion requires A-lane A04 "zero consumers"
-#: evidence in ``.omo/evidence/``.  While it is enabled, rows that the prepared
-#: projection does not cover are still enriched per request (legacy behaviour,
-#: which existing callers depend on).  Set ``ACP_TASK_VIEW_ENRICH_COMPAT=0`` to
-#: make the prepared snapshot authoritative: the query then never scans/parses
-#: ``state.json`` and an uncovered row simply shows its jobs base facts.
+#: (``acp-parallel-plan-2-services`` todo 19 / F4-B1) keeps ``_enrich_active_rows``
+#: as a retained compatibility branch — deletion requires A-lane A04 "zero
+#: consumers" evidence in ``.omo/evidence/``.  It now defaults **off** (IS-5):
+#: the prepared projection is authoritative, so a query never scans/parses
+#: ``state.json`` and a row the snapshot does not cover simply shows its jobs
+#: base facts.  Set ``ACP_TASK_VIEW_ENRICH_COMPAT=1`` to re-enable the legacy
+#: per-request enrichment during the transition (bounded by
+#: ``_LIST_DETAIL_FETCH_BUDGET``).
 _ENRICH_ACTIVE_ROWS_COMPAT: bool = os.environ.get(
-    "ACP_TASK_VIEW_ENRICH_COMPAT", "1"
-).strip().lower() not in ("0", "false", "no", "")
+    "ACP_TASK_VIEW_ENRICH_COMPAT", "0"
+).strip().lower() in ("1", "true", "yes")
 
 
 class _ManagerTaskProjectionSource:
@@ -204,9 +205,7 @@ class _ManagerTaskProjectionSource:
                     fields[field] = value
             live = getattr(enriched, "live_status", None)
             if live is not None:
-                fields["live_status"] = (
-                    live.model_dump() if hasattr(live, "model_dump") else live
-                )
+                fields["live_status"] = live.model_dump() if hasattr(live, "model_dump") else live
             projections.append(
                 TaskRowProjection(
                     task_id=job_id,
@@ -624,9 +623,7 @@ def get_task_view(
                 if row.get("status") in _ACTIVE_STATUSES_FOR_ENRICHMENT
             }
 
-    current_revisions = {
-        row["id"]: owner_revisions_for_row(row) for row in rows if row.get("id")
-    }
+    current_revisions = {row["id"]: owner_revisions_for_row(row) for row in rows if row.get("id")}
     projection.annotate_rows(
         rows,
         current_revisions=current_revisions,
