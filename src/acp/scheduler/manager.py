@@ -459,6 +459,7 @@ class JobManager:
         self._start_release_gc_thread()
 
         if self._reconnect_local_workers:
+            self._adopt_live_orphans_on_startup()
             with self._lock:
                 self._rebuild_reservations()
         else:
@@ -2364,6 +2365,18 @@ class JobManager:
                     )
         else:
             self.runner.cancel_local(job_id)
+            if self._has_live_task_process(record):
+                killed = self._terminate_stale_task_processes(record)
+                if killed:
+                    try:
+                        self._event_log(record).append(
+                            "process.cleaned",
+                            job_id=job_id,
+                            pids=killed,
+                            reason="cross-process-cancel",
+                        )
+                    except OSError:
+                        logger.debug("cancel cleanup event failed for %s", job_id, exc_info=True)
 
         self._event_log(record).append("job.cancelling", job_id=job_id, attempt=record.attempt)
         self._sync_task_status(record)
@@ -3347,6 +3360,11 @@ class JobManager:
                 logger.exception("Submission failed for job %s", job_id)
                 record = self.store.get(job_id)
                 if record and not record.status.is_terminal:
+                    # A failed submission must never leave a live worker
+                    # behind (startup-window orphan): confirm-stop it before
+                    # persisting FAILED.
+                    if not self._is_remote_job(record):
+                        self._cleanup_local_orphans(record)
                     # Terminal event first — same poller-consistency invariant
                     # as the fake-completion branch in _submit_job; the CAS
                     # below drops the write when a concurrent writer already
@@ -4436,11 +4454,14 @@ class JobManager:
             # submission threads cannot oversubscribe local slots (M5).
             with self._lock:
                 self._admit_local(record)
-                self.runner.submit(record, event_log, cancel_event)
+                adopted = self._adopt_existing_task_process(record)
+                if not adopted:
+                    self.runner.submit(record, event_log, cancel_event)
                 running = self._cas_write(
                     record,
                     expected_status=record.status,
                     status=JobStatus.RUNNING,
+                    pid=record.pid,
                     decide=lambda fresh: None,
                 )
                 if running is None:
@@ -5209,7 +5230,15 @@ class JobManager:
                 "error": error,
             }
         else:
-            if cancel_event.is_set() and exit_code and exit_code != 0:
+            if record.status == JobStatus.CANCELLING and not is_remote:
+                # A local control intent survives a controller restart: the
+                # process being gone IS the confirmed stop for a local task,
+                # so the durable CANCELLING row must finish CANCELLED instead
+                # of being overwritten by the stale/absent exit observation.
+                status = JobStatus.CANCELLED
+                if exit_code in (None, 0):
+                    exit_code = 130
+            elif cancel_event.is_set() and exit_code and exit_code != 0:
                 if is_remote:
                     # Contract A (D05): a remote cancel is finalised only
                     # after bjobs confirms the job is gone — never from
@@ -5578,6 +5607,104 @@ class JobManager:
         if "acp" in cmdline or "uvicorn" in cmdline:
             return owner
         return None
+
+    def _run_lock_payload(self, record: JobRecord) -> dict[str, object]:
+        try:
+            payload = json.loads(
+                runtime_file(Path(record.work_dir), "run.lock").read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _adopt_existing_task_process(self, record: JobRecord) -> bool:
+        """Adopt a live worker left behind in the submission window.
+
+        A controller killed between spawning the worker and persisting the
+        RUNNING row must not cause the next controller to either double
+        dispatch or fail the job while the worker keeps computing.  Identity
+        is proven from the task directory's live process set plus the
+        attempt-tagged ``run.lock``; a live foreign ACP owner still wins
+        (never adopt a peer's task).  Returns True when the worker was
+        adopted, in which case the caller must not spawn another process.
+        """
+        if self._is_remote_job(record):
+            return False
+        pids = list(self.runner._live_task_pids(record) or ())
+        if not pids:
+            return False
+        peer = self._run_lock_peer_pid(record)
+        if peer is not None:
+            raise RuntimeError(
+                f"task {record.id} still has live process(es) {pids} in "
+                f"{record.work_dir}; refusing to start a second execution"
+            )
+        payload = self._run_lock_payload(record)
+        recorded_attempt = payload.get("attempt")
+        if isinstance(recorded_attempt, int) and not isinstance(recorded_attempt, bool):
+            if recorded_attempt != record.attempt:
+                self._terminate_stale_task_processes(record)
+                return False
+        recorded_pid = payload.get("task_pid")
+        pid = (
+            recorded_pid
+            if isinstance(recorded_pid, int) and recorded_pid in pids
+            else pids[0]
+        )
+        if not isinstance(pid, int) or isinstance(pid, bool):
+            return False
+        record.pid = pid
+        self.runner.attach_run_lock(record, task_pid=pid)
+        try:
+            self._event_log(record).append(
+                "process.adopted",
+                job_id=record.id,
+                pid=pid,
+                pids=list(pids),
+                attempt=record.attempt,
+            )
+        except OSError:
+            logger.debug("adoption event failed for %s", record.id, exc_info=True)
+        return True
+
+    def _adopt_live_orphans_on_startup(self) -> None:
+        """Adopt live workers whose rows never reached RUNNING.
+
+        The reconnecting controller skips destructive startup recovery, so
+        the submission-window orphan would otherwise stay unobserved (and be
+        double-dispatched if its row was still QUEUED).
+        """
+        for status in (JobStatus.STARTING, JobStatus.QUEUED, JobStatus.PENDING):
+            for record in self.store.list(status=status.value, limit=10000):
+                if self._is_remote_job(record) or _has_pending_submission(record):
+                    continue
+                if self._skip_recovery_for_peer(record):
+                    continue
+                try:
+                    if not self._adopt_existing_task_process(record):
+                        continue
+                except RuntimeError:
+                    logger.warning(
+                        "Could not adopt live worker for job %s (peer owns it)", record.id
+                    )
+                    continue
+                adopted = self._cas_write(
+                    record,
+                    expected_status=record.status,
+                    status=JobStatus.RUNNING,
+                    pid=record.pid,
+                    decide=lambda fresh: None,
+                )
+                if adopted is None:
+                    continue
+                self._sync_task_status(adopted)
+                self._write_job_json(adopted)
+                logger.info(
+                    "Adopted startup-window worker for job %s (pid=%s, attempt=%s)",
+                    adopted.id,
+                    adopted.pid,
+                    adopted.attempt,
+                )
 
     def _skip_recovery_for_peer(self, record: JobRecord) -> bool:
         """True when a live peer server owns this task — leave it alone.

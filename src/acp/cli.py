@@ -29,7 +29,7 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, Final
@@ -2217,6 +2217,7 @@ Examples:
     plan.add_argument("--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)")
     plan.add_argument("--method", default="r2SCAN-3c", help="Method (default: r2SCAN-3c)")
     plan.add_argument("--profile", default="default", help="Plan profile (default: default)")
+    plan.add_argument("--config", default=None, help="Explicit config file (merged over user/project)")
 
     execute = task_sub.add_parser("execute", parents=[common], help="Submit a job to the local scheduler")
     execute.add_argument("--workflow", "-w", required=True, help="Workflow id (e.g. fake, singlepoint)")
@@ -2242,9 +2243,23 @@ Examples:
 
     recover = task_sub.add_parser("recover", parents=[common], help="Reuse valid results for a task")
     recover.add_argument("--task-dir", required=True, help="Task directory holding input.xyz")
-    recover.add_argument("--workflow", "-w", default="singlepoint", help="Workflow (default: singlepoint)")
-    recover.add_argument("--method", default="r2SCAN-3c", help="Method (default: r2SCAN-3c)")
+    recover.add_argument(
+        "--workflow",
+        "-w",
+        default=None,
+        help="Workflow (default: persisted job workflow, else singlepoint)",
+    )
+    recover.add_argument(
+        "--method",
+        default=None,
+        help="Method override (default: persisted job method, else r2SCAN-3c)",
+    )
     recover.add_argument("--profile", default="default", help="Plan profile (default: default)")
+    recover.add_argument(
+        "--config",
+        default=None,
+        help="Explicit config file (merged over user/project config)",
+    )
 
     export = task_sub.add_parser("export", parents=[common], help="Read the task result manifest")
     export.add_argument("--job", default=None, help="Job id (resolves the task dir)")
@@ -2289,9 +2304,68 @@ def _task_structure_elements(xyz_text: str) -> list[str]:
     return elements
 
 
-def _build_task_plan(task_dir: Path, workflow: str, method: str, profile: str) -> Any:
+def _task_config(args: argparse.Namespace) -> dict[str, Any]:
+    """Load the full merged configuration for a ``task`` subcommand."""
+    from cccp.config import load_config
+
+    overrides: dict[str, Any] = {}
+    if getattr(args, "nproc", None) is not None:
+        overrides.setdefault("resources", {})["nproc"] = args.nproc
+        overrides.setdefault("executables", {}).setdefault("orca", {})["nproc"] = args.nproc
+    if getattr(args, "mem", None) is not None:
+        overrides.setdefault("resources", {})["mem"] = args.mem
+    config_path = getattr(args, "config", None)
+    return load_config(
+        config_path=Path(config_path) if config_path else None,
+        overrides=overrides or None,
+    )
+
+
+def _persisted_task_spec(task_dir: Path) -> dict[str, Any]:
+    """Read the original workflow/method/resources from a persisted task."""
+    spec: dict[str, Any] = {}
+    for name in ("job.json", "task.json"):
+        path = task_dir / name
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        raw_spec = payload.get("spec")
+        if isinstance(raw_spec, dict):
+            workflow = raw_spec.get("workflow")
+            if isinstance(workflow, str) and workflow:
+                spec.setdefault("workflow", workflow)
+            method = raw_spec.get("method")
+            if isinstance(method, dict):
+                spec.setdefault("method", dict(method))
+            resources = raw_spec.get("resources")
+            if isinstance(resources, dict):
+                spec.setdefault("resources", dict(resources))
+            config_path = raw_spec.get("config_path")
+            if config_path:
+                spec.setdefault("config_path", str(config_path))
+        workflow = payload.get("workflow")
+        if isinstance(workflow, str) and workflow:
+            spec.setdefault("workflow", workflow)
+    return spec
+
+
+def _build_task_plan(
+    task_dir: Path,
+    workflow: str,
+    method: str,
+    profile: str,
+    *,
+    config: Mapping[str, Any] | None = None,
+    resources: Mapping[str, Any] | None = None,
+    method_flags: Mapping[str, Any] | None = None,
+) -> Any:
     from acp.calculations.contracts import (
+        CalculationPlan,
         CalculationRequest,
+        CalculationStep,
         StepKind,
         StructureArtifact,
         StructureRole,
@@ -2313,14 +2387,32 @@ def _build_task_plan(task_dir: Path, workflow: str, method: str, profile: str) -
         role=StructureRole.MINIMUM,
         source="cli-task",
     )
+    output_dir = task_dir / "WORK" / f"05_{kind_value.upper()}"
+    if config is None:
+        from cccp.config import load_config
+
+        config = load_config()
+    step_resources: dict[str, Any] = dict(resources or {})
+    step_resources["output_dir"] = str(output_dir)
+    step_resources["config"] = dict(config)
+    step_spec = dict(step_resources)
+    step_spec.update(method_flags or {})
+    step_spec["method"] = method
     request = CalculationRequest(
         input_artifact=artifact,
         method=method,
-        resources={"output_dir": str(task_dir / "WORK" / f"05_{kind_value.upper()}")},
+        resources=step_resources,
         workflow=workflow,
         profile=profile,
     )
-    return build_simple_plan(StepKind(kind_value), request)
+    base_plan = build_simple_plan(StepKind(kind_value), request)
+    first_step = next(step for step in base_plan.steps if isinstance(step, CalculationStep))
+    return CalculationPlan(
+        workflow=base_plan.workflow,
+        profile=base_plan.profile,
+        items=list(base_plan.items),
+        steps=[CalculationStep(kind=first_step.kind, mode=first_step.mode, spec=step_spec)],
+    )
 
 
 def _task_input_payload(source: str) -> dict[str, Any]:
@@ -2400,7 +2492,13 @@ def _handle_task_ingest(args: argparse.Namespace) -> int:
 def _handle_task_plan(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     try:
-        plan = _build_task_plan(Path(args.task_dir), args.workflow, args.method, args.profile)
+        plan = _build_task_plan(
+            Path(args.task_dir),
+            args.workflow,
+            args.method,
+            args.profile,
+            config=_task_config(args),
+        )
     except (FileNotFoundError, ValueError) as exc:
         _emit_task({"command": "plan", "status": "failed", "error": str(exc)})
         return 2
@@ -2522,8 +2620,31 @@ def _handle_task_recover(args: argparse.Namespace) -> int:
     run_root = _task_run_root(args)
     run_root.mkdir(parents=True, exist_ok=True)
     task_dir = Path(args.task_dir)
+    persisted = _persisted_task_spec(task_dir)
+    workflow = args.workflow or str(persisted.get("workflow") or "singlepoint")
+    persisted_method = persisted.get("method") or {}
+    method_flags = dict(persisted_method) if isinstance(persisted_method, Mapping) else {}
+    method = args.method or str(method_flags.get("method") or "r2SCAN-3c")
+    method_flags["method"] = method
+    resources = persisted.get("resources") or {}
     try:
-        plan = _build_task_plan(task_dir, args.workflow, args.method, args.profile)
+        config_path = (
+            Path(args.config)
+            if getattr(args, "config", None)
+            else (Path(persisted["config_path"]) if persisted.get("config_path") else None)
+        )
+        from cccp.config import load_config
+
+        config = load_config(config_path=config_path)
+        plan = _build_task_plan(
+            task_dir,
+            workflow,
+            method,
+            args.profile,
+            config=config,
+            resources=resources if isinstance(resources, Mapping) else None,
+            method_flags=method_flags,
+        )
     except (FileNotFoundError, ValueError) as exc:
         _emit_task({"command": "recover", "status": "failed", "error": str(exc)})
         return 2
@@ -2537,6 +2658,8 @@ def _handle_task_recover(args: argparse.Namespace) -> int:
             "command": "recover",
             "status": getattr(result, "status", "unknown"),
             "completed": completed,
+            "workflow": workflow,
+            "method": method,
             "task_dir": str(task_dir),
         }
     )
@@ -4559,14 +4682,144 @@ def _preflight_workflow(workflow: str) -> None:
             )
 
 
-def _handle_doctor(args: argparse.Namespace) -> int:
-    """``acp doctor`` — deployment self-check for remote compute nodes.
+def _doctor_binary_sanity(name: str, path: Path) -> str | None:
+    """Return a rejection reason when *path* is not a plausible QC binary."""
+    try:
+        head = Path(path).read_bytes()[:4096]
+    except OSError as exc:
+        return f"不可读取：{exc}"
+    if not head:
+        return "空文件"
+    lowered = head.lower()
+    if b"igalia" in lowered or b"screen reader" in lowered:
+        return "GNOME Orca 屏幕阅读器（非 QC 二进制）"
+    if head.startswith(b"\x7fELF"):
+        return None
+    if head.startswith(b"#!"):
+        first_line = head.split(b"\n", 1)[0].decode("utf-8", "replace").lower()
+        if name == "orca" and "python" in first_line:
+            return f"Python 脚本，不是 QC ORCA（{first_line.strip()}）"
+        return None
+    if name == "orca":
+        return "不是 QC ORCA 二进制（缺少 ELF 文件头）"
+    return None
 
-    Probes each node's Python interpreter and resolves every known QC
-    binary with the same centralized resolver the workflows use, so a
-    freshly configured cluster can be validated before any job is
-    submitted.  Exits non-zero when a node is unreachable or a binary is
-    missing.
+
+def _doctor_software_checks(cfg: Mapping[str, Any]) -> list[tuple[str, str, str]]:
+    """Resolve every QC binary without ever hiding a configured-but-invalid pin."""
+    from cccp.software import EXECUTABLES, resolve_executable_with_source
+
+    executables = cfg.get("executables")
+    if not isinstance(executables, Mapping):
+        executables = {}
+    checks: list[tuple[str, str, str]] = []
+    for name in EXECUTABLES:
+        entry = executables.get(name)
+        configured: str | None = None
+        if isinstance(entry, Mapping):
+            raw_path = entry.get("path")
+            if raw_path is not None and not isinstance(raw_path, bool):
+                text = str(raw_path).strip()
+                if text:
+                    configured = text
+        resolved, source = resolve_executable_with_source(name, configured_path=configured)
+        label = f"software:{name}"
+        if configured is not None and source != "config":
+            checks.append(
+                (
+                    label,
+                    "FAIL",
+                    f"已配置路径不可用：{configured}（拒绝 PATH 回落：{resolved}）",
+                )
+            )
+            continue
+        if resolved is None:
+            if configured is not None:
+                checks.append((label, "FAIL", f"已配置路径不可用：{configured}"))
+            else:
+                checks.append(
+                    (label, "NOT_VERIFIED", "未配置；PATH 中未找到，科学能力尚未验证")
+                )
+            continue
+        reason = _doctor_binary_sanity(name, resolved)
+        if reason is not None:
+            state = "FAIL" if configured is not None else "NOT_VERIFIED"
+            checks.append((label, state, f"{resolved} — {reason}"))
+            continue
+        checks.append((label, "PASS", f"{resolved}（source={source}）"))
+    return checks
+
+
+def _is_local_deployment(cfg: Mapping[str, Any]) -> bool:
+    deployment = cfg.get("deployment")
+    if not isinstance(deployment, Mapping):
+        return False
+    usage = str(deployment.get("usage") or "").strip().lower()
+    tier = str(deployment.get("tier") or "").strip().lower()
+    return usage == "local" or tier in {"local-single", "standalone", "local"}
+
+
+def _run_local_doctor(cfg: Mapping[str, Any]) -> int:
+    """Report local capability (PASS/FAIL/NOT_VERIFIED) for a local tier."""
+    from acp.core.paths import check_run_root_safety, resolve_run_root
+
+    deployment = cfg.get("deployment")
+    deployment_map = deployment if isinstance(deployment, Mapping) else {}
+    checks = _doctor_software_checks(cfg)
+    root: Path | None = None
+    try:
+        root = resolve_run_root(None)
+        warnings = check_run_root_safety(root)
+        target = root if root.exists() else root.parent
+        if root.exists() and not root.is_dir():
+            checks.append(("run_root", "FAIL", f"{root} 不是目录"))
+        elif not os.access(target, os.W_OK):
+            checks.append(("run_root", "FAIL", f"{root} 不可写"))
+        else:
+            detail = "；".join(warnings) if warnings else "就绪"
+            checks.append(("run_root", "PASS", f"{root} — {detail}"))
+    except (OSError, ValueError) as exc:
+        checks.append(("run_root", "FAIL", str(exc)))
+    if root is not None:
+        try:
+            from acp_services.store.store import JobStore
+
+            db_path = root / "acp_jobs.db"
+            JobStore(db_path)
+            checks.append(("store", "PASS", str(db_path)))
+        except (OSError, RuntimeError, ValueError) as exc:
+            checks.append(("store", "FAIL", str(exc)))
+    checks.append(("config", "PASS", "merged configuration loaded"))
+
+    print(
+        "\nLocal capability report "
+        f"(usage={deployment_map.get('usage', '?')}, tier={deployment_map.get('tier', '?')})"
+    )
+    failures = 0
+    for state in ("PASS", "FAIL", "NOT_VERIFIED"):
+        entries = [check for check in checks if check[1] == state]
+        print(f"  {state}（{len(entries)}）：")
+        if not entries:
+            print("    - （无）")
+        for name, _state, detail in entries:
+            if state == "FAIL":
+                failures += 1
+            print(f"    - {name} — {detail}")
+    print(
+        "\nLocal doctor finished: "
+        + ("all checks passed" if failures == 0 else f"{failures} failure(s) found")
+    )
+    return 1 if failures else 0
+
+
+def _handle_doctor(args: argparse.Namespace) -> int:
+    """``acp doctor`` — deployment self-check for remote nodes and local tiers.
+
+    Remote clusters keep the existing node/binary self-check.  A local
+    (standalone) deployment with zero remote nodes reports local capability
+    instead of failing solely because ``cluster.nodes`` is empty; an
+    explicitly configured-but-invalid executable is always FAIL, never a
+    silent PATH fallback PASS.
     """
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
@@ -4575,10 +4828,20 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     from acp.scheduler.remote.ssh import SSHConnectionPool
     from cccp.config import load_config
 
-    cfg = load_config()
+    try:
+        cfg = load_config()
+    except ValueError as exc:
+        print(f"FAIL config — {exc}")
+        return 1
     cluster = cfg.get("cluster") or {}
     remote_cfg = RemoteExecutionConfig.from_config_dict(cluster)
     if not remote_cfg.nodes:
+        if args.node is None and _is_local_deployment(cfg):
+            print(
+                "No remote nodes configured — running local capability checks "
+                "(local/standalone deployment)."
+            )
+            return _run_local_doctor(cfg)
         print("No remote nodes configured (cluster.nodes is empty).")
         return 1
 
