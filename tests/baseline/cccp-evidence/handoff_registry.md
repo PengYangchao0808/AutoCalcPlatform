@@ -34,7 +34,7 @@
 | HN-03 | C | 有界大数据产品 + 块索引（分块/抽样/多分辨率；派生身份=输入摘要+算法+范围+分辨率+schema）（T33） | C | B（Data 字节/元数据查询）/ A（有限产品消费） | 产出时冻结 | T11/T12 产品契约；T31/T32 分块实现 + 性能实测 | 产品块有界、原始点映射/顺序/关键点可复核；派生身份含全部维度；性能用同样本实测（不写未测收益） | pending | pending |
 | HN-04 | C | CCCP 最小科学包/依赖/资产/许可清单 + 精确打包改动请求（`pyproject.toml`/发行输入）+ wheel 构建与无 acp 安装证据（T39） | C | B（共享打包集成） | 产出时冻结 | T30/T33/T38 资产与清单；单 `pyproject.toml` 现状基线 | 精确变更请求可应用；无 acp/Services 环境安装 wheel 并运行科学 fixture/产品读取/模型报告样例；许可/可获得性声明 | pending | pending |
 | HN-05 | C | 远端节点运行时依赖同步请求（`requirements-node.txt`）+ 新增运行时 import 声明（T42） | C | B（节点清单集成） | 产出时冻结 | HN-04 科学依赖集；`acp run` 新增 import 清单 | 新增运行时依赖逐条登记（HERE + `pyproject.toml` 同步请求）；节点环境 `pip install -r` PASS；无漏项 | pending | pending |
-| HN-06 | C | 插件/parser 版本摘要（版本/能力/许可/冲突/unavailable 字段）+ 契约检查（T46） | C | B（release/step identity/产品身份 + 发现加载边界） | 产出时冻结 | T44 样板 + T45 发现/加载边界 | 固定版本结果与失败语义可验证；覆盖版本不符/缺依赖/重复能力/部分输出/单位映射/取消超时与回退；摘要供 B release/identity 消费 | pending | pending |
+| HN-06 | C | 插件/parser 版本摘要字段规范 + 真实示例值（`handoffs/HN-06-version-digest.md` + `handoffs/samples/version_digest_samples.json`，T46） | C | B（release/step/product identity 冻结与发布，B06/B07） | 产出时冻结（shape=T45 `b9283e5`；`PLUGIN_DIGEST_SCHEMA_VERSION=1`/`PLUGIN_IDENTITY_SCOPE_VERSION=1`） | T44 样板 + T45 SDK digest/identity_fields（已满足） | 字段名/types/来源齐备 B 可直接照接；样例值真实（SDK 生成，记录命令+原始输出）；字段冻结时点早于 B 执行身份发布；PRODUCT 缺 capability → typed 错误 | `f68274c4f0b15d46e23398aaecdd2d4542e575d8`（provider 交付提交） | delivered |
 
 ## 3. 与 write_registry 的关系
 
