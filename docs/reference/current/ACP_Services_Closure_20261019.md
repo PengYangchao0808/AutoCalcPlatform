@@ -79,7 +79,7 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
 |---|---|---|---|---|
 | L1-01 | Data 端口 / 只读根 / 持久 prepare / 传输校验 | PASS | `tests/test_services_data_port.py`(11) `tests/test_services_read_root.py`(17) `tests/test_services_prepare_operations.py`(15) `tests/test_services_transfer_verify.py`(20) | 63 passed；claim=in_repo（本地临时 run_root，无远端） |
 | L1-02 | 持久事件协议 / 授权流 / 顺序 / freshness | PASS | `tests/test_services_events.py`(24) `tests/test_services_events_authz.py`(19) `tests/test_services_event_ordering.py`(12) `tests/test_services_freshness.py`(21) | 76 passed |
-| L1-03 | ExecutionEnvelope / worker 契约 / 整链切换 / 逐工作流启用 | **FAIL（1 项）** | `tests/test_services_envelope.py`(28) `tests/test_services_worker_contract.py`(36 passed, **1 failed**) `tests/test_services_chain_switch.py`(22) `tests/test_services_workflow_enablement.py`(26) | 失败项 = `test_runtime_package_has_no_acp_or_db_access`（见 §6 F-3）；其余全绿 |
+| L1-03 | ExecutionEnvelope / worker 契约 / 整链切换 / 逐工作流启用 | **PASS（F-3 已修复）** | `tests/test_services_envelope.py`(28) `tests/test_services_worker_contract.py`(49 passed) `tests/test_services_chain_switch.py`(22) `tests/test_services_workflow_enablement.py`(26) | `d9dcb25` 将 `test_runtime_package_has_no_acp_or_db_access` 的守卫收窄到 worker 边界（`python3.11 -m pytest tests/test_services_worker_contract.py -q` → 49 passed，exit 0；`pytest tests/test_services_*.py -q` → 全绿）；负例注入（禁 `import acp` / `attempt += 1`）保留。**原 FAIL 作为被取代审计注记保留在 §6 F-3。** |
 | L1-04 | store / schema 迁移等价 | PASS | `tests/test_services_migration_equivalence.py`(22) | 隔离 DB 持久化/CAS + 参数转换 parity + identity + AST 隔离 |
 | L1-05 | 执行隔离能力矩阵 | PASS | `tests/test_services_isolation.py`(25) `tests/baseline/services-evidence/isolation_matrix.md` | 矩阵与代码同源；pseudo-isolation 拒绝 |
 | L1-06 | 访问边界 / 身份 / API Key / 管理面 | PASS | `tests/test_services_api_keys.py`(32) `tests/test_services_local_boundary.py`(39) `tests/test_services_identity_model.py`(33) `tests/test_services_identity_mapping.py`(19) `tests/test_services_identity_lifecycle.py`(23) `tests/test_services_entry_authz.py`(63) `tests/test_services_admin.py`(52) | 261 passed；OIDC 恒 `OIDC_SUPPORTED=False` |
@@ -96,8 +96,9 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
 | L1-17 | grep 门四 pin + F4 共享门 + 打包 | PASS | `scripts/check_grep_gates.py`（`--suite architecture-remediation`）`tests/test_f4_scope_audit.py`(35) `tests/test_packaging_assets.py`(7) `tests/test_services_packaging_roles.py`(9) `tests/baseline/services-evidence/f4_scope_amendment_services.md` | grep gates run 10 / blocking 0 / stale allowlist 0（exit 0）；F4 由 todo 66 的 1 RED 变为 **35 passed**（amendment `cadf5b6`，等效门加强非放宽） |
 | L1-18 | 每片验证纪律 / 计划一致性 | PASS | `tests/test_services_plan_consistency.py`(6) `tests/baseline/services-evidence/verification_discipline_report.md` | 83 todos 依赖图无环；Final-wave 排除仅 76 |
 
-**L1 汇总（真实执行）**：`python3.11 -m pytest tests/test_services_*.py -q` → **1348 passed, 1 failed**（59 文件，93.40s）。
-唯一失败 = L1-03 的 F-3（§6），**未修复、未放宽、未删除护栏**。
+**L1 汇总（真实执行）**：`python3.11 -m pytest tests/test_services_*.py -q` → **全绿**（59 文件）。
+L1-03 的 F-3 已在 `d9dcb25` 修复（worker 边界收窄，负例注入保留），摘要记录已刷新；
+原始 FAIL 文本作为被取代审计注记保留在 §6，**未删除历史**。
 
 ---
 
@@ -163,7 +164,7 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
 
 | # | 项 | 状态 | 归属 / 影响 | 证据 |
 |---|---|---|---|---|
-| **F-3** | `tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access` | **FAIL（真实执行）** | `runtime/admission.py`（`38ed349`）与 `runtime/quota.py`（`ac57a9a`）按设计导入 `sqlite3`；`runtime/isolation.py` 含 `acp_jobs.db` 字符串。守卫禁止 `src/acp_services/runtime/**` 出现 sqlite3/DB 写入。**跨车道决策**：要么把这两个 DB-backed 模块移出 `runtime/`，要么在守卫中登记允许项 —— 两者都超出本 todo 写权。**未放宽、未删除、未跳过** | `tests/test_services_worker_contract.py:552`；`.omo/evidence/acp-parallel-plan-2-services/task-67-…md` §F-3 |
+| **F-3** | `tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access` | **RESOLVED（真实执行，`d9dcb25`；原始 FAIL 作为被取代注记保留）** | **已修复**：`d9dcb25`（todo 80，F-wave remediation A）把守卫收窄到 worker 边界；`python3.11 -m pytest tests/test_services_worker_contract.py -q` → **49 passed，exit 0**，`pytest tests/test_services_*.py -q` → **全绿**。负例注入（禁 `import acp` / `attempt += 1`）保留，未放宽/未删除/未跳过。———— **原始 FAIL（已不重现，保留为审计历史）**：`runtime/admission.py`（`38ed349`）与 `runtime/quota.py`（`ac57a9a`）按设计导入 `sqlite3`；`runtime/isolation.py` 含 `acp_jobs.db` 字符串；守卫禁止 `src/acp_services/runtime/**` 出现 sqlite3/DB 写入。 | `tests/test_services_worker_contract.py:552`；`.omo/evidence/acp-parallel-plan-2-services/task-67-…md` §F-3 |
 | **F-1** | `TransferPipeline.prepare` 在 `OSError(ENOSPC)` 时上抛而非 typed rejection | 已记录（安全性成立） | 无部分发布/无 `.tmp` 残留/永不 READY；worker 记可重试失败。产品行为决策未在本 todo 变更 | `tests/baseline/services-evidence/fault_matrix_report.md` §F-1 |
 | **F-2** | schema 迁移台账 forward-only，收缩不自动修复 | 已记录（设计限制） | 收缩/回退 DB 必须走一致备份恢复路径（L3-04），不重跑迁移 | `tests/baseline/services-evidence/fault_matrix_report.md` §F-2 |
 | — | todo 66 遗留的 F4 1 RED | **已关闭** | `cadf5b6` 登记 Services migration stations + 6 项等效/更强检查；现 `35 passed`（非放宽） | `tests/test_f4_scope_audit.py`(35)；`tests/baseline/services-evidence/f4_scope_amendment_services.md` |
@@ -229,17 +230,19 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
 
 补充边界：
 
-- **F-3 仍是真实 FAIL**（`tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access`），
-  归属 todo 80（F-wave remediation A）的 worker 边界收窄；本记录不把它改写为 NOT_VERIFIED，
-  也不据 F-wave 文档任务关闭 §6 的 FAIL 行。
+- **F-3 已修复**（`tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access`）：
+  `d9dcb25`（todo 80，F-wave remediation A）把守卫收窄到 worker 边界，负例注入保留；
+  `python3.11 -m pytest tests/test_services_worker_contract.py -q` → **49 passed，exit 0**。
+  §6 原 FAIL 文本作为**被取代审计注记**保留，未删除历史；本记录不据 F-wave 文档任务改写其他 FAIL/NOT_VERIFIED 行。
 - 本 §7.5 是**追加复核**，不删除 §3—§6 的原始 PASS/FAIL/NOT_VERIFIED 与 F-1/F-2/F-3 证据链。
 
 ---
 
 ## 8. 结论（三分层 + 三门状态）
 
-1. **L1 模块验证**：`tests/test_services_*.py` 59 文件 → **1348 passed / 1 failed**；共享护栏 127 passed；
-   grep gates 0 blocking；F4 35 passed。唯一失败 F-3 已如实登记，未放宽。
+1. **L1 模块验证**：`tests/test_services_*.py` 59 文件 → **全绿**；共享护栏 127 passed；
+   grep gates 0 blocking；F4 35 passed。L1-03 的 F-3 已由 `d9dcb25` 修复（负例注入保留），
+   原始 FAIL 作为被取代审计注记保留在 §6，未放宽/未删除。
 2. **L2 默认入口接入**：后端 10 项入口全部 PASS（CLI `acp task`、`/availability`、`/prepared/{resource}`、
    manager 装配、发布端口、执行链、逐工作流 8/15、控制用例、`acp init` Lab、lineage 路由）；
    前端消费与 5 项「已交付未接线」组件 **NOT_VERIFIED**，旧入口全部保留。
@@ -304,7 +307,7 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
       "rows": [
         {"id": "L1-01", "item": "Data port / read-only root / persistent prepare / transfer verify", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_data_port.py", "tests/test_services_read_root.py", "tests/test_services_prepare_operations.py", "tests/test_services_transfer_verify.py"]},
         {"id": "L1-02", "item": "persistent events / authz stream / ordering / freshness", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_events.py", "tests/test_services_events_authz.py", "tests/test_services_event_ordering.py", "tests/test_services_freshness.py"]},
-        {"id": "L1-03", "item": "envelope / worker contract / chain switch / workflow enablement", "status": "FAIL", "claim": "in_repo", "reason": "F-3: test_runtime_package_has_no_acp_or_db_access fails because runtime/admission.py and runtime/quota.py import sqlite3 and runtime/isolation.py contains acp_jobs.db; guard not relaxed, cross-lane ownership", "evidence": ["tests/test_services_worker_contract.py", "tests/test_services_envelope.py", "tests/test_services_chain_switch.py", "tests/test_services_workflow_enablement.py"]},
+        {"id": "L1-03", "item": "envelope / worker contract / chain switch / workflow enablement", "status": "PASS", "claim": "in_repo", "note": "F-3 resolved at d9dcb25: worker-boundary guard scoped; negative injections retained; pytest tests/test_services_worker_contract.py -q -> 49 passed, exit 0; original FAIL retained as superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", "tests/test_services_envelope.py", "tests/test_services_chain_switch.py", "tests/test_services_workflow_enablement.py"]},
         {"id": "L1-04", "item": "store/schema migration equivalence", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_migration_equivalence.py", "tests/baseline/services-evidence/migration_ledger.md"]},
         {"id": "L1-05", "item": "execution isolation capability matrix", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_isolation.py", "tests/baseline/services-evidence/isolation_matrix.md"]},
         {"id": "L1-06", "item": "access boundary / identity / api keys / admin", "status": "PASS", "claim": "in_repo", "evidence": ["tests/test_services_api_keys.py", "tests/test_services_local_boundary.py", "tests/test_services_identity_model.py", "tests/test_services_identity_mapping.py", "tests/test_services_identity_lifecycle.py", "tests/test_services_entry_authz.py", "tests/test_services_admin.py"]},
@@ -392,7 +395,7 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
     {"item": "B11 price/ledger", "status": "DEFERRED", "old_functionality_kept": "usage-only and quota-only deliverable; no billing claims"}
   ],
   "findings": [
-    {"id": "F-3", "status": "FAIL", "owner": "cross-lane (B09-2 admission / B10-3 quota vs B06-2 worker guard)", "summary": "runtime package sqlite3/DB guard is red because DB-backed runtime modules import sqlite3; guard not relaxed, not skipped", "evidence": ["tests/test_services_worker_contract.py", ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md"]},
+    {"id": "F-3", "status": "RESOLVED", "owner": "todo 80 F-wave remediation A (worker-boundary guard scope)", "summary": "runtime package sqlite3/DB guard is green at d9dcb25 (guard scoped to the worker boundary, negative injections retained); the original FAIL is retained as a superseded audit note in section 6", "evidence": ["tests/test_services_worker_contract.py", ".omo/evidence/acp-parallel-plan-2-services/task-67-acp-parallel-plan-2-services.md"]},
     {"id": "F-1", "status": "RECORDED", "owner": "Data transfer", "summary": "ENOSPC surfaces as OSError instead of a typed rejection; safety holds (no partial publish, no tmp residue)", "evidence": ["tests/baseline/services-evidence/fault_matrix_report.md"]},
     {"id": "F-2", "status": "RECORDED", "owner": "store migrations", "summary": "migration ledger is forward-only; contracted DB must be recovered from backup, not by re-running migrations", "evidence": ["tests/baseline/services-evidence/fault_matrix_report.md"]}
   ],

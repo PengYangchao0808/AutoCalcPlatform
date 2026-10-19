@@ -37,7 +37,7 @@ from acp.calculations.primitives._common import (
     capability_kwargs,
     output_dir,
 )
-from acp.calculations.result_publication import register_result_manifest
+from acp.calculations.result_publication import ManifestPublisher, register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
 from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
@@ -54,6 +54,19 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["ScanCoordinateError", "run_scan"]
 
+_DEFAULT_PUBLISHER: ManifestPublisher | None = None
+
+
+def _default_manifest_publisher() -> ManifestPublisher:
+    """Data-backed publisher for the production ``RESULT`` manifest write."""
+    global _DEFAULT_PUBLISHER
+    if _DEFAULT_PUBLISHER is None:
+        from acp.services_publication_bootstrap import default_manifest_publisher
+
+        _DEFAULT_PUBLISHER = default_manifest_publisher()
+    return _DEFAULT_PUBLISHER
+
+
 #: Compat alias for the frozen golden generator (plan metadata serialiser).
 _plan_metadata = plan_metadata
 
@@ -62,7 +75,11 @@ class ScanCoordinateError(ValueError):
     """Raised when a scan coordinate cannot be compiled for the input geometry."""
 
 
-def execute_scan(req: CalculationRequest) -> CalculationResult:
+def execute_scan(
+    req: CalculationRequest,
+    *,
+    publisher: ManifestPublisher | None = None,
+) -> CalculationResult:
     """ACP compat wrapper: cccp task core + product publication.
 
     Verbatim legacy capability kwargs ride along as ``capability_extras``
@@ -70,6 +87,9 @@ def execute_scan(req: CalculationRequest) -> CalculationResult:
     surface as :class:`ScanCoordinateError` (the CLI usage-error seam); the
     ``structures``/``trajectories`` platform products are materialised from
     the typed payload and registered through the named publication entry.
+    ``publisher`` optionally routes that manifest write through an injected
+    Data publisher; when omitted the named seam's Data default applies, so a
+    production ``RESULT`` write never bypasses the port.
     """
     try:
         task_request, binding = to_task_request(req, TaskKind.SCAN)
@@ -100,6 +120,7 @@ def execute_scan(req: CalculationRequest) -> CalculationResult:
         target_dir,
         selected_backend,
         metadata,
+        publisher,
     )
     return CalculationResult(
         energy=legacy.energy,
@@ -144,6 +165,7 @@ def _publish_scan_products(
     target_dir: Path,
     backend: str,
     metadata: dict[str, JsonValue],
+    publisher: ManifestPublisher | None = None,
 ) -> list[ArtifactRef]:
     """Materialise ``structures``/``trajectories`` products and register them.
 
@@ -161,7 +183,7 @@ def _publish_scan_products(
         return []
     try:
         return _publish_scan_products_unchecked(
-            request, task_result, payload, target_dir, backend, metadata
+            request, task_result, payload, target_dir, backend, metadata, publisher
         )
     except Exception:  # noqa: BLE001 — publication never fails the step
         logger.debug("scan: product publication failed; skipping", exc_info=True)
@@ -175,6 +197,7 @@ def _publish_scan_products_unchecked(
     target_dir: Path,
     backend: str,
     metadata: dict[str, JsonValue],
+    publisher: ManifestPublisher | None = None,
 ) -> list[ArtifactRef]:
     result_dir = _result_dir(request, target_dir)
     structures_dir = result_dir / "structures"
@@ -245,7 +268,9 @@ def _publish_scan_products_unchecked(
         path=trajectory_relative_path,
         kind=ProductKind.TRAJECTORY,
     )
-    _ = register_result_manifest(result_dir, manifest)
+    _ = register_result_manifest(
+        result_dir, manifest, publisher=publisher or _default_manifest_publisher()
+    )
     return artifacts
 
 

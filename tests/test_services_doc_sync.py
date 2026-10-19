@@ -15,7 +15,8 @@ Checks:
    **same objects** as their ``acp_services`` roots (identity forwarders);
 4. the migration ledger keeps exactly six columns, every data row carries a
    status token in the exit-condition column, and the summary counts match;
-5. closure-record verdicts are not contradicted: ``F-3`` stays FAIL, the
+5. closure-record verdicts are not contradicted: ``F-3`` is resolved (PASS) with
+   its original FAIL retained as a superseded note (``d9dcb25``), the
    frontend/science/LSF/production rows stay ``NOT_VERIFIED``, and no doc claims
    real science / production release / full envelope coverage;
 6. the public shim inventory lists the retained surfaces with callers and every
@@ -315,7 +316,10 @@ def test_closure_statuses_not_contradicted() -> None:
         for row in layer["rows"]:
             statuses[row["id"]] = row["status"]
 
-    assert statuses["L1-03"] == "FAIL", "F-3 row must stay FAIL"
+    assert statuses["L1-03"] == "PASS", "F-3 must be resolved at HEAD (d9dcb25)"
+    assert "原始 FAIL" in _text(CLOSURE), (
+        "the original F-3 FAIL must be retained as a superseded audit note"
+    )
     for row_id in ("L2-11", "L2-12", "L2-14", "L2-15", "L3-05", "L3-06", "L3-07"):
         assert statuses.get(row_id) == "NOT_VERIFIED", f"{row_id} must stay NOT_VERIFIED"
     for gate, info in record["environment_gates"].items():
