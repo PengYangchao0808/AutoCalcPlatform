@@ -34,6 +34,7 @@
 | `acp_services.science.adapter` | `ScienceProductPort`, `FrameNode`, `FrameAnnotation` | 科学产品与帧 adapter（X2 交付物 4）；消费 `cccp.calculation.requests/results` 与 `acp.results.frames` 形状 | `acp.results` 发布/读取 | 冻结 |
 | `acp_services.data.namespaces` | `NamespaceStore`, `EnsureNamespaceRequest`, `NamespaceRecord`, `ensure_namespace` | Data 命名空间原子绑定（开通）；重复/并发收敛单空间、冲突非静默 | `acp_services.runtime.provisioning` | 冻结 |
 | `acp_services.runtime.provisioning` | `ProvisioningService`, `ProvisioningIntent`, `ProvisioningResult`, `EnvironmentStatePort` | Runtime 开通用例：消费 Workspace 持久意图 → Data 命名空间 → 提交环境状态并审计（失败可对账） | Workspace 环境状态命令面（todo 52 接线） | 冻结 |
+| `acp_services.runtime.admission` | `AdmissionController`, `ReservationLedger`, `AdmissionRequest`, `GrantResolution`, `GrantProvider`, `CapacityProvider`, `Capacity`, `ResourceBounds`, `AdmissionDecision`, `AdmissionReason`, `AdmissionMode`, `Reservation`, `ReservationState` | Runtime 资源准入：有效资源交集（用户 ∧ 项目 ∧ Key ∧ 节点/队列 ∧ 容量）、派发前原子预留/重验、PAUSED 实际占用、结构化拒绝（MU-05 / B09-2） | `acp_services/runtime/commands.py` submit 前置准入（todo 50）；旧 `acp.scheduler.manager` 派发路径 | 冻结 |
 
 ## 明确不在首片允许面
 
@@ -48,6 +49,7 @@
 |---|---|---|---|---|
 | 2026-10-18 | 上表全部（首片） | add | B00-3 首片冻结 | n/a |
 | 2026-10-19 | `acp_services.data.namespaces`、`acp_services.runtime.provisioning` | add | todo 48（B09-1）开通幂等：Data `ensure_namespace` + Runtime 消费 Workspace 意图 | n/a |
+| 2026-10-19 | `acp_services.runtime.admission` | add | todo 49（B09-2）资源准入核：交集有效资源 + 派发前原子预留/重验 + 结构化拒绝；消费 todo 7 `ResourceGrantSpec`，不扩展冻结契约 | n/a |
 
 ## 追加规则（append-only semantics）
 
