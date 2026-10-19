@@ -107,3 +107,12 @@
 - 本文件所有 `existing` 行仅证明"已声明/已安装/vendored"，**不构成行为级验证**（NOT_VERIFIED）：未在本任务中启动服务、发起 SSH、渲染分子或跑科学 fixture。
 - 所有 `candidate` 行**未安装、未配置、未测试**；`证据=None` 是刻意值，PoC 证据落位后再改状态与证据列。
 - 许可列中 `未确认` 项在 PoC 冻结前必须补上游官方依据；Lago 行的 AGPL-3.0 与 Premium 边界来自评估文档 §3.2 的已核验记录，不等于采用决定。
+
+<!-- SERVICES_STATUS_SYNC:todo70 -->
+## 实施状态同步（2026-10-19 / todo 70）
+
+- **delivered:** 组件台账（existing/candidate 状态、许可、边界）已随本文件交付；未改变任何依赖或安装。
+- **verified:** `existing` 行仅达到「已声明/已安装/vendored」级别；本文件 §5 的事实边界仍成立。
+- **NOT_VERIFIED:** 所有组件的**行为级**验证（启动/SSH/渲染/科学 fixture）；`candidate` 行未安装、未配置、未测试。
+- **limits:** B40b 完整发行（独立 CCCP wheel/notice 拆分）仍为 `gate OPEN`；未采用组件不得进入科学最小安装。
+- **authority:** 三态与真实门以 `docs/reference/current/ACP_Services_Closure_20261019.md` 为准；本块只同步状态，不改组件清单。

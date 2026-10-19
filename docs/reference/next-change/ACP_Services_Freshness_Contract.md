@@ -95,3 +95,12 @@ A 路用同一组 fixture 覆盖三态。字段形状（`basis_revision` 为 own
 | 日期 | 变更 | 提交 |
 |---|---|---|
 | 2026-10-19 | 首版（B03-2）：availability/freshness/basis_revision/observed_at + 独立 owner revision | 待提交 |
+
+<!-- SERVICES_STATUS_SYNC:todo70 -->
+## 实施状态同步（2026-10-19 / todo 70）
+
+- **delivered:** availability / freshness / `basis_revision` / `observed_at` 的加性响应契约与 `runtime/freshness.py` + `runtime/projections.py` 实现。
+- **verified:** 模块/投影/预算测试 `tests/test_services_freshness.py`、`test_services_task_projection.py`、`test_services_query_budget.py`（closure L1-02/L1-14）。
+- **NOT_VERIFIED:** 前端消费 cache-only 新读取面（`prepareAvailability:false`、0 调用点，closure L2-11）；旧 GET 兼容通道保留（L2-03）。
+- **limits:** `freshness` 只表示投影是否跟上权威状态，**不**表示资源可读；不得据此删除旧读取路径。
+- **authority:** 状态以 `docs/reference/current/ACP_Services_Closure_20261019.md` 为准（L2-11 `NOT_VERIFIED`）。

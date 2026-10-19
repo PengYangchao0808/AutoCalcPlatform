@@ -92,3 +92,12 @@
 - 不泄露秘密/主机路径/URL 参数。
 - 不翻译科学标识符（方法/基组/工作流/错误码/参数）。
 - 不为 OTel 启动常驻服务或引入硬依赖。
+
+<!-- SERVICES_STATUS_SYNC:todo70 -->
+## 实施状态同步（2026-10-19 / todo 70）
+
+- **delivered:** `src/acp_services/entrypoints/diagnostics.py` + `machine_output.py` 的结构化日志/诊断导出契约与脱敏规则。
+- **verified:** 模块级 `tests/test_services_mcp.py` / `test_services_machine_output.py` / `test_services_logging.py`（closure L1-09，82 passed）。
+- **NOT_VERIFIED:** 默认入口绑定与生产观测组件接入（closure L2-14）；OTel 为可选项，未启用。
+- **limits:** 日志/监控/trace **永不**成为结算、恢复或计量权威；本契约当前只证明模块正确，不证明生产遥测已上线。
+- **authority:** 三态/三层以 `docs/reference/current/ACP_Services_Closure_20261019.md` 为准（L1-09 PASS；L2 默认入口 `NOT_VERIFIED`）。

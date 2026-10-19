@@ -80,3 +80,12 @@ downstream GUI/CLI/MCP consistency task (todo 60) lands.
 | Date | Item | Action | Reason |
 |---|---|---|---|
 | 2026-10-19 | Locked version `2025-06-18`; 8-tool allowlist; stdio matrix | add | B08-2 initial freeze |
+
+<!-- SERVICES_STATUS_SYNC:todo70 -->
+## 实施状态同步（2026-10-19 / todo 70）
+
+- **delivered:** 锁定协议版本 `2025-06-18`、8 工具 allowlist、stdio 客户端矩阵与 `src/acp_services/entrypoints/mcp.py` 协议实现（39 项测试）。
+- **verified:** 模块/协议级 mock 会话（closure L1-09）；无任意 shell、身份/预算/幂等边界由测试守护。
+- **NOT_VERIFIED:** MCP **默认入口绑定**（closure L2-14）与真实 MCP 客户端集成（`real_client_integration: NOT_VERIFIED`）；HTTP/SSE 传输不在本切片。
+- **limits:** 协议实现已交付 ≠ 默认入口已接线；连接寿命不决定任务存活，长任务返回 operation/job。
+- **authority:** 状态以 `docs/reference/current/ACP_Services_Closure_20261019.md` 为准（L2-14 MCP 默认入口 `NOT_VERIFIED`）。

@@ -1,7 +1,7 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ≈247 files (incl. API + scheduler + nmr). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17).
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ≈247 files (incl. API + scheduler + nmr). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17). Platform services (store/schema, Data prepare/read, Runtime use cases, access boundary) live in `src/acp_services/`; the old `acp` paths for migrated symbols are **identity forwarders** (`is` same object), never second implementations (root ANTI #29–#32).
 
 **可运行工作流（15，registry 驱动）**: Confsearch, PESsearch, BatchOptimize, XtbPathSearch, OrcaGradient, XtbConstrainedOpt, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize（XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload，本地专用）。Retired（catalog `status:"retired"`，仅历史作业展示）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
@@ -44,7 +44,7 @@ acp/
 | Confsearch profiles | `confsearch/profiles.py` | light / default / high resource profiles |
 | Confsearch selection | `confsearch/selection.py` | Candidate selection and ranking logic |
 | Confsearch sampling | `confsearch/sampling.py` + `sampling_models.py` | parse_traj_frames / assign_basins / SamplingSaturation frozen dataclasses |
-| Calculation contracts | `calculations/contracts.py` | CalculationPlan, CalculationRequest, Checkpoint frozen dataclasses |
+| Calculation contracts | `acp_services/runtime/plan_contracts.py`（forwarder: `calculations/contracts.py`） | CalculationPlan, CalculationRequest, Checkpoint frozen dataclasses — old path re-exports the **same objects** (todo 77) |
 | Plan executor | `calculations/executor.py` | CalculationPlanExecutor — step dispatch + checkpoint resume |
 | Primitives | `cccp/calculation/tasks/`（compat: `calculations/primitives/`） | 实现体在 cccp 任务层；acp 侧为纯转发 + ACP 发布契约（run_singlepoint/optimize/frequency/scan/irc + casscf CASSCF/NEVPT2） |
 | PES engine | `calculations/pes/engine.py` | PesSearchEngine: confsearch manifest → scan → candidates |
@@ -60,7 +60,7 @@ acp/
 | TS Mode | `calculations/tsmode/` | 选虚频→读源 Hessian→定向 OptTS→频率→验证报告 |
 | Simple workflows | `workflows/simple.py` | singlepoint/optimize/frequency/scan/xtb-opt |
 | NMR workflow | `workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging → DP4/DP5 |
-| Compat legacy | `compat/legacy/manifests.py` | Read-only adapters: read_s2_path_manifest, read_s3_lowconfirm_manifest, etc. |
+| Compat legacy | `compat/legacy/manifests.py` | Read-only adapters: read_s2_path_manifest, read_s3_lowconfirm_manifest, etc. — retained by design (ANTI #18/#31); callers in `public_shim_inventory.md` |
 | Compat layout | `compat/legacy/layouts.py` | find_study_layout, find_reaction_json — v2 + legacy dual-probe resolution |
 | NMR | `nmr/` | DP4/DP5, averaging, scaling, FCHL, spectra, report (see nmr/AGENTS.md) |
 | Sampling projection | `results/sampling_graph.py` | build_sampling_energy_graph (view_type "sampling"); series energy-vs-time |
@@ -73,7 +73,7 @@ acp/
 | Structure viewer | `results/structure_viewer.py` | Per-workflow resolvers + overlay (MCS + Kabsch RMSD) |
 | IRC projection | `results/irc_projection.py` | Two-direction energy series in strict file order |
 | Remote structure cache | `results/remote_structure_cache.py` | Flat cache + pending_fetch + sweep_expired; singleton owned by JobManager |
-| API v1 | `api/v1_routes.py` | Jobs, files, detail, recovery matrix, edit-recalculate, PES review |
+| API v1 | `api/v1_routes.py` | Jobs, files, detail, recovery matrix, edit-recalculate, PES review; new read-only `GET /jobs/{id}/availability` + `GET /jobs/{id}/prepared/{resource}`; legacy GET retained for F0 (closure L2-02/L2-03); control endpoints go through `acp_services.runtime.commands.RuntimeCommands` |
 | API v2 | `api/v2_routes.py` | Task views, batch ops, molecule groups, lineage |
 | API schemas | `api/schemas.py` / `v1_schemas.py` | Pydantic models: QueueCounts, V1JobDetailResponse, V1JobPurgeRequest |
 | API server | `api/server.py` | FastAPI app factory + static frontend hosting at `/` |
@@ -84,15 +84,15 @@ acp/
 | Structure-source store | `scheduler/structure_source_store.py` | 4 tables, source_uid_for(), upsert, RevisionConflictError |
 | Structure-source indexer | `scheduler/structure_source_indexer.py` | Daemon: paged backfill + 60s incremental sweep |
 | Job edit | `scheduler/job_edit.py` | EDIT_ACTIVE_WORKFLOWS registry, edit draft, preview fingerprint |
-| Job manager | `scheduler/manager.py` | Lifecycle: pause/unpause/continue/rerun/purge + structure_cache singleton |
+| Job manager | `scheduler/manager.py` | Lifecycle: pause/unpause/continue/rerun/purge + structure_cache singleton; assembles persistent prepare executor + outbox from `acp.services_data_bootstrap` |
 | Job runner | `scheduler/runner.py` | Background process execution; `python -m acp.cli run <workflow>` subprocess |
 | Jobs model | `scheduler/jobs.py` | JobSpec, JobState, SUPPORTED_WORKFLOWS derived from active catalog |
-| Store | `scheduler/store.py` | SQLite persistence, counts(), queue operations |
+| Store | `scheduler/store.py` | Compat forwarder → `acp_services.store.store` (`JobStore is` same object); SQLite CAS, counts(), queue operations |
 | Provenance | `scheduler/provenance.py` | Event sourcing, audit logging |
 | Artifacts | `scheduler/artifacts.py` | Artifact tracking for stage workflows |
 | Stage tasks | `scheduler/stage_tasks.py` | Plan providers mapping workflow → stage list |
 | Local cleanup | `scheduler/local_cleanup.py` | Retention-based local disk cleanup |
-| Migrations | `scheduler/migrations.py` | SQLite schema migrations (incl. 017 custom_name, 018 job_edit_operations) |
+| Migrations | `scheduler/migrations.py` | Compat forwarder → `acp_services.store.migrations` (`migrate is` same object); schema migrations incl. 017 custom_name, 018 job_edit_operations |
 | Remote execution | `scheduler/remote/` | LSF bsub/bjobs, SSH/SFTP, code sync, result fetch (see remote/AGENTS.md) |
 
 ## CONVENTIONS
@@ -108,6 +108,7 @@ acp/
 - **Task custom names**: `tasks.py` custom_name/name_revision；NOT in `_SYNC_COLUMNS`；`update_custom_name()` 事务性 revision check；PATCH `/api/v2/tasks/{id}` + expected_name_revision（409）
 - **Structure-source org store**: `structure_source_store.py` — 4 tables；`source_uid_for()` = `ss_`+sha256；upsert 只碰 discovery fields；`RevisionConflictError`
 - **Job-edit coverage**: `job_edit.py::EDIT_ACTIVE_WORKFLOWS` 必须同步；`audit_workflow_edit_coverage()` 守护
+- **Services forwarders**: migrated symbols (`scheduler/{store,migrations}`, `calculations/{contracts,step_result,step_requirements}`, `catalog.method_levels_to_cli_flags`) re-export the **same object** from `acp_services`; `acp → acp_services` only. Never add business logic to a forwarder (root ANTI #29–#30)
 
 ## ANTI-PATTERNS（acp 模块特有，全局规则见 root AGENTS.md）
 - **Thin wrapper syndrome**: acp/io 和 acp/core/config 大量委托 cccp — 增加抽象但逻辑薄
@@ -116,3 +117,5 @@ acp/
 - **Bare `except Exception:`**: api/v1_routes、chem/embedding、nmr/enumerate 等多处静默吞错
 - **HARTREE_TO_KCAL duplication**: `acp/core/models.py` 和 `cccp/utils/constants.py` 各定义一次
 - **Retired catalog entries retained**: ensemble/benchmark/energy 等保留 `status:"retired"` + `visible:False`；NMR 已于 P1a 重新激活（`status:"active"`）
+- **Forwarder re-implementation**: putting logic back into `scheduler/store.py`, `scheduler/migrations.py`, `calculations/{contracts,step_result,step_requirements}.py`, or `catalog.method_levels_to_cli_flags` breaks the single implementation root; they must stay pure identity re-exports
+- **Deleting compat surfaces for line count**: `calculations/primitives`, `backends`, `compat/legacy`, retired engine shims and recovery fixtures are retained (root ANTI #31)

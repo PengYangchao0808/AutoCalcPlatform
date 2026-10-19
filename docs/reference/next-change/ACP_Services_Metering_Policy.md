@@ -197,3 +197,12 @@
 | 日期 | 动作 | 说明 | 提交 |
 |---|---|---|---|
 | 2026-10-19 | 初版冻结 | todo 53（B10-1）落地：口径/舍入/周期/暂停失败重试/未知用量/排除项/可执行上限/quota-only 拒绝 | 见 todo 53 提交 |
+
+<!-- SERVICES_STATUS_SYNC:todo70 -->
+## 实施状态同步（2026-10-19 / todo 70）
+
+- **delivered:** 可审计计量口径与不变量冻结；`runtime/{metering_policy,usage,quota,metering_decoupling}.py` 模块与测试。
+- **verified:** 模块级 148 passed（`tests/test_services_{admission,quota,usage,metering_policy,metering_decoupling}.py`，closure L1-07）。
+- **NOT_VERIFIED:** 用量采集/计量解耦接入生产完成路径（closure L2-15）；准入/配额派发前置与 UI（L2-12）。
+- **limits:** 未决政策必须显式配置/待确认，禁止隐藏默认；B11 价格/账本为 `DEFERRED`，不宣称收费可用；未知用量待对账不零填。
+- **authority:** 状态以 `docs/reference/current/ACP_Services_Closure_20261019.md` 为准（L2-15 生产接入 `NOT_VERIFIED`）。

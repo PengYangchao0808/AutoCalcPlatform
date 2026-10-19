@@ -146,6 +146,13 @@ acp run serve --host 127.0.0.1 --port 8765 --run-root "$ACP_RUN_ROOT"
 
 systemd 部署：`sudo systemctl restart acp`（**代码改动后必须重启**，服务未启用 `--reload`）。
 
+#### 1.5.1 部署/初始化现状（Services 收口，2026-10-19）
+
+- **unit 生成来源**：`scripts/install_systemd.sh` 写 `/etc/systemd/system/acp.service`，`ExecStart=<repo>/scripts/start_acp.sh`；`start_acp.sh` 以 `uvicorn acp.api.server:app` 启动，默认 `ACP_RUN_ROOT=/var/lib/acp/runs`。**不要手改 unit**；改部署请改脚本后重建。
+- **CLI/init**：`acp init` 仍写入 `~/.cccp.yaml`（交互/answers 文件），`acp doctor` 输出已配置节点/二进制检查；Services 新增 `acp task --help` 的本地任务管理动词（`ingest/plan/execute/query/pause/unpause/continue/cancel/rerun/recover/export`）。旧 `acp run <workflow>` 参数与入口保持不变。
+- **Services 装配**：`src/acp_services/` 为平台服务实现根，`src/acp/services_{,data_,events_,publication_}bootstrap.py` 为过渡装配；旧 `acp.scheduler.store`/`migrations` 等导入路径为 identity forwarder（同一对象）。部署未改 unit/启动脚本，也未改 run_root 约定。
+- **发布边界**：本手册只记录收口状态；**文档收口不重启服务**。实际发布/重启/冒烟归 todo 76（F1—F4 批准后）；浏览器、真实科学软件、LSF 与生产验收仍为 `NOT_VERIFIED`（见 `docs/reference/current/ACP_Services_Closure_20261019.md` §5）。
+
 ### 1.6 测试分层（关键认知）
 
 | 层级 | 覆盖内容 | 是否需要真实 QC 二进制 |

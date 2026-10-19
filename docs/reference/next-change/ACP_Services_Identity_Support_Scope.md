@@ -77,3 +77,12 @@
 | todo 52 Lab init/doctor | `IdentitySupportScope.to_dict()` | OIDC 只能 `NOT_VERIFIED`/`FAIL`/`UNAVAILABLE`；缺能力档位 `enabled=False` 时拒绝启用对应 Lab 能力 |
 | todo 75 组合验收 | 支持矩阵 | Lab 身份功能的组合以本轮交付为准；未选 Lab 能力不阻塞首批本地组合 |
 | 运行时授权 | `authorize_entry` / `stream_authorizer` | 禁用/撤销即时生效，不保留有效会话/Key |
+
+<!-- SERVICES_STATUS_SYNC:todo70 -->
+## 实施状态同步（2026-10-19 / todo 70）
+
+- **delivered:** `workspace/{identity_lifecycle,identity_mapping,keys,entry_authz,boundary,admin}.py` 的账户/Key/授权/管理面组件；`OIDC_SUPPORTED=False` 为显式能力声明。
+- **verified:** 模块级 261 passed（`test_services_api_keys.py`、`test_services_identity_*.py`、`test_services_entry_authz.py`、`test_services_admin.py`，closure L1-06）。
+- **NOT_VERIFIED:** Lab 身份 HTTP/UI 接线（closure L2-12）与 OIDC 网络登录（L3-09）；组件已交付不等于已接入。
+- **limits:** `local-single` 路径保持；缺能力档位 `enabled=False` 时拒绝启用对应 Lab 能力，不静默降级为匿名/无配额。
+- **authority:** 状态以 `docs/reference/current/ACP_Services_Closure_20261019.md` 为准（L2-12/L3-09 `NOT_VERIFIED`）。
