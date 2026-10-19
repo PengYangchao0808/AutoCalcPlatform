@@ -83,6 +83,13 @@ from acp_services.data.contracts import (
     TransferResult,
     TransferUpload,
 )
+from acp_services.data.import_ import (
+    DEFAULT_IMPORT_QUOTA,
+    ArchiveImportService,
+    ImportQuota,
+    ImportRecordStore,
+    LocalImportBundle,
+)
 from acp_services.data.operations import (
     PrepareExecutionResult,
     PrepareLease,
@@ -131,6 +138,8 @@ __all__ = [
     "build_transfer_executor",
     "build_archive_source",
     "build_task_archive_manifest",
+    "build_archive_import_service",
+    "build_local_import_bundle",
 ]
 
 _MANIFEST_READ_ERRORS = (
@@ -1162,3 +1171,50 @@ def build_task_archive_manifest(
         max_attempts=max_attempts,
         created_at=created_at,
     )
+
+
+# --------------------------------------------------------------------------- #
+# B08-4 (todo 45) — archive import composition hooks
+# --------------------------------------------------------------------------- #
+
+
+def build_archive_import_service(
+    import_root: str | Path,
+    *,
+    db_path: str | Path | None = None,
+    quota: ImportQuota = DEFAULT_IMPORT_QUOTA,
+    store: ImportRecordStore | None = None,
+    clock: Any | None = None,
+) -> ArchiveImportService:
+    """Build the quota-limited archive importer from the real staging store.
+
+    The pure import policy lives in :mod:`acp_services.data.import_`; this
+    legacy-side hook only wires the persistence authority.  The record store
+    defaults to ``<import_root>/acp_jobs.db`` so staging/import rows survive the
+    same backup/restore as the rest of the platform.
+
+    Args:
+        import_root: Controlled root the published package bytes live under.
+        db_path: SQLite path for the staging/import authority.
+        quota: Staging limits (defaults to the module default).
+        store: Pre-built :class:`ImportRecordStore` (created when omitted).
+        clock: Optional injectable wall clock (diagnostic timestamps).
+
+    Returns:
+        An :class:`ArchiveImportService` that never executes, never unpickles and
+        never adopts external execution authority.
+    """
+    resolved_root = Path(import_root)
+    resolved_db = Path(db_path) if db_path is not None else resolved_root / "acp_jobs.db"
+    record_store = store or ImportRecordStore(resolved_db)
+    return ArchiveImportService(
+        record_store,
+        import_root=resolved_root,
+        quota=quota,
+        clock=clock,
+    )
+
+
+def build_local_import_bundle(package_root: str | Path) -> LocalImportBundle:
+    """Wrap a local package directory as the injected import bundle port."""
+    return LocalImportBundle(package_root)
