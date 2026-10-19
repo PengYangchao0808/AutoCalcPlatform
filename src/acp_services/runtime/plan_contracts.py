@@ -256,12 +256,9 @@ _STEP_KIND_VALUES = frozenset(step_kind.value for step_kind in StepKind)
 
 #: Exact rejection messages (contract text pinned by tests).
 _CARDINALITY_ERROR = (
-    "calculation plans support exactly one input item; "
-    "submit multiple structures via BatchOptimize"
+    "calculation plans support exactly one input item; submit multiple structures via BatchOptimize"
 )
-_THERMOCHEMISTRY_ERROR = (
-    "thermochemistry requires preceding frequency and singlepoint steps"
-)
+_THERMOCHEMISTRY_ERROR = "thermochemistry requires preceding frequency and singlepoint steps"
 
 
 def validate_plan(plan: CalculationPlan) -> list[str]:
@@ -298,8 +295,7 @@ def validate_plan(plan: CalculationPlan) -> list[str]:
             if upstream not in _UPSTREAM_FAILURE_POLICIES:
                 allowed = ", ".join(repr(value) for value in _UPSTREAM_FAILURE_POLICIES)
                 errors.append(
-                    f"execution_policy.upstream_failure must be one of: {allowed}; "
-                    f"got {upstream!r}"
+                    f"execution_policy.upstream_failure must be one of: {allowed}; got {upstream!r}"
                 )
         else:
             errors.append("execution_policy must be an ExecutionPolicy or a mapping")
@@ -373,9 +369,7 @@ class CalculationResult:
         object.__setattr__(self, "errors", list(self.errors))
         object.__setattr__(self, "metadata", dict(self.metadata))
 
-    def to_step_result_dict(
-        self, *, root: Path | str | None = None
-    ) -> dict[str, JsonValue]:
+    def to_step_result_dict(self, *, root: Path | str | None = None) -> dict[str, JsonValue]:
         """Serialise the science payload of ``step_result.json`` (V02).
 
         Artifact paths are stored relative to *root* when the file lives

@@ -894,9 +894,7 @@ class LifecycleStreamAuthorizer:
                 reason_code=IdentityReason.UNKNOWN_ACCOUNT,
                 detail=f"no account for principal {principal_id!r}",
             )
-        decision = self._lifecycle.authorize_entry(
-            str(principal_id), IdentityEntry.EVENT_STREAM
-        )
+        decision = self._lifecycle.authorize_entry(str(principal_id), IdentityEntry.EVENT_STREAM)
         return StreamVerdict(
             allowed=decision.allowed,
             principal_id=decision.principal_id,
@@ -1401,9 +1399,7 @@ class IdentityLifecycle:
                         actor,
                     ),
                 )
-                invitation = self._mint_invitation(
-                    conn, account_id=account_id, reference=reference
-                )
+                invitation = self._mint_invitation(conn, account_id=account_id, reference=reference)
                 self._audit(
                     conn,
                     action="invite",
@@ -1995,8 +1991,9 @@ class IdentityLifecycle:
         now: datetime | None = None,
     ) -> AccountRecord:
         """Suspend an account; credentials stop working immediately."""
-        return self._deactivate(account_id, target=AccountStatus.DISABLED, actor=actor,
-                                reason=reason, now=now)
+        return self._deactivate(
+            account_id, target=AccountStatus.DISABLED, actor=actor, reason=reason, now=now
+        )
 
     def revoke_account(
         self,
@@ -2007,8 +2004,9 @@ class IdentityLifecycle:
         now: datetime | None = None,
     ) -> AccountRecord:
         """Revoke an account; every session/key is destroyed immediately."""
-        return self._deactivate(account_id, target=AccountStatus.REVOKED, actor=actor,
-                                reason=reason, now=now)
+        return self._deactivate(
+            account_id, target=AccountStatus.REVOKED, actor=actor, reason=reason, now=now
+        )
 
     def _deactivate(
         self,
@@ -2395,6 +2393,7 @@ class IdentityLifecycle:
         with self._lock:
             conn = self._connect()
             try:
+
                 def count(table: str) -> int:
                     row = conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
                     return int(row["n"]) if row is not None else 0

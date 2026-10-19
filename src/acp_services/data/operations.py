@@ -74,6 +74,11 @@ from acp_services.data.contracts import (
 
 logger = logging.getLogger(__name__)
 
+# Programming errors must surface instead of being logged and retried forever.
+# Expected failures (I/O, transport, store rejections) still take the
+# best-effort/retry path below.
+_PROGRAMMING_ERRORS: tuple[type[BaseException], ...] = (TypeError, AttributeError, NameError)
+
 __all__ = [
     "PrepareState",
     "PrepareRequest",
@@ -1208,6 +1213,8 @@ class PrepareOperationWorker:
                 lease = self._service.lease_next(lease_seconds=self._lease_seconds)
             except StaleLeaseError:  # pragma: no cover - lease_next never raises it
                 lease = None
+            except _PROGRAMMING_ERRORS:
+                raise
             except Exception:
                 logger.warning("prepare lease_next failed", exc_info=True)
             if lease is None:
@@ -1218,6 +1225,8 @@ class PrepareOperationWorker:
     def _execute(self, lease: PrepareLease) -> None:
         try:
             result = self._executor.execute(lease)
+        except _PROGRAMMING_ERRORS:
+            raise
         except Exception as exc:
             self._record_failure(lease, type(exc).__name__, str(exc), retryable=True)
             return
@@ -1254,6 +1263,8 @@ class PrepareOperationWorker:
             )
         except PrepareOperationError:
             logger.info("prepare failure record rejected for %s", lease.operation_id, exc_info=True)
+        except _PROGRAMMING_ERRORS:
+            raise
         except Exception:
             logger.warning(
                 "prepare failure record errored for %s", lease.operation_id, exc_info=True
