@@ -7,9 +7,10 @@
     "command": "PYTHONPATH=/tmp/opencode/builddeps python3.11 -m build --wheel --no-isolation --outdir /tmp/b40a-wheel /tmp/opencode/b40a-build",
     "toolchain": "python 3.11.13, build 1.6.1, setuptools 65.5.1, wheel 0.48.0",
     "wheel": "acp-0.2.0-py3-none-any.whl",
-    "wheel_sha256": "8bbd8c1f5ba052febfd2eb1efffa80d818a6001f67d09e693540cf28a71c325a",
+    "wheel_sha256": "4fa5d4df117cad517e84933da0354838e0c17ffbec027a2b526d98e56edeafa0",
     "zip_entries": 545,
-    "record_entries": 545
+    "record_entries": 545,
+    "note": "rebuilt after HN-05 node-dep sync applied (typing-extensions>=4.1 core+node); namelist unchanged vs first B40a build (dep line is METADATA only)"
   },
   "distribution": "acp",
   "top_level_packages": [
