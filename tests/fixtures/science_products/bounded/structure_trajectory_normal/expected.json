@@ -1,0 +1,24 @@
+{
+ "fixture": "structure_trajectory_normal",
+ "operation": "reconstruct",
+ "result_digest": "sha256:f1c9eca962b2c30c8503bba202b6884eb8398d1e8372bda9c0e588ee65e46cc7",
+ "checks": {
+  "n_frames": 10,
+  "first_frame_id": "structure_trajectory:frame:0",
+  "last_frame_id": "structure_trajectory:frame:9",
+  "block_count": 3,
+  "max_block_size": 4,
+  "total_items": 10,
+  "covered_range": [
+   0,
+   10
+  ],
+  "block_complete": [
+   true,
+   true,
+   true
+  ],
+  "missing": []
+ },
+ "expected_rejection": null
+}

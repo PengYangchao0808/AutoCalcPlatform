@@ -1,0 +1,108 @@
+{
+ "index_schema": "hn03_block_index",
+ "index_schema_version": 1,
+ "delivery_version": "hn-03-bounded-delivery-v1",
+ "bounded_schema_version": 1,
+ "product_schema_version": 1,
+ "delivery_state": "corrupt",
+ "product_kind": "curve_scatter",
+ "manifest": {
+  "file": "manifest.json",
+  "bytes": 14855,
+  "sha256": "sha256:0967206836c5310b0b7d53ea172ff984c458921257a4f126aa515c1980c14914"
+ },
+ "bounded_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_curve_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:b6ae6f1805a1f716bee7d7b017839b8bac91cb29fb991f169cbc8225bb5d2262"
+ },
+ "base_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+  "algorithm": "curve_scatter",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 16,
+  "start": 0,
+  "end": 40,
+  "params": [
+   {
+    "name": "series_id",
+    "value": "curve_scatter:series:scan_energy"
+   },
+   {
+    "name": "product_kind",
+    "value": "curve_scatter"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "block_count": 3,
+ "max_block_size": 16,
+ "total_items": 40,
+ "covered_range": [
+  0,
+  40
+ ],
+ "blocks": [
+  {
+   "block_index": 0,
+   "start": 0,
+   "end": 16,
+   "resolution": 16,
+   "item_count": 16,
+   "file": "block_000000.json",
+   "bytes": 4585,
+   "sha256": "sha256:1b6155ee1916c1b82a99de53e345a140b03108cd679e1ffe8a43c53daaa19594",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:3314261c1825591884fb92d8371d2cef5d06fb7819fedd07634539d61898192a",
+    "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c"
+   }
+  },
+  {
+   "block_index": 1,
+   "start": 16,
+   "end": 32,
+   "resolution": 16,
+   "item_count": 16,
+   "file": "block_000001.json",
+   "bytes": 300,
+   "sha256": "sha256:741410ca84578cb11b53e68b1414586bf958f14de857478e5f6df6d54bc776f1",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:4cc705780318d0306f16211f4c495ad47dad01822b6be86522b315b42b5787c6",
+    "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c"
+   }
+  }
+ ],
+ "expected_consumption": {
+  "operation": "reject"
+ },
+ "expected_rejection": {
+  "manifest.json": "cccp.analysis.bounded.errors.BoundedSchemaError",
+  "block_000000.json": "cccp.calculation.products.contracts.ProductSchemaError",
+  "block_000001.json": "json.JSONDecodeError"
+ }
+}

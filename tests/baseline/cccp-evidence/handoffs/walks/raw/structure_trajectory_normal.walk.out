@@ -1,0 +1,16 @@
+WALK fixture=structure_trajectory_normal
+  expected.json bytes=505 sha256=sha256:e56ce620c4753bcfb02a9e5b1518d34da46ddf90b89294c2fb65a80cd5910ab4
+  STEP1 index.json bytes=3687 sha256=sha256:d91cce18de869c2dc710a192a4f20192742f356ace7e86e30ff7dec67a508958
+  STEP2 header ok: hn03_block_index v1 delivery=hn-03-bounded-delivery-v1 bounded_schema=1 product_schema=1 state=ok kind=structure_trajectory
+  STEP3 manifest bytes=12349 sha256=sha256:6b88c78525ecd3c8817c9db9f3637c96a95b0a13c15da44b9d7f9c0d84865f4d matches_index=True
+  STEP4 manifest decode ok: blocks=3 display_subsampled=False spec.method=chunk resolution=4 range=[0,10]
+  STEP5 block[0] file=block_000000.json bytes=3594 sha256=sha256:0c09b7a3d60b7300... decode=structure_trajectory state=available complete=True items=4 range=[0,4) metadata_match=True
+  STEP5 block[1] file=block_000001.json bytes=3594 sha256=sha256:9c114e9e385de2ef... decode=structure_trajectory state=available complete=True items=4 range=[4,8) metadata_match=True
+  STEP5 block[2] file=block_000002.json bytes=2184 sha256=sha256:947a6b8a2735f1e9... decode=structure_trajectory state=available complete=True items=2 range=[8,10) metadata_match=True
+  STEP6 index re-derivation: MATCH fields=12 (manifest+blocks -> index)
+  STEP7 consumption op=reconstruct
+  STEP7a reconstruct from block files: n_frames=10 first=structure_trajectory:frame:0 last=structure_trajectory:frame:9
+  STEP7b reconstruct_structure_frames(manifest) digest agrees: sha256:f1c9eca962b2c30c...
+  STEP7c result_digest=sha256:f1c9eca962b2c30c8503bba202b6884eb8398d1e8372bda9c0e588ee65e46cc7 matches expected.json AND index.expected_consumption
+WALK RESULT: PASS fixture=structure_trajectory_normal op=reconstruct blocks=3 total_items=10 digest=sha256:f1c9eca962b2c30c...
+SUMMARY fixtures=1 failures=0

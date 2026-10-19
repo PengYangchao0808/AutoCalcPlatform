@@ -1,0 +1,3 @@
+REGEN determinism check: 2026-10-19T11:28:33+08:00
+command: python3.11 tests/baseline/cccp-evidence/handoffs/walks/hn03_gen_fixtures.py (second run vs raw/generate.out)
+RESULT: byte-identical — all 32 fixture file sha256 entries equal

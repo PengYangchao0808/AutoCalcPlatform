@@ -1,0 +1,63 @@
+{
+ "index_schema": "hn03_block_index",
+ "index_schema_version": 1,
+ "delivery_version": "hn-03-bounded-delivery-v1",
+ "bounded_schema_version": 1,
+ "product_schema_version": 1,
+ "delivery_state": "ok",
+ "product_kind": "curve_scatter",
+ "manifest": {
+  "file": "manifest.json",
+  "bytes": 1107,
+  "sha256": "sha256:4156460ef48db6991a846477c3f669da1aab2904dfee390a7e85d70f0ef443b2"
+ },
+ "bounded_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_curve_product",
+  "input_digest": "sha256:4108808e2e7ed67c210f733da2febd5d0478a0ad4a53f26c3a6fc8531b9bc786",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:a8e46c1ba4b0d59e44aa827882639bd4503104c7e93dcfa73c1d066dc76ad97c"
+ },
+ "base_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:4108808e2e7ed67c210f733da2febd5d0478a0ad4a53f26c3a6fc8531b9bc786",
+  "algorithm": "curve_scatter",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 16,
+  "start": 0,
+  "end": 0,
+  "params": [
+   {
+    "name": "series_id",
+    "value": "curve_scatter:series:scan_energy"
+   },
+   {
+    "name": "product_kind",
+    "value": "curve_scatter"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "block_count": 0,
+ "max_block_size": 0,
+ "total_items": 0,
+ "covered_range": [
+  0,
+  0
+ ],
+ "blocks": [],
+ "expected_consumption": {
+  "operation": "report_empty",
+  "result_digest": "sha256:6a0f78d5b3480af0e25e363bbb663652d782badd09d676bdbf615484589a4857"
+ }
+}
