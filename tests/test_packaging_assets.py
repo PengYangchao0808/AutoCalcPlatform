@@ -10,10 +10,11 @@ Locks three packaging contracts:
    core dep, ``nmrglue``/``qml`` (Bruker/FCHL) in the ``nmr`` extra — so no
    feature can silently skip without a capability declaration.
 3. ``[tool.setuptools.package-data]`` covers every file under
-   ``src/acp/nmr/models/`` so wheels ship the DP5/FCHL artifacts.
+   ``src/cccp/analysis/nmr/model_assets/`` so wheels ship the DP5/FCHL
+   artifacts.
 
-The *actual* wheel namelist check (``acp/nmr/models/atomic_reps.gz`` inside
-the built wheel) needs build-isolation network access, so it runs as an
+The *actual* wheel namelist check (``cccp/analysis/nmr/model_assets/atomic_reps.gz``
+inside the built wheel) needs build-isolation network access, so it runs as an
 evidence step (``pip wheel --no-deps``), not inside pytest; this file locks
 the declarations that make that check pass.
 """
@@ -140,18 +141,18 @@ def test_bruker_and_fchl_capabilities_are_declared_in_nmr_extra() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 3. package-data coverage for acp/nmr/models/ (wheel asset ship)
+# 3. package-data coverage for cccp/analysis/nmr/model_assets/ (wheel asset ship)
 # ---------------------------------------------------------------------------
 
 
 def test_package_data_covers_all_nmr_model_assets() -> None:
-    """Every file in the models/ data dir must match a package-data pattern."""
-    patterns = _load_pyproject()["tool"]["setuptools"]["package-data"]["acp.nmr"]
-    models_dir = ROOT / "src" / "acp" / "nmr" / "models"
+    """Every file in the model_assets/ data dir must match a package-data pattern."""
+    patterns = _load_pyproject()["tool"]["setuptools"]["package-data"]["cccp.analysis.nmr"]
+    models_dir = ROOT / "src" / "cccp" / "analysis" / "nmr" / "model_assets"
     files = sorted(p for p in models_dir.iterdir() if p.is_file())
     assert files, f"expected DP5/FCHL artifacts in {models_dir}"
     for asset in files:
-        rel = f"models/{asset.name}"
+        rel = f"model_assets/{asset.name}"
         assert any(fnmatch.fnmatch(rel, pat) for pat in patterns), (
             f"{rel} is not covered by [tool.setuptools.package-data] — "
             "wheels would silently lose this asset"
@@ -159,6 +160,6 @@ def test_package_data_covers_all_nmr_model_assets() -> None:
 
 
 def test_critical_nmr_assets_exist() -> None:
-    models_dir = ROOT / "src" / "acp" / "nmr" / "models"
+    models_dir = ROOT / "src" / "cccp" / "analysis" / "nmr" / "model_assets"
     for name in _CRITICAL_ASSETS:
         assert (models_dir / name).is_file(), f"missing NMR model asset: {name}"
