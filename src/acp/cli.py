@@ -23,11 +23,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import sys
 from collections.abc import Callable
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any, Final
 
@@ -469,9 +471,25 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             help=(
                 "Use the ORCA ScanTS route (transition-state-oriented scans). "
                 "Off by default; unavailable for synchronous multi-coordinate "
-                "or explicit-grid scans."
+                    "or explicit-grid scans."
             ),
         )
+
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit a machine-readable JSON result envelope on stdout (additive mode).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help=(
+            "Plan/validate/estimate only: emit a JSON envelope without launching "
+            "any scientific program, transfer or core-hour metering."
+        ),
+    )
 
 
 def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
@@ -4168,6 +4186,94 @@ def _handle_init(args: argparse.Namespace) -> int:
     return run_init(Path(args.config))
 
 
+# ---------------------------------------------------------------------------
+# Unified machine output (B08-1 / todo 42) — additive ``--json`` / ``--dry-run``
+# ---------------------------------------------------------------------------
+
+#: Simple workflows that expose the machine-output flags (added by
+#: ``_add_simple_workflow_args``).  Text mode for every workflow is unchanged.
+_MACHINE_OUTPUT_WORKFLOWS: Final[frozenset[str]] = frozenset(
+    {"singlepoint", "optimize", "frequency", "scan", "casscf"}
+)
+
+#: Dry-run step names per workflow (planning only — never executed).
+_DRY_RUN_STEPS: Final[dict[str, tuple[str, ...]]] = {
+    "singlepoint": ("single_point",),
+    "optimize": ("optimize",),
+    "frequency": ("frequency",),
+    "scan": ("scan",),
+    "casscf": ("casscf",),
+}
+
+
+def _machine_output_requested(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "json", False) or getattr(args, "dry_run", False))
+
+
+def _dry_run_plan(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Build the dry-run plan/estimate from parsed args only (zero side effects).
+
+    Nothing here touches the filesystem, launches ``cccp.calculation.run_*`` or
+    reserves core-hours; the identity is a pure hash of the non-path plan
+    fields so it is host-independent.
+    """
+    workflow = str(args.workflow)
+    plan: dict[str, Any] = {
+        "workflow": workflow,
+        "steps": list(_DRY_RUN_STEPS.get(workflow, (workflow,))),
+        "method": getattr(args, "method", None) or None,
+        "basis": getattr(args, "basis", None) or None,
+        "charge": getattr(args, "charge", None),
+        "multiplicity": getattr(args, "multiplicity", None),
+        "output_dir": str(getattr(args, "output", "") or ""),
+    }
+    identity_material = {key: value for key, value in plan.items() if key != "output_dir"}
+    digest = hashlib.sha256(
+        json.dumps(identity_material, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:32]
+    estimate: dict[str, Any] = {
+        "requested_nproc": getattr(args, "nproc", None),
+        "requested_mem": getattr(args, "mem", None),
+        "executes_science": False,
+        "consumes_core_hours": False,
+    }
+    return plan, estimate, f"v2:{digest}"
+
+
+def _dispatch_machine_output(
+    args: argparse.Namespace, handler: Callable[[argparse.Namespace], int]
+) -> int:
+    """Emit the unified JSON envelope for ``--json`` / ``--dry-run``.
+
+    ``--dry-run`` never calls *handler* (no science, no transfer, no metering).
+    ``--json`` runs the handler with stdout redirected to stderr so stdout
+    carries only the envelope; the handler's exit code is preserved.
+    """
+    from acp_services.entrypoints import machine_output as mo
+
+    operation = str(getattr(args, "workflow", "unknown"))
+    if bool(getattr(args, "dry_run", False)):
+        plan, estimate, identity = _dry_run_plan(args)
+        result = mo.dry_run_result(
+            operation, plan=plan, estimate=estimate, operation_identity=identity
+        )
+        print(result.to_json(indent=2))
+        return int(result.exit_code)
+    with redirect_stdout(sys.stderr):
+        exit_code = int(handler(args))
+    if exit_code == mo.ExitCode.OK:
+        result = mo.MachineResult(operation=operation, status="ok", exit_code=exit_code)
+    else:
+        result = mo.MachineResult(
+            operation=operation,
+            status="error",
+            exit_code=exit_code,
+            error=mo.default_error_for_exit(exit_code),
+        )
+    print(result.to_json(indent=2))
+    return exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     ACP CLI entry point.
@@ -4215,6 +4321,8 @@ def main(argv: list[str] | None = None) -> int:
         if handler is None:
             parser.print_help()
             return 1
+        if _machine_output_requested(args) and args.workflow in _MACHINE_OUTPUT_WORKFLOWS:
+            return _dispatch_machine_output(args, handler)
         _preflight_workflow(args.workflow)
         return handler(args)
 
