@@ -2466,7 +2466,14 @@ def test_batch_no_irc_invariants() -> None:
 # new path must not skip any key check.  ``_baseline_content``'s skip applies
 # only to the ① deletion-region checks on baseline-present files.
 
-MIGRATION_SCOPE = ("src/cccp/", "src/acp/")
+# Amendment S2 bis (2026-10-19): the ACP Services plan adds the new
+# ``src/acp_services/`` package as a first-class migration surface.  It is
+# included in the scope and the one-way dependency edge (``cccp``/``
+# acp_services`` must not import ``acp``) is enforced by the same AST scan that
+# guards ``src/cccp/`` — an equivalent (here, stronger-by-coverage) check, never
+# a relaxed one.  The dedicated ``tests/test_acp_services_isolation.py`` keeps
+# its deeper importlib/sys.modules/getattr defences.
+MIGRATION_SCOPE = ("src/cccp/", "src/acp/", "src/acp_services/")
 MIGRATION_STATION_PREFIXES = (
     "src/cccp/",
     "src/acp/calculations/",
@@ -2585,6 +2592,36 @@ MIGRATION_STATION_PREFIXES = (
     # auditing them.
     "src/acp/confsearch/__init__.py",
     "src/acp/confsearch/contracts.py",
+    # ── Amendment S2 bis: ACP Services plan stations (registered 2026-10-19) ──
+    # Plan: docs/reference/next-change/ACP_Parallel_Plan_2_Services_20261018.md
+    # (todo 66 shared-gate revision "register the revision + equivalent-or-
+    # stronger check").  Matrix / negative coverage lives in the S2-bis tests
+    # below (seam purity, singular composition root, init-wizard invariants).
+    "src/acp/services_bootstrap.py",
+    "src/acp/services_data_bootstrap.py",
+    "src/acp/services_events_bootstrap.py",
+    "src/acp/services_publication_bootstrap.py",
+    # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
+    # station (unified answers/plan/persist + pure node validation); the
+    # package-wide module-level-paramiko ban below is the added tooth.
+    "src/acp/init_wizard/",
+    # B28a/B28b: ACP-side publication + science-product projection stations.
+    "src/acp/results/frame_candidate_store.py",
+    "src/acp/results/frames_adapter.py",
+    # CCCP-relocation forwarders (Plan 3, lane C) that this shared gate sees.
+    # Registered as exact files (not whole dirs) so unrelated results/intake
+    # modules keep failing the boundary; each is also in MIGRATION_SHIM_PY, so
+    # R3 shim purity applies instead of a bare boundary pass.
+    "src/acp/chem/embedding.py",
+    "src/acp/intake/models.py",
+    "src/acp/confsearch/sampling.py",
+    "src/acp/confsearch/sampling_models.py",
+    "src/acp/confsearch/selection.py",
+    "src/acp/confsearch/shared/boltzmann.py",
+    "src/acp/confsearch/shared/deduplication.py",
+    # Services package (scope added above): every changed module is audited by
+    # the no-acp-import scan, not skipped.
+    "src/acp_services/",
 )
 MIGRATION_WORKFLOW_STATIONS = frozenset(
     {
@@ -2618,6 +2655,17 @@ MIGRATION_SHIM_PY = frozenset(
         "src/acp/calculations/primitives/_thermochemistry_support.py",
         "src/acp/chem/composition.py",
         "src/acp/core/registry.py",
+        # Amendment S2 bis (2026-10-19): CCCP-relocation forwarders now on the
+        # Services shared gate.  Each moved science body to ``cccp.analysis.*``
+        # and re-exports the same objects; R3 keeps them pure (no body may
+        # reappear).  ``_is_migration_shim`` semantics are unchanged.
+        "src/acp/chem/embedding.py",
+        "src/acp/intake/models.py",
+        "src/acp/confsearch/sampling.py",
+        "src/acp/confsearch/sampling_models.py",
+        "src/acp/confsearch/selection.py",
+        "src/acp/confsearch/shared/boltzmann.py",
+        "src/acp/confsearch/shared/deduplication.py",
     }
 )
 
@@ -2663,8 +2711,9 @@ def _migration_audit_issues(
 
     * R1 station boundary — a change outside a registered migration station is
       an unaudited change and FAILS;
-    * R2 new-station isolation — changed ``src/cccp/**`` files must not import
-      the acp package (AST scan: covers TYPE_CHECKING and lazy imports);
+    * R2 new-station isolation — changed ``src/cccp/**`` and
+      ``src/acp_services/**`` files must not import the acp package (AST scan:
+      covers TYPE_CHECKING and lazy imports);
     * R3 shim purity — declared compat shims stay pure re-export shells.
     * R4 workflow-station purity — the todo-28 workflow stations execute via
       the cccp task cores only; a ``get_backend``/``require_backend`` token
@@ -2678,7 +2727,7 @@ def _migration_audit_issues(
         src = (contents or {}).get(path)
         if src is None:
             src = (ROOT / path).read_text(encoding="utf-8")
-        if path.startswith("src/cccp/"):
+        if path.startswith(("src/cccp/", "src/acp_services/")):
             for node in ast.walk(ast.parse(src)):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
@@ -2778,3 +2827,160 @@ def test_migration_scope_catches_smuggled_shim_body() -> None:
         },
     )
     assert issues and "shim" in issues[0], f"shim body not detected: {issues}"
+
+
+# ── Amendment S2 bis teeth: ACP Services stations (2026-10-19) ──────────────
+# The Services plan registered new stations (see MIGRATION_* above); the checks
+# below give them equivalent-or-stronger teeth than the R1 boundary alone.
+
+SERVICES_BOOTSTRAP_STATIONS = (
+    "src/acp/services_bootstrap.py",
+    "src/acp/services_data_bootstrap.py",
+    "src/acp/services_events_bootstrap.py",
+    "src/acp/services_publication_bootstrap.py",
+)
+
+SERVICES_RELOCATION_SHIMS = (
+    "src/acp/chem/embedding.py",
+    "src/acp/intake/models.py",
+    "src/acp/confsearch/sampling.py",
+    "src/acp/confsearch/sampling_models.py",
+    "src/acp/confsearch/selection.py",
+    "src/acp/confsearch/shared/boltzmann.py",
+    "src/acp/confsearch/shared/deduplication.py",
+)
+
+INIT_WIZARD_SERVICES_DELEGATIONS = {
+    "src/acp/init_wizard/flows.py": "acp_services.contracts.config_validation",
+    "src/acp/init_wizard/gating.py": "acp_services.contracts.action_gating",
+}
+SERVICES_PURE_VALIDATORS = (
+    "src/acp_services/contracts/config_validation.py",
+    "src/acp_services/contracts/action_gating.py",
+)
+
+
+def _imported_modules(src: str) -> set[str]:
+    """Every module name imported anywhere in *src* (import / from-import)."""
+    modules: set[str] = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def _module_scope_imported_modules(src: str) -> set[str]:
+    """Module names imported at module scope only (excludes lazy/function imports)."""
+    modules: set[str] = set()
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def test_services_bootstrap_stations_are_pure_composition_seams() -> None:
+    """Amendment S2 bis: the four bootstrap seams stay wiring, not execution.
+
+    Each must import ``acp_services`` (it *is* the seam) and must never import
+    ``paramiko`` / ``subprocess`` / a ``cccp`` execution layer — the seam wires
+    injected ports; it never opens SSH or runs QC/compute work itself.
+    """
+    for path in SERVICES_BOOTSTRAP_STATIONS:
+        modules = _imported_modules((ROOT / path).read_text(encoding="utf-8"))
+        assert any(m == "acp_services" or m.startswith("acp_services.") for m in modules), (
+            f"{path}: registered Services seam does not import acp_services"
+        )
+        for module in modules:
+            assert module.split(".")[0] not in {"paramiko", "subprocess"}, (
+                f"{path}: Services seam imports {module} directly"
+            )
+            assert not module.startswith(("cccp.qc", "cccp.backends", "cccp.calculation")), (
+                f"{path}: Services seam reaches the execution stack via {module}"
+            )
+
+
+def test_services_composition_root_is_singular() -> None:
+    """Amendment S2 bis: only the composition root constructs ``ServicesPorts``.
+
+    A second construction site would be a second composition root — the exact
+    multi-owner drift the Services cut-over forbids.
+    """
+    construction_sites = {
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "src/acp").rglob("*.py")
+        if re.search(r"\bServicesPorts\s*\(", path.read_text(encoding="utf-8"))
+    }
+    assert construction_sites == {"src/acp/services_bootstrap.py"}, construction_sites
+
+
+def test_services_init_wizard_keeps_single_validation_invariants() -> None:
+    """Amendment S2 bis: the init wizard stays a thin, validation-delegating CLI.
+
+    (a) no module-scope ``paramiko`` anywhere in the package (D7: the remote
+    stack is imported lazily per flow only); (b) flows/gating delegate node
+    validation and action gating to the pure Services validators instead of
+    re-implementing them; (c) those pure validators import no paramiko/acp.
+    """
+    for path in sorted((ROOT / "src/acp/init_wizard").glob("*.py")):
+        modules = _module_scope_imported_modules(path.read_text(encoding="utf-8"))
+        assert not any(m.split(".")[0] == "paramiko" for m in modules), (
+            f"{path.name}: module-scope paramiko import breaks the lazy-remote invariant"
+        )
+    for path, target in INIT_WIZARD_SERVICES_DELEGATIONS.items():
+        modules = _imported_modules((ROOT / path).read_text(encoding="utf-8"))
+        assert target in modules, f"{path}: missing single-validation delegation to {target}"
+    for path in SERVICES_PURE_VALIDATORS:
+        roots = {m.split(".")[0] for m in _imported_modules((ROOT / path).read_text("utf-8"))}
+        assert not (roots & {"paramiko", "acp"}), f"{path}: pure validator depends on {roots}"
+
+
+def test_services_relocation_shims_stay_pure_reexports() -> None:
+    """Amendment S2 bis: the seven relocation forwarders are pure re-exports.
+
+    Registering them in ``MIGRATION_SHIM_PY`` only adds teeth if they actually
+    pass ``_is_migration_shim`` today.
+    """
+    for path in SERVICES_RELOCATION_SHIMS:
+        src = (ROOT / path).read_text(encoding="utf-8")
+        assert _is_migration_shim(src), f"{path}: registered shim has a real body"
+
+
+def test_services_amendment_keeps_unaudited_change_teeth() -> None:
+    """Amendment S2 bis negative: registering the Services stations does not
+    blunt the boundary — unregistered ``src/acp/**`` paths are still flagged,
+    near-misses on exact-file registrations are not swallowed, and a mutated
+    registered shim still fails R3."""
+    unknown = _migration_audit_issues(["src/acp/unknown_station.py"])
+    assert unknown and "unaudited" in unknown[0], unknown
+
+    near_miss = _migration_audit_issues(["src/acp/services_bootstrap_evil.py"])
+    assert near_miss and "unaudited" in near_miss[0], near_miss
+
+    rogue_results = _migration_audit_issues(["src/acp/results/rogue_station.py"])
+    assert rogue_results and "unaudited" in rogue_results[0], rogue_results
+
+    target = "src/acp/chem/embedding.py"
+    mutated = _migration_audit_issues(
+        [target],
+        {
+            target: (
+                '"""x"""\n'
+                "from cccp.analysis.structure.embedding import smiles_to_xyz\n"
+                "\n"
+                "VALUE = compute()\n"
+            )
+        },
+    )
+    assert mutated and "shim" in mutated[0], mutated
+
+
+def test_services_scope_audits_acp_services_import_discipline() -> None:
+    """Amendment S2 bis: adding ``src/acp_services/`` to the scope is not a skip
+    — an ``acp`` import smuggled into a Services module is flagged by R2."""
+    target = "src/acp_services/runtime/rogue.py"
+    issues = _migration_audit_issues([target], {target: "from acp.scheduler import jobs\n"})
+    assert issues and ("imports" in issues[0] or "from acp" in issues[0]), issues
