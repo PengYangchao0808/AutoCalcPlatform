@@ -47,6 +47,15 @@ from acp.scheduler.remote.paths import (
 )
 from acp.scheduler.structure_source_store import StructureSourceStore, source_uid_for
 from acp.storage.manifest import ResultManifest
+from acp_services.data.archive import (
+    ArchiveManifest,
+    ArchivePackageClass,
+    ArchiveSourcePort,
+    ExecutionState,
+    LocalArchiveSource,
+    SnapshotFence,
+    build_archive_manifest,
+)
 from acp_services.data.contracts import (
     Availability,
     AvailabilityQuery,
@@ -120,6 +129,8 @@ __all__ = [
     "build_transfer_authorization_port",
     "build_transfer_pipeline",
     "build_transfer_executor",
+    "build_archive_source",
+    "build_task_archive_manifest",
 ]
 
 _MANIFEST_READ_ERRORS = (
@@ -1073,3 +1084,81 @@ def build_cache_only_resource_reader(
         max_read_bytes=max_read_bytes,
     )
     return CacheOnlyResourceReader(reader, enabled=enabled)
+
+
+# --------------------------------------------------------------------------- #
+# B08-3 (todo 44) — versioned archive export composition hooks
+# --------------------------------------------------------------------------- #
+
+
+def build_archive_source(
+    task_root: str | Path,
+    *,
+    task_id: str = "",
+    generation: int = 0,
+    revision: int = 0,
+    execution_state: ExecutionState | str = ExecutionState.COMMITTED,
+    cache: RemoteStructureCache | None = None,
+    job_id: str | None = None,
+    attempt: int | None = None,
+) -> ArchiveSourcePort:
+    """Expose a task tree as an :class:`ArchiveSourcePort` for archive export.
+
+    The pure archive builder lives in :mod:`acp_services.data.archive`; this
+    legacy-side hook supplies the *pinnable* position.  When a shared
+    :class:`RemoteStructureCache` and ``job_id`` are given the generation is the
+    cache's committed fence generation and the revision is the attempt, so the
+    export is pinned to one inspected storage position rather than to whatever
+    the filesystem happens to contain mid-run.
+
+    Args:
+        task_root: Local task tree the export reads.
+        task_id: Stable identity recorded in the manifest (defaults to ``job_id``).
+        generation: Explicit fence generation when no cache is supplied.
+        revision: Explicit fence revision when no cache is supplied.
+        execution_state: ``committed`` (terminal) or ``in_flight``.
+        cache: Optional shared structure cache used to read the committed fence.
+        job_id: Job whose cache fence pins the generation.
+        attempt: Attempt number (the revision) for the pinned fence.
+
+    Returns:
+        A :class:`LocalArchiveSource` satisfying :class:`ArchiveSourcePort`.
+    """
+    resolved_generation = int(generation)
+    resolved_revision = int(revision)
+    if cache is not None and job_id:
+        _stored_attempt, fence_generation = cache._read_fence(job_id)
+        resolved_generation = int(fence_generation)
+        resolved_revision = int(attempt) if attempt is not None else resolved_revision
+    return LocalArchiveSource(
+        task_root,
+        task_id=task_id or (job_id or ""),
+        generation=resolved_generation,
+        revision=resolved_revision,
+        execution_state=execution_state,
+    )
+
+
+def build_task_archive_manifest(
+    task_root: str | Path,
+    *,
+    package_class: ArchivePackageClass | str,
+    source_kwargs: Mapping[str, Any] | None = None,
+    expected_fence: SnapshotFence | None = None,
+    max_attempts: int = 3,
+    created_at: str | None = None,
+) -> ArchiveManifest:
+    """Compose `build_archive_source` + `build_archive_manifest` for a task tree.
+
+    Thin, additive convenience for callers (import/CLI surfaces) that hold a
+    task root and want the versioned manifest without wiring the source by hand.
+    All snapshot/credential/package-class rules remain the pure builder's.
+    """
+    source = build_archive_source(task_root, **(source_kwargs or {}))
+    return build_archive_manifest(
+        source,
+        package_class=package_class,
+        expected_fence=expected_fence,
+        max_attempts=max_attempts,
+        created_at=created_at,
+    )
