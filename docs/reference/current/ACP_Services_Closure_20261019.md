@@ -215,6 +215,25 @@ S1 组合（F0＋S1 / F1＋S1）各自在 `d048950` 有独立 `executed` 记录�
 | 全量 15/15 envelope 覆盖 | NOT_VERIFIED | 7 项 legacy 走旧路径，不声称独立 |
 | B11 价格/账本 | DEFERRED（价格政策门） | usage-only/quota-only 可交付；不宣称收费可用 |
 
+### 7.5 F-wave 复核：IS-3 / IS-6 / IS-11 的如实状态（todo 82，2026-10-19）
+
+本轮只做**口径收口**，不改变已执行的模块/入口判定；以下三条是对 F4 ideal-state fidelity
+（`.omo/evidence/acp-parallel-plan-2-services/f4-ideal-state-fidelity.md`）发现（B3/B4/B7）的
+显式登记。**模块已交付 ≠ 生产接线；本记录不把任何 DEFERRED/OPEN 项写成已关闭。**
+
+| IS | 本轮口径 | 依据 / 延期范围 |
+|---|---|---|
+| **IS-3**（唯一实现根） | **PARTIAL — 注册性延期（registered deferral）**。schema/store、migrations、CLI flag 参数转换、plan/step requirements 已是 Services 唯一实现 + identity 转发；控制/recovery、`PlanExecutionPort`、Data writer/cache、`MethodConfigPort` catalog 归一化仍为 `src/acp`-owned。**不再以「端口收敛」声称唯一实现根已完成。** | `tests/baseline/services-evidence/injection_registry.md`「DEFERRED 注入登记表」逐项登记保留原因、迁移任务、移除任务号或 T78 过渡 controller 边界、验收测试与移除条件；`src/acp_services/compatibility/` 仍不存在（不虚报）。移除条件满足前各行保持 DEFERRED，不得标 CLOSED。 |
+| **IS-6**（envelope 覆盖） | **`8/15 envelope + 7 legacy, T34b gate OPEN`**（原文口径，非 15/15）。8 项 enabled：singlepoint / optimize / frequency / scan / irc / casscf / xtb_optimize / OrcaGradient；7 项 legacy：tsmode / nmr / Confsearch / PESsearch / BatchOptimize / XtbPathSearch / XtbConstrainedOpt。 | `tests/baseline/services-evidence/workflow_enablement_matrix.md`（enabled 8/15、legacy 7/15、full-coverage gate OPEN）；`src/acp_services/runtime/workflow_enablement.py::coverage_report()` 为准。7 项闭包由 C01 T20—T30 承担，保持旧路径且不声称独立；T34b 不因本记录关闭。 |
+| **IS-11**（台账逐项关闭） | **PARTIAL — 9 行 `[OPEN]` 保留**：5 行 cache-only 旧 GET 兼容面（catalog / manifest / frame_candidates / frequency_modes / geometry）与 4 行生产消费缺口（AdmissionController / Admin / Usage / Quota）。其中 **L2-11**（前端 cache-only 零调用点）、**L2-12**（准入/配额/身份生命周期派发+UI 零消费者）、**L2-15**（计量解耦生产路径零消费者）仍 `NOT_VERIFIED`。 | `tests/baseline/services-evidence/migration_ledger.md` 计数 `[CLOSED] 39 · [RETAINED] 5 · [OPEN] 9 · [DEFERRED] 0`；本记录 §4 L2-11/L2-12/L2-13/L2-14/L2-15/L2-16/L2-17。**延期范围**：生产派发/UI、前端 cache-only 消费、真实数据/计量接线。`todo 81`（F-wave remediation B）负责生产 Data 写入口与准备快照默认；在其证据落地前上述行**保持 OPEN**，不以本轮的文档收口替代实现验证。发布结果核对（todo 76 + F5）仍延后。 |
+
+补充边界：
+
+- **F-3 仍是真实 FAIL**（`tests/test_services_worker_contract.py::test_runtime_package_has_no_acp_or_db_access`），
+  归属 todo 80（F-wave remediation A）的 worker 边界收窄；本记录不把它改写为 NOT_VERIFIED，
+  也不据 F-wave 文档任务关闭 §6 的 FAIL 行。
+- 本 §7.5 是**追加复核**，不删除 §3—§6 的原始 PASS/FAIL/NOT_VERIFIED 与 F-1/F-2/F-3 证据链。
+
 ---
 
 ## 8. 结论（三分层 + 三门状态）

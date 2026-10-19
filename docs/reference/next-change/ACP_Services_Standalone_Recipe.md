@@ -41,7 +41,7 @@
 | S1 干净 venv 安装 | `python3.11 -m venv /tmp/acp_recipe_venv && /tmp/acp_recipe_venv/bin/python -m pip install -e '.[api,remote]'` | exit 0；venv 内出现 `acp` console script | acp-0.2.0 + 65 依赖（含 fastapi/uvicorn/paramiko/rdkit/numpy）安装成功，INSTALL_EXIT=0，venv 544M | PASS |
 | S2 CLI 入口 | `acp --help` | 打印 usage（run / doctor / init），exit 0 | usage 打印 `positional arguments: {run,doctor,init}`，exit 0 | PASS |
 | S3 init 非交互（回答文件） | `HOME=/tmp/acp_recipe_home acp init --config /tmp/acp_recipe_home/.cccp.yaml --answers answers.yaml`（answers：version 1 / usage local / tier standalone / components science-core+local-identity+local-storage / resources.software=7 二进制路径 / cluster.type local / params.run_root=/tmp/acp_recipe_runs） | 渲染版本化计划 → 应用到目标配置 → 输出 PASS/FAIL/NOT_VERIFIED 分列的 doctor 能力报告；不触碰真实 `~/.cccp.yaml` | 计划 v1 应用成功（写入 0644，含回退说明与配置差异清单）；内嵌 doctor 报告 PASS(12)/FAIL(0)/NOT_VERIFIED(0)；exit 0 | PASS |
-| S3a init 交互式（TTY 向导） | `acp init` | 交互完成最小配置 | B41a 原记录（保留）："本任务未执行：交互路径会写真实 `~/.cccp.yaml`（任务约束禁止触碰真实配置），且交互验收不属于 B41a 范围 → NOT_VERIFIED"。**B41b 回填**：tmux TTY 驱动完整交互（隔离 `HOME=/tmp/b41b_home_s3a`）——usage=本机部署 → 档位=Standalone → 资源=本地（自动检测表 + isostat/molclus 手动路径回填）→ 组件=默认组合 → run_root 默认 → secrets 跳过 → 计划预览 → 应用；计划应用成功（deployment 段 + 手动 executables 路径写入 `.cccp.yaml`，含 `.bak` 回退），内嵌 doctor 报告 PASS(12)/FAIL(0)/NOT_VERIFIED(0)，`q` 干净退出（"再见"）。**注记**：自动检测把 GNOME Orca 40.3（`/usr/bin/orca`）列为 orca 且 doctor 报 PASS——即 S4c 缺陷在交互路径同样存在；自动检测项（orca/xtb/crest/censo/shermo）不写入配置（保持 PATH 解析），仅手动输入的 isostat/molclus 落盘 | **PASS（B41b）** — 交互向导端到端跑通；orca 假成功缺陷见 S4c（同一缺陷，不重复计 FAIL） |
+| S3a init 交互式（TTY 向导） | `acp init` | 交互完成最小配置 | B41a 原记录（保留）："本任务未执行：交互路径会写真实 `~/.cccp.yaml`（任务约束禁止触碰真实配置），且交互验收不属于 B41a 范围 → NOT_VERIFIED"。**B41b 回填**：tmux TTY 驱动完整交互（隔离 `HOME=/tmp/b41b_home_s3a`）——usage=本机部署 → 档位=Standalone → 资源=本地（自动检测表 + isostat/molclus 手动路径回填）→ 组件=默认组合 → run_root 默认 → secrets 跳过 → 计划预览 → 应用；计划应用成功（deployment 段 + 手动 executables 路径写入 `.cccp.yaml`，含 `.bak` 回退），内嵌 doctor 报告 PASS(12)/FAIL(0)/NOT_VERIFIED(0)，`q` 干净退出（"再见"）。**注记**：自动检测把 GNOME Orca 40.3（`/usr/bin/orca`）列为 orca 且 doctor 报 PASS——即 S4c 缺陷在交互路径同样存在；自动检测项（orca/xtb/crest/censo/shermo）不写入配置（保持 PATH 解析），仅手动输入的 isostat/molclus 落盘 | PASS — **B41b 回填**：交互向导端到端跑通；orca 假成功缺陷见 S4c（同一缺陷，不重复计 FAIL）。原始 B41a NOT_VERIFIED 记录保留在 Actual 列 |
 | S4 doctor（Standalone 本地配置，无远程节点） | `cd /tmp/acp_recipe_work && HOME=/tmp/acp_recipe_home acp doctor` | 输出能力报告；本地-only 档位不因缺远程节点整体判失败（待确认语义） | 输出 `No remote nodes configured (cluster.nodes is empty).`，exit 1。**B41b 复核（2026-10-19，/tmp/b41b-venv）**：同样输出且 exit 1——缺陷未修复 | FAIL — 原因：`acp doctor` 当前自检范围是远程节点（cli 描述 "Deployment self-check for remote compute nodes"），零节点即 exit 1；本地 Standalone 的 doctor 门应改用 S3 内嵌能力报告或扩展 doctor 本地检查——语义裁定不在本任务；**B41b 复核仍未修复** |
 | S4b doctor（已配置远程节点） | `cd <含 cccp.yaml 的项目目录> && acp doctor`（或真实 `HOME`） | 各节点可达、Python 与二进制解析成功 → exit 0 | node-157（192.168.1.100）SSH 认证成功，python 3.13.9；censo 3.0.8 / crest 3.0.2 / xtb 6.7.1 / mpi 4.1.8 / orca / shermo / isostat / molclus 全部解析；`Doctor finished: all checks passed`，exit 0 | PASS |
 | S4c 负例探针（错误配置的 typed 呈现） | `acp init --answers answers_bad.yaml`（隔离 HOME，answers 中 `executables.orca.path=/nonexistent/orca`，crest/censo/shermo/isostat/molclus 故意不配置） | 缺失/错误的软件配置必须 typed unavailable（FAIL 或 NOT_VERIFIED），不得假成功 | 未配置的 5 项正确记 `NOT_VERIFIED（未配置；配置完成但科学能力尚未验证）`；但 orca 配置路径不存在时被回落到 PATH，doctor 报 `software:orca — /usr/bin/orca` **PASS**——该二进制实为 GNOME Orca 40.3（`file /usr/bin/orca`：Python script，Igalia），非 QC ORCA；BAD_INIT exit=0。**B41b 复核（2026-10-19）**：同样回落 PATH 报 `software:orca — /usr/bin/orca` PASS、6 项 NOT_VERIFIED、BAD_INIT exit=0——缺陷未修复；交互向导（S3a）的软件检测表同样显示 orca→/usr/bin/orca 40.3 path | FAIL — 原因：`resolve_executable` 在配置路径无效时静默回落 PATH，无关二进制被报为 PASS（假成功）；负例门未通过，须在 doctor/解析层修复；**B41b 复核仍未修复** |
@@ -49,7 +49,7 @@
 | S6 Web 服务冒烟（干净 venv，备用端口） | `HOME=… ACP_RUN_ROOT=/tmp/acp_recipe_runs acp run serve --host 127.0.0.1 --port 8899 --no-browser` | `/api/status` 200 | 200（version 0.2.0，run_root=/tmp/acp_recipe_runs 隔离生效）；`/` 200（Workbench 静态页）；`/api/workflows` 200 → 15 个工作流；测毕即杀进程，未与 8765 主机服务冲突 | PASS |
 | S7a 主机服务状态观测 | `systemctl is-enabled acp; systemctl is-active acp; curl -s http://127.0.0.1:8765/api/status` | enabled + active + HTTP 200 | enabled / active / 200（run_root=/var/lib/acp/runs，进程自报 version 0.1.3，uptime≈23.7h——见 §1 基线说明） | PASS |
 | S7b 从脚本重建 systemd unit | `sudo scripts/install_systemd.sh --user <user> --enable` | unit 由脚本生成、daemon-reload、服务启动 | 未执行：任务约束禁止重启服务；现役 unit 生成于 2026-09-06，与当前 `install_systemd.sh` 的逐字一致性未核验。**B41b 复核**：约束仍禁止重启/重建，未执行 | NOT_VERIFIED — 原因：两批任务均禁止重启/重建服务；须在无此约束的发布验收（todo 76）复现 |
-| S8 完整 CLI 复现（B41b） | install → init → doctor → 15 工作流 CLI 全链路 + 进程重启后控制/恢复（todo 74 范围） | todo 74 交付后执行并回填证据 | **B41b 已执行**（见 §2.1）：install/init/doctor/闭环/控制恢复腿全部在 `/tmp/b41b-venv` 复现；15 工作流仅真实验收 4 项（xtb_optimize / frequency / Confsearch / singlepoint-ORCA），其余 11 项未跑 | **部分完成** — 完整 CLI（含进程重启控制/恢复）PASS；"15 工作流逐项真实验收"未满足，仍属退出门二（§5） |
+| S8 完整 CLI 复现（B41b） | install → init → doctor → 15 工作流 CLI 全链路 + 进程重启后控制/恢复（todo 74 范围） | todo 74 交付后执行并回填证据 | **B41b 已执行**（见 §2.1）：install/init/doctor/闭环/控制恢复腿全部在 `/tmp/b41b-venv` 复现；15 工作流仅真实验收 4 项（xtb_optimize / frequency / Confsearch / singlepoint-ORCA），其余 11 项未跑 | NOT_VERIFIED — 原因：完整 CLI（含进程重启控制/恢复）PASS，但"15 工作流逐项真实验收"仅 4/15，未满足，仍属退出门二（§5）；不以本行代表完整发行 |
 
 **步骤小结（B41a 原记录，保留）**：S1/S2/S3/S4b/S5/S6/S7a 全部 PASS（真实观测，命令可复跑）；S4 与 S4c 为 FAIL（doctor 本地-only 语义、错误配置回落 PATH 假成功——均如实记录不粉饰）；S3a/S7b/S8 为 NOT_VERIFIED（各附原因与复现条件）。**"向导跑完"不作为任何步骤的验收依据**（§8）。
 
@@ -93,6 +93,27 @@
 - **D3（起步期 SIGKILL 孤儿）**：控制器在提交窗口内被 SIGKILL（run.lock 未落、job 行未 RUNNING）时，后续控制器拒绝收养存活 worker 并把 job 置 failed（"refusing to start a second execution"），孤儿 worker 继续消耗资源至自然结束（本例 Confsearch 数十秒后自然消亡）；长任务场景下为资源泄漏。
 
 **B41b 步骤小结**：install/init（非交互+交互）/doctor 复核/xtb 闭环/ORCA singlepoint/Web 冒烟/主机观测/todo-74 全部 11 个 task 动词中 10 个 PASS（recover FAIL）、pause/unpause/SIGKILL-query 三个跨进程腿 PASS；S4/S4c 两缺陷复核仍未修复；D1/D2/D3 三个新缺陷如实登记。**15 工作流逐项真实验收仍缺 11 项**（Confsearch/frequency/singlepoint/xtb_optimize 已真实验收），不以本批代表完整发行（§5）。
+
+---
+
+## 2.2 Todo 79 缺陷修复后值（2026-10-19 追加；原始 S4/S4c 记录保留）
+
+> 本段是**追加记录**，不覆盖 §2 / §2.1 的原始 FAIL 记录（审计痕迹保留）。修复实现与逐项实测
+> 证据见 `tests/baseline/services-evidence/b41b_defect_fixes.md`（todo 79）。配方未在本任务重跑
+> 这些腿；下列"修复后值"引用 todo 79 的隔离 `/tmp` run_root 实测，不把代码修复自动写成配方门已关闭。
+
+| 缺陷 / 腿 | 修复前（§2.1 原始记录） | 修复后实测值（todo 79） | 配方门状态 |
+|---|---|---|---|
+| D2 recover 配置丢失 | `acp task recover` 生成 `! default def2-TZVPP` 占位输入，orca 回落 GNOME `/usr/bin/orca` → failed | recover 读取持久 `job.json`/`task.json` 的 workflow/method/resources 与合并配置；实测 `! r2SCAN-3c Opt`，ORCA 6.1.1 真实输出，`{"completed": true, "status": "completed"}`，exit 0 | 修复后值 PASS（todo 79 证据）；§4/§5 门仍待 F3/F4 复核，不在本文档内改写 |
+| D1 跨进程 rerun/continue 收尾 | 无活控制器时 completed worker 被下一控制器收尾为 failed | `disk_completion_exit_code()` 先读 `.exit_code`/`state.json`（attempt-fenced）；实测下一控制器 poll `POLLED completed 0 1.0` | 修复后值 PASS（todo 79 证据）；原始 B11/B12 FAIL 记录保留 |
+| D1 跨进程 cancel 终局 | CANCELLING 行被收尾为 failed | 已持久化 CANCELLING 且进程消失 = 确认停止 → CANCELLED；实测 `POLLED cancelled 130 3` | 修复后值 PASS（todo 79 证据）；原始 B17 FAIL 记录保留 |
+| D3 起步期 SIGKILL 孤儿 | 拒绝收养存活 worker，置 failed 并放任资源 | `JobManager` 以 attempt-tagged `run.lock` + `/proc` 身份收养起步窗口 worker；跨进程 cancel 确认停止；`/proc` 扫描无残留，无二次派发 | 修复后值 PASS（todo 79 证据）；原始 B19 FAIL 记录保留 |
+| S4c 错误配置假成功 | 显式无效 orca 路径回落 PATH，GNOME Orca 被报 PASS、BAD_INIT exit=0 | `acp doctor` 用 `resolve_executable_with_source()`：配置 pin 未生效即 FAIL（拒绝 PATH 回落）；PATH 命中过 QC 二进制 sanity 校验；实测显式 `/nonexistent/orca` → FAIL、exit 1，无 `/usr/bin/orca` PASS 行 | 修复后值 PASS（todo 79 证据）；§2 S4c 原始 FAIL 行与 §4 门状态保留 |
+| S4 本地-only doctor | 零远程节点 exit 1 | local/standalone 且零节点时输出本地 capability 报告（10 PASS / 0 FAIL），exit 0；远程 doctor 输出未变 | 修复后值 PASS（todo 79 证据）；§2 S4 原始 FAIL 行保留 |
+
+**边界声明**：以上仅记录 todo 79 已交付的修复后值；`src/cccp/software.py::resolve_executable`
+的 PATH 回落根因仍登记为 C 路交接（见 `handoff_registry.md`），不在本配方范围内修改。
+`S4/S4c` 的原 FAIL 行**不删除、不改写**；退出门一/二是否关闭由 F3/F4 与发布终验判定。
 
 ---
 
@@ -164,7 +185,8 @@
 - **B41a（已完成，2026-10-19 @ `e447783`）**：配方设计、四态 capability 报告、两级退出门定义、首批复现记录（§2，含 NOT_VERIFIED 标注）。**不依赖完整发行**（评审 P1-3 顺序修正：B41a 配方设计可先做）。
 - **B41b（已完成本机复现，2026-10-19 @ `48b1660`，todo 74 之后）**：真实安装与完整 CLI 复现——**在本机干净 venv + 隔离 HOME/CWD/run_root**（`/tmp/b41b-*`）按配方执行全部步骤，含 S3a 交互向导、S4/S4c doctor 语义复核、todo 74 全部 `acp task` 控制/恢复腿。记录见 §2.1。**范围限制（如实声明）**：① 非异机/异账户复现（同一台 host，仅 venv/HOME/run_root 隔离）；② S7b systemd unit 重建仍受"禁止重启服务"约束未执行；③ 15 工作流仅真实验收 4 项（其余 11 项未跑）；④ 发现 3 个新缺陷（D1 孤儿收尾 / D2 recover 配置丢失 / D3 起步期 SIGKILL 孤儿），已登记 §2.1，修复不在本任务范围。
 - 回填规则（已执行）：§2 各行以"**B41b 回填/复核"标注附加在原记录之后，原始 NOT_VERIFIED/FAIL 记录保留（审计痕迹）；B41b 全量新记录集中在 §2.1，不覆盖 §2。
-- 依赖关系：B41a blocked by todos 35—38（已完成）；B41b blocked by todos 74、40、32—34（按 T34a 声明范围）；本任务 blocks todo 69（分层验收）。B41b 不阻塞任何其他任务，也不因 D1/D2/D3 关闭任何门。
+- 依赖关系：B41a blocked by todos 35—38（已完成）；B41b blocked by todos 74、40、32—34（按 T34a 声明范围）；本任务 blocks todo 69（分层验收）。
+- **T74 不等待本任务**：B41a 的配方设计与首批复现可先做，不反向阻塞 todo 74；B41b 的真实安装与完整 CLI 复现必须在 **todo 74 交付后**执行（本文件 §2.1 即按该顺序执行）。B41b 不阻塞任何其他任务，也不因 D1/D2/D3 关闭任何门。
 
 ---
 

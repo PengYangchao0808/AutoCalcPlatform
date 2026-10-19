@@ -67,6 +67,10 @@ xtb_optimize / OrcaGradient`（最小验证面：singlepoint / optimize / freque
 
 ## T34b — 15 项最终覆盖（全量门）
 
+> **IS-6 现行口径（todo 82 复核，2026-10-19）：`8/15 envelope + 7 legacy, T34b gate OPEN`。**
+> 这只表示“首片 8 项经 envelope、7 项保持旧路径”，**不表示 15/15 已启用**。7 项 legacy 的闭包
+> 由 C01 T20—T30 承担；本文件与闭包记录均不得写成“全量覆盖已完成”。
+
 **检查**：`workflow_enablement.coverage_report()` —— 机器可校验的矩阵完整性/诚实性门。
 
 | 指标 | 值 |
