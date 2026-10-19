@@ -43,3 +43,4 @@ scipy>=1.10
 matplotlib>=3.7
 openpyxl>=3.1
 nmrglue>=0.10
+typing-extensions>=4.1
