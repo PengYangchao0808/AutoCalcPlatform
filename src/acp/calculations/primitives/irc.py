@@ -38,7 +38,7 @@ from acp.calculations.primitives._common import (
     output_dir,
 )
 from acp.calculations.progress import ProgressReporter
-from acp.calculations.result_publication import register_result_manifest
+from acp.calculations.result_publication import ManifestPublisher, register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
 from cccp import calculation as _cccp_calculation
 from cccp.calculation.context import TaskContext
@@ -54,6 +54,19 @@ from cccp.utils import file_io
 logger = logging.getLogger(__name__)
 
 __all__ = ["IRC_PROGRESS_STAGES", "run_irc"]
+
+_DEFAULT_PUBLISHER: ManifestPublisher | None = None
+
+
+def _default_manifest_publisher() -> ManifestPublisher:
+    """Data-backed publisher for the production ``RESULT`` manifest write."""
+    global _DEFAULT_PUBLISHER
+    if _DEFAULT_PUBLISHER is None:
+        from acp.services_publication_bootstrap import default_manifest_publisher
+
+        _DEFAULT_PUBLISHER = default_manifest_publisher()
+    return _DEFAULT_PUBLISHER
+
 
 IRC_PROGRESS_STAGES = ("preparing", "irc_forward", "irc_backward", "validating")
 
@@ -71,6 +84,7 @@ def execute_irc(
     workflow: str = "irc",
     profile: str | None = None,
     progress_reporter: ProgressReporter | None = None,
+    publisher: ManifestPublisher | None = None,
 ) -> CalculationResult:
     """ACP compat wrapper: cccp task core + endpoint/trajectory publication.
 
@@ -127,6 +141,7 @@ def execute_irc(
         result_dir,
         selected_backend,
         directions,
+        publisher,
     )
     return CalculationResult(
         energy=legacy.energy,
@@ -153,6 +168,7 @@ def _publish_irc_products(
     result_dir: Path,
     backend: str,
     directions: tuple[str, ...],
+    publisher: ManifestPublisher | None = None,
 ) -> list[ArtifactRef]:
     """Materialise endpoint/trajectory products and register the manifest.
 
@@ -161,7 +177,7 @@ def _publish_irc_products(
     """
     try:
         return _publish_irc_products_unchecked(
-            request, task_result, result_dir, backend, directions
+            request, task_result, result_dir, backend, directions, publisher
         )
     except Exception:  # noqa: BLE001 — publication never fails the step
         logger.debug("irc: product publication failed; skipping", exc_info=True)
@@ -174,14 +190,17 @@ def _publish_irc_products_unchecked(
     result_dir: Path,
     backend: str,
     directions: tuple[str, ...],
+    publisher: ManifestPublisher | None = None,
 ) -> list[ArtifactRef]:
     artifacts: list[ArtifactRef] = []
     payload = task_result.payload if isinstance(task_result.payload, IrcPayload) else None
     if payload is not None and payload.directions:
         artifacts.extend(
-            _write_endpoint_products(request, task_result, payload, result_dir, backend, directions)
+            _write_endpoint_products(
+                request, task_result, payload, result_dir, backend, directions, publisher
+            )
         )
-    artifacts.extend(_register_trajectory_products(result_dir, backend))
+    artifacts.extend(_register_trajectory_products(result_dir, backend, publisher))
     return artifacts
 
 
@@ -192,6 +211,7 @@ def _write_endpoint_products(
     result_dir: Path,
     backend: str,
     directions: tuple[str, ...],
+    publisher: ManifestPublisher | None = None,
 ) -> list[ArtifactRef]:
     """Write ``RESULT/irc/irc_{direction}.xyz`` endpoint products and register them."""
     irc_dir = result_dir / "irc"
@@ -233,11 +253,17 @@ def _write_endpoint_products(
             },
         )
 
-    _ = register_result_manifest(result_dir, manifest)
+    _ = register_result_manifest(
+        result_dir, manifest, publisher=publisher or _default_manifest_publisher()
+    )
     return artifacts
 
 
-def _register_trajectory_products(result_dir: Path, backend: str) -> list[ArtifactRef]:
+def _register_trajectory_products(
+    result_dir: Path,
+    backend: str,
+    publisher: ManifestPublisher | None = None,
+) -> list[ArtifactRef]:
     """Register the IRC path trajectory and per-direction geometry products."""
     trajectory_path = result_dir / "trajectories" / "irc_trajectory.json"
     if not trajectory_path.is_file():
@@ -283,7 +309,9 @@ def _register_trajectory_products(result_dir: Path, backend: str) -> list[Artifa
                 path=str(relative_path),
                 kind=ProductKind.TRAJECTORY,
             )
-    _ = register_result_manifest(result_dir, manifest)
+    _ = register_result_manifest(
+        result_dir, manifest, publisher=publisher or _default_manifest_publisher()
+    )
     return artifacts
 
 
