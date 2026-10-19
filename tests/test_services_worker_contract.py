@@ -2,8 +2,10 @@
 
 Covers the acceptance clauses:
 
-1. worker AST ban — ``src/acp_services/runtime/**`` imports no ``acp``, no
-   ``sqlite3``/jobs-store, and contains no ``attempt`` increment / status write;
+1. worker AST ban — the worker execution boundary (``worker_bootstrap`` + the
+   static ``acp_services`` import closure of ``worker``/``execution_chain``)
+   imports no ``acp``, no ``sqlite3``/jobs-store, and contains no ``attempt``
+   increment / status write;
 2. receipt validation matrix — stale attempt / stale submission / stale release /
    wrong owner / wrong fencing / digest mismatch / forged submission rejected;
 3. the controller advances only after eligibility (CAS port called exactly once
@@ -55,7 +57,20 @@ from acp_services.runtime.worker import (
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_RUNTIME_ROOT = _REPO_ROOT / "src" / "acp_services" / "runtime"
+_SERVICES_ROOT = _REPO_ROOT / "src" / "acp_services"
+
+#: Worker execution boundary: the subprocess entry point, the frozen-execution
+#: entry selector, and every ``acp_services`` module reachable from them by
+#: static import.  Only these modules run (or decide what runs) in the worker
+#: process; the rest of the Services package is controller-side and owns its
+#: own ledgers (``admission``/``quota`` SQLite reservations, the ``isolation``
+#: deny-list literal), so the "no acp / no jobs DB" independence probe is
+#: scoped to this closure rather than ``runtime/**``.
+_WORKER_BOUNDARY_ROOTS = (
+    _SERVICES_ROOT / "worker_bootstrap.py",
+    _SERVICES_ROOT / "runtime" / "worker.py",
+    _SERVICES_ROOT / "runtime" / "execution_chain.py",
+)
 
 _JOB = "job-1"
 _PLAN_DIGEST = "v2:plan-digest"
@@ -485,7 +500,9 @@ _RAW_BANS = (
     re.compile(r"\bJobStore\b"),
     re.compile(r"\battempt\s*\+=\s*1\b"),
     re.compile(r"\battempt\s*=\s*attempt\s*\+\s*1\b"),
-    re.compile(r"attempt\s*\+\s*1"),
+    # Bare ``attempt + 1`` is intentionally NOT a raw ban: the AST visitor
+    # above detects a real counter advance (``Name``/``AugAssign``) while a
+    # wire validation like ``self.attempt + 1`` must stay legal.
     re.compile(r"\.transition\s*\("),
     re.compile(r"\.update_progress\s*\("),
     re.compile(r"\.requeue_with_spec\s*\("),
@@ -547,13 +564,53 @@ def scan_runtime_source(source: str) -> list[str]:
     return violations
 
 
-def test_runtime_package_has_no_acp_or_db_access() -> None:
+def _module_path(module: str) -> Path | None:
+    """Resolve a dotted ``acp_services`` module to its source file, if any."""
+    if module != "acp_services" and not module.startswith("acp_services."):
+        return None
+    base = _REPO_ROOT / "src"
+    parts = module.split(".")
+    file_path = base.joinpath(*parts).with_suffix(".py")
+    if file_path.is_file():
+        return file_path
+    package_init = base.joinpath(*parts) / "__init__.py"
+    return package_init if package_init.is_file() else None
+
+
+def worker_boundary_modules() -> list[Path]:
+    """Worker-boundary roots plus their static ``acp_services`` import closure."""
+    seen: dict[Path, None] = {}
+    queue: list[Path] = list(_WORKER_BOUNDARY_ROOTS)
+    while queue:
+        path = queue.pop(0)
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen[resolved] = None
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            modules: list[str] = []
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules = [node.module]
+            for module in modules:
+                dependency = _module_path(module)
+                if dependency is not None and dependency.resolve() not in seen:
+                    queue.append(dependency)
+    return sorted(seen)
+
+
+def test_worker_execution_boundary_has_no_acp_or_db_access() -> None:
+    boundary = worker_boundary_modules()
+    boundary_names = {path.name for path in boundary}
+    assert {"worker_bootstrap.py", "worker.py", "execution_chain.py"} <= boundary_names
     offenders: dict[str, list[str]] = {}
-    for path in sorted(_RUNTIME_ROOT.rglob("*.py")):
+    for path in boundary:
         findings = scan_runtime_source(path.read_text(encoding="utf-8"))
         if findings:
             offenders[str(path.relative_to(_REPO_ROOT))] = findings
-    assert not offenders, f"runtime guard violations: {offenders}"
+    assert not offenders, f"worker boundary guard violations: {offenders}"
 
 
 @pytest.mark.parametrize(
@@ -586,6 +643,28 @@ def test_guard_scanner_allows_docstring_and_services_imports() -> None:
         "    return port.advance(attempt)\n"
     )
     assert scan_runtime_source(source) == []
+
+
+_WORKER_MODULE_INJECTIONS = (
+    "import acp\n",
+    "def _injected(attempt):\n    attempt += 1\n",
+    "def _injected(store):\n    store.transition('j')\n",
+    "def _injected(conn):\n    conn.execute('UPDATE jobs SET status=1')\n",
+)
+
+
+@pytest.mark.parametrize("module_name", ["worker_bootstrap.py", "worker.py", "execution_chain.py"])
+@pytest.mark.parametrize("injection", _WORKER_MODULE_INJECTIONS)
+def test_guard_scanner_catches_violations_injected_into_worker_modules(
+    module_name: str, injection: str
+) -> None:
+    boundary = {path.name: path for path in worker_boundary_modules()}
+    path = boundary[module_name]
+    source = path.read_text(encoding="utf-8")
+    assert scan_runtime_source(source) == [], f"baseline not clean: {path}"
+    assert scan_runtime_source(source + "\n" + injection), (
+        f"scanner missed injected violation in {path}: {injection!r}"
+    )
 
 
 # ---------------------------------------------------------------------------

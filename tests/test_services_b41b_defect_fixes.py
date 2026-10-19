@@ -54,6 +54,7 @@ def _seed(
     status: str,
     *,
     workflow: str = "singlepoint",
+    attempt: int = 1,
 ) -> JobRecord:
     work_dir.mkdir(parents=True, exist_ok=True)
     TaskStorage(work_dir).ensure_layout()
@@ -62,27 +63,24 @@ def _seed(
         spec=_spec(workflow),
         status=JobStatus(status),
         work_dir=str(work_dir),
+        attempt=attempt,
     )
     JobStore(run_root / "acp_jobs.db").create(record)
     return record
 
 
-def _write_state(work_dir: Path, status: str) -> None:
-    (work_dir / "state.json").write_text(
-        json.dumps(
-            {
-                "version": "1.0",
-                "job_name": "b41b",
-                "status": status,
-                "current_stage": None,
-                "stages": {
-                    "single_point": {"status": "completed" if status == "completed" else "failed"}
-                },
-                "completed_at": "2026-10-19T00:00:00+00:00" if status == "completed" else None,
-            }
-        ),
-        encoding="utf-8",
-    )
+def _write_state(work_dir: Path, status: str, *, attempt: int | None = None) -> None:
+    payload = {
+        "version": "1.0",
+        "job_name": "b41b",
+        "status": status,
+        "current_stage": None,
+        "stages": {"single_point": {"status": "completed" if status == "completed" else "failed"}},
+        "completed_at": "2026-10-19T00:00:00+00:00" if status == "completed" else None,
+    }
+    if attempt is not None:
+        payload["attempt"] = attempt
+    (work_dir / "state.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _live_worker(work_dir: Path) -> subprocess.Popen[bytes]:
@@ -112,6 +110,10 @@ def _stop(proc: subprocess.Popen[bytes]) -> None:
 
 def _manager(run_root: Path) -> JobManager:
     return JobManager(run_root=run_root, poll_interval=3600, reconnect_local_workers=True)
+
+
+def _startup_manager(run_root: Path) -> JobManager:
+    return JobManager(run_root=run_root, poll_interval=3600, reconnect_local_workers=False)
 
 
 # --------------------------------------------------------------------------- #
@@ -188,6 +190,88 @@ def test_cross_process_cancelling_row_finalizes_cancelled(tmp_path: Path) -> Non
         fresh = manager.store.get("job-cancelling")
         assert fresh is not None
         assert fresh.status is JobStatus.CANCELLED
+    finally:
+        manager.shutdown()
+
+
+def test_fresh_controller_finalizes_unobserved_local_completion(tmp_path: Path) -> None:
+    """F3 D1: worker finished with no controller and no ``.exit_code`` marker.
+
+    The next controller's startup recovery must read the durable
+    ``state.json`` completion and finalize COMPLETED instead of stamping
+    ``[RESTART_FAILED]`` over a true success.
+    """
+    run_root = tmp_path / "runs"
+    work_dir = run_root / "task"
+    _seed(run_root, work_dir, "job-unobserved", "running")
+    _write_state(work_dir, "completed")
+    assert not (work_dir / ".exit_code").exists()
+
+    manager = _startup_manager(run_root)
+    try:
+        fresh = manager.store.get("job-unobserved")
+        assert fresh is not None
+        assert fresh.status is JobStatus.COMPLETED
+        assert fresh.exit_code == 0
+        assert "[RESTART_FAILED]" not in (fresh.error or "")
+    finally:
+        manager.shutdown()
+
+
+def test_fresh_controller_accepts_archived_attempt_completion(tmp_path: Path) -> None:
+    """F3 D1: the current attempt's receipt was archived by contract B."""
+    run_root = tmp_path / "runs"
+    work_dir = run_root / "task"
+    _seed(run_root, work_dir, "job-archived", "running", attempt=2)
+    archive = work_dir / "WORK" / "00_RUNTIME" / "attempts" / "2"
+    archive.mkdir(parents=True)
+    _write_state(archive, "completed", attempt=2)
+
+    manager = _startup_manager(run_root)
+    try:
+        fresh = manager.store.get("job-archived")
+        assert fresh is not None
+        assert fresh.status is JobStatus.COMPLETED
+        assert fresh.exit_code == 0
+        assert "[RESTART_FAILED]" not in (fresh.error or "")
+    finally:
+        manager.shutdown()
+
+
+def test_fresh_controller_ignores_other_attempt_archived_receipt(tmp_path: Path) -> None:
+    """Attempt fence: an archived receipt for a different attempt is never adopted."""
+    run_root = tmp_path / "runs"
+    work_dir = run_root / "task"
+    _seed(run_root, work_dir, "job-stale-archive", "running", attempt=2)
+    stale = work_dir / "WORK" / "00_RUNTIME" / "attempts" / "1"
+    stale.mkdir(parents=True)
+    _write_state(stale, "completed", attempt=1)
+
+    manager = _startup_manager(run_root)
+    try:
+        fresh = manager.store.get("job-stale-archive")
+        assert fresh is not None
+        assert fresh.status is JobStatus.FAILED
+        assert "[RESTART_FAILED]" in (fresh.error or "")
+    finally:
+        manager.shutdown()
+
+
+def test_fresh_controller_cancelling_local_carries_exit_130_without_restart_marker(
+    tmp_path: Path,
+) -> None:
+    """F3 D2: a local CANCELLING row is confirmed-stopped then CANCELLED/130."""
+    run_root = tmp_path / "runs"
+    work_dir = run_root / "task"
+    _seed(run_root, work_dir, "job-cancel-startup", "cancelling")
+
+    manager = _startup_manager(run_root)
+    try:
+        fresh = manager.store.get("job-cancel-startup")
+        assert fresh is not None
+        assert fresh.status is JobStatus.CANCELLED
+        assert fresh.exit_code == 130
+        assert "[RESTART_FAILED]" not in (fresh.error or "")
     finally:
         manager.shutdown()
 
