@@ -32,6 +32,8 @@
 | `acp_services.contracts.envelope` | `ExecutionEnvelope`, `ExecutionReceipt`, `StorageBinding` | 执行协议与科学闭包（X2 交付物 5） | 独立 worker（todo 30/31/78） | 冻结 |
 | `acp_services.release` | `ReleaseManifest`, `AssetManifest`, `LegacyImportWindow` | 发行与资产（X2 交付物 6） | `acp.scheduler.remote.release` 兼容转发 | 冻结 |
 | `acp_services.science.adapter` | `ScienceProductPort`, `FrameNode`, `FrameAnnotation` | 科学产品与帧 adapter（X2 交付物 4）；消费 `cccp.calculation.requests/results` 与 `acp.results.frames` 形状 | `acp.results` 发布/读取 | 冻结 |
+| `acp_services.data.namespaces` | `NamespaceStore`, `EnsureNamespaceRequest`, `NamespaceRecord`, `ensure_namespace` | Data 命名空间原子绑定（开通）；重复/并发收敛单空间、冲突非静默 | `acp_services.runtime.provisioning` | 冻结 |
+| `acp_services.runtime.provisioning` | `ProvisioningService`, `ProvisioningIntent`, `ProvisioningResult`, `EnvironmentStatePort` | Runtime 开通用例：消费 Workspace 持久意图 → Data 命名空间 → 提交环境状态并审计（失败可对账） | Workspace 环境状态命令面（todo 52 接线） | 冻结 |
 
 ## 明确不在首片允许面
 
@@ -45,6 +47,7 @@
 | 日期 | 符号 | 动作（add/remove） | 理由 | 提交 |
 |---|---|---|---|---|
 | 2026-10-18 | 上表全部（首片） | add | B00-3 首片冻结 | n/a |
+| 2026-10-19 | `acp_services.data.namespaces`、`acp_services.runtime.provisioning` | add | todo 48（B09-1）开通幂等：Data `ensure_namespace` + Runtime 消费 Workspace 意图 | n/a |
 
 ## 追加规则（append-only semantics）
 
