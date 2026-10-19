@@ -81,6 +81,7 @@ from acp.storage.backend import (
 from acp.storage.layout import TaskLayout
 from acp.storage.manifest import ResultManifest
 from acp_services.runtime.freshness import AVAILABILITY_READY
+from acp_services.runtime.lineage import TaskEvidenceBuilder
 from acp_services.runtime.projections import TaskProjectionStore, TaskRowProjection
 
 logger = logging.getLogger(__name__)
@@ -1680,6 +1681,70 @@ def get_task_lineage(task_id: str, request: Request) -> V2LineageResponse:
         upstream=upstream,
         downstream=downstream,
     )
+
+
+# ── Task evidence projection endpoint (B08-5) ──────────────────────────
+
+
+def _local_manifest_products(work_dir: str) -> list[Any]:
+    """Read a task's local ``RESULT/result_manifest.json`` products (read-only).
+
+    Best-effort: a remote or unreadable task simply yields no products so the
+    projection degrades to its input edges instead of raising on the query path.
+    """
+    if not work_dir:
+        return []
+    try:
+        from acp.results.manifest import load_result_manifest
+
+        manifest = load_result_manifest(Path(work_dir))
+        return list(manifest.products) if manifest is not None else []
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        logger.warning("lineage projection: manifest read skipped for %s", work_dir)
+        return []
+
+
+@router.get("/tasks/{task_id}/lineage/projection")
+def get_task_lineage_projection(task_id: str, request: Request) -> dict[str, Any]:
+    """Return the read-only research evidence projection for a task (B08-5).
+
+    Additive to the T12 lineage endpoint: the platform-side projection models the
+    five provenance edge types (uses / produces / derives / revision / reuses),
+    preserves atom/frame/mode mappings and carries the documented C02 derived
+    field map.  Strictly read-only — it never writes a scientific result, never
+    advances job state and constructs no second state machine.
+    """
+    manager = _manager(request)
+    try:
+        record = manager.store.get(task_id)
+    except (json.JSONDecodeError, sqlite3.Error, ValueError, TypeError):
+        logger.warning("lineage projection: unreadable task %s, returning empty", task_id)
+        return TaskEvidenceBuilder(task_id).build().to_dict()
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+    builder = TaskEvidenceBuilder(task_id)
+    builder.add_node(task_id, kind="task", label=record.spec.task_name)
+
+    spec_input = record.spec.input
+    if isinstance(spec_input, dict):
+        for ref_id, relation in _extract_upstream_refs(spec_input):
+            builder.add_use(task_id, ref_id, relation=relation)
+
+    for product in _local_manifest_products(record.work_dir):
+        kind = getattr(product.kind, "value", str(product.kind))
+        metadata = getattr(product, "metadata", None)
+        evidence: dict[str, Any] = {"product_id": product.id, "label": product.label}
+        if metadata:
+            evidence["metadata"] = dict(metadata)
+        builder.add_produce(
+            task_id,
+            product.path or product.id,
+            role=kind,
+            evidence=evidence,
+        )
+
+    return builder.build().to_dict()
 
 
 @router.post("/tasks/orphans/purge")
