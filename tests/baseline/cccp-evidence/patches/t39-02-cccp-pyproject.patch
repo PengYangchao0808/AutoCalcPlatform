@@ -1,0 +1,57 @@
+diff --git a/packaging/cccp/pyproject.toml b/packaging/cccp/pyproject.toml
+new file mode 100644
+--- /dev/null
++++ b/packaging/cccp/pyproject.toml
+@@ -0,0 +1,52 @@
++[build-system]
++requires = ["setuptools>=65.0", "wheel"]
++build-backend = "setuptools.build_meta"
++
++[project]
++name = "cccp"
++version = "0.2.0"
++description = "Computational Chemistry Connection Package — standalone QC/science library (no acp/Web/IAM/billing dependencies)"
++requires-python = ">=3.10"
++license = {text = "MIT"}
++authors = [
++    {name = "QCcalc Team"}
++]
++keywords = ["computational-chemistry", "conformers", "molecular-modeling", "quantum-chemistry"]
++classifiers = [
++    "Development Status :: 4 - Beta",
++    "Intended Audience :: Science/Research",
++    "License :: OSI Approved :: MIT License",
++    "Programming Language :: Python :: 3.10",
++    "Topic :: Scientific/Engineering :: Chemistry",
++]
++
++dependencies = [
++    "numpy>=2.1.0",
++    "rdkit>=2022.09.1",
++    "pyyaml>=6.0",
++    "scipy>=1.10",
++    "matplotlib>=3.7",
++    "openpyxl>=3.1",
++]
++
++[project.optional-dependencies]
++nmr = [
++    "nmrglue>=0.10",
++    "openbabel>=3.1",
++    "qml>=0.4",
++]
++
++# `cccp` is the sole owner of every path under `cccp/`; it never discovers
++# `acp*`/`acp_services*` (those belong to the `acp` compatibility distribution)
++# and it publishes no console script (no `python -m cccp`, no `acp` entry point).
++[tool.setuptools.packages.find]
++where = ["src"]
++include = ["cccp*"]
++exclude = ["acp*", "acp_services*"]
++
++# DP5/FCHL model artifacts ship as package data at their single location
++# (T55); `cccp/py.typed` must travel too. The two license/notice files
++# (`LICENSE-DP5`, `NOTICE.md`) live inside `model_assets/` and ship with it.
++[tool.setuptools.package-data]
++"cccp.analysis.nmr" = ["model_assets/*"]
++"cccp" = ["py.typed"]
