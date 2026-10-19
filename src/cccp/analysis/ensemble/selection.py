@@ -21,11 +21,11 @@ from cccp.analysis.ensemble.thermo import (
     s_mix_kcal_per_mol_kelvin,
     t_s_mix_kcal_per_mol,
 )
-from cccp.utils.constants import HARTREE_TO_KCAL
+from cccp.utils.constants import HARTREE_TO_KCAL, KELVIN_TO_HARTREE
 
 logger = logging.getLogger(__name__)
 
-_K_B_HARTREE_PER_KELVIN = 3.166811563e-6
+_K_B_HARTREE_PER_KELVIN = KELVIN_TO_HARTREE
 
 
 def boltzmann_weights(gibbs_values: list[float], temperature_k: float) -> list[float]:
