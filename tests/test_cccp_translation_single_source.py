@@ -5,8 +5,9 @@ template unit cases, summary-vs-actual-route consistency (display ==
 execution), a no-duplicate-defaults guard over the batch effective config,
 and the A5 acceptance rows — xTB argv/control normalization single-sourced
 through ``cccp.utils.solvent_map`` / ``cccp.qc.interfaces.xtb_scan``, and
-explicit consistency assertions across the three upstream ACP callers that
-previously hand-built ``"! "`` route lines.
+explicit consistency assertions across the three upstream callers that
+previously hand-built ``"! "`` route lines (T50 mirrored the Confsearch
+caller's pin onto its CCCP implementation path).
 """
 
 from __future__ import annotations
@@ -271,11 +272,13 @@ class TestSummaryConsistency:
 
 # ── no-duplicate-defaults guard ──────────────────────────────────────────
 #
-# Scope note (evidence task-25): the ``_base_route_extras`` template maps in
-# ``acp/workflows/energy_shared.py`` / ``acp/confsearch/shared/helpers.py``
-# are TEST-PINNED CENSO template projections (``tests/test_acp_censo_p5_acceptance.py``
-# asserts the uppercase DEFGRID spellings and imports ``_base_route_extras``);
-# their default-omission semantics differ from ``keyword_registry.resolve``
+# Scope note (evidence task-25; T50): the ``_base_route_extras`` template maps
+# reached via ``acp/workflows/energy_shared.py`` and
+# ``acp/confsearch/shared/helpers.py`` (T50: helpers forwards the CCCP map from
+# ``cccp.analysis.ensemble.levels``) are TEST-PINNED CENSO template projections
+# (``tests/test_acp_censo_p5_acceptance.py`` asserts the uppercase DEFGRID
+# spellings and imports ``_base_route_extras``); their default-omission
+# semantics differ from ``keyword_registry.resolve``
 # and must stay byte-identical.  The guard below covers the summary/execution
 # translation path, where a private keyword table is forbidden outright.
 
@@ -401,7 +404,9 @@ class TestNoWorkflowBackendSyntax:
 _UPSTREAM_CALLERS = (
     ("src/acp/calculations/batch/effective_config.py", "render_orca_opt"),
     ("src/acp/workflows/energy_shared.py", "render_censo_template_lines"),
-    ("src/acp/confsearch/shared/helpers.py", "render_censo_template_lines"),
+    # T50: helpers.py now same-object-forwards resolve_levels to this CCCP
+    # module; mirror the pin onto the real construction point.
+    ("src/cccp/analysis/ensemble/levels.py", "render_censo_template_lines"),
 )
 
 
