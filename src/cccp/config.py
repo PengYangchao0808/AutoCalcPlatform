@@ -27,6 +27,33 @@ USER_CONFIG_NAME = ".cccp.yaml"
 _LEGACY_DEFAULT_CONFIG_NAME = "conformer_search.yaml"
 _LEGACY_USER_CONFIG_NAME = ".conformer_search.yaml"
 
+# ---------------------------------------------------------------------------
+# Configuration domains (C07 — science vs Services platform separation)
+# ---------------------------------------------------------------------------
+# ACP's on-disk YAML layout merges two ownership domains into one mapping:
+#
+# 1. SCIENCE domain (CCCP owns): top-level sections ``executables``,
+#    ``resources``, ``theory``, ``thermo``, ``mrrho_settings``, ``censo``,
+#    ``nmr``, ``protocols``, ``mechanism`` and ``optimization_control`` —
+#    plus any unknown future keys.  CCCP parses and validates these.
+# 2. PLATFORM domain (Services owns): :data:`PLATFORM_CONFIG_SECTIONS`.
+#    ``cluster`` carries ``enabled``/``execution_mode``/``type``/``queue``/
+#    ``walltime``/``extra_flags``/``nodes``/``local``/``local_retention`` etc.
+#    CCCP treats the whole section as an **opaque, passively-merged**
+#    mapping: it never parses remote nodes, never validates
+#    ``execution_mode``, and never imports the Services implementation
+#    (``acp`` / ``acp_services``).  The authoritative platform schema and
+#    validation (``RemoteExecutionConfig`` / ``RemoteNode`` /
+#    ``acp_services.contracts.config_validation``), the ``acp init`` wizard
+#    and the platform YAML defaults live in the upper layer, which performs
+#    the final platform assembly.
+#
+# ``load_config`` remains the **legacy full-config compatibility entry
+# point** (science ∪ platform, unchanged output); science-only callers use
+# :func:`load_science_config`.  The built-in platform defaults here are a
+# transitional CCCP-side baseline only — see :func:`get_platform_defaults`.
+PLATFORM_CONFIG_SECTIONS: frozenset[str] = frozenset({"cluster"})
+
 
 def _find_project_root() -> Path | None:
     """
@@ -86,7 +113,8 @@ def load_config(
     defaults_path: Path | None = None
 ) -> dict[str, Any]:
     """
-    Load configuration from multiple sources, merged in order (latest wins):
+    Load the LEGACY FULL configuration from multiple sources, merged in order
+    (latest wins):
 
     1. Built-in defaults (config/defaults.yaml or _get_default_config())
     2. User home config (~/.cccp.yaml, falls back to ~/.conformer_search.yaml)
@@ -94,6 +122,14 @@ def load_config(
     4. Explicit config file (--config)
     5. Environment variable overrides (CONFSEARCH_*)
     6. Command-line parameter overrides
+
+    Transitional contract: this is the compatibility assembly of both
+    ownership domains.  It returns the science sections plus the platform
+    sections (:data:`PLATFORM_CONFIG_SECTIONS`) exactly as before the split;
+    the platform section is merged passively and never parsed here.  New
+    science-only callers should use :func:`load_science_config`; platform
+    callers should read :func:`load_platform_section` and hand it to the
+    Services parser (``RemoteExecutionConfig.from_config_dict``).
 
     Args:
         config_path: Explicit config file path (--config)
@@ -169,8 +205,68 @@ def load_config(
     return config
 
 
-def _get_default_config() -> dict[str, Any]:
-    """Get built-in default configuration."""
+def split_config_domains(
+    config: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split a merged configuration into ``(science, platform)``.
+
+    The platform mapping is a verbatim shallow copy of the
+    :data:`PLATFORM_CONFIG_SECTIONS` present in *config*; no CCCP-side
+    parsing, coercion or validation is applied to it.  Unknown science keys
+    stay in the science mapping.
+
+    Args:
+        config: A merged configuration dictionary (e.g. from
+            :func:`load_config`).
+
+    Returns:
+        Tuple of ``(science_config, platform_config)``.
+    """
+    platform = {key: config[key] for key in PLATFORM_CONFIG_SECTIONS if key in config}
+    science = {key: value for key, value in config.items() if key not in PLATFORM_CONFIG_SECTIONS}
+    return science, platform
+
+
+def load_science_config(
+    config_path: Path | None = None,
+    overrides: dict[str, Any] | None = None,
+    defaults_path: Path | None = None,
+) -> dict[str, Any]:
+    """Load the SCIENCE-domain configuration (minimal-install entry point).
+
+    Uses the identical six-source merge order as :func:`load_config`, then
+    strips the platform sections.  A science-only CCCP install therefore
+    needs no Services platform layer: this function never imports
+    ``acp`` / ``acp_services`` and never touches ``cluster``.
+    """
+    config = load_config(
+        config_path=config_path, overrides=overrides, defaults_path=defaults_path
+    )
+    science, _ = split_config_domains(config)
+    return science
+
+
+def load_platform_section(
+    config_path: Path | None = None,
+    overrides: dict[str, Any] | None = None,
+    defaults_path: Path | None = None,
+) -> dict[str, Any]:
+    """Return only the PLATFORM-domain sections of the merged config.
+
+    The result is an opaque pass-through mapping; the upper (Services)
+    layer owns parsing and validation.  Kept alongside
+    :func:`load_science_config` so every public entry point's returned
+    fields are explicit.
+    """
+    config = load_config(
+        config_path=config_path, overrides=overrides, defaults_path=defaults_path
+    )
+    _, platform = split_config_domains(config)
+    return platform
+
+
+def get_science_defaults() -> dict[str, Any]:
+    """Built-in SCIENCE-domain defaults (no platform sections)."""
     return {
         'executables': {
             'orca': {
@@ -437,6 +533,25 @@ def _get_default_config() -> dict[str, Any]:
                 'final_opt_sp': {},
             },
         },
+        'optimization_control': {
+            # 'auto' = infer Recalc_Hess from molecular elements (see defaults.yaml).
+            'recalc_hess': 'auto',
+            'timeout': {
+                'default_seconds': 864000
+            },
+        },
+    }
+
+
+def get_platform_defaults() -> dict[str, Any]:
+    """Built-in PLATFORM-domain defaults (the ``cluster`` section).
+
+    Transitional CCCP-side baseline only.  The authoritative platform
+    defaults, platform YAML section, ``acp init`` wizard and ``RemoteNode``
+    validation are owned by the Services layer (B integration batch); the
+    upper layer assembles the final platform config.
+    """
+    return {
         'cluster': {
             'enabled': False,
             'execution_mode': 'local',
@@ -480,17 +595,17 @@ def _get_default_config() -> dict[str, Any]:
                 'vacuum_after_db_cleanup': False,
             },
         },
-        'optimization_control': {
-            # 'auto' = infer Recalc_Hess interval from molecular elements:
-            # light (CHON+halogens) → initial Hessian only (no recalc);
-            # P/S/Si/B-only → 10 (legacy default); metals/other → 7 (conservative).
-            # Set to an integer (e.g. 10) to pin the legacy behaviour site-wide.
-            'recalc_hess': 'auto',
-            'timeout': {
-                'default_seconds': 864000
-            }
-        }
     }
+
+
+def _get_default_config() -> dict[str, Any]:
+    """LEGACY full-config defaults (science ∪ platform), unchanged output.
+
+    Compatibility view over :func:`get_science_defaults` and
+    :func:`get_platform_defaults`; callers that want a single domain use
+    those directly.
+    """
+    return _merge_configs(get_science_defaults(), get_platform_defaults())
 
 
 def _merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -584,12 +699,29 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
-    """
-    Validate configuration and apply defaults.
-    
+    """Validate a full (science ∪ platform) configuration in place.
+
+    Legacy full-config entry: runs science-domain validation, then the
+    CCCP-side platform-section normalization, preserving the exact pre-split
+    behaviour of :func:`load_config`.
+
     Args:
         config: Configuration dictionary
-        
+
+    Returns:
+        Validated configuration
+    """
+    config = _validate_science_config(config)
+    _validate_platform_section(config)
+    return config
+
+
+def _validate_science_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Validate the SCIENCE domain and apply science defaults in place.
+
+    Args:
+        config: Configuration dictionary
+
     Returns:
         Validated configuration
     """
@@ -701,18 +833,19 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         )
         references[nucleus] = default_value
 
-    _validate_local_retention(config)
-
     return config
 
 
-def _validate_local_retention(config: dict[str, Any]) -> None:
-    """Validate the ``cluster.local_retention`` section (Phase 5B).
+def _validate_platform_section(config: dict[str, Any]) -> None:
+    """Normalize the CCCP-side baseline of the PLATFORM ``cluster`` section.
 
-    Ensures retention windows are positive integers and that the disk
-    cleanup threshold stays below the skip threshold.  Coerces/repairs
-    bad values in place with a warning rather than failing hard — config
-    load must never crash the server.
+    The only platform-aware validation CCCP performs: it normalizes
+    ``cluster.local_retention`` so the legacy full-config entry
+    (:func:`load_config`) keeps its exact pre-split output.  It never parses
+    remote nodes or ``execution_mode`` — that authority stays in Services
+    (``RemoteExecutionConfig`` / ``acp_services.contracts.config_validation``).
+    Bad values are coerced/repair in place with a warning rather than failing
+    hard — config load must never crash the server.
     """
     cluster = config.setdefault('cluster', {})
     section = cluster.setdefault('local_retention', {})
