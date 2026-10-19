@@ -5758,8 +5758,20 @@ class JobManager:
                 )
                 continue
             self._cleanup_local_orphans(record)
+            if self._has_live_task_process(record):
+                logger.warning(
+                    "CANCELLING job %s still has live processes after stop sweep; "
+                    "keeping CANCELLING for the next confirmation pass",
+                    record.id,
+                )
+                continue
             self._finalize_restarted_job(
-                record, JobStatus.CANCELLED, restart_marker, "job.cancelled"
+                record,
+                JobStatus.CANCELLED,
+                None,
+                "job.cancelled",
+                exit_code=130,
+                reason="confirmed_local_stop",
             )
             logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
 
@@ -5816,7 +5828,19 @@ class JobManager:
                     continue
                 # Restart race guard: the workflow may have finished exactly
                 # as the server went down — probe disk before failing (Q12).
-                if self._disk_shows_completed(Path(record.work_dir), record.attempt):
+                # Never accept completion while a live task process remains:
+                # an alive worker is either a peer (skipped above) or an
+                # orphan that the destructive-startup path terminates below.
+                evidence: int | None = None
+                if not self._is_remote_job(record) and not self._has_live_task_process(record):
+                    evidence = self._local_attempt_completion_exit_code(record)
+                if evidence == 0 or self._disk_shows_completed(
+                    Path(record.work_dir), record.attempt
+                ):
+                    result = self._collect_result(record)
+                    # Scope the reconcile retry to this startup finalization:
+                    # the idempotent success side effects below mark it done.
+                    result["terminal_side_effects_done"] = False
                     completed = self._cas_write(
                         record,
                         expected_status=record.status,
@@ -5824,15 +5848,16 @@ class JobManager:
                         exit_code=0,
                         progress=1.0,
                         completed_at=_utc_now_iso(),
-                        result=self._collect_result(record),
+                        result=result,
                         decide=lambda fresh: None,
                     )
                     if completed is None:
                         continue
                     record = completed
-                    self._write_job_json(record)
                     self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
-                    self._sync_task_status(record)
+                    # Emit job.completed + artifact capture exactly once,
+                    # identical to the poll-path terminal side effects.
+                    self._retry_terminal_side_effects(record)
                     logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
                     continue
                 self._cleanup_local_orphans(record)
@@ -5841,6 +5866,7 @@ class JobManager:
                     JobStatus.FAILED,
                     restart_marker + self._restart_resume_hint(record),
                     "job.failed",
+                    exit_code=evidence,
                 )
                 logger.info("Marked interrupted job %s as FAILED", record.id)
 
@@ -5891,23 +5917,33 @@ class JobManager:
         self,
         record: JobRecord,
         status: JobStatus,
-        error: str,
+        error: str | None,
         event_type: str,
+        *,
+        exit_code: int | None = None,
+        reason: str = "server_restart",
     ) -> None:
         """Persist a restart-finalised state across DB, disk, and events.
 
         Clears the stale PID and refreshes the database row, task index,
         ``job.json``, on-disk ``task.json``, and ``events.jsonl`` so every
-        surface reports the same terminal status.
+        surface reports the same terminal status.  ``exit_code`` is written
+        only when the caller has positive evidence (e.g. a confirmed local
+        cancel), never as a placeholder for "unknown".
         """
+        fields: dict[str, Any] = {
+            "pid": None,
+            "error": error,
+            "completed_at": _utc_now_iso(),
+        }
+        if exit_code is not None:
+            fields["exit_code"] = exit_code
         final = self._cas_write(
             record,
             expected_status=record.status,
             status=status,
-            pid=None,
-            error=error,
-            completed_at=_utc_now_iso(),
             decide=lambda fresh: None,
+            **fields,
         )
         if final is None:
             return
@@ -5928,7 +5964,7 @@ class JobManager:
                 event_type,
                 job_id=record.id,
                 error=error,
-                reason="server_restart",
+                reason=reason,
                 attempt=record.attempt,
             )
         except OSError:
@@ -5958,6 +5994,88 @@ class JobManager:
             )
         except OSError:
             logger.debug("task.json refresh failed for %s", work_dir, exc_info=True)
+
+    def _local_attempt_completion_exit_code(self, record: JobRecord) -> int | None:
+        """Exit code proven by the *current* local attempt's durable receipts.
+
+        A local worker that finished after its controller exited writes no
+        ``.exit_code`` marker (that sentinel is wrapper/remote-only), so
+        startup recovery must read the workflow receipt instead.  Evidence is
+        accepted only for the row's current attempt:
+
+        1. ``.exit_code`` / live ``state.json`` (delegated to the runner);
+        2. the closed attempt's archived receipt under
+           ``WORK/00_RUNTIME/attempts/<n>/`` (in-place rerun contract B);
+        3. a ``RESULT/result_manifest.json`` declaring ``completed``.
+
+        A receipt declaring a different attempt, or a still-running stage
+        map, yields ``None`` (never a fabricated success).
+        """
+        evidence = self.runner.disk_completion_exit_code(record)
+        if evidence is not None:
+            return evidence
+
+        archive = (
+            Path(record.work_dir)
+            / "WORK"
+            / "00_RUNTIME"
+            / "attempts"
+            / str(record.attempt)
+        )
+        archived_marker = archive / ".exit_code"
+        try:
+            marker = archived_marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            marker = ""
+        if marker:
+            try:
+                return int(marker)
+            except ValueError:
+                logger.debug("Ignoring non-numeric archived .exit_code in %s", archive)
+
+        state_paths: list[Path] = []
+        root_state = archive / "state.json"
+        if root_state.is_file():
+            state_paths.append(root_state)
+        else:
+            state_paths.extend(
+                sorted(archive.rglob("state.json"), key=lambda p: len(p.relative_to(archive).parts))
+            )
+        for state_path in state_paths:
+            try:
+                data = json.loads(state_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            declared = data.get("attempt")
+            if isinstance(declared, int) and not isinstance(declared, bool):
+                if declared != record.attempt:
+                    continue
+            status = data.get("status")
+            if status == "completed":
+                return 0
+            if status == "failed":
+                return 1
+            stages = data.get("stages")
+            if isinstance(stages, dict) and stages:
+                if all(
+                    isinstance(info, dict) and info.get("status") in ("completed", "skipped")
+                    for info in stages.values()
+                ):
+                    return 0
+
+        for manifest_path in (
+            Path(record.work_dir) / "RESULT" / "result_manifest.json",
+            archive / "RESULT" / "result_manifest.json",
+        ):
+            try:
+                payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(payload, dict) and payload.get("status") == "completed":
+                return 0
+        return None
 
     def _disk_shows_completed(self, work_dir: Path, attempt: int | None = None) -> bool:
         """Probe disk for a job that finished exactly as the server died.
