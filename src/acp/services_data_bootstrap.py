@@ -125,6 +125,10 @@ from acp_services.data.transfer import (
 
 logger = logging.getLogger(__name__)
 
+# Boundary adapters are best-effort, but a programming error must surface
+# rather than be downgraded to "transport failed, retry later".
+_PROGRAMMING_ERRORS: tuple[type[BaseException], ...] = (TypeError, AttributeError, NameError)
+
 __all__ = [
     "build_data_resource_port",
     "build_read_only_reader",
@@ -731,6 +735,8 @@ class _TransferSourceAdapter:
             return None
         try:
             return factory(job_id)
+        except _PROGRAMMING_ERRORS:
+            raise
         except Exception:  # pragma: no cover - factory failure is a transport failure
             logger.warning("transfer fetcher factory failed for %s", job_id, exc_info=True)
             return None
@@ -776,6 +782,8 @@ class _TransferSourceAdapter:
             return None
         try:
             return info_fn(record, relative_path)
+        except _PROGRAMMING_ERRORS:
+            raise
         except Exception:
             return None
 
