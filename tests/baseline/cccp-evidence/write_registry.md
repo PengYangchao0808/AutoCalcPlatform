@@ -213,8 +213,8 @@ git -C "$REPO" worktree remove "$WT" --force
 
 | 文件 / 符号 | 写权 | 依据 | 转发·身份·导出 | provider→consumer | 前置 | 验收 | 删除/回退 | applied_commit |
 |---|---|---|---|---|---|---|---|---|
-| `pyproject.toml` | `B请求` | 共享打包（B 为集成写者）；C08 交精确打包改动 | RT-N/A | C(请求)→B | T39 | B 应用后 `pytest` + `python3.11 -m build` 证据 | D-KEEP | pending |
-| `requirements-node.txt` | `B请求` | 远端节点运行时依赖同步（T42） | RT-N/A | C(请求)→B | T42 | `pip install -r` 于节点环境 PASS | D-KEEP | pending |
+| `pyproject.toml` | `B请求` | 共享打包（B 为集成写者）；C08 交精确打包改动 | RT-N/A | C(请求)→B | T39 | B 应用后 `pytest` + `python3.11 -m build` 证据 | D-KEEP | **部分 integrated**：首批 c39a 已应用 @`8b9e0e6`（live `pyproject.toml:97`；T54 M1 wheel 8/8 资产实证）；完整发行 t39-01/02 **pending-B**（t39-01 锚点漂移须重锚，T54 §3.3） |
+| `requirements-node.txt` | `B请求` | 远端节点运行时依赖同步（T42） | RT-N/A | C(请求)→B | T42 | `pip install -r` 于节点环境 PASS | D-KEEP | **integrated** @`e021ad3`（typing-extensions>=4.1；T54 3×venv `pip check` PASS 替代证据；节点实机 NOT_VERIFIED） |
 | `src/cccp/py.typed`、cccp `LICENSE`/`NOTICE`、发行清单 | `C直写` | C08 独立 wheel/资产/许可 | RT-N/A | C→B(集成) | T39 | A-DIR + wheel 安装证据 | D-KEEP | pending |
 | `src/cccp/plugin/**`（发现元数据/启用/加载边界/SDK/示例） | `C直写` | C09 一个可信插件样板 | RT-N/A | C→B | T18/T56 | A-DIR + 契约检查 | D-KEEP | pending |
 
@@ -236,7 +236,7 @@ git -C "$REPO" worktree remove "$WT" --force
 | `scripts/check_grep_gates.py`（4 pin）、`scripts/verify_cccp_isolation.py` | `B请求` | 全局护栏脚本；pin 禁禁用 | RT-N/A | C(请求)→B | T48 | `python3.11 scripts/check_grep_gates.py` PASS | D-KEEP | pending |
 | 根 `README.md`、`AGENTS.md`（root + nested）、`docs/**`（含主方案、索引、Plan_3） | `B请求` | 根文档/主方案（B 表第 7 行） | RT-N/A | C(请求)→B | 各波 | B 应用后文档一致 | D-KEEP | pending |
 | `src/acp/scheduler/{stage_tasks,registration,job_edit,store,events}.py`、`scheduler/remote/script_gen.py` | `B补丁` | T2 registry-string/动态 provider/远端允许集；平台调度 | RT-CONV（保留调度预建文件全集，ANTI #11） | C→B | T3/T7 | A-PATCH + A-DIR | D-KEEP | pending |
-| `tests/test_packaging_assets.py`（`test_package_data_covers_all_nmr_model_assets` / `test_critical_nmr_assets_exist` / `_CRITICAL_ASSETS`） | `B请求`（打包测试） | **B请求补登（T55）**：T55 将 8 资产迁至 `src/cccp/analysis/nmr/model_assets/`；该共享打包测试仍指旧 `src/acp/nmr/models/`，须与 `pyproject.toml` 首批补丁（§4.8）**同批**应用（补丁：`patches/t55-c39a-packaging-test.patch`）。**T50/T51 reconciliation**：本行 T55 产生时补登，T50/T51 汇总时并入共享打包测试清单（原 T5 registry 未含此文件） | RT-N/A | C(请求)→B | T39/T40a（B40a） | B 应用两补丁后 `pytest tests/test_packaging_assets.py` 全绿；两态证据见 `build_spec_first_batch.md §1d` + T55 evidence | D-KEEP | pending |
+| `tests/test_packaging_assets.py`（`test_package_data_covers_all_nmr_model_assets` / `test_critical_nmr_assets_exist` / `_CRITICAL_ASSETS`） | `B请求`（打包测试） | **B请求补登（T55）**：T55 将 8 资产迁至 `src/cccp/analysis/nmr/model_assets/`；该共享打包测试仍指旧 `src/acp/nmr/models/`，须与 `pyproject.toml` 首批补丁（§4.8）**同批**应用（补丁：`patches/t55-c39a-packaging-test.patch`）。**T50/T51 reconciliation**：本行 T55 产生时补登，T50/T51 汇总时并入共享打包测试清单（原 T5 registry 未含此文件） | RT-N/A | C(请求)→B | T39/T40a（B40a） | B 应用两补丁后 `pytest tests/test_packaging_assets.py` 全绿；两态证据见 `build_spec_first_batch.md §1d` + T55 evidence | D-KEEP | **integrated** @`8b9e0e6`（B 应用 t55-c39a-packaging-test + c39a 同批；T51 复核 `pytest tests/test_packaging_assets.py` = 7 passed，2026-10-19） |
 
 ## 5. 覆盖交叉核对（T2 台账 acp 文件 ↔ 本表行）
 
@@ -301,5 +301,14 @@ git -C "$REPO" worktree remove "$WT" --force
 
 - **首片目标未定**（T3 未完成）：§4.1 按默认候选序（Confsearch）预留；T3 裁定后按 §12.1 单切片切换更新该组行。
 - **`results/`、`io/`、`core/` 混合文件内的科学函数**（`orca_parser.py`/`frequencies.py`/`models.py`）：本表按 T5 规则记 `B补丁`（混合文件永不直改）；若 B 按 B 表第 4 行「登记移交后才转移文件写权」将其登记移交，则改记 `C直写` 并回填 `applied_commit`。
-- **`applied_commit` 全列 `pending`**：C 尚未开始 T7+ 实施；本表在 C 提交补丁时记 `delivered`（provider 基线），B 应用后记 `integrated`（consumer 提交）。
+- **`applied_commit` 全列 `pending`**：C 尚未开始 T7+ 实施；本表在 C 提交补丁时记 `delivered`（provider 基线），B 应用后记 `integrated`（consumer 提交）。（历史陈述，T5 时点；T51 起逐行演进，见 §7。）
 - **科学软件真实运行**一律 `NOT_VERIFIED`（T2 口径），登记表不将其计为验收通过。
+
+## 7. T51 汇总时点 reconciliation（2026-10-19，候选 `355d96f`）
+
+> 仅登记有 B 应用提交 + 测试记录的行；其余行状态不变（多数 `delivered`/`pending` 如旧）。全文见 `c10-final-evidence-index.md` §3。
+
+- **integrated（3 处）**：§4.8 `pyproject.toml` 首批 c39a 部分 @`8b9e0e6`；§4.8 `requirements-node.txt` @`e021ad3`；§4.10 `tests/test_packaging_assets.py` @`8b9e0e6`（T51 复核 7 passed）。
+- **applied in-tree（C 迁移提交直接改写）**：`src/acp/calculations/tsmode/contracts.py` re-export（t23 patch 语义已入 `dfc192e`；T54 反向 dry-run APPLIED）。
+- **pending-B 显式保持 open**：t15（×2）/t17/t18（×3）/t19/t21（×2）/t24（×5）/t52 补丁（T54 反向 dry-run 全 NOT_APPLIED）；t39-01/02（t39-01 锚点漂移须重锚）；全部 B补丁 混合文件行的 B 接线未应用。
+- **不代记 B 验收**：B 权威表（`tests/baseline/services-evidence/`）由 B 自行回填。
