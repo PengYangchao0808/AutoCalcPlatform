@@ -51,12 +51,13 @@ from cccp.calculation.results import MdSamplingPayload
 from cccp.calculation.tasks.clustering import run_clustering
 from cccp.calculation.tasks.md_sampling import run_md_sampling
 from cccp.calculation.tasks.optimize import run_optimize
+from cccp.utils.constants import KELVIN_TO_HARTREE
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz_multiframe
 
 logger = logging.getLogger(__name__)
 
 
-_K_B_HARTREE_PER_KELVIN = 3.166811563e-6
+_K_B_HARTREE_PER_KELVIN = KELVIN_TO_HARTREE
 
 
 _PRECHECK_SAMPLE_STEP = 10

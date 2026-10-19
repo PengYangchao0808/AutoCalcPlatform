@@ -13,12 +13,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from cccp.utils.constants import HARTREE_TO_KCAL
+from cccp.utils.constants import HARTREE_TO_KCAL, KELVIN_TO_HARTREE
 
 logger = logging.getLogger(__name__)
 
-#: Boltzmann constant in Hartree per Kelvin (synced with energy_shared.py).
-_K_B_HARTREE_PER_KELVIN = 3.166811563e-6
+#: Boltzmann constant in Hartree per Kelvin (canonical source, ANTI #9).
+_K_B_HARTREE_PER_KELVIN = KELVIN_TO_HARTREE
 
 #: Tolerance (Hartree) for the rank1-vs-full-mixing-formula cross-check.
 _CROSS_CHECK_TOLERANCE_HARTREE = 1e-8

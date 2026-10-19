@@ -4,9 +4,14 @@ Relocated verbatim from ``acp/confsearch/shared/boltzmann.py`` (plan todo 21,
 C04-s2; T5 write-registry §4.4 ``C直写`` 移交).  The ACP path
 ``acp.confsearch.shared.boltzmann`` re-exports these same objects.
 
-Constants keep their **original values** (T15/T34 convergence policy: this
-module's ``HARTREE_TO_KCAL``/``_RGAS_KCAL_MOL_K`` are same-precision copies
-converged at T34 — do not merge or change precision here).
+Constant policy (T15/T34):
+
+* ``HARTREE_TO_KCAL`` is **not** redefined here — it is imported from the
+  canonical single source :mod:`cccp.utils.constants` (same-value convergence,
+  T15 §1 S4 / T21 relay; ``is``-identity holds).
+* ``_RGAS_KCAL_MOL_K`` keeps its original **different-precision** value
+  (``0.001987204258``); T34 policy forbids merging it with the canonical
+  ``GAS_CONSTANT_KCAL_PER_MOL_K``.
 """
 
 from __future__ import annotations
@@ -14,7 +19,8 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-HARTREE_TO_KCAL = 627.5094740631
+from cccp.utils.constants import HARTREE_TO_KCAL
+
 _KCAL_PER_HARTREE = HARTREE_TO_KCAL
 _RGAS_KCAL_MOL_K = 0.001987204258
 
