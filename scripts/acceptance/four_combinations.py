@@ -165,11 +165,25 @@ def _probe_service(base: str) -> dict[str, Any]:
     jobs_code, jobs = _get(base, "/api/v1/jobs")
     detail_code, _ = _get(base, "/api/v1/jobs/__missing__/detail")
     availability_code, _ = _get(base, "/api/v1/jobs/__missing__/availability")
+    workflow_items = (
+        workflows.get("workflows")
+        if isinstance(workflows, dict)
+        else workflows
+        if isinstance(workflows, list)
+        else []
+    )
     workflow_ids = [
-        str(item.get("id"))
-        for item in (workflows if isinstance(workflows, list) else [])
-        if isinstance(item, dict) and item.get("id")
+        str(item.get("id") or item.get("name"))
+        for item in (workflow_items or [])
+        if isinstance(item, dict) and (item.get("id") or item.get("name"))
     ]
+    if isinstance(jobs, dict):
+        raw_jobs = jobs.get("jobs") or jobs.get("items") or []
+    elif isinstance(jobs, list):
+        raw_jobs = jobs
+    else:
+        raw_jobs = []
+    job_items = [item for item in raw_jobs if isinstance(item, dict)]
     ok = (
         status_code == 200
         and workflows_code == 200
@@ -183,6 +197,7 @@ def _probe_service(base: str) -> dict[str, Any]:
         "workflows_count": len(workflow_ids),
         "workflow_ids": workflow_ids,
         "jobs_code": jobs_code,
+        "jobs_count": len(job_items),
         "detail_missing_code": detail_code,
         "availability_missing_code": availability_code,
         "status_keys": sorted(status.keys()) if isinstance(status, dict) else [],
@@ -199,7 +214,7 @@ def _legacy_commands() -> dict[str, list[str]]:
         "XtbPathSearch": ["run", "XtbPathSearch"],
         "XtbConstrainedOpt": ["run", "XtbConstrainedOpt"],
         "tsmode": ["run", "tsmode"],
-        "nmr": ["run", "nmr", "--input", "CCO"],
+        "nmr": ["run", "nmr"],
     }
 
 
