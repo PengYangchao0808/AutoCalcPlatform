@@ -41,6 +41,7 @@ from acp_services.runtime.errors import WorkerError
 __all__ = [
     "ReceiptRejectedError",
     "ReceiptVerdict",
+    "advance_job_from_worker_result",
     "advance_job_state",
     "verify_receipt",
 ]
@@ -140,6 +141,25 @@ def verify_receipt(
             "receipt plan/step/release digests disagree with the frozen envelope",
         )
     return ReceiptVerdict(accepted=True)
+
+
+def advance_job_from_worker_result(
+    port: JobStateAdvancePort,
+    envelope: ExecutionEnvelope,
+    result: Any,
+    **kwargs: Any,
+) -> Any:
+    """Consume a worker result, performing a CAS advance only for a receipt.
+
+    A :class:`~acp_services.runtime.execution_right.WorkerRefusal` (competition
+    loser / not-held / lost right) is **not** an authoritative failure fact: this
+    returns ``None`` without calling the CAS port, so the job cannot transition
+    to FAILED from a refusal.  Integrity is delegated to :func:`advance_job_state`
+    for the authoritative receipt branch.
+    """
+    if not isinstance(result, ExecutionReceipt):
+        return None
+    return advance_job_state(port, envelope, result, **kwargs)
 
 
 def advance_job_state(

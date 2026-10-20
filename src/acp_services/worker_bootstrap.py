@@ -48,10 +48,13 @@ Services consumer, never a hop through the legacy ``acp.cli``.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -63,7 +66,19 @@ from acp_services.contracts.envelope import (
     ExecutionReceipt,
     StorageBinding,
 )
+from acp_services.runtime.execution_right import (
+    AlwaysHeldExecutionRight,
+    ExecutionRightPort,
+    ExecutionRightVerdict,
+    WorkerExecutionResult,
+    WorkerRefusal,
+)
 from acp_services.runtime.plan_contracts import CalculationResult, StepKind
+from acp_services.runtime.receipt_identity import (
+    ReceiptIdentity,
+    ReceiptIdentityComparison,
+    compare_receipt_identity,
+)
 from acp_services.runtime.step_requirements import (
     SATISFIED,
     PriorStep,
@@ -99,20 +114,22 @@ __all__ = [
     "AssemblyError",
     "FrozenEnvelopeDecodeError",
     "FrozenPlanDecodeError",
+    "ExecutionRightPort",
     "FrozenPlanVerifier",
     "ServicesStepRequirements",
     "StorageBindingDecodeError",
     "WorkerBootstrapError",
+    "WorkerRefusal",
     "WorkerRuntime",
     "assemble_worker",
     "freeze_frozen_plan",
     "frozen_plan_body_digest",
     "frozen_plan_from_dict",
     "frozen_plan_to_dict",
+    "load_and_assemble",
     "load_frozen_envelope",
     "load_frozen_plan",
     "load_storage_binding",
-    "load_and_assemble",
     "main",
 ]
 
@@ -488,15 +505,153 @@ def _error_from_worker(exc: WorkerError) -> ExecutionError:
     return ExecutionError(code="worker_error", message=str(exc), retryable=False)
 
 
+# ── receipt conflict + refusal diagnostics ──────────────────────────────────
+
+
+@dataclass(frozen=True)
+class _ReceiptConflict:
+    """Why an existing receipt cannot be reused (identity mismatch or corruption)."""
+
+    code: str
+    message: str = ""
+    comparison: ReceiptIdentityComparison | None = None
+    existing: ExecutionReceipt | None = None
+
+
+def _write_json_document_atomic(path: Path, document: Mapping[str, Any]) -> None:
+    """Atomic (temp + ``os.replace``) JSON diagnostic write."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    blob = json.dumps(document, sort_keys=True, indent=2) + "\n"
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+    )
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(blob)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _file_sha256(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return ""
+
+
+def _conflict_path(receipt_path: Path) -> Path:
+    return receipt_path.with_name(receipt_path.name + ".conflict.json")
+
+
+def _refusal_path(receipt_path: Path) -> Path:
+    return receipt_path.with_name(receipt_path.name + ".refused.json")
+
+
+def _inspect_existing_receipt(
+    envelope: ExecutionEnvelope, receipt_path: Path
+) -> tuple[ExecutionReceipt | None, _ReceiptConflict | None]:
+    """Return ``(reusable receipt, conflict)`` for the canonical receipt path.
+
+    A readable receipt is reused only when its **full** frozen identity matches
+    the current envelope (task-6 predicate).  Corrupt JSON is a typed conflict,
+    never an exception escaping the handler.
+    """
+    try:
+        existing = read_receipt(receipt_path)
+    except (ReceiptConflictError, EnvelopeError) as exc:
+        # Unreadable JSON or a structurally invalid receipt document: both are
+        # evidence-preserving typed conflicts, never an escaping traceback.
+        return None, _ReceiptConflict(code="unreadable_receipt", message=str(exc))
+    if existing is None:
+        return None, None
+    comparison = compare_receipt_identity(existing, envelope)
+    if comparison.matches:
+        return existing, None
+    return None, _ReceiptConflict(
+        code="receipt_identity_mismatch",
+        message=(
+            f"existing receipt at {receipt_path} does not carry the current "
+            f"envelope identity ({comparison.describe()})"
+        ),
+        comparison=comparison,
+        existing=existing,
+    )
+
+
+def _write_conflict_document(
+    *,
+    envelope: ExecutionEnvelope,
+    receipt_path: Path,
+    conflict: _ReceiptConflict,
+    current_receipt: ExecutionReceipt | None = None,
+) -> None:
+    """Write ``<receipt>.conflict.json`` next to (never over) the original."""
+    current_identity = ReceiptIdentity.from_envelope(envelope)
+    existing_identity = (
+        ReceiptIdentity.from_receipt(conflict.existing)
+        if conflict.existing is not None
+        else None
+    )
+    document: dict[str, Any] = {
+        "schema": "worker_receipt_conflict",
+        "state": "conflict",
+        "code": conflict.code,
+        "message": conflict.message,
+        "receipt_path": str(receipt_path),
+        # The frozen attempt this worker was asked to execute.
+        "current_identity": current_identity.to_dict(),
+        # A receipt for the current attempt must carry exactly this identity.
+        "expected_identity": current_identity.to_dict(),
+        # The preserved evidence already on disk (``None`` when unreadable).
+        "existing_identity": existing_identity.to_dict() if existing_identity else None,
+        "conflict_field": conflict.comparison.code if conflict.comparison else "",
+        "conflicts": (
+            [entry.to_dict() for entry in conflict.comparison.conflicts]
+            if conflict.comparison is not None
+            else []
+        ),
+        "existing_receipt_sha256": _file_sha256(receipt_path),
+        "current_receipt": current_receipt.to_dict() if current_receipt is not None else None,
+    }
+    _write_json_document_atomic(_conflict_path(receipt_path), document)
+
+
+def _build_failure_receipt(
+    envelope: ExecutionEnvelope, error: ExecutionError, *, work_dir: Path | None
+) -> ExecutionReceipt:
+    outcome = outcome_from_decision(decision_for_failure(error), work_dir=work_dir)
+    return build_receipt(envelope, outcome)
+
+
+def _write_refusal(
+    envelope: ExecutionEnvelope, receipt_path: Path, verdict: ExecutionRightVerdict
+) -> WorkerRefusal:
+    refusal = WorkerRefusal(
+        envelope=envelope, verdict=verdict, receipt_path=str(receipt_path)
+    )
+    _write_json_document_atomic(_refusal_path(receipt_path), refusal.to_dict())
+    return refusal
+
+
 @dataclass(frozen=True)
 class WorkerRuntime:
     """Frozen data assembled into a ready-to-run worker (one attempt).
 
     Constructed by :func:`assemble_worker` / :func:`load_and_assemble`; carries
     no store, no database handle and no mutable job state.  :meth:`run`
-    executes once and always returns a receipt — a thrown worker/executor
-    failure is converted into a **structured failed receipt** with typed
-    :class:`ExecutionError` entries, never a crash trace.
+    executes once and returns an authoritative receipt — a thrown
+    worker/executor failure is converted into a **structured failed receipt**
+    with typed :class:`ExecutionError` entries, never a crash trace.
+
+    A non-holder of the injected :class:`ExecutionRightPort` (competition loser,
+    duplicate delivery, lost lease) gets a :class:`WorkerRefusal` instead: no
+    authoritative receipt/``task_result`` is written and the canonical receipt
+    path is never touched.
     """
 
     envelope: ExecutionEnvelope
@@ -505,11 +660,15 @@ class WorkerRuntime:
     receipt_path: Path
     storage_binding: StorageBinding | None
     worker: FrozenWorker
+    execution_right: ExecutionRightPort = field(default_factory=AlwaysHeldExecutionRight)
 
     def run(
         self, *, prior_steps: Sequence[Any] = (), item_symbols: Sequence[str] | None = None
-    ) -> ExecutionReceipt:
-        """Execute one attempt; return the (success or structured-failure) receipt."""
+    ) -> WorkerExecutionResult:
+        """Execute one attempt; return a receipt or a non-authoritative refusal."""
+        acquired = self.execution_right.acquire(self.envelope)
+        if not acquired.held:
+            return _write_refusal(self.envelope, self.receipt_path, acquired)
         try:
             return self.worker.execute(
                 self.envelope,
@@ -531,12 +690,27 @@ class WorkerRuntime:
                 )
             )
 
-    def _write_failure_receipt(self, error: ExecutionError) -> ExecutionReceipt:
-        existing = read_receipt(self.receipt_path)
+    def _write_failure_receipt(self, error: ExecutionError) -> WorkerExecutionResult:
+        # Re-check the right at the write seam: a worker that lost it must not
+        # publish an authoritative failure.
+        verdict = self.execution_right.verify(self.envelope)
+        if not verdict.held:
+            return _write_refusal(self.envelope, self.receipt_path, verdict)
+        existing, conflict = _inspect_existing_receipt(self.envelope, self.receipt_path)
         if existing is not None:
             return existing
-        outcome = outcome_from_decision(decision_for_failure(error), work_dir=self.work_dir)
-        receipt = build_receipt(self.envelope, outcome)
+        if conflict is not None:
+            # Preserve the original bytes; publish the current-attempt failed
+            # receipt in the conflict document and return it for the controller.
+            receipt = _build_failure_receipt(self.envelope, error, work_dir=None)
+            _write_conflict_document(
+                envelope=self.envelope,
+                receipt_path=self.receipt_path,
+                conflict=conflict,
+                current_receipt=receipt,
+            )
+            return receipt
+        receipt = _build_failure_receipt(self.envelope, error, work_dir=self.work_dir)
         write_receipt_atomic(self.receipt_path, receipt)
         return receipt
 
@@ -563,6 +737,7 @@ def assemble_worker(
     receipt_path: Path | str | None = None,
     storage_binding: StorageBinding | None = None,
     executor: TaskExecutorPort | None = None,
+    execution_right: ExecutionRightPort | None = None,
 ) -> WorkerRuntime:
     """Build the Services-native worker from frozen objects (no injection)."""
     if envelope.entrypoint not in _WORKER_ENTRYPOINTS:
@@ -588,6 +763,9 @@ def assemble_worker(
         receipt_path=resolved_receipt,
         storage_binding=_select_storage_binding(envelope, storage_binding),
         worker=worker,
+        execution_right=(
+            execution_right if execution_right is not None else AlwaysHeldExecutionRight()
+        ),
     )
 
 
@@ -599,6 +777,7 @@ def load_and_assemble(
     receipt_path: Path | str | None = None,
     binding_path: Path | str | None = None,
     executor: TaskExecutorPort | None = None,
+    execution_right: ExecutionRightPort | None = None,
 ) -> WorkerRuntime:
     """Read frozen files from disk and assemble the worker (new-process path)."""
     envelope = load_frozen_envelope(envelope_path)
@@ -611,6 +790,7 @@ def load_and_assemble(
         receipt_path=receipt_path,
         storage_binding=binding,
         executor=executor,
+        execution_right=execution_right,
     )
 
 
@@ -623,12 +803,26 @@ def _write_assembly_failure(
     error: ExecutionError,
     *,
     work_dir: Path | None = None,
-) -> ExecutionReceipt:
-    existing = read_receipt(receipt_path)
+    execution_right: ExecutionRightPort | None = None,
+) -> WorkerExecutionResult:
+    """Assembly failure receipt — never silently reusing another identity's receipt."""
+    port = execution_right if execution_right is not None else AlwaysHeldExecutionRight()
+    verdict = port.verify(envelope)
+    if not verdict.held:
+        return _write_refusal(envelope, receipt_path, verdict)
+    existing, conflict = _inspect_existing_receipt(envelope, receipt_path)
     if existing is not None:
         return existing
-    outcome = outcome_from_decision(decision_for_failure(error), work_dir=work_dir)
-    receipt = build_receipt(envelope, outcome)
+    if conflict is not None:
+        receipt = _build_failure_receipt(envelope, error, work_dir=None)
+        _write_conflict_document(
+            envelope=envelope,
+            receipt_path=receipt_path,
+            conflict=conflict,
+            current_receipt=receipt,
+        )
+        return receipt
+    receipt = _build_failure_receipt(envelope, error, work_dir=work_dir)
     write_receipt_atomic(receipt_path, receipt)
     return receipt
 
@@ -644,7 +838,18 @@ def _write_unbound_failure(receipt_path: Path, code: str, message: str) -> None:
     receipt_path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _result_exit_code(result: WorkerExecutionResult) -> int:
+    """Exit code for a worker result: refusal code, else the receipt row code."""
+    if isinstance(result, WorkerRefusal):
+        return result.exit_code
+    return receipt_exit_code(result)
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    execution_right: ExecutionRightPort | None = None,
+) -> int:
     """Worker process entrypoint (``python -m acp_services.worker_bootstrap``)."""
     parser = argparse.ArgumentParser(
         prog="acp_services.worker_bootstrap",
@@ -672,6 +877,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     work_dir = Path(args.work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     receipt_path = Path(args.receipt) if args.receipt else work_dir / _DEFAULT_RECEIPT_NAME
+    right_port = execution_right if execution_right is not None else AlwaysHeldExecutionRight()
 
     try:
         envelope = load_frozen_envelope(args.envelope)
@@ -701,20 +907,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             receipt_path=receipt_path,
             storage_binding=binding,
             executor=executor,
+            execution_right=right_port,
         )
     except AssemblyError as exc:
-        receipt = _write_assembly_failure(
+        result = _write_assembly_failure(
             envelope,
             receipt_path,
             ExecutionError(code="assembly_failed", message=str(exc), retryable=False),
             work_dir=work_dir,
+            execution_right=right_port,
         )
-        print(json.dumps(receipt.to_dict(), sort_keys=True))
-        return 1
+        print(json.dumps(result.to_dict(), sort_keys=True))
+        return _result_exit_code(result)
 
-    receipt = runtime.run()
-    print(json.dumps(receipt.to_dict(), sort_keys=True))
-    return receipt_exit_code(receipt)
+    result = runtime.run()
+    print(json.dumps(result.to_dict(), sort_keys=True))
+    return _result_exit_code(result)
 
 
 if __name__ == "__main__":  # pragma: no cover - process entry
