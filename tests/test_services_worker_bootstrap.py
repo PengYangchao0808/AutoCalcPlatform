@@ -172,6 +172,46 @@ def _write_frozen(tmp_path: Path, *, tamper_plan: bool = False) -> dict[str, str
     }
 
 
+def _write_flat_group_manifest(frozen: dict[str, str]) -> None:
+    """Add the remote flat-layout commit manifest beside the loose members."""
+    from acp_services.runtime.execution_chain import (
+        BINDING_FILENAME,
+        ENVELOPE_FILENAME,
+        FROZEN_GROUP_MANIFEST_FILENAME,
+        FROZEN_GROUP_SCHEMA,
+        PLAN_FILENAME,
+    )
+
+    envelope_path = Path(frozen["envelope"])
+    envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
+    plan = json.loads(Path(frozen["plan"]).read_text(encoding="utf-8"))
+    manifest = {
+        "schema": FROZEN_GROUP_SCHEMA,
+        "job_id": envelope["job_id"],
+        "attempt": envelope["attempt"],
+        "workflow": envelope.get("scientific_closure", {}).get("task_kind", "optimize"),
+        "submission_id": envelope["submission_id"],
+        "release_id": envelope["release_id"],
+        "release_digest": envelope.get("release_digest", ""),
+        "owner": envelope["owner"],
+        "fencing_token": envelope["fencing_token"],
+        "plan_digest": envelope["plan_digest"],
+        "plan_identity": envelope["plan_identity"],
+        "members": {
+            ENVELOPE_FILENAME: hashlib.sha256(envelope_path.read_bytes()).hexdigest(),
+            PLAN_FILENAME: hashlib.sha256(Path(frozen["plan"]).read_bytes()).hexdigest(),
+            BINDING_FILENAME: hashlib.sha256(Path(frozen["binding"]).read_bytes()).hexdigest(),
+        },
+    }
+    # The manifest schema validates the plan's declared identity separately;
+    # keep the task-result workflow label aligned with the frozen plan.
+    if plan.get("payload", {}).get("task"):
+        manifest["workflow"] = str(plan["payload"]["task"])
+    (envelope_path.parent / FROZEN_GROUP_MANIFEST_FILENAME).write_text(
+        json.dumps(manifest, sort_keys=True), encoding="utf-8"
+    )
+
+
 def _child_env(run_root: Path) -> dict[str, str]:
     env = dict(os.environ)
     existing = env.get("PYTHONPATH", "")
@@ -525,6 +565,7 @@ def test_remote_mock_chain_runs_generated_worker_command(tmp_path: Path) -> None
     from acp.scheduler.remote.script_gen import build_remote_worker_command
 
     frozen = _write_frozen(tmp_path)
+    _write_flat_group_manifest(frozen)
     run_root = tmp_path / "rr_remote"
     run_root.mkdir()
     cmd = build_remote_worker_command(

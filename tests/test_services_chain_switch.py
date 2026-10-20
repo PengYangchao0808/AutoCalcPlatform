@@ -59,12 +59,16 @@ from acp.calculations.result_publication import (
     load_publication_state,
     load_scientific_result,
 )
+from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.remote.release import build_release_manifest
+from acp.scheduler.remote.runner import RemotePollObservation
 from acp.scheduler.remote.script_gen import (
     build_remote_cli_command,
     build_remote_worker_command,
 )
+from acp.scheduler.remote.sync import build_sync_file_list
 from acp.scheduler.runner import JobRunner
 from acp.scheduler.store import JobStateConflictError, JobStore
 from acp.services_completion_bootstrap import (
@@ -2600,3 +2604,294 @@ def test_t29_non_default_workflow_stays_on_the_registered_path(tmp_path: Path) -
     assert chain.WORKER_MODULE not in " ".join(cmd)
     assert not chain.frozen_group_dir(work).exists()
     assert chain.read_attempt_choice(work) is not None
+
+
+# ---------------------------------------------------------------------------
+# 14. 07-C frozen chain over the remote LSF path (todo 30)
+# ---------------------------------------------------------------------------
+
+
+def _t30_harness(tmp_path: Path):
+    pytest.importorskip("paramiko")
+    from tests.test_remote_submission_protocol import _RunnerHarness
+
+    return _RunnerHarness(str(tmp_path))
+
+
+def _t30_record(tmp_path: Path, *, job_id: str = "job-t30") -> tuple[object, Path]:
+    work = tmp_path / "runs" / "singlepoint"
+    work.mkdir(parents=True)
+    (work / "input.xyz").write_text(_T27_XYZ, encoding="utf-8")
+    record = JobRecord(
+        id=job_id,
+        spec=JobSpec(
+            workflow="singlepoint",
+            name="t30",
+            input={"smiles": "CCO"},
+            method={},
+        ),
+        status=JobStatus.QUEUED,
+        work_dir=str(work),
+    )
+    return record, work
+
+
+def test_t30_synced_release_includes_services_and_matches_local_identity() -> None:
+    remote = build_release_manifest(_REPO_ROOT)
+    local = acp_freeze.local_release_identity(_REPO_ROOT)
+    synced = {path.relative_to(_REPO_ROOT).as_posix() for path in build_sync_file_list(_REPO_ROOT)}
+    assert "src/acp_services/worker_bootstrap.py" in synced
+    assert remote.release_id == local.release_id
+    assert set(remote.files) == set(local.files)
+    assert (
+        remote.files["src/acp_services/worker_bootstrap.py"]["sha256"]
+        == (local.files["src/acp_services/worker_bootstrap.py"]["sha256"])
+    )
+
+
+def test_t30_remote_singlepoint_freezes_before_choice_and_publishes_manifest_last(
+    tmp_path: Path, t25_release: acp_freeze.LocalRelease, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.scheduler.remote import ssh as ssh_mod
+
+    harness = _t30_harness(tmp_path)
+    record, work = _t30_record(tmp_path)
+    monkeypatch.setenv("ACP_REMOTE_ALLOW_UNVERSIONED", "1")
+    uploads: list[str] = []
+    renames: list[tuple[str, str]] = []
+    original_upload = harness.runner._stager.upload_file
+    original_rename = harness.runner._stager.rename_remote
+    original_resolve = harness.runner._resolve_remote_choice
+
+    def upload(node, local_path, remote_path):
+        uploads.append(str(remote_path))
+        return original_upload(node, local_path, remote_path)
+
+    def rename(node, src, dst):
+        renames.append((str(src), str(dst)))
+        return original_rename(node, src, dst)
+
+    def resolve(rec, wd):
+        assert chain.frozen_artifacts_present(wd, expected_attempt=rec.attempt)
+        return original_resolve(rec, wd)
+
+    harness.runner._stager.upload_file = upload  # type: ignore[method-assign]
+    harness.runner._stager.rename_remote = rename  # type: ignore[method-assign]
+    harness.runner._resolve_remote_choice = resolve  # type: ignore[method-assign]
+    harness.runner._ensure_code_release = (  # type: ignore[method-assign]
+        lambda node, event_log, rec: t25_release.release_id
+    )
+    try:
+        with __import__("unittest").mock.patch.object(
+            ssh_mod, "_create_client", side_effect=lambda n, timeout=30: harness.client
+        ):
+            lsf_id = harness.runner.submit_remote(record, JobEventLog(work / "events.jsonl"))
+        assert lsf_id and harness.bsub_calls == 1
+        choice = chain.read_attempt_choice(work)
+        assert choice is not None and choice.entry == chain.EXECUTION_ENTRY_ENVELOPE
+        assert choice.release_id == t25_release.release_id
+        group = chain.load_frozen_group(work, expected_attempt=1)
+        assert group.manifest.release_id == t25_release.release_id
+        assert group.manifest.release_digest == t25_release.release_digest
+        # The flat group manifest is the final publish rename.
+        assert renames[-1][1].endswith("/" + chain.FROZEN_GROUP_MANIFEST_FILENAME)
+        flat_manifest = renames[-1][1]
+        remote_root = flat_manifest.rsplit("/", 1)[0]
+        for name in (
+            chain.ENVELOPE_FILENAME,
+            chain.PLAN_FILENAME,
+            chain.FROZEN_GROUP_MANIFEST_FILENAME,
+        ):
+            assert f"{remote_root}/{name}" in harness.sftp.files
+        script = harness.sftp.files[f"{remote_root}/submit.lsf"].decode("utf-8")
+        assert "acp_services.worker_bootstrap" in script
+        assert "--require-frozen-group" in script
+        events = JobEventLog(work / "events.jsonl").read_all()
+        types = [event.get("type") for event in events]
+        assert "remote.attempt_frozen" in types
+        assert "remote.frozen_group_uploaded" in types
+    finally:
+        harness.close()
+
+
+def test_t30_missing_or_tampered_remote_group_is_rejected_before_bsub(
+    tmp_path: Path, t25_release: acp_freeze.LocalRelease
+) -> None:
+    from acp.scheduler.remote import ssh as ssh_mod
+
+    harness = _t30_harness(tmp_path)
+    record, work = _t30_record(tmp_path)
+    record.attempt = 1
+    group = acp_freeze.freeze_singlepoint_attempt(record, work, work / "input.xyz", t25_release)
+    assert group.plan_path.is_file()
+    group.plan_path.write_text("{tampered", encoding="utf-8")
+    chain.write_attempt_choice(
+        work,
+        chain.AttemptExecutionChoice(
+            attempt=1,
+            workflow="singlepoint",
+            entry=chain.EXECUTION_ENTRY_ENVELOPE,
+            protocol=chain.EXECUTION_PROTOCOL_LSF,
+            closure="integrated",
+            release_id=t25_release.release_id,
+        ),
+    )
+    harness.runner._ensure_code_release = (  # type: ignore[method-assign]
+        lambda node, event_log, rec: t25_release.release_id
+    )
+    try:
+        with __import__("unittest").mock.patch.object(
+            ssh_mod, "_create_client", side_effect=lambda n, timeout=30: harness.client
+        ):
+            with pytest.raises(Exception, match="frozen group|missing/corrupt"):
+                harness.runner.submit_remote(record, JobEventLog(work / "events.jsonl"))
+        assert harness.bsub_calls == 0
+    finally:
+        harness.close()
+
+
+def test_t30_interrupted_group_upload_leaves_no_manifest(
+    tmp_path: Path, t25_release: acp_freeze.LocalRelease
+) -> None:
+    harness = _t30_harness(tmp_path)
+    record, work = _t30_record(tmp_path)
+    acp_freeze.freeze_singlepoint_attempt(record, work, work / "input.xyz", t25_release)
+    chain.write_attempt_choice(
+        work,
+        chain.AttemptExecutionChoice(
+            attempt=1,
+            workflow="singlepoint",
+            entry=chain.EXECUTION_ENTRY_ENVELOPE,
+            protocol=chain.EXECUTION_PROTOCOL_LSF,
+            closure="integrated",
+            release_id=t25_release.release_id,
+        ),
+    )
+    calls = {"n": 0}
+    original = harness.runner._stager.upload_file
+
+    def interrupted(node, local_path, remote_path):
+        calls["n"] += 1
+        if calls["n"] >= 2:
+            raise OSError("simulated truncated upload")
+        return original(node, local_path, remote_path)
+
+    harness.runner._stager.upload_file = interrupted  # type: ignore[method-assign]
+    try:
+        with pytest.raises(Exception):
+            harness.runner._upload_frozen_envelope(
+                harness.node,
+                "/scratch/test/acp_jobs/interrupted",
+                work,
+                JobEventLog(work / "events.jsonl"),
+                record,
+            )
+        flat_manifest = "/scratch/test/acp_jobs/interrupted/frozen_group.json"
+        assert flat_manifest not in harness.sftp.files
+    finally:
+        harness.close()
+
+
+def test_t30_remote_worker_receipt_and_task_result_are_fetched(
+    tmp_path: Path,
+) -> None:
+    import posixpath as _posixpath
+
+    from acp.scheduler.remote import ssh as ssh_mod
+
+    harness = _t30_harness(tmp_path)
+    record, work = _t30_record(tmp_path)
+    import os
+
+    os.environ["ACP_REMOTE_ALLOW_UNVERSIONED"] = "1"
+    try:
+        with __import__("unittest").mock.patch.object(
+            ssh_mod, "_create_client", side_effect=lambda n, timeout=30: harness.client
+        ):
+            harness.runner.submit_remote(record, JobEventLog(work / "events.jsonl"))
+        remote_dir = (record.result or {}).get(
+            "remote_dir"
+        ) or "/scratch/test/acp_jobs/t30_singlepoint"
+        record.result = {
+            **(record.result or {}),
+            "node": "compute-01",
+            "remote_dir": remote_dir,
+        }
+        harness.sftp.files[_posixpath.join(remote_dir, "execution_receipt.json")] = b'{"r":1}'
+        harness.sftp.files[
+            _posixpath.join(remote_dir, "WORK", "00_RUNTIME", "task_result.json")
+        ] = b'{"t":1}'
+
+        harness.runner._fetch_worker_artifacts(
+            record, JobEventLog(work / "events.jsonl"), harness.node, remote_dir
+        )
+
+        assert (work / "execution_receipt.json").read_bytes() == b'{"r":1}'
+        assert (work / "WORK" / "00_RUNTIME" / "task_result.json").read_bytes() == b'{"t":1}'
+        events = JobEventLog(work / "events.jsonl").read_all()
+        fetched = [e for e in events if e.get("type") == "remote.worker_artifacts_fetched"]
+        assert fetched and fetched[-1].get("mechanism") == "RemoteStructureCache.fetch"
+    finally:
+        harness.close()
+
+
+def test_t30_remote_receipt_completion_cas_and_publication(tmp_path: Path) -> None:
+    work, _snapshot, _digest = _t28_attempt(tmp_path)
+    chain.write_attempt_choice(
+        work,
+        chain.AttemptExecutionChoice(
+            attempt=1,
+            workflow="singlepoint",
+            entry=chain.EXECUTION_ENTRY_ENVELOPE,
+            protocol=chain.EXECUTION_PROTOCOL_LSF,
+            closure="integrated",
+            release_id=_RELEASE,
+        ),
+    )
+    run_root = tmp_path / "run_root"
+    run_root.mkdir()
+    store = JobStore(run_root / "acp_jobs.db")
+
+    class _RemoteStub:
+        def poll_remote(self, record, event_log, cancel_event):
+            return RemotePollObservation(
+                terminal=True,
+                exit_code=0,
+                final_state={"result": dict(record.result or {})},
+            )
+
+        def apply_terminal_side_effects(self, record, event_log, stage_events=()):
+            return None
+
+    manager = JobManager(
+        run_root,
+        store=store,
+        runner=JobRunner(python_executable=sys.executable),
+        poll_interval=5,
+    )
+    manager.remote_runner = _RemoteStub()  # type: ignore[assignment]
+    record = JobRecord(
+        id=_JOB,
+        spec=JobSpec(workflow="singlepoint", name="t30", input={"smiles": "CCO"}),
+        status=JobStatus.RUNNING,
+        work_dir=str(work),
+        result={
+            "node": "compute-01",
+            "remote_dir": "/scratch/test/acp_jobs/t30",
+            "remote": {
+                "node": "compute-01",
+                "relative": "t30",
+                "submit_state": "submitted",
+            },
+        },
+    )
+    store.create(record)
+    try:
+        manager._poll_job(_JOB)
+        advanced = store.get(_JOB)
+        assert advanced is not None
+        assert advanced.status == JobStatus.COMPLETED
+        assert advanced.revision >= 1
+        assert (work / "RESULT" / "result_manifest.json").is_file()
+    finally:
+        manager.shutdown()

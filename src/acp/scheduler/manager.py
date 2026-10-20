@@ -5301,6 +5301,7 @@ class JobManager:
         cancel_event: threading.Event,
         event_log: JobEventLog,
         is_remote: bool,
+        observation: RemotePollObservation | None = None,
     ) -> bool:
         """Opt-in receipt-verified completion for an envelope-selected attempt.
 
@@ -5313,7 +5314,6 @@ class JobManager:
         if (
             not self._envelope_completion_enabled
             or self._attempt_completion is None
-            or is_remote
             or exit_code == EXIT_WAITING_REVIEW
             or record.spec.workflow not in DEFAULT_ENVELOPE_WORKFLOWS
         ):
@@ -5334,6 +5334,8 @@ class JobManager:
                 "attempt_protocol_corrupt",
                 str(exc),
                 event_log,
+                is_remote=is_remote,
+                observation=observation,
             )
             return True
         if choice is None:
@@ -5348,6 +5350,16 @@ class JobManager:
         from acp.services_completion_bootstrap import FrozenGroupSnapshotReader
 
         snapshot = FrozenGroupSnapshotReader(self.store).read(job_id)
+        if snapshot is not None:
+            # The remote poll mutates the in-memory record before the terminal
+            # CAS; keep the current result/revision/status in the snapshot so
+            # the T26 CAS does not drop remote provenance/metadata.
+            snapshot = replace(
+                snapshot,
+                result=dict(record.result or {}),
+                revision=record.revision,
+                status=str(record.status.value),
+            )
         if snapshot is None or snapshot.envelope is None:
             if cancel_intent:
                 return False
@@ -5360,6 +5372,8 @@ class JobManager:
                 "current_corrupt_after_exit",
                 "frozen attempt snapshot unavailable after the execution exited",
                 event_log,
+                is_remote=is_remote,
+                observation=observation,
             )
             return True
 
@@ -5416,7 +5430,9 @@ class JobManager:
         }:
             stored = self.store.get(job_id)
             if stored is not None:
-                self._run_terminal_side_effects(stored, job_id, event_log, False, None)
+                self._run_terminal_side_effects(
+                    stored, job_id, event_log, is_remote, observation
+                )
             return True
         if verdict.code == "current_corrupt_after_exit":
             failure = verdict.failure
@@ -5429,6 +5445,8 @@ class JobManager:
                 failure.code if failure is not None else "current_corrupt_after_exit",
                 failure.message if failure is not None else "current receipt missing or corrupt",
                 event_log,
+                is_remote=is_remote,
+                observation=observation,
             )
             return True
         event_log.append(
@@ -5450,6 +5468,9 @@ class JobManager:
         code: str,
         message: str,
         event_log: JobEventLog,
+        *,
+        is_remote: bool = False,
+        observation: RemotePollObservation | None = None,
     ) -> None:
         """Write the one CAS failure for a current attempt with no valid receipt."""
         result = dict(record.result or {})
@@ -5477,7 +5498,7 @@ class JobManager:
             code=code,
             attempt=expected_attempt,
         )
-        self._run_terminal_side_effects(stored, job_id, event_log, False, None)
+        self._run_terminal_side_effects(stored, job_id, event_log, is_remote, observation)
 
     def _persist_terminal(
         self,
@@ -5501,6 +5522,7 @@ class JobManager:
             cancel_event,
             event_log,
             is_remote,
+            observation,
         ):
             return
         progress = record.progress

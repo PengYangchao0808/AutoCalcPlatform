@@ -31,6 +31,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -90,15 +91,17 @@ from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
 from acp_services.runtime.execution_chain import (
     ATTEMPT_PROTOCOL_FILENAME,
     BINDING_FILENAME,
+    DEFAULT_ENVELOPE_WORKFLOWS,
     ENVELOPE_FILENAME,
     EXECUTION_ENTRY_ENVELOPE,
     FROZEN_GROUP_DIRNAME,
     FROZEN_GROUP_MANIFEST_FILENAME,
     PLAN_FILENAME,
-    RUNTIME_PROTOCOL_DIR,
     AttemptExecutionChoice,
     ExecutionLaunch,
+    FrozenGroupError,
     frozen_artifacts_present,
+    load_frozen_group,
     read_attempt_choice,
     resolve_attempt_choice,
     with_attempt_choice,
@@ -979,6 +982,7 @@ class RemoteJobRunner:
         result["command_line"] = " ".join(cli_cmd)
         record.result = result
         self._build_provenance(record, cli_cmd)
+        self._fetch_worker_artifacts(record, event_log, node, remote_job_dir)
         return RemotePollObservation(
             terminal=True,
             exit_code=exit_code,
@@ -987,6 +991,74 @@ class RemoteJobRunner:
             final_state={"result": dict(record.result or {}), "error": record.error},
             stage_events=stage_events,
         )
+
+    def _fetch_worker_artifacts(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        node: RemoteNode,
+        remote_job_dir: str,
+    ) -> None:
+        """Fetch the worker receipt + task_result for a frozen remote attempt.
+
+        The controller reads the fetched copies through the worker codec before
+        T26/T28 publication/CAS.  The named transport is
+        :class:`RemoteStructureCache.fetch` (attempt-fenced cache) over the
+        shared ``RemoteResultFetcher``; the bytes are then placed at the task
+        work dir paths the controller/runtime consume.
+        """
+        work_dir = Path(record.work_dir)
+        choice = read_attempt_choice(work_dir)
+        if (
+            choice is None
+            or choice.entry != EXECUTION_ENTRY_ENVELOPE
+            or choice.attempt != record.attempt
+        ):
+            return
+        from acp.results.remote_structure_cache import RemoteStructureCache
+        from acp.scheduler.remote.fetcher import RemoteResultFetcher
+
+        run_root = work_dir.parent.parent
+        cache = RemoteStructureCache(
+            run_root,
+            fetcher_factory=lambda _job_id: RemoteResultFetcher(
+                self._ssh, self._stager, self._config
+            ),
+        )
+        fetched: list[str] = []
+        for rel in ("execution_receipt.json", "WORK/00_RUNTIME/task_result.json"):
+            try:
+                cached = cache.fetch(record, rel, force=True, raise_errors=False)
+            except Exception:
+                logger.warning(
+                    "Remote artifact fetch failed for %s/%s",
+                    record.id,
+                    rel,
+                    exc_info=True,
+                )
+                cached = None
+            if cached is None:
+                event_log.append(
+                    "remote.worker_artifact_missing",
+                    job_id=record.id,
+                    remote_dir=remote_job_dir,
+                    relative=rel,
+                )
+                continue
+            target = work_dir / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_bytes(Path(cached).read_bytes())
+            os.replace(tmp, target)
+            fetched.append(rel)
+        if fetched:
+            event_log.append(
+                "remote.worker_artifacts_fetched",
+                job_id=record.id,
+                remote_dir=remote_job_dir,
+                files=fetched,
+                mechanism="RemoteStructureCache.fetch",
+            )
 
     def apply_terminal_side_effects(
         self,
@@ -1275,6 +1347,79 @@ class RemoteJobRunner:
     # Prepare + submit
     # ------------------------------------------------------------------ #
 
+    def _freeze_remote_attempt(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+        code_release: str | None,
+        event_log: JobEventLog,
+    ) -> None:
+        """Freeze the default-envelope attempt on the verified remote release."""
+        workflow = str(record.spec.workflow)
+        if workflow not in DEFAULT_ENVELOPE_WORKFLOWS:
+            return
+        previous = read_attempt_choice(work_dir)
+        if previous is not None and previous.attempt == record.attempt:
+            if previous.entry == EXECUTION_ENTRY_ENVELOPE and not frozen_artifacts_present(
+                work_dir, expected_attempt=record.attempt
+            ):
+                raise RemoteSubmissionRejected(
+                    f"envelope choice for attempt {record.attempt} is recorded but the local "
+                    "frozen group is missing/corrupt"
+                )
+            return
+        if not code_release:
+            raise RemoteSubmissionRejected(
+                f"job {record.id} has no verified code release for its frozen attempt"
+            )
+
+        from acp.calculations.attempt_freeze import (
+            UNVERSIONED_RELEASE_ID,
+            LocalRelease,
+            ReleaseIdentity,
+            build_freeze_spec,
+            build_local_release,
+        )
+        from acp_services.runtime.attempt_freeze import write_frozen_attempt
+
+        project_root = _project_root()
+        if code_release == _UNVERSIONED_RELEASE:
+            identity = ReleaseIdentity(
+                project_root=project_root,
+                release_id=UNVERSIONED_RELEASE_ID,
+                release_digest="",
+                files={},
+            )
+            release = LocalRelease(identity=identity, root=project_root, unversioned=True)
+        else:
+            try:
+                release = build_local_release(project_root, work_dir.parent.parent)
+            except Exception as exc:
+                raise RemoteSubmissionRejected(
+                    f"cannot materialise local release {code_release!r}: {exc}"
+                ) from exc
+            if release.release_id != code_release:
+                raise RemoteSubmissionRejected(
+                    f"verified remote release {code_release!r} != local release "
+                    f"{release.release_id!r}; refusing to freeze a mismatched tree"
+                )
+        try:
+            spec = build_freeze_spec(record, work_dir, input_path, release)
+            group = write_frozen_attempt(work_dir, spec)
+        except Exception as exc:
+            raise RemoteSubmissionRejected(
+                f"could not freeze attempt {record.attempt} of {workflow}: {exc}"
+            ) from exc
+        event_log.append(
+            "remote.attempt_frozen",
+            job_id=record.id,
+            attempt=record.attempt,
+            workflow=workflow,
+            release_id=group.manifest.release_id,
+            release_digest=group.manifest.release_digest,
+        )
+
     def _resolve_remote_choice(self, record: JobRecord, work_dir: Path) -> AttemptExecutionChoice:
         """Resolve + record the attempt entry via the single dispatcher (B06-3).
 
@@ -1313,29 +1458,111 @@ class RemoteJobRunner:
         event_log: JobEventLog,
         record: JobRecord,
     ) -> ExecutionLaunch | None:
-        """Upload the frozen envelope/plan/binding and return the worker launch.
+        """Upload the frozen group with manifest-last publication.
 
-        Returns ``None`` when no frozen artifacts are present (the dispatcher
-        would not have selected the envelope entry in that case). The uploaded
-        files land beside the scheduled task so the node-side worker can rebuild
-        every dependency from the synced code dir.
+        Members are uploaded to a remote staging directory and hash-verified
+        there.  The flat execution namespace is then populated member-first and
+        ``frozen_group.json`` is published LAST (sole commit marker).  A failed
+        or interrupted upload leaves no flat manifest, so the node-side worker
+        (which is passed ``--require-frozen-group``) cannot execute a half
+        group.
         """
-        if not frozen_artifacts_present(work_dir, expected_attempt=record.attempt):
-            return None
-        runtime = work_dir.joinpath(*RUNTIME_PROTOCOL_DIR)
-        binding_present = (runtime / BINDING_FILENAME).is_file()
-        for name in (ENVELOPE_FILENAME, PLAN_FILENAME, BINDING_FILENAME):
-            source = runtime / name
-            if source.is_file():
-                self._stager.upload_file(
-                    node, source, posixpath.join(remote_job_dir, name)
-                )
-        event_log.append(
-            "remote.envelope_uploaded",
-            job_id=record.id,
-            node=node.name,
-            remote_dir=remote_job_dir,
+        try:
+            group = load_frozen_group(work_dir, expected_attempt=record.attempt)
+        except FrozenGroupError as exc:
+            raise RemoteSubmissionRejected(
+                f"frozen group for attempt {record.attempt} is missing/corrupt: {exc}"
+            ) from exc
+        manifest = dict(group.manifest.to_dict())
+        members = list(manifest.get("members") or {})
+        if ENVELOPE_FILENAME not in members or PLAN_FILENAME not in members:
+            raise RemoteSubmissionRejected("frozen group manifest lacks envelope/plan members")
+        # Reject a path-bearing request that escapes the task directory before bsub.
+        try:
+            plan_payload = json.loads(group.plan_path.read_text(encoding="utf-8"))
+            task_payload = plan_payload.get("payload")
+            if isinstance(task_payload, Mapping):
+                self._assert_relative_task_paths(work_dir, task_payload)
+        except (OSError, ValueError) as exc:
+            raise RemoteSubmissionRejected(f"frozen plan is unreadable: {exc}") from exc
+
+        runtime_rel = posixpath.join("WORK", "00_RUNTIME")
+        staging = posixpath.join(
+            remote_job_dir, runtime_rel, ".frozen_staging", str(record.attempt)
         )
+        self._stager.remove_remote_dir(node, staging)
+        self._stager.make_remote_dir(node, staging)
+        # Drop the old marker first: an interrupted re-upload must never leave
+        # a previous valid group executable.
+        self._stager.remove_file(
+            node, posixpath.join(remote_job_dir, FROZEN_GROUP_MANIFEST_FILENAME)
+        )
+        for name in members:
+            local = group.directory / name
+            remote = posixpath.join(staging, name)
+            self._stager.upload_file(node, local, remote)
+            actual = hashlib.sha256(self._stager.read_remote_file(node, remote)).hexdigest()
+            if actual != manifest["members"][name]:
+                raise RemoteSubmissionRejected(
+                    f"remote frozen member {name!r} hash {actual} != manifest "
+                    f"{manifest['members'][name]}"
+                )
+        # Manifest is staged LAST.
+        self._stager.upload_file(
+            node,
+            group.directory / FROZEN_GROUP_MANIFEST_FILENAME,
+            posixpath.join(staging, FROZEN_GROUP_MANIFEST_FILENAME),
+        )
+        staged_manifest = json.loads(
+            self._stager.read_remote_file(
+                node, posixpath.join(staging, FROZEN_GROUP_MANIFEST_FILENAME)
+            ).decode("utf-8")
+        )
+        if staged_manifest.get("members") != manifest.get("members"):
+            raise RemoteSubmissionRejected("staged frozen manifest does not match the local group")
+
+        published: list[str] = []
+        for name in members:
+            flat = posixpath.join(remote_job_dir, name)
+            self._stager.remove_file(node, flat)
+            self._stager.rename_remote(node, posixpath.join(staging, name), flat)
+            actual = hashlib.sha256(self._stager.read_remote_file(node, flat)).hexdigest()
+            if actual != manifest["members"][name]:
+                raise RemoteSubmissionRejected(
+                    f"published frozen member {name!r} failed its hash check"
+                )
+            published.append(name)
+        flat_manifest = posixpath.join(remote_job_dir, FROZEN_GROUP_MANIFEST_FILENAME)
+        self._stager.remove_file(node, flat_manifest)
+        self._stager.rename_remote(
+            node,
+            posixpath.join(staging, FROZEN_GROUP_MANIFEST_FILENAME),
+            flat_manifest,
+        )
+        # Final complete-group verification (reader and writer agree).
+        final_manifest_raw = self._stager.read_remote_file(node, flat_manifest)
+        final_manifest = json.loads(final_manifest_raw.decode("utf-8"))
+        if final_manifest.get("members") != manifest.get("members"):
+            raise RemoteSubmissionRejected("published remote frozen manifest mismatches")
+        for name in members:
+            actual = hashlib.sha256(
+                self._stager.read_remote_file(node, posixpath.join(remote_job_dir, name))
+            ).hexdigest()
+            if actual != manifest["members"][name]:
+                raise RemoteSubmissionRejected(
+                    f"published remote group member {name!r} failed final verification"
+                )
+        self._stager.remove_remote_dir(node, staging)
+        event_log.append(
+            "remote.frozen_group_uploaded",
+            job_id=record.id,
+            attempt=record.attempt,
+            members=published,
+            commit_marker=FROZEN_GROUP_MANIFEST_FILENAME,
+            release_id=manifest.get("release_id"),
+            release_digest=manifest.get("release_digest"),
+        )
+        binding_present = BINDING_FILENAME in members
         return ExecutionLaunch(
             entry=EXECUTION_ENTRY_ENVELOPE,
             protocol="lsf",
@@ -1347,6 +1574,25 @@ class RemoteJobRunner:
                 posixpath.join(remote_job_dir, BINDING_FILENAME) if binding_present else None
             ),
         )
+
+    @staticmethod
+    def _assert_relative_task_paths(work_dir: Path, payload: Mapping[str, Any]) -> None:
+        """Reject absolute/escaping path-bearing TaskRequest fields before bsub."""
+        for key, value in payload.items():
+            if key == "output_dir" or key == "path" or str(key).endswith("_path"):
+                if isinstance(value, str) and value:
+                    candidate = Path(value)
+                    if candidate.is_absolute():
+                        raise RemoteSubmissionRejected(
+                            f"frozen task field {key!r} is absolute: {value!r}"
+                        )
+                    resolved = (work_dir / candidate).resolve()
+                    if not resolved.is_relative_to(work_dir.resolve()):
+                        raise RemoteSubmissionRejected(
+                            f"frozen task field {key!r} escapes the task dir: {value!r}"
+                        )
+            elif isinstance(value, Mapping):
+                RemoteJobRunner._assert_relative_task_paths(work_dir, value)
 
     def _prepare_and_submit(
         self,
@@ -1389,7 +1635,6 @@ class RemoteJobRunner:
             submission_id = submission_id_for(record.id, record.attempt)
         heartbeat_submit_worker(submission_id)
 
-        choice = self._resolve_remote_choice(record, work_dir)
         execution_launch: ExecutionLaunch | None = None
 
         try:
@@ -1408,6 +1653,23 @@ class RemoteJobRunner:
             )
             is_batch_structures = str(spec.input.get("source_type") or "") == "batch_structures"
             remote_input_name = "batch_items.json" if is_batch_structures else "input.xyz"
+            # 07-C: freeze AFTER the verified release is known and BEFORE the
+            # dispatcher resolves the attempt entry.  The frozen group is then
+            # uploaded below and is the node-side executable input.
+            self._freeze_remote_attempt(
+                record,
+                work_dir,
+                str(materialized) if materialized is not None else str(work_dir / "input.xyz"),
+                code_release,
+                event_log,
+            )
+            if code_release:
+                frozen_result = dict(record.result or {})
+                frozen_meta = dict(frozen_result.get("remote") or {})
+                frozen_meta["code_release"] = code_release
+                frozen_result["remote"] = frozen_meta
+                record.result = frozen_result
+            choice = self._resolve_remote_choice(record, work_dir)
             if bond_scan_mode:
                 scan_payload = build_remote_scan_config_payload(spec) or {}
                 scan_config_local = work_dir / SCAN_CONFIG_FILENAME
