@@ -24,6 +24,10 @@ Acceptance clauses verified here:
    race (exactly one executor entry; loser writes only a refusal, never an
    authoritative receipt/task_result, never a job failure CAS), and the
    killed-writer proof.
+8. **07-A singlepoint freeze spec + immutable local release (todo 25)**: the
+   spec reuses the workflow request builder and the ACP identity authority,
+   freezes work-dir-relative paths, binds an immutable content-addressed
+   release, and never activates a workflow.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ import ast
 import hashlib
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -41,6 +46,9 @@ from pathlib import Path
 
 import pytest
 
+from acp.calculations import attempt_freeze as acp_freeze
+from acp.calculations.contracts import StepKind
+from acp.calculations.identity import compute_identity
 from acp.scheduler.jobs import JobRecord, JobSpec
 from acp.scheduler.remote.script_gen import (
     build_remote_cli_command,
@@ -78,6 +86,7 @@ from acp_services.worker_bootstrap import (
     freeze_frozen_plan,
     frozen_plan_body_digest,
 )
+from cccp.calculation.requests import TaskRequest
 from tests.test_acp_services_isolation import (
     _code_only_text,
     scan_for_acp_imports,
@@ -1264,3 +1273,280 @@ def test_killed_real_writer_never_yields_mixed_group(tmp_path: Path) -> None:
     assert chain.frozen_artifacts_present(work) is True
     assert group.manifest.attempt == 1
     assert not staging.exists()  # stale staging cleaned, never adopted
+
+
+# ---------------------------------------------------------------------------
+# 8. 07-A singlepoint freeze spec + immutable local release (todo 25)
+# ---------------------------------------------------------------------------
+
+_T25_XYZ = """3
+water
+O 0.000000 0.000000 0.000000
+H 0.960000 0.000000 0.000000
+H -0.240000 0.930000 0.000000
+"""
+
+
+def _t25_record(*, attempt: int = 1, with_method: bool = True) -> JobRecord:
+    method: dict = {}
+    if with_method:
+        method = {
+            "levels": {
+                "single_point": {
+                    "functional": "wB97X-D4",
+                    "basis": "def2-SVP",
+                }
+            }
+        }
+    spec = JobSpec(
+        workflow="singlepoint",
+        name="t25",
+        input={"charge": 0, "multiplicity": 1},
+        method=method,
+    )
+    return JobRecord(id="job-t25", spec=spec, attempt=attempt, work_dir="")
+
+
+@pytest.fixture(scope="module")
+def t25_release(tmp_path_factory: pytest.TempPathFactory):
+    """One immutable release of the real execution tree for the T25 tests."""
+    run_root = tmp_path_factory.mktemp("t25-release-runs")
+    return acp_freeze.build_local_release(_REPO_ROOT, run_root)
+
+
+def _t25_work(tmp_path: Path) -> Path:
+    work = tmp_path / "task"
+    work.mkdir()
+    (work / "input.xyz").write_text(_T25_XYZ, encoding="utf-8")
+    return work
+
+
+def test_t25_singlepoint_freeze_spec_creates_complete_recomputable_group(
+    tmp_path: Path, t25_release: acp_freeze.LocalRelease
+) -> None:
+    work = _t25_work(tmp_path)
+    record = _t25_record()
+    release = t25_release
+
+    spec = acp_freeze.build_singlepoint_freeze_spec(record, work, work / "input.xyz", release)
+
+    assert spec.workflow == "singlepoint"
+    envelope = spec.envelope
+    assert envelope.job_id == record.id
+    assert envelope.attempt == 1
+    assert envelope.submission_id == expected_submission_id(record.id, record.attempt)
+    assert envelope.release_id == release.release_id
+    assert envelope.release_digest == release.release_digest
+    assert envelope.owner == f"local:{socket.gethostname()}:{os.getpid()}:1"
+    assert len(envelope.fencing_token) == 32
+    int(envelope.fencing_token, 16)  # 32 hex characters
+    assert envelope.plan_digest == frozen_plan_body_digest(spec.plan)
+    assert envelope.plan_digest == spec.plan.identity.plan_digest
+    assert envelope.plan_identity == spec.plan.identity.plan_identity
+    assert tuple(envelope.step_identities) == tuple(spec.plan.identity.step_identities)
+
+    task_request = TaskRequest.from_dict(spec.plan.payload)
+    assert task_request.structure is not None
+    assert task_request.structure.path == Path("input.xyz")
+    assert task_request.output_dir == Path(".")
+    assert task_request.level.method == "wB97X-D4"
+    assert task_request.level.basis == "def2-SVP"
+    assert spec.plan.item_symbols == ("O", "H", "H")
+
+    binding = spec.binding
+    assert binding is not None
+    assert binding.kind == "local"
+    assert binding.endpoint == "local"
+    assert binding.relative_path == work.name
+    assert binding.artifact_digests["input.xyz"] == (
+        "sha256:" + hashlib.sha256((work / "input.xyz").read_bytes()).hexdigest()
+    )
+
+    group = write_frozen_attempt(work, spec)
+    assert {entry.name for entry in group.directory.iterdir()} == {
+        chain.ENVELOPE_FILENAME,
+        chain.PLAN_FILENAME,
+        chain.BINDING_FILENAME,
+        chain.FROZEN_GROUP_MANIFEST_FILENAME,
+    }
+    manifest = json.loads(
+        (group.directory / chain.FROZEN_GROUP_MANIFEST_FILENAME).read_text(encoding="utf-8")
+    )
+    assert manifest["release_id"] == release.release_id
+    assert manifest["release_digest"] == release.release_digest
+    assert manifest["owner"] == envelope.owner
+    assert manifest["fencing_token"] == envelope.fencing_token
+    assert manifest["plan_identity"] == envelope.plan_identity
+    for name, digest in manifest["members"].items():
+        assert hashlib.sha256((group.directory / name).read_bytes()).hexdigest() == digest
+
+    # Recompute the ACP science identity through the existing authority.
+    context, request, task = acp_freeze._build_singlepoint_request(  # noqa: SLF001
+        record, work, work / "input.xyz"
+    )
+    assert task.to_dict() == spec.plan.payload
+    calculation_plan = acp_freeze._build_plan(  # noqa: SLF001
+        StepKind.SINGLEPOINT, [request], [StepKind.SINGLEPOINT]
+    )
+    identity = compute_identity(calculation_plan, location_root=work)
+    assert identity.plan_identity == envelope.plan_identity
+    assert identity.step_identities == envelope.step_identities
+    assert task_request.structure.path.is_absolute() is False
+
+    # No jobs DB is created by the freeze path.
+    assert not list(tmp_path.rglob("*.db"))
+
+
+def test_t25_same_attempt_reuses_group_and_a_new_attempt_conflicts(
+    tmp_path: Path, t25_release: acp_freeze.LocalRelease
+) -> None:
+    work = _t25_work(tmp_path)
+    first = acp_freeze.build_singlepoint_freeze_spec(
+        _t25_record(), work, work / "input.xyz", t25_release
+    )
+    group = write_frozen_attempt(work, first)
+
+    reused = acp_freeze.build_singlepoint_freeze_spec(
+        _t25_record(), work, work / "input.xyz", t25_release
+    )
+    assert reused.envelope.fencing_token == first.envelope.fencing_token
+    assert reused.envelope.owner == first.envelope.owner
+    again = write_frozen_attempt(work, reused)
+    assert again.manifest.identity_key == group.manifest.identity_key
+
+    with pytest.raises(acp_freeze.AttemptFreezeConflictError, match="belongs to attempt 1"):
+        acp_freeze.build_singlepoint_freeze_spec(
+            _t25_record(attempt=2), work, work / "input.xyz", t25_release
+        )
+    assert chain.load_frozen_group(work).manifest.attempt == 1
+
+
+def test_t25_release_digest_tracks_acp_services_and_stale_release_refuses(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    (project / "src" / "acp").mkdir(parents=True)
+    (project / "src" / "acp_services").mkdir(parents=True)
+    (project / "src" / "cccp").mkdir(parents=True)
+    (project / "config").mkdir(parents=True)
+    (project / "src" / "acp" / "a.py").write_text("A = 1\n", encoding="utf-8")
+    (project / "src" / "acp_services" / "svc.py").write_text("S = 1\n", encoding="utf-8")
+    (project / "src" / "cccp" / "c.py").write_text("C = 1\n", encoding="utf-8")
+    (project / "requirements-node.txt").write_text("numpy\n", encoding="utf-8")
+    (project / "config" / "defaults.yaml").write_text("x: 1\n", encoding="utf-8")
+
+    run_root = tmp_path / "runs"
+    first = acp_freeze.build_local_release(project, run_root)
+    first_identity = acp_freeze.local_release_identity(project)
+    assert first.release_id == first_identity.release_id
+    assert first.release_digest == first_identity.release_digest
+    assert len(first.release_id) == 16
+    assert len(first.release_digest) == 64
+    first.assert_current()
+
+    (project / "src" / "acp_services" / "svc.py").write_text("S = 2\n", encoding="utf-8")
+    second_identity = acp_freeze.local_release_identity(project)
+    assert second_identity.release_id != first_identity.release_id
+    assert second_identity.release_digest != first_identity.release_digest
+    with pytest.raises(acp_freeze.StaleReleaseError):
+        first.assert_current()
+
+    work = _t25_work(tmp_path)
+    with pytest.raises(acp_freeze.StaleReleaseError):
+        acp_freeze.build_singlepoint_freeze_spec(_t25_record(), work, work / "input.xyz", first)
+
+    second = acp_freeze.build_local_release(project, run_root)
+    assert second.release_id == second_identity.release_id
+    assert second.release_id != first.release_id
+    assert second.root != first.root
+    assert first.root.is_dir()  # the old immutable release is never deleted
+    assert second.root.is_dir()
+
+
+def test_t25_worker_loads_acp_services_from_the_release(
+    tmp_path: Path, t25_release: acp_freeze.LocalRelease
+) -> None:
+    work = _t25_work(tmp_path)
+    group = acp_freeze.freeze_singlepoint_attempt(
+        _t25_record(), work, work / "input.xyz", t25_release
+    )
+    run_root = tmp_path / "empty_run_root"
+    run_root.mkdir()
+    env = _child_env(run_root)
+    env["PYTHONPATH"] = str(t25_release.worker_pythonpath) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import acp_services, acp_services.worker_bootstrap as w; "
+            "print(acp_services.__file__); print(w.__file__)",
+        ],
+        cwd=str(work),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert probe.returncode == 0, probe.stderr
+    module_paths = [Path(line) for line in probe.stdout.splitlines() if line.strip()]
+    assert len(module_paths) == 2
+    for module_path in module_paths:
+        assert module_path.resolve().is_relative_to(t25_release.root.resolve())
+
+    assert group.binding_path is not None
+    worker = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "acp_services.worker_bootstrap",
+            "--envelope",
+            str(group.envelope_path),
+            "--plan",
+            str(group.plan_path),
+            "--binding",
+            str(group.binding_path),
+            "--work-dir",
+            str(work),
+            "--probe-executor",
+            "ok",
+        ],
+        cwd=str(work),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert worker.returncode == 0, worker.stdout + worker.stderr
+    receipt = json.loads((work / "execution_receipt.json").read_text(encoding="utf-8"))
+    assert receipt["state"] == "completed"
+    assert receipt["release_id"] == t25_release.release_id
+    assert receipt["release_digest"] == t25_release.release_digest
+    assert list(run_root.iterdir()) == []  # no jobs DB from the release worker
+
+
+def test_t25_local_release_identity_imports_without_remote_extra() -> None:
+    code = (
+        "import sys\n"
+        "sys.modules['paramiko'] = None\n"
+        "from acp.calculations.attempt_freeze import local_release_identity\n"
+        "loaded = [name for name in sys.modules if name.startswith('acp.scheduler.remote')]\n"
+        "assert loaded == [], loaded\n"
+        f"identity = local_release_identity({str(_REPO_ROOT)!r})\n"
+        "print(identity.release_id, identity.release_digest)\n"
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(_REPO_ROOT / "src")
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(_REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr
+    release_id, digest = proc.stdout.split()
+    assert len(release_id) == 16
+    assert len(digest) == 64

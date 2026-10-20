@@ -249,3 +249,22 @@ def test_enablement_module_is_acp_free() -> None:
         encoding="utf-8"
     )
     assert scan_for_acp_imports(source) == []
+
+
+# ---------------------------------------------------------------------------
+# T25: the freeze/release builder adds no activation
+# ---------------------------------------------------------------------------
+
+
+def test_t25_freeze_builder_does_not_activate_any_workflow() -> None:
+    from acp.calculations import attempt_freeze as freeze
+
+    assert not hasattr(freeze, "DEFAULT_ENVELOPE_WORKFLOWS")
+    assert not hasattr(freeze, "ENABLED_WORKFLOWS")
+    # The 8/7 scientific-closure entry policy is unchanged by adding a freeze
+    # builder: no workflow becomes default, and every active workflow keeps the
+    # entry the existing dispatcher/enablement matrix already recorded.
+    assert len(enablement.ACTIVE_WORKFLOWS) == 15
+    for row in enablement.enablement_matrix():
+        assert row.entry == enablement.select_entry(row.workflow)
+        assert row.remote_entry == enablement.select_entry(row.workflow, remote=True)
