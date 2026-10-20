@@ -50,7 +50,12 @@ from acp_services.contracts.envelope import (
     ensure_no_runtime_state,
 )
 from acp_services.contracts.injection import StepRequirementPort
+from acp_services.runtime.errors import WorkerError
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+from acp_services.runtime.receipt_identity import (
+    ReceiptIdentityError,
+    compare_receipt_identity,
+)
 
 __all__ = [
     "JOB_STATUS_BY_RECEIPT_STATE",
@@ -102,10 +107,9 @@ __all__ = [
 # ── errors ──────────────────────────────────────────────────────────────────
 
 
-class WorkerError(Exception):
-    """Base class for frozen-worker contract violations."""
-
-
+#: ``WorkerError`` is owned by the dependency-free :mod:`runtime.errors` module
+#: (D02) so ``runtime.receipts`` can share the base without importing this
+#: module. It stays importable from here (identity preserved, ANTI #30).
 class PlanVerificationError(WorkerError):
     """The supplied plan does not match the envelope's frozen plan identity."""
 
@@ -119,8 +123,13 @@ class DependencyNotSatisfiedError(WorkerError):
         self.reason = reason
 
 
-class ReceiptConflictError(WorkerError):
-    """A different attempt/submission already owns the receipt path."""
+class ReceiptConflictError(ReceiptIdentityError):
+    """A different attempt/identity already owns the receipt path.
+
+    Carries the full :class:`~acp_services.runtime.receipt_identity.ReceiptIdentityComparison`
+    on ``comparison`` when the conflict is an identity mismatch; unreadable
+    receipt payloads raise it with a message only (``comparison`` is ``None``).
+    """
 
 
 # ── frozen plan wire form ───────────────────────────────────────────────────
@@ -1240,15 +1249,20 @@ class FrozenWorker:
     ) -> ExecutionReceipt:
         """Execute the attempt once and return the (atomically written) receipt.
 
-        Idempotent: an existing receipt for the same ``(job, attempt,
-        submission)`` is returned without re-execution; an existing receipt for
-        a different identity is rejected (never silently overwritten).
+        Idempotent: an existing receipt for the same full frozen identity is
+        returned without re-execution; an existing receipt for a different
+        identity is rejected (never silently overwritten).
+
+        ``validate()`` always runs first — even when a receipt already exists —
+        so a tampered plan body, a plan/envelope identity mismatch, or a
+        prerequisite gate failure is rejected before a stale receipt can be
+        mistaken for the current attempt's result.
         """
         existing = read_receipt(receipt_path)
+        self.validate(envelope, plan, prior_steps=prior_steps, item_symbols=item_symbols)
         if existing is not None:
             return _reuse_or_conflict(existing, envelope)
 
-        self.validate(envelope, plan, prior_steps=prior_steps, item_symbols=item_symbols)
         scope = ExecutionScope(
             envelope=envelope,
             plan=plan,
@@ -1279,15 +1293,11 @@ def _assert_plan_matches_envelope(
 
 
 def _reuse_or_conflict(existing: ExecutionReceipt, envelope: ExecutionEnvelope) -> ExecutionReceipt:
-    if (
-        existing.job_id,
-        existing.attempt,
-        existing.submission_id,
-    ) == (envelope.job_id, envelope.attempt, envelope.submission_id):
+    comparison = compare_receipt_identity(existing, envelope)
+    if comparison.matches:
         return existing
     raise ReceiptConflictError(
-        f"receipt already exists for job {existing.job_id!r} attempt "
-        f"{existing.attempt} submission {existing.submission_id!r}; refusing to "
-        f"overwrite with job {envelope.job_id!r} attempt {envelope.attempt} "
-        f"submission {envelope.submission_id!r}"
+        "existing receipt does not carry the frozen envelope's identity "
+        f"({comparison.describe()}); refusing to reuse or overwrite it",
+        comparison=comparison,
     )
