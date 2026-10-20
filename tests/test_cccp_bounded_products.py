@@ -21,10 +21,14 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from cccp.analysis.bounded import (
+    BOUNDED_IDENTITY_RULE_VERSION,
+    BOUNDED_SCHEMA_VERSION,
     DISPLAY_SAMPLING_NOTE,
     GENERATOR_CHUNK,
     GENERATOR_MULTIRESOLUTION,
@@ -34,6 +38,8 @@ from cccp.analysis.bounded import (
     KEY_GLOBAL_MAX,
     KEY_GLOBAL_MIN,
     KEY_LOCAL_MIN,
+    LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
+    LEGACY_BOUNDED_SCHEMA_VERSION,
     BoundedProduct,
     BoundedSchemaError,
     BoundedSpec,
@@ -46,6 +52,7 @@ from cccp.analysis.bounded import (
     reconstruct_curve_series,
     reconstruct_structure_frames,
     selected_point_mapping,
+    source_identity_digest,
     subsample_curve_product,
 )
 from cccp.calculation.products import (
@@ -318,7 +325,7 @@ def test_identity_stable_for_same_input_and_distinct_for_parameters():
     assert first.input_digest == product.identity.input_digest
     assert first.generator == GENERATOR_CHUNK
     assert first.algorithm == "chunk"
-    assert first.algorithm_version == "1"
+    assert first.algorithm_version == "2"
     # platform identity never enters the derived identity
     assert "job" not in json.dumps(first.to_dict())
     assert "account" not in json.dumps(first.to_dict())
@@ -348,6 +355,149 @@ def test_identity_distinct_for_multiresolution_level_set():
     three = build_multiresolution_product(product, resolutions=[1, 10, 100]).identity
     assert two.params_digest != three.params_digest
     assert two.generator == GENERATOR_MULTIRESOLUTION
+
+
+def _source_from_same_input(*, y: float, version: str):
+    """Two sources over the *same* raw input digest but different generators."""
+    series = CurveSeries(
+        ref=SeriesRef(series_id="curve", x_unit="angstrom", y_unit="hartree"),
+        points=(PointRecord(point_id="p0", x=0.0, y=y),),
+    )
+    return build_curve_scatter_product(
+        series=[series],
+        input_digest="sha256:same-raw-input",
+        algorithm="parser",
+        algorithm_version=version,
+        params_digest=f"sha256:params:{version}",
+    )
+
+
+def test_d10_counterexample_distinct_source_science_keeps_derived_identity():
+    """D10: two sources over one input must not collapse to one cache identity."""
+    a, b = _source_from_same_input(y=-1.0, version="1"), _source_from_same_input(
+        y=-2.0, version="2"
+    )
+    assert a.identity != b.identity
+    chunked_a = chunk_curve_product(a, chunk_size=1)
+    chunked_b = chunk_curve_product(b, chunk_size=1)
+    assert chunked_a.identity != chunked_b.identity, (
+        "different source algorithms collapse to one derived identity"
+    )
+    assert chunked_a.blocks[0].product.identity != chunked_b.blocks[0].product.identity, (
+        "different source algorithms collapse to one block identity"
+    )
+    assert chunked_a.identity.params_digest != chunked_b.identity.params_digest
+    assert chunked_a.blocks[0].product.identity.params_digest != (
+        chunked_b.blocks[0].product.identity.params_digest
+    )
+    assert chunked_a.identity.input_digest == a.identity.input_digest
+    assert chunked_a.identity.algorithm_version == "2"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("generator", "cccp.other.build_curve_scatter_product"),
+        ("algorithm", "other_parser"),
+        ("algorithm_version", "9"),
+        ("params_digest", "sha256:other-params"),
+    ],
+)
+def test_source_identity_fields_reach_derived_and_block_identities(field, value):
+    product = _curve_product(12)
+    variant = replace(product, identity=replace(product.identity, **{field: value}))
+    reference = chunk_curve_product(product, chunk_size=4)
+    changed = chunk_curve_product(variant, chunk_size=4)
+    assert changed.identity != reference.identity
+    assert changed.identity.params_digest != reference.identity.params_digest
+    assert len(changed.blocks) == len(reference.blocks)
+    for changed_block, reference_block in zip(changed.blocks, reference.blocks):
+        assert changed_block.product.identity != reference_block.product.identity
+        assert (
+            changed_block.product.identity.params_digest
+            != reference_block.product.identity.params_digest
+        )
+
+
+def test_every_block_carries_the_verified_source_identity_digest():
+    curve = _curve_product(40)
+    manifests = (
+        chunk_curve_product(curve, chunk_size=8),
+        subsample_curve_product(curve, stride=7),
+        build_multiresolution_product(curve, resolutions=[1, 5]),
+        chunk_trajectory_product(_traj_product(9), chunk_size=4),
+    )
+    for manifest in manifests:
+        expected = source_identity_digest(manifest.base_identity)
+        assert manifest.schema_version == BOUNDED_SCHEMA_VERSION
+        assert manifest.spec.identity_rule_version == BOUNDED_IDENTITY_RULE_VERSION
+        assert manifest.spec.source_identity_digest == expected
+        assert manifest.identity.params_digest == manifest.spec.params_digest()
+        assert manifest.blocks, "a bounded product always carries blocks"
+        assert all(block.source_identity_digest == expected for block in manifest.blocks)
+        assert manifest.is_cache_adoptable() is True
+
+
+def test_forged_source_identity_digest_is_rejected():
+    product = _curve_product(10)
+    forged = BoundedSpec(
+        method="chunk",
+        resolution=5,
+        start=0,
+        end=10,
+        source_identity_digest="sha256:" + "0" * 64,
+    )
+    with pytest.raises(BoundedSchemaError, match="does not match"):
+        bounded_identity(product.identity, forged, generator=GENERATOR_CHUNK)
+    # The legacy rule cannot smuggle a digest past verification either.
+    with pytest.raises(BoundedSchemaError):
+        BoundedSpec(
+            method="chunk",
+            resolution=5,
+            start=0,
+            end=10,
+            identity_rule_version=LEGACY_BOUNDED_IDENTITY_RULE_VERSION,
+            source_identity_digest="sha256:" + "1" * 64,
+        )
+
+
+_BOUNDED_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "science_products" / "bounded"
+    / "curve_scatter_normal" / "manifest.json"
+)
+
+
+def test_v1_manifest_reads_with_old_digest_but_is_not_cache_adoptable():
+    document = json.loads(_BOUNDED_FIXTURE.read_text())
+    legacy = BoundedProduct.from_dict(document)
+    assert legacy.schema_version == LEGACY_BOUNDED_SCHEMA_VERSION
+    assert legacy.spec.identity_rule_version == LEGACY_BOUNDED_IDENTITY_RULE_VERSION
+    assert legacy.identity.params_digest == document["bounded_identity"]["params_digest"]
+    # The v1 params payload is reproduced byte-for-byte (old rule, no source digest).
+    assert legacy.spec.params_digest() == legacy.identity.params_digest
+    assert legacy.is_cache_adoptable() is False
+    again = BoundedProduct.from_dict(json.loads(json.dumps(legacy.to_dict())))
+    assert again == legacy
+    assert again.is_cache_adoptable() is False
+
+
+def test_v1_to_v2_migration_rebuilds_under_the_new_identity():
+    legacy = BoundedProduct.from_dict(json.loads(_BOUNDED_FIXTURE.read_text()))
+    series = reconstruct_curve_series(legacy)
+    base = build_curve_scatter_product(
+        series=[series],
+        input_digest=legacy.base_identity.input_digest,
+        algorithm=legacy.base_identity.algorithm,
+        algorithm_version=legacy.base_identity.algorithm_version,
+        params_digest=legacy.base_identity.params_digest,
+    )
+    assert base.identity.to_dict() == legacy.base_identity.to_dict()
+    rebuilt = chunk_curve_product(base, chunk_size=legacy.spec.resolution)
+    assert rebuilt.schema_version == BOUNDED_SCHEMA_VERSION
+    assert rebuilt.identity.input_digest == legacy.identity.input_digest
+    assert rebuilt.identity.params_digest != legacy.identity.params_digest
+    assert rebuilt.is_cache_adoptable() is True
+    assert legacy.is_cache_adoptable() is False
 
 
 # ── trajectory chunking ─────────────────────────────────────────────────
