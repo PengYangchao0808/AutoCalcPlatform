@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import posixpath
+import stat
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -1506,6 +1507,7 @@ class _ReadRootAdapter:
         result = getattr(record, "result", None) or {}
         is_remote = bool(result.get("node") and result.get("remote_dir"))
         workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        attempt = int(getattr(record, "attempt", 0) or 0) or None
         if is_remote:
             root = self._cache.job_root(record.id)
             ready = self._cache.catalog_ready(root, workflow)
@@ -1515,24 +1517,66 @@ class _ReadRootAdapter:
                 is_remote=True,
                 catalog_ready=ready,
                 found=True,
+                attempt=attempt,
             )
         work_dir = Path(str(record.work_dir))
         return ReadRoot(
             job_id=job_id,
             path=str(work_dir),
             is_remote=False,
-            catalog_ready=work_dir.is_dir(),
+            catalog_ready=self._cache.catalog_ready(work_dir, workflow),
             found=True,
+            attempt=attempt,
         )
+
+
+class _UnsafeReadPathError(ValueError):
+    """A relative path cannot be opened inside the controlled read root."""
+
+
+def _open_within_root(root: Path, relative_path: str) -> int:
+    """Open *relative_path* under *root* as one descriptor-pinned snapshot.
+
+    Absolute paths, empty/``.``/``..`` components and every symlink component
+    are refused.  The walk is descriptor-relative with ``O_NOFOLLOW`` and the
+    returned descriptor is the only handle used for the bounded read, so a
+    path/root/symlink swap after the last check cannot redirect the read
+    outside *root*.
+    """
+    if not relative_path:
+        raise _UnsafeReadPathError(relative_path)
+    rel = Path(relative_path)
+    if rel.is_absolute():
+        raise _UnsafeReadPathError(relative_path)
+    parts = rel.parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise _UnsafeReadPathError(relative_path)
+    if any(os.sep in part or (os.altsep and os.altsep in part) for part in parts):
+        raise _UnsafeReadPathError(relative_path)
+    cloexec = getattr(os, "O_CLOEXEC", 0)
+    dir_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | cloexec
+    file_flags = os.O_RDONLY | os.O_NOFOLLOW | cloexec
+    current = os.open(str(root), dir_flags)
+    try:
+        for part in parts[:-1]:
+            next_fd = os.open(part, dir_flags, dir_fd=current)
+            os.close(current)
+            current = next_fd
+        return os.open(parts[-1], file_flags, dir_fd=current)
+    finally:
+        os.close(current)
 
 
 class _ReadCacheIndexAdapter:
     """Expose the prepared cache index read-only (stat + bounded range read).
 
-    ``entry`` / ``catalog`` are local stat/fence reads (``get_cached`` /
-    ``catalog_ready`` / ``_read_fence``); ``read_bytes`` opens the cached file
-    and reads at most *limit* bytes at *offset* so a large file is never loaded
-    whole into memory.  No method can fetch from a node.
+    ``entry`` / ``catalog`` are local fact reads; for a local root they open
+    the target inside that root (descriptor-relative, no symlink following)
+    instead of consulting the remote cache.  For a remote root they only serve
+    ``RemoteStructureCache.get_cached``.  ``read_bytes`` consumes and closes
+    the descriptor the entry opened, so resolve + open + fstat + read are one
+    snapshot and a large file is never loaded whole into memory.  No method can
+    fetch from a node.
     """
 
     def __init__(self, cache: RemoteStructureCache) -> None:
@@ -1541,35 +1585,121 @@ class _ReadCacheIndexAdapter:
     def _generation(self, job_id: str) -> int:
         return int(self._cache._read_fence(job_id)[1])
 
+    @staticmethod
+    def _refuses_attempt(root: ReadRoot, attempt: int | None) -> bool:
+        if root.is_remote or attempt is None:
+            return False
+        return root.attempt is None or int(root.attempt) != int(attempt)
+
     def entry(
-        self, job_id: str, relative_path: str, *, attempt: int | None = None
+        self,
+        root: ReadRoot,
+        relative_path: str,
+        *,
+        attempt: int | None = None,
+        snapshot: bool = False,
     ) -> CacheIndexFacts:
-        try:
-            path = self._cache.get_cached(job_id, relative_path, attempt=attempt)
-        except ValueError:
+        requested = int(attempt) if attempt is not None else None
+        if not root.found or not root.path or self._refuses_attempt(root, requested):
             return CacheIndexFacts(present=False)
-        if path is None:
-            return CacheIndexFacts(present=False)
-        size: int | None = None
+        approved: Path | None = None
+        if root.is_remote:
+            try:
+                approved = self._cache.get_cached(root.job_id, relative_path, attempt=requested)
+            except ValueError:
+                return CacheIndexFacts(present=False)
+            if approved is None:
+                return CacheIndexFacts(present=False)
+            root_dir = self._cache.job_root(root.job_id)
+            generation = self._generation(root.job_id)
+        else:
+            root_dir = Path(root.path)
+            generation = 0
         try:
-            size = path.stat().st_size
-        except OSError:
-            size = None
-        return CacheIndexFacts(
-            present=True,
-            cached_path=str(path),
-            total_size=size,
-            generation=self._generation(job_id),
-        )
+            return self._snapshot_facts(
+                root_dir, relative_path, approved, generation, snapshot=snapshot
+            )
+        except (OSError, ValueError):
+            return CacheIndexFacts(present=False)
 
-    def catalog(self, job_id: str, root: str, workflow: str) -> CacheIndexFacts:
-        ready = self._cache.catalog_ready(Path(root), workflow)
-        return CacheIndexFacts(present=ready, generation=self._generation(job_id))
+    @staticmethod
+    def _snapshot_facts(
+        root_dir: Path,
+        relative_path: str,
+        approved: Path | None,
+        generation: int,
+        *,
+        snapshot: bool,
+    ) -> CacheIndexFacts:
+        descriptor = _open_within_root(root_dir, relative_path)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                raise _UnsafeReadPathError(relative_path)
+            if approved is not None:
+                try:
+                    expected = os.stat(approved)
+                except OSError as exc:
+                    raise _UnsafeReadPathError(relative_path) from exc
+                if (expected.st_dev, expected.st_ino) != (opened.st_dev, opened.st_ino):
+                    raise _UnsafeReadPathError(relative_path)
+            facts = CacheIndexFacts(
+                present=True,
+                cached_path=str(approved or (root_dir / relative_path)),
+                total_size=int(opened.st_size),
+                generation=generation,
+                snapshot=descriptor if snapshot else None,
+            )
+        except BaseException:
+            os.close(descriptor)
+            raise
+        if not snapshot:
+            os.close(descriptor)
+        return facts
 
-    def read_bytes(self, path: str, offset: int, limit: int) -> bytes:
-        with open(path, "rb") as handle:  # noqa: PTH123 - bounded binary range read
-            handle.seek(int(offset))
-            return handle.read(int(limit))
+    def catalog(self, root: ReadRoot, workflow: str) -> CacheIndexFacts:
+        if not root.found or not root.path:
+            return CacheIndexFacts(present=False)
+        root_dir = Path(root.path)
+        generation = self._generation(root.job_id) if root.is_remote else 0
+        if root.is_remote and not self._cache.catalog_ready(root_dir, workflow):
+            return CacheIndexFacts(present=False)
+        for rel_path in _catalog_ready_paths(workflow):
+            try:
+                descriptor = _open_within_root(root_dir, rel_path)
+            except (OSError, ValueError):
+                continue
+            try:
+                opened = os.fstat(descriptor)
+            finally:
+                os.close(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                continue
+            return CacheIndexFacts(
+                present=True,
+                cached_path=str(root_dir / rel_path),
+                total_size=int(opened.st_size),
+                generation=generation,
+            )
+        return CacheIndexFacts(present=False)
+
+    def read_bytes(self, facts: CacheIndexFacts, offset: int, limit: int) -> bytes:
+        descriptor = facts.snapshot
+        if not isinstance(descriptor, int):
+            raise ValueError("cache index facts carry no open read snapshot")
+        try:
+            os.lseek(descriptor, max(0, int(offset)), os.SEEK_SET)
+            chunks: list[bytes] = []
+            remaining = max(0, int(limit))
+            while remaining > 0:
+                chunk = os.read(descriptor, min(remaining, 1 << 20))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            return b"".join(chunks)
+        finally:
+            os.close(descriptor)
 
 
 def _expected_catalog_prepare_request(
@@ -1684,6 +1814,7 @@ def build_read_only_reader(
     clock: Callable[[], str] | None = None,
     max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
     expected_provider: Callable[[AvailabilityRead], PrepareRequest | None] | None = None,
+    before_read: Callable[[], None] | None = None,
 ) -> ReadOnlyResourceReader:
     """Compose the strictly read-only reader from the real local mechanisms.
 
@@ -1699,6 +1830,8 @@ def build_read_only_reader(
             (``AvailabilityRead -> PrepareRequest``).  Production attempts to
             carry the full runtime identity (task 15/18) inject it here; the
             default derives the catalog identity from the job record.
+        before_read: Optional instrumentation barrier invoked after the
+            descriptor-pinned snapshot is opened and before the bounded read.
 
     Returns:
         A :class:`ReadOnlyResourceReader` that never fetches over SSH/SFTP,
@@ -1720,6 +1853,7 @@ def build_read_only_reader(
         operations=_OperationAvailabilityAdapter(operations, expected_provider=_expected),
         clock=clock,
         max_read_bytes=max_read_bytes,
+        before_read=before_read,
     )
 
 

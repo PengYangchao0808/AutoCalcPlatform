@@ -98,6 +98,11 @@ class ReadRoot:
     is_remote: bool = False
     catalog_ready: bool = False
     found: bool = True
+    #: The attempt this root was resolved for (``None`` when the caller did not
+    #: pin one).  A reader that asks for a different attempt must refuse rather
+    #: than fall back to this root (D04: a missing historical original is a
+    #: refusal, never the current ``work_dir``).
+    attempt: int | None = None
 
 
 @runtime_checkable
@@ -131,12 +136,19 @@ class ReadRootResolver:
 
 @dataclass(frozen=True)
 class CacheIndexFacts:
-    """One prepared-index observation for a resource (local stat only)."""
+    """One prepared-index observation for a resource.
+
+    ``snapshot`` is an opaque, port-owned token.  When it is not ``None`` the
+    port opened the target under the controlled root and owns a live
+    descriptor; :meth:`CacheIndexPort.read_bytes` consumes that descriptor and
+    performs the bounded read from it, so no path is resolved a second time.
+    """
 
     present: bool
     cached_path: str | None = None
     total_size: int | None = None
     generation: int = 0
+    snapshot: object | None = None
 
 
 @dataclass(frozen=True)
@@ -153,20 +165,36 @@ class OperationFacts:
 
 @runtime_checkable
 class CacheIndexPort(Protocol):
-    """Read the prepared cache index without fetching, parsing or writing."""
+    """Read the prepared cache index without fetching, parsing or writing.
+
+    ``root`` is the already-resolved :class:`ReadRoot` for the request, so the
+    port never re-resolves a root of its own.  For a local root
+    (``root.is_remote is False``) the port must open the target inside that
+    root as one authorized snapshot; for a remote root it may only serve the
+    controlled prepared-cache copy.
+    """
 
     def entry(
-        self, job_id: str, relative_path: str, *, attempt: int | None = None
+        self,
+        root: ReadRoot,
+        relative_path: str,
+        *,
+        attempt: int | None = None,
+        snapshot: bool = False,
     ) -> CacheIndexFacts:
-        """Return the prepared-index facts for one cached file."""
+        """Return the prepared-index facts for one file under *root*.
+
+        With ``snapshot=True`` the returned facts carry a live descriptor that
+        :meth:`read_bytes` must consume and close.
+        """
         ...
 
-    def catalog(self, job_id: str, root: str, workflow: str) -> CacheIndexFacts:
-        """Return the prepared-index facts for a job's catalog root."""
+    def catalog(self, root: ReadRoot, workflow: str) -> CacheIndexFacts:
+        """Return the prepared-index facts for *root*'s job catalog."""
         ...
 
-    def read_bytes(self, path: str, offset: int, limit: int) -> bytes:
-        """Read at most *limit* bytes at *offset* from an already-cached file."""
+    def read_bytes(self, facts: CacheIndexFacts, offset: int, limit: int) -> bytes:
+        """Read at most *limit* bytes at *offset* from the facts' snapshot."""
         ...
 
 
@@ -276,6 +304,16 @@ class AvailabilitySnapshot:
 # ---------------------------------------------------------------------------
 
 
+def _requested_attempt(attempt: int | None) -> int | None:
+    """Return the explicitly requested attempt, or ``None`` when unpinned.
+
+    An unpinned request keeps the port's default attempt-fence behaviour; a
+    pinned request is never silently replaced by the root's attempt (the port
+    refuses a root that cannot prove that attempt).
+    """
+    return int(attempt) if attempt is not None else None
+
+
 def _freshness_of(basis_revision: int, expected_revision: int) -> Freshness:
     """Map a (basis, expected) revision pair onto the frozen freshness trips.
 
@@ -301,6 +339,10 @@ class ReadOnlyResourceReader:
             projection reads as ``absent``.  This port has no write method.
         clock: Diagnostic timestamp source (tests pin it); defaults to UTC now.
         max_read_bytes: Hard cap for every bounded read (clamped, never exceeded).
+        before_read: Optional instrumentation barrier invoked after the target
+            snapshot has been opened and before its bounded read (tests use it
+            to swap a symlink/root and prove the descriptor still pins one
+            inside-root snapshot).
     """
 
     def __init__(
@@ -311,12 +353,14 @@ class ReadOnlyResourceReader:
         operations: OperationAvailabilityPort | None = None,
         clock: Callable[[], str] | None = None,
         max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
+        before_read: Callable[[], None] | None = None,
     ) -> None:
         self._resolver = resolver
         self._cache = cache_index
         self._operations = operations
         self._clock = clock or _utc_now_iso
         self._max_read_bytes = max(1, int(max_read_bytes))
+        self._before_read = before_read
 
     # -- availability ---------------------------------------------------
 
@@ -360,23 +404,20 @@ class ReadOnlyResourceReader:
 
         if request.relative_path:
             facts = self._cache.entry(
-                request.job_id, request.relative_path, attempt=request.attempt
+                root,
+                request.relative_path,
+                attempt=_requested_attempt(request.attempt),
             )
             ready = facts.present
             basis_revision = facts.generation if facts.present else request.basis_revision
             size_bytes = facts.total_size
             prepared_root = facts.cached_path if facts.present else None
-        elif root.is_remote:
-            facts = self._cache.catalog(request.job_id, root.path, request.workflow)
-            ready = bool(root.catalog_ready and facts.present)
+        else:
+            facts = self._cache.catalog(root, request.workflow)
+            ready = bool(root.path and facts.present)
             basis_revision = facts.generation
             size_bytes = facts.total_size
-            prepared_root = root.path if ready else None
-        else:
-            ready = bool(root.path and root.catalog_ready)
-            basis_revision = request.basis_revision
-            size_bytes = None
-            prepared_root = root.path if ready else None
+            prepared_root = (facts.cached_path or root.path) if ready else None
 
         if ready:
             operation_generation = int(op_facts.expected_revision) if op_facts else 0
@@ -439,22 +480,40 @@ class ReadOnlyResourceReader:
     def read_range(self, request: RangeReadRequest) -> BoundedRead:
         """Read a bounded byte range from an already-prepared resource.
 
+        The root is resolved exactly once per call and handed to the index
+        port.  For a local root the port opens the target inside this root as
+        one authorized snapshot; the bounded read consumes that same opened
+        descriptor, so a symlink/root/attempt swap after the check cannot move
+        the read outside the root or mix two attempts.
+
         The requested ``limit`` is clamped to ``max_read_bytes`` before it
         reaches the index port, so the file is never read whole into memory
         (Range/chunk semantics mirror ``remote/fetcher.py:read_range``).
 
         Raises:
-            ResourceNotPreparedError: The resource is not in the prepared
-                index.  No fetch and no enqueue is attempted.
+            ResourceNotPreparedError: The resource is not readable under the
+                resolved root.  No fetch, no enqueue and no fallback to
+                another root is attempted.
         """
-        facts = self._cache.entry(request.job_id, request.relative_path, attempt=request.attempt)
-        if not facts.present or not facts.cached_path:
+        root = self._resolver.resolve(request.job_id)
+        attempt = _requested_attempt(request.attempt)
+        if not root.found or not root.path:
+            raise ResourceNotPreparedError(f"resource not prepared: {request.job_id}")
+        facts = self._cache.entry(
+            root,
+            request.relative_path,
+            attempt=attempt,
+            snapshot=True,
+        )
+        if not facts.present or not facts.cached_path or facts.snapshot is None:
             raise ResourceNotPreparedError(
                 f"resource not prepared: {request.job_id}/{request.relative_path}"
             )
         offset = max(0, int(request.offset))
         limit = max(0, min(int(request.limit), self._max_read_bytes))
-        data = bytes(self._cache.read_bytes(facts.cached_path, offset, limit))
+        if self._before_read is not None:
+            self._before_read()
+        data = bytes(self._cache.read_bytes(facts, offset, limit))
         total_size = facts.total_size
         end = offset + len(data)
         truncated = total_size is not None and end < int(total_size)

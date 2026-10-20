@@ -20,9 +20,10 @@ Run with: pytest tests/test_services_read_root.py -q
 from __future__ import annotations
 
 import ast
+import os
 import sqlite3
 from collections.abc import Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -77,16 +78,29 @@ class _FakeCache:
         self.read_calls: list[tuple[str, int, int]] = []
         self.max_limit = 0
         self.network_calls = 0
+        self.roots_seen: list[ReadRoot] = []
+        self.catalogs_seen: list[ReadRoot] = []
 
     def entry(
-        self, job_id: str, relative_path: str, *, attempt: int | None = None
+        self,
+        root: ReadRoot,
+        relative_path: str,
+        *,
+        attempt: int | None = None,
+        snapshot: bool = False,
     ) -> CacheIndexFacts:
-        return self.entries.get((job_id, relative_path), CacheIndexFacts(present=False))
+        self.roots_seen.append(root)
+        facts = self.entries.get((root.job_id, relative_path), CacheIndexFacts(present=False))
+        if facts.present and snapshot:
+            return replace(facts, snapshot=facts.cached_path)
+        return facts
 
-    def catalog(self, job_id: str, root: str, workflow: str) -> CacheIndexFacts:
-        return self.catalogs.get((job_id, workflow), CacheIndexFacts(present=False))
+    def catalog(self, root: ReadRoot, workflow: str) -> CacheIndexFacts:
+        self.catalogs_seen.append(root)
+        return self.catalogs.get((root.job_id, workflow), CacheIndexFacts(present=False))
 
-    def read_bytes(self, path: str, offset: int, limit: int) -> bytes:
+    def read_bytes(self, facts: CacheIndexFacts, offset: int, limit: int) -> bytes:
+        path = str(facts.cached_path)
         self.read_calls.append((path, offset, limit))
         self.max_limit = max(self.max_limit, limit)
         return b"x" * limit
@@ -155,6 +169,7 @@ def _reader(
     cache: _FakeCache,
     ops: _FakeOps | None = None,
     max_read_bytes: int = 1 << 20,
+    before_read: Any | None = None,
 ) -> ReadOnlyResourceReader:
     return ReadOnlyResourceReader(
         resolver=ReadRootResolver(_FakeRootPort(roots)),
@@ -162,6 +177,7 @@ def _reader(
         operations=ops,
         clock=lambda: _FIXED_CLOCK,
         max_read_bytes=max_read_bytes,
+        before_read=before_read,
     )
 
 
@@ -460,6 +476,294 @@ def test_real_reader_availability_catalog_hit_no_network(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
+# D04 — local originals and remote cached copies through one read root
+# ---------------------------------------------------------------------------
+
+_LOCAL_FILES: dict[str, bytes] = {
+    "RESULT/result_manifest.json": b'{"version": 2}',
+    "RESULT/frame_candidates.json": b'{"schema_version": "frame_candidates_v2"}',
+    "RESULT/frequencies/normal_modes.json": b'{"schema_version": "normal_modes_v1"}',
+    "RESULT/structures/frame_0001.xyz": b"3\nwater\nO 0 0 0\nH 0 0 1\nH 0 0 -1\n",
+}
+
+_GEOMETRY_PATH = "RESULT/structures/frame_0001.xyz"
+
+
+class _FetchGuard:
+    """Any fetch-factory / fetcher use inside a read is a counted hard failure."""
+
+    def __init__(self) -> None:
+        self.factory_calls = 0
+        self.fetcher_calls = 0
+
+    def factory(self, _job_id: str) -> Any:
+        self.factory_calls += 1
+        raise AssertionError("fetch factory invoked inside a read")
+
+    def fetcher(self, *_args: Any, **_kwargs: Any) -> Any:
+        self.fetcher_calls += 1
+        raise AssertionError("fetcher invoked inside a read")
+
+
+def _write_tree(root: Path, files: dict[str, bytes]) -> None:
+    for relative_path, data in files.items():
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+
+def _local_record(
+    job_id: str, work_dir: Path, *, workflow: str = "optimize", attempt: int = 1
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=job_id,
+        attempt=attempt,
+        work_dir=str(work_dir),
+        result={},
+        spec=SimpleNamespace(workflow=workflow),
+    )
+
+
+def _serve_all(
+    reader: Any, job_id: str, workflow: str, *, attempt: int | None = None
+) -> dict[str, Any]:
+    served: dict[str, Any] = {}
+    for kind, relative_path in (
+        ("catalog", ""),
+        ("manifest", "RESULT/result_manifest.json"),
+        ("frame_candidates", "RESULT/frame_candidates.json"),
+        ("frequency_modes", "RESULT/frequencies/normal_modes.json"),
+        ("geometry", _GEOMETRY_PATH),
+    ):
+        served[kind] = reader.serve(
+            kind,
+            job_id=job_id,
+            workflow=workflow,
+            relative_path=relative_path,
+            attempt=attempt,
+        )
+    return served
+
+
+def test_reader_passes_resolved_read_root_to_cache_index_port() -> None:
+    root = ReadRoot(job_id="j1", path="/work/j1", found=True, attempt=4)
+    cache = _FakeCache(
+        entries={("j1", "RESULT/x.xyz"): CacheIndexFacts(present=True, cached_path="/w/x")},
+        catalogs={("j1", "optimize"): CacheIndexFacts(present=True, cached_path="/w/j1")},
+    )
+    reader = _reader(roots={"j1": root}, cache=cache)
+    reader.availability(
+        AvailabilityRead(job_id="j1", resource_id="file:x", relative_path="RESULT/x.xyz")
+    )
+    reader.availability(
+        AvailabilityRead(job_id="j1", resource_id="catalog:optimize", workflow="optimize")
+    )
+    reader.read_range(RangeReadRequest(job_id="j1", relative_path="RESULT/x.xyz", limit=4))
+    assert cache.roots_seen[0] == root
+    assert cache.catalogs_seen[0] == root
+    assert cache.roots_seen[-1] == root
+
+
+def test_local_root_serves_all_five_resources_without_copy_or_fetch(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    guard = _FetchGuard()
+    cache = RemoteStructureCache(run_root, fetcher_factory=guard.factory)
+    work = tmp_path / "project" / "water"
+    _write_tree(work, _LOCAL_FILES)
+    record = _local_record("local-five", work)
+    reader = build_cache_only_resource_reader(job_lookup={record.id: record}.get, cache=cache)
+
+    served = _serve_all(reader, record.id, "optimize")
+
+    assert set(served) == {"catalog", "manifest", "frame_candidates", "frequency_modes", "geometry"}
+    assert all(result.served for result in served.values()), served
+    assert served["manifest"].data == _LOCAL_FILES["RESULT/result_manifest.json"]
+    assert served["frame_candidates"].data == _LOCAL_FILES["RESULT/frame_candidates.json"]
+    assert served["frequency_modes"].data == _LOCAL_FILES["RESULT/frequencies/normal_modes.json"]
+    assert served["geometry"].data == _LOCAL_FILES[_GEOMETRY_PATH]
+    assert guard.factory_calls == 0
+    assert guard.fetcher_calls == 0
+    assert not (run_root / ".remote_cache").exists()
+
+
+def test_d04_counterexample_local_manifest_byte_identical(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    work = tmp_path / "project" / "water"
+    manifest = work / "RESULT" / "result_manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text('{"audit": true}', encoding="utf-8")
+    record = _local_record("audit-local", work, workflow="singlepoint")
+    cache = RemoteStructureCache(tmp_path / "runs")
+    reader = build_cache_only_resource_reader(job_lookup=lambda _jid: record, cache=cache)
+
+    result = reader.serve("manifest", job_id=record.id, workflow="singlepoint")
+
+    assert result.served, result
+    assert result.data == manifest.read_bytes()
+
+
+def test_remote_root_serves_all_five_resources_from_get_cached_only(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    guard = _FetchGuard()
+    cache = RemoteStructureCache(run_root, fetcher_factory=guard.factory)
+    job_id = "remote-five"
+    cache_root = cache.job_root(job_id)
+    _write_tree(cache_root, _LOCAL_FILES)
+    record = _remote_record(job_id, workflow="optimize", run_root=run_root)
+    reader = build_cache_only_resource_reader(job_lookup={job_id: record}.get, cache=cache)
+
+    served = _serve_all(reader, job_id, "optimize")
+
+    assert all(result.served for result in served.values()), served
+    assert served["manifest"].data == _LOCAL_FILES["RESULT/result_manifest.json"]
+    assert served["geometry"].data == _LOCAL_FILES[_GEOMETRY_PATH]
+    assert guard.factory_calls == 0
+    assert guard.fetcher_calls == 0
+
+
+def test_local_read_rejects_absolute_parent_and_symlink_escape(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    cache = RemoteStructureCache(run_root)
+    work = tmp_path / "work"
+    work.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"SECRET")
+    record = _local_record("local-paths", work)
+    reader = build_read_only_reader(job_lookup={record.id: record}.get, cache=cache)
+
+    for bad_path in (str(outside), "../outside.txt", "RESULT/../../outside.txt"):
+        with pytest.raises(ResourceNotPreparedError):
+            reader.read_range(RangeReadRequest(job_id=record.id, relative_path=bad_path))
+
+    (work / "RESULT").mkdir()
+    (work / "RESULT" / "evil.txt").symlink_to(outside)
+    with pytest.raises(ResourceNotPreparedError):
+        reader.read_range(RangeReadRequest(job_id=record.id, relative_path="RESULT/evil.txt"))
+
+    (work / "links").symlink_to(outside.parent, target_is_directory=True)
+    with pytest.raises(ResourceNotPreparedError):
+        reader.read_range(RangeReadRequest(job_id=record.id, relative_path="links/outside.txt"))
+
+
+def test_symlink_and_root_swap_after_snapshot_cannot_leave_root(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    cache = RemoteStructureCache(run_root)
+    work = tmp_path / "work"
+    _write_tree(work, {"RESULT/result_manifest.json": b"SAFE"})
+    outside = tmp_path / "outside"
+    _write_tree(outside, {"RESULT/result_manifest.json": b"EVIL"})
+    record = _local_record("local-swap", work)
+    swaps: list[str] = []
+
+    def swap_root() -> None:
+        (work / "RESULT").rename(work / "RESULT_ORIGINAL")
+        (work / "RESULT").symlink_to(outside / "RESULT", target_is_directory=True)
+        swaps.append("swapped")
+
+    reader = build_read_only_reader(
+        job_lookup={record.id: record}.get, cache=cache, before_read=swap_root
+    )
+    result = reader.read_range(
+        RangeReadRequest(job_id=record.id, relative_path="RESULT/result_manifest.json")
+    )
+
+    assert swaps == ["swapped"]
+    assert result.data == b"SAFE"
+
+
+def test_read_during_rerun_sees_one_attempt_snapshot(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    cache = RemoteStructureCache(run_root)
+    work = tmp_path / "work"
+    target = work / "RESULT" / "result_manifest.json"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"ATTEMPT-1-BYTES")
+    record = _local_record("local-rerun", work, attempt=1)
+    replaced: list[bool] = []
+
+    def rerun() -> None:
+        replacement = target.with_name("result_manifest.json.rerun")
+        replacement.write_bytes(b"ATTEMPT-2")
+        os.replace(replacement, target)
+        replaced.append(True)
+
+    reader = build_read_only_reader(
+        job_lookup={record.id: record}.get, cache=cache, before_read=rerun
+    )
+    result = reader.read_range(
+        RangeReadRequest(job_id=record.id, relative_path="RESULT/result_manifest.json")
+    )
+
+    assert replaced == [True]
+    assert result.data == b"ATTEMPT-1-BYTES"
+    assert target.read_bytes() == b"ATTEMPT-2"
+
+
+def test_missing_historical_attempt_refuses_instead_of_current_work_dir(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    cache = RemoteStructureCache(run_root)
+    work = tmp_path / "work"
+    _write_tree(work, {"RESULT/result_manifest.json": b"CURRENT"})
+    record = _local_record("local-historical", work, attempt=2)
+    reader = build_cache_only_resource_reader(job_lookup={record.id: record}.get, cache=cache)
+
+    historical = reader.serve("manifest", job_id=record.id, workflow="optimize", attempt=1)
+    assert historical.served is False
+    assert historical.source == "not_prepared"
+    with pytest.raises(ResourceNotPreparedError):
+        reader.read_range("manifest", job_id=record.id, attempt=1)
+
+    current = reader.serve("manifest", job_id=record.id, workflow="optimize", attempt=2)
+    assert current.served is True
+    assert current.data == b"CURRENT"
+
+
+def test_local_and_remote_ranges_are_clamped(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    run_root = tmp_path / "runs"
+    run_root.mkdir()
+    cache = RemoteStructureCache(run_root)
+    body = bytes(range(100))
+    work = tmp_path / "local"
+    _write_tree(work, {"RESULT/bytes.bin": body})
+    local_record = _local_record("local-range", work)
+    remote_id = "remote-range"
+    _write_tree(cache.job_root(remote_id), {"RESULT/bytes.bin": body})
+    remote_record = _remote_record(remote_id, workflow="optimize", run_root=run_root)
+    lookup = {local_record.id: local_record, remote_id: remote_record}.get
+
+    for job_id in (local_record.id, remote_id):
+        reader = build_read_only_reader(job_lookup=lookup, cache=cache, max_read_bytes=16)
+        result = reader.read_range(
+            RangeReadRequest(job_id=job_id, relative_path="RESULT/bytes.bin", offset=4, limit=10**9)
+        )
+        assert result.offset == 4
+        assert result.length == 16
+        assert result.data == body[4:20]
+        assert result.truncated is True
+
+
+# ---------------------------------------------------------------------------
 # API endpoint (additive GET)
 # ---------------------------------------------------------------------------
 
@@ -547,12 +851,36 @@ def test_endpoint_availability_local_job_ready(client: TestClient, tmp_path: Pat
             work_dir=str(tmp_path / job_id),
         ),
     )
+    manifest = tmp_path / job_id / "RESULT" / "result_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("{}", encoding="utf-8")
     response = client.get(f"/api/v1/jobs/{job_id}/availability")
     assert response.status_code == 200
     body = response.json()
     assert body["availability"] == "ready"
     assert body["is_remote"] is False
     assert body["detail"] == "cache_index"
+    assert body["size_bytes"] == len(b"{}")
+
+
+def test_endpoint_availability_local_directory_only_is_not_ready(
+    client: TestClient, tmp_path: Path
+) -> None:
+    job_id = "local-avail-empty"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="optimize", name="local-avail-empty"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / job_id),
+        ),
+    )
+    response = client.get(f"/api/v1/jobs/{job_id}/availability")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["availability"] == "absent"
+    assert body["detail"] == "no_projection"
 
 
 def test_endpoint_availability_unknown_job_404(client: TestClient) -> None:
