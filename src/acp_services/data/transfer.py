@@ -771,7 +771,17 @@ class TransferPipeline:
         authorization: The re-checked authorization port.
         publications: The persistent publication record store.
         adoption: Optional historical expected-value resolver.
+        identity_check: Optional re-read of the authoritative identity, called
+            after verification and immediately before the publish decision.  It
+            returns a stable refusal token (or ``None`` when still valid).  The
+            cache adapter re-runs the same check under its generation lock so
+            the check-to-``os.replace`` window is closed by the publisher.
         clock: Injectable wall clock (record timestamps).
+
+    Raises:
+        ValueError: When the authorization port is omitted.  There is no
+            ``None``-means-allow fallback: production assembly must inject an
+            explicit policy (local-single supplies its own).
     """
 
     def __init__(
@@ -782,13 +792,20 @@ class TransferPipeline:
         authorization: TransferAuthorizationPort,
         publications: TransferPublicationStore,
         adoption: TransferAdoptionPort | None = None,
+        identity_check: Callable[[], str | None] | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
+        if authorization is None:
+            raise ValueError(
+                "TransferPipeline requires an explicit authorization port "
+                "(no None-means-allow fallback)"
+            )
         self._cache = cache
         self._source = source
         self._authorization = authorization
         self._publications = publications
         self._adoption = adoption
+        self._identity_check = identity_check
         self._clock = clock or time.time
 
     # -- public ---------------------------------------------------------
@@ -894,13 +911,25 @@ class TransferPipeline:
             observed_sha = sha256_bytes(data)
             observed_size = size
 
-            # 7. Authorization before publish (a revocation between the two).
+            # 7. Identity before publish: a rerun / rebind / revocation / purge
+            # observed after the download must not publish.  The cache adapter
+            # repeats this check under its generation lock immediately before
+            # ``os.replace``, closing the check-to-publish window.
+            identity_reason = self._identity_reason()
+            if identity_reason:
+                return self._record_rejection(
+                    request,
+                    _identity_rejection_code(identity_reason),
+                    identity_reason,
+                )
+
+            # 8. Authorization before publish (a revocation between the two).
             if not self._authorized(request, "publish"):
                 return self._record_rejection(
                     request, RejectionCode.PERMISSION_REVOKED, "publish authorization denied"
                 )
 
-            # 8. Atomic publish; the fence/generation is re-checked by the cache.
+            # 9. Atomic publish; the fence/generation is re-checked by the cache.
             outcome = self._cache.publish(
                 request.job_id,
                 request.normalized_path,
@@ -923,7 +952,7 @@ class TransferPipeline:
                 request, RejectionCode.SOURCE_UNAVAILABLE, outcome.reason or "publish failed"
             )
 
-        # 9. Persistent publication record (before availability is committed).
+        # 10. Persistent publication record (before availability is committed).
         record = PublicationRecord(
             job_id=request.job_id,
             attempt=request.attempt,
@@ -955,6 +984,11 @@ class TransferPipeline:
         return self._cache.push_paths(job_id, relative_paths)
 
     # -- internals ------------------------------------------------------
+    def _identity_reason(self) -> str | None:
+        if self._identity_check is None:
+            return None
+        return self._identity_check()
+
     def _authorized(self, request: TransferRequest, action: str) -> bool:
         return bool(
             self._authorization.authorize(
@@ -1031,6 +1065,15 @@ class TransferPipeline:
         )
 
 
+def _identity_rejection_code(reason: str) -> RejectionCode:
+    """Map a stable identity-refusal token onto the recorded rejection code."""
+    if reason.startswith("stale_attempt"):
+        return RejectionCode.STALE_ATTEMPT
+    if reason.startswith("authorization_revoked") or reason.startswith("permission"):
+        return RejectionCode.PERMISSION_REVOKED
+    return RejectionCode.IDENTITY_MISMATCH
+
+
 def _remove_tmp(tmp_path: str) -> None:
     try:
         os.unlink(tmp_path)
@@ -1073,9 +1116,12 @@ class TransferPrepareExecutor:
                 sha256=result.sha256,
             )
         assert result.rejection is not None
+        detail = result.rejection.value
+        if result.detail:
+            detail = f"{detail}:{result.detail}"
         return PrepareExecutionResult(
             prepared=False,
             availability=Availability.UNAVAILABLE,
-            detail=result.rejection.value,
+            detail=detail,
             retryable=result.retryable,
         )
