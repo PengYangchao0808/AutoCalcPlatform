@@ -796,9 +796,7 @@ def test_amendment_i_predicates_confined_and_negatives() -> None:
     )
     issues = _amendment_i_orca_teeth(injected)
     assert any("still reaches for acp" in issue for issue in issues)
-    stripped = worktree.replace(
-        "from cccp.qc.method_meta import method_meta, scf_constraint\n", ""
-    )
+    stripped = worktree.replace("from cccp.qc.method_meta import method_meta, scf_constraint\n", "")
     issues = _amendment_i_orca_teeth(stripped)
     assert any("direct cccp.qc.method_meta import missing" in issue for issue in issues)
 
@@ -1678,8 +1676,7 @@ def _amendment_s_import_line(ln: int, txt: str, source: str, *, censo: bool = Fa
     if censo:
         expected.add("from __future__ import annotations")
     return txt.strip() in expected and any(
-        isinstance(node, ast.ImportFrom) and node.lineno == ln
-        for node in ast.parse(source).body
+        isinstance(node, ast.ImportFrom) and node.lineno == ln for node in ast.parse(source).body
     )
 
 
@@ -1696,21 +1693,28 @@ def _is_amendment_s_orca_addition(ln: int, txt: str, source: str) -> bool:
             if not isinstance(func, ast.FunctionDef) or func.name != "__init__":
                 continue
             start = next(
-                node.lineno for node in func.body
+                node.lineno
+                for node in func.body
                 if isinstance(node, ast.ImportFrom) and node.module == "cccp.config"
             )
             end = next(
-                node.end_lineno for node in func.body
+                node.end_lineno
+                for node in func.body
                 if isinstance(node, ast.Assign)
                 and any(isinstance(t, ast.Attribute) and t.attr == "maxcore" for t in node.targets)
             )
             if end is not None and start <= ln <= end:
                 return True
     renderer = _func_range(source, "_build_input_blocks", "ORCAInterface")
-    return renderer is not None and renderer[0] <= ln <= renderer[1] and txt.strip() in {
-        "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
-        'blocks.append(f"%maxcore {maxcore}")',
-    }
+    return (
+        renderer is not None
+        and renderer[0] <= ln <= renderer[1]
+        and txt.strip()
+        in {
+            "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
+            'blocks.append(f"%maxcore {maxcore}")',
+        }
+    )
 
 
 def _is_amendment_s_censo_addition(ln: int, txt: str, source: str) -> bool:
@@ -1720,14 +1724,20 @@ def _is_amendment_s_censo_addition(ln: int, txt: str, source: str) -> bool:
     if helper is not None and helper[0] <= ln <= helper[1]:
         return True
     refine = _func_range(source, "refine_ensemble", "CensoInterface")
-    return refine is not None and refine[0] <= ln <= refine[1] and txt.strip() == (
-        "effective_templates = self._memory_templates(preset_cfg, nproc_val, part_templates)"
+    return (
+        refine is not None
+        and refine[0] <= ln <= refine[1]
+        and txt.strip()
+        == ("effective_templates = self._memory_templates(preset_cfg, nproc_val, part_templates)")
     )
 
 
 def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
     if txt.strip() == "from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb":
-        return any(isinstance(node, ast.ImportFrom) and node.lineno == ln for node in ast.parse(source).body)
+        return any(
+            isinstance(node, ast.ImportFrom) and node.lineno == ln
+            for node in ast.parse(source).body
+        )
     for cls in ast.parse(source).body:
         if not isinstance(cls, ast.ClassDef) or cls.name != "ORCAInterface":
             continue
@@ -1735,12 +1745,14 @@ def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
             if not isinstance(func, ast.FunctionDef) or func.name != "__init__":
                 continue
             start = next(
-                node.lineno for node in func.body
+                node.lineno
+                for node in func.body
                 if isinstance(node, ast.Assign)
                 and any(isinstance(t, ast.Attribute) and t.attr == "mem_str" for t in node.targets)
             )
             end = next(
-                node.end_lineno for node in func.body
+                node.end_lineno
+                for node in func.body
                 if isinstance(node, ast.If)
                 and isinstance(node.test, ast.Compare)
                 and isinstance(node.test.left, ast.Name)
@@ -1752,17 +1764,29 @@ def _is_amendment_s_orca_deletion(ln: int, txt: str, source: str) -> bool:
 
 def _amendment_s_teeth(source: str, *, censo: bool = False) -> list[str]:
     requirements = (
-        ('resolve_orca_maxcore(', 'total-memory validation missing'),
-        ('self._memory_templates(preset_cfg, nproc_val, part_templates)', 'template wiring missing'),
-        ('lines.append(f"%maxcore {maxcore}")', 'template maxcore missing'),
-    ) if censo else (
-        ('self.maxcore = resolve_orca_maxcore(', 'total-memory validation missing'),
-        ('resolve_orca_maxcore(self.mem_mb, actual_nproc, maxcore=int(match[1]))',
-         'raw maxcore validation missing'),
-        ('maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)', 'renderer wiring missing'),
-        ('blocks.append(f"%maxcore {maxcore}")', 'single maxcore rendering missing'),
-        ('default_resources["mem"]', 'authoritative default missing'),
-        ('%maxcore {self.maxcore}\\n%pal nprocs {self.nproc} end\\n', 'IRC resources missing'),
+        (
+            ("resolve_orca_maxcore(", "total-memory validation missing"),
+            (
+                "self._memory_templates(preset_cfg, nproc_val, part_templates)",
+                "template wiring missing",
+            ),
+            ('lines.append(f"%maxcore {maxcore}")', "template maxcore missing"),
+        )
+        if censo
+        else (
+            ("self.maxcore = resolve_orca_maxcore(", "total-memory validation missing"),
+            (
+                "resolve_orca_maxcore(self.mem_mb, actual_nproc, maxcore=int(match[1]))",
+                "raw maxcore validation missing",
+            ),
+            (
+                "maxcore, extra_blocks = self._memory_input_blocks(extra_blocks, actual_nproc)",
+                "renderer wiring missing",
+            ),
+            ('blocks.append(f"%maxcore {maxcore}")', "single maxcore rendering missing"),
+            ('default_resources["mem"]', "authoritative default missing"),
+            ("%maxcore {self.maxcore}\\n%pal nprocs {self.nproc} end\\n", "IRC resources missing"),
+        )
     )
     return [f"  Amendment S: {message}" for text, message in requirements if text not in source]
 
@@ -1773,11 +1797,19 @@ def test_amendment_s_memory_scopes_and_negative_injections() -> None:
         ("censo", _is_amendment_s_censo_addition, True),
     ):
         source = _worktree_content(f"src/cccp/qc/interfaces/{name}.py")
-        assert not predicate(1, "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore", source)
+        assert not predicate(
+            1,
+            "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore",
+            source,
+        )
         assert not predicate(1, "unrelated_algorithm()", source)
         assert not _amendment_s_teeth(source, censo=censo)
-        assert _amendment_s_teeth(source.replace("resolve_orca_maxcore(", "unguarded_maxcore("), censo=censo)
-        assert _amendment_s_teeth(source.replace("self._memory_", "self._unwired_memory_"), censo=censo)
+        assert _amendment_s_teeth(
+            source.replace("resolve_orca_maxcore(", "unguarded_maxcore("), censo=censo
+        )
+        assert _amendment_s_teeth(
+            source.replace("self._memory_", "self._unwired_memory_"), censo=censo
+        )
     baseline = _baseline_content("src/cccp/qc/interfaces/orca.py")
     for ln, txt in enumerate(baseline.splitlines(), 1):
         if 'self.mem_str = resources.get("mem", "32GB")' in txt:
@@ -1845,7 +1877,7 @@ def _amendment_t_teeth(xtb_src: str | None = None, scan_src: str | None = None) 
         issues.append("  Amendment T: XTBInterface.constrained_optimize missing")
     else:
         body = "\n".join(xtb.splitlines()[rng[0] - 1 : rng[1]])
-        if "extra_control_text: str = \"\"" not in body:
+        if 'extra_control_text: str = ""' not in body:
             issues.append("  Amendment T: constrained_optimize must accept extra_control_text")
         if "{extra_control_text}" not in body:
             issues.append("  Amendment T: xcontrol write must insert extra_control_text")
@@ -1870,9 +1902,7 @@ def test_amendment_t_predicates_confined_and_negatives() -> None:
     scan = _worktree_content("src/cccp/qc/interfaces/xtb_scan.py")
     constrained = _func_range(xtb, "constrained_optimize", "XTBInterface")
     assert constrained is not None
-    assert _is_amendment_t_xtb_addition(
-        constrained[0], 'extra_control_text: str = "",', xtb
-    )
+    assert _is_amendment_t_xtb_addition(constrained[0], 'extra_control_text: str = "",', xtb)
     assert not _is_amendment_t_xtb_addition(1, "unrelated_algorithm()", xtb)
     assert not _is_amendment_t_xtb_addition(constrained[1] + 1, "extra_control_text = 1", xtb)
     assert not _is_amendment_t_xtb_addition(1, '"-P", str(self.nproc),', xtb)
@@ -1880,7 +1910,7 @@ def test_amendment_t_predicates_confined_and_negatives() -> None:
     for ln, txt in enumerate(baseline_xtb.splitlines(), 1):
         if txt.strip() == '"-T", str(self.nproc),':
             assert _is_amendment_t_xtb_deletion(ln, txt, baseline_xtb)
-        if txt.strip() == "self.nproc = kwargs.get(\"nproc\", 1)":
+        if txt.strip() == 'self.nproc = kwargs.get("nproc", 1)':
             assert not _is_amendment_t_xtb_deletion(ln, txt, baseline_xtb)
     scan_rng = _func_ranges(scan).get("xcontrol_constraint_block")
     assert scan_rng is not None
@@ -2239,7 +2269,8 @@ def test_deleted_lines_in_target_regions() -> None:
                 if not _is_amendment_q_deletion(ln, t, baseline_src)
             ]
             bad_entries = [
-                (ln, t) for ln, t in bad_entries
+                (ln, t)
+                for ln, t in bad_entries
                 if not _is_amendment_s_orca_deletion(ln, t, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
@@ -2598,6 +2629,7 @@ MIGRATION_STATION_PREFIXES = (
     # stronger check").  Matrix / negative coverage lives in the S2-bis tests
     # below (seam purity, singular composition root, init-wizard invariants).
     "src/acp/services_bootstrap.py",
+    "src/acp/services_completion_bootstrap.py",
     "src/acp/services_data_bootstrap.py",
     "src/acp/services_events_bootstrap.py",
     "src/acp/services_publication_bootstrap.py",
@@ -2838,6 +2870,7 @@ def test_migration_scope_catches_smuggled_shim_body() -> None:
 
 SERVICES_BOOTSTRAP_STATIONS = (
     "src/acp/services_bootstrap.py",
+    "src/acp/services_completion_bootstrap.py",
     "src/acp/services_data_bootstrap.py",
     "src/acp/services_events_bootstrap.py",
     "src/acp/services_publication_bootstrap.py",

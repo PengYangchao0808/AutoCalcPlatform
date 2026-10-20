@@ -1845,8 +1845,12 @@ def test_data_integration_restart_eviction_prefetch_and_old_rows(
         # Restart replay: the SAME operation row was requeued and executed
         # exactly once (one lease before the crash + one replay), never a
         # replacement row and never a second execution.
-        old_row = second._prepare_operations.get(crashed.operation_id)
-        assert old_row is not None
+        old_row = _wait_state(
+            second._prepare_operations,
+            crashed.operation_id,
+            ops.PrepareState.FAILED,
+            timeout=10.0,
+        )
         assert old_row.state is ops.PrepareState.FAILED
         assert old_row.attempt_count == 2
         assert old_row.error_message == "stale_attempt"

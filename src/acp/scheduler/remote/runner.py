@@ -1482,7 +1482,10 @@ class RemoteJobRunner:
         staging = posixpath.join(
             remote_job_dir, runtime_rel, ".frozen_staging", str(record.attempt)
         )
-        self._stager.remove_remote_dir(node, staging)
+        # Staging is intentionally left for retention/reconcile cleanup: the
+        # flat frozen_group.json is the sole execution marker, so a staging
+        # directory is harmless and removing it here would record a remote
+        # directory cleanup on an indeterminate bsub.
         self._stager.make_remote_dir(node, staging)
         # Drop the old marker first: an interrupted re-upload must never leave
         # a previous valid group executable.
@@ -1544,7 +1547,6 @@ class RemoteJobRunner:
                 raise RemoteSubmissionRejected(
                     f"published remote group member {name!r} failed final verification"
                 )
-        self._stager.remove_remote_dir(node, staging)
         event_log.append(
             "remote.frozen_group_uploaded",
             job_id=record.id,
