@@ -23,6 +23,7 @@ and use an isolated DB; the "no jobs DB" probe here is bounded at the worker.
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
 import subprocess
@@ -37,13 +38,22 @@ from acp_services.contracts.envelope import (
     StorageBinding,
     expected_submission_id,
 )
+from acp_services.runtime.execution_right import (
+    ExecutionRightState,
+    ExecutionRightVerdict,
+    WorkerRefusal,
+)
+from acp_services.runtime.receipts import advance_job_from_worker_result
 from acp_services.runtime.worker import (
     FrozenStep,
     PlanVerificationError,
     TaskExecutionOutcome,
+    build_receipt,
     read_task_result,
     read_task_result_qualification,
+    receipt_exit_code,
     task_result_path,
+    write_receipt_atomic,
 )
 from acp_services.worker_bootstrap import (
     AssemblyError,
@@ -58,6 +68,7 @@ from acp_services.worker_bootstrap import (
     frozen_plan_to_dict,
     load_and_assemble,
     load_storage_binding,
+    main,
 )
 from tests.test_acp_services_isolation import scan_for_acp_imports
 
@@ -679,3 +690,377 @@ def test_d01_subprocess_complete_row_b(tmp_path: Path) -> None:
     assert evidence["publish_policy"] == "normal"
     assert evidence["job_status"] == "completed"
     assert evidence["exit_code"] == "0"
+
+
+# ---------------------------------------------------------------------------
+# D02 — conflicting failure-path receipts + injected execution right
+# ---------------------------------------------------------------------------
+
+
+class _RaisingExecutor:
+    """Executor that fails hard (drives ``WorkerRuntime.run``'s failure seam)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def execute(self, scope: object) -> TaskExecutionOutcome:
+        self.calls += 1
+        raise RuntimeError("executor exploded")
+
+
+class _FakeExecutionRight:
+    """Configurable execution-right port (task 24 supplies the persistent one)."""
+
+    def __init__(
+        self,
+        *,
+        acquire: ExecutionRightState = ExecutionRightState.HELD,
+        verify: ExecutionRightState | None = None,
+    ) -> None:
+        self.acquire_verdict = ExecutionRightVerdict(acquire)
+        self.verify_verdict = ExecutionRightVerdict(
+            acquire if verify is None else verify
+        )
+        self.calls: list[str] = []
+
+    def acquire(self, envelope: object) -> ExecutionRightVerdict:
+        self.calls.append("acquire")
+        return self.acquire_verdict
+
+    def verify(self, envelope: object) -> ExecutionRightVerdict:
+        self.calls.append("verify")
+        return self.verify_verdict
+
+
+class _RecordingAdvancePort:
+    """Minimal ``JobStateAdvancePort`` stand-in that records CAS attempts."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+    def advance(self, job_id: str, **kwargs: object) -> str:
+        self.calls.append((job_id, dict(kwargs)))
+        return "advanced"
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _seed_foreign_receipt(receipt_path: Path, *, attempt: int = 2) -> None:
+    foreign = _envelope(
+        _plan(), attempt=attempt, submission_id=expected_submission_id(_JOB, attempt)
+    )
+    write_receipt_atomic(
+        receipt_path,
+        build_receipt(
+            foreign, TaskExecutionOutcome(state="completed", result_digest="sha256:old")
+        ),
+    )
+
+
+def _main_args(frozen: dict[str, str], probe: str = "ok") -> list[str]:
+    return [
+        "--envelope",
+        frozen["envelope"],
+        "--plan",
+        frozen["plan"],
+        "--work-dir",
+        frozen["work_dir"],
+        "--receipt",
+        frozen["receipt"],
+        "--binding",
+        frozen["binding"],
+        "--probe-executor",
+        probe,
+    ]
+
+
+def test_holder_conflicting_receipt_preserves_bytes_and_writes_conflict_doc(
+    tmp_path: Path,
+) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    _seed_foreign_receipt(receipt_path)
+    sha_before = _sha256(receipt_path)
+
+    executor = _RaisingExecutor()
+    runtime = assemble_worker(
+        envelope=_envelope(_plan()),
+        plan=_plan(),
+        work_dir=frozen["work_dir"],
+        receipt_path=receipt_path,
+        storage_binding=_binding(),
+        executor=executor,
+    )
+    result = runtime.run()
+
+    assert not isinstance(result, WorkerRefusal)
+    assert result.attempt == 1
+    assert result.state == "failed"
+    assert result.errors[0].code == "receipt_conflict"  # type: ignore[union-attr]
+    assert receipt_exit_code(result) == 1
+    assert executor.calls == 0, "a conflicting receipt must be resolved before execution"
+    # the original receipt is evidence: bytes are untouched
+    assert _sha256(receipt_path) == sha_before
+
+    conflict_path = receipt_path.with_name(receipt_path.name + ".conflict.json")
+    document = json.loads(conflict_path.read_text(encoding="utf-8"))
+    assert document["schema"] == "worker_receipt_conflict"
+    assert document["code"] == "receipt_identity_mismatch"
+    assert document["conflict_field"] == "attempt"
+    assert document["current_identity"]["attempt"] == 1
+    assert document["expected_identity"]["attempt"] == 1
+    assert document["existing_identity"]["attempt"] == 2
+    assert document["existing_receipt_sha256"] == sha_before
+    assert document["current_receipt"]["attempt"] == 1
+    assert document["current_receipt"]["state"] == "failed"
+    # no authoritative task_result for a preserved conflict
+    assert not task_result_path(frozen["work_dir"]).exists()
+
+
+def test_main_holder_conflicting_receipt_exits_one_and_preserves_bytes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    _seed_foreign_receipt(receipt_path)
+    sha_before = _sha256(receipt_path)
+
+    code = main(_main_args(frozen, probe="ok"))
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert printed["attempt"] == 1
+    assert printed["state"] == "failed"
+    assert printed["errors"][0]["code"] == "receipt_conflict"
+    assert _sha256(receipt_path) == sha_before
+    assert receipt_path.with_name(receipt_path.name + ".conflict.json").is_file()
+
+
+def test_loser_not_held_writes_only_refusal_document_and_exits_three(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    right = _FakeExecutionRight(acquire=ExecutionRightState.NOT_HELD)
+
+    code = main(_main_args(frozen, probe="fail"), execution_right=right)
+
+    assert code == 3, "a non-holder refusal is a distinct non-zero retry code"
+    printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert printed["schema"] == "worker_execution_refusal"
+    assert printed["code"] == "execution_right_not_held"
+    assert printed["state"] == "wait"
+    assert printed["authoritative"] is False
+    assert printed["receipt"] is None
+    assert printed["current_identity"]["attempt"] == 1
+    # no authoritative receipt/task_result; only the separate diagnostic document
+    assert not receipt_path.exists()
+    assert not task_result_path(frozen["work_dir"]).exists()
+    assert sorted(p.name for p in Path(frozen["work_dir"]).iterdir()) == [
+        receipt_path.name + ".refused.json"
+    ]
+
+
+def test_lost_right_at_failure_seam_writes_no_authoritative_receipt(tmp_path: Path) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    right = _FakeExecutionRight(
+        acquire=ExecutionRightState.HELD, verify=ExecutionRightState.LOST
+    )
+    runtime = assemble_worker(
+        envelope=_envelope(_plan()),
+        plan=_plan(),
+        work_dir=frozen["work_dir"],
+        receipt_path=receipt_path,
+        storage_binding=_binding(),
+        executor=_RaisingExecutor(),
+        execution_right=right,
+    )
+
+    result = runtime.run()
+
+    assert isinstance(result, WorkerRefusal)
+    assert result.state == "retry"
+    assert result.code == "execution_right_lost"
+    assert result.exit_code == 3
+    assert right.calls == ["acquire", "verify"]
+    assert not receipt_path.exists()
+    assert not task_result_path(frozen["work_dir"]).exists()
+    document = json.loads(
+        receipt_path.with_name(receipt_path.name + ".refused.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert document["code"] == "execution_right_lost"
+    assert document["receipt"] is None
+
+
+def test_unreadable_receipt_is_typed_conflict_not_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    receipt_path.write_text("{not json", encoding="utf-8")
+    sha_before = _sha256(receipt_path)
+
+    code = main(_main_args(frozen, probe="ok"))
+
+    assert code == 1
+    output = capsys.readouterr()
+    assert "Traceback" not in output.err
+    printed = json.loads(output.out.strip().splitlines()[-1])
+    assert printed["attempt"] == 1
+    assert printed["state"] == "failed"
+    assert _sha256(receipt_path) == sha_before
+    document = json.loads(
+        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert document["code"] == "unreadable_receipt"
+    assert document["existing_identity"] is None
+    assert document["existing_receipt_sha256"] == sha_before
+
+
+def test_duplicate_failure_delivery_same_identity_is_idempotent_without_conflict(
+    tmp_path: Path,
+) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    executor = _FakeExecutor(
+        outcome=TaskExecutionOutcome(state="failed", result_digest="sha256:failed")
+    )
+    runtime = assemble_worker(
+        envelope=_envelope(_plan()),
+        plan=_plan(),
+        work_dir=frozen["work_dir"],
+        receipt_path=receipt_path,
+        storage_binding=_binding(),
+        executor=executor,
+    )
+
+    first = runtime.run()
+    second = runtime.run()
+
+    assert first == second
+    assert executor.calls == 1
+    assert first.state == "failed"
+    assert not receipt_path.with_name(receipt_path.name + ".conflict.json").exists()
+
+
+def test_refusal_never_triggers_job_failure_cas_but_receipt_does(tmp_path: Path) -> None:
+    frozen = _write_frozen(tmp_path)
+    envelope = _envelope(_plan())
+    refusal_runtime = assemble_worker(
+        envelope=envelope,
+        plan=_plan(),
+        work_dir=frozen["work_dir"],
+        receipt_path=Path(frozen["receipt"]),
+        storage_binding=_binding(),
+        executor=_FakeExecutor(),
+        execution_right=_FakeExecutionRight(acquire=ExecutionRightState.NOT_HELD),
+    )
+    refusal = refusal_runtime.run()
+    assert isinstance(refusal, WorkerRefusal)
+
+    kwargs = {
+        "current_attempt": 1,
+        "current_submission_id": expected_submission_id(_JOB, 1),
+        "current_release_id": _RELEASE,
+        "owner_token": _OWNER,
+        "fencing_token": _FENCE,
+        "expected_revision": 1,
+        "status": "failed",
+    }
+    port = _RecordingAdvancePort()
+    consumed = advance_job_from_worker_result(port, envelope, refusal, **kwargs)
+    assert consumed is None
+    assert port.calls == [], "a non-holder refusal must not trigger a job CAS"
+
+    # positive control: the holder's authoritative failed receipt does CAS once
+    holder_frozen = _write_frozen(tmp_path / "holder")
+    holder_runtime = assemble_worker(
+        envelope=envelope,
+        plan=_plan(),
+        work_dir=holder_frozen["work_dir"],
+        receipt_path=Path(holder_frozen["receipt"]),
+        storage_binding=_binding(),
+        executor=_RaisingExecutor(),
+    )
+    failed_receipt = holder_runtime.run()
+    assert not isinstance(failed_receipt, WorkerRefusal)
+    applied = advance_job_from_worker_result(port, envelope, failed_receipt, **kwargs)
+    assert applied == "advanced"
+    assert len(port.calls) == 1
+    assert port.calls[0][1]["status"] == "failed"
+
+
+def test_assembly_failure_with_conflicting_receipt_preserves_bytes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    _seed_foreign_receipt(receipt_path)
+    sha_before = _sha256(receipt_path)
+    undeclared = StorageBinding(
+        binding_id="sb_undeclared",
+        tenant_id="tenant-1",
+        project_id="proj-1",
+        endpoint="local",
+        relative_path="proj-1/other",
+        artifact_digests={"input.xyz": "sha256:other"},
+    )
+    undeclared_path = tmp_path / "undeclared_binding.json"
+    undeclared_path.write_text(json.dumps(undeclared.to_dict()), encoding="utf-8")
+    args = _main_args(frozen, probe="ok")
+    args[args.index("--binding") + 1] = str(undeclared_path)
+
+    code = main(args)
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert printed["state"] == "failed"
+    assert printed["errors"][0]["code"] == "assembly_failed"
+    assert printed["attempt"] == 1
+    assert _sha256(receipt_path) == sha_before
+    document = json.loads(
+        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert document["schema"] == "worker_receipt_conflict"
+    assert document["code"] == "receipt_identity_mismatch"
+    assert document["existing_identity"]["attempt"] == 2
+
+
+def test_structurally_invalid_receipt_is_typed_conflict(tmp_path: Path) -> None:
+    frozen = _write_frozen(tmp_path)
+    receipt_path = Path(frozen["receipt"])
+    receipt_path.write_text(
+        json.dumps({"receipt_version": 1, "state": "not-a-receipt-state"}),
+        encoding="utf-8",
+    )
+    sha_before = _sha256(receipt_path)
+
+    result = assemble_worker(
+        envelope=_envelope(_plan()),
+        plan=_plan(),
+        work_dir=frozen["work_dir"],
+        receipt_path=receipt_path,
+        storage_binding=_binding(),
+        executor=_FakeExecutor(),
+    ).run()
+
+    assert not isinstance(result, WorkerRefusal)
+    assert result.attempt == 1
+    assert result.state == "failed"
+    assert _sha256(receipt_path) == sha_before
+    document = json.loads(
+        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert document["code"] == "unreadable_receipt"
+    assert document["existing_identity"] is None
