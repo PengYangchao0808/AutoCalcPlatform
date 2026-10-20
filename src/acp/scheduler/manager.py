@@ -79,14 +79,22 @@ from acp.scheduler.store import JobStateConflictError, JobStore
 from acp.scheduler.tasks import PROJECTION_RECONCILE_BATCH, TaskIndex
 from acp.services_events_bootstrap import open_outbox_delivery
 from acp.storage.layout import TaskStorage, runtime_file, sanitize_existing_task_dir_name
+from acp_services.contracts.envelope import EnvelopeError
 from acp_services.data.contracts import ResourceKind
 from acp_services.data.operations import (
     PrepareOperationService,
     PrepareOperationWorker,
     PrepareRequest,
 )
+from acp_services.runtime.execution_chain import (
+    EXECUTION_ENTRY_ENVELOPE,
+    attempt_choice_from_result,
+    read_attempt_choice,
+)
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 from acp_services.runtime.outbox import OutboxDeliveryResult, OutboxEventSpec
+from acp_services.runtime.receipts import verify_receipt
+from acp_services.runtime.worker import ReceiptConflictError, read_receipt
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +333,8 @@ class JobManager:
         local_cleanup_interval_hours: int = 6,
         local_max_jobs: int = 4,
         reconnect_local_workers: bool = False,
+        envelope_completion: bool = False,
+        attempt_completion: Any | None = None,
     ):
         #: Persistent controller/worker connection mode (B07-8 / todo 74):
         #: a *reconnecting controller* skips destructive startup recovery and
@@ -333,6 +343,13 @@ class JobManager:
         #: identity (otherwise a second controller marks a still-computing
         #: RUNNING job ``[RESTART_FAILED]``).
         self._reconnect_local_workers = bool(reconnect_local_workers)
+        # 07-B opt-in integration: only an envelope-selected local attempt whose
+        # service is explicitly injected/enabled uses receipt-verified completion.
+        # The ordinary default stays exit-code-only until task 29 activates it.
+        self._attempt_completion = attempt_completion
+        self._envelope_completion_enabled = bool(
+            envelope_completion or attempt_completion is not None
+        )
         self._shutdown_lock = threading.Lock()
         self._shutdown_complete = False
         # Closing latch: set by ``_stop_background_work`` (under ``self._lock``)
@@ -354,6 +371,10 @@ class JobManager:
         self._acquire_instance_lock()
         logger.info("JobManager booted: pid=%s run_root=%s", os.getpid(), self.run_root)
         self.store = store or JobStore(self.run_root / "acp_jobs.db")
+        if self._attempt_completion is None and envelope_completion:
+            from acp.services_completion_bootstrap import build_attempt_completion_service
+
+            self._attempt_completion = build_attempt_completion_service(self.store)
         self.max_running = max_running  # retained for API compatibility (unused)
         self.poll_interval = max(5, int(poll_interval))
 
@@ -1193,21 +1214,22 @@ class JobManager:
                 "refusing to rerun — terminate them first"
             )
 
-        from acp.scheduler.job_edit import resolve_previous_outputs
         from acp.results.structure_snapshots import preserve_outputs
+        from acp.scheduler.job_edit import resolve_previous_outputs
         read_root = Path(record.work_dir)
         skipped_collections: list[dict[str, Any]] = []
         from acp.scheduler.structure_sources import StructureSourceService
         if StructureSourceService._is_remote(record):
             cached_root = self.structure_cache.fetch_catalog(record, record.spec.workflow)
-            from acp.results.manifest import load_result_manifest
             from acp.confsearch.manifest import find_confsearch_manifest
+            from acp.results.manifest import load_result_manifest
             if cached_root is None or (
                 load_result_manifest(cached_root) is None
                 and find_confsearch_manifest(cached_root) is None
             ):
                 logger.warning(
-                    "No synced remote results for %s; rerun proceeds without preserving old outputs",
+                    "No synced remote results for %s; rerun proceeds without "
+                    "preserving old outputs",
                     record.id,
                 )
                 previous_outputs = []
@@ -1352,7 +1374,9 @@ class JobManager:
         payload_json: str,
         diff_summary: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Apply an edited spec as a new attempt (docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md).
+        """Apply an edited spec as a new attempt.
+
+        Design reference: ``docs/archive/2026-10-16/history/ACP_Edit_And_Recalculate_Plan.md``.
 
         ``mode="in_place"`` reuses the shared in-place requeue core with a
         validated spec; ``mode="new_job"`` performs exactly one regular
@@ -4488,13 +4512,13 @@ class JobManager:
         from acp.scheduler.remote.submission import submission_id_for as _sub_id
 
         try:
-            from acp.scheduler.remote.runner import (
-                RemoteSubmissionIndeterminate,
-                RemoteSubmissionRejected,
-            )
+            from acp.scheduler.remote import runner as _remote_runner
+
+            remote_submission_indeterminate = _remote_runner.RemoteSubmissionIndeterminate
+            remote_submission_rejected = _remote_runner.RemoteSubmissionRejected
         except ImportError:  # pragma: no cover - paramiko missing
-            RemoteSubmissionIndeterminate = ()  # type: ignore[assignment,misc]
-            RemoteSubmissionRejected = ()  # type: ignore[assignment,misc]
+            remote_submission_indeterminate = ()  # type: ignore[assignment,misc]
+            remote_submission_rejected = ()  # type: ignore[assignment,misc]
 
         try:
             self._ensure_remote_capacity(record, target)
@@ -4534,7 +4558,7 @@ class JobManager:
             # unbound, never emit a second write path.
             bound = self._persist_submit_intent(intent_record, target.name, code_release=release_id)
             if bound is None:
-                raise RemoteSubmissionRejected(
+                raise remote_submission_rejected(
                     f"submit intent no longer valid for job {job_id}; code "
                     f"release {release_id} could not be bound before bsub"
                 )
@@ -4556,10 +4580,10 @@ class JobManager:
                 submission_id=submission_id,
                 on_code_release_bound=_on_code_release_bound,
             )
-        except RemoteSubmissionRejected as exc:
+        except remote_submission_rejected as exc:
             self._handle_rejected_submission(record, exc)
             return True
-        except RemoteSubmissionIndeterminate as exc:
+        except remote_submission_indeterminate as exc:
             self._handle_indeterminate_submission(record, exc)
             return True
         except BaseException:
@@ -5194,6 +5218,181 @@ class JobManager:
             # running-jobs probe); terminal transitions release below.
             self._release_reservation(job_id)
 
+    def _try_envelope_completion(
+        self,
+        record: JobRecord,
+        job_id: str,
+        loaded_revision: int,
+        loaded_attempt: int,
+        exit_code: int | None,
+        cancel_event: threading.Event,
+        event_log: JobEventLog,
+        is_remote: bool,
+    ) -> bool:
+        """Opt-in receipt-verified completion for an envelope-selected attempt.
+
+        Returns ``True`` when this path consumed the terminal observation (CAS
+        performed or the observation isolated/deferred) and the legacy
+        exit-code terminal decision must not run.  Returns ``False`` for a
+        legacy-selected attempt or when pause/cancel precedence keeps the
+        existing path (a stale/foreign receipt is isolated before that check).
+        """
+        if (
+            not self._envelope_completion_enabled
+            or self._attempt_completion is None
+            or is_remote
+            or exit_code == EXIT_WAITING_REVIEW
+        ):
+            return False
+        work_dir = Path(record.work_dir)
+        try:
+            choice = read_attempt_choice(work_dir)
+        except (OSError, ValueError):
+            choice = None
+        if choice is None:
+            choice = attempt_choice_from_result(record.result)
+        if (
+            choice is None
+            or choice.entry != EXECUTION_ENTRY_ENVELOPE
+            or choice.attempt != record.attempt
+        ):
+            return False
+
+        from acp.services_completion_bootstrap import FrozenGroupSnapshotReader
+
+        snapshot = FrozenGroupSnapshotReader(self.store).read(job_id)
+        cancel_intent = record.status == JobStatus.CANCELLING or cancel_event.is_set()
+        if snapshot is None or snapshot.envelope is None:
+            if cancel_intent:
+                return False
+            self._cas_envelope_failure(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                exit_code,
+                "current_corrupt_after_exit",
+                "frozen attempt snapshot unavailable after the execution exited",
+                event_log,
+            )
+            return True
+
+        receipt_path = work_dir / "execution_receipt.json"
+        decoded = None
+        try:
+            decoded = read_receipt(receipt_path)
+        except (ReceiptConflictError, EnvelopeError, OSError, ValueError):
+            decoded = None
+
+        if decoded is not None:
+            check = verify_receipt(
+                decoded,
+                snapshot.envelope,
+                current_attempt=record.attempt,
+                current_submission_id=snapshot.submission_id,
+                current_release_id=snapshot.release_id,
+                owner_token=snapshot.owner,
+                fencing_token=snapshot.fencing_token,
+            )
+            if not check.accepted:
+                event_log.append(
+                    "job.completion_receipt_rejected",
+                    job_id=job_id,
+                    code=check.code,
+                    attempt=record.attempt,
+                    receipt_attempt=decoded.attempt,
+                    detail=check.reason,
+                    idempotency_key=(
+                        f"completion-rejected:{job_id}:{record.attempt}:{check.code}"
+                    ),
+                )
+                return True
+            if cancel_intent:
+                # Pause/cancel intent keeps precedence; the current receipt is
+                # not used to override it.
+                return False
+            verdict = self._attempt_completion.complete(
+                snapshot, receipt=decoded, confirmed_exited=True
+            )
+        else:
+            if cancel_intent:
+                return False
+            verdict = self._attempt_completion.complete(
+                snapshot,
+                receipt_path=receipt_path,
+                confirmed_exited=True,
+            )
+
+        if verdict.code in {
+            "published",
+            "accepted_pending_publication",
+            "already_published",
+        }:
+            stored = self.store.get(job_id)
+            if stored is not None:
+                self._run_terminal_side_effects(stored, job_id, event_log, False, None)
+            return True
+        if verdict.code == "current_corrupt_after_exit":
+            failure = verdict.failure
+            self._cas_envelope_failure(
+                record,
+                job_id,
+                loaded_revision,
+                loaded_attempt,
+                exit_code,
+                failure.code if failure is not None else "current_corrupt_after_exit",
+                failure.message if failure is not None else "current receipt missing or corrupt",
+                event_log,
+            )
+            return True
+        event_log.append(
+            "job.completion_deferred",
+            job_id=job_id,
+            code=verdict.code,
+            attempt=record.attempt,
+            detail=verdict.detail,
+        )
+        return True
+
+    def _cas_envelope_failure(
+        self,
+        record: JobRecord,
+        job_id: str,
+        expected_revision: int,
+        expected_attempt: int,
+        exit_code: int | None,
+        code: str,
+        message: str,
+        event_log: JobEventLog,
+    ) -> None:
+        """Write the one CAS failure for a current attempt with no valid receipt."""
+        result = dict(record.result or {})
+        result["terminal_side_effects_done"] = False
+        result["completion_failure"] = {"code": code, "message": message}
+        failure_exit = exit_code if exit_code not in (None, 0) else 1
+        try:
+            stored = self.store.transition(
+                job_id,
+                expected_status=_POLL_SCAN_STATUSES,
+                expected_revision=expected_revision,
+                expected_attempt=expected_attempt,
+                status=JobStatus.FAILED,
+                exit_code=failure_exit,
+                completed_at=_utc_now_iso(),
+                error=f"{code}: {message}",
+                result=result,
+            )
+        except JobStateConflictError as exc:
+            self._drop_stale_poll(job_id, exc, event_log, context="envelope-completion-failure")
+            return
+        event_log.append(
+            "job.completion_failure",
+            job_id=job_id,
+            code=code,
+            attempt=expected_attempt,
+        )
+        self._run_terminal_side_effects(stored, job_id, event_log, False, None)
+
     def _persist_terminal(
         self,
         record: JobRecord,
@@ -5207,6 +5406,17 @@ class JobManager:
         observation: RemotePollObservation | None,
     ) -> None:
         """Persist the terminal transition first, then run retryable side effects."""
+        if self._try_envelope_completion(
+            record,
+            job_id,
+            loaded_revision,
+            loaded_attempt,
+            exit_code,
+            cancel_event,
+            event_log,
+            is_remote,
+        ):
+            return
         progress = record.progress
         current_stage = record.current_stage
         error = record.error
@@ -5297,6 +5507,31 @@ class JobManager:
             self._drop_stale_poll(job_id, exc, event_log, context="terminal")
             return
 
+        self._run_terminal_side_effects(
+            stored,
+            job_id,
+            event_log,
+            is_remote,
+            observation,
+            review_payload,
+        )
+
+    def _run_terminal_side_effects(
+        self,
+        stored: JobRecord,
+        job_id: str,
+        event_log: JobEventLog,
+        is_remote: bool,
+        observation: RemotePollObservation | None,
+        review_payload: Any = None,
+    ) -> None:
+        """Run the idempotent post-CAS terminal side effects (shared boundary).
+
+        The caller has already committed the terminal CAS.  This helper re-reads
+        the row under ``_side_effect_lock`` so a superseded attempt cannot write
+        into a rerun directory, then emits/captures and finally persists the
+        ``terminal_side_effects_done`` marker on success.
+        """
         side_effects_ok = True
         with self._side_effect_lock:
             stored = self._reread_side_effect_scope(stored)
