@@ -41,6 +41,17 @@ from acp_services.contracts.envelope import (
     expected_submission_id,
 )
 from acp_services.contracts.injection import JobStateAdvancePort, StepRequirementPort
+from acp_services.runtime.attempt_completion import (
+    ALREADY_PUBLISHED,
+    CLAIM_HELD,
+    CURRENT_CORRUPT_AFTER_EXIT,
+    HOLDER_LOST,
+    RECEIPT_PENDING,
+    SUPERSEDED,
+    AttemptCompletionService,
+    AttemptExecutionState,
+    AttemptSnapshot,
+)
 from acp_services.runtime.plan_contracts import CalculationResult, StepKind
 from acp_services.runtime.receipt_identity import compare_receipt_identity
 from acp_services.runtime.receipts import (
@@ -1540,3 +1551,287 @@ def test_executor_adoption_refuses_an_embedded_partial_step_result(tmp_path: Pat
     assert adoption.result is None
     assert adoption.reason == "partial_result_not_reusable"
     assert adoption.integrity_failed is True
+
+
+# ---------------------------------------------------------------------------
+# B07-A (todo 26) — completion service: receipt gate → one CAS → publication
+# ---------------------------------------------------------------------------
+
+
+class _FakePublication:
+    """Publication port double: records calls and an idempotent published set."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.calls = 0
+        self.fail = fail
+        self.published: set[tuple[object, ...]] = set()
+
+    def publish(self, snapshot: AttemptSnapshot) -> dict[str, object]:
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("publication transport failed")
+        self.published.add(snapshot.identity_key)
+        return {"published": True, "job_id": snapshot.job_id, "attempt": snapshot.attempt}
+
+    def is_published(self, snapshot: AttemptSnapshot) -> bool:
+        return snapshot.identity_key in self.published
+
+
+class _SnapshotReader:
+    """Snapshot reader double used for the side-effect re-read boundary."""
+
+    def __init__(self, snapshot: AttemptSnapshot) -> None:
+        self.snapshot = snapshot
+        self.calls = 0
+
+    def read(self, job_id: str) -> AttemptSnapshot | None:
+        self.calls += 1
+        return self.snapshot if self.snapshot.job_id == job_id else None
+
+
+def _snapshot_for(
+    env: ExecutionEnvelope | None = None,
+    **overrides: object,
+) -> AttemptSnapshot:
+    env = env or _envelope()
+    base = AttemptSnapshot(
+        job_id=env.job_id,
+        attempt=env.attempt,
+        submission_id=env.submission_id,
+        release_id=env.release_id,
+        owner=env.owner,
+        fencing_token=env.fencing_token,
+        revision=7,
+        status="running",
+        release_digest=env.release_digest,
+        work_dir="",
+        result={},
+        envelope=env,
+    )
+    return dataclasses.replace(base, **overrides) if overrides else base
+
+
+def test_completion_accepted_receipt_cas_once_records_pending_publication() -> None:
+    env = _envelope()
+    receipt = _receipt(env)
+    snapshot = _snapshot_for(env)
+    port = _FakeAdvancePort()
+    publication = _FakePublication()
+    reader = _SnapshotReader(snapshot)
+    service = AttemptCompletionService(port, publication=publication, snapshots=reader)
+
+    verdict = service.complete(snapshot, receipt=receipt, confirmed_exited=True)
+
+    assert verdict.code == "published"
+    assert verdict.accepted is True
+    assert verdict.cas_calls == 1
+    assert verdict.receipt == receipt
+    assert len(port.calls) == 1
+    job_id, revision, status, attempt, fields = port.calls[0]
+    assert (job_id, revision, status, attempt) == (_JOB, 7, "running", 1)
+    assert fields["status"] == "completed"
+    assert fields["exit_code"] == 0
+    assert fields["result"]["publication_pending"] is True
+    assert fields["result"]["terminal_side_effects_done"] is False
+    assert fields["result"]["receipt_state"] == "completed"
+    assert publication.calls == 1
+    assert reader.calls >= 1  # re-read before publishing
+
+    # Duplicate delivery after the CAS: terminal row, already published -> no-op.
+    terminal = dataclasses.replace(
+        snapshot,
+        status="completed",
+        revision=8,
+        result=dict(fields["result"]),
+    )
+    reader.snapshot = terminal
+    duplicate = service.complete(terminal, receipt=receipt)
+    assert duplicate.code == ALREADY_PUBLISHED
+    assert duplicate.cas_calls == 0
+    assert duplicate.receipt == receipt  # valid receipt reuse, no re-execution
+    assert len(port.calls) == 1
+    assert publication.calls == 1
+
+
+def test_completion_stale_or_foreign_receipt_has_zero_cas_and_no_publication() -> None:
+    snapshot = _snapshot_for()
+    port = _FakeAdvancePort()
+    publication = _FakePublication()
+    service = AttemptCompletionService(port, publication=publication)
+
+    stale_attempt_env = _envelope(attempt=2, submission_id=expected_submission_id(_JOB, 2))
+    verdict = service.complete(snapshot, receipt=_receipt(stale_attempt_env), confirmed_exited=True)
+    assert verdict.code == "stale_attempt"
+    assert verdict.accepted is False
+    assert verdict.cas_calls == 0
+    assert verdict.failure is None
+    assert port.calls == []
+    assert publication.calls == 0
+
+    stale_release_env = _envelope(release_id="rel-other")
+    verdict = service.complete(snapshot, receipt=_receipt(stale_release_env), confirmed_exited=True)
+    assert verdict.code == "stale_release"
+    assert verdict.cas_calls == 0
+    assert port.calls == []
+    assert publication.calls == 0
+
+
+def test_completion_current_corrupt_after_exit_is_a_failure_fact_without_cas(
+    tmp_path: Path,
+) -> None:
+    snapshot = _snapshot_for()
+    port = _FakeAdvancePort()
+    publication = _FakePublication()
+    service = AttemptCompletionService(port, publication=publication)
+
+    verdict = service.complete(
+        snapshot,
+        receipt_path=tmp_path / "missing.json",
+        confirmed_exited=True,
+    )
+    assert verdict.code == CURRENT_CORRUPT_AFTER_EXIT
+    assert verdict.failure is not None
+    assert verdict.failure.code == CURRENT_CORRUPT_AFTER_EXIT
+    assert verdict.requires_controller_cas is True
+    assert verdict.cas_calls == 0
+    assert port.calls == []
+    assert publication.calls == 0
+
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("{not-a-receipt", encoding="utf-8")
+    verdict = service.complete(snapshot, receipt_path=corrupt, confirmed_exited=True)
+    assert verdict.code == CURRENT_CORRUPT_AFTER_EXIT
+    assert verdict.failure is not None
+    assert port.calls == []
+
+    # Before the controller confirms the exit, a missing receipt is just "wait".
+    waiting = service.complete(snapshot, receipt_path=tmp_path / "missing.json")
+    assert waiting.code == RECEIPT_PENDING
+    assert waiting.failure is None
+    assert waiting.cas_calls == 0
+    assert port.calls == []
+
+
+def test_completion_held_or_lost_claim_never_writes_an_authoritative_fact() -> None:
+    receipt = _receipt(_envelope())
+    snapshot = _snapshot_for()
+    port = _FakeAdvancePort()
+    publication = _FakePublication()
+    service = AttemptCompletionService(port, publication=publication)
+
+    held = service.complete(
+        snapshot,
+        receipt=receipt,
+        confirmed_exited=True,
+        execution_state=AttemptExecutionState.CLAIM_HELD,
+    )
+    assert held.code == CLAIM_HELD
+    assert held.receipt is None
+    assert held.failure is None
+    assert held.cas_calls == 0
+
+    lost = service.complete(
+        snapshot,
+        receipt=receipt,
+        confirmed_exited=True,
+        execution_state="holder_lost",
+    )
+    assert lost.code == HOLDER_LOST
+    assert lost.receipt is None
+    assert lost.failure is None
+    assert lost.requires_process_check is True
+    assert lost.cas_calls == 0
+    assert port.calls == []
+    assert publication.calls == 0
+
+
+def test_completion_pending_publication_resumes_on_restart_without_cas() -> None:
+    snapshot = _snapshot_for()
+    pending = dataclasses.replace(
+        snapshot,
+        status="completed",
+        revision=8,
+        result={"publication_pending": True, "terminal_side_effects_done": False},
+    )
+    port = _FakeAdvancePort()
+    publication = _FakePublication()
+    service = AttemptCompletionService(
+        port,
+        publication=publication,
+        snapshots=_SnapshotReader(pending),
+    )
+
+    first = service.resume_pending_publication(pending)
+    assert first.code == "published"
+    assert first.published is True
+    assert first.cas_calls == 0
+    assert publication.calls == 1
+    assert port.calls == []
+
+    second = service.resume_pending_publication(pending)
+    assert second.code == ALREADY_PUBLISHED
+    assert second.cas_calls == 0
+    assert publication.calls == 1
+    assert port.calls == []
+
+
+def test_completion_publication_failure_stays_pending_and_restart_resumes() -> None:
+    env = _envelope()
+    receipt = _receipt(env)
+    snapshot = _snapshot_for(env)
+    port = _FakeAdvancePort()
+    publication = _FakePublication(fail=True)
+    service = AttemptCompletionService(
+        port, publication=publication, snapshots=_SnapshotReader(snapshot)
+    )
+
+    failed = service.complete(snapshot, receipt=receipt, confirmed_exited=True)
+    assert failed.code == "publication_failed"
+    assert failed.cas_calls == 1
+    assert failed.publication_pending is True
+    assert len(port.calls) == 1
+    assert publication.calls == 1
+
+    # "Restart": no second CAS and no second QC run; only publication retried.
+    terminal = dataclasses.replace(
+        snapshot,
+        status="completed",
+        revision=8,
+        result=dict(port.calls[0][4]["result"]),
+    )
+    publication.fail = False
+    restarted = AttemptCompletionService(
+        port, publication=publication, snapshots=_SnapshotReader(terminal)
+    )
+    resumed = restarted.resume_pending_publication(terminal)
+    assert resumed.code == "published"
+    assert resumed.cas_calls == 0
+    assert len(port.calls) == 1
+    assert publication.calls == 2
+
+
+def test_completion_superseded_attempt_is_not_published_by_the_old_attempt() -> None:
+    env = _envelope()
+    receipt = _receipt(env)
+    snapshot = _snapshot_for(env)
+    newer = dataclasses.replace(
+        snapshot,
+        attempt=2,
+        submission_id=expected_submission_id(_JOB, 2),
+        owner="worker-2",
+        fencing_token="fence-2",
+        revision=9,
+    )
+    port = _FakeAdvancePort()
+    publication = _FakePublication()
+    service = AttemptCompletionService(
+        port, publication=publication, snapshots=_SnapshotReader(newer)
+    )
+
+    verdict = service.complete(snapshot, receipt=receipt, confirmed_exited=True)
+
+    assert verdict.code == SUPERSEDED
+    assert verdict.advanced is True
+    assert verdict.cas_calls == 1
+    assert publication.calls == 0  # old attempt never publishes into the rerun dir
+    assert len(port.calls) == 1

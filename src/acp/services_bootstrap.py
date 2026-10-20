@@ -35,12 +35,18 @@ from acp.scheduler.remote import release as remote_release
 from acp.scheduler.remote import submission as remote_submission
 from acp.scheduler.task_views import query_project_tasks
 from acp.scheduler.tasks import TaskIndex
+from acp.services_completion_bootstrap import JobStoreAdvancePort
 from acp.services_publication_bootstrap import build_publication_data_port
 from acp_services.bootstrap import ServicesPorts
 from acp_services.runtime.commands import RuntimeCommands
 from acp_services.runtime.recovery import RuntimeRecovery
 
-__all__ = ["build_runtime_commands", "build_runtime_recovery", "build_services_ports"]
+__all__ = [
+    "JobStoreAdvancePort",
+    "build_runtime_commands",
+    "build_runtime_recovery",
+    "build_services_ports",
+]
 
 
 class _JobControlAdapter:

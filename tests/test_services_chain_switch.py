@@ -49,12 +49,18 @@ import pytest
 from acp.calculations import attempt_freeze as acp_freeze
 from acp.calculations.contracts import StepKind
 from acp.calculations.identity import compute_identity
-from acp.scheduler.jobs import JobRecord, JobSpec
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.remote.script_gen import (
     build_remote_cli_command,
     build_remote_worker_command,
 )
 from acp.scheduler.runner import JobRunner
+from acp.scheduler.store import JobStateConflictError, JobStore
+from acp.services_completion_bootstrap import (
+    FrozenGroupSnapshotReader,
+    JobStoreAdvancePort,
+    build_attempt_completion_service,
+)
 from acp_services.contracts.envelope import (
     ExecutionEnvelope,
     StorageBinding,
@@ -62,6 +68,11 @@ from acp_services.contracts.envelope import (
 )
 from acp_services.runtime import attempt_freeze as af
 from acp_services.runtime import execution_chain as chain
+from acp_services.runtime.attempt_completion import (
+    ALREADY_PUBLISHED,
+    CURRENT_CORRUPT_AFTER_EXIT,
+    AttemptSnapshot,
+)
 from acp_services.runtime.attempt_freeze import (
     AttemptFreezeError,
     AttemptFreezeSpec,
@@ -80,7 +91,12 @@ from acp_services.runtime.receipts import (
     advance_job_state,
     verify_receipt,
 )
-from acp_services.runtime.worker import FrozenStep, TaskExecutionOutcome, build_receipt
+from acp_services.runtime.worker import (
+    FrozenStep,
+    TaskExecutionOutcome,
+    build_receipt,
+    write_receipt_atomic,
+)
 from acp_services.worker_bootstrap import (
     assemble_worker,
     freeze_frozen_plan,
@@ -1040,6 +1056,12 @@ from pathlib import Path
 
 sys.path.insert(0, {src!r})
 
+from acp_services.runtime.attempt_completion import (
+    ALREADY_PUBLISHED,
+    CURRENT_CORRUPT_AFTER_EXIT,
+    AttemptCompletionService,
+    AttemptSnapshot,
+)
 from acp_services.runtime.attempt_freeze import (
     AttemptLockExecutionRight,
     attempt_lock_path,
@@ -1154,47 +1176,57 @@ def test_two_real_worker_processes_execute_exactly_once(tmp_path: Path) -> None:
 
 
 def test_cli_attempt_lock_flag_selects_the_persistent_claim(tmp_path: Path) -> None:
+    """The shipped CLI flag constructs the persistent claim (live holder -> refusal).
+
+    The cross-process exactly-one-executor race is proved separately with the
+    injected barrier port (`test_two_real_worker_processes_execute_exactly_once`);
+    here the holder is held alive so the CLI selection itself is deterministic.
+    """
     work = tmp_path / "task"
     work.mkdir()
     group = write_frozen_attempt(work, _freeze_spec("singlepoint"))
     run_root = tmp_path / "empty_run_root"
     run_root.mkdir()
-
-    base_argv = [
-        sys.executable,
-        "-m",
-        "acp_services.worker_bootstrap",
-        "--envelope",
-        str(group.envelope_path),
-        "--plan",
-        str(group.plan_path),
-        "--work-dir",
-        str(work),
-        "--probe-executor",
-        "ok",
-        "--attempt-lock",
-    ]
-    procs = [
-        subprocess.Popen(
-            base_argv,
+    holder = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+    try:
+        _write_foreign_claim(
+            attempt_lock_path(work),
+            pid=holder.pid,
+            pid_starttime=af._proc_start_time(holder.pid),
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "acp_services.worker_bootstrap",
+                "--envelope",
+                str(group.envelope_path),
+                "--plan",
+                str(group.plan_path),
+                "--work-dir",
+                str(work),
+                "--probe-executor",
+                "ok",
+                "--attempt-lock",
+            ],
             cwd=str(_REPO_ROOT),
             env=_child_env(run_root),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
+            timeout=120,
         )
-        for _ in range(2)
-    ]
-    outs = [proc.communicate(timeout=120) for proc in procs]
-    assert sorted(proc.returncode for proc in procs) == [0, 3], outs
+    finally:
+        holder.kill()
+        holder.wait(timeout=30)
 
+    assert result.returncode == 3, result.stdout + result.stderr
     receipt_path = work / "execution_receipt.json"
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    assert receipt["state"] == "completed"
+    assert not receipt_path.exists()  # loser never writes an authoritative receipt
     refusal_doc = json.loads(
         receipt_path.with_name(receipt_path.name + ".refused.json").read_text(encoding="utf-8")
     )
     assert refusal_doc["code"] == "execution_right_not_held"
+    assert refusal_doc["authoritative"] is False
     assert attempt_lock_path(work).is_file()
     assert list(run_root.iterdir()) == []
 
@@ -1550,3 +1582,230 @@ def test_t25_local_release_identity_imports_without_remote_extra() -> None:
     release_id, digest = proc.stdout.split()
     assert len(release_id) == 16
     assert len(digest) == 64
+
+
+# ---------------------------------------------------------------------------
+# 9. 07-B completion service + ACP JobStore CAS adapter (todo 26)
+# ---------------------------------------------------------------------------
+
+
+class _T26Publication:
+    """Publication double: idempotent published set + optional failure."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.calls = 0
+        self.fail = fail
+        self.published: set[tuple[object, ...]] = set()
+
+    def publish(self, snapshot: AttemptSnapshot) -> dict[str, object]:
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("publication transport unavailable")
+        self.published.add(snapshot.identity_key)
+        return {"published": True}
+
+    def is_published(self, snapshot: AttemptSnapshot) -> bool:
+        return snapshot.identity_key in self.published
+
+
+def _t26_record(
+    work: Path,
+    *,
+    job_id: str = _JOB,
+    attempt: int = 1,
+    status: JobStatus = JobStatus.QUEUED,
+) -> JobRecord:
+    return JobRecord(
+        id=job_id,
+        spec=JobSpec(workflow="singlepoint", name="t26", input={"smiles": "CCO"}),
+        status=status,
+        work_dir=str(work),
+        attempt=attempt,
+    )
+
+
+def _t26_env(job_id: str = _JOB, *, attempt: int = 1):
+    base = _envelope(attempt=attempt)
+    if job_id == _JOB:
+        return base
+    return replace(
+        base,
+        job_id=job_id,
+        submission_id=expected_submission_id(job_id, attempt),
+    )
+
+
+def _t26_receipt(env, *, state: str = "completed"):
+    return build_receipt(env, TaskExecutionOutcome(state=state, result_digest="sha256:t26"))
+
+
+def test_t26_jobstore_adapter_advances_once_and_restart_is_a_noop(tmp_path: Path) -> None:
+    work = tmp_path / "task"
+    work.mkdir()
+    env = _t26_env()
+    write_frozen_attempt(work, _freeze_spec(envelope=env))
+    store = JobStore(tmp_path / "jobs.db")
+    store.create(_t26_record(work))
+    receipt = _t26_receipt(env)
+    receipt_path = work / "execution_receipt.json"
+    write_receipt_atomic(receipt_path, receipt)
+
+    publication = _T26Publication()
+    service = build_attempt_completion_service(store, publication=publication)
+    snapshot = FrozenGroupSnapshotReader(store).read(_JOB)
+    assert snapshot is not None
+    verdict = service.complete(snapshot, receipt_path=receipt_path, confirmed_exited=True)
+
+    assert verdict.code == "published"
+    assert verdict.cas_calls == 1
+    assert publication.calls == 1
+    stored = store.get(_JOB)
+    assert stored is not None
+    assert stored.status == JobStatus.COMPLETED
+    assert stored.revision == 1
+    assert stored.attempt == 1
+    result = stored.result or {}
+    assert result["publication_pending"] is True
+    assert result["terminal_side_effects_done"] is False
+    assert result["receipt_state"] == "completed"
+
+    # Restart / duplicate delivery: terminal + already published -> no CAS.
+    revision_before = stored.revision
+    duplicate = service.complete(
+        FrozenGroupSnapshotReader(store).read(_JOB),  # type: ignore[arg-type]
+        receipt_path=receipt_path,
+        confirmed_exited=True,
+    )
+    assert duplicate.code == ALREADY_PUBLISHED
+    assert duplicate.cas_calls == 0
+    assert store.get(_JOB).revision == revision_before  # type: ignore[union-attr]
+    assert publication.calls == 1
+
+
+def test_t26_crash_between_cas_and_publication_resumes_without_second_cas(
+    tmp_path: Path,
+) -> None:
+    job_id = "job-t26-crash"
+    work = tmp_path / "task-crash"
+    work.mkdir()
+    env = _t26_env(job_id)
+    write_frozen_attempt(work, _freeze_spec(envelope=env))
+    store = JobStore(tmp_path / "jobs.db")
+    store.create(_t26_record(work, job_id=job_id))
+    receipt_path = work / "execution_receipt.json"
+    write_receipt_atomic(receipt_path, _t26_receipt(env))
+
+    failing = _T26Publication(fail=True)
+    service = build_attempt_completion_service(store, publication=failing)
+    snapshot = FrozenGroupSnapshotReader(store).read(job_id)
+    assert snapshot is not None
+    failed = service.complete(snapshot, receipt_path=receipt_path, confirmed_exited=True)
+    assert failed.code == "publication_failed"
+    assert failed.cas_calls == 1
+    assert failing.calls == 1
+    after_cas = store.get(job_id)
+    assert after_cas is not None
+    assert after_cas.revision == 1
+    assert (after_cas.result or {})["publication_pending"] is True
+
+    # "Restart": the terminal CAS is not repeated; only publication resumes.
+    recovered_pub = _T26Publication()
+    restarted = build_attempt_completion_service(store, publication=recovered_pub)
+    pending = FrozenGroupSnapshotReader(store).read(job_id)
+    assert pending is not None
+    resumed = restarted.resume_pending_publication(pending)
+    assert resumed.code == "published"
+    assert resumed.cas_calls == 0
+    assert recovered_pub.calls == 1
+    final = store.get(job_id)
+    assert final is not None
+    assert final.revision == 1  # no second CAS / no second QC-run transition
+    assert final.status == JobStatus.COMPLETED
+
+
+def test_t26_stale_attempt_receipt_leaves_the_job_untouched(tmp_path: Path) -> None:
+    work = tmp_path / "task-stale"
+    work.mkdir()
+    current_env = _t26_env(attempt=2)
+    write_frozen_attempt(work, _freeze_spec(envelope=current_env))
+    store = JobStore(tmp_path / "jobs.db")
+    store.create(_t26_record(work, attempt=2))
+    stale_receipt = _t26_receipt(_envelope(attempt=1))
+
+    publication = _T26Publication()
+    service = build_attempt_completion_service(store, publication=publication)
+    snapshot = FrozenGroupSnapshotReader(store).read(_JOB)
+    assert snapshot is not None
+    verdict = service.complete(snapshot, receipt=stale_receipt, confirmed_exited=True)
+
+    assert verdict.code == "stale_attempt"
+    assert verdict.cas_calls == 0
+    assert publication.calls == 0
+    unchanged = store.get(_JOB)
+    assert unchanged is not None
+    assert unchanged.status == JobStatus.QUEUED
+    assert unchanged.revision == 0
+    assert unchanged.attempt == 2
+    assert unchanged.result is None
+
+
+def test_t26_current_corrupt_after_exit_is_one_failure_cas_for_the_controller(
+    tmp_path: Path,
+) -> None:
+    work = tmp_path / "task-corrupt"
+    work.mkdir()
+    env = _t26_env()
+    write_frozen_attempt(work, _freeze_spec(envelope=env))
+    store = JobStore(tmp_path / "jobs.db")
+    store.create(_t26_record(work))
+    publication = _T26Publication()
+    service = build_attempt_completion_service(store, publication=publication)
+    snapshot = FrozenGroupSnapshotReader(store).read(_JOB)
+    assert snapshot is not None
+
+    verdict = service.complete(
+        snapshot,
+        receipt_path=work / "execution_receipt.json",
+        confirmed_exited=True,
+    )
+    assert verdict.code == CURRENT_CORRUPT_AFTER_EXIT
+    assert verdict.failure is not None
+    assert verdict.requires_controller_cas is True
+    assert verdict.cas_calls == 0
+    assert publication.calls == 0
+    untouched = store.get(_JOB)
+    assert untouched is not None
+    assert untouched.status == JobStatus.QUEUED
+    assert untouched.revision == 0
+
+    # Task 27 consumes the returned fact and writes exactly one CAS failure.
+    adapter = JobStoreAdvancePort(store)
+    failed = adapter.advance(
+        _JOB,
+        expected_revision=0,
+        expected_status=JobStatus.QUEUED,
+        expected_attempt=1,
+        status=JobStatus.FAILED,
+        error=verdict.failure.code,
+    )
+    assert failed.status == JobStatus.FAILED
+    assert failed.revision == 1
+    with pytest.raises(JobStateConflictError):
+        adapter.advance(
+            _JOB,
+            expected_revision=0,
+            expected_status=JobStatus.QUEUED,
+            expected_attempt=1,
+            status=JobStatus.FAILED,
+            error=verdict.failure.code,
+        )
+
+
+def test_t26_completion_service_is_not_a_second_job_writer() -> None:
+    from acp_services.runtime import attempt_completion as completion
+
+    source = Path(completion.__file__).read_text(encoding="utf-8")
+    assert "sqlite3" not in source
+    assert ".transition(" not in source
+    assert not any(line.startswith(("from acp.", "import acp.")) for line in source.splitlines())
+    assert "advance_job_state" in source
