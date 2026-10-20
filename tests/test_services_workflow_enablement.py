@@ -268,3 +268,127 @@ def test_t25_freeze_builder_does_not_activate_any_workflow() -> None:
     for row in enablement.enablement_matrix():
         assert row.entry == enablement.select_entry(row.workflow)
         assert row.remote_entry == enablement.select_entry(row.workflow, remote=True)
+
+
+# ---------------------------------------------------------------------------
+# T31 — D07 support matrix consistency (separate default vs scientific closure)
+# ---------------------------------------------------------------------------
+
+_SUPPORT_MATRIX = _REPO_ROOT / "reports" / "architecture_remediation_20261020" / "support-matrix.md"
+_MATRIX_STATUS_COLUMNS = (
+    "scientific closure",
+    "default submit freeze",
+    "local dispatch+receipt",
+    "remote dispatch+receipt",
+    "publication recovery",
+    "real science",
+)
+_MATRIX_TOKENS = frozenset({"PASS", "OPEN", "NOT_VERIFIED", "FAIL", "N/A"})
+
+
+def _matrix_rows(text: str) -> list[dict[str, str]]:
+    lines = text.splitlines()
+    header: list[str] | None = None
+    for index, line in enumerate(lines):
+        if not line.strip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells[:2] == ["#", "workflow"]:
+            header = cells
+            start = index + 2
+            break
+    if header is None:
+        return []
+    rows: list[dict[str, str]] = []
+    for line in lines[start:]:
+        if not line.strip().startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != len(header):
+            continue
+        if all(set(cell) <= set("-: ") for cell in cells):
+            continue
+        rows.append(dict(zip(header, cells, strict=True)))
+    return rows
+
+
+def _cell_token(cell: str) -> str:
+    head = cell.split("—", 1)[0].strip()
+    return head.split()[0] if head else ""
+
+
+def _cell_has_evidence(cell: str) -> bool:
+    return "`" in cell or "](" in cell or "python3.11 -m pytest" in cell
+
+
+def _matrix_problems(text: str) -> list[str]:
+    from acp_services.runtime.worker import TASK_COMPLETION_AUTHORITIES
+
+    rows = _matrix_rows(text)
+    problems: list[str] = []
+    workflows = [row.get("workflow", "") for row in rows]
+    if workflows != list(enablement.ACTIVE_WORKFLOWS):
+        problems.append(f"matrix workflows {workflows} != ACTIVE_WORKFLOWS")
+    defaults: set[str] = set()
+    for row in rows:
+        workflow = row.get("workflow", "")
+        for column in _MATRIX_STATUS_COLUMNS:
+            cell = row.get(column, "")
+            if not cell:
+                problems.append(f"{workflow}: empty {column}")
+                continue
+            token = _cell_token(cell)
+            if token not in _MATRIX_TOKENS:
+                problems.append(f"{workflow}: {column} has unknown token {token!r}")
+            if token != "N/A" and not _cell_has_evidence(cell):
+                problems.append(f"{workflow}: {column} lacks evidence link/command")
+            if token == "PASS" and not _cell_has_evidence(cell):
+                problems.append(f"{workflow}: {column} PASS without evidence")
+        if row.get("default_envelope") == "yes":
+            defaults.add(workflow)
+        expected_path = "envelope" if workflow in chain.DEFAULT_ENVELOPE_WORKFLOWS else "legacy"
+        if row.get("current path") != expected_path:
+            problems.append(
+                f"{workflow}: current path {row.get('current path')!r} != {expected_path!r}"
+            )
+        if workflow in chain.DEFAULT_ENVELOPE_WORKFLOWS:
+            if _cell_token(row.get("default submit freeze", "")) != "PASS":
+                problems.append(f"{workflow}: default workflow lacks PASS freeze evidence")
+            task_kinds = chain.capability_for(workflow).capabilities
+            if not task_kinds or task_kinds[0] not in TASK_COMPLETION_AUTHORITIES:
+                problems.append(
+                    f"{workflow}: TaskKind {task_kinds[:1]!r} missing from "
+                    "T5 completion authorities"
+                )
+    if defaults != set(chain.DEFAULT_ENVELOPE_WORKFLOWS):
+        problems.append(
+            f"matrix default set {sorted(defaults)} != DEFAULT_ENVELOPE_WORKFLOWS "
+            f"{sorted(chain.DEFAULT_ENVELOPE_WORKFLOWS)}"
+        )
+    return problems
+
+
+def test_t31_support_matrix_is_consistent_and_default_scope_is_explicit() -> None:
+    text = _SUPPORT_MATRIX.read_text(encoding="utf-8")
+    problems = _matrix_problems(text)
+    assert problems == [], problems
+    assert "singlepoint" in chain.DEFAULT_ENVELOPE_WORKFLOWS
+    assert len(chain.DEFAULT_ENVELOPE_WORKFLOWS) == 1
+    # Scientific closure is tracked separately; the matrix must not use the
+    # closure count as a generic default-enabled count.
+    assert "8/15" not in text
+
+
+def test_t31_matrix_checker_rejects_enabled_without_evidence() -> None:
+    lines = _SUPPORT_MATRIX.read_text(encoding="utf-8").splitlines()
+    mutated: list[str] = []
+    for line in lines:
+        if line.startswith("| 1 | singlepoint |"):
+            cells = line.strip().strip("|").split("|")
+            # #0 workflow1 current2 default_envelope3 closure4 freeze5
+            cells[5] = " PASS "
+            mutated.append("|" + "|".join(cells) + "|")
+        else:
+            mutated.append(line)
+    problems = _matrix_problems("\n".join(mutated))
+    assert any("default submit freeze" in problem and "evidence" in problem for problem in problems)

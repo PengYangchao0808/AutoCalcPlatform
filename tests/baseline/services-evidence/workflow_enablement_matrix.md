@@ -1,6 +1,11 @@
 # Workflow enablement matrix (B06-5 / todo 34)
 
 **Created:** 2026-10-19，基线 HEAD `feat/frontend-plan1-closure`（todo 32 之后）。
+**T31 (2026-10-20) scope note:** the per-workflow D07 support matrix now lives at
+`reports/architecture_remediation_20261020/support-matrix.md`. Default submit
+freeze scope (`DEFAULT_ENVELOPE_WORKFLOWS`, currently `singlepoint`) is tracked
+separately from scientific closure (`ENABLED_WORKFLOWS`, the C01 eight); this
+snapshot's 8/7 entry policy is not a default-enabled count.
 **Owner of this file:** B 路（todo 34）。**Authority:** `src/acp_services/runtime/workflow_enablement.py`
 + `src/acp_services/runtime/execution_chain.py::FROZEN_WORKFLOW_CAPABILITY_TABLE`
 （唯一能力表，todo 32）。本文件是**可读快照 + 启用证据**，不是第二权威；能力表/策略以代码为准。

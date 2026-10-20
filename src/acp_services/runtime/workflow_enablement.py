@@ -17,15 +17,24 @@ by todo 32); this module is the *policy* layer over it:
   explicit typed refusal, never a silent fallback that a caller could mistake for
   independence.
 
+Task 31 publishes the per-workflow D07 support matrix at
+``reports/architecture_remediation_20261020/support-matrix.md``.  That matrix
+keeps the **default submit freeze** scope (`execution_chain.DEFAULT_ENVELOPE_WORKFLOWS`,
+currently only ``singlepoint``) separate from the **scientific closure**
+(`ENABLED_WORKFLOWS`, the C01 eight); it never derives a default-enabled count
+from the closure count.  A cell without executed candidate-revision evidence is
+``OPEN``/``NOT_VERIFIED``, never ``PASS``.
+
 Two exit gates (review P1-3) stay separate:
 
 * **T34a** — the selected closure workflows enable via the envelope entry, with a
   targeted regression (``tests/test_services_workflow_enablement.py``).
 * **T34b** — full 15-active coverage. :func:`coverage_report` is the
   machine-checkable check: it PASSES on matrix integrity/honesty while
-  *recording* that the full-coverage gate is still OPEN (``enabled 8/15``). The
-  remaining seven keep the legacy path and are never claimed independent; their
-  closures are carried by C01 (HN-01 §13, T20–T30).
+  *recording* that the full-coverage gate is still OPEN (the closure table has
+  eight integrated / seven pending entries — a closure fact, not a default
+  enablement count). The remaining seven keep the legacy path and are never
+  claimed independent; their closures are carried by C01 (HN-01 §13, T20–T30).
 
 This module imports stdlib + the Services execution-chain table only (no ``acp``)
 and never references the legacy CLI entry as a command.

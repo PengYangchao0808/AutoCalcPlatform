@@ -1,74 +1,80 @@
-# ACP 架构整改验收 — 支持矩阵（种子）
+# ACP 架构整改验收 — 支持矩阵（D07 分格证据）
 
-**Candidate revision:** `878e3557b3b593a0c42adf842e80fe1408db395e`
-**Seeded:** 2026-10-20 (task 1, baseline freeze)
-**Status of every cell at baseline:** `OPEN` or `NOT_VERIFIED` — **no cell may read `PASS` at baseline.**
+**Candidate revision:** `878e3557b3b593a0c42adf842e80fe1408db395e`（基线冻结）+ T24–T32 交付
+**Published:** 2026-10-20（task 31）
+**矩阵性质:** 一行一个 active 工作流；每个**已执行**格子必须带命令/工件路径；没有执行证据的格子只能是 `OPEN` 或 `NOT_VERIFIED`，不得写 `PASS`。
+
+> 本文件只发布**分格证据**。它不把 `ENABLED_WORKFLOWS`（科学闭包 8 项）写成默认启用计数；
+> 默认冻结集合是独立的 `DEFAULT_ENVELOPE_WORKFLOWS`，本任务时只有 `singlepoint`。
+> 15/15 验收门保持 **OPEN**，直到所有格子都有候选 revision 上的执行证据。
 
 ## 行来源（row source）
 
-一个活动工作流一行。活动集合取自代码，不臆造：
-
 - `src/acp_services/runtime/workflow_enablement.py::ACTIVE_WORKFLOWS`（15 项，canonical catalog order）
-- 每行的 closure / remote 事实取自 `src/acp_services/runtime/execution_chain.py::FROZEN_WORKFLOW_CAPABILITY_TABLE`
+- `src/acp_services/runtime/execution_chain.py::FROZEN_WORKFLOW_CAPABILITY_TABLE`
   （`closure=integrated|legacy`、`remote_supported=True|False`）
-
-这些只是**代码事实**（capability table 的自述），不是验收证据；它们决定格子预期，不改变格子状态。
+- 默认冻结集合：`src/acp_services/runtime/execution_chain.py::DEFAULT_ENVELOPE_WORKFLOWS`
+  （当前 `frozenset({"singlepoint"})`，与科学闭包集合**分开**）
 
 ## 词汇（vocabulary）
 
 | token | 含义 |
 |---|---|
-| `OPEN` | 整改尚未交付该格的证据；默认链/科学/恢复证据缺失 |
-| `NOT_VERIFIED` | 本机/本环境无法执行（缺真实 QC/LSF/浏览器/冻结 bundle），带 skip 原因 |
-| `PASS` | 仅在该格实际命令 + 原始回执落盘后由后续任务写入（**基线禁止**） |
-| `FAIL` | 已执行且失败，不得改写为 `NOT_VERIFIED` |
+| `PASS` | 该格在候选交付上实际执行，命令 + 原始回执/测试路径存在 |
+| `OPEN` | 尚未交付/未执行该格证据；不得外推为已交付 |
+| `NOT_VERIFIED` | 环境缺失（真实 QC/LSF/浏览器/冻结 bundle），带具体原因 |
+| `FAIL` | 已执行且失败；不得改写为 `NOT_VERIFIED` |
+| `N/A` | 该格对该工作流不适用（例如 local-only 工作流的远端格） |
 
-## 列定义（column definitions）
+## 矩阵（15 rows）
 
-| 列 | 关闭条件（证据必须实际存在） |
-|---|---|
-| scientific closure | 该工作流的 per-workflow 科学闭包（C01/HN-01 记录）在**候选 revision** 上被实际执行验证，科学容差与黄金值不变 |
-| default submit freeze | 普通提交产生冻结 envelope/plan/binding（D07），断言真实模块路径/摘要，非缓存 hash |
-| local dispatch+receipt | 本地派发 → 单次执行 → receipt 身份（attempt/release/digest）校验 → CAS 终态，含失败/重投递反例 |
-| remote dispatch+receipt | 真实 SSH/SFTP/LSF：bsub 提交、bjobs 观测、停止确认、断线恢复、终态预取、旧 attempt 拒绝 |
-| publication recovery | 发布只重试发布；进程在 terminal CAS 后、publisher 前被杀 → 重启续发布且无第二次 QC 运行 |
-| real science | 真实 QC 程序从结构 → 提交 → 规范产品 → 可视化 → 证据报告；FakeBackend 不算 |
-
-## 矩阵（15 行）
-
-| # | workflow | closure | remote_supported | scientific closure | default submit freeze | local dispatch+receipt | remote dispatch+receipt | publication recovery | real science |
+| # | workflow | current path | default_envelope | scientific closure | default submit freeze | local dispatch+receipt | remote dispatch+receipt | publication recovery | real science |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | singlepoint | integrated | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 2 | optimize | integrated | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 3 | frequency | integrated | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 4 | scan | integrated | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 5 | irc | integrated | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 6 | casscf | integrated | no | OPEN | OPEN | OPEN | NOT_APPLICABLE | OPEN | NOT_VERIFIED |
-| 7 | xtb_optimize | integrated | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 8 | OrcaGradient | integrated | no | OPEN | OPEN | OPEN | NOT_APPLICABLE | OPEN | NOT_VERIFIED |
-| 9 | tsmode | legacy | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 10 | nmr | legacy | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 11 | Confsearch | legacy | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 12 | PESsearch | legacy | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 13 | BatchOptimize | legacy | yes | OPEN | OPEN | OPEN | OPEN | OPEN | NOT_VERIFIED |
-| 14 | XtbPathSearch | legacy | no | OPEN | OPEN | OPEN | NOT_APPLICABLE | OPEN | NOT_VERIFIED |
-| 15 | XtbConstrainedOpt | legacy | no | OPEN | OPEN | OPEN | NOT_APPLICABLE | OPEN | NOT_VERIFIED |
+| 1 | singlepoint | envelope | yes | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | PASS — `tests/test_services_chain_switch.py::test_t29_ordinary_singlepoint_submit_uses_the_frozen_chain` | PASS — `tests/test_services_chain_switch.py::test_t27_opt_in_singlepoint_runs_worker_advances_once_and_restarts_noop` | NOT_VERIFIED — controlled fake transport only; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | PASS — `tests/test_services_chain_switch.py::test_t28_publish_failure_keeps_scientific_record_then_retries` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 2 | optimize | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 3 | frequency | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 4 | scan | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 5 | irc | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 6 | tsmode | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 7 | casscf | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | N/A | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 8 | xtb_optimize | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 9 | nmr | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 10 | Confsearch | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 11 | PESsearch | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 12 | BatchOptimize | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | OPEN — no controlled remote evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-30-acp-architecture-acceptance-remediation.md` | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 13 | XtbPathSearch | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | N/A | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 14 | OrcaGradient | legacy | no | OPEN — no candidate-revision C01 rerun; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — builder registered, no controlled local receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-29-acp-architecture-acceptance-remediation.md` | N/A | OPEN — no per-workflow publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
+| 15 | XtbConstrainedOpt | legacy | no | OPEN — C01 closure pending; `tests/baseline/services-evidence/workflow_enablement_matrix.md` | OPEN — not default; `src/acp_services/runtime/execution_chain.py` | OPEN — no controlled envelope receipt run; `.omo/evidence/acp-architecture-acceptance-remediation/task-31-acp-architecture-acceptance-remediation.md` | N/A | OPEN — no publication evidence; `.omo/evidence/acp-architecture-acceptance-remediation/task-28-acp-architecture-acceptance-remediation.md` | NOT_VERIFIED — no real QC; `reports/architecture_remediation_20261020/evidence/qc-discovery.log` |
 
-### 格子状态说明（为什么不是 PASS）
+## 范围声明（scoped claims）
 
-- **全部 6 列 × 15 行 = 90 格，基线无任何 `PASS`。**
-- `NOT_VERIFIED` 只用于**环境缺失**的真实科学/真实远端：本机 `command -v` 显示 `crest/xtb/censo/isostat/shermo/bsub/bjobs/bstop` **ABSENT**（见 `evidence/qc-discovery.log`），因此 `real science` 与需要 LSF 客户端的格子在本机不可执行。`acp doctor` 通过 SSH 探测到远端 node-157 上的软件版本（`evidence/qc-doctor.log`）是**远端节点事实**，不是本机可用性，也不是任何一格的 PASS。
-- `remote dispatch+receipt` 对 `remote_supported=no` 的 4 行（casscf / OrcaGradient / XtbPathSearch / XtbConstrainedOpt）记 `NOT_APPLICABLE`（scope token），不记 PASS/FAIL。
-- `closure` 列的 `integrated`/`legacy` 是 capability table 自述，**不是** scientific closure 列的证据；后者保持 `OPEN` 直到候选 revision 上的实跑证据落盘。
+- **默认冻结范围**: `DEFAULT_ENVELOPE_WORKFLOWS == {"singlepoint"}`。只有 singlepoint 的普通提交在本
+  revision 上走 freeze → worker → receipt → CAS → publish；其余 14 项保持各自 current path。
+- **科学闭包**: `ENABLED_WORKFLOWS` 仍是 C01 的 8 项（integrated），它与默认冻结集合不是同一集合；
+  本矩阵不把它写成“默认启用计数”，也不据此关闭 15/15 门。
+- **legacy 保留**: 7 项 legacy 是兼容决定，不是缺陷，也不是完成证据；它们继续走注册路径。
+- **15/15 gate**: **OPEN**。只有每格都有候选 revision 上的实际执行证据、且默认集合按工作流逐项
+  证据扩张后，门才可关闭。
+- **真实环境**: real science 与 real remote 未执行（`qc-discovery.log` 显示本机缺 QC/LSF 客户端）；
+  对应格子为 `NOT_VERIFIED`，不是 PASS。
+
+## 证据位置
+
+- 默认冻结/本地链路: `tests/test_services_chain_switch.py`（T27/T28/T29 段）与
+  `.omo/evidence/acp-architecture-acceptance-remediation/task-27..29-*.md`
+- 远端受控传输: `.omo/evidence/acp-architecture-acceptance-remediation/task-30-*.md`
+- 冻结/发布/恢复基础: `.omo/evidence/acp-architecture-acceptance-remediation/task-24..28-*.md`
+- 同 attempt/归档: `.omo/evidence/acp-architecture-acceptance-remediation/task-32-*.md`
+- 环境缺失: `reports/architecture_remediation_20261020/evidence/qc-discovery.log`
 
 ## 谁可以改写格子
 
-| 改写为 | 需要 |
+| 改写 | 需要 |
 |---|---|
-| `OPEN` → `PASS` | 该格的原始命令 + 退出码 + 日志落在 `reports/architecture_remediation_20261020/evidence/`，并由任务 41/42/43 更新 manifest |
-| `OPEN` → `NOT_VERIFIED` | 具体缺失的环境前置（二进制/凭据/冻结 bundle），逐格单独说明，不接受笼统 skip |
-| `NOT_VERIFIED` → `PASS` | 环境补齐后**实际执行**；不得因环境出现就直接改写 |
-| 任意 → `FAIL` | 已执行且失败；`FAIL` 不得再改写为 `NOT_VERIFIED` |
+| `OPEN` → `PASS` | 该格实际命令 + 退出码 + 原始回执落在 `reports/architecture_remediation_20261020/evidence/`；manifest 由 T41/42/43 更新 |
+| `OPEN` → `NOT_VERIFIED` | 逐格写明缺失环境（二进制/凭据/冻结 bundle），不接受笼统 skip |
+| `NOT_VERIFIED` → `PASS` | 环境补齐后实际执行 |
+| 任意 → `FAIL` | 已执行且失败；`FAIL` 不得改回 `NOT_VERIFIED` |
 
 相关门：`G3 默认链路`（default submit freeze / dispatch+receipt / publication recovery）、
 `G5 功能验收`（real science + 浏览器）、`G4 独立交付`（release/markers），
