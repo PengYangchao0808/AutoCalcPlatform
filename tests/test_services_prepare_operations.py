@@ -691,9 +691,10 @@ def test_content_identity_change_creates_a_new_operation(tmp_path: Path) -> None
     assert len(service.list()) == 2
     # same logical key, newest preparation returned by the logical lookup
     assert service.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch") is not None
-    assert newer.operation_id == service.find(
-        job_id="j1", attempt=1, resource_id="catalog:Confsearch"
-    ).operation_id
+    assert (
+        newer.operation_id
+        == service.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch").operation_id
+    )
 
 
 def test_enqueue_same_client_key_same_content_merges(tmp_path: Path) -> None:
@@ -933,10 +934,7 @@ def test_two_concurrent_initializers_converge(tmp_path: Path) -> None:
         "from acp_services.data.operations import PrepareOperationService\n"
         "PrepareOperationService(sys.argv[1]).close()\n"
     )
-    processes = [
-        subprocess.Popen([sys.executable, "-c", code, str(db)])
-        for _ in range(2)
-    ]
+    processes = [subprocess.Popen([sys.executable, "-c", code, str(db)]) for _ in range(2)]
     try:
         for process in processes:
             assert process.wait(timeout=60) == 0
@@ -956,3 +954,269 @@ def test_two_concurrent_initializers_converge(tmp_path: Path) -> None:
         assert conn.execute("SELECT COUNT(*) FROM _prepare_schema_migrations").fetchone()[0] == 1
     finally:
         conn.close()
+
+
+# ===========================================================================
+# D05 (task 13) — frozen epoch/reopen, expire(SUCCEEDED), cross-process safety
+# ===========================================================================
+
+
+def test_d05_counterexample_generation_two_is_not_old_success(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    original = _request(generation=1, digest="sha256:old")
+    first = service.enqueue(original)
+    leased = service.lease_next()
+    assert leased is not None
+    assert service.complete(leased).state is ops.PrepareState.SUCCEEDED
+
+    newer = _request(generation=2, digest="sha256:new")
+    second = service.enqueue(newer)
+    assert second.operation_id != first.operation_id
+    assert second.resource_generation == 2
+    assert second.state is not ops.PrepareState.SUCCEEDED
+    assert second.state is ops.PrepareState.QUEUED
+    found = service.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch")
+    assert found is not None and found.operation_id == second.operation_id
+
+    claim = service.lease_next()
+    assert claim is not None and claim.operation_id == second.operation_id
+    assert service.complete(claim).state is ops.PrepareState.SUCCEEDED
+
+    # same identity (generation 2) executes once — the second enqueue merges
+    again = service.enqueue(newer)
+    assert again.operation_id == second.operation_id
+    assert service.lease_next() is None
+    assert len(service.list()) == 2
+
+
+def test_expire_succeeded_row_is_not_ready_and_keeps_result(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    op = service.enqueue(_request(client_key="client-1"))
+    lease = service.lease_next()
+    assert lease is not None
+    done = service.complete(
+        lease,
+        ops.PrepareCompletion(result={"manifest": MANIFEST_PATH}, size_bytes=42, sha256="abc123"),
+    )
+    assert done.state is ops.PrepareState.SUCCEEDED
+    assert done.result == {"manifest": MANIFEST_PATH}
+    assert service.availability(op.operation_id).availability is dc.Availability.READY
+
+    expired = service.expire(op.operation_id, reason="cache_evicted")
+    assert expired.state is ops.PrepareState.EXPIRED
+    assert expired.error_code == "expired"
+    assert expired.error_message == "cache_evicted"
+    assert expired.result == {"manifest": MANIFEST_PATH}
+    assert expired.size_bytes == 42
+    assert expired.sha256 == "abc123"
+
+    assert service.availability(op.operation_id).availability is dc.Availability.ABSENT
+    assert service.availability(op.operation_id).availability is not dc.Availability.READY
+    contract = service.get(op.operation_id).to_contract()
+    assert contract.state is dc.ResourceState.FAILED
+    assert contract.availability is dc.Availability.ABSENT
+    assert contract.freshness is dc.Freshness.UNKNOWN
+
+    assert service.expire(op.operation_id, reason="again").state is ops.PrepareState.EXPIRED
+    with pytest.raises(ops.StaleLeaseError):
+        service.complete(lease)
+
+
+def test_expire_succeeded_same_client_key_reopens_next_epoch(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    request = _request(client_key="reprepare")
+    first = service.enqueue(request)
+    lease = service.lease_next()
+    assert lease is not None
+    service.complete(lease, ops.PrepareCompletion(result={"manifest": MANIFEST_PATH}))
+    service.expire(first.operation_id, reason="cache_evicted")
+
+    second = service.enqueue(request)
+    assert second.operation_id != first.operation_id
+    assert second.dedup_epoch == first.dedup_epoch + 1 == 1
+    assert second.state is ops.PrepareState.QUEUED
+    assert second.content_identity == first.content_identity
+    assert second.client_idempotency_key == "reprepare"
+
+    old = service.get(first.operation_id)
+    assert old is not None
+    assert old.state is ops.PrepareState.EXPIRED
+    assert old.result == {"manifest": MANIFEST_PATH}
+    assert len(service.list()) == 2
+
+    claim = service.lease_next()
+    assert claim is not None and claim.operation_id == second.operation_id
+    with pytest.raises(ops.PrepareOperationConflictError):
+        service.enqueue(_request(client_key="reprepare", digest="dg-other"))
+
+
+def test_expire_running_invalidates_old_lease(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    request = _request()
+    op = service.enqueue(request)
+    stale = service.lease_next()
+    assert stale is not None
+    service.expire(op.operation_id, reason="superseded")
+
+    with pytest.raises(ops.StaleLeaseError):
+        service.complete(stale)
+    with pytest.raises(ops.StaleLeaseError):
+        service.fail(stale, error_code="x")
+
+    row = service.get(op.operation_id)
+    assert row is not None
+    assert row.state is ops.PrepareState.EXPIRED
+    assert row.error_message == "superseded"
+    assert service.availability(op.operation_id).availability is not dc.Availability.READY
+    assert service.lease_next() is None
+
+    reopened = service.enqueue(request)
+    assert reopened.operation_id != op.operation_id
+    assert reopened.dedup_epoch == 1
+    claim = service.lease_next()
+    assert claim is not None and claim.operation_id == reopened.operation_id
+
+
+def test_failed_row_resets_retry_budget_on_reenqueue(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    request = _request(max_attempts=1)
+    op = service.enqueue(request)
+    lease = service.lease_next()
+    assert lease is not None
+    assert (
+        service.fail(lease, error_code="sftp_failed", error_message="down").state
+        is ops.PrepareState.FAILED
+    )
+
+    reset = service.enqueue(request)
+    assert reset.operation_id == op.operation_id
+    assert reset.state is ops.PrepareState.QUEUED
+    assert reset.attempt_count == 0
+    assert reset.error_code is None and reset.error_message is None
+    assert reset.owner_generation > op.owner_generation
+
+    retry = service.lease_next()
+    assert retry is not None and retry.operation_id == op.operation_id
+    assert service.complete(retry).state is ops.PrepareState.SUCCEEDED
+
+
+def test_same_identity_executes_once_across_two_connections(tmp_path: Path) -> None:
+    db = tmp_path / "acp_jobs.db"
+    first_service = ops.PrepareOperationService(db, clock=FakeClock(), retry_backoff_seconds=0.0)
+    second_service = ops.PrepareOperationService(db, clock=FakeClock(), retry_backoff_seconds=0.0)
+    try:
+        request = _request(client_key="shared")
+        first = first_service.enqueue(request)
+        second = second_service.enqueue(request)
+        assert first.operation_id == second.operation_id
+        assert len(first_service.list()) == 1
+
+        lease = first_service.lease_next()
+        assert lease is not None
+        assert second_service.lease_next() is None
+        first_service.complete(lease)
+        assert second_service.get(first.operation_id).state is ops.PrepareState.SUCCEEDED
+    finally:
+        first_service.close()
+        second_service.close()
+
+
+def test_client_key_conflict_is_not_the_idempotency_hash(tmp_path: Path) -> None:
+    first_request = _request(client_key="same", digest="dg-A")
+    second_request = _request(client_key="same", digest="dg-B")
+    # Different content means different idempotency hashes: only the partial
+    # unique index on (scope, client_key, epoch) can reject this.
+    assert first_request.idempotency_key != second_request.idempotency_key
+
+    service = _service(tmp_path)
+    service.enqueue(first_request)
+    with pytest.raises(ops.PrepareOperationConflictError):
+        service.enqueue(second_request)
+    assert len(service.list()) == 1
+    assert service.list()[0].content_identity == first_request.content_identity
+
+
+_PROCESS_ENQUEUE = """
+import sys
+from acp_services.data import contracts as dc
+from acp_services.data import operations as ops
+
+service = ops.PrepareOperationService(sys.argv[1], retry_backoff_seconds=0.0)
+try:
+    request = ops.PrepareRequest(
+        job_id="j1",
+        attempt=1,
+        resource_id="catalog:Confsearch",
+        resource_kind=dc.ResourceKind.CACHE,
+        resource_digest=sys.argv[2],
+        client_idempotency_key="shared",
+    )
+    print(service.enqueue(request).operation_id)
+except ops.PrepareOperationConflictError:
+    print("CONFLICT")
+    raise SystemExit(3)
+finally:
+    service.close()
+"""
+
+
+def _run_enqueue_processes(db: Path, digests: tuple[str, ...]) -> list[tuple[int, str, str]]:
+    processes = [
+        subprocess.Popen(
+            [sys.executable, "-c", _PROCESS_ENQUEUE, str(db), digest],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for digest in digests
+    ]
+    outcomes: list[tuple[int, str, str]] = []
+    try:
+        for process in processes:
+            out, err = process.communicate(timeout=60)
+            outcomes.append((int(process.returncode), out.strip(), err.strip()))
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=10)
+    return outcomes
+
+
+def test_cross_process_same_client_key_different_content_one_winner(tmp_path: Path) -> None:
+    db = tmp_path / "acp_jobs.db"
+    outcomes = _run_enqueue_processes(db, ("dg-A", "dg-B"))
+    codes = sorted(code for code, _out, _err in outcomes)
+    assert codes == [0, 3], outcomes
+    winners = [out for code, out, _err in outcomes if code == 0]
+    conflicts = [out for code, out, _err in outcomes if code == 3]
+    assert len(winners) == 1 and winners[0].startswith("op_")
+    assert conflicts == ["CONFLICT"]
+
+    service = ops.PrepareOperationService(db, clock=FakeClock())
+    try:
+        rows = service.list()
+        assert len(rows) == 1
+        assert rows[0].operation_id == winners[0]
+        assert rows[0].client_idempotency_key == "shared"
+    finally:
+        service.close()
+
+
+def test_cross_process_same_identity_produces_one_row(tmp_path: Path) -> None:
+    db = tmp_path / "acp_jobs.db"
+    outcomes = _run_enqueue_processes(db, ("dg-same", "dg-same"))
+    assert [code for code, _out, _err in outcomes] == [0, 0], outcomes
+    operation_ids = {out for _code, out, _err in outcomes}
+    assert len(operation_ids) == 1
+    operation_id = operation_ids.pop()
+    assert operation_id.startswith("op_")
+
+    service = ops.PrepareOperationService(db)
+    try:
+        assert [row.operation_id for row in service.list()] == [operation_id]
+        lease = service.lease_next()
+        assert lease is not None and lease.operation_id == operation_id
+        assert service.lease_next() is None
+    finally:
+        service.close()
