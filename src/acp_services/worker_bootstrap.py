@@ -477,6 +477,8 @@ def validate_frozen_group_inputs(
     envelope_path: Path | str,
     plan_path: Path | str,
     binding_path: Path | str | None = None,
+    *,
+    require_manifest: bool = False,
 ) -> None:
     """Reject a partial/mixed frozen group before anything executes (07-A).
 
@@ -489,6 +491,10 @@ def validate_frozen_group_inputs(
     """
     envelope_file = Path(envelope_path)
     if not (envelope_file.parent / FROZEN_GROUP_MANIFEST_FILENAME).is_file():
+        if require_manifest:
+            raise AssemblyError(
+                "frozen group manifest required for this entry; refusing loose member files"
+            )
         return
     try:
         group = inspect_frozen_group_dir(envelope_file.parent)
@@ -893,6 +899,14 @@ def main(
     )
     parser.add_argument("--binding", default=None, help="optional StorageBinding JSON path")
     parser.add_argument(
+        "--require-frozen-group",
+        action="store_true",
+        help=(
+            "require the complete frozen-group manifest beside the envelope (remote entry); "
+            "loose envelope/plan files are rejected"
+        ),
+    )
+    parser.add_argument(
         "--attempt-lock",
         nargs="?",
         const="",
@@ -922,7 +936,12 @@ def main(
     receipt_path = Path(args.receipt) if args.receipt else work_dir / _DEFAULT_RECEIPT_NAME
 
     try:
-        validate_frozen_group_inputs(args.envelope, args.plan, args.binding)
+        validate_frozen_group_inputs(
+            args.envelope,
+            args.plan,
+            args.binding,
+            require_manifest=bool(args.require_frozen_group),
+        )
     except AssemblyError as exc:
         _write_unbound_failure(receipt_path, "frozen_group_invalid", str(exc))
         print(json.dumps({"state": "failed", "code": "frozen_group_invalid", "message": str(exc)}))

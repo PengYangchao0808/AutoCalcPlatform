@@ -776,6 +776,10 @@ def worker_argv(
         argv += ["--receipt", str(receipt_path)]
     if launch.binding_path:
         argv += ["--binding", str(launch.binding_path)]
+    if launch.protocol == EXECUTION_PROTOCOL_LSF:
+        # Remote attempts are handed the flat member layout: require the
+        # manifest commit marker so a half/tampered upload never executes.
+        argv += ["--require-frozen-group"]
     if probe_executor:
         argv += ["--probe-executor", str(probe_executor)]
     return argv

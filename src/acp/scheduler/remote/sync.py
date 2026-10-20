@@ -99,17 +99,22 @@ def build_sync_file_list(project_root: Path) -> list[Path]:
     if acp_root.is_dir():
         files.extend(_walk_dir(acp_root, exclude_dirs=_ACP_EXCLUDE_DIRS | _EXCLUDE_DIR_NAMES))
 
-    # 2. src/cccp/ — full QC interface library (formerly conformer_search)
+    # 2. src/acp_services/ — Services platform/runtime consumed by the worker
+    services_root = project_root / "src" / "acp_services"
+    if services_root.is_dir():
+        files.extend(_walk_dir(services_root, exclude_dirs=_EXCLUDE_DIR_NAMES))
+
+    # 3. src/cccp/ — full QC interface library (formerly conformer_search)
     cs_root = project_root / "src" / "cccp"
     if cs_root.is_dir():
         files.extend(_walk_dir(cs_root, exclude_dirs=_EXCLUDE_DIR_NAMES))
 
-    # 3. requirements-node.txt — node runtime deps (for bootstrap_node()).
+    # 4. requirements-node.txt — node runtime deps (for bootstrap_node()).
     reqs = project_root / "requirements-node.txt"
     if reqs.is_file():
         files.append(reqs)
 
-    # 4. config/defaults.yaml — default configuration merged by cccp.config
+    # 5. config/defaults.yaml — default configuration merged by cccp.config
     #    on the node.  Without this, an old defaults.yaml left behind on a
     #    node silently diverges from the server (stale executable paths).
     defaults = project_root / "config" / "defaults.yaml"
