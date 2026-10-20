@@ -76,6 +76,7 @@ from acp_services.data.contracts import (
     ManifestRead,
     ManifestSnapshot,
     RemoteJobRef,
+    ResourceKind,
     SourceUpsert,
     TransferDirection,
     TransferDownload,
@@ -93,6 +94,7 @@ from acp_services.data.import_ import (
 from acp_services.data.operations import (
     PrepareExecutionResult,
     PrepareLease,
+    PrepareRequest,
     default_resource_key,
 )
 from acp_services.data.read_root import (
@@ -984,40 +986,103 @@ class _ReadCacheIndexAdapter:
             return handle.read(int(limit))
 
 
-class _OperationAvailabilityAdapter:
-    """Read the committed availability of a prepare operation (read-only).
+def _expected_catalog_prepare_request(
+    record: Any, request: AvailabilityRead
+) -> PrepareRequest | None:
+    """Build the frozen expected identity for a catalog read from real facts."""
+    job_id = str(getattr(record, "id", "") or "")
+    if request.relative_path or not job_id:
+        return None
+    workflow = request.workflow or str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+    attempt = int(request.attempt or getattr(record, "attempt", 1) or 1)
+    if attempt < 1:
+        return None
+    return PrepareRequest(
+        job_id=job_id,
+        attempt=attempt,
+        resource_id=request.resource_id,
+        resource_kind=ResourceKind.CACHE,
+        resource_digest=f"{job_id}\x1f{attempt}\x1f{workflow}",
+        permission_scope=request.permission_scope,
+        resource_generation=int(request.expected_revision or 0),
+        payload={"workflow": workflow, "job_id": job_id, "attempt": attempt},
+    )
 
-    Delegates to the real :class:`PrepareOperationService` ``find`` +
-    ``availability`` — both pure reads.  There is no enqueue/lease/cancel path
-    here, so a read surface built over this adapter structurally cannot create
-    an operation.
+
+class _OperationAvailabilityAdapter:
+    """Read the committed availability of the current operation (read-only).
+
+    Delegates to the real :class:`PrepareOperationService`
+    ``find_by_identity`` + ``availability`` — both pure reads.  When an
+    expected-identity provider is supplied, the row is located by that frozen
+    identity (never by "latest row"); a logical key with no matching identity
+    reports a non-ready mismatch instead of falling through to an old cache
+    body.  There is no enqueue/lease/cancel path here, so a read surface built
+    over this adapter structurally cannot create an operation.
     """
 
-    def __init__(self, service: Any | None) -> None:
+    def __init__(
+        self,
+        service: Any | None,
+        *,
+        expected_provider: Callable[[AvailabilityRead], PrepareRequest | None] | None = None,
+    ) -> None:
         self._service = service
+        self._expected_provider = expected_provider
 
     def facts(self, request: AvailabilityRead) -> OperationFacts:
         if self._service is None:
             return OperationFacts(exists=False)
         attempt = int(request.attempt or 0)
         resource_key = default_resource_key(request.job_id, attempt, request.resource_id)
-        record = self._service.find(
-            job_id=request.job_id,
-            resource_id=request.resource_id,
-            attempt=attempt,
-            permission_scope=request.permission_scope,
-            resource_key=resource_key,
-        )
+        expected: PrepareRequest | None = None
+        if self._expected_provider is not None:
+            try:
+                expected = self._expected_provider(request)
+            except (TypeError, ValueError, AttributeError):
+                expected = None
+        if expected is not None:
+            record = self._service.find_by_identity(expected)
+            if record is None:
+                logical = self._service.find(
+                    job_id=request.job_id,
+                    resource_id=request.resource_id,
+                    attempt=int(expected.attempt),
+                    permission_scope=request.permission_scope,
+                    resource_key=expected.key,
+                )
+                if logical is None:
+                    return OperationFacts(exists=False)
+                generation = int(expected.resource_generation)
+                return OperationFacts(
+                    exists=True,
+                    availability=Availability.ABSENT,
+                    freshness=Freshness.STALE,
+                    basis_revision=generation,
+                    expected_revision=generation,
+                    detail="identity_mismatch",
+                )
+        else:
+            record = self._service.find(
+                job_id=request.job_id,
+                resource_id=request.resource_id,
+                attempt=attempt,
+                permission_scope=request.permission_scope,
+                resource_key=resource_key,
+            )
         if record is None:
             return OperationFacts(exists=False)
         availability = self._service.availability(record.operation_id)
+        detail = f"operation:{record.state.value}"
+        if expected is not None and record.content_identity != expected.content_identity:
+            detail += ":superseded"
         return OperationFacts(
             exists=True,
             availability=availability.availability,
             freshness=availability.freshness,
             basis_revision=availability.basis_revision,
             expected_revision=availability.expected_revision,
-            detail=f"operation:{record.state.value}",
+            detail=detail,
         )
 
 
@@ -1032,6 +1097,7 @@ def build_read_only_reader(
     operations: Any | None = None,
     clock: Callable[[], str] | None = None,
     max_read_bytes: int = DEFAULT_MAX_READ_BYTES,
+    expected_provider: Callable[[AvailabilityRead], PrepareRequest | None] | None = None,
 ) -> ReadOnlyResourceReader:
     """Compose the strictly read-only reader from the real local mechanisms.
 
@@ -1039,20 +1105,33 @@ def build_read_only_reader(
         job_lookup: ``job_id -> JobRecord | None`` (the scheduler store).
         cache: The shared :class:`RemoteStructureCache` (read-only index access).
         operations: Optional :class:`PrepareOperationService` for the operation
-            projection; only ``find`` + ``availability`` are ever called, so a
-            read through this reader cannot enqueue or lease.
+            projection; only ``find_by_identity`` + ``availability`` are ever
+            called, so a read through this reader cannot enqueue or lease.
         clock: Diagnostic timestamp source (tests pin it).
         max_read_bytes: Hard cap for every bounded range read.
+        expected_provider: Optional authoritative expected-identity factory
+            (``AvailabilityRead -> PrepareRequest``).  Production attempts to
+            carry the full runtime identity (task 15/18) inject it here; the
+            default derives the catalog identity from the job record.
 
     Returns:
         A :class:`ReadOnlyResourceReader` that never fetches over SSH/SFTP,
         never enqueues an operation and never parses or writes a file.
     """
     resolver = ReadRootResolver(_ReadRootAdapter(job_lookup=job_lookup, cache=cache))
+
+    def _expected(request: AvailabilityRead) -> PrepareRequest | None:
+        if expected_provider is not None:
+            return expected_provider(request)
+        record = job_lookup(request.job_id)
+        if record is None:
+            return None
+        return _expected_catalog_prepare_request(record, request)
+
     return _ReadOnlyReaderAdapter(
         resolver=resolver,
         cache_index=_ReadCacheIndexAdapter(cache),
-        operations=_OperationAvailabilityAdapter(operations),
+        operations=_OperationAvailabilityAdapter(operations, expected_provider=_expected),
         clock=clock,
         max_read_bytes=max_read_bytes,
     )

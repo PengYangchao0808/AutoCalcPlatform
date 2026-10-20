@@ -1220,3 +1220,196 @@ def test_cross_process_same_identity_produces_one_row(tmp_path: Path) -> None:
         assert service.lease_next() is None
     finally:
         service.close()
+
+
+# ===========================================================================
+# D05 (task 14) — current operation by expected identity, not latest row
+# ===========================================================================
+
+
+def _catalog_request(record: JobRecord, *, generation: int, **overrides: Any) -> ops.PrepareRequest:
+    workflow = str(record.spec.workflow or "")
+    return ops.PrepareRequest(
+        job_id=record.id,
+        attempt=record.attempt,
+        resource_id=f"catalog:{workflow}",
+        resource_kind=dc.ResourceKind.CACHE,
+        resource_digest=f"{record.id}\x1f{record.attempt}\x1f{workflow}",
+        resource_generation=generation,
+        payload={"workflow": workflow, "job_id": record.id, "attempt": record.attempt},
+        **overrides,
+    )
+
+
+def _remote_record(job_id: str, tmp_path: Path) -> JobRecord:
+    return JobRecord(
+        id=job_id,
+        spec=JobSpec(workflow="singlepoint", name=job_id),
+        status=JobStatus.COMPLETED,
+        attempt=1,
+        work_dir=str(tmp_path / job_id),
+        result={"node": "node1", "remote_dir": f"/remote/{job_id}"},
+    )
+
+
+def _remote_cache(tmp_path: Path, record: JobRecord) -> Any:
+    from acp.results.remote_structure_cache import RemoteStructureCache
+
+    cache = RemoteStructureCache(tmp_path / "runs")
+    manifest = cache.job_root(record.id) / "RESULT" / "result_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text('{"generation": 1}', encoding="utf-8")
+    return cache
+
+
+def _reader(cache: Any, record: JobRecord, service: Any) -> Any:
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    return build_read_only_reader(
+        job_lookup=lambda job_id: record if job_id == record.id else None,
+        cache=cache,
+        operations=service,
+    )
+
+
+def _availability(record: JobRecord, *args: Any, **kwargs: Any) -> Any:
+    from acp_services.data.read_root import AvailabilityRead
+
+    return AvailabilityRead(
+        job_id=record.id,
+        resource_id=f"catalog:{record.spec.workflow}",
+        workflow=str(record.spec.workflow),
+        attempt=record.attempt,
+        *args,
+        **kwargs,
+    )
+
+
+def test_late_lower_generation_never_rolls_back_current_operation(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    gen2 = _request(generation=2, digest="dg-gen2")
+    newer = service.enqueue(gen2)
+    late_gen1 = _request(generation=1, digest="dg-gen1")
+    older = service.enqueue(late_gen1)
+
+    assert older.operation_id != newer.operation_id
+    assert service.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch").operation_id == (
+        newer.operation_id
+    )
+    assert service.find_by_identity(gen2).operation_id == newer.operation_id
+    assert service.find_by_identity(late_gen1).operation_id == newer.operation_id
+    assert service.get(older.operation_id).operation_id == older.operation_id
+    assert service.get(older.operation_id).resource_generation == 1
+    cross_attempt = _request(attempt=2, generation=2, digest="dg-gen2")
+    assert service.find_by_identity(cross_attempt) is None
+    assert service.find(job_id="j1", attempt=2, resource_id="catalog:Confsearch") is None
+
+
+def test_reader_reports_preparing_when_newer_generation_is_queued(tmp_path: Path) -> None:
+    record = _remote_record("d05-current", tmp_path)
+    cache = _remote_cache(tmp_path, record)
+    service = _service(tmp_path)
+
+    old = _catalog_request(record, generation=1)
+    service.enqueue(old)
+    lease = service.lease_next()
+    assert lease is not None
+    service.complete(lease)
+    service.enqueue(_catalog_request(record, generation=2))
+    assert cache.catalog_ready(cache.job_root(record.id), "singlepoint") is True
+
+    reader = _reader(cache, record, service)
+    for expected_revision in (2, 0):
+        snapshot = reader.availability(_availability(record, expected_revision=expected_revision))
+        assert snapshot.availability is dc.Availability.PREPARING
+        assert snapshot.availability is not dc.Availability.READY
+        assert snapshot.detail.startswith("operation:queued")
+        assert snapshot.is_readable() is False
+
+
+def test_reader_does_not_ready_expired_current_over_old_cached_body(tmp_path: Path) -> None:
+    record = _remote_record("d05-expired", tmp_path)
+    cache = _remote_cache(tmp_path, record)
+    service = _service(tmp_path)
+
+    current = service.enqueue(_catalog_request(record, generation=2))
+    service.expire(current.operation_id, reason="cache_evicted")
+
+    reader = _reader(cache, record, service)
+    snapshot = reader.availability(_availability(record, expected_revision=2))
+    assert snapshot.availability is dc.Availability.ABSENT
+    assert snapshot.availability is not dc.Availability.READY
+    assert snapshot.detail == "operation:expired"
+
+
+def test_reader_running_and_failed_current_are_not_ready_over_old_cached_body(
+    tmp_path: Path,
+) -> None:
+    record = _remote_record("d05-running", tmp_path)
+    cache = _remote_cache(tmp_path, record)
+    service = _service(tmp_path)
+
+    service.enqueue(_catalog_request(record, generation=2))
+    lease = service.lease_next()
+    assert lease is not None
+    reader = _reader(cache, record, service)
+    running = reader.availability(_availability(record, expected_revision=2))
+    assert running.availability is dc.Availability.PREPARING
+    assert running.is_readable() is False
+
+    service.fail(lease, error_code="sftp_failed", error_message="down", retryable=False)
+    failed = reader.availability(_availability(record, expected_revision=2))
+    assert failed.availability is dc.Availability.UNAVAILABLE
+    assert failed.is_readable() is False
+    assert failed.detail == "operation:failed"
+
+
+def test_operation_adapter_rejects_same_attempt_rebind_by_expected_identity(
+    tmp_path: Path,
+) -> None:
+    from acp.services_data_bootstrap import _OperationAvailabilityAdapter
+    from acp_services.data.read_root import AvailabilityRead
+
+    service = _service(tmp_path)
+    original = _request(binding_id="sb_original", authorization_version=1)
+    service.enqueue(original)
+    lease = service.lease_next()
+    assert lease is not None
+    service.complete(lease)
+
+    expected = replace(original, binding_id="sb_rebound", authorization_version=2)
+    adapter = _OperationAvailabilityAdapter(service, expected_provider=lambda _request: expected)
+    facts = adapter.facts(
+        AvailabilityRead(job_id="j1", resource_id="catalog:Confsearch", attempt=1)
+    )
+    assert facts.exists is True
+    assert facts.availability is dc.Availability.ABSENT
+    assert facts.availability is not dc.Availability.READY
+    assert facts.detail == "identity_mismatch"
+    current = service.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch")
+    assert current is not None
+    assert service.get(current.operation_id).state is ops.PrepareState.SUCCEEDED
+
+
+def test_operation_adapter_locates_retry_of_same_identity_by_epoch(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import _OperationAvailabilityAdapter
+    from acp_services.data.read_root import AvailabilityRead
+
+    service = _service(tmp_path)
+    request = _request(generation=2)
+    first = service.enqueue(request)
+    lease = service.lease_next()
+    assert lease is not None
+    service.complete(lease)
+    service.expire(first.operation_id, reason="cache_evicted")
+    reopened = service.enqueue(request)
+    assert reopened.dedup_epoch == first.dedup_epoch + 1
+
+    adapter = _OperationAvailabilityAdapter(service, expected_provider=lambda _request: request)
+    facts = adapter.facts(
+        AvailabilityRead(job_id="j1", resource_id="catalog:Confsearch", attempt=1)
+    )
+    assert facts.exists is True
+    assert facts.availability is dc.Availability.PREPARING
+    assert facts.detail == "operation:queued"
+    assert service.get(first.operation_id).state is ops.PrepareState.EXPIRED
