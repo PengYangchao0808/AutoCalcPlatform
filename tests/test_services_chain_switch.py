@@ -48,8 +48,17 @@ from pathlib import Path
 import pytest
 
 from acp.calculations import attempt_freeze as acp_freeze
+from acp.calculations.attempt_publication import (
+    AttemptResultPublication,
+    PublicationIntegrityError,
+    PublicationSupersededError,
+)
 from acp.calculations.contracts import StepKind
 from acp.calculations.identity import compute_identity
+from acp.calculations.result_publication import (
+    load_publication_state,
+    load_scientific_result,
+)
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
 from acp.scheduler.remote.script_gen import (
@@ -63,6 +72,7 @@ from acp.services_completion_bootstrap import (
     JobStoreAdvancePort,
     build_attempt_completion_service,
 )
+from acp.storage.manifest import ResultManifest
 from acp_services.contracts.envelope import (
     ExecutionEnvelope,
     StorageBinding,
@@ -94,10 +104,13 @@ from acp_services.runtime.receipts import (
     verify_receipt,
 )
 from acp_services.runtime.worker import (
+    CompletionDecision,
     FrozenStep,
     TaskExecutionOutcome,
     build_receipt,
+    read_task_result,
     write_receipt_atomic,
+    write_task_result,
 )
 from acp_services.worker_bootstrap import (
     assemble_worker,
@@ -2063,5 +2076,294 @@ def test_t27_current_corrupt_after_exit_is_one_failure_cas(tmp_path: Path) -> No
         again = store.get(_JOB)
         assert again is not None and again.revision == revision
         assert events.count("job.completion_failure") == 1
+    finally:
+        manager.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# 11. 07-B retryable publication without recomputation (todo 28)
+# ---------------------------------------------------------------------------
+
+
+class _T28Result:
+    """Minimal TaskResult-shaped object for the worker task_result codec."""
+
+    def __init__(self, *, status: str = "completed") -> None:
+        self._status = status
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "task": "singlepoint",
+            "status": self._status,
+            "energy_hartree": -76.0,
+            "symbols": ["O", "H", "H"],
+            "coordinates": [
+                [0.0, 0.0, 0.0],
+                [0.96, 0.0, 0.0],
+                [-0.24, 0.93, 0.0],
+            ],
+        }
+
+
+class _T28Reader:
+    def __init__(self, snapshot: AttemptSnapshot) -> None:
+        self.snapshot = snapshot
+
+    def read(self, job_id: str) -> AttemptSnapshot | None:
+        return self.snapshot if self.snapshot.job_id == job_id else None
+
+
+def _t28_decision(*, partial: bool = False) -> CompletionDecision:
+    if partial:
+        return CompletionDecision(
+            row="c",
+            receipt_state="completed",
+            exit_code=0,
+            job_status="completed",
+            normal_reuse=False,
+            publish=True,
+            publish_policy="partial",
+            partial_result=True,
+            qualification="partial_result",
+            task="singlepoint",
+            status="completed",
+            complete=False,
+        )
+    return CompletionDecision(
+        row="b",
+        receipt_state="completed",
+        exit_code=0,
+        job_status="completed",
+        normal_reuse=True,
+        publish=True,
+        publish_policy="normal",
+        partial_result=False,
+        qualification="complete",
+        task="singlepoint",
+        status="completed",
+        complete=True,
+        required_facts=("coordinates", "symbols_aligned"),
+    )
+
+
+def _t28_attempt(tmp_path: Path, *, partial: bool = False) -> tuple[Path, AttemptSnapshot, str]:
+    work = tmp_path / "task"
+    work.mkdir()
+    env = _t26_env(_JOB)
+    write_frozen_attempt(work, _freeze_spec(envelope=env))
+    decision = _t28_decision(partial=partial)
+    result = _T28Result()
+    task_result_digest = write_task_result(work, decision, result)
+    document = read_task_result(work)
+    assert document is not None
+    receipt = build_receipt(
+        env,
+        TaskExecutionOutcome(
+            state=decision.receipt_state,
+            result_digest=str(document["result_digest"]),
+            evidence_digests={"task_result_digest": task_result_digest},
+        ),
+    )
+    write_receipt_atomic(work / "execution_receipt.json", receipt)
+    snapshot = AttemptSnapshot(
+        job_id=env.job_id,
+        attempt=env.attempt,
+        submission_id=env.submission_id,
+        release_id=env.release_id,
+        owner=env.owner,
+        fencing_token=env.fencing_token,
+        revision=1,
+        status="running",
+        release_digest=env.release_digest,
+        work_dir=str(work),
+        result={},
+        envelope=env,
+    )
+    return work, snapshot, task_result_digest
+
+
+def test_t28_adapter_publishes_bound_task_result_idempotently(tmp_path: Path) -> None:
+    work, snapshot, task_result_digest = _t28_attempt(tmp_path)
+    adapter = AttemptResultPublication(workflow="singlepoint")
+
+    report = adapter.publish(snapshot)
+
+    result_dir = work / "RESULT"
+    assert report.workflow == "singlepoint"
+    assert report.manifest.status == "completed"
+    assert report.partial is False
+    assert (result_dir / "scientific_result.json").is_file()
+    assert (result_dir / "result_manifest.json").is_file()
+    assert (result_dir / "publication_state.json").is_file()
+    assert (result_dir / "task_result.json").is_file()
+    manifest = ResultManifest.read(result_dir)
+    assert manifest.task_id == snapshot.job_id
+    assert manifest.workflow == "singlepoint"
+    assert manifest.status == "completed"
+    assert [product.path for product in manifest.products] == ["task_result.json"]
+    record = load_scientific_result(result_dir)
+    assert record is not None
+    assert record.kind == "singlepoint"
+    assert record.summary["task_result_digest"] == task_result_digest
+    assert record.summary["plan_identity"] == snapshot.envelope.plan_identity
+    state = load_publication_state(result_dir)
+    assert state is not None and state.complete is True
+    assert state.result_id == adapter.result_id(snapshot)
+    assert adapter.is_published(snapshot) is True
+
+    again = adapter.publish(snapshot)
+    assert again.result_id == report.result_id
+    assert [product.path for product in ResultManifest.read(result_dir).products] == [
+        "task_result.json"
+    ]
+
+
+def test_t28_publish_failure_keeps_scientific_record_then_retries(
+    tmp_path: Path,
+) -> None:
+    work, snapshot, _digest = _t28_attempt(tmp_path)
+    calls = {"count": 0}
+
+    def publisher(result_dir: Path, manifest: ResultManifest) -> Path:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise OSError("publication transport unavailable")
+        return manifest.write(result_dir)
+
+    adapter = AttemptResultPublication(workflow="singlepoint", publisher=publisher)
+    with pytest.raises(OSError):
+        adapter.publish(snapshot)
+
+    result_dir = work / "RESULT"
+    assert load_scientific_result(result_dir) is not None  # durable record survives
+    assert not (result_dir / "result_manifest.json").exists()
+    state = load_publication_state(result_dir)
+    assert state is None or state.complete is False
+    # No executor/worker process is involved in publication retry (QC count 0).
+    assert not (work / "WORK" / "00_RUNTIME" / "events.jsonl").exists() or (
+        "process.starting" not in _t27_events(work)
+    )
+
+    report = adapter.publish(snapshot)
+    assert calls["count"] == 2
+    assert report.manifest.status == "completed"
+    assert (result_dir / "result_manifest.json").is_file()
+    state = load_publication_state(result_dir)
+    assert state is not None and state.complete is True
+
+
+def test_t28_partial_result_publishes_only_as_partial(tmp_path: Path) -> None:
+    work, snapshot, _digest = _t28_attempt(tmp_path, partial=True)
+    adapter = AttemptResultPublication(workflow="singlepoint")
+
+    report = adapter.publish(snapshot)
+
+    assert report.partial is True
+    assert report.manifest.status == "partial"
+    assert report.manifest.status != "completed"
+    assert len(report.manifest.products) == 1
+    product = report.manifest.products[0]
+    assert product.metadata["partial_result"] is True
+    assert product.metadata["normal_reuse"] is False
+    assert product.metadata["product_role"] == "partial"
+    record = load_scientific_result(work / "RESULT")
+    assert record is not None
+    assert record.summary["partial_result"] is True
+    assert record.summary["normal_reuse"] is False
+
+
+def test_t28_tampered_or_missing_task_result_is_rejected(tmp_path: Path) -> None:
+    work, snapshot, _digest = _t28_attempt(tmp_path)
+    task_result = work / "WORK" / "00_RUNTIME" / "task_result.json"
+    adapter = AttemptResultPublication(workflow="singlepoint")
+
+    payload = json.loads(task_result.read_text(encoding="utf-8"))
+    payload["status"] = "failed"
+    task_result.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(PublicationIntegrityError, match="task_result"):
+        adapter.publish(snapshot)
+    assert not (work / "RESULT" / "result_manifest.json").exists()
+
+    task_result.unlink()
+    with pytest.raises(PublicationIntegrityError, match="task_result"):
+        adapter.publish(snapshot)
+    assert not (work / "RESULT" / "result_manifest.json").exists()
+
+
+def test_t28_superseded_attempt_never_publishes_into_rerun_directory(
+    tmp_path: Path,
+) -> None:
+    work, snapshot, _digest = _t28_attempt(tmp_path)
+    newer = replace(
+        snapshot,
+        attempt=2,
+        submission_id=expected_submission_id(_JOB, 2),
+        owner="worker-2",
+        fencing_token="fence-2",
+        revision=2,
+    )
+    adapter = AttemptResultPublication(workflow="singlepoint", snapshot_reader=_T28Reader(newer))
+
+    with pytest.raises(PublicationSupersededError):
+        adapter.publish(snapshot)
+    assert not (work / "RESULT" / "result_manifest.json").exists()
+
+
+def test_t28_manager_restart_resumes_pending_publication_without_qc_or_cas(
+    tmp_path: Path,
+) -> None:
+    work, snapshot, _digest = _t28_attempt(tmp_path)
+    run_root = tmp_path / "run_root"
+    run_root.mkdir()
+    store = JobStore(run_root / "acp_jobs.db")
+    record = JobRecord(
+        id=_JOB,
+        spec=JobSpec(workflow="singlepoint", name="t28", input={"smiles": "CCO"}),
+        status=JobStatus.COMPLETED,
+        work_dir=str(work),
+        attempt=1,
+        result={"publication_pending": True, "terminal_side_effects_done": True},
+    )
+    store.create(record)
+    calls = {"count": 0}
+
+    def publisher(result_dir: Path, manifest: ResultManifest) -> Path:
+        calls["count"] += 1
+        return manifest.write(result_dir)
+
+    adapter = AttemptResultPublication(workflow="singlepoint", publisher=publisher)
+    manager = JobManager(
+        run_root,
+        store=store,
+        runner=JobRunner(python_executable=sys.executable),
+        envelope_completion=True,
+        attempt_publication=adapter,
+        poll_interval=5,
+    )
+    try:
+        # Startup sweep continues the pending publication (no worker/CAS).
+        assert (work / "RESULT" / "result_manifest.json").is_file()
+        assert adapter.is_published(snapshot) is True
+        assert calls["count"] == 1
+        after_startup = store.get(_JOB)
+        assert after_startup is not None
+        assert after_startup.revision == 0
+        assert after_startup.status == JobStatus.COMPLETED
+
+        # A later reconcile confirms the already-published fact without a
+        # second publisher call, second CAS, or QC run.
+        manager._reconcile_once()
+        assert calls["count"] == 1
+        assert store.get(_JOB).revision == 0  # type: ignore[union-attr]
+        assert "process.starting" not in _t27_events(work)
+
+        # A terminal no-op must not skip an unwritten manifest: deleting the
+        # manifest (state marker still complete) makes the next recovery
+        # re-publish through the same named path, without QC or a job CAS.
+        (work / "RESULT" / "result_manifest.json").unlink()
+        manager._reconcile_once()
+        assert (work / "RESULT" / "result_manifest.json").is_file()
+        assert calls["count"] == 2
+        assert store.get(_JOB).revision == 0  # type: ignore[union-attr]
     finally:
         manager.shutdown()

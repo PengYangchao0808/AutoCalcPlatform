@@ -179,6 +179,18 @@ def _has_pending_submission(record: JobRecord) -> bool:
     return remote_meta.get("submit_state") in _SUBMIT_RECONCILE_STATES
 
 
+def _needs_publication_retry(record: JobRecord) -> bool:
+    """Category ②b of the reconcile loop: terminal row with pending publication.
+
+    The pending fact is written by the T26 terminal CAS together with the
+    status transition; a crash after that CAS but before the publisher ran is
+    recovered from this marker without a second QC execution.
+    """
+    if not record.status.is_terminal:
+        return False
+    return (record.result or {}).get("publication_pending") is True
+
+
 def _needs_side_effect_retry(record: JobRecord) -> bool:
     """Category ② of the reconcile loop: terminal but side effects unfinished.
 
@@ -335,6 +347,7 @@ class JobManager:
         reconnect_local_workers: bool = False,
         envelope_completion: bool = False,
         attempt_completion: Any | None = None,
+        attempt_publication: Any | None = None,
     ):
         #: Persistent controller/worker connection mode (B07-8 / todo 74):
         #: a *reconnecting controller* skips destructive startup recovery and
@@ -347,8 +360,9 @@ class JobManager:
         # service is explicitly injected/enabled uses receipt-verified completion.
         # The ordinary default stays exit-code-only until task 29 activates it.
         self._attempt_completion = attempt_completion
+        self._attempt_publication = attempt_publication
         self._envelope_completion_enabled = bool(
-            envelope_completion or attempt_completion is not None
+            envelope_completion or attempt_completion is not None or attempt_publication is not None
         )
         self._shutdown_lock = threading.Lock()
         self._shutdown_complete = False
@@ -371,10 +385,20 @@ class JobManager:
         self._acquire_instance_lock()
         logger.info("JobManager booted: pid=%s run_root=%s", os.getpid(), self.run_root)
         self.store = store or JobStore(self.run_root / "acp_jobs.db")
-        if self._attempt_completion is None and envelope_completion:
+        if self._attempt_completion is None and self._envelope_completion_enabled:
+            from acp.calculations.attempt_publication import AttemptResultPublication
             from acp.services_completion_bootstrap import build_attempt_completion_service
 
-            self._attempt_completion = build_attempt_completion_service(self.store)
+            publication = attempt_publication or AttemptResultPublication()
+            self._attempt_publication = publication
+            self._attempt_completion = build_attempt_completion_service(
+                self.store, publication=publication
+            )
+        elif self._attempt_publication is None and self._attempt_completion is not None:
+            self._attempt_publication = getattr(self._attempt_completion, "publication", None)
+        self._publication_reconcile_enabled = bool(
+            self._attempt_completion is not None and self._attempt_publication is not None
+        )
         self.max_running = max_running  # retained for API compatibility (unused)
         self.poll_interval = max(5, int(poll_interval))
 
@@ -489,6 +513,7 @@ class JobManager:
                 self._rebuild_reservations()
             self._dispatch_queued_jobs()
         self._queue_startup_catalog_prefetch()
+        self._resume_pending_publications()
         self._sweep_outbox()
         self._poll_thread.start()
         self._reconcile_thread.start()
@@ -5670,6 +5695,76 @@ class JobManager:
                     exc_info=True,
                 )
 
+    def _resume_pending_publications(self, *, limit: int = 100) -> None:
+        """Startup/reconcile sweep: continue terminal rows with pending publication.
+
+        The T26 terminal CAS writes ``publication_pending=True``; a crash after
+        that CAS but before/during the publisher leaves this marker.  Recovery
+        retries only publication — it never calls the executor.
+        """
+        if not self._publication_reconcile_enabled:
+            return
+        for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            for record in self.store.list(status=status.value, limit=limit):
+                if _needs_publication_retry(record):
+                    self._resume_attempt_publication(record)
+
+    def _resume_attempt_publication(self, record: JobRecord) -> None:
+        """Retry one terminal row's pending publication through the T26 service."""
+        if not self._publication_reconcile_enabled or self._attempt_completion is None:
+            return
+        from acp.services_completion_bootstrap import FrozenGroupSnapshotReader
+
+        try:
+            snapshot = FrozenGroupSnapshotReader(self.store).read(record.id)
+        except Exception:
+            logger.warning("Publication snapshot read failed for job %s", record.id, exc_info=True)
+            return
+        if snapshot is None:
+            self._event_log(record).append(
+                "job.publication_pending",
+                job_id=record.id,
+                code="frozen_snapshot_unavailable",
+                attempt=record.attempt,
+                idempotency_key=f"publication-pending:{record.id}:{record.attempt}:snapshot",
+            )
+            return
+        try:
+            verdict = self._attempt_completion.resume_pending_publication(snapshot)
+        except Exception as exc:
+            logger.warning("Publication retry failed for job %s", record.id, exc_info=True)
+            self._event_log(record).append(
+                "job.publication_pending",
+                job_id=record.id,
+                code=type(exc).__name__,
+                attempt=record.attempt,
+                detail=str(exc),
+                idempotency_key=(
+                    f"publication-pending:{record.id}:{record.attempt}:"
+                    f"{type(exc).__name__}"
+                ),
+            )
+            return
+        if verdict.code in {"published", "already_published"}:
+            self._event_log(record).append(
+                "job.publication_completed",
+                job_id=record.id,
+                attempt=record.attempt,
+                result_id=getattr(verdict.publication_outcome, "result_id", ""),
+                idempotency_key=f"publication-completed:{record.id}:{record.attempt}",
+            )
+            return
+        self._event_log(record).append(
+            "job.publication_pending",
+            job_id=record.id,
+            code=verdict.code,
+            attempt=record.attempt,
+            detail=verdict.detail,
+            idempotency_key=(
+                f"publication-pending:{record.id}:{record.attempt}:{verdict.code}"
+            ),
+        )
+
     def _reconcile_starting_submission(self, record: JobRecord) -> None:
         """Category ①: converge a recoverable STARTING submission to PENDING."""
         if record.id in self._submission_jobs:
@@ -5697,9 +5792,12 @@ class JobManager:
                 self._reconcile_cancelling_remote(record)
         for status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             for record in self.store.list(status=status.value, limit=10000):
-                if _needs_side_effect_retry(record):
+                side_effect_retry = _needs_side_effect_retry(record)
+                if side_effect_retry:
                     self._retry_terminal_side_effects(record)
-                elif self._pending_orphans(record.result or {}):
+                if self._publication_reconcile_enabled and _needs_publication_retry(record):
+                    self._resume_attempt_publication(record)
+                if not side_effect_retry and self._pending_orphans(record.result or {}):
                     self._orphan_cancel_pass(record)
         self._reconcile_task_projection()
         self._sweep_outbox()
