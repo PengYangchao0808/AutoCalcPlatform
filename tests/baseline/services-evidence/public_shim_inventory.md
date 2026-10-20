@@ -66,3 +66,23 @@ PY
 
 **审计结论：** 上表所有 `[RETAINED]` 面均有真实调用者或按设计作为历史读取/资产保留；
 本任务**未删除**任何 shim、历史 reader、模型/资产/notice 或 recovery fixture。
+
+## 6. 本轮整改新增/变更的公开面（T24 至 T33，登记不授权删除）
+
+| 面 | 实现驻点 | 兼容/调用面 | 状态 | 守护测试 |
+|---|---|---|---|---|
+| 冻结 attempt 生产器与执行权 | `src/acp_services/runtime/attempt_freeze.py`（AttemptFreezeSpec、write_frozen_attempt、AttemptLockExecutionRight） | ACP 侧 `acp.calculations.attempt_freeze` builder；`src/acp/scheduler/{runner,remote/runner}.py`；`worker_bootstrap` | `[CLOSED]` | `tests/test_services_chain_switch.py`；`tests/test_services_worker_bootstrap.py` |
+| attempt 完成服务 | `src/acp_services/runtime/attempt_completion.py`（AttemptSnapshot、AttemptCompletionService） | `src/acp/services_completion_bootstrap.py:JobStoreAdvancePort`；`src/acp/scheduler/manager.py` | `[CLOSED]` | `tests/test_services_worker_contract.py`；`tests/test_services_chain_switch.py` |
+| receipt 身份契约 | `src/acp_services/runtime/receipt_identity.py`（ReceiptIdentity、compare_receipt_identity） | `worker.py` 与 `receipts.py` 共用；`worker_bootstrap.py` 冲突路径 | `[CLOSED]` | `tests/test_services_worker_contract.py`；`tests/test_services_worker_bootstrap.py` |
+| D01 任务完成事实与 task_result | `src/acp_services/runtime/worker.py`（decide_task_result、write_task_result、read_task_result） | `src/acp/calculations/executor.py`；`src/acp_services/runtime/step_requirements.py`；`attempt_publication.py` | `[CLOSED]` | `tests/test_services_worker_contract.py` |
+| prepare 内容身份与 epoch | `src/acp_services/data/operations.py`（content_identity、client_idempotency_key、dedup_epoch、find_by_identity） | 既有 `PrepareOperationService` API 加性扩展 | `[CLOSED]` | `tests/test_services_prepare_operations.py` |
+| 读取根授权快照 | `src/acp_services/data/read_root.py`（ReadRoot.attempt、CacheIndexFacts.snapshot、CacheIndexPort.entry） | `build_read_only_reader` 与 `build_cache_only_resource_reader` 加性参数；`src/acp/api/v1_routes.py` | `[CLOSED]` | `tests/test_services_read_root.py`；`tests/test_services_cache_only_switch.py` |
+| 传输发布边界身份 | `src/acp_services/data/transfer.py`（identity_check、强制 authorization） | `build_transfer_pipeline` 与 `build_transfer_executor` 加性参数 | `[CLOSED]` | `tests/test_services_transfer_verify.py` |
+| 默认链发布适配器（ACP 侧） | `src/acp/calculations/attempt_publication.py`（AttemptResultPublication） | 复用 `publish_result`；`src/acp/scheduler/manager.py` | `[CLOSED]` | `tests/test_services_chain_switch.py`；`tests/test_acp_workflows_simple.py` |
+| singlepoint 默认 envelope 集合 | `src/acp_services/runtime/execution_chain.py`（DEFAULT_ENVELOPE_WORKFLOWS） | 既有 legacy 路径保留；DEFAULT 与 ENABLED 分离 | `[CLOSED]` | `tests/test_services_workflow_enablement.py` |
+| 远端冻结链 | `src/acp/scheduler/remote/runner.py`（_upload_frozen_envelope、receipt 与 task_result fetch） | `src/acp/scheduler/remote/sync.py`（sync 含 src/acp_services） | `[CLOSED]`（真实 LSF 为 `NOT_VERIFIED`） | `tests/test_services_chain_switch.py`；`tests/test_remote_phase1.py` |
+| `Path_safe` 公共命名兼容 | `src/cccp/analysis/structure/parsers.py:path_safe` | `Path_safe` 兼容别名；`src/acp/intake/parsers.py` 旧导入面保留 | `[RETAINED]` | `tests/test_acp_intake.py`；T33 import smoke |
+
+**兼容面结论：** 上述公开面均为加性或新驻点；旧 identity forwarder（`acp.scheduler.{store,migrations}`、
+`acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags`）
+保持 `is` 同一对象，未新增第二实现。
