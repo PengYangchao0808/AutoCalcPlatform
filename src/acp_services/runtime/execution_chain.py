@@ -53,6 +53,7 @@ __all__ = [
     "ATTEMPT_PROTOCOL_FILENAME",
     "BINDING_FILENAME",
     "CURRENT_SWITCH_SCHEMA",
+    "DEFAULT_ENVELOPE_WORKFLOWS",
     "ENVELOPE_FILENAME",
     "EXECUTION_ENTRY_ENVELOPE",
     "EXECUTION_ENTRY_LEGACY",
@@ -207,6 +208,13 @@ FROZEN_WORKFLOW_CAPABILITY_TABLE: Final[dict[str, WorkflowExecutionCapability]] 
 ENABLED_WORKFLOWS: Final[frozenset[str]] = frozenset(
     name for name, cap in FROZEN_WORKFLOW_CAPABILITY_TABLE.items() if cap.closure == "integrated"
 )
+
+#: Workflows whose ORDINARY submission freezes an envelope attempt by default.
+#: Activation is separate from scientific closure: only workflows with a
+#: request builder + publication/recovery evidence are added here.  Task 29
+#: activates ``singlepoint`` first; other C01 workflows stay on their
+#: registered path until their own evidence lands.
+DEFAULT_ENVELOPE_WORKFLOWS: Final[frozenset[str]] = frozenset({"singlepoint"})
 
 
 def capability_for(workflow: str) -> WorkflowExecutionCapability:
