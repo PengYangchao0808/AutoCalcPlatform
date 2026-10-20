@@ -30,7 +30,7 @@ import logging
 import os
 import posixpath
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -116,6 +116,8 @@ from acp_services.data.storage_binding import (
     LegacyResolution,
 )
 from acp_services.data.transfer import (
+    ByteRange,
+    ExpectedDigest,
     FenceSnapshot,
     PublishOutcome,
     RejectionCode,
@@ -127,6 +129,7 @@ from acp_services.data.transfer import (
     TransferPublicationStore,
     TransferRequest,
     TransferSourceError,
+    VerificationLevel,
 )
 
 logger = logging.getLogger(__name__)
@@ -146,6 +149,8 @@ __all__ = [
     "build_transfer_cache_port",
     "build_transfer_source_port",
     "build_transfer_authorization_port",
+    "build_local_single_transfer_authorization",
+    "build_transfer_request_factory",
     "build_transfer_pipeline",
     "build_transfer_executor",
     "build_archive_source",
@@ -733,6 +738,7 @@ class _PrepareExecutorAdapter:
         self._is_remote = is_remote
         self._before_publish = before_publish
         self._publications: TransferPublicationStore | None = None
+        self._request_factory = build_transfer_request_factory()
 
     # -- compatibility entry point (legacy direct prefetch) -------------
 
@@ -820,27 +826,18 @@ class _PrepareExecutorAdapter:
         # verified transfer path (single publisher: cache fence/generation +
         # atomic os.replace).  Missing optional files are tolerated exactly as
         # before; identity/permission/stale rejections abort immediately.
-        pipeline = self._build_pipeline(cache, guard)
+        executor = build_transfer_executor(
+            self._build_pipeline(cache, guard), self._request_factory
+        )
         fetched = 0
         for rel_path in _catalog_fetch_paths(workflow):
-            result = pipeline.prepare(
-                TransferRequest(
-                    job_id=lease.job_id,
-                    attempt=int(lease.attempt),
-                    relative_path=rel_path,
-                    resource_class=ResourceClass.MUTABLE,
-                    resource_generation=int(lease.resource_generation),
-                    authorization_version=int(lease.authorization_version),
-                    binding_id=str(lease.binding_id),
-                    payload={"workflow": workflow},
-                )
-            )
-            if result.accepted:
+            outcome = executor.execute(self._file_lease(lease, rel_path, workflow))
+            if outcome.prepared:
                 fetched += 1
                 continue
-            if result.rejection is RejectionCode.SOURCE_NOT_FOUND:
+            if outcome.detail.startswith(RejectionCode.SOURCE_NOT_FOUND.value):
                 continue
-            return self._pipeline_refusal(result)
+            return self._executor_refusal(outcome)
 
         with cache._get_generation_lock(lease.job_id):
             commit_reason = guard.check()
@@ -865,20 +862,35 @@ class _PrepareExecutorAdapter:
 
     # -- internals ------------------------------------------------------
 
+    @staticmethod
+    def _file_lease(lease: PrepareLease, relative_path: str, workflow: str) -> PrepareLease:
+        """Freeze one catalog file onto the full parent lease identity.
+
+        Only the per-file facts are added: job/attempt/generation/binding/
+        authorization stay exactly those of the claimed lease, so the request
+        factory can never synthesise a different identity.
+        """
+        payload = dict(lease.payload or {})
+        payload.update(
+            {
+                "relative_path": relative_path,
+                "resource_class": ResourceClass.MUTABLE.value,
+                "workflow": workflow,
+            }
+        )
+        return replace(lease, payload=payload)
+
     def _build_pipeline(
         self, cache: RemoteStructureCache, guard: _LeaseIdentityGuard
     ) -> TransferPipeline:
         if self._publications is None:
             self._publications = TransferPublicationStore(cache._run_root / "acp_jobs.db")
-        return TransferPipeline(
-            cache=_TransferCacheAdapter(
-                cache,
-                publish_guard=guard.check,
-                before_publish=self._before_publish,
-            ),
-            source=_TransferSourceAdapter(cache),
-            authorization=_LeaseAuthorizationPort(guard),
+        return build_transfer_pipeline(
+            cache=cache,
             publications=self._publications,
+            authorization=_LeaseAuthorizationPort(guard),
+            identity_check=guard.check,
+            before_publish=self._before_publish,
         )
 
     @staticmethod
@@ -891,16 +903,17 @@ class _PrepareExecutorAdapter:
         )
 
     @staticmethod
-    def _pipeline_refusal(result: Any) -> PrepareExecutionResult:
-        retryable = bool(result.retryable)
-        if result.rejection is RejectionCode.LATE_TRANSFER:
+    def _executor_refusal(outcome: Any) -> PrepareExecutionResult:
+        code, _, reason = str(outcome.detail).partition(":")
+        retryable = bool(outcome.retryable)
+        if code == RejectionCode.LATE_TRANSFER.value:
             # A purge generation moved: a fresh attempt can legitimately retry.
             # An identity/attempt fence moved: the lease can never become valid.
-            retryable = "generation_changed" in str(result.detail)
+            retryable = "generation_changed" in reason
         return PrepareExecutionResult(
             prepared=False,
             availability=Availability.UNAVAILABLE,
-            detail=f"publish_rejected:{result.rejection.value}",
+            detail=f"publish_rejected:{code}",
             retryable=retryable,
         )
 
@@ -1199,14 +1212,20 @@ class _TransferSourceAdapter:
 
 
 class _TransferAuthorizationAdapter:
-    """Delegate the re-checked authorization onto an injected decision callable.
+    """Delegate the re-checked authorization onto an explicit decision callable.
 
-    With no callable supplied every transfer is allowed (the local-single
-    deployment boundary); a real policy supplies a callable that receives the
-    transfer identity and re-evaluates the grant at both check points.
+    There is no ``None``-means-allow default: assembly refuses a port with no
+    policy.  Production supplies the live lease guard
+    (:class:`_LeaseAuthorizationPort`); local-single supplies
+    :func:`build_local_single_transfer_authorization` explicitly.
     """
 
-    def __init__(self, decision: Callable[[Mapping[str, Any]], bool] | None = None) -> None:
+    def __init__(self, decision: Callable[[Mapping[str, Any]], bool]) -> None:
+        if not callable(decision):
+            raise ValueError(
+                "transfer authorization requires an explicit decision policy "
+                "(no None-means-allow fallback)"
+            )
         self._decision = decision
 
     def authorize(
@@ -1218,8 +1237,6 @@ class _TransferAuthorizationAdapter:
         action: str,
         authorization_version: int,
     ) -> bool:
-        if self._decision is None:
-            return True
         return bool(
             self._decision(
                 {
@@ -1246,48 +1263,221 @@ def build_transfer_source_port(cache: RemoteStructureCache) -> _TransferSourceAd
 def build_transfer_authorization_port(
     decision: Callable[[Mapping[str, Any]], bool] | None = None,
 ) -> _TransferAuthorizationAdapter:
-    """Build the re-checked authorization port (allow-all when no policy given)."""
+    """Build the re-checked authorization port from an explicit policy.
+
+    Raises:
+        ValueError: When no decision callable is supplied.  Production must
+            inject a real policy; a ``None`` policy never means allow-all.
+    """
+    if decision is None:
+        raise ValueError(
+            "transfer authorization requires an explicit decision policy "
+            "(no None-means-allow fallback)"
+        )
     return _TransferAuthorizationAdapter(decision)
+
+
+def build_local_single_transfer_authorization() -> _TransferAuthorizationAdapter:
+    """Explicit local-single policy: the trusted local operator is authorized.
+
+    This is a policy statement, not a silent default: the single local
+    deployment has no permission registry, so every transfer decided by that
+    deployment is allowed.  Remote/multi-user assemblies must supply their own
+    decision instead of reusing this.
+    """
+    return _TransferAuthorizationAdapter(lambda _facts: True)
+
+
+def _expected_from_payload(payload: Mapping[str, Any]) -> ExpectedDigest | None:
+    """Read the frozen expected value carried by a prepare lease payload."""
+    frozen = payload.get("expected")
+    if isinstance(frozen, Mapping):
+        sha = str(frozen.get("sha256") or "").strip()
+        if not sha:
+            return None
+        return ExpectedDigest(
+            sha256=sha,
+            size_bytes=_optional_int(frozen.get("size_bytes")),
+            source=str(frozen.get("source") or "lease_payload"),
+            verification_level=_verification_level(frozen.get("verification_level")),
+        )
+    sha = str(payload.get("expected_sha256") or "").strip()
+    if not sha:
+        return None
+    return ExpectedDigest(
+        sha256=sha,
+        size_bytes=_optional_int(payload.get("expected_size")),
+        source=str(payload.get("expected_source") or "lease_payload"),
+        verification_level=_verification_level(payload.get("verification_level")),
+    )
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _verification_level(value: Any) -> VerificationLevel:
+    if value is None or value == "":
+        return VerificationLevel.VERIFIED
+    try:
+        return VerificationLevel(str(value))
+    except ValueError:
+        return VerificationLevel.VERIFIED
+
+
+def _byte_range_from_payload(payload: Mapping[str, Any]) -> ByteRange | None:
+    raw = payload.get("byte_range")
+    if not isinstance(raw, Mapping):
+        return None
+    offset = _optional_int(raw.get("offset"))
+    limit = _optional_int(raw.get("limit"))
+    if offset is None or limit is None:
+        return None
+    return ByteRange(offset=offset, limit=limit)
+
+
+def build_transfer_request_factory(
+    *,
+    expected_provider: Callable[[PrepareLease], ExpectedDigest | None] | None = None,
+) -> Callable[[PrepareLease], TransferRequest]:
+    """Build the production ``lease -> TransferRequest`` factory.
+
+    Everything is taken from the *frozen* lease: job, attempt, relative path,
+    resource class, resource generation, binding, authorization version,
+    optional byte range and the expected digest/size.  The expected value comes
+    from the lease payload (or an injected frozen-manifest resolver) and is
+    never derived from the bytes about to be downloaded.  A missing expected
+    value for an attempt artifact is left ``None`` so the pipeline rejects it
+    with ``missing_expected_digest``.
+
+    Args:
+        expected_provider: Optional resolver reading an already-frozen manifest
+            / receipt for this lease.  Only consulted when the lease payload
+            carries no expected value.
+
+    Returns:
+        A callable taking :class:`PrepareLease` and returning a
+        :class:`TransferRequest`.
+
+    Raises:
+        ValueError: At call time when the lease freezes no ``relative_path``.
+    """
+
+    def factory(lease: PrepareLease) -> TransferRequest:
+        payload = dict(lease.payload or {})
+        relative_path = str(payload.get("relative_path") or payload.get("path") or "").strip()
+        if not relative_path:
+            raise ValueError(
+                f"file prepare lease must freeze relative_path (resource_id={lease.resource_id!r})"
+            )
+        expected = _expected_from_payload(payload)
+        if expected is None and expected_provider is not None:
+            expected = expected_provider(lease)
+        resource_class = _resource_class_from_payload(payload)
+        return TransferRequest(
+            job_id=str(lease.job_id),
+            attempt=int(lease.attempt),
+            relative_path=relative_path,
+            resource_class=resource_class,
+            expected=expected,
+            expected_size=_optional_int(payload.get("expected_size")),
+            resource_generation=int(lease.resource_generation),
+            authorization_version=int(lease.authorization_version),
+            binding_id=str(lease.binding_id),
+            basis_revision=_optional_int(payload.get("basis_revision")) or 0,
+            expected_revision=_optional_int(payload.get("expected_revision")) or 0,
+            byte_range=_byte_range_from_payload(payload),
+            payload={
+                "workflow": str(payload.get("workflow") or ""),
+                "resource_id": str(lease.resource_id),
+                "resource_kind": str(lease.resource_kind),
+            },
+        )
+
+    return factory
+
+
+def _resource_class_from_payload(payload: Mapping[str, Any]) -> ResourceClass:
+    raw = payload.get("resource_class")
+    if raw:
+        return ResourceClass(str(raw))
+    return ResourceClass.ATTEMPT_ARTIFACT
 
 
 def build_transfer_pipeline(
     *,
     cache: RemoteStructureCache,
+    authorization: Any | None = None,
+    identity_check: Callable[[], str | None] | None = None,
     db_path: str | Path | None = None,
     publications: TransferPublicationStore | None = None,
     source: Any | None = None,
-    authorization: Any | None = None,
     adoption: Any | None = None,
+    before_publish: Callable[[], None] | None = None,
 ) -> TransferPipeline:
     """Compose the verified transfer pipeline from the real cache mechanism.
+
+    The pipeline is the only publisher: the cache adapter re-checks the purge
+    generation, the attempt fence and the injected identity under the generation
+    lock immediately before ``os.replace``.
 
     Args:
         cache: The shared :class:`RemoteStructureCache` (traversal guard / fence /
             generation / atomic publish / ``push_paths``).
+        authorization: **Required** re-checked authorization port.  There is no
+            allow-all default; local-single supplies
+            :func:`build_local_single_transfer_authorization`.
+        identity_check: **Required** publish-boundary identity re-check (the
+            live lease guard).  It returns a refusal token or ``None``.
         db_path: SQLite path for the publication table; defaults to the cache's
             run root ``acp_jobs.db`` so it survives the same backup/restore.
         publications: Pre-built publication store (created when omitted).
         source: Optional source port override (defaults to the real fetcher).
-        authorization: Optional authorization port override (defaults allow-all).
         adoption: Optional historical expected-value resolver.
+        before_publish: Optional instrumentation barrier executed inside the
+            cache lock after the fence checks and before the identity check +
+            ``os.replace``.
+
+    Raises:
+        ValueError: When the authorization port or identity check is omitted.
     """
+    if authorization is None:
+        raise ValueError(
+            "build_transfer_pipeline requires an explicit authorization port "
+            "(no None-means-allow fallback)"
+        )
+    if identity_check is None:
+        raise ValueError(
+            "build_transfer_pipeline requires an explicit identity_check "
+            "(publish-boundary identity re-check)"
+        )
     store = publications or TransferPublicationStore(
         Path(db_path) if db_path is not None else cache._run_root / "acp_jobs.db"
     )
     return TransferPipeline(
-        cache=_TransferCacheAdapter(cache),
+        cache=_TransferCacheAdapter(
+            cache,
+            publish_guard=identity_check,
+            before_publish=before_publish,
+        ),
         source=source or _TransferSourceAdapter(cache),
-        authorization=authorization or _TransferAuthorizationAdapter(),
+        authorization=authorization,
         publications=store,
         adoption=adoption,
+        identity_check=identity_check,
     )
 
 
 def build_transfer_executor(
     pipeline: TransferPipeline,
-    request_factory: Callable[[PrepareLease], Any],
+    request_factory: Callable[[PrepareLease], TransferRequest],
 ) -> TransferPrepareExecutor:
-    """Wrap the pipeline as the todo-13 prepare-operation executor."""
+    """Wrap the pipeline as the prepare-operation executor for per-file leases."""
     return TransferPrepareExecutor(pipeline, request_factory)
 
 

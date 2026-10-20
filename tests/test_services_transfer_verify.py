@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -28,6 +29,7 @@ import pytest
 
 from acp.results.remote_structure_cache import RemoteStructureCache
 from acp.services_data_bootstrap import (
+    build_local_single_transfer_authorization,
     build_transfer_cache_port,
     build_transfer_pipeline,
     build_transfer_source_port,
@@ -644,7 +646,12 @@ def test_real_cache_adapter_publishes_and_pushes_paths(tmp_path: Path) -> None:
     rel = "RESULT/result_manifest.json"
     fetcher = _FakeFetcher({rel: payload})
     cache = RemoteStructureCache(tmp_path / "run_root", fetcher_factory=lambda _jid: fetcher)
-    pipeline = build_transfer_pipeline(cache=cache, db_path=tmp_path / "publications.db")
+    pipeline = build_transfer_pipeline(
+        cache=cache,
+        authorization=build_local_single_transfer_authorization(),
+        identity_check=lambda: None,
+        db_path=tmp_path / "publications.db",
+    )
 
     request = _request(payload)
     result = pipeline.prepare(request)
@@ -682,3 +689,414 @@ def test_real_cache_adapter_source_classifies_permission(tmp_path: Path) -> None
     with pytest.raises(tx.TransferSourceError) as excinfo:
         source.read("job_1", 1, "RESULT/x.json")
     assert excinfo.value.kind is tx.SourceFailureKind.PERMISSION_DENIED
+
+
+# ---------------------------------------------------------------------------
+# 8. D06 (task 16) — production request factory + publish-boundary guards
+# ---------------------------------------------------------------------------
+
+
+def _file_lease(**overrides: Any) -> ops.PrepareLease:
+    payload: dict[str, Any] = {
+        "workflow": "singlepoint",
+        "relative_path": "RESULT/result_manifest.json",
+        "expected_sha256": tx.sha256_bytes(b"NEW"),
+        "expected_size": 3,
+        "resource_class": tx.ResourceClass.ATTEMPT_ARTIFACT.value,
+        "byte_range": {"offset": 2, "limit": 4},
+    }
+    payload.update(overrides.pop("payload", {}))
+    fields: dict[str, Any] = {
+        "operation_id": "op-file-1",
+        "job_id": "job_1",
+        "attempt": 2,
+        "resource_id": "artifact:RESULT/result_manifest.json",
+        "resource_kind": dc.ResourceKind.ARTIFACT.value,
+        "resource_digest": "dg-file",
+        "resource_key": "rk-file",
+        "permission_scope": "unit",
+        "owner_generation": 4,
+        "lease_token": "token",
+        "lease_expires_at": None,
+        "authorization_version": 7,
+        "binding_id": "binding-1",
+        "resource_generation": 3,
+        "attempt_count": 1,
+        "payload": payload,
+    }
+    fields.update(overrides)
+    return ops.PrepareLease(**fields)
+
+
+def test_production_request_factory_carries_frozen_lease_identity() -> None:
+    from acp.services_data_bootstrap import build_transfer_request_factory
+
+    request = build_transfer_request_factory()(_file_lease())
+
+    assert request.job_id == "job_1"
+    assert request.attempt == 2
+    assert request.relative_path == "RESULT/result_manifest.json"
+    assert request.resource_class is tx.ResourceClass.ATTEMPT_ARTIFACT
+    assert request.resource_generation == 3
+    assert request.authorization_version == 7
+    assert request.binding_id == "binding-1"
+    assert request.byte_range == tx.ByteRange(offset=2, limit=4)
+    assert request.expected is not None
+    assert request.expected.sha256 == tx.sha256_bytes(b"NEW")
+    assert request.expected.size_bytes == 3
+    assert request.expected.verification_level is tx.VerificationLevel.VERIFIED
+
+
+def test_request_factory_requires_a_frozen_relative_path() -> None:
+    from acp.services_data_bootstrap import build_transfer_request_factory
+
+    lease = _file_lease(payload={"relative_path": None})
+    with pytest.raises(ValueError, match="relative_path"):
+        build_transfer_request_factory()(lease)
+
+
+def test_missing_expected_digest_is_rejected_never_invented(tmp_path: Path) -> None:
+    payload = b"x"
+    source = FakeSource(payload)
+    pipeline, cache, store = _pipeline(tmp_path, source=source)
+
+    lease = _file_lease(payload={"expected_sha256": None, "expected_size": None})
+    from acp.services_data_bootstrap import build_transfer_request_factory
+
+    request = build_transfer_request_factory()(lease)
+    assert request.expected is None
+
+    result = pipeline.prepare(request)
+    assert result.accepted is False
+    assert result.rejection is tx.RejectionCode.MISSING_EXPECTED_DIGEST
+    assert result.retryable is False
+    assert source.calls == []
+    assert cache.published == {}
+    assert store.list_all() == ()
+
+
+def test_transfer_assembly_refuses_missing_authorization_and_identity(tmp_path: Path) -> None:
+    from acp.services_data_bootstrap import (
+        build_transfer_authorization_port,
+        build_transfer_pipeline,
+    )
+
+    cache = RemoteStructureCache(tmp_path / "run_root")
+    with pytest.raises(ValueError, match="authorization"):
+        build_transfer_pipeline(cache=cache, identity_check=lambda: None)
+    with pytest.raises(ValueError, match="identity_check"):
+        build_transfer_pipeline(
+            cache=cache, authorization=build_local_single_transfer_authorization()
+        )
+    with pytest.raises(ValueError, match="authorization"):
+        build_transfer_authorization_port()
+    with pytest.raises(ValueError, match="authorization"):
+        tx.TransferPipeline(
+            cache=FakeCache(tmp_path / "cache"),
+            source=FakeSource(b""),
+            authorization=None,  # type: ignore[arg-type]
+            publications=tx.TransferPublicationStore(tmp_path / "pub.db"),
+        )
+
+
+def _wait_for_state(
+    service: ops.PrepareOperationService, operation_id: str, timeout: float = 5.0
+) -> ops.PrepareOperationRecord:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        record = service.get(operation_id)
+        if record is not None and record.is_terminal:
+            return record
+        time.sleep(0.01)
+    raise AssertionError(f"operation {operation_id} did not finish")
+
+
+def _run_file_worker(
+    tmp_path: Path,
+    cache: RemoteStructureCache,
+    *,
+    job_id: str,
+    relative_path: str,
+    expected: bytes,
+    publications: tx.TransferPublicationStore,
+    authorization: Any,
+    identity_check: Any,
+    before_publish: Any = None,
+    max_attempts: int = 1,
+) -> tuple[ops.PrepareOperationRecord, ops.PrepareOperationService, tx.TransferPublicationStore]:
+    from acp.services_data_bootstrap import (
+        build_transfer_executor,
+        build_transfer_pipeline,
+        build_transfer_request_factory,
+    )
+
+    pipeline = build_transfer_pipeline(
+        cache=cache,
+        authorization=authorization,
+        identity_check=identity_check,
+        publications=publications,
+        before_publish=before_publish,
+    )
+    executor = build_transfer_executor(pipeline, build_transfer_request_factory())
+    service = ops.PrepareOperationService(
+        tmp_path / f"ops-{job_id}.db", retry_backoff_seconds=0.0, default_lease_seconds=10.0
+    )
+    request = ops.PrepareRequest(
+        job_id=job_id,
+        attempt=1,
+        resource_id=f"artifact:{relative_path}",
+        resource_kind=dc.ResourceKind.ARTIFACT,
+        resource_digest="dg-file",
+        payload={
+            "workflow": "singlepoint",
+            "relative_path": relative_path,
+            "expected_sha256": tx.sha256_bytes(expected),
+            "expected_size": len(expected),
+        },
+        max_attempts=max_attempts,
+    )
+    op = service.enqueue(request)
+    worker = ops.PrepareOperationWorker(service, executor, poll_interval=0.01)
+    worker.start()
+    try:
+        done = _wait_for_state(service, op.operation_id)
+    finally:
+        worker.stop()
+    return done, service, publications
+
+
+def test_happy_file_download_publishes_once_and_commits_readiness(tmp_path: Path) -> None:
+    rel = "RESULT/result_manifest.json"
+    payload = b'{"version": 2, "products": []}'
+    fetcher = _FakeFetcher({rel: payload})
+    fetcher.file_info = lambda *_args, **_kwargs: None  # type: ignore[method-assign]
+    cache = RemoteStructureCache(tmp_path / "runs", fetcher_factory=lambda _jid: fetcher)
+    publications = tx.TransferPublicationStore(tmp_path / "publications.db")
+
+    calls = {"reads": 0}
+    original_read = fetcher.read_file
+
+    def counting_read(record: Any, filename: str) -> bytes:
+        calls["reads"] += 1
+        return original_read(record, filename)
+
+    fetcher.read_file = counting_read  # type: ignore[method-assign]
+
+    done, service, store = _run_file_worker(
+        tmp_path,
+        cache,
+        job_id="job_happy",
+        relative_path=rel,
+        expected=payload,
+        publications=publications,
+        authorization=build_local_single_transfer_authorization(),
+        identity_check=lambda: None,
+    )
+    try:
+        assert done.state is ops.PrepareState.SUCCEEDED
+        assert done.sha256 == tx.sha256_bytes(payload)
+        assert done.size_bytes == len(payload)
+        availability = service.availability(done.operation_id)
+        assert availability.availability is dc.Availability.READY
+        assert calls["reads"] == 1
+        assert cache.cache_path("job_happy", rel).read_bytes() == payload
+        records = store.list_by_job("job_happy")
+        assert len(records) == 1
+        assert records[0].state == tx.PublicationState.PUBLISHED.value
+        assert records[0].sha256 == tx.sha256_bytes(payload)
+    finally:
+        service.close()
+        store.close()
+
+
+@pytest.mark.parametrize("event", ["rerun", "rebind", "revoke", "evict"])
+def test_publish_barrier_event_never_replaces_current_bytes(tmp_path: Path, event: str) -> None:
+    job_id = f"job_barrier_{event}"
+    rel = "RESULT/result_manifest.json"
+    current = b"CURRENT"
+    verified = b"NEW-VERIFIED"
+    cache = RemoteStructureCache(
+        tmp_path / f"runs_{event}", fetcher_factory=lambda _jid: _FakeFetcher({rel: verified})
+    )
+    target = cache.cache_path(job_id, rel)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(current)
+    cache._write_attempt_sidecar(target, 1)
+    cache._write_fence(job_id, attempt=1, generation=0)
+
+    state = {"valid": True, "reason": ""}
+
+    def identity_check() -> str | None:
+        return None if state["valid"] else state["reason"]
+
+    def barrier() -> None:
+        if event == "rerun":
+            cache._write_fence(job_id, attempt=2, generation=0)
+        elif event == "evict":
+            cache._write_fence(job_id, attempt=1, generation=1)
+        elif event == "rebind":
+            state.update(valid=False, reason="identity_mismatch:binding")
+        else:
+            state.update(valid=False, reason="authorization_revoked")
+
+    publications = tx.TransferPublicationStore(tmp_path / f"publications_{event}.db")
+    done, service, store = _run_file_worker(
+        tmp_path,
+        cache,
+        job_id=job_id,
+        relative_path=rel,
+        expected=verified,
+        publications=publications,
+        authorization=build_local_single_transfer_authorization(),
+        identity_check=identity_check,
+        before_publish=barrier,
+    )
+    try:
+        assert done.state is ops.PrepareState.FAILED
+        assert service.availability(done.operation_id).availability is not dc.Availability.READY
+        assert target.read_bytes() == current
+        assert cache._read_attempt_sidecar(target) == (True, 1)
+        records = store.list_by_job(job_id)
+        assert all(record.state != tx.PublicationState.PUBLISHED.value for record in records)
+    finally:
+        service.close()
+        store.close()
+    assert _tmp_files(tmp_path) == []
+
+
+def test_catalog_bundle_publishes_through_the_same_publish_guard(tmp_path: Path) -> None:
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+    from acp.services_data_bootstrap import (
+        build_local_prepare_identity_provider,
+        build_prepare_executor,
+    )
+
+    job_id = "job_catalog_guard"
+    rel = "RESULT/result_manifest.json"
+    record = JobRecord(
+        id=job_id,
+        spec=JobSpec(workflow="singlepoint", name="catalog"),
+        status=JobStatus.COMPLETED,
+        attempt=1,
+        work_dir=str(tmp_path / job_id),
+        result={"node": "node1", "remote_dir": f"/remote/{job_id}"},
+    )
+    cache = RemoteStructureCache(
+        tmp_path / "runs_catalog",
+        fetcher_factory=lambda _jid: _FakeFetcher({rel: b"NEW-CATALOG", "input.xyz": b"1\n"}),
+    )
+    seeded = cache.cache_path(job_id, "RESULT/frame_candidates.json")
+    seeded.parent.mkdir(parents=True, exist_ok=True)
+    seeded.write_bytes(b"CURRENT")
+    target = cache.cache_path(job_id, rel)
+    cache._write_fence(job_id, attempt=1, generation=0)
+
+    state = {"valid": True}
+
+    def before_publish() -> None:
+        state["valid"] = False
+
+    local = build_local_prepare_identity_provider(lambda _jid: record)
+
+    def provider(lease: ops.PrepareLease) -> Any:
+        identity = local(lease)
+        if identity is None or state["valid"]:
+            return identity
+        return replace(identity, authorized=False)
+
+    executor = build_prepare_executor(
+        job_lookup=lambda _jid: record,
+        identity_provider=provider,
+        cache=cache,
+        is_remote=lambda _record: True,
+        before_publish=before_publish,
+    )
+    service = ops.PrepareOperationService(tmp_path / "ops-catalog.db", retry_backoff_seconds=0.0)
+    try:
+        workflow = "singlepoint"
+        service.enqueue(
+            ops.PrepareRequest(
+                job_id=job_id,
+                attempt=1,
+                resource_id=f"catalog:{workflow}",
+                resource_kind=dc.ResourceKind.CACHE,
+                resource_digest=f"{job_id}\x1f1\x1f{workflow}",
+                payload={"workflow": workflow},
+            )
+        )
+        lease = service.lease_next()
+        assert lease is not None
+        result = executor.execute(lease)
+    finally:
+        service.close()
+
+    assert result.prepared is False
+    assert result.retryable is False
+    assert result.detail.startswith("publish_rejected:")
+    assert target.exists() is False
+    assert seeded.read_bytes() == b"CURRENT"
+
+
+def test_cache_hit_commit_boundary_rechecks_identity(tmp_path: Path) -> None:
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+    from acp.services_data_bootstrap import (
+        build_local_prepare_identity_provider,
+        build_prepare_executor,
+    )
+
+    job_id = "job_cache_hit_guard"
+    record = JobRecord(
+        id=job_id,
+        spec=JobSpec(workflow="singlepoint", name="cache-hit"),
+        status=JobStatus.COMPLETED,
+        attempt=1,
+        work_dir=str(tmp_path / job_id),
+        result={"node": "node1", "remote_dir": f"/remote/{job_id}"},
+    )
+    cache = RemoteStructureCache(
+        tmp_path / "runs_hit", fetcher_factory=lambda _jid: _FakeFetcher({})
+    )
+    target = cache.cache_path(job_id, "RESULT/result_manifest.json")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"cached")
+    cache._write_attempt_sidecar(target, 1)
+    cache._write_fence(job_id, attempt=1, generation=0)
+
+    local = build_local_prepare_identity_provider(lambda _jid: record)
+    calls = {"count": 0}
+
+    def provider(lease: ops.PrepareLease) -> Any:
+        calls["count"] += 1
+        identity = local(lease)
+        if calls["count"] >= 2 and identity is not None:
+            return replace(identity, authorized=False)
+        return identity
+
+    executor = build_prepare_executor(
+        job_lookup=lambda _jid: record,
+        identity_provider=provider,
+        cache=cache,
+        is_remote=lambda _record: True,
+    )
+    service = ops.PrepareOperationService(tmp_path / "ops-hit.db", retry_backoff_seconds=0.0)
+    try:
+        service.enqueue(
+            ops.PrepareRequest(
+                job_id=job_id,
+                attempt=1,
+                resource_id="catalog:singlepoint",
+                resource_kind=dc.ResourceKind.CACHE,
+                resource_digest=f"{job_id}\x1f1\x1fsinglepoint",
+                payload={"workflow": "singlepoint"},
+            )
+        )
+        lease = service.lease_next()
+        assert lease is not None
+        result = executor.execute(lease)
+    finally:
+        service.close()
+
+    assert calls["count"] >= 2
+    assert result.prepared is False
+    assert result.detail != "already_ready"
+    assert result.availability is not dc.Availability.READY
