@@ -855,9 +855,7 @@ class RemoteJobRunner:
         """True only when ``job.json`` is readable AND names this job/attempt."""
         for marker in ("job.json", "task.json"):
             try:
-                raw = self._stager.read_remote_file(
-                    node, posixpath.join(remote_dir, marker)
-                )
+                raw = self._stager.read_remote_file(node, posixpath.join(remote_dir, marker))
             except FileNotFoundError:
                 continue
             except (OSError, SSHExecutionError):
@@ -887,9 +885,7 @@ class RemoteJobRunner:
             return None
         for marker in (".exit_code", "state.json"):
             try:
-                content = self._stager.read_remote_file(
-                    node, posixpath.join(remote_dir, marker)
-                )
+                content = self._stager.read_remote_file(node, posixpath.join(remote_dir, marker))
             except FileNotFoundError:
                 continue
             except (OSError, SSHExecutionError):
@@ -912,9 +908,7 @@ class RemoteJobRunner:
         # a readable marker declaring another attempt is foreign evidence.
         for marker in ("job.json", "task.json"):
             try:
-                raw = self._stager.read_remote_file(
-                    node, posixpath.join(remote_dir, marker)
-                )
+                raw = self._stager.read_remote_file(node, posixpath.join(remote_dir, marker))
             except FileNotFoundError:
                 continue
             except (OSError, SSHExecutionError):
@@ -1439,9 +1433,7 @@ class RemoteJobRunner:
             workflow=record.spec.workflow,
             attempt=record.attempt,
             remote=True,
-            envelope_available=frozen_artifacts_present(
-                work_dir, expected_attempt=record.attempt
-            ),
+            envelope_available=frozen_artifacts_present(work_dir, expected_attempt=record.attempt),
             previous=previous,
             release_id=release_id,
         )
@@ -1693,8 +1685,11 @@ class RemoteJobRunner:
                 # experiment set; each remote argument points at an uploaded
                 # file, including native input extensions and Bruker assets.
                 local_command = JobRunner()._build_nmr_cmd(spec, work_dir)
-                local_sources = [local_command[i + 1] for i, flag in enumerate(local_command)
-                                 if flag == "--input"]
+                local_sources = [
+                    local_command[i + 1]
+                    for i, flag in enumerate(local_command)
+                    if flag == "--input"
+                ]
                 candidates = spec.input.get("candidates")
                 candidates = candidates if isinstance(candidates, list) else [spec.input]
                 if len(local_sources) != len(candidates):
@@ -1714,8 +1709,12 @@ class RemoteJobRunner:
                 self._stager.upload_directory(
                     node, work_dir / "inputs", posixpath.join(remote_job_dir, "inputs")
                 )
-                event_log.append("remote.input_uploaded", job_id=record.id,
-                                 node=node.name, role="nmr_candidates_and_experiment")
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="nmr_candidates_and_experiment",
+                )
             elif materialized and materialized.is_file():
                 remote_path = posixpath.join(remote_job_dir, remote_input_name)
                 self._stager.upload_file(node, materialized, remote_path)
@@ -1726,9 +1725,7 @@ class RemoteJobRunner:
                     role="input",
                 )
             else:
-                raise RemoteSubmissionRejected(
-                    f"Failed to materialise input for job {record.id}"
-                )
+                raise RemoteSubmissionRejected(f"Failed to materialise input for job {record.id}")
 
             # 3b. Scheduler-context markers (job.json + task.json): the node
             # side detects them by existence only (workflows/_helpers.py) and
@@ -1751,7 +1748,8 @@ class RemoteJobRunner:
                 if module:
                     _electronic_state_cli_flags(module, work_dir)
                     self._stager.upload_file(
-                        node, work_dir / "electronic_state.json",
+                        node,
+                        work_dir / "electronic_state.json",
                         posixpath.join(remote_job_dir, "electronic_state.json"),
                     )
             resume_source = work_dir / "resume_source.json"
@@ -1996,9 +1994,7 @@ class RemoteJobRunner:
         def probe(candidate: str) -> bool:
             for marker in ("job.json", "task.json"):
                 try:
-                    raw = self._stager.read_remote_file(
-                        node, posixpath.join(candidate, marker)
-                    )
+                    raw = self._stager.read_remote_file(node, posixpath.join(candidate, marker))
                 except (OSError, SSHExecutionError):
                     continue
                 if not raw:
@@ -2153,9 +2149,7 @@ class RemoteJobRunner:
         """
         for marker in ("state.json", "job.json"):
             try:
-                raw = self._stager.read_remote_file(
-                    node, posixpath.join(remote_job_dir, marker)
-                )
+                raw = self._stager.read_remote_file(node, posixpath.join(remote_job_dir, marker))
             except (OSError, SSHExecutionError):
                 continue
             if not raw:
@@ -2771,12 +2765,9 @@ class RemoteJobRunner:
         args = " ".join(_shlex.quote(b) for b in binaries)
         # The probe imports cccp.software from the synced codebase — export
         # PYTHONPATH so it resolves exactly like the workflow will.
-        command = (
-            "bash -lc "
-            + _shlex.quote(
-                f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
-                f"{py} -c {script_arg} {args}"
-            )
+        command = "bash -lc " + _shlex.quote(
+            f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
+            f"{py} -c {script_arg} {args}"
         )
 
         try:
@@ -2827,8 +2818,7 @@ class RemoteJobRunner:
 
         if missing and self._config.require_all_binaries:
             detail = "\n".join(
-                f"  - {name}: configured={report[name].get('configured')!r}"
-                for name in missing
+                f"  - {name}: configured={report[name].get('configured')!r}" for name in missing
             )
             raise RemoteNodeUnavailableError(
                 f"Node {node.name!r} cannot resolve required binaries for "
@@ -2871,9 +2861,7 @@ class RemoteJobRunner:
         """
         cmd = f'cd "{remote_job_dir}" && bsub < "{script_remote_path}"'
         try:
-            code, out, err = self._ssh.execute(
-                node, cmd, timeout=self._config.submission_timeout
-            )
+            code, out, err = self._ssh.execute(node, cmd, timeout=self._config.submission_timeout)
         except SSHExecutionError as exc:
             raise RemoteSubmissionIndeterminate(
                 f"bsub SSH execution failed on {node.name} (outcome unknown): {exc}"
@@ -2882,12 +2870,9 @@ class RemoteJobRunner:
             detail = err.strip() or out.strip()
             if not detail:
                 raise RemoteSubmissionIndeterminate(
-                    f"bsub exited {code} on {node.name} without diagnostics "
-                    f"(outcome unknown)"
+                    f"bsub exited {code} on {node.name} without diagnostics (outcome unknown)"
                 )
-            raise RemoteSubmissionRejected(
-                f"bsub failed on {node.name} (exit={code}): {detail}"
-            )
+            raise RemoteSubmissionRejected(f"bsub failed on {node.name} (exit={code}): {detail}")
         match = _LSF_JOB_ID_RE.search(out)
         if not match:
             raise RemoteSubmissionIndeterminate(

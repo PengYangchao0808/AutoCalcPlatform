@@ -759,9 +759,7 @@ class _FakeExecutionRight:
         verify: ExecutionRightState | None = None,
     ) -> None:
         self.acquire_verdict = ExecutionRightVerdict(acquire)
-        self.verify_verdict = ExecutionRightVerdict(
-            acquire if verify is None else verify
-        )
+        self.verify_verdict = ExecutionRightVerdict(acquire if verify is None else verify)
         self.calls: list[str] = []
 
     def acquire(self, envelope: object) -> ExecutionRightVerdict:
@@ -794,9 +792,7 @@ def _seed_foreign_receipt(receipt_path: Path, *, attempt: int = 2) -> None:
     )
     write_receipt_atomic(
         receipt_path,
-        build_receipt(
-            foreign, TaskExecutionOutcome(state="completed", result_digest="sha256:old")
-        ),
+        build_receipt(foreign, TaskExecutionOutcome(state="completed", result_digest="sha256:old")),
     )
 
 
@@ -907,9 +903,7 @@ def test_loser_not_held_writes_only_refusal_document_and_exits_three(
 def test_lost_right_at_failure_seam_writes_no_authoritative_receipt(tmp_path: Path) -> None:
     frozen = _write_frozen(tmp_path)
     receipt_path = Path(frozen["receipt"])
-    right = _FakeExecutionRight(
-        acquire=ExecutionRightState.HELD, verify=ExecutionRightState.LOST
-    )
+    right = _FakeExecutionRight(acquire=ExecutionRightState.HELD, verify=ExecutionRightState.LOST)
     runtime = assemble_worker(
         envelope=_envelope(_plan()),
         plan=_plan(),
@@ -930,9 +924,7 @@ def test_lost_right_at_failure_seam_writes_no_authoritative_receipt(tmp_path: Pa
     assert not receipt_path.exists()
     assert not task_result_path(frozen["work_dir"]).exists()
     document = json.loads(
-        receipt_path.with_name(receipt_path.name + ".refused.json").read_text(
-            encoding="utf-8"
-        )
+        receipt_path.with_name(receipt_path.name + ".refused.json").read_text(encoding="utf-8")
     )
     assert document["code"] == "execution_right_lost"
     assert document["receipt"] is None
@@ -956,9 +948,7 @@ def test_unreadable_receipt_is_typed_conflict_not_traceback(
     assert printed["state"] == "failed"
     assert _sha256(receipt_path) == sha_before
     document = json.loads(
-        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(
-            encoding="utf-8"
-        )
+        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(encoding="utf-8")
     )
     assert document["code"] == "unreadable_receipt"
     assert document["existing_identity"] is None
@@ -1067,9 +1057,7 @@ def test_assembly_failure_with_conflicting_receipt_preserves_bytes(
     assert printed["attempt"] == 1
     assert _sha256(receipt_path) == sha_before
     document = json.loads(
-        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(
-            encoding="utf-8"
-        )
+        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(encoding="utf-8")
     )
     assert document["schema"] == "worker_receipt_conflict"
     assert document["code"] == "receipt_identity_mismatch"
@@ -1099,9 +1087,7 @@ def test_structurally_invalid_receipt_is_typed_conflict(tmp_path: Path) -> None:
     assert result.state == "failed"
     assert _sha256(receipt_path) == sha_before
     document = json.loads(
-        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(
-            encoding="utf-8"
-        )
+        receipt_path.with_name(receipt_path.name + ".conflict.json").read_text(encoding="utf-8")
     )
     assert document["code"] == "unreadable_receipt"
     assert document["existing_identity"] is None

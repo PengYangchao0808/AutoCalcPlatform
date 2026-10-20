@@ -394,14 +394,10 @@ class BoundedProduct:
                 raise BoundedSchemaError(message)
             block_identity = block.product.identity
             if block_identity.product_kind is not self.base_identity.product_kind:
-                message = (
-                    f"block {block.block_index} product_kind must match the base identity"
-                )
+                message = f"block {block.block_index} product_kind must match the base identity"
                 raise BoundedSchemaError(message)
             if block_identity.input_digest != self.base_identity.input_digest:
-                message = (
-                    f"block {block.block_index} input_digest must be the source input digest"
-                )
+                message = f"block {block.block_index} input_digest must be the source input digest"
                 raise BoundedSchemaError(message)
 
     def is_cache_adoptable(self) -> bool:

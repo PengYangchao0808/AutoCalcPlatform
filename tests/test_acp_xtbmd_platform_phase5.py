@@ -156,8 +156,18 @@ def test_cli_has_xtbmd_censo_energy_subcommand_and_all_flags() -> None:
             assert flag_true in option_strings, f"CLI missing {flag_true}"
         if flag_false:
             assert flag_false in option_strings, f"CLI missing {flag_false}"
-    for base in ("--input", "--batch-file", "--preset", "--no-opt", "--rank1-only",
-                 "--threshold", "--levels", "--solvent", "--ewin", "--resume"):
+    for base in (
+        "--input",
+        "--batch-file",
+        "--preset",
+        "--no-opt",
+        "--rank1-only",
+        "--threshold",
+        "--levels",
+        "--solvent",
+        "--ewin",
+        "--resume",
+    ):
         assert base in option_strings, f"CLI missing {base}"
 
     # Dispatch wiring: the handler must exist for the subcommand (cli.py
@@ -273,7 +283,10 @@ def test_catalog_opt_level_xtb_options_corrected_per_v14() -> None:
     from acp.catalog import FIELD_DEFINITIONS
 
     assert FIELD_DEFINITIONS["opt_level"]["per_backend"]["xtb"] == [
-        "crude", "normal", "tight", "verytight",
+        "crude",
+        "normal",
+        "tight",
+        "verytight",
     ]
 
 
@@ -330,8 +343,12 @@ def test_runner_boolean_string_coercion() -> None:
     from acp.scheduler.jobs import xtbmd_method_flags
 
     method = {
-        "md_shake": "false", "md_nvt": "false", "conv_check": "False",
-        "resume": "true", "rank1_only": "1", "keep_frames": "on",
+        "md_shake": "false",
+        "md_nvt": "false",
+        "conv_check": "False",
+        "resume": "true",
+        "rank1_only": "1",
+        "keep_frames": "on",
         "no_opt": "0",
     }
     flags = xtbmd_method_flags(method)
@@ -393,9 +410,7 @@ def test_runner_accepts_and_emits_xtbmd_flags() -> None:
     for key, flag in _XTBMD_FLAG_MAP.items():
         assert flag in joined, f"runner missing {flag} for {key}"
         if method.get(key) is not None:
-            assert str(method[key]) in cmd[cmd.index(flag) + 1], (
-                f"runner value mismatch for {flag}"
-            )
+            assert str(method[key]) in cmd[cmd.index(flag) + 1], f"runner value mismatch for {flag}"
     for key, flag_true, flag_false in _XTBMD_BOOL_FIELDS:
         if flag_false and method.get(key) is False:
             assert flag_false in joined, f"runner missing {flag_false} (method {key}=False)"
@@ -457,8 +472,15 @@ def test_stage_plan_provider_registered() -> None:
     spec = _job_spec({"preset": "censo-light"})
     names = [p.stage_name for p in get_stage_plan(spec)]
     assert names == [
-        "embed", "xtbmd", "batch_opt", "isostat", "energy_filter",
-        "censo", "dft_handoff", "finalize", "conformer_energy",
+        "embed",
+        "xtbmd",
+        "batch_opt",
+        "isostat",
+        "energy_filter",
+        "censo",
+        "dft_handoff",
+        "finalize",
+        "conformer_energy",
     ]
 
     spec_zero = _job_spec({"preset": "censo-zero", "no_opt": True})
@@ -488,10 +510,16 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
     from acp.cli import build_parser
 
     parser = build_parser()
-    args = parser.parse_args([
-        "run", _XTBMD_WORKFLOW_ID, "--input", "CCO",
-        "--levels", '{"refinement_threshold": 0.95}',
-    ])
+    args = parser.parse_args(
+        [
+            "run",
+            _XTBMD_WORKFLOW_ID,
+            "--input",
+            "CCO",
+            "--levels",
+            '{"refinement_threshold": 0.95}',
+        ]
+    )
     assert args.threshold == 0.99  # CLI default, not user-explicit
 
     # Reproduce the handler merge.
@@ -505,10 +533,18 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
     assert levels["refinement_threshold"] == 0.95
 
     # Explicit --threshold still wins over the levels value.
-    args2 = parser.parse_args([
-        "run", _XTBMD_WORKFLOW_ID, "--input", "CCO", "--threshold", "0.9",
-        "--levels", '{"refinement_threshold": 0.95}',
-    ])
+    args2 = parser.parse_args(
+        [
+            "run",
+            _XTBMD_WORKFLOW_ID,
+            "--input",
+            "CCO",
+            "--threshold",
+            "0.9",
+            "--levels",
+            '{"refinement_threshold": 0.95}',
+        ]
+    )
     levels2 = _parse_levels_json(args2.levels) or {}
     if args2.threshold != 0.99:
         levels2["refinement_threshold"] = args2.threshold
@@ -526,9 +562,7 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
 _WIZARD_DIR = REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard"
 _SUBMIT_EDIT = _WIZARD_DIR / "submit-edit.js"
 _DRAFT_FORM = _WIZARD_DIR / "draft-form.js"
-_WIZARD_MONOLITH = (
-    REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard.js"
-)
+_WIZARD_MONOLITH = REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard.js"
 
 #: Positive rank1 toggle guard owned by draft-form.js: both energy and
 #: xtbmd_censo_energy must render the rank1-only option card.
@@ -595,10 +629,9 @@ def test_frontend_rank1_toggle_covers_xtbmd() -> None:
     assert _DRAFT_FORM.is_file(), f"owner file missing: {_DRAFT_FORM}"
     source = _read_source(_DRAFT_FORM)
     assert _RANK1_TOGGLE_GUARD in source, (
-        "draft-form.js lacks the positive rank1 toggle guard "
-        f"{_RANK1_TOGGLE_GUARD!r}"
+        f"draft-form.js lacks the positive rank1 toggle guard {_RANK1_TOGGLE_GUARD!r}"
     )
-    assert 'modal.rank1_only_desc_xtbmd' in source, (
+    assert "modal.rank1_only_desc_xtbmd" in source, (
         "draft-form.js lacks the xtbmd-specific rank1 description key"
     )
 
@@ -607,10 +640,7 @@ def test_frontend_rank1_default_differs_per_workflow() -> None:
     """energy defaults rank1-only ON; xtbmd defaults to full ensemble."""
     assert _DRAFT_FORM.is_file(), f"owner file missing: {_DRAFT_FORM}"
     source = _read_source(_DRAFT_FORM)
-    assert (
-        'wizardState.method.rank1_only = (wizardState.workflow.id === "energy")'
-        in source
-    )
+    assert 'wizardState.method.rank1_only = (wizardState.workflow.id === "energy")' in source
 
 
 # ---------------------------------------------------------------------------
@@ -630,9 +660,7 @@ def test_control_group_guard_rejects_wizard_only_source(monkeypatch) -> None:
     guard must fail instead of silently passing on unrelated source.
     """
     wizard_source = _wizard_monolith_source()
-    monkeypatch.setattr(
-        sys.modules[__name__], "_read_source", lambda _path: wizard_source
-    )
+    monkeypatch.setattr(sys.modules[__name__], "_read_source", lambda _path: wizard_source)
     with pytest.raises(AssertionError):
         test_frontend_submits_xtbmd_control_group_fields()
 
@@ -640,8 +668,6 @@ def test_control_group_guard_rejects_wizard_only_source(monkeypatch) -> None:
 def test_rank1_toggle_guard_rejects_wizard_only_source(monkeypatch) -> None:
     """D12 non-vacuity: the positive toggle guard must come from draft-form.js."""
     wizard_source = _wizard_monolith_source()
-    monkeypatch.setattr(
-        sys.modules[__name__], "_read_source", lambda _path: wizard_source
-    )
+    monkeypatch.setattr(sys.modules[__name__], "_read_source", lambda _path: wizard_source)
     with pytest.raises(AssertionError):
         test_frontend_rank1_toggle_covers_xtbmd()

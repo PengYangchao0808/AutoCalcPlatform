@@ -213,6 +213,7 @@ def _count_xyz_frames_strict(path: Path) -> int:
     _, _, frames = _read_trajectory(path)
     return len(frames)
 
+
 __all__ = [
     "_TITLE_ENERGY_RE",
     "_aligned_rmsd",

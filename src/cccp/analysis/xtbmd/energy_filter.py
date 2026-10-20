@@ -13,10 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from numpy.typing import NDArray
 
 from cccp.analysis.xtbmd.trajectory import (
-    _aligned_rmsd,
     _match_isomers_frame,
     _parse_title_energy_hartree,
     _read_trajectory,
@@ -187,6 +185,7 @@ def _filter_energy_window(
         n_total=len(records),
         n_after_filter=len(kept),
     )
+
 
 __all__ = [
     "EnergyFilterResult",

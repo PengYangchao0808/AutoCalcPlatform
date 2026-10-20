@@ -130,15 +130,11 @@ def parse_traj_frames(traj_path: Path) -> list[TrajFrame]:
             if len(parts) < 4:
                 continue
             try:
-                coords_list.append(
-                    [float(parts[1]), float(parts[2]), float(parts[3])]
-                )
+                coords_list.append([float(parts[1]), float(parts[2]), float(parts[3])])
             except ValueError:
                 if len(parts) >= 5:
                     try:
-                        coords_list.append(
-                            [float(parts[2]), float(parts[3]), float(parts[4])]
-                        )
+                        coords_list.append([float(parts[2]), float(parts[3]), float(parts[4])])
                     except ValueError:
                         skip_counter += 1
                 else:
@@ -163,24 +159,22 @@ def parse_traj_frames(traj_path: Path) -> list[TrajFrame]:
             except ValueError:
                 pass
 
-        frames.append(TrajFrame(
-            index=len(frames),
-            time_ps=time_ps,
-            step=len(frames),
-            energy_kcal_mol=energy,
-            symbols=list(symbols),
-            coords=(
-                np.asarray(coords_list, dtype=np.float64)
-                if coords_list
-                else np.empty((0, 3))
-            ),
-        ))
+        frames.append(
+            TrajFrame(
+                index=len(frames),
+                time_ps=time_ps,
+                step=len(frames),
+                energy_kcal_mol=energy,
+                symbols=list(symbols),
+                coords=(
+                    np.asarray(coords_list, dtype=np.float64) if coords_list else np.empty((0, 3))
+                ),
+            )
+        )
         offset = end
 
     if skip_counter:
-        logger.debug(
-            "Skipped %d malformed lines in %s", skip_counter, traj_path
-        )
+        logger.debug("Skipped %d malformed lines in %s", skip_counter, traj_path)
     return frames
 
 
@@ -287,14 +281,16 @@ def assign_basins(
             new_id = len(basin_representatives)
             basin_representatives.append(frame.coords.copy())
             sampled_basin_ids.append(new_id)
-            basin_infos.append(BasinInfo(
-                basin_id=new_id,
-                first_seen_index=idx,
-                first_seen_ps=frame.time_ps,
-                visit_count=1,
-                min_energy=frame.energy_kcal_mol,
-                representative_frame=idx,
-            ))
+            basin_infos.append(
+                BasinInfo(
+                    basin_id=new_id,
+                    first_seen_index=idx,
+                    first_seen_ps=frame.time_ps,
+                    visit_count=1,
+                    min_energy=frame.energy_kcal_mol,
+                    representative_frame=idx,
+                )
+            )
 
     # Carry-forward: non-sampled frames inherit previous sampled basin
     basin_ids: list[int] = []
@@ -395,9 +391,7 @@ def _compute_saturation(
         seen2.add(bid)
     revisit_ratio = revisits / n if n > 0 else 0.0
 
-    energies = [
-        f.energy_kcal_mol for f in frames if f.energy_kcal_mol is not None
-    ]
+    energies = [f.energy_kcal_mol for f in frames if f.energy_kcal_mol is not None]
     energy_window = (max(energies) - min(energies)) if energies else 0.0
 
     if new_in_last_20 == 0:
@@ -411,9 +405,7 @@ def _compute_saturation(
     seen3: set[int] = set()
     for i, bid in enumerate(basin_ids):
         seen3.add(bid)
-        cumulative_unique.append(
-            {"time_ps": frames[i].time_ps, "unique": len(seen3)}
-        )
+        cumulative_unique.append({"time_ps": frames[i].time_ps, "unique": len(seen3)})
 
     return SamplingSaturation(
         unique_clusters=unique,
@@ -503,8 +495,6 @@ def compute_sampling_history(
         computed_at=datetime.now(timezone.utc).isoformat(),
         subsampled=len(frames) > max_cluster_frames,
         subsample_stride=(
-            max(1, len(frames) // max_cluster_frames)
-            if len(frames) > max_cluster_frames
-            else 1
+            max(1, len(frames) // max_cluster_frames) if len(frames) > max_cluster_frames else 1
         ),
     )

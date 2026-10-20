@@ -166,9 +166,7 @@ class BoundedSpec:
             )
             raise BoundedSchemaError(message)
         object.__setattr__(self, "algorithm_version", str(self.algorithm_version))
-        object.__setattr__(
-            self, "source_identity_digest", str(self.source_identity_digest).strip()
-        )
+        object.__setattr__(self, "source_identity_digest", str(self.source_identity_digest).strip())
         object.__setattr__(self, "params", tuple((str(name), value) for name, value in self.params))
 
     def params_payload(self) -> JsonObject:

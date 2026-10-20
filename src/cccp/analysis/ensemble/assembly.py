@@ -190,6 +190,7 @@ def censo_record_to_candidate(rec: Any, index: int = 0) -> dict[str, Any]:
         "source": rec.conf_id,
     }
 
+
 __all__ = [
     "_build_ensemble_from_censo",
     "_ensemble_xyz_frames",

@@ -52,17 +52,17 @@ def smiles_to_xyz(
     if not smiles or not smiles.strip():
         raise ValueError("SMILES input is empty")
 
-    Chem, AllChem = _require_rdkit()
+    chem, all_chem = _require_rdkit()
 
-    mol = Chem.MolFromSmiles(smiles)
+    mol = chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES: {smiles}")
 
-    mol3d = Chem.AddHs(mol)
+    mol3d = chem.AddHs(mol)
 
-    etkdg_v3 = getattr(AllChem, "ETKDGv3", None)
-    etkdg = getattr(AllChem, "ETKDG", None)
-    embed = getattr(AllChem, "EmbedMolecule", None)
+    etkdg_v3 = getattr(all_chem, "ETKDGv3", None)
+    etkdg = getattr(all_chem, "ETKDG", None)
+    embed = getattr(all_chem, "EmbedMolecule", None)
     if embed is None or etkdg is None:
         raise RuntimeError("RDKit 3D embedding support is unavailable")
 
@@ -75,9 +75,9 @@ def smiles_to_xyz(
     if code != 0:
         raise ValueError("RDKit failed to embed input structure")
 
-    mmff_sanitize = getattr(AllChem, "MMFFSanitizeMolecule", None)
-    mmff_optimize = getattr(AllChem, "MMFFOptimizeMolecule", None)
-    uff_optimize = getattr(AllChem, "UFFOptimizeMolecule", None)
+    mmff_sanitize = getattr(all_chem, "MMFFSanitizeMolecule", None)
+    mmff_optimize = getattr(all_chem, "MMFFOptimizeMolecule", None)
+    uff_optimize = getattr(all_chem, "UFFOptimizeMolecule", None)
     try:
         if mmff_sanitize is not None and mmff_optimize is not None:
             mmff_sanitize(mol3d)
@@ -91,7 +91,7 @@ def smiles_to_xyz(
             except Exception:
                 pass
 
-    xyz = Chem.MolToXYZBlock(mol3d)
+    xyz = chem.MolToXYZBlock(mol3d)
     lines = xyz.strip("\n").splitlines()
     if len(lines) < 2:
         raise ValueError("RDKit produced an empty XYZ block")
@@ -124,20 +124,20 @@ def molfile_to_xyz(
     if not molfile or not molfile.strip():
         raise ValueError("molfile input is empty")
 
-    Chem, AllChem = _require_rdkit()
+    chem, all_chem = _require_rdkit()
 
     try:
-        mol = Chem.MolFromMolBlock(molfile, sanitize=True, removeHs=False)
+        mol = chem.MolFromMolBlock(molfile, sanitize=True, removeHs=False)
     except Exception as exc:
         raise ValueError(f"Invalid molfile: {exc}") from exc
     if mol is None:
         raise ValueError("Invalid molfile")
 
-    mol3d = Chem.AddHs(mol)
+    mol3d = chem.AddHs(mol)
 
-    etkdg_v3 = getattr(AllChem, "ETKDGv3", None)
-    etkdg = getattr(AllChem, "ETKDG", None)
-    embed = getattr(AllChem, "EmbedMolecule", None)
+    etkdg_v3 = getattr(all_chem, "ETKDGv3", None)
+    etkdg = getattr(all_chem, "ETKDG", None)
+    embed = getattr(all_chem, "EmbedMolecule", None)
     if embed is None or etkdg is None:
         raise RuntimeError("RDKit 3D embedding support is unavailable")
 
@@ -150,9 +150,9 @@ def molfile_to_xyz(
     if code != 0:
         raise ValueError("RDKit failed to embed input structure")
 
-    mmff_sanitize = getattr(AllChem, "MMFFSanitizeMolecule", None)
-    mmff_optimize = getattr(AllChem, "MMFFOptimizeMolecule", None)
-    uff_optimize = getattr(AllChem, "UFFOptimizeMolecule", None)
+    mmff_sanitize = getattr(all_chem, "MMFFSanitizeMolecule", None)
+    mmff_optimize = getattr(all_chem, "MMFFOptimizeMolecule", None)
+    uff_optimize = getattr(all_chem, "UFFOptimizeMolecule", None)
     try:
         if mmff_sanitize is not None and mmff_optimize is not None:
             mmff_sanitize(mol3d)
@@ -166,7 +166,7 @@ def molfile_to_xyz(
             except Exception:
                 pass
 
-    xyz = Chem.MolToXYZBlock(mol3d)
+    xyz = chem.MolToXYZBlock(mol3d)
     lines = xyz.strip("\n").splitlines()
     if len(lines) < 2:
         raise ValueError("RDKit produced an empty XYZ block")
@@ -402,19 +402,19 @@ def enumerate_embeddings(
     if n <= 0:
         raise ValueError(f"n must be positive, got {n}")
 
-    Chem, AllChem = _require_rdkit()
+    chem, all_chem = _require_rdkit()
 
     if isinstance(source, Path):
         source_text = str(source)
-        mol = _mol_from_file(source, Chem)
+        mol = _mol_from_file(source, chem)
     elif "\n" not in source.strip() and not Path(source).exists():
-        mol = Chem.MolFromSmiles(source)
+        mol = chem.MolFromSmiles(source)
         if mol is None:
             raise ValueError(f"Invalid SMILES: {source}")
         source_text = source
-        mol = Chem.AddHs(mol)
+        mol = chem.AddHs(mol)
     else:
-        mol = _mol_from_file(Path(source), Chem)
+        mol = _mol_from_file(Path(source), chem)
         source_text = str(source)
 
     embeddings: list[str] = []
@@ -423,7 +423,7 @@ def enumerate_embeddings(
         # depend on RDKit-version conformer append/replace semantics and
         # could return the same conformation for every replica.
         try:
-            block = _embed_mol(Chem.Mol(mol), seed_base + i, Chem, AllChem)
+            block = _embed_mol(chem.Mol(mol), seed_base + i, chem, all_chem)
         except Exception as exc:
             raise ValueError(f"RDKit failed to embed structure {i}: {exc}") from exc
         lines = block.strip("\n").splitlines()
@@ -433,7 +433,7 @@ def enumerate_embeddings(
     return embeddings
 
 
-def _mol_from_file(path: Path, Chem: Any) -> Any:
+def _mol_from_file(path: Path, chem: Any) -> Any:
     """Load a molecule from an XYZ/molfile/SDF path, adding hydrogens."""
     path = Path(path)
     if not path.exists():
@@ -441,9 +441,9 @@ def _mol_from_file(path: Path, Chem: Any) -> Any:
     suffix = path.suffix.lower()
     try:
         if suffix == ".xyz":
-            mol = Chem.MolFromXYZFile(str(path))
+            mol = chem.MolFromXYZFile(str(path))
         elif suffix in {".mol", ".sdf", ".sd"}:
-            mol = Chem.MolFromMolFile(str(path))
+            mol = chem.MolFromMolFile(str(path))
         else:
             raise ValueError(f"Unsupported structure format for embedding: {suffix}")
     except Exception as exc:
@@ -454,22 +454,22 @@ def _mol_from_file(path: Path, Chem: Any) -> Any:
         # XYZ frames carry no bond information; re-running RemoveHs forces
         # the implicit-valence bookkeeping so AddHs can compute the full
         # hydrogen count.
-        mol = Chem.RemoveHs(mol)
-        return Chem.AddHs(mol)
+        mol = chem.RemoveHs(mol)
+        return chem.AddHs(mol)
     except Exception as exc:
         raise ValueError(f"RDKit could not add hydrogens to {path}: {exc}") from exc
 
 
-def _embed_mol(mol3d: Any, seed: int, Chem: Any, AllChem: Any) -> str:
+def _embed_mol(mol3d: Any, seed: int, chem: Any, all_chem: Any) -> str:
     """Embed *mol3d* with ETKDG (``randomSeed=seed``) and return its XYZ block.
 
     Falls back to random-coordinate embedding when deterministic ETKDG
     fails, then relaxes with MMFF (UFF fallback) — the same recipe used by
     :func:`smiles_to_xyz`.
     """
-    etkdg_v3 = getattr(AllChem, "ETKDGv3", None)
-    etkdg = getattr(AllChem, "ETKDG", None)
-    embed = getattr(AllChem, "EmbedMolecule", None)
+    etkdg_v3 = getattr(all_chem, "ETKDGv3", None)
+    etkdg = getattr(all_chem, "ETKDG", None)
+    embed = getattr(all_chem, "EmbedMolecule", None)
     if embed is None or etkdg is None:
         raise RuntimeError("RDKit 3D embedding support is unavailable")
 
@@ -482,9 +482,9 @@ def _embed_mol(mol3d: Any, seed: int, Chem: Any, AllChem: Any) -> str:
     if code != 0:
         raise ValueError("RDKit failed to embed input structure")
 
-    mmff_sanitize = getattr(AllChem, "MMFFSanitizeMolecule", None)
-    mmff_optimize = getattr(AllChem, "MMFFOptimizeMolecule", None)
-    uff_optimize = getattr(AllChem, "UFFOptimizeMolecule", None)
+    mmff_sanitize = getattr(all_chem, "MMFFSanitizeMolecule", None)
+    mmff_optimize = getattr(all_chem, "MMFFOptimizeMolecule", None)
+    uff_optimize = getattr(all_chem, "UFFOptimizeMolecule", None)
     try:
         if mmff_sanitize is not None and mmff_optimize is not None:
             mmff_sanitize(mol3d)
@@ -498,7 +498,7 @@ def _embed_mol(mol3d: Any, seed: int, Chem: Any, AllChem: Any) -> str:
             except Exception:
                 pass
 
-    xyz = Chem.MolToXYZBlock(mol3d)
+    xyz = chem.MolToXYZBlock(mol3d)
     lines = xyz.strip("\n").splitlines()
     if len(lines) < 2:
         raise ValueError("RDKit produced an empty XYZ block")

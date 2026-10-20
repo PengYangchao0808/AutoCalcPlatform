@@ -170,6 +170,7 @@ def build_ensemble_summary(
         ),
     )
 
+
 __all__ = [
     "boltzmann_weights",
     "build_ensemble_summary",

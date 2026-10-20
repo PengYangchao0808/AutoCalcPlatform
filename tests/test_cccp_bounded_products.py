@@ -383,8 +383,9 @@ def test_d10_counterexample_distinct_source_science_keeps_derived_identity():
     algorithm/version/params.  The report directory is not imported at runtime.
     """
     # Trigger condition: same raw-input digest, different source algorithm.
-    a, b = _source_from_same_input(y=-1.0, version="1"), _source_from_same_input(
-        y=-2.0, version="2"
+    a, b = (
+        _source_from_same_input(y=-1.0, version="1"),
+        _source_from_same_input(y=-2.0, version="2"),
     )
     assert a.identity.input_digest == b.identity.input_digest
     assert a.identity.algorithm_version != b.identity.algorithm_version
@@ -675,8 +676,12 @@ def test_forged_source_identity_digest_is_rejected():
 
 
 _BOUNDED_FIXTURE = (
-    Path(__file__).parent / "fixtures" / "science_products" / "bounded"
-    / "curve_scatter_normal" / "manifest.json"
+    Path(__file__).parent
+    / "fixtures"
+    / "science_products"
+    / "bounded"
+    / "curve_scatter_normal"
+    / "manifest.json"
 )
 
 
@@ -715,9 +720,10 @@ def test_v1_to_v2_migration_rebuilds_under_the_new_identity():
     assert rebuilt.identity.input_digest == legacy.identity.input_digest
     # The historical digest is preserved untouched; only the rebuilt product
     # gets the v2 identity.
-    assert legacy.identity.params_digest == BoundedProduct.from_dict(
-        json.loads(_BOUNDED_FIXTURE.read_text())
-    ).identity.params_digest
+    assert (
+        legacy.identity.params_digest
+        == BoundedProduct.from_dict(json.loads(_BOUNDED_FIXTURE.read_text())).identity.params_digest
+    )
     assert rebuilt.identity.params_digest != legacy.identity.params_digest
     assert rebuilt.spec.source_identity_digest == source_identity_digest(base.identity)
     assert legacy.spec.source_identity_digest == ""

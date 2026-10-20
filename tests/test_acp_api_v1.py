@@ -1478,9 +1478,7 @@ def test_v1_batch_structures_requires_nonempty_items(
     assert record.spec.input["items"] == []
 
 
-def test_v1_batch_structures_rejects_bad_item(
-    client: TestClient, qc_capable_local: None
-) -> None:
+def test_v1_batch_structures_rejects_bad_item(client: TestClient, qc_capable_local: None) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -1589,23 +1587,54 @@ def test_run_irc_endpoint(client: TestClient, tmp_path: Path) -> None:
     optimized = source_dir / "WORK" / "03_OPT" / "optimized.xyz"
     optimized.parent.mkdir(parents=True)
     optimized.write_text("2\noptimized\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n", encoding="utf-8")
-    (runtime / "checkpoint.json").write_text(json.dumps({"items_state": {
-        "item_001": {"status": "completed", "tag": "TS", "optimized_xyz": "WORK/03_OPT/optimized.xyz",
-                     "charge": 0, "multiplicity": 1,
-                     "frequency": {"status": "completed", "frequencies": [-130.0, 40.0]}}
-    }}), encoding="utf-8")
-    (source_dir / "RESULT" / "batch_provenance.json").write_text(json.dumps({"items": [{
-        "item_id": "item_001", "role": "ts",
-        "effective_config": {"method": "B97-3c", "basis": "def2-mTZVPP"},
-    }]}), encoding="utf-8")
+    (runtime / "checkpoint.json").write_text(
+        json.dumps(
+            {
+                "items_state": {
+                    "item_001": {
+                        "status": "completed",
+                        "tag": "TS",
+                        "optimized_xyz": "WORK/03_OPT/optimized.xyz",
+                        "charge": 0,
+                        "multiplicity": 1,
+                        "frequency": {"status": "completed", "frequencies": [-130.0, 40.0]},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (source_dir / "RESULT" / "batch_provenance.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "item_id": "item_001",
+                        "role": "ts",
+                        "effective_config": {"method": "B97-3c", "basis": "def2-mTZVPP"},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     source_record = JobRecord(
-        id="source-job", status=JobStatus.COMPLETED, work_dir=str(source_dir),
+        id="source-job",
+        status=JobStatus.COMPLETED,
+        work_dir=str(source_dir),
         project_id="uncategorized",
-        spec=JobSpec(workflow="BatchOptimize", name="source-ts", project_id="uncategorized",
-                     resources={"nproc": 2}, method={"batch_roles": {
-                         "ts": {"method": "B97-3c", "basis": "def2-mTZVPP"},
-                         "int": {"method": "r2SCAN-3c", "basis": ""},
-                     }}),
+        spec=JobSpec(
+            workflow="BatchOptimize",
+            name="source-ts",
+            project_id="uncategorized",
+            resources={"nproc": 2},
+            method={
+                "batch_roles": {
+                    "ts": {"method": "B97-3c", "basis": "def2-mTZVPP"},
+                    "int": {"method": "r2SCAN-3c", "basis": ""},
+                }
+            },
+        ),
     )
     manager = _FakeIrcManager({"source-job": source_record})
     client.app.state.job_manager = manager
@@ -2797,9 +2826,7 @@ def test_v1_job_files_serves_nmr_report_new_layout(
     (work_dir / "RESULT" / "reports" / "nmr_report.json").write_text(
         json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8"
     )
-    (work_dir / "nmr_report.json").write_text(
-        json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8"
-    )
+    (work_dir / "nmr_report.json").write_text(json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8")
 
     new_layout = client.get(f"/api/v1/jobs/{job_id}/files/RESULT/reports/nmr_report.json")
     assert new_layout.status_code == 200

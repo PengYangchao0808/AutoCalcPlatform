@@ -1013,9 +1013,7 @@ def test_vibration_animation_frames_combo_hide_remount_teardown(
     assert facts["hidden_frame_delta"] < 1e-9, (
         f"hidden ticks must stop — frames changed while hidden ({identity}): {facts}"
     )
-    assert facts["unhide_frame_delta"] > 1e-3, (
-        f"unhide must resume ticking ({identity}): {facts}"
-    )
+    assert facts["unhide_frame_delta"] > 1e-3, f"unhide must resume ticking ({identity}): {facts}"
     assert facts["playing_after_unhide"] is True, (
         f"session survives hide/unhide ({identity}): {facts}"
     )

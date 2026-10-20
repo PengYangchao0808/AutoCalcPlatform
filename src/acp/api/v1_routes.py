@@ -1541,8 +1541,7 @@ def _resolve_batch_structures_input(
         resolved = {
             key: value
             for key, value in item.items()
-            if key
-            not in {"source_id", "source_ref", "allow_disabled_use", "disabled_use_reason"}
+            if key not in {"source_id", "source_ref", "allow_disabled_use", "disabled_use_reason"}
         }
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
@@ -1560,14 +1559,10 @@ def _resolve_batch_structures_input(
             "role_evidence": "",
             "candidate_id": asset.get("candidate_id", ""),
             "checksum": source_checksum,
-            "input_xyz_hash": hashlib.sha256(
-                resolved["xyz"].encode("utf-8")
-            ).hexdigest(),
+            "input_xyz_hash": hashlib.sha256(resolved["xyz"].encode("utf-8")).hexdigest(),
             "input_snapshot": {
                 "charge": resolved.get("charge", asset.get("charge")),
-                "multiplicity": resolved.get(
-                    "multiplicity", asset.get("multiplicity")
-                ),
+                "multiplicity": resolved.get("multiplicity", asset.get("multiplicity")),
             },
             "metadata_revision": 0,
         }
@@ -1865,9 +1860,7 @@ def _snapshot_direct_source_input(
         "usage_status": (projection or {}).get("usage_status", "active"),
         "metadata_revision": (projection or {}).get("metadata_revision", 0),
         "disabled_exception": bool(
-            projection
-            and projection.get("usage_status") == "disabled"
-            and allow_disabled
+            projection and projection.get("usage_status") == "disabled" and allow_disabled
         ),
         "exception_reason": exception_reason,
         "input_snapshot": {
@@ -2216,9 +2209,7 @@ def _resolve_irc_source_reference(inp: dict[str, Any], manager: Any) -> dict[str
         return inp
     ref = inp.get("source_ref")
     source_id = str(
-        inp.get("source_id")
-        or (ref.get("source_id") if isinstance(ref, dict) else "")
-        or ""
+        inp.get("source_id") or (ref.get("source_id") if isinstance(ref, dict) else "") or ""
     )
     prefix, separator, path = source_id.partition(":")
     if not separator or not prefix.startswith("job_") or not path.startswith("RESULT/"):
@@ -2275,9 +2266,7 @@ def _validate_simple_method_cli(workflow: str, method: dict[str, Any]) -> None:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _validate_scan_submission(
-    workflow: str, method: dict[str, Any], inp: dict[str, Any]
-) -> None:
+def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[str, Any]) -> None:
     """Reject invalid ``scan`` submissions with a synchronous 422.
 
     ``scan_method_flags`` is the single coordinate contract the local/remote
@@ -3177,6 +3166,7 @@ def save_job_s2_review(
 
 _PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
+
 def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
     """Resolve (task dir, task status) of a PESsearch job for manual review.
 
@@ -3204,9 +3194,7 @@ def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> t
         )
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
-    status = (
-        record.status.value if getattr(record.status, "value", None) else str(record.status)
-    )
+    status = record.status.value if getattr(record.status, "value", None) else str(record.status)
     status_key = str(status).strip().upper()
     active_job = status_key not in {"COMPLETED", "FAILED", "CANCELLED"}
 
@@ -3232,9 +3220,7 @@ def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> t
             )
         from acp.results.pes_scan_live import collect_pes_scan_live_frames
 
-        if (
-            collect_pes_scan_live_frames(work_dir, include_incomplete=True) is None
-        ):
+        if collect_pes_scan_live_frames(work_dir, include_incomplete=True) is None:
             raise HTTPException(
                 status_code=404,
                 detail=(
@@ -3400,6 +3386,7 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
 def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
     """Notify structure source indexer of updated candidates/manifest for job."""
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc).isoformat()
     try:
         manager = getattr(request.app.state, "job_manager", None)
@@ -3416,6 +3403,7 @@ def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
 
     try:
         from acp.api.v2_structure_sources import _get_stores
+
         _source_store, indexer = _get_stores(request)
         indexer.refresh_job(job_id)
     except Exception as exc:
@@ -3435,9 +3423,7 @@ def restore_pes_review_endpoint(
     remote_ctx = _remote_review_setup(
         request,
         job_id,
-        backup_rel=(
-            f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"
-        ),
+        backup_rel=(f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"),
     )
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
@@ -3946,7 +3932,9 @@ def get_structure_viewer_geometry(
         try:
             xyz_text = resolved.read_text(encoding="utf-8")
         except OSError as exc:
-            raise HTTPException(status_code=404, detail=f"Cannot read geometry file: {exc}") from exc
+            raise HTTPException(
+                status_code=404, detail=f"Cannot read geometry file: {exc}"
+            ) from exc
 
     if entry.source.frame_index is not None:
         frame = read_traj_frame_xyz(resolved, entry.source.frame_index)
@@ -4203,9 +4191,7 @@ def get_structure_viewer_vibrations(
                 frequency_cm1=float(m.get("frequency_cm1", 0.0)),
                 imaginary=bool(m.get("imaginary", False)),
                 ir_intensity=(
-                    float(m["ir_intensity"])
-                    if m.get("ir_intensity") is not None
-                    else None
+                    float(m["ir_intensity"]) if m.get("ir_intensity") is not None else None
                 ),
                 vectors=vectors,
             )
@@ -4811,8 +4797,16 @@ def _overlay_state_on_entries(
             state_detail = state_info.get("detail")
             if isinstance(state_detail, str) and state_detail:
                 detail = state_detail
-            started_at = state_info.get("started_at") if prefer_state else state_info.get("started_at") or started_at
-            completed_at = state_info.get("completed_at") if prefer_state else state_info.get("completed_at") or completed_at
+            started_at = (
+                state_info.get("started_at")
+                if prefer_state
+                else state_info.get("started_at") or started_at
+            )
+            completed_at = (
+                state_info.get("completed_at")
+                if prefer_state
+                else state_info.get("completed_at") or completed_at
+            )
             error = state_info.get("error") if prefer_state else state_info.get("error") or error
         entries.append(
             JobStageEntry(
@@ -5033,19 +5027,28 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
 def _structure_result_summary(request: Request, record: JobRecord) -> dict[str, Any]:
     """Keep execution, structure creation and chemical validation independent."""
     from acp.scheduler.job_edit import resolve_previous_outputs
+
     root = _job_read_root(request, record)
     outputs = resolve_previous_outputs(root, job_id=record.id, project_id=record.project_id)
     if _is_remote_job(record) and not (root / "RESULT" / "result_manifest.json").is_file():
-        return {"availability":"pending_sync", "message":"结果目录仍待同步", "structures":[]}
+        return {"availability": "pending_sync", "message": "结果目录仍待同步", "structures": []}
     if _is_remote_job(record):
         from acp.results.manifest import load_result_manifest
         from acp.results.structure_policy import reusable_product
+
         manifest = load_result_manifest(root)
-        expected = [p for p in manifest.products if reusable_product(p.to_dict())] if manifest else []
+        expected = (
+            [p for p in manifest.products if reusable_product(p.to_dict())] if manifest else []
+        )
         if len(outputs) < len(expected):
-            return {"availability":"pending_fetch", "message":"部分结果几何仍待下载；暂不能确定结构总数", "structures":[
-                {k:v for k,v in row.items() if k != "xyz_text"} for row in outputs]}
-    structures = [{k:v for k,v in row.items() if k != "xyz_text"} for row in outputs]
+            return {
+                "availability": "pending_fetch",
+                "message": "部分结果几何仍待下载；暂不能确定结构总数",
+                "structures": [
+                    {k: v for k, v in row.items() if k != "xyz_text"} for row in outputs
+                ],
+            }
+    structures = [{k: v for k, v in row.items() if k != "xyz_text"} for row in outputs]
     count = len(structures)
     if count:
         message = f"保留 {count} 个可复用结构；计算执行状态与结构验证结果分别显示"
@@ -5055,8 +5058,13 @@ def _structure_result_summary(request: Request, record: JobRecord) -> dict[str, 
         message = "当前采用人工选点；可打开完整曲线和轨迹保存帧"
     else:
         message = "没有具备成功证据的自动结构；可从可读轨迹手动保存初猜"
-    return {"availability":"available", "count":count, "message":message,
-            "structures":structures, "input_sources":record.spec.input}
+    return {
+        "availability": "available",
+        "count": count,
+        "message": message,
+        "structures": structures,
+        "input_sources": record.spec.input,
+    }
 
 
 def _read_job_metrics(record: JobRecord) -> JobMetrics | None:
@@ -5233,14 +5241,12 @@ def _build_edited_spec(
     """
     workflow = req.workflow or record.spec.workflow
     if req.mode == "in_place" and workflow != record.spec.workflow:
-        raise EditValidationError(
-            "原地重算锁定工作流；请切换为「创建新任务」以更换工作流"
-        )
+        raise EditValidationError("原地重算锁定工作流；请切换为「创建新任务」以更换工作流")
     edit_status = workflow_edit_status(workflow)
     if not edit_status["editable"]:
         raise EditValidationError(
-            edit_status.get("migration_hint") or
-            f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算"
+            edit_status.get("migration_hint")
+            or f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算"
         )
     from acp.scheduler.edit_parameters import (
         apply_edited_parameters,
@@ -5269,7 +5275,10 @@ def _build_edited_spec(
             ):
                 edited_levels = req.method.get("levels") or {}
             method, inp = apply_edited_parameters(
-                record.spec, method, inp, edited_levels=edited_levels,
+                record.spec,
+                method,
+                inp,
+                edited_levels=edited_levels,
             )
         except ValueError as exc:
             raise EditValidationError(str(exc)) from exc
@@ -5392,9 +5401,7 @@ def _validate_reaction_path_frame_input(
     else:
         input_xyz = str(inp.get("source") or inp.get("xyz_text") or inp.get("xyz") or "")
     if not input_xyz or not frame.xyz or not _same_xyz_geometry(input_xyz, frame.xyz):
-        raise EditValidationError(
-            "所选结构与上游路径帧当前几何不一致；请重新选择该路径帧后提交。"
-        )
+        raise EditValidationError("所选结构与上游路径帧当前几何不一致；请重新选择该路径帧后提交。")
 
     original_input = record.spec.input if isinstance(record.spec.input, dict) else {}
     original_xyzs: list[str] = []
@@ -5407,9 +5414,7 @@ def _validate_reaction_path_frame_input(
                 if isinstance(row, dict)
             )
     scan_request = original_input.get("scan_request")
-    source_input = (
-        scan_request.get("source") if isinstance(scan_request, dict) else original_input
-    )
+    source_input = scan_request.get("source") if isinstance(scan_request, dict) else original_input
     if isinstance(source_input, dict):
         original_xyzs.append(
             str(
@@ -5496,10 +5501,13 @@ def _edit_payload_dict(
 
 def _edit_request_payload(job_id: str, body: V1EditRecalculateRequest) -> dict[str, Any]:
     """Hash supplied patch fields, independently of the mutable source spec."""
-    return {"job_id": job_id, "request": body.model_dump(
-        exclude_unset=True,
-        exclude={"request_id", "expected_source_revision", "preview_fingerprint"},
-    )}
+    return {
+        "job_id": job_id,
+        "request": body.model_dump(
+            exclude_unset=True,
+            exclude={"request_id", "expected_source_revision", "preview_fingerprint"},
+        ),
+    }
 
 
 @router.get("/jobs/{job_id}/edit-draft", response_model=V1EditDraftResponse)
@@ -5516,8 +5524,10 @@ def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
     draft = build_edit_draft(read_record, run_root=manager.run_root)
     if _is_remote_job(record):
         from acp.scheduler.job_edit import resolve_previous_outputs
+
         root = _job_read_root(request, record)
         from acp.results.manifest import load_result_manifest
+
         manifest = load_result_manifest(root)
         cache = _remote_structure_cache(request)
         availability = "available"
@@ -5528,16 +5538,14 @@ def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
         outputs = resolve_previous_outputs(root, job_id=record.id, project_id=record.project_id)
         draft["input_refs"]["previous_outputs"] = outputs
         draft["input_refs"]["last_structure"] = outputs[0] if outputs else None
-        draft["input_refs"]["outputs_availability"] = availability if manifest is not None or outputs else "pending_sync"
-    draft["input_refs"]["reaction_path_sources"] = _reaction_path_sources_for_edit(
-        record, manager
-    )
+        draft["input_refs"]["outputs_availability"] = (
+            availability if manifest is not None or outputs else "pending_sync"
+        )
+    draft["input_refs"]["reaction_path_sources"] = _reaction_path_sources_for_edit(record, manager)
     return V1EditDraftResponse(**draft)
 
 
-def _reaction_path_sources_for_edit(
-    record: JobRecord, manager: JobManager
-) -> list[dict[str, Any]]:
+def _reaction_path_sources_for_edit(record: JobRecord, manager: JobManager) -> list[dict[str, Any]]:
     """Return PESsearch jobs that are direct or recorded structure ancestors."""
     input_spec = record.spec.input if isinstance(record.spec.input, dict) else {}
     source_job_ids: list[str] = []
@@ -5578,9 +5586,7 @@ def _reaction_path_sources_for_edit(
                             add_source(event.get("snapshots") or [])
                             break
             except (OSError, UnicodeDecodeError):
-                logger.debug(
-                    "Could not read edit source lineage for %s", record.id, exc_info=True
-                )
+                logger.debug("Could not read edit source lineage for %s", record.id, exc_info=True)
 
     sources: list[dict[str, Any]] = []
     for source_job_id in source_job_ids:
@@ -5588,9 +5594,7 @@ def _reaction_path_sources_for_edit(
         if source_record is None or str(source_record.spec.workflow or "") != "PESsearch":
             continue
         source_input = (
-            source_record.spec.input
-            if isinstance(source_record.spec.input, dict)
-            else {}
+            source_record.spec.input if isinstance(source_record.spec.input, dict) else {}
         )
         scan_source = source_input.get("scan_request")
         scan_source = scan_source.get("source") if isinstance(scan_source, dict) else None
@@ -5717,8 +5721,8 @@ def submit_job_edit_recalculate(
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    source_status.get("migration_hint") or
-                    f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
+                    source_status.get("migration_hint")
+                    or f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
                     "历史任务仅支持查看与迁移，原地编辑重算已禁用"
                 ),
             )
@@ -6448,12 +6452,16 @@ def list_stage_tasks(job_id: str, request: Request) -> StageTaskListResponse:
         for entry in _detail_stages(job_id, record, request):
             task = by_name.get(entry.stage_name)
             if task is not None:
-                models.append(_stage_task_to_model(task).model_copy(update={
-                    "state": entry.status,
-                    "started_at": entry.started_at,
-                    "completed_at": entry.completed_at,
-                    "stderr_summary": entry.error,
-                }))
+                models.append(
+                    _stage_task_to_model(task).model_copy(
+                        update={
+                            "state": entry.status,
+                            "started_at": entry.started_at,
+                            "completed_at": entry.completed_at,
+                            "stderr_summary": entry.error,
+                        }
+                    )
+                )
         if models:
             return StageTaskListResponse(tasks=models)
     return StageTaskListResponse(tasks=[_stage_task_to_model(task) for task in tasks])
@@ -6491,9 +6499,7 @@ def run_irc_from_artifact(
     )
 
     try:
-        manifest = load_ts_result_manifest(
-            source_record, getattr(manager, "remote_fetcher", None)
-        )
+        manifest = load_ts_result_manifest(source_record, getattr(manager, "remote_fetcher", None))
     except (
         OSError,
         UnicodeError,

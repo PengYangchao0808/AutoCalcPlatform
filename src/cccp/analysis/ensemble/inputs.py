@@ -39,6 +39,7 @@ def _is_file_input(input_source: str) -> bool:
     except OSError:
         return False
 
+
 __all__ = [
     "_is_file_input",
     "_is_multiframe_xyz",
