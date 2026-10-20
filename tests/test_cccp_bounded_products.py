@@ -56,6 +56,7 @@ from cccp.analysis.bounded import (
     subsample_curve_product,
 )
 from cccp.calculation.products import (
+    PRODUCT_SCHEMA_VERSION,
     CoordinateAtom,
     CoordinateUnits,
     CurveSeries,
@@ -68,6 +69,7 @@ from cccp.calculation.products import (
     SeriesRef,
     build_curve_scatter_product,
     build_structure_trajectory_product,
+    compute_input_digest,
     frame_stable_id,
     point_stable_id,
     product_from_dict,
@@ -373,10 +375,20 @@ def _source_from_same_input(*, y: float, version: str):
 
 
 def test_d10_counterexample_distinct_source_science_keeps_derived_identity():
-    """D10: two sources over one input must not collapse to one cache identity."""
+    """D10: two sources over one input must not collapse to one cache identity.
+
+    Ported from ``reports/architecture_acceptance_20261019/reproduce_defects.py::
+    test_d10_bounded_product_keeps_source_algorithm_identity`` with its exact
+    trigger: two sources share ``input_digest`` but differ in
+    algorithm/version/params.  The report directory is not imported at runtime.
+    """
+    # Trigger condition: same raw-input digest, different source algorithm.
     a, b = _source_from_same_input(y=-1.0, version="1"), _source_from_same_input(
         y=-2.0, version="2"
     )
+    assert a.identity.input_digest == b.identity.input_digest
+    assert a.identity.algorithm_version != b.identity.algorithm_version
+    assert a.identity.params_digest != b.identity.params_digest
     assert a.identity != b.identity
     chunked_a = chunk_curve_product(a, chunk_size=1)
     chunked_b = chunk_curve_product(b, chunk_size=1)
@@ -417,6 +429,207 @@ def test_source_identity_fields_reach_derived_and_block_identities(field, value)
             changed_block.product.identity.params_digest
             != reference_block.product.identity.params_digest
         )
+
+
+# ── D10 identity lock matrix (all bounded operations) ───────────────────
+
+
+def _build_curve_chunk(source: ScienceProduct):
+    return chunk_curve_product(source, chunk_size=4)
+
+
+def _build_trajectory_chunk(source: ScienceProduct):
+    return chunk_trajectory_product(source, chunk_size=4)
+
+
+def _build_subsample(source: ScienceProduct):
+    return subsample_curve_product(source, stride=3)
+
+
+def _build_multiresolution(source: ScienceProduct):
+    return build_multiresolution_product(source, resolutions=[1, 4])
+
+
+#: One row per bounded operation: ``(source kind, builder, max block size)``.
+_OPERATION_MATRIX = [
+    pytest.param("curve", _build_curve_chunk, 4, id="curve-chunk"),
+    pytest.param("trajectory", _build_trajectory_chunk, 4, id="trajectory-chunk"),
+    pytest.param("curve", _build_subsample, 20, id="subsample"),
+    pytest.param("curve", _build_multiresolution, 20, id="multiresolution"),
+]
+
+#: Mutations of every mutable *source* identity field (schema is contract-fixed
+#: on ``ProductIdentity``; its participation is asserted on the digested payload
+#: below instead of by constructing an invalid identity).
+_SOURCE_IDENTITY_MUTATIONS = [
+    ("generator", "cccp.other.other_product_builder"),
+    ("algorithm", "other_unrelated_algorithm"),
+    ("algorithm_version", "9"),
+    ("params_digest", "sha256:other-source-params"),
+    ("input_digest", "sha256:other-raw-input"),
+]
+
+
+def _source_for(kind: str) -> ScienceProduct:
+    return _traj_product(10) if kind == "trajectory" else _curve_product(20)
+
+
+@pytest.mark.parametrize(("kind", "build", "_limit"), _OPERATION_MATRIX)
+def test_same_source_and_params_are_stable_in_every_operation(kind, build, _limit):
+    first = build(_source_for(kind))
+    second = build(_source_for(kind))
+    assert first.identity == second.identity
+    assert first.identity.params_digest == second.identity.params_digest
+    assert first.spec == second.spec
+    assert [block.product.identity for block in first.blocks] == [
+        block.product.identity for block in second.blocks
+    ]
+    assert [block.source_identity_digest for block in first.blocks] == [
+        block.source_identity_digest for block in second.blocks
+    ]
+
+
+@pytest.mark.parametrize(("kind", "build", "_limit"), _OPERATION_MATRIX)
+def test_every_block_identity_is_distinct_in_every_operation(kind, build, _limit):
+    manifest = build(_source_for(kind))
+    identities = [block.product.identity for block in manifest.blocks]
+    assert identities
+    assert len(identities) == len(set(identities))
+    assert len({identity.params_digest for identity in identities}) == len(identities)
+    assert manifest.identity not in identities
+    for previous, current in zip(manifest.blocks, manifest.blocks[1:]):
+        assert previous.product.identity != current.product.identity
+
+
+@pytest.mark.parametrize(("kind", "build", "_limit"), _OPERATION_MATRIX)
+@pytest.mark.parametrize(("field", "value"), _SOURCE_IDENTITY_MUTATIONS)
+def test_source_change_cannot_keep_any_bounded_identity(kind, build, _limit, field, value):
+    """Negative lock: one source-identity change reaches derived *and* block keys.
+
+    This is the formal "a source change cannot keep a block identity" gate; it
+    deliberately mutates only ``field`` and keeps the source payload/raw input
+    untouched, so a pass cannot come from a content change.
+    """
+    source = _source_for(kind)
+    variant = replace(source, identity=replace(source.identity, **{field: value}))
+    reference = build(source)
+    changed = build(variant)
+    expected_source_digest = source_identity_digest(variant.identity)
+    assert changed.identity != reference.identity
+    assert changed.identity.params_digest != reference.identity.params_digest
+    assert changed.identity.input_digest == variant.identity.input_digest
+    assert changed.spec.source_identity_digest == expected_source_digest
+    assert changed.spec.source_identity_digest != reference.spec.source_identity_digest
+    assert len(changed.blocks) == len(reference.blocks)
+    for changed_block, reference_block in zip(changed.blocks, reference.blocks):
+        assert changed_block.product.identity != reference_block.product.identity
+        assert (
+            changed_block.product.identity.params_digest
+            != reference_block.product.identity.params_digest
+        )
+        assert changed_block.source_identity_digest == expected_source_digest
+
+
+@pytest.mark.parametrize(("kind", "build", "limit"), _OPERATION_MATRIX)
+def test_bounded_sizes_and_key_point_retention_in_every_operation(kind, build, limit):
+    manifest = build(_source_for(kind))
+    assert manifest.max_block_size() <= limit
+    assert all(block.item_count() <= limit for block in manifest.blocks)
+    assert manifest.covered_range() == (0, 10 if kind == "trajectory" else 20)
+    if manifest.display_subsampled:
+        assert manifest.note == DISPLAY_SAMPLING_NOTE
+        assert manifest.key_points
+        assert all(record.retained or record.reason for record in manifest.key_points)
+    else:
+        assert manifest.note == ""
+        assert manifest.key_points == ()
+
+
+@pytest.mark.parametrize(("kind", "build", "_limit"), _OPERATION_MATRIX)
+def test_bounded_operations_preserve_point_and_frame_native_indices(kind, build, _limit):
+    source = _source_for(kind)
+    manifest = build(source)
+    if kind == "trajectory":
+        frames = reconstruct_structure_frames(manifest)
+        assert frames == source.payload.frames
+        assert [frame.frame_index for frame in frames] == list(range(10))
+        assert [frame.frame_id for frame in frames] == [
+            frame_stable_id(ProductKind.STRUCTURE_TRAJECTORY, index) for index in range(10)
+        ]
+        return
+    original = source.payload.series[0].points
+    if kind == "curve_chunk":
+        rebuilt = reconstruct_curve_series(manifest)
+        assert [native_index_of(point) for point in rebuilt.points] == list(range(20))
+        assert [point.point_id for point in rebuilt.points] == [
+            point.point_id for point in original
+        ]
+        return
+    if kind == "subsample":
+        for index, point in selected_point_mapping(manifest):
+            assert point.point_id == original[index].point_id
+            assert point.x == original[index].x
+            assert point.y == original[index].y
+        assert [index for index, _point in selected_point_mapping(manifest)] == sorted(
+            {index for index, _point in selected_point_mapping(manifest)}
+        )
+        return
+    # multi-resolution: every level maps back to the same original points.
+    for block in manifest.blocks:
+        points = block.product.payload.series[0].points
+        indices = [native_index_of(point) for point in points]
+        assert indices == sorted(set(indices))
+        for index, point in zip(indices, points):
+            assert point.point_id == original[index].point_id
+            assert point.x == original[index].x
+            assert point.y == original[index].y
+
+
+def test_source_identity_digest_covers_every_identity_field():
+    identity = _curve_product(6).identity
+    canonical = identity.to_dict()
+    assert source_identity_digest(identity) == compute_input_digest(canonical)
+    # Every source-identity field, including the contract-fixed schema version,
+    # changes the canonical digest basis.  ``schema_version``/``product_kind``
+    # are mutated on the serialized payload only: constructing a ProductIdentity
+    # with another schema version is illegal by design.
+    mutations = {
+        "product_kind": ProductKind.STRUCTURE_TRAJECTORY.value,
+        "schema_version": PRODUCT_SCHEMA_VERSION + 1,
+        "generator": "cccp.other.other_product_builder",
+        "input_digest": "sha256:other-raw-input",
+        "algorithm": "other_unrelated_algorithm",
+        "algorithm_version": "9",
+        "params_digest": "sha256:other-source-params",
+    }
+    assert set(mutations) == set(canonical)
+    digests = {
+        compute_input_digest({**canonical, field: value}) for field, value in mutations.items()
+    }
+    assert len(digests) == len(mutations)
+    assert source_identity_digest(identity) not in digests
+
+
+def test_product_kind_participates_in_bounded_identity():
+    base = _curve_product(6).identity
+    trajectory = replace(base, product_kind=ProductKind.STRUCTURE_TRAJECTORY)
+
+    def derive(identity):
+        spec = BoundedSpec(
+            method="chunk",
+            resolution=3,
+            start=0,
+            end=6,
+            source_identity_digest=source_identity_digest(identity),
+        )
+        return bounded_identity(identity, spec, generator=GENERATOR_CHUNK)
+
+    curve_derived, trajectory_derived = derive(base), derive(trajectory)
+    assert curve_derived.product_kind is ProductKind.CURVE_SCATTER
+    assert trajectory_derived.product_kind is ProductKind.STRUCTURE_TRAJECTORY
+    assert curve_derived != trajectory_derived
+    assert curve_derived.params_digest != trajectory_derived.params_digest
+    assert curve_derived.input_digest == trajectory_derived.input_digest == base.input_digest
 
 
 def test_every_block_carries_the_verified_source_identity_digest():
@@ -475,9 +688,14 @@ def test_v1_manifest_reads_with_old_digest_but_is_not_cache_adoptable():
     assert legacy.identity.params_digest == document["bounded_identity"]["params_digest"]
     # The v1 params payload is reproduced byte-for-byte (old rule, no source digest).
     assert legacy.spec.params_digest() == legacy.identity.params_digest
+    assert legacy.spec.source_identity_digest == ""
+    assert document["bounded_identity"]["params_digest"] == legacy.identity.params_digest
+    assert all(block.source_identity_digest == "" for block in legacy.blocks)
+    # The current reader reads the old product, but it is never cache-adoptable.
     assert legacy.is_cache_adoptable() is False
     again = BoundedProduct.from_dict(json.loads(json.dumps(legacy.to_dict())))
     assert again == legacy
+    assert again.identity.params_digest == legacy.identity.params_digest
     assert again.is_cache_adoptable() is False
 
 
@@ -495,7 +713,14 @@ def test_v1_to_v2_migration_rebuilds_under_the_new_identity():
     rebuilt = chunk_curve_product(base, chunk_size=legacy.spec.resolution)
     assert rebuilt.schema_version == BOUNDED_SCHEMA_VERSION
     assert rebuilt.identity.input_digest == legacy.identity.input_digest
+    # The historical digest is preserved untouched; only the rebuilt product
+    # gets the v2 identity.
+    assert legacy.identity.params_digest == BoundedProduct.from_dict(
+        json.loads(_BOUNDED_FIXTURE.read_text())
+    ).identity.params_digest
     assert rebuilt.identity.params_digest != legacy.identity.params_digest
+    assert rebuilt.spec.source_identity_digest == source_identity_digest(base.identity)
+    assert legacy.spec.source_identity_digest == ""
     assert rebuilt.is_cache_adoptable() is True
     assert legacy.is_cache_adoptable() is False
 
