@@ -66,7 +66,6 @@ module.exports.register = async function (h) {
     };
     ns.state.selectedModeIndex = 6;
     ns.arrowState.displayMode = "arrows";
-    ns.arrowState.enabled = true;
     ns.animationState.phase = 0;
     ns.animationState.playing = false;
     ns.animationState.paused = false;
@@ -99,7 +98,7 @@ module.exports.register = async function (h) {
     const rec = {
       play: 0, pause: 0, resume: 0, stop: 0, hidden: [],
       onTick: null, playMs: null, seq: 0,
-      addArrowTokens: [], arrowFail: false,
+      addArrowTokens: [], arrowFail: false, clears: 0,
     };
     const inst = {
       __rec: rec,
@@ -119,7 +118,7 @@ module.exports.register = async function (h) {
       removeAllModels() { return true; },
       addModel() { return { setStyle() { return true; }, addStyle() { return true; } }; },
       addStyle() { return true; },
-      removeAllShapes() { return true; },
+      removeAllShapes() { rec.clears += 1; return true; },
       addArrow(spec) {
         if (rec.arrowFail) return null;
         const token = { __shapeToken: true, spec };
@@ -234,19 +233,91 @@ module.exports.register = async function (h) {
     assertEq(ns.arrowState._lastCount, 3, "recovery restores the consistent count");
   });
 
-  await test("vibration: RECORDED FINDING (owner T27/T30) — cold-start static arrows draw 0 (arrowState.enabled chicken-and-egg)", () => {
+  await test("vibration: D09 cold-start static arrows draw 3 from display intent — enabled is an output, never a gate", () => {
     const { ns } = loadRig();
-    seedGeometry(ns);
-    ns.arrowState.enabled = false;
+    seedGeometry(ns); // leaves arrowState.enabled at the module default (false)
     ns.arrowState.displayMode = "arrows";
     const inst = makeStubInstance();
     ns._viewerImpl = () => inst;
+    assertEq(ns.arrowState.enabled, false, "cold start: nothing drawn yet, enabled=false");
     ns.refreshArrows();
-    assertEq(ns.arrowState._lastCount, 0,
-      "cold start draws nothing: _arrowsVisible requires arrowState.enabled, set only by a successful draw");
-    ns.arrowState.enabled = true;
+    assertEq(ns.arrowState._lastCount, 3,
+      "first refresh draws the 3 arrows with NO manual enabled=true (regression for the old chicken-and-egg gate)");
+    assertEq(inst.__rec.addArrowTokens.length, 3, "3 arrow shapes actually created on the canvas");
+    assertEq(ns.arrowState.enabled, true, "enabled flips true as an OUTPUT of the draw");
+    assertEq(ns.arrowState._hint, null, "no hint when the draw succeeds");
+  });
+
+  await test("vibration: D09 display intent — animation hides arrows, switching back redraws", () => {
+    const { ns } = loadRig();
+    seedGeometry(ns);
+    const inst = makeStubInstance();
+    ns._viewerImpl = () => inst;
+
+    ns.setDisplayMode("arrows");
+    assertEq(ns.arrowState._lastCount, 3, "arrows mode draws 3");
+    assertEq(inst.__rec.addArrowTokens.length, 3, "3 shapes on the canvas");
+    assertEq(inst.__rec.clears, 1, "one clear+redraw cycle");
+
+    ns.setDisplayMode("animation");
+    assertEq(ns.arrowState._lastCount, 0, "animation hides the arrows");
+    assertEq(inst.__rec.addArrowTokens.length, 3, "no new shapes while in animation mode");
+    assertEq(inst.__rec.clears, 2, "the old arrows were cleared off the canvas");
+    assertEq(ns.arrowState.enabled, false, "enabled output false while hidden");
+
+    ns.setDisplayMode("combo");
+    assertEq(ns.arrowState._lastCount, 3, "combo redraws the arrows");
+    assertEq(inst.__rec.addArrowTokens.length, 6, "3 fresh shapes after the redraw");
+    assertEq(ns.arrowState.enabled, true, "enabled output true again");
+
+    ns.setDisplayMode("arrows");
+    assertEq(ns.arrowState._lastCount, 3, "back to plain arrows still draws 3");
+  });
+
+  await test("vibration: D09 missing geometry shows a hint; later valid geometry recovers", () => {
+    const { sandbox, ns } = loadRig();
+    seedGeometry(ns);
+    const inst = makeStubInstance();
+    ns._viewerImpl = () => inst;
+
+    sandbox.window.ACPStructureViewer.state.displayedEntryId = "other";
     ns.refreshArrows();
-    assertEq(ns.arrowState._lastCount, 3, "with enabled seeded, the same call draws the 3 arrows");
+    assertEq(ns.arrowState._lastCount, 0, "no arrows without matching geometry");
+    assert(ns.arrowState._hint, "a hint explains the missing geometry");
+    assertEq(ns.arrowState.enabled, false, "enabled output false while unavailable");
+    assertEq(inst.__rec.addArrowTokens.length, 0, "nothing drawn");
+
+    sandbox.window.ACPStructureViewer.state.displayedEntryId = "e1";
+    ns.refreshArrows();
+    assertEq(ns.arrowState._lastCount, 3, "recovery redraws once the geometry is valid again");
+    assertEq(ns.arrowState._hint, null, "hint cleared on recovery");
+    assertEq(ns.arrowState.enabled, true, "enabled output true again");
+    assertEq(inst.__rec.addArrowTokens.length, 3, "3 shapes drawn after recovery");
+  });
+
+  await test("vibration: D09 two instances keep independent draw counts", () => {
+    const a = loadRig();
+    const b = loadRig();
+    seedGeometry(a.ns);
+    seedGeometry(b.ns);
+    const instA = makeStubInstance();
+    const instB = makeStubInstance();
+    a.ns._viewerImpl = () => instA;
+    b.ns._viewerImpl = () => instB;
+    assert(a.ns.arrowState !== b.ns.arrowState, "per-instance arrowState, not shared");
+
+    a.ns.refreshArrows();
+    assertEq(a.ns.arrowState._lastCount, 3, "instance A draws 3");
+
+    b.sandbox.window.ACPStructureViewer.state.displayedEntryId = "other";
+    b.ns.refreshArrows();
+    assertEq(b.ns.arrowState._lastCount, 0, "instance B draws 0 — its own geometry is missing");
+    assertEq(a.ns.arrowState._lastCount, 3, "A's count is untouched by B's refresh");
+
+    b.sandbox.window.ACPStructureViewer.state.displayedEntryId = "e1";
+    b.ns.refreshArrows();
+    assertEq(b.ns.arrowState._lastCount, 3, "B recovers independently");
+    assertEq(a.ns.arrowState._lastCount, 3, "A still 3 after B's recovery");
   });
 
   await test("vibration: frame recipe runs on the instance — camera preserved across rebuilds", async () => {

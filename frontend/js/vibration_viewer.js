@@ -193,11 +193,17 @@
 
   /**
    * @typedef {Object} ArrowState
-   * @property {boolean} enabled      - arrows applicable (mode + geometry available)
+   * @property {boolean} enabled      - OUTPUT of the last refreshArrows: static
+   *                                    arrows are applicable for the current
+   *                                    displayMode + geometry.  Never an input
+   *                                    to the draw decision (D09) — the first
+   *                                    draw must not depend on a previous
+   *                                    draw's success.
    * @property {number} amplitude     - arrow length in Å (clamped [AMP_MIN, AMP_MAX])
    * @property {number|null} modeIndex - mode the arrows depict (mirrors selection)
    * @property {string} displayMode   - "arrows" | "animation" | "combo"
-   * @property {number} _lastCount    - arrows actually drawn by the last refresh
+   * @property {number} _lastCount    - OUTPUT: arrows actually drawn by the last
+   *                                    refresh (0 when cleared/hidden)
    * @property {string|null} _hint    - why arrows are unavailable (shown in UI)
    */
   var arrowState = {
@@ -531,21 +537,25 @@
   }
 
   /**
-   * Whether arrows are drawn for the current displayMode.  "animation"
-   * hides arrows until todo 29 lands; "arrows" and "combo" show them.
+   * Display intent only: whether the user's displayMode asks for static
+   * displacement arrows.  "animation" hides them; "arrows" and "combo"
+   * request them.  Deliberately ignores arrowState.enabled — draw
+   * eligibility must never depend on a previous draw's success (D09).
    *
    * @returns {boolean}
    */
-  function _arrowsVisible() {
-    return arrowState.enabled && arrowState.displayMode !== "animation";
+  function _arrowsRequested() {
+    return arrowState.displayMode !== "animation";
   }
 
   /**
    * Clear and re-apply displacement arrows on the main viewer for the
-   * selected mode.  Sets arrowState.enabled/_hint; never throws.  Arrows
-   * are disabled with a hint when the displayed geometry is missing or
-   * its atom count does not match the mode vectors.  While the animation
-   * loop is playing it owns the canvas — this is a no-op.
+   * selected mode.  Draws when the geometry context is ok AND the display
+   * intent requests arrows; arrowState.enabled/_lastCount are outputs of
+   * the draw, never gates on it.  When nothing is drawn the canvas is
+   * cleared and _hint explains why (missing/mismatched geometry).  Never
+   * throws.  While the animation loop is playing it owns the canvas — this
+   * is a no-op.
    */
   function refreshArrows() {
     if (animationState.playing) return;
@@ -555,8 +565,8 @@
     arrowState.modeIndex = vibrationState.selectedModeIndex;
 
     var ctx = _vibGeometry();
-    var hint = ctx.hint;
-    if (ctx.ok && _arrowsVisible()) {
+    var requested = _arrowsRequested();
+    if (ctx.ok && requested) {
       var endpoints = computeArrowEndpoints(ctx.coords, ctx.mode.vectors, arrowState.amplitude);
       var color = _isImaginary(ctx.mode) ? COLOR_IMAGINARY : COLOR_NEUTRAL;
       arrowState._lastCount = applyArrows(viewerObj, endpoints, ctx.symbols, { color: color });
@@ -568,7 +578,7 @@
       return;
     }
     arrowState.enabled = false;
-    arrowState._hint = hint;
+    arrowState._hint = ctx.hint;
   }
 
   /**
@@ -2023,7 +2033,7 @@
     _esc: _esc,
     _vibrationsUrl: _vibrationsUrl,
     _getMainViewer: _getMainViewer,
-    _arrowsVisible: _arrowsVisible,
+    _arrowsRequested: _arrowsRequested,
     _viewerImpl: null,
     _nowImpl: null,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
