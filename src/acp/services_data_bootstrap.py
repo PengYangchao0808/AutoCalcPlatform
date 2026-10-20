@@ -30,6 +30,7 @@ import logging
 import os
 import posixpath
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -117,11 +118,14 @@ from acp_services.data.storage_binding import (
 from acp_services.data.transfer import (
     FenceSnapshot,
     PublishOutcome,
+    RejectionCode,
+    ResourceClass,
     SourceFailureKind,
     SourceRead,
     TransferPipeline,
     TransferPrepareExecutor,
     TransferPublicationStore,
+    TransferRequest,
     TransferSourceError,
 )
 
@@ -137,6 +141,8 @@ __all__ = [
     "build_cache_only_resource_reader",
     "build_storage_allocation_port",
     "build_prepare_executor",
+    "build_local_prepare_identity_provider",
+    "PrepareIdentity",
     "build_transfer_cache_port",
     "build_transfer_source_port",
     "build_transfer_authorization_port",
@@ -520,19 +526,191 @@ def build_storage_allocation_port(
 # --------------------------------------------------------------------------- #
 
 
-class _PrepareExecutorAdapter:
-    """Execute a prepare operation by prefetching through the real cache path.
+@dataclass(frozen=True)
+class PrepareIdentity:
+    """The authoritative current facts a prepare lease must still match.
 
-    B02-3 (plan todo 13).  The Services-side worker owns the persistent operation
-    state machine; this adapter (legacy side) is the *mechanism* it injects — it
-    delegates to :class:`acp.results.remote_structure_cache.RemoteStructureCache`
-    (``catalog_ready`` / ``job_root`` / ``fetch_catalog``), the exact same path
-    the scheduler's in-process prefetch used, so the ``pending_fetch → ready``
-    flip and the on-disk cache layout are unchanged.
+    Supplied by an explicit provider (production: the scheduler manager's
+    current record; local-single: :func:`build_local_prepare_identity_provider`).
+    There is deliberately no "``None`` means allow" default: an executor built
+    without a provider refuses to assemble.
+    """
+
+    job_id: str
+    attempt: int
+    workflow: str
+    resource_digest: str
+    resource_generation: int = 0
+    binding_id: str = ""
+    authorization_version: int = 0
+    permission_scope: str = "local-single"
+    authorized: bool = True
+
+
+def _lease_workflow(lease: PrepareLease) -> str:
+    """Return the workflow frozen into the lease payload (never re-read)."""
+    try:
+        return str(lease.payload.get("workflow") or "")
+    except AttributeError:  # pragma: no cover - payload is always a mapping
+        return ""
+
+
+def _identity_mismatch(lease: PrepareLease, expected: PrepareIdentity | None) -> str | None:
+    """Return a stable refusal token when *lease* is not the current identity."""
+    if expected is None:
+        return "identity_unavailable"
+    if not expected.authorized:
+        return "authorization_revoked"
+    if str(expected.job_id) != str(lease.job_id):
+        return "identity_mismatch:job_id"
+    if int(expected.attempt) != int(lease.attempt):
+        return "stale_attempt"
+    lease_workflow = _lease_workflow(lease)
+    if lease_workflow and expected.workflow and lease_workflow != expected.workflow:
+        return "identity_mismatch:workflow"
+    if str(expected.resource_digest) != str(lease.resource_digest):
+        return "identity_mismatch:content"
+    if int(expected.resource_generation) != int(lease.resource_generation):
+        return "identity_mismatch:generation"
+    if str(expected.binding_id) != str(lease.binding_id):
+        return "identity_mismatch:binding"
+    if int(expected.authorization_version) != int(lease.authorization_version):
+        return "identity_mismatch:authorization"
+    if str(expected.permission_scope) != str(lease.permission_scope):
+        return "identity_mismatch:scope"
+    return None
+
+
+class _LeaseIdentityGuard:
+    """Re-read the authoritative identity for one lease and validate it.
+
+    The provider is consulted at every check point (pre-download, download
+    re-authorization, publish re-authorization and the cache-locked publish
+    boundary), so a rerun, rebind, revocation or purge observed at any of them
+    refuses the lease.  Resource generation (identity fact) and cache purge
+    generation (fence fact) stay separate: the former is compared to the
+    lease, the latter is the cache's own publish fence.
+    """
+
+    def __init__(
+        self,
+        lease: PrepareLease,
+        provider: Callable[[PrepareLease], PrepareIdentity | None],
+        cache: RemoteStructureCache,
+    ) -> None:
+        self._lease = lease
+        self._provider = provider
+        self._cache = cache
+        self.last_reason = ""
+
+    def check(self) -> str | None:
+        try:
+            expected = self._provider(self._lease)
+        except Exception:
+            logger.warning(
+                "prepare identity provider failed for %s", self._lease.job_id, exc_info=True
+            )
+            expected = None
+        reason = _identity_mismatch(self._lease, expected)
+        if reason is None:
+            stored_attempt, _generation = self._cache._read_fence(self._lease.job_id)
+            if stored_attempt is not None and int(stored_attempt) > int(self._lease.attempt):
+                reason = "stale_attempt:cache_fence"
+        self.last_reason = reason or ""
+        return reason
+
+
+class _LeaseAuthorizationPort:
+    """Transfer authorization port backed by the live lease identity guard."""
+
+    def __init__(self, guard: _LeaseIdentityGuard) -> None:
+        self._guard = guard
+
+    def authorize(
+        self,
+        *,
+        job_id: str,
+        attempt: int,
+        relative_path: str,
+        action: str,
+        authorization_version: int,
+    ) -> bool:
+        lease = self._guard._lease  # noqa: SLF001 - same module, one owner
+        if str(job_id) != str(lease.job_id) or int(attempt) != int(lease.attempt):
+            return False
+        if int(authorization_version) != int(lease.authorization_version):
+            return False
+        return self._guard.check() is None
+
+
+def _catalog_fetch_paths(workflow: str) -> tuple[str, ...]:
+    """Return the bounded set of files a viewer catalog needs for *workflow*."""
+    from acp.results.remote_structure_cache import _CATALOG_FETCH_PATHS
+
+    paths = _CATALOG_FETCH_PATHS.get(workflow, _CATALOG_FETCH_PATHS["legacy"])
+    return tuple(
+        dict.fromkeys((*paths, "RESULT/result_manifest.json", "RESULT/frame_candidates.json"))
+    )
+
+
+def _catalog_ready_paths(workflow: str) -> tuple[str, ...]:
+    from acp.results.remote_structure_cache import _CATALOG_READY_PATHS
+
+    return tuple(_CATALOG_READY_PATHS.get(workflow, _CATALOG_READY_PATHS["legacy"]))
+
+
+def _catalog_ready_for_attempt(
+    cache: RemoteStructureCache,
+    root: Path,
+    job_id: str,
+    workflow: str,
+    attempt: int,
+) -> bool:
+    """True only when the catalog body provably belongs to *attempt*.
+
+    A present required file whose attempt sidecar names another attempt (or,
+    for a legacy sidecar-less entry, when the job fence contradicts the read)
+    can never satisfy this attempt.  This is the cache-hit/publish-commit
+    identity gate; it never returns "ready" for bytes of a stale attempt.
+    """
+    if not cache.catalog_ready(root, workflow):
+        return False
+    stored_attempt, _generation = cache._read_fence(job_id)
+    if stored_attempt is not None and int(stored_attempt) > int(attempt):
+        return False
+    for rel_path in _catalog_ready_paths(workflow):
+        target = Path(root) / rel_path
+        if not target.is_file():
+            continue
+        present, sidecar_attempt = cache._read_attempt_sidecar(target)
+        if present:
+            if sidecar_attempt != int(attempt):
+                return False
+        elif stored_attempt is not None and int(stored_attempt) != int(attempt):
+            return False
+    return True
+
+
+class _PrepareExecutorAdapter:
+    """Execute a prepare operation from the *whole* lease identity.
+
+    B02-3 (plan todo 13) + D06 (plan todo 15).  The Services worker owns the
+    persistent operation state machine; this adapter (legacy side) is the
+    injected mechanism.  The lease is passed through untouched — it is never
+    reduced to a job id and "the latest job" is never re-read as authority:
+
+    * an explicit :class:`PrepareIdentity` provider is mandatory (no
+      ``None``-means-allow); a missing provider refuses assembly/execution;
+    * the identity is validated before any cache hit or download and again
+      under the cache's generation lock at the publish/commit boundary;
+    * every catalog file is published through the unified verified transfer
+      pipeline, whose cache adapter re-checks the identity after the cache's
+      own fence/generation checks and immediately before ``os.replace``;
+    * stale/foreign leases return ``prepared=False`` with a typed detail and
+      ``retryable=False`` — never ``already_ready``.
 
     The executor never decides state: it only reports whether the catalog is
-    prepared and is retryable.  A non-terminal / local / missing job is a
-    permanent (non-retryable) skip; a transport failure is a retryable one.
+    prepared and whether a retry could help.
     """
 
     def __init__(
@@ -540,14 +718,68 @@ class _PrepareExecutorAdapter:
         *,
         job_lookup: Callable[[str], Any],
         cache_provider: Callable[[], RemoteStructureCache],
+        identity_provider: Callable[[PrepareLease], PrepareIdentity | None],
         is_remote: Callable[[Any], bool] | None = None,
+        before_publish: Callable[[], None] | None = None,
     ) -> None:
+        if not callable(identity_provider):
+            raise ValueError(
+                "build_prepare_executor requires an explicit identity_provider "
+                "(no None-means-allow fallback)"
+            )
         self._job_lookup = job_lookup
         self._cache_provider = cache_provider
+        self._identity_provider = identity_provider
         self._is_remote = is_remote
+        self._before_publish = before_publish
+        self._publications: TransferPublicationStore | None = None
+
+    # -- compatibility entry point (legacy direct prefetch) -------------
 
     def prefetch(self, job_id: str) -> PrepareExecutionResult:
+        """Legacy direct prefetch: build the lease the operation would carry.
+
+        The manager still calls this on a terminal transition as a fast path;
+        it validates the same identity as the durable worker by synthesising
+        the lease (with the current attempt) rather than bypassing the guard.
+        """
         record = self._job_lookup(job_id)
+        if record is None:
+            return PrepareExecutionResult(prepared=False, detail="job_missing", retryable=False)
+        workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        attempt = int(getattr(record, "attempt", 0) or 0)
+        lease = PrepareLease(
+            operation_id=f"prefetch:{job_id}",
+            job_id=job_id,
+            attempt=attempt,
+            resource_id=f"catalog:{workflow}",
+            resource_kind=ResourceKind.CACHE.value,
+            resource_digest=f"{job_id}\x1f{attempt}\x1f{workflow}",
+            resource_key=default_resource_key(job_id, attempt, f"catalog:{workflow}"),
+            permission_scope="local-single",
+            owner_generation=0,
+            lease_token="",
+            lease_expires_at=None,
+            authorization_version=0,
+            binding_id="",
+            resource_generation=0,
+            attempt_count=0,
+            payload={"workflow": workflow, "job_id": job_id, "attempt": attempt},
+        )
+        return self.execute(lease)
+
+    # -- PrepareExecutorPort -------------------------------------------
+
+    def execute(self, lease: PrepareLease) -> PrepareExecutionResult:
+        """Prepare the catalog for exactly ``lease`` (full identity)."""
+        cache = self._cache_provider()
+        guard = _LeaseIdentityGuard(lease, self._identity_provider, cache)
+
+        reason = guard.check()
+        if reason is not None:
+            return self._refuse(reason)
+
+        record = self._job_lookup(lease.job_id)
         if record is None:
             return PrepareExecutionResult(prepared=False, detail="job_missing", retryable=False)
         status = getattr(record, "status", None)
@@ -555,62 +787,196 @@ class _PrepareExecutorAdapter:
             return PrepareExecutionResult(prepared=False, detail="not_terminal", retryable=False)
         if self._is_remote is not None and not self._is_remote(record):
             return PrepareExecutionResult(prepared=False, detail="not_remote", retryable=False)
-        cache = self._cache_provider()
-        workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        if int(getattr(record, "attempt", 0) or 0) != int(lease.attempt):
+            return self._refuse("stale_attempt")
+        workflow = _lease_workflow(lease) or str(
+            getattr(getattr(record, "spec", None), "workflow", "") or ""
+        )
+        record_workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        if workflow and record_workflow and workflow != record_workflow:
+            return self._refuse("identity_mismatch:workflow")
+
+        # A cache-hit is accepted only for this attempt's own body, and only
+        # after a final identity + fence check under the cache generation lock
+        # (the same lock the cache/purge/publish paths take).
+        cache_root = cache.job_root(lease.job_id)
         work_dir = Path(str(record.work_dir))
-        if cache.catalog_ready(work_dir, workflow):
-            return PrepareExecutionResult(
-                prepared=True,
-                availability=Availability.READY,
-                detail="already_ready",
-                retryable=False,
+        with cache._get_generation_lock(lease.job_id):
+            hit_reason = guard.check()
+            if hit_reason is not None:
+                return self._refuse(hit_reason)
+            for root in (work_dir, cache_root):
+                if _catalog_ready_for_attempt(
+                    cache, root, lease.job_id, workflow, int(lease.attempt)
+                ):
+                    return PrepareExecutionResult(
+                        prepared=True,
+                        availability=Availability.READY,
+                        detail="already_ready",
+                        retryable=False,
+                    )
+
+        # Miss: publish every required catalog file through the unified
+        # verified transfer path (single publisher: cache fence/generation +
+        # atomic os.replace).  Missing optional files are tolerated exactly as
+        # before; identity/permission/stale rejections abort immediately.
+        pipeline = self._build_pipeline(cache, guard)
+        fetched = 0
+        for rel_path in _catalog_fetch_paths(workflow):
+            result = pipeline.prepare(
+                TransferRequest(
+                    job_id=lease.job_id,
+                    attempt=int(lease.attempt),
+                    relative_path=rel_path,
+                    resource_class=ResourceClass.MUTABLE,
+                    resource_generation=int(lease.resource_generation),
+                    authorization_version=int(lease.authorization_version),
+                    binding_id=str(lease.binding_id),
+                    payload={"workflow": workflow},
+                )
             )
-        if cache.catalog_ready(cache.job_root(job_id), workflow):
-            return PrepareExecutionResult(
-                prepared=True,
-                availability=Availability.READY,
-                detail="already_ready",
-                retryable=False,
+            if result.accepted:
+                fetched += 1
+                continue
+            if result.rejection is RejectionCode.SOURCE_NOT_FOUND:
+                continue
+            return self._pipeline_refusal(result)
+
+        with cache._get_generation_lock(lease.job_id):
+            commit_reason = guard.check()
+            if commit_reason is not None:
+                return self._refuse(commit_reason)
+            ready = _catalog_ready_for_attempt(
+                cache, cache_root, lease.job_id, workflow, int(lease.attempt)
             )
-        if cache.fetch_catalog(record, workflow) is not None:
+        if not ready:
             return PrepareExecutionResult(
-                prepared=True,
-                availability=Availability.READY,
-                detail="fetched",
-                retryable=False,
+                prepared=False,
+                availability=Availability.PREPARING,
+                detail="not_ready",
+                retryable=True,
             )
         return PrepareExecutionResult(
-            prepared=False,
-            availability=Availability.PREPARING,
-            detail="not_ready",
-            retryable=True,
+            prepared=True,
+            availability=Availability.READY,
+            detail="fetched" if fetched else "already_ready",
+            retryable=False,
         )
 
-    def execute(self, lease: PrepareLease) -> PrepareExecutionResult:
-        return self.prefetch(lease.job_id)
+    # -- internals ------------------------------------------------------
+
+    def _build_pipeline(
+        self, cache: RemoteStructureCache, guard: _LeaseIdentityGuard
+    ) -> TransferPipeline:
+        if self._publications is None:
+            self._publications = TransferPublicationStore(cache._run_root / "acp_jobs.db")
+        return TransferPipeline(
+            cache=_TransferCacheAdapter(
+                cache,
+                publish_guard=guard.check,
+                before_publish=self._before_publish,
+            ),
+            source=_TransferSourceAdapter(cache),
+            authorization=_LeaseAuthorizationPort(guard),
+            publications=self._publications,
+        )
+
+    @staticmethod
+    def _refuse(reason: str) -> PrepareExecutionResult:
+        return PrepareExecutionResult(
+            prepared=False,
+            availability=Availability.ABSENT,
+            detail=reason,
+            retryable=False,
+        )
+
+    @staticmethod
+    def _pipeline_refusal(result: Any) -> PrepareExecutionResult:
+        retryable = bool(result.retryable)
+        if result.rejection is RejectionCode.LATE_TRANSFER:
+            # A purge generation moved: a fresh attempt can legitimately retry.
+            # An identity/attempt fence moved: the lease can never become valid.
+            retryable = "generation_changed" in str(result.detail)
+        return PrepareExecutionResult(
+            prepared=False,
+            availability=Availability.UNAVAILABLE,
+            detail=f"publish_rejected:{result.rejection.value}",
+            retryable=retryable,
+        )
+
+
+def build_local_prepare_identity_provider(
+    job_lookup: Callable[[str], Any],
+) -> Callable[[PrepareLease], PrepareIdentity | None]:
+    """Explicit local-single identity/authorization policy.
+
+    The local deployment has no separate resource-generation/authorization
+    registry, so the policy states that fact explicitly (generation 0, no
+    binding, authorization version 0, always authorized for local-single).
+    Only the attempt/workflow/content are re-derived from the authoritative
+    current record; a lease from an earlier attempt therefore mismatches.
+    """
+
+    def provider(lease: PrepareLease) -> PrepareIdentity | None:
+        record = job_lookup(lease.job_id)
+        if record is None:
+            return None
+        workflow = str(getattr(getattr(record, "spec", None), "workflow", "") or "")
+        attempt = int(getattr(record, "attempt", 0) or 0)
+        if attempt < 1:
+            return None
+        return PrepareIdentity(
+            job_id=str(record.id),
+            attempt=attempt,
+            workflow=workflow,
+            resource_digest=f"{record.id}\x1f{attempt}\x1f{workflow}",
+            resource_generation=0,
+            binding_id="",
+            authorization_version=0,
+            permission_scope="local-single",
+            authorized=True,
+        )
+
+    return provider
 
 
 def build_prepare_executor(
     *,
     job_lookup: Callable[[str], Any],
+    identity_provider: Callable[[PrepareLease], PrepareIdentity | None] | None = None,
     cache_provider: Callable[[], RemoteStructureCache] | None = None,
     cache: RemoteStructureCache | None = None,
     is_remote: Callable[[Any], bool] | None = None,
+    before_publish: Callable[[], None] | None = None,
 ) -> _PrepareExecutorAdapter:
     """Build the injected prepare executor from the real remote cache path.
 
     Args:
         job_lookup: ``job_id -> JobRecord | None`` (the scheduler store).
+        identity_provider: **Required** authoritative identity/authorization
+            provider for the current record.  There is no ``None``-means-allow
+            fallback: omitting it raises ``ValueError`` (assembly refusal).
         cache_provider: Lazy accessor for the shared ``RemoteStructureCache``
             singleton (the fetcher factory inside it resolves the current
             fetcher, so the adapter stays valid across fetcher swaps).
         cache: Pre-built cache (alternative to ``cache_provider``).
         is_remote: Optional predicate distinguishing remote jobs; when omitted
             every terminal job is eligible.
+        before_publish: Optional test/instrumentation barrier invoked inside
+            the cache lock after the cache's fence checks and before the final
+            identity check + ``os.replace``.
 
     Returns:
         An object satisfying :class:`acp_services.data.operations.PrepareExecutorPort`.
+
+    Raises:
+        ValueError: When no cache source or no identity provider is supplied.
     """
+    if identity_provider is None or not callable(identity_provider):
+        raise ValueError(
+            "build_prepare_executor requires an explicit identity_provider "
+            "(no None-means-allow fallback)"
+        )
     if cache_provider is None:
         if cache is None:
             raise ValueError("build_prepare_executor requires cache or cache_provider")
@@ -622,7 +988,9 @@ def build_prepare_executor(
     return _PrepareExecutorAdapter(
         job_lookup=job_lookup,
         cache_provider=cache_provider,
+        identity_provider=identity_provider,
         is_remote=is_remote,
+        before_publish=before_publish,
     )
 
 
@@ -651,8 +1019,16 @@ class _TransferCacheAdapter:
     ``push_paths`` is delegated verbatim (``remote_structure_cache.py:499``).
     """
 
-    def __init__(self, cache: RemoteStructureCache) -> None:
+    def __init__(
+        self,
+        cache: RemoteStructureCache,
+        *,
+        publish_guard: Callable[[], str | None] | None = None,
+        before_publish: Callable[[], None] | None = None,
+    ) -> None:
         self._cache = cache
+        self._publish_guard = publish_guard
+        self._before_publish = before_publish
 
     def guarded_path(self, job_id: str, relative_path: str) -> Path:
         return self._cache.cache_path(job_id, relative_path)
@@ -673,11 +1049,23 @@ class _TransferCacheAdapter:
         cache = self._cache
         target = cache.cache_path(job_id, relative_path)  # traversal guard
         with cache._get_generation_lock(job_id):
+            # D06: optional barrier representing any concurrent event (rerun /
+            # rebind / revoke / evict).  It runs *before* every remaining check
+            # so that the authoritative identity check immediately preceding
+            # ``os.replace`` observes the event; a moved fence/generation or a
+            # changed identity discards the write instead of overwriting the
+            # current bytes.
+            if self._before_publish is not None:
+                self._before_publish()
             if cache._read_generation(job_id) != expected_generation:
                 return PublishOutcome(published=False, discarded=True, reason="generation_changed")
             stored_attempt, generation = cache._read_fence(job_id)
             if stored_attempt is not None and int(attempt) < int(stored_attempt):
                 return PublishOutcome(published=False, discarded=True, reason="attempt_advanced")
+            if self._publish_guard is not None:
+                reason = self._publish_guard()
+                if reason:
+                    return PublishOutcome(published=False, discarded=True, reason=reason)
             if attempt is not None:
                 if stored_attempt is None:
                     cache._write_fence(job_id, attempt=int(attempt), generation=generation)
@@ -765,6 +1153,14 @@ class _TransferSourceAdapter:
             else:
                 data = bytes(fetcher.read_file(record, relative_path))
         except FileNotFoundError as exc:
+            # Preserve the cache's read-only nested-layout compatibility: a
+            # pre-marker remote job stores results under a discovered prefix.
+            # The same fetcher/mechanism is used (no second downloader).
+            if byte_range is None:
+                nested = self._cache._discover_nested(fetcher, record, job_id, relative_path)
+                if nested is not None:
+                    data = bytes(nested)
+                    return SourceRead(data=data, size_bytes=len(data), revision=0, generation=0)
             raise TransferSourceError(SourceFailureKind.NOT_FOUND, str(exc)) from exc
         except PermissionError as exc:
             raise TransferSourceError(SourceFailureKind.PERMISSION_DENIED, str(exc)) from exc
