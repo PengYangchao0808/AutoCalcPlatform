@@ -31,18 +31,21 @@ Decisions frozen here
   entry (:func:`acp.scheduler.remote.script_gen.build_remote_worker_command`)
   delegates to it.
 
-This module imports stdlib only (no ``acp``) and never references the legacy CLI
-entry as a command (AST + string gate in
-``tests/test_services_chain_switch.py``).
+This module imports no ``acp`` package (AST + string gate in
+``tests/test_services_chain_switch.py``); the frozen-group reader lazily
+imports the dependency-free ``acp_services.contracts.envelope`` for its
+manifest/envelope cross-check only.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -55,6 +58,9 @@ __all__ = [
     "EXECUTION_ENTRY_LEGACY",
     "EXECUTION_PROTOCOL_LOCAL",
     "EXECUTION_PROTOCOL_LSF",
+    "FROZEN_GROUP_DIRNAME",
+    "FROZEN_GROUP_MANIFEST_FILENAME",
+    "FROZEN_GROUP_SCHEMA",
     "FROZEN_WORKFLOW_CAPABILITY_TABLE",
     "PLAN_FILENAME",
     "RUNTIME_PROTOCOL_DIR",
@@ -62,11 +68,17 @@ __all__ = [
     "AttemptExecutionChoice",
     "ExecutionLaunch",
     "ExecutionEntrySelection",
+    "FrozenGroup",
+    "FrozenGroupError",
+    "FrozenGroupManifest",
     "UnsupportedExecutionWorkflowError",
     "WorkflowExecutionCapability",
     "attempt_choice_from_result",
     "capability_for",
     "frozen_artifacts_present",
+    "frozen_group_dir",
+    "inspect_frozen_group_dir",
+    "load_frozen_group",
     "local_launch",
     "read_attempt_choice",
     "resolve_attempt_choice",
@@ -94,8 +106,23 @@ ENVELOPE_FILENAME: Final = "envelope.json"
 PLAN_FILENAME: Final = "plan.json"
 BINDING_FILENAME: Final = "binding.json"
 
+#: Frozen-attempt input group (07-A / todo 24).  The immutable frozen inputs
+#: are published as ONE directory under the runtime dir; ``frozen_group.json``
+#: is the group's sole commit marker and member hash manifest.  The
+#: execution-right record (``attempt.lock``) and the post-run
+#: ``execution_receipt.json``/``task_result.json`` are **not** group members.
+FROZEN_GROUP_DIRNAME: Final = "frozen"
+FROZEN_GROUP_MANIFEST_FILENAME: Final = "frozen_group.json"
+FROZEN_GROUP_SCHEMA: Final = 1
+
 #: Services worker module entry (never the legacy CLI).
 WORKER_MODULE: Final = "acp_services.worker_bootstrap"
+
+#: Member files a group manifest may list (the manifest itself is implicit).
+_GROUP_MEMBER_NAMES: Final[frozenset[str]] = frozenset(
+    {ENVELOPE_FILENAME, PLAN_FILENAME, BINDING_FILENAME}
+)
+_SHA256_HEX: Final = re.compile(r"^[0-9a-f]{64}$")
 
 
 class UnsupportedExecutionWorkflowError(Exception):
@@ -368,6 +395,258 @@ def with_attempt_choice(
 # ── frozen envelope artifacts + worker argv ─────────────────────────────────
 
 
+class FrozenGroupError(Exception):
+    """The frozen-attempt input group is absent, incomplete or tampered."""
+
+
+@dataclass(frozen=True)
+class FrozenGroupManifest:
+    """Identity + member hash list of one published frozen-attempt group.
+
+    ``member_digests`` maps each member filename (``envelope.json`` /
+    ``plan.json`` / optional ``binding.json``) to its sha256 hex digest.  The
+    manifest file itself is never a member — its presence inside the group
+    directory **is** the commit marker.
+    """
+
+    schema: int = FROZEN_GROUP_SCHEMA
+    job_id: str = ""
+    attempt: int = 0
+    workflow: str = ""
+    submission_id: str = ""
+    release_id: str = ""
+    release_digest: str = ""
+    owner: str = ""
+    fencing_token: str = ""
+    plan_digest: str = ""
+    plan_identity: str = ""
+    member_digests: Mapping[str, str] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "job_id": self.job_id,
+            "attempt": self.attempt,
+            "workflow": self.workflow,
+            "submission_id": self.submission_id,
+            "release_id": self.release_id,
+            "release_digest": self.release_digest,
+            "owner": self.owner,
+            "fencing_token": self.fencing_token,
+            "plan_digest": self.plan_digest,
+            "plan_identity": self.plan_identity,
+            "members": dict(self.member_digests),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> FrozenGroupManifest:
+        if not isinstance(payload, Mapping):
+            raise FrozenGroupError("frozen group manifest must be a mapping")
+        raw_members = payload.get("members")
+        if not isinstance(raw_members, Mapping):
+            raise FrozenGroupError("frozen group manifest 'members' must be a mapping")
+        members: dict[str, str] = {}
+        for name, digest in raw_members.items():
+            if name not in _GROUP_MEMBER_NAMES:
+                raise FrozenGroupError(f"unknown group member {name!r}")
+            if not isinstance(digest, str) or not _SHA256_HEX.match(digest):
+                raise FrozenGroupError(f"member {name!r} digest is not a sha256 hex string")
+            members[name] = digest
+        if ENVELOPE_FILENAME not in members or PLAN_FILENAME not in members:
+            raise FrozenGroupError(
+                f"frozen group manifest must list both {ENVELOPE_FILENAME!r} and {PLAN_FILENAME!r}"
+            )
+        return cls(
+            schema=int(payload.get("schema", 0)),
+            job_id=str(payload.get("job_id") or ""),
+            attempt=int(payload.get("attempt") or 0),
+            workflow=str(payload.get("workflow") or ""),
+            submission_id=str(payload.get("submission_id") or ""),
+            release_id=str(payload.get("release_id") or ""),
+            release_digest=str(payload.get("release_digest") or ""),
+            owner=str(payload.get("owner") or ""),
+            fencing_token=str(payload.get("fencing_token") or ""),
+            plan_digest=str(payload.get("plan_digest") or ""),
+            plan_identity=str(payload.get("plan_identity") or ""),
+            member_digests=members,
+        )
+
+    @property
+    def identity_key(self) -> tuple[Any, ...]:
+        """Full freeze identity compared for same-attempt idempotency."""
+        return (
+            self.schema,
+            self.job_id,
+            self.attempt,
+            self.workflow,
+            self.submission_id,
+            self.release_id,
+            self.release_digest,
+            self.owner,
+            self.fencing_token,
+            self.plan_digest,
+            self.plan_identity,
+            tuple(sorted(self.member_digests.items())),
+        )
+
+
+@dataclass(frozen=True)
+class FrozenGroup:
+    """A validated frozen-attempt input group on disk."""
+
+    directory: Path
+    manifest: FrozenGroupManifest
+
+    @property
+    def envelope_path(self) -> Path:
+        return self.directory / ENVELOPE_FILENAME
+
+    @property
+    def plan_path(self) -> Path:
+        return self.directory / PLAN_FILENAME
+
+    @property
+    def binding_path(self) -> Path | None:
+        if BINDING_FILENAME in self.manifest.member_digests:
+            return self.directory / BINDING_FILENAME
+        return None
+
+
+def frozen_group_dir(work_dir: Path | str) -> Path:
+    """Canonical frozen-group directory of the task in *work_dir*."""
+    return Path(work_dir).joinpath(*RUNTIME_PROTOCOL_DIR, FROZEN_GROUP_DIRNAME)
+
+
+def _sha256_of(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def inspect_frozen_group_dir(directory: Path | str) -> FrozenGroup:
+    """Validate a frozen-group directory whose manifest is present.
+
+    Acceptance is all-or-nothing: the manifest must decode, every listed
+    member must exist with a matching sha256, the envelope member must decode
+    and agree with the manifest identity, and a ``binding.json`` member must be
+    declared by the envelope's ``data_bindings``.  Sibling files that are not
+    members are tolerated (a node-side flat layout uploads the group beside
+    task files); the strict local reader additionally pins the directory
+    listing in :func:`load_frozen_group`.
+    """
+    # Import stays local: the envelope contract is needed only for the
+    # member cross-check, and keeping it out of module scope preserves this
+    # module's stdlib-only import profile for its other consumers.
+    from acp_services.contracts.envelope import (
+        EnvelopeError,
+        ExecutionEnvelope,
+        StorageBinding,
+    )
+
+    target = Path(directory)
+    manifest_path = target / FROZEN_GROUP_MANIFEST_FILENAME
+    if not target.is_dir() or not manifest_path.is_file():
+        raise FrozenGroupError(
+            f"no committed frozen group under {target} "
+            f"({FROZEN_GROUP_MANIFEST_FILENAME} is the commit marker)"
+        )
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise FrozenGroupError(
+            f"frozen group manifest unreadable at {manifest_path}: {exc}"
+        ) from exc
+    manifest = FrozenGroupManifest.from_dict(raw)
+    if manifest.schema != FROZEN_GROUP_SCHEMA:
+        raise FrozenGroupError(
+            f"frozen group schema {manifest.schema} != supported {FROZEN_GROUP_SCHEMA}"
+        )
+    if manifest.attempt < 1:
+        raise FrozenGroupError("frozen group manifest attempt must be >= 1")
+    for name in (
+        "job_id",
+        "submission_id",
+        "release_id",
+        "owner",
+        "fencing_token",
+        "plan_digest",
+        "plan_identity",
+    ):
+        if not getattr(manifest, name):
+            raise FrozenGroupError(f"frozen group manifest field {name!r} must not be empty")
+
+    for name, expected in sorted(manifest.member_digests.items()):
+        member = target / name
+        if not member.is_file():
+            raise FrozenGroupError(f"frozen group member {name!r} missing under {target}")
+        actual = _sha256_of(member)
+        if actual != expected:
+            raise FrozenGroupError(
+                f"frozen group member {name!r} hash {actual} != manifest {expected} "
+                "(tampered or mixed group)"
+            )
+
+    try:
+        envelope = ExecutionEnvelope.from_dict(
+            json.loads((target / ENVELOPE_FILENAME).read_text(encoding="utf-8"))
+        )
+    except (OSError, ValueError) as exc:
+        raise FrozenGroupError(f"frozen group envelope member undecodable: {exc}") from exc
+    except EnvelopeError as exc:
+        raise FrozenGroupError(f"frozen group envelope member invalid: {exc}") from exc
+    declared = {binding.binding_id for binding in envelope.data_bindings}
+    if BINDING_FILENAME in manifest.member_digests:
+        try:
+            frozen_binding = StorageBinding.from_dict(
+                json.loads((target / BINDING_FILENAME).read_text(encoding="utf-8"))
+            )
+        except (OSError, ValueError) as exc:
+            raise FrozenGroupError(f"frozen group binding member undecodable: {exc}") from exc
+        except EnvelopeError as exc:
+            raise FrozenGroupError(f"frozen group binding member invalid: {exc}") from exc
+        if frozen_binding.binding_id not in declared:
+            raise FrozenGroupError(
+                f"frozen group binding {frozen_binding.binding_id!r} is not declared by "
+                "the envelope"
+            )
+    elif declared:
+        raise FrozenGroupError(
+            "envelope declares data_bindings but the frozen group has no binding.json member"
+        )
+    mismatches = [
+        f"{field}={getattr(envelope, field)!r}"
+        for field in ("job_id", "submission_id", "release_id", "owner", "fencing_token")
+        if getattr(envelope, field) != getattr(manifest, field)
+    ]
+    if envelope.attempt != manifest.attempt:
+        mismatches.append(f"attempt={envelope.attempt}")
+    if envelope.plan_digest != manifest.plan_digest:
+        mismatches.append(f"plan_digest={envelope.plan_digest}")
+    if mismatches:
+        raise FrozenGroupError(
+            f"frozen group manifest/envelope identity disagree: {', '.join(mismatches)}"
+        )
+    return FrozenGroup(directory=target, manifest=manifest)
+
+
+def load_frozen_group(work_dir: Path | str) -> FrozenGroup:
+    """Strict local reader: complete, hash-verified, exactly-membered group.
+
+    The group directory must contain exactly the manifest-listed members plus
+    the manifest itself — anything else is a mixed group and is rejected
+    without partial adoption.
+    """
+    group = inspect_frozen_group_dir(frozen_group_dir(work_dir))
+    expected = set(group.manifest.member_digests) | {FROZEN_GROUP_MANIFEST_FILENAME}
+    actual = {entry.name for entry in group.directory.iterdir()}
+    if actual != expected:
+        extra = sorted(actual - expected)
+        missing = sorted(expected - actual)
+        raise FrozenGroupError(
+            f"frozen group directory is mixed (extra={extra}, missing={missing}); "
+            "refusing partial adoption"
+        )
+    return group
+
+
 @dataclass(frozen=True)
 class ExecutionLaunch:
     """Everything the worker entry needs for one attempt."""
@@ -382,36 +661,45 @@ class ExecutionLaunch:
 
 
 def frozen_artifacts_present(work_dir: Path | str) -> bool:
-    """True when the frozen envelope + plan pair exists under *work_dir*."""
-    runtime = Path(work_dir).joinpath(*RUNTIME_PROTOCOL_DIR)
-    return (runtime / ENVELOPE_FILENAME).is_file() and (runtime / PLAN_FILENAME).is_file()
+    """True when a complete, hash-verified frozen group exists under *work_dir*.
+
+    ``frozen_group.json`` is the sole commit marker: an envelope/plan pair
+    without it, a group with a missing/tampered member, or a mixed directory
+    all read as absent — the dispatcher then deterministically selects the
+    legacy entry instead of adopting a partial freeze.
+    """
+    try:
+        load_frozen_group(work_dir)
+    except FrozenGroupError:
+        return False
+    return True
 
 
 def local_launch(work_dir: Path | str, choice: AttemptExecutionChoice) -> ExecutionLaunch:
     """Build the local (absolute-path) worker launch for *choice*.
 
-    The caller must only call this when ``choice.entry == envelope`` and the
-    frozen artifacts are present (:func:`frozen_artifacts_present`); a missing
-    pair is an explicit failure, never a silent legacy hop.
+    The caller must only call this when ``choice.entry == envelope`` and a
+    complete frozen group is present (:func:`frozen_artifacts_present`); a
+    missing or invalid group is an explicit failure, never a silent legacy
+    hop.
     """
     if choice.entry != EXECUTION_ENTRY_ENVELOPE:
         raise ValueError(f"attempt {choice.attempt} did not select the envelope entry")
-    runtime = Path(work_dir).joinpath(*RUNTIME_PROTOCOL_DIR)
-    envelope = runtime / ENVELOPE_FILENAME
-    plan = runtime / PLAN_FILENAME
-    if not envelope.is_file() or not plan.is_file():
+    try:
+        group = load_frozen_group(work_dir)
+    except FrozenGroupError as exc:
         raise FileNotFoundError(
-            f"frozen envelope/plan missing under {runtime} for attempt {choice.attempt}"
-        )
-    binding = runtime / BINDING_FILENAME
+            f"no complete frozen group under {frozen_group_dir(work_dir)} "
+            f"for attempt {choice.attempt}: {exc}"
+        ) from exc
     return ExecutionLaunch(
         entry=choice.entry,
         protocol=choice.protocol,
         closure=choice.closure,
         work_dir=str(work_dir),
-        envelope_path=str(envelope),
-        plan_path=str(plan),
-        binding_path=str(binding) if binding.is_file() else None,
+        envelope_path=str(group.envelope_path),
+        plan_path=str(group.plan_path),
+        binding_path=str(group.binding_path) if group.binding_path is not None else None,
     )
 
 

@@ -66,6 +66,16 @@ from acp_services.contracts.envelope import (
     ExecutionReceipt,
     StorageBinding,
 )
+from acp_services.runtime.attempt_freeze import (
+    DEFAULT_LEASE_SECONDS,
+    AttemptLockExecutionRight,
+    attempt_lock_path,
+)
+from acp_services.runtime.execution_chain import (
+    FROZEN_GROUP_MANIFEST_FILENAME,
+    FrozenGroupError,
+    inspect_frozen_group_dir,
+)
 from acp_services.runtime.execution_right import (
     AlwaysHeldExecutionRight,
     ExecutionRightPort,
@@ -102,13 +112,14 @@ from acp_services.runtime.worker import (
     WorkerError,
     build_receipt,
     decision_for_failure,
+    frozen_plan_body_digest,
+    frozen_plan_to_dict,
     outcome_from_decision,
     outcome_from_task_result,
     read_receipt,
     receipt_exit_code,
     write_receipt_atomic,
 )
-from cccp.analysis.identity import identity_fingerprint
 
 __all__ = [
     "AssemblyError",
@@ -131,6 +142,7 @@ __all__ = [
     "load_frozen_plan",
     "load_storage_binding",
     "main",
+    "validate_frozen_group_inputs",
 ]
 
 #: Entrypoints this composition root is allowed to consume.  A frozen envelope
@@ -164,23 +176,10 @@ class StorageBindingDecodeError(AssemblyError):
 
 
 # ── frozen-plan wire codec ──────────────────────────────────────────────────
-
-
-def frozen_plan_body_digest(plan: FrozenPlan) -> str:
-    """Recompute the content-free body digest of a frozen plan.
-
-    Covers exactly the dispatched body (``payload`` + ordered ``steps`` +
-    ``item_symbols``) and excludes the opaque declared science identity — the
-    digest is the tamper anchor the composition root recomputes, never trusts.
-    """
-    return identity_fingerprint(
-        {
-            "scope": "frozen-plan",
-            "payload": dict(plan.payload),
-            "steps": [{"kind": step.kind, "payload": dict(step.payload)} for step in plan.steps],
-            "item_symbols": list(plan.item_symbols),
-        }
-    )
+#
+# ``frozen_plan_body_digest`` / ``frozen_plan_to_dict`` live in
+# ``acp_services.runtime.worker`` (07-A / todo 24) so the frozen-attempt
+# producer shares the exact digest/codec; they stay importable from here.
 
 
 def freeze_frozen_plan(
@@ -209,23 +208,6 @@ def freeze_frozen_plan(
         step_identities=tuple(step_identities),
     )
     return replace(body, identity=identity)
-
-
-def frozen_plan_to_dict(plan: FrozenPlan) -> dict[str, Any]:
-    """Serialise *plan* to its frozen wire form (JSON-safe)."""
-    identity: dict[str, Any] | None = None
-    if plan.identity is not None:
-        identity = {
-            "plan_digest": plan.identity.plan_digest,
-            "plan_identity": plan.identity.plan_identity,
-            "step_identities": list(plan.identity.step_identities),
-        }
-    return {
-        "payload": dict(plan.payload),
-        "steps": [{"kind": step.kind, "payload": dict(step.payload)} for step in plan.steps],
-        "item_symbols": list(plan.item_symbols),
-        "identity": identity,
-    }
 
 
 def _as_mapping(value: Any, *, what: str) -> Mapping[str, Any]:
@@ -491,6 +473,38 @@ def load_storage_binding(path: Path | str) -> StorageBinding:
         raise StorageBindingDecodeError(f"invalid storage binding {target}: {exc}") from exc
 
 
+def validate_frozen_group_inputs(
+    envelope_path: Path | str,
+    plan_path: Path | str,
+    binding_path: Path | str | None = None,
+) -> None:
+    """Reject a partial/mixed frozen group before anything executes (07-A).
+
+    When ``frozen_group.json`` sits beside the envelope, the manifest is the
+    group's commit marker: every member hash is re-verified here and the
+    paths this worker consumes must be exactly the group's members.  Without
+    a manifest (direct/remote flat hand-off) the loose files keep the
+    historical verification path (plan digest + envelope identity inside the
+    worker).
+    """
+    envelope_file = Path(envelope_path)
+    if not (envelope_file.parent / FROZEN_GROUP_MANIFEST_FILENAME).is_file():
+        return
+    try:
+        group = inspect_frozen_group_dir(envelope_file.parent)
+    except FrozenGroupError as exc:
+        raise AssemblyError(f"frozen input group rejected: {exc}") from exc
+    if envelope_file != group.envelope_path or Path(plan_path) != group.plan_path:
+        raise AssemblyError("envelope/plan paths are not the frozen group's members")
+    if binding_path is None:
+        if group.binding_path is not None:
+            raise AssemblyError("frozen group declares binding.json but no --binding was supplied")
+    elif group.binding_path is None:
+        raise AssemblyError("--binding supplied but the frozen group declares no binding member")
+    elif Path(binding_path) != group.binding_path:
+        raise AssemblyError("--binding path is not the frozen group's binding member")
+
+
 # ── the assembled runtime ───────────────────────────────────────────────────
 
 
@@ -522,9 +536,7 @@ def _write_json_document_atomic(path: Path, document: Mapping[str, Any]) -> None
     """Atomic (temp + ``os.replace``) JSON diagnostic write."""
     path.parent.mkdir(parents=True, exist_ok=True)
     blob = json.dumps(document, sort_keys=True, indent=2) + "\n"
-    fd, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
-    )
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     tmp = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -593,9 +605,7 @@ def _write_conflict_document(
     """Write ``<receipt>.conflict.json`` next to (never over) the original."""
     current_identity = ReceiptIdentity.from_envelope(envelope)
     existing_identity = (
-        ReceiptIdentity.from_receipt(conflict.existing)
-        if conflict.existing is not None
-        else None
+        ReceiptIdentity.from_receipt(conflict.existing) if conflict.existing is not None else None
     )
     document: dict[str, Any] = {
         "schema": "worker_receipt_conflict",
@@ -631,11 +641,17 @@ def _build_failure_receipt(
 def _write_refusal(
     envelope: ExecutionEnvelope, receipt_path: Path, verdict: ExecutionRightVerdict
 ) -> WorkerRefusal:
-    refusal = WorkerRefusal(
-        envelope=envelope, verdict=verdict, receipt_path=str(receipt_path)
-    )
+    refusal = WorkerRefusal(envelope=envelope, verdict=verdict, receipt_path=str(receipt_path))
     _write_json_document_atomic(_refusal_path(receipt_path), refusal.to_dict())
     return refusal
+
+
+class _ExecutionRightLostError(Exception):
+    """Raised at the authoritative-write seam when the claim is no longer held."""
+
+    def __init__(self, verdict: ExecutionRightVerdict) -> None:
+        super().__init__(verdict.detail or "execution right lost")
+        self.verdict = verdict
 
 
 @dataclass(frozen=True)
@@ -678,7 +694,10 @@ class WorkerRuntime:
                 storage_binding=self.storage_binding,
                 prior_steps=prior_steps,
                 item_symbols=item_symbols,
+                before_write=self._require_execution_right,
             )
+        except _ExecutionRightLostError as exc:
+            return _write_refusal(self.envelope, self.receipt_path, exc.verdict)
         except WorkerError as exc:
             return self._write_failure_receipt(_error_from_worker(exc))
         except Exception as exc:  # noqa: BLE001 — executor failure must become a typed receipt
@@ -689,6 +708,12 @@ class WorkerRuntime:
                     retryable=False,
                 )
             )
+
+    def _require_execution_right(self) -> None:
+        """Write seam: raise ``_ExecutionRightLostError`` when the claim is gone."""
+        verdict = self.execution_right.verify(self.envelope)
+        if not verdict.held:
+            raise _ExecutionRightLostError(verdict)
 
     def _write_failure_receipt(self, error: ExecutionError) -> WorkerExecutionResult:
         # Re-check the right at the write seam: a worker that lost it must not
@@ -780,6 +805,7 @@ def load_and_assemble(
     execution_right: ExecutionRightPort | None = None,
 ) -> WorkerRuntime:
     """Read frozen files from disk and assemble the worker (new-process path)."""
+    validate_frozen_group_inputs(envelope_path, plan_path, binding_path)
     envelope = load_frozen_envelope(envelope_path)
     plan = load_frozen_plan(plan_path)
     binding = load_storage_binding(binding_path) if binding_path is not None else None
@@ -867,6 +893,23 @@ def main(
     )
     parser.add_argument("--binding", default=None, help="optional StorageBinding JSON path")
     parser.add_argument(
+        "--attempt-lock",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "atomically acquire the exclusive execution right (attempt.lock, default "
+            "WORK/00_RUNTIME/attempt.lock or the given path) before invoking the executor; "
+            "a competition loser writes only a refusal diagnostic"
+        ),
+    )
+    parser.add_argument(
+        "--lease-seconds",
+        type=float,
+        default=DEFAULT_LEASE_SECONDS,
+        help="claim lease seconds for --attempt-lock",
+    )
+    parser.add_argument(
         "--probe-executor",
         choices=("ok", "fail", "partial", "partial-missing"),
         default=None,
@@ -877,7 +920,24 @@ def main(
     work_dir = Path(args.work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     receipt_path = Path(args.receipt) if args.receipt else work_dir / _DEFAULT_RECEIPT_NAME
-    right_port = execution_right if execution_right is not None else AlwaysHeldExecutionRight()
+
+    try:
+        validate_frozen_group_inputs(args.envelope, args.plan, args.binding)
+    except AssemblyError as exc:
+        _write_unbound_failure(receipt_path, "frozen_group_invalid", str(exc))
+        print(json.dumps({"state": "failed", "code": "frozen_group_invalid", "message": str(exc)}))
+        return 2
+
+    lock_path = Path(args.attempt_lock) if args.attempt_lock else attempt_lock_path(work_dir)
+    right_port = (
+        execution_right
+        if execution_right is not None
+        else (
+            AttemptLockExecutionRight(lock_path=lock_path, lease_seconds=args.lease_seconds)
+            if args.attempt_lock is not None
+            else AlwaysHeldExecutionRight()
+        )
+    )
 
     try:
         envelope = load_frozen_envelope(args.envelope)
