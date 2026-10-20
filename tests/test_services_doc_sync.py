@@ -37,15 +37,11 @@ STATUS_MARKER = "<!-- SERVICES_STATUS_SYNC:todo70 -->"
 SHIM_MARKER = "<!-- SERVICES_SHIM_INVENTORY:todo70 -->"
 
 CLOSURE = REPO_ROOT / "docs" / "reference" / "current" / "ACP_Services_Closure_20261019.md"
-RECIPE = (
-    REPO_ROOT / "docs" / "reference" / "next-change" / "ACP_Services_Standalone_Recipe.md"
-)
+RECIPE = REPO_ROOT / "docs" / "reference" / "next-change" / "ACP_Services_Standalone_Recipe.md"
 MASTER_PLAN = REPO_ROOT / "docs" / "ACP_Architecture_Adjustment_Plan_20261016.md"
 DEPLOY_MANUAL = REPO_ROOT / "docs" / "reference" / "current" / "ACP_Function_Test_Manual.md"
 LEDGER = REPO_ROOT / "tests" / "baseline" / "services-evidence" / "migration_ledger.md"
-SHIM_DOC = (
-    REPO_ROOT / "tests" / "baseline" / "services-evidence" / "public_shim_inventory.md"
-)
+SHIM_DOC = REPO_ROOT / "tests" / "baseline" / "services-evidence" / "public_shim_inventory.md"
 SERVICE_AGENTS = REPO_ROOT / "src" / "acp_services" / "AGENTS.md"
 ROOT_AGENTS = REPO_ROOT / "AGENTS.md"
 ACP_AGENTS = REPO_ROOT / "src" / "acp" / "AGENTS.md"
@@ -328,7 +324,9 @@ def test_closure_statuses_not_contradicted() -> None:
     # Every synced doc that maps to a NOT_VERIFIED area says so explicitly.
     for path in STATUS_DOCS:
         assert "NOT_VERIFIED" in _text(path), f"{path.name} must state NOT_VERIFIED limits"
-    a04_doc = REPO_ROOT / "docs" / "reference" / "next-change" / "ACP_Services_Events_A04_Contract.md"
+    a04_doc = (
+        REPO_ROOT / "docs" / "reference" / "next-change" / "ACP_Services_Events_A04_Contract.md"
+    )
     assert "NOT_VERIFIED" in _text(a04_doc), "A04 doc must state NOT_VERIFIED"
     assert record["binding"]["contract_versions"]["a04_status"] == "DEFERRED"
 
@@ -405,3 +403,94 @@ def test_agents_and_master_plan_document_services() -> None:
     section_45 = plan.split("## 45. ACP Services 实施记录（2026-10-19）", 1)[1]
     for token in ("B40b", "T34b", "W12", "W13", "F0/F1×S0/S1", "NOT_VERIFIED"):
         assert token in section_45, f"master plan §45 missing {token}"
+
+
+# ── T36 deferred capability handoffs ───────────────────────────────────────
+
+HANDOFF_REGISTRY = REPO_ROOT / "tests" / "baseline" / "services-evidence" / "handoff_registry.md"
+_T36_HEADING = "## Deferred capability handoffs (T36)"
+_T36_CAPABILITIES = {
+    "account/permission/quota production wiring",
+    "MCP default entry",
+    "project-package CLI/API",
+    "metering production wiring",
+    "persistent event A04",
+    "frontend prepare/availability consumption",
+}
+_T36_FIELDS = ("owner", "blocker", "entry_condition", "next_acceptance_gate", "status")
+
+
+def _t36_rows(text: str) -> list[dict[str, str]]:
+    if _T36_HEADING not in text:
+        return []
+    section = text.split(_T36_HEADING, 1)[1]
+    next_heading = re.search(r"\n## ", section)
+    if next_heading:
+        section = section[: next_heading.start()]
+    lines = section.splitlines()
+    header: list[str] | None = None
+    start = 0
+    for index, line in enumerate(lines):
+        if not line.strip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells[:1] == ["capability"]:
+            header = cells
+            start = index + 2
+            break
+    if header is None:
+        return []
+    rows: list[dict[str, str]] = []
+    for line in lines[start:]:
+        if not line.strip().startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != len(header):
+            continue
+        if all(set(cell) <= set("-: ") for cell in cells):
+            continue
+        rows.append(dict(zip(header, cells, strict=True)))
+    return rows
+
+
+def _t36_problems(text: str) -> list[str]:
+    rows = _t36_rows(text)
+    problems: list[str] = []
+    capabilities = {row.get("capability", "") for row in rows}
+    if capabilities != _T36_CAPABILITIES:
+        problems.append(f"deferred capabilities {sorted(capabilities)} != required set")
+    for row in rows:
+        capability = row.get("capability", "")
+        for field in _T36_FIELDS:
+            if not row.get(field, "").strip():
+                problems.append(f"{capability}: missing {field}")
+        status = row.get("status", "").strip().split()[0] if row.get("status") else ""
+        if status not in {"NOT_VERIFIED", "OPEN", "DEFERRED"}:
+            problems.append(f"{capability}: unexpected status {status!r}")
+        if status == "PASS":
+            problems.append(f"{capability}: deferred capability cannot be PASS")
+        evidence = row.get("evidence", "")
+        if "`" not in evidence and "](" not in evidence:
+            problems.append(f"{capability}: evidence link/command missing")
+    return problems
+
+
+def test_t36_deferred_capability_handoffs_have_owner_blocker_entry_and_gate() -> None:
+    text = HANDOFF_REGISTRY.read_text(encoding="utf-8")
+    problems = _t36_problems(text)
+    assert problems == [], problems
+
+
+def test_t36_handoff_checker_rejects_missing_owner() -> None:
+    text = HANDOFF_REGISTRY.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    mutated: list[str] = []
+    for line in lines:
+        if line.startswith("| account/permission/quota production wiring |"):
+            cells = line.strip().strip("|").split("|")
+            cells[1] = " "  # owner column
+            mutated.append("|" + "|".join(cells) + "|")
+        else:
+            mutated.append(line)
+    problems = _t36_problems("\n".join(mutated))
+    assert any("missing owner" in problem for problem in problems)
