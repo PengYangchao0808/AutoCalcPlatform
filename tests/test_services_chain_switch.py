@@ -40,6 +40,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -50,6 +51,7 @@ from acp.calculations import attempt_freeze as acp_freeze
 from acp.calculations.contracts import StepKind
 from acp.calculations.identity import compute_identity
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+from acp.scheduler.manager import JobManager
 from acp.scheduler.remote.script_gen import (
     build_remote_cli_command,
     build_remote_worker_command,
@@ -1809,3 +1811,257 @@ def test_t26_completion_service_is_not_a_second_job_writer() -> None:
     assert ".transition(" not in source
     assert not any(line.startswith(("from acp.", "import acp.")) for line in source.splitlines())
     assert "advance_job_state" in source
+
+
+# ---------------------------------------------------------------------------
+# 10. 07-B opt-in local singlepoint chain (todo 27)
+# ---------------------------------------------------------------------------
+
+_T27_XYZ = """3
+water
+O 0.000000 0.000000 0.000000
+H 0.960000 0.000000 0.000000
+H -0.240000 0.930000 0.000000
+"""
+
+
+def _t27_manager(
+    tmp_path: Path,
+    *,
+    probe: str | None = "ok",
+) -> tuple[JobManager, JobStore, JobRunner, Path]:
+    run_root = tmp_path / "run_root"
+    run_root.mkdir()
+    store = JobStore(run_root / "acp_jobs.db")
+    runner = JobRunner(python_executable=sys.executable)
+    runner.worker_probe_executor = probe
+    manager = JobManager(
+        run_root,
+        store=store,
+        runner=runner,
+        envelope_completion=True,
+        poll_interval=5,
+    )
+    return manager, store, runner, run_root
+
+
+def _t27_submit(
+    manager: JobManager,
+    tmp_path: Path,
+    *,
+    probe: str = "ok",
+) -> JobRecord:
+    """Submit through the real manager; freeze the group in the allocator.
+
+    ``_allocate_work_dir`` runs after the manager generated the job id but
+    before the worker command is built, so the frozen envelope can carry the
+    real job id / submission derivation.
+    """
+    work = tmp_path / "task"
+
+    def _allocate(spec: JobSpec, job_id: str) -> Path:
+        work.mkdir(parents=True, exist_ok=True)
+        (work / "input.xyz").write_text(_T27_XYZ, encoding="utf-8")
+        env = _t26_env(job_id)
+        write_frozen_attempt(work, _freeze_spec(envelope=env))
+        return work
+
+    manager._allocate_work_dir = _allocate  # type: ignore[method-assign]
+    spec = JobSpec(
+        workflow="singlepoint",
+        name="t27",
+        input={"smiles": "CCO"},
+        method={},
+    )
+    return manager.submit(spec)
+
+
+def _t27_wait(manager: JobManager, store: JobStore, job_id: str, *, timeout: float = 30.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        record = store.get(job_id)
+        if record is not None and record.status.is_terminal:
+            return record
+        manager._poll_job(job_id)
+        time.sleep(0.05)
+    raise AssertionError(f"job {job_id} did not reach a terminal state in {timeout}s")
+
+
+def _t27_events(work: Path) -> str:
+    return (work / "WORK" / "00_RUNTIME" / "events.jsonl").read_text(encoding="utf-8")
+
+
+def test_t27_opt_in_singlepoint_runs_worker_advances_once_and_restarts_noop(
+    tmp_path: Path,
+) -> None:
+    manager, store, _runner, run_root = _t27_manager(tmp_path)
+    try:
+        record = _t27_submit(manager, tmp_path)
+        terminal = _t27_wait(manager, store, record.id)
+
+        assert terminal.status == JobStatus.COMPLETED
+        assert terminal.revision >= 1  # at least the one terminal CAS
+        assert terminal.attempt == 1
+        result = terminal.result or {}
+        assert result["publication_pending"] is True
+        assert result["receipt_state"] == "completed"
+        work = Path(terminal.work_dir)
+        receipt_path = work / "execution_receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        assert receipt["state"] == "completed"
+        events = _t27_events(work)
+        assert "acp_services.worker_bootstrap" in events
+        assert "acp.cli" not in events
+        choice = chain.read_attempt_choice(work)
+        assert choice is not None and choice.entry == chain.EXECUTION_ENTRY_ENVELOPE
+        assert choice.attempt == 1
+
+        # A duplicate/extra poll after the terminal CAS never re-executes.
+        revision = terminal.revision
+        manager._poll_job(record.id)
+        after_duplicate = store.get(record.id)
+        assert after_duplicate is not None
+        assert after_duplicate.revision == revision
+        assert _t27_events(work).count('"type": "process.starting"') == 1
+
+        # Restart after the receipt: terminal row is not re-executed.
+        manager.shutdown()
+        manager = None  # type: ignore[assignment]
+        restart_store = JobStore(run_root / "acp_jobs.db")
+        restart_runner = JobRunner(python_executable=sys.executable)
+        restart_runner.worker_probe_executor = "ok"
+        restarted = JobManager(
+            run_root,
+            store=restart_store,
+            runner=restart_runner,
+            envelope_completion=True,
+            poll_interval=5,
+        )
+        try:
+            after_restart = restart_store.get(record.id)
+            assert after_restart is not None
+            assert after_restart.status == JobStatus.COMPLETED
+            assert after_restart.revision == revision
+            assert _t27_events(work).count('"type": "process.starting"') == 1
+            assert receipt_path.is_file()
+        finally:
+            restarted.shutdown()
+    finally:
+        if manager is not None:
+            manager.shutdown()
+
+
+def test_t27_failed_receipt_yields_failed_via_cas(tmp_path: Path) -> None:
+    manager, store, _runner, _run_root = _t27_manager(tmp_path, probe="fail")
+    try:
+        record = _t27_submit(manager, tmp_path, probe="fail")
+        terminal = _t27_wait(manager, store, record.id)
+        assert terminal.status == JobStatus.FAILED
+        assert terminal.revision >= 1
+        result = terminal.result or {}
+        assert result["receipt_state"] == "failed"
+        assert result["publication_pending"] is True
+        receipt = json.loads(
+            (Path(terminal.work_dir) / "execution_receipt.json").read_text(encoding="utf-8")
+        )
+        assert receipt["state"] == "failed"
+    finally:
+        manager.shutdown()
+
+
+@pytest.mark.parametrize("status", [JobStatus.RUNNING, JobStatus.PAUSED, JobStatus.CANCELLING])
+def test_t27_stale_attempt_receipt_leaves_current_attempt_unchanged(
+    tmp_path: Path, status: JobStatus
+) -> None:
+    manager, store, _runner, _run_root = _t27_manager(tmp_path)
+    try:
+        work = tmp_path / "task"
+        work.mkdir()
+        write_frozen_attempt(work, _freeze_spec(envelope=_t26_env(_JOB, attempt=2)))
+        chain.write_attempt_choice(
+            work,
+            chain.AttemptExecutionChoice(
+                attempt=2,
+                workflow="singlepoint",
+                entry=chain.EXECUTION_ENTRY_ENVELOPE,
+                protocol=chain.EXECUTION_PROTOCOL_LOCAL,
+                closure="integrated",
+                release_id=_RELEASE,
+            ),
+        )
+        write_receipt_atomic(
+            work / "execution_receipt.json",
+            _t26_receipt(_envelope(attempt=1)),
+        )
+        record = JobRecord(
+            id=_JOB,
+            spec=JobSpec(workflow="singlepoint", name="t27", input={"smiles": "CCO"}),
+            status=status,
+            work_dir=str(work),
+            attempt=2,
+        )
+        store.create(record)
+        manager.runner.poll = lambda _record: (True, 0)  # type: ignore[method-assign]
+        work_events = work / "WORK" / "00_RUNTIME" / "events.jsonl"
+
+        manager._poll_job(_JOB)
+
+        unchanged = store.get(_JOB)
+        assert unchanged is not None
+        assert unchanged.status == status
+        assert unchanged.revision == 0
+        assert unchanged.attempt == 2
+        assert unchanged.result is None
+        if status != JobStatus.PAUSED:
+            assert "job.completion_receipt_rejected" in work_events.read_text(encoding="utf-8")
+    finally:
+        manager.shutdown()
+
+
+def test_t27_current_corrupt_after_exit_is_one_failure_cas(tmp_path: Path) -> None:
+    manager, store, _runner, _run_root = _t27_manager(tmp_path)
+    try:
+        work = tmp_path / "task"
+        work.mkdir()
+        write_frozen_attempt(work, _freeze_spec(envelope=_t26_env(_JOB)))
+        chain.write_attempt_choice(
+            work,
+            chain.AttemptExecutionChoice(
+                attempt=1,
+                workflow="singlepoint",
+                entry=chain.EXECUTION_ENTRY_ENVELOPE,
+                protocol=chain.EXECUTION_PROTOCOL_LOCAL,
+                closure="integrated",
+                release_id=_RELEASE,
+            ),
+        )
+        record = JobRecord(
+            id=_JOB,
+            spec=JobSpec(workflow="singlepoint", name="t27", input={"smiles": "CCO"}),
+            status=JobStatus.RUNNING,
+            work_dir=str(work),
+        )
+        store.create(record)
+        manager.runner.poll = lambda _record: (True, 1)  # type: ignore[method-assign]
+
+        manager._poll_job(_JOB)
+
+        failed = store.get(_JOB)
+        assert failed is not None
+        assert failed.status == JobStatus.FAILED
+        assert failed.revision >= 1
+        assert failed.exit_code == 1
+        assert "current_corrupt_after_exit" in (failed.error or "")
+        result = failed.result or {}
+        assert result["completion_failure"]["code"] == "current_corrupt_after_exit"
+        events = (work / "WORK" / "00_RUNTIME" / "events.jsonl").read_text(encoding="utf-8")
+        assert "job.completion_failure" in events
+
+        # Exactly one failure CAS: a repeated poll is terminal no-op.
+        revision = failed.revision
+        manager._poll_job(_JOB)
+        again = store.get(_JOB)
+        assert again is not None and again.revision == revision
+        assert events.count("job.completion_failure") == 1
+    finally:
+        manager.shutdown()

@@ -22,11 +22,11 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from acp.scheduler.remote.runner import RemotePollObservation
@@ -529,6 +529,11 @@ class JobRunner:
         # branch runs pre-submit housekeeping before materializing input.
         # Populated by ``JobManager`` when ``local_retention.enabled``.
         self.local_cleanup = local_cleanup
+        # Worker-independence probe only (controlled integration tests): when
+        # set, envelope-selected local attempts pass ``--probe-executor`` to the
+        # Services worker.  Production leaves it ``None``; no ordinary job is
+        # affected and the worker remains the same executable.
+        self.worker_probe_executor: str | None = None
         self._proc_lock = threading.Lock()
         self._processes: dict[str, subprocess.Popen[Any]] = {}
         self._seen_stages: dict[str, set[str]] = {}
@@ -1349,7 +1354,12 @@ class JobRunner:
         record.result = with_attempt_choice(record.result, choice)
         if choice.entry == EXECUTION_ENTRY_ENVELOPE:
             launch = local_launch(work_dir, choice)
-            return worker_argv(self.python, launch, work_dir=str(work_dir))
+            return worker_argv(
+                self.python,
+                launch,
+                work_dir=str(work_dir),
+                probe_executor=self.worker_probe_executor,
+            )
         return self._build_cmd(record.spec, work_dir, input_path, materialized_roles)
 
     def _build_cmd(
