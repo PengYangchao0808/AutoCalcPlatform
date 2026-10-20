@@ -369,7 +369,12 @@ class PrepareOperationRecord:
         else:
             freshness = Freshness.UNKNOWN
         projected_availability = self.availability
-        if self.state is PrepareState.SUCCEEDED and self.is_legacy_identity:
+        if self.state is PrepareState.EXPIRED:
+            # An expired cache/result must never report READY again, even when
+            # the row still carries the availability it had before expiry.
+            projected_availability = Availability.ABSENT
+            freshness = Freshness.UNKNOWN
+        elif self.state is PrepareState.SUCCEEDED and self.is_legacy_identity:
             projected_availability = Availability.UNAVAILABLE
         return PrepareOperation(
             operation_id=self.operation_id,
@@ -874,29 +879,65 @@ class PrepareOperationService:
 
         One logical request with the same content identity yields exactly one
         row (a concurrent insert is merged via the DB constraints).  An explicit
-        ``client_idempotency_key`` reused for different content at the same
-        ``dedup_epoch`` is a :class:`PrepareOperationConflictError` enforced by
-        the partial unique index, never a silent rewrite of the stored row.  A
-        re-enqueue of an ``EXPIRED`` row with the same content starts a new
-        ``dedup_epoch + 1`` row and leaves the old failure/audit row intact.
+        ``client_idempotency_key`` reused for different content is a
+        :class:`PrepareOperationConflictError` enforced by the partial unique
+        index, never a silent rewrite of the stored row.
+
+        **Frozen expiry transition.**  An ``EXPIRED`` row is never reopened in
+        place: a same-content re-enqueue inserts a NEW row at
+        ``dedup_epoch + 1`` while the old row (its result and audit meaning)
+        stays ``EXPIRED``.  The lookup + epoch bump + insert run inside one
+        ``BEGIN IMMEDIATE`` transaction, so a crash between them cannot lose the
+        old row and two independent connections cannot both open the same epoch
+        (the losing insert re-reads the DB winner or raises the typed conflict).
         """
         now = self._clock()
         iso = _utc_now_iso()
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                record = self._enqueue_locked(request, now=now, iso=iso)
+                self._conn.execute("COMMIT")
+            except BaseException:
+                self._conn.execute("ROLLBACK")
+                raise
+            return record
+
+    def _enqueue_locked(
+        self,
+        request: PrepareRequest,
+        *,
+        now: float,
+        iso: str,
+    ) -> PrepareOperationRecord:
+        """Enqueue body; the caller owns the surrounding DB transaction."""
         resource_key = request.key
         client_key = str(request.client_idempotency_key or "").strip()
         content_identity = request.content_identity
         payload_json = _json_dumps(request.payload)
         epoch = int(request.dedup_epoch)
-        with self._lock:
-            if epoch == 0:
-                latest = self._latest_identity_row_locked(request=request, client_key=client_key)
-                if latest is not None:
-                    record = self._record_from_row(latest)
-                    if record.content_identity == content_identity:
-                        if record.state is PrepareState.EXPIRED:
-                            epoch = record.dedup_epoch + 1
-                        else:
-                            return self._merge_existing(record, request, payload_json, now, iso)
+        latest = self._latest_identity_row_locked(request=request, client_key=client_key)
+        if latest is not None:
+            latest_identity = str(latest["content_identity"] or "")
+            if client_key and latest_identity != content_identity:
+                # A client idempotency key names one request content forever.
+                # Reusing it for different content is a conflict at any epoch,
+                # not just the epoch the DB index happens to cover.
+                raise PrepareOperationConflictError(
+                    f"client idempotency key reused with different content "
+                    f"(scope={request.permission_scope!r}, epoch={epoch})"
+                )
+            if epoch == 0 and latest_identity == content_identity:
+                latest_record = self._record_from_row(latest)
+                if latest_record.state is PrepareState.EXPIRED:
+                    epoch = latest_record.dedup_epoch + 1
+                else:
+                    return self._merge_existing(latest_record, request, payload_json, now, iso)
+
+        # At most one row can be pending per (identity, epoch): either the
+        # idempotency key or the client-key partial index collides.  A row that
+        # is already EXPIRED at this epoch is superseded by the next epoch.
+        for _ in range(1000):
             idem = idempotency_key_for(
                 permission_scope=request.permission_scope,
                 resource_key=resource_key,
@@ -908,11 +949,14 @@ class PrepareOperationService:
             ).fetchone()
             if existing is not None:
                 record = self._record_from_row(existing)
-                if record.content_identity == content_identity:
-                    return self._merge_existing(record, request, payload_json, now, iso)
-                raise PrepareOperationConflictError(
-                    f"idempotency key collision for {request.job_id!r} at epoch {epoch}"
-                )
+                if record.content_identity != content_identity:
+                    raise PrepareOperationConflictError(
+                        f"idempotency key collision for {request.job_id!r} at epoch {epoch}"
+                    )
+                if record.state is PrepareState.EXPIRED:
+                    epoch = record.dedup_epoch + 1
+                    continue
+                return self._merge_existing(record, request, payload_json, now, iso)
 
             operation_id = "op_" + uuid.uuid4().hex
             params = (
@@ -955,7 +999,7 @@ class PrepareOperationService:
                     f"INSERT INTO data_operations ({columns}) VALUES ({placeholders})", params
                 )
             except sqlite3.IntegrityError as exc:
-                return self._read_back_integrity_winner(
+                winner = self._read_back_integrity_winner(
                     exc,
                     idem=idem,
                     permission_scope=request.permission_scope,
@@ -963,7 +1007,15 @@ class PrepareOperationService:
                     epoch=epoch,
                     content_identity=content_identity,
                 )
+                if winner.state is PrepareState.EXPIRED:
+                    epoch = winner.dedup_epoch + 1
+                    continue
+                return winner
             return self._record_from_row(self._get_row_locked(operation_id))
+        raise PrepareOperationError(
+            f"could not allocate a dedup epoch for {request.job_id!r} "
+            f"(scope={request.permission_scope!r})"
+        )
 
     def _read_back_integrity_winner(
         self,
@@ -1135,16 +1187,21 @@ class PrepareOperationService:
                 row = self._get_row_locked(lease.operation_id)
                 if row is None:
                     raise PrepareOperationNotFoundError(lease.operation_id)
+                # Fencing first: after an expire/takeover the token and
+                # generation are cleared/bumped, so the old holder reports a
+                # stale lease (never a terminal-state success).
+                if (
+                    row["lease_token"] != lease.lease_token
+                    or int(row["owner_generation"]) != lease.owner_generation
+                ):
+                    raise StaleLeaseError(
+                        f"stale lease holder cannot publish {lease.operation_id!r}"
+                    )
                 if row["state"] != PrepareState.RUNNING.value:
                     raise PrepareOperationTerminalError(
                         f"operation {lease.operation_id!r} is {row['state']}, not running"
                     )
-                if (
-                    row["lease_token"] != lease.lease_token
-                    or int(row["owner_generation"]) != lease.owner_generation
-                    or row["resource_digest"] != digest
-                    or int(row["job_attempt"]) != lease.attempt
-                ):
+                if row["resource_digest"] != digest or int(row["job_attempt"]) != lease.attempt:
                     raise StaleLeaseError(
                         f"stale lease holder cannot publish {lease.operation_id!r}"
                     )
@@ -1195,15 +1252,15 @@ class PrepareOperationService:
                 row = self._get_row_locked(lease.operation_id)
                 if row is None:
                     raise PrepareOperationNotFoundError(lease.operation_id)
-                if row["state"] != PrepareState.RUNNING.value:
-                    raise PrepareOperationTerminalError(
-                        f"operation {lease.operation_id!r} is {row['state']}, not running"
-                    )
                 if (
                     row["lease_token"] != lease.lease_token
                     or int(row["owner_generation"]) != lease.owner_generation
                 ):
                     raise StaleLeaseError(f"stale lease holder cannot fail {lease.operation_id!r}")
+                if row["state"] != PrepareState.RUNNING.value:
+                    raise PrepareOperationTerminalError(
+                        f"operation {lease.operation_id!r} is {row['state']}, not running"
+                    )
                 budget_left = int(row["attempt_count"]) < int(row["max_attempts"])
                 if retryable and budget_left:
                     new_state = PrepareState.QUEUED.value
@@ -1255,18 +1312,28 @@ class PrepareOperationService:
             return self._record_from_row(self._get_row_locked(operation_id))
 
     def expire(self, operation_id: str, *, reason: str = "") -> PrepareOperationRecord:
-        """Invalidate a non-terminal operation (e.g. its resource was superseded).
+        """Invalidate an operation, including an already ``SUCCEEDED`` one.
 
         Expiry is explicit — a lease simply running out never sets this state.
+        The row keeps its ``result`` (and every audit fact) but moves to
+        ``EXPIRED``, its lease and ownership generation are fenced so no old
+        holder can publish, and it can never report READY again.  A later
+        same-content enqueue opens a new ``dedup_epoch + 1`` row; this row is
+        history, never reopened in place.  ``FAILED``/``CANCELED`` are already
+        terminal and stay as they are (re-enqueue semantics depend on them).
         """
         with self._lock:
             row = self._get_row_locked(operation_id)
             if row is None:
                 raise PrepareOperationNotFoundError(operation_id)
-            if row["state"] in _TERMINAL_STATES:
+            state = row["state"]
+            if state == PrepareState.EXPIRED.value:
+                return self._record_from_row(row)
+            if state in (PrepareState.FAILED.value, PrepareState.CANCELED.value):
                 return self._record_from_row(row)
             self._conn.execute(
                 "UPDATE data_operations SET state=?, error_code=?, error_message=?, "
+                "owner_generation=owner_generation+1, "
                 "lease_token=NULL, lease_expires_at=NULL, updated_at=? WHERE operation_id=?",
                 (
                     PrepareState.EXPIRED.value,
