@@ -1,10 +1,10 @@
 {
-  "artifact_count": 17,
+  "artifact_count": 27,
   "artifacts": [
     {
-      "bytes": 5450,
+      "bytes": 11949,
       "path": "REPORT.md",
-      "sha256": "661d0a0691628f35a6480d9ba97fab931168ba2d17ac92663395dba2135cfc25"
+      "sha256": "275e675dd7a27224a9d6f0a147fb5b53d62037eae35f7bf434a880f9d6e11ad5"
     },
     {
       "bytes": 36722,
@@ -20,11 +20,6 @@
       "bytes": 2825,
       "path": "evidence/baseline-20261019/commands.json",
       "sha256": "b272d20af1a3b44ce01ef1c6f999bbd9a3bf0db515adede93099f3d233e08ffa"
-    },
-    {
-      "bytes": 6471,
-      "path": "evidence/baseline-20261019/evidence_manifest.json",
-      "sha256": "40f33341f8e68fd465fbe1a49e3892f9881aa343e801e33722ea5c9708c0f1a2"
     },
     {
       "bytes": 2491,
@@ -67,6 +62,21 @@
       "sha256": "e079db7bcc94171f882da335fe721262437ec9f1f0f6d4585c1de62c9e45959d"
     },
     {
+      "bytes": 203,
+      "path": "evidence/report_sha256.txt",
+      "sha256": "67ea627e7f3f3f1fc7e2e26f9851eaddfb5ee7cf9cace0a342683cbd1175fdb0"
+    },
+    {
+      "bytes": 3312,
+      "path": "evidence/t39-guards.log",
+      "sha256": "cb7d193e3ae1faf3f012175ca67481e1a152c8eb8f88a402cb053141de810f37"
+    },
+    {
+      "bytes": 11275,
+      "path": "evidence/t39-nonslow.log",
+      "sha256": "748c64b41b776e826d9e1ccf72f6e9190e1f8eb3c443239ae24b0317ff967089"
+    },
+    {
       "bytes": 4903,
       "path": "evidence/verification.log",
       "sha256": "e5e1d80aa2e69eb9aed701e9e44a68170955866de234576a1c2ba19df4e58f7a"
@@ -77,20 +87,60 @@
       "sha256": "c6d4d4ffda47d712ca760425c11045a527b09e7e9a074a1d1576d53562a72f73"
     },
     {
+      "bytes": 11551,
+      "path": "four_combinations/F0_S0.json",
+      "sha256": "021ed22fe092a66002982429051e9796a9ebdccca3493b89bd9b19721aa20238"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F0_S1.json",
+      "sha256": "4867a8007497a1f55c51917208222f6bbf5aded38bc37a10eb21c1074f63a379"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F1_S0.json",
+      "sha256": "1ee86a289f216d3274c31d0c29f4494a1ae9943cd28bb0307bc330a0404d25e6"
+    },
+    {
+      "bytes": 11551,
+      "path": "four_combinations/F1_S1.json",
+      "sha256": "889421a73f213f0af51cf5076fe17672d66845be2190d8e7006e10f4edf91e3b"
+    },
+    {
+      "bytes": 445,
+      "path": "four_combinations/summary.json",
+      "sha256": "a119f0e18b1601efe3fc3ac3a75c4a514c0669ab0e04e9b0753f8461e579e411"
+    },
+    {
       "bytes": 12121,
       "path": "harness-contract.md",
       "sha256": "398e6048bb6e965e980ff053c5c378f77ca908df878381907e75cd3e20f0860a"
     },
     {
-      "bytes": 5583,
+      "bytes": 684,
+      "path": "real_environment/lsf-singlepoint.json",
+      "sha256": "44d8a4b4b35ae81adcbea6ef34309f1f56b85bb63201c6ccfa4cc94d8483b1c4"
+    },
+    {
+      "bytes": 681,
+      "path": "real_environment/m1-singlepoint.json",
+      "sha256": "0858b9fd044ed12036f52d1c7d54aa0d05c657630fdb998b36a34fed7f9159c7"
+    },
+    {
+      "bytes": 194,
+      "path": "real_environment/summary.json",
+      "sha256": "9ea3dd7a53b41152b869d8a462708a30c35535ea055e992a2694e1a8ed719e6e"
+    },
+    {
+      "bytes": 15078,
       "path": "support-matrix.md",
-      "sha256": "d5f947fc07c3157f40a232af3307250e6bee97c64cd796e012e785f87a3165fd"
+      "sha256": "03096f351ae9c3c17a24268481e7e46983c3774499657222f2d2d9ea7e9bb2f1"
     }
   ],
-  "generated_by": "task 1 — baseline candidate, harness contract and evidence skeleton",
-  "generated_on": "2026-10-20",
-  "revision": "878e3557b3b593a0c42adf842e80fe1408db395e",
-  "schema": "acp.architecture.remediation.evidence.v1",
-  "self_excluded": "evidence_manifest.json excludes itself (self-hash impossible); every other file in this directory is listed.",
-  "status": "DRAFT / NOT_ACCEPTED"
+  "generated_by": "task-43",
+  "generated_on": "2026-10-20T21:12:07.704903+00:00",
+  "revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+  "schema": "acp.remediation.evidence_manifest.v1",
+  "self_excluded": true,
+  "status": "BATCH_COMPLETE_SCOPED"
 }
