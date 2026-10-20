@@ -86,10 +86,14 @@ from acp.scheduler.remote.sync import CodeSyncer, _default_state_dir, _project_r
 from acp.scheduler.runner import JobRunner, _electronic_state_cli_flags, materialize_job_input
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
+from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
 from acp_services.runtime.execution_chain import (
+    ATTEMPT_PROTOCOL_FILENAME,
     BINDING_FILENAME,
     ENVELOPE_FILENAME,
     EXECUTION_ENTRY_ENVELOPE,
+    FROZEN_GROUP_DIRNAME,
+    FROZEN_GROUP_MANIFEST_FILENAME,
     PLAN_FILENAME,
     RUNTIME_PROTOCOL_DIR,
     AttemptExecutionChoice,
@@ -101,6 +105,7 @@ from acp_services.runtime.execution_chain import (
     write_attempt_choice,
 )
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
+from acp_services.runtime.worker import TASK_RESULT_RELATIVE_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +219,7 @@ class RemoteSubmissionError(RuntimeError):
     """LSF job submission (``bsub``) failed or produced no job ID."""
 
 
-class RemoteSubmissionRejected(RemoteSubmissionError):
+class RemoteSubmissionRejected(RemoteSubmissionError):  # noqa: N818
     """Definitive submission rejection — the job never entered LSF.
 
     Never deletes the remote directory (contract A): the job goes FAILED
@@ -223,7 +228,7 @@ class RemoteSubmissionRejected(RemoteSubmissionError):
     """
 
 
-class RemoteSubmissionIndeterminate(RemoteSubmissionError):
+class RemoteSubmissionIndeterminate(RemoteSubmissionError):  # noqa: N818
     """``bsub`` outcome unknown (SSH/timeout/unparseable reply).
 
     The remote directory is kept, ``submit_state`` becomes
@@ -1289,7 +1294,9 @@ class RemoteJobRunner:
             workflow=record.spec.workflow,
             attempt=record.attempt,
             remote=True,
-            envelope_available=frozen_artifacts_present(work_dir),
+            envelope_available=frozen_artifacts_present(
+                work_dir, expected_attempt=record.attempt
+            ),
             previous=previous,
             release_id=release_id,
         )
@@ -1313,7 +1320,7 @@ class RemoteJobRunner:
         files land beside the scheduled task so the node-side worker can rebuild
         every dependency from the synced code dir.
         """
-        if not frozen_artifacts_present(work_dir):
+        if not frozen_artifacts_present(work_dir, expected_attempt=record.attempt):
             return None
         runtime = work_dir.joinpath(*RUNTIME_PROTOCOL_DIR)
         binding_present = (runtime / BINDING_FILENAME).is_file()
@@ -1470,6 +1477,13 @@ class RemoteJobRunner:
                 execution_launch = self._upload_frozen_envelope(
                     node, remote_job_dir, work_dir, event_log, record
                 )
+                if execution_launch is None:
+                    # Once the entry is frozen to envelope, a missing/corrupt
+                    # group is an explicit submission failure — never a silent
+                    # legacy CLI re-submit.
+                    raise RemoteSubmissionRejected(
+                        "envelope entry selected but the frozen group is missing/corrupt"
+                    )
             if spec.workflow in {"singlepoint", "optimize", "frequency", "scan"}:
                 module = electronic_state_from_method(spec.method)
                 if module:
@@ -1785,6 +1799,27 @@ class RemoteJobRunner:
                 _move(entry.name, entry.name)
         runtime_rel = posixpath.join("WORK", "00_RUNTIME")
         _move(posixpath.join(runtime_rel, "run.lock"), posixpath.join(runtime_rel, "run.lock"))
+        # 07-D: attempt-scoped envelope/execution records are archived on the
+        # continue (adopt_results=True) path too.  Science (checkpoint/
+        # step_result/RESULT) stays in place below for adoption.
+        _move("execution_receipt.json", "execution_receipt.json")
+        _move(
+            posixpath.join(runtime_rel, ATTEMPT_PROTOCOL_FILENAME),
+            posixpath.join(runtime_rel, ATTEMPT_PROTOCOL_FILENAME),
+        )
+        _move(
+            posixpath.join(runtime_rel, FROZEN_GROUP_DIRNAME),
+            posixpath.join(runtime_rel, FROZEN_GROUP_DIRNAME),
+        )
+        for name in (
+            ENVELOPE_FILENAME,
+            PLAN_FILENAME,
+            BINDING_FILENAME,
+            FROZEN_GROUP_MANIFEST_FILENAME,
+            ATTEMPT_LOCK_FILENAME,
+            TASK_RESULT_RELATIVE_PATH[-1],
+        ):
+            _move(posixpath.join(runtime_rel, name), posixpath.join(runtime_rel, name))
         if adopt_results:
             if moved:
                 event_log.append(
@@ -1821,7 +1856,9 @@ class RemoteJobRunner:
             _move(entry.name, entry.name)
         work_rel = "WORK"
         try:
-            work_entries = self._stager.list_remote_dir(node, posixpath.join(remote_job_dir, work_rel))
+            work_entries = self._stager.list_remote_dir(
+                node, posixpath.join(remote_job_dir, work_rel)
+            )
         except FileNotFoundError:
             work_entries = []
         for entry in work_entries:

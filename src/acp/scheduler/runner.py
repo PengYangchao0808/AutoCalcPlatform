@@ -1329,7 +1329,9 @@ class JobRunner:
             workflow=record.spec.workflow,
             attempt=record.attempt,
             remote=remote,
-            envelope_available=frozen_artifacts_present(work_dir),
+            envelope_available=frozen_artifacts_present(
+                work_dir, expected_attempt=record.attempt
+            ),
             previous=previous,
             release_id=release_id,
         )
