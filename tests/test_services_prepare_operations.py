@@ -15,6 +15,10 @@ scheduler integration (``acp.scheduler.manager``):
    operations and the worker converges to ``succeeded``.
 7. manager restart — a durable operation left ``running`` by a prior
    JobManager is recovered by the next one.
+8. cross-component Data integration (todo 19) — the real local root plus a
+   controlled remote cache across manager restart recovery, the background
+   prefetch sweep, eviction/re-prepare, an old attempt lease and old operation
+   rows, with zero GET side effects.
 
 Run with: pytest tests/test_services_prepare_operations.py -q
 """
@@ -1631,3 +1635,376 @@ def test_d06_eviction_generation_barrier_discards_publish(tmp_path: Path) -> Non
     assert result.prepared is False
     assert result.detail.startswith("publish_rejected:")
     assert target.exists() is False
+
+
+# ===========================================================================
+# B02-8 (todo 19) — restart / eviction / prefetch / old-row integration slice
+# ===========================================================================
+#
+# One composed slice over the REAL mechanisms:
+#   * the real local read root (a local job's ``work_dir``),
+#   * a controlled ``RemoteStructureCache`` whose only transport is a canned
+#     fetcher (no SSH/SFTP, no network),
+#   * the real ``PrepareOperationService`` state machine and the manager's
+#     startup ``recover()`` + background ``_queue_catalog_prefetch`` sweep,
+#   * the real ``build_read_only_reader`` adapters (no fake reader).
+#
+# It proves the D04-D06/D11 integration facts end to end: restart replay,
+# eviction then re-prepare with real bytes, an old attempt lease that can never
+# publish or report current READY, an old operation row that stays readable by
+# operation id, and zero GET side effects (no fetch/SSH/SFTP/enqueue).
+
+_LOCAL_MANIFEST = b'{"schema_version": "result_manifest_v2", "source": "local"}'
+_REMOTE_MANIFEST_V1 = b'{"schema_version": "result_manifest_v2", "generation": 1}'
+_REMOTE_MANIFEST_V2 = b'{"schema_version": "result_manifest_v2", "generation": 2}'
+_REMOTE_INPUT = b"3\nwater\nO 0 0 0\nH 0 0 1\nH 0 0 -1\n"
+
+
+class _IntegrationFetcher:
+    """The only remote transport in this slice: canned bytes + a phase gate.
+
+    Every method call here is a would-be SSH/SFTP round trip, so the call log
+    doubles as the network-side-effect counter.
+    """
+
+    def __init__(self, files: dict[str, bytes] | None = None) -> None:
+        self.files = dict(files or {})
+        self.calls: list[str] = []
+        self.gate: threading.Event | None = None
+
+    def read_file(self, _record: Any, rel_path: str) -> bytes:
+        gate = self.gate
+        if gate is not None and not gate.wait(10.0):
+            raise TimeoutError(f"integration gate never opened for {rel_path}")
+        self.calls.append(rel_path)
+        if rel_path in self.files:
+            return self.files[rel_path]
+        raise FileNotFoundError(rel_path)
+
+
+def _integration_reader(manager: JobManager) -> Any:
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    return build_read_only_reader(
+        job_lookup=manager.store.get,
+        cache=manager.structure_cache,
+        operations=manager._prepare_operations,
+    )
+
+
+def test_data_integration_restart_eviction_prefetch_and_old_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.results.remote_structure_cache import RemoteStructureCache
+    from acp_services.data.read_root import AvailabilityRead, RangeReadRequest
+
+    workflow = "singlepoint"
+    remote_id = "it-remote"
+    local_id = "it-local"
+    run_root = tmp_path
+
+    fetcher = _IntegrationFetcher(
+        {
+            "RESULT/result_manifest.json": _REMOTE_MANIFEST_V1,
+            "input.xyz": _REMOTE_INPUT,
+        }
+    )
+
+    # -- phase 0: a completed remote attempt 1 and a real local root ---------
+    first = JobManager(run_root=run_root, max_running=1)
+    first._poll_stop.set()
+    try:
+        remote_work = tmp_path / remote_id
+        remote_work.mkdir()
+        first.store.create(
+            JobRecord(
+                id=remote_id,
+                spec=JobSpec(workflow=workflow, name=remote_id),
+                status=JobStatus.COMPLETED,
+                attempt=1,
+                work_dir=str(remote_work),
+                result={"node": "node1", "remote_dir": f"/remote/{remote_id}"},
+            )
+        )
+        local_work = tmp_path / local_id
+        (local_work / "RESULT").mkdir(parents=True)
+        (local_work / "RESULT" / "result_manifest.json").write_bytes(_LOCAL_MANIFEST)
+        first.store.create(
+            JobRecord(
+                id=local_id,
+                spec=JobSpec(workflow=workflow, name=local_id),
+                status=JobStatus.COMPLETED,
+                attempt=1,
+                work_dir=str(local_work),
+            )
+        )
+
+        # The worker downloaded a temporary file and was killed before publish:
+        # the durable operation stays RUNNING and no catalog body exists.
+        attempt_one = first.store.get(remote_id)
+        assert attempt_one is not None
+        crashed = first._prepare_operations.enqueue(first._prepare_request(attempt_one))
+        old_lease = first._prepare_operations.lease_next()
+        assert old_lease is not None
+        assert old_lease.operation_id == crashed.operation_id
+        assert first._prepare_operations.get(crashed.operation_id).state is (
+            ops.PrepareState.RUNNING
+        )
+        cache_root = first.structure_cache.job_root(remote_id)
+        (cache_root / "RESULT").mkdir(parents=True, exist_ok=True)
+        (cache_root / "RESULT" / "result_manifest.json.download.tmp").write_bytes(
+            _REMOTE_MANIFEST_V1
+        )
+        assert first.structure_cache.catalog_ready(cache_root, workflow) is False
+
+        # A rerun advanced the authoritative attempt to 2 and reached COMPLETED.
+        requeued = first.store.requeue_with_spec(
+            remote_id,
+            new_spec=attempt_one.spec,
+            expected_revision=attempt_one.revision,
+            expected_attempt=1,
+            expected_status=JobStatus.COMPLETED,
+            result={
+                "execution_kind": "remote",
+                "node": "node1",
+                "remote_dir": f"/remote/{remote_id}",
+            },
+        )
+        assert requeued.attempt == 2
+        first.store.transition(
+            remote_id,
+            expected_status=JobStatus.QUEUED,
+            expected_revision=requeued.revision,
+            expected_attempt=2,
+            status=JobStatus.COMPLETED,
+            progress=1.0,
+            exit_code=0,
+            result=requeued.result,
+        )
+        assert first.store.get(remote_id).attempt == 2
+    finally:
+        first.shutdown()
+
+    # -- phase 1: manager startup recovery + background prefetch sweep -------
+    fetch_events: list[str] = []
+    enqueue_events: list[str] = []
+    executions: list[str] = []
+    factory_calls: list[str] = []
+
+    def factory(job_id: str) -> _IntegrationFetcher:
+        factory_calls.append(job_id)
+        return fetcher
+
+    cache = RemoteStructureCache(run_root, fetcher_factory=factory)
+
+    second = JobManager(run_root=run_root, max_running=1)
+    second._poll_stop.set()
+    try:
+        second._remote_fetcher = fetcher  # type: ignore[assignment]
+        second._remote_structure_cache = cache
+
+        original_fetch = cache.fetch
+
+        def counting_fetch(record: Any, rel_path: str, **kwargs: Any) -> Any:
+            fetch_events.append(rel_path)
+            return original_fetch(record, rel_path, **kwargs)
+
+        monkeypatch.setattr(cache, "fetch", counting_fetch)
+
+        original_enqueue = second._prepare_operations.enqueue
+
+        def counting_enqueue(request: ops.PrepareRequest) -> ops.PrepareOperationRecord:
+            enqueue_events.append(request.job_id)
+            return original_enqueue(request)
+
+        monkeypatch.setattr(second._prepare_operations, "enqueue", counting_enqueue)
+
+        original_execute = second._prepare_executor.execute
+
+        def counting_execute(lease: ops.PrepareLease) -> ops.PrepareExecutionResult:
+            executions.append(lease.operation_id)
+            return original_execute(lease)
+
+        monkeypatch.setattr(second._prepare_executor, "execute", counting_execute)
+
+        # The real startup entry point: replay undecided operations, then sweep
+        # terminal remote jobs through the background enqueue path (this is the
+        # path that must work without a browser ``?fetch=1``).
+        second._queue_startup_catalog_prefetch()
+
+        current = second._prepare_operations.find(
+            job_id=remote_id, resource_id=f"catalog:{workflow}", attempt=2
+        )
+        assert current is not None
+        current = _wait_state(
+            second._prepare_operations, current.operation_id, ops.PrepareState.SUCCEEDED
+        )
+        assert current.state is ops.PrepareState.SUCCEEDED
+        assert enqueue_events == [remote_id], "background prefetch enqueued exactly once"
+
+        # Restart replay: the SAME operation row was requeued and executed
+        # exactly once (one lease before the crash + one replay), never a
+        # replacement row and never a second execution.
+        old_row = second._prepare_operations.get(crashed.operation_id)
+        assert old_row is not None
+        assert old_row.state is ops.PrepareState.FAILED
+        assert old_row.attempt_count == 2
+        assert old_row.error_message == "stale_attempt"
+        assert executions.count(crashed.operation_id) == 1
+        assert executions.count(current.operation_id) == 1
+        attempt_one_rows = [
+            row
+            for row in second._prepare_operations.list()
+            if row.job_id == remote_id and row.attempt == 1
+        ]
+        assert [row.operation_id for row in attempt_one_rows] == [crashed.operation_id]
+
+        # The old lease holder lost publish eligibility at recovery.
+        with pytest.raises(ops.StaleLeaseError):
+            second._prepare_operations.complete(old_lease)
+        with pytest.raises(ops.StaleLeaseError):
+            second._prepare_operations.fail(old_lease, error_code="late")
+
+        reader = _integration_reader(second)
+        catalog = AvailabilityRead(
+            job_id=remote_id, resource_id=f"catalog:{workflow}", workflow=workflow
+        )
+        ready = reader.availability(catalog)
+        assert ready.availability is dc.Availability.READY
+        assert ready.is_remote is True
+        assert ready.detail == "cache_index"
+        assert (
+            reader.read_range(
+                RangeReadRequest(job_id=remote_id, relative_path="RESULT/result_manifest.json")
+            ).data
+            == _REMOTE_MANIFEST_V1
+        )
+
+        # The old attempt never reports the current readiness.
+        historical = reader.availability(replace(catalog, attempt=1))
+        assert historical.availability is not dc.Availability.READY
+        assert historical.detail == "operation:failed"
+
+        # The real local root is served from the local job's own work_dir.
+        local = AvailabilityRead(
+            job_id=local_id, resource_id=f"catalog:{workflow}", workflow=workflow
+        )
+        local_ready = reader.availability(local)
+        assert local_ready.availability is dc.Availability.READY
+        assert local_ready.is_remote is False
+        assert local_ready.detail == "cache_index"
+        assert (
+            reader.read_range(
+                RangeReadRequest(job_id=local_id, relative_path="RESULT/result_manifest.json")
+            ).data
+            == _LOCAL_MANIFEST
+        )
+
+        # -- phase 2: eviction, stale body suppression and re-prepare --------
+        before_expiry = second._prepare_operations.get(current.operation_id)
+        assert before_expiry is not None and before_expiry.result is not None
+        kept_result = dict(before_expiry.result)
+
+        cache.purge_job(remote_id)
+        expired = second._prepare_operations.expire(current.operation_id, reason="cache_evicted")
+        assert expired.state is ops.PrepareState.EXPIRED
+        assert (
+            second._prepare_operations.availability(current.operation_id).availability
+            is dc.Availability.ABSENT
+        )
+        # The old operation row stays readable by operation id, result intact.
+        assert second._prepare_operations.get(current.operation_id).result == kept_result
+
+        # An old cached body plus an expired operation must not report READY.
+        stale = cache.cache_path(remote_id, "RESULT/result_manifest.json")
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_bytes(_REMOTE_MANIFEST_V1)
+        cache._write_attempt_sidecar(stale, 2)
+        assert cache.catalog_ready(cache.job_root(remote_id), workflow) is True
+        suppressed = reader.availability(catalog)
+        assert suppressed.availability is dc.Availability.ABSENT
+        assert suppressed.availability is not dc.Availability.READY
+        assert suppressed.detail == "operation:expired"
+
+        # Re-prepare: the body left behind belongs to an old attempt, so it can
+        # never satisfy the newer attempt; the queued operation stays not-ready
+        # until real re-fetched bytes land.
+        stale.write_bytes(_REMOTE_MANIFEST_V1)
+        cache._write_attempt_sidecar(stale, 1)
+        gate = threading.Event()
+        fetcher.gate = gate
+        fetcher.files["RESULT/result_manifest.json"] = _REMOTE_MANIFEST_V2
+        second._queue_catalog_prefetch(remote_id)
+
+        replacement = second._prepare_operations.find(
+            job_id=remote_id, resource_id=f"catalog:{workflow}", attempt=2
+        )
+        assert replacement is not None
+        assert replacement.operation_id != current.operation_id
+        assert replacement.dedup_epoch == current.dedup_epoch + 1
+        running = _wait_state(
+            second._prepare_operations, replacement.operation_id, ops.PrepareState.RUNNING
+        )
+        assert running.state is ops.PrepareState.RUNNING
+
+        queued_ready = reader.availability(catalog)
+        assert queued_ready.availability is not dc.Availability.READY
+        assert queued_ready.detail.startswith("operation:running")
+        # Even without the operation projection the stale body is refused, so
+        # the suppression is not an artifact of the operation row alone.
+        from acp.services_data_bootstrap import build_read_only_reader
+
+        cache_only = build_read_only_reader(job_lookup=second.store.get, cache=cache)
+        assert cache_only.availability(catalog).availability is not dc.Availability.READY
+
+        gate.set()
+        done = _wait_state(
+            second._prepare_operations, replacement.operation_id, ops.PrepareState.SUCCEEDED
+        )
+        assert done.state is ops.PrepareState.SUCCEEDED
+        assert (
+            reader.read_range(
+                RangeReadRequest(job_id=remote_id, relative_path="RESULT/result_manifest.json")
+            ).data
+            == _REMOTE_MANIFEST_V2
+        ), "eviction re-prepare must publish real re-fetched bytes"
+        assert fetcher.calls
+
+        # -- phase 3: GET reads are side-effect free -------------------------
+        before = (
+            len(fetch_events),
+            len(enqueue_events),
+            len(executions),
+            len(factory_calls),
+            len(fetcher.calls),
+            len(second._prepare_operations.list()),
+        )
+        assert reader.availability(catalog).availability is dc.Availability.READY
+        assert reader.availability(local).availability is dc.Availability.READY
+        assert (
+            reader.availability(replace(catalog, attempt=1)).availability
+            is not dc.Availability.READY
+        )
+        reader.read_range(
+            RangeReadRequest(job_id=remote_id, relative_path="RESULT/result_manifest.json")
+        )
+        reader.read_range(
+            RangeReadRequest(job_id=local_id, relative_path="RESULT/result_manifest.json")
+        )
+        after = (
+            len(fetch_events),
+            len(enqueue_events),
+            len(executions),
+            len(factory_calls),
+            len(fetcher.calls),
+            len(second._prepare_operations.list()),
+        )
+        assert after == before, "availability/range GET must not fetch, enqueue or execute"
+
+        # Old operation ids remain readable after every transition.
+        assert second._prepare_operations.get(crashed.operation_id) is not None
+        assert (
+            second._prepare_operations.get(current.operation_id).state is ops.PrepareState.EXPIRED
+        )
+    finally:
+        second.shutdown()
