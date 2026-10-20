@@ -286,6 +286,10 @@ def _validate(records: dict[str, Any], text: str | None = None) -> None:
         assert item["old_functionality_kept"].strip(), (
             f"{item['item']}: unintegrated items must state the old functionality stays available"
         )
+        for field in ("owner", "blocker", "entry_condition", "next_gate"):
+            assert isinstance(item.get(field), str) and item[field].strip(), (
+                f"{item['item']}: deferred capability must carry {field}"
+            )
 
     # ── evidence index: every path must resolve ──────────────────────────
     index = records["evidence_index"]
@@ -412,6 +416,32 @@ def test_a_and_c_receipts_and_deferrals_registered() -> None:
     assert records["deferrals"]
     for item in records["deferrals"]:
         assert item["old_functionality_kept"].strip()
+        for field in ("owner", "blocker", "entry_condition", "next_gate"):
+            assert item[field].strip()
+
+
+def test_deferred_capability_handoffs_are_registered() -> None:
+    records, _ = _load()
+    items = {entry["item"] for entry in records["deferrals"]}
+    assert {
+        "A04 refresh protocol",
+        "MCP default-entry binding",
+        "archive export/import CLI-API binding",
+        "metering production wiring",
+        "frontend cache-only consumption",
+        "admission/quota pre-dispatch wiring",
+        "Lab identity HTTP/UI (todo 73)",
+    } <= items
+    for entry in records["deferrals"]:
+        assert entry["status"] in {"DEFERRED", "NOT_VERIFIED"}
+
+
+def test_negative_control_deferral_missing_owner_rejected() -> None:
+    records, _ = _load()
+    bad = copy.deepcopy(records)
+    bad["deferrals"][0]["owner"] = ""
+    with pytest.raises(AssertionError):
+        _validate(bad)
 
 
 def test_evidence_paths_exist() -> None:

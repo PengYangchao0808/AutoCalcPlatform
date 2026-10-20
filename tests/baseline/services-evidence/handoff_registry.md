@@ -52,6 +52,24 @@
 | B | `src/acp_services/runtime/{plan_contracts,step_result,step_requirements}.py`、旧 `acp/calculations/{contracts,step_result,step_requirements}.py` 转发路径、`acp_services/runtime/recovery.py` 默认门 | B | A/C 消费（旧 import 路径不变，identity 转发） | `d45c1dd`（本切片起点） | todo 72 注入登记表（plan/step requirements 行）；todo 27/31 已交付；todo 78 需要 Services-native 步骤门 | `tests/test_services_migration_equivalence.py`（plan 闭包 identity + evaluate_prerequisite/validate_plan parity + AST 隔离）+ 678 定向回归 PASS；`ServicesPorts.step_requirements` 注入已删 | `0286b2b`（refactor(services): migrate plan/step-requirements closure in-package） | integrated |
 | C | `src/cccp/software.py::resolve_executable` / `_resolve`（显式配置无效时静默回落 PATH） | B（todo 79 发现并登记，证据 `tests/baseline/services-evidence/b41b_defect_fixes.md`） | C（修复解析器）；B（`acp doctor` 已用 source-aware 解析自保） | `15e568c` | todo 79 S4c 负例（`acp doctor` 显式无效 orca path）；B41b §2.1 S4c | C 修复后：显式配置但无效 → 返回 None（不回落），`acp init` 内嵌能力报告随之 FAIL；`tests/test_services_b41b_defect_fixes.py` + init capability 负例 PASS | n/a | pending |
 
+## Deferred capability handoffs (T36)
+
+**Scope:** 以下六项是 GAP-14 的显式 deferred capability handoff。它们**不是**本批实施任务；
+状态保持 `NOT_VERIFIED`/`DEFERRED`，不得改写成 `PASS`。owner 使用现有 closure/plan
+渠道与路名，不新增未登记 owner。
+
+| capability | owner | blocker | entry_condition | next_acceptance_gate | status | evidence |
+|---|---|---|---|---|---|---|
+| account/permission/quota production wiring | B — Runtime/Workspace (L2-12, L3-09) | 组件已交付但 `src/acp` 零消费者；OIDC 恒不可用；尚未接到 HTTP/CLI 提交与派发前置 | 先 local-single 跑通，再按部署档位接入 Runtime 提交/派发前置；Workspace 提供身份/授权 | L2-12/L3-09 实测跨用户拒绝、撤权、重复请求、配额竞争与执行隔离；未通过不声明多租户上线 | NOT_VERIFIED | `docs/reference/current/ACP_Services_Closure_20261019.md`（L2-12/L3-09）；`src/acp_services/runtime/admission.py`；`src/acp_services/workspace/identity_lifecycle.py` |
+| MCP default entry | B — Services entrypoints (L2-14) | `entrypoints.mcp` 已交付且有测试，但 `src/acp` 无默认入口消费者；未与真实客户端联调 | Runtime/Data/Workspace 用例稳定并定义明确默认入口后接入 | L2-14 至少一个真实客户端联调；身份、失败、取消、幂等与 GUI/CLI 一致，不复制调度器 | NOT_VERIFIED | `src/acp_services/entrypoints/mcp.py`；`tests/test_services_mcp.py` |
+| project-package CLI/API | B — Data archive/import (L2-13) | archive/import builder 已交付但未绑定 CLI/HTTP；命令、权限、完整性语义未接线 | M1 稳定后按 M2 交付；明确命令/权限/操作回执/完整性校验/幂等导入 | L2-13 本地导出→新环境导入→读取与证据完整；导入不自动执行任务 | NOT_VERIFIED | `src/acp/services_data_bootstrap.py`；`src/acp_services/data/archive.py` |
+| metering production wiring | B — Runtime metering (L2-15) | 解耦模块与 26 项测试已交付，但 Runtime 完成/恢复/读取路径零消费者 | 在真实 Runtime 完成/恢复及读取路径接入已交付解耦模块；单独记录用量事实 | L2-15 重复/乱序回执不重复计量；计量失败不改变科学完成或结果可读性；收费另过独立门 | NOT_VERIFIED | `src/acp_services/runtime/metering_decoupling.py`；`tests/test_services_metering_decoupling.py` |
+| persistent event A04 | A04-lane (A frontend + B Services events) | A04 刷新协议仍 DEFERRED；前端 `eventCursor:false`；没有真实持久事件协议/游标实现 | 真实服务协议和持久事实落地后独立交付 Client cursor/重置/重连与刷新切换 | L2-16 真实服务协议下验证 cursor/重置/重连；只关闭事件实际覆盖的轮询；旧服务/终态可用性刷新保持 | NOT_VERIFIED | `docs/reference/next-change/ACP_Services_Events_A04_Contract.md` |
+| frontend prepare/availability consumption | A05 frontend (L2-11) | 后端 availability/prepared 端点已交付，但前端 `prepareAvailability=false` 且 `/availability`、`/prepared/` 零调用点 | D04—D06/D11 通过后，按真实 capability/部署配置显式接入 prepare 与只读查询；保留 S0 adapter | L2-11 默认页验证 queued/running/failed/ready、重启重试、终态后台预取；旧服务不收新协议；没有 GET 隐式 prepare | NOT_VERIFIED | `frontend/js/workbench/contracts/task_view_contract.js`；`docs/reference/current/ACP_Services_Closure_20261019.md`（L2-11） |
+
+**Non-claims:** 上表六项均为 handoff registration，不是 implementation。模块/测试已交付的行
+保持 `NOT_VERIFIED`；不得把“已交字段”写成“前端已接入”或把 `DEFERRED` 写成 PASS。
+
 ## 维护约定
 
 - 本表**与 C-T5 共同维护**：C 路新增科学闭包/移交行后，B 在整合时更新 `applied_commit` 与状态。
