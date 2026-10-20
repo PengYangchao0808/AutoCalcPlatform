@@ -19,10 +19,13 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import hashlib
 import io
 import json
 import re
 import sqlite3
+import subprocess
+import sys
 import tokenize
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,11 +36,13 @@ from acp_services.contracts.envelope import (
     CURRENT_ENVELOPE_VERSION,
     ExecutionEnvelope,
     ExecutionReceipt,
+    StorageBinding,
     TaskContextSerializationError,
     expected_submission_id,
 )
 from acp_services.contracts.injection import JobStateAdvancePort, StepRequirementPort
 from acp_services.runtime.plan_contracts import CalculationResult, StepKind
+from acp_services.runtime.receipt_identity import compare_receipt_identity
 from acp_services.runtime.receipts import (
     ReceiptRejectedError,
     advance_job_state,
@@ -427,6 +432,263 @@ def test_conflicting_attempt_receipt_is_not_overwritten(tmp_path: Path) -> None:
 
     assert executor.calls == 1
     assert read_receipt(receipt_path).attempt == 1  # type: ignore[union-attr]
+
+
+# ---------------------------------------------------------------------------
+# D02 — full frozen receipt identity is validated before any reuse
+# ---------------------------------------------------------------------------
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _import_closure(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
+def test_receipt_identity_import_graph_is_acyclic_in_both_orders() -> None:
+    runtime_root = _SERVICES_ROOT / "runtime"
+    receipts_imports = _import_closure(runtime_root / "receipts.py")
+    identity_imports = _import_closure(runtime_root / "receipt_identity.py")
+
+    assert not {m for m in receipts_imports if m.startswith("acp_services.runtime.worker")}, (
+        "receipts.py must not import worker (D02: controller -> execution reverse dependency)"
+    )
+    forbidden = ("acp_services.runtime.worker", "acp_services.runtime.receipts")
+    assert not {m for m in identity_imports if m.startswith(forbidden)}, (
+        "the identity predicate must stay dependency-free (no worker/receipts import)"
+    )
+
+    orders = (
+        (
+            "acp_services.runtime.receipt_identity",
+            "acp_services.runtime.receipts",
+            "acp_services.runtime.worker",
+        ),
+        (
+            "acp_services.runtime.worker",
+            "acp_services.runtime.receipt_identity",
+            "acp_services.runtime.receipts",
+        ),
+    )
+    for order in orders:
+        code = "; ".join(f"import {module}" for module in order)
+        completed = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert completed.returncode == 0, completed.stderr
+    independent_worker = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys, acp_services.worker_bootstrap; "
+            "assert 'acp_services.runtime.receipt_identity' in sys.modules",
+        ],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert independent_worker.returncode == 0, independent_worker.stderr
+
+
+_IDENTITY_MUTATIONS = [
+    ("attempt", {"attempt": 2}, "attempt"),
+    ("submission", {"submission_id": "sub_other_attempt"}, "submission_id"),
+    ("release_id", {"release_id": "rel-2"}, "release_id"),
+    ("release_digest", {"release_digest": "reldig-2"}, "release_digest"),
+    ("plan_identity", {"plan_identity": "v2:plan-other"}, "plan_identity"),
+    ("step_identities", {"step_identities": ("v2:step-other",)}, "step_identities"),
+    ("owner", {"owner": "worker-2"}, "owner"),
+    ("fencing_token", {"fencing_token": "fence-2"}, "fencing_token"),
+]
+
+
+@pytest.mark.parametrize(
+    "name,overrides,code",
+    _IDENTITY_MUTATIONS,
+    ids=[case[0] for case in _IDENTITY_MUTATIONS],
+)
+def test_single_field_identity_mutation_is_a_typed_conflict(
+    tmp_path: Path, name: str, overrides: dict[str, object], code: str
+) -> None:
+    env = _envelope()
+    mutated = _envelope(**overrides)
+    executor = _FakeExecutor()
+    worker = _worker(executor=executor)
+    receipt_path = tmp_path / "receipt.json"
+
+    original = worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+    before = _sha256(receipt_path)
+
+    with pytest.raises(ReceiptConflictError) as excinfo:
+        worker.execute(mutated, _plan(mutated), receipt_path=receipt_path, work_dir=tmp_path)
+
+    comparison = excinfo.value.comparison
+    assert comparison is not None
+    assert comparison.codes == (code,), f"exactly one field drifted, got {comparison.codes}"
+    assert _sha256(receipt_path) == before, "a conflicting receipt must stay byte-identical"
+    assert read_receipt(receipt_path) == original
+    assert executor.calls == 1, "a conflicting receipt must never reach the executor"
+
+
+def test_receipt_data_binding_identity_mutation_is_a_typed_conflict(tmp_path: Path) -> None:
+    env = _envelope(
+        data_bindings=(
+            StorageBinding(binding_id="bind-1", artifact_digests={"geom.xyz": "sha256:aaa"}),
+        )
+    )
+    executor = _FakeExecutor()
+    worker = _worker(executor=executor)
+    receipt_path = tmp_path / "receipt.json"
+
+    original = worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+    tampered = dataclasses.replace(
+        original,
+        data_bindings=(
+            StorageBinding(binding_id="bind-1", artifact_digests={"geom.xyz": "sha256:bbb"}),
+        ),
+    )
+    write_receipt_atomic(receipt_path, tampered)
+    before = _sha256(receipt_path)
+
+    with pytest.raises(ReceiptConflictError) as excinfo:
+        worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+
+    assert excinfo.value.comparison is not None
+    assert "data_bindings" in excinfo.value.comparison.codes
+    assert _sha256(receipt_path) == before
+    assert read_receipt(receipt_path) == tampered
+    assert executor.calls == 1
+
+
+def test_predicate_reports_every_divergent_field(tmp_path: Path) -> None:
+    env = _envelope()
+    receipt = build_receipt(env, TaskExecutionOutcome(state="completed"))
+    drifted = dataclasses.replace(
+        receipt,
+        receipt_version=0,
+        owner="worker-2",
+        fencing_token="fence-2",
+        step_identities=("v2:step-other",),
+    )
+    comparison = compare_receipt_identity(drifted, env)
+    assert set(comparison.codes) >= {
+        "receipt_version",
+        "owner",
+        "fencing_token",
+        "step_identities",
+    }
+
+
+def test_attempt_2_envelope_with_attempt_1_completed_receipt_is_a_typed_conflict(
+    tmp_path: Path,
+) -> None:
+    env1 = _envelope(attempt=1)
+    env2 = _envelope(attempt=2, submission_id=expected_submission_id(_JOB, 2))
+    executor = _FakeExecutor()
+    worker = _worker(executor=executor)
+    receipt_path = tmp_path / "receipt.json"
+    worker.execute(env1, _plan(env1), receipt_path=receipt_path, work_dir=tmp_path)
+    before = _sha256(receipt_path)
+
+    with pytest.raises(ReceiptConflictError) as excinfo:
+        worker.execute(env2, _plan(env2), receipt_path=receipt_path, work_dir=tmp_path)
+
+    assert excinfo.value.comparison is not None
+    assert "attempt" in excinfo.value.comparison.codes
+    assert _sha256(receipt_path) == before
+    assert read_receipt(receipt_path).attempt == 1  # type: ignore[union-attr]
+    assert executor.calls == 1
+
+
+def test_same_attempt_with_different_release_is_a_typed_conflict(tmp_path: Path) -> None:
+    env = _envelope()
+    other_release = _envelope(release_id="release-b")
+    executor = _FakeExecutor()
+    worker = _worker(executor=executor)
+    receipt_path = tmp_path / "receipt.json"
+    worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+    before = _sha256(receipt_path)
+
+    with pytest.raises(ReceiptConflictError) as excinfo:
+        worker.execute(
+            other_release, _plan(other_release), receipt_path=receipt_path, work_dir=tmp_path
+        )
+
+    assert excinfo.value.comparison is not None
+    assert excinfo.value.comparison.codes == ("release_id",)
+    assert _sha256(receipt_path) == before
+    assert executor.calls == 1
+
+
+def test_tampered_plan_body_is_rejected_before_receipt_reuse(tmp_path: Path) -> None:
+    env = _envelope()
+    executor = _FakeExecutor()
+    worker = _worker(executor=executor)
+    receipt_path = tmp_path / "receipt.json"
+    worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+    before = _sha256(receipt_path)
+
+    tampered = _plan(
+        env,
+        payload={"task": "singlepoint"},
+        identity=FrozenPlanIdentity("v2:tampered", env.plan_identity, env.step_identities),
+    )
+    with pytest.raises(PlanVerificationError):
+        worker.execute(env, tampered, receipt_path=receipt_path, work_dir=tmp_path)
+
+    assert _sha256(receipt_path) == before
+    assert executor.calls == 1
+
+
+def test_prerequisite_gate_runs_before_receipt_reuse(tmp_path: Path) -> None:
+    env = _envelope()
+    executor = _FakeExecutor()
+    receipt_path = tmp_path / "receipt.json"
+    _worker(executor=executor).execute(
+        env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path
+    )
+    before = _sha256(receipt_path)
+
+    blocked = _FakeRequirements(satisfied=False, reason="missing_requirement")
+    with pytest.raises(DependencyNotSatisfiedError) as excinfo:
+        _worker(executor=executor, requirements=blocked).execute(
+            env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path
+        )
+
+    assert excinfo.value.reason == "missing_requirement"
+    assert _sha256(receipt_path) == before
+    assert executor.calls == 1
+
+
+def test_full_identity_reuse_returns_existing_receipt_without_second_execution(
+    tmp_path: Path,
+) -> None:
+    env = _envelope()
+    executor = _FakeExecutor()
+    worker = _worker(executor=executor)
+    receipt_path = tmp_path / "receipt.json"
+
+    first = worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+    before = _sha256(receipt_path)
+    second = worker.execute(env, _plan(env), receipt_path=receipt_path, work_dir=tmp_path)
+
+    assert second == first
+    assert executor.calls == 1
+    assert _sha256(receipt_path) == before
 
 
 # ---------------------------------------------------------------------------

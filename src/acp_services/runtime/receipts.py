@@ -36,7 +36,7 @@ from acp_services.contracts.envelope import (
     expected_submission_id,
 )
 from acp_services.contracts.injection import JobStateAdvancePort
-from acp_services.runtime.worker import WorkerError
+from acp_services.runtime.errors import WorkerError
 
 __all__ = [
     "ReceiptRejectedError",
