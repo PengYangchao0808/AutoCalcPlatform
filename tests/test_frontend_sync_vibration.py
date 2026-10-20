@@ -977,13 +977,13 @@ def test_vibration_viewer_node_arrow_math() -> None:
             console.error("FAIL: invalid displayMode must be ignored");
             process.exit(1);
         }
-        ns.arrowState.enabled = true;
+        ns.arrowState.enabled = false;
         ns.arrowState.displayMode = "arrows";
-        if (!ns._arrowsVisible()) { console.error("FAIL: arrows visible"); process.exit(1); }
+        if (!ns._arrowsRequested()) { console.error("FAIL: arrows requested"); process.exit(1); }
         ns.arrowState.displayMode = "animation";
-        if (ns._arrowsVisible()) { console.error("FAIL: animation hides arrows"); process.exit(1); }
+        if (ns._arrowsRequested()) { console.error("FAIL: animation hides arrows"); process.exit(1); }
         ns.arrowState.displayMode = "combo";
-        if (!ns._arrowsVisible()) { console.error("FAIL: combo shows arrows"); process.exit(1); }
+        if (!ns._arrowsRequested()) { console.error("FAIL: combo shows arrows"); process.exit(1); }
 
         // clamped amplitude setter
         ns.setAmplitude(5);
@@ -1243,7 +1243,6 @@ def test_vibration_viewer_node_animation_loop() -> None:
             }
         };
         ns.arrowState.displayMode = "combo";
-        ns.arrowState.enabled = true;
 
         ns.playAnimation();
         if (!ns.animationState.playing || playCalls !== 1 || playMs !== 33) {
@@ -1473,7 +1472,6 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
         ns2.state.displayedSymbols = ["C", "O", "C"];
         ns2.state.displayedEntryId = "e1";
         ns.arrowState.displayMode = "arrows";
-        ns.arrowState.enabled = true;
 
         // (i) play -> locked; stop -> unlock + equilibrium + camera + idempotent
         ns.playAnimation();
